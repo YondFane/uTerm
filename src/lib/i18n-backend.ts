@@ -1,4 +1,10 @@
 export const backendMessages: Record<string, string> = {
+  "复制目标无效，不能复制到自身或子目录。":
+    "Invalid destination: cannot copy into itself or a descendant.",
+  "无法粘贴：同名文件或目录已存在。":
+    "Cannot paste: a file or folder with this name already exists.",
+  "不支持复制链接或特殊文件。": "Copying links or special files is not supported.",
+  "复制超过层级或条目数量限制。": "Copy exceeds the depth or entry limit.",
   "此 Agent 不支持自动安装，请按其发布方说明安装后配置程序路径。":
     "Automatic installation is unavailable for this agent. Follow its publisher’s instructions and configure the program path.",
   "已有 Agent 正在安装。": "An agent installation is already running.",

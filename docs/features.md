@@ -34,6 +34,8 @@ Workspace storage accepts schema version 3; settings accept version 1 and requir
 
 ## Files and source control
 
+The file tree supports Copy/Paste from its context menu and Ctrl+C/Ctrl+V (Cmd+C/Cmd+V on macOS) while the list is focused. A folder receives the copy; a file targets its parent, and blank space targets the project root. This single-entry internal clipboard resets on project changes and does not import files from the system clipboard. Files, binary content and complete directories are supported without overwriting existing names. Links, special files, root copies and self/descendant destinations are rejected. Copy runs off the UI thread, stages content locally and limits recursion to 64 levels and 100,000 entries; extra disk space is required. A final write failure may leave an incomplete destination, reported visibly for inspection. Component and backend tests cover destination routing, recursive copying, conflicts and traversal; a mocked browser preview verifies the menu and refreshed tree. Native WebView and macOS acceptance remain pending.
+
 HTML and HTM files open in static preview, with an Edit/Preview toggle that previews unsaved text without saving. Full-document head styles, inline CSS and embedded data images are preserved. The isolated frame blocks scripts, external/local linked resources, forms and navigation; pages needing JavaScript (including Vite/React entry HTML) must use their development server. Such dependencies display a limitation notice rather than an unexplained blank panel. Regression tests cover style preservation and active-content removal. Native WebView acceptance remains pending.
 
 Project and file-tree context menus offer Open in File Manager. Folders open directly; files are revealed in their containing folder. File-tree paths are checked against the selected root before opening. Native file-manager selection remains pending runtime acceptance.
@@ -47,6 +49,8 @@ New files and folders are named inline inside the target folder in the file tree
 File access stays within the selected project root. Text saves check for conflicts and retain unsaved drafts for recovery. Markdown is sanitized before rendering; PDF canvas dimensions are bounded. Git views include status, diffs and commits, with worktree management. GitHub integration requires the user's credentials and access.
 
 ## Agents and settings
+
+Kimi, OpenCode and Grok use bundled SVG brand icons in Agent settings and session controls, with theme-inherited colors and no network dependency. Unknown agents retain the terminal icon. Component tests cover distinct brand paths and fallback; a browser preview verifies all three icons. Native WebView visual acceptance remains pending.
 
 OpenCode is a built-in Agent: its `opencode` executable is detected on PATH and in `~/.opencode/bin`, and it uses the existing project/chat launch flow. Missing programs expose an installation panel. OpenCode, Claude, Codex and Gemini support confirmed global npm installation (Node.js/npm and network access required; no privilege elevation). Only fixed package identifiers are accepted; installation runs off the UI thread, concurrent installs are rejected, and errors remain visible. Completion refreshes program detection; custom npm prefixes may require configuring the executable path or restarting uTerm. Kimi links to its official installation instructions; Grok and custom executables require publisher-directed manual installation and path configuration. OpenCode does not yet expose Hooks or usage integration. Bilingual component tests cover confirmation, failure/retry and refresh; backend tests cover the package allowlist. Actual package downloads, native Agent launch and macOS installation remain unverified.
 
@@ -91,6 +95,8 @@ The file editor and its Markdown/syntax dependencies load on demand, with loadin
 React components live in `src/components/`; state and pure logic in `src/lib/`; Tauri commands in `src-tauri/src/`; PTYs, replay and hooks in `crates/utermd-local/`. The backend and session service use separate Cargo manifests and lockfiles.
 
 ## Validation and limits
+
+File-copy validation on Windows: 135 frontend tests, 32 backend tests, TypeScript, production build and localization checks pass. The browser preview uses mocked filesystem commands; native integration remains unverified. The production build retains its large-chunk warning.
 
 Lifecycle regression tests cover successful versus failed/unknown Agent exits, repeated close failures and duplicate close requests. Windows process tests verify that installer cleanup terminates both its parent and child processes using an isolated Job Object; Unix uses an isolated process group and still needs native acceptance. HTML sanitization tests reject SVG `xlink:href` navigation as well as ordinary links. No Agent package installation is performed by these tests.
 

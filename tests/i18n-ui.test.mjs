@@ -81,7 +81,7 @@ test("real settings tabs, commands and panels render in both languages without u
   const { GitHubPanel } = await load("components/GitHubPanel.tsx");
   const { DirectoryPanel } = await load("components/DirectoryPanel.tsx");
   const { Sidebar } = await load("components/Sidebar.tsx");
-  const { AgentStatusIndicator } = await load("components/SidebarIcon.tsx");
+  const { AgentStatusIndicator, SessionIcon } = await load("components/SidebarIcon.tsx");
   const { AgentSettings } = await load("components/AgentPanel.tsx");
   const { FileEditor, UnsavedDialog } = await load("components/FileEditor.tsx");
   const { TerminalView } = await load("components/TerminalView.tsx");
@@ -111,8 +111,24 @@ test("real settings tabs, commands and panels render in both languages without u
   let autostartFail = false;
   let installFail = false;
   let installedAgent;
+  let copiedFiles;
   mockIPC((cmd, args) => {
     calls.push(cmd);
+    if (cmd === "file_copy") {
+      copiedFiles = args;
+      return null;
+    }
+    if (cmd === "files_list")
+      return {
+        entries: args.path
+          ? []
+          : [
+              { path: "file.txt", name: "file.txt", directory: false, symlink: false },
+              { path: "folder", name: "folder", directory: true, symlink: false },
+            ],
+        partial: false,
+        skipped: 0,
+      };
     if (cmd === "install_agent") {
       installedAgent = args.agent;
       if (installFail) throw new Error("未找到 npm，请先安装 Node.js，再重启 uTerm 后重试。");
@@ -158,6 +174,75 @@ test("real settings tabs, commands and panels render in both languages without u
     assert.equal(i18n.missingTranslations.size, 0);
   }
   try {
+    await context.test("file list copy/paste targets folders and ignores text inputs", async () => {
+      await mount(
+        React.createElement(FilePanel, {
+          directory: "C:/fixture",
+          mode: "tree",
+          request: 0,
+          setMode: noop,
+          open: noop,
+          beforeMutation: (action) => action(),
+        }),
+        "en",
+      );
+      const file = host.querySelector('[title="file.txt"]');
+      await act(async () => file.focus());
+      await act(async () =>
+        file.dispatchEvent(
+          new dom.window.KeyboardEvent("keydown", { key: "c", ctrlKey: true, bubbles: true }),
+        ),
+      );
+      const folder = host.querySelector('[title="folder"]');
+      await act(async () => folder.focus());
+      await act(async () =>
+        folder.dispatchEvent(
+          new dom.window.KeyboardEvent("keydown", { key: "v", ctrlKey: true, bubbles: true }),
+        ),
+      );
+      assert.deepEqual(copiedFiles, {
+        directory: "C:/fixture",
+        path: "file.txt",
+        destination: "folder",
+      });
+      await act(async () => folder.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true })));
+      assert.ok(
+        [...host.querySelectorAll('[role="menuitem"]')].some(
+          (button) => button.textContent === "Paste" && !button.disabled,
+        ),
+      );
+      assertEnglish();
+      await click("New file");
+      const nameInput = host.querySelector("input");
+      const countBefore = calls.filter((command) => command === "file_copy").length;
+      const pasteKey = new dom.window.KeyboardEvent("keydown", {
+        key: "v",
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      await act(async () => nameInput.dispatchEvent(pasteKey));
+      assert.equal(pasteKey.defaultPrevented, false);
+      assert.equal(calls.filter((command) => command === "file_copy").length, countBefore);
+    });
+    await context.test(
+      "built-in agents render distinct local brand marks with safe fallback",
+      () => {
+        const marks = ["kimi", "opencode", "grok"].map((agent) => {
+          const markup = renderToStaticMarkup(React.createElement(SessionIcon, { agent }));
+          assert.match(markup, new RegExp(`agent-${agent}`));
+          assert.match(markup, /fill="currentColor"/);
+          assert.doesNotMatch(markup, /icon-terminal|<image|<img/);
+          return markup.match(/ d="([^"]+)"/)[1];
+        });
+        assert.equal(new Set(marks).size, 3);
+        for (const agent of [undefined, "custom", "constructor", "__proto__"])
+          assert.match(
+            renderToStaticMarkup(React.createElement(SessionIcon, { agent })),
+            /icon-terminal/,
+          );
+      },
+    );
     await context.test(
       "agent installation requires confirmation, reports failures and refreshes",
       async () => {

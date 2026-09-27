@@ -195,6 +195,88 @@ fn mutate_file(directory: &str, path: &str, action: &str, name: &str) -> Result<
 }
 
 #[tauri::command]
+pub async fn file_copy(directory: String, path: String, destination: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || copy_entry(&directory, &path, &destination))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+fn copy_entry(directory: &str, path: &str, destination: &str) -> Result<(), String> {
+    let _guard = WRITES.lock().map_err(|error| error.to_string())?;
+    let (root, source) = resolve(directory, path)?;
+    let (_, parent) = resolve(directory, destination)?;
+    if source == root || !parent.is_dir() || parent.starts_with(&source) {
+        return Err("复制目标无效，不能复制到自身或子目录。".into());
+    }
+    for relative in [path, destination] {
+        let mut cursor = root.clone();
+        for part in Path::new(relative).components() {
+            cursor.push(part);
+            reject_copy_link(&cursor)?;
+        }
+    }
+    let target = parent.join(source.file_name().ok_or("Invalid source name.")?);
+    if target.try_exists().map_err(|e| e.to_string())? || std::fs::symlink_metadata(&target).is_ok()
+    {
+        return Err("无法粘贴：同名文件或目录已存在。".into());
+    }
+    // Stage the complete tree before creating the destination; reject links before copying bytes.
+    // 先暂存完整目录树，再创建目标；复制内容之前拒绝链接。
+    let staging = tempfile::Builder::new()
+        .prefix(".uterm-editor-copy-")
+        .tempdir_in(&root)
+        .map_err(|e| e.to_string())?;
+    let staged = staging.path().join("content");
+    copy_tree(&source, &staged, 0, &mut 0)?;
+    copy_tree(&staged, &target, 0, &mut 0)
+}
+
+fn reject_copy_link(path: &Path) -> Result<std::fs::Metadata, String> {
+    let metadata = std::fs::symlink_metadata(path).map_err(|e| e.to_string())?;
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Err("不支持复制链接或特殊文件。".into());
+        }
+    }
+    if metadata.file_type().is_symlink() || !(metadata.is_file() || metadata.is_dir()) {
+        return Err("不支持复制链接或特殊文件。".into());
+    }
+    Ok(metadata)
+}
+
+fn copy_tree(source: &Path, target: &Path, depth: usize, count: &mut usize) -> Result<(), String> {
+    *count += 1;
+    if depth > 64 || *count > 100_000 {
+        return Err("复制超过层级或条目数量限制。".into());
+    }
+    let metadata = reject_copy_link(source)?;
+    if metadata.is_dir() {
+        std::fs::create_dir(target).map_err(|e| e.to_string())?;
+        for entry in std::fs::read_dir(source).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            copy_tree(
+                &entry.path(),
+                &target.join(entry.file_name()),
+                depth + 1,
+                count,
+            )?;
+        }
+    } else {
+        let mut input = std::fs::File::open(source).map_err(|e| e.to_string())?;
+        let mut output = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(target)
+            .map_err(|e| e.to_string())?;
+        std::io::copy(&mut input, &mut output).map_err(|e| e.to_string())?;
+    }
+    std::fs::set_permissions(target, metadata.permissions()).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn file_mutate(
     directory: String,
     path: String,
@@ -638,6 +720,31 @@ pub async fn files_search(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn copies_files_and_directories_without_overwrite_or_escape() {
+        let fixture = tempfile::tempdir().unwrap();
+        let root = fixture.path();
+        std::fs::create_dir_all(root.join("source/empty")).unwrap();
+        std::fs::create_dir(root.join("destination")).unwrap();
+        std::fs::write(root.join("source/data.bin"), [0, 255, 10]).unwrap();
+        let directory = root.to_str().unwrap();
+        copy_entry(directory, "source", "destination").unwrap();
+        assert_eq!(
+            std::fs::read(root.join("destination/source/data.bin")).unwrap(),
+            [0, 255, 10]
+        );
+        assert!(root.join("destination/source/empty").is_dir());
+        copy_entry(directory, "source/data.bin", "").unwrap();
+        assert!(copy_entry(directory, "source/data.bin", "").is_err());
+        assert!(copy_entry(directory, "source", "source/empty").is_err());
+        assert!(copy_entry(directory, "", "destination").is_err());
+        assert!(copy_entry(directory, "../outside", "destination").is_err());
+        assert!(copy_entry(directory, "source", "../").is_err());
+        assert_eq!(
+            std::fs::read(root.join("source/data.bin")).unwrap(),
+            [0, 255, 10]
+        );
+    }
     #[test]
     fn file_management_rejects_root_traversal_overwrite_and_nonempty_delete() {
         let fixture = tempfile::tempdir().unwrap();

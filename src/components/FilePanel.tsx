@@ -30,6 +30,7 @@ function Folder({
   hidden,
   open,
   manage,
+  select,
   edit,
   revision,
 }: {
@@ -39,6 +40,7 @@ function Folder({
   hidden: boolean;
   open: (path: string) => void;
   manage: (entry: Entry, x: number, y: number) => void;
+  select: (entry: Entry) => void;
   edit: { path: string; rename: boolean; node: ReactNode } | null;
   revision: number;
 }) {
@@ -87,8 +89,11 @@ function Folder({
               className="file-row"
               style={{ paddingLeft: 12 + depth * 15 }}
               title={entry.path}
+              onFocus={() => select(entry)}
               onContextMenu={(event) => {
                 event.preventDefault();
+                event.stopPropagation();
+                select(entry);
                 manage(entry, event.clientX, event.clientY);
               }}
               aria-expanded={entry.directory ? expanded.has(entry.path) : undefined}
@@ -137,6 +142,7 @@ function Folder({
                 hidden={hidden}
                 open={open}
                 manage={manage}
+                select={select}
                 edit={edit}
                 revision={revision}
               />
@@ -184,14 +190,51 @@ export function FilePanel({
   const [mutating, setMutating] = useState(false);
   const [menu, setMenu] = useState<{ entry: Entry; x: number; y: number } | null>(null);
   const menuElement = useRef<HTMLDivElement>(null);
+  const [fileClipboard, setFileClipboard] = useState<Entry | null>(null);
+  const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
+  const copying = useRef(false);
+  const currentDirectory = useRef(directory);
+  currentDirectory.current = directory;
   useEffect(() => {
     // A draft belongs to its selected root and must not follow a project switch.
     // 输入草稿属于所选根目录，不能随项目切换应用到另一个目录。
     setTarget(null);
     setMenu(null);
     setName("");
+    setFileClipboard(null);
+    setFocusedEntry(null);
   }, [directory]);
   const rootEntry: Entry = { path: "", name: tx("项目根目录"), directory: true, symlink: false };
+  const copyFile = (entry: Entry) => {
+    if (!entry.path || entry.symlink || mutating) return;
+    setFileClipboard(entry);
+    setMenu(null);
+    results.current?.focus();
+  };
+  const pasteFile = async (entry: Entry) => {
+    if (!fileClipboard || entry.symlink || mutating || copying.current) return;
+    copying.current = true;
+    setMutating(true);
+    setMenu(null);
+    setError("");
+    const destination = entry.directory ? entry.path : entry.path.split("/").slice(0, -1).join("/");
+    try {
+      await invoke("file_copy", { directory, path: fileClipboard.path, destination });
+      if (currentDirectory.current === directory) setRevision((value) => value + 1);
+    } catch (reason) {
+      if (currentDirectory.current === directory) {
+        setError(
+          tx("粘贴失败，请检查目标目录（可能有未完成的副本）：{p0}", {
+            p0: localizeMessage(String(reason)),
+          }),
+        );
+        setRevision((value) => value + 1);
+      }
+    } finally {
+      copying.current = false;
+      setMutating(false);
+    }
+  };
   const manage = (entry: Entry, operation: string) => {
     setMenu(null);
     if (mutating) return;
@@ -438,7 +481,42 @@ export function FilePanel({
           }}
         />
       )}
-      <div className="file-results" ref={results}>
+      <div
+        className="file-results"
+        ref={results}
+        tabIndex={0}
+        onContextMenu={(event) => {
+          if (
+            mode !== "tree" ||
+            mutating ||
+            (event.target as HTMLElement).closest("input,textarea")
+          )
+            return;
+          event.preventDefault();
+          setFocusedEntry(null);
+          setMenu({ entry: rootEntry, x: event.clientX, y: event.clientY });
+        }}
+        onPointerDown={(event) => {
+          if (!(event.target as HTMLElement).closest("button,input,textarea"))
+            setFocusedEntry(null);
+        }}
+        onKeyDown={(event) => {
+          if (
+            mode !== "tree" ||
+            event.altKey ||
+            event.nativeEvent.isComposing ||
+            !(event.ctrlKey || event.metaKey) ||
+            (event.target as HTMLElement).closest("input,textarea,[contenteditable=true]")
+          )
+            return;
+          const key = event.key.toLowerCase();
+          if (key !== "c" && key !== "v") return;
+          event.preventDefault();
+          event.stopPropagation();
+          if (key === "c" && focusedEntry) copyFile(focusedEntry);
+          if (key === "v") void pasteFile(focusedEntry || rootEntry);
+        }}
+      >
         {mode === "tree" ? (
           <Folder
             key={directory}
@@ -456,6 +534,7 @@ export function FilePanel({
             manage={(entry, x, y) => {
               if (!mutating) setMenu({ entry, x, y });
             }}
+            select={setFocusedEntry}
           />
         ) : (
           <>
@@ -507,7 +586,7 @@ export function FilePanel({
           aria-label={tx("文件操作")}
           style={{
             left: Math.max(0, Math.min(menu.x, window.innerWidth - 220)),
-            top: Math.max(0, Math.min(menu.y, window.innerHeight - 310)),
+            top: Math.max(0, Math.min(menu.y, window.innerHeight - 390)),
           }}
           onKeyDown={(event) => {
             const buttons = Array.from(
@@ -525,14 +604,28 @@ export function FilePanel({
         >
           <button
             role="menuitem"
-            disabled={menu.entry.symlink}
+            disabled={!menu.entry.path || menu.entry.symlink || mutating}
+            onClick={() => copyFile(menu.entry)}
+          >
+            {tx("复制")}
+          </button>
+          <button
+            role="menuitem"
+            disabled={!fileClipboard || menu.entry.symlink || mutating}
+            onClick={() => void pasteFile(menu.entry)}
+          >
+            {tx("粘贴")}
+          </button>
+          <button
+            role="menuitem"
+            disabled={!menu.entry.path || menu.entry.symlink || mutating}
             onClick={() => manage(menu.entry, "rename")}
           >
             {tx("重命名")}
           </button>
           <button
             role="menuitem"
-            disabled={menu.entry.symlink}
+            disabled={!menu.entry.path || menu.entry.symlink || mutating}
             onClick={() => manage(menu.entry, "delete")}
           >
             {tx("删除")}

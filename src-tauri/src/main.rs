@@ -329,6 +329,7 @@ fn main() {
             agent_install::install_agent,
             files::files_list,
             files::file_mutate,
+            files::file_copy,
             files::file_reveal,
             files::file_read,
             files::file_save,

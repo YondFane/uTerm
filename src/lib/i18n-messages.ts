@@ -285,6 +285,10 @@ export const messages: Record<string, string> = {
   新建文件: "New file",
   新建目录: "New directory",
   复制路径: "Copy path",
+  复制: "Copy",
+  粘贴: "Paste",
+  "粘贴失败，请检查目标目录（可能有未完成的副本）：{p0}":
+    "Paste failed; check the destination (an incomplete copy may remain): {p0}",
   复制文件名: "Copy file name",
   "Git 面板": "Git panel",
   "Git 视图": "Git views",
