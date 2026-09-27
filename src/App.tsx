@@ -54,6 +54,7 @@ import {
   splitGroup,
   selectedRoster,
   nextSessionToClose,
+  cycleSession,
   sessionRosters,
   sessionEntries,
   updateRoster,
@@ -880,7 +881,11 @@ export function App() {
   }, [workspace?.selectedProject, workspace?.selectedWorkspace, activeGroupId]);
   function commandAvailable(id: CommandId): boolean {
     if (!runtime || !workspace || editor.transitioning || editor.pending) return false;
-    if (["splitRight", "splitDown", "terminalSearch", "next", "previous"].includes(id))
+    if (id === "next" || id === "previous")
+      return (
+        !editor.document && sessionRosters(workspace).some((roster) => roster.sessions.length > 0)
+      );
+    if (["splitRight", "splitDown", "terminalSearch"].includes(id))
       return !!workspace.selectedSession && !editor.document;
     if (["zoom", "ungroup", "left", "right", "up", "down"].includes(id))
       return !!activeGroup && !editor.document;
@@ -947,20 +952,23 @@ export function App() {
       );
       if (neighbor) update((previous) => selectSession(previous, neighbor));
     } else if ((id === "next" || id === "previous") && workspace) {
-      const sessions = sessionRosters(workspace)
-        .filter((item) => item.workspaceId === workspace.selectedWorkspace)
-        .flatMap((item) => item.sessions);
-      const index = sessions.findIndex((item) => item.id === workspace.selectedSession);
-      const next = sessions[(index + (id === "next" ? 1 : -1) + sessions.length) % sessions.length];
-      if (next) update((previous) => selectSession(previous, next.id));
+      update((previous) => cycleSession(previous, id === "next" ? 1 : -1));
     } else if (id === "terminalSearch") window.dispatchEvent(new Event("uterm-search"));
     else if (id === "close" && workspace) {
       const target = nextSessionToClose(workspace);
-      if (target)
+      if (target) {
+        const targetRoster = sessionRosters(workspace).find((item) =>
+          item.sessions.some((session) => session.id === target),
+        );
+        if (targetRoster)
+          update((previous) =>
+            selectSession(switchWorkspace(previous, targetRoster.workspaceId), target),
+          );
         setCloseRequest((previous) => ({
           id: target,
           sequence: (previous?.sequence ?? 0) + 1,
         }));
+      }
     } else if (id === "link" && workspace?.selectedSession)
       void navigator.clipboard
         .writeText(sessionLink(workspace.selectedSession))

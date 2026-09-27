@@ -810,6 +810,26 @@ export function nextSessionToClose(workspace: Workspace): string | undefined {
     sessionRosters(workspace).find((item) => item.sessions.length)?.sessions[0].id
   );
 }
+export function cycleSession(workspace: Workspace, direction: 1 | -1): Workspace {
+  const rosters = sessionRosters(workspace);
+  const sessions = (workspace.groups ?? []).flatMap((group) =>
+    rosters
+      .filter((roster) => roster.workspaceId === group.id)
+      .flatMap((roster) =>
+        roster.sessions.map((session) => ({ id: session.id, workspaceId: group.id })),
+      ),
+  );
+  if (!sessions.length) return workspace;
+  const index = sessions.findIndex((session) => session.id === workspace.selectedSession);
+  const local = sessions.filter((session) => session.workspaceId === workspace.selectedWorkspace);
+  const target =
+    index < 0
+      ? (direction === 1 ? (local[0] ?? sessions[0]) : (local.at(-1) ?? sessions.at(-1)))!
+      : sessions[(index + direction + sessions.length) % sessions.length];
+  // Switch the workspace first to preserve its remembered selection before selecting the session.
+  // 先切换工作区以保存原工作区的选择记录，再选中目标会话。
+  return selectSession(switchWorkspace(workspace, target.workspaceId), target.id);
+}
 export function selectSession(workspace: Workspace, id: string): Workspace {
   const roster = sessionRosters(workspace).find((item) =>
     item.sessions.some((session) => session.id === id),
