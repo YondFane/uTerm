@@ -1,6 +1,15 @@
+import { panelCollapseWidth } from "./sidebar-layout.ts";
+
+export function inspectorDragLayout(available: number, requestedWidth: number) {
+  return {
+    ...inspectorLayout(available, requestedWidth / Math.max(560, available)),
+    hidden: requestedWidth <= panelCollapseWidth,
+  };
+}
+
 export function inspectorLayout(availableWidth: number, ratio: number) {
   const available = Math.max(560, availableWidth);
-  const minimum = Math.max(240, available * 0.2);
+  const minimum = panelCollapseWidth;
   const maximum = Math.min(available - 320, available * 0.6);
   const width = Math.max(minimum, Math.min(maximum, available * ratio));
   return { available, minimum, maximum, width, ratio: width / available };

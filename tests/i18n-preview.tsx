@@ -12,7 +12,14 @@ if (!localStorage.getItem(settingsKey))
 setUiLanguage(
   JSON.parse(localStorage.getItem(settingsKey)!).language === "zh-Hans" ? "zh-Hans" : "en",
 );
-mockIPC(() => ({ enabled: false, port: 0, directory: "", endpoint: "" }));
+let autostart = false;
+mockIPC((cmd, args) => {
+  if (cmd === "autostart_configure") {
+    if (typeof args.enabled === "boolean") autostart = args.enabled;
+    return autostart;
+  }
+  return { enabled: false, port: 0, directory: "", endpoint: "" };
+});
 const noop = () => {};
 createRoot(document.getElementById("root")!).render(
   <SettingsProvider>

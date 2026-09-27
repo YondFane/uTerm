@@ -15,6 +15,7 @@ import { languages } from "@codemirror/language-data";
 import { oneDark } from "@codemirror/theme-one-dark";
 import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
+import { htmlPreview } from "../lib/html-preview";
 import { isDirty, editorText, documentText } from "../lib/file-document";
 import type { OpenFile } from "../lib/file-document";
 import type { useFileDocument } from "../lib/useFileDocument";
@@ -197,6 +198,10 @@ export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocume
   const [previewSource, setPreviewSource] = useState("");
   const isMarkdown = !!document && /\.(md|markdown|mdown)$/i.test(document.path);
   const isHtml = !!document && /\.html?$/i.test(document.path);
+  const htmlDocument = useMemo(
+    () => (isHtml && preview ? htmlPreview(previewSource) : null),
+    [isHtml, preview, previewSource],
+  );
   useEffect(() => {
     setPreview((isMarkdown || isHtml) && !document?.line);
     setPreviewSource(document?.text ?? "");
@@ -320,13 +325,22 @@ export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocume
             />
           </div>
           {preview && isHtml && (
-            <iframe
-              className="pdf-preview"
-              title={tx("HTML 预览 {p0}", { p0: document.path })}
-              sandbox=""
-              referrerPolicy="no-referrer"
-              srcDoc={`<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; form-action 'none'; base-uri 'none'"></head><body>${DOMPurify.sanitize(previewSource, { WHOLE_DOCUMENT: false, FORBID_TAGS: ["script", "iframe", "object", "embed", "base", "meta", "link", "form"], FORBID_ATTR: ["srcdoc"] })}<style>*{scrollbar-width:none!important}*::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}</style></body></html>`}
-            />
+            <>
+              {htmlDocument?.limited && (
+                <p className="editor-notice" role="status">
+                  {tx(
+                    "HTML 静态预览不运行脚本或加载外部资源。若页面空白，请通过项目开发服务器预览。",
+                  )}
+                </p>
+              )}
+              <iframe
+                className="html-preview"
+                title={tx("HTML 预览 {p0}", { p0: document.path })}
+                sandbox=""
+                referrerPolicy="no-referrer"
+                srcDoc={htmlDocument?.html}
+              />
+            </>
           )}
           {preview && !isHtml && (
             <article

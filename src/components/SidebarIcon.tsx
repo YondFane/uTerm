@@ -6,6 +6,7 @@ export const agentNames: Record<string, string> = {
   codex: "Codex",
   claude: "Claude",
   gemini: "Gemini",
+  opencode: "OpenCode",
   kimi: "Kimi",
   grok: "Grok",
 };

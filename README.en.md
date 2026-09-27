@@ -16,6 +16,10 @@ Quitting detaches the window without terminating background sessions. **Close Se
 
 ## Development
 
+Agent settings can install OpenCode, Claude, Codex and Gemini after confirmation using the local Node.js/npm installation. This requires internet access and permission to write npm's global prefix. Agent packages are optional and are not bundled with uTerm; other programs can be installed manually and configured by executable path.
+
+Launch at login uses the Rust dependency `tauri-plugin-autostart` and can be toggled in Settings → General. No additional JavaScript dependency is required.
+
 Requirements: Node.js 22.13 or newer, pnpm 11.22.0, Rust stable and Git. Windows requires the MSVC toolchain, Visual Studio C++ Build Tools, Windows SDK and WebView2. macOS requires Xcode command-line tools.
 
 ```sh

@@ -111,11 +111,29 @@ export function SettingsPanel({
   const [control, setControl] = useState<ControlStatus | null>(null);
   const [launcher, setLauncher] = useState("");
   const [busy, setBusy] = useState(false);
+  const [autostart, setAutostart] = useState<boolean | null>(null);
+  const [autostartBusy, setAutostartBusy] = useState(false);
+  const [autostartError, setAutostartError] = useState("");
+  async function configureAutostart(enabled?: boolean) {
+    setAutostartBusy(true);
+    setAutostartError("");
+    try {
+      const actual = await invoke<boolean>("autostart_configure", { enabled });
+      if (typeof actual !== "boolean") throw new Error("Invalid autostart status");
+      setAutostart(actual);
+      if (enabled !== undefined && actual !== enabled) throw new Error("Autostart state mismatch");
+    } catch (reason) {
+      setAutostartError(String(reason));
+    } finally {
+      setAutostartBusy(false);
+    }
+  }
   const mac = runtime.platform === "macos";
   const language = activeLanguage(settings.language);
   const t = (key: string) => translate(language, key);
   useEffect(() => {
     dialog.current?.showModal();
+    void configureAutostart();
     void invoke<ControlStatus>("control_status")
       .then(setControl)
       .catch((reason) => setMessage(String(reason)));
@@ -184,22 +202,75 @@ export function SettingsPanel({
             </p>
           ) : null}
           {tab === "通用" && (
-            <label>
-              {t("应用语言")}
-              <select
-                value={settings.language}
-                onChange={(event) =>
-                  change({ language: event.target.value as Settings["language"] })
-                }
-              >
-                {languageOptions.map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {value === "system" ? t("跟随系统") : label}
-                  </option>
-                ))}
-              </select>
-              <span className="muted">{t("语言切换立即生效。")}</span>
-            </label>
+            <>
+              <label>
+                {t("应用语言")}
+                <select
+                  value={settings.language}
+                  onChange={(event) =>
+                    change({ language: event.target.value as Settings["language"] })
+                  }
+                >
+                  {languageOptions.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {value === "system" ? t("跟随系统") : label}
+                    </option>
+                  ))}
+                </select>
+                <span className="muted">{t("语言切换立即生效。")}</span>
+              </label>
+              <label>
+                {t("开机自启动")}
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={autostart === true}
+                  disabled={autostartBusy || autostart === null}
+                  onChange={(event) => void configureAutostart(event.target.checked)}
+                />
+                <span className="muted">{t("登录系统后自动打开 uTerm。")}</span>
+              </label>
+              {autostartError && (
+                <p role="alert" className="settings-error">
+                  {tx("无法设置自启动：{p0}", { p0: autostartError })}
+                  <button disabled={autostartBusy} onClick={() => void configureAutostart()}>
+                    {t("重试")}
+                  </button>
+                </p>
+              )}
+              <div className="break-reminder-settings-row">
+                <label>
+                  {t("休息提醒")}
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    checked={settings.breakReminder}
+                    onChange={(event) => change({ breakReminder: event.target.checked })}
+                  />
+                </label>
+                <label>
+                  {t("提醒间隔（分钟）")}
+                  <input
+                    type="number"
+                    min={1}
+                    max={1440}
+                    step={1}
+                    disabled={!settings.breakReminder}
+                    defaultValue={settings.breakInterval}
+                    key={settings.breakInterval}
+                    onBlur={(event) => {
+                      const value = event.target.valueAsNumber;
+                      if (Number.isInteger(value) && value >= 1 && value <= 1440)
+                        change({ breakInterval: value });
+                      else {
+                        event.target.value = String(settings.breakInterval);
+                        setMessage(t("提醒间隔必须为 1 至 1440 分钟的整数。"));
+                      }
+                    }}
+                  />
+                </label>
+              </div>
+            </>
           )}
           {tab === "外观" && (
             <>

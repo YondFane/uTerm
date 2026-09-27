@@ -16,6 +16,10 @@ uTerm is a free Windows and macOS desktop terminal. All terminal and Agent proce
 
 ## Workspaces and sessions
 
+Agent chats close automatically only on a successful exit (code 0), removing the chat pane and sidebar entry after final output acknowledgement and successful host cleanup. Failed or unknown exits retain diagnostics, as do ordinary shell terminals. A failed Close Session retains the attachment and retries must confirm termination before removing it; disconnected sessions may require reconnection first. Disconnection alone does not close a chat; acknowledgement or cleanup failures remain visible. Native Claude/Codex exit acceptance remains pending.
+
+Close Session closes one session per shortcut invocation: the active session in the selected project, then its remaining sessions (including Worktrees), then other projects in stored order and finally standalone sessions across workspaces. With no project selected, an active standalone session takes priority. The shortcut is disabled while editing a file or when no sessions remain. Sequence tests cover draining all collections; native shortcut acceptance remains pending.
+
 Add Project supports selecting multiple folders in the native chooser. Review the selected paths and confirm Add to insert them into the workspace selected at confirmation. All directories are validated before the batch is saved; existing projects in that workspace are reused. Manual path entry replaces the multi-selection with a single path. Native multi-selection interaction remains pending runtime acceptance.
 
 New chat from the welcome page, command palette or shortcut uses the selected project's directory (or selected Worktree directory) and belongs to that project. Without a selected project it uses the standalone chat directory. This routing uses the existing project-session creation flow; live Agent working-directory acceptance remains pending.
@@ -30,6 +34,8 @@ Workspace storage accepts schema version 3; settings accept version 1 and requir
 
 ## Files and source control
 
+HTML and HTM files open in static preview, with an Edit/Preview toggle that previews unsaved text without saving. Full-document head styles, inline CSS and embedded data images are preserved. The isolated frame blocks scripts, external/local linked resources, forms and navigation; pages needing JavaScript (including Vite/React entry HTML) must use their development server. Such dependencies display a limitation notice rather than an unexplained blank panel. Regression tests cover style preservation and active-content removal. Native WebView acceptance remains pending.
+
 Project and file-tree context menus offer Open in File Manager. Folders open directly; files are revealed in their containing folder. File-tree paths are checked against the selected root before opening. Native file-manager selection remains pending runtime acceptance.
 
 Creation and renaming report conflicts separately for files and folders, including cross-type collisions. Renaming to the unchanged name succeeds without writing. Editing the input clears the previous validation message. Files and folders still cannot share a name in the same parent directory. Backend regression tests cover these rules; native interaction acceptance remains pending.
@@ -42,6 +48,16 @@ File access stays within the selected project root. Text saves check for conflic
 
 ## Agents and settings
 
+OpenCode is a built-in Agent: its `opencode` executable is detected on PATH and in `~/.opencode/bin`, and it uses the existing project/chat launch flow. Missing programs expose an installation panel. OpenCode, Claude, Codex and Gemini support confirmed global npm installation (Node.js/npm and network access required; no privilege elevation). Only fixed package identifiers are accepted; installation runs off the UI thread, concurrent installs are rejected, and errors remain visible. Completion refreshes program detection; custom npm prefixes may require configuring the executable path or restarting uTerm. Kimi links to its official installation instructions; Grok and custom executables require publisher-directed manual installation and path configuration. OpenCode does not yet expose Hooks or usage integration. Bilingual component tests cover confirmation, failure/retry and refresh; backend tests cover the package allowlist. Actual package downloads, native Agent launch and macOS installation remain unverified.
+
+Clicking blank space inside or outside a break reminder, or pressing Escape, does not dismiss it. Use Keep working to close it manually, or wait ten seconds for automatic dismissal. Component interaction and timer tests pass for these paths; native WebView interaction remains unverified.
+
+The break reminder switch and interval input share one row in General settings, without the auto-dismiss helper text. Reminder timing and validation are unchanged. A browser preview verifies the row alignment; bilingual component tests check both controls and removal of the helper text.
+
+Settings → General includes a Break reminder switch (off by default) and an interval of 1–1440 whole minutes (default 60). Interval edits save on leaving the field. While the app runs, a non-blocking reminder appears without taking focus, closes automatically after ten seconds, and can be dismissed with Keep working. Dismissal restarts the interval; changing the interval or restarting the app also resets it. Disabling cancels pending reminders. Missed intervals during sleep are not queued, and the app does not force its window to the foreground. Timer and settings regression tests cover automatic/manual dismissal, cleanup and invalid values; native timing and visual acceptance remain pending.
+
+Settings → General → Launch at login controls automatic startup after OS sign-in on Windows and macOS. Opening settings reads the system registration without enabling it. Changes apply immediately; failures remain visible and can be retried. Resetting interface settings does not change the OS registration. Development builds use a separate startup entry. Mocked component tests cover enabling, disabling and failure recovery. An isolated browser preview verifies the General settings layout; native login and macOS acceptance remain pending.
+
 Agent definitions specify a program and argument list. Hooks report activity; usage can combine local logs with provider requests when enabled. Provider credentials and permissions determine availability. Terminal input and process I/O are handled independently of UI rendering.
 
 Settings include appearance, color themes, fonts, terminal cursor and scrollback, keyboard shortcuts, default shell and Agent. Theme import accepts supported color fields only.
@@ -49,6 +65,12 @@ Settings include appearance, color themes, fonts, terminal cursor and scrollback
 In a focused Windows terminal, Ctrl+C copies selected terminal text; without a selection it remains the terminal interrupt key. Ctrl+V and Ctrl+Shift+V paste clipboard text using the terminal's bracketed-paste mode when enabled. Ctrl+Shift+C also copies selected text. macOS uses Cmd+C/Cmd+V for clipboard operations and preserves Control keys for terminal programs. Clipboard failures are displayed in the session; a pending paste is discarded if its connection closes or changes.
 
 ## Interface
+
+Both side panels highlight at a requested width of 30 px or less and collapse only on pointer release. Dragging back above the threshold while holding cancels the snap. The right panel checks this threshold before applying its minimum width, remembers the current panel and reopens through its button or shortcut. Release restores the pre-drag width for reopening; pointer cancellation clears the highlight without hiding. Window resizing alone does not trigger collapse. Boundary tests cover both sides; native right-panel drag acceptance remains pending.
+
+Toggle left sidebar uses Ctrl+B on Windows and Cmd+B on macOS; toggle right sidebar uses Ctrl+Alt+B or Cmd+Option+B. Both appear in Settings → Keyboard shortcuts and the command palette, and can be rebound or disabled. The right shortcut restores the last panel (falling back to Files when its project is unavailable) and requires a working directory. Dialogs and pending editor transitions suppress these shortcuts. Automated tests cover defaults, conflicts and custom bindings; native terminal shortcut acceptance remains pending.
+
+The sidebar hide button is at the top right of its brand row. Drag its right edge to resize between 30 px and the smaller of 320 px or 30% of the window (with a 180 px floor). Dragging to 30 px or less highlights it; releasing hides it; the toolbar button reopens it. Width is retained for the current app run. The separator also supports arrow keys, Home to hide, End for maximum width and Enter/double-click to reset. Boundary tests cover collapse and narrow-window limits; native pointer acceptance remains pending.
 
 Central error banners hide after 1.5 seconds without clearing the underlying error state. A different message starts a new timer; unchanged background errors do not keep reopening the banner. Workspace-load retry remains available after the banner hides. Native timing acceptance remains pending.
 
@@ -69,6 +91,18 @@ The file editor and its Markdown/syntax dependencies load on demand, with loadin
 React components live in `src/components/`; state and pure logic in `src/lib/`; Tauri commands in `src-tauri/src/`; PTYs, replay and hooks in `crates/utermd-local/`. The backend and session service use separate Cargo manifests and lockfiles.
 
 ## Validation and limits
+
+Lifecycle regression tests cover successful versus failed/unknown Agent exits, repeated close failures and duplicate close requests. Windows process tests verify that installer cleanup terminates both its parent and child processes using an isolated Job Object; Unix uses an isolated process group and still needs native acceptance. HTML sanitization tests reject SVG `xlink:href` navigation as well as ordinary links. No Agent package installation is performed by these tests.
+
+Agent installation and lifecycle validation: 133 frontend tests, 31 backend tests, 15 local-service tests, production build, formatting and localization checks pass. A browser preview verifies the OpenCode installation panel and confirmation command. Tests do not install packages on the user's machine; native download/install/launch and macOS acceptance remain pending. The build still reports chunks over 500 kB.
+
+Snap eligibility tests cover entering and leaving the threshold during a drag. Browser checks confirm release-to-collapse on the left; held-pointer highlight/reversal and native right-panel interaction still require runtime acceptance.
+
+Both panel minimum widths equal the 30 px collapse threshold. Layout tests verify 31 px remains visible and 30 px arms collapse during dragging; a browser check verifies left-panel resizing through 50 px to collapse without content spilling into the main area. Native right-panel acceptance remains pending.
+
+Sidebar browser acceptance verifies the top-right hide button, the 320 px drag limit and automatic hiding below the collapse threshold. Native desktop and macOS pointer acceptance remain pending.
+
+HTML preview validation: 122 frontend tests, production build and localization checks pass. A browser run of the real file editor verifies full-document styles and content. Native WebView acceptance is not covered by this preview.
 
 Performance validation: 119 frontend/build-helper tests, localization checks and the TypeScript/production build pass. The main JavaScript chunk measures 909.45 kB versus a 1,343.64 kB baseline (approximately 32% smaller); this is startup chunk size, not total installer size. Total installer reduction and runtime CPU/RSS improvements have not been measured. Deferred-editor failure/recovery and offscreen PDF rendering still need desktop interaction checks; the >500 kB chunk warning remains.
 

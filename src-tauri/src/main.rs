@@ -2,6 +2,7 @@
 
 use serde::Serialize;
 use tauri::{Emitter, Manager};
+mod agent_install;
 mod agents;
 mod control;
 mod files;
@@ -11,6 +12,25 @@ mod projects;
 mod sessions;
 mod taskbar;
 mod updates;
+
+#[tauri::command]
+async fn autostart_configure(app: tauri::AppHandle, enabled: Option<bool>) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    tauri::async_runtime::spawn_blocking(move || {
+        let manager = app.autolaunch();
+        if let Some(enabled) = enabled {
+            if enabled {
+                manager.enable()
+            } else {
+                manager.disable()
+            }
+            .map_err(|error| error.to_string())?;
+        }
+        manager.is_enabled().map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
 
 pub(crate) fn show_main_window(app: &tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
@@ -51,7 +71,7 @@ fn runtime_info(app: tauri::AppHandle) -> Result<RuntimeInfo, String> {
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?;
-    let mut available: Vec<String> = ["codex", "claude", "gemini"]
+    let mut available: Vec<String> = ["codex", "claude", "gemini", "opencode", "kimi", "grok"]
         .into_iter()
         .map(String::from)
         .chain(definitions.iter().map(|item| item.id.clone()))
@@ -271,9 +291,22 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin({
+            let builder =
+                tauri_plugin_autostart::Builder::new().app_name(if cfg!(debug_assertions) {
+                    "uTerm-dev"
+                } else {
+                    "uTerm"
+                });
+            #[cfg(target_os = "macos")]
+            let builder =
+                builder.macos_launcher(tauri_plugin_autostart::MacosLauncher::LaunchAgent);
+            builder.build()
+        })
         .manage(std::sync::Arc::new(sessions::Sessions::default()))
         .manage(files::EditorGuard::default())
         .invoke_handler(tauri::generate_handler![
+            autostart_configure,
             runtime_info,
             updates::update_status,
             updates::update_check,
@@ -293,6 +326,7 @@ fn main() {
             sessions::control_session,
             sessions::local_session_list,
             open_external,
+            agent_install::install_agent,
             files::files_list,
             files::file_mutate,
             files::file_reveal,

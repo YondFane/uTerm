@@ -16,6 +16,10 @@ uTerm 是免费的独立桌面终端，面向 Windows 和 macOS，使用 Tauri�
 
 ## 开发
 
+Agent 设置可在确认后使用本机 Node.js/npm 安装 OpenCode、Claude、Codex 和 Gemini，需要网络及 npm 全局目录写入权限。Agent 软件包为可选组件，不随 uTerm 打包；其他程序可手动安装并配置可执行文件路径。
+
+登录自启动由 Rust 依赖 `tauri-plugin-autostart` 提供，可在设置 → 通用中开关，无需额外 JavaScript 依赖。
+
 需要 Node.js 22.13 或以上、pnpm 11.22.0、Rust stable 和 Git。Windows 需要 MSVC 工具链、Visual Studio C++ Build Tools、Windows SDK 和 WebView2。macOS 需要 Xcode 命令行工具。
 
 ```sh

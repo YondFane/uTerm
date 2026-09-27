@@ -37,6 +37,18 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
   en: {
     ...messages,
     ...backendMessages,
+    安装程序: "Install program",
+    确认安装: "Confirm installation",
+    "正在安装…": "Installing…",
+    官方安装说明: "Official installation guide",
+    重新检测: "Check again",
+    "将通过 npm 全局安装程序，需要 Node.js 和网络连接，不会自动提权。":
+      "Installs globally with npm. Requires Node.js and internet access; no automatic elevation.",
+    "请按发布方说明安装程序，再配置可执行文件路径。":
+      "Install using the publisher’s instructions, then configure the executable path.",
+    "安装完成，程序已可用。": "Installation complete. The program is available.",
+    "安装命令已完成，但未找到程序。请配置程序路径或重启 uTerm 后重新检测。":
+      "Installation finished, but the program was not found. Configure its path or restart uTerm and check again.",
     纸白: "Paper",
     晴空: "Clear Sky",
     "暖白与陶棕，温润清爽。": "Warm white and terracotta. Soft and fresh.",
@@ -84,6 +96,22 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     本地控制: "Local control",
     软件更新: "Software update",
     应用语言: "App language",
+    开机自启动: "Launch at login",
+    重试: "Retry",
+    休息提醒: "Break reminder",
+    "提醒间隔（分钟）": "Reminder interval (minutes)",
+    "提醒间隔必须为 1 至 1440 分钟的整数。":
+      "The reminder interval must be a whole number from 1 to 1440 minutes.",
+    "该休息一下了，起来活动活动吧。": "Time for a break. Get up and stretch a little.",
+    "10 秒后自动关闭，不影响继续使用。": "Dismisses after 10 seconds. You can keep working.",
+    继续使用: "Keep working",
+    调整左侧栏宽度: "Resize left sidebar",
+    显示或隐藏左侧栏: "Toggle left sidebar",
+    显示或隐藏右侧栏: "Toggle right sidebar",
+    "HTML 静态预览不运行脚本或加载外部资源。若页面空白，请通过项目开发服务器预览。":
+      "Static HTML preview does not run scripts or load external resources. If the page is blank, preview it using the project's development server.",
+    "登录系统后自动打开 uTerm。": "Open uTerm automatically after signing in.",
+    "无法设置自启动：{p0}": "Unable to configure launch at login: {p0}",
     系统默认: "System default",
     跟随系统: "System default",
     "打开 uTerm": "Open uTerm",

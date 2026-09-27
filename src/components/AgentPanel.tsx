@@ -6,6 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 import type { AgentDefinition, RuntimeInfo } from "../lib/desktop";
 import { agentNames, SessionIcon } from "./SidebarIcon";
+import { agentInstallers } from "../lib/agent-install";
 export const notificationKey = "uterm.desktop.agentNotifications";
 interface Usage {
   input: number;
@@ -69,6 +70,8 @@ export function AgentSettings({
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [installing, setInstalling] = useState<string | null>(null);
+  const [installTarget, setInstallTarget] = useState<string | null>(null);
   const [usage, setUsage] = useState<{ agent: string; value: Usage } | null>(null);
   const [notifications, setNotifications] = useState(
     () => localStorage.getItem(notificationKey) === "true",
@@ -78,6 +81,7 @@ export function AgentSettings({
       "claude",
       "codex",
       "gemini",
+      "opencode",
       "kimi",
       "grok",
       ...definitions.map((item) => item.id),
@@ -102,11 +106,20 @@ export function AgentSettings({
   }
   return (
     <div className="agent-settings">
-      {error && <p role="alert">{localizeMessage(error)}</p>}
+      {error && (
+        <p role="alert">
+          {error
+            .split("\n")
+            .map((line) => localizeMessage(line))
+            .join("\n")}
+        </p>
+      )}
       {notice && <p role="status">{localizeMessage(notice)}</p>}
       <div className="agent-catalog">
         {ids.map((id) => {
           const definition = definitions.find((item) => item.id === id);
+          const installer = agentInstallers[id];
+          const automatic = installer?.package && (!definition || definition.program === id);
           return (
             <section key={id} className="agent-definition">
               <header>
@@ -115,6 +128,11 @@ export function AgentSettings({
                 <span>{runtime.agents.includes(id) ? tx("可用") : tx("未找到程序")}</span>
               </header>
               <div className="agent-buttons">
+                {!runtime.agents.includes(id) && (
+                  <button disabled={busy} onClick={() => setInstallTarget(id)}>
+                    {tx("安装程序")}
+                  </button>
+                )}
                 <button
                   disabled={busy}
                   onClick={() => {
@@ -203,6 +221,63 @@ export function AgentSettings({
                   </button>
                 )}
               </div>
+              {installTarget === id && (
+                <div className="agent-editor">
+                  <p>
+                    {automatic
+                      ? tx("将通过 npm 全局安装程序，需要 Node.js 和网络连接，不会自动提权。")
+                      : tx("请按发布方说明安装程序，再配置可执行文件路径。")}
+                  </p>
+                  {automatic && <code>{`npm install -g ${installer.package}`}</code>}
+                  <div className="agent-buttons">
+                    {automatic && (
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void perform(async () => {
+                            setInstalling(id);
+                            try {
+                              const available = await invoke<boolean>("install_agent", {
+                                agent: id,
+                              });
+                              setNotice(
+                                available
+                                  ? tx("安装完成，程序已可用。")
+                                  : tx(
+                                      "安装命令已完成，但未找到程序。请配置程序路径或重启 uTerm 后重新检测。",
+                                    ),
+                              );
+                              await reload();
+                            } finally {
+                              setInstalling(null);
+                            }
+                          })
+                        }
+                      >
+                        {installing === id ? tx("正在安装…") : tx("确认安装")}
+                      </button>
+                    )}
+                    {installer && (
+                      <button
+                        disabled={busy}
+                        onClick={() =>
+                          void perform(async () => {
+                            await invoke("open_external", { url: installer.url });
+                          })
+                        }
+                      >
+                        {tx("官方安装说明")}
+                      </button>
+                    )}
+                    <button disabled={busy} onClick={() => void perform(reload)}>
+                      {tx("重新检测")}
+                    </button>
+                    <button disabled={busy} onClick={() => setInstallTarget(null)}>
+                      {tx("取消")}
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
           );
         })}

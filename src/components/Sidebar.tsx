@@ -31,6 +31,7 @@ export interface SidebarMenu {
   y: number;
 }
 export function Sidebar({
+  resizeHandle,
   visible,
   toggleVisibility,
   closeSession,
@@ -50,6 +51,7 @@ export function Sidebar({
   onSessionViewed,
   footerActions,
 }: {
+  resizeHandle?: ReactNode;
   closeSession: (id: string) => void;
   visible: boolean;
   toggleVisibility: () => void;
@@ -572,8 +574,6 @@ export function Sidebar({
         </span>
         <strong data-tauri-drag-region>uTerm</strong>
         <small>{tx("本地")}</small>
-      </div>
-      <header className="sidebar-header" data-tauri-drag-region>
         <button
           className="icon-button sidebar-toggle"
           aria-label={tx("隐藏侧栏")}
@@ -584,6 +584,9 @@ export function Sidebar({
         >
           <SidebarIcon name="sidebar" />
         </button>
+      </div>
+      {resizeHandle}
+      <header className="sidebar-header" data-tauri-drag-region>
         <button
           className="workspace-switcher"
           disabled={!workspace}

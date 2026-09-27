@@ -1,4 +1,14 @@
 export const backendMessages: Record<string, string> = {
+  "此 Agent 不支持自动安装，请按其发布方说明安装后配置程序路径。":
+    "Automatic installation is unavailable for this agent. Follow its publisher’s instructions and configure the program path.",
+  "已有 Agent 正在安装。": "An agent installation is already running.",
+  "未找到 npm，请先安装 Node.js，再重启 uTerm 后重试。":
+    "npm was not found. Install Node.js, then restart uTerm and try again.",
+  "找不到 npm CLI。": "npm CLI was not found.",
+  "安装超时或输出过多，请查看官方安装说明。":
+    "Installation timed out or produced too much output. See the official installation guide.",
+  "安装失败，请检查网络、权限和 Node.js 版本。":
+    "Installation failed. Check your network, permissions and Node.js version.",
   "保存期间文件发生变化，请重新读取。": "The file changed during saving. Reload it.",
   "文件已被其他程序修改。请重新读取，或确认覆盖磁盘版本。":
     "Another program modified this file. Reload it or confirm overwriting the disk version.",

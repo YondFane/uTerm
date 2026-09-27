@@ -792,6 +792,24 @@ export function selectedRoster(workspace: Workspace): SessionRoster | undefined 
         : roster.projectId !== null && roster.projectId === workspace.selectedProject),
   );
 }
+export function nextSessionToClose(workspace: Workspace): string | undefined {
+  const project = workspace.projects.find((item) => item.id === workspace.selectedProject);
+  // Finish the selected project before traversing other projects and standalone sessions.
+  // 先关闭所选项目内的会话，再遍历其他项目及独立会话。
+  const preferred = project?.sessions;
+  if (preferred?.length)
+    return preferred.find((item) => item.id === workspace.selectedSession)?.id ?? preferred[0].id;
+  if (!project && workspace.selectedSession) {
+    const active = sessionRosters(workspace)
+      .flatMap((item) => item.sessions)
+      .find((item) => item.id === workspace.selectedSession);
+    if (active) return active.id;
+  }
+  return (
+    workspace.projects.find((item) => item.sessions.length)?.sessions[0].id ??
+    sessionRosters(workspace).find((item) => item.sessions.length)?.sessions[0].id
+  );
+}
 export function selectSession(workspace: Workspace, id: string): Workspace {
   const roster = sessionRosters(workspace).find((item) =>
     item.sessions.some((session) => session.id === id),

@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { binding, shortcutLabel } from "../lib/settings";
 import { useSettings } from "../lib/SettingsContext";
 import { isBareShiftTab, terminalClipboardAction } from "../lib/terminal-input";
+import { autoCloseAgent, closeAttachedSession } from "../lib/session-lifecycle";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import type { DragEventHandler, PointerEventHandler } from "react";
@@ -96,6 +97,8 @@ export function TerminalView({
   const terminal = useRef<Terminal | null>(null);
   const fitAddon = useRef<FitAddon | null>(null);
   const connection = useRef<Connection | null>(null);
+  const closeRef = useRef(close);
+  closeRef.current = close;
   const search = useRef<SearchAddon | null>(null);
   const searchInput = useRef<HTMLInputElement>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -390,12 +393,25 @@ export function TerminalView({
           current.exited = true;
           term.options.disableStdin = true;
           setStatus("exited");
-          term.writeln(tx("\r\n[会话已退出：{p0}]", { p0: event.code ?? tx("未知") }));
+          if (!autoCloseAgent(session.agent, event.code))
+            term.writeln(tx("\r\n[会话已退出：{p0}]", { p0: event.code ?? tx("未知") }));
         }
         // Acknowledge after xterm consumes the bytes to keep output backpressure bounded.
         current.ready
           .then(() => {
             if (!current.closed) return action(current.id, "ack", { sequence: event.sequence });
+          })
+          .then(() => {
+            // Close agent chats only after consuming and acknowledging their final output.
+            // 仅在消费并确认最后的输出后关闭 Agent 聊天。
+            if (
+              event.exited &&
+              autoCloseAgent(session.agent, event.code) &&
+              !event.error &&
+              !current.closed &&
+              connection.current === current
+            )
+              return closeRef.current();
           })
           .catch((reason: unknown) => {
             if (!current.closed) setError(String(reason));
@@ -436,24 +452,15 @@ export function TerminalView({
 
   async function close() {
     const current = connection.current;
+    if (current?.closed) return;
     if (!current) {
       onClosed();
       return;
     }
-    if (status === "disconnected") {
-      current.closed = true;
-      connection.current = null;
-      if (terminal.current) terminal.current.options.disableStdin = true;
-      setStatus("idle");
-      onClosed();
-      return;
-    }
     setStatus("closing");
-    current.closed = true;
     if (terminal.current) terminal.current.options.disableStdin = true;
     try {
-      await current.ready;
-      await action(current.id, "close");
+      if (!(await closeAttachedSession(current, () => action(current.id, "close")))) return;
       connection.current = null;
       setStatus("idle");
       onClosed();

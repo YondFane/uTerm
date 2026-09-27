@@ -38,6 +38,22 @@ test("platform shortcuts avoid project and terminal search collisions", () => {
   );
   assert.equal(binding({ ...defaults, shortcuts: { palette: "" } }, "palette", true), "");
 });
+test("sidebar shortcuts support platform modifiers, customization and disabling", () => {
+  for (const mac of [true, false]) {
+    assert.equal(binding(defaults, "toggleSidebar", mac), "Mod+KeyB");
+    assert.equal(binding(defaults, "toggleInspector", mac), "Mod+Alt+KeyB");
+    validateShortcuts(defaults, mac);
+    const settings = readSettings(
+      JSON.stringify({
+        ...defaults,
+        shortcuts: { toggleSidebar: "", toggleInspector: "Mod+Shift+KeyB" },
+      }),
+    );
+    assert.equal(binding(settings, "toggleSidebar", mac), "");
+    assert.equal(binding(settings, "toggleInspector", mac), "Mod+Shift+KeyB");
+    validateShortcuts(settings, mac);
+  }
+});
 test("rebindings reject collisions and reserved editing keys", () => {
   assert.throws(() =>
     validateShortcuts({ ...defaults, shortcuts: { settings: "Mod+KeyP" } }, true),

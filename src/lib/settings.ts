@@ -14,6 +14,8 @@ export const commands = [
   ["quick", "快速打开文件", "Mod+KeyP"],
   ["search", "搜索项目", "Mod+Shift+KeyF"],
   ["files", "显示或隐藏文件", ""],
+  ["toggleSidebar", "显示或隐藏左侧栏", "Mod+KeyB"],
+  ["toggleInspector", "显示或隐藏右侧栏", "Mod+Alt+KeyB"],
   ["git", "显示或隐藏 Git", ""],
   ["github", "显示或隐藏 GitHub", ""],
   ["agents", "Agent 与用量", ""],
@@ -33,6 +35,8 @@ export const commands = [
 ] as const;
 export type CommandId = (typeof commands)[number][0];
 export interface Settings {
+  breakReminder: boolean;
+  breakInterval: number;
   interfaceTheme: InterfaceThemeId;
   darkTheme: string;
   lightTheme: string;
@@ -61,6 +65,8 @@ export interface Settings {
   shortcuts: Partial<Record<CommandId, string>>;
 }
 export const defaults: Settings = {
+  breakReminder: false,
+  breakInterval: 60,
   interfaceTheme: "black",
   darkTheme: "default-dark",
   lightTheme: "default-light",
@@ -129,6 +135,10 @@ export function readSettings(raw: string | null): Settings {
   const parsed = JSON.parse(raw);
   const v = parsed?.version === 1 && {
     ...parsed,
+    breakReminder:
+      parsed.breakReminder === undefined ? defaults.breakReminder : parsed.breakReminder,
+    breakInterval:
+      parsed.breakInterval === undefined ? defaults.breakInterval : parsed.breakInterval,
     interfaceTheme:
       parsed.interfaceTheme === undefined ? defaults.interfaceTheme : parsed.interfaceTheme,
   };
@@ -137,6 +147,9 @@ export function readSettings(raw: string | null): Settings {
   if (
     !v ||
     v.version !== 1 ||
+    typeof v.breakReminder !== "boolean" ||
+    !Number.isInteger(v.breakInterval) ||
+    !finite(v.breakInterval, 1, 1440) ||
     !interfaceThemes.some((theme) => theme.id === v.interfaceTheme) ||
     !["dark", "light", "system"].includes(v.appearance) ||
     typeof v.fontFamily !== "string" ||

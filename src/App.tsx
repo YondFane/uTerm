@@ -4,10 +4,11 @@ import { tx } from "./lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { sessionSyncErrorMessage } from "./lib/session-sync";
 import type { CSSProperties } from "react";
-import { hasInspectorContent, inspectorLayout } from "./lib/inspector-layout";
+import { hasInspectorContent, inspectorLayout, inspectorDragLayout } from "./lib/inspector-layout";
 import { CommandPalette } from "./components/CommandPalette";
 import { useUpdates } from "./lib/useUpdates";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { BreakReminder } from "./components/BreakReminder";
 import { useSettings } from "./lib/SettingsContext";
 import { activeLanguage, translate } from "./lib/i18n";
 import { quotaAgent, remainingUsage, type UsageWindow } from "./lib/usage";
@@ -52,6 +53,7 @@ import {
   removeProject,
   splitGroup,
   selectedRoster,
+  nextSessionToClose,
   sessionRosters,
   sessionEntries,
   updateRoster,
@@ -73,18 +75,25 @@ import type {
   LocalSessionSnapshot,
 } from "./lib/workspace";
 
+import { sidebarLayout, panelCollapseWidth } from "./lib/sidebar-layout";
+
 export function App() {
   useUiLanguage();
 
   const { settings } = useSettings();
   const t = (key: string) => translate(activeLanguage(settings.language), key);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [requestedSidebarWidth, setRequestedSidebarWidth] = useState(248);
+  const sidebarDrag = useRef<{ x: number; width: number; collapse?: boolean } | null>(null);
+  const [sidebarSnap, setSidebarSnap] = useState(false);
+  const [inspectorSnap, setInspectorSnap] = useState(false);
+  const [resizingSidebar, setResizingSidebar] = useState(false);
   const [gitExpanded, setGitExpanded] = useState(false);
   const shellElement = useRef<HTMLDivElement>(null);
   const [shellWidth, setShellWidth] = useState(window.innerWidth);
   const [inspectorRatio, setInspectorRatio] = useState(0.35);
   const [resizingInspector, setResizingInspector] = useState(false);
-  const inspectorDrag = useRef<{ x: number; width: number } | null>(null);
+  const inspectorDrag = useRef<{ x: number; width: number; collapse?: boolean } | null>(null);
   useEffect(() => {
     const shell = shellElement.current;
     if (!shell) return;
@@ -92,7 +101,78 @@ export function App() {
     observer.observe(shell);
     return () => observer.disconnect();
   }, []);
-  const sidebarWidth = sidebarVisible ? (shellWidth <= 950 ? 220 : 248) : 0;
+  const sidebarSize = sidebarLayout(shellWidth, requestedSidebarWidth);
+  const sidebarWidth = sidebarVisible ? sidebarSize.width : 0;
+  function resizeSidebar(width: number) {
+    const next = sidebarLayout(shellWidth, width);
+    if (next.hidden) {
+      sidebarDrag.current = null;
+      setResizingSidebar(false);
+      setSidebarVisible(false);
+    } else setRequestedSidebarWidth(next.width);
+  }
+  const sidebarResizeHandle = (
+    <div
+      className="sidebar-resizer"
+      role="separator"
+      tabIndex={0}
+      aria-label={tx("调整左侧栏宽度")}
+      aria-orientation="vertical"
+      aria-valuemin={panelCollapseWidth}
+      aria-valuemax={Math.round(sidebarSize.maximum)}
+      aria-valuenow={Math.round(sidebarWidth)}
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        sidebarDrag.current = { x: event.clientX, width: sidebarWidth };
+        setResizingSidebar(true);
+      }}
+      onPointerMove={(event) => {
+        const drag = sidebarDrag.current;
+        if (!drag) return;
+        const next = sidebarLayout(shellWidth, drag.width + event.clientX - drag.x);
+        drag.collapse = next.hidden;
+        setSidebarSnap(next.hidden);
+        setRequestedSidebarWidth(next.width);
+      }}
+      onPointerUp={(event) => {
+        if (sidebarDrag.current?.collapse) {
+          setRequestedSidebarWidth(sidebarDrag.current.width);
+          setSidebarVisible(false);
+        }
+        setSidebarSnap(false);
+        sidebarDrag.current = null;
+        setResizingSidebar(false);
+        if (event.currentTarget.hasPointerCapture(event.pointerId))
+          event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
+      onLostPointerCapture={() => {
+        setSidebarSnap(false);
+        sidebarDrag.current = null;
+        setResizingSidebar(false);
+      }}
+      onPointerCancel={() => {
+        setSidebarSnap(false);
+        sidebarDrag.current = null;
+        setResizingSidebar(false);
+      }}
+      onDoubleClick={() => setRequestedSidebarWidth(248)}
+      onKeyDown={(event) => {
+        if (!["ArrowLeft", "ArrowRight", "Home", "End", "Enter"].includes(event.key)) return;
+        event.preventDefault();
+        resizeSidebar(
+          event.key === "Home"
+            ? panelCollapseWidth
+            : event.key === "End"
+              ? sidebarSize.maximum
+              : event.key === "Enter"
+                ? 248
+                : sidebarWidth + (event.key === "ArrowLeft" ? -24 : 24),
+        );
+      }}
+    />
+  );
   const inspectorSize = inspectorLayout(shellWidth - sidebarWidth, inspectorRatio);
   const resizeHandle = (
     <div
@@ -114,23 +194,36 @@ export function App() {
       onPointerMove={(event) => {
         const drag = inspectorDrag.current;
         if (!drag) return;
-        setInspectorRatio(
-          inspectorLayout(
-            inspectorSize.available,
-            (drag.width + drag.x - event.clientX) / inspectorSize.available,
-          ).ratio,
+        const next = inspectorDragLayout(
+          inspectorSize.available,
+          drag.width + drag.x - event.clientX,
         );
+        drag.collapse = next.hidden;
+        setInspectorSnap(next.hidden);
+        setInspectorRatio(next.ratio);
       }}
       onPointerUp={(event) => {
+        if (inspectorDrag.current?.collapse) {
+          setInspectorRatio(inspectorDrag.current.width / inspectorSize.available);
+          if (inspectorVisible) toggleInspector();
+        }
+        setInspectorSnap(false);
         inspectorDrag.current = null;
         setResizingInspector(false);
-        event.currentTarget.releasePointerCapture(event.pointerId);
+        if (event.currentTarget.hasPointerCapture(event.pointerId))
+          event.currentTarget.releasePointerCapture(event.pointerId);
       }}
       onLostPointerCapture={() => {
+        setInspectorSnap(false);
         inspectorDrag.current = null;
         setResizingInspector(false);
       }}
       onDoubleClick={() => setInspectorRatio(0.35)}
+      onPointerCancel={() => {
+        setInspectorSnap(false);
+        inspectorDrag.current = null;
+        setResizingInspector(false);
+      }}
       onKeyDown={(event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End", "Enter"].includes(event.key)) return;
         event.preventDefault();
@@ -791,14 +884,18 @@ export function App() {
       return !!workspace.selectedSession && !editor.document;
     if (["zoom", "ungroup", "left", "right", "up", "down"].includes(id))
       return !!activeGroup && !editor.document;
-    if (["close", "link"].includes(id)) return !!workspace.selectedSession && !editor.document;
+    if (id === "close") return !!nextSessionToClose(workspace) && !editor.document;
+    if (id === "link") return !!workspace.selectedSession && !editor.document;
     if (id === "github") return !!selected;
+    if (id === "toggleInspector") return !!fileDirectory;
     if (id === "chat") return runtime.agents.includes(settings.defaultAgent);
     return true;
   }
   function runCommand(id: CommandId) {
     if (!commandAvailable(id)) return;
     if (id === "palette") setPaletteOpen(true);
+    else if (id === "toggleSidebar") setSidebarVisible((value) => !value);
+    else if (id === "toggleInspector") toggleInspector();
     else if (id === "settings") setSettingsOpen(true);
     else if (id === "project") openProjectDialog();
     else if (id === "terminal") {
@@ -857,12 +954,14 @@ export function App() {
       const next = sessions[(index + (id === "next" ? 1 : -1) + sessions.length) % sessions.length];
       if (next) update((previous) => selectSession(previous, next.id));
     } else if (id === "terminalSearch") window.dispatchEvent(new Event("uterm-search"));
-    else if (id === "close" && workspace?.selectedSession)
-      setCloseRequest((previous) => ({
-        id: workspace.selectedSession ?? "",
-        sequence: (previous?.sequence ?? 0) + 1,
-      }));
-    else if (id === "link" && workspace?.selectedSession)
+    else if (id === "close" && workspace) {
+      const target = nextSessionToClose(workspace);
+      if (target)
+        setCloseRequest((previous) => ({
+          id: target,
+          sequence: (previous?.sequence ?? 0) + 1,
+        }));
+    } else if (id === "link" && workspace?.selectedSession)
       void navigator.clipboard
         .writeText(sessionLink(workspace.selectedSession))
         .catch((reason) => setError(String(reason)));
@@ -1119,6 +1218,30 @@ export function App() {
     git: gitOpen,
     github: githubOpen,
   });
+  function toggleInspector() {
+    if (inspectorVisible) {
+      lastInspector.current = directoryOpen
+        ? "directory"
+        : githubOpen
+          ? "github"
+          : gitOpen
+            ? "git"
+            : "files";
+      setFilesOpen(false);
+      setGitOpen(false);
+      setGithubOpen(false);
+      setDirectoryOpen(false);
+    } else {
+      const panel =
+        ["github", "git"].includes(lastInspector.current) && !selected
+          ? "files"
+          : lastInspector.current;
+      setFilesOpen(panel === "files");
+      setGitOpen(panel === "git");
+      setGithubOpen(panel === "github");
+      setDirectoryOpen(panel === "directory");
+    }
+  }
   const inspectorToggle = (
     <button
       className="toolbar-icon-button"
@@ -1126,28 +1249,7 @@ export function App() {
       title={inspectorVisible ? tx("隐藏右侧栏") : tx("显示右侧栏")}
       aria-expanded={inspectorVisible}
       disabled={!runtime || !fileDirectory}
-      onClick={() => {
-        if (inspectorVisible) {
-          lastInspector.current = directoryOpen
-            ? "directory"
-            : githubOpen
-              ? "github"
-              : gitOpen
-                ? "git"
-                : "files";
-          setFilesOpen(false);
-          setGitOpen(false);
-          setGithubOpen(false);
-          setDirectoryOpen(false);
-        } else {
-          const panel =
-            lastInspector.current === "github" && !selected ? "files" : lastInspector.current;
-          setFilesOpen(panel === "files");
-          setGitOpen(panel === "git");
-          setGithubOpen(panel === "github");
-          setDirectoryOpen(panel === "directory");
-        }
-      }}
+      onClick={toggleInspector}
     >
       <SidebarIcon name="sidebarRight" />
     </button>
@@ -1226,10 +1328,15 @@ export function App() {
         } as CSSProperties
       }
       data-resizing-inspector={resizingInspector || undefined}
+      data-resizing-sidebar={resizingSidebar || undefined}
+      data-sidebar-snap={sidebarSnap || undefined}
+      data-inspector-snap={inspectorSnap || undefined}
       data-expanded-inspector={(inspectorVisible && gitOpen && gitExpanded) || undefined}
       className={`app-shell${sidebarVisible ? "" : " sidebar-hidden"}${runtime?.platform === "macos" ? " platform-macos" : ""}${inspectorVisible ? " with-inspector" : ""}${inspectorVisible && (filesOpen || directoryOpen) ? " with-files" : ""}`}
     >
+      <BreakReminder />
       <Sidebar
+        resizeHandle={sidebarResizeHandle}
         closeSession={(id) =>
           setCloseRequest((previous) => ({ id, sequence: (previous?.sequence ?? 0) + 1 }))
         }

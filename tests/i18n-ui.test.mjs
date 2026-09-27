@@ -82,6 +82,7 @@ test("real settings tabs, commands and panels render in both languages without u
   const { DirectoryPanel } = await load("components/DirectoryPanel.tsx");
   const { Sidebar } = await load("components/Sidebar.tsx");
   const { AgentStatusIndicator } = await load("components/SidebarIcon.tsx");
+  const { AgentSettings } = await load("components/AgentPanel.tsx");
   const { FileEditor, UnsavedDialog } = await load("components/FileEditor.tsx");
   const { TerminalView } = await load("components/TerminalView.tsx");
   const { PdfReader } = await load("components/PdfReader.tsx");
@@ -106,8 +107,22 @@ test("real settings tabs, commands and panels render in both languages without u
     install: noop,
   };
   const calls = [];
-  mockIPC((cmd) => {
+  let autostart = false;
+  let autostartFail = false;
+  let installFail = false;
+  let installedAgent;
+  mockIPC((cmd, args) => {
     calls.push(cmd);
+    if (cmd === "install_agent") {
+      installedAgent = args.agent;
+      if (installFail) throw new Error("未找到 npm，请先安装 Node.js，再重启 uTerm 后重试。");
+      return true;
+    }
+    if (cmd === "autostart_configure") {
+      if (autostartFail) throw new Error("Access denied");
+      if (typeof args.enabled === "boolean") autostart = args.enabled;
+      return autostart;
+    }
     if (cmd === "control_status")
       return { enabled: true, port: 1234, directory: "C:/fixture", endpoint: "loopback" };
     if (cmd === "directory_tools" || cmd === "github_repositories") return [];
@@ -143,6 +158,43 @@ test("real settings tabs, commands and panels render in both languages without u
     assert.equal(i18n.missingTranslations.size, 0);
   }
   try {
+    await context.test(
+      "agent installation requires confirmation, reports failures and refreshes",
+      async () => {
+        for (const language of ["en", "zh-Hans"]) {
+          let reloads = 0;
+          await mount(
+            React.createElement(AgentSettings, {
+              runtime,
+              reload: async () => {
+                reloads++;
+              },
+            }),
+            language,
+          );
+          const section = [...host.querySelectorAll(".agent-definition")].find(
+            (el) => el.querySelector("strong").textContent === "OpenCode",
+          );
+          assert.ok(section);
+          const before = calls.filter((cmd) => cmd === "install_agent").length;
+          await act(async () => section.querySelector("button").click());
+          assert.equal(calls.filter((cmd) => cmd === "install_agent").length, before);
+          assert.match(section.textContent, /npm install -g opencode-ai/);
+          installFail = true;
+          await click(language === "en" ? "Confirm installation" : "确认安装");
+          assert.match(host.querySelector('[role="alert"]').textContent, /npm/);
+          assert.equal(reloads, 0);
+          if (language === "en") assertEnglish();
+          installFail = false;
+          await click(language === "en" ? "Confirm installation" : "确认安装");
+          assert.equal(installedAgent, "opencode");
+          assert.equal(reloads, 1);
+          assert.ok(host.querySelector('[role="status"]'));
+          assert.equal(host.querySelector('[role="alert"]'), null);
+          if (language === "en") assertEnglish();
+        }
+      },
+    );
     await context.test(
       "editor, unsaved dialog and terminal chrome render in both languages",
       async () => {
@@ -233,6 +285,24 @@ test("real settings tabs, commands and panels render in both languages without u
         "en",
       );
       assert.match(host.textContent, /Reset interface and terminal settings/);
+      const reminderRow = host.querySelector(".break-reminder-settings-row");
+      assert.ok(reminderRow.querySelector('[role="switch"]'));
+      assert.ok(reminderRow.querySelector('input[type="number"]'));
+      assert.equal(reminderRow.querySelector(".muted"), null);
+      const startupSwitch = host.querySelector('[role="switch"]');
+      assert.equal(startupSwitch.checked, false);
+      assert.equal(startupSwitch.disabled, false);
+      await act(async () => startupSwitch.click());
+      assert.equal(startupSwitch.checked, true);
+      assert.equal(autostart, true);
+      autostartFail = true;
+      await act(async () => startupSwitch.click());
+      assert.equal(startupSwitch.checked, true);
+      assert.match(host.textContent, /Unable to configure launch at login:.*Access denied/);
+      autostartFail = false;
+      await act(async () => startupSwitch.click());
+      assert.equal(startupSwitch.checked, false);
+      assert.equal(autostart, false);
       const originalDialog = host.querySelector("dialog");
       const select = host.querySelector("select");
       await act(async () => {

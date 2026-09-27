@@ -1,6 +1,6 @@
 [package]
 name = "uterm"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 publish = false
 description = "uTerm cross-platform desktop client"
@@ -35,3 +35,4 @@ tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = "2"
 uuid = { version = "1.26.1", features = ["v4"] }
 tauri-plugin-updater = "2"
+tauri-plugin-autostart = "=2.5.1"

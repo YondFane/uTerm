@@ -4,7 +4,7 @@ pub mod agents;
 pub mod daemon;
 
 mod process;
-pub use process::{agent_program, shell_command};
+pub use process::{agent_program, resolve_program, shell_command, BackgroundChild};
 
 use anyhow::{bail, Context, Result};
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};

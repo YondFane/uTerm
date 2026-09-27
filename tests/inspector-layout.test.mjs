@@ -1,13 +1,31 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { hasInspectorContent, inspectorLayout } from "../src/lib/inspector-layout.ts";
+import {
+  hasInspectorContent,
+  inspectorLayout,
+  inspectorDragLayout,
+} from "../src/lib/inspector-layout.ts";
+test("right drag collapses before clamping, while normal layout never hides on window resize", () => {
+  for (const available of [392, 852, 2200]) {
+    assert.equal(inspectorDragLayout(available, 30).hidden, true);
+    assert.equal(inspectorDragLayout(available, -20).hidden, true);
+    assert.equal(inspectorDragLayout(available, 31).hidden, false);
+    assert.equal(inspectorDragLayout(available, 160).hidden, false);
+    assert.ok(Math.abs(inspectorDragLayout(available, 31).width - 31) < 0.001);
+    assert.equal(inspectorLayout(available, 0).width, 30);
+    assert.equal(
+      inspectorDragLayout(available, 9999).width,
+      inspectorLayout(available, 10).maximum,
+    );
+  }
+});
 test("inspector resizing reserves usable widths for both columns", () => {
   for (const available of [392, 560, 852, 1200, 2200]) {
     for (const ratio of [-2, 0.2, 0.35, 0.6, 4]) {
       const layout = inspectorLayout(available, ratio);
-      assert.ok(layout.width >= 240);
+      assert.ok(layout.width >= 30);
       assert.ok(layout.available - layout.width >= 320);
-      assert.ok(layout.ratio >= 0.2 && layout.ratio <= 0.6);
+      assert.ok(layout.ratio >= 30 / layout.available && layout.ratio <= 0.6);
     }
   }
 });

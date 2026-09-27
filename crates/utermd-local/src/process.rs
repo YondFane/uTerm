@@ -246,11 +246,15 @@ pub struct ProcessGroup(std::os::windows::io::OwnedHandle);
 #[cfg(windows)]
 impl ProcessGroup {
     pub fn attach(child: &dyn Child) -> Result<Self> {
-        use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
-        use windows_sys::Win32::System::JobObjects::*;
         let process = child
             .as_raw_handle()
             .context("Shell has no process handle")?;
+        Self::attach_handle(process)
+    }
+
+    fn attach_handle(process: std::os::windows::io::RawHandle) -> Result<Self> {
+        use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+        use windows_sys::Win32::System::JobObjects::*;
         let raw = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
         if raw.is_null() {
             return Err(std::io::Error::last_os_error().into());
@@ -285,12 +289,123 @@ impl ProcessGroup {
     }
 }
 
+pub struct BackgroundChild {
+    child: std::process::Child,
+    #[cfg(windows)]
+    group: ProcessGroup,
+}
+
+impl BackgroundChild {
+    pub fn spawn(command: &mut std::process::Command) -> Result<Self> {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            command.process_group(0);
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x08000000);
+        }
+        let child = command.spawn()?;
+        #[cfg(windows)]
+        let group = {
+            use std::os::windows::io::AsRawHandle;
+            match ProcessGroup::attach_handle(AsRawHandle::as_raw_handle(&child)) {
+                Ok(group) => group,
+                Err(error) => {
+                    let mut child = child;
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(error);
+                }
+            }
+        };
+        Ok(Self {
+            child,
+            #[cfg(windows)]
+            group,
+        })
+    }
+
+    pub fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        self.child.try_wait()
+    }
+}
+
+impl Drop for BackgroundChild {
+    fn drop(&mut self) {
+        // Stop the entire installer tree before releasing its lock or output file.
+        // 释放安装锁或输出文件前终止整个安装进程树。
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            unsafe {
+                windows_sys::Win32::System::JobObjects::TerminateJobObject(
+                    self.group.0.as_raw_handle(),
+                    1,
+                );
+            }
+        }
+        #[cfg(unix)]
+        if let Ok(pid) = i32::try_from(self.child.id()) {
+            unsafe {
+                libc::kill(-pid, libc::SIGKILL);
+            }
+        }
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[cfg(all(test, windows))]
+mod background_tests {
+    use super::*;
+    use std::io::{BufRead, BufReader};
+    use std::process::{Command, Stdio};
+
+    #[test]
+    fn background_cleanup_terminates_installer_descendants() {
+        let powershell = PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32/WindowsPowerShell/v1.0/powershell.exe");
+        let mut command = Command::new(&powershell);
+        command.args(["-NoProfile", "-Command", "$p = Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList '-NoProfile', '-Command', 'Start-Sleep 60' -WindowStyle Hidden -PassThru; Write-Output $p.Id; Start-Sleep 60"]);
+        command.stdout(Stdio::piped());
+        let mut child = BackgroundChild::spawn(&mut command).unwrap();
+        let parent = child.child.id();
+        let mut line = String::new();
+        BufReader::new(child.child.stdout.take().unwrap())
+            .read_line(&mut line)
+            .unwrap();
+        let descendant: u32 = line.trim().parse().unwrap();
+        assert!(process_snapshot().unwrap().contains_key(&descendant));
+        drop(child);
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        loop {
+            let processes = process_snapshot().unwrap();
+            if !processes.contains_key(&parent) && !processes.contains_key(&descendant) {
+                break;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "installer descendants survived cleanup"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    }
+}
+
 fn command_path() -> Vec<PathBuf> {
     let mut paths: Vec<_> = std::env::var_os("PATH")
         .map(|value| std::env::split_paths(&value).collect())
         .unwrap_or_default();
     if let Some(home) = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) {
-        for relative in [".local/bin", ".cargo/bin", ".npm-global/bin"] {
+        for relative in [
+            ".local/bin",
+            ".cargo/bin",
+            ".npm-global/bin",
+            ".opencode/bin",
+        ] {
             paths.push(PathBuf::from(&home).join(relative));
         }
     }
@@ -311,7 +426,7 @@ fn command_path() -> Vec<PathBuf> {
 }
 
 pub fn agent_program(name: &str) -> Result<PathBuf> {
-    if !["codex", "claude", "gemini"].contains(&name) {
+    if !["codex", "claude", "gemini", "opencode", "kimi", "grok"].contains(&name) {
         bail!("Unsupported chat agent");
     }
     resolve_program(name)
