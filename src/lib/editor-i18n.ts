@@ -1,0 +1,33 @@
+import { tx } from "./i18n.ts";
+export function editorPhrases() {
+  return {
+    Find: tx("查找"),
+    Replace: tx("替换"),
+    next: tx("下一个"),
+    previous: tx("上一个"),
+    all: tx("全部匹配"),
+    "match case": tx("区分大小写"),
+    regexp: tx("正则表达式"),
+    "by word": tx("全词匹配"),
+    replace: tx("替换"),
+    "replace all": tx("全部替换"),
+    close: tx("关闭"),
+    "Go to line": tx("跳转到行"),
+    go: tx("跳转"),
+    "current match": tx("当前匹配"),
+    "on line": tx("所在行"),
+    "replaced match on line $": tx("已替换第 $ 行的匹配"),
+    "replaced $ matches": tx("已替换 $ 处匹配"),
+    "Selection deleted": tx("已删除选中内容"),
+    "Control character": tx("控制字符"),
+    "Fold line": tx("折叠行"),
+    "Unfold line": tx("展开行"),
+    "Folded lines": tx("已折叠行"),
+    unfold: tx("展开"),
+    "folded code": tx("已折叠代码"),
+    to: tx("至"),
+    "No diagnostics": tx("没有诊断信息"),
+    Diagnostics: tx("诊断信息"),
+    Completions: tx("补全建议"),
+  };
+}

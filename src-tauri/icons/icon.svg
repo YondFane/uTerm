@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">uTerm</title>
+  <desc id="description">A red U made from a four by four grid on a black background.</desc>
+  <rect width="512" height="512" rx="104" fill="#000000"/>
+  <!-- 4 × 4 grid; the eight red cells form a U. -->
+  <g fill="#ef2b2d">
+    <rect x="76" y="76" width="76" height="76" rx="10"/>
+    <rect x="360" y="76" width="76" height="76" rx="10"/>
+    <rect x="76" y="172" width="76" height="76" rx="10"/>
+    <rect x="360" y="172" width="76" height="76" rx="10"/>
+    <rect x="76" y="268" width="76" height="76" rx="10"/>
+    <rect x="360" y="268" width="76" height="76" rx="10"/>
+    <rect x="172" y="364" width="76" height="76" rx="10"/>
+    <rect x="268" y="364" width="76" height="76" rx="10"/>
+  </g>
+</svg>
