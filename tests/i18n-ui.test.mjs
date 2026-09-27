@@ -112,10 +112,12 @@ test("real settings tabs, commands and panels render in both languages without u
   let installFail = false;
   let installedAgent;
   let copiedFiles;
+  let copyFail = false;
   mockIPC((cmd, args) => {
     calls.push(cmd);
     if (cmd === "file_copy") {
       copiedFiles = args;
+      if (copyFail) throw new Error("无法粘贴：同名文件或目录已存在。");
       return null;
     }
     if (cmd === "files_list")
@@ -202,6 +204,7 @@ test("real settings tabs, commands and panels render in both languages without u
       );
       assert.deepEqual(copiedFiles, {
         directory: "C:/fixture",
+        sourceDirectory: "C:/fixture",
         path: "file.txt",
         destination: "folder",
       });
@@ -212,6 +215,18 @@ test("real settings tabs, commands and panels render in both languages without u
         ),
       );
       assertEnglish();
+      copyFail = true;
+      await click("Paste");
+      assert.ok(host.querySelector('[role="alert"]'));
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 1800)));
+      await act(async () => folder.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true })));
+      await click("Paste");
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 1500)));
+      assert.ok(host.querySelector('[role="alert"]'), "Repeated failure restarts the timer");
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 1600)));
+      assert.equal(host.querySelector('[role="alert"]'), null);
+      copyFail = false;
+      await act(async () => folder.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true })));
       await click("New file");
       const nameInput = host.querySelector("input");
       const countBefore = calls.filter((command) => command === "file_copy").length;
@@ -224,6 +239,30 @@ test("real settings tabs, commands and panels render in both languages without u
       await act(async () => nameInput.dispatchEvent(pasteKey));
       assert.equal(pasteKey.defaultPrevented, false);
       assert.equal(calls.filter((command) => command === "file_copy").length, countBefore);
+      await mount(
+        React.createElement(FilePanel, {
+          directory: "C:/project-b",
+          mode: "tree",
+          request: 0,
+          setMode: noop,
+          open: noop,
+          beforeMutation: (action) => action(),
+        }),
+        "en",
+      );
+      await act(async () =>
+        host
+          .querySelector('[title="folder"]')
+          .dispatchEvent(new MouseEvent("contextmenu", { bubbles: true })),
+      );
+      assert.equal(host.querySelector('[role="menuitem"]:nth-child(2)').disabled, false);
+      await click("Paste");
+      assert.deepEqual(copiedFiles, {
+        directory: "C:/project-b",
+        sourceDirectory: "C:/fixture",
+        path: "file.txt",
+        destination: "folder",
+      });
     });
     await context.test(
       "built-in agents render distinct local brand marks with safe fallback",

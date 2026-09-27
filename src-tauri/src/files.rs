@@ -195,21 +195,38 @@ fn mutate_file(directory: &str, path: &str, action: &str, name: &str) -> Result<
 }
 
 #[tauri::command]
-pub async fn file_copy(directory: String, path: String, destination: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || copy_entry(&directory, &path, &destination))
-        .await
-        .map_err(|error| error.to_string())?
+pub async fn file_copy(
+    directory: String,
+    source_directory: String,
+    path: String,
+    destination: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        copy_between_roots(&source_directory, &path, &directory, &destination)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
+#[cfg(test)]
 fn copy_entry(directory: &str, path: &str, destination: &str) -> Result<(), String> {
+    copy_between_roots(directory, path, directory, destination)
+}
+
+fn copy_between_roots(
+    source_directory: &str,
+    path: &str,
+    directory: &str,
+    destination: &str,
+) -> Result<(), String> {
     let _guard = WRITES.lock().map_err(|error| error.to_string())?;
-    let (root, source) = resolve(directory, path)?;
-    let (_, parent) = resolve(directory, destination)?;
+    let (root, source) = resolve(source_directory, path)?;
+    let (destination_root, parent) = resolve(directory, destination)?;
     if source == root || !parent.is_dir() || parent.starts_with(&source) {
         return Err("复制目标无效，不能复制到自身或子目录。".into());
     }
-    for relative in [path, destination] {
-        let mut cursor = root.clone();
+    for (base, relative) in [(&root, path), (&destination_root, destination)] {
+        let mut cursor = base.clone();
         for part in Path::new(relative).components() {
             cursor.push(part);
             reject_copy_link(&cursor)?;
@@ -224,7 +241,7 @@ fn copy_entry(directory: &str, path: &str, destination: &str) -> Result<(), Stri
     // 先暂存完整目录树，再创建目标；复制内容之前拒绝链接。
     let staging = tempfile::Builder::new()
         .prefix(".uterm-editor-copy-")
-        .tempdir_in(&root)
+        .tempdir_in(&parent)
         .map_err(|e| e.to_string())?;
     let staged = staging.path().join("content");
     copy_tree(&source, &staged, 0, &mut 0)?;
@@ -743,6 +760,37 @@ mod tests {
         assert_eq!(
             std::fs::read(root.join("source/data.bin")).unwrap(),
             [0, 255, 10]
+        );
+    }
+    #[test]
+    fn copies_between_project_roots_and_revalidates_source() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        let ar = a.path().to_str().unwrap();
+        let br = b.path().to_str().unwrap();
+        std::fs::create_dir_all(a.path().join("folder/empty")).unwrap();
+        std::fs::write(a.path().join("folder/data.bin"), [0, 255]).unwrap();
+        copy_between_roots(ar, "folder", br, "").unwrap();
+        assert_eq!(
+            std::fs::read(b.path().join("folder/data.bin")).unwrap(),
+            [0, 255]
+        );
+        assert!(b.path().join("folder/empty").is_dir());
+        assert!(copy_between_roots(ar, "folder", br, "").is_err());
+        assert!(copy_between_roots(ar, "../escape", br, "").is_err());
+        assert!(copy_between_roots(ar, "folder", br, "../escape").is_err());
+        assert!(copy_between_roots(
+            ar,
+            "folder",
+            a.path().join("folder/empty").to_str().unwrap(),
+            ""
+        )
+        .is_err());
+        std::fs::remove_file(a.path().join("folder/data.bin")).unwrap();
+        assert!(copy_between_roots(ar, "folder/data.bin", br, "").is_err());
+        assert_eq!(
+            std::fs::read(b.path().join("folder/data.bin")).unwrap(),
+            [0, 255]
         );
     }
     #[test]

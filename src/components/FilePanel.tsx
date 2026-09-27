@@ -6,6 +6,7 @@ import { ToolbarIcon } from "./SidebarIcon";
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { clipboardPath } from "../lib/file-document";
+import { setFileClipboard, useFileClipboard } from "../lib/file-clipboard";
 interface Entry {
   path: string;
   name: string;
@@ -190,7 +191,7 @@ export function FilePanel({
   const [mutating, setMutating] = useState(false);
   const [menu, setMenu] = useState<{ entry: Entry; x: number; y: number } | null>(null);
   const menuElement = useRef<HTMLDivElement>(null);
-  const [fileClipboard, setFileClipboard] = useState<Entry | null>(null);
+  const fileClipboard = useFileClipboard();
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const copying = useRef(false);
   const currentDirectory = useRef(directory);
@@ -201,13 +202,13 @@ export function FilePanel({
     setTarget(null);
     setMenu(null);
     setName("");
-    setFileClipboard(null);
     setFocusedEntry(null);
+    setError("");
   }, [directory]);
   const rootEntry: Entry = { path: "", name: tx("项目根目录"), directory: true, symlink: false };
   const copyFile = (entry: Entry) => {
     if (!entry.path || entry.symlink || mutating) return;
-    setFileClipboard(entry);
+    setFileClipboard({ directory, path: entry.path });
     setMenu(null);
     results.current?.focus();
   };
@@ -219,7 +220,12 @@ export function FilePanel({
     setError("");
     const destination = entry.directory ? entry.path : entry.path.split("/").slice(0, -1).join("/");
     try {
-      await invoke("file_copy", { directory, path: fileClipboard.path, destination });
+      await invoke("file_copy", {
+        directory,
+        sourceDirectory: fileClipboard.directory,
+        path: fileClipboard.path,
+        destination,
+      });
       if (currentDirectory.current === directory) setRevision((value) => value + 1);
     } catch (reason) {
       if (currentDirectory.current === directory) {
@@ -227,6 +233,7 @@ export function FilePanel({
           tx("粘贴失败，请检查目标目录（可能有未完成的副本）：{p0}", {
             p0: localizeMessage(String(reason)),
           }),
+          true,
         );
         setRevision((value) => value + 1);
       }
@@ -279,13 +286,22 @@ export function FilePanel({
       const path = `${directory.replace(/[\\/]+$/, "")}/${entry.path}`;
       await navigator.clipboard.writeText(fullPath ? clipboardPath(path) : entry.name);
     } catch (reason) {
-      setError(tx("复制失败：{p0}", { p0: String(reason) }));
+      setError(tx("复制失败：{p0}", { p0: String(reason) }), true);
     }
   }
   const [query, setQuery] = useState("");
   const [sensitive, setSensitive] = useState(false);
   const [result, setResult] = useState<Matches | null>(null);
-  const [error, setError] = useState("");
+  const [notice, setNotice] = useState({ message: "", transient: false });
+  const error = notice.message;
+  const setError = (message: string, transient = false) => setNotice({ message, transient });
+  useEffect(() => {
+    if (!notice.message || !notice.transient) return;
+    // Each failed action gets a fresh timer, including repeated identical errors.
+    // 每次操作失败都重新计时，包括重复出现的相同错误。
+    const timer = setTimeout(() => setNotice({ message: "", transient: false }), 3000);
+    return () => clearTimeout(timer);
+  }, [notice, directory]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(0);
   const input = useRef<HTMLInputElement>(null);
@@ -352,7 +368,7 @@ export function FilePanel({
               setTarget(null);
               setRevision((value) => value + 1);
             })
-            .catch((reason) => setError(String(reason)))
+            .catch((reason) => setError(String(reason), true))
             .finally(() => setMutating(false));
         });
       }}
@@ -653,7 +669,7 @@ export function FilePanel({
               const path = menu.entry.path;
               setMenu(null);
               void invoke("file_reveal", { directory, path }).catch((reason) =>
-                setError(String(reason)),
+                setError(String(reason), true),
               );
             }}
           >
