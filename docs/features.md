@@ -88,6 +88,8 @@ Agent definitions specify a program and argument list. Hooks report activity; us
 
 Settings include appearance, color themes, fonts, terminal cursor and scrollback, keyboard shortcuts, default shell and Agent. Theme import accepts supported color fields only.
 
+Settings → Software update checks for updates after startup. While an update downloads, and after its download has completed, its progress bar remains visible with the downloaded size immediately beside it. A completed update additionally reports successful signature verification before Install and restart is available. The bilingual settings component regression test covers this completed-download layout; signed-update runtime acceptance remains pending.
+
 In a focused Windows terminal, Ctrl+C copies selected terminal text; without a selection it remains the terminal interrupt key. Ctrl+V and Ctrl+Shift+V paste clipboard text using the terminal's bracketed-paste mode when enabled. Ctrl+Shift+C also copies selected text. macOS sends Cmd+C/Cmd+V through native copy/paste events to xterm, without requesting asynchronous browser clipboard access: pasting needs no extra WebKit “Paste” click and does not produce that API's `NotAllowedError` banner. Control keys remain available to terminal programs. Native paste retains bracketed-paste handling and disabled-input protection. Other clipboard and session failures remain visible; a pending asynchronous paste is discarded if its connection closes or changes. Shortcut regression tests cover native macOS routing, selection states and Shift modifiers, alongside Windows copy/paste and Control passthrough; native acceptance is recorded below.
 
 ## Interface

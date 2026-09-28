@@ -1674,6 +1674,21 @@ select:focus-visible {
   font-size: 12px;
   line-height: 1.6;
 }
+.update-download-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+.update-download-progress progress {
+  flex: 1;
+  min-width: 0;
+}
+.update-download-progress span {
+  flex: 0 0 auto;
+  font-size: 12px;
+  white-space: nowrap;
+}
 .break-reminder-settings-row {
   display: flex;
   align-items: center;

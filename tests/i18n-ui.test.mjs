@@ -452,6 +452,29 @@ test("real settings tabs, commands and panels render in both languages without u
         await click(tab);
         assertEnglish();
       }
+      await mount(
+        React.createElement(SettingsPanel, {
+          runtime,
+          updates: {
+            ...updates,
+            phase: "ready",
+            progress: { downloaded: 1992294, total: null },
+          },
+          close: noop,
+          reloadAgents: async () => {},
+          workspace: emptyWorkspace(),
+          updateWorkspace: noop,
+        }),
+        "en",
+      );
+      await click("Software update");
+      const downloadProgress = host.querySelector(".update-download-progress");
+      assert.ok(downloadProgress);
+      assert.equal(downloadProgress.firstElementChild.tagName, "PROGRESS");
+      assert.equal(downloadProgress.firstElementChild.max, 1992294);
+      assert.equal(downloadProgress.firstElementChild.value, 1992294);
+      assert.match(downloadProgress.textContent, /Downloaded 1.9 MB/);
+      assert.match(host.textContent, /Update downloaded and signature verified/);
       assert.equal(JSON.parse(localStorage.getItem(settingsKey)).language, "en");
     });
     await context.test("command palette uses translated command labels", async () => {

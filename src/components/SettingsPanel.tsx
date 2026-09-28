@@ -109,6 +109,15 @@ export function SettingsPanel({
   );
   const [workspaceDelete, setWorkspaceDelete] = useState<string | null>(null);
   const [tab, setTab] = useState<(typeof tabs)[number]>("通用");
+  const showingDownloadProgress = ["downloading", "ready"].includes(updates.phase);
+  const downloadProgressMax =
+    updates.progress.total ??
+    (updates.phase === "ready" ? Math.max(updates.progress.downloaded, 1) : undefined);
+  const downloadProgressValue = updates.progress.total
+    ? updates.progress.downloaded
+    : updates.phase === "ready"
+      ? Math.max(updates.progress.downloaded, 1)
+      : undefined;
   const dialog = useRef<HTMLDialogElement>(null);
   const backdrop = useDialogBackdrop(() => {
     if (updates.phase !== "installing") close();
@@ -791,15 +800,12 @@ export function SettingsPanel({
               ) : (
                 <>
                   <p className="muted">{tx("启动后自动检查更新。下载和安装由你决定。")}</p>
-                  <p role="status" aria-live="polite">
-                    {updates.phase === "checking"
-                      ? tx("正在检查更新…")
-                      : updates.phase === "current"
-                        ? tx("已是最新版本。")
-                        : updates.phase === "downloading"
-                          ? tx("已下载 {p0} MB", {
-                              p0: (updates.progress.downloaded / 1048576).toFixed(1),
-                            })
+                  {!showingDownloadProgress && (
+                    <p role="status" aria-live="polite">
+                      {updates.phase === "checking"
+                        ? tx("正在检查更新…")
+                        : updates.phase === "current"
+                          ? tx("已是最新版本。")
                           : updates.phase === "ready"
                             ? tx("更新已下载并通过签名校验。")
                             : updates.phase === "installing"
@@ -807,18 +813,33 @@ export function SettingsPanel({
                               : updates.available.version
                                 ? tx("新版本 uTerm {p0}", { p0: updates.available.version })
                                 : ""}
-                  </p>
+                    </p>
+                  )}
+                  {showingDownloadProgress && (
+                    <>
+                      <div className="update-download-progress">
+                        <progress
+                          aria-label={tx("下载进度")}
+                          max={downloadProgressMax}
+                          value={downloadProgressValue}
+                        />
+                        <span role="status" aria-live="polite">
+                          {tx("已下载 {p0} MB", {
+                            p0: (updates.progress.downloaded / 1048576).toFixed(1),
+                          })}
+                        </span>
+                      </div>
+                      {updates.phase === "ready" && (
+                        <p role="status" aria-live="polite">
+                          {tx("更新已下载并通过签名校验。")}
+                        </p>
+                      )}
+                    </>
+                  )}
                   {updates.available.notes && (
                     <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
                       {updates.available.notes}
                     </p>
-                  )}
-                  {updates.phase === "downloading" && (
-                    <progress
-                      aria-label={tx("下载进度")}
-                      max={updates.progress.total ?? undefined}
-                      value={updates.progress.total ? updates.progress.downloaded : undefined}
-                    />
                   )}
                   {["idle", "current", "available"].includes(updates.phase) && (
                     <button onClick={() => void updates.check()}>{tx("检查更新")}</button>
