@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # uTerm 功能说明
@@ -72,7 +72,7 @@ Agent 定义指定程序及参数列表。Hooks 上报活动；启用时，用�
 
 设置包含外观、配色主题、字体、终端光标和滚动行数、快捷键、默认 Shell 与 Agent。主题导入仅接受支持的颜色字段。
 
-Windows 终端获得焦点时，Ctrl+C 复制选中的终端文本；未选中文本时仍作为终端中断键。Ctrl+V 和 Ctrl+Shift+V 粘贴剪贴板文本，并在终端启用时使用括号粘贴模式。Ctrl+Shift+C 也可复制选中文本。macOS 使用 Cmd+C/Cmd+V 操作剪贴板，Control 按键保留给终端程序。剪贴板失败会显示在会话内；若连接已关闭或改变，尚未完成的粘贴会被丢弃。
+Windows 终端获得焦点时，Ctrl+C 复制选中的终端文本；未选中文本时仍作为终端中断键。Ctrl+V 和 Ctrl+Shift+V 粘贴剪贴板文本，并在终端启用时使用括号粘贴模式。Ctrl+Shift+C 也可复制选中文本。macOS 的 Cmd+C/Cmd+V 通过原生复制/粘贴事件交给 xterm，不请求浏览器异步剪贴板访问：粘贴无需额外点击 WebKit 的“Paste”，也不会产生该接口的 `NotAllowedError` 横幅。Control 按键仍保留给终端程序。原生粘贴保留括号粘贴处理和禁用输入保护。其他剪贴板及会话失败仍会显示；若连接已关闭或改变，尚未完成的异步粘贴会被丢弃。快捷键回归测试覆盖 macOS 原生事件路由、选择状态及 Shift 修饰键，以及 Windows 复制/粘贴和 Control 透传；原生验收情况见下文。
 
 ## 界面
 
@@ -101,6 +101,8 @@ Windows 终端获得焦点时，Ctrl+C 复制选中的终端文本；未选中�
 React 组件位于 `src/components/`，状态和纯逻辑位于 `src/lib/`，Tauri 命令位于 `src-tauri/src/`，PTY、回放和 hooks 位于 `crates/utermd-local/`。后端和会话服务各自使用独立的 Cargo 清单和锁文件。
 
 ## 验证与限制
+
+macOS 剪贴板验证：137 项前端及构建工具测试、锁定依赖安装、格式、文档和国际化检查、TypeScript/生产构建及独立桌面调试构建通过。使用 `sh.uterm.desktop.qa.clipboard` 包标识的原生 QA 窗口中，已观察到中文直接粘贴到 Shell，没有 WebKit“Paste”确认或 `NotAllowedError` 横幅。未重启已安装的应用。原生复制、多行粘贴和真实 Agent 剪贴板验收仍待完成；未在 macOS 上重新验证 Windows 或 Linux 的运行行为。现有大代码包及 Rust 未使用代码警告仍存在。
 
 Windows 文件复制验证：135 项前端测试、32 项后端测试、TypeScript、生产构建及国际化检查通过。浏览器预览模拟文件系统命令，原生集成仍未验证。生产构建仍有大代码包警告。
 

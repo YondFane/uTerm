@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-09-27
+updated: 2026-09-28
 ---
 
 # uTerm feature guide
@@ -72,7 +72,7 @@ Agent definitions specify a program and argument list. Hooks report activity; us
 
 Settings include appearance, color themes, fonts, terminal cursor and scrollback, keyboard shortcuts, default shell and Agent. Theme import accepts supported color fields only.
 
-In a focused Windows terminal, Ctrl+C copies selected terminal text; without a selection it remains the terminal interrupt key. Ctrl+V and Ctrl+Shift+V paste clipboard text using the terminal's bracketed-paste mode when enabled. Ctrl+Shift+C also copies selected text. macOS uses Cmd+C/Cmd+V for clipboard operations and preserves Control keys for terminal programs. Clipboard failures are displayed in the session; a pending paste is discarded if its connection closes or changes.
+In a focused Windows terminal, Ctrl+C copies selected terminal text; without a selection it remains the terminal interrupt key. Ctrl+V and Ctrl+Shift+V paste clipboard text using the terminal's bracketed-paste mode when enabled. Ctrl+Shift+C also copies selected text. macOS sends Cmd+C/Cmd+V through native copy/paste events to xterm, without requesting asynchronous browser clipboard access: pasting needs no extra WebKit “Paste” click and does not produce that API's `NotAllowedError` banner. Control keys remain available to terminal programs. Native paste retains bracketed-paste handling and disabled-input protection. Other clipboard and session failures remain visible; a pending asynchronous paste is discarded if its connection closes or changes. Shortcut regression tests cover native macOS routing, selection states and Shift modifiers, alongside Windows copy/paste and Control passthrough; native acceptance is recorded below.
 
 ## Interface
 
@@ -101,6 +101,8 @@ The file editor and its Markdown/syntax dependencies load on demand, with loadin
 React components live in `src/components/`; state and pure logic in `src/lib/`; Tauri commands in `src-tauri/src/`; PTYs, replay and hooks in `crates/utermd-local/`. The backend and session service use separate Cargo manifests and lockfiles.
 
 ## Validation and limits
+
+Clipboard validation on macOS: 137 frontend/build-helper tests, frozen dependency installation, formatting, documentation and localization checks, TypeScript/production build and an isolated desktop debug build pass. Native QA with bundle ID `sh.uterm.desktop.qa.clipboard` shows Chinese text pasted directly into a shell without a WebKit “Paste” confirmation or `NotAllowedError` banner. The installed app was not restarted. Native copy, multiline paste and live Agent clipboard acceptance remain pending; Windows and Linux runtime behavior was not retested on macOS. Existing large-chunk and Rust dead-code warnings remain.
 
 File-copy validation on Windows: 135 frontend tests, 32 backend tests, TypeScript, production build and localization checks pass. The browser preview uses mocked filesystem commands; native integration remains unverified. The production build retains its large-chunk warning.
 

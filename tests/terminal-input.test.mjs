@@ -36,13 +36,19 @@ test("Windows Ctrl+V and Ctrl+Shift+V paste without sending a control character"
       );
 });
 
-test("macOS uses Command for clipboard and leaves Control to terminal programs", () => {
+test("macOS leaves Command copy/paste to native events and Control to terminal programs", () => {
   for (const code of ["KeyC", "KeyV"]) {
     assert.equal(terminalClipboardAction(clipboardEvent({ code }), true, true), null);
-    assert.equal(
-      terminalClipboardAction(clipboardEvent({ code, ctrlKey: false, metaKey: true }), true, true),
-      code === "KeyC" ? "copy" : "paste",
-    );
+    for (const selected of [false, true])
+      for (const shiftKey of [false, true])
+        assert.equal(
+          terminalClipboardAction(
+            clipboardEvent({ code, ctrlKey: false, metaKey: true, shiftKey }),
+            true,
+            selected,
+          ),
+          null,
+        );
   }
 });
 
