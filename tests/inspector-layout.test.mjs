@@ -4,6 +4,7 @@ import {
   hasInspectorContent,
   inspectorLayout,
   inspectorDragLayout,
+  inspectorResizeWidth,
 } from "../src/lib/inspector-layout.ts";
 test("right drag collapses before clamping, while normal layout never hides on window resize", () => {
   for (const available of [392, 852, 2200]) {
@@ -44,4 +45,21 @@ test("inspector columns require renderable content instead of only an open prefe
     assert.equal(hasInspectorContent("/home", false, open), key === "files" || key === "directory");
   }
   assert.equal(hasInspectorContent("/project", true, panels), false);
+});
+
+test("drag and arrow deltas track the physical separator on either side", () => {
+  for (const position of ["left", "right"]) {
+    const towardCollapse = position === "left" ? -170 : 170;
+    assert.equal(inspectorResizeWidth(200, towardCollapse, position), 30);
+    assert.equal(
+      inspectorDragLayout(1000, inspectorResizeWidth(200, towardCollapse, position)).hidden,
+      true,
+    );
+    assert.equal(
+      inspectorDragLayout(1000, inspectorResizeWidth(200, towardCollapse * 0.9, position)).hidden,
+      false,
+    );
+    assert.equal(inspectorResizeWidth(200, -16, position), position === "left" ? 184 : 216);
+    assert.equal(inspectorResizeWidth(200, 16, position), position === "left" ? 216 : 184);
+  }
 });

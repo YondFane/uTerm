@@ -2094,7 +2094,7 @@ select:focus-visible {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: -4px;
+  left: 0;
   width: 8px;
   z-index: 20;
   cursor: col-resize;
@@ -2843,4 +2843,94 @@ textarea:focus-visible {
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
+}
+
+/* Reorder grid columns without remounting terminals or editor documents.
+   只交换网格列，不重新挂载终端或编辑器文档。 */
+.app-shell {
+  position: relative;
+}
+.app-shell.with-inspector > .sidebar {
+  grid-column: 1;
+  grid-row: 1;
+}
+.app-shell.with-inspector > main {
+  grid-column: 2;
+  grid-row: 1;
+}
+.app-shell.with-inspector > :is(.file-panel, .git-panel) {
+  grid-column: 3;
+  grid-row: 1;
+}
+.app-shell.sidebar-hidden.with-inspector > main {
+  grid-column: 1;
+}
+.app-shell.sidebar-hidden.with-inspector > :is(.file-panel, .git-panel) {
+  grid-column: 2;
+}
+.app-shell.with-inspector[data-inspector-position="left"] {
+  grid-template-columns: var(--sidebar-width) var(--inspector-width) minmax(320px, 1fr);
+}
+.app-shell.with-inspector[data-inspector-position="left"] > main {
+  grid-column: 3;
+}
+.app-shell.with-inspector[data-inspector-position="left"] > :is(.file-panel, .git-panel) {
+  grid-column: 2;
+  border-left: 0;
+  border-right: 1px solid var(--ui-border);
+}
+.app-shell.sidebar-hidden.with-inspector[data-inspector-position="left"] {
+  grid-template-columns: var(--inspector-width) minmax(320px, 1fr);
+}
+.app-shell.sidebar-hidden.with-inspector[data-inspector-position="left"] > main {
+  grid-column: 2;
+}
+.app-shell.sidebar-hidden.with-inspector[data-inspector-position="left"]
+  > :is(.file-panel, .git-panel) {
+  grid-column: 1;
+}
+[data-inspector-position="left"] .inspector-resizer {
+  left: auto;
+  right: 0;
+}
+.app-shell.with-inspector[data-expanded-inspector] {
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+}
+.app-shell.with-inspector[data-expanded-inspector] > .git-panel {
+  grid-column: 2;
+}
+.app-shell.sidebar-hidden.with-inspector[data-expanded-inspector] {
+  grid-template-columns: minmax(0, 1fr);
+}
+.app-shell.sidebar-hidden.with-inspector[data-expanded-inspector] > .git-panel {
+  grid-column: 1;
+}
+.platform-macos.sidebar-hidden.with-inspector[data-inspector-position="left"] > main > .toolbar {
+  padding-left: 24px;
+}
+.platform-macos.sidebar-hidden.with-inspector[data-inspector-position="left"]
+  > :is(.file-panel, .git-panel)
+  > .inspector-header,
+.platform-macos.sidebar-hidden[data-expanded-inspector] > .git-panel > .inspector-header {
+  padding-top: 38px;
+}
+.app-shell > .pane-swap-button {
+  position: absolute;
+  top: 16px;
+  left: var(--inspector-boundary);
+  transform: translateX(-50%);
+  z-index: 25;
+  width: 26px;
+  height: 28px;
+  padding: 4px;
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  background: var(--ui-surface);
+}
+.app-shell > .pane-swap-button:hover {
+  background: var(--ui-hover);
+}
+.app-shell > .pane-swap-button:focus-visible {
+  outline: 2px solid var(--ui-accent);
+  outline-offset: 2px;
 }

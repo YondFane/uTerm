@@ -4,7 +4,12 @@ import { tx } from "./lib/i18n";
 import { useEffect, useRef, useState } from "react";
 import { sessionSyncErrorMessage } from "./lib/session-sync";
 import type { CSSProperties } from "react";
-import { hasInspectorContent, inspectorLayout, inspectorDragLayout } from "./lib/inspector-layout";
+import {
+  hasInspectorContent,
+  inspectorLayout,
+  inspectorDragLayout,
+  inspectorResizeWidth,
+} from "./lib/inspector-layout";
 import { CommandPalette } from "./components/CommandPalette";
 import { useUpdates } from "./lib/useUpdates";
 import { SettingsPanel } from "./components/SettingsPanel";
@@ -83,7 +88,8 @@ import { sidebarLayout, panelCollapseWidth } from "./lib/sidebar-layout";
 export function App() {
   useUiLanguage();
 
-  const { settings } = useSettings();
+  const { settings, save: saveSettings } = useSettings();
+  const inspectorOnLeft = settings.inspectorPosition === "left";
   const t = (key: string) => translate(activeLanguage(settings.language), key);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [requestedSidebarWidth, setRequestedSidebarWidth] = useState(248);
@@ -181,7 +187,7 @@ export function App() {
     <div
       className="inspector-resizer"
       role="separator"
-      aria-label={tx("调整右侧栏宽度")}
+      aria-label={tx("调整工具面板宽度")}
       aria-orientation="vertical"
       tabIndex={0}
       aria-valuemin={Math.round((inspectorSize.minimum / inspectorSize.available) * 100)}
@@ -199,7 +205,7 @@ export function App() {
         if (!drag) return;
         const next = inspectorDragLayout(
           inspectorSize.available,
-          drag.width + drag.x - event.clientX,
+          inspectorResizeWidth(drag.width, event.clientX - drag.x, settings.inspectorPosition),
         );
         drag.collapse = next.hidden;
         setInspectorSnap(next.hidden);
@@ -237,7 +243,11 @@ export function App() {
               ? inspectorSize.maximum
               : event.key === "Enter"
                 ? inspectorSize.available * 0.35
-                : inspectorSize.width + (event.key === "ArrowLeft" ? 16 : -16);
+                : inspectorResizeWidth(
+                    inspectorSize.width,
+                    event.key === "ArrowLeft" ? -16 : 16,
+                    settings.inspectorPosition,
+                  );
         setInspectorRatio(
           inspectorLayout(inspectorSize.available, width / inspectorSize.available).ratio,
         );
@@ -838,6 +848,10 @@ export function App() {
     if (id === "link") return !!workspace.selectedSession && !editor.document;
     if (id === "github") return !!selected;
     if (id === "toggleInspector") return !!fileDirectory;
+    if (id === "swapPanes")
+      return (
+        inspectorVisible && !(gitOpen && gitExpanded) && !resizingInspector && !resizingSidebar
+      );
     if (id === "chat") return runtime.agents.includes(settings.defaultAgent);
     return true;
   }
@@ -846,6 +860,7 @@ export function App() {
     if (id === "palette") setPaletteOpen(true);
     else if (id === "toggleSidebar") setSidebarVisible((value) => !value);
     else if (id === "toggleInspector") toggleInspector();
+    else if (id === "swapPanes") swapPanes();
     else if (id === "settings") setSettingsOpen(true);
     else if (id === "project") openProjectDialog();
     else if (id === "terminal") {
@@ -1172,6 +1187,17 @@ export function App() {
     git: gitOpen,
     github: githubOpen,
   });
+  function swapPanes() {
+    if (!commandAvailable("swapPanes")) return;
+    try {
+      saveSettings(
+        { ...settings, inspectorPosition: inspectorOnLeft ? "right" : "left" },
+        runtime?.platform === "macos",
+      );
+    } catch (reason) {
+      setError(tx("无法保存窗格位置：{p0}", { p0: String(reason) }));
+    }
+  }
   function toggleInspector() {
     if (inspectorVisible) {
       lastInspector.current = directoryOpen
@@ -1199,17 +1225,17 @@ export function App() {
   const inspectorToggle = (
     <button
       className="toolbar-icon-button"
-      aria-label={inspectorVisible ? tx("隐藏右侧栏") : tx("显示右侧栏")}
-      title={inspectorVisible ? tx("隐藏右侧栏") : tx("显示右侧栏")}
+      aria-label={inspectorVisible ? tx("隐藏工具面板") : tx("显示工具面板")}
+      title={inspectorVisible ? tx("隐藏工具面板") : tx("显示工具面板")}
       aria-expanded={inspectorVisible}
       disabled={!runtime || !fileDirectory}
       onClick={toggleInspector}
     >
-      <SidebarIcon name="sidebarRight" />
+      <SidebarIcon name={inspectorOnLeft ? "sidebar" : "sidebarRight"} />
     </button>
   );
   const inspectorActions = (
-    <div className="inspector-switcher" role="group" aria-label={tx("右侧面板")}>
+    <div className="inspector-switcher" role="group" aria-label={tx("工具面板")}>
       <button
         className="toolbar-icon-button"
         aria-label={tx("文件")}
@@ -1279,8 +1305,10 @@ export function App() {
         {
           "--inspector-width": `${inspectorSize.width}px`,
           "--sidebar-width": `${sidebarWidth}px`,
+          "--inspector-boundary": `${sidebarWidth + (inspectorOnLeft ? inspectorSize.width : Math.max(320, shellWidth - sidebarWidth - inspectorSize.width))}px`,
         } as CSSProperties
       }
+      data-inspector-position={settings.inspectorPosition}
       data-resizing-inspector={resizingInspector || undefined}
       data-resizing-sidebar={resizingSidebar || undefined}
       data-sidebar-snap={sidebarSnap || undefined}
@@ -1359,6 +1387,21 @@ export function App() {
           addSession(undefined, { project, worktree, agent })
         }
       />
+      {inspectorVisible && !(gitOpen && gitExpanded) && (
+        <button
+          className="pane-swap-button toolbar-icon-button"
+          title={tx("交换左右窗格")}
+          aria-label={tx("交换左右窗格")}
+          aria-pressed={inspectorOnLeft}
+          disabled={!commandAvailable("swapPanes")}
+          onPointerDown={(event) => {
+            if (event.button === 0) event.preventDefault();
+          }}
+          onClick={swapPanes}
+        >
+          <ToolbarIcon name="swap" />
+        </button>
+      )}
       <main>
         <header className="toolbar" data-tauri-drag-region>
           <div className="workspace-heading" data-tauri-drag-region>

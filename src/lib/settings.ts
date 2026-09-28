@@ -15,7 +15,8 @@ export const commands = [
   ["search", "搜索项目", "Mod+Shift+KeyF"],
   ["files", "显示或隐藏文件", ""],
   ["toggleSidebar", "显示或隐藏左侧栏", "Mod+KeyB"],
-  ["toggleInspector", "显示或隐藏右侧栏", "Mod+Alt+KeyB"],
+  ["toggleInspector", "显示或隐藏工具面板", "Mod+Alt+KeyB"],
+  ["swapPanes", "交换左右窗格", ""],
   ["git", "显示或隐藏 Git", ""],
   ["github", "显示或隐藏 GitHub", ""],
   ["agents", "Agent 与用量", ""],
@@ -37,6 +38,7 @@ export type CommandId = (typeof commands)[number][0];
 export interface Settings {
   breakReminder: boolean;
   breakInterval: number;
+  inspectorPosition: "left" | "right";
   interfaceTheme: InterfaceThemeId;
   darkTheme: string;
   lightTheme: string;
@@ -67,6 +69,7 @@ export interface Settings {
 export const defaults: Settings = {
   breakReminder: false,
   breakInterval: 60,
+  inspectorPosition: "right",
   interfaceTheme: "black",
   darkTheme: "default-dark",
   lightTheme: "default-light",
@@ -139,6 +142,10 @@ export function readSettings(raw: string | null): Settings {
       parsed.breakReminder === undefined ? defaults.breakReminder : parsed.breakReminder,
     breakInterval:
       parsed.breakInterval === undefined ? defaults.breakInterval : parsed.breakInterval,
+    inspectorPosition:
+      parsed.inspectorPosition === undefined
+        ? defaults.inspectorPosition
+        : parsed.inspectorPosition,
     interfaceTheme:
       parsed.interfaceTheme === undefined ? defaults.interfaceTheme : parsed.interfaceTheme,
   };
@@ -150,6 +157,7 @@ export function readSettings(raw: string | null): Settings {
     typeof v.breakReminder !== "boolean" ||
     !Number.isInteger(v.breakInterval) ||
     !finite(v.breakInterval, 1, 1440) ||
+    !["left", "right"].includes(v.inspectorPosition) ||
     !interfaceThemes.some((theme) => theme.id === v.interfaceTheme) ||
     !["dark", "light", "system"].includes(v.appearance) ||
     typeof v.fontFamily !== "string" ||

@@ -29,3 +29,7 @@ export function hasInspectorContent(
     !!directory && (panels.files || panels.directory || (project && (panels.git || panels.github)))
   );
 }
+
+export function inspectorResizeWidth(width: number, deltaX: number, position: "left" | "right") {
+  return width + (position === "left" ? deltaX : -deltaX);
+}
