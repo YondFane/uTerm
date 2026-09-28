@@ -107,6 +107,7 @@ export function SessionIcon({ agent }: { agent?: SessionConfig["agent"] }) {
 }
 
 const toolbarPaths = {
+  swap: "M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4",
   compare: "M12 3v18M3 7h6L6 4m3 3-3 3m15 7h-6l3-3m-3 3 3 3",
   previous: "m14 6-6 6 6 6",
   next: "m10 6 6 6-6 6",

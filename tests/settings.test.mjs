@@ -105,3 +105,21 @@ test("Ghostty theme import only accepts colors and valid palette indices", () =>
   ])
     assert.throws(() => importTheme(source, "Invalid"));
 });
+
+test("inspector position defaults for old settings and supports persistent swapping and shortcuts", () => {
+  const old = { ...defaults };
+  delete old.inspectorPosition;
+  assert.equal(readSettings(JSON.stringify(old)).inspectorPosition, "right");
+  for (const inspectorPosition of ["left", "right"]) {
+    const settings = readSettings(JSON.stringify({ ...defaults, inspectorPosition }));
+    assert.equal(readSettings(JSON.stringify(settings)).inspectorPosition, inspectorPosition);
+  }
+  for (const inspectorPosition of [null, true, "center", 0])
+    assert.throws(() => readSettings(JSON.stringify({ ...defaults, inspectorPosition })));
+  assert.equal(binding(defaults, "swapPanes", true), "");
+  for (const mac of [true, false]) {
+    const custom = { ...defaults, shortcuts: { swapPanes: "Mod+Alt+KeyS" } };
+    validateShortcuts(custom, mac);
+    assert.equal(binding(readSettings(JSON.stringify(custom)), "swapPanes", mac), "Mod+Alt+KeyS");
+  }
+});

@@ -107,7 +107,7 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     继续使用: "Keep working",
     调整左侧栏宽度: "Resize left sidebar",
     显示或隐藏左侧栏: "Toggle left sidebar",
-    显示或隐藏右侧栏: "Toggle right sidebar",
+    显示或隐藏工具面板: "Toggle inspector",
     "HTML 静态预览不运行脚本或加载外部资源。若页面空白，请通过项目开发服务器预览。":
       "Static HTML preview does not run scripts or load external resources. If the page is blank, preview it using the project's development server.",
     "登录系统后自动打开 uTerm。": "Open uTerm automatically after signing in.",

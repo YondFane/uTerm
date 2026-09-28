@@ -472,7 +472,7 @@ export function GitPanel({
                 <button
                   className="icon-button"
                   title={tx("全展示")}
-                  aria-label={tx("全展示：差异铺满中栏和右栏")}
+                  aria-label={tx("全展示：差异铺满主工作区和工具面板")}
                   aria-pressed={expanded}
                   onClick={() => {
                     setDiffFocused(true);
@@ -483,8 +483,8 @@ export function GitPanel({
                 </button>
                 <button
                   className="icon-button"
-                  title={tx("右栏全展示")}
-                  aria-label={tx("右栏全展示：保留中栏，差异铺满右栏")}
+                  title={tx("工具面板全展示")}
+                  aria-label={tx("工具面板全展示：保留主工作区，差异铺满工具面板")}
                   aria-pressed={diffFocused && !expanded}
                   onClick={() => {
                     setDiffFocused(true);
