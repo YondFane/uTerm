@@ -5,9 +5,13 @@ These instructions apply to this repository. It is a self-contained Tauri deskto
 ## Branching and releases
 
 - For every release request, read and follow `.agents/skills/uterm-release/SKILL.md`.
-  Prepare detailed, aligned Simplified Chinese and English release notes from the
-  actual diff since the previous stable release. Include user-visible features,
-  fixes, relevant compatibility/setup changes, validation and known limitations.
+  Prepare concise, aligned Simplified Chinese and English release notes from the
+  actual diff since the previous stable release. Write only this release's
+  feature highlights and short usage instructions (entry point and steps).
+  For fixes, briefly state the user-visible result. Keep test counts, QA/build
+  reports, implementation details and broad compatibility/limitation sections
+  out of the release body; mention only conditions needed to use a feature.
+  Validation remains required and belongs in the feature guides, not release notes.
   Commit `release-notes/uTerm-vMAJOR.MINOR.PATCH.md` before tagging. Missing,
   placeholder-only or unsupported notes block the release; the script's generic
   fallback is not acceptable. Versioned release notes are required release
