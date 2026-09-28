@@ -164,6 +164,7 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     };
     const shell = () => document.querySelector(".app-shell");
     const swap = () => document.querySelector(".pane-swap-button");
+    const inspectorToggle = () => document.querySelector(".inspector-toggle");
     const click = (node) => act(async () => node.click());
     const shortcut = () =>
       act(async () =>
@@ -181,6 +182,7 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     await render();
     assert.ok(swap());
     assert.equal(swap().title, "Swap left and right panes");
+    assert.equal(inspectorToggle().closest(".toolbar"), document.querySelector(".toolbar"));
     assert.equal(globalThis.paneMounts, 1);
     const terminal = document.querySelector(".terminal-test");
     await click(document.querySelector('.file-row[title="src"]'));
@@ -193,6 +195,12 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     for (let i = 0; i < 3; i++) {
       await click(swap());
       assert.equal(shell().dataset.inspectorPosition, i % 2 === 0 ? "left" : "right");
+      if (i % 2 === 0)
+        assert.equal(
+          inspectorToggle().closest(".inspector-switcher"),
+          document.querySelector(".inspector-switcher"),
+        );
+      else assert.equal(inspectorToggle().closest(".toolbar"), document.querySelector(".toolbar"));
       assert.strictEqual(document.querySelector(".terminal-test"), terminal);
       assert.strictEqual(document.querySelector(".editor-test"), editor);
       assert.strictEqual(document.querySelector(".file-panel"), filePanel);
@@ -226,6 +234,7 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     dom.window.Storage.prototype.setItem = originalSetItem;
     await click(swap());
     await click(document.querySelector('button[aria-label="Hide inspector"]'));
+    assert.equal(inspectorToggle().closest(".toolbar"), document.querySelector(".toolbar"));
     assert.equal(swap(), null);
     await shortcut();
     assert.equal(shell().dataset.inspectorPosition, "left");

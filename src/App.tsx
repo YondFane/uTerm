@@ -1266,6 +1266,7 @@ export function App() {
   );
   const inspectorActions = (
     <div className="inspector-switcher" role="group" aria-label={tx("工具面板")}>
+      {inspectorOnLeft && inspectorToggle}
       <button
         className="toolbar-icon-button"
         aria-label={tx("文件")}
@@ -1452,6 +1453,7 @@ export function App() {
                 <SidebarIcon name="sidebar" />
               </button>
             )}
+            {!inspectorVisible && inspectorOnLeft && inspectorToggle}
             <h1 data-tauri-drag-region>
               {selectedWorktree
                 ? `${selected?.name} / ${selectedWorktree.name}`
@@ -1498,7 +1500,7 @@ export function App() {
                 )}
               </div>
             )}
-            {inspectorToggle}
+            {!inspectorOnLeft && inspectorToggle}
           </div>
         </header>
         {updates.available?.version && ["available", "ready"].includes(updates.phase) && (

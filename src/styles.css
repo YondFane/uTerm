@@ -2022,7 +2022,7 @@ select:focus-visible {
 .sidebar-reopen:hover {
   background: #8883;
 }
-.toolbar button[data-collapse-hint] {
+:is(.toolbar, .inspector-switcher) button[data-collapse-hint] {
   color: var(--ui-accent);
   background: var(--ui-selected);
   animation: panel-collapse-hint 750ms ease-in-out 4;
