@@ -96,6 +96,8 @@ export function App() {
   const sidebarDrag = useRef<{ x: number; width: number; collapse?: boolean } | null>(null);
   const [sidebarSnap, setSidebarSnap] = useState(false);
   const [inspectorSnap, setInspectorSnap] = useState(false);
+  const [sidebarCollapseHint, setSidebarCollapseHint] = useState(false);
+  const [inspectorCollapseHint, setInspectorCollapseHint] = useState(false);
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const [gitExpanded, setGitExpanded] = useState(false);
   const shellElement = useRef<HTMLDivElement>(null);
@@ -149,6 +151,7 @@ export function App() {
         if (sidebarDrag.current?.collapse) {
           setRequestedSidebarWidth(sidebarDrag.current.width);
           setSidebarVisible(false);
+          setSidebarCollapseHint(true);
         }
         setSidebarSnap(false);
         sidebarDrag.current = null;
@@ -214,7 +217,10 @@ export function App() {
       onPointerUp={(event) => {
         if (inspectorDrag.current?.collapse) {
           setInspectorRatio(inspectorDrag.current.width / inspectorSize.available);
-          if (inspectorVisible) toggleInspector();
+          if (inspectorVisible) {
+            toggleInspector();
+            setInspectorCollapseHint(true);
+          }
         }
         setInspectorSnap(false);
         inspectorDrag.current = null;
@@ -1187,6 +1193,24 @@ export function App() {
     git: gitOpen,
     github: githubOpen,
   });
+  useEffect(() => {
+    if (!sidebarCollapseHint) return;
+    if (sidebarVisible) {
+      setSidebarCollapseHint(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setSidebarCollapseHint(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [sidebarCollapseHint, sidebarVisible]);
+  useEffect(() => {
+    if (!inspectorCollapseHint) return;
+    if (inspectorVisible) {
+      setInspectorCollapseHint(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setInspectorCollapseHint(false), 3000);
+    return () => window.clearTimeout(timer);
+  }, [inspectorCollapseHint, inspectorVisible]);
   function swapPanes() {
     if (!commandAvailable("swapPanes")) return;
     try {
@@ -1224,7 +1248,8 @@ export function App() {
   }
   const inspectorToggle = (
     <button
-      className="toolbar-icon-button"
+      className="toolbar-icon-button inspector-toggle"
+      data-collapse-hint={(!inspectorVisible && inspectorCollapseHint) || undefined}
       aria-label={inspectorVisible ? tx("隐藏工具面板") : tx("显示工具面板")}
       title={inspectorVisible ? tx("隐藏工具面板") : tx("显示工具面板")}
       aria-expanded={inspectorVisible}
@@ -1412,6 +1437,7 @@ export function App() {
             {!sidebarVisible && (
               <button
                 className="sidebar-reopen"
+                data-collapse-hint={sidebarCollapseHint || undefined}
                 aria-label={tx("显示侧栏")}
                 title={tx("显示侧栏")}
                 aria-expanded={false}

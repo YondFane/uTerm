@@ -5,7 +5,7 @@ import { createServer } from "vite";
 import React, { act } from "react";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 
-test("App swaps mounted panes, keeps drafts and tree state, persists position and reports save failures", async () => {
+test("App swaps mounted panes, keeps drafts and tree state, persists position and reports save failures", async (t) => {
   const dom = new JSDOM('<div id="root"></div>', {
     url: "http://localhost/",
     pretendToBeVisual: true,
@@ -259,7 +259,85 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     await act(async () => prefs.reset());
     assert.equal(shell().dataset.inspectorPosition, "right");
     await act(async () => setUiLanguage("en"));
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const hint = (selector) =>
+      document.querySelector(selector)?.hasAttribute("data-collapse-hint") ?? false;
+    const pointer = (node, type, clientX) =>
+      act(async () =>
+        node.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX })),
+      );
+    const drag = async (selector, end, finish = "pointerup", back) => {
+      const node = document.querySelector(selector);
+      await pointer(node, "pointerdown", 600);
+      await pointer(node, "pointermove", end);
+      assert.equal(
+        hint(selector === ".sidebar-resizer" ? ".sidebar-reopen" : ".inspector-toggle"),
+        false,
+      );
+      if (back !== undefined) await pointer(node, "pointermove", back);
+      await pointer(node, finish, back ?? end);
+    };
+    await click(document.querySelector(".sidebar-toggle"));
+    assert.equal(hint(".sidebar-reopen"), false);
+    await click(document.querySelector(".sidebar-reopen"));
+    await click(document.querySelector(".inspector-toggle"));
+    assert.equal(hint(".inspector-toggle"), false);
+    await click(document.querySelector(".inspector-toggle"));
+    await drag(".sidebar-resizer", -1000, "pointercancel");
+    assert.equal(document.querySelector(".sidebar-reopen"), null);
+    await drag(".sidebar-resizer", -1000, "pointerup", 800);
+    assert.equal(document.querySelector(".sidebar-reopen"), null);
+    await drag(".inspector-resizer", 2000, "pointercancel");
+    assert.equal(hint(".inspector-toggle"), false);
+    await drag(".inspector-resizer", 2000, "pointerup", 400);
+    assert.equal(hint(".inspector-toggle"), false);
+    await drag(".sidebar-resizer", -1000);
+    assert.equal(hint(".sidebar-reopen"), true);
+    await act(async () => t.mock.timers.tick(2999));
+    assert.equal(hint(".sidebar-reopen"), true);
+    await act(async () => t.mock.timers.tick(1));
+    assert.equal(hint(".sidebar-reopen"), false);
+    await click(document.querySelector(".sidebar-reopen"));
+    for (const side of ["right", "left"]) {
+      if (side === "left") await click(swap());
+      await drag(".inspector-resizer", side === "right" ? 2000 : -1000);
+      assert.equal(hint(".inspector-toggle"), true);
+      await act(async () => t.mock.timers.tick(2999));
+      assert.equal(hint(".inspector-toggle"), true);
+      await act(async () => t.mock.timers.tick(1));
+      assert.equal(hint(".inspector-toggle"), false);
+      await click(document.querySelector(".inspector-toggle"));
+    }
+    await drag(".sidebar-resizer", -1000);
+    await act(async () => t.mock.timers.tick(1000));
+    await click(document.querySelector(".sidebar-reopen"));
+    await click(document.querySelector(".sidebar-toggle"));
+    assert.equal(hint(".sidebar-reopen"), false);
+    await click(document.querySelector(".sidebar-reopen"));
+    await drag(".sidebar-resizer", -1000);
+    await act(async () => t.mock.timers.tick(2000));
+    assert.equal(hint(".sidebar-reopen"), true);
+    await act(async () => t.mock.timers.tick(1000));
+    assert.equal(hint(".sidebar-reopen"), false);
+    await click(document.querySelector(".sidebar-reopen"));
+    await drag(".sidebar-resizer", -1000);
+    await act(async () => t.mock.timers.tick(1000));
+    await drag(".inspector-resizer", -1000);
+    assert.equal(hint(".sidebar-reopen"), true);
+    assert.equal(hint(".inspector-toggle"), true);
+    await act(async () => t.mock.timers.tick(2000));
+    assert.equal(hint(".sidebar-reopen"), false);
+    assert.equal(hint(".inspector-toggle"), true);
+    await act(async () => t.mock.timers.tick(1000));
+    assert.equal(hint(".inspector-toggle"), false);
+    await click(document.querySelector(".inspector-toggle"));
+    await drag(".inspector-resizer", -1000);
+    await click(document.querySelector(".inspector-toggle"));
+    await click(document.querySelector(".inspector-toggle"));
+    assert.equal(hint(".inspector-toggle"), false);
+    t.mock.timers.reset();
   } finally {
+    t.mock.timers.reset();
     dom.window.Storage.prototype.setItem = originalSetItem;
     if (root) await act(async () => root.unmount());
     clearMocks();

@@ -1985,7 +1985,8 @@ select:focus-visible {
   display: none;
 }
 .sidebar .sidebar-toggle,
-.sidebar-reopen {
+.sidebar-reopen,
+.toolbar .inspector-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1998,12 +1999,27 @@ select:focus-visible {
   border-radius: 6px;
 }
 .sidebar-toggle .sidebar-icon,
-.sidebar-reopen .sidebar-icon {
+.sidebar-reopen .sidebar-icon,
+.inspector-toggle .sidebar-icon {
   width: 18px;
   height: 18px;
 }
 .sidebar-reopen:hover {
   background: #8883;
+}
+.toolbar button[data-collapse-hint] {
+  color: var(--ui-accent);
+  background: var(--ui-selected);
+  animation: panel-collapse-hint 750ms ease-in-out 4;
+}
+@keyframes panel-collapse-hint {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 .app-shell.sidebar-hidden {
   grid-template-columns: minmax(0, 1fr);
