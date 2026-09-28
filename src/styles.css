@@ -1962,7 +1962,7 @@ select:focus-visible {
   color: var(--ui-muted);
   font-size: 12px;
 }
-.workspace-branch select {
+.workspace-branch .branch-trigger {
   min-width: 0;
   max-width: 220px;
   padding: 0;
@@ -2806,4 +2806,41 @@ textarea:focus-visible {
     animation: none !important;
     transition: none !important;
   }
+}
+
+.branch-menu {
+  width: 300px;
+  max-width: calc(100vw - 8px);
+}
+.branch-menu button {
+  overflow-wrap: anywhere;
+}
+.branch-menu-heading {
+  padding: 6px 8px;
+  font-weight: 600;
+  color: var(--ui-muted);
+}
+.branch-menu-heading:not(:first-child) {
+  border-top: 1px solid var(--ui-border);
+  margin-top: 4px;
+}
+.branch-menu-note,
+.branch-menu-error {
+  padding: 6px 8px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  color: var(--ui-muted);
+}
+.branch-menu-error {
+  color: #ffaba6;
+}
+.branch-menu [aria-checked="true"] {
+  background: var(--ui-hover);
+}
+.branch-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }

@@ -1,4 +1,14 @@
 export const backendMessages: Record<string, string> = {
+  "请选择已配置的远程仓库。": "Select a configured remote.",
+  "远程分支名无效。": "Invalid remote branch name.",
+  "同名本地分支已存在，但跟踪的远程分支不同。请先在终端中处理。":
+    "A local branch with this name tracks a different remote branch. Resolve this in the terminal first.",
+  "未知的 Git 操作。": "Unknown Git action.",
+  "请先切换到已有提交的本地分支。": "Switch to a local branch with commits first.",
+  "当前分支没有上游，请先在终端中设置上游分支。":
+    "This branch has no upstream. Set its upstream in the terminal first.",
+  "上游分支配置无效。": "Invalid upstream branch configuration.",
+  "Pull 前请先提交或暂存工作区修改。": "Commit or stash working tree changes before Pull.",
   "分支列表过大，请在终端中切换。": "Too many branches. Switch branches in the terminal.",
   "分支名包含无法显示的字符。": "A branch name contains characters that cannot be displayed.",
   "当前分支已改变，请刷新后重试。": "The current branch has changed. Refresh and try again.",

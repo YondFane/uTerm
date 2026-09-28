@@ -924,7 +924,7 @@ export function App() {
       if (
         event.isComposing ||
         event.repeat ||
-        document.querySelector("dialog[open]") ||
+        document.querySelector("dialog[open], .branch-menu") ||
         menu ||
         !runtime
       )
@@ -1089,6 +1089,7 @@ export function App() {
     menu?.kind === "worktree"
       ? menuProject?.worktrees?.find((worktree) => worktree.id === menu.id)
       : undefined;
+  const menuDirectory = menu?.kind === "project" ? menuProject?.directory : menuWorktree?.path;
   const menuWorktreeHasSessions =
     !!menuWorktree &&
     menuProject?.sessions.some((session) => session.worktreeId === menuWorktree.id);
@@ -1783,11 +1784,12 @@ export function App() {
               </button>
             </>
           )}
-          {menu.kind === "project" && menuProject && (
+          {menuDirectory && (
             <button
               role="menuitem"
+              disabled={menuWorktree?.missing}
               onClick={() => {
-                const directory = menuProject.directory;
+                const directory = menuDirectory;
                 setMenu(null);
                 void invoke("directory_open", { directory, target: "reveal" }).catch((reason) =>
                   setError(String(reason)),

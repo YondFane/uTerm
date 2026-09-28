@@ -405,6 +405,7 @@ fn command_path() -> Vec<PathBuf> {
             ".cargo/bin",
             ".npm-global/bin",
             ".opencode/bin",
+            ".kimi-code/bin",
         ] {
             paths.push(PathBuf::from(&home).join(relative));
         }
@@ -512,4 +513,70 @@ pub fn launch_command(
     sanitize_environment(&mut command);
     command.env("PATH", std::env::join_paths(command_path())?);
     Ok(command)
+}
+
+#[cfg(test)]
+mod program_tests {
+    use super::*;
+
+    #[test]
+    fn kimi_default_install_is_detected_without_shell_path() {
+        const FIXTURE: &str = "UTERM_KIMI_PATH_FIXTURE";
+        if let Some(home) = std::env::var_os(FIXTURE) {
+            let home = PathBuf::from(home);
+            let executable = if cfg!(windows) { "kimi.exe" } else { "kimi" };
+            let fallback = home.join(".kimi-code/bin").join(executable);
+            let preferred = home.join("preferred").join(executable);
+            let expected = if std::env::var_os("PATH").is_some_and(|path| !path.is_empty()) {
+                preferred
+            } else {
+                fallback.clone()
+            };
+            assert_eq!(agent_program("kimi").unwrap(), expected);
+            assert_eq!(
+                resolve_program(fallback.to_str().unwrap()).unwrap(),
+                fallback
+            );
+            let command = launch_command("default", Some("kimi"), &home).unwrap();
+            let path = command.get_env("PATH").unwrap();
+            assert!(std::env::split_paths(path).any(|path| path == home.join(".kimi-code/bin")));
+            return;
+        }
+        let home = std::env::temp_dir().join(format!("uterm-kimi-{}", uuid::Uuid::new_v4()));
+        let executable = if cfg!(windows) { "kimi.exe" } else { "kimi" };
+        for directory in [home.join(".kimi-code/bin"), home.join("preferred")] {
+            std::fs::create_dir_all(&directory).unwrap();
+            let path = directory.join(executable);
+            std::fs::write(&path, b"fixture").unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            }
+        }
+        // Isolate environment changes in child processes so parallel tests keep their own PATH.
+        // 在子进程中隔离环境变更，避免并行测试的 PATH 被修改。
+        for path in [
+            std::ffi::OsString::new(),
+            home.join("preferred").into_os_string(),
+        ] {
+            let result = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "process::program_tests::kimi_default_install_is_detected_without_shell_path",
+                ])
+                .env(FIXTURE, &home)
+                .env(if cfg!(windows) { "USERPROFILE" } else { "HOME" }, &home)
+                .env("PATH", path)
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&result.stdout),
+                String::from_utf8_lossy(&result.stderr)
+            );
+        }
+        std::fs::remove_dir_all(home).unwrap();
+    }
 }

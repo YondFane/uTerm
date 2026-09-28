@@ -29,6 +29,9 @@ test("branch dropdown preserves editor changes, serializes switching and ignores
     let branch = "main";
     let saveFails = false;
     let switchFails = false;
+    let actionFails = false;
+    let noUpstream = false;
+    let remoteErrors = [];
     let finishSwitch;
     let finishPoll;
     let holdPoll = false;
@@ -40,7 +43,21 @@ test("branch dropdown preserves editor changes, serializes switching and ignores
       if (command === "git_branches") {
         if (args.directory === "/outside") return { current: null, local: [] };
         if (holdPoll) return new Promise((resolve) => (finishPoll = resolve));
-        return { current: branch, local: ["feature/中文", "main"] };
+        return {
+          current: branch,
+          local: [...new Set(["feature/中文", "main", branch])],
+          upstream: noUpstream ? null : "origin/" + branch,
+        };
+      }
+      if (command === "git_remote_branches")
+        return { branches: [{ remote: "origin", branch: "feature/remote" }], errors: remoteErrors };
+      if (command === "git_branch_action") {
+        if (actionFails) throw new Error("Authentication failed");
+        return null;
+      }
+      if (command === "git_switch_remote_branch") {
+        branch = args.branch;
+        return null;
       }
       if (command === "git_switch_branch") {
         if (switchFails) throw new Error("Git refused conflicting changes");
@@ -80,17 +97,22 @@ test("branch dropdown preserves editor changes, serializes switching and ignores
     }
     const render = (directory = "/repo") =>
       act(async () => root.render(React.createElement(Harness, { directory })));
-    const select = () => document.querySelector("select");
-    const choose = (value) =>
-      act(async () => {
-        select().value = value;
-        select().dispatchEvent(new dom.window.Event("change", { bubbles: true }));
-      });
+    const select = () => document.querySelector(".branch-trigger");
+    const current = () => select().textContent.replace("⌄", "").trim();
+    const choose = async (value) => {
+      if (select().disabled) return;
+      await act(async () => select().click());
+      await act(async () =>
+        [...document.querySelectorAll('[role="menuitemradio"]')]
+          .find((button) => button.textContent.replace("✓", "").trim() === value)
+          ?.click(),
+      );
+    };
     const switches = () => calls.filter((call) => call.command === "git_switch_branch");
     await act(async () => setUiLanguage("en"));
     await render();
     assert.equal(select().getAttribute("aria-label"), "Switch branch");
-    assert.equal(select().value, "main");
+    assert.equal(current(), "main");
     await act(async () => setUiLanguage("zh-Hans"));
     assert.equal(select().getAttribute("aria-label"), "切换分支");
     await act(async () => editor.open("/repo", "file.txt"));
@@ -101,7 +123,7 @@ test("branch dropdown preserves editor changes, serializes switching and ignores
     assert.equal(editor.pending, true);
     assert.equal(editor.document.text, "draft");
     await act(async () => editor.cancel());
-    assert.equal(select().value, "main");
+    assert.equal(current(), "main");
     saveFails = false;
     holdPoll = true;
     await act(async () => window.dispatchEvent(new dom.window.Event("focus")));
@@ -120,19 +142,86 @@ test("branch dropdown preserves editor changes, serializes switching and ignores
     assert.equal(calls.filter((call) => call.command === "file_read").length, readsBefore);
     await choose("feature/中文");
     assert.equal(switches().length, 1);
+    const stalePoll = finishPoll;
+    holdPoll = false;
     await act(async () => finishSwitch());
-    assert.equal(select().value, "feature/中文");
+    assert.equal(current(), "feature/中文");
     assert.equal(select().disabled, false);
     assert.equal(editor.transitioning, false);
     assert.equal(changed, 1);
-    await act(async () => finishPoll({ current: "main", local: ["feature/中文", "main"] }));
-    assert.equal(select().value, "feature/中文");
+    await act(async () => stalePoll({ current: "main", local: ["feature/中文", "main"] }));
+    assert.equal(current(), "feature/中文");
     holdPoll = false;
     switchFails = true;
     await choose("main");
-    assert.equal(select().value, "feature/中文");
+    assert.equal(current(), "feature/中文");
     assert.match(errors[0], /Git refused/);
-    assert.equal(changed, 1);
+    assert.equal(changed, 2);
+    await act(async () =>
+      select().dispatchEvent(
+        new dom.window.MouseEvent("contextmenu", { bubbles: true, clientX: 99999, clientY: 99999 }),
+      ),
+    );
+    assert.match(document.body.textContent, /Push/);
+    const menu = document.querySelector('[role="menu"]');
+    assert(Number.parseFloat(menu.style.left) <= window.innerWidth - 300);
+    await act(async () =>
+      [...menu.querySelectorAll("button")]
+        .find((button) => button.textContent.includes("Fetch"))
+        .click(),
+    );
+    assert.equal(
+      calls.filter((call) => call.command === "git_branch_action")[0].args.action,
+      "fetch",
+    );
+    await act(async () => select().click());
+    assert.match(document.body.textContent, /Local/);
+    assert.match(document.body.textContent, /Remote/);
+    await act(async () =>
+      [...document.querySelectorAll('[role="menuitem"]')]
+        .find((button) => button.textContent === "origin/feature/remote")
+        .click(),
+    );
+    assert.equal(current(), "feature/remote");
+    assert.equal(
+      calls.filter((call) => call.command === "git_switch_remote_branch")[0].args.remote,
+      "origin",
+    );
+    await act(async () => select().click());
+    await act(async () =>
+      document
+        .querySelector('[role="menu"]')
+        .dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
+    assert.equal(document.querySelector('[role="menu"]'), null);
+    assert.equal(document.activeElement, select());
+    noUpstream = true;
+    await act(async () => window.dispatchEvent(new dom.window.Event("focus")));
+    await act(async () =>
+      select().dispatchEvent(
+        new dom.window.KeyboardEvent("keydown", { key: "F10", shiftKey: true, bubbles: true }),
+      ),
+    );
+    assert(
+      [...document.querySelectorAll('[role="menuitem"]')].find((button) =>
+        button.textContent.includes("Push"),
+      ).disabled,
+    );
+    actionFails = true;
+    await act(async () =>
+      [...document.querySelectorAll('[role="menuitem"]')]
+        .find((button) => button.textContent.includes("Fetch"))
+        .click(),
+    );
+    assert.match(errors.at(-1), /Authentication failed/);
+    remoteErrors = ["upstream: Network unavailable"];
+    await act(async () => select().click());
+    assert.match(document.querySelector('[role="alert"]').textContent, /Network unavailable/);
+    await act(async () =>
+      document
+        .querySelector('[role="menu"]')
+        .dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
+    );
     saveFails = true;
     await act(async () => editor.open("/repo", "file.txt"));
     await act(async () => editor.change("keep draft"));

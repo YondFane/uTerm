@@ -341,6 +341,7 @@ pub async fn git_branch(directory: String) -> Result<Option<String>, String> {
 pub struct Branches {
     current: Option<String>,
     local: Vec<String>,
+    upstream: Option<String>,
 }
 fn branches(directory: &str) -> Result<Branches, String> {
     let current = current_branch(directory)?;
@@ -365,7 +366,27 @@ fn branches(directory: &str) -> Result<Branches, String> {
     } else {
         Vec::new()
     };
-    Ok(Branches { current, local })
+    let upstream = current
+        .as_ref()
+        .filter(|name| local.contains(name))
+        .and_then(|name| {
+            run(
+                directory,
+                &[
+                    "for-each-ref",
+                    "--format=%(upstream:short)",
+                    &format!("refs/heads/{name}"),
+                ],
+            )
+            .ok()
+            .map(text)
+            .filter(|value| !value.is_empty())
+        });
+    Ok(Branches {
+        current,
+        local,
+        upstream,
+    })
 }
 fn switch_branch(directory: &str, branch: &str, expected: &str) -> Result<(), String> {
     let root = root(directory)?;
@@ -393,9 +414,312 @@ pub async fn git_switch_branch(
     branch: String,
     expected: String,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || switch_branch(&directory, &branch, &expected))
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = BRANCH_OPERATION.lock().map_err(|error| error.to_string())?;
+        switch_branch(&directory, &branch, &expected)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+static BRANCH_OPERATION: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[derive(Debug, Serialize)]
+pub struct RemoteBranch {
+    remote: String,
+    branch: String,
+}
+#[derive(Serialize)]
+pub struct RemoteBranches {
+    branches: Vec<RemoteBranch>,
+    errors: Vec<String>,
+}
+fn remotes(directory: &str) -> Result<Vec<String>, String> {
+    Ok(text(run(directory, &["remote"])?)
+        .lines()
+        .map(String::from)
+        .collect())
+}
+fn validate_remote(directory: &str, remote: &str) -> Result<(), String> {
+    if remote.starts_with('-') || !remotes(directory)?.iter().any(|name| name == remote) {
+        return Err("请选择已配置的远程仓库。".into());
+    }
+    Ok(())
+}
+fn remote_branches(directory: &str) -> Result<RemoteBranches, String> {
+    let directory = root(directory)?;
+    let mut result = RemoteBranches {
+        branches: vec![],
+        errors: vec![],
+    };
+    for remote in remotes(&directory)? {
+        let listed = (|| {
+            validate_remote(&directory, &remote)?;
+            let output = run(&directory, &["ls-remote", "--heads", "--", &remote])?;
+            if output.len() > LIMIT {
+                return Err("分支列表过大，请在终端中切换。".into());
+            }
+            let output = std::str::from_utf8(&output).map_err(|_| "分支名包含无法显示的字符。")?;
+            Ok::<_, String>(
+                output
+                    .lines()
+                    .filter_map(|line| {
+                        let (_, reference) = line.split_once('\t')?;
+                        Some(RemoteBranch {
+                            remote: remote.clone(),
+                            branch: reference.strip_prefix("refs/heads/")?.into(),
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })();
+        match listed {
+            Ok(mut branches) => result.branches.append(&mut branches),
+            Err(error) => result.errors.push(format!("{remote}: {error}")),
+        }
+    }
+    result
+        .branches
+        .sort_by(|a, b| (&a.remote, &a.branch).cmp(&(&b.remote, &b.branch)));
+    Ok(result)
+}
+fn expect_branch(directory: &str, expected: &str) -> Result<(), String> {
+    if current_branch(directory)?.as_deref() != Some(expected) {
+        return Err("当前分支已改变，请刷新后重试。".into());
+    }
+    Ok(())
+}
+fn switch_remote_branch(
+    directory: &str,
+    remote: &str,
+    branch: &str,
+    expected: &str,
+) -> Result<(), String> {
+    let directory = root(directory)?;
+    validate_remote(&directory, remote)?;
+    expect_branch(&directory, expected)?;
+    if branch.starts_with('-') || branch == "HEAD" {
+        return Err("远程分支名无效。".into());
+    }
+    run(
+        &directory,
+        &["check-ref-format", &format!("refs/heads/{branch}")],
+    )?;
+    let tracking = format!("refs/remotes/{remote}/{branch}");
+    let local_exists = branches(&directory)?
+        .local
+        .iter()
+        .any(|name| name == branch);
+    if local_exists {
+        let upstream = text(run(
+            &directory,
+            &[
+                "for-each-ref",
+                "--format=%(upstream)",
+                &format!("refs/heads/{branch}"),
+            ],
+        )?);
+        if upstream != tracking {
+            return Err("同名本地分支已存在，但跟踪的远程分支不同。请先在终端中处理。".into());
+        }
+    }
+    run(
+        &directory,
+        &[
+            "fetch",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "--",
+            remote,
+            &format!("+refs/heads/{branch}:{tracking}"),
+        ],
+    )?;
+    expect_branch(&directory, expected)?;
+    if local_exists {
+        return switch_branch(&directory, branch, expected);
+    }
+    // Configure tracking explicitly so single-branch clones can also select other remote branches.
+    // 显式配置跟踪关系，使单分支克隆也能选择其他远程分支。
+    run(
+        &directory,
+        &[
+            "switch",
+            "--no-guess",
+            "--no-track",
+            "-c",
+            branch,
+            "--",
+            &tracking,
+        ],
+    )?;
+    run(
+        &directory,
+        &["config", &format!("branch.{branch}.remote"), remote],
+    )?;
+    run(
+        &directory,
+        &[
+            "config",
+            &format!("branch.{branch}.merge"),
+            &format!("refs/heads/{branch}"),
+        ],
+    )?;
+    if text(run(
+        &directory,
+        &[
+            "for-each-ref",
+            "--format=%(upstream)",
+            &format!("refs/heads/{branch}"),
+        ],
+    )?) != tracking
+    {
+        run(
+            &directory,
+            &[
+                "config",
+                "--add",
+                &format!("remote.{remote}.fetch"),
+                &format!("+refs/heads/{branch}:{tracking}"),
+            ],
+        )?;
+    }
+    Ok(())
+}
+fn branch_action(directory: &str, action: &str, expected: &str) -> Result<(), String> {
+    let directory = root(directory)?;
+    expect_branch(&directory, expected)?;
+    if action == "fetch" {
+        for remote in remotes(&directory)? {
+            validate_remote(&directory, &remote)?;
+            run(
+                &directory,
+                &[
+                    "fetch",
+                    "--no-tags",
+                    "--no-recurse-submodules",
+                    "--prune",
+                    "--",
+                    &remote,
+                    &format!("+refs/heads/*:refs/remotes/{remote}/*"),
+                ],
+            )?;
+        }
+        return Ok(());
+    }
+    if !["push", "pull"].contains(&action) {
+        return Err("未知的 Git 操作。".into());
+    }
+    if !branches(&directory)?
+        .local
+        .iter()
+        .any(|branch| branch == expected)
+    {
+        return Err("请先切换到已有提交的本地分支。".into());
+    }
+    let remote = text(
+        run(
+            &directory,
+            &["config", "--get", &format!("branch.{expected}.remote")],
+        )
+        .map_err(|_| "当前分支没有上游，请先在终端中设置上游分支。")?,
+    );
+    let merge = text(
+        run(
+            &directory,
+            &["config", "--get", &format!("branch.{expected}.merge")],
+        )
+        .map_err(|_| "当前分支没有上游，请先在终端中设置上游分支。")?,
+    );
+    validate_remote(&directory, &remote)?;
+    if !merge.starts_with("refs/heads/") {
+        return Err("上游分支配置无效。".into());
+    }
+    run(&directory, &["check-ref-format", &merge])?;
+    if action == "push" {
+        let commit = revision(&directory, "HEAD")?;
+        expect_branch(&directory, expected)?;
+        run(
+            &directory,
+            &[
+                "-c",
+                &format!("remote.{remote}.mirror=false"),
+                "push",
+                "--no-force",
+                "--no-follow-tags",
+                "--recurse-submodules=no",
+                "--",
+                &remote,
+                &format!("{commit}:{merge}"),
+            ],
+        )?;
+    } else {
+        let ensure_clean = || -> Result<(), String> {
+            if !run(
+                &directory,
+                &["status", "--porcelain=v1", "--untracked-files=all"],
+            )?
+            .is_empty()
+            {
+                return Err("Pull 前请先提交或暂存工作区修改。".into());
+            }
+            Ok(())
+        };
+        ensure_clean()?;
+        // Merge the captured object, not FETCH_HEAD which another Git process can replace.
+        // 合并已获取的对象，避免其他 Git 进程覆盖 FETCH_HEAD 后误合并。
+        run(
+            &directory,
+            &[
+                "fetch",
+                "--no-tags",
+                "--no-recurse-submodules",
+                "--",
+                &remote,
+                &merge,
+            ],
+        )?;
+        let commit = revision(&directory, "FETCH_HEAD")?;
+        expect_branch(&directory, expected)?;
+        ensure_clean()?;
+        run(
+            &directory,
+            &["merge", "--ff-only", "--no-autostash", &commit],
+        )?;
+    }
+    Ok(())
+}
+#[tauri::command]
+pub async fn git_remote_branches(directory: String) -> Result<RemoteBranches, String> {
+    tauri::async_runtime::spawn_blocking(move || remote_branches(&directory))
         .await
         .map_err(|error| error.to_string())?
+}
+#[tauri::command]
+pub async fn git_switch_remote_branch(
+    directory: String,
+    remote: String,
+    branch: String,
+    expected: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = BRANCH_OPERATION.lock().map_err(|error| error.to_string())?;
+        switch_remote_branch(&directory, &remote, &branch, &expected)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+#[tauri::command]
+pub async fn git_branch_action(
+    directory: String,
+    action: String,
+    expected: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = BRANCH_OPERATION.lock().map_err(|error| error.to_string())?;
+        branch_action(&directory, &action, &expected)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -613,6 +937,172 @@ mod tests {
                 .as_deref(),
             Some("other")
         );
+    }
+    fn remote_fixture(directory: &str) -> tempfile::TempDir {
+        let remote = tempfile::tempdir().unwrap();
+        run(
+            remote.path().to_str().unwrap(),
+            &["init", "--bare", "--initial-branch=main"],
+        )
+        .unwrap();
+        run(
+            directory,
+            &["remote", "add", "origin", remote.path().to_str().unwrap()],
+        )
+        .unwrap();
+        run(directory, &["push", "--set-upstream", "origin", "main"]).unwrap();
+        remote
+    }
+    #[test]
+    fn remote_listing_reads_unfetched_heads_and_keeps_partial_failures_visible() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let _remote = remote_fixture(directory);
+        run(
+            directory,
+            &["push", "origin", "feature/中文:refs/heads/remote/中文"],
+        )
+        .unwrap();
+        run(
+            directory,
+            &["update-ref", "-d", "refs/remotes/origin/remote/中文"],
+        )
+        .unwrap();
+        run(
+            directory,
+            &[
+                "remote",
+                "add",
+                "unavailable",
+                temp.path().join("missing").to_str().unwrap(),
+            ],
+        )
+        .unwrap();
+        let listed = remote_branches(directory).unwrap();
+        assert_eq!(
+            listed
+                .branches
+                .iter()
+                .map(|b| b.branch.as_str())
+                .collect::<Vec<_>>(),
+            vec!["main", "remote/中文"]
+        );
+        assert_eq!(listed.errors.len(), 1);
+        assert!(listed.errors[0].starts_with("unavailable:"));
+        assert!(run(
+            directory,
+            &["show-ref", "--verify", "refs/remotes/origin/remote/中文"]
+        )
+        .is_err());
+        assert!(!branches(directory)
+            .unwrap()
+            .local
+            .contains(&"remote/中文".into()));
+    }
+    #[test]
+    fn remote_switch_creates_tracking_and_rejects_collisions_stale_targets_and_conflicts() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let _remote = remote_fixture(directory);
+        switch_branch(directory, "feature/中文", "main").unwrap();
+        std::fs::write(temp.path().join("file.txt"), "remote change\n").unwrap();
+        fixture_commit(directory);
+        run(
+            directory,
+            &["push", "origin", "HEAD:refs/heads/remote/中文"],
+        )
+        .unwrap();
+        switch_branch(directory, "main", "feature/中文").unwrap();
+        assert!(switch_remote_branch(directory, "origin", "remote/中文", "stale").is_err());
+        assert!(switch_remote_branch(directory, "--force", "main", "main").is_err());
+        assert!(switch_remote_branch(directory, "origin", "--force", "main").is_err());
+        std::fs::write(temp.path().join("file.txt"), "keep draft\n").unwrap();
+        assert!(switch_remote_branch(directory, "origin", "remote/中文", "main").is_err());
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
+            "keep draft\n"
+        );
+        assert!(!branches(directory)
+            .unwrap()
+            .local
+            .contains(&"remote/中文".into()));
+        run(directory, &["restore", "file.txt"]).unwrap();
+        run(
+            directory,
+            &[
+                "config",
+                "remote.origin.fetch",
+                "+refs/heads/main:refs/remotes/origin/main",
+            ],
+        )
+        .unwrap();
+        switch_remote_branch(directory, "origin", "remote/中文", "main").unwrap();
+        assert_eq!(
+            current_branch(directory).unwrap().as_deref(),
+            Some("remote/中文")
+        );
+        assert_eq!(
+            text(run(directory, &["config", "branch.remote/中文.merge"]).unwrap()),
+            "refs/heads/remote/中文"
+        );
+        switch_branch(directory, "main", "remote/中文").unwrap();
+        switch_remote_branch(directory, "origin", "remote/中文", "main").unwrap();
+        switch_branch(directory, "main", "remote/中文").unwrap();
+        run(
+            directory,
+            &["config", "branch.remote/中文.merge", "refs/heads/other"],
+        )
+        .unwrap();
+        assert!(switch_remote_branch(directory, "origin", "remote/中文", "main").is_err());
+    }
+    #[test]
+    fn sync_uses_explicit_upstream_rejects_dirty_or_diverged_pull_and_never_force_pushes() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        assert!(branch_action(directory, "push", "main").is_err());
+        let remote = remote_fixture(directory);
+        let other = tempfile::tempdir().unwrap();
+        let other_dir = other.path().to_str().unwrap();
+        run(other_dir, &["clone", remote.path().to_str().unwrap(), "."]).unwrap();
+        std::fs::write(temp.path().join("file.txt"), "local change\n").unwrap();
+        assert!(branch_action(directory, "pull", "main").is_err());
+        fixture_commit(directory);
+        branch_action(directory, "push", "main").unwrap();
+        branch_action(other_dir, "pull", "main").unwrap();
+        assert_eq!(
+            revision(directory, "HEAD").unwrap(),
+            revision(other_dir, "HEAD").unwrap()
+        );
+        std::fs::write(other.path().join("file.txt"), "remote change\n").unwrap();
+        fixture_commit(other_dir);
+        branch_action(other_dir, "push", "main").unwrap();
+        branch_action(directory, "pull", "main").unwrap();
+        assert_eq!(
+            revision(directory, "HEAD").unwrap(),
+            revision(other_dir, "HEAD").unwrap()
+        );
+        std::fs::write(other.path().join("file.txt"), "diverged remote\n").unwrap();
+        fixture_commit(other_dir);
+        branch_action(other_dir, "push", "main").unwrap();
+        std::fs::write(temp.path().join("file.txt"), "diverged local\n").unwrap();
+        fixture_commit(directory);
+        let before = revision(directory, "HEAD").unwrap();
+        assert!(branch_action(directory, "pull", "main").is_err());
+        assert_eq!(revision(directory, "HEAD").unwrap(), before);
+        run(
+            directory,
+            &["config", "remote.origin.push", "+refs/heads/*:refs/heads/*"],
+        )
+        .unwrap();
+        assert!(branch_action(directory, "push", "main").is_err());
+        assert_eq!(
+            revision(remote.path().to_str().unwrap(), "main").unwrap(),
+            revision(other_dir, "HEAD").unwrap()
+        );
+        branch_action(directory, "fetch", "main").unwrap();
+        assert_eq!(revision(directory, "HEAD").unwrap(), before);
+        assert!(branch_action(directory, "reset", "main").is_err());
+        assert!(branch_action(directory, "pull", "stale").is_err());
     }
     #[test]
     fn branch_label_handles_unborn_switches_and_detached_head() {
