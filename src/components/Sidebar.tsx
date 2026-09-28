@@ -659,23 +659,6 @@ export function Sidebar({
   }
   return (
     <aside id="workspace-sidebar" className="sidebar" aria-label={tx("工作区")} hidden={!visible}>
-      <div className="sidebar-brand" data-tauri-drag-region>
-        <span className="brand-symbol" aria-hidden="true">
-          ›_
-        </span>
-        <strong data-tauri-drag-region>uTerm</strong>
-        <small>{tx("本地")}</small>
-        <button
-          className="icon-button sidebar-toggle"
-          aria-label={tx("隐藏侧栏")}
-          title={tx("隐藏侧栏")}
-          aria-expanded={true}
-          aria-controls="workspace-sidebar"
-          onClick={() => act(toggleVisibility)}
-        >
-          <SidebarIcon name="sidebar" />
-        </button>
-      </div>
       {resizeHandle}
       <header className="sidebar-header" data-tauri-drag-region>
         <button
@@ -688,6 +671,16 @@ export function Sidebar({
           onClick={(event) => togglePopover(event, "workspace")}
         >
           <span>{group?.name ?? tx("工作区")}</span>
+        </button>
+        <button
+          className="icon-button sidebar-toggle"
+          aria-label={tx("隐藏侧栏")}
+          title={tx("隐藏侧栏")}
+          aria-expanded={true}
+          aria-controls="workspace-sidebar"
+          onClick={() => act(toggleVisibility)}
+        >
+          <SidebarIcon name="sidebar" />
         </button>
       </header>
       <nav className="project-list" aria-label={tx("项目与会话")}>

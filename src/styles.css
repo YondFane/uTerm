@@ -414,12 +414,14 @@ select:focus-visible {
 .sidebar-header {
   display: flex;
   align-items: center;
-  flex: 0 0 44px;
+  gap: 6px;
+  flex: 0 0 56px;
   min-width: 0;
+  margin-bottom: 8px;
   padding: 0 5px;
 }
 .platform-macos .sidebar-header {
-  padding-left: 92px;
+  padding-left: 78px;
 }
 .sidebar button {
   background: transparent;
@@ -661,7 +663,7 @@ select:focus-visible {
   max-height: min(400px, calc(100vh - 90px));
 }
 .sidebar-popover.workspace {
-  top: 42px;
+  top: 56px;
 }
 .sidebar-popover.add {
   bottom: 40px;
@@ -2333,60 +2335,21 @@ select:focus-visible {
 .app-shell[data-resizing-sidebar] iframe {
   pointer-events: none;
 }
-.sidebar-brand .sidebar-toggle {
+.sidebar-header .sidebar-toggle {
   flex-shrink: 0;
-}
-.sidebar-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 56px;
-  flex-shrink: 0;
-  padding: 0 8px;
-}
-.sidebar-brand strong {
-  font-size: 16px;
-  letter-spacing: -0.6px;
-  font-weight: 650;
-}
-.brand-symbol {
-  color: var(--ui-accent);
-  font:
-    600 18px ui-monospace,
-    monospace;
-}
-.sidebar-brand small {
-  margin-left: auto;
-  color: var(--ui-muted);
-  font:
-    10px ui-monospace,
-    monospace;
-  letter-spacing: 1.2px;
-}
-.sidebar-header {
-  flex-basis: 42px;
-  margin: 4px 0 14px;
-  padding: 3px 4px;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-radius: 6px;
 }
 .sidebar .workspace-switcher {
   flex: 1;
   font-size: 12px;
   font-weight: 500;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
 }
 .sidebar .workspace-switcher::after {
   content: "⌄";
   margin-left: auto;
   color: var(--ui-muted);
-}
-.platform-macos .sidebar-brand {
-  padding-top: 30px;
-  height: 80px;
-}
-.platform-macos .sidebar-header {
-  padding-left: 4px;
 }
 .project-list {
   padding: 0 2px;
@@ -2435,12 +2398,6 @@ select:focus-visible {
 .sidebar .sidebar-popover {
   background: var(--ui-surface);
   box-shadow: var(--ui-shadow);
-}
-.sidebar-popover.workspace {
-  top: 103px;
-}
-.platform-macos .sidebar-popover.workspace {
-  top: 127px;
 }
 .sidebar-popover.add {
   bottom: 58px;
