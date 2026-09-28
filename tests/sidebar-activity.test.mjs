@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { createServer } from "vite";
 import React, { act } from "react";
 
-test("activity shortcuts follow workspace sessions and preserve original project rows", async () => {
+test("active project trees move between sections without duplicating pinned children", async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
   for (const key of ["window", "document", "navigator", "HTMLElement", "localStorage"])
     Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
@@ -27,8 +27,14 @@ test("activity shortcuts follow workspace sessions and preserve original project
     const { SettingsProvider } = await server.ssrLoadModule("/src/lib/SettingsContext.tsx");
     const { defaults, settingsKey } = await server.ssrLoadModule("/src/lib/settings.ts");
     const { setUiLanguage } = await server.ssrLoadModule("/src/lib/i18n.ts");
-    const { emptyWorkspace, selectSession, moveProject, removeSession } =
-      await server.ssrLoadModule("/src/lib/workspace.ts");
+    const {
+      emptyWorkspace,
+      selectSession,
+      moveProject,
+      removeSession,
+      removeProject,
+      reorderProject,
+    } = await server.ssrLoadModule("/src/lib/workspace.ts");
     localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
     const session = (id, extra = {}) => ({ id, name: id, shell: "default", ...extra });
     let workspace = emptyWorkspace();
@@ -49,12 +55,23 @@ test("activity shortcuts follow workspace sessions and preserve original project
           name: "Zulu",
           directory: "/z",
           workspaceId: local,
+          collapsed: true,
           sessions: [
-            session("wt", { worktreeId: "tree" }),
+            session("wt", { worktreeId: "tree", pinned: true }),
             session("shell"),
-            session("agent", { agent: "codex" }),
+            session("agent", { agent: "codex", pinned: true }),
           ],
-          worktrees: [{ id: "tree", name: "Tree", path: "/tree", branch: "test" }],
+          worktrees: [
+            {
+              id: "tree",
+              name: "Tree",
+              path: "/tree",
+              branch: "test",
+              pinned: true,
+              collapsed: true,
+            },
+            { id: "unused", name: "Unused", path: "/unused", branch: "unused" },
+          ],
         },
         {
           id: "a",
@@ -84,6 +101,7 @@ test("activity shortcuts follow workspace sessions and preserve original project
       selectedSession: "shell",
     };
     const selected = [];
+    const menus = [];
     const noop = () => {};
     let disabled = false;
     let providerKey = 0;
@@ -99,9 +117,11 @@ test("activity shortcuts follow workspace sessions and preserve original project
               closeSession: noop,
               workspace,
               runtime: null,
-              update: noop,
+              update: (change) => {
+                workspace = change(workspace);
+              },
               focus: noop,
-              menu: noop,
+              menu: (value) => menus.push(value),
               addProject: noop,
               newWorkspace: noop,
               renameWorkspace: noop,
@@ -122,42 +142,88 @@ test("activity shortcuts follow workspace sessions and preserve original project
         ),
       );
     const section = () => document.querySelector('section[aria-label="Active"]');
-    const rows = () => [...section().querySelectorAll(".activity-row button")];
-    const names = () => rows().map((row) => row.querySelector(".activity-name").textContent);
+    const rows = () => [...(section()?.querySelectorAll("[data-project-id] > .row-label") ?? [])];
+    const names = () => rows().map((row) => row.textContent);
     const click = (element) => act(async () => element.click());
+    const sessions = () => [...section().querySelectorAll(".session-row > .row-label")];
+    const projectRow = (id) => document.querySelector(`[data-project-id="${id}"]`);
+    const toggle = (name) =>
+      [...section().querySelectorAll(".folder-toggle")].find((button) =>
+        button.getAttribute("aria-label").endsWith(name),
+      );
     await render();
     assert.deepEqual(names(), ["Pinned", "Zulu", "Alpha"]);
     assert.equal(rows()[1].title, "/z");
-    assert.equal(rows()[1].getAttribute("aria-label"), "Zulu, 3 sessions");
-    assert.equal(rows()[1].getAttribute("aria-current"), "true");
-    assert.equal(section().querySelectorAll(".folder-toggle, .row-actions, [draggable]").length, 0);
-    assert.ok(document.querySelector('section[aria-label="Pinned"] .folder-row'));
+    assert.equal(document.querySelectorAll('[data-project-id="z"]').length, 1);
+    assert.equal(document.querySelector('section[aria-label="Pinned"]'), null);
     assert.equal(
-      document.querySelector('section[aria-label="Projects"] [data-project-id="z"] .row-label')
-        .textContent,
-      "Zulu",
+      document.querySelector('section[aria-label="Projects"] [data-project-id="z"]'),
+      null,
     );
+    assert.equal(section().querySelector(".activity-count"), null);
+    assert.equal(sessions().length, 5);
+    assert.equal(toggle("Tree").getAttribute("aria-expanded"), "true");
+    assert.ok(toggle("Unused"));
+    assert.equal(workspace.projects[0].collapsed, true);
+    assert.equal(workspace.projects[0].worktrees[0].collapsed, true);
+    assert.equal(removeProject(workspace, "z"), workspace);
+    await act(async () =>
+      projectRow("z").dispatchEvent(new dom.window.MouseEvent("contextmenu", { bubbles: true })),
+    );
+    assert.equal(menus.at(-1).kind, "project");
+    assert.equal(menus.at(-1).id, "z");
     await click(rows()[1]);
     assert.equal(selected.at(-1), "shell");
     workspace = { ...workspace, selectedProject: "a", selectedSession: "alpha" };
     await render();
     await click(rows()[1]);
     assert.equal(selected.at(-1), "wt");
-    assert.equal(workspace.selectedProject, "z");
     assert.equal(workspace.selectedWorktree, "tree");
+    await click(sessions().find((button) => button.title === "Zulu / agent"));
+    assert.equal(selected.at(-1), "agent");
     disabled = true;
     await render();
     const count = selected.length;
     await click(rows()[0]);
+    await click(sessions()[0]);
     assert.equal(selected.length, count);
     disabled = false;
+    await render();
+    await click(toggle("Zulu"));
+    await render();
+    assert.equal(toggle("Zulu").getAttribute("aria-expanded"), "false");
+    assert.equal(toggle("Tree"), undefined);
+    await click(toggle("Zulu"));
+    await render();
+    await click(toggle("Tree"));
+    await render();
+    assert.equal(toggle("Tree").getAttribute("aria-expanded"), "false");
+    await click(section().querySelector(".section-action"));
+    await render();
+    assert.equal(rows().length, 3);
+    assert.equal(sessions().length, 0);
+    assert.equal(workspace.projects[1].collapsed, undefined);
+    await click(section().querySelector(".section-action"));
+    await render();
+    assert.equal(sessions().length, 5);
     await click(section().querySelector(".section-toggle"));
     assert.equal(rows().length, 0);
     await click(section().querySelector(".section-toggle"));
     assert.equal(rows().length, 3);
+    assert.equal(reorderProject(workspace, "z", "empty", false), workspace);
+    assert.equal(reorderProject(workspace, "z", "p", false), workspace);
+    const reordered = reorderProject(workspace, "a", "z", false);
+    assert.ok(
+      reordered.projects.findIndex((p) => p.id === "a") <
+        reordered.projects.findIndex((p) => p.id === "z"),
+    );
+    workspace = removeSession(workspace, "pinned");
+    await render();
+    assert.ok(document.querySelector('section[aria-label="Pinned"] [data-project-id="p"]'));
     workspace = removeSession(workspace, "alpha");
     await render();
-    assert.deepEqual(names(), ["Pinned", "Zulu"]);
+    assert.deepEqual(names(), ["Zulu"]);
+    assert.ok(document.querySelector('section[aria-label="Projects"] [data-project-id="a"]'));
     workspace = {
       ...workspace,
       projects: workspace.projects.map((p) =>
@@ -165,26 +231,46 @@ test("activity shortcuts follow workspace sessions and preserve original project
       ),
     };
     await render();
-    assert.deepEqual(names(), ["Pinned", "Zulu", "Alpha"]);
+    assert.deepEqual(names(), ["Zulu", "Alpha"]);
     localStorage.setItem(
       settingsKey,
       JSON.stringify({ ...defaults, language: "en", projectOrder: "name" }),
     );
     providerKey++;
     await render();
-    assert.deepEqual(names(), ["Pinned", "Alpha", "Zulu"]);
+    assert.deepEqual(names(), ["Alpha", "Zulu"]);
+    await click(toggle("Zulu"));
+    await render();
+    for (const id of ["wt", "shell", "agent"]) workspace = removeSession(workspace, id);
+    await render();
+    assert.equal(document.querySelectorAll('[data-project-id="z"]').length, 1);
+    assert.equal(
+      projectRow("z").querySelector(".folder-toggle").getAttribute("aria-expanded"),
+      "false",
+    );
+    assert.match(document.querySelector('section[aria-label="Pinned"]').textContent, /Tree/);
+    workspace = {
+      ...workspace,
+      projects: workspace.projects.map((p) =>
+        p.id === "z" ? { ...p, sessions: [session("wt-again", { worktreeId: "tree" })] } : p,
+      ),
+    };
+    await render();
+    assert.equal(toggle("Zulu").getAttribute("aria-expanded"), "true");
+    assert.equal(toggle("Tree").getAttribute("aria-expanded"), "true");
     workspace = moveProject(workspace, "z", "other");
     await render();
-    assert.deepEqual(names(), ["Pinned", "Alpha"]);
+    assert.deepEqual(names(), ["Alpha"]);
     workspace = { ...workspace, selectedWorkspace: "other" };
     await render();
     assert.deepEqual(names(), ["Elsewhere", "Zulu"]);
+    await act(async () => setUiLanguage("zh-Hans"));
+    assert.ok(document.querySelector('section[aria-label="活动"] .session-row'));
     workspace = { ...workspace, selectedWorkspace: local, projects: [] };
     await render();
-    assert.match(section().textContent, /No active projects/);
-    assert.equal(rows().length, 0);
-    await act(async () => setUiLanguage("zh-Hans"));
-    assert.match(document.querySelector('section[aria-label="活动"]').textContent, /暂无活动项目/);
+    assert.equal(document.querySelector('section[aria-label="活动"]'), null);
+    assert.ok(document.querySelector('section[aria-label="独立终端"]'));
+    assert.ok(document.querySelector('section[aria-label="聊天"]'));
   } finally {
     await act(async () => root.unmount());
     await server.close();

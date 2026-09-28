@@ -243,8 +243,6 @@ export const messages: Record<string, string> = {
   项目与会话: "Projects and sessions",
   已固定: "Pinned",
   活动: "Active",
-  暂无活动项目: "No active projects",
-  "{p0}，{p1} 个会话": "{p0}, {p1} sessions",
   项目: "Projects",
   "添加项目…": "Add project…",
   添加项目或会话: "Add project or session",
