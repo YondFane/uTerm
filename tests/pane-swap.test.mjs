@@ -91,6 +91,16 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     if (command === "project_worktrees") return [];
     if (command === "update_status") return { enabled: false, version: "", downloaded: false };
     if (command === "git_branches") return { current: "main", local: ["main"] };
+    if (command === "agent_usage")
+      return {
+        windows: [
+          {
+            label: "主要额度",
+            percent: 74,
+            resetsAt: "2026-09-29T00:00:00Z",
+          },
+        ],
+      };
     if (command === "files_list")
       return {
         entries: args.path
@@ -144,11 +154,20 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
         name: "Test",
         directory: "/test",
         workspaceId: workspace.selectedWorkspace,
-        sessions: [],
+        sessions: [
+          {
+            id: "agent-session",
+            name: "Codex",
+            shell: "default",
+            agent: "codex",
+            directory: "/test",
+          },
+        ],
         worktrees: [],
       },
     ];
     workspace.selectedProject = "project";
+    workspace.selectedSession = "agent-session";
     localStorage.setItem(workspaceKey, JSON.stringify(workspace));
     let prefs;
     function Harness() {
@@ -182,8 +201,29 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     await render();
     assert.ok(swap());
     assert.equal(swap().title, "Swap left and right panes");
-    assert.equal(inspectorToggle().closest(".toolbar"), document.querySelector(".toolbar"));
+    assert.equal(
+      inspectorToggle().closest(".toolbar-actions"),
+      document.querySelector(".toolbar-actions"),
+    );
     assert.equal(globalThis.paneMounts, 1);
+    const usageButton = document.querySelector(".chat-usage");
+    assert.ok(usageButton);
+    assert.equal(usageButton.textContent.trim(), "26% remaining");
+    await click(usageButton);
+    const usageDetails = document.querySelector(".chat-usage-popover");
+    assert.ok(usageDetails);
+    assert.match(usageDetails.textContent, /Codex usage details/);
+    assert.match(usageDetails.textContent, /Primary quota/);
+    assert.match(usageDetails.textContent, /26% remaining/);
+    await act(async () =>
+      window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape" })),
+    );
+    assert.equal(document.querySelector(".chat-usage-popover"), null);
+    await click(usageButton);
+    await act(async () =>
+      document.body.dispatchEvent(new dom.window.Event("pointerdown", { bubbles: true })),
+    );
+    assert.equal(document.querySelector(".chat-usage-popover"), null);
     const terminal = document.querySelector(".terminal-test");
     await click(document.querySelector('.file-row[title="src"]'));
     await click(document.querySelector('.file-row[title="src/a.txt"]'));
@@ -197,10 +237,15 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
       assert.equal(shell().dataset.inspectorPosition, i % 2 === 0 ? "left" : "right");
       if (i % 2 === 0)
         assert.equal(
-          inspectorToggle().closest(".inspector-switcher"),
-          document.querySelector(".inspector-switcher"),
+          inspectorToggle().closest(".workspace-heading"),
+          document.querySelector(".workspace-heading"),
         );
-      else assert.equal(inspectorToggle().closest(".toolbar"), document.querySelector(".toolbar"));
+      else
+        assert.equal(
+          inspectorToggle().closest(".toolbar-actions"),
+          document.querySelector(".toolbar-actions"),
+        );
+      assert.equal(inspectorToggle().closest(".inspector-switcher"), null);
       assert.strictEqual(document.querySelector(".terminal-test"), terminal);
       assert.strictEqual(document.querySelector(".editor-test"), editor);
       assert.strictEqual(document.querySelector(".file-panel"), filePanel);
@@ -234,7 +279,10 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     dom.window.Storage.prototype.setItem = originalSetItem;
     await click(swap());
     await click(document.querySelector('button[aria-label="Hide inspector"]'));
-    assert.equal(inspectorToggle().closest(".toolbar"), document.querySelector(".toolbar"));
+    assert.equal(
+      inspectorToggle().closest(".workspace-heading"),
+      document.querySelector(".workspace-heading"),
+    );
     assert.equal(swap(), null);
     await shortcut();
     assert.equal(shell().dataset.inspectorPosition, "left");

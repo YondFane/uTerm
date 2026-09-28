@@ -4,6 +4,9 @@ These instructions apply to this repository. It is a self-contained Tauri deskto
 
 ## Branching and releases
 
+- For every commit or push request, read and follow
+  `.agents/skills/uterm-commit/SKILL.md`. Commit messages must include concise,
+  aligned Simplified Chinese and English descriptions of the staged change.
 - For every release request, read and follow `.agents/skills/uterm-release/SKILL.md`.
   Prepare concise, aligned Simplified Chinese and English release notes from the
   actual diff since the previous stable release. Write only this release's

@@ -364,7 +364,8 @@ select:focus-visible {
   justify-content: flex-end;
 }
 .workspace-actions > select,
-.workspace-actions > .chat-usage {
+.workspace-actions > .chat-usage-control,
+.chat-usage {
   height: 30px;
 }
 .workspace-actions > select {
@@ -375,10 +376,48 @@ select:focus-visible {
   background: #8883;
   border: 1px solid var(--ui-border);
   border-radius: 5px;
+  color: var(--ui-text);
+  cursor: pointer;
   display: inline-flex;
+  font: inherit;
   font-size: 12px;
   padding: 0 8px;
   white-space: nowrap;
+}
+.chat-usage:hover,
+.chat-usage[aria-expanded="true"] {
+  background: var(--ui-selected);
+}
+.chat-usage-control {
+  display: inline-flex;
+  position: relative;
+}
+.chat-usage-popover {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 7px;
+  box-shadow: 0 10px 30px #0008;
+  display: grid;
+  gap: 10px;
+  min-width: 240px;
+  padding: 12px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 30;
+}
+.chat-usage-window {
+  display: grid;
+  gap: 5px;
+  grid-template-columns: 1fr auto;
+}
+.chat-usage-window progress,
+.chat-usage-window small {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.chat-usage-window small {
+  color: var(--ui-muted);
 }
 .toolbar {
   gap: 12px;
@@ -1032,9 +1071,6 @@ select:focus-visible {
 }
 .usage-agent-panel {
   padding-top: 8px;
-}
-.usage-agent-panel > .agent-buttons {
-  margin-top: 0;
 }
 .usage-agent-panel > [role="alert"] {
   white-space: pre-wrap;
@@ -2059,7 +2095,7 @@ select:focus-visible {
 .sidebar-reopen:hover {
   background: #8883;
 }
-:is(.toolbar, .inspector-switcher) button[data-collapse-hint] {
+.toolbar button[data-collapse-hint] {
   color: var(--ui-accent);
   background: var(--ui-selected);
   animation: panel-collapse-hint 750ms ease-in-out 4;

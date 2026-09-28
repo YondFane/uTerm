@@ -288,6 +288,20 @@ export function SettingsPanel({
                   />
                 </label>
               </div>
+              <footer>
+                <button
+                  onClick={() => {
+                    try {
+                      reset();
+                      setMessage(tx("已恢复默认设置。原设置已备份。"));
+                    } catch (reason) {
+                      setMessage(String(reason));
+                    }
+                  }}
+                >
+                  {tx("恢复界面与终端默认设置")}
+                </button>
+              </footer>
             </>
           )}
           {tab === "外观" && (
@@ -737,16 +751,26 @@ export function SettingsPanel({
           )}
           {tab === "用量" && (
             <>
-              <p>{tx("选择 Agent 并读取用量。每个标签会保留最近一次查询结果。")}</p>
               <label>
+                {tx("用量查询间隔（秒）")}
                 <input
-                  type="checkbox"
-                  checked={settings.usageRemote}
-                  onChange={(e) => change({ usageRemote: e.target.checked })}
+                  type="number"
+                  min={10}
+                  max={3600}
+                  step={1}
+                  defaultValue={settings.usageRefreshInterval}
+                  key={settings.usageRefreshInterval}
+                  onBlur={(event) => {
+                    const value = event.target.valueAsNumber;
+                    if (Number.isInteger(value) && value >= 10 && value <= 3600)
+                      change({ usageRefreshInterval: value });
+                    else {
+                      event.target.value = String(settings.usageRefreshInterval);
+                      setMessage(tx("用量查询间隔必须为 10 至 3600 秒的整数。"));
+                    }
+                  }}
                 />
-                {tx("读取用量时查询服务商额度")}
               </label>
-              <p className="muted">{tx("关闭后仅统计本机近 7 天的 Token 日志。不会自动查询。")}</p>
               <AgentUsage runtime={runtime} />
             </>
           )}
@@ -869,20 +893,6 @@ export function SettingsPanel({
               )}
             </>
           )}
-          <footer>
-            <button
-              onClick={() => {
-                try {
-                  reset();
-                  setMessage(tx("已恢复默认设置。原设置已备份。"));
-                } catch (reason) {
-                  setMessage(String(reason));
-                }
-              }}
-            >
-              {tx("恢复界面与终端默认设置")}
-            </button>
-          </footer>
         </section>
       </div>
     </dialog>

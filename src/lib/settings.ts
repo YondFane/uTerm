@@ -65,6 +65,7 @@ export interface Settings {
   enabledAgents: string[];
   projectOrder: "manual" | "name";
   usageRemote: boolean;
+  usageRefreshInterval: number;
   shortcuts: Partial<Record<CommandId, string>>;
 }
 export const defaults: Settings = {
@@ -97,6 +98,7 @@ export const defaults: Settings = {
   enabledAgents: [],
   projectOrder: "manual",
   usageRemote: true,
+  usageRefreshInterval: 60,
   shortcuts: {},
 };
 export function binding(settings: Settings, id: CommandId, mac: boolean): string {
@@ -151,6 +153,10 @@ export function readSettings(raw: string | null): Settings {
         : parsed.inspectorPosition,
     interfaceTheme:
       parsed.interfaceTheme === undefined ? defaults.interfaceTheme : parsed.interfaceTheme,
+    usageRefreshInterval:
+      parsed.usageRefreshInterval === undefined
+        ? defaults.usageRefreshInterval
+        : parsed.usageRefreshInterval,
   };
   const finite = (n: unknown, min: number, max: number) =>
     typeof n === "number" && Number.isFinite(n) && n >= min && n <= max;
@@ -183,6 +189,8 @@ export function readSettings(raw: string | null): Settings {
     new Set(v.enabledAgents).size !== v.enabledAgents.length ||
     !["manual", "name"].includes(v.projectOrder) ||
     typeof v.usageRemote !== "boolean" ||
+    !Number.isInteger(v.usageRefreshInterval) ||
+    !finite(v.usageRefreshInterval, 10, 3600) ||
     !v.shortcuts ||
     typeof v.shortcuts !== "object" ||
     Array.isArray(v.shortcuts)

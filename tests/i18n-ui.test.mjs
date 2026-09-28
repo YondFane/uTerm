@@ -465,6 +465,10 @@ test("real settings tabs, commands and panels render in both languages without u
         "Software update",
       ]) {
         await click(tab);
+        assert.equal(
+          host.textContent.includes("Reset interface and terminal settings"),
+          tab === "General",
+        );
         assertEnglish();
       }
       await click("Agent");
@@ -472,22 +476,40 @@ test("real settings tabs, commands and panels render in both languages without u
         [...host.querySelectorAll("button")].some((button) => button.textContent === "Read usage"),
         false,
       );
+      usageReads.length = 0;
       await click("Usage");
       const agentTabs = host.querySelectorAll('.usage-agent-tabs [role="tab"]');
       assert.equal(agentTabs.length, 4);
       assert.equal(agentTabs[0].textContent.trim(), "Claude");
       assert.equal(agentTabs[0].getAttribute("aria-selected"), "true");
-      await click("Read usage");
+      assert.equal(host.textContent.includes("Select an Agent to read usage"), false);
+      assert.equal(host.textContent.includes("Fetch provider quotas"), false);
+      assert.equal(host.textContent.includes("Reset interface and terminal settings"), false);
+      assert.equal(
+        [...host.querySelectorAll("button")].some((button) => button.textContent === "Read usage"),
+        false,
+      );
+      const usageInterval = [...host.querySelectorAll("label")]
+        .find((label) => label.textContent.includes("Usage query interval (seconds)"))
+        ?.querySelector('input[type="number"]');
+      assert.ok(usageInterval);
+      assert.equal(usageInterval.value, "60");
+      assert.equal(usageInterval.min, "10");
+      assert.equal(usageInterval.max, "3600");
+      await act(async () => {
+        usageInterval.value = "30";
+        usageInterval.dispatchEvent(new dom.window.FocusEvent("focusout", { bubbles: true }));
+      });
+      assert.equal(JSON.parse(localStorage.getItem(settingsKey)).usageRefreshInterval, 30);
       assert.match(host.textContent, /Claude · Past 7 days/);
       assert.match(host.textContent, /111/);
       await click("Codex");
-      await click("Read usage");
       assert.match(host.textContent, /Codex · Past 7 days/);
       assert.match(host.textContent, /222/);
       await click("Claude");
       assert.match(host.textContent, /Claude · Past 7 days/);
       assert.match(host.textContent, /111/);
-      assert.deepEqual(usageReads, ["claude", "codex"]);
+      assert.deepEqual(usageReads, ["claude", "codex", "claude"]);
       await mount(
         React.createElement(SettingsPanel, {
           runtime,

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { quotaAgent, remainingUsage } from "../src/lib/usage.ts";
+import { quotaAgent, remainingUsage, scheduleUsageRefresh } from "../src/lib/usage.ts";
 
 test("quota lookup follows the Agent session instead of its workspace group", () => {
   assert.equal(quotaAgent("codex"), "codex");
@@ -17,7 +17,14 @@ test("remaining usage uses the tightest available quota window", () => {
       { label: "主要额度", percent: 37.4 },
       { label: "次要额度", percent: 72.8 },
     ]),
-    { percent: 27, title: "主要额度剩余 63%；次要额度剩余 27%" },
+    {
+      percent: 27,
+      title: "主要额度剩余 63%；次要额度剩余 27%",
+      windows: [
+        { label: "主要额度", percent: 63 },
+        { label: "次要额度", percent: 27 },
+      ],
+    },
   );
 });
 
@@ -25,4 +32,38 @@ test("remaining usage stays hidden without a valid quota window", () => {
   assert.equal(remainingUsage([]), null);
   assert.equal(remainingUsage([{ label: "主要额度", percent: Number.NaN }]), null);
   assert.equal(remainingUsage([{ label: "主要额度", percent: 101 }]), null);
+});
+
+test("usage refresh starts immediately, waits for the active query and stops cleanly", async () => {
+  let tick;
+  let resolveQuery;
+  let calls = 0;
+  const cancelled = [];
+  const stop = scheduleUsageRefresh(
+    () => {
+      calls += 1;
+      return new Promise((resolve) => {
+        resolveQuery = resolve;
+      });
+    },
+    30,
+    (handler, delay) => {
+      tick = handler;
+      assert.equal(delay, 30_000);
+      return 7;
+    },
+    (id) => cancelled.push(id),
+  );
+  assert.equal(calls, 1);
+  tick();
+  assert.equal(calls, 1);
+  resolveQuery();
+  await Promise.resolve();
+  await Promise.resolve();
+  tick();
+  assert.equal(calls, 2);
+  stop();
+  tick();
+  assert.equal(calls, 2);
+  assert.deepEqual(cancelled, [7]);
 });

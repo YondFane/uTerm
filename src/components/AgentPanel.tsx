@@ -369,35 +369,59 @@ export function AgentSettings({
 }
 
 const usageAgents = ["claude", "codex", "kimi", "grok"] as const;
+type UsageAgent = (typeof usageAgents)[number];
 
 export function AgentUsage({ runtime }: { runtime: RuntimeInfo }) {
   useUiLanguage();
 
-  const { settings } = useSettings();
-  const [selected, setSelected] = useState<(typeof usageAgents)[number]>(usageAgents[0]);
+  const [selected, setSelected] = useState<UsageAgent>(usageAgents[0]);
   const [results, setResults] = useState<Partial<Record<string, Usage>>>({});
   const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
-  const [busyAgent, setBusyAgent] = useState<string | null>(null);
+  const [busyAgents, setBusyAgents] = useState<Partial<Record<UsageAgent, boolean>>>({});
+  const pendingAgents = useRef(new Set<UsageAgent>());
+  const requestQueue = useRef(Promise.resolve());
+  const mounted = useRef(true);
   const name = (id: string) =>
     runtime.agent_definitions.find((definition) => definition.id === id)?.name ??
     agentNames[id] ??
     id;
-  async function readUsage(agent: (typeof usageAgents)[number], allowKeychain = false) {
-    setBusyAgent(agent);
+  function readUsage(agent: UsageAgent) {
+    if (pendingAgents.current.has(agent)) return;
+    pendingAgents.current.add(agent);
+    setBusyAgents((previous) => ({ ...previous, [agent]: true }));
     setErrors((previous) => ({ ...previous, [agent]: undefined }));
-    try {
-      const value = await invoke<Usage>("agent_usage", {
+    const request = requestQueue.current.then(() =>
+      invoke<Usage>("agent_usage", {
         agent,
-        remote: settings.usageRemote,
-        ...(allowKeychain ? { allowKeychain: true } : {}),
+        remote: true,
+        ...(agent === "claude" && runtime.platform === "macos" ? { allowKeychain: true } : {}),
+      }),
+    );
+    requestQueue.current = request.then(
+      () => undefined,
+      () => undefined,
+    );
+    void request
+      .then((value) => {
+        if (mounted.current) setResults((previous) => ({ ...previous, [agent]: value }));
+      })
+      .catch((reason) => {
+        if (mounted.current) setErrors((previous) => ({ ...previous, [agent]: String(reason) }));
+      })
+      .finally(() => {
+        pendingAgents.current.delete(agent);
+        if (mounted.current) setBusyAgents((previous) => ({ ...previous, [agent]: false }));
       });
-      setResults((previous) => ({ ...previous, [agent]: value }));
-    } catch (reason) {
-      setErrors((previous) => ({ ...previous, [agent]: String(reason) }));
-    } finally {
-      setBusyAgent(null);
-    }
   }
+  useEffect(() => {
+    readUsage(selected);
+  }, [selected]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   function selectTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
     const nextIndex =
@@ -443,26 +467,9 @@ export function AgentUsage({ runtime }: { runtime: RuntimeInfo }) {
         role="tabpanel"
         aria-labelledby={`usage-tab-${selected}`}
       >
-        <div className="agent-buttons">
-          <button disabled={busyAgent !== null} onClick={() => void readUsage(selected)}>
-            {tx("读取用量")}
-          </button>
-          {selected === "claude" && runtime.platform === "macos" && (
-            <button
-              disabled={busyAgent !== null || !settings.usageRemote}
-              onClick={() => void readUsage(selected, true)}
-            >
-              {tx("通过钥匙串读取用量")}
-            </button>
-          )}
-        </div>
-        {busyAgent === selected && <p role="status">{tx("正在处理…")}</p>}
+        {busyAgents[selected] && <p role="status">{tx("正在处理…")}</p>}
         {error && <p role="alert">{localizeMessage(error)}</p>}
-        {result ? (
-          <UsageResult agent={name(selected)} usage={result} />
-        ) : (
-          !error && <p className="muted">{tx("尚未读取用量。")}</p>
-        )}
+        {result && <UsageResult agent={name(selected)} usage={result} />}
       </section>
     </div>
   );

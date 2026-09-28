@@ -1,4 +1,4 @@
-import { localizeMessage } from "./lib/i18n";
+import { getUiLanguage, localizeMessage } from "./lib/i18n";
 import { useUiLanguage } from "./lib/useUiLanguage";
 import { tx } from "./lib/i18n";
 import { useEffect, useRef, useState } from "react";
@@ -16,7 +16,7 @@ import { SettingsPanel } from "./components/SettingsPanel";
 import { BreakReminder } from "./components/BreakReminder";
 import { useSettings } from "./lib/SettingsContext";
 import { activeLanguage, translate } from "./lib/i18n";
-import { quotaAgent, remainingUsage, type UsageWindow } from "./lib/usage";
+import { quotaAgent, remainingUsage, scheduleUsageRefresh, type UsageWindow } from "./lib/usage";
 import {
   availableAgents,
   binding,
@@ -794,29 +794,53 @@ export function App() {
     (session) => session.id === workspace?.selectedSession,
   );
   const [chatUsageWindows, setChatUsage] = useState<UsageWindow[] | null>(null);
+  const [chatUsageDetailsOpen, setChatUsageDetailsOpen] = useState(false);
+  const chatUsageDetailsRef = useRef<HTMLDivElement>(null);
   const chatUsage = chatUsageWindows ? remainingUsage(chatUsageWindows) : null;
   useEffect(() => {
+    if (!chatUsage) setChatUsageDetailsOpen(false);
+  }, [chatUsage]);
+  useEffect(() => {
     const agent = quotaAgent(selectedSession?.agent);
+    setChatUsageDetailsOpen(false);
     if (!agent) {
       setChatUsage(null);
       return;
     }
-    let disposed = false;
+    let active = true;
     setChatUsage(null);
-    void invoke<{ windows: UsageWindow[] }>("agent_usage", {
-      agent,
-      remote: settings.usageRemote,
-    })
-      .then((usage) => {
-        if (!disposed) setChatUsage(usage.windows);
-      })
-      .catch(() => {
-        if (!disposed) setChatUsage(null);
-      });
+    const stop = scheduleUsageRefresh(async () => {
+      try {
+        const usage = await invoke<{ windows: UsageWindow[] }>("agent_usage", {
+          agent,
+          remote: true,
+        });
+        if (active) setChatUsage(usage.windows);
+      } catch {
+        if (active) setChatUsage(null);
+      }
+    }, settings.usageRefreshInterval);
     return () => {
-      disposed = true;
+      active = false;
+      stop();
     };
-  }, [selectedSession?.agent, selectedSession?.id, settings.usageRemote]);
+  }, [selectedSession?.agent, selectedSession?.id, settings.usageRefreshInterval]);
+  useEffect(() => {
+    if (!chatUsageDetailsOpen) return;
+    const closeOutside = (event: PointerEvent) => {
+      if (!chatUsageDetailsRef.current?.contains(event.target as Node))
+        setChatUsageDetailsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setChatUsageDetailsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    window.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      window.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [chatUsageDetailsOpen]);
   const fileDirectory =
     selectedWorktree?.path ??
     selected?.directory ??
@@ -1266,7 +1290,6 @@ export function App() {
   );
   const inspectorActions = (
     <div className="inspector-switcher" role="group" aria-label={tx("工具面板")}>
-      {inspectorOnLeft && inspectorToggle}
       <button
         className="toolbar-icon-button"
         aria-label={tx("文件")}
@@ -1453,7 +1476,7 @@ export function App() {
                 <SidebarIcon name="sidebar" />
               </button>
             )}
-            {!inspectorVisible && inspectorOnLeft && inspectorToggle}
+            {inspectorOnLeft && inspectorToggle}
             <h1 data-tauri-drag-region>
               {selectedWorktree
                 ? `${selected?.name} / ${selectedWorktree.name}`
@@ -1474,9 +1497,62 @@ export function App() {
             {roster && (
               <div className="workspace-actions">
                 {chatUsage && (
-                  <span className="chat-usage" title={chatUsage.title}>
-                    {tx("剩余 {p0}%", { p0: chatUsage.percent })}
-                  </span>
+                  <div className="chat-usage-control" ref={chatUsageDetailsRef}>
+                    <button
+                      type="button"
+                      className="chat-usage"
+                      title={chatUsage.title}
+                      aria-expanded={chatUsageDetailsOpen}
+                      aria-controls="chat-usage-details"
+                      onClick={() => setChatUsageDetailsOpen((value) => !value)}
+                    >
+                      {tx("剩余 {p0}%", { p0: chatUsage.percent })}
+                    </button>
+                    {chatUsageDetailsOpen && (
+                      <div
+                        className="chat-usage-popover"
+                        id="chat-usage-details"
+                        role="region"
+                        aria-label={tx("{p0} 用量详情", {
+                          p0:
+                            agentNames[quotaAgent(selectedSession?.agent) ?? ""] ??
+                            selectedSession?.agent ??
+                            "Agent",
+                        })}
+                      >
+                        <strong>
+                          {tx("{p0} 用量详情", {
+                            p0:
+                              agentNames[quotaAgent(selectedSession?.agent) ?? ""] ??
+                              selectedSession?.agent ??
+                              "Agent",
+                          })}
+                        </strong>
+                        {chatUsage.windows.map((window, index) => (
+                          <div className="chat-usage-window" key={`${window.label}-${index}`}>
+                            <span>
+                              {window.seconds
+                                ? tx("{p0} 小时", { p0: window.seconds / 3600 })
+                                : localizeMessage(window.label)}
+                            </span>
+                            <b>{tx("剩余 {p0}%", { p0: window.percent })}</b>
+                            <progress max="100" value={window.percent} />
+                            {window.resetsAt && (
+                              <small>
+                                {tx("重置于 {p0}", {
+                                  p0: new Date(
+                                    typeof window.resetsAt === "number"
+                                      ? window.resetsAt * 1000
+                                      : window.resetsAt,
+                                  ).toLocaleString(getUiLanguage()),
+                                })}
+                              </small>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {runtime?.platform === "windows" && (
                   <select

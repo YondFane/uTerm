@@ -105,6 +105,9 @@ export const messages: Record<string, string> = {
   "选择 Agent 并读取用量。每个标签会保留最近一次查询结果。":
     "Select an Agent to read usage. Each tab keeps its latest result.",
   读取用量时查询服务商额度: "Fetch provider quotas when checking usage",
+  "用量查询间隔（秒）": "Usage query interval (seconds)",
+  "用量查询间隔必须为 10 至 3600 秒的整数。":
+    "The usage query interval must be a whole number from 10 to 3600 seconds.",
   "关闭后仅统计本机近 7 天的 Token 日志。不会自动查询。":
     "When disabled, only local token logs from the past 7 days are counted. No automatic queries are made.",
   "允许本地 CLI 控制": "Allow local CLI control",
@@ -186,6 +189,7 @@ export const messages: Record<string, string> = {
   刷新分支列表: "Refresh branches",
   切换分支: "Switch branch",
   "剩余 {p0}%": "{p0}% remaining",
+  "{p0} 用量详情": "{p0} usage details",
   还原窗格: "Restore pane",
   放大窗格: "Zoom pane",
   "新版本 uTerm {p0} 可用。": "uTerm {p0} is available.",

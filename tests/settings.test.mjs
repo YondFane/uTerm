@@ -19,6 +19,9 @@ test("settings round trip and invalid data is rejected without normalizing it aw
     { cursorStyle: "triangle" },
     { fontThicken: "yes" },
     { usageRemote: "yes" },
+    { usageRefreshInterval: 9 },
+    { usageRefreshInterval: 3601 },
+    { usageRefreshInterval: 10.5 },
     { language: "de" },
     { shortcuts: { unknown: "" } },
   ])
@@ -150,4 +153,15 @@ test("agents require explicit enablement and invalid saved selections are reject
   ]) {
     assert.throws(() => readSettings(JSON.stringify({ ...defaults, enabledAgents })));
   }
+});
+
+test("usage refresh interval defaults for old settings and accepts whole seconds", () => {
+  const old = { ...defaults };
+  delete old.usageRefreshInterval;
+  assert.equal(readSettings(JSON.stringify(old)).usageRefreshInterval, 60);
+  for (const usageRefreshInterval of [10, 30, 60, 3600])
+    assert.equal(
+      readSettings(JSON.stringify({ ...defaults, usageRefreshInterval })).usageRefreshInterval,
+      usageRefreshInterval,
+    );
 });
