@@ -1,4 +1,7 @@
 export const messages: Record<string, string> = {
+  "启用 {p0}": "Enable {p0}",
+  启用后显示新建入口: "Show creation shortcuts when enabled",
+  "请先启用 Agent": "Enable an Agent first",
   "## 摘要\n\n\n## 验证\n\n\nRelease Notes:\n\n":
     "## Summary\n\n\n## Validation\n\n\nRelease Notes:\n\n",
   "选择主题文件…": "Choose theme file…",

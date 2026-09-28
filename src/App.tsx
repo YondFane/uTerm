@@ -18,6 +18,7 @@ import { useSettings } from "./lib/SettingsContext";
 import { activeLanguage, translate } from "./lib/i18n";
 import { quotaAgent, remainingUsage, type UsageWindow } from "./lib/usage";
 import {
+  availableAgents,
   binding,
   chord,
   commands,
@@ -264,6 +265,10 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [runtime, setRuntime] = useState<RuntimeInfo | null>(null);
+  const enabledAgents = availableAgents(settings, runtime?.agents ?? []);
+  const chatAgent = enabledAgents.includes(settings.defaultAgent)
+    ? settings.defaultAgent
+    : enabledAgents[0];
   const [agentOpen, setAgentOpen] = useState(false);
   const [agentStates, setAgentStates] = useState<Record<string, string>>({});
   const [unreadCompletedSessions, setUnreadCompletedSessions] = useState<ReadonlySet<string>>(
@@ -646,7 +651,7 @@ export function App() {
     }
   }
   function addLoose(kind: "terminals" | "chats", agent?: SessionConfig["agent"]) {
-    if (!runtime || (kind === "chats" && !agent)) return;
+    if (!runtime || (kind === "chats" && (!agent || !enabledAgents.includes(agent)))) return;
     const start = () => {
       setZoomedGroup(null);
       update((previous) => {
@@ -858,7 +863,7 @@ export function App() {
       return (
         inspectorVisible && !(gitOpen && gitExpanded) && !resizingInspector && !resizingSidebar
       );
-    if (id === "chat") return runtime.agents.includes(settings.defaultAgent);
+    if (id === "chat") return !!chatAgent;
     return true;
   }
   function runCommand(id: CommandId) {
@@ -879,9 +884,9 @@ export function App() {
         addSession(undefined, {
           project: selected.id,
           worktree: selectedWorktree?.id,
-          agent: settings.defaultAgent,
+          agent: chatAgent,
         });
-      else addLoose("chats", settings.defaultAgent);
+      else addLoose("chats", chatAgent);
     } else if (id === "agents") setAgentOpen(true);
     else if (id === "files") {
       setGithubOpen(false);
@@ -1750,9 +1755,7 @@ export function App() {
                         id,
                         name: `#${item.number} ${item.title}`.slice(0, 100),
                         shell,
-                        ...(runtime?.agents.includes(settings.defaultAgent)
-                          ? { agent: settings.defaultAgent }
-                          : {}),
+                        ...(chatAgent ? { agent: chatAgent } : {}),
                         ...(previous.selectedWorktree
                           ? { worktreeId: previous.selectedWorktree }
                           : {}),

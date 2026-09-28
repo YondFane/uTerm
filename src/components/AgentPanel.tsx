@@ -62,7 +62,7 @@ export function AgentSettings({
 }) {
   useUiLanguage();
 
-  const { settings } = useSettings();
+  const { settings, save: saveSettings } = useSettings();
   const [definitions, setDefinitions] = useState(runtime.agent_definitions);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AgentDefinition | null>(null);
@@ -126,6 +126,31 @@ export function AgentSettings({
                 <SessionIcon agent={id} />
                 <strong>{definition?.name ?? agentNames[id] ?? id}</strong>
                 <span>{runtime.agents.includes(id) ? tx("可用") : tx("未找到程序")}</span>
+                <input
+                  className="agent-enable"
+                  type="checkbox"
+                  role="switch"
+                  aria-label={tx("启用 {p0}", { p0: definition?.name ?? agentNames[id] ?? id })}
+                  title={tx("启用后显示新建入口")}
+                  checked={settings.enabledAgents.includes(id)}
+                  disabled={
+                    busy || (!runtime.agents.includes(id) && !settings.enabledAgents.includes(id))
+                  }
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    void perform(async () => {
+                      saveSettings(
+                        {
+                          ...settings,
+                          enabledAgents: enabled
+                            ? [...settings.enabledAgents, id]
+                            : settings.enabledAgents.filter((agent) => agent !== id),
+                        },
+                        runtime.platform === "macos",
+                      );
+                    });
+                  }}
+                />
               </header>
               <div className="agent-buttons">
                 {!runtime.agents.includes(id) && (

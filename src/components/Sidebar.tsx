@@ -1,3 +1,4 @@
+import { availableAgents } from "../lib/settings";
 import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
@@ -180,7 +181,7 @@ export function Sidebar({
         >
           <SessionIcon />
         </button>
-        {runtime?.agents.map((agent) => (
+        {availableAgents(settings, runtime?.agents ?? []).map((agent) => (
           <button
             key={agent}
             className="icon-button"
@@ -824,7 +825,7 @@ export function Sidebar({
                 <SessionIcon />
                 {tx("新建终端")}
               </button>
-              {runtime?.agents.map((agent) => (
+              {availableAgents(settings, runtime?.agents ?? []).map((agent) => (
                 <button
                   key={agent}
                   role="menuitem"

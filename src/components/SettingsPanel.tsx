@@ -9,7 +9,14 @@ import { AgentSettings } from "./AgentPanel";
 import { canRemoveWorkspace, createWorkspaceGroup, removeWorkspace } from "../lib/workspace";
 import type { Workspace } from "../lib/workspace";
 import { useSettings } from "../lib/SettingsContext";
-import { defaults, binding, chord, commands, shortcutLabel } from "../lib/settings";
+import {
+  availableAgents,
+  defaults,
+  binding,
+  chord,
+  commands,
+  shortcutLabel,
+} from "../lib/settings";
 import type { Settings, CommandId } from "../lib/settings";
 import type { Updates } from "../lib/useUpdates";
 import type { RuntimeInfo } from "../lib/desktop";
@@ -96,6 +103,7 @@ export function SettingsPanel({
   useUiLanguage();
 
   const { settings, light, error, save, reset } = useSettings();
+  const enabledAgents = availableAgents(settings, runtime.agents);
   const [workspaceEdit, setWorkspaceEdit] = useState<{ id: string | null; name: string } | null>(
     null,
   );
@@ -653,13 +661,18 @@ export function SettingsPanel({
               <label>
                 {tx("新聊天 Agent")}
                 <select
-                  value={settings.defaultAgent}
+                  value={
+                    enabledAgents.includes(settings.defaultAgent)
+                      ? settings.defaultAgent
+                      : (enabledAgents[0] ?? "")
+                  }
+                  disabled={!enabledAgents.length}
                   onChange={(e) => change({ defaultAgent: e.target.value })}
                 >
-                  {[...new Set([settings.defaultAgent, ...runtime.agents])].map((id) => (
+                  {!enabledAgents.length && <option value="">{tx("请先启用 Agent")}</option>}
+                  {enabledAgents.map((id) => (
                     <option key={id} value={id}>
                       {runtime.agent_definitions.find((a) => a.id === id)?.name ?? id}
-                      {runtime.agents.includes(id) ? "" : tx("（未找到程序）")}
                     </option>
                   ))}
                 </select>

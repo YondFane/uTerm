@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  availableAgents,
   defaults,
   readSettings,
   binding,
@@ -121,5 +122,32 @@ test("inspector position defaults for old settings and supports persistent swapp
     const custom = { ...defaults, shortcuts: { swapPanes: "Mod+Alt+KeyS" } };
     validateShortcuts(custom, mac);
     assert.equal(binding(readSettings(JSON.stringify(custom)), "swapPanes", mac), "Mod+Alt+KeyS");
+  }
+});
+
+test("agents require explicit enablement and invalid saved selections are rejected", () => {
+  const old = { ...defaults };
+  delete old.enabledAgents;
+  assert.deepEqual(readSettings(JSON.stringify(old)).enabledAgents, []);
+  assert.deepEqual(availableAgents(readSettings(null), ["claude", "codex"]), []);
+  const settings = readSettings(
+    JSON.stringify({ ...defaults, enabledAgents: ["codex", "custom-agent"] }),
+  );
+  assert.deepEqual(readSettings(JSON.stringify(settings)).enabledAgents, ["codex", "custom-agent"]);
+  assert.deepEqual(availableAgents(settings, ["claude", "codex", "custom-agent"]), [
+    "codex",
+    "custom-agent",
+  ]);
+  assert.deepEqual(availableAgents(settings, ["claude"]), []);
+  for (const enabledAgents of [
+    null,
+    true,
+    "codex",
+    ["codex", "codex"],
+    [42],
+    ["../program"],
+    [""],
+  ]) {
+    assert.throws(() => readSettings(JSON.stringify({ ...defaults, enabledAgents })));
   }
 });

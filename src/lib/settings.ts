@@ -62,6 +62,7 @@ export interface Settings {
   copyOnSelect: boolean;
   defaultShell: "default" | "cmd";
   defaultAgent: string;
+  enabledAgents: string[];
   projectOrder: "manual" | "name";
   usageRemote: boolean;
   shortcuts: Partial<Record<CommandId, string>>;
@@ -93,6 +94,7 @@ export const defaults: Settings = {
   copyOnSelect: false,
   defaultShell: "default",
   defaultAgent: "codex",
+  enabledAgents: [],
   projectOrder: "manual",
   usageRemote: true,
   shortcuts: {},
@@ -138,6 +140,7 @@ export function readSettings(raw: string | null): Settings {
   const parsed = JSON.parse(raw);
   const v = parsed?.version === 1 && {
     ...parsed,
+    enabledAgents: parsed.enabledAgents === undefined ? [] : parsed.enabledAgents,
     breakReminder:
       parsed.breakReminder === undefined ? defaults.breakReminder : parsed.breakReminder,
     breakInterval:
@@ -173,6 +176,11 @@ export function readSettings(raw: string | null): Settings {
     typeof v.copyOnSelect !== "boolean" ||
     !["default", "cmd"].includes(v.defaultShell) ||
     !/^[a-zA-Z0-9_-]{1,80}$/.test(v.defaultAgent) ||
+    !Array.isArray(v.enabledAgents) ||
+    !v.enabledAgents.every(
+      (id: unknown) => typeof id === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(id),
+    ) ||
+    new Set(v.enabledAgents).size !== v.enabledAgents.length ||
     !["manual", "name"].includes(v.projectOrder) ||
     typeof v.usageRemote !== "boolean" ||
     !v.shortcuts ||
@@ -254,4 +262,8 @@ export function sessionFromLink(value: string): string {
   )
     throw new Error(tx("会话链接无效。"));
   return url.pathname.slice(1);
+}
+
+export function availableAgents(settings: Settings, detected: readonly string[]): string[] {
+  return detected.filter((id) => settings.enabledAgents.includes(id));
 }

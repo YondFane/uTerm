@@ -2914,3 +2914,35 @@ textarea:focus-visible {
   outline: 2px solid var(--ui-accent);
   outline-offset: 2px;
 }
+
+.agent-definition header .agent-enable {
+  appearance: none;
+  flex: 0 0 28px;
+  width: 28px;
+  min-width: 28px;
+  height: 16px;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  background: var(--ui-muted);
+  cursor: pointer;
+}
+.agent-enable::before {
+  content: "";
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ui-surface);
+}
+.agent-definition header .agent-enable:checked {
+  background: var(--ui-accent);
+}
+.agent-enable:checked::before {
+  transform: translateX(12px);
+}
+.agent-enable:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
