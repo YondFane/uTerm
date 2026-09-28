@@ -2916,9 +2916,9 @@ textarea:focus-visible {
 }
 .app-shell > .pane-swap-button {
   position: absolute;
-  top: 16px;
+  top: 50%;
   left: var(--inspector-boundary);
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   z-index: 25;
   width: 26px;
   height: 28px;
@@ -2926,6 +2926,13 @@ textarea:focus-visible {
   border: 1px solid var(--ui-border);
   border-radius: 7px;
   background: var(--ui-surface);
+  opacity: 0;
+  pointer-events: none;
+}
+.app-shell:has(.inspector-resizer:hover) > .pane-swap-button,
+.app-shell > .pane-swap-button:is(:hover, :focus-visible) {
+  opacity: 1;
+  pointer-events: auto;
 }
 .app-shell > .pane-swap-button:hover {
   background: var(--ui-hover);
