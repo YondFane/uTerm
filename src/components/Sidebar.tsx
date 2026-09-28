@@ -49,6 +49,8 @@ export function Sidebar({
   detectedAgents,
   unreadCompletedSessions,
   onSessionViewed,
+  onActivitySession,
+  activityDisabled = false,
   footerActions,
 }: {
   resizeHandle?: ReactNode;
@@ -60,6 +62,8 @@ export function Sidebar({
   detectedAgents: Record<string, string>;
   unreadCompletedSessions: ReadonlySet<string>;
   onSessionViewed: (id: string) => void;
+  onActivitySession: (id: string) => void;
+  activityDisabled?: boolean;
   workspace: Workspace | null;
   runtime: RuntimeInfo | null;
   update: (change: (state: Workspace) => Workspace) => void;
@@ -600,6 +604,49 @@ export function Sidebar({
         </button>
       </header>
       <nav className="project-list" aria-label={tx("项目与会话")}>
+        <section className="sidebar-section" aria-label={tx("活动")}>
+          {sectionHeader(tx("活动"), !!collapsed.active, () =>
+            setCollapsed((value) => ({ ...value, active: !value.active })),
+          )}
+          {!collapsed.active && (
+            <>
+              {projects
+                .filter((project) => project.sessions.length > 0)
+                .map((project) => (
+                  <div
+                    key={project.id}
+                    className={`sidebar-row activity-row${workspace?.selectedProject === project.id ? " selected" : ""}`}
+                  >
+                    <button
+                      className="row-label"
+                      title={project.directory}
+                      aria-current={workspace?.selectedProject === project.id ? "true" : undefined}
+                      aria-label={tx("{p0}，{p1} 个会话", {
+                        p0: project.name,
+                        p1: project.sessions.length,
+                      })}
+                      disabled={activityDisabled}
+                      onClick={() => {
+                        const session =
+                          project.sessions.find((item) => item.id === workspace?.selectedSession) ??
+                          project.sessions[0];
+                        onActivitySession(session.id);
+                      }}
+                    >
+                      <SidebarIcon name="folder" />
+                      <span className="activity-name">{project.name}</span>
+                      <span className="activity-count" aria-hidden="true">
+                        {project.sessions.length}
+                      </span>
+                    </button>
+                  </div>
+                ))}
+              {!projects.some((project) => project.sessions.length > 0) && (
+                <p className="activity-empty">{tx("暂无活动项目")}</p>
+              )}
+            </>
+          )}
+        </section>
         {pinned.length > 0 && (
           <section className="sidebar-section" aria-label={tx("已固定")}>
             {sectionHeader(

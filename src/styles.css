@@ -536,6 +536,23 @@ select:focus-visible {
 .sidebar .row-label:hover {
   background: transparent;
 }
+.activity-row .sidebar-icon {
+  flex-shrink: 0;
+}
+.activity-name {
+  flex: 1;
+}
+.activity-count {
+  flex-shrink: 0;
+  color: var(--ui-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.activity-empty {
+  margin: 4px 8px 8px;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
 .session-icon-frame {
   display: inline-flex;
   align-items: center;

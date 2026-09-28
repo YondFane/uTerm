@@ -1354,6 +1354,10 @@ export function App() {
         detectedAgents={detectedAgents}
         unreadCompletedSessions={unreadCompletedSessions}
         onSessionViewed={acknowledgeCompletedSession}
+        activityDisabled={editor.transitioning || editor.pending}
+        onActivitySession={(id) => {
+          if (!editor.transitioning && !editor.pending) revealTaskbarSession(id);
+        }}
         addLoose={addLoose}
         addSession={(project, worktree, agent) =>
           addSession(undefined, { project, worktree, agent })

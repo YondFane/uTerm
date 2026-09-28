@@ -538,6 +538,7 @@ test("real settings tabs, commands and panels render in both languages without u
           detectedAgents: {},
           unreadCompletedSessions: new Set(),
           onSessionViewed: noop,
+          onActivitySession: noop,
           footerActions: null,
         }),
       ],
