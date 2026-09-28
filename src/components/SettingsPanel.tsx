@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { interfacePalette, interfaceThemes } from "../lib/interface-themes";
 import { invoke } from "@tauri-apps/api/core";
-import { AgentSettings } from "./AgentPanel";
+import { AgentSettings, AgentUsage } from "./AgentPanel";
 import { canRemoveWorkspace, createWorkspaceGroup, removeWorkspace } from "../lib/workspace";
 import type { Workspace } from "../lib/workspace";
 import { useSettings } from "../lib/SettingsContext";
@@ -81,7 +81,8 @@ const tabs = [
   "终端",
   "工作区",
   "快捷键",
-  "Agent 与用量",
+  "Agent",
+  "用量",
   "本地控制",
   "软件更新",
 ] as const;
@@ -728,10 +729,15 @@ export function SettingsPanel({
               <button onClick={() => change({ shortcuts: {} })}>{tx("恢复默认快捷键")}</button>
             </>
           )}
-          {tab === "Agent 与用量" && (
+          {tab === "Agent" && (
             <>
               <p>{tx("配置 Agent 程序、启动参数、Hooks 和任务通知。")}</p>
               <AgentSettings runtime={runtime} reload={reloadAgents} />
+            </>
+          )}
+          {tab === "用量" && (
+            <>
+              <p>{tx("选择 Agent 并读取用量。每个标签会保留最近一次查询结果。")}</p>
               <label>
                 <input
                   type="checkbox"
@@ -741,6 +747,7 @@ export function SettingsPanel({
                 {tx("读取用量时查询服务商额度")}
               </label>
               <p className="muted">{tx("关闭后仅统计本机近 7 天的 Token 日志。不会自动查询。")}</p>
+              <AgentUsage runtime={runtime} />
             </>
           )}
           {tab === "本地控制" && (

@@ -1003,6 +1003,43 @@ select:focus-visible {
 .agent-settings > button {
   margin-top: 12px;
 }
+.usage-agent-tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ui-border);
+}
+.usage-agent-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--ui-muted);
+}
+.usage-agent-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--ui-accent);
+  background: var(--ui-selected);
+  color: var(--ui-text);
+}
+.usage-agent-tabs .sidebar-icon {
+  width: 15px;
+  height: 15px;
+}
+.usage-agent-panel {
+  padding-top: 8px;
+}
+.usage-agent-panel > .agent-buttons {
+  margin-top: 0;
+}
+.usage-agent-panel > [role="alert"] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .agent-editor {
   padding: 12px;
   background: var(--ui-canvas);

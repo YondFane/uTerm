@@ -19,7 +19,7 @@ export const commands = [
   ["swapPanes", "交换左右窗格", ""],
   ["git", "显示或隐藏 Git", ""],
   ["github", "显示或隐藏 GitHub", ""],
-  ["agents", "Agent 与用量", ""],
+  ["agents", "Agent", ""],
   ["splitRight", "向右分屏", "Mod+KeyD"],
   ["splitDown", "向下分屏", "Mod+Shift+KeyD"],
   ["zoom", "放大或还原窗格", "Mod+Shift+Enter"],

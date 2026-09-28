@@ -113,6 +113,7 @@ test("real settings tabs, commands and panels render in both languages without u
   let installedAgent;
   let copiedFiles;
   let copyFail = false;
+  const usageReads = [];
   mockIPC((cmd, args) => {
     calls.push(cmd);
     if (cmd === "file_copy") {
@@ -135,6 +136,19 @@ test("real settings tabs, commands and panels render in both languages without u
       installedAgent = args.agent;
       if (installFail) throw new Error("未找到 npm，请先安装 Node.js，再重启 uTerm 后重试。");
       return true;
+    }
+    if (cmd === "agent_usage") {
+      usageReads.push(args.agent);
+      return {
+        input: args.agent === "codex" ? 222 : 111,
+        output: 20,
+        cache_read: 30,
+        cache_write: 40,
+        records: 1,
+        partial: false,
+        notice: null,
+        windows: [{ label: "主要额度", percent: 25 }],
+      };
     }
     if (cmd === "autostart_configure") {
       if (autostartFail) throw new Error("Access denied");
@@ -395,7 +409,7 @@ test("real settings tabs, commands and panels render in both languages without u
         }
       },
     );
-    await context.test("all eight settings tabs and immediate language switching", async () => {
+    await context.test("all nine settings tabs and immediate language switching", async () => {
       i18n.setUiLanguage("en");
       await mount(
         React.createElement(SettingsPanel, {
@@ -445,13 +459,35 @@ test("real settings tabs, commands and panels render in both languages without u
         "Terminal",
         "Workspace",
         "Keyboard shortcuts",
-        "Agents & usage",
+        "Agent",
+        "Usage",
         "Local control",
         "Software update",
       ]) {
         await click(tab);
         assertEnglish();
       }
+      await click("Agent");
+      assert.equal(
+        [...host.querySelectorAll("button")].some((button) => button.textContent === "Read usage"),
+        false,
+      );
+      await click("Usage");
+      const agentTabs = host.querySelectorAll('.usage-agent-tabs [role="tab"]');
+      assert.equal(agentTabs.length, 4);
+      assert.equal(agentTabs[0].textContent.trim(), "Claude");
+      assert.equal(agentTabs[0].getAttribute("aria-selected"), "true");
+      await click("Read usage");
+      assert.match(host.textContent, /Claude · Past 7 days/);
+      assert.match(host.textContent, /111/);
+      await click("Codex");
+      await click("Read usage");
+      assert.match(host.textContent, /Codex · Past 7 days/);
+      assert.match(host.textContent, /222/);
+      await click("Claude");
+      assert.match(host.textContent, /Claude · Past 7 days/);
+      assert.match(host.textContent, /111/);
+      assert.deepEqual(usageReads, ["claude", "codex"]);
       await mount(
         React.createElement(SettingsPanel, {
           runtime,

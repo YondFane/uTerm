@@ -2,6 +2,7 @@ import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx, getUiLanguage, localizeMessage } from "../lib/i18n";
 import { useSettings } from "../lib/SettingsContext";
 import { useEffect, useRef, useState } from "react";
+import type { KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 import type { AgentDefinition, RuntimeInfo } from "../lib/desktop";
@@ -72,7 +73,6 @@ export function AgentSettings({
   const [busy, setBusy] = useState(false);
   const [installing, setInstalling] = useState<string | null>(null);
   const [installTarget, setInstallTarget] = useState<string | null>(null);
-  const [usage, setUsage] = useState<{ agent: string; value: Usage } | null>(null);
   const [notifications, setNotifications] = useState(
     () => localStorage.getItem(notificationKey) === "true",
   );
@@ -197,43 +197,6 @@ export function AgentSettings({
                       {tx("移除 Hooks")}
                     </button>
                   </>
-                )}
-                {["codex", "claude", "kimi", "grok"].includes(id) && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void perform(async () => {
-                        setUsage({
-                          agent: id,
-                          value: await invoke<Usage>("agent_usage", {
-                            agent: id,
-                            remote: settings.usageRemote,
-                          }),
-                        });
-                      })
-                    }
-                  >
-                    {tx("读取用量")}
-                  </button>
-                )}
-                {id === "claude" && runtime.platform === "macos" && (
-                  <button
-                    disabled={busy || !settings.usageRemote}
-                    onClick={() =>
-                      void perform(async () => {
-                        setUsage({
-                          agent: id,
-                          value: await invoke<Usage>("agent_usage", {
-                            agent: id,
-                            remote: true,
-                            allowKeychain: true,
-                          }),
-                        });
-                      })
-                    }
-                  >
-                    {tx("通过钥匙串读取用量")}
-                  </button>
                 )}
                 {definition && (
                   <button
@@ -401,49 +364,150 @@ export function AgentSettings({
       </label>
       {runtime.debug && <p className="muted">{tx("开发构建不发送任务通知。")}</p>}
       {busy && <p role="status">{tx("正在处理…")}</p>}
-      {usage && (
-        <section className="agent-usage">
-          <h3>{tx("{p0} · 近 7 天", { p0: agentNames[usage.agent] })}</h3>
-          <dl>
-            <dt>{tx("输入")}</dt>
-            <dd>{usage.value.input.toLocaleString(getUiLanguage())}</dd>
-            <dt>{tx("输出")}</dt>
-            <dd>{usage.value.output.toLocaleString(getUiLanguage())}</dd>
-            <dt>{tx("缓存读取")}</dt>
-            <dd>{usage.value.cache_read.toLocaleString(getUiLanguage())}</dd>
-            <dt>{tx("缓存写入")}</dt>
-            <dd>{usage.value.cache_write.toLocaleString(getUiLanguage())}</dd>
-          </dl>
-          {!usage.value.records && <p>{tx("未找到近 7 天的 Token 记录。")}</p>}
-          {usage.value.partial && <p>{tx("日志较大，当前统计仅包含已读取的部分。")}</p>}
-          {usage.value.windows.map((window, index) => (
-            <div key={index}>
-              <span>
-                {tx("{p0}：已用 {p1}%", {
-                  p0: window.seconds
-                    ? tx("{p0} 小时", { p0: window.seconds / 3600 })
-                    : localizeMessage(window.label),
-                  p1: Math.round(window.percent),
-                })}
-              </span>
-              <progress max="100" value={window.percent} />
-              {window.resetsAt && (
-                <small>
-                  {tx("重置于 {p0}", {
-                    p0: new Date(
-                      typeof window.resetsAt === "number"
-                        ? window.resetsAt * 1000
-                        : window.resetsAt,
-                    ).toLocaleString(getUiLanguage()),
-                  })}
-                </small>
-              )}
-            </div>
-          ))}
-          {usage.value.notice && <p>{localizeMessage(usage.value.notice)}</p>}
-        </section>
-      )}
     </div>
+  );
+}
+
+const usageAgents = ["claude", "codex", "kimi", "grok"] as const;
+
+export function AgentUsage({ runtime }: { runtime: RuntimeInfo }) {
+  useUiLanguage();
+
+  const { settings } = useSettings();
+  const [selected, setSelected] = useState<(typeof usageAgents)[number]>(usageAgents[0]);
+  const [results, setResults] = useState<Partial<Record<string, Usage>>>({});
+  const [errors, setErrors] = useState<Partial<Record<string, string>>>({});
+  const [busyAgent, setBusyAgent] = useState<string | null>(null);
+  const name = (id: string) =>
+    runtime.agent_definitions.find((definition) => definition.id === id)?.name ??
+    agentNames[id] ??
+    id;
+  async function readUsage(agent: (typeof usageAgents)[number], allowKeychain = false) {
+    setBusyAgent(agent);
+    setErrors((previous) => ({ ...previous, [agent]: undefined }));
+    try {
+      const value = await invoke<Usage>("agent_usage", {
+        agent,
+        remote: settings.usageRemote,
+        ...(allowKeychain ? { allowKeychain: true } : {}),
+      });
+      setResults((previous) => ({ ...previous, [agent]: value }));
+    } catch (reason) {
+      setErrors((previous) => ({ ...previous, [agent]: String(reason) }));
+    } finally {
+      setBusyAgent(null);
+    }
+  }
+  function selectTab(event: KeyboardEvent<HTMLButtonElement>, index: number) {
+    const offset = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0;
+    const nextIndex =
+      event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? usageAgents.length - 1
+          : offset
+            ? (index + offset + usageAgents.length) % usageAgents.length
+            : -1;
+    if (nextIndex < 0) return;
+    event.preventDefault();
+    const next = usageAgents[nextIndex];
+    setSelected(next);
+    event.currentTarget.parentElement
+      ?.querySelectorAll<HTMLButtonElement>('[role="tab"]')
+      [nextIndex]?.focus();
+  }
+  const result = results[selected];
+  const error = errors[selected];
+  return (
+    <div className="agent-usage-settings">
+      <div className="usage-agent-tabs" role="tablist" aria-label={tx("用量")}>
+        {usageAgents.map((agent, index) => (
+          <button
+            key={agent}
+            id={`usage-tab-${agent}`}
+            role="tab"
+            aria-selected={selected === agent}
+            aria-controls={`usage-panel-${agent}`}
+            tabIndex={selected === agent ? 0 : -1}
+            onClick={() => setSelected(agent)}
+            onKeyDown={(event) => selectTab(event, index)}
+          >
+            <SessionIcon agent={agent} />
+            {name(agent)}
+          </button>
+        ))}
+      </div>
+      <section
+        className="usage-agent-panel"
+        id={`usage-panel-${selected}`}
+        role="tabpanel"
+        aria-labelledby={`usage-tab-${selected}`}
+      >
+        <div className="agent-buttons">
+          <button disabled={busyAgent !== null} onClick={() => void readUsage(selected)}>
+            {tx("读取用量")}
+          </button>
+          {selected === "claude" && runtime.platform === "macos" && (
+            <button
+              disabled={busyAgent !== null || !settings.usageRemote}
+              onClick={() => void readUsage(selected, true)}
+            >
+              {tx("通过钥匙串读取用量")}
+            </button>
+          )}
+        </div>
+        {busyAgent === selected && <p role="status">{tx("正在处理…")}</p>}
+        {error && <p role="alert">{localizeMessage(error)}</p>}
+        {result ? (
+          <UsageResult agent={name(selected)} usage={result} />
+        ) : (
+          !error && <p className="muted">{tx("尚未读取用量。")}</p>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function UsageResult({ agent, usage }: { agent: string; usage: Usage }) {
+  return (
+    <section className="agent-usage">
+      <h3>{tx("{p0} · 近 7 天", { p0: agent })}</h3>
+      <dl>
+        <dt>{tx("输入")}</dt>
+        <dd>{usage.input.toLocaleString(getUiLanguage())}</dd>
+        <dt>{tx("输出")}</dt>
+        <dd>{usage.output.toLocaleString(getUiLanguage())}</dd>
+        <dt>{tx("缓存读取")}</dt>
+        <dd>{usage.cache_read.toLocaleString(getUiLanguage())}</dd>
+        <dt>{tx("缓存写入")}</dt>
+        <dd>{usage.cache_write.toLocaleString(getUiLanguage())}</dd>
+      </dl>
+      {!usage.records && <p>{tx("未找到近 7 天的 Token 记录。")}</p>}
+      {usage.partial && <p>{tx("日志较大，当前统计仅包含已读取的部分。")}</p>}
+      {usage.windows.map((window, index) => (
+        <div key={index}>
+          <span>
+            {tx("{p0}：已用 {p1}%", {
+              p0: window.seconds
+                ? tx("{p0} 小时", { p0: window.seconds / 3600 })
+                : localizeMessage(window.label),
+              p1: Math.round(window.percent),
+            })}
+          </span>
+          <progress max="100" value={window.percent} />
+          {window.resetsAt && (
+            <small>
+              {tx("重置于 {p0}", {
+                p0: new Date(
+                  typeof window.resetsAt === "number" ? window.resetsAt * 1000 : window.resetsAt,
+                ).toLocaleString(getUiLanguage()),
+              })}
+            </small>
+          )}
+        </div>
+      ))}
+      {usage.notice && <p>{localizeMessage(usage.notice)}</p>}
+    </section>
   );
 }
 import { useDialogBackdrop } from "../lib/useDialogBackdrop";

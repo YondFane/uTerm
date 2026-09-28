@@ -102,6 +102,8 @@ export const messages: Record<string, string> = {
   恢复默认快捷键: "Reset keyboard shortcuts",
   "配置 Agent 程序、启动参数、Hooks 和任务通知。":
     "Configure agent programs, arguments, hooks and task notifications.",
+  "选择 Agent 并读取用量。每个标签会保留最近一次查询结果。":
+    "Select an Agent to read usage. Each tab keeps its latest result.",
   读取用量时查询服务商额度: "Fetch provider quotas when checking usage",
   "关闭后仅统计本机近 7 天的 Token 日志。不会自动查询。":
     "When disabled, only local token logs from the past 7 days are counted. No automatic queries are made.",
@@ -414,6 +416,7 @@ export const messages: Record<string, string> = {
   "移除 Hooks": "Remove hooks",
   读取用量: "Read usage",
   通过钥匙串读取用量: "Read usage using Keychain",
+  "尚未读取用量。": "Usage has not been read yet.",
   移除配置: "Remove configuration",
   "添加 Agent": "Add agent",
   标识: "ID",

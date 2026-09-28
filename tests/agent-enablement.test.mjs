@@ -138,7 +138,7 @@ test("Agent switches gate creation, persist, preserve sessions and report storag
     await shortcut();
     assert.equal(sessions().length, 0);
     await click(document.querySelector('button[aria-label="Settings"]'));
-    await click(button("Agents & usage"));
+    await click(button("Agent"));
     assert.equal(toggle("Codex").checked, false);
     assert.equal(toggle("Grok").disabled, true);
     await click(toggle("Claude"));
@@ -156,7 +156,7 @@ test("Agent switches gate creation, persist, preserve sessions and report storag
     assert.equal(sessions().length, 1);
     assert.equal(sessions()[0].agent, "claude");
     await click(document.querySelector('button[aria-label="Settings"]'));
-    await click(button("Agents & usage"));
+    await click(button("Agent"));
     const saved = localStorage.getItem(settingsKey);
     dom.window.Storage.prototype.setItem = function (key, value) {
       if (key === settingsKey) throw new Error("storage unavailable");
