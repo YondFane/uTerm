@@ -110,14 +110,14 @@ export function useFileDocument() {
       setConflict(false);
     });
   }
-  async function close(after?: () => void) {
+  async function close(after?: () => void | Promise<void>) {
     await request(async () => {
       await invoke("editor_guard", { active: false });
       setDocument(null);
       setRecovered(false);
       setError("");
       setConflict(false);
-      after?.();
+      await after?.();
     });
   }
   async function reload() {

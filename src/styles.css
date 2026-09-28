@@ -270,6 +270,20 @@ select:focus-visible {
   border: none;
   background: transparent;
 }
+.context-menu .workspace-submenu-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.workspace-submenu {
+  z-index: 21;
+  max-height: min(300px, calc(100vh - 16px));
+}
+.workspace-submenu button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .dialog-backdrop {
   position: fixed;
   inset: 0;
@@ -1948,7 +1962,15 @@ select:focus-visible {
   color: var(--ui-muted);
   font-size: 12px;
 }
-.workspace-branch > span {
+.workspace-branch select {
+  min-width: 0;
+  max-width: 220px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2651,7 +2673,7 @@ textarea:focus-visible {
     gap: 6px;
   }
   .workspace-branch {
-    display: none;
+    max-width: 140px;
   }
   .welcome {
     padding: 20px;

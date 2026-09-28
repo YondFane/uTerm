@@ -30,6 +30,8 @@ import { AgentPanel, notificationKey } from "./components/AgentPanel";
 import { GitHubPanel } from "./components/GitHubPanel";
 import { DirectoryPanel } from "./components/DirectoryPanel";
 import { GitPanel } from "./components/GitPanel";
+import { BranchSelector } from "./components/BranchSelector";
+import { ProjectMenuActions } from "./components/ProjectMenuActions";
 import { FilePanel } from "./components/FilePanel";
 import type { FileMode } from "./components/FilePanel";
 import { DeferredFileEditor } from "./components/DeferredFileEditor";
@@ -253,11 +255,7 @@ export function App() {
   );
   const [detectedAgents, setDetectedAgents] = useState<Record<string, string>>({});
   const agentStateValues = useRef<Record<string, string>>({});
-  const [branchInfo, setBranchInfo] = useState<{
-    directory: string;
-    name: string | null;
-    error: string;
-  } | null>(null);
+  const [repositoryRevision, setRepositoryRevision] = useState(0);
   const lastInspector = useRef<"files" | "git" | "github" | "directory">("files");
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [githubOpen, setGithubOpen] = useState(false);
@@ -596,17 +594,6 @@ export function App() {
     }
   }
 
-  async function refreshWorktrees(project: Project) {
-    try {
-      const discovered = await invoke<{ path: string; branch: string; missing: boolean }[]>(
-        "project_worktrees",
-        { directory: project.directory },
-      );
-      update((previous) => reconcileWorktrees(previous, project.id, discovered));
-    } catch (reason) {
-      setError(tx("无法读取 Worktree：{p0}", { p0: String(reason) }));
-    }
-  }
   async function createWorktree(project: Project) {
     if (creatingWorktree) return;
     setCreatingWorktree(true);
@@ -815,48 +802,6 @@ export function App() {
     roster?.sessions.find((session) => session.id === workspace?.selectedSession)?.directory ??
     runtime?.home ??
     "";
-  useEffect(() => {
-    if (!runtime || !fileDirectory) return;
-    let disposed = false,
-      busy = false;
-    async function refreshBranch() {
-      if (busy || document.hidden) return;
-      busy = true;
-      try {
-        const name = await invoke<string | null>("git_branch", { directory: fileDirectory });
-        // Preserve state identity when polling finds no change to avoid rendering every pane.
-        // 轮询结果未改变时保留状态引用，避免重新渲染所有窗格。
-        if (!disposed)
-          setBranchInfo((previous) =>
-            previous?.directory === fileDirectory && previous.name === name && !previous.error
-              ? previous
-              : { directory: fileDirectory, name, error: "" },
-          );
-      } catch (reason) {
-        if (!disposed)
-          setBranchInfo((previous) =>
-            previous?.directory === fileDirectory && previous.error === String(reason)
-              ? previous
-              : { directory: fileDirectory, name: null, error: String(reason) },
-          );
-      } finally {
-        busy = false;
-      }
-    }
-    void refreshBranch();
-    const timer = window.setInterval(() => void refreshBranch(), 4000);
-    const visible = () => {
-      void refreshBranch();
-    };
-    window.addEventListener("focus", visible);
-    document.addEventListener("visibilitychange", visible);
-    return () => {
-      disposed = true;
-      clearInterval(timer);
-      window.removeEventListener("focus", visible);
-      document.removeEventListener("visibilitychange", visible);
-    };
-  }, [fileDirectory, runtime]);
   useEffect(() => {
     if (!editor.document) setFocusRequest((value) => value + 1);
   }, [editor.document?.id]);
@@ -1433,19 +1378,15 @@ export function App() {
                 ? `${selected?.name} / ${selectedWorktree.name}`
                 : (selected?.name ?? (roster?.kind === "chats" ? tx("聊天") : tx("终端")))}
             </h1>
-            {branchInfo?.directory === fileDirectory && (branchInfo.name || branchInfo.error) && (
-              <span
-                className="workspace-branch"
-                aria-label={
-                  branchInfo.name
-                    ? tx("当前分支：{p0}", { p0: branchInfo.name })
-                    : tx("分支读取失败")
-                }
-                title={branchInfo.error ? localizeMessage(branchInfo.error) : branchInfo.name || ""}
-              >
-                <SidebarIcon name="branch" />
-                <span>{branchInfo.name || tx("分支读取失败")}</span>
-              </span>
+            {runtime && fileDirectory && (
+              <BranchSelector
+                key={fileDirectory}
+                directory={fileDirectory}
+                disabled={editor.transitioning || editor.pending}
+                beforeSwitch={(action) => void editor.close(action)}
+                onChanged={() => setRepositoryRevision((value) => value + 1)}
+                onError={setError}
+              />
             )}
           </div>
           <div className="toolbar-actions">
@@ -1683,7 +1624,7 @@ export function App() {
         <FilePanel
           resizeHandle={resizeHandle}
           headerActions={inspectorActions}
-          key={fileDirectory}
+          key={`${fileDirectory}:${repositoryRevision}`}
           directory={fileDirectory}
           mode={fileMode}
           request={fileRequest}
@@ -1696,7 +1637,7 @@ export function App() {
         <GitHubPanel
           resizeHandle={resizeHandle}
           headerActions={inspectorActions}
-          key={fileDirectory}
+          key={`${fileDirectory}:${repositoryRevision}`}
           directory={fileDirectory}
           canAssociate={!!workspace?.selectedSession}
           canInsert={
@@ -1778,7 +1719,7 @@ export function App() {
           expanded={gitExpanded}
           onExpandedChange={setGitExpanded}
           headerActions={inspectorActions}
-          key={fileDirectory}
+          key={`${fileDirectory}:${repositoryRevision}`}
           directory={fileDirectory}
         />
       )}
@@ -1793,11 +1734,15 @@ export function App() {
             top: Math.max(0, Math.min(menu.y, window.innerHeight - 320)),
           }}
           onKeyDown={(event) => {
+            if (event.key === "Tab") {
+              setMenu(null);
+              return;
+            }
             if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
             event.preventDefault();
             const buttons = Array.from(
               event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
-            );
+            ).filter((button) => button.closest('[role="menu"]') === event.currentTarget);
             const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
             buttons[
               event.key === "Home"
@@ -1958,52 +1903,19 @@ export function App() {
             </>
           )}
           {menu.kind === "project" && menuProject && (
-            <>
-              <button
-                role="menuitem"
-                onClick={() => {
-                  addSession(undefined, { project: menuProject.id });
-                  setMenu(null);
-                }}
-              >
-                {tx("新建终端")}
-              </button>
-              <button
-                role="menuitem"
-                disabled={creatingWorktree}
-                onClick={() => {
-                  setMenu(null);
-                  void createWorktree(menuProject);
-                }}
-              >
-                {creatingWorktree ? tx("正在创建 Worktree") : tx("新建 Worktree")}
-              </button>
-              <button
-                role="menuitem"
-                onClick={() => {
-                  void refreshWorktrees(menuProject);
-                  setMenu(null);
-                }}
-              >
-                {tx("刷新 Worktree")}
-              </button>
-            </>
+            <ProjectMenuActions
+              key={menuProject.id}
+              directory={menuProject.directory}
+              workspaces={(workspace?.groups ?? []).filter(
+                (group) => group.id !== menuProject.workspaceId,
+              )}
+              creatingWorktree={creatingWorktree}
+              createWorktree={() => void createWorktree(menuProject)}
+              move={(target) => update((previous) => moveProject(previous, menu.id, target))}
+              close={() => setMenu(null)}
+              onError={setError}
+            />
           )}
-          {menu.kind === "project" &&
-            workspace?.groups
-              ?.filter((group) => group.id !== menuProject?.workspaceId)
-              .map((group) => (
-                <button
-                  key={group.id}
-                  role="menuitem"
-                  onClick={() => {
-                    update((previous) => moveProject(previous, menu.id, group.id));
-                    setMenu(null);
-                  }}
-                >
-                  {tx("移至 {p0}", { p0: group.name })}
-                </button>
-              ))}
         </div>
       )}
       {agentOpen && runtime && (

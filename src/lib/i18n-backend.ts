@@ -1,4 +1,8 @@
 export const backendMessages: Record<string, string> = {
+  "分支列表过大，请在终端中切换。": "Too many branches. Switch branches in the terminal.",
+  "分支名包含无法显示的字符。": "A branch name contains characters that cannot be displayed.",
+  "当前分支已改变，请刷新后重试。": "The current branch has changed. Refresh and try again.",
+  "请选择现有的本地分支。": "Select an existing local branch.",
   "复制目标无效，不能复制到自身或子目录。":
     "Invalid destination: cannot copy into itself or a descendant.",
   "无法粘贴：同名文件或目录已存在。":

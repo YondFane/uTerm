@@ -337,6 +337,67 @@ pub async fn git_branch(directory: String) -> Result<Option<String>, String> {
         .map_err(|error| error.to_string())?
 }
 
+#[derive(Serialize)]
+pub struct Branches {
+    current: Option<String>,
+    local: Vec<String>,
+}
+fn branches(directory: &str) -> Result<Branches, String> {
+    let current = current_branch(directory)?;
+    let local = if current.is_some() {
+        let output = run(
+            directory,
+            &[
+                "for-each-ref",
+                "--format=%(refname)",
+                "--sort=refname",
+                "refs/heads/",
+            ],
+        )?;
+        if output.len() > LIMIT {
+            return Err("分支列表过大，请在终端中切换。".into());
+        }
+        std::str::from_utf8(&output)
+            .map_err(|_| "分支名包含无法显示的字符。")?
+            .lines()
+            .filter_map(|line| line.strip_prefix("refs/heads/").map(String::from))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    Ok(Branches { current, local })
+}
+fn switch_branch(directory: &str, branch: &str, expected: &str) -> Result<(), String> {
+    let root = root(directory)?;
+    let available = branches(&root)?;
+    if available.current.as_deref() != Some(expected) {
+        return Err("当前分支已改变，请刷新后重试。".into());
+    }
+    if branch.starts_with('-') || !available.local.iter().any(|name| name == branch) {
+        return Err("请选择现有的本地分支。".into());
+    }
+    // Let Git reject conflicting changes and branches in other worktrees; never force or stash.
+    // 由 Git 拒绝冲突修改及其他 Worktree 占用的分支，不强制切换或自动暂存。
+    run(&root, &["switch", "--no-guess", "--", branch])?;
+    Ok(())
+}
+#[tauri::command]
+pub async fn git_branches(directory: String) -> Result<Branches, String> {
+    tauri::async_runtime::spawn_blocking(move || branches(&directory))
+        .await
+        .map_err(|error| error.to_string())?
+}
+#[tauri::command]
+pub async fn git_switch_branch(
+    directory: String,
+    branch: String,
+    expected: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || switch_branch(&directory, &branch, &expected))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
 #[tauri::command]
 pub async fn git_snapshot(directory: String) -> Result<Snapshot, String> {
     tauri::async_runtime::spawn_blocking(move || snapshot(&directory))
@@ -450,6 +511,109 @@ pub async fn git_files(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn branch_fixture() -> tempfile::TempDir {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().to_str().unwrap();
+        run(directory, &["init", "--initial-branch=main"]).unwrap();
+        std::fs::write(temp.path().join("file.txt"), "main\n").unwrap();
+        run(directory, &["add", "."]).unwrap();
+        fixture_commit(directory);
+        run(directory, &["branch", "feature/中文"]).unwrap();
+        temp
+    }
+    fn fixture_commit(directory: &str) {
+        run(
+            directory,
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "--no-gpg-sign",
+                "-am",
+                "fixture",
+            ],
+        )
+        .unwrap();
+    }
+    #[test]
+    fn branch_picker_lists_only_local_branches_and_switches_from_detached_head() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        run(directory, &["tag", "tag-only"]).unwrap();
+        run(
+            directory,
+            &["update-ref", "refs/remotes/origin/remote-only", "HEAD"],
+        )
+        .unwrap();
+        assert_eq!(
+            branches(directory).unwrap().local,
+            vec!["feature/中文", "main"]
+        );
+        switch_branch(directory, "feature/中文", "main").unwrap();
+        assert_eq!(
+            current_branch(directory).unwrap().as_deref(),
+            Some("feature/中文")
+        );
+        run(directory, &["checkout", "--detach"]).unwrap();
+        let detached = current_branch(directory).unwrap().unwrap();
+        switch_branch(directory, "main", &detached).unwrap();
+        assert_eq!(current_branch(directory).unwrap().as_deref(), Some("main"));
+    }
+    #[test]
+    fn branch_switch_preserves_conflicting_changes_and_rejects_stale_or_nonlocal_targets() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        switch_branch(directory, "feature/中文", "main").unwrap();
+        std::fs::write(temp.path().join("file.txt"), "feature\n").unwrap();
+        fixture_commit(directory);
+        switch_branch(directory, "main", "feature/中文").unwrap();
+        for target in ["--discard-changes", "HEAD~1", "missing", "origin/main"] {
+            assert!(switch_branch(directory, target, "main").is_err());
+        }
+        assert!(switch_branch(directory, "feature/中文", "stale").is_err());
+        std::fs::write(temp.path().join("file.txt"), "unsaved work\n").unwrap();
+        assert!(switch_branch(directory, "feature/中文", "main").is_err());
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
+            "unsaved work\n"
+        );
+        assert_eq!(current_branch(directory).unwrap().as_deref(), Some("main"));
+    }
+    #[test]
+    fn branch_switch_respects_worktree_ownership_and_unborn_repositories() {
+        let empty = tempfile::tempdir().unwrap();
+        let directory = empty.path().to_str().unwrap();
+        assert!(branches(directory).unwrap().current.is_none());
+        run(directory, &["init", "--initial-branch=main"]).unwrap();
+        let unborn = branches(directory).unwrap();
+        assert_eq!(unborn.current.as_deref(), Some("main"));
+        assert!(unborn.local.is_empty());
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let worktree = temp.path().join("linked");
+        run(
+            directory,
+            &[
+                "worktree",
+                "add",
+                worktree.to_str().unwrap(),
+                "feature/中文",
+            ],
+        )
+        .unwrap();
+        assert!(switch_branch(directory, "feature/中文", "main").is_err());
+        run(directory, &["branch", "other"]).unwrap();
+        switch_branch(worktree.to_str().unwrap(), "other", "feature/中文").unwrap();
+        assert_eq!(current_branch(directory).unwrap().as_deref(), Some("main"));
+        assert_eq!(
+            current_branch(worktree.to_str().unwrap())
+                .unwrap()
+                .as_deref(),
+            Some("other")
+        );
+    }
     #[test]
     fn branch_label_handles_unborn_switches_and_detached_head() {
         let temp = tempfile::tempdir().unwrap();

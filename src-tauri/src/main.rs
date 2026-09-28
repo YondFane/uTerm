@@ -341,6 +341,8 @@ fn main() {
             github::github_prepare_pr,
             github::github_create_pr,
             git::git_branch,
+            git::git_branches,
+            git::git_switch_branch,
             git::git_snapshot,
             git::git_diff,
             git::git_history,
