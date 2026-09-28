@@ -468,7 +468,8 @@ export function reorderProject(
     !destination ||
     id === target ||
     source.workspaceId !== destination.workspaceId ||
-    !!source.pinned !== !!destination.pinned
+    !!source.pinned !== !!destination.pinned ||
+    source.sessions.length > 0 !== destination.sessions.length > 0
   )
     return workspace;
   const projects = workspace.projects.filter((item) => item.id !== id);

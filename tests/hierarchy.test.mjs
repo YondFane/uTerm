@@ -171,8 +171,20 @@ test("project drag preserves sessions and selection, persists order and respects
   const state = fixture();
   const project = state.projects[0];
   state.projects.push(
-    { ...project, id: "second", sessions: [], worktrees: [] },
-    { ...project, id: "third", sessions: [], worktrees: [] },
+    {
+      ...project,
+      id: "second",
+      sessions: [{ id: "second-session", name: "Terminal", shell: "default" }],
+      worktrees: [],
+      splitGroups: [],
+    },
+    {
+      ...project,
+      id: "third",
+      sessions: [{ id: "third-session", name: "Terminal", shell: "default" }],
+      worktrees: [],
+      splitGroups: [],
+    },
     { ...project, id: "pinned", pinned: true, sessions: [], worktrees: [] },
     { ...project, id: "elsewhere", workspaceId: "other", sessions: [], worktrees: [] },
   );

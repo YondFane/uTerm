@@ -83,6 +83,7 @@ export function Sidebar({
   const [projectDrop, setProjectDrop] = useState<{ id: string; after: boolean } | null>(null);
   const [dragError, setDragError] = useState("");
   const [popover, setPopover] = useState<"workspace" | "add" | null>(null);
+  const [activeFolded, setActiveFolded] = useState<Record<string, boolean>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -109,6 +110,33 @@ export function Sidebar({
       window.removeEventListener("keydown", escape);
     };
   }, [popover]);
+  const activeKey = (project: Project, worktree?: Worktree) =>
+    JSON.stringify([project.id, worktree?.id ?? null]);
+  useEffect(() => {
+    const keys = new Set(
+      (workspace?.projects ?? [])
+        .filter((project) => project.sessions.length > 0)
+        .flatMap((project) => [
+          activeKey(project),
+          ...(project.worktrees ?? []).map((worktree) => activeKey(project, worktree)),
+        ]),
+    );
+    setActiveFolded((previous) => {
+      const entries = Object.entries(previous).filter(([key]) => keys.has(key));
+      return entries.length === Object.keys(previous).length
+        ? previous
+        : Object.fromEntries(entries);
+    });
+  }, [workspace?.projects]);
+  function folderCollapsed(project: Project, worktree?: Worktree) {
+    if (!project.sessions.length) return !!(worktree ?? project).collapsed;
+    return (
+      activeFolded[activeKey(project, worktree)] ??
+      (worktree && !project.sessions.some((session) => session.worktreeId === worktree.id)
+        ? !!worktree.collapsed
+        : false)
+    );
+  }
   const group = workspace?.groups?.find((group) => group.id === workspace.selectedWorkspace);
   const projects = ordered(
     workspace?.projects.filter((project) => project.workspaceId === workspace.selectedWorkspace) ??
@@ -189,6 +217,7 @@ export function Sidebar({
     roster: SessionRoster,
     depth = 0,
     breadcrumb?: string,
+    active = false,
   ) {
     const completedUnread = unreadCompletedSessions.has(session.id);
     return (
@@ -200,6 +229,7 @@ export function Sidebar({
       >
         <button
           className="row-label"
+          disabled={active && activityDisabled}
           draggable
           onDragStart={(event) => {
             event.dataTransfer.setData("application/x-uterm-session", session.id);
@@ -208,6 +238,10 @@ export function Sidebar({
           title={breadcrumb ? `${breadcrumb} / ${session.name}` : session.name}
           aria-current={session.id === workspace?.selectedSession ? "true" : undefined}
           onClick={() => {
+            if (active) {
+              onActivitySession(session.id);
+              return;
+            }
             update((previous) => selectSession(previous, session.id));
             onSessionViewed(session.id);
             focus();
@@ -253,6 +287,7 @@ export function Sidebar({
         target &&
         target.id !== sourceId &&
         !!target.pinned === !!source.pinned &&
+        target.sessions.length > 0 === source.sessions.length > 0 &&
         x >= box.left &&
         x <= box.right &&
         y >= box.top &&
@@ -264,6 +299,8 @@ export function Sidebar({
   }
   function folderRow(project: Project, depth: number, worktree?: Worktree) {
     const item = worktree ?? project;
+    const active = project.sessions.length > 0;
+    const folded = folderCollapsed(project, worktree);
     const selected =
       workspace?.selectedProject === project.id &&
       (workspace.selectedWorktree ?? undefined) === worktree?.id &&
@@ -279,9 +316,16 @@ export function Sidebar({
       >
         <button
           className="folder-toggle icon-button"
-          aria-label={`${item.collapsed ? tx("展开") : tx("折叠")}${item.name}`}
-          aria-expanded={!item.collapsed}
-          onClick={() =>
+          aria-label={`${folded ? tx("展开") : tx("折叠")}${item.name}`}
+          aria-expanded={!folded}
+          onClick={() => {
+            if (active) {
+              setActiveFolded((previous) => ({
+                ...previous,
+                [activeKey(project, worktree)]: !folded,
+              }));
+              return;
+            }
             projectChange(project, (value) =>
               worktree
                 ? {
@@ -291,16 +335,17 @@ export function Sidebar({
                     ),
                   }
                 : { ...value, collapsed: !value.collapsed },
-            )
-          }
+            );
+          }}
         >
-          <SidebarIcon name={item.collapsed ? "folderClosed" : "folder"} />
-          <span className={`folder-chevron${item.collapsed ? "" : " expanded"}`}>
+          <SidebarIcon name={folded ? "folderClosed" : "folder"} />
+          <span className={`folder-chevron${folded ? "" : " expanded"}`}>
             <SidebarIcon name="chevron" />
           </span>
         </button>
         <button
           className="row-label"
+          disabled={active && activityDisabled}
           onPointerDown={
             worktree
               ? undefined
@@ -385,6 +430,17 @@ export function Sidebar({
               suppressProjectClick.current = false;
               return;
             }
+            if (active) {
+              const sessions = worktree
+                ? project.sessions.filter((session) => session.worktreeId === worktree.id)
+                : project.sessions;
+              const session =
+                sessions.find((item) => item.id === workspace?.selectedSession) ?? sessions[0];
+              if (session) {
+                onActivitySession(session.id);
+                return;
+              }
+            }
             update((previous) => selectProject(previous, project.id, worktree?.id));
             focus();
           }}
@@ -411,15 +467,21 @@ export function Sidebar({
     return (
       <div key={worktree.id}>
         {folderRow(project, depth, worktree)}
-        {!worktree.collapsed &&
+        {!folderCollapsed(project, worktree) &&
           ordered(
             project.sessions.filter(
               (session) =>
                 session.worktreeId === worktree.id &&
-                (pinnedParent || worktree.pinned || !session.pinned),
+                (project.sessions.length > 0 || pinnedParent || worktree.pinned || !session.pinned),
             ),
           ).map((session) =>
-            sessionRow(session, roster, depth + 1, `${project.name}/${worktree.name}`),
+            sessionRow(
+              session,
+              roster,
+              depth + 1,
+              `${project.name}/${worktree.name}`,
+              project.sessions.length > 0,
+            ),
           )}
       </div>
     );
@@ -430,23 +492,27 @@ export function Sidebar({
     return (
       <div key={project.id}>
         {folderRow(project, 0)}
-        {!project.collapsed && (
+        {!folderCollapsed(project) && (
           <>
+            {ordered(project.sessions.filter((session) => !session.worktreeId)).map((session) =>
+              sessionRow(session, roster, 1, project.name, project.sessions.length > 0),
+            )}
             {ordered(
-              project.sessions.filter(
-                (session) => !session.worktreeId && (project.pinned || !session.pinned),
+              (project.worktrees ?? []).filter(
+                (worktree) => project.sessions.length > 0 || project.pinned || !worktree.pinned,
               ),
-            ).map((session) => sessionRow(session, roster, 1, project.name))}
-            {ordered(
-              (project.worktrees ?? []).filter((worktree) => project.pinned || !worktree.pinned),
             ).map((worktree) => worktreeBlock(project, worktree, project.pinned, 1))}
           </>
         )}
       </div>
     );
   }
-  const pinned: ReactNode[] = projects.filter((project) => project.pinned).map(projectBlock);
-  for (const project of projects.filter((project) => !project.pinned)) {
+  const inactiveProjects = projects.filter((project) => !project.sessions.length);
+  const activeProjects = projects.filter((project) => project.sessions.length > 0);
+  const pinned: ReactNode[] = inactiveProjects
+    .filter((project) => project.pinned)
+    .map(projectBlock);
+  for (const project of inactiveProjects.filter((project) => !project.pinned)) {
     pinned.push(
       ...ordered(project.worktrees ?? [])
         .filter((worktree) => worktree.pinned)
@@ -455,7 +521,7 @@ export function Sidebar({
   }
   for (const roster of rosters) {
     const project = projects.find((project) => project.id === roster.projectId);
-    if (project?.pinned) continue;
+    if (project?.pinned || project?.sessions.length) continue;
     for (const session of roster.sessions.filter(
       (session) =>
         session.pinned &&
@@ -471,16 +537,30 @@ export function Sidebar({
       );
     }
   }
-  function setSectionCollapsed(section: "pinned" | "projects", folded: boolean) {
+  function setSectionCollapsed(section: "active" | "pinned" | "projects", folded: boolean) {
+    if (section === "active") {
+      setActiveFolded((previous) => ({
+        ...previous,
+        ...Object.fromEntries(
+          activeProjects.flatMap((project) => [
+            [activeKey(project), folded],
+            ...(project.worktrees ?? []).map((worktree) => [activeKey(project, worktree), folded]),
+          ]),
+        ),
+      }));
+      return;
+    }
     update((previous) => ({
       ...previous,
       projects: previous.projects.map((project) => {
-        if (project.workspaceId !== previous.selectedWorkspace) return project;
+        if (project.workspaceId !== previous.selectedWorkspace || project.sessions.length)
+          return project;
         const inSection = !!project.pinned === (section === "pinned");
         return {
           ...project,
           collapsed: inSection ? folded : project.collapsed,
           // Pinned worktrees of unpinned projects belong to the pinned section.
+          // 未置顶项目中的置顶 Worktree 属于已固定区域。
           worktrees: project.worktrees?.map((worktree) =>
             (project.pinned || worktree.pinned ? "pinned" : "projects") === section
               ? { ...worktree, collapsed: folded }
@@ -490,11 +570,18 @@ export function Sidebar({
       }),
     }));
   }
-  function sectionFolders(section: "pinned" | "projects") {
-    const roots = projects.filter((project) => !!project.pinned === (section === "pinned"));
+  function sectionFolders(section: "active" | "pinned" | "projects") {
+    if (section === "active")
+      return activeProjects.flatMap((project) => [
+        { collapsed: folderCollapsed(project) },
+        ...(project.worktrees ?? []).map((worktree) => ({
+          collapsed: folderCollapsed(project, worktree),
+        })),
+      ]);
+    const roots = inactiveProjects.filter((project) => !!project.pinned === (section === "pinned"));
     const pinnedWorktrees =
       section === "pinned"
-        ? projects
+        ? inactiveProjects
             .filter((project) => !project.pinned)
             .flatMap((project) => (project.worktrees ?? []).filter((worktree) => worktree.pinned))
         : [];
@@ -504,7 +591,7 @@ export function Sidebar({
     name: string,
     isCollapsed: boolean,
     toggle: () => void,
-    section?: "pinned" | "projects",
+    section?: "active" | "pinned" | "projects",
   ) {
     const folders = section ? sectionFolders(section) : [];
     const allFoldersCollapsed = folders.length > 0 && folders.every((folder) => folder.collapsed);
@@ -604,49 +691,17 @@ export function Sidebar({
         </button>
       </header>
       <nav className="project-list" aria-label={tx("项目与会话")}>
-        <section className="sidebar-section" aria-label={tx("活动")}>
-          {sectionHeader(tx("活动"), !!collapsed.active, () =>
-            setCollapsed((value) => ({ ...value, active: !value.active })),
-          )}
-          {!collapsed.active && (
-            <>
-              {projects
-                .filter((project) => project.sessions.length > 0)
-                .map((project) => (
-                  <div
-                    key={project.id}
-                    className={`sidebar-row activity-row${workspace?.selectedProject === project.id ? " selected" : ""}`}
-                  >
-                    <button
-                      className="row-label"
-                      title={project.directory}
-                      aria-current={workspace?.selectedProject === project.id ? "true" : undefined}
-                      aria-label={tx("{p0}，{p1} 个会话", {
-                        p0: project.name,
-                        p1: project.sessions.length,
-                      })}
-                      disabled={activityDisabled}
-                      onClick={() => {
-                        const session =
-                          project.sessions.find((item) => item.id === workspace?.selectedSession) ??
-                          project.sessions[0];
-                        onActivitySession(session.id);
-                      }}
-                    >
-                      <SidebarIcon name="folder" />
-                      <span className="activity-name">{project.name}</span>
-                      <span className="activity-count" aria-hidden="true">
-                        {project.sessions.length}
-                      </span>
-                    </button>
-                  </div>
-                ))}
-              {!projects.some((project) => project.sessions.length > 0) && (
-                <p className="activity-empty">{tx("暂无活动项目")}</p>
-              )}
-            </>
-          )}
-        </section>
+        {activeProjects.length > 0 && (
+          <section className="sidebar-section" aria-label={tx("活动")}>
+            {sectionHeader(
+              tx("活动"),
+              !!collapsed.active,
+              () => setCollapsed((value) => ({ ...value, active: !value.active })),
+              "active",
+            )}
+            {!collapsed.active && activeProjects.map(projectBlock)}
+          </section>
+        )}
         {pinned.length > 0 && (
           <section className="sidebar-section" aria-label={tx("已固定")}>
             {sectionHeader(
@@ -668,7 +723,8 @@ export function Sidebar({
             () => setCollapsed((value) => ({ ...value, projects: !value.projects })),
             "projects",
           )}
-          {!collapsed.projects && projects.filter((project) => !project.pinned).map(projectBlock)}
+          {!collapsed.projects &&
+            inactiveProjects.filter((project) => !project.pinned).map(projectBlock)}
           {!projects.length && (
             <button className="sidebar-empty" disabled={!runtime} onClick={addProject}>
               {tx("添加项目…")}
