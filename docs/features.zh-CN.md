@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # uTerm 功能说明
@@ -13,6 +13,14 @@ updated: 2026-09-28
 ## 产品范围
 
 uTerm 是免费的 Windows 和 macOS 桌面终端。所有终端和 Agent 进程均在本机运行。界面支持简体中文和英文。
+
+## 安装
+
+[README](../README.md#一行命令安装) 提供终端和 PowerShell 一行安装命令，对应 `scripts/install/install.sh` 和 `scripts/install/install.ps1`。脚本读取对应平台的稳定更新清单，并通过 HTTPS 从本仓库下载匹配版本的安装包。macOS 自动选择 Apple Silicon 或 Intel（包括 Rosetta 检测），只读挂载 DMG，安装到 `~/Applications/uTerm.app`，不使用 sudo，也不启动应用。保留已有用户级／系统级安装，请使用应用内更新。Windows x64 打开安装向导，并报告非成功退出码。完成或失败后清理临时下载文件。需要访问 GitHub，无需开发工具链。应用未经 Apple 公证，首次启动可能需要在“隐私与安全”中批准。远程命令需要脚本已发布到 `release`。
+
+`scripts/install` 中的独立 npm 包通过 npx、pnpm dlx 或全局安装提供 `uterm-install` 命令，需要 Node.js 22.13 或以上。命令以独立参数调用包内平台脚本，不使用 Shell 插值，并保留安装器退出码。帮助及无效参数不会启动安装。包不使用安装生命周期钩子；安装／移除 npm 包只管理命令，不安装／卸载桌面应用。包已以 `@yondfane/uterm-install` 名称发布到 npm。
+
+验证：macOS 上的 150 项前端／构建工具测试、39 项后端测试、本地会话服务测试、锁定依赖安装、格式、国际化、文档检查和 TypeScript／生产及桌面构建通过。Shell 语法和模拟 macOS 安装测试覆盖原生／Rosetta 架构选择、含空格路径、不支持的平台、无效版本号、下载失败及已有安装保护。npm 入口测试覆盖平台分派、独立参数、帮助、无效输入及失败退出码。本地打包的 tarball 在 macOS 上通过 npm exec 和 pnpm dlx 帮助冒烟检查；npm pack 确认包含两个平台脚本。已发布的 npm 0.1.0 包也通过 npx 和 pnpm dlx 帮助检查。测试不会下载或安装应用。真实 macOS 安装及 Windows PowerShell／运行验收仍未验证。
 
 ## 工作区与会话
 

@@ -14,6 +14,44 @@ uTerm 是免费的独立桌面终端，面向 Windows 和 macOS，使用 Tauri�
 
 退出应用只分离窗口，不终止后台会话。**关闭会话**会终止所选进程。会话服务需要认证，且只监听本机回环地址。
 
+## 一行命令安装
+
+使用 npm 或 pnpm（需要 Node.js 22.13 或以上）：
+
+```sh
+npx @yondfane/uterm-install
+# 或
+pnpm dlx @yondfane/uterm-install
+```
+
+也可全局安装命令入口，再运行安装器：
+
+```sh
+npm install -g @yondfane/uterm-install
+# 或 pnpm add -g @yondfane/uterm-install
+uterm-install
+```
+
+全局安装只添加命令入口，运行 `uterm-install` 才安装桌面应用；`uterm-install --help` 查看说明。包不使用安装生命周期脚本。卸载 npm 包不会卸载桌面应用。
+
+npm 安装器已发布为 `@yondfane/uterm-install`。维护者可在 `scripts/install` 目录运行 `npm pack --dry-run` 检查包内容，确认后使用 `npm publish --access public` 发布。开发验证可直接运行 `node scripts/install/cli.mjs --help`。
+
+macOS（Apple Silicon / Intel），在终端运行：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/install.sh | bash
+```
+
+Windows x64，在 PowerShell 中运行：
+
+```powershell
+irm https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/install.ps1 | iex
+```
+
+需要访问 GitHub。macOS 安装到 `~/Applications/uTerm.app`，完成后从访达打开；已有用户级或系统级安装时停止，请使用应用内更新。安装包未经 Apple 公证，首次启动可能需要在“隐私与安全”中批准。Windows 下载稳定版安装程序并打开向导，按提示完成安装。无需 Node.js、Rust 或管理员终端。
+
+脚本位于 `scripts/install/`，远程命令读取 `release` 分支中的脚本。也可从 [Releases](https://github.com/YondFane/uTerm/releases) 手动下载安装包。
+
 ## 开发
 
 Agent 设置可在确认后使用本机 Node.js/npm 安装 OpenCode、Claude、Codex 和 Gemini，需要网络及 npm 全局目录写入权限。Agent 软件包为可选组件，不随 uTerm 打包；其他程序可手动安装并配置可执行文件路径。

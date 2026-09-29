@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-09-28
+updated: 2026-09-29
 ---
 
 # uTerm feature guide
@@ -13,6 +13,14 @@ updated: 2026-09-28
 ## Product scope
 
 uTerm is a free Windows and macOS desktop terminal. All terminal and Agent processes run locally. The interface supports Simplified Chinese and English.
+
+## Installation
+
+The [README](../README.en.md#one-line-installation) provides one-line Terminal and PowerShell commands backed by `scripts/install/install.sh` and `scripts/install/install.ps1`. They read the platform stable update feed and download the matching versioned installer over HTTPS from this repository. macOS selects Apple Silicon or Intel, including Rosetta detection, mounts the DMG read-only and installs to `~/Applications/uTerm.app` without sudo or launching the app. Existing user/system installations are preserved; use in-app updates. Windows x64 opens the installation wizard and reports unsuccessful exit codes. Temporary downloads are cleaned up on completion or failure. GitHub access is required; no development toolchain is needed. Apple notarization is unavailable, and first launch may require Privacy & Security approval. The commands require the scripts to be published on `release`.
+
+The standalone npm package in `scripts/install` exposes `uterm-install` through npx, pnpm dlx or a global installation. Node.js 22.13 or newer is required. It invokes the bundled platform script with separate arguments and no shell interpolation, preserving installer exit status. Help and invalid arguments never start installation. There are no install lifecycle hooks; installing/removing the npm package only manages the command, not the desktop application. The package is published on npm as `@yondfane/uterm-install`.
+
+Validation: all 150 frontend/build-helper tests, 39 backend tests, local-session service tests, locked dependency installation, formatting, localization, documentation checks and TypeScript/production and desktop builds pass on macOS. Shell syntax and mocked macOS installer tests cover native/Rosetta architecture selection, paths with spaces, unsupported platforms, malformed versions, download failure and existing-install protection. The npm entry test covers platform dispatch, separate arguments, help, invalid input and failure exit status. A locally packed tarball passes both npm exec and pnpm dlx help smoke tests on macOS; npm pack confirms both platform scripts are included. The published npm 0.1.0 package also passes npx and pnpm dlx help checks. These tests do not download or install an application. Actual macOS installation and Windows PowerShell/runtime acceptance remain unverified.
 
 ## Workspaces and sessions
 
