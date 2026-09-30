@@ -43,7 +43,7 @@ export function WorkspaceTabs({
       });
   }, [activeFile, activeSession, diff?.active]);
   const visibleSessions = sessions.filter((session) => session.id === activeSession);
-  if (!visibleSessions.length && !documents.length && !diff) return null;
+  if (!documents.length && !diff) return null;
   const hasActiveTab =
     !!diff?.active ||
     documents.some((file) => file.id === activeFile) ||
@@ -97,7 +97,18 @@ export function WorkspaceTabs({
         );
       })}
       {diff && (
-        <div className="workspace-tab" data-active={diff.active || undefined}>
+        <div
+          className="workspace-tab"
+          data-active={diff.active || undefined}
+          onMouseDown={(event) => {
+            if (event.button === 1) event.preventDefault();
+          }}
+          onAuxClick={(event) => {
+            if (event.button !== 1) return;
+            event.preventDefault();
+            if (!disabled) closeDiff?.();
+          }}
+        >
           <button
             role="tab"
             id="workspace-git-diff"
@@ -126,7 +137,19 @@ export function WorkspaceTabs({
       {documents.map((file, index) => {
         const active = !diff?.active && activeFile === file.id;
         return (
-          <div className="workspace-tab" data-active={active || undefined} key={file.id}>
+          <div
+            className="workspace-tab"
+            data-active={active || undefined}
+            key={file.id}
+            onMouseDown={(event) => {
+              if (event.button === 1) event.preventDefault();
+            }}
+            onAuxClick={(event) => {
+              if (event.button !== 1) return;
+              event.preventDefault();
+              if (!disabled) closeFile(file.id);
+            }}
+          >
             <button
               role="tab"
               id={`workspace-file-${file.id}`}

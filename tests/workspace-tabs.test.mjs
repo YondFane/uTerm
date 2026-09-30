@@ -71,6 +71,7 @@ test("workspace tabs retain files, guard switching and only offer file close but
       });
     }
     await act(async () => root.render(React.createElement(Harness)));
+    assert.equal(document.querySelector(".workspace-tabs"), null);
     await act(async () => editor.open("/repo", "first.txt"));
     const firstId = editor.document.id;
     await act(async () => editor.change("edited first"));
@@ -148,6 +149,33 @@ test("workspace tabs retain files, guard switching and only offer file close but
       document.querySelector(".workspace-tab-close").getAttribute("aria-label"),
       /关闭文件/,
     );
+    const middleClick = async (element, button = 1) => {
+      await act(async () =>
+        element.dispatchEvent(
+          new dom.window.MouseEvent("auxclick", { button, bubbles: true, cancelable: true }),
+        ),
+      );
+    };
+    await middleClick(tabs()[0]);
+    assert.equal(editor.documents.length, 1);
+    await middleClick(tabs()[1], 2);
+    assert.equal(editor.documents.length, 1);
+    await middleClick(tabs()[1]);
+    assert.equal(editor.documents.length, 0);
+    assert.equal(document.querySelector(".workspace-tabs"), null);
+    await act(async () => editor.open("/repo", "first.txt"));
+    await act(async () => editor.change("middle-click draft"));
+    failSave = true;
+    await middleClick(tabs()[1]);
+    assert.equal(editor.pending, true);
+    assert.equal(editor.document.text, "middle-click draft");
+    await middleClick(tabs()[1]);
+    assert.equal(editor.documents.length, 1);
+    await act(async () => editor.cancel());
+    failSave = false;
+    await middleClick(tabs()[1]);
+    assert.equal(editor.document, null);
+    await act(async () => editor.open("/repo", "first.txt"));
     limit = 2;
     await act(async () => root.render(React.createElement(Harness)));
     await act(async () => editor.open("/repo", "second.txt"));
@@ -176,9 +204,14 @@ test("workspace tabs retain files, guard switching and only offer file close but
     assert.equal(editor.document.path, "fourth.txt");
     assert.ok(tabs().some((tab) => tab.textContent === "Terminal"));
     assert.equal(calls.filter((call) => call.command === "control_session").length, 0);
+    let diffClosed = 0;
     await act(async () =>
       root.render(
         React.createElement(WorkspaceTabs, {
+          diff: { path: "diff.txt", active: false },
+          closeDiff() {
+            diffClosed++;
+          },
           sessions: [],
           documents: editor.documents,
           activeFile: null,
@@ -191,7 +224,10 @@ test("workspace tabs retain files, guard switching and only offer file close but
         }),
       ),
     );
-    assert.equal(document.querySelector('[role="tab"]').tabIndex, 0);
+    await middleClick(document.querySelector("#workspace-git-diff"), 2);
+    assert.equal(diffClosed, 0);
+    await middleClick(document.querySelector("#workspace-git-diff"));
+    assert.equal(diffClosed, 1);
   } finally {
     await act(async () => root.unmount());
     clearMocks();
