@@ -860,7 +860,7 @@ export function SettingsPanel({
                   onChange={(event) => change({ automaticUpdates: event.target.checked })}
                 />
                 <span className="muted">
-                  {tx("开启后自动下载、安装并重启；未保存的文件会阻止安装。")}
+                  {tx("开启后自动下载；安装前确认，10 秒后自动安装并重启。")}
                 </span>
               </label>
               {!updates.available?.enabled ? (

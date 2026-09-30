@@ -17,6 +17,11 @@ export function useUpdates(
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
   const [progress, setProgress] = useState({ downloaded: 0, total: null as number | null });
+  const [confirmation, setConfirmation] = useState<number | null>(null);
+  const pendingInstall = useRef(false);
+  const deadline = useRef(0);
+  const cancelledVersions = useRef(new Set<string>());
+  const autoPrompt = useRef(false);
   const busy = useRef(false);
   const checked = useRef(false);
   const check = useCallback(async () => {
@@ -76,7 +81,7 @@ export function useUpdates(
       busy.current = false;
     }
   }
-  async function install() {
+  async function performInstall() {
     if (busy.current) return;
     busy.current = true;
     setError("");
@@ -96,6 +101,40 @@ export function useUpdates(
       busy.current = false;
     }
   }
+  async function install(fromAutomatic = false) {
+    if (busy.current || pendingInstall.current || phase !== "ready") return;
+    pendingInstall.current = true;
+    autoPrompt.current = fromAutomatic;
+    deadline.current = Date.now() + 10_000;
+    setConfirmation(10);
+  }
+  function cancelInstall() {
+    if (available?.version) cancelledVersions.current.add(available.version);
+    pendingInstall.current = false;
+    setConfirmation(null);
+  }
+  async function confirmInstall() {
+    if (!pendingInstall.current) return;
+    pendingInstall.current = false;
+    setConfirmation(null);
+    await performInstall();
+  }
+  const confirm = useRef(confirmInstall);
+  confirm.current = confirmInstall;
+  const awaitingConfirmation = confirmation !== null;
+  useEffect(() => {
+    if (!awaitingConfirmation) return;
+    const timer = setInterval(() => {
+      if (!pendingInstall.current) return;
+      const remaining = Math.max(0, Math.ceil((deadline.current - Date.now()) / 1000));
+      if (remaining === 0) void confirm.current();
+      else setConfirmation(remaining);
+    }, 250);
+    return () => clearInterval(timer);
+  }, [awaitingConfirmation]);
+  useEffect(() => {
+    if (!automatic && autoPrompt.current && pendingInstall.current) cancelInstall();
+  }, [automatic]);
   const actions = useRef({ check, download, install, phase });
   actions.current = { check, download, install, phase };
   useEffect(() => {
@@ -110,8 +149,20 @@ export function useUpdates(
   useEffect(() => {
     if (!automatic || !available?.enabled || error) return;
     if (phase === "available") void actions.current.download();
-    else if (phase === "ready") void actions.current.install();
+    else if (phase === "ready" && !cancelledVersions.current.has(available.version))
+      void actions.current.install(true);
   }, [automatic, available?.enabled, phase, error]);
-  return { available, phase, error, progress, check, download, install };
+  return {
+    available,
+    phase,
+    error,
+    progress,
+    check,
+    download,
+    install,
+    confirmation,
+    confirmInstall,
+    cancelInstall,
+  };
 }
 export type Updates = ReturnType<typeof useUpdates>;

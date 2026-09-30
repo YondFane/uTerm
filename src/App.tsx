@@ -1,3 +1,4 @@
+import { UpdateInstallDialog } from "./components/UpdateInstallDialog";
 import { getUiLanguage, localizeMessage } from "./lib/i18n";
 import { useUiLanguage } from "./lib/useUiLanguage";
 import { tx } from "./lib/i18n";
@@ -1925,6 +1926,7 @@ export function App() {
           close={() => setPaletteOpen(false)}
         />
       )}
+      {updates.confirmation !== null && <UpdateInstallDialog updates={updates} />}
       {settingsOpen && runtime && (
         <SettingsPanel
           runtime={runtime}

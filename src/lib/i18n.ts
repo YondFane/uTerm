@@ -100,10 +100,16 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     用量: "Usage",
     本地控制: "Local control",
     软件更新: "Software update",
+    确认安装更新: "Confirm update installation",
+    "将在 {p0} 秒后安装更新并重启。":
+      "The update will install and restart the app in {p0} seconds.",
+    "取消将停止本次安装，可稍后在软件更新中手动安装。":
+      "Cancel stops this installation. You can install it later in Software update.",
+    立即安装: "Install now",
     版本说明: "Release notes",
     自动更新: "Automatic updates",
-    "开启后自动下载、安装并重启；未保存的文件会阻止安装。":
-      "Automatically download, install and restart when enabled; unsaved files prevent installation.",
+    "开启后自动下载；安装前确认，10 秒后自动安装并重启。":
+      "Automatically download when enabled; confirm before installation, or install and restart automatically after 10 seconds.",
     "自动检查并安装更新。": "Automatically check for and install updates.",
     应用语言: "App language",
     开机自启动: "Launch at login",

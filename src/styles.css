@@ -3118,3 +3118,13 @@ textarea:focus-visible {
 .update-release-notes-content pre {
   white-space: pre-wrap;
 }
+
+.update-install-dialog {
+  max-width: min(460px, calc(100vw - 40px));
+}
+.update-install-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
