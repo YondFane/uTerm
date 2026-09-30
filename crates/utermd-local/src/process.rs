@@ -2,7 +2,6 @@ use anyhow::{bail, Context, Result};
 use portable_pty::{Child, CommandBuilder, MasterPty};
 use std::path::PathBuf;
 
-#[cfg(windows)]
 pub(crate) struct ProcessEntry {
     parent: u32,
     name: String,
@@ -52,7 +51,40 @@ pub(crate) fn process_snapshot() -> Result<std::collections::HashMap<u32, Proces
     Ok(entries)
 }
 
-#[cfg(windows)]
+#[cfg(unix)]
+pub(crate) fn process_snapshot() -> Result<std::collections::HashMap<u32, ProcessEntry>> {
+    let output = std::process::Command::new("/bin/ps")
+        .args(["-ax", "-o", "pid=,ppid=,comm="])
+        .output()
+        .context("reading process list")?;
+    if !output.status.success() {
+        bail!("Could not read process list");
+    }
+    Ok(parse_process_snapshot(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
+}
+
+#[cfg(unix)]
+fn parse_process_snapshot(output: &str) -> std::collections::HashMap<u32, ProcessEntry> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let id: u32 = line.split_whitespace().next()?.parse().ok()?;
+            // ps pads numeric columns; parse the parent separately from the executable path.
+            // ps 会填充数字列；将父进程编号与可执行文件路径分别解析。
+            let rest = line.trim().strip_prefix(&id.to_string())?.trim_start();
+            let boundary = rest.find(char::is_whitespace)?;
+            let parent = rest[..boundary].parse().ok()?;
+            let name = std::path::Path::new(rest[boundary..].trim())
+                .file_name()?
+                .to_str()?
+                .to_owned();
+            Some((id, ProcessEntry { parent, name }))
+        })
+        .collect()
+}
+
 pub(crate) fn agent_in_process_tree(
     shell: u32,
     processes: &std::collections::HashMap<u32, ProcessEntry>,
@@ -60,8 +92,8 @@ pub(crate) fn agent_in_process_tree(
     let mut closest = None;
     for (id, process) in processes {
         let agent = match process.name.as_str() {
-            "codex.exe" => "codex",
-            "claude.exe" => "claude",
+            "codex.exe" | "codex" => "codex",
+            "claude.exe" | "claude" => "claude",
             _ => continue,
         };
         let mut parent = process.parent;
@@ -92,7 +124,7 @@ pub(crate) fn agent_in_process_tree(
     closest.and_then(|(_, agent, ambiguous)| (!ambiguous).then_some(agent))
 }
 
-#[cfg(all(test, windows))]
+#[cfg(test)]
 mod process_tests {
     use super::{agent_in_process_tree, process_snapshot, ProcessEntry};
     use std::collections::HashMap;
@@ -140,6 +172,17 @@ mod process_tests {
             },
         );
         assert_eq!(agent_in_process_tree(10, &ambiguous), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_snapshot_recognizes_paths_and_clears_exited_agents() {
+        let processes = super::parse_process_snapshot(
+            " 10   1 /bin/zsh\n 11  10 /Users/test user/.local/bin/claude\n 20 1 codex\n",
+        );
+        assert_eq!(agent_in_process_tree(10, &processes), Some("claude"));
+        let exited = super::parse_process_snapshot("10 1 /bin/zsh\n20 1 codex\n");
+        assert_eq!(agent_in_process_tree(10, &exited), None);
     }
 
     #[test]

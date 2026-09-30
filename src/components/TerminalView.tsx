@@ -6,8 +6,14 @@ import { themes } from "../lib/themes";
 import { useEffect, useRef, useState } from "react";
 import { binding, shortcutLabel } from "../lib/settings";
 import { useSettings } from "../lib/SettingsContext";
-import { isBareShiftTab, terminalClipboardAction } from "../lib/terminal-input";
+import {
+  attachTerminalPunctuationInput,
+  isBareShiftTab,
+  terminalClipboardAction,
+  terminalPunctuationKey,
+} from "../lib/terminal-input";
 import { autoCloseAgent, closeAttachedSession } from "../lib/session-lifecycle";
+import { decodeTerminalFrame } from "../lib/terminal-frame";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import type { DragEventHandler, PointerEventHandler } from "react";
@@ -17,18 +23,6 @@ import { FitAddon } from "@xterm/addon-fit";
 import type { PaneFrame, SessionConfig } from "../lib/workspace";
 import "@xterm/xterm/css/xterm.css";
 
-type SessionEvent = {
-  agent_state?: string | null;
-  foreground_agent?: string | null;
-  sequence: number;
-  reset: boolean;
-  rows: number;
-  cols: number;
-  data: number[];
-  exited: boolean;
-  code: number | null;
-  error: string | null;
-};
 type Connection = {
   id: string;
   ready: Promise<void>;
@@ -166,6 +160,11 @@ export function TerminalView({
     term.loadAddon(new WebLinksAddon(openLink));
     term.options.linkHandler = { activate: openLink, allowNonHttpProtocols: false };
     term.attachCustomKeyEventHandler((event) => {
+      if (event.type === "keydown" || event.type === "keypress") {
+        // Let the input method transform punctuation before accepting its committed text.
+        // 先让输入法转换标点，再接收其提交的文本。
+        if (terminalPunctuationKey(event)) return false;
+      }
       if (event.type !== "keydown") return true;
       if (isBareShiftTab(event)) {
         event.preventDefault();
@@ -217,6 +216,13 @@ export function TerminalView({
     });
     term.open(container.current);
     terminal.current = term;
+    const disposePunctuation = term.textarea
+      ? attachTerminalPunctuationInput(
+          term.textarea,
+          (text) => term.input(text, true),
+          () => !term.options.disableStdin,
+        )
+      : () => {};
     const send = (data: Uint8Array) => {
       const current = connection.current;
       if (!current || current.closed || current.replaying) return;
@@ -303,6 +309,7 @@ export function TerminalView({
       input.dispose();
       binary.dispose();
       resize.dispose();
+      disposePunctuation();
       term.dispose();
       terminal.current = null;
     };
@@ -354,7 +361,7 @@ export function TerminalView({
     setError("");
     setStatus("starting");
     term.reset();
-    const events = new Channel<SessionEvent>();
+    const events = new Channel<ArrayBuffer>();
     const current: Connection = {
       id: crypto.randomUUID(),
       closed: false,
@@ -365,13 +372,24 @@ export function TerminalView({
       bytes: 0,
     };
     connection.current = current;
-    events.onmessage = (event) => {
+    events.onmessage = (payload) => {
       if (current.closed || connection.current !== current) return;
+      let decoded;
+      try {
+        decoded = decodeTerminalFrame(payload);
+      } catch (reason) {
+        setError(String(reason));
+        setStatus("disconnected");
+        term.options.disableStdin = true;
+        void action(current.id, "detach").catch((reason) => setError(String(reason)));
+        return;
+      }
+      const { data, ...event } = decoded;
       if (event.agent_state) agentStateRef.current(event.agent_state, event.reset);
       if (event.foreground_agent !== undefined) detectedAgentRef.current(event.foreground_agent);
       if (event.error) {
         setError(event.error);
-        if (!event.data.length && event.sequence === 0) {
+        if (!data.length && event.sequence === 0) {
           setStatus("disconnected");
           term.options.disableStdin = true;
           return;
@@ -383,7 +401,7 @@ export function TerminalView({
         term.reset();
         term.resize(event.cols, event.rows);
       }
-      term.write(new Uint8Array(event.data), () => {
+      term.write(data, () => {
         if (current.closed) return;
         if (event.reset) {
           current.replaying = false;
@@ -609,15 +627,6 @@ export function TerminalView({
             <ToolbarIcon name="restart" />
           </button>
         )}
-        <button
-          className="toolbar-icon-button"
-          aria-label={tx("关闭会话")}
-          disabled={status === "starting" || status === "closing"}
-          onClick={() => void close()}
-          title={tx("关闭会话")}
-        >
-          <ToolbarIcon name="close" />
-        </button>
       </div>
       {searchOpen && (
         <form

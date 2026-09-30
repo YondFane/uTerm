@@ -14,6 +14,12 @@ import type { FileData, OpenFile } from "./file-document";
 export function useFileDocument() {
   const [document, render] = useState<OpenFile | null>(null);
   const current = useRef<OpenFile | null>(null);
+  const [documents, renderDocuments] = useState<OpenFile[]>([]);
+  const retained = useRef<OpenFile[]>([]);
+  function setDocuments(values: OpenFile[]) {
+    retained.current = values;
+    renderDocuments(values);
+  }
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -27,6 +33,16 @@ export function useFileDocument() {
   function setDocument(value: OpenFile | null) {
     current.current = value;
     render(value);
+    if (value) {
+      const index = retained.current.findIndex(
+        (item) => item.directory === value.directory && item.path === value.path,
+      );
+      setDocuments(
+        index < 0
+          ? [...retained.current, value]
+          : retained.current.map((item, position) => (position === index ? value : item)),
+      );
+    }
     try {
       if (isDirty(value)) localStorage.setItem(draftKey, JSON.stringify(value));
       else localStorage.removeItem(draftKey);
@@ -55,8 +71,9 @@ export function useFileDocument() {
         }
         return true;
       } catch (reason) {
-        setError(String(reason).replace(/^CONFLICT:/, ""));
-        setConflict(String(reason).startsWith("CONFLICT:"));
+        const message = reason instanceof Error ? reason.message : String(reason);
+        setError(message.replace(/^CONFLICT:/, ""));
+        setConflict(message.startsWith("CONFLICT:"));
         return false;
       } finally {
         setSaving(false);
@@ -70,7 +87,7 @@ export function useFileDocument() {
     return !isDirty(current.current);
   }
   async function request(action: () => Promise<void>) {
-    if (transition.current) return;
+    if (transition.current || pendingAction.current) return;
     transition.current = true;
     setTransitioning(true);
     try {
@@ -88,12 +105,24 @@ export function useFileDocument() {
     }
   }
   async function open(directory: string, path: string, line?: number) {
+    if (transition.current || pendingAction.current) return;
     const existing = current.current;
     if (existing?.directory === directory && existing.path === path) {
       setDocument({ ...existing, line, jump: existing.jump + 1 });
       return;
     }
     await request(async () => {
+      const cached = retained.current.find(
+        (item) => item.directory === directory && item.path === path,
+      );
+      if (cached) {
+        await invoke("editor_guard", { active: cached.kind === "text" && !cached.readonly });
+        setDocument({ ...cached, line, jump: cached.jump + 1 });
+        setRecovered(false);
+        setError("");
+        setConflict(false);
+        return;
+      }
       const data = await invoke<FileData>("file_read", { directory, path });
       await invoke("editor_guard", { active: data.kind === "text" && !data.readonly });
       setDocument({
@@ -110,13 +139,34 @@ export function useFileDocument() {
       setConflict(false);
     });
   }
-  async function close(after?: () => void | Promise<void>) {
+  async function hide(after?: () => void | Promise<void>) {
     await request(async () => {
       await invoke("editor_guard", { active: false });
       setDocument(null);
       setRecovered(false);
       setError("");
       setConflict(false);
+      await after?.();
+    });
+  }
+  async function close(after?: () => void | Promise<void>, id = current.current?.id) {
+    if (transition.current || pendingAction.current) return;
+    if (id === undefined) {
+      await hide(after);
+      return;
+    }
+    if (id !== current.current?.id) {
+      setDocuments(retained.current.filter((item) => item.id !== id));
+      return;
+    }
+    await hide(async () => {
+      setDocuments(retained.current.filter((item) => item.id !== id));
+      await after?.();
+    });
+  }
+  async function closeDirectory(directory: string, after?: () => void | Promise<void>) {
+    await hide(async () => {
+      setDocuments(retained.current.filter((item) => item.directory !== directory));
       await after?.();
     });
   }
@@ -147,7 +197,15 @@ export function useFileDocument() {
     transition.current = true;
     setTransitioning(true);
     try {
+      const value = current.current;
       await action();
+      if (value && isDirty(value)) {
+        setDocuments(
+          retained.current.map((item) =>
+            item.id === value.id ? { ...item, text: item.saved } : item,
+          ),
+        );
+      }
     } catch (reason) {
       setError(String(reason));
     } finally {
@@ -243,6 +301,7 @@ export function useFileDocument() {
     prepareUpdate,
     restoreUpdateGuard,
     document,
+    documents,
     error,
     conflict,
     saving,
@@ -250,6 +309,8 @@ export function useFileDocument() {
     pending,
     open,
     close,
+    hide,
+    closeDirectory,
     save,
     reload,
     discard,

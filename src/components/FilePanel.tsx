@@ -52,16 +52,26 @@ function Folder({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   useEffect(() => {
     let disposed = false;
-    setError("");
-    invoke<Listing>("files_list", { directory, path, hidden })
-      .then((result) => {
-        if (!disposed) setListing(result);
-      })
-      .catch((reason) => {
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        const result = await invoke<Listing>("files_list", { directory, path, hidden });
+        if (!disposed) {
+          setListing(result);
+          setError("");
+        }
+      } catch (reason) {
         if (!disposed) setError(String(reason));
-      });
+      } finally {
+        // Schedule after completion so slow directory reads cannot overlap.
+        // 读取完成后再安排下一次刷新，避免慢目录读取请求重叠。
+        if (!disposed) timer = setTimeout(refresh, 5000);
+      }
+    };
+    void refresh();
     return () => {
       disposed = true;
+      clearTimeout(timer);
     };
   }, [directory, path, hidden, revision]);
   useEffect(() => {

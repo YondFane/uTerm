@@ -2218,16 +2218,6 @@ select:focus-visible {
   user-select: none !important;
 }
 
-.app-shell.with-inspector[data-expanded-inspector] {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-}
-.app-shell.sidebar-hidden.with-inspector[data-expanded-inspector] {
-  grid-template-columns: minmax(0, 1fr);
-}
-/* Keep terminal instances mounted while the diff uses their screen space. */
-.app-shell[data-expanded-inspector] > main {
-  display: none;
-}
 .git-diff header .icon-button {
   flex-shrink: 0;
 }
@@ -2954,25 +2944,12 @@ textarea:focus-visible {
   left: auto;
   right: 0;
 }
-.app-shell.with-inspector[data-expanded-inspector] {
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-}
-.app-shell.with-inspector[data-expanded-inspector] > .git-panel {
-  grid-column: 2;
-}
-.app-shell.sidebar-hidden.with-inspector[data-expanded-inspector] {
-  grid-template-columns: minmax(0, 1fr);
-}
-.app-shell.sidebar-hidden.with-inspector[data-expanded-inspector] > .git-panel {
-  grid-column: 1;
-}
 .platform-macos.sidebar-hidden.with-inspector[data-inspector-position="left"] > main > .toolbar {
   padding-left: 24px;
 }
 .platform-macos.sidebar-hidden.with-inspector[data-inspector-position="left"]
   > :is(.file-panel, .git-panel)
-  > .inspector-header,
-.platform-macos.sidebar-hidden[data-expanded-inspector] > .git-panel > .inspector-header {
+  > .inspector-header {
   padding-top: 38px;
 }
 .app-shell > .pane-swap-button {
@@ -3033,4 +3010,78 @@ textarea:focus-visible {
 .agent-enable:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.workspace-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-sidebar);
+  scrollbar-width: thin;
+}
+.workspace-tab {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  max-width: 220px;
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 2px solid transparent;
+  color: var(--ui-muted);
+}
+.workspace-tab[data-active] {
+  color: var(--ui-text);
+  background: var(--ui-canvas);
+  border-bottom-color: var(--ui-accent);
+}
+.workspace-tab > button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+}
+.workspace-tab > [role="tab"] {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+.workspace-tab > [role="tab"] > span:not(.workspace-tab-dirty) {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.workspace-tab svg {
+  flex-shrink: 0;
+}
+.workspace-tab > .workspace-tab-close {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  margin-right: 5px;
+  padding: 0;
+  border-radius: 4px;
+}
+.workspace-tab > button:hover {
+  background: var(--ui-hover);
+}
+.workspace-tab-dirty {
+  font-size: 8px;
+}
+
+.git-main-diff:not([hidden]) {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  background: var(--ui-canvas);
+}
+.git-main-diff > .git-diff {
+  min-width: 0;
 }

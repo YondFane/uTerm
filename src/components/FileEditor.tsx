@@ -280,13 +280,6 @@ export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocume
         <button disabled={editor.transitioning} onClick={() => void editor.reload()}>
           {tx("重新读取")}
         </button>
-        <button
-          aria-label={tx("关闭文件")}
-          disabled={editor.transitioning}
-          onClick={() => void editor.close()}
-        >
-          ×
-        </button>
       </header>
       {document.notice && <p className="editor-notice">{localizeMessage(document.notice)}</p>}
       {editor.error && (
