@@ -8,7 +8,11 @@ interface Availability {
   notes: string | null;
   downloaded: boolean;
 }
-export function useUpdates(prepare: () => Promise<void>, restore: () => Promise<void>) {
+export function useUpdates(
+  prepare: () => Promise<void>,
+  restore: () => Promise<void>,
+  automatic = false,
+) {
   const [available, setAvailable] = useState<Availability | null>(null);
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState("");
@@ -92,6 +96,22 @@ export function useUpdates(prepare: () => Promise<void>, restore: () => Promise<
       busy.current = false;
     }
   }
+  const actions = useRef({ check, download, install, phase });
+  actions.current = { check, download, install, phase };
+  useEffect(() => {
+    if (!automatic || !available?.enabled) return;
+    const checkWhenIdle = () => {
+      if (["idle", "current"].includes(actions.current.phase)) void actions.current.check();
+    };
+    checkWhenIdle();
+    const timer = setInterval(checkWhenIdle, 60 * 60 * 1000);
+    return () => clearInterval(timer);
+  }, [automatic, available?.enabled]);
+  useEffect(() => {
+    if (!automatic || !available?.enabled || error) return;
+    if (phase === "available") void actions.current.download();
+    else if (phase === "ready") void actions.current.install();
+  }, [automatic, available?.enabled, phase, error]);
   return { available, phase, error, progress, check, download, install };
 }
 export type Updates = ReturnType<typeof useUpdates>;

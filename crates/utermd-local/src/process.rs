@@ -54,7 +54,7 @@ pub(crate) fn process_snapshot() -> Result<std::collections::HashMap<u32, Proces
 #[cfg(unix)]
 pub(crate) fn process_snapshot() -> Result<std::collections::HashMap<u32, ProcessEntry>> {
     let output = std::process::Command::new("/bin/ps")
-        .args(["-ax", "-o", "pid=,ppid=,comm="])
+        .args(["-axww", "-o", "pid=,ppid=,comm="])
         .output()
         .context("reading process list")?;
     if !output.status.success() {
@@ -183,6 +183,39 @@ mod process_tests {
         assert_eq!(agent_in_process_tree(10, &processes), Some("claude"));
         let exited = super::parse_process_snapshot("10 1 /bin/zsh\n20 1 codex\n");
         assert_eq!(agent_in_process_tree(10, &exited), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_snapshot_preserves_long_executable_paths() {
+        let directory = std::env::temp_dir().join(format!(
+            "uterm process snapshot long path {}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let executable = directory.join("claude");
+        std::fs::copy("/bin/sleep", &executable).unwrap();
+        let mut child = std::process::Command::new(&executable)
+            .arg("30")
+            .spawn()
+            .unwrap();
+        let result = (|| {
+            for _ in 0..20 {
+                let snapshot = process_snapshot()?;
+                if snapshot
+                    .get(&child.id())
+                    .is_some_and(|entry| entry.name == "claude")
+                {
+                    return Ok::<_, anyhow::Error>(());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            anyhow::bail!("Long executable path did not preserve the Agent name")
+        })();
+        let _ = child.kill();
+        let _ = child.wait();
+        let _ = std::fs::remove_dir_all(directory);
+        result.unwrap();
     }
 
     #[test]

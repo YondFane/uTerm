@@ -292,11 +292,15 @@ export function App() {
   const [filesOpen, setFilesOpen] = useState(true);
   const [fileMode, setFileMode] = useState<FileMode>("tree");
   const [fileRequest, setFileRequest] = useState(0);
-  const editor = useFileDocument();
+  const editor = useFileDocument(settings.fileTabLimit);
   useEffect(() => {
     if (editor.document) setGitDiffActive(false);
   }, [editor.document?.id]);
-  const updates = useUpdates(editor.prepareUpdate, editor.restoreUpdateGuard);
+  const updates = useUpdates(
+    editor.prepareUpdate,
+    editor.restoreUpdateGuard,
+    settings.automaticUpdates,
+  );
   const [error, setError] = useState("");
   const [sessionSyncError, setSessionSyncError] = useState("");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -1615,12 +1619,7 @@ export function App() {
           detectedAgents={detectedAgents}
           disabled={editor.transitioning || editor.pending}
           selectSession={revealTaskbarSession}
-          selectFile={(file) => {
-            void editor.hide(() => {
-              setGitDiffActive(false);
-              void editor.open(file.directory, file.path);
-            });
-          }}
+          selectFile={(file) => void editor.open(file.directory, file.path)}
           diff={
             gitOpen && gitExpanded && gitDiffPath
               ? { path: gitDiffPath, active: gitDiffActive }

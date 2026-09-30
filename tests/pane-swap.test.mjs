@@ -407,6 +407,19 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     assert.equal(hint(".inspector-toggle"), false);
     t.mock.timers.reset();
     await act(async () => globalThis.paneEditor.open("/test", "shortcut.txt"));
+    await act(async () => globalThis.paneEditor.open("/test", "another.txt"));
+    await act(async () => globalThis.paneEditor.change("retained tab draft"));
+    const fileTab = (path) => document.querySelector(`[role="tab"][title="/test/${path}"]`);
+    await click(fileTab("shortcut.txt"));
+    assert.equal(globalThis.paneEditor.document?.path, "shortcut.txt");
+    assert.equal(document.querySelector(".editor-test").value, "original");
+    await click(fileTab("another.txt"));
+    assert.equal(globalThis.paneEditor.document?.path, "another.txt");
+    assert.equal(document.querySelector(".editor-test").value, "retained tab draft");
+    await click(document.querySelector('[role="tab"][id^="workspace-session-"]'));
+    assert.equal(globalThis.paneEditor.document, null);
+    await click(fileTab("shortcut.txt"));
+    assert.equal(globalThis.paneEditor.document?.path, "shortcut.txt");
     await act(async () => globalThis.paneEditor.change("shortcut draft"));
     const sessionsBeforeClose = JSON.parse(localStorage.getItem(workspaceKey)).projects[0].sessions;
     await act(async () =>

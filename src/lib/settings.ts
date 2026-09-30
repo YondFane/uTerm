@@ -36,6 +36,8 @@ export const commands = [
 ] as const;
 export type CommandId = (typeof commands)[number][0];
 export interface Settings {
+  automaticUpdates: boolean;
+  fileTabLimit: number;
   breakReminder: boolean;
   breakInterval: number;
   inspectorPosition: "left" | "right";
@@ -69,6 +71,8 @@ export interface Settings {
   shortcuts: Partial<Record<CommandId, string>>;
 }
 export const defaults: Settings = {
+  automaticUpdates: false,
+  fileTabLimit: 10,
   breakReminder: false,
   breakInterval: 60,
   inspectorPosition: "right",
@@ -142,6 +146,8 @@ export function readSettings(raw: string | null): Settings {
   const parsed = JSON.parse(raw);
   const v = parsed?.version === 1 && {
     ...parsed,
+    automaticUpdates: parsed.automaticUpdates === undefined ? false : parsed.automaticUpdates,
+    fileTabLimit: parsed.fileTabLimit === undefined ? defaults.fileTabLimit : parsed.fileTabLimit,
     enabledAgents: parsed.enabledAgents === undefined ? [] : parsed.enabledAgents,
     breakReminder:
       parsed.breakReminder === undefined ? defaults.breakReminder : parsed.breakReminder,
@@ -163,6 +169,9 @@ export function readSettings(raw: string | null): Settings {
   if (
     !v ||
     v.version !== 1 ||
+    typeof v.automaticUpdates !== "boolean" ||
+    !Number.isSafeInteger(v.fileTabLimit) ||
+    v.fileTabLimit < 1 ||
     typeof v.breakReminder !== "boolean" ||
     !Number.isInteger(v.breakInterval) ||
     !finite(v.breakInterval, 1, 1440) ||

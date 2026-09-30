@@ -11,7 +11,7 @@ import {
   DocumentSaveQueue,
 } from "./file-document";
 import type { FileData, OpenFile } from "./file-document";
-export function useFileDocument() {
+export function useFileDocument(fileTabLimit = 10) {
   const [document, render] = useState<OpenFile | null>(null);
   const current = useRef<OpenFile | null>(null);
   const [documents, renderDocuments] = useState<OpenFile[]>([]);
@@ -104,6 +104,33 @@ export function useFileDocument() {
       setTransitioning(false);
     }
   }
+  async function trimTabs() {
+    const excess = new Set<number>();
+    const counts = new Map<string, number>();
+    for (const file of [...retained.current].reverse()) {
+      const count = (counts.get(file.directory) ?? 0) + 1;
+      counts.set(file.directory, count);
+      if (count > fileTabLimit) excess.add(file.id);
+    }
+    if (!excess.size) return;
+    if (current.current && excess.has(current.current.id)) {
+      await invoke("editor_guard", { active: false });
+      setDocument(null);
+    }
+    setDocuments(retained.current.filter((file) => !excess.has(file.id)));
+  }
+  useEffect(() => {
+    if (transitioning || pending) return;
+    const counts = new Map<string, number>();
+    if (
+      documents.some((file) => {
+        const count = (counts.get(file.directory) ?? 0) + 1;
+        counts.set(file.directory, count);
+        return count > fileTabLimit;
+      })
+    )
+      void request(trimTabs);
+  }, [fileTabLimit, documents, transitioning, pending]);
   async function open(directory: string, path: string, line?: number) {
     if (transition.current || pendingAction.current) return;
     const existing = current.current;
@@ -134,6 +161,7 @@ export function useFileDocument() {
         line,
         jump: 0,
       });
+      await trimTabs();
       setRecovered(false);
       setError("");
       setConflict(false);

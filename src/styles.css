@@ -3085,3 +3085,36 @@ textarea:focus-visible {
 .git-main-diff > .git-diff {
   min-width: 0;
 }
+
+.update-release-notes {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--ui-border);
+}
+.update-release-notes h4 {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.update-release-notes-content {
+  max-height: 40vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+.update-release-notes-content :is(h1, h2, h3, h4) {
+  margin: 18px 0 10px;
+  font-size: 14px;
+}
+.update-release-notes-content > :first-child {
+  margin-top: 0;
+}
+.update-release-notes-content :is(ul, ol) {
+  margin: 8px 0 16px;
+  padding-left: 22px;
+}
+.update-release-notes-content li {
+  margin: 6px 0;
+}
+.update-release-notes-content pre {
+  white-space: pre-wrap;
+}

@@ -28,6 +28,7 @@ test("workspace tabs retain files, guard switching and only offer file close but
     const { setUiLanguage } = await server.ssrLoadModule("/src/lib/i18n.ts");
     setUiLanguage("en");
     let editor;
+    let limit = 10;
     let selected = "terminal";
     let failSave = false;
     const calls = [];
@@ -50,7 +51,7 @@ test("workspace tabs retain files, guard switching and only offer file close but
       return null;
     });
     function Harness() {
-      editor = useFileDocument();
+      editor = useFileDocument(limit);
       return React.createElement(WorkspaceTabs, {
         sessions: [
           { id: "terminal", name: "Terminal", shell: "default" },
@@ -147,6 +148,33 @@ test("workspace tabs retain files, guard switching and only offer file close but
       document.querySelector(".workspace-tab-close").getAttribute("aria-label"),
       /关闭文件/,
     );
+    limit = 2;
+    await act(async () => root.render(React.createElement(Harness)));
+    await act(async () => editor.open("/repo", "second.txt"));
+    await act(async () => editor.open("/repo", "first.txt"));
+    await act(async () => editor.open("/repo", "third.txt"));
+    assert.deepEqual(
+      editor.documents.map((file) => file.path),
+      ["second.txt", "third.txt"],
+    );
+    assert.equal(editor.document.path, "third.txt");
+    await act(async () => editor.open("/repo", "second.txt"));
+    await act(async () => editor.change("protected draft"));
+    failSave = true;
+    limit = 1;
+    await act(async () => root.render(React.createElement(Harness)));
+    assert.equal(editor.pending, true);
+    assert.equal(editor.documents.length, 2);
+    assert.equal(editor.document.text, "protected draft");
+    await act(async () => editor.discard());
+    assert.equal(editor.documents.length, 1);
+    assert.equal(editor.documents[0].path, "third.txt");
+    assert.equal(editor.document, null);
+    failSave = false;
+    await act(async () => editor.open("/repo", "fourth.txt"));
+    assert.equal(editor.documents.length, 1);
+    assert.equal(editor.document.path, "fourth.txt");
+    assert.ok(tabs().some((tab) => tab.textContent === "Terminal"));
     assert.equal(calls.filter((call) => call.command === "control_session").length, 0);
     await act(async () =>
       root.render(
