@@ -11,9 +11,15 @@ import {
   DocumentSaveQueue,
 } from "./file-document";
 import type { FileData, OpenFile } from "./file-document";
-export function useFileDocument() {
+export function useFileDocument(fileTabLimit = 10) {
   const [document, render] = useState<OpenFile | null>(null);
   const current = useRef<OpenFile | null>(null);
+  const [documents, renderDocuments] = useState<OpenFile[]>([]);
+  const retained = useRef<OpenFile[]>([]);
+  function setDocuments(values: OpenFile[]) {
+    retained.current = values;
+    renderDocuments(values);
+  }
   const [error, setError] = useState("");
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -27,6 +33,16 @@ export function useFileDocument() {
   function setDocument(value: OpenFile | null) {
     current.current = value;
     render(value);
+    if (value) {
+      const index = retained.current.findIndex(
+        (item) => item.directory === value.directory && item.path === value.path,
+      );
+      setDocuments(
+        index < 0
+          ? [...retained.current, value]
+          : retained.current.map((item, position) => (position === index ? value : item)),
+      );
+    }
     try {
       if (isDirty(value)) localStorage.setItem(draftKey, JSON.stringify(value));
       else localStorage.removeItem(draftKey);
@@ -55,8 +71,9 @@ export function useFileDocument() {
         }
         return true;
       } catch (reason) {
-        setError(String(reason).replace(/^CONFLICT:/, ""));
-        setConflict(String(reason).startsWith("CONFLICT:"));
+        const message = reason instanceof Error ? reason.message : String(reason);
+        setError(message.replace(/^CONFLICT:/, ""));
+        setConflict(message.startsWith("CONFLICT:"));
         return false;
       } finally {
         setSaving(false);
@@ -70,7 +87,7 @@ export function useFileDocument() {
     return !isDirty(current.current);
   }
   async function request(action: () => Promise<void>) {
-    if (transition.current) return;
+    if (transition.current || pendingAction.current) return;
     transition.current = true;
     setTransitioning(true);
     try {
@@ -87,13 +104,52 @@ export function useFileDocument() {
       setTransitioning(false);
     }
   }
+  async function trimTabs() {
+    const excess = new Set<number>();
+    const counts = new Map<string, number>();
+    for (const file of [...retained.current].reverse()) {
+      const count = (counts.get(file.directory) ?? 0) + 1;
+      counts.set(file.directory, count);
+      if (count > fileTabLimit) excess.add(file.id);
+    }
+    if (!excess.size) return;
+    if (current.current && excess.has(current.current.id)) {
+      await invoke("editor_guard", { active: false });
+      setDocument(null);
+    }
+    setDocuments(retained.current.filter((file) => !excess.has(file.id)));
+  }
+  useEffect(() => {
+    if (transitioning || pending) return;
+    const counts = new Map<string, number>();
+    if (
+      documents.some((file) => {
+        const count = (counts.get(file.directory) ?? 0) + 1;
+        counts.set(file.directory, count);
+        return count > fileTabLimit;
+      })
+    )
+      void request(trimTabs);
+  }, [fileTabLimit, documents, transitioning, pending]);
   async function open(directory: string, path: string, line?: number) {
+    if (transition.current || pendingAction.current) return;
     const existing = current.current;
     if (existing?.directory === directory && existing.path === path) {
       setDocument({ ...existing, line, jump: existing.jump + 1 });
       return;
     }
     await request(async () => {
+      const cached = retained.current.find(
+        (item) => item.directory === directory && item.path === path,
+      );
+      if (cached) {
+        await invoke("editor_guard", { active: cached.kind === "text" && !cached.readonly });
+        setDocument({ ...cached, line, jump: cached.jump + 1 });
+        setRecovered(false);
+        setError("");
+        setConflict(false);
+        return;
+      }
       const data = await invoke<FileData>("file_read", { directory, path });
       await invoke("editor_guard", { active: data.kind === "text" && !data.readonly });
       setDocument({
@@ -105,18 +161,40 @@ export function useFileDocument() {
         line,
         jump: 0,
       });
+      await trimTabs();
       setRecovered(false);
       setError("");
       setConflict(false);
     });
   }
-  async function close(after?: () => void | Promise<void>) {
+  async function hide(after?: () => void | Promise<void>) {
     await request(async () => {
       await invoke("editor_guard", { active: false });
       setDocument(null);
       setRecovered(false);
       setError("");
       setConflict(false);
+      await after?.();
+    });
+  }
+  async function close(after?: () => void | Promise<void>, id = current.current?.id) {
+    if (transition.current || pendingAction.current) return;
+    if (id === undefined) {
+      await hide(after);
+      return;
+    }
+    if (id !== current.current?.id) {
+      setDocuments(retained.current.filter((item) => item.id !== id));
+      return;
+    }
+    await hide(async () => {
+      setDocuments(retained.current.filter((item) => item.id !== id));
+      await after?.();
+    });
+  }
+  async function closeDirectory(directory: string, after?: () => void | Promise<void>) {
+    await hide(async () => {
+      setDocuments(retained.current.filter((item) => item.directory !== directory));
       await after?.();
     });
   }
@@ -147,7 +225,15 @@ export function useFileDocument() {
     transition.current = true;
     setTransitioning(true);
     try {
+      const value = current.current;
       await action();
+      if (value && isDirty(value)) {
+        setDocuments(
+          retained.current.map((item) =>
+            item.id === value.id ? { ...item, text: item.saved } : item,
+          ),
+        );
+      }
     } catch (reason) {
       setError(String(reason));
     } finally {
@@ -243,6 +329,7 @@ export function useFileDocument() {
     prepareUpdate,
     restoreUpdateGuard,
     document,
+    documents,
     error,
     conflict,
     saving,
@@ -250,6 +337,8 @@ export function useFileDocument() {
     pending,
     open,
     close,
+    hide,
+    closeDirectory,
     save,
     reload,
     discard,

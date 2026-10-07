@@ -516,6 +516,11 @@ test("real settings tabs, commands and panels render in both languages without u
           updates: {
             ...updates,
             phase: "ready",
+            available: {
+              ...updates.available,
+              enabled: true,
+              notes: "## 中文\n\n- 清晰列表\n\n## English\n\n- Clear list\n<script>bad()</script>",
+            },
             progress: { downloaded: 1992294, total: null },
           },
           close: noop,
@@ -533,6 +538,20 @@ test("real settings tabs, commands and panels render in both languages without u
       assert.equal(downloadProgress.firstElementChild.value, 1992294);
       assert.match(downloadProgress.textContent, /Downloaded 1.9 MB/);
       assert.match(host.textContent, /Update downloaded and signature verified/);
+      const notes = host.querySelector(".update-release-notes");
+      assert.equal(notes.querySelectorAll("h2").length, 2);
+      assert.equal(notes.querySelectorAll("li").length, 2);
+      assert.equal(notes.querySelector("script"), null);
+      const install = [...host.querySelectorAll("button")].find(
+        (button) => button.textContent === "Install and restart",
+      );
+      assert.ok(
+        install.compareDocumentPosition(notes) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+      assert.ok(
+        downloadProgress.compareDocumentPosition(notes) &
+          dom.window.Node.DOCUMENT_POSITION_FOLLOWING,
+      );
       assert.equal(JSON.parse(localStorage.getItem(settingsKey)).language, "en");
     });
     await context.test("command palette uses translated command labels", async () => {

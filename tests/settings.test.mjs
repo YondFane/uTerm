@@ -14,6 +14,10 @@ test("settings round trip and invalid data is rejected without normalizing it aw
   assert.deepEqual(readSettings(JSON.stringify(defaults)), defaults);
   for (const patch of [
     { version: 2 },
+    { automaticUpdates: "yes" },
+    { fileTabLimit: 0 },
+    { fileTabLimit: 1.5 },
+    { fileTabLimit: "10" },
     { fontSize: 999 },
     { scrollback: -1 },
     { cursorStyle: "triangle" },
@@ -164,4 +168,19 @@ test("usage refresh interval defaults for old settings and accepts whole seconds
       readSettings(JSON.stringify({ ...defaults, usageRefreshInterval })).usageRefreshInterval,
       usageRefreshInterval,
     );
+});
+
+test("file tab limit defaults for old settings and accepts a minimum of one", () => {
+  const { fileTabLimit, ...old } = defaults;
+  assert.equal(readSettings(JSON.stringify(old)).fileTabLimit, 10);
+  assert.equal(readSettings(JSON.stringify({ ...defaults, fileTabLimit: 1 })).fileTabLimit, 1);
+});
+
+test("automatic updates are opt-in and compatible with previous settings", () => {
+  const { automaticUpdates, ...old } = defaults;
+  assert.equal(readSettings(JSON.stringify(old)).automaticUpdates, false);
+  assert.equal(
+    readSettings(JSON.stringify({ ...defaults, automaticUpdates: true })).automaticUpdates,
+    true,
+  );
 });

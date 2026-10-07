@@ -14,6 +14,44 @@ uTerm is a free, self-contained desktop terminal for Windows and macOS, built wi
 
 Quitting detaches the window without terminating background sessions. **Close Session** terminates the selected process. The session service is authenticated and listens only on loopback.
 
+## One-line installation
+
+Using npm or pnpm (requires Node.js 22.13 or newer):
+
+```sh
+npx @yondfane/uterm-install
+# or
+pnpm dlx @yondfane/uterm-install
+```
+
+Alternatively, install the command globally, then run the installer:
+
+```sh
+npm install -g @yondfane/uterm-install
+# or pnpm add -g @yondfane/uterm-install
+uterm-install
+```
+
+Global installation only adds the command; running `uterm-install` installs the desktop application. Use `uterm-install --help` for help. The package uses no install lifecycle scripts. Removing the npm package does not uninstall the desktop application.
+
+The npm installer is published as `@yondfane/uterm-install`. Maintainers can run `npm pack --dry-run` in `scripts/install` to inspect the package, then publish with `npm publish --access public` when ready. For development validation, run `node scripts/install/cli.mjs --help`.
+
+macOS (Apple Silicon / Intel), run in Terminal:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/install.sh | bash
+```
+
+Windows x64, run in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/install.ps1 | iex
+```
+
+GitHub access is required. macOS installs to `~/Applications/uTerm.app`; open it from Finder when finished. An existing user or system installation stops the script; use in-app updates instead. The build is not notarized by Apple, so first launch may require approval in Privacy & Security. Windows downloads the stable installer and opens its wizard; follow its prompts. Node.js, Rust and an administrator terminal are not required.
+
+Scripts live in `scripts/install/`; the remote commands read scripts from the `release` branch. You can also download installers manually from [Releases](https://github.com/YondFane/uTerm/releases).
+
 ## Development
 
 Agent settings can install OpenCode, Claude, Codex and Gemini after confirmation using the local Node.js/npm installation. This requires internet access and permission to write npm's global prefix. Agent packages are optional and are not bundled with uTerm; other programs can be installed manually and configured by executable path.

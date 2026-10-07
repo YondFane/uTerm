@@ -1,3 +1,5 @@
+import MarkdownIt from "markdown-it";
+import DOMPurify from "dompurify";
 import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
@@ -22,6 +24,7 @@ import type { Updates } from "../lib/useUpdates";
 import type { RuntimeInfo } from "../lib/desktop";
 import { themes, importTheme } from "../lib/themes";
 import { activeLanguage, languageOptions, translate } from "../lib/i18n";
+const releaseMarkdown = new MarkdownIt({ html: false, linkify: false });
 const interfaceFonts = [
   ["系统默认", defaults.interfaceFont],
   ["Arial", "Arial, sans-serif"],
@@ -256,6 +259,27 @@ export function SettingsPanel({
                   </button>
                 </p>
               )}
+              <label>
+                {t("文件标签数量上限")}
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  key={settings.fileTabLimit}
+                  defaultValue={settings.fileTabLimit}
+                  onBlur={(event) => {
+                    const value = event.target.valueAsNumber;
+                    if (Number.isSafeInteger(value) && value >= 1) change({ fileTabLimit: value });
+                    else {
+                      event.target.value = String(settings.fileTabLimit);
+                      setMessage(t("标签数量必须为至少 1 的整数。"));
+                    }
+                  }}
+                />
+                <span className="muted">
+                  {t("超过上限时关闭最早打开的文件标签，保留终端和会话。")}
+                </span>
+              </label>
               <div className="break-reminder-settings-row">
                 <label>
                   {t("休息提醒")}
@@ -826,11 +850,28 @@ export function SettingsPanel({
           {tab === "软件更新" && (
             <>
               <p>uTerm {runtime.version}</p>
+              <label>
+                {tx("自动更新")}
+                <input
+                  type="checkbox"
+                  role="switch"
+                  checked={settings.automaticUpdates}
+                  disabled={!updates.available?.enabled}
+                  onChange={(event) => change({ automaticUpdates: event.target.checked })}
+                />
+                <span className="muted">
+                  {tx("开启后自动下载；安装前确认，10 秒后自动安装并重启。")}
+                </span>
+              </label>
               {!updates.available?.enabled ? (
                 <p className="muted">{tx("此构建未启用在线更新。请使用正式渠道安装包。")}</p>
               ) : (
                 <>
-                  <p className="muted">{tx("启动后自动检查更新。下载和安装由你决定。")}</p>
+                  <p className="muted">
+                    {settings.automaticUpdates
+                      ? tx("自动检查并安装更新。")
+                      : tx("启动后自动检查更新。下载和安装由你决定。")}
+                  </p>
                   {!showingDownloadProgress && (
                     <p role="status" aria-live="polite">
                       {updates.phase === "checking"
@@ -867,11 +908,6 @@ export function SettingsPanel({
                       )}
                     </>
                   )}
-                  {updates.available.notes && (
-                    <p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
-                      {updates.available.notes}
-                    </p>
-                  )}
                   {["idle", "current", "available"].includes(updates.phase) && (
                     <button onClick={() => void updates.check()}>{tx("检查更新")}</button>
                   )}
@@ -890,6 +926,36 @@ export function SettingsPanel({
                 <p role="alert" className="settings-error">
                   {localizeMessage(updates.error)}
                 </p>
+              )}
+              {updates.available?.notes && (
+                <section className="update-release-notes" aria-label={tx("版本说明")}>
+                  <h4>{tx("版本说明")}</h4>
+                  <div
+                    className="update-release-notes-content"
+                    dangerouslySetInnerHTML={{
+                      __html: DOMPurify.sanitize(releaseMarkdown.render(updates.available.notes), {
+                        ALLOWED_TAGS: [
+                          "p",
+                          "h1",
+                          "h2",
+                          "h3",
+                          "h4",
+                          "ul",
+                          "ol",
+                          "li",
+                          "strong",
+                          "em",
+                          "code",
+                          "pre",
+                          "blockquote",
+                          "br",
+                          "hr",
+                        ],
+                        ALLOWED_ATTR: [],
+                      }),
+                    }}
+                  />
+                </section>
               )}
             </>
           )}

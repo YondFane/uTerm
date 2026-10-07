@@ -5,7 +5,10 @@ use std::sync::{
     Arc, Condvar, Mutex, OnceLock,
 };
 use std::time::Duration;
-use tauri::{ipc::Channel, Manager};
+use tauri::{
+    ipc::{Channel, Response},
+    Manager,
+};
 use utermd_local::daemon::{
     Client, Frame, HostStatus, Operation, Reply, SessionSnapshot, SessionSpec,
 };
@@ -161,7 +164,7 @@ pub async fn start_session(
     app: tauri::AppHandle,
     state: tauri::State<'_, Arc<Sessions>>,
     request: StartRequest,
-    events: Channel<Frame>,
+    events: Channel<Response>,
 ) -> Result<(), String> {
     let StartRequest {
         id,
@@ -228,7 +231,7 @@ pub async fn start_session(
                         code: None,
                         error: Some(format!("连接已断开：{error}。请重新连接。")),
                     };
-                    if let Err(error) = events.send(frame) {
+                    if let Err(error) = events.send(Response::new(encode_frame(&frame))) {
                         eprintln!("Could not report disconnected session: {error}");
                     }
                 }
@@ -244,7 +247,29 @@ pub async fn start_session(
     .map_err(|error| error.to_string())?
 }
 
-fn stream(link: &Link, events: &Channel<Frame>) -> Result<(), String> {
+fn encode_frame(frame: &Frame) -> Vec<u8> {
+    // Keep terminal bytes out of JSON number arrays across the WebView boundary.
+    // 跨 WebView 边界时避免将终端字节转换为 JSON 数字数组。
+    let metadata = serde_json::json!({
+        "agent_state": frame.agent_state,
+        "foreground_agent": frame.foreground_agent,
+        "sequence": frame.sequence,
+        "reset": frame.reset,
+        "rows": frame.rows,
+        "cols": frame.cols,
+        "exited": frame.exited,
+        "code": frame.code,
+        "error": frame.error,
+    });
+    let header = metadata.to_string();
+    let mut bytes = Vec::with_capacity(4 + header.len() + frame.data.len());
+    bytes.extend_from_slice(&(header.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(header.as_bytes());
+    bytes.extend_from_slice(&frame.data);
+    bytes
+}
+
+fn stream(link: &Link, events: &Channel<Response>) -> Result<(), String> {
     let mut cursor = None;
     while !link.stopped.load(Ordering::Acquire) {
         let frame = match link
@@ -270,7 +295,10 @@ fn stream(link: &Link, events: &Channel<Frame>) -> Result<(), String> {
         *link.pending.lock().map_err(|error| error.to_string())? = Some(frame.sequence);
         // Wait for the renderer's acknowledgement before requesting more output.
         // 等待渲染端确认后再请求下一帧，避免输出积压并保持回放顺序。
-        events.send(frame).map_err(|error| error.to_string())?;
+        events
+            .send(Response::new(encode_frame(&frame)))
+            .map_err(|error| error.to_string())?;
+        drop(frame);
         let mut pending = link.pending.lock().map_err(|error| error.to_string())?;
         while pending.is_some() && !link.stopped.load(Ordering::Acquire) {
             pending = link
@@ -502,6 +530,36 @@ fn stage_host(
 #[cfg(test)]
 mod update_tests {
     use super::*;
+    #[test]
+    fn binary_frame_preserves_metadata_and_raw_output() {
+        let frame = Frame {
+            agent_state: Some("idle".into()),
+            foreground_agent: None,
+            sequence: 42,
+            reset: true,
+            rows: 24,
+            cols: 80,
+            data: (0..=255).collect(),
+            exited: true,
+            code: Some(1),
+            error: Some("连接错误".into()),
+        };
+        for data in [frame.data.clone(), vec![]] {
+            let frame = Frame {
+                data,
+                ..frame.clone()
+            };
+            let bytes = encode_frame(&frame);
+            let length = u32::from_le_bytes(bytes[..4].try_into().unwrap()) as usize;
+            let metadata: serde_json::Value =
+                serde_json::from_slice(&bytes[4..4 + length]).unwrap();
+            let mut expected = serde_json::to_value(&frame).unwrap();
+            expected.as_object_mut().unwrap().remove("data");
+            assert_eq!(metadata, expected);
+            assert_eq!(&bytes[4 + length..], frame.data);
+        }
+    }
+
     #[test]
     fn stale_close_does_not_remove_a_reconnected_attachment() {
         use std::io::{Read, Write};

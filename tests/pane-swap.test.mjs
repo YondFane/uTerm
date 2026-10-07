@@ -56,7 +56,8 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
           if (id === "\0pane:TerminalWorkspace")
             return `
           import React, { useEffect } from 'react';
-          export function TerminalWorkspace() {
+          export function TerminalWorkspace({ closeRequest }) {
+            globalThis.paneCloseRequest = closeRequest;
             useEffect(() => { globalThis.paneMounts++; return () => { globalThis.paneUnmounts++; }; }, []);
             return React.createElement('div', { className: 'terminal-test' }, 'retained terminal output');
           }`;
@@ -293,10 +294,22 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     await click(document.querySelector(".git-files button"));
     await click(
       document.querySelector(
-        'button[aria-label="Expand diff across the main workspace and inspector"]',
+        'button[aria-label="Show diff in the main workspace and keep the inspector"]',
       ),
     );
     assert.equal(shell().dataset.expandedInspector, "true");
+    assert.ok(document.querySelector(".git-main-diff .git-diff"));
+    const diffTab = () => document.querySelector("#workspace-git-diff");
+    assert.equal(diffTab().getAttribute("aria-selected"), "true");
+    await click(document.querySelector('[role="tab"][id^="workspace-session-"]'));
+    assert.equal(document.querySelector(".git-main-diff").hidden, true);
+    assert.equal(diffTab().getAttribute("aria-selected"), "false");
+    await click(diffTab());
+    assert.equal(document.querySelector(".git-main-diff").hidden, false);
+    assert.equal(diffTab().getAttribute("aria-selected"), "true");
+    assert.ok(document.querySelector(".git-panel .git-list-area"));
+    assert.equal(document.querySelector(".git-panel").hasAttribute("data-diff-focused"), false);
+    assert.ok(document.querySelector("main > .toolbar"));
     assert.equal(swap(), null);
     await shortcut();
     assert.equal(shell().dataset.inspectorPosition, "left");
@@ -393,6 +406,41 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     await click(document.querySelector(".inspector-toggle"));
     assert.equal(hint(".inspector-toggle"), false);
     t.mock.timers.reset();
+    await act(async () => globalThis.paneEditor.open("/test", "shortcut.txt"));
+    await act(async () => globalThis.paneEditor.open("/test", "another.txt"));
+    await act(async () => globalThis.paneEditor.change("retained tab draft"));
+    const fileTab = (path) => document.querySelector(`[role="tab"][title="/test/${path}"]`);
+    await click(fileTab("shortcut.txt"));
+    assert.equal(globalThis.paneEditor.document?.path, "shortcut.txt");
+    assert.equal(document.querySelector(".editor-test").value, "original");
+    await click(fileTab("another.txt"));
+    assert.equal(globalThis.paneEditor.document?.path, "another.txt");
+    assert.equal(document.querySelector(".editor-test").value, "retained tab draft");
+    await click(document.querySelector('[role="tab"][id^="workspace-session-"]'));
+    assert.equal(globalThis.paneEditor.document, null);
+    await click(fileTab("shortcut.txt"));
+    assert.equal(globalThis.paneEditor.document?.path, "shortcut.txt");
+    await act(async () => globalThis.paneEditor.change("shortcut draft"));
+    const sessionsBeforeClose = JSON.parse(localStorage.getItem(workspaceKey)).projects[0].sessions;
+    await act(async () =>
+      window.dispatchEvent(
+        new dom.window.KeyboardEvent("keydown", {
+          key: "w",
+          code: "KeyW",
+          metaKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      ),
+    );
+    assert.equal(globalThis.paneEditor.document, null);
+    assert.ok(!globalThis.paneEditor.documents.some((file) => file.path === "shortcut.txt"));
+    assert.equal(globalThis.paneCloseRequest, null);
+    assert.deepEqual(
+      JSON.parse(localStorage.getItem(workspaceKey)).projects[0].sessions,
+      sessionsBeforeClose,
+    );
+    assert.ok(calls.includes("file_save"));
   } finally {
     t.mock.timers.reset();
     dom.window.Storage.prototype.setItem = originalSetItem;
@@ -401,6 +449,7 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     await server.close();
     dom.window.close();
     delete globalThis.paneEditor;
+    delete globalThis.paneCloseRequest;
     delete globalThis.isTauri;
   }
 });

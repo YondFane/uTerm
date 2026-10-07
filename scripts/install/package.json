@@ -1,0 +1,25 @@
+{
+  "name": "@yondfane/uterm-install",
+  "version": "0.1.0",
+  "description": "Install the stable uTerm desktop application for macOS and Windows",
+  "type": "module",
+  "bin": {
+    "uterm-install": "cli.mjs"
+  },
+  "files": [
+    "cli.mjs",
+    "install.sh",
+    "install.ps1"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YondFane/uTerm.git",
+    "directory": "scripts/install"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

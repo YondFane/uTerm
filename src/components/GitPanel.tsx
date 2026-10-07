@@ -3,6 +3,7 @@ import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx, getUiLanguage } from "../lib/i18n";
 import type { ReactNode } from "react";
 import { HistoryPager, commitGraph, formatCommitTimestamp } from "../lib/git-history";
+import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ToolbarIcon } from "./SidebarIcon";
@@ -23,12 +24,16 @@ export function GitPanel({
   headerActions,
   directory,
   expanded,
+  diffTarget,
+  onDiffPathChange,
   onExpandedChange,
 }: {
   resizeHandle: ReactNode;
   headerActions: ReactNode;
   directory: string;
   expanded: boolean;
+  diffTarget?: HTMLElement | null;
+  onDiffPathChange?: (path: string | null) => void;
   onExpandedChange: (expanded: boolean) => void;
 }) {
   useUiLanguage();
@@ -60,6 +65,10 @@ export function GitPanel({
   const request = useRef(0);
   const selectedChange = useRef(false);
   const refresh = () => setRevision((value) => value + 1);
+  useEffect(() => {
+    onDiffPathChange?.(selection?.path ?? null);
+    return () => onDiffPathChange?.(null);
+  }, [selection?.path, onDiffPathChange]);
   useEffect(() => {
     if (!selection) {
       onExpandedChange(false);
@@ -241,10 +250,164 @@ export function GitPanel({
       </div>
     );
   }
+  const diffView = selection && (
+    <section className="git-diff" aria-label={tx("{p0} 的差异", { p0: selection.path })}>
+      <header>
+        <span className="git-diff-path" title={selection.path}>
+          {selection.path}
+        </span>
+        <div className="git-diff-actions">
+          <button
+            disabled={!diff}
+            onClick={() => {
+              if (diff)
+                void navigator.clipboard
+                  .writeText(diff.text)
+                  .catch((reason) => setError(String(reason)));
+            }}
+          >
+            {tx("复制 Diff")}
+          </button>
+          <button
+            className="icon-button"
+            title={sideBySide ? tx("切换统一 Diff") : tx("切换左右对比")}
+            aria-label={sideBySide ? tx("切换统一 Diff") : tx("切换左右对比")}
+            aria-pressed={sideBySide}
+            onClick={() => setSideBySide((value) => !value)}
+          >
+            <ToolbarIcon name="compare" />
+          </button>
+          <button
+            className="icon-button"
+            title={tx("上一个文件")}
+            aria-label={tx("上一个文件")}
+            disabled={loading || selectedFileIndex <= 0}
+            onClick={() => navigateFile(-1)}
+          >
+            <ToolbarIcon name="previous" />
+          </button>
+          <button
+            className="icon-button"
+            title={tx("下一个文件")}
+            aria-label={tx("下一个文件")}
+            disabled={
+              loading || selectedFileIndex < 0 || selectedFileIndex >= navigableFiles.length - 1
+            }
+            onClick={() => navigateFile(1)}
+          >
+            <ToolbarIcon name="next" />
+          </button>
+          <button
+            className="icon-button"
+            title={tx("全展示")}
+            aria-label={tx("全展示：在中栏显示差异，保留工具面板")}
+            aria-pressed={expanded}
+            onClick={() => {
+              setDiffFocused(true);
+              onExpandedChange(true);
+            }}
+          >
+            <ToolbarIcon name="maximize" />
+          </button>
+          <button
+            className="icon-button"
+            title={tx("工具面板全展示")}
+            aria-label={tx("工具面板全展示：保留主工作区，差异铺满工具面板")}
+            aria-pressed={diffFocused && !expanded}
+            onClick={() => {
+              setDiffFocused(true);
+              onExpandedChange(false);
+            }}
+          >
+            <ToolbarIcon name="splitRight" />
+          </button>
+          <button
+            className="icon-button"
+            title={tx("关闭差异")}
+            aria-label={tx("关闭差异")}
+            onClick={() => {
+              setSelection(null);
+              setDiff(null);
+              setDiffFocused(false);
+              onExpandedChange(false);
+            }}
+          >
+            <ToolbarIcon name="close" />
+          </button>
+        </div>
+      </header>
+      {diff ? (
+        <>
+          {diff.truncated && (
+            <p className="inspector-message">{tx("Diff 较大，仅显示前 2 MB 或 10,000 行。")}</p>
+          )}
+          {sideBySide && diff.text ? (
+            <div className="git-side-diff" role="region" aria-label={tx("左右对比")} tabIndex={0}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>{tx("修改前")}</th>
+                    <th>{tx("修改后")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {diffRows.map((row, index) =>
+                    row.header !== undefined ? (
+                      <tr key={index}>
+                        <td colSpan={2} className="diff-hunk">
+                          {row.header || " "}
+                        </td>
+                      </tr>
+                    ) : (
+                      <tr key={index}>
+                        {[row.left, row.right].map((cell, side) => (
+                          <td key={side} className={cell ? `diff-${cell.kind}` : "diff-empty"}>
+                            {cell && (
+                              <>
+                                <span className="diff-line-number">{cell.line}</span>
+                                {cell.text || " "}
+                              </>
+                            )}
+                          </td>
+                        ))}
+                      </tr>
+                    ),
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <pre>
+              {diff.text
+                ? diff.text.split("\n").map((line, index) => (
+                    <div
+                      key={index}
+                      className={
+                        line.startsWith("+") && !line.startsWith("+++")
+                          ? "diff-added"
+                          : line.startsWith("-") && !line.startsWith("---")
+                            ? "diff-removed"
+                            : line.startsWith("@@")
+                              ? "diff-hunk"
+                              : ""
+                      }
+                    >
+                      {line || " "}
+                    </div>
+                  ))
+                : tx("没有差异。")}
+            </pre>
+          )}
+        </>
+      ) : (
+        !error && <p className="inspector-message">{tx("正在读取 Diff…")}</p>
+      )}
+    </section>
+  );
   return (
     <aside
       className="git-panel"
-      data-diff-focused={(!!selection && diffFocused) || undefined}
+      data-diff-focused={(!!selection && diffFocused && !expanded) || undefined}
       aria-label={tx("Git 面板")}
     >
       {resizeHandle}
@@ -420,172 +583,7 @@ export function GitPanel({
             <p className="inspector-message">{tx("正在读取…")}</p>
           )}
         </div>
-        {selection && (
-          <section className="git-diff" aria-label={tx("{p0} 的差异", { p0: selection.path })}>
-            <header>
-              <span className="git-diff-path" title={selection.path}>
-                {selection.path}
-              </span>
-              <div className="git-diff-actions">
-                <button
-                  disabled={!diff}
-                  onClick={() => {
-                    if (diff)
-                      void navigator.clipboard
-                        .writeText(diff.text)
-                        .catch((reason) => setError(String(reason)));
-                  }}
-                >
-                  {tx("复制 Diff")}
-                </button>
-                <button
-                  className="icon-button"
-                  title={sideBySide ? tx("切换统一 Diff") : tx("切换左右对比")}
-                  aria-label={sideBySide ? tx("切换统一 Diff") : tx("切换左右对比")}
-                  aria-pressed={sideBySide}
-                  onClick={() => setSideBySide((value) => !value)}
-                >
-                  <ToolbarIcon name="compare" />
-                </button>
-                <button
-                  className="icon-button"
-                  title={tx("上一个文件")}
-                  aria-label={tx("上一个文件")}
-                  disabled={loading || selectedFileIndex <= 0}
-                  onClick={() => navigateFile(-1)}
-                >
-                  <ToolbarIcon name="previous" />
-                </button>
-                <button
-                  className="icon-button"
-                  title={tx("下一个文件")}
-                  aria-label={tx("下一个文件")}
-                  disabled={
-                    loading ||
-                    selectedFileIndex < 0 ||
-                    selectedFileIndex >= navigableFiles.length - 1
-                  }
-                  onClick={() => navigateFile(1)}
-                >
-                  <ToolbarIcon name="next" />
-                </button>
-                <button
-                  className="icon-button"
-                  title={tx("全展示")}
-                  aria-label={tx("全展示：差异铺满主工作区和工具面板")}
-                  aria-pressed={expanded}
-                  onClick={() => {
-                    setDiffFocused(true);
-                    onExpandedChange(true);
-                  }}
-                >
-                  <ToolbarIcon name="maximize" />
-                </button>
-                <button
-                  className="icon-button"
-                  title={tx("工具面板全展示")}
-                  aria-label={tx("工具面板全展示：保留主工作区，差异铺满工具面板")}
-                  aria-pressed={diffFocused && !expanded}
-                  onClick={() => {
-                    setDiffFocused(true);
-                    onExpandedChange(false);
-                  }}
-                >
-                  <ToolbarIcon name="splitRight" />
-                </button>
-                <button
-                  className="icon-button"
-                  title={tx("关闭差异")}
-                  aria-label={tx("关闭差异")}
-                  onClick={() => {
-                    setSelection(null);
-                    setDiff(null);
-                    setDiffFocused(false);
-                    onExpandedChange(false);
-                  }}
-                >
-                  <ToolbarIcon name="close" />
-                </button>
-              </div>
-            </header>
-            {diff ? (
-              <>
-                {diff.truncated && (
-                  <p className="inspector-message">
-                    {tx("Diff 较大，仅显示前 2 MB 或 10,000 行。")}
-                  </p>
-                )}
-                {sideBySide && diff.text ? (
-                  <div
-                    className="git-side-diff"
-                    role="region"
-                    aria-label={tx("左右对比")}
-                    tabIndex={0}
-                  >
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>{tx("修改前")}</th>
-                          <th>{tx("修改后")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {diffRows.map((row, index) =>
-                          row.header !== undefined ? (
-                            <tr key={index}>
-                              <td colSpan={2} className="diff-hunk">
-                                {row.header || " "}
-                              </td>
-                            </tr>
-                          ) : (
-                            <tr key={index}>
-                              {[row.left, row.right].map((cell, side) => (
-                                <td
-                                  key={side}
-                                  className={cell ? `diff-${cell.kind}` : "diff-empty"}
-                                >
-                                  {cell && (
-                                    <>
-                                      <span className="diff-line-number">{cell.line}</span>
-                                      {cell.text || " "}
-                                    </>
-                                  )}
-                                </td>
-                              ))}
-                            </tr>
-                          ),
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <pre>
-                    {diff.text
-                      ? diff.text.split("\n").map((line, index) => (
-                          <div
-                            key={index}
-                            className={
-                              line.startsWith("+") && !line.startsWith("+++")
-                                ? "diff-added"
-                                : line.startsWith("-") && !line.startsWith("---")
-                                  ? "diff-removed"
-                                  : line.startsWith("@@")
-                                    ? "diff-hunk"
-                                    : ""
-                            }
-                          >
-                            {line || " "}
-                          </div>
-                        ))
-                      : tx("没有差异。")}
-                  </pre>
-                )}
-              </>
-            ) : (
-              !error && <p className="inspector-message">{tx("正在读取 Diff…")}</p>
-            )}
-          </section>
-        )}
+        {expanded && diffTarget ? createPortal(diffView, diffTarget) : diffView}
       </div>
     </aside>
   );

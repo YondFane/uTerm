@@ -534,11 +534,9 @@ struct Host {
     sessions: Mutex<HashMap<String, Arc<Entry>>>,
     closed_sessions: Mutex<HashSet<String>>,
     stopping: Arc<AtomicBool>,
-    #[cfg(windows)]
     processes: Mutex<ProcessCache>,
 }
 
-#[cfg(windows)]
 #[derive(Default)]
 struct ProcessCache {
     refreshed: Option<Instant>,
@@ -546,7 +544,6 @@ struct ProcessCache {
 }
 
 impl Host {
-    #[cfg(windows)]
     fn foreground_agent(&self, shell: Option<u32>) -> Result<Option<String>> {
         let Some(shell) = shell else { return Ok(None) };
         let mut cache = lock(&self.processes);
@@ -745,7 +742,6 @@ impl Host {
                 after,
             } => {
                 let entry = self.entry(&id, &generation)?;
-                #[cfg(windows)]
                 if entry.spec.agent.is_none() {
                     match self.foreground_agent(entry.session.process_id()) {
                         Ok(agent) => {
@@ -842,7 +838,6 @@ pub fn serve(directory: &Path) -> Result<()> {
         sessions: Mutex::new(HashMap::new()),
         closed_sessions: Mutex::new(HashSet::new()),
         stopping: Arc::new(AtomicBool::new(false)),
-        #[cfg(windows)]
         processes: Mutex::new(ProcessCache::default()),
     });
     let active = Arc::new(AtomicUsize::new(0));

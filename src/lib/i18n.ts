@@ -88,6 +88,10 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     设置: "Settings",
     关闭设置: "Close settings",
     通用: "General",
+    文件标签数量上限: "File tab limit",
+    "标签数量必须为至少 1 的整数。": "The tab limit must be an integer of at least 1.",
+    "超过上限时关闭最早打开的文件标签，保留终端和会话。":
+      "Close the earliest opened file tab when the limit is exceeded, keeping terminals and sessions.",
     外观: "Appearance",
     终端: "Terminal",
     工作区: "Workspace",
@@ -96,6 +100,17 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     用量: "Usage",
     本地控制: "Local control",
     软件更新: "Software update",
+    确认安装更新: "Confirm update installation",
+    "将在 {p0} 秒后安装更新并重启。":
+      "The update will install and restart the app in {p0} seconds.",
+    "取消将停止本次安装，可稍后在软件更新中手动安装。":
+      "Cancel stops this installation. You can install it later in Software update.",
+    立即安装: "Install now",
+    版本说明: "Release notes",
+    自动更新: "Automatic updates",
+    "开启后自动下载；安装前确认，10 秒后自动安装并重启。":
+      "Automatically download when enabled; confirm before installation, or install and restart automatically after 10 seconds.",
+    "自动检查并安装更新。": "Automatically check for and install updates.",
     应用语言: "App language",
     开机自启动: "Launch at login",
     重试: "Retry",

@@ -1,7 +1,8 @@
+import { UpdateInstallDialog } from "./components/UpdateInstallDialog";
 import { getUiLanguage, localizeMessage } from "./lib/i18n";
 import { useUiLanguage } from "./lib/useUiLanguage";
 import { tx } from "./lib/i18n";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { sessionSyncErrorMessage } from "./lib/session-sync";
 import type { CSSProperties } from "react";
 import {
@@ -40,6 +41,7 @@ import { BranchSelector } from "./components/BranchSelector";
 import { ProjectMenuActions } from "./components/ProjectMenuActions";
 import { FilePanel } from "./components/FilePanel";
 import type { FileMode } from "./components/FilePanel";
+import { WorkspaceTabs } from "./components/WorkspaceTabs";
 import { DeferredFileEditor } from "./components/DeferredFileEditor";
 import { useFileDocument } from "./lib/useFileDocument";
 import { Sidebar } from "./components/Sidebar";
@@ -101,6 +103,13 @@ export function App() {
   const [inspectorCollapseHint, setInspectorCollapseHint] = useState(false);
   const [resizingSidebar, setResizingSidebar] = useState(false);
   const [gitExpanded, setGitExpanded] = useState(false);
+  const [gitDiffActive, setGitDiffActive] = useState(false);
+  const [gitDiffPath, setGitDiffPath] = useState<string | null>(null);
+  const changeGitExpanded = useCallback((expanded: boolean) => {
+    setGitExpanded(expanded);
+    setGitDiffActive(expanded);
+  }, []);
+  const [gitDiffTarget, setGitDiffTarget] = useState<HTMLDivElement | null>(null);
   const shellElement = useRef<HTMLDivElement>(null);
   const [shellWidth, setShellWidth] = useState(window.innerWidth);
   const [inspectorRatio, setInspectorRatio] = useState(0.35);
@@ -284,8 +293,15 @@ export function App() {
   const [filesOpen, setFilesOpen] = useState(true);
   const [fileMode, setFileMode] = useState<FileMode>("tree");
   const [fileRequest, setFileRequest] = useState(0);
-  const editor = useFileDocument();
-  const updates = useUpdates(editor.prepareUpdate, editor.restoreUpdateGuard);
+  const editor = useFileDocument(settings.fileTabLimit);
+  useEffect(() => {
+    if (editor.document) setGitDiffActive(false);
+  }, [editor.document?.id]);
+  const updates = useUpdates(
+    editor.prepareUpdate,
+    editor.restoreUpdateGuard,
+    settings.automaticUpdates,
+  );
   const [error, setError] = useState("");
   const [sessionSyncError, setSessionSyncError] = useState("");
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
@@ -442,6 +458,7 @@ export function App() {
 
   function revealTaskbarSession(id: string) {
     const reveal = () => {
+      setGitDiffActive(false);
       const state = currentWorkspace.current;
       const target = state
         ? sessionRosters(state).find((roster) =>
@@ -456,7 +473,7 @@ export function App() {
       setFocusRequest((value) => value + 1);
       acknowledgeCompletedSession(id);
     };
-    if (editor.document) void editor.close(reveal);
+    if (editor.document) void editor.hide(reveal);
     else reveal();
   }
 
@@ -682,7 +699,7 @@ export function App() {
         );
       });
     };
-    if (editor.document) void editor.close(start);
+    if (editor.document) void editor.hide(start);
     else start();
   }
   function addSession(
@@ -727,7 +744,7 @@ export function App() {
           : next;
       });
     };
-    if (editor.document) void editor.close(start);
+    if (editor.document) void editor.hide(start);
     else start();
   }
 
@@ -879,13 +896,16 @@ export function App() {
       return !!workspace.selectedSession && !editor.document;
     if (["zoom", "ungroup", "left", "right", "up", "down"].includes(id))
       return !!activeGroup && !editor.document;
-    if (id === "close") return !!nextSessionToClose(workspace) && !editor.document;
+    if (id === "close") return !!editor.document || !!nextSessionToClose(workspace);
     if (id === "link") return !!workspace.selectedSession && !editor.document;
     if (id === "github") return !!selected;
     if (id === "toggleInspector") return !!fileDirectory;
     if (id === "swapPanes")
       return (
-        inspectorVisible && !(gitOpen && gitExpanded) && !resizingInspector && !resizingSidebar
+        inspectorVisible &&
+        !(gitOpen && gitExpanded && gitDiffActive) &&
+        !resizingInspector &&
+        !resizingSidebar
       );
     if (id === "chat") return !!chatAgent;
     return true;
@@ -949,6 +969,7 @@ export function App() {
     } else if ((id === "next" || id === "previous") && workspace) {
       update((previous) => cycleSession(previous, id === "next" ? 1 : -1));
     } else if (id === "terminalSearch") window.dispatchEvent(new Event("uterm-search"));
+    else if (id === "close" && editor.document) void editor.close();
     else if (id === "close" && workspace) {
       const target = nextSessionToClose(workspace);
       if (target) {
@@ -1023,7 +1044,7 @@ export function App() {
     if (["sessions.focus", "open", "sessions.new"].includes(method)) {
       if (isDirty(editor.document))
         throw new Error(tx("编辑器有未保存的修改，请先保存或关闭文件。"));
-      if (editor.document) await editor.close();
+      if (editor.document) await editor.hide();
     }
     if (method === "sessions.new") {
       if (typeof params.directory !== "string" || params.directory.length > 4096)
@@ -1367,7 +1388,9 @@ export function App() {
       data-resizing-sidebar={resizingSidebar || undefined}
       data-sidebar-snap={sidebarSnap || undefined}
       data-inspector-snap={inspectorSnap || undefined}
-      data-expanded-inspector={(inspectorVisible && gitOpen && gitExpanded) || undefined}
+      data-expanded-inspector={
+        (inspectorVisible && gitOpen && gitExpanded && gitDiffActive) || undefined
+      }
       className={`app-shell${sidebarVisible ? "" : " sidebar-hidden"}${runtime?.platform === "macos" ? " platform-macos" : ""}${inspectorVisible ? " with-inspector" : ""}${inspectorVisible && (filesOpen || directoryOpen) ? " with-files" : ""}`}
     >
       <BreakReminder />
@@ -1385,7 +1408,7 @@ export function App() {
         runtime={runtime}
         update={update}
         focus={() => {
-          if (editor.document) void editor.close();
+          if (editor.document) void editor.hide();
           else setFocusRequest((value) => value + 1);
         }}
         menu={setMenu}
@@ -1445,7 +1468,7 @@ export function App() {
           addSession(undefined, { project, worktree, agent })
         }
       />
-      {inspectorVisible && !(gitOpen && gitExpanded) && (
+      {inspectorVisible && !(gitOpen && gitExpanded && gitDiffActive) && (
         <button
           className="pane-swap-button toolbar-icon-button"
           title={tx("交换左右窗格")}
@@ -1487,7 +1510,7 @@ export function App() {
                 key={fileDirectory}
                 directory={fileDirectory}
                 disabled={editor.transitioning || editor.pending}
-                beforeSwitch={(action) => void editor.close(action)}
+                beforeSwitch={(action) => void editor.closeDirectory(fileDirectory, action)}
                 onChanged={() => setRepositoryRevision((value) => value + 1)}
                 onError={setError}
               />
@@ -1589,10 +1612,45 @@ export function App() {
           <TransientError key={error || sessionSyncError} message={error || sessionSyncError} />
         )}
         {!workspace && error && <button onClick={() => void load()}>{tx("重试读取")}</button>}
-        <div className="terminal-container">
+        <WorkspaceTabs
+          sessions={roster?.sessions ?? []}
+          documents={editor.documents.filter((item) => item.directory === fileDirectory)}
+          activeFile={editor.document?.id ?? null}
+          activeSession={workspace?.selectedSession ?? null}
+          detectedAgents={detectedAgents}
+          disabled={editor.transitioning || editor.pending}
+          selectSession={revealTaskbarSession}
+          selectFile={(file) => void editor.open(file.directory, file.path)}
+          diff={
+            gitOpen && gitExpanded && gitDiffPath
+              ? { path: gitDiffPath, active: gitDiffActive }
+              : undefined
+          }
+          selectDiff={() => void editor.hide(() => setGitDiffActive(true))}
+          closeDiff={() => changeGitExpanded(false)}
+          closeFile={(id) => void editor.close(undefined, id)}
+        />
+        <div
+          className="terminal-container"
+          id="workspace-content"
+          role="tabpanel"
+          aria-labelledby={
+            gitOpen && gitExpanded && gitDiffActive
+              ? "workspace-git-diff"
+              : editor.document
+                ? `workspace-file-${editor.document.id}`
+                : workspace?.selectedSession
+                  ? `workspace-session-${workspace.selectedSession}`
+                  : undefined
+          }
+        >
           <div
-            inert={!!editor.document}
-            className={editor.document ? "terminal-behind-editor" : undefined}
+            inert={!!editor.document || (gitOpen && gitExpanded && gitDiffActive)}
+            className={
+              editor.document || (gitOpen && gitExpanded && gitDiffActive)
+                ? "terminal-behind-editor"
+                : undefined
+            }
           >
             {!workspace?.selectedSession && (
               <section className="welcome" aria-label={t("开始工作")}>
@@ -1754,7 +1812,17 @@ export function App() {
               />
             )}
           </div>
-          <DeferredFileEditor editor={editor} />
+          <div
+            inert={gitOpen && gitExpanded && gitDiffActive}
+            hidden={gitOpen && gitExpanded && gitDiffActive}
+          >
+            <DeferredFileEditor editor={editor} />
+          </div>
+          <div
+            ref={setGitDiffTarget}
+            className="git-main-diff"
+            hidden={!gitOpen || !gitExpanded || !gitDiffActive}
+          />
           {!editor.document && editor.error && (
             <div className="file-open-error" role="alert">
               {localizeMessage(editor.error)}
@@ -1787,7 +1855,7 @@ export function App() {
           request={fileRequest}
           setMode={setFileMode}
           open={(path, line) => void editor.open(fileDirectory, path, line)}
-          beforeMutation={(action) => void editor.close(action)}
+          beforeMutation={(action) => void editor.closeDirectory(fileDirectory, action)}
         />
       )}
       {githubOpen && selected && (
@@ -1845,7 +1913,7 @@ export function App() {
                 );
               });
             };
-            if (editor.document) void editor.close(start);
+            if (editor.document) void editor.hide(start);
             else start();
           }}
         />
@@ -1858,6 +1926,7 @@ export function App() {
           close={() => setPaletteOpen(false)}
         />
       )}
+      {updates.confirmation !== null && <UpdateInstallDialog updates={updates} />}
       {settingsOpen && runtime && (
         <SettingsPanel
           runtime={runtime}
@@ -1870,9 +1939,11 @@ export function App() {
       )}
       {gitOpen && workspace && (
         <GitPanel
-          resizeHandle={gitExpanded ? null : resizeHandle}
+          resizeHandle={resizeHandle}
+          diffTarget={gitDiffTarget}
           expanded={gitExpanded}
-          onExpandedChange={setGitExpanded}
+          onExpandedChange={changeGitExpanded}
+          onDiffPathChange={setGitDiffPath}
           headerActions={inspectorActions}
           key={`${fileDirectory}:${repositoryRevision}`}
           directory={fileDirectory}
@@ -1966,8 +2037,7 @@ export function App() {
                 const id = menu.id;
                 setMenu(null);
                 const remove = () => update((previous) => removeProject(previous, id));
-                if (editor.document) void editor.close(remove);
-                else remove();
+                void editor.closeDirectory(menuProject.directory, remove);
               }}
             >
               {tx("移除项目")}

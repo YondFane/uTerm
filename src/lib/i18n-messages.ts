@@ -297,6 +297,8 @@ export const messages: Record<string, string> = {
   快速打开: "Quick open",
   项目搜索: "Project search",
   刷新文件列表: "Refresh files",
+  工作区标签: "Workspace tabs",
+  "关闭文件 {p0}": "Close file {p0}",
   "永久删除“{p0}”？目录必须为空，此操作无法撤销。":
     "Permanently delete “{p0}”? Directories must be empty. This cannot be undone.",
   文件或目录名称: "File or directory name",
@@ -320,6 +322,7 @@ export const messages: Record<string, string> = {
   "粘贴失败，请检查目标目录（可能有未完成的副本）：{p0}":
     "Paste failed; check the destination (an incomplete copy may remain): {p0}",
   复制文件名: "Copy file name",
+  "Git 差异 · {p0}": "Git diff · {p0}",
   "Git 面板": "Git panel",
   "Git 视图": "Git views",
   变更: "Changes",
@@ -343,7 +346,7 @@ export const messages: Record<string, string> = {
   上一个文件: "Previous file",
   下一个文件: "Next file",
   全展示: "Expand diff",
-  "全展示：差异铺满主工作区和工具面板": "Expand diff across the main workspace and inspector",
+  "全展示：在中栏显示差异，保留工具面板": "Show diff in the main workspace and keep the inspector",
   工具面板全展示: "Expand in inspector",
   "工具面板全展示：保留主工作区，差异铺满工具面板":
     "Expand diff in the inspector and keep the main workspace",
