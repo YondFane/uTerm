@@ -226,6 +226,15 @@ export function Sidebar({
         key={session.id}
         className={`sidebar-row session-row${session.id === workspace?.selectedSession ? " selected" : ""}${completedUnread ? " completion-unread" : ""}`}
         style={{ "--depth": depth } as React.CSSProperties}
+        onMouseDown={(event) => {
+          if (event.button === 1) event.preventDefault();
+        }}
+        onAuxClick={(event) => {
+          if (event.button !== 1) return;
+          event.preventDefault();
+          event.stopPropagation();
+          closeSession(session.id);
+        }}
         onContextMenu={(event) => openMenu(event, "session", session.id, roster.id)}
       >
         <button

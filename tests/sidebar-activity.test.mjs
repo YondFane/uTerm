@@ -102,6 +102,7 @@ test("active project trees move between sections without duplicating pinned chil
     };
     const selected = [];
     const menus = [];
+    const closed = [];
     const noop = () => {};
     let disabled = false;
     let providerKey = 0;
@@ -114,7 +115,7 @@ test("active project trees move between sections without duplicating pinned chil
             React.createElement(Sidebar, {
               visible: true,
               toggleVisibility: noop,
-              closeSession: noop,
+              closeSession: (id) => closed.push(id),
               workspace,
               runtime: null,
               update: (change) => {
@@ -152,6 +153,32 @@ test("active project trees move between sections without duplicating pinned chil
         button.getAttribute("aria-label").endsWith(name),
       );
     await render();
+    for (const name of ["shell", "agent", "wt", "loose", "chat"]) {
+      const label = [...document.querySelectorAll(".session-row > .row-label")].find(
+        (button) => button.textContent.trim() === name || button.title.endsWith(` / ${name}`),
+      );
+      assert.ok(label, name);
+      const down = new dom.window.MouseEvent("mousedown", {
+        button: 1,
+        bubbles: true,
+        cancelable: true,
+      });
+      const middle = new dom.window.MouseEvent("auxclick", {
+        button: 1,
+        bubbles: true,
+        cancelable: true,
+      });
+      await act(async () => {
+        label.dispatchEvent(down);
+        label.dispatchEvent(middle);
+        label.dispatchEvent(new dom.window.MouseEvent("auxclick", { button: 2, bubbles: true }));
+      });
+      assert.equal(down.defaultPrevented, true);
+      assert.equal(middle.defaultPrevented, true);
+    }
+    assert.deepEqual(closed, ["shell", "agent", "wt", "loose", "chat"]);
+    assert.deepEqual(selected, []);
+    assert.equal(workspace.selectedSession, "shell");
     assert.deepEqual(names(), ["Pinned", "Zulu", "Alpha"]);
     assert.equal(rows()[1].title, "/z");
     assert.equal(document.querySelectorAll('[data-project-id="z"]').length, 1);

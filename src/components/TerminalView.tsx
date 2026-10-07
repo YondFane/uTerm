@@ -525,6 +525,15 @@ export function TerminalView({
         <span
           className="session-directory"
           onPointerDown={onPaneDragStart}
+          onMouseDown={(event) => {
+            if (event.button === 1) event.preventDefault();
+          }}
+          onAuxClick={(event) => {
+            if (event.button !== 1) return;
+            event.preventDefault();
+            event.stopPropagation();
+            void close();
+          }}
           title={`${session.name} — ${directory}`}
         >
           {session.name}

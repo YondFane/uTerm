@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-09-28
+updated: 2026-10-07
 ---
 
 # uTerm feature guide
@@ -15,6 +15,8 @@ updated: 2026-09-28
 uTerm is a free Windows and macOS desktop terminal. All terminal and Agent processes run locally. The interface supports Simplified Chinese and English.
 
 ## Workspaces and sessions
+
+Middle-click a sidebar session row or a terminal pane's title to Close Session, terminating that session's process through the existing close flow. This works for project, Worktree, pinned and standalone terminal/Agent sessions. Middle-click does not select the sidebar target or trigger its context menu; terminal content retains its existing mouse behavior. Close failures remain visible and retain the session for retry. Windows validation: all 147 frontend/build-helper tests, TypeScript/production build, localization and changed-file formatting checks pass. Component regression coverage includes project terminals, Agents, Worktrees and standalone terminals/chats, default-event suppression and right-button exclusion. Native Windows/macOS mouse acceptance remains pending. Repository-wide formatting is blocked by existing issues in 14 unrelated files; the production build retains its large-chunk warning.
 
 The sidebar’s Active section shows complete project trees for projects in the current workspace with unclosed terminal or Agent sessions, including idle and Worktree sessions. Each project appears only once, with its sessions and all Worktrees beneath it; no session count is shown. Pinned projects, Worktrees and sessions join the same active tree while retaining their pin flags and ordering. Closing the last session returns the project and its children to their original Projects/Pinned sections. Active is hidden when no projects have sessions; standalone terminals and chats stay in their own sections. Active projects and Worktrees with sessions initially expand, with separate in-memory folding that does not overwrite the original folder settings. Section-wide folding affects only that section; project dragging stays within the same section and pin status. Selecting an active project retains its selected session or opens its first stored session; selecting a session or a Worktree with sessions uses the editor save/close guard and is disabled during pending transitions. Project removal stays disabled until every session closes. Session and workspace changes update the tree immediately.
 
