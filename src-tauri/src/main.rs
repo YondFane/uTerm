@@ -248,6 +248,18 @@ fn main() {
                 // The native frame follows Windows' system theme unless it is set here.
                 // Keep it dark so a light system title bar does not sit above uTerm.
                 window.set_theme(Some(tauri::Theme::Dark))?;
+                // Disable WebView2 menus in every frame, including sandboxed HTML previews.
+                // 禁用所有框架中的 WebView2 菜单，包括沙盒 HTML 预览。
+                window.with_webview(|webview| unsafe {
+                    let result = webview
+                        .controller()
+                        .CoreWebView2()
+                        .and_then(|webview| webview.Settings())
+                        .and_then(|settings| settings.SetAreDefaultContextMenusEnabled(false));
+                    if let Err(error) = result {
+                        eprintln!("Disable browser context menus: {error}");
+                    }
+                })?;
             }
             if app.config().plugins.0.contains_key("updater") {
                 app.handle()

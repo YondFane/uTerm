@@ -5,6 +5,9 @@ import { App } from "./App";
 import "./styles.css";
 import { activeLanguage, setUiLanguage } from "./lib/i18n";
 import { defaults, readSettings, settingsKey } from "./lib/settings";
+import { suppressBrowserContextMenu } from "./lib/context-menu";
+
+suppressBrowserContextMenu(window);
 
 try {
   setUiLanguage(activeLanguage(readSettings(localStorage.getItem(settingsKey)).language));
