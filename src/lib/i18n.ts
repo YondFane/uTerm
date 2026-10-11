@@ -126,7 +126,8 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     显示或隐藏工具面板: "Toggle inspector",
     "HTML 静态预览不运行脚本或加载外部资源。若页面空白，请通过项目开发服务器预览。":
       "Static HTML preview does not run scripts or load external resources. If the page is blank, preview it using the project's development server.",
-    "登录系统后自动打开 uTerm。": "Open uTerm automatically after signing in.",
+    "登录系统后驻留系统托盘，不打开主界面。":
+      "Run in the system tray after signing in without opening the main window.",
     "无法设置自启动：{p0}": "Unable to configure launch at login: {p0}",
     系统默认: "System default",
     跟随系统: "System default",

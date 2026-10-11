@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-07
+updated: 2026-10-11
 ---
 
 # uTerm feature guide
@@ -112,7 +112,7 @@ Settings → General includes a Break reminder switch (off by default) and an in
 
 The global Reset interface and terminal settings action appears only in Settings → General. Other settings categories do not repeat it, so its scope is distinct from category-specific controls. Resetting keeps the existing backup and visible error behavior.
 
-Settings → General → Launch at login controls automatic startup after OS sign-in on Windows and macOS. Opening settings reads the system registration without enabling it. Changes apply immediately; failures remain visible and can be retried. Resetting interface settings does not change the OS registration. Development builds use a separate startup entry. Mocked component tests cover enabling, disabling and failure recovery. An isolated browser preview verifies the General settings layout; native login and macOS acceptance remain pending.
+Settings → General → Launch at login controls automatic startup after OS sign-in on Windows and macOS. Login startup keeps the main window hidden and runs in the system tray (macOS menu bar); click the tray icon to open it. Manual launches and session links still open the window, while repeated background launches leave an existing window hidden. For an existing startup entry, turn this setting off and on to apply background startup. Opening settings reads the system registration without enabling it. Changes apply immediately; failures remain visible and can be retried. Resetting interface settings does not change the OS registration. Development builds use a separate startup entry. Mocked component tests cover enabling, disabling and failure recovery. An isolated browser preview verifies the General settings layout. A Windows build with an isolated application identifier passes native window visibility checks: background startup and repeated background requests keep the main window hidden, and a subsequent manual launch shows it. All 41 backend tests, 13 settings/bilingual UI tests, frontend and desktop builds, localization and documentation checks pass. Repository formatting remains blocked by existing issues in 39 files. Actual OS sign-in, visual tray-click acceptance and macOS acceptance remain pending.
 
 Agent definitions specify a program and argument list. Hooks report activity; usage can combine local logs with provider requests when enabled. Provider credentials and permissions determine availability. Terminal input and process I/O are handled independently of UI rendering.
 

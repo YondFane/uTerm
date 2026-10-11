@@ -249,7 +249,7 @@ export function SettingsPanel({
                   disabled={autostartBusy || autostart === null}
                   onChange={(event) => void configureAutostart(event.target.checked)}
                 />
-                <span className="muted">{t("登录系统后自动打开 uTerm。")}</span>
+                <span className="muted">{t("登录系统后驻留系统托盘，不打开主界面。")}</span>
               </label>
               {autostartError && (
                 <p role="alert" className="settings-error">
