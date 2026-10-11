@@ -477,11 +477,18 @@ impl Output {
         let data = if reset {
             self.snapshot()
         } else {
-            self.chunks
+            let chunks = self
+                .chunks
                 .iter()
-                .filter(|(sequence, _)| after.is_some_and(|cursor| *sequence > cursor))
-                .flat_map(|(_, data)| data.iter().copied())
-                .collect()
+                .filter(|(sequence, _)| after.is_some_and(|cursor| *sequence > cursor));
+            // Reserve once and copy whole chunks instead of growing the buffer byte by byte.
+            // 一次预分配并整块复制，避免逐字节扩充缓冲区。
+            let length = chunks.clone().map(|(_, data)| data.len()).sum();
+            let mut data = Vec::with_capacity(length);
+            for (_, chunk) in chunks {
+                data.extend_from_slice(chunk);
+            }
+            data
         };
         Frame {
             agent_state: self.agent_state.clone(),
@@ -911,6 +918,55 @@ pub fn report_from_environment(state: String) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn delta_frames_preserve_bytes_order_and_exit_metadata() {
+        let mut output = Output::new(24, 80, None);
+        output.record(Event::Output {
+            sequence: 1,
+            data: b"already consumed".to_vec(),
+        });
+        let bytes: Vec<u8> = (0..=255).collect();
+        for chunk in bytes.chunks(31) {
+            output.record(Event::Output {
+                sequence: 0,
+                data: chunk.to_vec(),
+            });
+        }
+        output.record(Event::Output {
+            sequence: 0,
+            data: vec![],
+        });
+        output.record(Event::Exit { code: Some(7) });
+
+        let frame = output.frame(Some(1));
+        assert_eq!(frame.data, bytes);
+        assert!(!frame.reset);
+        assert!(frame.exited);
+        assert_eq!(frame.code, Some(7));
+        assert_eq!((frame.rows, frame.cols), (24, 80));
+        assert_eq!(frame.sequence, output.sequence);
+        assert!(output.frame(Some(frame.sequence)).data.is_empty());
+    }
+
+    #[test]
+    fn evicted_and_future_cursors_still_request_a_replay_reset() {
+        let mut output = Output::new(24, 80, None);
+        output.record(Event::Output {
+            sequence: 1,
+            data: b"old".to_vec(),
+        });
+        output.record(Event::Output {
+            sequence: 2,
+            data: vec![b'x'; HISTORY_BYTES],
+        });
+        assert!(output.frame(Some(0)).reset);
+        assert!(output.frame(Some(u64::MAX)).reset);
+        let delta = output.frame(Some(1));
+        assert!(!delta.reset);
+        assert_eq!(delta.data.len(), HISTORY_BYTES);
+        assert!(delta.data.iter().all(|byte| *byte == b'x'));
+    }
 
     #[test]
     fn resetting_output_cache_preserves_future_terminal_output() {

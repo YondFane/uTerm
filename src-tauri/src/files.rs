@@ -2,6 +2,7 @@ use base64::Engine;
 use ignore::WalkBuilder;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::borrow::Cow;
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{
@@ -412,11 +413,12 @@ fn list(directory: &str, relative: &str, hidden: bool) -> Result<Listing, String
             break;
         }
     }
-    result.entries.sort_by(|a, b| {
-        b.directory
-            .cmp(&a.directory)
-            .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
-            .then_with(|| a.name.cmp(&b.name))
+    result.entries.sort_by_cached_key(|entry| {
+        (
+            !entry.directory,
+            entry.name.to_lowercase(),
+            entry.name.clone(),
+        )
     });
     Ok(result)
 }
@@ -626,9 +628,9 @@ fn search(
         let path = path.replace(std::path::MAIN_SEPARATOR, "/");
         if !content {
             let candidate = if sensitive {
-                path.clone()
+                Cow::Borrowed(path.as_str())
             } else {
-                path.to_lowercase()
+                Cow::Owned(path.to_lowercase())
             };
             if needle
                 .split_whitespace()
@@ -661,12 +663,16 @@ fn search(
             };
             // Match the editor's line numbering for LF, CRLF, and CR files.
             // 对 LF、CRLF 和 CR 文件使用与编辑器一致的行号。
-            let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
+            let normalized = if text.contains('\r') {
+                Cow::Owned(text.replace("\r\n", "\n").replace('\r', "\n"))
+            } else {
+                Cow::Borrowed(text)
+            };
             for (line, value) in normalized.lines().enumerate() {
                 let candidate = if sensitive {
-                    value.to_owned()
+                    Cow::Borrowed(value)
                 } else {
-                    value.to_lowercase()
+                    Cow::Owned(value.to_lowercase())
                 };
                 if candidate.contains(&needle) {
                     result.matches.push(Match {
@@ -737,6 +743,71 @@ pub async fn files_search(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn listing_keeps_directories_first_and_case_insensitive_unicode_order() {
+        let fixture = tempfile::tempdir().unwrap();
+        for name in ["Zoo", "aFolder"] {
+            std::fs::create_dir(fixture.path().join(name)).unwrap();
+        }
+        for name in ["中文.txt", "zeta.txt", "Äther.txt", "BETA.txt", "alpha.txt"] {
+            std::fs::write(fixture.path().join(name), "").unwrap();
+        }
+        let listing = list(fixture.path().to_str().unwrap(), "", false).unwrap();
+        assert_eq!(
+            listing
+                .entries
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "aFolder",
+                "Zoo",
+                "alpha.txt",
+                "BETA.txt",
+                "zeta.txt",
+                "Äther.txt",
+                "中文.txt"
+            ]
+        );
+        assert!(!listing.partial);
+        assert_eq!(listing.skipped, 0);
+    }
+
+    #[test]
+    fn search_preserves_unicode_case_matching_and_quick_open_terms() {
+        let fixture = tempfile::tempdir().unwrap();
+        let root = fixture.path().to_str().unwrap();
+        std::fs::write(
+            fixture.path().join("Äpfel 中文.txt"),
+            "first\nÄPFEL 中文\r\nlast\rapfel",
+        )
+        .unwrap();
+        let found = search(root, "äpfel", true, false, false).unwrap();
+        assert_eq!(found.matches.len(), 1);
+        assert_eq!(found.matches[0].line, 2);
+        assert_eq!(found.matches[0].text, "ÄPFEL 中文");
+        assert!(search(root, "äpfel", true, true, false)
+            .unwrap()
+            .matches
+            .is_empty());
+        assert_eq!(
+            search(root, "ÄPFEL", true, true, false).unwrap().matches[0].line,
+            2
+        );
+        assert_eq!(
+            search(root, "apfel", true, true, false).unwrap().matches[0].line,
+            4
+        );
+        let quick = search(root, "中文 äpfel", false, false, false).unwrap();
+        assert_eq!(quick.matches.len(), 1);
+        assert_eq!(quick.matches[0].path, "Äpfel 中文.txt");
+        assert_eq!(quick.matches[0].line, 0);
+        assert!(search(root, "äpfel", false, true, false)
+            .unwrap()
+            .matches
+            .is_empty());
+    }
+
     #[test]
     fn copies_files_and_directories_without_overwrite_or_escape() {
         let fixture = tempfile::tempdir().unwrap();

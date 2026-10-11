@@ -64,6 +64,9 @@ export function GitPanel({
   const [revision, setRevision] = useState(0);
   const request = useRef(0);
   const selectedChange = useRef(false);
+  // Refresh working diffs after the snapshot succeeds, avoiding duplicate reads.
+  // 工作目录差异在快照成功后再刷新，避免重复读取。
+  const diffRefresh = tab === "changes" ? diffRevision : revision;
   const refresh = () => setRevision((value) => value + 1);
   useEffect(() => {
     onDiffPathChange?.(selection?.path ?? null);
@@ -102,7 +105,8 @@ export function GitPanel({
     const timer = tab === "changes" ? window.setInterval(() => void load(), 4000) : undefined;
     const visible = () => {
       if (!document.hidden) {
-        void load();
+        // The revision effect performs the read; starting one here duplicates it.
+        // revision 对应的副作用会执行读取，此处再次启动会产生重复请求。
         refresh();
       }
     };
@@ -197,7 +201,7 @@ export function GitPanel({
     return () => {
       request.current++;
     };
-  }, [directory, selection, base, commit, tab, snapshot, revision, diffRevision]);
+  }, [directory, selection, base, commit, tab, snapshot, diffRefresh]);
   const navigableFiles =
     tab === "changes"
       ? [
