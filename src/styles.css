@@ -908,7 +908,7 @@ select:focus-visible {
 }
 .git-diff pre {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--git-diff-font-size, 14px);
   line-height: 1.65;
   overflow: auto;
   tab-size: 4;
@@ -1514,19 +1514,19 @@ select:focus-visible {
   min-height: 0;
   overflow: auto;
   padding: 20px 28px;
-  font-size: 14px;
+  font-size: var(--file-font-size, 14px);
   line-height: 1.7;
   color: var(--ui-text);
   overflow-wrap: anywhere;
 }
 .markdown-preview h1 {
-  font-size: 25px;
+  font-size: calc(25em / 14);
 }
 .markdown-preview h2 {
-  font-size: 21px;
+  font-size: 1.5em;
 }
 .markdown-preview h3 {
-  font-size: 17px;
+  font-size: calc(17em / 14);
 }
 .markdown-preview h1,
 .markdown-preview h2 {
@@ -1545,7 +1545,7 @@ select:focus-visible {
 }
 .markdown-preview code {
   font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 12px;
+  font-size: calc(12em / 14);
 }
 .markdown-preview :not(pre) > code {
   background: var(--ui-hover);
@@ -2257,7 +2257,7 @@ select:focus-visible {
   min-height: 0;
   overflow: auto;
   font-family: monospace;
-  font-size: 11px;
+  font-size: var(--git-diff-font-size, 14px);
   line-height: 1.65;
 }
 .git-side-diff table {

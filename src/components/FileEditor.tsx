@@ -43,7 +43,7 @@ function CodeEditor({
 }) {
   const uiLanguage = useUiLanguage();
 
-  const { light } = useSettings();
+  const { light, settings } = useSettings();
   const appearance = useRef(new Compartment());
   const locale = useRef(new Compartment());
   const host = useRef<HTMLDivElement>(null);
@@ -109,7 +109,11 @@ function CodeEditor({
             }
           }),
           EditorView.theme({
-            "&": { height: "100%", backgroundColor: "transparent", fontSize: "13px" },
+            "&": {
+              height: "100%",
+              backgroundColor: "transparent",
+              fontSize: "var(--file-font-size, 14px)",
+            },
             ".cm-scroller": {
               overflow: "auto",
               fontFamily: '"Cascadia Code", "SFMono-Regular", Consolas, monospace',
@@ -155,6 +159,9 @@ function CodeEditor({
   useEffect(() => {
     controls.current?.dispatch({ effects: appearance.current.reconfigure(light ? [] : oneDark) });
   }, [light]);
+  useEffect(() => {
+    controls.current?.requestMeasure();
+  }, [settings.fileFontSize, document.id]);
   useEffect(() => {
     controls.current?.dispatch({
       effects: editable.current.reconfigure([

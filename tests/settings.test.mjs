@@ -184,3 +184,21 @@ test("automatic updates are opt-in and compatible with previous settings", () =>
     true,
   );
 });
+
+test("file and diff font sizes upgrade old settings and validate independently", () => {
+  const old = { ...defaults };
+  delete old.fileFontSize;
+  delete old.gitDiffFontSize;
+  assert.deepEqual(readSettings(JSON.stringify(old)), defaults);
+  for (const key of ["fileFontSize", "gitDiffFontSize"]) {
+    for (const value of [10, 14, 20, 32]) {
+      const settings = readSettings(JSON.stringify({ ...defaults, [key]: value }));
+      assert.equal(settings[key], value);
+      assert.equal(settings[key === "fileFontSize" ? "gitDiffFontSize" : "fileFontSize"], 14);
+      assert.equal(settings.fontSize, defaults.fontSize);
+      assert.equal(settings.interfaceSize, defaults.interfaceSize);
+    }
+    for (const value of [9, 33, 14.5, "20", null])
+      assert.throws(() => readSettings(JSON.stringify({ ...defaults, [key]: value })));
+  }
+});

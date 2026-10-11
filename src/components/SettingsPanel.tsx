@@ -528,6 +528,33 @@ export function SettingsPanel({
                 />
               </label>
               <p className="muted">{tx("更改会立即应用到已有终端。")}</p>
+              {(
+                [
+                  ["fileFontSize", tx("文件查看字号")],
+                  ["gitDiffFontSize", tx("Git 对比字号")],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key}>
+                  {label}
+                  <input
+                    type="number"
+                    min="10"
+                    max="32"
+                    step="1"
+                    key={settings[key]}
+                    defaultValue={settings[key]}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") event.currentTarget.blur();
+                    }}
+                    onBlur={(event) => change({ [key]: Number(event.target.value) })}
+                  />
+                </label>
+              ))}
+              <p className="muted">
+                {tx(
+                  "文件字号用于文本编辑和 Markdown 预览；对比字号用于 Git 差异。更改立即生效并自动保存。",
+                )}
+              </p>
             </>
           )}
           {tab === "终端" && (

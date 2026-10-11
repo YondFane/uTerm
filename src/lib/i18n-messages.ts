@@ -47,6 +47,10 @@ export const messages: Record<string, string> = {
   恢复界面与终端默认设置: "Reset interface and terminal settings",
   "已恢复默认设置。原设置已备份。": "Default settings restored. Previous settings were backed up.",
   界面字体: "Interface font",
+  文件查看字号: "File font size",
+  "Git 对比字号": "Git diff font size",
+  "文件字号用于文本编辑和 Markdown 预览；对比字号用于 Git 差异。更改立即生效并自动保存。":
+    "File size applies to text editing and Markdown previews; diff size applies to Git diffs. Changes apply immediately and save automatically.",
   界面字号: "Interface font size",
   侧栏行间距: "Sidebar row spacing",
   终端内边距: "Terminal padding",

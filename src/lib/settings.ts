@@ -57,6 +57,8 @@ export interface Settings {
   fontFamily: string;
   fontThicken: boolean;
   fontSize: number;
+  fileFontSize: number;
+  gitDiffFontSize: number;
   lineHeight: number;
   cursorStyle: "block" | "bar" | "underline";
   cursorBlink: boolean;
@@ -92,6 +94,8 @@ export const defaults: Settings = {
   fontFamily: '"Cascadia Code", "SFMono-Regular", Consolas, monospace',
   fontThicken: false,
   fontSize: 14,
+  fileFontSize: 14,
+  gitDiffFontSize: 14,
   lineHeight: 1,
   cursorStyle: "block",
   cursorBlink: true,
@@ -146,6 +150,9 @@ export function readSettings(raw: string | null): Settings {
   const parsed = JSON.parse(raw);
   const v = parsed?.version === 1 && {
     ...parsed,
+    fileFontSize: parsed.fileFontSize === undefined ? defaults.fileFontSize : parsed.fileFontSize,
+    gitDiffFontSize:
+      parsed.gitDiffFontSize === undefined ? defaults.gitDiffFontSize : parsed.gitDiffFontSize,
     automaticUpdates: parsed.automaticUpdates === undefined ? false : parsed.automaticUpdates,
     fileTabLimit: parsed.fileTabLimit === undefined ? defaults.fileTabLimit : parsed.fileTabLimit,
     enabledAgents: parsed.enabledAgents === undefined ? [] : parsed.enabledAgents,
@@ -183,6 +190,10 @@ export function readSettings(raw: string | null): Settings {
     v.fontFamily.length > 300 ||
     typeof v.fontThicken !== "boolean" ||
     !finite(v.fontSize, 10, 32) ||
+    !finite(v.fileFontSize, 10, 32) ||
+    !Number.isInteger(v.fileFontSize) ||
+    !finite(v.gitDiffFontSize, 10, 32) ||
+    !Number.isInteger(v.gitDiffFontSize) ||
     !finite(v.lineHeight, 1, 2) ||
     !["block", "bar", "underline"].includes(v.cursorStyle) ||
     typeof v.cursorBlink !== "boolean" ||
