@@ -1,6 +1,6 @@
 [package]
 name = "uterm"
-version = "0.1.12"
+version = "0.1.13"
 edition = "2021"
 publish = false
 description = "uTerm cross-platform desktop client"
