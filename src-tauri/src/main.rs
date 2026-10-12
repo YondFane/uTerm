@@ -386,6 +386,7 @@ fn main() {
             git::git_branch_action,
             git::git_switch_branch,
             git::git_snapshot,
+            git::git_rollback_file,
             git::git_diff,
             git::git_history,
             git::git_files,

@@ -995,7 +995,7 @@ export function App() {
       if (
         event.isComposing ||
         event.repeat ||
-        document.querySelector("dialog[open], .branch-menu") ||
+        document.querySelector("dialog[open], .branch-menu, .git-file-menu") ||
         menu ||
         !runtime
       )
@@ -1945,8 +1945,12 @@ export function App() {
           onExpandedChange={changeGitExpanded}
           onDiffPathChange={setGitDiffPath}
           headerActions={inspectorActions}
-          key={`${fileDirectory}:${repositoryRevision}`}
+          key={fileDirectory}
           directory={fileDirectory}
+          refreshRevision={repositoryRevision}
+          disabled={editor.transitioning || editor.pending}
+          beforeMutation={(action) => void editor.closeDirectory(fileDirectory, action)}
+          onChanged={() => setRepositoryRevision((value) => value + 1)}
         />
       )}
       {menu && menuItem && (

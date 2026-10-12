@@ -8,6 +8,7 @@ export interface GitChange {
 export interface GitSnapshot {
   root: string;
   branch: string;
+  head?: string | null;
   references: string[];
   changes: GitChange[];
   truncated: boolean;
@@ -18,6 +19,7 @@ export function sameGitSnapshot(previous: GitSnapshot | null, next: GitSnapshot)
     !previous ||
     previous.root !== next.root ||
     previous.branch !== next.branch ||
+    previous.head !== next.head ||
     previous.truncated !== next.truncated ||
     previous.references.length !== next.references.length ||
     previous.changes.length !== next.changes.length

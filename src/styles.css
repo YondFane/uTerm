@@ -270,6 +270,19 @@ select:focus-visible {
   border: none;
   background: transparent;
 }
+
+.git-rollback-dialog {
+  max-width: min(460px, calc(100vw - 32px));
+}
+.git-rollback-path {
+  overflow-wrap: anywhere;
+}
+.git-rollback-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
 .context-menu .workspace-submenu-trigger {
   display: flex;
   align-items: center;

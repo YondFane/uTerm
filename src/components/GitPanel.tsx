@@ -27,6 +27,10 @@ export function GitPanel({
   diffTarget,
   onDiffPathChange,
   onExpandedChange,
+  disabled = false,
+  beforeMutation = (action) => void action(),
+  onChanged,
+  refreshRevision = 0,
 }: {
   resizeHandle: ReactNode;
   headerActions: ReactNode;
@@ -35,6 +39,10 @@ export function GitPanel({
   diffTarget?: HTMLElement | null;
   onDiffPathChange?: (path: string | null) => void;
   onExpandedChange: (expanded: boolean) => void;
+  disabled?: boolean;
+  beforeMutation?: (action: () => Promise<void>) => void;
+  onChanged?: () => void;
+  refreshRevision?: number;
 }) {
   useUiLanguage();
 
@@ -59,6 +67,23 @@ export function GitPanel({
   );
   const [diffFocused, setDiffFocused] = useState(false);
   const [error, setError] = useState("");
+  const [mutationError, setMutationError] = useState("");
+  const [mutating, setMutating] = useState(false);
+  const [menu, setMenu] = useState<{
+    change: Change;
+    head: string | null;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [confirmation, setConfirmation] = useState<{ change: Change; head: string | null } | null>(
+    null,
+  );
+  const popup = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const cancel = useRef<HTMLButtonElement>(null);
+  const alive = useRef(false);
+  const changing = useRef(false);
   const [loading, setLoading] = useState(false);
   const [diffRevision, setDiffRevision] = useState(0);
   const [revision, setRevision] = useState(0);
@@ -68,6 +93,94 @@ export function GitPanel({
   // 工作目录差异在快照成功后再刷新，避免重复读取。
   const diffRefresh = tab === "changes" ? diffRevision : revision;
   const refresh = () => setRevision((value) => value + 1);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, [directory]);
+  function closeMenu(focus = false) {
+    setMenu(null);
+    if (focus) trigger.current?.focus();
+  }
+  useEffect(() => {
+    if (!menu) return;
+    popup.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const outside = (event: PointerEvent) => {
+      if (!popup.current?.contains(event.target as Node)) closeMenu();
+    };
+    const dismiss = () => closeMenu();
+    document.addEventListener("pointerdown", outside);
+    window.addEventListener("resize", dismiss);
+    window.addEventListener("blur", dismiss);
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      window.removeEventListener("resize", dismiss);
+      window.removeEventListener("blur", dismiss);
+    };
+  }, [menu]);
+  useEffect(() => {
+    closeMenu();
+    setConfirmation(null);
+  }, [tab, directory]);
+  useEffect(() => {
+    if (!confirmation) return;
+    const current = dialog.current;
+    current?.showModal();
+    cancel.current?.focus();
+    return () => {
+      current?.close();
+    };
+  }, [confirmation]);
+  function openMenu(change: Change, button: HTMLButtonElement, x: number, y: number) {
+    if (disabled || changing.current || confirmation || tab !== "changes") return;
+    trigger.current = button;
+    setMenu({
+      change,
+      head: snapshot?.head ?? null,
+      x: Math.max(4, Math.min(x, window.innerWidth - 224)),
+      y: Math.max(4, Math.min(y, window.innerHeight - 64)),
+    });
+  }
+  function closeConfirmation() {
+    dialog.current?.close();
+    setConfirmation(null);
+    trigger.current?.focus();
+  }
+  function rollback() {
+    if (!confirmation || disabled || changing.current) return;
+    const target = confirmation;
+    closeConfirmation();
+    beforeMutation(async () => {
+      // A delayed save must not roll back a repository the user has left.
+      // 延迟保存后，不能回滚用户已经离开的仓库。
+      if (!alive.current || changing.current) return;
+      changing.current = true;
+      setMutating(true);
+      setMutationError("");
+      try {
+        await invoke("git_rollback_file", {
+          directory,
+          expected: target.change,
+          head: target.head,
+        });
+        if (alive.current) {
+          setSelection(null);
+          setDiff(null);
+        }
+      } catch (reason) {
+        if (alive.current) setMutationError(String(reason));
+      } finally {
+        changing.current = false;
+        if (alive.current) {
+          setMutating(false);
+          refresh();
+          onChanged?.();
+          trigger.current?.focus();
+        }
+      }
+    });
+  }
   useEffect(() => {
     onDiffPathChange?.(selection?.path ?? null);
     return () => onDiffPathChange?.(null);
@@ -86,7 +199,7 @@ export function GitPanel({
     let disposed = false,
       busy = false;
     async function load() {
-      if (busy || document.hidden) return;
+      if (busy || changing.current || document.hidden) return;
       busy = true;
       try {
         const next = await invoke<Snapshot>("git_snapshot", { directory });
@@ -118,7 +231,7 @@ export function GitPanel({
       window.removeEventListener("focus", visible);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [directory, revision, tab]);
+  }, [directory, revision, tab, refreshRevision]);
   useEffect(() => {
     setSelection(null);
     setDiff(null);
@@ -133,7 +246,7 @@ export function GitPanel({
       true,
     );
     return () => pager.invalidate();
-  }, [directory, tab, revision]);
+  }, [directory, tab, revision, refreshRevision]);
   useEffect(() => {
     if (tab === "changes" || (tab === "compare" ? !base : !commit)) {
       setFiles([]);
@@ -163,7 +276,7 @@ export function GitPanel({
     return () => {
       disposed = true;
     };
-  }, [directory, tab, base, commit, snapshot, revision]);
+  }, [directory, tab, base, commit, snapshot, revision, refreshRevision]);
   useEffect(() => {
     const current = ++request.current;
     if (!selection) setDiff(null);
@@ -234,6 +347,20 @@ export function GitPanel({
             key={change.path}
             className={`git-file${selection?.path === change.path && selection.mode === mode ? " selected" : ""}`}
             title={change.original ? `${change.original} → ${change.path}` : change.path}
+            aria-haspopup={tab === "changes" ? "menu" : undefined}
+            disabled={mutating}
+            onContextMenu={(event) => {
+              if (tab !== "changes") return;
+              event.preventDefault();
+              openMenu(change, event.currentTarget, event.clientX, event.clientY);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+                event.preventDefault();
+                const rect = event.currentTarget.getBoundingClientRect();
+                openMenu(change, event.currentTarget, rect.left, rect.bottom);
+              }
+            }}
             onClick={() => {
               setDiff(null);
               setSelection({ path: change.path, mode });
@@ -442,9 +569,14 @@ export function GitPanel({
           </button>
         )}
       </div>
-      {(error || (tab === "history" && history.error)) && (
+      {(mutationError || error || (tab === "history" && history.error)) && (
         <p role="alert" className="inspector-message">
-          {localizeMessage(error || history.error)}
+          {localizeMessage(mutationError || error || history.error)}
+        </p>
+      )}
+      {mutating && (
+        <p role="status" className="inspector-message">
+          {tx("正在回滚文件…")}
         </p>
       )}
       <div className="git-content">
@@ -589,6 +721,75 @@ export function GitPanel({
         </div>
         {expanded && diffTarget ? createPortal(diffView, diffTarget) : diffView}
       </div>
+      {menu &&
+        createPortal(
+          <div
+            ref={popup}
+            className="context-menu git-file-menu"
+            role="menu"
+            aria-label={tx("Git 文件操作")}
+            style={{ left: menu.x, top: menu.y }}
+            onContextMenu={(event) => event.preventDefault()}
+            onKeyDown={(event) => {
+              event.stopPropagation();
+              if (event.key === "Escape" || event.key === "Tab") {
+                if (event.key === "Escape") event.preventDefault();
+                closeMenu(event.key === "Escape");
+              } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                event.preventDefault();
+                popup.current?.querySelector<HTMLButtonElement>("button")?.focus();
+              }
+            }}
+          >
+            <button
+              role="menuitem"
+              className="danger"
+              disabled={disabled || mutating}
+              onClick={() => {
+                setConfirmation({ change: menu.change, head: menu.head });
+                closeMenu();
+              }}
+            >
+              {tx("回滚文件")}
+            </button>
+          </div>,
+          document.body,
+        )}
+      {confirmation &&
+        createPortal(
+          <dialog
+            ref={dialog}
+            className="name-dialog git-rollback-dialog"
+            aria-labelledby="git-rollback-title"
+            onCancel={(event) => {
+              event.preventDefault();
+              closeConfirmation();
+            }}
+          >
+            <h2 id="git-rollback-title">{tx("回滚文件")}</h2>
+            <p className="git-rollback-path">
+              {confirmation.change.original
+                ? `${confirmation.change.original} → ${confirmation.change.path}`
+                : confirmation.change.path}
+            </p>
+            <p>
+              {confirmation.change.index === "?" ||
+              confirmation.change.index === "A" ||
+              confirmation.change.index === "C"
+                ? tx("将删除此新增文件及其暂存记录，此操作无法撤销。")
+                : tx("将此文件的暂存和工作目录改动恢复到 HEAD，此操作无法撤销。")}
+            </p>
+            <div className="git-rollback-actions">
+              <button ref={cancel} onClick={closeConfirmation}>
+                {tx("取消")}
+              </button>
+              <button className="danger" disabled={disabled || mutating} onClick={rollback}>
+                {tx("确认回滚")}
+              </button>
+            </div>
+          </dialog>,
+          document.body,
+        )}
     </aside>
   );
 }

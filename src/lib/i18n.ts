@@ -37,6 +37,21 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
   en: {
     ...messages,
     ...backendMessages,
+    回滚文件: "Roll back file",
+    确认回滚: "Confirm rollback",
+    "Git 文件操作": "Git file actions",
+    "正在回滚文件…": "Rolling back file…",
+    "将删除此新增文件及其暂存记录，此操作无法撤销。":
+      "This deletes the added file and its staged entry. This cannot be undone.",
+    "将此文件的暂存和工作目录改动恢复到 HEAD，此操作无法撤销。":
+      "This restores the file’s staged and working changes to HEAD. This cannot be undone.",
+    "回滚文件必须位于所选目录内。": "The file to roll back must be inside the selected directory.",
+    "链接和子模块不能在此回滚，请使用终端。":
+      "Links and submodules cannot be rolled back here. Use a terminal.",
+    "当前提交已改变，请刷新后重试。": "The current commit has changed. Refresh and retry.",
+    "文件状态已改变，请刷新后重试。": "The file status has changed. Refresh and retry.",
+    "原路径存在其他变更，请先在终端中处理。":
+      "The original path has other changes. Resolve them in a terminal first.",
     安装程序: "Install program",
     确认安装: "Confirm installation",
     "正在安装…": "Installing…",
