@@ -3,7 +3,7 @@ title: Desktop documentation
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-12
+updated: 2026-10-14
 ---
 # Desktop documentation / 开发文档
 

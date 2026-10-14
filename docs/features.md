@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-12
+updated: 2026-10-14
 ---
 
 # uTerm feature guide
@@ -216,7 +216,7 @@ Current macOS validation: frozen dependency installation, all 159 frontend/build
 
 Automated checks cover state validation, session identity and layout, file recovery, input handling, build helpers, Rust backend and local service behavior. Run the commands in the README on the target OS.
 
-Current Windows verification: frozen dependency installation, documentation/localization checks, 162 frontend/build-helper tests (two platform-specific tests skipped), 18 local-service tests, 43 backend tests, six release-helper tests and the TypeScript/frontend production build pass. Backend tests and desktop compilation with the isolated identifier `sh.uterm.desktop.qa.release` pass with single-job compilation, without restarting the installed app. Frontend, desktop configuration, Cargo manifest and lockfile versions agree; the versioned bilingual release body loads through `releaseNotes(tag)` and agrees with the release configuration without an override. Repository-wide formatting still reports existing issues in 31 files. Native mouse, localization, signed-update and installer acceptance remain pending. Shortcut tests cover selection-dependent copying, Control interrupt passthrough, paste keys, macOS modifiers and composition/AltGr exclusion. Clipboard shortcuts in live Claude/Codex sessions still require interactive verification. The frontend build reports a bundle-size warning for chunks above 500 kB.
+Current Windows verification: frozen dependency installation, documentation/localization checks, 163 frontend/build-helper tests (two platform-specific tests skipped), 18 local-service tests, 48 backend tests, six release-helper tests and the TypeScript/frontend production build pass. The full frontend suite passes with test-file concurrency limited to four; the initial parallel run encountered Vite SSR loading timeouts. Backend tests and desktop compilation with the isolated identifier `sh.uterm.desktop.qa.release014` pass with single-job compilation, without restarting the installed app. Frontend, desktop configuration, Cargo manifest and lockfile versions agree; the versioned bilingual release body loads through `releaseNotes(tag)` and agrees with the Windows/macOS updater configuration without an override. Changed version files and both Cargo formatting checks pass; repository-wide formatting still reports existing issues in 34 other files. Native mouse, localization, signed-update and installer acceptance remain as recorded for each feature; build results do not establish runtime acceptance. Shortcut tests cover selection-dependent copying, Control interrupt passthrough, paste keys, macOS modifiers and composition/AltGr exclusion. Clipboard shortcuts in live Claude/Codex sessions still require interactive verification. The frontend build reports a bundle-size warning for chunks above 500 kB.
 
 The Windows app was built and visually inspected in a separate design-QA window. Browser checks cover the welcome page at 680×500 without overflow and light-palette rendering. Full keyboard, split-pane, file/editor/dialog and macOS visual acceptance remains unverified.
 
