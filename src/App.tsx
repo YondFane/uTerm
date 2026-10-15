@@ -2521,7 +2521,7 @@ export function App() {
           )}
         </div>
       </main>
-      {directoryOpen && fileDirectory && !activeSsh && (
+      {inspectorVisible && directoryOpen && fileDirectory && !activeSsh && (
         <DirectoryPanel
           key={fileDirectory}
           directory={fileDirectory}
@@ -2530,7 +2530,7 @@ export function App() {
           headerActions={inspectorActions}
         />
       )}
-      {filesOpen && activeSsh && (
+      {inspectorVisible && filesOpen && activeSsh && (
         <RemoteFiles
           key={sshTargetKey}
           connection={activeSsh}
@@ -2547,7 +2547,7 @@ export function App() {
           }}
         />
       )}
-      {filesOpen && fileDirectory && !activeSsh && (
+      {inspectorVisible && filesOpen && fileDirectory && !activeSsh && (
         <FilePanel
           resizeHandle={resizeHandle}
           headerActions={inspectorActions}
@@ -2560,7 +2560,7 @@ export function App() {
           beforeMutation={(action) => void editor.closeDirectory(fileDirectory, action)}
         />
       )}
-      {githubOpen && selected && (
+      {inspectorVisible && githubOpen && selected && (
         <GitHubPanel
           resizeHandle={resizeHandle}
           headerActions={inspectorActions}
@@ -2639,7 +2639,7 @@ export function App() {
           updateWorkspace={update}
         />
       )}
-      {gitOpen && workspace && !activeSsh && (
+      {inspectorVisible && gitOpen && workspace && !activeSsh && (
         <GitPanel
           resizeHandle={resizeHandle}
           diffTarget={gitDiffTarget}

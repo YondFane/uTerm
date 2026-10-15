@@ -49,6 +49,58 @@ export interface DatabaseResult {
   elapsed?: number;
   pending?: boolean;
 }
+export interface DatabaseObject {
+  name: string;
+  catalog: string;
+  schema: string;
+  type: string;
+}
+export function databaseObjects(result: DatabaseResult): DatabaseObject[] {
+  const at = (row: NonNullable<DatabaseResult["rows"]>[number], name: string) =>
+    String(
+      row[result.columns?.findIndex((column) => column.name.toUpperCase() === name) ?? -1] ?? "",
+    );
+  return (result.rows ?? []).map((row) => ({
+    name: at(row, "TABLE_NAME") || at(row, "TABLE_SCHEM") || at(row, "TABLE_CAT"),
+    catalog: at(row, "TABLE_CAT"),
+    schema: at(row, "TABLE_SCHEM"),
+    type: at(row, "TABLE_TYPE"),
+  }));
+}
+export const databaseObjectKey = (object: DatabaseObject) =>
+  JSON.stringify([object.catalog, object.schema, object.name]);
+export function databaseSelect(kind: DatabaseKind, object: DatabaseObject) {
+  const quote = kind === "mysql" ? "`" : '"';
+  const name = (value: string) => quote + value.replaceAll(quote, quote + quote) + quote;
+  const namespace = kind === "mysql" ? object.catalog : object.schema;
+  return `SELECT * FROM ${namespace ? name(namespace) + "." : ""}${name(object.name)}`;
+}
+export function databaseCellText(cell: NonNullable<DatabaseResult["rows"]>[number][number]) {
+  return cell === null
+    ? "NULL"
+    : typeof cell === "string"
+      ? cell
+      : cell.binary + (cell.truncated ? " …" : "");
+}
+export function databaseClipboard(
+  result: DatabaseResult,
+  range: [number, number, number, number],
+  headers = false,
+) {
+  const [top, left, bottom, right] = range;
+  const rows = (result.rows ?? [])
+    .slice(top, bottom + 1)
+    .map((row) => row.slice(left, right + 1).map(databaseCellText));
+  if (headers)
+    rows.unshift((result.columns ?? []).slice(left, right + 1).map((column) => column.name));
+  return rows
+    .map((row) =>
+      row
+        .map((cell) => (/[\t\r\n"]/.test(cell) ? '"' + cell.replaceAll('"', '""') + '"' : cell))
+        .join("\t"),
+    )
+    .join("\n");
+}
 export interface DatabaseStatus {
   connected: boolean;
   busy: boolean;
@@ -115,6 +167,10 @@ export function validDatabaseConfig(value: unknown): value is DatabaseConfig {
 /** Maps backend codes without exposing credential-bearing diagnostics. 映射后端错误码，不显示可能含凭据的诊断信息。 */
 export function databaseError(reason: unknown): string {
   const code = String(reason);
+  if (code.includes("DB_BROWSE_DISCONNECTED"))
+    return tx("浏览连接已关闭，SQL 连接和事务保留，请重试浏览。");
+  if (code.includes("DB_CONNECTION_LIMIT"))
+    return tx("数据库连接名额已用完，请断开其他连接后重试。浏览连接也计入八个名额。");
   if (code.includes("DB_SQL:"))
     return tx("数据库拒绝了操作：{code}", {
       code: code.slice(code.indexOf("DB_SQL:") + 7).replace(/[^a-zA-Z0-9:_-]/g, ""),

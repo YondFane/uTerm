@@ -1,4 +1,6 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { DatabaseGrid } from "./DatabaseGrid";
+import { DatabaseObjects } from "./DatabaseObjects";
 import type { EditorView } from "@codemirror/view";
 import { invoke } from "@tauri-apps/api/core";
 import { tx } from "../lib/i18n";
@@ -7,11 +9,12 @@ import {
   databaseError,
   databaseNames,
   databaseStatus,
+  databaseSelect,
+  type DatabaseObject,
   type DatabaseConfig,
   type DatabaseResult,
 } from "../lib/database";
 import type { OpenFile } from "../lib/file-document";
-import { DatabaseComponents } from "./DatabaseComponents";
 
 export function DatabaseWorkspace({
   config,
@@ -40,7 +43,21 @@ export function DatabaseWorkspace({
   const [info, setInfo] = useState("");
   const [result, setResult] = useState<DatabaseResult | null>(null);
   const [metadata, setMetadata] = useState<DatabaseResult | null>(null);
-  const [scope, setScope] = useState("");
+  const [object, setObject] = useState<DatabaseObject | null>(null);
+  const [tab, setTab] = useState<"query" | "object">("query");
+  const [objectView, setObjectView] = useState<"data" | "columns">("data");
+  const [objectResults, setObjectResults] = useState<{
+    data: DatabaseResult | null;
+    columns: DatabaseResult | null;
+  }>({ data: null, columns: null });
+  const [objectOffset, setObjectOffset] = useState(0);
+  const [querying, setQuerying] = useState(false);
+  const [browserWidth, setBrowserWidth] = useState(220);
+  const [editorRatio, setEditorRatio] = useState(35);
+  const [browserOpen, setBrowserOpen] = useState(true);
+  const [showMessages, setShowMessages] = useState(false);
+  const body = useRef<HTMLDivElement>(null);
+  const queryPane = useRef<HTMLDivElement>(null);
   const [offset, setOffset] = useState(0);
   const [confirm, setConfirm] = useState<(() => Promise<void>) | null>(null);
   const [confirmationText, setConfirmationText] = useState("");
@@ -140,6 +157,9 @@ export function DatabaseWorkspace({
     setMetadata(null);
     setExecuted("");
     setOffset(0);
+    setObject(null);
+    setObjectResults({ data: null, columns: null });
+    setTab("query");
   }
   async function connect() {
     const result = await invoke<{ handle: string; info: { version: string } }>("database_connect", {
@@ -156,7 +176,7 @@ export function DatabaseWorkspace({
     setPassword("");
     setWritable(false);
     setPending(false);
-    setMetadata(await request({ op: "metadata", view: "catalogs" }));
+    setMetadata(await request({ op: "browse", view: "catalogs" }));
   }
   async function disconnect(discard: boolean) {
     if (current.current) await invoke("database_disconnect", { handle: current.current, discard });
@@ -167,11 +187,43 @@ export function DatabaseWorkspace({
     if (await invoke<boolean>("database_export_sql", { sql: copied })) setSaved(copied);
   }
   async function query(at = 0, text = sql) {
-    if (writable) setPending(true);
-    const value = await request({ op: "query", sql: text, offset: at });
-    setResult(value);
-    setExecuted(text);
-    setOffset(at);
+    setQuerying(true);
+    try {
+      if (writable) setPending(true);
+      const value = await request({ op: "query", sql: text, offset: at });
+      setResult(value);
+      setExecuted(text);
+      setOffset(at);
+    } finally {
+      setQuerying(false);
+    }
+  }
+  async function browseTable(target: DatabaseObject, view: "data" | "columns", at = 0) {
+    const value = await request({
+      op: "browse",
+      view,
+      catalog: target.catalog,
+      schema: target.schema,
+      table: target.name,
+      offset: at,
+    });
+    setObject(target);
+    setTab("object");
+    setObjectView(view);
+    setObjectResults((previous) => ({
+      ...(object === target ? previous : { data: null, columns: null }),
+      [view]: value,
+    }));
+    if (view === "data") setObjectOffset(at);
+  }
+  function generate(target: DatabaseObject) {
+    const text = databaseSelect(config.kind, target);
+    const apply = async () => {
+      replaceSql(text);
+      setTab("query");
+    };
+    if (dirty && text !== sql) confirmAction(apply, tx("替换当前 SQL？尚未保存的修改将被覆盖。"));
+    else void apply();
   }
   // Recreate the shared editor after replacing SQL outside its user-input callback.
   // 程序替换 SQL 时更新文档标识，使共享编辑器与待执行 SQL 保持一致。
@@ -193,13 +245,71 @@ export function DatabaseWorkspace({
     notice: null,
     jump: 0,
   };
-  const quote = (value: string) => {
-    const q = config.kind === "mysql" ? "`" : '"';
-    return q + value.replaceAll(q, q + q) + q;
-  };
+  const visibleResult = tab === "query" ? result : objectResults[objectView];
+  const visibleOffset = tab === "query" ? offset : objectOffset;
+  const canPage = tab === "query" ? !!executed && !writable : objectView === "data";
+  function page(at: number) {
+    void run(() => (tab === "query" ? query(at, executed) : browseTable(object!, "data", at)));
+  }
+  const resizer = (axis: "browser" | "editor") => (
+    <div
+      role="separator"
+      tabIndex={0}
+      className={`database-resizer database-resizer-${axis}`}
+      aria-label={axis === "browser" ? tx("调整对象浏览区宽度") : tx("调整 SQL 编辑区高度")}
+      aria-orientation={axis === "browser" ? "vertical" : "horizontal"}
+      aria-valuemin={axis === "browser" ? 150 : 15}
+      aria-valuemax={axis === "browser" ? 360 : 75}
+      aria-valuenow={axis === "browser" ? browserWidth : editorRatio}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.currentTarget.focus();
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+        if (axis === "browser") {
+          const rect = body.current?.getBoundingClientRect();
+          if (rect)
+            setBrowserWidth(
+              Math.max(150, Math.min(360, rect.width * 0.45, event.clientX - rect.left)),
+            );
+        } else {
+          const rect = queryPane.current?.getBoundingClientRect();
+          const height = queryPane.current?.parentElement?.clientHeight;
+          if (rect && height)
+            setEditorRatio(Math.max(15, Math.min(75, ((event.clientY - rect.top) / height) * 100)));
+        }
+      }}
+      onPointerUp={(event) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId))
+          event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
+      onKeyDown={(event) => {
+        if (axis === "browser" && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
+          event.preventDefault();
+          setBrowserWidth((previous) =>
+            Math.max(150, Math.min(360, previous + (event.key === "ArrowRight" ? 20 : -20))),
+          );
+        }
+        if (axis === "editor" && ["ArrowUp", "ArrowDown"].includes(event.key)) {
+          event.preventDefault();
+          setEditorRatio((previous) =>
+            Math.max(15, Math.min(75, previous + (event.key === "ArrowDown" ? 5 : -5))),
+          );
+        }
+      }}
+    />
+  );
   return (
     <section
       className="database-workspace"
+      style={
+        {
+          "--database-browser-width": `${browserWidth}px`,
+          "--database-editor-ratio": `${editorRatio}%`,
+        } as CSSProperties
+      }
       hidden={!active}
       inert={!active}
       aria-label={tx("数据库工作台")}
@@ -207,7 +317,7 @@ export function DatabaseWorkspace({
         if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
           event.preventDefault();
           event.stopPropagation();
-          if (handle && !busy) {
+          if (handle && !busy && tab === "query") {
             if (writable) confirmAction(() => query());
             else void run(() => query());
           }
@@ -219,11 +329,18 @@ export function DatabaseWorkspace({
         }
       }}
     >
-      <header className="redis-toolbar">
-        <strong>{config.name}</strong>
+      <header className="redis-toolbar database-connection-bar">
+        <button
+          aria-label={tx("对象浏览区")}
+          aria-expanded={browserOpen}
+          onClick={() => setBrowserOpen((value) => !value)}
+        >
+          {tx("对象")}
+        </button>
         <span>
           {databaseNames[config.kind]} · {config.host}:{config.port} {info}
         </span>
+        <span className="database-access-state">{writable ? tx("允许写入") : tx("只读")}</span>
         {handle ? (
           <>
             <label>
@@ -241,6 +358,37 @@ export function DatabaseWorkspace({
               />
               {tx("允许编辑")}
             </label>
+            {pending && (
+              <span role="status" title={tx("事务待处理；DDL 可能自动提交。")}>
+                {tx("事务已开启")}
+              </span>
+            )}
+            {writable && (
+              <>
+                <button
+                  disabled={!pending || busy}
+                  onClick={() =>
+                    confirmAction(async () => {
+                      await request({ op: "commit" });
+                      setPending(false);
+                    })
+                  }
+                >
+                  {tx("提交事务")}
+                </button>
+                <button
+                  disabled={!pending || busy}
+                  onClick={() =>
+                    confirmAction(async () => {
+                      await request({ op: "rollback" });
+                      setPending(false);
+                    })
+                  }
+                >
+                  {tx("回滚事务")}
+                </button>
+              </>
+            )}
             <button
               disabled={busy}
               onClick={() =>
@@ -270,233 +418,202 @@ export function DatabaseWorkspace({
           {error}
         </p>
       )}
-      {!handle && active && (
-        <details open>
-          <summary>{tx("安装或管理连接组件")}</summary>
-          <DatabaseComponents selectedKind={config.kind} />
-        </details>
-      )}
-      <div className="database-body">
-        <aside className="database-browser">
-          <div className="database-actions">
-            <button
-              disabled={!handle || busy || pending}
-              onClick={() =>
-                void run(async () =>
-                  setMetadata(await request({ op: "metadata", view: "catalogs" })),
-                )
-              }
-            >
-              {tx("库与模式")}
-            </button>
-            <button
-              disabled={!handle || busy || pending}
-              onClick={() =>
-                void run(async () =>
-                  setMetadata(
-                    await request({
-                      op: "metadata",
-                      view: "tables",
-                      catalog: config.kind === "mysql" ? scope : "",
-                      schema: config.kind === "mysql" ? "" : scope,
-                    }),
-                  ),
-                )
-              }
-            >
-              {tx("表与视图")}
-            </button>
-          </div>
-          <input
-            aria-label={tx("库或模式")}
-            value={scope}
-            placeholder={tx("库或模式")}
-            onChange={(event) => setScope(event.target.value)}
+      <div className="database-body" ref={body}>
+        <aside className="database-browser" hidden={!browserOpen}>
+          <DatabaseObjects
+            key={handle ?? "disconnected"}
+            kind={config.kind}
+            scopes={metadata}
+            disabled={!handle || busy}
+            load={request}
+            perform={(action) => void run(action)}
+            open={(target, view) => void run(() => browseTable(target, view))}
+            generate={generate}
+            refresh={() =>
+              void run(async () => setMetadata(await request({ op: "browse", view: "catalogs" })))
+            }
           />
-          {metadata?.rows?.map((row, index) => {
-            const indexOf = (name: string) =>
-              metadata.columns?.findIndex((item) => item.name === name) ?? -1;
-            const name = String(
-              row[indexOf("TABLE_NAME")] ??
-                row[indexOf("TABLE_SCHEM")] ??
-                row[indexOf("TABLE_CAT")] ??
-                row[0] ??
-                "",
-            );
-            const table = indexOf("TABLE_NAME") >= 0;
-            const catalog = String(row[indexOf("TABLE_CAT")] ?? "");
-            const schema = String(row[indexOf("TABLE_SCHEM")] ?? "");
-            return (
-              <div className="database-browser-row" key={`${name}-${index}`}>
+        </aside>
+        {browserOpen && resizer("browser")}
+        <div className="database-content">
+          <div className="database-view-tabs" role="tablist" aria-label={tx("数据库视图")}>
+            <button role="tab" aria-selected={tab === "query"} onClick={() => setTab("query")}>
+              {tx("SQL 查询")}
+              {dirty ? " •" : ""}
+            </button>
+            {object && (
+              <button
+                role="tab"
+                aria-selected={tab === "object"}
+                title={[object.catalog, object.schema, object.name].filter(Boolean).join(".")}
+                onClick={() => setTab("object")}
+              >
+                {object.name}
+              </button>
+            )}
+          </div>
+          <div className="database-query" hidden={tab !== "query"} ref={queryPane}>
+            <div className="database-actions database-query-actions">
+              <button
+                className="database-run"
+                disabled={!handle || busy}
+                onClick={() => (writable ? confirmAction(() => query()) : void run(() => query()))}
+              >
+                {tx("执行 SQL")}
+              </button>
+              {querying && handle && (
                 <button
-                  disabled={!handle || busy || pending}
+                  title={tx("取消会关闭连接，写入结果可能未知。")}
                   onClick={() => {
-                    if (!table) {
-                      setScope(name);
-                      void run(async () =>
-                        setMetadata(
-                          await request({
-                            op: "metadata",
-                            view: "tables",
-                            catalog: config.kind === "mysql" ? name : "",
-                            schema: config.kind === "mysql" ? "" : name,
-                          }),
-                        ),
-                      );
-                    } else {
-                      const namespace = config.kind === "mysql" ? catalog : schema;
-                      const text = `SELECT * FROM ${namespace ? quote(namespace) + "." : ""}${quote(name)}`;
-                      if (dirty && text !== sql)
-                        confirmAction(
-                          async () => replaceSql(text),
-                          tx("替换当前 SQL？尚未保存的修改将被覆盖。"),
-                        );
-                      else replaceSql(text);
-                    }
+                    cancelled.current = true;
+                    void disconnect(true)
+                      .then(() => setError(databaseError("DB_CANCELLED")))
+                      .catch((reason) => setError(databaseError(reason)));
                   }}
                 >
-                  {name}
+                  {tx("取消查询")}
                 </button>
-                {table && (
+              )}
+              <button disabled={busy} onClick={() => void run(exportSql)}>
+                {tx("保存 SQL…")}
+              </button>
+              <details className="database-query-menu">
+                <summary>{tx("更多")}</summary>
+                <div>
                   <button
-                    disabled={!handle || busy || pending}
-                    title={tx("查看字段")}
+                    disabled={busy}
+                    onClick={() => {
+                      void navigator.clipboard
+                        .writeText(sql)
+                        .catch(() => setError(tx("无法复制 SQL。")));
+                    }}
+                  >
+                    {tx("复制 SQL")}
+                  </button>
+                  <button
+                    disabled={!dirty || busy}
                     onClick={() =>
-                      void run(async () => {
-                        const value = await request({
-                          op: "metadata",
-                          view: "columns",
-                          catalog,
-                          schema,
-                          table: name,
-                        });
-                        setExecuted("");
-                        setOffset(0);
-                        setResult(value);
-                      })
+                      confirmAction(
+                        async () => replaceSql(saved),
+                        tx("放弃 SQL 修改？这会恢复上次保存的 SQL 内容。"),
+                      )
                     }
                   >
-                    {tx("字段")}
+                    {tx("放弃 SQL 修改")}
                   </button>
-                )}
-              </div>
-            );
-          })}
-          {metadata?.more && <p>{tx("元数据超过 500 项，请缩小库或模式范围。")}</p>}
-        </aside>
-        <div className="database-query">
-          <div className="database-actions">
-            <button
-              disabled={!handle || busy}
-              onClick={() => (writable ? confirmAction(() => query()) : void run(() => query()))}
-            >
-              {tx("执行 SQL")}
-            </button>
-            {busy && handle && (
-              <button
-                onClick={() => {
-                  cancelled.current = true;
-                  void disconnect(true)
-                    .then(() => setError(databaseError("DB_CANCELLED")))
-                    .catch((reason) => setError(databaseError(reason)));
-                }}
-              >
-                {tx("取消查询")}
-              </button>
-            )}
-            <button
-              disabled={!pending || busy}
-              onClick={() =>
-                confirmAction(async () => {
-                  await request({ op: "commit" });
-                  setPending(false);
-                })
-              }
-            >
-              {tx("提交事务")}
-            </button>
-            <button
-              disabled={!pending || busy}
-              onClick={() =>
-                confirmAction(async () => {
-                  await request({ op: "rollback" });
-                  setPending(false);
-                })
-              }
-            >
-              {tx("回滚事务")}
-            </button>
-            <button
-              disabled={busy}
-              onClick={() => {
-                void navigator.clipboard.writeText(sql).catch(() => setError(tx("无法复制 SQL。")));
-              }}
-            >
-              {tx("复制 SQL")}
-            </button>
-            <button disabled={busy} onClick={() => void run(exportSql)}>
-              {tx("保存 SQL…")}
-            </button>
-            <button
-              disabled={!dirty || busy}
-              onClick={() =>
-                confirmAction(async () => {
-                  replaceSql(saved);
-                }, tx("放弃 SQL 修改？这会恢复上次保存的 SQL 内容。"))
-              }
-            >
-              {tx("放弃 SQL 修改")}
-            </button>
-            {pending && <strong>{tx("事务待处理；DDL 可能自动提交。")}</strong>}
+                </div>
+              </details>
+            </div>
+            <div className="database-sql-editor">
+              {editor ? (
+                <editor.CodeEditor
+                  key={document.id}
+                  document={document}
+                  blocked={busy}
+                  change={setSql}
+                  save={() => void run(exportSql)}
+                  close={() => {}}
+                  controls={controls}
+                />
+              ) : (
+                <textarea
+                  aria-label={tx("SQL 编辑器")}
+                  value={sql}
+                  disabled={busy}
+                  onChange={(event) => setSql(event.target.value)}
+                  maxLength={262144}
+                />
+              )}
+            </div>
+            {resizer("editor")}
           </div>
-          <div className="database-sql-editor">
-            {editor ? (
-              <editor.CodeEditor
-                key={document.id}
-                document={document}
-                blocked={busy}
-                change={setSql}
-                save={() => {
-                  void run(exportSql);
-                }}
-                close={() => {}}
-                controls={controls}
-              />
-            ) : (
-              <textarea
-                aria-label={tx("SQL 编辑器")}
-                value={sql}
-                disabled={busy}
-                onChange={(event) => setSql(event.target.value)}
-                maxLength={262144}
-              />
-            )}
-          </div>
-          <DatabaseResults result={result} />
-          {result && (
-            <footer className="database-actions">
-              <span>
-                {tx("结果：{count} 行 · {elapsed} 毫秒", {
-                  count: result.rows?.length ?? result.affected ?? 0,
-                  elapsed: result.elapsed ?? 0,
-                })}
-              </span>
+          {tab === "object" && object && (
+            <div className="database-actions database-object-actions">
               <button
-                disabled={!handle || busy || offset === 0 || writable || !executed}
-                onClick={() => void run(() => query(Math.max(0, offset - 200), executed))}
-              >
-                {tx("上一页")}
-              </button>
-              <button
-                disabled={
-                  !handle || busy || !result.more || writable || !executed || offset >= 10000
+                aria-pressed={objectView === "data"}
+                disabled={!handle || busy}
+                onClick={() =>
+                  objectResults.data
+                    ? setObjectView("data")
+                    : void run(() => browseTable(object, "data"))
                 }
-                onClick={() => void run(() => query(offset + 200, executed))}
               >
-                {tx("下一页")}
+                {tx("数据")}
               </button>
-            </footer>
+              <button
+                aria-pressed={objectView === "columns"}
+                disabled={!handle || busy}
+                onClick={() =>
+                  objectResults.columns
+                    ? setObjectView("columns")
+                    : void run(() => browseTable(object, "columns"))
+                }
+              >
+                {tx("结构")}
+              </button>
+              <button
+                disabled={!handle || busy}
+                onClick={() =>
+                  void run(() =>
+                    browseTable(object, objectView, objectView === "data" ? objectOffset : 0),
+                  )
+                }
+              >
+                {tx("刷新")}
+              </button>
+              <button disabled={busy} onClick={() => generate(object)}>
+                {tx("生成 SELECT")}
+              </button>
+              <span>{tx("只读浏览")}</span>
+            </div>
           )}
+          <div className="database-result-tabs" role="tablist" aria-label={tx("查询输出")}>
+            <button role="tab" aria-selected={!showMessages} onClick={() => setShowMessages(false)}>
+              {tx("结果")}
+            </button>
+            <button role="tab" aria-selected={showMessages} onClick={() => setShowMessages(true)}>
+              {tx("消息")}
+            </button>
+          </div>
+          <div className="database-grid-container" hidden={showMessages}>
+            <DatabaseGrid result={visibleResult} report={setError} />
+          </div>
+          <div className="database-output-message" hidden={!showMessages} role="status">
+            {error ||
+              (visibleResult?.affected !== undefined
+                ? tx("受影响行数：{count}", { count: visibleResult.affected })
+                : visibleResult
+                  ? tx("结果：{count} 行 · {elapsed} 毫秒", {
+                      count: visibleResult.rows?.length ?? 0,
+                      elapsed: visibleResult.elapsed ?? 0,
+                    })
+                  : tx("执行 SQL 或打开表查看数据"))}
+          </div>
+          <footer className="database-actions database-result-footer">
+            <span>
+              {visibleResult
+                ? tx("结果：{count} 行 · {elapsed} 毫秒", {
+                    count: visibleResult.rows?.length ?? visibleResult.affected ?? 0,
+                    elapsed: visibleResult.elapsed ?? 0,
+                  })
+                : tx("就绪")}
+            </span>
+            {visibleResult?.more && <span>{tx("还有更多数据")}</span>}
+            <button
+              disabled={!handle || busy || visibleOffset === 0 || !canPage}
+              onClick={() => page(Math.max(0, visibleOffset - 200))}
+            >
+              {tx("上一页")}
+            </button>
+            <button
+              disabled={
+                !handle || busy || !visibleResult?.more || !canPage || visibleOffset >= 10000
+              }
+              onClick={() => page(visibleOffset + 200)}
+            >
+              {tx("下一页")}
+            </button>
+          </footer>
         </div>
       </div>
       <dialog
@@ -522,42 +639,3 @@ export function DatabaseWorkspace({
     </section>
   );
 }
-
-const DatabaseResults = memo(function DatabaseResults({
-  result,
-}: {
-  result: DatabaseResult | null;
-}) {
-  return (
-    <div className="database-results">
-      <table>
-        <thead>
-          <tr>
-            {result?.columns?.map((column, index) => (
-              <th key={index} title={column.type}>
-                {column.name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {result?.rows?.map((row, index) => (
-            <tr key={index}>
-              {row.map((cell, column) => (
-                <td key={column}>
-                  {cell === null ? (
-                    <em>{"NULL"}</em>
-                  ) : typeof cell === "string" ? (
-                    cell
-                  ) : (
-                    `${cell.binary}${cell.truncated ? " …" : ""}`
-                  )}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-});

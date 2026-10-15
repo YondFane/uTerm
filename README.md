@@ -34,6 +34,10 @@ uTerm 是非商业用途免费的独立桌面终端，面向 Windows 和 macOS�
 
 侧栏“数据库”支持 MySQL、PostgreSQL 和 Oracle（服务名连接）。点击加号配置连接，应用自动检测并优先使用可运行的本机 Java 17 或更新版本；未检测到时，可通过“安装或管理连接组件”选择本机 Java，或在线/离线安装运行时，再按需安装对应驱动。下载中断或取消后保留进度，点击“继续下载”可重试；下载源不支持续传时重新下载。连接引擎已内置，无需单独下载安装；主安装包不包含 Java 或数据库驱动。底部数据库图标默认高亮，点击可独立显示或隐藏连接区域；隐藏保留工作台和连接。组件也可在“设置 → 数据库组件”管理。详见[功能说明](docs/features.zh-CN.md#数据库连接与可选组件)。
 
+从侧栏打开“数据库组件”会暂时隐藏项目工具面板，返回项目后恢复原来选择的工具及左右位置，侧栏底部工具栏保持原位。
+
+工作台通过对象树浏览库／模式、表和视图。双击表打开独立的数据／结构视图，SQL 草稿及查询结果保留。对象区宽度、SQL／结果高度和结果列宽可调整，分页固定在底部；结果支持选区、带表头复制及单元格值查看。表预览使用独立只读连接，不提交或回滚 SQL 事务。三批范围与体积预算见[数据库工作台实施计划](docs/database-workbench-plan.zh-CN.md)。
+
 内置连接引擎源码位于 `components/database/src/`，纳入版本控制的 `components/database/engine.jar` 嵌入桌面可执行文件。`components/database/catalog.json` 固定引擎校验值及可选驱动/运行时下载信息。构建主应用不需要 Java；重新构建引擎需要与校验目录一致的 JDK 26.0.2.1，运行 `pnpm database:build` 校验生成结果与内置 JAR 一致。修改源码后运行 `node scripts/database-component.mjs --record`，审核并同步提交源码、内置 JAR 及目录。临时编译产物仍位于忽略的 `components/database/target/`。`.github/workflows/database-components.yml` 手动校验内置产物，无需单独发布引擎。
 
 `pnpm test:database` 默认跳过真实数据库测试；设置 `UTERM_MYSQL_TEST=1`、`UTERM_MYSQL_PASSWORD` 及可选的 `UTERM_MYSQL_HOST`、`UTERM_MYSQL_PORT`、`UTERM_MYSQL_USER`、`UTERM_MYSQL_DATABASE` 后执行本机集成验证。先下载与目录匹配的驱动到忽略的 `components/database/target/mysql.jar`。测试只查询元数据/构造数据并设置会话变量，不创建或修改业务表。请勿将密码写入源文件、命令历史或测试夹具。 如需验证三种驱动的代理认证，将匹配的 `mysql.jar`、`postgresql.jar` 和 `oracle.jar` 放入同一忽略目录，并设置 `UTERM_DATABASE_PROXY_TEST=1`；此路由测试使用可丢弃的回环 SOCKS 代理，无需数据库服务。
