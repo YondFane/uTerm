@@ -409,6 +409,72 @@ test("real settings tabs, commands and panels render in both languages without u
         }
       },
     );
+    await context.test(
+      "content font controls persist independently, retain values on failure and reset",
+      async () => {
+        await mount(
+          React.createElement(SettingsPanel, {
+            runtime,
+            updates,
+            close: noop,
+            reloadAgents: async () => {},
+            workspace: emptyWorkspace(),
+            updateWorkspace: noop,
+          }),
+          "en",
+        );
+        await click("Appearance");
+        const input = (label) =>
+          [...host.querySelectorAll("label")]
+            .find((row) => row.textContent.trim() === label)
+            .querySelector("input");
+        const update = async (label, value) => {
+          await act(async () => {
+            const control = input(label);
+            control.value = String(value);
+            control.dispatchEvent(new dom.window.FocusEvent("focusout", { bubbles: true }));
+          });
+        };
+        await update("File font size", 20);
+        await update("Git diff font size", 32);
+        let saved = JSON.parse(localStorage.getItem(settingsKey));
+        assert.equal(saved.fileFontSize, 20);
+        assert.equal(saved.gitDiffFontSize, 32);
+        assert.equal(saved.fontSize, defaults.fontSize);
+        assert.equal(document.documentElement.style.getPropertyValue("--file-font-size"), "20px");
+        assert.equal(
+          document.documentElement.style.getPropertyValue("--git-diff-font-size"),
+          "32px",
+        );
+        await update("File font size", 20.5);
+        assert.match(host.textContent, /Settings are invalid/);
+        assert.equal(JSON.parse(localStorage.getItem(settingsKey)).fileFontSize, 20);
+        const originalSet = dom.window.Storage.prototype.setItem;
+        dom.window.Storage.prototype.setItem = () => {
+          throw new Error("Storage full");
+        };
+        try {
+          await update("Git diff font size", 18);
+          assert.match(host.textContent, /Storage full/);
+          assert.equal(
+            document.documentElement.style.getPropertyValue("--git-diff-font-size"),
+            "32px",
+          );
+        } finally {
+          dom.window.Storage.prototype.setItem = originalSet;
+        }
+        await click("General");
+        await click("Reset interface and terminal settings");
+        saved = JSON.parse(localStorage.getItem(settingsKey));
+        assert.equal(saved.fileFontSize, 14);
+        assert.equal(saved.gitDiffFontSize, 14);
+        await click("Appearance");
+        assertEnglish();
+        await act(async () => i18n.setUiLanguage("zh-Hans"));
+        assert.match(host.textContent, /文件查看字号/);
+        assert.match(host.textContent, /Git 对比字号/);
+      },
+    );
     await context.test("all nine settings tabs and immediate language switching", async () => {
       i18n.setUiLanguage("en");
       await mount(

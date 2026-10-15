@@ -62,6 +62,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--window-opacity", String(settings.opacity));
     root.style.setProperty("--interface-font", settings.interfaceFont);
     root.style.setProperty("--interface-size", `${settings.interfaceSize}px`);
+    root.style.setProperty("--file-font-size", `${settings.fileFontSize}px`);
+    root.style.setProperty("--git-diff-font-size", `${settings.gitDiffFontSize}px`);
     root.style.setProperty("--row-padding", `${settings.rowPadding}px`);
     root.style.setProperty("--window-padding", `${settings.windowPadding}px`);
   }, [settings, light]);

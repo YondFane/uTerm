@@ -17,7 +17,6 @@ test("automatic updates download and install once, preserve file guards and stop
   dom.window.HTMLDialogElement.prototype.close = function () {
     this.open = false;
   };
-  t.mock.timers.enable({ apis: ["setInterval", "setTimeout", "Date"] });
   const server = await createServer({
     configFile: false,
     server: { middlewareMode: true },
@@ -31,6 +30,7 @@ test("automatic updates download and install once, preserve file guards and stop
     const { UpdateInstallDialog } = await server.ssrLoadModule(
       "/src/components/UpdateInstallDialog.tsx",
     );
+    t.mock.timers.enable({ apis: ["setInterval", "setTimeout", "Date"] });
     const calls = [];
     let updates;
     let automatic = false;

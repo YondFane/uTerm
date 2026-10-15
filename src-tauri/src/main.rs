@@ -169,6 +169,21 @@ fn window_appearance(app: tauri::AppHandle, blur: bool) -> Result<(), String> {
     Ok(())
 }
 
+const AUTOSTART_ARGUMENT: &str = "--autostart";
+
+fn starts_in_background(arguments: impl IntoIterator<Item = impl AsRef<std::ffi::OsStr>>) -> bool {
+    let arguments: Vec<_> = arguments
+        .into_iter()
+        .map(|argument| argument.as_ref().to_owned())
+        .collect();
+    arguments
+        .iter()
+        .any(|argument| argument == AUTOSTART_ARGUMENT)
+        && !arguments
+            .iter()
+            .any(|argument| argument.to_string_lossy().starts_with("uterm://"))
+}
+
 fn main() {
     let mut arguments = std::env::args_os().skip(1);
     let mode = arguments.next();
@@ -224,6 +239,15 @@ fn main() {
         }
         return;
     }
+    let mut context = tauri::generate_context!();
+    if starts_in_background(std::env::args_os().skip(1)) {
+        for window in &mut context.config_mut().app.windows {
+            if window.label == "main" {
+                window.visible = false;
+                window.focus = false;
+            }
+        }
+    }
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
             if let Some(state) = app.try_state::<std::sync::Arc<control::Control>>() {
@@ -236,8 +260,10 @@ fn main() {
                     }
                 }
             }
-            if let Err(error) = show_main_window(app) {
-                eprintln!("Show desktop: {error}");
+            if !starts_in_background(arguments.iter().skip(1)) {
+                if let Err(error) = show_main_window(app) {
+                    eprintln!("Show desktop: {error}");
+                }
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
@@ -251,6 +277,18 @@ fn main() {
                 // The native frame follows Windows' system theme unless it is set here.
                 // Keep it dark so a light system title bar does not sit above uTerm.
                 window.set_theme(Some(tauri::Theme::Dark))?;
+                // Disable WebView2 menus in every frame, including sandboxed HTML previews.
+                // 禁用所有框架中的 WebView2 菜单，包括沙盒 HTML 预览。
+                window.with_webview(|webview| unsafe {
+                    let result = webview
+                        .controller()
+                        .CoreWebView2()
+                        .and_then(|webview| webview.Settings())
+                        .and_then(|settings| settings.SetAreDefaultContextMenusEnabled(false));
+                    if let Err(error) = result {
+                        eprintln!("Disable browser context menus: {error}");
+                    }
+                })?;
             }
             if app.config().plugins.0.contains_key("updater") {
                 app.handle()
@@ -295,12 +333,13 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin({
-            let builder =
-                tauri_plugin_autostart::Builder::new().app_name(if cfg!(debug_assertions) {
+            let builder = tauri_plugin_autostart::Builder::new()
+                .app_name(if cfg!(debug_assertions) {
                     "uTerm-dev"
                 } else {
                     "uTerm"
-                });
+                })
+                .args([AUTOSTART_ARGUMENT]);
             #[cfg(target_os = "macos")]
             let builder =
                 builder.macos_launcher(tauri_plugin_autostart::MacosLauncher::LaunchAgent);
@@ -372,6 +411,7 @@ fn main() {
             git::git_branch_action,
             git::git_switch_branch,
             git::git_snapshot,
+            git::git_rollback_file,
             git::git_diff,
             git::git_history,
             git::git_files,
@@ -386,7 +426,7 @@ fn main() {
             projects::create_worktree,
             projects::delete_worktree
         ])
-        .build(tauri::generate_context!());
+        .build(context);
     match result {
         Ok(app) => app.run(|handle, event| {
             match &event {
@@ -470,5 +510,26 @@ fn main() {
             eprintln!("uTerm could not start: {error}");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::starts_in_background;
+
+    #[test]
+    fn login_stays_hidden_but_manual_and_session_links_open() {
+        assert!(starts_in_background(["--autostart"]));
+        assert!(!starts_in_background(Vec::<String>::new()));
+        assert!(!starts_in_background(["--other"]));
+        assert!(!starts_in_background(["--autostart-extra"]));
+        assert!(!starts_in_background([
+            "--autostart",
+            "uterm://session/test"
+        ]));
+        assert!(!starts_in_background([
+            "uterm://session/test",
+            "--autostart"
+        ]));
     }
 }

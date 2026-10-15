@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -109,7 +109,7 @@ fn revision(directory: &str, value: &str) -> Result<String, String> {
     }
     Ok(commit)
 }
-#[derive(Debug, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Change {
     path: String,
     original: Option<String>,
@@ -145,6 +145,7 @@ fn status(bytes: &[u8]) -> Result<Vec<Change>, String> {
 pub struct Snapshot {
     root: String,
     branch: String,
+    head: Option<String>,
     references: Vec<String>,
     changes: Vec<Change>,
     truncated: bool,
@@ -176,6 +177,7 @@ fn snapshot(directory: &str) -> Result<Snapshot, String> {
     .map(String::from)
     .collect();
     Ok(Snapshot {
+        head: revision(&root, "HEAD").ok(),
         root,
         branch: if branch.is_empty() {
             "Detached HEAD".into()
@@ -423,6 +425,125 @@ pub async fn git_switch_branch(
 }
 
 static BRANCH_OPERATION: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn rollback_path(directory: &Path, root: &Path, path: &str) -> Result<(), String> {
+    let relative = Path::new(path);
+    if path.is_empty()
+        || relative.components().any(|part| {
+            !matches!(part, std::path::Component::Normal(name) if !name.to_string_lossy().eq_ignore_ascii_case(".git"))
+        })
+        || !root.join(relative).starts_with(directory)
+    {
+        return Err("回滚文件必须位于所选目录内。".into());
+    }
+    let mut cursor = root.to_path_buf();
+    for part in relative.components() {
+        cursor.push(part);
+        match std::fs::symlink_metadata(&cursor) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err("链接和子模块不能在此回滚，请使用终端。".into());
+            }
+            Ok(metadata) if cursor == root.join(relative) && !metadata.is_file() => {
+                return Err("链接和子模块不能在此回滚，请使用终端。".into());
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+    Ok(())
+}
+
+fn rollback_file(directory: &str, expected: &Change, head: Option<&str>) -> Result<(), String> {
+    let selected = Path::new(directory)
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    let repository = root(directory)?;
+    let canonical_root = Path::new(&repository)
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    let current = snapshot(&repository)?;
+    if current.head.as_deref() != head {
+        return Err("当前提交已改变，请刷新后重试。".into());
+    }
+    let change = current
+        .changes
+        .iter()
+        .find(|change| change.path == expected.path)
+        .filter(|change| *change == expected)
+        .ok_or("文件状态已改变，请刷新后重试。")?;
+    let mut paths = vec![change.path.as_str()];
+    if change.index == "R" || change.working == "R" {
+        let original = change.original.as_deref().ok_or("重命名路径缺失。")?;
+        if current.changes.iter().any(|other| other.path == original) {
+            return Err("原路径存在其他变更，请先在终端中处理。".into());
+        }
+        paths.push(original);
+    }
+    for path in &paths {
+        rollback_path(&selected, &canonical_root, path)?;
+    }
+    let mut indexed = vec!["ls-files", "--stage", "-z", "--"];
+    indexed.extend(&paths);
+    let indexed = run(&repository, &indexed)?;
+    let mut committed = vec![];
+    if let Some(head) = head {
+        let mut args = vec!["ls-tree", "-z", head, "--"];
+        args.extend(&paths);
+        committed = run(&repository, &args)?;
+    }
+    if indexed.len() > LIMIT || committed.len() > LIMIT {
+        return Err("文件状态已改变，请刷新后重试。".into());
+    }
+    for entry in indexed
+        .split(|byte| *byte == 0)
+        .chain(committed.split(|byte| *byte == 0))
+    {
+        if entry.starts_with(b"120000 ")
+            || entry.starts_with(b"160000 ")
+            || entry.starts_with(b"040000 ")
+        {
+            return Err("链接和子模块不能在此回滚，请使用终端。".into());
+        }
+    }
+    if change.index == "?" {
+        // Remove only the confirmed file; never recurse into an untracked directory.
+        // 只删除已确认的文件，绝不递归删除未跟踪目录。
+        std::fs::remove_file(canonical_root.join(&change.path))
+            .map_err(|error| error.to_string())?;
+    } else if let Some(head) = head {
+        let mut args = vec![
+            "restore",
+            "--source",
+            head,
+            "--staged",
+            "--worktree",
+            "--no-recurse-submodules",
+            "--",
+        ];
+        args.extend(paths);
+        run(&repository, &args)?;
+    } else {
+        let mut args = vec!["rm", "--force", "--"];
+        args.extend(paths);
+        run(&repository, &args)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn git_rollback_file(
+    directory: String,
+    expected: Change,
+    head: Option<String>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = BRANCH_OPERATION.lock().map_err(|error| error.to_string())?;
+        rollback_file(&directory, &expected, head.as_deref())
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
 
 #[derive(Debug, Serialize)]
 pub struct RemoteBranch {
@@ -839,6 +960,7 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let directory = temp.path().to_str().unwrap();
         run(directory, &["init", "--initial-branch=main"]).unwrap();
+        run(directory, &["config", "core.autocrlf", "false"]).unwrap();
         std::fs::write(temp.path().join("file.txt"), "main\n").unwrap();
         run(directory, &["add", "."]).unwrap();
         fixture_commit(directory);
@@ -860,6 +982,160 @@ mod tests {
             ],
         )
         .unwrap();
+    }
+    fn rollback_target(directory: &str, path: &str) -> (Change, Option<String>) {
+        let mut snapshot = snapshot(directory).unwrap();
+        let change = snapshot.changes.remove(
+            snapshot
+                .changes
+                .iter()
+                .position(|change| change.path == path)
+                .unwrap(),
+        );
+        (change, snapshot.head)
+    }
+    #[test]
+    fn rollback_restores_staged_and_working_content_without_touching_other_files() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        std::fs::write(temp.path().join("file.txt"), "staged\n").unwrap();
+        run(directory, &["add", "file.txt"]).unwrap();
+        std::fs::write(temp.path().join("file.txt"), "working\n").unwrap();
+        std::fs::write(temp.path().join("keep.txt"), "keep\n").unwrap();
+        let (change, head) = rollback_target(directory, "file.txt");
+        rollback_file(directory, &change, head.as_deref()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
+            "main\n"
+        );
+        assert_eq!(
+            text(run(directory, &["show", ":file.txt"]).unwrap()),
+            "main"
+        );
+        assert_eq!(snapshot(directory).unwrap().changes.len(), 1);
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("keep.txt")).unwrap(),
+            "keep\n"
+        );
+        std::fs::remove_file(temp.path().join("file.txt")).unwrap();
+        run(directory, &["add", "file.txt"]).unwrap();
+        let (change, head) = rollback_target(directory, "file.txt");
+        rollback_file(directory, &change, head.as_deref()).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
+            "main\n"
+        );
+    }
+    #[test]
+    fn rollback_removes_added_files_with_literal_names_and_supports_unborn_repositories() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        for staged in [false, true] {
+            let name = "-中文 [file].txt";
+            std::fs::write(temp.path().join(name), "new\n").unwrap();
+            if staged {
+                run(directory, &["add", "--", name]).unwrap();
+            }
+            let (change, head) = rollback_target(directory, name);
+            rollback_file(directory, &change, head.as_deref()).unwrap();
+            assert!(!temp.path().join(name).exists());
+            assert!(snapshot(directory).unwrap().changes.is_empty());
+        }
+        let unborn = tempfile::tempdir().unwrap();
+        let directory = unborn.path().to_str().unwrap();
+        run(directory, &["init", "--initial-branch=main"]).unwrap();
+        std::fs::write(unborn.path().join("new.txt"), "new").unwrap();
+        run(directory, &["add", "new.txt"]).unwrap();
+        let (change, head) = rollback_target(directory, "new.txt");
+        assert!(head.is_none());
+        rollback_file(directory, &change, None).unwrap();
+        assert!(!unborn.path().join("new.txt").exists());
+        assert!(snapshot(directory).unwrap().changes.is_empty());
+    }
+    #[test]
+    fn rollback_restores_renames_and_rejects_stale_state_or_commits() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        run(directory, &["mv", "file.txt", "renamed 中文.txt"]).unwrap();
+        let (change, head) = rollback_target(directory, "renamed 中文.txt");
+        assert_eq!(change.original.as_deref(), Some("file.txt"));
+        rollback_file(directory, &change, head.as_deref()).unwrap();
+        assert!(!temp.path().join("renamed 中文.txt").exists());
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
+            "main\n"
+        );
+        std::fs::write(temp.path().join("file.txt"), "keep\n").unwrap();
+        let (change, head) = rollback_target(directory, "file.txt");
+        run(directory, &["add", "file.txt"]).unwrap();
+        assert!(rollback_file(directory, &change, head.as_deref())
+            .unwrap_err()
+            .contains("文件状态已改变"));
+        let (change, head) = rollback_target(directory, "file.txt");
+        fixture_commit(directory);
+        assert!(rollback_file(directory, &change, head.as_deref())
+            .unwrap_err()
+            .contains("当前提交已改变"));
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
+            "keep\n"
+        );
+    }
+    #[test]
+    fn rollback_rejects_paths_outside_selected_directory_and_directory_targets() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let selected = temp.path().join("selected");
+        std::fs::create_dir(&selected).unwrap();
+        std::fs::write(temp.path().join("file.txt"), "keep\n").unwrap();
+        let (change, head) = rollback_target(directory, "file.txt");
+        assert!(
+            rollback_file(selected.to_str().unwrap(), &change, head.as_deref())
+                .unwrap_err()
+                .contains("所选目录")
+        );
+        for path in ["../escape", ".git/config", "", directory] {
+            assert!(rollback_path(temp.path(), temp.path(), path).is_err());
+        }
+        run(directory, &["rm", "--force", "file.txt"]).unwrap();
+        std::fs::create_dir(temp.path().join("file.txt")).unwrap();
+        std::fs::write(temp.path().join("file.txt/keep.txt"), "keep").unwrap();
+        let (change, head) = rollback_target(directory, "file.txt");
+        assert!(rollback_file(directory, &change, head.as_deref()).is_err());
+        assert!(temp.path().join("file.txt/keep.txt").exists());
+    }
+    #[test]
+    fn rollback_rejects_links_submodules_and_rename_collisions() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        run(directory, &["mv", "file.txt", "new.txt"]).unwrap();
+        std::fs::write(temp.path().join("file.txt"), "keep new original\n").unwrap();
+        let (change, head) = rollback_target(directory, "new.txt");
+        assert!(rollback_file(directory, &change, head.as_deref()).is_err());
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
+            "keep new original\n"
+        );
+        let commit = revision(directory, "HEAD").unwrap();
+        let blob = text(run(directory, &["rev-parse", "HEAD:file.txt"]).unwrap());
+        for (mode, object) in [("120000", blob.as_str()), ("160000", commit.as_str())] {
+            run(
+                directory,
+                &[
+                    "update-index",
+                    "--add",
+                    "--cacheinfo",
+                    mode,
+                    object,
+                    "special",
+                ],
+            )
+            .unwrap();
+            let (change, head) = rollback_target(directory, "special");
+            assert!(rollback_file(directory, &change, head.as_deref())
+                .unwrap_err()
+                .contains("链接和子模块"));
+        }
     }
     #[test]
     fn branch_picker_lists_only_local_branches_and_switches_from_detached_head() {

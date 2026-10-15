@@ -17,4 +17,5 @@ test("Git snapshots compare without serializing unchanged file lists", () => {
     false,
   );
   assert.equal(sameGitSnapshot(snapshot, { ...snapshot, references: ["main"] }), false);
+  assert.equal(sameGitSnapshot(snapshot, { ...snapshot, head: "a".repeat(40) }), false);
 });
