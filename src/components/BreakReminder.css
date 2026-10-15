@@ -1,0 +1,17 @@
+.break-reminder {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 1000;
+  width: min(340px, calc(100vw - 48px));
+  padding: 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  box-shadow: 0 8px 32px #0005;
+}
+.break-reminder button {
+  display: block;
+  margin-top: 12px;
+}
