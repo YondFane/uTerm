@@ -534,6 +534,11 @@ select:focus-visible {
   justify-content: space-between;
   padding: 0 5px 0 4px;
 }
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .sidebar .section-toggle {
   display: flex;
   align-items: center;
@@ -3253,21 +3258,6 @@ textarea:focus-visible {
 }
 .ssh-dialog .ssh-password-remember input {
   width: auto;
-}
-.ssh-section-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 10px;
-  font-size: 11px;
-  color: var(--ui-muted);
-}
-.database-section-heading {
-  justify-content: flex-start;
-  gap: 4px;
-}
-.database-section-heading strong {
-  margin-right: auto;
 }
 .ssh-connection .row-label {
   min-width: 0;

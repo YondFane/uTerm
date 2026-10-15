@@ -32,7 +32,7 @@ uTerm 是非商业用途免费的独立桌面终端，面向 Windows 和 macOS�
 
 ## 数据库连接与可选组件
 
-侧栏“数据库连接”支持 MySQL、PostgreSQL 和 Oracle（服务名连接）。点击加号配置连接，通过“安装或管理连接组件”按需安装 Java 运行时及对应驱动，也可选择本机 Java 17 或更新版本。连接引擎已内置，无需单独下载安装；主安装包不包含 Java 或数据库驱动。底部数据库图标默认高亮，点击可独立显示或隐藏连接区域；隐藏保留工作台和连接。组件也可在“设置 → 数据库组件”管理。详见[功能说明](docs/features.zh-CN.md#数据库连接与可选组件)。
+侧栏“数据库”支持 MySQL、PostgreSQL 和 Oracle（服务名连接）。点击加号配置连接，应用自动检测并优先使用可运行的本机 Java 17 或更新版本；未检测到时，可通过“安装或管理连接组件”选择本机 Java，或在线/离线安装运行时，再按需安装对应驱动。下载中断或取消后保留进度，点击“继续下载”可重试；下载源不支持续传时重新下载。连接引擎已内置，无需单独下载安装；主安装包不包含 Java 或数据库驱动。底部数据库图标默认高亮，点击可独立显示或隐藏连接区域；隐藏保留工作台和连接。组件也可在“设置 → 数据库组件”管理。详见[功能说明](docs/features.zh-CN.md#数据库连接与可选组件)。
 
 内置连接引擎源码位于 `components/database/src/`，纳入版本控制的 `components/database/engine.jar` 嵌入桌面可执行文件。`components/database/catalog.json` 固定引擎校验值及可选驱动/运行时下载信息。构建主应用不需要 Java；重新构建引擎需要与校验目录一致的 JDK 26.0.2.1，运行 `pnpm database:build` 校验生成结果与内置 JAR 一致。修改源码后运行 `node scripts/database-component.mjs --record`，审核并同步提交源码、内置 JAR 及目录。临时编译产物仍位于忽略的 `components/database/target/`。`.github/workflows/database-components.yml` 手动校验内置产物，无需单独发布引擎。
 

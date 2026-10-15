@@ -33,6 +33,7 @@ export interface DatabaseComponent {
   size: number;
   installed: boolean;
   external?: boolean;
+  downloaded?: number;
   source: string;
 }
 export interface DatabaseComponents {
@@ -124,7 +125,7 @@ export function databaseError(reason: unknown): string {
   if (code.includes("DB_COMPONENT_MISSING"))
     return tx("请选择本机 Java 或安装 Java 运行时，并安装对应数据库驱动。");
   if (code.includes("DB_COMPONENT_DOWNLOAD"))
-    return tx("组件下载失败。请检查网络，或使用离线安装。");
+    return tx("组件下载中断，已保留下载进度。请重试继续下载，或使用离线安装。");
   if (code.includes("DB_ENGINE_INVALID")) return tx("内置连接引擎不可用，请重新安装 uTerm。");
   if (code.includes("DB_COMPONENT_HASH")) return tx("组件校验失败，未安装。请重新下载匹配版本。");
   if (code.includes("DB_PENDING")) return tx("请先提交或回滚当前事务。");

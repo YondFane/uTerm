@@ -104,12 +104,15 @@ export function DatabaseComponents({ selectedKind }: { selectedKind?: DatabaseKi
     <section className="database-components" aria-label={tx("数据库组件")}>
       <h3>{tx("数据库组件")}</h3>
       <p>
-        {tx(
-          "连接引擎已内置。只需选择本机 Java 17 或更新版本，或安装 Java 运行时，再按需安装数据库驱动。",
-        )}
+        {tx("连接引擎已内置，自动检测并优先使用本机 Java 17 或更新版本，再按需安装数据库驱动。")}
       </p>
+      {!status && <p role="status">{tx("正在检测 Java 与组件…")}</p>}
+      {status && !status.java && (
+        <p>{tx("未检测到可用的 Java 17 或更新版本。请选择本机 Java，或在线/离线安装运行时。")}</p>
+      )}
       {status?.java && <p>{tx("Java 路径：{path}", { path: status.java })}</p>}
       {status?.java && <p>{tx("选择本机 Java 不会修改或卸载系统 Java。")}</p>}
+      <p>{tx("下载中断或取消后会保留进度，再次安装时继续下载；下载源不支持续传时重新下载。")}</p>
       {selectedKind && needed.length > 0 && (
         <button
           type="button"
@@ -127,34 +130,41 @@ export function DatabaseComponents({ selectedKind }: { selectedKind?: DatabaseKi
             <div>
               <strong>{label(item.id)}</strong>
               <small>
-                {item.external ? tx("使用本机 Java") : item.version} · {sizeLabel(item.size)}
+                {item.external ? tx("使用本机 Java") : `${item.version} · ${sizeLabel(item.size)}`}
                 {" · "}
-                {item.installed ? tx("已安装") : tx("未安装")}
+                {item.external ? tx("已就绪") : item.installed ? tx("已安装") : tx("未安装")}
               </small>
-              <small title={item.source}>{new URL(item.source).hostname}</small>
+              {!item.external && <small title={item.source}>{new URL(item.source).hostname}</small>}
+              {!item.external && !!item.downloaded && (
+                <small>{tx("已下载 {size}", { size: sizeLabel(item.downloaded) })}</small>
+              )}
             </div>
-            <button
-              type="button"
-              disabled={busy || status.busy}
-              onClick={() => void act("install", item.id)}
-            >
-              {item.installed ? tx("重新安装") : tx("安装")}
-            </button>
-            <button
-              type="button"
-              disabled={busy || status.busy}
-              onClick={() => void act("import", item.id)}
-            >
-              {tx("离线安装")}
-            </button>
-            {item.installed && (
-              <button
-                type="button"
-                disabled={busy || status.busy}
-                onClick={() => setRemove(item.id)}
-              >
-                {tx("卸载")}
-              </button>
+            {!item.external && (
+              <>
+                <button
+                  type="button"
+                  disabled={busy || status.busy}
+                  onClick={() => void act("install", item.id)}
+                >
+                  {item.downloaded ? tx("继续下载") : item.installed ? tx("重新安装") : tx("安装")}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || status.busy}
+                  onClick={() => void act("import", item.id)}
+                >
+                  {tx("离线安装")}
+                </button>
+                {item.installed && (
+                  <button
+                    type="button"
+                    disabled={busy || status.busy}
+                    onClick={() => setRemove(item.id)}
+                  >
+                    {tx("卸载")}
+                  </button>
+                )}
+              </>
             )}
           </div>
         ))}

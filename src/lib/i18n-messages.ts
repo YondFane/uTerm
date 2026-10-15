@@ -18,8 +18,16 @@ export const messages: Record<string, string> = {
   "放弃 SQL 草稿并退出": "Discard SQL drafts and quit",
   数据库组件: "Database components",
   "Java 运行时": "Java runtime",
-  "连接引擎已内置。只需选择本机 Java 17 或更新版本，或安装 Java 运行时，再按需安装数据库驱动。":
-    "The connection engine is built in. Choose local Java 17 or newer, or install the Java runtime, then install the database drivers you need.",
+  "连接引擎已内置，自动检测并优先使用本机 Java 17 或更新版本，再按需安装数据库驱动。":
+    "The connection engine is built in. Local Java 17 or newer is detected and preferred automatically; install database drivers as needed.",
+  "正在检测 Java 与组件…": "Detecting Java and components…",
+  "未检测到可用的 Java 17 或更新版本。请选择本机 Java，或在线/离线安装运行时。":
+    "No working Java 17 or newer was detected. Choose local Java, or install the runtime online or offline.",
+  "下载中断或取消后会保留进度，再次安装时继续下载；下载源不支持续传时重新下载。":
+    "Interrupted or cancelled downloads keep their progress and resume on the next installation attempt; sources without resume support restart the download.",
+  "已下载 {size}": "Downloaded {size}",
+  继续下载: "Resume download",
+  已就绪: "Ready",
   "Java 路径：{path}": "Java path: {path}",
   "安装所需组件（{size}）": "Install required components ({size})",
   已安装: "Installed",
@@ -66,6 +74,7 @@ export const messages: Record<string, string> = {
   "确认此数据库操作？写入、DDL 和事务操作可能立即影响服务器；未提交事务在断开时尝试回滚。":
     "Confirm this database operation? Writes, DDL and transaction operations may affect the server immediately. Disconnecting attempts to roll back uncommitted transactions.",
   数据库连接: "Database connections",
+  数据库: "Databases",
   "编辑数据库连接：{name}": "Edit database connection: {name}",
   移除数据库连接: "Remove database connection",
   "移除数据库连接：{name}": "Remove database connection: {name}",
@@ -76,8 +85,8 @@ export const messages: Record<string, string> = {
     "The connection is read-only and accepts SELECT queries. Enable editing to execute other SQL.",
   "请选择本机 Java 或安装 Java 运行时，并安装对应数据库驱动。":
     "Choose local Java or install the Java runtime, and install the selected database driver.",
-  "组件下载失败。请检查网络，或使用离线安装。":
-    "Component download failed. Check the network or use offline installation.",
+  "组件下载中断，已保留下载进度。请重试继续下载，或使用离线安装。":
+    "The component download was interrupted and progress was kept. Retry to resume, or install offline.",
   "内置连接引擎不可用，请重新安装 uTerm。":
     "The built-in connection engine is unavailable. Reinstall uTerm.",
   "组件校验失败，未安装。请重新下载匹配版本。":
