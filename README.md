@@ -36,13 +36,17 @@ uTerm 是非商业用途免费的独立桌面终端，面向 Windows 和 macOS�
 
 从侧栏打开“数据库组件”会暂时隐藏项目工具面板，返回项目后恢复原来选择的工具及左右位置，侧栏底部工具栏保持原位。
 
-工作台通过对象树浏览库／模式、表和视图。双击表打开独立的数据／结构视图，SQL 草稿及查询结果保留。对象区宽度、SQL／结果高度和结果列宽可调整，分页固定在底部；结果支持选区、带表头复制及单元格值查看。表预览使用独立只读连接，不提交或回滚 SQL 事务。三批范围与体积预算见[数据库工作台实施计划](docs/database-workbench-plan.zh-CN.md)。
+“复制 SQL”和“放弃 SQL 修改”直接位于查询工具栏；表操作菜单在点击其他位置或按 Esc 时收起。
+
+工作台提供最多八个共享明确事务的 SQL 标签，支持当前／选中／全部执行、方言／对象补全、格式化及内存历史。双击表打开数据／结构视图和参数化服务端筛选；开启编辑后暂存受支持主键表的修改，预览 SQL、应用后显式提交，冲突保留草稿及此前 SQL 写入。可导出已加载页面为 CSV／JSON，或查看只读查询执行计划。表格按可见行列渲染，支持选区复制和固定底部分页。只读浏览复用主进程，编辑时按需使用独立浏览连接。限制与用法见[实施计划](docs/database-workbench-plan.zh-CN.md)和[功能指南](docs/features.zh-CN.md#数据库连接与可选组件)。
 
 内置连接引擎源码位于 `components/database/src/`，纳入版本控制的 `components/database/engine.jar` 嵌入桌面可执行文件。`components/database/catalog.json` 固定引擎校验值及可选驱动/运行时下载信息。构建主应用不需要 Java；重新构建引擎需要与校验目录一致的 JDK 26.0.2.1，运行 `pnpm database:build` 校验生成结果与内置 JAR 一致。修改源码后运行 `node scripts/database-component.mjs --record`，审核并同步提交源码、内置 JAR 及目录。临时编译产物仍位于忽略的 `components/database/target/`。`.github/workflows/database-components.yml` 手动校验内置产物，无需单独发布引擎。
 
 `pnpm test:database` 默认跳过真实数据库测试；设置 `UTERM_MYSQL_TEST=1`、`UTERM_MYSQL_PASSWORD` 及可选的 `UTERM_MYSQL_HOST`、`UTERM_MYSQL_PORT`、`UTERM_MYSQL_USER`、`UTERM_MYSQL_DATABASE` 后执行本机集成验证。先下载与目录匹配的驱动到忽略的 `components/database/target/mysql.jar`。测试只查询元数据/构造数据并设置会话变量，不创建或修改业务表。请勿将密码写入源文件、命令历史或测试夹具。 如需验证三种驱动的代理认证，将匹配的 `mysql.jar`、`postgresql.jar` 和 `oracle.jar` 放入同一忽略目录，并设置 `UTERM_DATABASE_PROXY_TEST=1`；此路由测试使用可丢弃的回环 SOCKS 代理，无需数据库服务。
 
 使用 JDK 17 或更新版本，可设置 `UTERM_DATABASE_JAVA_TEST=1` 验证内置 JSON 的 Unicode、控制字符及精确数值，无需数据库。启用 MySQL 测试时可加 `UTERM_MYSQL_TLS=1` 和 `UTERM_MYSQL_CA` 验证 TLS；会话超时测试只关闭测试自身的连接。
+
+受控写入验证需显式设置 `UTERM_DATABASE_WRITE_TEST=1`，配合上述 MySQL 变量执行 `node --experimental-strip-types --test tests/database-maintenance.test.mjs`。必须使用临时回环服务、显式非 3306 端口及 `uterm_*` 专用库；仅创建／删除唯一名称的测试表，请勿指向业务数据。`pnpm test` 限制文件并发为四，约束并行 Vite／DOM 测试进程。SQL 补全将已有 CodeMirror SQL 包声明为直接依赖，不捆绑额外编辑器或表格框架。
 
 ## 一行命令安装
 

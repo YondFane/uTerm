@@ -1,4 +1,91 @@
 export const messages: Record<string, string> = {
+  "SQL 超过 262,144 字符限制。": "SQL exceeds the 262,144-character limit.",
+  "最多打开八个查询标签，请先关闭一个标签。":
+    "Up to eight query tabs can be open. Close one first.",
+  "关闭此查询标签并放弃未保存的 SQL？": "Close this query tab and discard its unsaved SQL?",
+  "没有可执行的 SQL，请选择语句或输入查询。":
+    "No SQL to execute. Select a statement or enter a query.",
+  "确认执行 {count} 条 SQL？所有查询标签共享此连接及事务，DDL 可能自动提交。":
+    "Execute {count} SQL statements? All query tabs share this connection and transaction; DDL may commit automatically.",
+  "此行包含截断值，无法安全编辑或删除。":
+    "This row contains truncated values and cannot be safely edited or deleted.",
+  "切换表将放弃尚未应用的表格修改，是否继续？": "Switch tables and discard unapplied grid changes?",
+  "将这些修改应用到当前事务？应用后仍需显式提交；冲突会保留草稿，不会自动重试。":
+    "Apply these changes to the current transaction? Commit explicitly afterward. Conflicts retain drafts without automatic retries.",
+  应用到事务: "Apply to transaction",
+  "断开连接并放弃尚未应用的表格修改？未提交的事务将尝试回滚。":
+    "Disconnect and discard unapplied grid changes? Uncommitted transactions will attempt to roll back.",
+  定位失败语句: "Go to failed statement",
+  "查询 {number}": "Query {number}",
+  "关闭查询 {number}": "Close query {number}",
+  新建查询: "New query",
+  执行范围: "Execution scope",
+  当前语句或选区: "Current statement or selection",
+  当前语句: "Current statement",
+  选中语句: "Selected statements",
+  全部语句: "All statements",
+  "格式化 SQL": "Format SQL",
+  "Oracle 需开启编辑，并具备 PLAN_TABLE 与 DBMS_XPLAN 权限。":
+    "Oracle requires editing enabled and access to PLAN_TABLE and DBMS_XPLAN.",
+  执行计划: "Explain plan",
+  查询历史: "Query history",
+  当前事务数据: "Current transaction data",
+  预览表格修改: "Preview grid changes",
+  "放弃尚未应用的表格修改？已应用到事务的写入需使用回滚事务。":
+    "Discard unapplied grid changes? Use Roll back transaction for writes already applied to the transaction.",
+  放弃表格修改: "Discard grid changes",
+  服务端筛选: "Server filter",
+  筛选字段: "Filter column",
+  选择字段: "Choose a column",
+  筛选条件: "Filter operator",
+  包含: "Contains",
+  为空: "Is NULL",
+  非空: "Is not NULL",
+  筛选值: "Filter value",
+  应用筛选: "Apply filter",
+  清除筛选: "Clear filter",
+  "此表缺少可靠主键、包含不支持的列类型，或不支持事务；保持只读。":
+    "This table lacks a reliable primary key, contains unsupported column types, or does not support transactions; it remains read-only.",
+  选择语句结果: "Choose statement result",
+  "导出 CSV": "Export CSV",
+  "导出 JSON": "Export JSON",
+  "未应用修改：{count}": "Unapplied changes: {count}",
+  "查询历史（仅本次运行）": "Query history (this run only)",
+  清空历史: "Clear history",
+  "耗时：{elapsed} 毫秒": "Duration: {elapsed} ms",
+  没有查询历史: "No query history",
+  "参数：{values}": "Parameters: {values}",
+  筛选本页已加载结果: "Filter loaded rows on this page",
+  编辑单元格: "Edit cell",
+  删除当前行: "Delete current row",
+  恢复当前行: "Restore current row",
+  新增行: "Add row",
+  默认值: "Default",
+  编辑单元格值: "Edit cell value",
+  "修改超过大小限制，请减少修改后重试。": "Changes exceed the size limit. Reduce them and retry.",
+  "单元格值无效。": "Invalid cell value.",
+  暂存单元格修改: "Stage cell change",
+  "只读模式仅支持 SELECT 及不写入数据的 WITH 查询。":
+    "Read-only mode supports SELECT and non-writing WITH queries only.",
+  "SQL 语句边界、引号或注释不完整，或包含不支持的语句块。":
+    "SQL boundaries, quotes or comments are incomplete, or the statement block is unsupported.",
+  "数据或表结构已变化，本批表格修改已撤销并保留草稿；此前的 SQL 事务保留。请核对并刷新后重试。":
+    "Data or table structure changed. This grid batch was rolled back and drafts retained; the earlier SQL transaction remains. Review and refresh before retrying.",
+  "值与列类型、必填约束或生成列要求不符，请检查输入。":
+    "A value does not match its column type, required fields or generated-column rules. Check the input.",
+  "此表无法安全编辑，请使用具备主键且支持事务的完整标量列普通表。":
+    "This table cannot be safely edited. Use a transactional base table with a primary key and complete scalar columns.",
+  "写入结果不确定，连接已关闭。请重新连接并核对数据，勿直接重复写入。":
+    "The write outcome is uncertain and the connection closed. Reconnect and verify data before writing again.",
+  "内容超过大小或数量限制，请减少批量操作。":
+    "Content exceeds a size or count limit. Reduce the batch.",
+  "本批表格操作超时，已撤销本批写入并保留草稿及此前事务。":
+    "This grid batch timed out. Its writes were rolled back; drafts and the earlier transaction are retained.",
+  所有查询标签共享此连接及事务: "All query tabs share this connection and transaction",
+  共享事务: "Shared transaction",
+  "数据库仍有操作、事务或未保存修改。请等待操作完成，提交或回滚事务，并保存或放弃修改后退出。":
+    "Database operations, transactions or unsaved changes remain. Wait for operations, commit or roll back transactions, and save or discard changes before quitting.",
+  放弃未保存修改并退出: "Discard unsaved changes and quit",
   "无法复制结果。": "Could not copy results.",
   复制选区: "Copy selection",
   带表头复制: "Copy with headers",

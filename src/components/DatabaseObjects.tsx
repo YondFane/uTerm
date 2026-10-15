@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import {
@@ -9,7 +9,7 @@ import {
   type DatabaseResult,
 } from "../lib/database";
 
-export function DatabaseObjects({
+export const DatabaseObjects = memo(function DatabaseObjects({
   kind,
   scopes,
   disabled,
@@ -18,6 +18,7 @@ export function DatabaseObjects({
   open,
   generate,
   refresh,
+  loaded,
 }: {
   kind: DatabaseKind;
   scopes: DatabaseResult | null;
@@ -27,6 +28,7 @@ export function DatabaseObjects({
   open: (object: DatabaseObject, view: "data" | "columns") => void;
   generate: (object: DatabaseObject) => void;
   refresh: () => void;
+  loaded?: (namespace: string, objects: DatabaseObject[]) => void;
 }) {
   useUiLanguage();
   const [filter, setFilter] = useState("");
@@ -34,6 +36,27 @@ export function DatabaseObjects({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [system, setSystem] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState("");
+  const tree = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const dismiss = (event: PointerEvent | KeyboardEvent) => {
+      if ("key" in event && event.key !== "Escape") return;
+      for (const menu of tree.current?.querySelectorAll<HTMLDetailsElement>(
+        ".database-object-menu[open]",
+      ) ?? []) {
+        if ("key" in event || !menu.contains(event.target as Node)) {
+          if ("key" in event && menu.contains(document.activeElement))
+            menu.querySelector("summary")?.focus();
+          menu.open = false;
+        }
+      }
+    };
+    document.addEventListener("pointerdown", dismiss, true);
+    document.addEventListener("keydown", dismiss, true);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss, true);
+      document.removeEventListener("keydown", dismiss, true);
+    };
+  }, []);
   const names = databaseObjects(scopes ?? {});
   const isSystem = (object: DatabaseObject) =>
     /SYSTEM/i.test(object.type) ||
@@ -54,7 +77,18 @@ export function DatabaseObjects({
           catalog: kind === "mysql" ? scope.name : "",
           schema: kind === "mysql" ? "" : scope.name,
         });
-        setTables((previous) => ({ ...previous, [key]: result }));
+        setTables((previous) =>
+          Object.fromEntries([...Object.entries(previous).slice(-7), [key, result]]),
+        );
+        setExpanded((previous) =>
+          Object.fromEntries([
+            ...Object.entries(previous)
+              .filter(([entry]) => entry in tables)
+              .slice(-7),
+            [key, true],
+          ]),
+        );
+        loaded?.(scope.name, databaseObjects(result));
       }
       setExpanded((previous) => ({ ...previous, [key]: true }));
     });
@@ -116,9 +150,10 @@ export function DatabaseObjects({
                         ⋯
                       </summary>
                       <div
-                        onClick={(event) =>
-                          event.currentTarget.parentElement?.removeAttribute("open")
-                        }
+                        onClick={(event) => {
+                          if ((event.target as HTMLElement).closest("button"))
+                            event.currentTarget.parentElement?.removeAttribute("open");
+                        }}
                       >
                         <button disabled={disabled} onClick={() => open(object, "data")}>
                           {tx("查看数据")}
@@ -182,7 +217,7 @@ export function DatabaseObjects({
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
       />
-      <div className="database-object-tree" aria-label={tx("数据库对象")}>
+      <div className="database-object-tree" aria-label={tx("数据库对象")} ref={tree}>
         {names.filter((object) => !isSystem(object)).map(renderScope)}
         {names.some(isSystem) && (
           <details
@@ -198,4 +233,4 @@ export function DatabaseObjects({
       </div>
     </>
   );
-}
+});

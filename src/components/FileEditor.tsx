@@ -7,7 +7,7 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSettings } from "../lib/SettingsContext";
 import { invoke } from "@tauri-apps/api/core";
 import { basicSetup } from "codemirror";
-import { Compartment, EditorState } from "@codemirror/state";
+import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { openSearchPanel, searchPanelOpen, gotoLine } from "@codemirror/search";
@@ -34,6 +34,7 @@ export function CodeEditor({
   save,
   close,
   controls,
+  syntax,
 }: {
   document: OpenFile;
   blocked: boolean;
@@ -41,6 +42,7 @@ export function CodeEditor({
   save: () => void;
   close: () => void;
   controls: React.RefObject<EditorView | null>;
+  syntax?: Extension;
 }) {
   const uiLanguage = useUiLanguage();
 
@@ -65,7 +67,7 @@ export function CodeEditor({
           basicSetup,
           appearance.current.of(light ? [] : oneDark),
           EditorView.lineWrapping,
-          language.current.of([]),
+          language.current.of(syntax ?? []),
           editable.current.of([
             EditorState.readOnly.of(document.readonly || blocked),
             EditorView.editable.of(!document.readonly && !blocked),
@@ -127,7 +129,7 @@ export function CodeEditor({
       }),
     });
     controls.current = view;
-    if (document.text.length < 256 * 1024) {
+    if (!syntax && document.text.length < 256 * 1024) {
       const mode = LanguageDescription.matchFilename(languages, document.path);
       if (mode)
         void mode
@@ -146,6 +148,9 @@ export function CodeEditor({
       view.destroy();
     };
   }, [document.id]);
+  useEffect(() => {
+    if (syntax) controls.current?.dispatch({ effects: language.current.reconfigure(syntax) });
+  }, [syntax, document.id]);
   useEffect(() => {
     controls.current?.dispatch({
       effects: locale.current.reconfigure([

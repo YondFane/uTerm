@@ -1,6 +1,6 @@
 {
   "name": "uterm",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
@@ -18,7 +18,7 @@
     "uterm:dev": "tauri dev",
     "desktop:build": "node scripts/package.mjs",
     "desktop:check": "node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle -- --locked",
-    "test": "node --experimental-strip-types --test tests/*.test.mjs",
+    "test": "node --experimental-strip-types --test --test-concurrency=4 tests/*.test.mjs",
     "format": "prettier --write src tests scripts \"*.{json,ts,html}\" \"src-tauri/{tauri.conf.json,capabilities/*.json}\" && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path crates/utermd-local/Cargo.toml",
     "format:check": "prettier --check src tests scripts \"*.{json,ts,html}\" \"src-tauri/{tauri.conf.json,capabilities/*.json}\" && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo fmt --manifest-path crates/utermd-local/Cargo.toml -- --check",
     "test:host": "cargo test --manifest-path crates/utermd-local/Cargo.toml --locked",
@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
+    "@codemirror/lang-sql": "6.10.0",
     "@codemirror/language": "^6.12.4",
     "@codemirror/language-data": "^6.5.2",
     "@codemirror/search": "^6.7.2",

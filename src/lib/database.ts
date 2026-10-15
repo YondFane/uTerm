@@ -48,6 +48,36 @@ export interface DatabaseResult {
   affected?: number;
   elapsed?: number;
   pending?: boolean;
+  partial?: [number, number][];
+  table?: DatabaseTable;
+  applied?: number;
+  preview?: { sql: string; parameters: (string | null)[] }[];
+}
+export interface DatabaseTable {
+  columns: {
+    name: string;
+    jdbcType: number;
+    nullable: boolean;
+    generated: boolean;
+    hasDefault: boolean;
+    editable: boolean;
+  }[];
+  keys: string[];
+  editable: boolean;
+  signature: string;
+  target: string;
+}
+export interface DatabaseChange {
+  id: number;
+  kind: "insert" | "update" | "delete";
+  row?: number;
+  original?: NonNullable<DatabaseResult["rows"]>[number];
+  values: Record<string, string | null>;
+}
+export interface DatabaseFilter {
+  column: string;
+  operator: "eq" | "contains" | "gt" | "lt" | "null" | "notnull";
+  value: string;
 }
 export interface DatabaseObject {
   name: string;
@@ -167,6 +197,24 @@ export function validDatabaseConfig(value: unknown): value is DatabaseConfig {
 /** Maps backend codes without exposing credential-bearing diagnostics. 映射后端错误码，不显示可能含凭据的诊断信息。 */
 export function databaseError(reason: unknown): string {
   const code = String(reason);
+  if (code.includes("DB_SQL_UNSUPPORTED"))
+    return tx("SQL 语句边界、引号或注释不完整，或包含不支持的语句块。");
+  if (code.includes("DB_SQL_EMPTY")) return tx("没有可执行的 SQL，请选择语句或输入查询。");
+  if (code.includes("DB_CONFLICT"))
+    return tx(
+      "数据或表结构已变化，本批表格修改已撤销并保留草稿；此前的 SQL 事务保留。请核对并刷新后重试。",
+    );
+  if (code.includes("DB_INVALID_VALUE"))
+    return tx("值与列类型、必填约束或生成列要求不符，请检查输入。");
+  if (code.includes("DB_TABLE_UNSUPPORTED"))
+    return tx("此表无法安全编辑，请使用具备主键且支持事务的完整标量列普通表。");
+  if (code.includes("DB_WRITE_UNKNOWN"))
+    return tx("写入结果不确定，连接已关闭。请重新连接并核对数据，勿直接重复写入。");
+  if (code.includes("DB_EXPLAIN_WRITABLE"))
+    return tx("Oracle 需开启编辑，并具备 PLAN_TABLE 与 DBMS_XPLAN 权限。");
+  if (code.includes("DB_INPUT_LIMIT")) return tx("内容超过大小或数量限制，请减少批量操作。");
+  if (code.includes("DB_BATCH_TIMEOUT"))
+    return tx("本批表格操作超时，已撤销本批写入并保留草稿及此前事务。");
   if (code.includes("DB_BROWSE_DISCONNECTED"))
     return tx("浏览连接已关闭，SQL 连接和事务保留，请重试浏览。");
   if (code.includes("DB_CONNECTION_LIMIT"))
@@ -175,8 +223,7 @@ export function databaseError(reason: unknown): string {
     return tx("数据库拒绝了操作：{code}", {
       code: code.slice(code.indexOf("DB_SQL:") + 7).replace(/[^a-zA-Z0-9:_-]/g, ""),
     });
-  if (code.includes("DB_READ_ONLY"))
-    return tx("连接处于只读模式，仅支持 SELECT 查询。开启允许编辑后可执行其他 SQL。");
+  if (code.includes("DB_READ_ONLY")) return tx("只读模式仅支持 SELECT 及不写入数据的 WITH 查询。");
   if (code.includes("DB_COMPONENT_CANCELLED")) return tx("组件安装已取消。");
   if (code.includes("DB_COMPONENT_MISSING"))
     return tx("请选择本机 Java 或安装 Java 运行时，并安装对应数据库驱动。");

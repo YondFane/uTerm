@@ -120,6 +120,7 @@ impl Drop for Tunnel {
 struct Connection {
     browser: Mutex<Option<(String, Arc<Connection>)>>,
     browser_lock: AsyncMutex<()>,
+    session_lock: AsyncMutex<()>,
     browser_config: Option<(Config, String, String)>,
     child: Mutex<Option<BackgroundChild>>,
     input: AsyncMutex<tokio::fs::File>,
@@ -454,7 +455,7 @@ pub async fn database_connect(
         let input = crate::ssh::pipe_file(child.take_stdin().context("DB_PROTOCOL")?);
         let output = crate::ssh::pipe_file(child.take_stdout().context("DB_PROTOCOL")?);
         let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
-        let connection = Arc::new(Connection { browser: Mutex::new(None), browser_lock: AsyncMutex::new(()), browser_config: Some((config.clone(), password.clone(), identity.clone())), child: Mutex::new(Some(child)), input: AsyncMutex::new(input), pending: pending.clone(), sequence: AtomicU64::new(1), busy: AtomicBool::new(false), writable: AtomicBool::new(false), transaction: AtomicBool::new(false), dead: AtomicBool::new(false), tunnel: Mutex::new(tunnel), reader: Mutex::new(None), temporary: Mutex::new(Some(temporary)) });
+        let connection = Arc::new(Connection { browser: Mutex::new(None), browser_lock: AsyncMutex::new(()), session_lock: AsyncMutex::new(()), browser_config: Some((config.clone(), password.clone(), identity.clone())), child: Mutex::new(Some(child)), input: AsyncMutex::new(input), pending: pending.clone(), sequence: AtomicU64::new(1), busy: AtomicBool::new(false), writable: AtomicBool::new(false), transaction: AtomicBool::new(false), dead: AtomicBool::new(false), tunnel: Mutex::new(tunnel), reader: Mutex::new(None), temporary: Mutex::new(Some(temporary)) });
         let weak = Arc::downgrade(&connection);
         let pending_reader = pending.clone();
         let reader = tokio::spawn(async move {
@@ -503,7 +504,7 @@ fn browse_request(kind: &str, value: &Value) -> Result<Value, String> {
             json!({"op":"metadata", "view":view, "catalog":catalog, "schema":schema, "table":table}),
         );
     }
-    if view != "data" || table.is_empty() {
+    if !["data", "table"].contains(&view) || table.is_empty() {
         return Err("DB_INVALID_REQUEST".into());
     }
     let offset = value
@@ -511,6 +512,15 @@ fn browse_request(kind: &str, value: &Value) -> Result<Value, String> {
         .map_or(Some(0), Value::as_u64)
         .filter(|offset| *offset <= 10000)
         .ok_or("DB_INPUT_LIMIT")?;
+    if view == "table" {
+        let filters = value.get("filters").cloned().unwrap_or_else(|| json!([]));
+        if !filters.as_array().is_some_and(|filters| filters.len() <= 8) {
+            return Err("DB_INPUT_LIMIT".into());
+        }
+        return Ok(
+            json!({"op":"table", "catalog":catalog, "schema":schema, "table":table, "offset":offset, "filters":filters}),
+        );
+    }
     let quote = if kind == "mysql" { "`" } else { "\"" };
     let quoted = |name: &str| format!("{quote}{}{quote}", name.replace(quote, &quote.repeat(2)));
     let namespace = if kind == "mysql" { catalog } else { schema };
@@ -541,6 +551,7 @@ pub async fn database_request(
         .ok_or("DB_INVALID_REQUEST")?
         .to_owned();
     let op = op.as_str();
+    let _session = connection.session_lock.lock().await;
     if op == "browse" {
         let (config, password, identity) = connection
             .browser_config
@@ -550,6 +561,11 @@ pub async fn database_request(
         let _lock = connection.browser_lock.lock().await;
         if connection.dead.load(Ordering::SeqCst) {
             return Err("DB_DISCONNECTED".into());
+        }
+        if !connection.writable.load(Ordering::SeqCst)
+            && !connection.transaction.load(Ordering::SeqCst)
+        {
+            return connection.send(request).await;
         }
         let existing = connection
             .browser
@@ -619,21 +635,49 @@ pub async fn database_request(
         }
         return result;
     }
-    if !["query", "metadata", "writable", "commit", "rollback"].contains(&op) {
+    if ![
+        "query", "metadata", "writable", "commit", "rollback", "table", "preview", "apply",
+        "explain",
+    ]
+    .contains(&op)
+    {
         return Err("DB_INVALID_REQUEST".into());
     }
     if connection.transaction.load(Ordering::SeqCst) && ["metadata", "writable"].contains(&op) {
         return Err("DB_PENDING".into());
     }
-    if op == "query" && connection.writable.load(Ordering::SeqCst) {
+    if op == "apply" && !connection.writable.load(Ordering::SeqCst) {
+        return Err("DB_READ_ONLY".into());
+    }
+    if ["query", "table", "preview", "apply", "explain"].contains(&op)
+        && connection.writable.load(Ordering::SeqCst)
+    {
         connection.transaction.store(true, Ordering::SeqCst);
     }
     let result = connection.send(request).await;
     if let Ok(value) = &result {
+        if let Some(pending) = value["pending"].as_bool() {
+            connection.transaction.store(pending, Ordering::SeqCst);
+        }
         if op == "writable" {
             connection
                 .writable
                 .store(value["writable"] == true, Ordering::SeqCst);
+            if value["writable"] == false {
+                let browser = connection
+                    .browser
+                    .lock()
+                    .map_err(|_| "DB_OPERATION_FAILED")?
+                    .take();
+                if let Some((id, browser)) = browser {
+                    browser.stop();
+                    app.state::<DatabaseState>()
+                        .connections
+                        .lock()
+                        .map_err(|_| "DB_OPERATION_FAILED")?
+                        .remove(&id);
+                }
+            }
         }
         if ["commit", "rollback"].contains(&op) {
             connection.transaction.store(false, Ordering::SeqCst);
@@ -710,18 +754,45 @@ pub async fn database_export_sql(
     window: tauri::WebviewWindow,
     sql: String,
 ) -> Result<bool, String> {
-    use std::io::Write;
-    use tauri_plugin_dialog::DialogExt;
     if sql.len() > 1048576 {
         return Err("DB_INPUT_LIMIT".into());
     }
+    export_text(window, sql, "query.sql", "sql").await
+}
+
+#[tauri::command]
+pub async fn database_export_result(
+    window: tauri::WebviewWindow,
+    data: String,
+    format: String,
+) -> Result<bool, String> {
+    if data.len() > 8 * 1024 * 1024 {
+        return Err("DB_INPUT_LIMIT".into());
+    }
+    match format.as_str() {
+        "csv" => export_text(window, data, "results.csv", "csv").await,
+        "json" => export_text(window, data, "results.json", "json").await,
+        _ => Err("DB_INVALID_REQUEST".into()),
+    }
+}
+
+async fn export_text(
+    window: tauri::WebviewWindow,
+    data: String,
+    name: &str,
+    extension: &str,
+) -> Result<bool, String> {
+    use std::io::Write;
+    use tauri_plugin_dialog::DialogExt;
+    let name = name.to_owned();
+    let extension = extension.to_owned();
     tauri::async_runtime::spawn_blocking(move || -> Result<bool> {
         let selected = window
             .dialog()
             .file()
             .set_parent(&window)
-            .set_file_name("query.sql")
-            .add_filter("SQL", &["sql"])
+            .set_file_name(name)
+            .add_filter(extension.to_uppercase(), &[extension.as_str()])
             .blocking_save_file();
         let Some(selected) = selected else {
             return Ok(false);
@@ -731,7 +802,7 @@ pub async fn database_export_sql(
             .map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))?;
         let mut temporary =
             tempfile::NamedTempFile::new_in(path.parent().context("DB_OPERATION_FAILED")?)?;
-        temporary.write_all(sql.as_bytes())?;
+        temporary.write_all(data.as_bytes())?;
         temporary.as_file().sync_all()?;
         temporary
             .persist(path)
@@ -846,6 +917,15 @@ mod tests {
             .unwrap()["op"],
             "metadata"
         );
+        let request = browse_request("mysql", &json!({"view":"table", "table":"x", "sql":"DELETE FROM x", "op":"apply", "changes":[{}], "filters":[{"column":"id","operator":"eq","value":"1"}]})).unwrap();
+        assert_eq!(request["op"], "table");
+        assert!(request.get("sql").is_none() && request.get("changes").is_none());
+        assert_eq!(request["filters"][0]["value"], "1");
+        assert!(browse_request(
+            "mysql",
+            &json!({"view":"table","table":"x","filters":[{},{},{},{},{},{},{},{},{}]})
+        )
+        .is_err());
     }
     #[test]
     fn stopping_an_owner_closes_browsing_and_reclaims_dead_slots() {
@@ -873,6 +953,7 @@ mod tests {
         Connection {
             browser: Mutex::new(None),
             browser_lock: AsyncMutex::new(()),
+            session_lock: AsyncMutex::new(()),
             browser_config: None,
             child: Mutex::new(None),
             input: AsyncMutex::new(tokio::fs::File::from_std(tempfile::tempfile().unwrap())),

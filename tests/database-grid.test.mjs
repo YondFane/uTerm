@@ -148,6 +148,32 @@ test("grid supports keyboard range copying, row selection, resizing and literal 
       ),
     );
     assert.equal(document.querySelector('[data-selected="true"]'), null);
+    const wide = {
+      columns: Array.from({ length: 256 }, (_, at) => ({ name: `column_${at}`, type: "VARCHAR" })),
+      rows: Array.from({ length: 200 }, (_, row) =>
+        Array.from({ length: 256 }, (_, col) => `${row}:${col}`),
+      ),
+    };
+    await act(async () =>
+      root.render(React.createElement(DatabaseGrid, { result: wide, report: () => {} })),
+    );
+    assert.ok(
+      document.querySelectorAll("td[data-cell]").length < 500,
+      "Only visible rows and columns should render",
+    );
+    await act(async () =>
+      document
+        .querySelector('[data-cell="0:0"]')
+        .dispatchEvent(new window.MouseEvent("pointerdown", { bubbles: true, button: 0 })),
+    );
+    for (let at = 0; at < 30; at++)
+      await act(async () =>
+        grid.dispatchEvent(
+          new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+        ),
+      );
+    assert.equal(document.querySelector('[data-cell="0:30"]').textContent, "0:30");
+    assert.ok(document.querySelectorAll("td[data-cell]").length < 500);
   } finally {
     await act(async () => root.unmount());
     await server.close();

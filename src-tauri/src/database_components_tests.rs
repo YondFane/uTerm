@@ -24,6 +24,7 @@ fn download_server(
                     Err(error) => panic!("{error}"),
                 }
             };
+            stream.set_nonblocking(false).unwrap();
             stream
                 .set_read_timeout(Some(Duration::from_secs(3)))
                 .unwrap();

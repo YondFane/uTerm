@@ -1,9 +1,9 @@
 {
   "protocol": 1,
   "engine": {
-    "version": "1.0.0",
-    "sha256": "67ae7d0c9d9eda63e05c83002c6f0b6313a6a5d37695cb6f038c6b5784475bec",
-    "size": 11276
+    "version": "1.1.0",
+    "sha256": "53ee592bf5f6ab822525d36e00b72f3d6d46bf9daf90a11f20d15b2f0b61158a",
+    "size": 28972
   },
   "drivers": {
     "mysql": {

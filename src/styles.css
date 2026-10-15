@@ -3901,6 +3901,15 @@ textarea:focus-visible {
   flex: none;
   gap: 8px;
   padding: 6px 10px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.database-connection-bar > * {
+  flex-shrink: 0;
+}
+.database-connection-bar > span:first-of-type {
+  flex-shrink: 1;
 }
 .database-connection-bar > span:first-of-type {
   flex: 1;
@@ -3966,19 +3975,16 @@ textarea:focus-visible {
   background: var(--ui-selected);
   border-radius: 5px;
 }
-.database-object-menu,
-.database-query-menu {
+.database-object-menu {
   position: relative;
   flex-shrink: 0;
 }
-.database-object-menu > summary,
-.database-query-menu > summary {
+.database-object-menu > summary {
   cursor: pointer;
   padding: 5px 8px;
   list-style: none;
 }
-.database-object-menu > div,
-.database-query-menu > div {
+.database-object-menu > div {
   position: absolute;
   right: 0;
   z-index: 20;
@@ -3994,8 +4000,7 @@ textarea:focus-visible {
   left: auto;
   right: auto;
 }
-.database-object-menu button,
-.database-query-menu button {
+.database-object-menu button {
   display: block;
   width: 100%;
   text-align: left;
@@ -4046,6 +4051,69 @@ textarea:focus-visible {
 .database-object-actions {
   flex: none;
   padding: 5px 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.database-query-actions > *,
+.database-object-actions > *,
+.database-result-tabs > * {
+  flex-shrink: 0;
+}
+.database-query-tab {
+  display: flex;
+  flex: none;
+  align-items: center;
+}
+.database-query-tab > button + button {
+  padding-inline: 7px;
+}
+.database-table-filter {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--ui-border);
+}
+.database-table-filter > * {
+  flex: none;
+}
+.database-table-filter input {
+  width: 140px;
+}
+.database-table-filter select {
+  max-width: 180px;
+}
+.database-session-scope {
+  color: var(--ui-muted);
+}
+.database-confirm-dialog,
+.database-history-dialog {
+  max-width: min(760px, 90vw);
+  max-height: 80vh;
+  overflow: auto;
+}
+.database-sql-preview {
+  max-height: 45vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.database-history-entry {
+  display: flex;
+  width: 100%;
+  gap: 12px;
+  margin-block: 6px;
+  text-align: left;
+}
+.database-history-entry pre {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
 }
 .database-sql-editor .code-editor {
   min-height: 0;
@@ -4217,12 +4285,59 @@ textarea:focus-visible {
   overflow-wrap: anywhere;
   user-select: text;
 }
+.database-results thead th {
+  height: 44px;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+.database-results tbody tr:not(.database-grid-spacer) {
+  height: 32px;
+}
+.database-results tbody td,
+.database-results tbody th {
+  height: 32px;
+  box-sizing: border-box;
+  line-height: 18px;
+}
+.database-results tbody th button {
+  height: 30px;
+  min-height: 0;
+  padding: 0;
+}
+.database-results .database-grid-spacer,
+.database-results .database-grid-spacer td {
+  max-width: none;
+  padding: 0;
+  border: 0;
+  pointer-events: none;
+}
+.database-results td[data-edited] {
+  box-shadow: inset 3px 0 var(--ui-accent);
+}
+.database-results tr[data-deleted] td {
+  text-decoration: line-through;
+  opacity: 0.55;
+}
+.database-value-dialog textarea {
+  display: block;
+  width: 100%;
+  min-height: 160px;
+  margin-block: 8px;
+}
+.database-grid-actions input {
+  width: 170px;
+  min-width: 120px;
+  flex-shrink: 0;
+}
 @media (max-height: 520px) {
   .database-query {
     min-height: 90px;
   }
   .database-grid-container {
-    min-height: 110px;
+    min-height: 0;
+  }
+  .database-results {
+    min-height: 0;
   }
 }
 @media (max-width: 800px) {

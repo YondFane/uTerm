@@ -3,7 +3,7 @@ title: Database workbench implementation plan
 status: active
 type: plan
 created: 2026-10-15
-updated: 2026-10-15
+updated: 2026-10-16
 ---
 
 # Database workbench implementation plan
@@ -29,11 +29,11 @@ Acceptance: find student, open Data, inspect Structure, return to unchanged SQL/
 
 ## Phase 2 — SQL productivity
 
-Planned: multiple query tabs with explicit session/transaction ownership; execute selection/current statement/all with dialect-aware parsing; SQL completion/formatting, error location and query history. Support commented SELECT and read-only CTEs without treating every WITH statement as read-only. History stays in memory by default; restart recovery is a separate explicit setting. Distinguish server-side table filters from filtering loaded arbitrary-query results.
+Implemented: up to eight query tabs sharing an explicitly labeled connection/transaction, dialect-aware current/selection/all execution, loaded-schema completion, whitespace formatting with independent undo, numeric error location and bounded in-memory history. Commented SELECT and nonwriting WITH work read-only; writing CTEs remain guarded. Server-side prepared table filters are separate from loaded-page filtering. Restart recovery remains a separate future opt-in setting. See the feature guide for limits and acceptance evidence.
 
 ## Phase 3 — controlled data maintenance
 
-Planned: grid edits, insert/delete rows, SQL change preview, stale-data conflict checks, export and execution plans. Require a reliable unique key for editable results; otherwise remain read-only. Evaluate driver-supported cancellation that preserves the connection separately. Preserve explicit transaction handling and uncertain-write diagnostics.
+Implemented: staged grid edits/inserts/deletes, bound SQL previews, primary-key row locking and original-value conflict checks, batch savepoint rollback, loaded-page CSV/JSON export and non-executing plans. The editable scope is deliberately ordinary transactional tables with non-null primary keys and supported scalar columns; views, arbitrary query results and unsupported columns stay read-only. This avoids inferring writable identities from ambiguous result sets. Connection-preserving cancellation was evaluated and deferred: closing the connection keeps uncertain write outcomes explicit across drivers. Oracle plans require editing and plan-table permissions. PostgreSQL/Oracle live-server acceptance remains pending.
 
 ## Size budget and validation
 

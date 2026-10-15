@@ -11,6 +11,8 @@ public final class DatabaseJsonProbe {
         Class<?> json = Class.forName("Json");
         Method write = json.getDeclaredMethod("write", Object.class);
         Method parse = json.getDeclaredMethod("parse", String.class);
+        Method length = json.getDeclaredMethod("length", Object.class);
+        length.setAccessible(true);
         write.setAccessible(true);
         parse.setAccessible(true);
         StringBuilder controls = new StringBuilder();
@@ -20,6 +22,7 @@ public final class DatabaseJsonProbe {
         fixture.put("text", "中文𐐀\"\\\n\r\t");
         fixture.put("nested", Arrays.asList(null, true, Map.of("number", new BigDecimal("12345678901234567890.125"))));
         String encoded = (String) write.invoke(null, fixture);
+        if (!Integer.valueOf(encoded.length()).equals(length.invoke(null, fixture))) throw new AssertionError("JSON length differs");
         if (!fixture.equals(parse.invoke(null, encoded))) throw new AssertionError("JSON round trip differs");
         System.out.write(encoded.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
