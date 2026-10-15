@@ -133,6 +133,9 @@ pub struct StartRequest {
     directory: String,
     shell: String,
     agent: Option<String>,
+    ssh: Option<utermd_local::ssh::SshTarget>,
+    #[serde(default)]
+    create: bool,
     rows: u16,
     cols: u16,
 }
@@ -160,6 +163,32 @@ pub async fn local_session_list(app: tauri::AppHandle) -> Result<SessionSnapshot
 }
 
 #[tauri::command]
+pub async fn ssh_session_list(app: tauri::AppHandle) -> Result<SessionSnapshot, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let root = local_root(&app)?;
+        if !root.join("endpoint.json").exists() {
+            return Ok(SessionSnapshot::default());
+        }
+        let client = Client::connect(&root).map_err(|error| error.to_string())?;
+        if let Err(error) = client.require_ssh_support() {
+            if error.to_string() == "SSH_HOST_UPGRADE_REQUIRED" {
+                return Ok(SessionSnapshot::default());
+            }
+            return Err(error.to_string());
+        }
+        match client
+            .request(Operation::SshSessionSnapshot)
+            .map_err(|error| error.to_string())?
+        {
+            Reply::SshSessionSnapshot(snapshot) => Ok(snapshot),
+            _ => Err("Invalid SSH session list".into()),
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 pub async fn start_session(
     app: tauri::AppHandle,
     state: tauri::State<'_, Arc<Sessions>>,
@@ -172,9 +201,24 @@ pub async fn start_session(
         directory,
         shell,
         agent,
+        ssh,
+        create,
         rows,
         cols,
     } = request;
+    let prepared = if create {
+        if let Some(target) = &ssh {
+            Some(
+                crate::ssh_auth::prepare(&app, target)
+                    .await
+                    .map_err(|error| error.to_string())?,
+            )
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let client = local_client(&app, &state)?;
@@ -183,17 +227,47 @@ pub async fn start_session(
                 .require_agent_support()
                 .map_err(|error| error.to_string())?;
         }
-        let generation = match client
-            .request(Operation::Open {
-                spec: SessionSpec {
-                    id: id.clone(),
-                    directory: directory.into(),
-                    shell,
-                    agent,
-                },
+        let is_ssh = ssh.is_some();
+        if is_ssh {
+            client
+                .require_ssh_support()
+                .map_err(|error| error.to_string())?;
+            if ssh.as_ref().is_some_and(|target| target.mode.is_some()) {
+                client
+                    .require_ssh_config_support()
+                    .map_err(|error| error.to_string())?;
+            }
+        }
+        let spec = SessionSpec {
+            id: id.clone(),
+            directory: directory.into(),
+            shell,
+            agent,
+            ssh,
+        };
+        let operation = if let Some(prepared) = prepared {
+            client
+                .require_ssh_config_support()
+                .map_err(|error| error.to_string())?;
+            Operation::OpenSshConfigured {
+                spec,
                 rows,
                 cols,
-            })
+                resolved: prepared.resolved().map_err(|error| error.to_string())?,
+                askpass: prepared.askpass,
+            }
+        } else if is_ssh {
+            Operation::OpenSsh {
+                spec,
+                rows,
+                cols,
+                create,
+            }
+        } else {
+            Operation::Open { spec, rows, cols }
+        };
+        let generation = match client
+            .request(operation)
             .map_err(|error| format!("{error:#}"))?
         {
             Reply::Opened { generation } => generation,

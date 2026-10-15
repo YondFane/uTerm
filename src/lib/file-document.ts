@@ -1,3 +1,4 @@
+import { displayDirectory, fileTarget, isRemoteDirectory } from "./file-target.ts";
 import { tx } from "./i18n.ts";
 export interface FileData {
   kind: "text" | "image" | "pdf";
@@ -17,6 +18,7 @@ export interface OpenFile extends FileData {
   jump: number;
 }
 export function clipboardPath(path: string): string {
+  if (isRemoteDirectory(path)) return displayDirectory(path);
   const windows = path.replace(/\//g, "\\");
   if (/^\\\\\?\\[a-z]:\\/i.test(windows)) return windows.slice(4);
   if (/^\\\\\?\\UNC\\/i.test(windows)) return `\\\\${windows.slice(8)}`;
@@ -57,6 +59,7 @@ export function readDraft(serialized: string): OpenFile {
     !["\n", "\r\n", "\r"].includes(value.line_ending)
   )
     throw new Error(tx("无法读取编辑器草稿，原数据已保留。"));
+  fileTarget(value.directory);
   return {
     id: 0,
     directory: value.directory,

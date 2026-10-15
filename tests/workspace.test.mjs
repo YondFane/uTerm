@@ -140,7 +140,7 @@ test("restores selection, Unicode paths, and shell settings without runtime data
   assert.throws(() => readWorkspace(JSON.stringify(saved)));
   delete saved.projects[0].sessions[0].pid;
   const restored = readWorkspace(JSON.stringify(saved));
-  assert.equal(restored.version, 3);
+  assert.equal(restored.version, 7);
   assert.equal(restored.selectedSession, "s2");
   assert.equal(restored.projects[0].workspaceId, "local");
   assert.equal(restored.projects[0].sessions[0].pid, undefined);

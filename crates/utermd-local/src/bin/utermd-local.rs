@@ -1,4 +1,7 @@
 fn main() -> anyhow::Result<()> {
+    if utermd_local::ssh_askpass::requested() {
+        return utermd_local::ssh_askpass::run();
+    }
     let mut arguments = std::env::args_os().skip(1);
     let mode = arguments.next();
     if mode.as_deref() == Some(std::ffi::OsStr::new("--agent-report")) {

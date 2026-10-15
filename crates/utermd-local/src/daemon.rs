@@ -29,6 +29,8 @@ pub struct SessionSpec {
     pub directory: PathBuf,
     pub shell: String,
     pub agent: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh: Option<crate::ssh::SshTarget>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -52,12 +54,26 @@ pub enum Operation {
     Ping,
     ListSessions,
     SessionSnapshot,
+    SshSessionSnapshot,
     HostStatus,
     ShutdownIfIdle,
     Open {
         spec: SessionSpec,
         rows: u16,
         cols: u16,
+    },
+    OpenSsh {
+        spec: SessionSpec,
+        rows: u16,
+        cols: u16,
+        create: bool,
+    },
+    OpenSshConfigured {
+        spec: SessionSpec,
+        rows: u16,
+        cols: u16,
+        resolved: crate::ssh::ResolvedTarget,
+        askpass: Option<crate::ssh_askpass::Endpoint>,
     },
     Read {
         id: String,
@@ -107,6 +123,7 @@ pub struct HostStatus {
 pub enum Reply {
     Sessions(Vec<SessionSpec>),
     SessionSnapshot(SessionSnapshot),
+    SshSessionSnapshot(SessionSnapshot),
     HostStatus(HostStatus),
     Ready {
         pid: u32,
@@ -157,6 +174,20 @@ impl Client {
             return Ok(());
         }
         bail!("后台服务不支持 Agent 会话。请关闭会话并重新启动应用；已有进程未被终止。");
+    }
+    pub fn require_ssh_support(&self) -> Result<()> {
+        if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "ssh-sessions-v1"))
+        {
+            return Ok(());
+        }
+        bail!("SSH_HOST_UPGRADE_REQUIRED");
+    }
+    pub fn require_ssh_config_support(&self) -> Result<()> {
+        if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "ssh-options-v1"))
+        {
+            return Ok(());
+        }
+        bail!("SSH_HOST_UPGRADE_REQUIRED");
     }
     pub fn request(&self, operation: Operation) -> Result<Reply> {
         let address = SocketAddr::from(([127, 0, 0, 1], self.endpoint.port));
@@ -575,7 +606,17 @@ impl Host {
         Ok(entry)
     }
 
-    fn open_session(&self, spec: SessionSpec, rows: u16, cols: u16) -> Result<Arc<Entry>> {
+    fn open_session(
+        &self,
+        spec: SessionSpec,
+        rows: u16,
+        cols: u16,
+        create: bool,
+        configured: Option<(
+            crate::ssh::ResolvedTarget,
+            Option<crate::ssh_askpass::Endpoint>,
+        )>,
+    ) -> Result<Arc<Entry>> {
         crate::size(rows, cols)?;
         if spec.id.is_empty() || spec.id.len() > 200 {
             bail!("Invalid session identifier");
@@ -589,6 +630,15 @@ impl Host {
                 bail!("Session configuration differs from its running process");
             }
             return Ok(entry.clone());
+        }
+        if !create {
+            bail!("SSH_SESSION_MISSING");
+        }
+        if let Some(target) = &spec.ssh {
+            target.validate()?;
+            if spec.agent.is_some() {
+                bail!("SSH_INVALID_CONNECTION");
+            }
         }
         if lock(&self.closed_sessions).contains(&spec.id) {
             bail!("Session was explicitly closed; create a new session instead");
@@ -608,17 +658,27 @@ impl Host {
         let sink = output.clone();
         let (reply_sender, reply_receiver) = mpsc::sync_channel::<Vec<u8>>(64);
         let generation = uuid::Uuid::new_v4().to_string();
-        let mut command = crate::process::launch_command(
-            &spec.shell,
-            spec.agent.as_deref(),
-            self.directory
-                .parent()
-                .context("Host directory has no parent")?,
-        )?;
-        command.env("UTERM_DESKTOP_HOST", &self.directory);
-        command.env("UTERM_DESKTOP_REPORTER", std::env::current_exe()?);
-        command.env("UTERM_DESKTOP_SESSION", &spec.id);
-        command.env("UTERM_DESKTOP_GENERATION", &generation);
+        let mut command = if let Some(target) = &spec.ssh {
+            crate::ssh::configured_command(
+                target,
+                configured.as_ref().map(|v| &v.0),
+                configured.as_ref().and_then(|v| v.1.as_ref()),
+            )?
+        } else {
+            crate::process::launch_command(
+                &spec.shell,
+                spec.agent.as_deref(),
+                self.directory
+                    .parent()
+                    .context("Host directory has no parent")?,
+            )?
+        };
+        if spec.ssh.is_none() {
+            command.env("UTERM_DESKTOP_HOST", &self.directory);
+            command.env("UTERM_DESKTOP_REPORTER", std::env::current_exe()?);
+            command.env("UTERM_DESKTOP_SESSION", &spec.id);
+            command.env("UTERM_DESKTOP_GENERATION", &generation);
+        }
         let session =
             Session::spawn_background(command, &spec.directory, rows, cols, move |event| {
                 let mut output = lock(&sink.0);
@@ -683,6 +743,8 @@ impl Host {
                 capabilities: {
                     let mut values = vec![
                         "agent-reports-v1".into(),
+                        "ssh-sessions-v1".into(),
+                        "ssh-options-v1".into(),
                         "local-session-list-v1".into(),
                         "local-session-snapshot-v1".into(),
                         "local-host-management-v1".into(),
@@ -723,7 +785,9 @@ impl Host {
                     sessions: entries
                         .values()
                         .filter(|entry| {
-                            !lock(&entry.output.0).exited && !closed.contains(&entry.spec.id)
+                            entry.spec.ssh.is_none()
+                                && !lock(&entry.output.0).exited
+                                && !closed.contains(&entry.spec.id)
                         })
                         .map(|entry| entry.spec.clone())
                         .collect(),
@@ -733,12 +797,52 @@ impl Host {
             Operation::ListSessions => Ok(Reply::Sessions(
                 lock(&self.sessions)
                     .values()
-                    .filter(|entry| !lock(&entry.output.0).exited)
+                    .filter(|entry| entry.spec.ssh.is_none() && !lock(&entry.output.0).exited)
                     .map(|entry| entry.spec.clone())
                     .collect(),
             )),
             Operation::Open { spec, rows, cols } => {
-                let entry = self.open_session(spec, rows, cols)?;
+                if spec.ssh.is_some() {
+                    bail!("Use OpenSsh for SSH sessions");
+                }
+                let entry = self.open_session(spec, rows, cols, true, None)?;
+                Ok(Reply::Opened {
+                    generation: entry.generation.clone(),
+                })
+            }
+            Operation::OpenSshConfigured {
+                spec,
+                rows,
+                cols,
+                resolved,
+                askpass,
+            } => {
+                if spec.ssh.is_none() {
+                    bail!("SSH_INVALID_CONNECTION");
+                }
+                let entry = self.open_session(spec, rows, cols, true, Some((resolved, askpass)))?;
+                Ok(Reply::Opened {
+                    generation: entry.generation.clone(),
+                })
+            }
+            Operation::SshSessionSnapshot => Ok(Reply::SshSessionSnapshot(SessionSnapshot {
+                sessions: lock(&self.sessions)
+                    .values()
+                    .filter(|entry| entry.spec.ssh.is_some())
+                    .map(|entry| entry.spec.clone())
+                    .collect(),
+                closed: lock(&self.closed_sessions).iter().cloned().collect(),
+            })),
+            Operation::OpenSsh {
+                spec,
+                rows,
+                cols,
+                create,
+            } => {
+                if spec.ssh.is_none() {
+                    bail!("SSH_INVALID_CONNECTION");
+                }
+                let entry = self.open_session(spec, rows, cols, create, None)?;
                 Ok(Reply::Opened {
                     generation: entry.generation.clone(),
                 })
@@ -749,7 +853,7 @@ impl Host {
                 after,
             } => {
                 let entry = self.entry(&id, &generation)?;
-                if entry.spec.agent.is_none() {
+                if entry.spec.agent.is_none() && entry.spec.ssh.is_none() {
                     match self.foreground_agent(entry.session.process_id()) {
                         Ok(agent) => {
                             let mut output = lock(&entry.output.0);

@@ -24,6 +24,7 @@ impl RunningHost {
     }
     fn open(&mut self, id: &str) -> String {
         let spec = SessionSpec {
+            ssh: None,
             id: id.into(),
             directory: self.directory.clone(),
             shell: "default".into(),
@@ -141,6 +142,7 @@ fn session_requires_an_explicit_existing_directory() {
             .client
             .request(Operation::Open {
                 spec: SessionSpec {
+                    ssh: None,
                     id: "invalid-directory".into(),
                     directory,
                     shell: "default".into(),
@@ -314,6 +316,7 @@ fn client_process_exit_keeps_shell_and_background_work_alive() {
         )
         .expect("child starts host");
         let spec = SessionSpec {
+            ssh: None,
             id: "parent-exit".into(),
             directory: directory.clone(),
             shell: "default".into(),
@@ -487,6 +490,7 @@ fn custom_agent_arguments_and_reporter_environment_reach_the_daemon() {
     let Reply::Opened { generation } = client
         .request(Operation::Open {
             spec: SessionSpec {
+                ssh: None,
                 id: "custom-session".into(),
                 directory: root.clone(),
                 shell: "default".into(),
@@ -610,4 +614,172 @@ fn detached_host_allows_updates_and_survives_installation_replacement() {
         assert!(Instant::now() < deadline, "cleanup: {error}");
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+
+#[cfg(unix)]
+#[test]
+fn ssh_protocol_helper() {
+    let Some(root) = std::env::var_os("UTERM_TEST_SSH_PROTOCOL") else {
+        return;
+    };
+    let mut host = RunningHost::new();
+    host.client.require_ssh_support().unwrap();
+    host.client.require_ssh_config_support().unwrap();
+    let spec = SessionSpec {
+        id: "ssh".into(),
+        directory: PathBuf::from(root),
+        shell: "default".into(),
+        agent: None,
+        ssh: Some(utermd_local::ssh::SshTarget {
+            connection_id: "connection".into(),
+            workspace_id: "workspace".into(),
+            name: "Remote".into(),
+            host: "fixture".into(),
+            os: "posix".into(),
+            root: "/remote".into(),
+            ..Default::default()
+        }),
+    };
+    assert!(host
+        .client
+        .request(Operation::Open {
+            spec: spec.clone(),
+            rows: 24,
+            cols: 80
+        })
+        .is_err());
+    assert!(host
+        .client
+        .request(Operation::OpenSsh {
+            spec: spec.clone(),
+            rows: 24,
+            cols: 80,
+            create: false
+        })
+        .unwrap_err()
+        .to_string()
+        .contains("SSH_SESSION_MISSING"));
+    let Reply::Opened { generation } = host
+        .client
+        .request(Operation::OpenSsh {
+            spec: spec.clone(),
+            rows: 24,
+            cols: 80,
+            create: true,
+        })
+        .unwrap()
+    else {
+        panic!("SSH open");
+    };
+    host.sessions.push((spec.id.clone(), generation.clone()));
+    host.until("ssh", &generation, "SSH_FIXTURE_READY");
+    let Reply::SessionSnapshot(local) = host.client.request(Operation::SessionSnapshot).unwrap()
+    else {
+        panic!("local snapshot");
+    };
+    assert!(local.sessions.is_empty());
+    let Reply::SshSessionSnapshot(snapshot) =
+        host.client.request(Operation::SshSessionSnapshot).unwrap()
+    else {
+        panic!("SSH snapshot");
+    };
+    assert_eq!(snapshot.sessions, vec![spec.clone()]);
+    let Reply::Opened {
+        generation: reattached,
+    } = host
+        .client
+        .request(Operation::OpenSsh {
+            spec: spec.clone(),
+            rows: 40,
+            cols: 100,
+            create: false,
+        })
+        .unwrap()
+    else {
+        panic!("reattach");
+    };
+    assert_eq!(reattached, generation);
+    host.write("ssh", &generation, "replay-after-attach\r");
+    host.until("ssh", &generation, "replay-after-attach");
+    assert!(host
+        .client
+        .request(Operation::Close {
+            id: "ssh".into(),
+            generation: "stale".into()
+        })
+        .is_err());
+    host.client
+        .request(Operation::Close {
+            id: "ssh".into(),
+            generation,
+        })
+        .unwrap();
+    host.sessions.clear();
+    assert!(host
+        .client
+        .request(Operation::OpenSsh {
+            spec,
+            rows: 24,
+            cols: 80,
+            create: true
+        })
+        .is_err());
+    let mut configured = snapshot.sessions[0].clone();
+    configured.id = "ssh-configured".into();
+    let target = configured.ssh.as_mut().unwrap();
+    target.mode = Some("direct".into());
+    target.port = Some(2222);
+    target.username = Some("qa".into());
+    let Reply::Opened { generation } = host
+        .client
+        .request(Operation::OpenSshConfigured {
+            spec: configured,
+            rows: 24,
+            cols: 80,
+            resolved: utermd_local::ssh::ResolvedTarget {
+                hostname: "127.0.0.1".into(),
+                user: "qa".into(),
+                port: 2222,
+            },
+            askpass: None,
+        })
+        .unwrap()
+    else {
+        panic!("configured SSH open");
+    };
+    host.sessions
+        .push(("ssh-configured".into(), generation.clone()));
+    host.until("ssh-configured", &generation, "SSH_FIXTURE_READY");
+}
+
+#[cfg(unix)]
+#[test]
+fn ssh_sessions_are_isolated_from_local_discovery_and_keep_identity_on_attach() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = std::env::temp_dir().join(format!("uterm-ssh-test-{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&root).unwrap();
+    let program = root.join("ssh");
+    std::fs::write(
+        &program,
+        "#!/bin/sh\nprintf 'SSH_FIXTURE_READY\\n'\nexec /bin/cat\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let mut path = vec![root.clone()];
+    path.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "ssh_protocol_helper", "--nocapture"])
+        .env("UTERM_TEST_SSH_PROTOCOL", &root)
+        .env("PATH", std::env::join_paths(path).unwrap())
+        .output()
+        .unwrap();
+    let _ = std::fs::remove_dir_all(root);
+    assert!(
+        output.status.success(),
+        "{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

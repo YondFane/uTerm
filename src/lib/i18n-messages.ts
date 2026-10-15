@@ -1,4 +1,317 @@
 export const messages: Record<string, string> = {
+  "数据库连接已关闭。写入结果可能未知，请重新连接并确认。":
+    "The database connection is closed. Write outcomes may be unknown; reconnect and verify.",
+  "替换当前 SQL？尚未保存的修改将被覆盖。":
+    "Replace the current SQL? Unsaved changes will be overwritten.",
+  字段: "Columns",
+  "放弃 SQL 修改？这会恢复上次保存的 SQL 内容。":
+    "Discard SQL changes? This restores the last saved SQL.",
+  "使用本机 Java": "Using local Java",
+  "选择本机 Java 不会修改或卸载系统 Java。":
+    "Selecting local Java does not change or uninstall system Java.",
+  "组件安装已取消。": "Component installation cancelled.",
+  取消安装: "Cancel installation",
+  "保存 SQL…": "Save SQL…",
+  "数据库仍有操作、事务或 SQL 草稿。请等待操作完成，提交或回滚事务，并保存或放弃草稿后退出。":
+    "Database operations, transactions or SQL drafts remain. Wait for operations, commit or roll back transactions, and save or discard drafts before quitting.",
+  返回工作台: "Return to workbench",
+  "放弃 SQL 草稿并退出": "Discard SQL drafts and quit",
+  数据库组件: "Database components",
+  "Java 运行时": "Java runtime",
+  "连接引擎已内置。只需选择本机 Java 17 或更新版本，或安装 Java 运行时，再按需安装数据库驱动。":
+    "The connection engine is built in. Choose local Java 17 or newer, or install the Java runtime, then install the database drivers you need.",
+  "Java 路径：{path}": "Java path: {path}",
+  "安装所需组件（{size}）": "Install required components ({size})",
+  已安装: "Installed",
+  未安装: "Not installed",
+  重新安装: "Reinstall",
+  安装: "Install",
+  离线安装: "Offline install",
+  卸载: "Uninstall",
+  "卸载组件将保留连接配置。已连接时无法卸载。":
+    "Uninstalling retains connection profiles. Disconnect databases before uninstalling.",
+  确认卸载: "Confirm uninstall",
+  "选择本机 Java…": "Choose local Java…",
+  刷新: "Refresh",
+  "正在安装 {name}：{percent}%": "Installing {name}: {percent}%",
+  "正在处理组件…": "Processing components…",
+  "数据库连接配置无效。": "Invalid database connection configuration.",
+  "数据库连接测试成功。": "Database connection test succeeded.",
+  编辑数据库连接: "Edit database connection",
+  添加数据库连接: "Add database connection",
+  数据库类型: "Database type",
+  "Oracle 服务名": "Oracle service name",
+  "数据库名称（可选）": "Database name (optional)",
+  "CA 证书路径（可选）": "CA certificate path (optional)",
+  "TLS 验证服务器证书和主机名。SSH 隧道由所选 SSH 服务器访问数据库地址。":
+    "TLS verifies the server certificate and hostname. SSH tunnels reach the database from the selected SSH server.",
+  安装或管理连接组件: "Install or manage connection components",
+  数据库工作台: "Database workbench",
+  库与模式: "Catalogs and schemas",
+  表与视图: "Tables and views",
+  库或模式: "Catalog or schema",
+  查看字段: "View columns",
+  "元数据超过 500 项，请缩小库或模式范围。":
+    "Metadata exceeds 500 items. Narrow the catalog or schema scope.",
+  "执行 SQL": "Execute SQL",
+  取消查询: "Cancel query",
+  提交事务: "Commit transaction",
+  回滚事务: "Roll back transaction",
+  "无法复制 SQL。": "Could not copy SQL.",
+  "复制 SQL": "Copy SQL",
+  "放弃 SQL 修改": "Discard SQL changes",
+  "事务待处理；DDL 可能自动提交。": "Transaction pending; DDL may commit automatically.",
+  "SQL 编辑器": "SQL editor",
+  "结果：{count} 行 · {elapsed} 毫秒": "Result: {count} rows · {elapsed} ms",
+  "确认此数据库操作？写入、DDL 和事务操作可能立即影响服务器；未提交事务在断开时尝试回滚。":
+    "Confirm this database operation? Writes, DDL and transaction operations may affect the server immediately. Disconnecting attempts to roll back uncommitted transactions.",
+  数据库连接: "Database connections",
+  "编辑数据库连接：{name}": "Edit database connection: {name}",
+  移除数据库连接: "Remove database connection",
+  "移除数据库连接：{name}": "Remove database connection: {name}",
+  隐藏数据库连接: "Hide database connections",
+  显示数据库连接: "Show database connections",
+  "数据库拒绝了操作：{code}": "The database rejected the operation: {code}",
+  "连接处于只读模式，仅支持 SELECT 查询。开启允许编辑后可执行其他 SQL。":
+    "The connection is read-only and accepts SELECT queries. Enable editing to execute other SQL.",
+  "请选择本机 Java 或安装 Java 运行时，并安装对应数据库驱动。":
+    "Choose local Java or install the Java runtime, and install the selected database driver.",
+  "组件下载失败。请检查网络，或使用离线安装。":
+    "Component download failed. Check the network or use offline installation.",
+  "内置连接引擎不可用，请重新安装 uTerm。":
+    "The built-in connection engine is unavailable. Reinstall uTerm.",
+  "组件校验失败，未安装。请重新下载匹配版本。":
+    "Component verification failed; nothing was installed. Download the matching version again.",
+  "请先提交或回滚当前事务。": "Commit or roll back the current transaction first.",
+  "数据库操作仍在执行，请等待完成。":
+    "A database operation is still running. Wait for it to finish.",
+  "操作超时，连接已关闭。写入结果可能未知，请重新连接并确认后再操作。":
+    "The operation timed out and the connection was closed. Writes may have an uncertain outcome; reconnect and verify before continuing.",
+  "请选择 Java 17 或更新版本的可执行文件。": "Choose a Java 17 or newer executable.",
+  "数据库凭据不可用或连接目标已变化，请重新输入密码。":
+    "Database credentials are unavailable or the target changed. Enter the password again.",
+  "结果超过显示限制，请缩小查询范围。": "The result exceeds display limits. Narrow the query.",
+  "查询已取消，连接已关闭。写入结果需要重新连接确认。":
+    "The query was cancelled and the connection was closed. Reconnect to verify write outcomes.",
+  "数据库操作失败，请检查组件、连接配置和服务端状态。":
+    "The database operation failed. Check components, connection settings and server status.",
+  "数据库连接数据无效，原数据已保留。":
+    "Invalid database connection data. The original data has been preserved.",
+  "请先完成数据库操作、提交或回滚事务并处理 SQL 草稿，再安装更新。":
+    "Finish database operations, commit or roll back transactions, and handle SQL drafts before installing updates.",
+  "Redis 地址由 SSH 服务器访问；使用所选 SSH 连接的认证方式，并需允许 TCP 转发。":
+    "The Redis address is reached from the SSH server. Uses the selected SSH authentication and requires TCP forwarding.",
+  "连接已保存，但旧凭据清理失败：{message}":
+    "Connection saved, but old credentials could not be removed: {message}",
+  连接方式: "Connection mode",
+  主机地址: "Host address",
+  "使用 OpenSSH 配置": "Use OpenSSH configuration",
+  用户名: "Username",
+  "留空使用 OpenSSH 配置": "Leave blank to use OpenSSH configuration",
+  认证方式: "Authentication",
+  "OpenSSH 自动认证": "OpenSSH automatic authentication",
+  "私钥 / ssh-agent": "Private key / ssh-agent",
+  密码: "Password",
+  "私钥文件（可选）": "Private key file (optional)",
+  "留空使用 ssh-agent 或默认密钥": "Leave blank to use ssh-agent or default keys",
+  "选择文件…": "Choose file…",
+  "有口令的私钥用于文件或隧道时，请先加入 ssh-agent。":
+    "Add passphrase-protected keys to ssh-agent before using files or tunnels.",
+  "SSH 密码": "SSH password",
+  留空保留现有密码: "Leave blank to keep the current password",
+  "不记住密码时仅在本次运行有效，重开应用后需重新输入。密码认证暂不支持跳板机或验证码。":
+    "Unremembered passwords last for this app run. Reenter after restarting. Password mode does not support jump hosts or verification codes.",
+  "使用系统 OpenSSH。首次连接需确认主机指纹；端口和用户名留空时沿用 OpenSSH 配置。":
+    "Uses system OpenSSH. Confirm the host fingerprint on first connection. Blank port and username inherit OpenSSH configuration.",
+  "SSH 主机指纹 / SSH host fingerprint": "SSH host fingerprint",
+  "信任并连接 / Trust and connect": "Trust and connect",
+  "取消 / Cancel": "Cancel",
+  "请输入有效的 SSH 主机地址或 Host 别名。": "Enter a valid SSH host address or Host alias.",
+  "后台服务不支持当前 SSH 配置。请先关闭全部会话，再退出并重新打开应用；已有进程未被终止。":
+    "The background service does not support these SSH options. Close all sessions, then quit and reopen the app. Existing processes were left running.",
+  "SFTP 连接失败。请检查主机指纹、认证信息及服务端 SFTP 配置。":
+    "SFTP connection failed. Check the host fingerprint, authentication and server SFTP configuration.",
+  "请编辑 SSH 连接并输入密码。未记住的密码在重开应用后需重新输入。":
+    "Edit the SSH connection and enter its password. Unremembered passwords must be reentered after restarting.",
+  "SSH 密码不能为空或包含换行，且不能超过 1023 字节。":
+    "SSH passwords must be nonempty, contain no newlines, and use at most 1023 bytes.",
+  "无法访问 SSH 系统凭据库，请检查权限或取消记住密码。":
+    "Cannot access the SSH system credential store. Check permissions or turn off Remember password.",
+  "SSH 连接目标已变化，请重新输入密码。": "The SSH target changed. Enter the password again.",
+  "SSH 密码认证失败，请重新连接。": "SSH password authentication failed. Reconnect.",
+  "SSH 认证请求过多，请稍后重试。": "Too many SSH authentication requests. Try again shortly.",
+  "密码认证暂不支持 ProxyJump 或 ProxyCommand，请使用密钥或 ssh-agent。":
+    "Password authentication does not support ProxyJump or ProxyCommand. Use a key or ssh-agent.",
+  SSH: "SSH",
+  Redis: "Redis",
+  "隐藏 SSH 连接": "Hide SSH connections",
+  "显示 SSH 连接": "Show SSH connections",
+  "隐藏 Redis 连接": "Hide Redis connections",
+  "显示 Redis 连接": "Show Redis connections",
+  "部分服务器信息不可用。": "Some server information is unavailable.",
+  测试连接: "Test connection",
+  "连接测试成功，PING 耗时 {elapsed} 毫秒。": "Connection successful; PING took {elapsed} ms.",
+  "Redis 连接配置无效。": "Invalid Redis connection configuration.",
+  "请输入需要保存的密码。": "Enter the password to save.",
+  "编辑 Redis 连接": "Edit Redis connection",
+  "添加 Redis 连接": "Add Redis connection",
+  "Redis 地址": "Redis host",
+  端口: "Port",
+  "数据库 DB": "Database DB",
+  "用户名（可选）": "Username (optional)",
+  "密码（可选）": "Password (optional)",
+  留空使用已保存密码: "Leave blank to use the saved password",
+  "记住密码（系统凭据库）": "Remember password (system credential store)",
+  "SSH 隧道": "SSH tunnel",
+  直连: "Direct",
+  "Redis 地址由 SSH 服务器访问；隧道需要密钥或 ssh-agent 及 TCP 转发权限。":
+    "The SSH server connects to this Redis address. The tunnel requires a key or ssh-agent and TCP forwarding permission.",
+  "启用 TLS": "Enable TLS",
+  "TLS 服务端名称（可选）": "TLS server name (optional)",
+  "CA 证书（可选）": "CA certificate (optional)",
+  选择文件: "Choose file",
+  清除: "Clear",
+  "验证证书及服务端名称。留空 CA 时使用系统信任证书。":
+    "Certificates and server names are verified. Leave CA blank to use system trust.",
+  保存连接: "Save connection",
+  "编辑器加载失败，请重新打开工作台。": "Could not load the editor. Reopen the workbench.",
+  "已连接；服务器信息不可用。": "Connected; server information is unavailable.",
+  "空 Key": "Empty key",
+  "二进制 Key": "Binary key",
+  "Redis 工作台": "Redis workbench",
+  已连接: "Connected",
+  切换: "Switch",
+  允许编辑: "Allow editing",
+  可编辑: "Editable",
+  断开: "Disconnect",
+  临时密码: "Temporary password",
+  "正在连接…": "Connecting…",
+  连接: "Connect",
+  "Key 匹配规则": "Key pattern",
+  按冒号分组: "Group by colon",
+  "已加载 {count} 个 Key": "{count} keys loaded",
+  "已达 10000 个 Key 上限，请缩小匹配范围。":
+    "The 10,000-key limit has been reached. Narrow the pattern.",
+  "新 Key": "New key",
+  值类型: "Value type",
+  "Hash 字段": "Hash field",
+  新建: "Create",
+  TTL: "TTL",
+  String: "String",
+  Hash: "Hash",
+  "新 Key 名称": "New key name",
+  "TTL（秒）": "TTL (seconds)",
+  "设置 TTL": "Set TTL",
+  "清除 TTL": "Clear TTL",
+  "删除 Key": "Delete key",
+  值: "Value",
+  "内容不是有效的 JSON。": "The content is not valid JSON.",
+  "格式化 JSON": "Format JSON",
+  删除字段: "Delete field",
+  "二进制内容，仅供预览。": "Binary content; preview only.",
+  "十六进制（前 256 字节）": "Hexadecimal (first 256 bytes)",
+  序列化信息: "Serialization information",
+  格式: "Format",
+  "未识别（二进制）": "Unrecognized (binary)",
+  流版本: "Stream version",
+  "序列版本 UID": "serialVersionUID",
+  类名: "Class name",
+  字段名: "Field name",
+  字段类型: "Field type",
+  "字段信息（{count}）": "Fields ({count})",
+  "类描述未完整读取或暂不支持，仅显示已识别的信息。":
+    "The class descriptor is incomplete or unsupported; only recognized information is shown.",
+  "可读文本（UTF-8）": "Readable text (UTF-8)",
+  "控制字符显示为 ·，无效 UTF-8 字节显示为 �。此视图不还原完整对象。":
+    "Control characters appear as · and invalid UTF-8 bytes as �. This view does not reconstruct full objects.",
+  "可读预览仅显示当前页前 {count} 字节。":
+    "Readable preview shows only the first {count} bytes of this page.",
+  "无可读内容。": "No readable content.",
+  "值超过 1 MB，不能完整编辑。": "The value exceeds 1 MB and cannot be edited in full.",
+  成员匹配规则: "Member pattern",
+  搜索成员: "Search members",
+  添加字段: "Add field",
+  "该数据类型暂不支持专用视图。": "A dedicated view is not available for this data type.",
+  "本批次超过显示上限，请缩小成员匹配范围。":
+    "This batch exceeds the display limit. Narrow the member pattern.",
+  "选择 Key 查看内容。连接默认只读，开启允许编辑后可新建或修改数据。":
+    "Select a key to view its value. Connections start read-only. Enable editing to create or change data.",
+  命令台: "Console",
+  "Redis 命令": "Redis command",
+  执行: "Run",
+  "支持 PING、INFO、DBSIZE、TYPE、TTL、PTTL、EXISTS 和长度命令。":
+    "Supports PING, INFO, DBSIZE, TYPE, TTL, PTTL, EXISTS and length commands.",
+  "{elapsed} 毫秒": "{elapsed} ms",
+  "Redis 有未保存修改": "Unsaved Redis changes",
+  "编辑内容仅保存在本次运行中。保存、放弃修改或取消当前操作。":
+    "Edits are kept for this run only. Save, discard, or cancel this action.",
+  放弃修改: "Discard changes",
+  保存并继续: "Save and continue",
+  "确认 Redis 操作": "Confirm Redis action",
+  "删除该 Key？此操作无法撤销。": "Delete this key? This cannot be undone.",
+  "删除该 Hash 字段？此操作无法撤销。": "Delete this Hash field? This cannot be undone.",
+  "将修改此 Key 的名称或过期时间。": "This will change the key name or expiration.",
+  确认: "Confirm",
+  "Redis 连接": "Redis connections",
+  "编辑 Redis 连接：{name}": "Edit Redis connection: {name}",
+  "移除 Redis 连接": "Remove Redis connection",
+  "移除 Redis 连接：{name}": "Remove Redis connection: {name}",
+  "Redis 数据已变化，编辑内容已保留。请重新读取后再修改。":
+    "Redis data changed. Your edits are retained. Reload before editing again.",
+  "Redis 连接处于只读模式。": "The Redis connection is read-only.",
+  "Redis 数据库已切换，请重新读取。": "The Redis database changed. Reload the value.",
+  "Redis Key 已不存在。": "The Redis key no longer exists.",
+  "目标 Key 已存在，未覆盖。": "The destination key exists and was not overwritten.",
+  "写入结果未知。请重新连接并读取确认，不要直接重复提交。":
+    "The write result is unknown. Reconnect and read to confirm before submitting again.",
+  "Redis 连接已中断或请求超时，请重新连接。":
+    "The Redis connection closed or the request timed out. Reconnect.",
+  "Redis 认证或数据库选择失败，请检查用户名、密码和 DB。":
+    "Redis authentication or database selection failed. Check the username, password and DB.",
+  "TLS 连接失败，请检查证书、CA 和服务端名称。":
+    "TLS connection failed. Check the certificate, CA and server name.",
+  "无法读取有效的 CA 证书。": "Could not read a valid CA certificate.",
+  "Redis 连接超时，请检查网络或 SSH 隧道。":
+    "Redis connection timed out. Check the network or SSH tunnel.",
+  "无法连接 Redis，请检查地址和端口。": "Could not connect to Redis. Check the host and port.",
+  "该命令不在首版允许范围内。命令台仅支持已登记的只读命令。":
+    "This command is not supported. The console accepts registered read-only commands only.",
+  "首版不支持 Redis Cluster，请连接独立节点。":
+    "Redis Cluster is not supported. Connect to a standalone node.",
+  "连接目标已变化，请重新输入并保存密码。":
+    "The connection target changed. Enter and save the password again.",
+  "无法访问系统凭据库，请重新输入密码或检查系统权限。":
+    "Could not access the system credential store. Enter the password again or check system permissions.",
+  "未找到保存的 Redis 密码，请重新输入。":
+    "The saved Redis password was not found. Enter it again.",
+  "密码过长，最多支持 2048 字节。": "The password exceeds the 2048-byte limit.",
+  "当前平台不支持保存 Redis 密码，请使用临时密码。":
+    "Saving Redis passwords is unavailable on this platform. Use a temporary password.",
+  "最多同时打开 8 个 Redis 连接，请先断开其他连接。":
+    "At most eight Redis connections can be open. Disconnect another connection first.",
+  "返回数据超过限制，请缩小查询范围。": "The response exceeds the limit. Narrow the query.",
+  "Key 或字段名超过 4096 字节。": "The key or field name exceeds 4096 bytes.",
+  "输入超过允许范围。": "The input exceeds the allowed range.",
+  "TTL 必须是 1 到 3153600000 之间的整数秒。":
+    "TTL must be a whole number of seconds from 1 to 3153600000.",
+  "Redis 拒绝了写入，请检查权限和服务端版本。":
+    "Redis rejected the write. Check permissions and the server version.",
+  "Redis 返回错误：{code}": "Redis returned an error: {code}",
+  "SSH 隧道失败。请先确认主机指纹，并检查密钥、ssh-agent 和转发权限。":
+    "The SSH tunnel failed. Confirm the host fingerprint and check the key, ssh-agent and forwarding permissions.",
+  "Redis 操作失败，请检查连接后重试。": "Redis operation failed. Check the connection and retry.",
+  "命令引号或转义不完整。": "The command has an incomplete quote or escape.",
+  "Redis 连接数据无效，原数据已保留。":
+    "Saved Redis connections are invalid. The original data is preserved.",
+  "Redis 操作仍在执行，请等待完成后退出。":
+    "A Redis operation is still running. Wait for it to finish before quitting.",
+  "Redis 扫描失败，请检查读取权限并重新连接。":
+    "Redis scan failed. Check read permissions and reconnect.",
+  断开文件连接: "Disconnect files",
+  "无法保存连接，请检查工作区存储后重试。":
+    "Could not save the connection. Check workspace storage and retry.",
+  "远程文件连接已达上限，请断开暂不使用的连接。":
+    "The remote file connection limit has been reached. Disconnect unused connections.",
   "启用 {p0}": "Enable {p0}",
   启用后显示新建入口: "Show creation shortcuts when enabled",
   "请先启用 Agent": "Enable an Agent first",
@@ -570,4 +883,74 @@ export const messages: Record<string, string> = {
     "Group layout contains duplicate or missing sessions. Original data was preserved.",
   "文件已变化，请刷新列表。": "The file changed. Refresh the list.",
   "语言切换立即生效。": "Language changes apply immediately.",
+  上传文件: "Upload files",
+  下载文件: "Download file",
+  "SSH 终端": "SSH terminal",
+  上传时覆盖同名文件: "Overwrite files on upload",
+  "正在连接远程文件…": "Connecting to remote files…",
+  文件传输: "File transfers",
+  传输进度: "Transfer progress",
+  传输完成: "Transfer complete",
+  传输中: "Transferring",
+  文件仍在传输: "Files are still transferring",
+  "可以等待传输完成，或取消传输后退出。未保存文件仍会通过保存保护。":
+    "Wait for transfers to finish, or cancel them and quit. Unsaved files still use the save guard.",
+  继续等待: "Keep waiting",
+  取消传输并退出: "Cancel transfers and quit",
+  "SSH 连接": "SSH connections",
+  "添加 SSH 连接": "Add SSH connection",
+  服务端登录目录: "Server login directory",
+  "新建 SSH 终端：{p0}": "New SSH terminal: {p0}",
+  "新建 SSH 终端": "New SSH terminal",
+  "编辑 SSH 连接：{p0}": "Edit SSH connection: {p0}",
+  "编辑 SSH 连接": "Edit SSH connection",
+  "移除 SSH 连接：{p0}": "Remove SSH connection: {p0}",
+  "移除 SSH 连接": "Remove SSH connection",
+  "请输入有效的 SSH Host 别名。": "Enter a valid SSH Host alias.",
+  "SSH Host 别名": "SSH Host alias",
+  远端系统: "Remote system",
+  "Linux / macOS": "Linux / macOS",
+  Windows: "Windows",
+  远程文件根目录: "Remote file root",
+  留空使用服务端登录目录: "Leave blank to use the server login directory",
+  "使用系统 OpenSSH 配置。文件面板需要密钥或 ssh-agent；首次连接请在 SSH 终端确认主机指纹。":
+    "Uses system OpenSSH configuration. Files require a key or ssh-agent; confirm the host fingerprint in an SSH terminal on the first connection.",
+  "未找到系统 OpenSSH。请先安装 OpenSSH 客户端。":
+    "System OpenSSH was not found. Install the OpenSSH client first.",
+  "SSH 文件根目录无效，原数据已保留。":
+    "The SSH file root is invalid. The original data has been retained.",
+  "SSH 连接配置无效。": "Invalid SSH connection configuration.",
+  "后台服务不支持 SSH。请先关闭全部会话，再退出并重新打开应用；已有进程未被终止。":
+    "The background service does not support SSH. Close all sessions, then quit and reopen the app. Existing processes were left running.",
+  "SSH 会话已结束或后台已停止。点击重新启动以建立新连接。":
+    "The SSH session has ended or its host has stopped. Click Restart to create a new connection.",
+  "SFTP 连接失败。请先在 SSH 终端确认主机指纹，并配置密钥或 ssh-agent 登录。":
+    "SFTP connection failed. Confirm the host fingerprint in an SSH terminal and configure a key or ssh-agent login.",
+  "SSH 连接超时，请检查网络后重试。": "SSH connection timed out. Check your network and retry.",
+  "无法读取 SSH 配置，请检查 OpenSSH 配置。":
+    "Could not read SSH settings. Check your OpenSSH configuration.",
+  "连接目标或文件已变化，操作已停止。请重新连接并检查文件。":
+    "The connection target or file has changed. The operation was stopped. Reconnect and check the file.",
+  "远程根目录无效。Windows 远端请选择本地盘符下的目录。":
+    "Invalid remote root. For Windows servers, select a directory on a local drive.",
+  "文件路径超出所选远程根目录。": "The file path is outside the selected remote root.",
+  "远程文件连接已断开，请重新连接。":
+    "The remote file connection is disconnected. Reconnect to continue.",
+  "服务器不支持安全覆盖。请下载文件，或上传为新文件。":
+    "The server does not support safe replacement. Download the file or upload it under a new name.",
+  "安全替换失败，原文件已保留。": "Safe replacement failed. The original file has been retained.",
+  "同名文件或目录已存在。上传覆盖需要明确勾选覆盖选项。":
+    "A file or directory with that name already exists. Select the overwrite option to replace uploaded files.",
+  "仅支持普通文件，不支持目录传输或链接。":
+    "Only regular files are supported. Directory transfers and links are unavailable.",
+  "文件超过编辑或预览上限，请使用下载功能。":
+    "The file exceeds the editing or preview limit. Download it instead.",
+  "传输已取消。": "Transfer cancelled.",
+  "文件仍在传输。请等待完成或取消传输。":
+    "Files are still transferring. Wait for completion or cancel the transfers.",
+  "源文件在传输期间发生变化，请重新传输。":
+    "The source file changed during the transfer. Transfer it again.",
+  "此操作暂不支持远程目录。": "This operation is unavailable for remote directories.",
+  "SSH 连接数据无效，原数据已保留。":
+    "SSH connection data is invalid. The original data has been retained.",
 };

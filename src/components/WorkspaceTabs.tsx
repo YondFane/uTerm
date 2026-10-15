@@ -1,3 +1,4 @@
+import { displayDirectory } from "../lib/file-target";
 import { useEffect, useRef } from "react";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
@@ -158,7 +159,7 @@ export function WorkspaceTabs({
               tabIndex={
                 active || (!hasActiveTab && !visibleSessions.length && index === 0) ? 0 : -1
               }
-              title={`${file.directory}/${file.path}`}
+              title={`${displayDirectory(file.directory)}/${file.path}`}
               disabled={disabled}
               onClick={() => selectFile(file)}
             >

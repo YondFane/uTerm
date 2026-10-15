@@ -31,6 +31,24 @@ test("settings round trip and invalid data is rejected without normalizing it aw
   ])
     assert.throws(() => readSettings(JSON.stringify({ ...defaults, ...patch })));
 });
+test("connection sections default visible for old settings and preserve independent choices", () => {
+  const { showSshConnections, showRedisConnections, ...old } = defaults;
+  const migrated = readSettings(JSON.stringify(old));
+  assert.equal(migrated.showSshConnections, true);
+  assert.equal(migrated.showRedisConnections, true);
+  for (const ssh of [false, true]) {
+    for (const redis of [false, true]) {
+      const settings = readSettings(
+        JSON.stringify({ ...defaults, showSshConnections: ssh, showRedisConnections: redis }),
+      );
+      assert.equal(settings.showSshConnections, ssh);
+      assert.equal(settings.showRedisConnections, redis);
+    }
+  }
+  for (const key of ["showSshConnections", "showRedisConnections"])
+    for (const value of [null, 0, 1, "false", []])
+      assert.throws(() => readSettings(JSON.stringify({ ...defaults, [key]: value })));
+});
 test("platform shortcuts avoid project and terminal search collisions", () => {
   for (const mac of [true, false]) {
     validateShortcuts(defaults, mac);

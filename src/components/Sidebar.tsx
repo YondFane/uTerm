@@ -1,3 +1,5 @@
+import type { DatabaseConfig, DatabaseStatus } from "../lib/database";
+import type { RedisConfig, RedisStatus } from "../lib/redis";
 import { availableAgents } from "../lib/settings";
 import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
@@ -14,7 +16,14 @@ import {
   splitGroup,
   switchWorkspace,
 } from "../lib/workspace";
-import type { Project, SessionConfig, SessionRoster, Workspace, Worktree } from "../lib/workspace";
+import type {
+  Project,
+  SessionConfig,
+  SessionRoster,
+  Workspace,
+  Worktree,
+  SshConnection,
+} from "../lib/workspace";
 import type { RuntimeInfo } from "../lib/desktop";
 import {
   AgentStatusIndicator,
@@ -53,7 +62,47 @@ export function Sidebar({
   onActivitySession,
   activityDisabled = false,
   footerActions,
+  addSsh,
+  editSsh,
+  selectSsh,
+  newSshTerminal,
+  removeSsh,
+  canRemoveSsh,
+  canEditSsh,
+  addRedis,
+  editRedis,
+  selectRedis,
+  removeRedis,
+  redisStatuses = {},
+  selectedRedisId,
+  addDatabase,
+  editDatabase,
+  selectDatabase,
+  removeDatabase,
+  manageDatabase,
+  databaseStatuses = {},
+  selectedDatabaseId,
 }: {
+  addDatabase?: () => void;
+  editDatabase?: (connection: DatabaseConfig) => void;
+  selectDatabase?: (connection: DatabaseConfig) => void;
+  removeDatabase?: (connection: DatabaseConfig) => void;
+  manageDatabase?: () => void;
+  databaseStatuses?: Record<string, DatabaseStatus>;
+  selectedDatabaseId?: string | null;
+  addRedis?: () => void;
+  editRedis?: (connection: RedisConfig) => void;
+  selectRedis?: (connection: RedisConfig) => void;
+  removeRedis?: (connection: RedisConfig) => void;
+  redisStatuses?: Record<string, RedisStatus>;
+  selectedRedisId?: string | null;
+  addSsh?: () => void;
+  editSsh?: (connection: SshConnection) => void;
+  selectSsh?: (connection: SshConnection) => void;
+  newSshTerminal?: (connection: SshConnection) => void;
+  removeSsh?: (connection: SshConnection) => void;
+  canRemoveSsh?: (connection: SshConnection) => boolean;
+  canEditSsh?: (connection: SshConnection) => boolean;
   resizeHandle?: ReactNode;
   closeSession: (id: string) => void;
   visible: boolean;
@@ -83,11 +132,22 @@ export function Sidebar({
   const suppressProjectClick = useRef(false);
   const [projectDrop, setProjectDrop] = useState<{ id: string; after: boolean } | null>(null);
   const [dragError, setDragError] = useState("");
+  const [visibilityError, setVisibilityError] = useState("");
   const [popover, setPopover] = useState<"workspace" | "add" | null>(null);
   const [activeFolded, setActiveFolded] = useState<Record<string, boolean>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  function toggleConnections(
+    key: "showSshConnections" | "showRedisConnections" | "showDatabaseConnections",
+  ) {
+    try {
+      save({ ...settings, [key]: !settings[key] }, runtime?.platform === "macos");
+      setVisibilityError("");
+    } catch (reason) {
+      setVisibilityError(String(reason));
+    }
+  }
   useEffect(() => {
     if (!popover) return;
     popoverRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
@@ -531,7 +591,7 @@ export function Sidebar({
   }
   for (const roster of rosters) {
     const project = projects.find((project) => project.id === roster.projectId);
-    if (project?.pinned || project?.sessions.length) continue;
+    if (roster.kind === "ssh" || project?.pinned || project?.sessions.length) continue;
     for (const session of roster.sessions.filter(
       (session) =>
         session.pinned &&
@@ -717,6 +777,200 @@ export function Sidebar({
           </section>
         )}
         {dragError && <p role="alert">{localizeMessage(dragError)}</p>}
+        {visibilityError && <p role="alert">{localizeMessage(visibilityError)}</p>}
+        {addSsh && settings.showSshConnections && (
+          <section className="sidebar-section" aria-label={tx("SSH 连接")}>
+            <div className="ssh-section-heading">
+              <strong>{tx("SSH 连接")}</strong>
+              <button
+                className="icon-button"
+                aria-label={tx("添加 SSH 连接")}
+                title={tx("添加 SSH 连接")}
+                disabled={!runtime}
+                onClick={addSsh}
+              >
+                <SidebarIcon name="plus" />
+              </button>
+            </div>
+            {(group?.sshConnections ?? []).map((connection) => {
+              const roster = rosters.find((item) => item.id === `ssh:${connection.id}`)!;
+              return (
+                <div key={connection.id} className="ssh-connection">
+                  <div className="sidebar-row">
+                    <button
+                      className="row-label"
+                      title={`${connection.host} · ${connection.root || tx("服务端登录目录")}`}
+                      disabled={activityDisabled}
+                      onClick={() => selectSsh?.(connection)}
+                    >
+                      <SessionIcon />
+                      <span>{connection.name}</span>
+                    </button>
+                    <button
+                      className="icon-button"
+                      aria-label={tx("新建 SSH 终端：{p0}", { p0: connection.name })}
+                      title={tx("新建 SSH 终端")}
+                      disabled={activityDisabled}
+                      onClick={() => newSshTerminal?.(connection)}
+                    >
+                      <SidebarIcon name="plus" />
+                    </button>
+                    <button
+                      className="icon-button"
+                      aria-label={tx("编辑 SSH 连接：{p0}", { p0: connection.name })}
+                      title={tx("编辑 SSH 连接")}
+                      disabled={canEditSsh?.(connection) === false}
+                      onClick={() => editSsh?.(connection)}
+                    >
+                      ⋯
+                    </button>
+                    <button
+                      className="icon-button"
+                      aria-label={tx("移除 SSH 连接：{p0}", { p0: connection.name })}
+                      title={tx("移除 SSH 连接")}
+                      disabled={!canRemoveSsh?.(connection)}
+                      onClick={() => removeSsh?.(connection)}
+                    >
+                      <ToolbarIcon name="close" />
+                    </button>
+                  </div>
+                  {ordered(connection.sessions).map((session) =>
+                    sessionRow(session, roster, 1, connection.name, true),
+                  )}
+                </div>
+              );
+            })}
+          </section>
+        )}
+        {addRedis && settings.showRedisConnections && (
+          <section className="sidebar-section" aria-label={tx("Redis 连接")}>
+            <div className="ssh-section-heading">
+              <strong>{tx("Redis 连接")}</strong>
+              <button
+                className="icon-button"
+                aria-label={tx("添加 Redis 连接")}
+                title={tx("添加 Redis 连接")}
+                disabled={!runtime}
+                onClick={addRedis}
+              >
+                <SidebarIcon name="plus" />
+              </button>
+            </div>
+            {(group?.redisConnections ?? []).map((connection) => {
+              const status = redisStatuses[connection.id];
+              const retained = status?.connected || status?.dirty || status?.opening;
+              return (
+                <div
+                  className={`sidebar-row${selectedRedisId === connection.id ? " selected" : ""}`}
+                  key={connection.id}
+                >
+                  <button
+                    className="row-label"
+                    title={`${connection.host}:${connection.port}`}
+                    disabled={activityDisabled}
+                    onClick={() => selectRedis?.(connection)}
+                  >
+                    <span
+                      className="redis-sidebar-icon"
+                      data-connected={status?.connected || undefined}
+                      aria-hidden="true"
+                    >
+                      {"R"}
+                    </span>
+                    <span>
+                      {connection.name}
+                      {status?.dirty ? " *" : ""}
+                    </span>
+                  </button>
+                  <button
+                    className="icon-button"
+                    title={tx("编辑 Redis 连接")}
+                    aria-label={tx("编辑 Redis 连接：{name}", { name: connection.name })}
+                    disabled={!!retained}
+                    onClick={() => editRedis?.(connection)}
+                  >
+                    ⋯
+                  </button>
+                  <button
+                    className="icon-button"
+                    title={tx("移除 Redis 连接")}
+                    aria-label={tx("移除 Redis 连接：{name}", { name: connection.name })}
+                    disabled={!!retained}
+                    onClick={() => removeRedis?.(connection)}
+                  >
+                    <ToolbarIcon name="close" />
+                  </button>
+                </div>
+              );
+            })}
+          </section>
+        )}
+        {addDatabase && settings.showDatabaseConnections && (
+          <section className="sidebar-section" aria-label={tx("数据库连接")}>
+            <div className="ssh-section-heading database-section-heading">
+              <strong>{tx("数据库连接")}</strong>
+              <button
+                className="icon-button"
+                aria-label={tx("数据库组件")}
+                title={tx("数据库组件")}
+                disabled={!runtime}
+                onClick={manageDatabase}
+              >
+                <ToolbarIcon name="settings" />
+              </button>
+              <button
+                className="icon-button"
+                aria-label={tx("添加数据库连接")}
+                title={tx("添加数据库连接")}
+                disabled={!runtime}
+                onClick={addDatabase}
+              >
+                <SidebarIcon name="plus" />
+              </button>
+            </div>
+            {(group?.databaseConnections ?? []).map((connection) => {
+              const status = databaseStatuses[connection.id];
+              const retained = status?.connected || status?.busy || status?.dirty;
+              return (
+                <div
+                  className={`sidebar-row${selectedDatabaseId === connection.id ? " selected" : ""}`}
+                  key={connection.id}
+                >
+                  <button
+                    className="row-label"
+                    title={`${connection.host}:${connection.port}`}
+                    disabled={activityDisabled}
+                    onClick={() => selectDatabase?.(connection)}
+                  >
+                    <SidebarIcon name="sqlDatabase" />
+                    <span>
+                      {connection.name}
+                      {status?.dirty ? " *" : ""}
+                    </span>
+                  </button>
+                  <button
+                    className="icon-button"
+                    title={tx("编辑数据库连接")}
+                    aria-label={tx("编辑数据库连接：{name}", { name: connection.name })}
+                    disabled={!!retained}
+                    onClick={() => editDatabase?.(connection)}
+                  >
+                    {"⋯"}
+                  </button>
+                  <button
+                    className="icon-button"
+                    title={tx("移除数据库连接")}
+                    aria-label={tx("移除数据库连接：{name}", { name: connection.name })}
+                    disabled={!!retained}
+                    onClick={() => removeDatabase?.(connection)}
+                  >
+                    <ToolbarIcon name="close" />
+                  </button>
+                </div>
+              );
+            })}
+          </section>
+        )}
         {looseSection("terminals")}
         {looseSection("chats")}
         <section className="sidebar-section" aria-label={tx("项目")}>
@@ -747,6 +1001,41 @@ export function Sidebar({
         >
           <SidebarIcon name="plus" />
         </button>
+        <div className="sidebar-connection-toggles">
+          {addSsh && (
+            <button
+              className="sidebar-connection-toggle"
+              aria-label={tx("SSH 连接")}
+              aria-pressed={settings.showSshConnections}
+              title={settings.showSshConnections ? tx("隐藏 SSH 连接") : tx("显示 SSH 连接")}
+              onClick={() => toggleConnections("showSshConnections")}
+            >
+              <SidebarIcon name="terminal" />
+            </button>
+          )}
+          {addRedis && (
+            <button
+              className="sidebar-connection-toggle"
+              aria-label={tx("Redis 连接")}
+              aria-pressed={settings.showRedisConnections}
+              title={settings.showRedisConnections ? tx("隐藏 Redis 连接") : tx("显示 Redis 连接")}
+              onClick={() => toggleConnections("showRedisConnections")}
+            >
+              <SidebarIcon name="database" />
+            </button>
+          )}
+          {addDatabase && (
+            <button
+              className="sidebar-connection-toggle"
+              aria-label={tx("数据库连接")}
+              aria-pressed={settings.showDatabaseConnections}
+              title={settings.showDatabaseConnections ? tx("隐藏数据库连接") : tx("显示数据库连接")}
+              onClick={() => toggleConnections("showDatabaseConnections")}
+            >
+              <SidebarIcon name="sqlDatabase" />
+            </button>
+          )}
+        </div>
         {footerActions}
       </footer>
       {popover && (
@@ -799,6 +1088,9 @@ export function Sidebar({
               </button>
               {(workspace?.groups?.length ?? 0) > 1 &&
                 !projects.length &&
+                !group?.sshConnections?.length &&
+                !group?.redisConnections?.length &&
+                !group?.databaseConnections?.length &&
                 !rosters.some((roster) => roster.sessions.length) && (
                   <button
                     role="menuitem"
@@ -830,6 +1122,12 @@ export function Sidebar({
                 <SidebarIcon name="folder" />
                 {tx("添加项目…")}
               </button>
+              {addSsh && (
+                <button role="menuitem" onClick={() => act(addSsh)}>
+                  <SessionIcon />
+                  {tx("添加 SSH 连接")}
+                </button>
+              )}
               <button role="menuitem" onClick={() => act(() => addLoose("terminals"))}>
                 <SessionIcon />
                 {tx("新建终端")}

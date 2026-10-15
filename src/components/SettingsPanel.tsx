@@ -1,3 +1,4 @@
+import { DatabaseComponents } from "./DatabaseComponents";
 import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
 import { localizeMessage } from "../lib/i18n";
@@ -87,6 +88,7 @@ const tabs = [
   "Agent",
   "用量",
   "本地控制",
+  "数据库组件",
   "软件更新",
 ] as const;
 export function SettingsPanel({
@@ -874,6 +876,7 @@ export function SettingsPanel({
               </p>
             </>
           )}
+          {tab === "数据库组件" && <DatabaseComponents />}
           {tab === "软件更新" && (
             <>
               <p>uTerm {runtime.version}</p>

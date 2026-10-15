@@ -1,4 +1,6 @@
 export const backendMessages: Record<string, string> = {
+  "请先保存或放弃 Redis 修改，再安装更新。":
+    "Save or discard Redis changes before installing the update.",
   "请选择已配置的远程仓库。": "Select a configured remote.",
   "远程分支名无效。": "Invalid remote branch name.",
   "同名本地分支已存在，但跟踪的远程分支不同。请先在终端中处理。":

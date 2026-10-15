@@ -1,5 +1,6 @@
 import { tx } from "./i18n.ts";
 import { useEffect, useRef, useState } from "react";
+import { fileInvoke } from "./file-target";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
@@ -56,7 +57,7 @@ export function useFileDocument(fileTabLimit = 10) {
       if (!snapshot || !isDirty(snapshot) || snapshot.readonly) return true;
       setSaving(true);
       try {
-        const version = await invoke<string>("file_save", {
+        const version = await fileInvoke<string>("file_save", {
           directory: snapshot.directory,
           path: snapshot.path,
           text: fileBytes(snapshot),
@@ -150,7 +151,7 @@ export function useFileDocument(fileTabLimit = 10) {
         setConflict(false);
         return;
       }
-      const data = await invoke<FileData>("file_read", { directory, path });
+      const data = await fileInvoke<FileData>("file_read", { directory, path });
       await invoke("editor_guard", { active: data.kind === "text" && !data.readonly });
       setDocument({
         ...data,
@@ -202,7 +203,7 @@ export function useFileDocument(fileTabLimit = 10) {
     const snapshot = current.current;
     if (!snapshot) return;
     const action = async () => {
-      const data = await invoke<FileData>("file_read", {
+      const data = await fileInvoke<FileData>("file_read", {
         directory: snapshot.directory,
         path: snapshot.path,
       });

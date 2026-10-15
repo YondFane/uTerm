@@ -1,3 +1,4 @@
+import { sshError } from "../lib/file-target";
 import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
@@ -37,6 +38,8 @@ const action = (id: string, action: string, values = {}) =>
 
 export function TerminalView({
   directory,
+  allowSshCreate = false,
+  onSshRestart,
   session,
   active,
   visible,
@@ -54,6 +57,8 @@ export function TerminalView({
   onDrop,
   onPaneDragStart,
 }: {
+  allowSshCreate?: boolean;
+  onSshRestart?: () => void;
   agentState?: string;
   onPaneDragStart: PointerEventHandler<HTMLElement>;
   onAgentState: (state: string, initial: boolean) => void;
@@ -240,7 +245,7 @@ export function TerminalView({
             });
         })
         .catch((reason: unknown) => {
-          if (!current.closed) setError(String(reason));
+          if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
         })
         .finally(() => {
           current.bytes -= data.length;
@@ -281,7 +286,7 @@ export function TerminalView({
           if (!current.closed) await action(current.id, "resize", { rows, cols });
         })
         .catch((reason: unknown) => {
-          if (!current.closed) setError(String(reason));
+          if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
         });
     });
     let frame = 0;
@@ -378,7 +383,7 @@ export function TerminalView({
       try {
         decoded = decodeTerminalFrame(payload);
       } catch (reason) {
-        setError(String(reason));
+        setError(session.ssh ? sshError(reason) : String(reason));
         setStatus("disconnected");
         term.options.disableStdin = true;
         void action(current.id, "detach").catch((reason) => setError(String(reason)));
@@ -432,7 +437,7 @@ export function TerminalView({
               return closeRef.current();
           })
           .catch((reason: unknown) => {
-            if (!current.closed) setError(String(reason));
+            if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
           });
       });
     };
@@ -443,6 +448,8 @@ export function TerminalView({
         directory,
         shell,
         agent: session.agent ?? null,
+        ssh: session.ssh ?? null,
+        create: allowSshCreate,
         rows: term.rows,
         cols: term.cols,
       },
@@ -459,7 +466,7 @@ export function TerminalView({
       if (!current.closed) {
         connection.current = null;
         setStatus("idle");
-        setError(String(reason));
+        setError(session.ssh ? sshError(reason) : String(reason));
       }
     }
   }
@@ -485,7 +492,7 @@ export function TerminalView({
     } catch (reason) {
       current.closed = false;
       setStatus("disconnected");
-      setError(String(reason));
+      setError(session.ssh ? sshError(reason) : String(reason));
     }
   }
 
@@ -504,13 +511,17 @@ export function TerminalView({
   }
 
   async function restart() {
+    if (session.ssh) {
+      onSshRestart?.();
+      return;
+    }
     const current = connection.current;
     if (current) {
       try {
         await current.ready;
         await action(current.id, "close");
       } catch (reason) {
-        setError(String(reason));
+        setError(session.ssh ? sshError(reason) : String(reason));
         return;
       }
       current.closed = true;
@@ -552,7 +563,7 @@ export function TerminalView({
             event.stopPropagation();
             void close();
           }}
-          title={`${session.name} — ${directory}`}
+          title={`${session.name} — ${session.ssh?.host ?? directory}`}
         >
           {session.name}
         </span>

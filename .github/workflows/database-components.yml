@@ -1,0 +1,29 @@
+name: Verify bundled database engine
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "26.0.2.1+1"
+      - run: node scripts/database-component.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundled-database-engine
+          path: |
+            components/database/engine.jar
+            components/database/catalog.json
+          if-no-files-found: error

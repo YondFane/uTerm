@@ -128,6 +128,23 @@ pub async fn update_install(
     {
         return Err("请先保存或放弃文件修改，再安装更新。".into());
     }
+    if app.state::<crate::database::DatabaseState>().busy()
+        || app.state::<crate::database::DatabaseState>().dirty()
+        || app
+            .state::<crate::database_components::Components>()
+            .0
+            .load(Ordering::SeqCst)
+    {
+        return Err("请先完成数据库操作、提交或回滚事务并处理 SQL 草稿，再安装更新。".into());
+    }
+    if app.state::<crate::redis::RedisState>().dirty()
+        || app.state::<crate::redis::RedisState>().busy()
+    {
+        return Err("请先保存或放弃 Redis 修改，再安装更新。".into());
+    }
+    if app.state::<crate::ssh::SshFiles>().busy() {
+        return Err("文件仍在传输。请等待完成或取消传输。".into());
+    }
     update.install(bytes).map_err(|e| e.to_string())?;
     app.restart();
 }
