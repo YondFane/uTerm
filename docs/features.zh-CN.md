@@ -16,6 +16,10 @@ uTerm 是 Windows 和 macOS 桌面终端。本地终端和 Agent 进程在本机
 
 ## 安装
 
+仓库侧栏的 Latest 入口指向稳定安装包版本。发布流水线在公开下载验证和稳定更新清单发布成功后，才将版本标记为 Latest。预发布更新通道不会标记为 Latest。
+
+Latest 验证：6 项发布工具测试、工作流格式、步骤顺序及 Shell 语法检查，以及文档检查通过。线上 Latest 接口指向已发布稳定版，发布名称、说明和 11 项上传资源记录保持完整。
+
 [README](../README.md#一行命令安装) 提供终端和 PowerShell 一行安装命令，对应 `scripts/install/install.sh` 和 `scripts/install/install.ps1`。脚本读取对应平台的稳定更新清单，并通过 HTTPS 从本仓库下载匹配版本的安装包。macOS 自动选择 Apple Silicon 或 Intel（包括 Rosetta 检测），只读挂载 DMG，安装到 `~/Applications/uTerm.app`，不使用 sudo，也不启动应用。保留已有用户级／系统级安装，请使用应用内更新。Windows x64 打开安装向导，并报告非成功退出码。完成或失败后清理临时下载文件。需要访问 GitHub，无需开发工具链。应用未经 Apple 公证，首次启动可能需要在“隐私与安全”中批准。远程命令需要脚本已发布到 `release`。
 
 `scripts/install` 中的独立 npm 包通过 npx、pnpm dlx 或全局安装提供 `uterm-install` 命令，需要 Node.js 22.13 或以上。命令以独立参数调用包内平台脚本，不使用 Shell 插值，并保留安装器退出码。帮助及无效参数不会启动安装。包不使用安装生命周期钩子；安装／移除 npm 包只管理命令，不安装／卸载桌面应用。包已以 `@yondfane/uterm-install` 名称发布到 npm。

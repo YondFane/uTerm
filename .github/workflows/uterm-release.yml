@@ -187,3 +187,5 @@ jobs:
             gh release create uTerm-updates release/latest*.json --target "$(git rev-parse HEAD)" \
               --prerelease --latest=false --title 'uTerm update channel' --notes-file channel-notes.md
           fi
+      - name: Mark stable version as latest
+        run: gh release edit "$RELEASE_TAG" --latest=true

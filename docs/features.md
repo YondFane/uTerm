@@ -16,6 +16,10 @@ uTerm is a Windows and macOS desktop terminal. Local terminal and Agent processe
 
 ## Installation
 
+The repository sidebar’s Latest entry points to the stable installer release. The release workflow marks a version Latest only after public downloads are verified and the stable update feed is published. The prerelease update channel is never marked Latest.
+
+Latest validation: six release-helper tests, workflow formatting, step-order and shell syntax checks, and documentation checks pass. The live latest-release API resolves to a published stable release, with its name, notes and all 11 uploaded asset records intact.
+
 The [README](../README.en.md#one-line-installation) provides one-line Terminal and PowerShell commands backed by `scripts/install/install.sh` and `scripts/install/install.ps1`. They read the platform stable update feed and download the matching versioned installer over HTTPS from this repository. macOS selects Apple Silicon or Intel, including Rosetta detection, mounts the DMG read-only and installs to `~/Applications/uTerm.app` without sudo or launching the app. Existing user/system installations are preserved; use in-app updates. Windows x64 opens the installation wizard and reports unsuccessful exit codes. Temporary downloads are cleaned up on completion or failure. GitHub access is required; no development toolchain is needed. Apple notarization is unavailable, and first launch may require Privacy & Security approval. The commands require the scripts to be published on `release`.
 
 The standalone npm package in `scripts/install` exposes `uterm-install` through npx, pnpm dlx or a global installation. Node.js 22.13 or newer is required. It invokes the bundled platform script with separate arguments and no shell interpolation, preserving installer exit status. Help and invalid arguments never start installation. There are no install lifecycle hooks; installing/removing the npm package only manages the command, not the desktop application. The package is published on npm as `@yondfane/uterm-install`.
