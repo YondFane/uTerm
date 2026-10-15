@@ -263,7 +263,7 @@ pub fn shell_command(shell: &str) -> Result<CommandBuilder> {
     }
 }
 
-fn sanitize_environment(command: &mut CommandBuilder) {
+pub(crate) fn sanitize_environment(command: &mut CommandBuilder) {
     // A new desktop session must not inherit the launching agent's identity or
     // accidentally report to the original app's daemon through inherited hooks.
     for (key, _) in std::env::vars_os() {
@@ -402,6 +402,16 @@ impl BackgroundChild {
             #[cfg(windows)]
             group,
         })
+    }
+
+    pub fn take_stdin(&mut self) -> Option<std::process::ChildStdin> {
+        self.child.stdin.take()
+    }
+    pub fn take_stdout(&mut self) -> Option<std::process::ChildStdout> {
+        self.child.stdout.take()
+    }
+    pub fn take_stderr(&mut self) -> Option<std::process::ChildStderr> {
+        self.child.stderr.take()
     }
 
     pub fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {

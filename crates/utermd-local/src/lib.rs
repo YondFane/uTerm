@@ -2,6 +2,7 @@
 
 pub mod agents;
 pub mod daemon;
+pub mod ssh;
 
 mod process;
 pub use process::{agent_program, resolve_program, shell_command, BackgroundChild};

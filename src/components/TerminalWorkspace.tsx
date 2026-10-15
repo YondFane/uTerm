@@ -25,6 +25,8 @@ const frameStyle = (frame: PaneFrame): CSSProperties => ({
 
 export function TerminalWorkspace({
   workspace,
+  sshLaunches,
+  onSshRestart,
   zoomed,
   focusRequest,
   closeRequest,
@@ -35,6 +37,8 @@ export function TerminalWorkspace({
   onSessionViewed,
   agentStates,
 }: {
+  sshLaunches?: ReadonlySet<string>;
+  onSshRestart?: (id: string) => void;
   agentStates: Record<string, string>;
   onAgentState: (id: string, state: string, initial: boolean) => void;
   onDetectedAgent: (id: string, agent: string | null) => void;
@@ -148,6 +152,8 @@ export function TerminalWorkspace({
           key={session.id}
           directory={directory}
           session={session}
+          allowSshCreate={sshLaunches?.has(session.id)}
+          onSshRestart={() => onSshRestart?.(session.id)}
           agentState={agentStates[session.id]}
           closeRequest={closeRequest?.id === session.id ? closeRequest.sequence : 0}
           active={session.id === workspace.selectedSession}

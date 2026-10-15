@@ -1,5 +1,49 @@
 import { tx } from "./i18n.ts";
+import { validRedisConfig, type RedisConfig } from "./redis.ts";
+export interface SshTarget {
+  connection_id: string;
+  workspace_id: string;
+  name: string;
+  host: string;
+  os: "posix" | "windows";
+  root: string;
+}
+export interface SshConnection {
+  id: string;
+  name: string;
+  host: string;
+  os: "posix" | "windows";
+  root: string;
+  sessions: SessionConfig[];
+  splitGroups?: SplitNode[];
+}
+export function validSshHost(host: unknown): host is string {
+  return (
+    typeof host === "string" &&
+    host.length <= 255 &&
+    /^[a-zA-Z0-9_.@:[\]-]+$/.test(host) &&
+    !host.startsWith("-")
+  );
+}
+export function validSshTarget(value: unknown): value is SshTarget {
+  const target = value as SshTarget;
+  return (
+    !!target &&
+    typeof target.connection_id === "string" &&
+    !!target.connection_id &&
+    typeof target.workspace_id === "string" &&
+    !!target.workspace_id &&
+    typeof target.name === "string" &&
+    !!target.name.trim() &&
+    validSshHost(target.host) &&
+    ["posix", "windows"].includes(target.os) &&
+    typeof target.root === "string" &&
+    target.root.length <= 4096 &&
+    !/[\0\r\n]/.test(target.root)
+  );
+}
 export interface SessionConfig {
+  ssh?: SshTarget;
   issue?: { url: string; title: string };
   id: string;
   name: string;
@@ -30,7 +74,7 @@ export interface Project {
   collapsed?: boolean;
 }
 export interface Workspace {
-  version: 3;
+  version: 5;
   groups?: WorkspaceGroup[];
   selectedWorkspace?: string;
   selectedWorktree?: string | null;
@@ -39,6 +83,8 @@ export interface Workspace {
   selectedSession: string | null;
 }
 export interface WorkspaceGroup {
+  redisConnections?: RedisConfig[];
+  sshConnections?: SshConnection[];
   id: string;
   name: string;
   selectedProject: string | null;
@@ -58,6 +104,7 @@ export interface LocalHostSession {
   directory: string;
   shell: string;
   agent: string | null;
+  ssh?: SshTarget;
 }
 export interface LocalSessionSnapshot {
   sessions: LocalHostSession[];
@@ -101,6 +148,7 @@ export function reconcileLocalSessions(
   );
   let result = workspace;
   for (const item of discovered) {
+    if (item.ssh) continue;
     if (known.has(item.id)) continue;
     known.add(item.id);
     const path = localPathKey(item.directory);
@@ -147,12 +195,73 @@ export function reconcileLocalSessions(
   }
   return result;
 }
+export function reconcileSshSessions(
+  workspace: Workspace,
+  snapshot: LocalSessionSnapshot,
+): Workspace {
+  let next = workspace;
+  const known = new Set(
+    sessionRosters(workspace).flatMap((roster) => roster.sessions.map((session) => session.id)),
+  );
+  for (const id of snapshot.closed) next = removeSession(next, id);
+  for (const item of snapshot.sessions) {
+    const target = item.ssh;
+    if (
+      !target ||
+      !validSshTarget(target) ||
+      known.has(item.id) ||
+      snapshot.closed.includes(item.id)
+    )
+      continue;
+    const group = next.groups?.find((group) => group.id === target.workspace_id);
+    if (!group) continue;
+    let connection = group.sshConnections?.find(
+      (connection) => connection.id === target.connection_id,
+    );
+    if (!connection) {
+      connection = {
+        id: target.connection_id,
+        name: target.name,
+        host: target.host,
+        os: target.os,
+        root: target.root,
+        sessions: [],
+      };
+      const restored = connection;
+      next = {
+        ...next,
+        groups: next.groups?.map((group) =>
+          group.id === target.workspace_id
+            ? { ...group, sshConnections: [...(group.sshConnections ?? []), restored] }
+            : group,
+        ),
+      };
+    }
+    known.add(item.id);
+    next = updateRoster(next, `ssh:${connection.id}`, (roster) => ({
+      ...roster,
+      sessions: [
+        ...roster.sessions,
+        {
+          id: item.id,
+          name: target.name,
+          shell: "default",
+          directory: item.directory,
+          ssh: target,
+        },
+      ],
+    }));
+  }
+  return next;
+}
 export const createWorkspaceGroup = (id: string, name: string): WorkspaceGroup => ({
   id,
   name,
   selectedProject: null,
   selectedSession: null,
   selectedWorktree: null,
+  redisConnections: [],
+  sshConnections: [],
   terminals: [],
   chats: [],
   terminalSplits: [],
@@ -161,7 +270,7 @@ export const createWorkspaceGroup = (id: string, name: string): WorkspaceGroup =
   chatsCollapsed: false,
 });
 export const emptyWorkspace = (): Workspace => ({
-  version: 3,
+  version: 5,
   groups: [createWorkspaceGroup("local", tx("本地工作区"))],
   selectedWorkspace: "local",
   projects: [],
@@ -178,7 +287,7 @@ export function readWorkspace(serialized: string | null): Workspace {
   const text = (item: unknown) => typeof item === "string" && item.trim().length > 0;
   if (
     !value ||
-    value.version !== 3 ||
+    ![3, 4, 5].includes(value.version) ||
     !Array.isArray(value.projects) ||
     !value.projects.every(
       (project) =>
@@ -222,6 +331,7 @@ export function readWorkspace(serialized: string | null): Workspace {
               "worktreeId",
               "pinned",
               "issue",
+              "ssh",
             ].includes(key),
         ) ||
         (validateIds && !identifier(session.id)) ||
@@ -229,7 +339,11 @@ export function readWorkspace(serialized: string | null): Workspace {
         !["default", "cmd"].includes(session.shell) ||
         (session.agent !== undefined && !/^[a-zA-Z0-9_-]{1,80}$/.test(session.agent)) ||
         (session.directory !== undefined && !text(session.directory)) ||
-        (session.worktreeId !== undefined && !text(session.worktreeId))
+        (session.worktreeId !== undefined && !text(session.worktreeId)) ||
+        (session.ssh !== undefined &&
+          (!validSshTarget(session.ssh) ||
+            session.agent !== undefined ||
+            session.worktreeId !== undefined))
       )
         throw new Error(tx("会话配置无效，原数据已保留。"));
       if (
@@ -246,6 +360,7 @@ export function readWorkspace(serialized: string | null): Workspace {
           name: session.name,
           shell: session.shell,
           pinned: session.pinned === true,
+          ...(session.ssh ? { ssh: session.ssh } : {}),
           ...(session.issue ? { issue: session.issue } : {}),
           ...(session.agent ? { agent: session.agent } : {}),
           ...(session.directory ? { directory: session.directory } : {}),
@@ -279,6 +394,8 @@ export function readWorkspace(serialized: string | null): Workspace {
       };
     });
     const sessions = readSessions(project.sessions, false);
+    if (sessions.some((session) => session.ssh))
+      throw new Error(tx("SSH 连接数据无效，原数据已保留。"));
     if (
       sessions.some(
         (session) =>
@@ -317,7 +434,55 @@ export function readWorkspace(serialized: string | null): Workspace {
       chats.some((session) => !session.agent)
     )
       throw new Error(tx("独立会话的启动目录或 Agent 无效。"));
+    if (
+      [...terminals, ...chats].some((session) => session.ssh) ||
+      (group.sshConnections !== undefined && !Array.isArray(group.sshConnections))
+    )
+      throw new Error(tx("SSH 连接数据无效，原数据已保留。"));
+    const sshConnections = (group.sshConnections ?? []).map((connection) => {
+      if (
+        !connection ||
+        !identifier(connection.id) ||
+        !text(connection.name) ||
+        !validSshHost(connection.host) ||
+        !["posix", "windows"].includes(connection.os) ||
+        typeof connection.root !== "string" ||
+        connection.root.length > 4096 ||
+        /[\0\r\n]/.test(connection.root)
+      )
+        throw new Error(tx("SSH 连接数据无效，原数据已保留。"));
+      const sessions = readSessions(connection.sessions, true);
+      if (
+        sessions.some(
+          (session) =>
+            !session.directory ||
+            !session.ssh ||
+            session.ssh.connection_id !== connection.id ||
+            session.ssh.workspace_id !== group.id,
+        )
+      )
+        throw new Error(tx("SSH 连接数据无效，原数据已保留。"));
+      return {
+        id: connection.id,
+        name: connection.name,
+        host: connection.host,
+        os: connection.os,
+        root: connection.root,
+        sessions,
+        splitGroups: readSplitGroups(connection.splitGroups, sessions),
+      };
+    });
+    if (
+      group.redisConnections !== undefined &&
+      (!Array.isArray(group.redisConnections) ||
+        !group.redisConnections.every(
+          (connection) => validRedisConfig(connection) && identifier(connection.id),
+        ))
+    )
+      throw new Error(tx("Redis 连接数据无效，原数据已保留。"));
     return {
+      redisConnections: group.redisConnections ?? [],
+      sshConnections,
       id: group.id,
       name: group.name,
       selectedProject: typeof group.selectedProject === "string" ? group.selectedProject : null,
@@ -332,7 +497,7 @@ export function readWorkspace(serialized: string | null): Workspace {
     };
   });
   const restored: Workspace = {
-    version: 3,
+    version: 5,
     groups: restoredGroups,
     selectedWorkspace,
     projects,
@@ -420,7 +585,9 @@ export function canRemoveWorkspace(workspace: Workspace, id: string): boolean {
     (workspace.groups?.length ?? 0) > 1 &&
     !workspace.projects.some((project) => project.workspaceId === id) &&
     !group.terminals?.length &&
-    !group.chats?.length
+    !group.chats?.length &&
+    !group.sshConnections?.length &&
+    !group.redisConnections?.length
   );
 }
 
@@ -722,7 +889,8 @@ export interface SessionRoster {
   id: string;
   workspaceId: string;
   projectId: string | null;
-  kind: "project" | "terminals" | "chats";
+  kind: "project" | "terminals" | "chats" | "ssh";
+  connection?: SshConnection;
   sessions: SessionConfig[];
   splitGroups?: SplitNode[];
 }
@@ -737,6 +905,15 @@ export function sessionRosters(workspace: Workspace): SessionRoster[] {
       splitGroups: project.splitGroups,
     })),
     ...(workspace.groups ?? []).flatMap((group) => [
+      ...(group.sshConnections ?? []).map((connection) => ({
+        id: `ssh:${connection.id}`,
+        workspaceId: group.id,
+        projectId: null,
+        kind: "ssh" as const,
+        sessions: connection.sessions,
+        splitGroups: connection.splitGroups,
+        connection,
+      })),
       {
         id: `loose:${group.id}:terminals`,
         workspaceId: group.id,
@@ -778,9 +955,18 @@ export function updateRoster(
     groups: workspace.groups?.map((group) =>
       group.id !== roster.workspaceId
         ? group
-        : roster.kind === "terminals"
-          ? { ...group, terminals: next.sessions, terminalSplits: next.splitGroups }
-          : { ...group, chats: next.sessions, chatSplits: next.splitGroups },
+        : roster.kind === "ssh"
+          ? {
+              ...group,
+              sshConnections: group.sshConnections?.map((connection) =>
+                connection.id === roster.connection?.id
+                  ? { ...connection, sessions: next.sessions, splitGroups: next.splitGroups }
+                  : connection,
+              ),
+            }
+          : roster.kind === "terminals"
+            ? { ...group, terminals: next.sessions, terminalSplits: next.splitGroups }
+            : { ...group, chats: next.sessions, chatSplits: next.splitGroups },
     ),
   };
 }

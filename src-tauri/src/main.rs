@@ -9,7 +9,10 @@ mod files;
 mod git;
 mod github;
 mod projects;
+mod redis;
+mod redis_credentials;
 mod sessions;
+mod ssh;
 mod taskbar;
 mod updates;
 
@@ -305,7 +308,18 @@ fn main() {
         })
         .manage(std::sync::Arc::new(sessions::Sessions::default()))
         .manage(files::EditorGuard::default())
+        .manage(ssh::SshFiles::default())
+        .manage(redis::RedisState::default())
         .invoke_handler(tauri::generate_handler![
+            redis::redis_pick_ca,
+            redis::redis_connect,
+            redis::redis_reconnect,
+            redis::redis_request,
+            redis::redis_writable,
+            redis::redis_disconnect,
+            redis::redis_credential,
+            redis::redis_guard,
+            redis::redis_exit,
             autostart_configure,
             runtime_info,
             updates::update_status,
@@ -325,6 +339,17 @@ fn main() {
             control::control_install,
             sessions::control_session,
             sessions::local_session_list,
+            sessions::ssh_session_list,
+            ssh::ssh_info,
+            ssh::ssh_files_open,
+            ssh::ssh_files_disconnect,
+            ssh::ssh_files_list,
+            ssh::ssh_file_read,
+            ssh::ssh_file_save,
+            ssh::ssh_file_mutate,
+            ssh::ssh_transfer,
+            ssh::ssh_transfer_cancel,
+            ssh::ssh_transfer_cancel_all,
             open_external,
             agent_install::install_agent,
             files::files_list,
@@ -377,6 +402,42 @@ fn main() {
                     }
                 }
                 tauri::RunEvent::ExitRequested { api, .. }
+                    if handle.state::<ssh::SshFiles>().busy() =>
+                {
+                    api.prevent_exit();
+                    if let Err(error) = show_main_window(handle) {
+                        eprintln!("Show transfer guard: {error}");
+                    }
+                    if let Err(error) = handle.emit("ssh-transfer-exit-request", ()) {
+                        eprintln!("Transfer exit request: {error}");
+                    }
+                }
+                tauri::RunEvent::ExitRequested { api, .. }
+                    if handle.state::<redis::RedisState>().busy() =>
+                {
+                    api.prevent_exit();
+                    if let Err(error) = show_main_window(handle) {
+                        eprintln!("Show Redis operation: {error}");
+                    }
+                    if let Err(error) = handle.emit("redis-operation-exit-request", ()) {
+                        eprintln!("Redis operation exit request: {error}");
+                    }
+                }
+                tauri::RunEvent::ExitRequested { api, .. }
+                    if handle.state::<redis::RedisState>().dirty() =>
+                {
+                    api.prevent_exit();
+                    if let Err(error) = show_main_window(handle) {
+                        eprintln!("Show Redis guard: {error}");
+                    }
+                    if let Err(error) = handle.emit(
+                        "redis-close-request",
+                        handle.state::<redis::RedisState>().first_dirty(),
+                    ) {
+                        eprintln!("Redis close request: {error}");
+                    }
+                }
+                tauri::RunEvent::ExitRequested { api, .. }
                     if handle
                         .state::<files::EditorGuard>()
                         .0
@@ -399,6 +460,7 @@ fn main() {
                 _ => {}
             }
             if matches!(event, tauri::RunEvent::Exit) {
+                handle.state::<redis::RedisState>().stop();
                 handle
                     .state::<std::sync::Arc<sessions::Sessions>>()
                     .detach();

@@ -3128,3 +3128,443 @@ textarea:focus-visible {
   gap: 12px;
   margin-top: 20px;
 }
+
+.ssh-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid var(--ui-border);
+  border-radius: 12px;
+  color: var(--ui-text);
+  background: var(--ui-canvas);
+}
+.ssh-dialog::backdrop {
+  background: #0008;
+}
+.ssh-dialog form,
+.ssh-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.ssh-dialog form {
+  gap: 14px;
+}
+.ssh-dialog h2 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+.ssh-dialog input,
+.ssh-dialog select {
+  min-width: 0;
+  width: 100%;
+  padding: 8px;
+}
+.ssh-dialog p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ssh-dialog .dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+.ssh-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--ui-muted);
+}
+.ssh-connection .row-label {
+  min-width: 0;
+}
+.ssh-connection .icon-button {
+  flex-shrink: 0;
+}
+.remote-files > .file-panel {
+  flex: 1;
+  min-height: 0;
+  border: 0;
+}
+.remote-files > .file-panel > .inspector-header {
+  display: none;
+}
+.remote-file-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px;
+  border-bottom: 1px solid var(--ui-border);
+  font-size: 11px;
+}
+.remote-file-status > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.remote-file-status label {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 5px;
+}
+.remote-file-error {
+  padding: 10px;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.remote-transfer-shelf {
+  position: fixed;
+  z-index: 120;
+  bottom: 12px;
+  right: 12px;
+  width: min(500px, calc(100vw - 24px));
+  max-height: 35vh;
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-canvas);
+  box-shadow: 0 4px 20px #0004;
+}
+.remote-transfer-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 11px;
+  padding: 5px;
+}
+.remote-transfer-row > span:first-child {
+  flex: 1;
+  min-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.remote-transfer-row progress {
+  width: 80px;
+}
+.remote-transfer-row p {
+  width: 100%;
+  overflow-wrap: anywhere;
+  margin: 2px 0;
+}
+
+.redis-sidebar-icon {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid var(--ui-muted);
+  border-radius: 4px;
+  color: var(--ui-muted);
+}
+.redis-sidebar-icon[data-connected] {
+  color: var(--ui-accent);
+  border-color: var(--ui-accent);
+}
+.redis-workspace {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.redis-workspace[hidden],
+.terminal-container[hidden] {
+  display: none;
+}
+.redis-workspace button,
+.redis-workspace input,
+.redis-workspace select {
+  font: inherit;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+  padding: 5px 8px;
+}
+.redis-workspace button:disabled {
+  opacity: 0.45;
+}
+.redis-workspace button:not(:disabled):hover {
+  background: var(--ui-hover);
+}
+.redis-workspace input {
+  min-width: 0;
+}
+.redis-toolbar,
+.redis-value-heading,
+.redis-editor-actions,
+.redis-key-actions,
+.redis-search,
+.redis-pagination,
+.redis-create {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ui-border);
+  font-size: 12px;
+}
+.redis-toolbar > span {
+  color: var(--ui-muted);
+  overflow-wrap: anywhere;
+}
+.redis-toolbar input[type="password"] {
+  max-width: 200px;
+}
+.redis-toolbar input[type="number"] {
+  width: 58px;
+  margin-left: 4px;
+}
+.redis-connected {
+  color: var(--ui-accent) !important;
+}
+.redis-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.redis-browser {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 260px;
+  min-width: 180px;
+  max-width: 40%;
+  border-right: 1px solid var(--ui-border);
+  min-height: 0;
+}
+.redis-search {
+  flex-wrap: nowrap;
+}
+.redis-search input {
+  flex: 1;
+  width: 70px;
+}
+.redis-key-list {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+  padding: 4px;
+}
+.redis-key-list details > summary {
+  cursor: pointer;
+  font-size: 12px;
+  padding: 6px;
+  overflow-wrap: anywhere;
+  color: var(--ui-muted);
+}
+.redis-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  margin-bottom: 2px;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+.redis-key.selected {
+  background: var(--ui-selected) !important;
+}
+.redis-key > span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.redis-key small {
+  color: var(--ui-muted);
+  font-size: 10px;
+}
+.redis-browser > footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  font-size: 11px;
+}
+.redis-detail {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.redis-create input {
+  flex: 1;
+  width: 90px;
+}
+.redis-value-heading strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 50%;
+  white-space: nowrap;
+}
+.redis-value-heading > span {
+  color: var(--ui-muted);
+}
+.redis-key-actions input {
+  width: 100px;
+}
+.redis-key-actions input[type="number"] {
+  width: 85px;
+}
+.redis-key-actions button {
+  padding: 4px 6px;
+}
+.redis-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 180px;
+  overflow: hidden;
+}
+.redis-editor .code-editor-host {
+  flex: 1;
+  min-height: 0;
+}
+.redis-preview {
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 12px;
+  flex: 1;
+}
+.redis-members {
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+.redis-member {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ui-border);
+  font-size: 12px;
+}
+.redis-member > * {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+}
+.redis-member button {
+  text-align: left;
+}
+.redis-empty {
+  padding: 20px;
+}
+.redis-console {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-top: 1px solid var(--ui-border);
+  max-height: 38%;
+  overflow: auto;
+  font-size: 12px;
+}
+.redis-console form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.redis-console form input {
+  flex: 1;
+}
+.redis-console pre {
+  max-height: 140px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.redis-dialog {
+  width: min(620px, 90vw);
+  overflow: hidden;
+  padding: 18px;
+}
+.redis-dialog form {
+  max-height: calc(100vh - 88px);
+  min-height: 0;
+  gap: 12px;
+}
+.redis-dialog footer {
+  display: flex;
+  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.redis-dialog fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.redis-form-row {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+.redis-form-row > label {
+  flex: 1;
+  min-width: 0;
+}
+.redis-form-row > label:first-child {
+  flex: 2;
+}
+.redis-form-row input {
+  width: 100%;
+  min-width: 0;
+}
+.redis-form-row > input {
+  flex: 1;
+  width: 0;
+}
+.redis-form-row > button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.redis-checkbox {
+  display: inline-flex !important;
+  align-items: center;
+  flex-direction: row !important;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+.redis-checkbox input {
+  width: auto !important;
+}
+@media (max-width: 760px) {
+  .redis-browser {
+    flex-basis: 190px;
+  }
+  .redis-key-actions {
+    gap: 4px;
+  }
+  .redis-form-row {
+    flex-wrap: wrap;
+  }
+}

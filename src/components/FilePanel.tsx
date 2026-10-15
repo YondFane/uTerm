@@ -4,6 +4,7 @@ import { tx } from "../lib/i18n";
 import type { ReactNode } from "react";
 import { ToolbarIcon } from "./SidebarIcon";
 import { useEffect, useRef, useState } from "react";
+import { fileInvoke, isRemoteDirectory, displayDirectory } from "../lib/file-target";
 import { invoke } from "@tauri-apps/api/core";
 import { clipboardPath } from "../lib/file-document";
 import { setFileClipboard, useFileClipboard } from "../lib/file-clipboard";
@@ -55,7 +56,7 @@ function Folder({
     let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
       try {
-        const result = await invoke<Listing>("files_list", { directory, path, hidden });
+        const result = await fileInvoke<Listing>("files_list", { directory, path, hidden });
         if (!disposed) {
           setListing(result);
           setError("");
@@ -175,6 +176,7 @@ function Folder({
 export function FilePanel({
   resizeHandle,
   headerActions,
+  transfer,
   directory,
   mode,
   request,
@@ -184,6 +186,7 @@ export function FilePanel({
 }: {
   resizeHandle: ReactNode;
   headerActions: ReactNode;
+  transfer?: (path: string, direction: "upload" | "download") => void;
   directory: string;
   mode: FileMode;
   request: number;
@@ -204,6 +207,7 @@ export function FilePanel({
   const fileClipboard = useFileClipboard();
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const copying = useRef(false);
+  const remote = isRemoteDirectory(directory);
   const currentDirectory = useRef(directory);
   currentDirectory.current = directory;
   useEffect(() => {
@@ -217,12 +221,14 @@ export function FilePanel({
   }, [directory]);
   const rootEntry: Entry = { path: "", name: tx("项目根目录"), directory: true, symlink: false };
   const copyFile = (entry: Entry) => {
+    if (remote) return;
     if (!entry.path || entry.symlink || mutating) return;
     setFileClipboard({ directory, path: entry.path });
     setMenu(null);
     results.current?.focus();
   };
   const pasteFile = async (entry: Entry) => {
+    if (remote) return;
     if (!fileClipboard || entry.symlink || mutating || copying.current) return;
     copying.current = true;
     setMutating(true);
@@ -293,7 +299,8 @@ export function FilePanel({
   async function copyEntry(entry: Entry, fullPath: boolean) {
     setMenu(null);
     try {
-      const path = `${directory.replace(/[\\/]+$/, "")}/${entry.path}`;
+      const base = remote ? displayDirectory(directory) : directory;
+      const path = `${base.replace(/[\\/]+$/, "")}/${entry.path}`;
       await navigator.clipboard.writeText(fullPath ? clipboardPath(path) : entry.name);
     } catch (reason) {
       setError(tx("复制失败：{p0}", { p0: String(reason) }), true);
@@ -373,7 +380,7 @@ export function FilePanel({
         beforeMutation(() => {
           setMutating(true);
           setError("");
-          void invoke("file_mutate", { directory, path: target.path, action, name })
+          void fileInvoke("file_mutate", { directory, path: target.path, action, name })
             .then(() => {
               setTarget(null);
               setRevision((value) => value + 1);
@@ -421,23 +428,34 @@ export function FilePanel({
             ["quick", tx("快速打开")],
             ["search", tx("项目搜索")],
           ] as const
-        ).map(([value, label]) => (
-          <button
-            className="toolbar-icon-button"
-            title={label}
-            aria-label={label}
-            key={value}
-            role="tab"
-            aria-selected={mode === value}
-            onClick={() => setMode(value)}
-          >
-            <ToolbarIcon
-              name={value === "tree" ? "tree" : value === "quick" ? "quick" : "search"}
-            />
-          </button>
-        ))}
+        )
+          .filter(([value]) => !remote || value === "tree")
+          .map(([value, label]) => (
+            <button
+              className="toolbar-icon-button"
+              title={label}
+              aria-label={label}
+              key={value}
+              role="tab"
+              aria-selected={mode === value}
+              onClick={() => setMode(value)}
+            >
+              <ToolbarIcon
+                name={value === "tree" ? "tree" : value === "quick" ? "quick" : "search"}
+              />
+            </button>
+          ))}
       </div>
       <div className="file-options">
+        {transfer && (
+          <button
+            disabled={mutating}
+            onClick={() => transfer(focusedEntry?.directory ? focusedEntry.path : "", "upload")}
+          >
+            {tx("上传文件")}
+          </button>
+        )}
+
         <button
           className="toolbar-icon-button"
           title={tx("新建文件")}
@@ -630,14 +648,14 @@ export function FilePanel({
         >
           <button
             role="menuitem"
-            disabled={!menu.entry.path || menu.entry.symlink || mutating}
+            disabled={remote || !menu.entry.path || menu.entry.symlink || mutating}
             onClick={() => copyFile(menu.entry)}
           >
             {tx("复制")}
           </button>
           <button
             role="menuitem"
-            disabled={!fileClipboard || menu.entry.symlink || mutating}
+            disabled={remote || !fileClipboard || menu.entry.symlink || mutating}
             onClick={() => void pasteFile(menu.entry)}
           >
             {tx("粘贴")}
@@ -670,14 +688,43 @@ export function FilePanel({
           >
             {tx("新建目录")}
           </button>
+          {transfer && !menu.entry.directory && !menu.entry.symlink && (
+            <button
+              role="menuitem"
+              onClick={() => {
+                transfer(menu.entry.path, "download");
+                setMenu(null);
+              }}
+            >
+              {tx("下载文件")}
+            </button>
+          )}
+          {transfer && (
+            <button
+              role="menuitem"
+              onClick={() => {
+                transfer(
+                  menu.entry.directory
+                    ? menu.entry.path
+                    : menu.entry.path.split("/").slice(0, -1).join("/"),
+                  "upload",
+                );
+                setMenu(null);
+              }}
+            >
+              {tx("上传文件")}
+            </button>
+          )}
           <button role="menuitem" onClick={() => void copyEntry(menu.entry, true)}>
             {tx("复制路径")}
           </button>
           <button
             role="menuitem"
+            disabled={remote}
             onClick={() => {
               const path = menu.entry.path;
               setMenu(null);
+              if (remote) return;
               void invoke("file_reveal", { directory, path }).catch((reason) =>
                 setError(String(reason), true),
               );

@@ -1,3 +1,4 @@
+import { displayDirectory } from "../lib/file-target";
 import { localizeMessage } from "../lib/i18n";
 import { editorPhrases } from "../lib/editor-i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
@@ -26,7 +27,7 @@ const PdfReader = lazy(() =>
 );
 markdown.renderer.rules.image = (tokens, index) =>
   `<span class="preview-image-label">${markdown.utils.escapeHtml(tx("[图片：{p0}]", { p0: tokens[index].content }))}</span>`;
-function CodeEditor({
+export function CodeEditor({
   document,
   blocked,
   change,
@@ -223,10 +224,10 @@ export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocume
   return (
     <section className="file-editor" aria-label={tx("文件编辑器 {p0}", { p0: document.path })}>
       <header className="editor-header">
-        <div title={`${document.directory}/${document.path}`}>
+        <div title={`${displayDirectory(document.directory)}/${document.path}`}>
           <strong>{document.path.split(/[\\/]/).at(-1)}</strong>
           <small>
-            {document.directory}/{document.path}
+            {displayDirectory(document.directory)}/{document.path}
           </small>
         </div>
         <span className="editor-save-state" role="status">

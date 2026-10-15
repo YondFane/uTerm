@@ -428,7 +428,7 @@ pub struct Document {
     line_ending: String,
     bom: bool,
     readonly: bool,
-    notice: Option<String>,
+    pub(crate) notice: Option<String>,
 }
 fn image_type(bytes: &[u8]) -> Option<&'static str> {
     if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
@@ -452,6 +452,13 @@ fn read(directory: &str, relative: &str) -> Result<Document, String> {
         return Err("仅支持普通文件。".into());
     }
     let bytes = read_bytes(&path, PREVIEW_LIMIT)?;
+    let readonly = std::fs::metadata(path)
+        .map_err(|error| error.to_string())?
+        .permissions()
+        .readonly();
+    document_from_bytes(bytes, readonly)
+}
+pub(crate) fn document_from_bytes(bytes: Vec<u8>, readonly: bool) -> Result<Document, String> {
     let digest = version(&bytes);
     if let Some(kind) = image_type(&bytes) {
         return Ok(Document {
@@ -503,11 +510,7 @@ fn read(directory: &str, relative: &str) -> Result<Document, String> {
         "\n"
     }
     .into();
-    let readonly = std::fs::metadata(path)
-        .map_err(|error| error.to_string())?
-        .permissions()
-        .readonly()
-        || mixed;
+    let readonly = readonly || mixed;
     Ok(Document {
         kind: "text".into(),
         text,

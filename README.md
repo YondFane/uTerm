@@ -7,12 +7,22 @@ uTerm 是免费的独立桌面终端，面向 Windows 和 macOS，使用 Tauri�
 ## 功能
 
 - 本地终端与 Agent 会话，按工作区、项目和 Git Worktree 组织。
+- SSH 连接管理，复用系统 OpenSSH，提供远程终端与 SFTP 文件编辑、上传和下载。
+- Redis 工作台，支持直连、TLS、SSH 隧道、Key 浏览与受控编辑。
 - 分屏、键盘导航、会话链接和后台会话重连。
 - 项目文件、带冲突检查和草稿恢复的文本编辑、Markdown 与 PDF 预览。
 - Git 状态、差异、提交和 Worktree；GitHub Issue 与 Pull Request。
 - Agent 配置、活动与用量；可配置主题、字体、快捷键，支持简体中文和英文。
 
 退出应用只分离窗口，不终止后台会话。**关闭会话**会终止所选进程。会话服务需要认证，且只监听本机回环地址。
+
+## SSH 使用
+
+在侧栏“SSH 连接”点击加号，填写 `~/.ssh/config`（Windows 为 `%USERPROFILE%\.ssh\config`）中的 Host 别名，并选择远端系统及文件根目录。点击连接旁的加号启动 SSH 终端，首次连接在终端确认主机指纹；点击连接名称打开远程文件。文件面板需要密钥或 ssh-agent 非交互认证；密码可在终端输入，不会保存。Windows 需要安装系统 OpenSSH 客户端可选功能。uTerm 不捆绑 SSH 可执行文件，SFTP 仅新增轻量协议依赖并复用已有异步运行时。远端需启用 SFTP；具体限制和验收状态见[功能说明](docs/features.zh-CN.md#ssh-与远程文件)。
+
+## Redis 使用
+
+在侧栏“Redis 连接”点击加号，填写地址、端口、DB 和可选认证信息，可先测试连接。支持直连、TLS 自定义 CA/服务端名称，以及选择已有 SSH 别名建立隧道。保存后点击连接名称，再点击“连接”打开工作台；默认只读，勾选“允许编辑”后可修改 String/Hash、Key 和 TTL。密码默认仅在内存中使用，可选择存入系统凭据库。应用不包含 Redis 服务端或 `redis-cli`。详见[功能说明](docs/features.zh-CN.md#redis-连接与工作台)。
 
 ## 一行命令安装
 
@@ -84,9 +94,13 @@ pnpm desktop:check
 
 国际化检查使用仅开发环境依赖 `@babel/parser` 扫描界面源码和已登记的后端消息。`pnpm test` 还通过仅开发环境依赖 `jsdom` 运行词典、占位符及双语组件测试，桌面接口与画布渲染器使用模拟实现。独立设置预览可运行 `pnpm dev --port 1422`，然后打开 `/tests/i18n-preview.html`；它使用模拟桌面数据和独立浏览器来源设置，不连接真实会话。
 
+Redis 集成测试单独运行 `pnpm test:redis`，需要 PATH 中有支持 TLS 的 `redis-server` 和 `openssl`。它启动临时回环服务，不访问已有数据库。普通 `pnpm test:backend` 将四项真实服务测试标为忽略，并运行不依赖 Redis 的协议预算/超时测试；完整验证需要同时运行两个命令。运行应用本身不需要这些测试程序。Redis 客户端关闭默认可选功能，TLS 复用现有 rustls/ring，凭据访问使用系统原生 API。
+
 ## 打包与发布
 
 `pnpm desktop:build` 在当前系统打包原生安装程序。运行 `pnpm desktop:build --help` 查看安装包和目标平台选项。开发构建使用 `sh.uterm.desktop.dev`；签名更新构建使用 `sh.uterm.desktop`。
+
+macOS 上如果 Rust 构建报告过程宏动态库的 `mis-aligned LINKEDIT string pool`，可使用 `CARGO_PROFILE_RELEASE_STRIP=none pnpm desktop:build` 绕过当前工具链的剥离问题，参见 [Rust 问题记录](https://github.com/rust-lang/rust/issues/157750)。此设置只作用于该次构建，不修改项目配置。
 
 发布工作流构建 Windows x64 和 macOS ARM64/x64。在 `release` 分支上从已审查提交创建 `uTerm-vMAJOR.MINOR.PATCH` 标签，先推送分支，再推送标签。在 CI 中配置 `DESKTOP_UPDATER_PUBLIC_KEY`、`DESKTOP_UPDATER_PRIVATE_KEY` 和 `DESKTOP_UPDATER_KEY_PASSWORD`。Windows 证书签名还使用 `DESKTOP_WINDOWS_CERT_P12` 和 `DESKTOP_WINDOWS_CERT_PASSWORD`。不要提交签名密钥。
 
