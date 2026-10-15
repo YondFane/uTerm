@@ -2,11 +2,14 @@
   "name": "@yondfane/uterm-install",
   "version": "0.1.0",
   "description": "Install the stable uTerm desktop application for macOS and Windows",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
   "bin": {
     "uterm-install": "cli.mjs"
   },
   "files": [
+    "LICENSE",
+    "NOTICE",
     "cli.mjs",
     "install.sh",
     "install.ps1"

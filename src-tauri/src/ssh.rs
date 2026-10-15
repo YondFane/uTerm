@@ -119,15 +119,26 @@ pub(crate) fn base_command() -> Result<Command> {
         .env("SSH_ASKPASS_REQUIRE", "never");
     Ok(command)
 }
+#[derive(Clone)]
 pub(crate) struct EffectiveSsh {
     pub identity: String,
     pub hostname: String,
     pub user: String,
     pub port: String,
+    pub proxy: bool,
+    pub password_host: String,
 }
 pub(crate) async fn effective_identity(host: &str) -> Result<EffectiveSsh> {
+    effective_config(host, vec![]).await
+}
+pub(crate) async fn effective_target(target: &SshTarget) -> Result<EffectiveSsh> {
+    target.validate()?;
+    effective_config(&target.host, target.options()).await
+}
+async fn effective_config(host: &str, options: Vec<String>) -> Result<EffectiveSsh> {
     validate_host(host)?;
     let mut command = base_command()?;
+    command.args(&options);
     command.args(["-G", "--", host]);
     let mut child = BackgroundChild::spawn(&mut command)?;
     drop(child.take_stdin());
@@ -185,11 +196,30 @@ pub(crate) async fn effective_identity(host: &str) -> Result<EffectiveSsh> {
             .map(str::to_owned)
             .ok_or_else(|| anyhow!("SSH_CONFIG_FAILED"))
     };
+    let identity = if options.is_empty() {
+        fields.join("\n")
+    } else {
+        format!(
+            "{}\n{}",
+            fields.join("\n"),
+            serde_json::to_string(&options)?
+        )
+    };
     Ok(EffectiveSsh {
-        identity: digest(fields.join("\n").as_bytes()),
+        identity: digest(identity.as_bytes()),
         hostname: option("hostname ")?,
+        password_host: option("hostkeyalias ")
+            .ok()
+            .filter(|v| v != "none")
+            .unwrap_or(option("hostname ")?),
         user: option("user ")?,
         port: option("port ")?,
+        proxy: text.lines().any(|line| {
+            ["proxyjump ", "proxycommand "].iter().any(|key| {
+                line.strip_prefix(key)
+                    .is_some_and(|v| !v.is_empty() && v != "none")
+            })
+        }),
     })
 }
 fn canonical(path: &str, windows: bool) -> Result<String> {
@@ -254,13 +284,19 @@ fn join(root: &str, path: &str) -> String {
 }
 
 impl RemoteFs {
-    async fn connect(connection: SshTarget, expected: Option<&RemoteRoot>) -> Result<Arc<Self>> {
+    async fn connect(
+        connection: SshTarget,
+        expected: Option<&RemoteRoot>,
+        prepared: crate::ssh_auth::Prepared,
+    ) -> Result<Arc<Self>> {
         connection.validate()?;
-        let effective = effective_identity(&connection.host).await?;
+        let effective = &prepared.effective;
         if expected.is_some_and(|root| root.identity != effective.identity) {
             bail!("SSH_TARGET_CHANGED");
         }
         let mut command = base_command()?;
+        command.args(connection.options());
+        prepared.apply(&mut command)?;
         command.args([
             "-T",
             "-S",
@@ -268,9 +304,17 @@ impl RemoteFs {
             "-o",
             "ControlMaster=no",
             "-o",
-            "BatchMode=yes",
+            if prepared.askpass.is_some() {
+                "BatchMode=no"
+            } else {
+                "BatchMode=yes"
+            },
             "-o",
-            "StrictHostKeyChecking=yes",
+            if prepared.askpass.is_some() {
+                "StrictHostKeyChecking=ask"
+            } else {
+                "StrictHostKeyChecking=yes"
+            },
             "-o",
             "ClearAllForwardings=yes",
             "-o",
@@ -318,7 +362,7 @@ impl RemoteFs {
             }
         });
         let sftp = RawSftpSession::new(stream);
-        sftp.set_timeout(15);
+        sftp.set_timeout(if prepared.askpass.is_some() { 120 } else { 15 });
         let version = sftp.init().await.map_err(|error| {
             anyhow!(
                 "SSH_SFTP_FAILED: {error}: {}",
@@ -328,6 +372,7 @@ impl RemoteFs {
                     .unwrap_or_default()
             )
         })?;
+        sftp.set_timeout(15);
         if version.version != 3 {
             bail!("SSH_SFTP_UNSUPPORTED");
         }
@@ -363,7 +408,7 @@ impl RemoteFs {
             root: RemoteRoot {
                 connection,
                 path,
-                identity: effective.identity,
+                identity: effective.identity.clone(),
             },
             sftp,
             replace: version.extensions.contains_key("posix-rename@openssh.com"),
@@ -560,7 +605,11 @@ impl RemoteFs {
         result
     }
 }
-async fn remote(state: &SshFiles, root: &RemoteRoot) -> Result<Arc<RemoteFs>> {
+async fn remote(
+    app: &tauri::AppHandle,
+    state: &SshFiles,
+    root: &RemoteRoot,
+) -> Result<Arc<RemoteFs>> {
     root.validate()?;
     let key = root.key()?;
     let mut roots = state.roots.lock().await;
@@ -571,7 +620,8 @@ async fn remote(state: &SshFiles, root: &RemoteRoot) -> Result<Arc<RemoteFs>> {
     if roots.len() >= 16 {
         bail!("SSH_CONNECTION_LIMIT");
     }
-    let remote = RemoteFs::connect(root.connection.clone(), Some(root)).await?;
+    let prepared = crate::ssh_auth::prepare(app, &root.connection).await?;
+    let remote = RemoteFs::connect(root.connection.clone(), Some(root), prepared).await?;
     roots.insert(key, remote.clone());
     Ok(remote)
 }
@@ -659,15 +709,19 @@ pub async fn ssh_info() -> Result<SshInfo, String> {
 }
 #[tauri::command]
 pub async fn ssh_files_open(
+    app: tauri::AppHandle,
     state: tauri::State<'_, SshFiles>,
     connection: SshTarget,
     expected: Option<RemoteRoot>,
 ) -> Result<RemoteRoot, String> {
+    let prepared = crate::ssh_auth::prepare(&app, &connection)
+        .await
+        .map_err(failure)?;
     let mut roots = state.roots.lock().await;
     if roots.len() >= 16 {
         return Err("SSH_CONNECTION_LIMIT".into());
     }
-    let remote = RemoteFs::connect(connection, expected.as_ref())
+    let remote = RemoteFs::connect(connection, expected.as_ref(), prepared)
         .await
         .map_err(failure)?;
     let root = remote.root.clone();
@@ -704,13 +758,14 @@ pub struct RemoteListing {
 }
 #[tauri::command]
 pub async fn ssh_files_list(
+    app: tauri::AppHandle,
     state: tauri::State<'_, SshFiles>,
     root: RemoteRoot,
     path: String,
     hidden: bool,
 ) -> Result<RemoteListing, String> {
     async {
-        let remote = remote(&state, &root).await?;
+        let remote = remote(&app, &state, &root).await?;
         let folder = remote.resolve(&path, false).await?;
         let handle = remote.sftp.opendir(folder).await?.handle;
         let result: Result<RemoteListing> = async {
@@ -774,11 +829,12 @@ pub async fn ssh_files_list(
 }
 #[tauri::command]
 pub async fn ssh_file_read(
+    app: tauri::AppHandle,
     state: tauri::State<'_, SshFiles>,
     root: RemoteRoot,
     path: String,
 ) -> Result<crate::files::Document, String> {
-    let remote = remote(&state, &root).await.map_err(failure)?;
+    let remote = remote(&app, &state, &root).await.map_err(failure)?;
     let resolved = remote.resolve(&path, false).await.map_err(failure)?;
     let (bytes, attrs) = remote
         .read_bytes(&resolved, PREVIEW_LIMIT)
@@ -799,6 +855,7 @@ pub async fn ssh_file_read(
 }
 #[tauri::command]
 pub async fn ssh_file_save(
+    app: tauri::AppHandle,
     state: tauri::State<'_, SshFiles>,
     root: RemoteRoot,
     path: String,
@@ -806,7 +863,7 @@ pub async fn ssh_file_save(
     expected: String,
     force: bool,
 ) -> Result<String, String> {
-    remote(&state, &root)
+    remote(&app, &state, &root)
         .await
         .map_err(failure)?
         .save(&path, &text, &expected, force)
@@ -881,13 +938,14 @@ impl RemoteFs {
 }
 #[tauri::command]
 pub async fn ssh_file_mutate(
+    app: tauri::AppHandle,
     state: tauri::State<'_, SshFiles>,
     root: RemoteRoot,
     path: String,
     action: String,
     name: String,
 ) -> Result<(), String> {
-    remote(&state, &root)
+    remote(&app, &state, &root)
         .await
         .map_err(failure)?
         .mutate(path, action, name)
@@ -1213,6 +1271,7 @@ async fn local_version(path: PathBuf) -> Result<Option<String>> {
 }
 #[tauri::command]
 pub async fn ssh_transfer(
+    app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     state: tauri::State<'_, SshFiles>,
     root: RemoteRoot,
@@ -1269,7 +1328,7 @@ pub async fn ssh_transfer(
             bail!("SSH_TRANSFER_CANCELLED");
         };
         cancelled(&cancel)?;
-        let remote = remote(&state, &root).await?;
+        let remote = remote(&app, &state, &root).await?;
         let _write = remote.writes.lock().await;
         if direction == "upload" {
             let mut total = 0u64;
@@ -1425,6 +1484,7 @@ mod tests {
                     host: "fixture".into(),
                     os: "posix".into(),
                     root: path.clone(),
+                    ..Default::default()
                 },
                 path,
                 identity: "0".repeat(64),

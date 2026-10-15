@@ -206,6 +206,19 @@ pub async fn start_session(
         rows,
         cols,
     } = request;
+    let prepared = if create {
+        if let Some(target) = &ssh {
+            Some(
+                crate::ssh_auth::prepare(&app, target)
+                    .await
+                    .map_err(|error| error.to_string())?,
+            )
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         let client = local_client(&app, &state)?;
@@ -219,6 +232,11 @@ pub async fn start_session(
             client
                 .require_ssh_support()
                 .map_err(|error| error.to_string())?;
+            if ssh.as_ref().is_some_and(|target| target.mode.is_some()) {
+                client
+                    .require_ssh_config_support()
+                    .map_err(|error| error.to_string())?;
+            }
         }
         let spec = SessionSpec {
             id: id.clone(),
@@ -227,7 +245,18 @@ pub async fn start_session(
             agent,
             ssh,
         };
-        let operation = if is_ssh {
+        let operation = if let Some(prepared) = prepared {
+            client
+                .require_ssh_config_support()
+                .map_err(|error| error.to_string())?;
+            Operation::OpenSshConfigured {
+                spec,
+                rows,
+                cols,
+                resolved: prepared.resolved().map_err(|error| error.to_string())?,
+                askpass: prepared.askpass,
+            }
+        } else if is_ssh {
             Operation::OpenSsh {
                 spec,
                 rows,

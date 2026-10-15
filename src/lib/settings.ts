@@ -68,6 +68,9 @@ export interface Settings {
   defaultAgent: string;
   enabledAgents: string[];
   projectOrder: "manual" | "name";
+  showSshConnections: boolean;
+  showRedisConnections: boolean;
+  showDatabaseConnections: boolean;
   usageRemote: boolean;
   usageRefreshInterval: number;
   shortcuts: Partial<Record<CommandId, string>>;
@@ -105,6 +108,9 @@ export const defaults: Settings = {
   defaultAgent: "codex",
   enabledAgents: [],
   projectOrder: "manual",
+  showSshConnections: true,
+  showRedisConnections: true,
+  showDatabaseConnections: true,
   usageRemote: true,
   usageRefreshInterval: 60,
   shortcuts: {},
@@ -156,6 +162,18 @@ export function readSettings(raw: string | null): Settings {
     automaticUpdates: parsed.automaticUpdates === undefined ? false : parsed.automaticUpdates,
     fileTabLimit: parsed.fileTabLimit === undefined ? defaults.fileTabLimit : parsed.fileTabLimit,
     enabledAgents: parsed.enabledAgents === undefined ? [] : parsed.enabledAgents,
+    showSshConnections:
+      parsed.showSshConnections === undefined
+        ? defaults.showSshConnections
+        : parsed.showSshConnections,
+    showDatabaseConnections:
+      parsed.showDatabaseConnections === undefined
+        ? defaults.showDatabaseConnections
+        : parsed.showDatabaseConnections,
+    showRedisConnections:
+      parsed.showRedisConnections === undefined
+        ? defaults.showRedisConnections
+        : parsed.showRedisConnections,
     breakReminder:
       parsed.breakReminder === undefined ? defaults.breakReminder : parsed.breakReminder,
     breakInterval:
@@ -177,6 +195,9 @@ export function readSettings(raw: string | null): Settings {
     !v ||
     v.version !== 1 ||
     typeof v.automaticUpdates !== "boolean" ||
+    typeof v.showSshConnections !== "boolean" ||
+    typeof v.showRedisConnections !== "boolean" ||
+    typeof v.showDatabaseConnections !== "boolean" ||
     !Number.isSafeInteger(v.fileTabLimit) ||
     v.fileTabLimit < 1 ||
     typeof v.breakReminder !== "boolean" ||

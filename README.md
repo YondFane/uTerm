@@ -2,7 +2,13 @@
 
 [English](README.en.md) · [功能说明](docs/features.zh-CN.md)
 
-uTerm 是免费的独立桌面终端，面向 Windows 和 macOS，使用 Tauri、React、TypeScript、Rust 和 xterm.js 构建。
+uTerm 是非商业用途免费的独立桌面终端，面向 Windows 和 macOS，使用 Tauri、React、TypeScript、Rust 和 xterm.js 构建。
+
+## 许可与商业授权
+
+本源码树采用 [PolyForm Noncommercial 1.0.0](LICENSE)，非商业用途及协议明确允许的其他用途免费，超出这些许可范围的商业使用须事先取得 **YondFane 的单独书面授权**。协议中的个人使用、非商业组织及合理使用条款完整保留。企业商业运营、商业分发或转售、集成商业产品及收费或托管服务，如不属于协议已允许的用途，均需另行授权。
+
+授权申请方式及中英文说明见 [NOTICE](NOTICE)。YondFane 保留对其具有充分权利的代码自行商业化及另行授权的权利；本项目属于源码可用软件，不属于 OSI 认可的开源软件。第三方依赖及资源继续适用各自的许可。
 
 ## 功能
 
@@ -18,11 +24,21 @@ uTerm 是免费的独立桌面终端，面向 Windows 和 macOS，使用 Tauri�
 
 ## SSH 使用
 
-在侧栏“SSH 连接”点击加号，填写 `~/.ssh/config`（Windows 为 `%USERPROFILE%\.ssh\config`）中的 Host 别名，并选择远端系统及文件根目录。点击连接旁的加号启动 SSH 终端，首次连接在终端确认主机指纹；点击连接名称打开远程文件。文件面板需要密钥或 ssh-agent 非交互认证；密码可在终端输入，不会保存。Windows 需要安装系统 OpenSSH 客户端可选功能。uTerm 不捆绑 SSH 可执行文件，SFTP 仅新增轻量协议依赖并复用已有异步运行时。远端需启用 SFTP；具体限制和验收状态见[功能说明](docs/features.zh-CN.md#ssh-与远程文件)。
+在侧栏“SSH 连接”点击加号，填写主机地址、端口（默认 22）和用户名，或切换到 Host 别名模式沿用 `~/.ssh/config`（Windows 为 `%USERPROFILE%\.ssh\config`）。选择自动认证、私钥文件/ssh-agent 或密码；密码可在连接窗口输入并可选保存到系统凭据库，未记住的密码重启后需重新输入。点击连接旁的加号启动 SSH 终端，点击连接名称打开远程文件；密码模式首次通过原生对话框确认主机指纹，自动/密钥模式先在终端确认。Windows 需要安装系统 OpenSSH 客户端可选功能。应用复用系统 OpenSSH，远端需启用 SFTP；密码模式暂不支持跳板机或验证码，带口令私钥用于文件/隧道前需加入 ssh-agent。详见[功能说明](docs/features.zh-CN.md#ssh-与远程文件)。
 
 ## Redis 使用
 
-在侧栏“Redis 连接”点击加号，填写地址、端口、DB 和可选认证信息，可先测试连接。支持直连、TLS 自定义 CA/服务端名称，以及选择已有 SSH 别名建立隧道。保存后点击连接名称，再点击“连接”打开工作台；默认只读，勾选“允许编辑”后可修改 String/Hash、Key 和 TTL。密码默认仅在内存中使用，可选择存入系统凭据库。应用不包含 Redis 服务端或 `redis-cli`。详见[功能说明](docs/features.zh-CN.md#redis-连接与工作台)。
+在侧栏“Redis 连接”点击加号，填写地址、端口、DB 和可选认证信息，可先测试连接。支持直连、TLS 自定义 CA/服务端名称，以及选择已有 SSH 连接建立隧道并复用其端口、用户名和认证方式。保存后点击连接名称，再点击“连接”打开工作台；默认只读，勾选“允许编辑”后可修改 String/Hash、Key 和 TTL。密码默认仅在内存中使用，可选择存入系统凭据库。应用不包含 Redis 服务端或 `redis-cli`。详见[功能说明](docs/features.zh-CN.md#redis-连接与工作台)。
+
+## 数据库连接与可选组件
+
+侧栏“数据库连接”支持 MySQL、PostgreSQL 和 Oracle（服务名连接）。点击加号配置连接，通过“安装或管理连接组件”按需安装 Java 运行时及对应驱动，也可选择本机 Java 17 或更新版本。连接引擎已内置，无需单独下载安装；主安装包不包含 Java 或数据库驱动。底部数据库图标默认高亮，点击可独立显示或隐藏连接区域；隐藏保留工作台和连接。组件也可在“设置 → 数据库组件”管理。详见[功能说明](docs/features.zh-CN.md#数据库连接与可选组件)。
+
+内置连接引擎源码位于 `components/database/src/`，纳入版本控制的 `components/database/engine.jar` 嵌入桌面可执行文件。`components/database/catalog.json` 固定引擎校验值及可选驱动/运行时下载信息。构建主应用不需要 Java；重新构建引擎需要与校验目录一致的 JDK 26.0.2.1，运行 `pnpm database:build` 校验生成结果与内置 JAR 一致。修改源码后运行 `node scripts/database-component.mjs --record`，审核并同步提交源码、内置 JAR 及目录。临时编译产物仍位于忽略的 `components/database/target/`。`.github/workflows/database-components.yml` 手动校验内置产物，无需单独发布引擎。
+
+`pnpm test:database` 默认跳过真实数据库测试；设置 `UTERM_MYSQL_TEST=1`、`UTERM_MYSQL_PASSWORD` 及可选的 `UTERM_MYSQL_HOST`、`UTERM_MYSQL_PORT`、`UTERM_MYSQL_USER`、`UTERM_MYSQL_DATABASE` 后执行本机集成验证。先下载与目录匹配的驱动到忽略的 `components/database/target/mysql.jar`。测试只查询元数据/构造数据并设置会话变量，不创建或修改业务表。请勿将密码写入源文件、命令历史或测试夹具。 如需验证三种驱动的代理认证，将匹配的 `mysql.jar`、`postgresql.jar` 和 `oracle.jar` 放入同一忽略目录，并设置 `UTERM_DATABASE_PROXY_TEST=1`；此路由测试使用可丢弃的回环 SOCKS 代理，无需数据库服务。
+
+使用 JDK 17 或更新版本，可设置 `UTERM_DATABASE_JAVA_TEST=1` 验证内置 JSON 的 Unicode、控制字符及精确数值，无需数据库。启用 MySQL 测试时可加 `UTERM_MYSQL_TLS=1` 和 `UTERM_MYSQL_CA` 验证 TLS；会话超时测试只关闭测试自身的连接。
 
 ## 一行命令安装
 
@@ -112,10 +128,12 @@ macOS 上如果 Rust 构建报告过程宏动态库的 `mis-aligned LINKEDIT str
 | `src/lib/` | 状态、设置和纯逻辑 |
 | `src-tauri/src/` | 桌面命令和系统集成 |
 | `crates/utermd-local/` | 本地 PTY、输出回放和 Agent hooks |
+| `components/database/` | 内置 JDBC 进程源码/JAR 与固定组件下载目录 |
 | `tests/` | 前端和构建工具测试 |
 | `scripts/`、`packaging/` | 构建、发布和文档工具 |
 | `.github/workflows/` | CI 与发布 |
 | `docs/` | 当前功能与验证说明 |
+| `LICENSE`、`NOTICE` | 公开许可、版权及中英文商业授权说明 |
 | `DESIGN.md` | 中英文界面规范、颜色变量与设计参考 |
 
 桌面后端和本地会话服务各自维护 Cargo 清单及锁文件。源码和运行资源均保存在本仓库内。

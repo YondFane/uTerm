@@ -45,17 +45,24 @@ export function sshError(value: unknown): string {
   const message = value instanceof Error ? value.message : String(value);
   if (message.startsWith("CONFLICT:")) return message;
   const codes: Record<string, string> = {
+    SSH_PASSWORD_REQUIRED: tx("请编辑 SSH 连接并输入密码。未记住的密码在重开应用后需重新输入。"),
+    SSH_PASSWORD_INVALID: tx("SSH 密码不能为空或包含换行，且不能超过 1023 字节。"),
+    SSH_CREDENTIAL_FAILED: tx("无法访问 SSH 系统凭据库，请检查权限或取消记住密码。"),
+    SSH_CREDENTIAL_TARGET_CHANGED: tx("SSH 连接目标已变化，请重新输入密码。"),
+    SSH_AUTH_FAILED: tx("SSH 密码认证失败，请重新连接。"),
+    SSH_AUTH_BUSY: tx("SSH 认证请求过多，请稍后重试。"),
+    SSH_PASSWORD_PROXY_UNSUPPORTED: tx(
+      "密码认证暂不支持 ProxyJump 或 ProxyCommand，请使用密钥或 ssh-agent。",
+    ),
     SSH_CONNECTION_LIMIT: tx("远程文件连接已达上限，请断开暂不使用的连接。"),
-    SSH_INVALID_HOST: tx("请输入有效的 SSH Host 别名。"),
+    SSH_INVALID_HOST: tx("请输入有效的 SSH 主机地址或 Host 别名。"),
     SSH_INVALID_CONNECTION: tx("SSH 连接配置无效。"),
     SSH_NOT_INSTALLED: tx("未找到系统 OpenSSH。请先安装 OpenSSH 客户端。"),
     SSH_HOST_UPGRADE_REQUIRED: tx(
-      "后台服务不支持 SSH。请先关闭全部会话，再退出并重新打开应用；已有进程未被终止。",
+      "后台服务不支持当前 SSH 配置。请先关闭全部会话，再退出并重新打开应用；已有进程未被终止。",
     ),
     SSH_SESSION_MISSING: tx("SSH 会话已结束或后台已停止。点击重新启动以建立新连接。"),
-    SSH_SFTP_FAILED: tx(
-      "SFTP 连接失败。请先在 SSH 终端确认主机指纹，并配置密钥或 ssh-agent 登录。",
-    ),
+    SSH_SFTP_FAILED: tx("SFTP 连接失败。请检查主机指纹、认证信息及服务端 SFTP 配置。"),
     SSH_TIMEOUT: tx("SSH 连接超时，请检查网络后重试。"),
     SSH_CONFIG_FAILED: tx("无法读取 SSH 配置，请检查 OpenSSH 配置。"),
     SSH_TARGET_CHANGED: tx("连接目标或文件已变化，操作已停止。请重新连接并检查文件。"),

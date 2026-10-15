@@ -2,7 +2,13 @@
 
 [简体中文](README.md) · [Feature guide](docs/features.md)
 
-uTerm is a free, self-contained desktop terminal for Windows and macOS, built with Tauri, React, TypeScript, Rust, and xterm.js.
+uTerm is a self-contained desktop terminal for Windows and macOS, free for noncommercial use and built with Tauri, React, TypeScript, Rust, and xterm.js.
+
+## License and commercial authorization
+
+This source tree uses [PolyForm Noncommercial 1.0.0](LICENSE). Noncommercial use and other purposes expressly permitted by the license are free of charge. Commercial use outside those permissions requires **prior, separate written authorization from YondFane**. The license's personal-use, noncommercial-organization and fair-use provisions remain intact. Commercial business operations, commercial redistribution or resale, integration into commercial products, and paid or hosted services require separate authorization when not already permitted by the license.
+
+See [NOTICE](NOTICE) for authorization requests and the aligned English/Chinese explanation. YondFane retains the right to commercialize and separately license code for which YondFane holds the necessary rights. This is source-available software, not OSI-approved open source. Third-party dependencies and assets retain their own licenses.
 
 ## Features
 
@@ -18,11 +24,21 @@ Quitting detaches the window without terminating background sessions. **Close Se
 
 ## Using SSH
 
-Click the plus beside SSH connections in the sidebar. Enter a Host alias from `~/.ssh/config` (`%USERPROFILE%\.ssh\config` on Windows), choose the remote system and an optional file root. The plus beside a connection starts an SSH terminal; confirm a new host fingerprint there. Select the connection name to open remote files. Files require noninteractive key or ssh-agent authentication; passwords can be entered in the terminal and are not stored. Windows requires the system OpenSSH Client optional feature. uTerm does not bundle SSH executables; SFTP adds a small protocol dependency and reuses the existing async runtime. The server must enable SFTP. See the [feature guide](docs/features.md#ssh-and-remote-files) for limits and acceptance status.
+Click the plus beside SSH connections in the sidebar. Enter a host address, port (default 22) and username, or choose Host alias mode to inherit `~/.ssh/config` (`%USERPROFILE%\.ssh\config` on Windows). Choose automatic authentication, a private-key file/ssh-agent, or a password. Enter the password in the connection dialog and optionally save it to the system credential store; unremembered passwords must be reentered after restarting. The plus beside a connection starts a terminal; selecting its name opens remote files. Password mode confirms new host fingerprints in a native dialog; automatic/key modes confirm them in the terminal first. Windows requires the system OpenSSH Client optional feature. uTerm reuses system OpenSSH, and the server must enable SFTP. Password mode does not support jump hosts or verification codes; add encrypted keys to ssh-agent before using files/tunnels. See the [feature guide](docs/features.md#ssh-and-remote-files).
 
 ## Using Redis
 
-Click the plus beside Redis connections in the sidebar. Enter the host, port, DB and optional credentials; Test connection checks them before saving. Direct TCP, TLS with custom CA/server name, and tunnels through an existing SSH alias are supported. Select a saved profile and click Connect to open its workbench. Connections start read-only; Allow editing enables String/Hash, key and TTL changes. Passwords remain in memory unless saved to the system credential store. Redis servers and `redis-cli` are not bundled. See the [feature guide](docs/features.md#redis-connections-and-workbench).
+Click the plus beside Redis connections in the sidebar. Enter the host, port, DB and optional credentials; Test connection checks them before saving. Direct TCP, TLS with custom CA/server name, and tunnels through an existing SSH connection with its port, username and authentication are supported. Select a saved profile and click Connect to open its workbench. Connections start read-only; Allow editing enables String/Hash, key and TTL changes. Passwords remain in memory unless saved to the system credential store. Redis servers and `redis-cli` are not bundled. See the [feature guide](docs/features.md#redis-connections-and-workbench).
+
+## Database connections and optional components
+
+Database connections in the sidebar support MySQL, PostgreSQL and Oracle service-name connections. Click the plus to configure a profile, then Install or manage connection components to install the Java runtime and selected driver. The connection engine is built in and needs no separate installation. You can choose an existing Java 17 or newer executable. Java and database drivers are excluded from the main installer. The highlighted database icon in the footer independently shows/hides the section; hidden workbenches and connections are retained. Components are also managed under Settings → Database components. See the [feature guide](docs/features.md#database-connections-and-optional-components).
+
+The bundled worker source is in `components/database/src/`; the checked-in `components/database/engine.jar` is embedded in the desktop executable. `components/database/catalog.json` pins its checksum and optional driver/runtime downloads. Main application builds do not need Java. Rebuilding the worker needs JDK 26.0.2.1 matching the checksum catalog: run `pnpm database:build` to verify that generated bytes match the bundled JAR. After source changes, run `node scripts/database-component.mjs --record`, review and commit the bundled JAR with its source and catalog. Temporary compilation outputs stay under ignored `components/database/target/`. `.github/workflows/database-components.yml` manually verifies the bundled artifact; no separate engine release is required.
+
+`pnpm test:database` skips real database tests by default. Set `UTERM_MYSQL_TEST=1`, `UTERM_MYSQL_PASSWORD` and optionally `UTERM_MYSQL_HOST`, `UTERM_MYSQL_PORT`, `UTERM_MYSQL_USER`, `UTERM_MYSQL_DATABASE` to enable local integration validation. First download the matching driver to ignored `components/database/target/mysql.jar`. Tests query metadata/constructed data and set session variables without creating or changing business tables. Never write passwords into source files, command history or test fixtures. Enable `UTERM_DATABASE_PROXY_TEST=1` with matching `mysql.jar`, `postgresql.jar` and `oracle.jar` in the same ignored directory to verify all three drivers authenticate with a disposable loopback SOCKS proxy; this routing test needs no database server.
+
+With JDK 17 or newer, set `UTERM_DATABASE_JAVA_TEST=1` to verify Unicode, control-character and exact-number handling in the bundled JSON layer without a database. Add `UTERM_MYSQL_TLS=1` and `UTERM_MYSQL_CA` to enabled MySQL tests for TLS validation; session-timeout tests close only their own test connection.
 
 ## One-line installation
 
@@ -112,10 +128,12 @@ The release workflow builds Windows x64 and macOS ARM64/x64. Create reviewed `uT
 | `src/lib/` | State, settings and pure logic |
 | `src-tauri/src/` | Desktop commands and OS integration |
 | `crates/utermd-local/` | Local PTYs, replay and Agent hooks |
+| `components/database/` | Bundled JDBC worker source/JAR and pinned component catalog |
 | `tests/` | Frontend and build-helper tests |
 | `scripts/`, `packaging/` | Build, release and documentation tools |
 | `.github/workflows/` | CI and releases |
 | `docs/` | Current feature and validation reference |
+| `LICENSE`, `NOTICE` | Public license, copyright and English/Chinese commercial authorization guidance |
 | `DESIGN.md` | Bilingual interface rules, color tokens and design references |
 
 The desktop backend and local session service have separate Cargo manifests and lockfiles. Source and runtime assets stay within this repository.

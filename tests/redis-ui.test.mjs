@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import { createServer } from "vite";
 import React, { act } from "react";
@@ -248,6 +249,71 @@ test("a Redis connection completed after unmount is immediately disconnected", a
     await act(async () => view.root.unmount());
     await act(async () => resolve({ handle: "late-connection", db: 0 }));
     assert.deepEqual(closed, ["late-connection"]);
+  } finally {
+    await view.cleanup();
+  }
+});
+
+test("binary Redis values show descriptors and readable text without enabling edits or rendering markup", async () => {
+  const view = await setup();
+  const bytes = Buffer.concat([
+    Buffer.from(
+      readFileSync(new URL("./fixtures/redis-auth-info.base64", import.meta.url), "utf8").trim(),
+      "base64",
+    ),
+    Buffer.from('<img src="x" onerror="alert(1)">'),
+  ]);
+  const key = { data: "YmluYXJ5", text: "binary", size: 6, truncated: false };
+  const writes = [];
+  mockIPC((command, args) => {
+    if (command === "redis_connect") return { handle: "binary", db: 0 };
+    if (command === "redis_request") {
+      const op = args.request.op;
+      if (op === "console")
+        return { result: { text: "", data: "", size: 0, truncated: false }, elapsed: 0 };
+      if (op === "scan") return { cursor: "0", entries: [{ key, kind: "string", ttl: -1 }] };
+      if (op === "read")
+        return {
+          kind: "string",
+          ttl: -1,
+          db: 0,
+          size: bytes.length,
+          value: {
+            data: bytes.toString("base64"),
+            text: null,
+            size: bytes.length,
+            truncated: false,
+          },
+        };
+      if (op === "save") writes.push(args.request);
+    }
+    return null;
+  });
+  try {
+    await act(async () =>
+      view.root.render(
+        React.createElement(view.RedisWorkspace, {
+          config,
+          active: true,
+          password: "",
+          consumed() {},
+        }),
+      ),
+    );
+    await act(async () => button("Connect").click());
+    await act(async () => document.querySelector(".redis-key").click());
+    const section = document.querySelector('[aria-label="Serialization information"]');
+    assert.ok(section);
+    assert.match(section.textContent, /com.core.AuthInfo/);
+    assert.match(section.textContent, /java.lang.String\[\]/);
+    assert.match(section.textContent, /示例用户/);
+    assert.match(section.querySelector("pre").textContent, /<img/);
+    assert.equal(section.querySelector("img"), null);
+    assert.match(document.querySelector(".redis-binary-preview pre").textContent, /^ac ed 00 05/);
+    assert.equal(document.querySelector(".redis-editor"), null);
+    await act(async () => document.querySelector('input[type="checkbox"]').click());
+    assert.equal(document.querySelector(".redis-editor"), null);
+    assert.deepEqual(writes, []);
   } finally {
     await view.cleanup();
   }

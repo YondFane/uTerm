@@ -45,6 +45,8 @@ pub struct Config {
     pub ca_file: String,
     pub server_name: String,
     pub ssh_host: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ssh_target: Option<utermd_local::ssh::SshTarget>,
     pub credential_id: Option<String>,
 }
 impl Config {
@@ -65,6 +67,12 @@ impl Config {
         if !self.ssh_host.is_empty() {
             utermd_local::ssh::validate_host(&self.ssh_host)?;
         }
+        if let Some(target) = &self.ssh_target {
+            target.validate()?;
+            if target.host != self.ssh_host {
+                bail!("REDIS_INVALID_CONFIG");
+            }
+        }
         if let Some(reference) = &self.credential_id {
             crate::redis_credentials::validate_reference(reference)?;
         }
@@ -74,6 +82,8 @@ impl Config {
         self.validate()?;
         let ssh = if self.ssh_host.is_empty() {
             String::new()
+        } else if let Some(target) = &self.ssh_target {
+            crate::ssh::effective_target(target).await?.identity
         } else {
             crate::ssh::effective_identity(&self.ssh_host)
                 .await?
@@ -182,6 +192,7 @@ async fn read_ca(path: &str) -> Result<Vec<u8>> {
 async fn transport(
     config: &Config,
     expected: &str,
+    prepared: Option<crate::ssh_auth::Prepared>,
 ) -> Result<(Box<dyn Io>, Option<BackgroundChild>)> {
     let (mut stream, child): (Box<dyn Io>, _) = if config.ssh_host.is_empty() {
         if config.target_with_ssh("").await? != expected {
@@ -193,7 +204,16 @@ async fn transport(
         socket.set_nodelay(true)?;
         (Box::new(socket), None)
     } else {
-        let endpoint = crate::ssh::effective_identity(&config.ssh_host).await?;
+        let endpoint = if let Some(prepared) = &prepared {
+            prepared.effective.clone()
+        } else if config.ssh_target.is_some() {
+            bail!("SSH_PASSWORD_REQUIRED");
+        } else {
+            crate::ssh::effective_identity(&config.ssh_host).await?
+        };
+        let interactive = prepared
+            .as_ref()
+            .is_some_and(|value| value.askpass.is_some());
         if config.target_with_ssh(&endpoint.identity).await? != expected {
             bail!("REDIS_CREDENTIAL_TARGET_CHANGED");
         }
@@ -203,6 +223,12 @@ async fn transport(
             format!("{}:{}", config.host, config.port)
         };
         let mut command = crate::ssh::base_command()?;
+        if let Some(target) = &config.ssh_target {
+            command.args(target.options());
+        }
+        if let Some(prepared) = &prepared {
+            prepared.apply(&mut command)?;
+        }
         command.args([
             "-T",
             "-S",
@@ -210,9 +236,17 @@ async fn transport(
             "-o",
             "ControlMaster=no",
             "-o",
-            "BatchMode=yes",
+            if interactive {
+                "BatchMode=no"
+            } else {
+                "BatchMode=yes"
+            },
             "-o",
-            "StrictHostKeyChecking=yes",
+            if interactive {
+                "StrictHostKeyChecking=ask"
+            } else {
+                "StrictHostKeyChecking=yes"
+            },
             "-o",
             "ClearAllForwardings=yes",
             "-o",
@@ -318,6 +352,7 @@ impl Connection {
         config: Config,
         password: Option<String>,
         expected_target: Option<String>,
+        prepared: Option<crate::ssh_auth::Prepared>,
     ) -> Result<Self> {
         config.validate()?;
         let target = if let Some(target) = expected_target {
@@ -325,9 +360,18 @@ impl Connection {
         } else {
             config.target().await?
         };
-        let (stream, child) = tokio::time::timeout(TIMEOUT, transport(&config, &target))
-            .await
-            .context("REDIS_CONNECT_TIMEOUT")??;
+        let handshake_timeout = if prepared
+            .as_ref()
+            .is_some_and(|value| value.askpass.is_some())
+        {
+            Duration::from_secs(120)
+        } else {
+            TIMEOUT
+        };
+        let (stream, child) =
+            tokio::time::timeout(handshake_timeout, transport(&config, &target, prepared))
+                .await
+                .context("REDIS_CONNECT_TIMEOUT")??;
         let budget = Arc::new(AtomicUsize::new(WIRE_LIMIT));
         let info = RedisConnectionInfo::default()
             .set_db(config.db.into())
@@ -343,7 +387,7 @@ impl Connection {
             info
         };
         let (wire, driver) = tokio::time::timeout(
-            TIMEOUT,
+            handshake_timeout,
             MultiplexedConnection::new_with_config(
                 &info,
                 LimitedStream {
@@ -351,13 +395,15 @@ impl Connection {
                     budget: budget.clone(),
                 },
                 redis::AsyncConnectionConfig::new()
-                    .set_response_timeout(Some(TIMEOUT))
+                    .set_response_timeout(Some(handshake_timeout))
                     .set_concurrency_limit(1),
             ),
         )
         .await
         .context("REDIS_CONNECT_TIMEOUT")?
         .context("REDIS_AUTH_FAILED")?;
+        let mut wire = wire;
+        wire.set_response_timeout(TIMEOUT);
         let db = config.db as usize;
         Ok(Self {
             config,
@@ -440,6 +486,10 @@ impl Connection {
                     .into_iter()
                     .filter(|key| seen.insert(key.clone()))
                     .collect();
+                // Empty SCAN pages have no metadata requests; an empty pipeline has no reply. 空 SCAN 页无需元数据请求，空管道不会收到响应。
+                if keys.is_empty() {
+                    return Ok(serde_json::json!({"cursor":next,"entries":[]}));
+                }
                 let mut pipeline = redis::pipe();
                 for key in &keys {
                     check_key(key)?;
@@ -774,14 +824,23 @@ impl Drop for Connection {
 pub struct RedisState {
     connections: AsyncMutex<HashMap<String, Arc<Connection>>>,
     dirty: Mutex<HashSet<String>>,
+    opening: AtomicUsize,
 }
 impl RedisState {
+    fn reserve(&self, connections: usize) -> Result<MutationGuard<'_>, String> {
+        if connections + self.opening.load(Ordering::SeqCst) >= MAX_CONNECTIONS {
+            return Err("REDIS_CONNECTION_LIMIT".into());
+        }
+        self.opening.fetch_add(1, Ordering::SeqCst);
+        Ok(MutationGuard(&self.opening))
+    }
     pub fn busy(&self) -> bool {
-        self.connections.try_lock().map_or(true, |connections| {
-            connections
-                .values()
-                .any(|connection| connection.mutations.load(Ordering::SeqCst) > 0)
-        })
+        self.opening.load(Ordering::SeqCst) > 0
+            || self.connections.try_lock().map_or(true, |connections| {
+                connections
+                    .values()
+                    .any(|connection| connection.mutations.load(Ordering::SeqCst) > 0)
+            })
     }
     pub fn dirty(&self) -> bool {
         self.dirty.lock().map_or(true, |v| !v.is_empty())
@@ -965,6 +1024,11 @@ pub async fn redis_connect(
     if password.as_ref().is_some_and(|p| p.len() > 2048) {
         return Err("REDIS_CREDENTIAL_SIZE".into());
     }
+    let state = app.state::<RedisState>();
+    let opening = {
+        let connections = state.connections.lock().await;
+        state.reserve(connections.len())?
+    };
     let target = config.target().await.map_err(fail)?;
     let password = if password.is_some() {
         password
@@ -986,18 +1050,20 @@ pub async fn redis_connect(
     } else {
         None
     };
-    let state = app.state::<RedisState>();
-    // Reserve under the lock so parallel handshakes cannot exceed the connection limit. 持锁预留，避免并行握手突破连接上限。
-    let mut connections = state.connections.lock().await;
-    if connections.len() >= MAX_CONNECTIONS {
-        return Err("REDIS_CONNECTION_LIMIT".into());
-    }
-    let connection = Connection::open(config, password, Some(target))
+    let prepared = if let Some(target) = &config.ssh_target {
+        Some(crate::ssh_auth::prepare(&app, target).await.map_err(fail)?)
+    } else {
+        None
+    };
+    // Reserve a slot without holding the connection map during SSH prompts or network I/O. 预留槽位，避免 SSH 提示及网络读写长期占用连接表锁。
+    let connection = Connection::open(config, password, Some(target), prepared)
         .await
         .map_err(fail)?;
     let handle = uuid::Uuid::new_v4().to_string();
     let db = connection.db.load(Ordering::Relaxed);
+    let mut connections = state.connections.lock().await;
     connections.insert(handle.clone(), Arc::new(connection));
+    drop(opening);
     Ok(serde_json::json!({"handle":handle,"db":db}))
 }
 #[tauri::command]
@@ -1006,22 +1072,34 @@ pub async fn redis_reconnect(
     handle: String,
 ) -> Result<serde_json::Value, String> {
     let state = app.state::<RedisState>();
-    let mut connections = state.connections.lock().await;
-    let previous = connections.remove(&handle).ok_or("REDIS_RECONNECT")?;
+    let (previous, opening) = {
+        let mut connections = state.connections.lock().await;
+        let previous = connections.remove(&handle).ok_or("REDIS_RECONNECT")?;
+        let opening = state.reserve(connections.len())?;
+        (previous, opening)
+    };
     previous.stop();
     let mut config = previous.config.clone();
     config.db = previous.db.load(Ordering::Relaxed) as u16;
+    let prepared = if let Some(target) = &config.ssh_target {
+        Some(crate::ssh_auth::prepare(&app, target).await.map_err(fail)?)
+    } else {
+        None
+    };
     // A new transport must still resolve to the original target before password reuse. 复用密码前，新传输仍必须解析到原目标。
     let connection = Connection::open(
         config,
         previous.password.clone(),
         Some(previous.target.clone()),
+        prepared,
     )
     .await
     .map_err(fail)?;
     let handle = uuid::Uuid::new_v4().to_string();
     let db = connection.db.load(Ordering::Relaxed);
+    let mut connections = state.connections.lock().await;
     connections.insert(handle.clone(), Arc::new(connection));
+    drop(opening);
     Ok(serde_json::json!({ "handle": handle, "db": db }))
 }
 #[tauri::command]
@@ -1114,6 +1192,24 @@ mod tests {
         net::TcpListener,
         process::{Child, Command, Stdio},
     };
+    #[tokio::test]
+    async fn opening_slots_are_bounded_released_and_leave_other_connections_accessible() {
+        let state = RedisState::default();
+        let mut slots = Vec::new();
+        for _ in 0..MAX_CONNECTIONS {
+            let connections = state.connections.lock().await;
+            slots.push(state.reserve(connections.len()).unwrap());
+        }
+        assert!(state.busy());
+        assert!(state.connections.try_lock().is_ok());
+        assert!(state.reserve(0).is_err());
+        slots.pop();
+        slots.push(state.reserve(0).unwrap());
+        drop(slots);
+        assert!(!state.busy());
+        assert_eq!(state.opening.load(Ordering::SeqCst), 0);
+        assert!(state.reserve(MAX_CONNECTIONS).is_err());
+    }
     struct Server {
         child: Child,
         _root: tempfile::TempDir,
@@ -1233,14 +1329,20 @@ mod tests {
                     String::new()
                 },
                 ssh_host: String::new(),
+                ssh_target: None,
                 credential_id: None,
             },
         }
     }
     async fn open(server: &Server) -> Connection {
-        Connection::open(server.config.clone(), Some("uterm-redis-test".into()), None)
-            .await
-            .unwrap()
+        Connection::open(
+            server.config.clone(),
+            Some("uterm-redis-test".into()),
+            None,
+            None,
+        )
+        .await
+        .unwrap()
     }
     async fn seed(connection: &Connection, args: &[&str]) {
         let mut cmd = redis::cmd(args[0]);
@@ -1274,11 +1376,23 @@ mod tests {
         let server = server(false);
         runtime().block_on(async {
             assert!(
-                Connection::open(server.config.clone(), Some("incorrect".into()), None)
+                Connection::open(server.config.clone(), Some("incorrect".into()), None, None)
                     .await
                     .is_err()
             );
             let connection = open(&server).await;
+            let empty = tokio::time::timeout(
+                Duration::from_secs(2),
+                connection.request(Request::Scan {
+                    cursor: "0".into(),
+                    pattern: "*".into(),
+                }),
+            )
+            .await
+            .unwrap()
+            .unwrap();
+            assert_eq!(empty["entries"], serde_json::json!([]));
+            assert_eq!(empty["cursor"], "0");
             seed(&connection, &["SET", "中文:key", "hello"]).await;
             let page = connection
                 .request(Request::Scan {
@@ -1486,14 +1600,14 @@ mod tests {
             let mut wrong = server.config.clone();
             wrong.server_name = "wrong.test".into();
             assert!(
-                Connection::open(wrong, Some("uterm-redis-test".into()), None)
+                Connection::open(wrong, Some("uterm-redis-test".into()), None, None)
                     .await
                     .is_err()
             );
             let mut untrusted = server.config.clone();
             untrusted.ca_file.clear();
             assert!(
-                Connection::open(untrusted, Some("uterm-redis-test".into()), None)
+                Connection::open(untrusted, Some("uterm-redis-test".into()), None, None)
                     .await
                     .is_err()
             );
@@ -1557,9 +1671,10 @@ mod tests {
                 ca_file: String::new(),
                 server_name: String::new(),
                 ssh_host: String::new(),
+                ssh_target: None,
                 credential_id: None,
             };
-            let connection = Connection::open(config, None, None).await.unwrap();
+            let connection = Connection::open(config, None, None, None).await.unwrap();
             connection
                 .wire
                 .lock()

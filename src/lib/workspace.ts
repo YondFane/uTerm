@@ -1,6 +1,16 @@
+import { validDatabaseConfig, type DatabaseConfig } from "./database.ts";
 import { tx } from "./i18n.ts";
 import { validRedisConfig, type RedisConfig } from "./redis.ts";
-export interface SshTarget {
+export interface SshOptions {
+  mode?: "alias" | "direct";
+  port?: number;
+  username?: string;
+  authentication?: "config" | "key" | "password";
+  identity_file?: string;
+  credential_id?: string | null;
+  remember_password?: boolean;
+}
+export interface SshTarget extends SshOptions {
   connection_id: string;
   workspace_id: string;
   name: string;
@@ -8,7 +18,7 @@ export interface SshTarget {
   os: "posix" | "windows";
   root: string;
 }
-export interface SshConnection {
+export interface SshConnection extends SshOptions {
   id: string;
   name: string;
   host: string;
@@ -16,6 +26,54 @@ export interface SshConnection {
   root: string;
   sessions: SessionConfig[];
   splitGroups?: SplitNode[];
+}
+const sshOptionKeys = [
+  "mode",
+  "port",
+  "username",
+  "authentication",
+  "identity_file",
+  "credential_id",
+  "remember_password",
+] as const;
+export function sshOptions(value: SshOptions): SshOptions {
+  return Object.fromEntries(
+    sshOptionKeys.filter((key) => value[key] !== undefined).map((key) => [key, value[key]]),
+  );
+}
+export function sshTargetFor(connection: SshConnection, workspaceId: string): SshTarget {
+  return {
+    connection_id: connection.id,
+    workspace_id: workspaceId,
+    name: connection.name,
+    host: connection.host,
+    os: connection.os,
+    root: connection.root,
+    ...sshOptions(connection),
+  };
+}
+function validSshOptions(value: SshOptions & { host: string }): boolean {
+  const clean = (v: unknown, limit: number) =>
+    typeof v === "string" && v.length <= limit && !/[\x00-\x1f\x7f]/.test(v);
+  return (
+    (value.mode === undefined || ["alias", "direct"].includes(value.mode)) &&
+    (value.port === undefined ||
+      (Number.isInteger(value.port) && value.port > 0 && value.port <= 65535)) &&
+    (value.username === undefined ||
+      (clean(value.username, 512) && value.username.trim() === value.username)) &&
+    (value.identity_file === undefined || clean(value.identity_file, 4096)) &&
+    (value.authentication === undefined ||
+      ["config", "key", "password"].includes(value.authentication)) &&
+    (value.credential_id === undefined ||
+      value.credential_id === null ||
+      (typeof value.credential_id === "string" &&
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+          value.credential_id,
+        ))) &&
+    (value.remember_password === undefined || typeof value.remember_password === "boolean") &&
+    (value.mode !== "direct" ||
+      (typeof value.host === "string" && !value.host.includes("@") && value.port !== undefined))
+  );
 }
 export function validSshHost(host: unknown): host is string {
   return (
@@ -29,6 +87,12 @@ export function validSshTarget(value: unknown): value is SshTarget {
   const target = value as SshTarget;
   return (
     !!target &&
+    Object.keys(target).every((key) =>
+      ["connection_id", "workspace_id", "name", "host", "os", "root", ...sshOptionKeys].includes(
+        key,
+      ),
+    ) &&
+    validSshOptions(target) &&
     typeof target.connection_id === "string" &&
     !!target.connection_id &&
     typeof target.workspace_id === "string" &&
@@ -74,7 +138,7 @@ export interface Project {
   collapsed?: boolean;
 }
 export interface Workspace {
-  version: 5;
+  version: 7;
   groups?: WorkspaceGroup[];
   selectedWorkspace?: string;
   selectedWorktree?: string | null;
@@ -84,6 +148,7 @@ export interface Workspace {
 }
 export interface WorkspaceGroup {
   redisConnections?: RedisConfig[];
+  databaseConnections?: DatabaseConfig[];
   sshConnections?: SshConnection[];
   id: string;
   name: string;
@@ -226,6 +291,7 @@ export function reconcileSshSessions(
         os: target.os,
         root: target.root,
         sessions: [],
+        ...sshOptions(target),
       };
       const restored = connection;
       next = {
@@ -261,6 +327,7 @@ export const createWorkspaceGroup = (id: string, name: string): WorkspaceGroup =
   selectedSession: null,
   selectedWorktree: null,
   redisConnections: [],
+  databaseConnections: [],
   sshConnections: [],
   terminals: [],
   chats: [],
@@ -270,7 +337,7 @@ export const createWorkspaceGroup = (id: string, name: string): WorkspaceGroup =
   chatsCollapsed: false,
 });
 export const emptyWorkspace = (): Workspace => ({
-  version: 5,
+  version: 7,
   groups: [createWorkspaceGroup("local", tx("本地工作区"))],
   selectedWorkspace: "local",
   projects: [],
@@ -287,7 +354,7 @@ export function readWorkspace(serialized: string | null): Workspace {
   const text = (item: unknown) => typeof item === "string" && item.trim().length > 0;
   if (
     !value ||
-    ![3, 4, 5].includes(value.version) ||
+    ![3, 4, 5, 6, 7].includes(value.version) ||
     !Array.isArray(value.projects) ||
     !value.projects.every(
       (project) =>
@@ -442,6 +509,19 @@ export function readWorkspace(serialized: string | null): Workspace {
     const sshConnections = (group.sshConnections ?? []).map((connection) => {
       if (
         !connection ||
+        !Object.keys(connection).every((key) =>
+          [
+            "id",
+            "name",
+            "host",
+            "os",
+            "root",
+            "sessions",
+            "splitGroups",
+            ...sshOptionKeys,
+          ].includes(key),
+        ) ||
+        !validSshOptions(connection) ||
         !identifier(connection.id) ||
         !text(connection.name) ||
         !validSshHost(connection.host) ||
@@ -468,10 +548,19 @@ export function readWorkspace(serialized: string | null): Workspace {
         host: connection.host,
         os: connection.os,
         root: connection.root,
+        ...sshOptions(connection),
         sessions,
         splitGroups: readSplitGroups(connection.splitGroups, sessions),
       };
     });
+    if (
+      group.databaseConnections !== undefined &&
+      (!Array.isArray(group.databaseConnections) ||
+        !group.databaseConnections.every(
+          (connection) => validDatabaseConfig(connection) && identifier(connection.id),
+        ))
+    )
+      throw new Error(tx("数据库连接数据无效，原数据已保留。"));
     if (
       group.redisConnections !== undefined &&
       (!Array.isArray(group.redisConnections) ||
@@ -482,6 +571,7 @@ export function readWorkspace(serialized: string | null): Workspace {
       throw new Error(tx("Redis 连接数据无效，原数据已保留。"));
     return {
       redisConnections: group.redisConnections ?? [],
+      databaseConnections: group.databaseConnections ?? [],
       sshConnections,
       id: group.id,
       name: group.name,
@@ -497,7 +587,7 @@ export function readWorkspace(serialized: string | null): Workspace {
     };
   });
   const restored: Workspace = {
-    version: 5,
+    version: 7,
     groups: restoredGroups,
     selectedWorkspace,
     projects,
@@ -587,6 +677,7 @@ export function canRemoveWorkspace(workspace: Workspace, id: string): boolean {
     !group.terminals?.length &&
     !group.chats?.length &&
     !group.sshConnections?.length &&
+    !group.databaseConnections?.length &&
     !group.redisConnections?.length
   );
 }

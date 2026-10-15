@@ -1,3 +1,12 @@
+import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
+import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
+import { DatabaseComponents } from "./components/DatabaseComponents";
+import {
+  databaseError,
+  databaseSnapshot,
+  subscribeDatabase,
+  type DatabaseConfig,
+} from "./lib/database";
 import { RedisConnectionDialog } from "./components/RedisConnectionDialog";
 import { RedisWorkspace } from "./components/RedisWorkspace";
 import { redisError, redisSnapshot, subscribeRedis, type RedisConfig } from "./lib/redis";
@@ -60,6 +69,7 @@ import type { RuntimeInfo } from "./lib/desktop";
 import { buildTaskbarSnapshot, taskbarSnapshotSignature } from "./lib/taskbar";
 import {
   emptyWorkspace,
+  sshTargetFor,
   createWorkspaceGroup,
   readWorkspace,
   removeSession,
@@ -281,6 +291,51 @@ export function App() {
 
   const transfers = useSyncExternalStore(subscribeTransfers, transferSnapshot);
   const redisStatuses = useSyncExternalStore(subscribeRedis, redisSnapshot);
+  const databaseStatuses = useSyncExternalStore(subscribeDatabase, databaseSnapshot);
+  const [databaseDialog, setDatabaseDialog] = useState<{ connection?: DatabaseConfig } | null>(
+    null,
+  );
+  const [databaseViews, setDatabaseViews] = useState<DatabaseConfig[]>([]);
+  const [selectedDatabaseId, setSelectedDatabaseId] = useState<string | null>(null);
+  const [databasePasswords, setDatabasePasswords] = useState<Record<string, string>>({});
+  const [databaseExit, setDatabaseExit] = useState(false);
+  const databaseExitDialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (databaseExit) databaseExitDialog.current?.showModal();
+    else databaseExitDialog.current?.close();
+  }, [databaseExit]);
+  useEffect(() => {
+    let disposed = false;
+    let stop: (() => void) | undefined;
+    void listen("database-close-request", () => {
+      const id = Object.entries(databaseSnapshot()).find(
+        ([, status]) => status.dirty || status.busy,
+      )?.[0];
+      const owner = currentWorkspace.current?.groups?.find((group) =>
+        group.databaseConnections?.some((connection) => connection.id === id),
+      );
+      if (owner && id) {
+        update((previous) => ({
+          ...switchWorkspace(previous, owner.id),
+          selectedProject: null,
+          selectedSession: null,
+          selectedWorktree: null,
+        }));
+        setSelectedRedisId(null);
+        setSelectedDatabaseId(id);
+      } else setSelectedDatabaseId("components");
+      setDatabaseExit(true);
+    })
+      .then((value) => {
+        if (disposed) value();
+        else stop = value;
+      })
+      .catch((reason) => setError(databaseError(reason)));
+    return () => {
+      disposed = true;
+      stop?.();
+    };
+  }, []);
   const [redisDialog, setRedisDialog] = useState<{ connection?: RedisConfig } | null>(null);
   const [redisViews, setRedisViews] = useState<RedisConfig[]>([]);
   const [selectedRedisId, setSelectedRedisId] = useState<string | null>(null);
@@ -383,10 +438,10 @@ export function App() {
     try {
       const serialized = localStorage.getItem(workspaceKey);
       const saved = readWorkspace(serialized);
-      const savedVersion = serialized ? JSON.parse(serialized).version : 5;
+      const savedVersion = serialized ? JSON.parse(serialized).version : 7;
       if (
         serialized &&
-        [3, 4].includes(savedVersion) &&
+        [3, 4, 5, 6].includes(savedVersion) &&
         !localStorage.getItem(`${workspaceKey}.v${savedVersion}-backup`)
       )
         localStorage.setItem(`${workspaceKey}.v${savedVersion}-backup`, serialized);
@@ -431,8 +486,10 @@ export function App() {
         next.selectedWorkspace !== previous.selectedWorkspace ||
         next.selectedProject !== previous.selectedProject ||
         next.selectedSession !== previous.selectedSession
-      )
+      ) {
         setSelectedRedisId(null);
+        setSelectedDatabaseId(null);
+      }
       // Synchronous persistence prevents an older asynchronous save from winning.
       localStorage.setItem(workspaceKey, JSON.stringify(next));
       currentWorkspace.current = next;
@@ -920,14 +977,24 @@ export function App() {
     };
   }, [chatUsageDetailsOpen]);
   function sshTarget(connection: SshConnection, workspaceId: string): SshTarget {
-    return {
-      connection_id: connection.id,
-      workspace_id: workspaceId,
-      name: connection.name,
-      host: connection.host,
-      os: connection.os,
-      root: connection.root,
-    };
+    return sshTargetFor(connection, workspaceId);
+  }
+  function sshInUse(connection: SshConnection): boolean {
+    return (
+      !!connection.sessions.length ||
+      editor.documents.some((file) => {
+        const target = fileTarget(file.directory);
+        return target.kind === "ssh" && target.root.connection.connection_id === connection.id;
+      }) ||
+      transfers.some((task) => task.state === "running") ||
+      redisViews.some((view) => {
+        const status = redisStatuses[view.id];
+        return (
+          view.ssh_target?.connection_id === connection.id &&
+          !!(status?.connected || status?.dirty || status?.opening)
+        );
+      })
+    );
   }
   function newSshTerminal(connection: SshConnection) {
     const start = () => {
@@ -959,6 +1026,10 @@ export function App() {
   const activeSession = roster?.sessions.find(
     (session) => session.id === workspace?.selectedSession,
   );
+  const activeDatabaseConfig = workspace?.groups
+    ?.find((group) => group.id === workspace.selectedWorkspace)
+    ?.databaseConnections?.find((connection) => connection.id === selectedDatabaseId);
+  const activeDatabase = selectedDatabaseId === "components" || !!activeDatabaseConfig;
   const activeRedis = workspace?.groups
     ?.find((group) => group.id === workspace.selectedWorkspace)
     ?.redisConnections?.find((connection) => connection.id === selectedRedisId);
@@ -978,6 +1049,7 @@ export function App() {
             selectedSession: null,
             selectedWorktree: null,
           }));
+          setSelectedDatabaseId(null);
           setSelectedRedisId(view.id);
         };
         if (editor.document) void editor.hide(reveal);
@@ -1018,12 +1090,13 @@ export function App() {
         (activeSession?.ssh?.connection_id ??
           (!workspace?.selectedProject && !workspace?.selectedSession ? selectedSshId : null)),
     );
-  const activeSsh = activeRedis
-    ? null
-    : (activeSession?.ssh ??
-      (activeSshConnection
-        ? sshTarget(activeSshConnection, workspace?.selectedWorkspace ?? "local")
-        : null));
+  const activeSsh =
+    activeRedis || activeDatabase
+      ? null
+      : (activeSession?.ssh ??
+        (activeSshConnection
+          ? sshTarget(activeSshConnection, workspace?.selectedWorkspace ?? "local")
+          : null));
   useEffect(() => {
     if (activeSsh) {
       setGitOpen(false);
@@ -1033,15 +1106,17 @@ export function App() {
     }
   }, [activeSsh?.connection_id]);
   const sshTargetKey = activeSsh ? JSON.stringify(activeSsh) : "";
-  const fileDirectory = activeRedis
-    ? ""
-    : activeSsh
-      ? (remoteDirectories[sshTargetKey] ?? "")
-      : (selectedWorktree?.path ??
-        selected?.directory ??
-        roster?.sessions.find((session) => session.id === workspace?.selectedSession)?.directory ??
-        runtime?.home ??
-        "");
+  const fileDirectory =
+    activeRedis || activeDatabase
+      ? ""
+      : activeSsh
+        ? (remoteDirectories[sshTargetKey] ?? "")
+        : (selectedWorktree?.path ??
+          selected?.directory ??
+          roster?.sessions.find((session) => session.id === workspace?.selectedSession)
+            ?.directory ??
+          runtime?.home ??
+          "");
   useEffect(() => {
     if (!editor.document) setFocusRequest((value) => value + 1);
   }, [editor.document?.id]);
@@ -1066,9 +1141,12 @@ export function App() {
   }, [workspace?.selectedProject, workspace?.selectedWorkspace, activeGroupId]);
   function commandAvailable(id: CommandId): boolean {
     if (!runtime || !workspace || editor.transitioning || editor.pending) return false;
-    if (activeRedis && !["palette", "project", "terminal", "close", "toggleSidebar"].includes(id))
+    if (
+      (activeRedis || activeDatabase) &&
+      !["palette", "project", "terminal", "close", "toggleSidebar"].includes(id)
+    )
       return false;
-    if (activeRedis && id === "close") return true;
+    if ((activeRedis || activeDatabase) && id === "close") return true;
     if (id === "next" || id === "previous")
       return (
         !editor.document && sessionRosters(workspace).some((roster) => roster.sessions.length > 0)
@@ -1094,6 +1172,11 @@ export function App() {
   }
   function runCommand(id: CommandId) {
     if (!commandAvailable(id)) return;
+    if (activeDatabase && id === "close") {
+      setSelectedDatabaseId(null);
+      return;
+    }
+    if (activeDatabase && id === "terminal") setSelectedDatabaseId(null);
     if (activeRedis && id === "close") {
       setSelectedRedisId(null);
       return;
@@ -1427,6 +1510,7 @@ export function App() {
   }
   const inspectorVisible =
     !activeRedis &&
+    !activeDatabase &&
     ((!!activeSsh && filesOpen) ||
       hasInspectorContent(fileDirectory, !!selected, {
         files: filesOpen,
@@ -1601,10 +1685,90 @@ export function App() {
         update={update}
         focus={() => {
           setSelectedRedisId(null);
+          setSelectedDatabaseId(null);
           if (editor.document) void editor.hide();
           else setFocusRequest((value) => value + 1);
         }}
         menu={setMenu}
+        addDatabase={() => setDatabaseDialog({})}
+        editDatabase={(connection) => setDatabaseDialog({ connection })}
+        databaseStatuses={databaseStatuses}
+        selectedDatabaseId={activeDatabaseConfig?.id ?? null}
+        manageDatabase={() => {
+          const reveal = () => {
+            setSelectedRedisId(null);
+            setSelectedDatabaseId("components");
+          };
+          if (editor.document) void editor.hide(reveal);
+          else reveal();
+        }}
+        selectDatabase={(connection) => {
+          const reveal = () => {
+            update((previous) => ({
+              ...previous,
+              selectedProject: null,
+              selectedSession: null,
+              selectedWorktree: null,
+            }));
+            setSelectedRedisId(null);
+            setSelectedSshId(null);
+            setSelectedDatabaseId(connection.id);
+            setDatabaseViews((previous) =>
+              previous.some((item) => item.id === connection.id)
+                ? previous
+                : [...previous, connection],
+            );
+          };
+          if (editor.document) void editor.hide(reveal);
+          else reveal();
+        }}
+        removeDatabase={(connection) => {
+          const remove = async () => {
+            const owner = currentWorkspace.current?.groups?.find((group) =>
+              group.databaseConnections?.some((item) => item.id === connection.id),
+            );
+            if (!owner) return;
+            const saved = update((previous) => ({
+              ...previous,
+              groups: previous.groups?.map((group) => ({
+                ...group,
+                databaseConnections: group.databaseConnections?.filter(
+                  (item) => item.id !== connection.id,
+                ),
+              })),
+            }));
+            if (!saved) return;
+            try {
+              if (connection.credential_id)
+                await invoke("database_credential", {
+                  config: connection,
+                  password: null,
+                  remove: true,
+                });
+            } catch (reason) {
+              update((previous) => ({
+                ...previous,
+                groups: previous.groups?.map((group) =>
+                  group.id === owner.id
+                    ? {
+                        ...group,
+                        databaseConnections: [...(group.databaseConnections ?? []), connection],
+                      }
+                    : group,
+                ),
+              }));
+              throw reason;
+            }
+            setDatabaseViews((previous) => previous.filter((item) => item.id !== connection.id));
+            if (selectedDatabaseId === connection.id) setSelectedDatabaseId(null);
+            setDatabasePasswords((previous) => {
+              const next = { ...previous };
+              delete next[connection.id];
+              return next;
+            });
+          };
+          void remove().catch((reason) => setError(databaseError(reason)));
+        }}
         addRedis={() => setRedisDialog({})}
         editRedis={(connection) => setRedisDialog({ connection })}
         redisStatuses={redisStatuses}
@@ -1621,6 +1785,7 @@ export function App() {
             setGitOpen(false);
             setGithubOpen(false);
             setDirectoryOpen(false);
+            setSelectedDatabaseId(null);
             setSelectedRedisId(connection.id);
             setRedisViews((previous) =>
               previous.some((item) => item.id === connection.id)
@@ -1678,6 +1843,7 @@ export function App() {
         selectSsh={(connection) => {
           const select = () => {
             setSelectedRedisId(null);
+            setSelectedDatabaseId(null);
             setSelectedSshId(connection.id);
             setGitOpen(false);
             setGithubOpen(false);
@@ -1698,24 +1864,43 @@ export function App() {
           else select();
         }}
         newSshTerminal={newSshTerminal}
+        canEditSsh={(connection) =>
+          !sshInUse(connection) &&
+          !workspace?.groups?.some((group) =>
+            group.databaseConnections?.some(
+              (item) => item.ssh_target?.connection_id === connection.id,
+            ),
+          )
+        }
         canRemoveSsh={(connection) =>
-          !connection.sessions.length &&
-          !editor.documents.some((file) => {
-            const target = fileTarget(file.directory);
-            return target.kind === "ssh" && target.root.connection.connection_id === connection.id;
-          }) &&
-          !transfers.some((task) => task.state === "running")
+          !sshInUse(connection) &&
+          !workspace?.groups?.some((group) =>
+            group.databaseConnections?.some(
+              (item) => item.ssh_target?.connection_id === connection.id,
+            ),
+          ) &&
+          !workspace?.groups?.some((group) =>
+            group.redisConnections?.some(
+              (redis) => redis.ssh_target?.connection_id === connection.id,
+            ),
+          )
         }
         removeSsh={(connection) => {
           void invoke("ssh_files_disconnect", { connectionId: connection.id })
             .then(() => {
-              update((previous) => ({
+              const removed = update((previous) => ({
                 ...previous,
                 groups: previous.groups?.map((group) => ({
                   ...group,
                   sshConnections: group.sshConnections?.filter((item) => item.id !== connection.id),
                 })),
               }));
+              if (!removed) return;
+              if (connection.credential_id)
+                void invoke("ssh_forget_auth", {
+                  reference: connection.credential_id,
+                  remember: connection.remember_password ?? false,
+                }).catch((error) => setError(sshError(error)));
               if (selectedSshId === connection.id) setSelectedSshId(null);
             })
             .catch((error) => setError(sshError(error)));
@@ -1791,8 +1976,69 @@ export function App() {
           <ToolbarIcon name="swap" />
         </button>
       )}
+      {databaseDialog && (
+        <DatabaseConnectionDialog
+          report={setError}
+          connection={databaseDialog.connection}
+          workspaceId={workspace?.selectedWorkspace ?? "local"}
+          ssh={
+            workspace?.groups?.find((group) => group.id === workspace.selectedWorkspace)
+              ?.sshConnections ?? []
+          }
+          close={() => setDatabaseDialog(null)}
+          save={(connection, password) => {
+            const saved = update((previous) => ({
+              ...previous,
+              groups: previous.groups?.map((group) =>
+                group.id !== previous.selectedWorkspace
+                  ? group
+                  : {
+                      ...group,
+                      databaseConnections: group.databaseConnections?.some(
+                        (item) => item.id === connection.id,
+                      )
+                        ? group.databaseConnections.map((item) =>
+                            item.id === connection.id ? connection : item,
+                          )
+                        : [...(group.databaseConnections ?? []), connection],
+                    },
+              ),
+            }));
+            if (saved) {
+              setDatabaseViews((previous) =>
+                previous.map((item) => (item.id === connection.id ? connection : item)),
+              );
+              setDatabasePasswords((previous) => ({ ...previous, [connection.id]: password }));
+            }
+            return saved;
+          }}
+        />
+      )}
+      <dialog
+        ref={databaseExitDialog}
+        className="database-confirm-dialog"
+        onCancel={(event) => {
+          event.preventDefault();
+          setDatabaseExit(false);
+        }}
+      >
+        <p>
+          {tx(
+            "数据库仍有操作、事务或 SQL 草稿。请等待操作完成，提交或回滚事务，并保存或放弃草稿后退出。",
+          )}
+        </p>
+        <button onClick={() => setDatabaseExit(false)}>{tx("返回工作台")}</button>
+        <button
+          onClick={() => {
+            void invoke("database_exit").catch((reason) => setError(databaseError(reason)));
+          }}
+        >
+          {tx("放弃 SQL 草稿并退出")}
+        </button>
+      </dialog>
       {redisDialog && (
         <RedisConnectionDialog
+          workspaceId={workspace?.selectedWorkspace ?? "local"}
           connection={redisDialog.connection}
           ssh={
             workspace?.groups?.find((group) => group.id === workspace.selectedWorkspace)
@@ -1829,15 +2075,25 @@ export function App() {
       )}
       {sshDialog && (
         <SshConnectionDialog
+          workspaceId={workspace?.selectedWorkspace ?? "local"}
           connection={sshDialog.connection}
           close={() => setSshDialog(null)}
-          save={(connection) =>
-            update((previous) => ({
+          save={(connection) => {
+            const updateRedis = (value: RedisConfig): RedisConfig =>
+              value.ssh_target?.connection_id === connection.id
+                ? {
+                    ...value,
+                    ssh_host: connection.host,
+                    ssh_target: sshTarget(connection, value.ssh_target.workspace_id),
+                  }
+                : value;
+            const saved = update((previous) => ({
               ...previous,
-              groups: previous.groups?.map((group) =>
-                group.id === previous.selectedWorkspace
+              groups: previous.groups?.map((group) => ({
+                ...group,
+                redisConnections: group.redisConnections?.map(updateRedis),
+                ...(group.id === previous.selectedWorkspace
                   ? {
-                      ...group,
                       sshConnections: group.sshConnections?.some(
                         (item) => item.id === connection.id,
                       )
@@ -1852,10 +2108,12 @@ export function App() {
                           )
                         : [...(group.sshConnections ?? []), connection],
                     }
-                  : group,
-              ),
-            }))
-          }
+                  : {}),
+              })),
+            }));
+            if (saved) setRedisViews((previous) => previous.map(updateRedis));
+            return saved;
+          }}
         />
       )}
       {runtime && <RemoteTransferShelf />}
@@ -1877,13 +2135,15 @@ export function App() {
             )}
             {inspectorOnLeft && inspectorToggle}
             <h1 data-tauri-drag-region>
-              {activeRedis
-                ? activeRedis.name
-                : selectedWorktree
-                  ? `${selected?.name} / ${selectedWorktree.name}`
-                  : (activeSsh?.name ??
-                    selected?.name ??
-                    (roster?.kind === "chats" ? tx("聊天") : tx("终端")))}
+              {activeDatabase
+                ? (activeDatabaseConfig?.name ?? tx("数据库组件"))
+                : activeRedis
+                  ? activeRedis.name
+                  : selectedWorktree
+                    ? `${selected?.name} / ${selectedWorktree.name}`
+                    : (activeSsh?.name ??
+                      selected?.name ??
+                      (roster?.kind === "chats" ? tx("聊天") : tx("终端")))}
             </h1>
             {runtime && fileDirectory && !activeSsh && (
               <BranchSelector
@@ -1897,7 +2157,7 @@ export function App() {
             )}
           </div>
           <div className="toolbar-actions">
-            {roster && !activeRedis && (
+            {roster && !activeRedis && !activeDatabase && (
               <div className="workspace-actions">
                 {chatUsage && (
                   <div className="chat-usage-control" ref={chatUsageDetailsRef}>
@@ -2010,6 +2270,19 @@ export function App() {
           closeDiff={() => changeGitExpanded(false)}
           closeFile={(id) => void editor.close(undefined, id)}
         />
+        {activeDatabase && selectedDatabaseId === "components" && (
+          <div className="database-component-workspace">
+            <DatabaseComponents />
+          </div>
+        )}
+        {databaseViews.map((connection) => (
+          <DatabaseWorkspace
+            key={JSON.stringify(connection)}
+            config={connection}
+            active={activeDatabaseConfig?.id === connection.id}
+            password={databasePasswords[connection.id] ?? ""}
+          />
+        ))}
         {redisViews.map((connection) => (
           <RedisWorkspace
             key={JSON.stringify(connection)}
@@ -2020,7 +2293,7 @@ export function App() {
           />
         ))}
         <div
-          hidden={!!activeRedis}
+          hidden={!!activeRedis || activeDatabase}
           className="terminal-container"
           id="workspace-content"
           role="tabpanel"

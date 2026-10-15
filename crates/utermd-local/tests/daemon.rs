@@ -624,6 +624,7 @@ fn ssh_protocol_helper() {
     };
     let mut host = RunningHost::new();
     host.client.require_ssh_support().unwrap();
+    host.client.require_ssh_config_support().unwrap();
     let spec = SessionSpec {
         id: "ssh".into(),
         directory: PathBuf::from(root),
@@ -636,6 +637,7 @@ fn ssh_protocol_helper() {
             host: "fixture".into(),
             os: "posix".into(),
             root: "/remote".into(),
+            ..Default::default()
         }),
     };
     assert!(host
@@ -722,6 +724,32 @@ fn ssh_protocol_helper() {
             create: true
         })
         .is_err());
+    let mut configured = snapshot.sessions[0].clone();
+    configured.id = "ssh-configured".into();
+    let target = configured.ssh.as_mut().unwrap();
+    target.mode = Some("direct".into());
+    target.port = Some(2222);
+    target.username = Some("qa".into());
+    let Reply::Opened { generation } = host
+        .client
+        .request(Operation::OpenSshConfigured {
+            spec: configured,
+            rows: 24,
+            cols: 80,
+            resolved: utermd_local::ssh::ResolvedTarget {
+                hostname: "127.0.0.1".into(),
+                user: "qa".into(),
+                port: 2222,
+            },
+            askpass: None,
+        })
+        .unwrap()
+    else {
+        panic!("configured SSH open");
+    };
+    host.sessions
+        .push(("ssh-configured".into(), generation.clone()));
+    host.until("ssh-configured", &generation, "SSH_FIXTURE_READY");
 }
 
 #[cfg(unix)]

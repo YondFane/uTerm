@@ -4,16 +4,18 @@ import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { useDialogBackdrop } from "../lib/useDialogBackdrop";
 import { redisError, validRedisConfig, type RedisConfig } from "../lib/redis";
-import type { SshConnection } from "../lib/workspace";
+import { sshTargetFor, type SshConnection } from "../lib/workspace";
 
 export function RedisConnectionDialog({
   connection,
   ssh,
+  workspaceId,
   save,
   close,
 }: {
   connection?: RedisConfig;
   ssh: SshConnection[];
+  workspaceId: string;
   save: (connection: RedisConfig, password: string) => boolean;
   close: () => void;
 }) {
@@ -225,21 +227,34 @@ export function RedisConnectionDialog({
           </label>
           <label>
             {tx("SSH 隧道")}
-            <select value={config.ssh_host} onChange={(e) => field("ssh_host", e.target.value)}>
+            <select
+              value={config.ssh_target?.connection_id ?? config.ssh_host}
+              onChange={(e) => {
+                const target = ssh.find((item) => item.id === e.target.value);
+                setConfig((previous) => ({
+                  ...previous,
+                  ssh_host: target?.host ?? e.target.value,
+                  ssh_target: target ? sshTargetFor(target, workspaceId) : undefined,
+                }));
+              }}
+            >
               <option value="">{tx("直连")}</option>
               {ssh.map((item) => (
-                <option key={item.id} value={item.host}>
+                <option key={item.id} value={item.id}>
                   {item.name} · {item.host}
                 </option>
               ))}
-              {config.ssh_host && !ssh.some((item) => item.host === config.ssh_host) && (
-                <option value={config.ssh_host}>{config.ssh_host}</option>
-              )}
+              {config.ssh_host &&
+                !ssh.some((item) => item.id === config.ssh_target?.connection_id) && (
+                  <option value={config.ssh_target?.connection_id ?? config.ssh_host}>
+                    {config.ssh_host}
+                  </option>
+                )}
             </select>
           </label>
           {config.ssh_host && (
             <p className="muted">
-              {tx("Redis 地址由 SSH 服务器访问；隧道需要密钥或 ssh-agent 及 TCP 转发权限。")}
+              {tx("Redis 地址由 SSH 服务器访问；使用所选 SSH 连接的认证方式，并需允许 TCP 转发。")}
             </p>
           )}
           <label className="redis-checkbox">

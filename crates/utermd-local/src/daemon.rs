@@ -68,6 +68,13 @@ pub enum Operation {
         cols: u16,
         create: bool,
     },
+    OpenSshConfigured {
+        spec: SessionSpec,
+        rows: u16,
+        cols: u16,
+        resolved: crate::ssh::ResolvedTarget,
+        askpass: Option<crate::ssh_askpass::Endpoint>,
+    },
     Read {
         id: String,
         generation: String,
@@ -170,6 +177,13 @@ impl Client {
     }
     pub fn require_ssh_support(&self) -> Result<()> {
         if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "ssh-sessions-v1"))
+        {
+            return Ok(());
+        }
+        bail!("SSH_HOST_UPGRADE_REQUIRED");
+    }
+    pub fn require_ssh_config_support(&self) -> Result<()> {
+        if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "ssh-options-v1"))
         {
             return Ok(());
         }
@@ -598,6 +612,10 @@ impl Host {
         rows: u16,
         cols: u16,
         create: bool,
+        configured: Option<(
+            crate::ssh::ResolvedTarget,
+            Option<crate::ssh_askpass::Endpoint>,
+        )>,
     ) -> Result<Arc<Entry>> {
         crate::size(rows, cols)?;
         if spec.id.is_empty() || spec.id.len() > 200 {
@@ -641,7 +659,11 @@ impl Host {
         let (reply_sender, reply_receiver) = mpsc::sync_channel::<Vec<u8>>(64);
         let generation = uuid::Uuid::new_v4().to_string();
         let mut command = if let Some(target) = &spec.ssh {
-            crate::ssh::terminal_command(target)?
+            crate::ssh::configured_command(
+                target,
+                configured.as_ref().map(|v| &v.0),
+                configured.as_ref().and_then(|v| v.1.as_ref()),
+            )?
         } else {
             crate::process::launch_command(
                 &spec.shell,
@@ -722,6 +744,7 @@ impl Host {
                     let mut values = vec![
                         "agent-reports-v1".into(),
                         "ssh-sessions-v1".into(),
+                        "ssh-options-v1".into(),
                         "local-session-list-v1".into(),
                         "local-session-snapshot-v1".into(),
                         "local-host-management-v1".into(),
@@ -782,7 +805,22 @@ impl Host {
                 if spec.ssh.is_some() {
                     bail!("Use OpenSsh for SSH sessions");
                 }
-                let entry = self.open_session(spec, rows, cols, true)?;
+                let entry = self.open_session(spec, rows, cols, true, None)?;
+                Ok(Reply::Opened {
+                    generation: entry.generation.clone(),
+                })
+            }
+            Operation::OpenSshConfigured {
+                spec,
+                rows,
+                cols,
+                resolved,
+                askpass,
+            } => {
+                if spec.ssh.is_none() {
+                    bail!("SSH_INVALID_CONNECTION");
+                }
+                let entry = self.open_session(spec, rows, cols, true, Some((resolved, askpass)))?;
                 Ok(Reply::Opened {
                     generation: entry.generation.clone(),
                 })
@@ -804,7 +842,7 @@ impl Host {
                 if spec.ssh.is_none() {
                     bail!("SSH_INVALID_CONNECTION");
                 }
-                let entry = self.open_session(spec, rows, cols, create)?;
+                let entry = self.open_session(spec, rows, cols, create, None)?;
                 Ok(Reply::Opened {
                     generation: entry.generation.clone(),
                 })

@@ -138,7 +138,7 @@ test("App migrates Redis profiles, isolates the workbench and never closes a loc
       false,
     );
     const saved = JSON.parse(localStorage.getItem(workspaceKey));
-    assert.equal(saved.version, 5);
+    assert.equal(saved.version, 7);
     assert.deepEqual(saved.groups[0].redisConnections, [connection]);
     await act(async () =>
       window.dispatchEvent(

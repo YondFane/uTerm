@@ -5,6 +5,8 @@ use tauri::{Emitter, Manager};
 mod agent_install;
 mod agents;
 mod control;
+mod database;
+mod database_components;
 mod files;
 mod git;
 mod github;
@@ -13,6 +15,7 @@ mod redis;
 mod redis_credentials;
 mod sessions;
 mod ssh;
+mod ssh_auth;
 mod taskbar;
 mod updates;
 
@@ -185,6 +188,12 @@ fn starts_in_background(arguments: impl IntoIterator<Item = impl AsRef<std::ffi:
 }
 
 fn main() {
+    if utermd_local::ssh_askpass::requested() {
+        if utermd_local::ssh_askpass::run().is_err() {
+            std::process::exit(1);
+        }
+        return;
+    }
     let mut arguments = std::env::args_os().skip(1);
     let mode = arguments.next();
     if mode.as_deref() == Some(std::ffi::OsStr::new("--control")) {
@@ -348,8 +357,19 @@ fn main() {
         .manage(std::sync::Arc::new(sessions::Sessions::default()))
         .manage(files::EditorGuard::default())
         .manage(ssh::SshFiles::default())
+        .manage(ssh_auth::SshAuth::default())
         .manage(redis::RedisState::default())
+        .manage(database::DatabaseState::default())
+        .manage(database_components::Components::default())
         .invoke_handler(tauri::generate_handler![
+            database_components::database_components,
+            database::database_connect,
+            database::database_request,
+            database::database_disconnect,
+            database::database_credential,
+            database::database_guard,
+            database::database_exit,
+            database::database_export_sql,
             redis::redis_pick_ca,
             redis::redis_connect,
             redis::redis_reconnect,
@@ -379,6 +399,9 @@ fn main() {
             sessions::control_session,
             sessions::local_session_list,
             sessions::ssh_session_list,
+            ssh_auth::ssh_configure_auth,
+            ssh_auth::ssh_forget_auth,
+            ssh_auth::ssh_pick_identity,
             ssh::ssh_info,
             ssh::ssh_files_open,
             ssh::ssh_files_disconnect,
@@ -453,6 +476,18 @@ fn main() {
                     }
                 }
                 tauri::RunEvent::ExitRequested { api, .. }
+                    if handle.state::<database::DatabaseState>().busy()
+                        || handle.state::<database::DatabaseState>().dirty()
+                        || handle
+                            .state::<database_components::Components>()
+                            .0
+                            .load(std::sync::atomic::Ordering::SeqCst) =>
+                {
+                    api.prevent_exit();
+                    let _ = show_main_window(handle);
+                    let _ = handle.emit("database-close-request", ());
+                }
+                tauri::RunEvent::ExitRequested { api, .. }
                     if handle.state::<redis::RedisState>().busy() =>
                 {
                     api.prevent_exit();
@@ -501,6 +536,7 @@ fn main() {
             }
             if matches!(event, tauri::RunEvent::Exit) {
                 handle.state::<redis::RedisState>().stop();
+                handle.state::<database::DatabaseState>().stop();
                 handle
                     .state::<std::sync::Arc<sessions::Sessions>>()
                     .detach();

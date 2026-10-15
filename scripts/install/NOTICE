@@ -1,0 +1,60 @@
+Required Notice: Copyright (c) 2026 YondFane
+
+uTerm licensing notice / uTerm 许可说明
+
+English
+
+uTerm's original code in this source tree is offered under the PolyForm
+Noncommercial License 1.0.0 in LICENSE. Noncommercial uses and the other
+purposes expressly permitted by that license are free of charge, subject to
+its terms. The license's personal-use, noncommercial-organization and fair-use
+provisions remain unchanged. This notice explains the licensing arrangement;
+it does not amend or narrow permissions granted by LICENSE.
+
+Commercial use outside the purposes already permitted by LICENSE requires
+prior, separate written authorization from YondFane. This includes use in
+commercial business operations, commercial redistribution or resale,
+integration into commercial products, and paid or hosted services, when such
+use is not already permitted by LICENSE. Source access, a download, a fork,
+an inquiry or a contribution does not itself grant commercial authorization.
+
+Request commercial authorization through the project maintainer at
+https://github.com/YondFane/uTerm. A written authorization must identify the
+licensee, the covered software or versions, the permitted commercial scope
+and any applicable conditions. Commercial terms are agreed separately;
+this notice is not a commercial license. YondFane retains the right to
+commercialize and separately license code for which YondFane holds the
+necessary rights.
+
+Third-party code, packages and assets retain their own licenses and
+copyright notices. These licensing terms do not transfer third-party
+copyrights or automatically grant commercial
+relicensing rights to other contributors' work.
+
+This is source-available software with use restrictions, rather than
+OSI-approved open source. The English LICENSE text governs its public
+license; the Chinese explanation below is provided for convenience.
+
+简体中文
+
+本源码树中的 uTerm 原创代码采用 LICENSE 中的 PolyForm Noncommercial
+License 1.0.0。非商业用途及协议明确允许的其他用途可免费使用，但须遵守协议
+条款。协议中的个人使用、非商业组织和合理使用条款完整保留。本说明解释授权
+安排，不修改或缩减 LICENSE 已授予的许可。
+
+不属于 LICENSE 已允许范围的商业使用，须事先取得 YondFane 单独的书面授权。
+在协议尚未允许的情况下，这包括用于企业商业运营、商业分发或转售、集成到
+商业产品，以及提供收费或托管服务。查看源码、下载、fork、咨询或贡献代码
+本身均不构成商业授权。
+
+申请商业授权请通过项目仓库 https://github.com/YondFane/uTerm 联系维护者。
+书面授权须明确被授权人、所覆盖的软件或版本、允许的商业使用范围及适用
+条件。商业条款另行约定，本说明本身不授予商业许可。YondFane 保留对其具有
+充分权利的代码自行商业化及另行授权的权利。
+
+第三方代码、软件包和资源继续适用各自的许可及版权声明。这些条款不转让
+第三方版权，也不自动赋予对其他贡献者作品的商业
+再许可权。
+
+这是附带用途限制的源码可用软件，不属于 OSI 认可的开源软件。公开许可以
+英文 LICENSE 正文为准，中文说明供理解参考。

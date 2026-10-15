@@ -49,7 +49,7 @@ const fixture = () => {
 };
 
 test("SSH storage upgrades v3, validates targets and preserves grouping boundaries", () => {
-  assert.equal(readWorkspace(JSON.stringify({ ...emptyWorkspace(), version: 3 })).version, 5);
+  assert.equal(readWorkspace(JSON.stringify({ ...emptyWorkspace(), version: 3 })).version, 7);
   const state = fixture();
   const restored = readWorkspace(JSON.stringify(state));
   assert.deepEqual(restored, state);

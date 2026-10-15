@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
+import { RedisBinaryPreview } from "./RedisBinaryPreview";
 import {
   redisArguments,
   redisDisplay,
@@ -715,7 +716,11 @@ export function RedisWorkspace({
                         ? tx("二进制内容，仅供预览。")
                         : tx("值超过 1 MB，不能完整编辑。")}
                     </p>
-                    <pre className="redis-preview">{redisDisplay(data.value)}</pre>
+                    {data.value.text === null ? (
+                      <RedisBinaryPreview value={data.value} offset={offset} />
+                    ) : (
+                      <pre className="redis-preview">{redisDisplay(data.value)}</pre>
+                    )}
                     {data.kind === "string" && (
                       <div className="redis-pagination">
                         <button

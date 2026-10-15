@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { tx } from "./i18n.ts";
-import { validSshHost } from "./workspace.ts";
+import { validSshHost, validSshTarget, type SshTarget } from "./workspace.ts";
+import { sshError } from "./file-target.ts";
 
 export interface RedisConfig {
   id: string;
@@ -13,6 +14,7 @@ export interface RedisConfig {
   ca_file: string;
   server_name: string;
   ssh_host: string;
+  ssh_target?: SshTarget;
   credential_id: string | null;
 }
 export interface RedisBlob {
@@ -61,6 +63,7 @@ export function validRedisConfig(value: unknown): value is RedisConfig {
         "ca_file",
         "server_name",
         "ssh_host",
+        "ssh_target",
         "credential_id",
       ].includes(key),
     ) &&
@@ -84,6 +87,8 @@ export function validRedisConfig(value: unknown): value is RedisConfig {
     !config.ca_file.includes("\0") &&
     (config.server_name === "" || host(config.server_name)) &&
     (config.ssh_host === "" || validSshHost(config.ssh_host)) &&
+    (config.ssh_target === undefined ||
+      (validSshTarget(config.ssh_target) && config.ssh_host === config.ssh_target.host)) &&
     (config.credential_id === null ||
       (typeof config.credential_id === "string" && uuid.test(config.credential_id)))
   );
@@ -123,8 +128,7 @@ export function redisError(error: unknown): string {
   for (const [code, message] of Object.entries(errors)) if (value.includes(code)) return message();
   if (value.includes("REDIS_SERVER:"))
     return tx("Redis 返回错误：{code}", { code: value.split("REDIS_SERVER:")[1].trim() });
-  if (value.includes("SSH_"))
-    return tx("SSH 隧道失败。请先确认主机指纹，并检查密钥、ssh-agent 和转发权限。");
+  if (value.includes("SSH_")) return sshError(error);
   return tx("Redis 操作失败，请检查连接后重试。");
 }
 export function redisEncode(text: string): string {
@@ -136,7 +140,7 @@ export function redisEncode(text: string): string {
 }
 export function redisDisplay(value: RedisBlob): string {
   if (value.text !== null) return value.text + (value.truncated ? " …" : "");
-  const bytes = atob(value.data);
+  const bytes = atob(value.data.slice(0, Math.ceil(256 / 3) * 4));
   return (
     [...bytes.slice(0, 256)]
       .map((byte) => byte.charCodeAt(0).toString(16).padStart(2, "0"))

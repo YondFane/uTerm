@@ -57,7 +57,7 @@ These instructions apply to this repository. It is a self-contained Tauri deskto
   recovery, and keep local control authenticated and loopback-only.
 - Use platform-equivalent shortcuts and commands. Avoid shell interpolation for
   file paths or arguments. Test Windows-specific behavior on Windows.
-- Use direct, concrete UI copy. uTerm is free. Use session, project, workspace,
+- Use direct, concrete UI copy. Use session, project, workspace,
   Group with, Ungroup, and Close Session consistently. No AI attribution.
 
 ## Required documentation update on every development change

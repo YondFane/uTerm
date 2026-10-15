@@ -21,12 +21,36 @@ const config = () => ({
   ssh_host: "",
   credential_id: null,
 });
+test("binary hex previews decode only the displayed prefix", () => {
+  const original = globalThis.atob;
+  let largest = 0;
+  globalThis.atob = (value) => {
+    largest = Math.max(largest, value.length);
+    return original(value);
+  };
+  try {
+    const value = {
+      data: Buffer.alloc(2 * 1024 * 1024, 255).toString("base64"),
+      text: null,
+      size: 2 * 1024 * 1024,
+      truncated: false,
+    };
+    assert.equal(redisDisplay(value), Array(256).fill("ff").join(" ") + " …");
+    assert.ok(largest <= 344);
+    assert.equal(
+      redisDisplay({ ...value, data: Buffer.alloc(256, 0).toString("base64") }),
+      Array(256).fill("00").join(" "),
+    );
+  } finally {
+    globalThis.atob = original;
+  }
+});
 test("Redis workspace migration preserves SSH and rejects credentials or malformed endpoints", () => {
-  for (const version of [3, 4, 5]) {
+  for (const version of [3, 4, 5, 6, 7]) {
     const state = { ...emptyWorkspace(), version };
     state.groups[0].redisConnections = [config()];
     const restored = readWorkspace(JSON.stringify(state));
-    assert.equal(restored.version, 5);
+    assert.equal(restored.version, 7);
     assert.deepEqual(restored.groups[0].redisConnections, [config()]);
   }
   for (const invalid of [
