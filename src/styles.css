@@ -4061,7 +4061,7 @@ textarea:focus-visible {
 .database-results th {
   position: sticky;
   top: 0;
-  background: var(--ui-selected);
+  background: var(--ui-surface);
   text-align: left;
 }
 .database-results em {
@@ -4412,6 +4412,23 @@ textarea:focus-visible {
 }
 .database-results {
   min-height: 0;
+  min-width: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-muted) var(--ui-surface);
+}
+.database-results::-webkit-scrollbar {
+  display: block;
+  width: 10px;
+  height: 10px;
+}
+.database-results::-webkit-scrollbar-track,
+.database-results::-webkit-scrollbar-corner {
+  background: var(--ui-surface);
+}
+.database-results::-webkit-scrollbar-thumb {
+  background: var(--ui-muted);
+  border: 2px solid var(--ui-surface);
+  border-radius: 5px;
 }
 .database-results:focus-visible {
   outline: 1px solid var(--ui-accent);
@@ -4461,6 +4478,10 @@ textarea:focus-visible {
   left: 0;
   top: auto;
   z-index: 1;
+}
+.database-results thead .database-row-number {
+  left: 0;
+  z-index: 3;
 }
 .database-results tbody th button {
   width: 100%;
