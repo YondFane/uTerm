@@ -500,7 +500,7 @@ function UsageResult({ agent, usage }: { agent: string; usage: Usage }) {
         <dd>{usage.cache_write.toLocaleString(getUiLanguage())}</dd>
       </dl>
       {!usage.records && <p>{tx("未找到近 7 天的 Token 记录。")}</p>}
-      {usage.partial && <p>{tx("日志较大，当前统计仅包含已读取的部分。")}</p>}
+      {usage.partial && <p>{tx("当前统计仅包含可读取的日志记录。")}</p>}
       {usage.windows.map((window, index) => (
         <div key={index}>
           <span>

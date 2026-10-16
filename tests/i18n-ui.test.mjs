@@ -150,7 +150,7 @@ test("real settings tabs, commands and panels render in both languages without u
         cache_read: 30,
         cache_write: 40,
         records: 1,
-        partial: false,
+        partial: args.agent === "codex",
         notice: null,
         windows: [{ label: "主要额度", percent: 25 }],
       };
@@ -577,9 +577,18 @@ test("real settings tabs, commands and panels render in both languages without u
       await click("Codex");
       assert.match(host.textContent, /Codex · Past 7 days/);
       assert.match(host.textContent, /222/);
+      assert.match(host.textContent, /The current totals include only readable log records\./);
+      assert.equal(host.querySelector(".agent-usage progress").value, 25);
+      await act(async () => i18n.setUiLanguage("zh-Hans"));
+      assert.match(host.textContent, /当前统计仅包含可读取的日志记录。/);
+      await act(async () => i18n.setUiLanguage("en"));
       await click("Claude");
       assert.match(host.textContent, /Claude · Past 7 days/);
       assert.match(host.textContent, /111/);
+      assert.doesNotMatch(
+        host.textContent,
+        /The current totals include only readable log records\./,
+      );
       assert.deepEqual(usageReads, ["claude", "codex", "claude"]);
       await mount(
         React.createElement(SettingsPanel, {
