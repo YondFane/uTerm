@@ -1,0 +1,807 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101010" />
+    <meta
+      name="description"
+      content="uTerm 将终端、Agent、Git、SSH 和数据库放进同一个桌面工作区，支持 Windows 与 macOS。"
+    />
+    <meta property="og:title" content="uTerm — 让开发，回到专注。" />
+    <meta
+      property="og:description"
+      content="终端、Agent 与开发工具，一个窗口，有序展开。适用于 Windows 与 macOS。"
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://yondfane.github.io/uTerm/" />
+    <link rel="canonical" href="https://yondfane.github.io/uTerm/" />
+    <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+    <link rel="stylesheet" href="./style.css" />
+    <script defer src="./site.js"></script>
+    <title>uTerm — 让开发，回到专注。</title>
+  </head>
+  <body>
+    <svg class="svg-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <symbol id="arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6" /></symbol>
+      <symbol id="external" viewBox="0 0 24 24"><path d="M7 17 17 7M7 7h10v10" /></symbol>
+      <symbol id="terminal" viewBox="0 0 24 24"><path d="m5 7 5 5-5 5m8 0h6" /></symbol>
+      <symbol id="branch" viewBox="0 0 24 24">
+        <circle cx="6" cy="5" r="2" />
+        <circle cx="6" cy="19" r="2" />
+        <circle cx="18" cy="5" r="2" />
+        <path d="M6 7v10m12-10v2a4 4 0 0 1-4 4H6" />
+      </symbol>
+      <symbol id="server" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="7" rx="2" />
+        <rect x="3" y="14" width="18" height="7" rx="2" />
+        <path d="M7 6.5h.01M7 17.5h.01M11 6.5h6m-6 11h6" />
+      </symbol>
+      <symbol id="database" viewBox="0 0 24 24">
+        <ellipse cx="12" cy="5" rx="8" ry="3" />
+        <path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0" />
+      </symbol>
+      <symbol id="folder" viewBox="0 0 24 24">
+        <path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+      </symbol>
+      <symbol id="copy" viewBox="0 0 24 24">
+        <rect x="8" y="8" width="12" height="12" rx="2" />
+        <path d="M16 8V4H4v12h4" />
+      </symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24">
+        <path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" />
+      </symbol>
+      <symbol id="windows" viewBox="0 0 24 24">
+        <path d="m3 5 8-1v7H3Zm10-1 8-1v8h-8ZM3 13h8v7l-8-1Zm10 0h8v8l-8-1Z" />
+      </symbol>
+      <symbol id="apple" viewBox="0 0 24 24">
+        <path
+          d="M15 3c0 2-1 3-3 4 0-2 1-4 3-4Zm2 5c-2-1-3 0-5 0S9 7 7 8c-5 3-2 11 1 13 1 1 3-1 4-1s3 2 4 1c2-1 3-4 4-6-3-1-4-4-1-6Z"
+        />
+      </symbol>
+      <symbol id="github" viewBox="0 0 24 24">
+        <path
+          d="M9 19c-4 1-4-2-6-2m12 5v-4c0-1 0-2-1-2 4 0 7-2 7-6 0-2-1-3-2-4 0-1 0-3-1-4-2 0-3 1-4 2a13 13 0 0 0-5 0C8 3 7 2 5 2 4 3 4 5 5 6c-1 1-2 2-2 4 0 4 3 6 7 6-1 0-1 1-1 2v4"
+        />
+      </symbol>
+    </svg>
+    <a class="skip-link" href="#main" data-i18n="skip">跳转到内容</a>
+    <header class="site-header">
+      <div class="container nav-bar">
+        <a class="wordmark" href="#" aria-label="uTerm"
+          ><img src="./icon.svg" alt="" width="34" height="34" /><span
+            >uTerm<span class="wordmark-dot">.</span></span
+          ></a
+        >
+        <nav aria-label="主导航" data-i18n-aria="navigation">
+          <a href="#workflow" data-i18n="navWorkflow">工作流</a>
+          <a href="#features" data-i18n="navFeatures">功能</a>
+          <a
+            href="https://github.com/YondFane/uTerm/blob/release/docs/features.zh-CN.md"
+            data-guide-link
+            data-i18n="navDocs"
+            >文档</a
+          >
+        </nav>
+        <div class="nav-actions">
+          <button
+            class="language-button"
+            id="language-toggle"
+            type="button"
+            aria-label="Switch to English"
+          >
+            EN
+          </button>
+          <a class="github-link" href="https://github.com/YondFane/uTerm" aria-label="GitHub"
+            ><svg class="icon"><use href="#github" /></svg><span>GitHub</span
+            ><svg class="icon small"><use href="#external" /></svg
+          ></a>
+        </div>
+      </div>
+    </header>
+    <main id="main">
+      <section class="hero container">
+        <a class="release-link" href="https://github.com/YondFane/uTerm/releases/latest"
+          ><span class="status-dot"></span
+          ><span id="release-label" data-i18n="releaseDefault">uTerm · 桌面开发工作区</span
+          ><svg class="icon small"><use href="#arrow" /></svg
+        ></a>
+        <div class="hero-grid">
+          <h1>
+            <span data-i18n="heroFirst">让开发，</span><br /><span
+              class="hero-second"
+              data-i18n="heroSecond"
+              >回到专注<span class="hero-period">。</span></span
+            >
+          </h1>
+          <div class="hero-aside">
+            <p class="hero-description" data-i18n="heroDescription">
+              终端、Agent 与开发工具，<br />一个窗口，有序展开。
+            </p>
+            <p class="hero-detail" data-i18n="heroDetail">
+              把项目、远程连接和数据放回同一处，让思路留在正在做的事情上。
+            </p>
+            <div class="hero-actions">
+              <a class="button primary" href="#download"
+                ><span data-i18n="getUterm">下载 uTerm</span
+                ><svg class="icon"><use href="#arrow" /></svg></a
+              ><a class="text-link" href="#workflow"
+                ><span data-i18n="takeLook">看看工作区</span><span aria-hidden="true">↙</span></a
+              >
+            </div>
+            <p class="platform-note">
+              <svg class="icon"><use href="#windows" /></svg><span>Windows</span
+              ><span class="note-divider">/</span><svg class="icon"><use href="#apple" /></svg
+              ><span>macOS</span>
+            </p>
+          </div>
+        </div>
+        <div class="hero-baseline">
+          <span class="mono">ONE WORKSPACE. YOUR FLOW.</span
+          ><span data-i18n="heroBaseline">少一点切换，多一点沉浸。</span
+          ><span class="baseline-index mono">01 — 04</span>
+        </div>
+      </section>
+
+      <section class="showcase container" id="workflow" aria-labelledby="workflow-title">
+        <h2 class="sr-only" id="workflow-title" data-i18n="workflowTitle">探索 uTerm 工作区</h2>
+        <div
+          class="demo-tabs"
+          role="tablist"
+          data-tabs="demo"
+          aria-label="功能预览"
+          data-i18n-aria="previewTabs"
+        >
+          <button
+            id="tab-terminal"
+            type="button"
+            role="tab"
+            aria-selected="true"
+            aria-controls="demo-terminal"
+            data-tab="terminal"
+          >
+            <span class="tab-number mono">01</span><svg class="icon"><use href="#terminal" /></svg
+            ><span data-i18n="tabTerminal">终端与 Agent</span>
+          </button>
+          <button
+            id="tab-git"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="demo-git"
+            tabindex="-1"
+            data-tab="git"
+          >
+            <span class="tab-number mono">02</span><svg class="icon"><use href="#branch" /></svg
+            ><span data-i18n="tabGit">项目与 Git</span>
+          </button>
+          <button
+            id="tab-ssh"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="demo-ssh"
+            tabindex="-1"
+            data-tab="ssh"
+          >
+            <span class="tab-number mono">03</span><svg class="icon"><use href="#server" /></svg
+            ><span data-i18n="tabSsh">SSH 与远程</span>
+          </button>
+          <button
+            id="tab-data"
+            type="button"
+            role="tab"
+            aria-selected="false"
+            aria-controls="demo-data"
+            tabindex="-1"
+            data-tab="data"
+          >
+            <span class="tab-number mono">04</span><svg class="icon"><use href="#database" /></svg
+            ><span data-i18n="tabData">Redis 与数据库</span>
+          </button>
+        </div>
+        <figure class="product-figure">
+          <div class="app-window" id="app-preview" data-theme="black">
+            <div class="app-titlebar">
+              <div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div>
+              <span class="app-workspace" data-i18n="demoWorkspace">我的工作区</span
+              ><span class="app-title-path mono">uTerm <span>/</span> workspace</span
+              ><span class="app-title-split" aria-hidden="true">◫</span>
+            </div>
+            <div class="app-body">
+              <aside class="app-sidebar" aria-label="示例项目" data-i18n-aria="demoProjects">
+                <div class="sidebar-heading">
+                  <span data-i18n="demoActive">活动</span><span>−</span>
+                </div>
+                <div class="project-row">
+                  <svg class="icon"><use href="#folder" /></svg><strong>uterm</strong
+                  ><span class="row-plus">+</span>
+                </div>
+                <div class="session-row selected">
+                  <span class="session-ring"
+                    ><svg class="icon"><use href="#terminal" /></svg></span
+                  ><span>Terminal</span><span class="session-shortcut mono">⌘1</span>
+                </div>
+                <div class="session-row">
+                  <span class="agent-glyph">✳</span><span>Claude</span
+                  ><span class="tiny-dot"></span>
+                </div>
+                <div class="session-row">
+                  <span class="agent-glyph codex-glyph">◇</span><span>Codex</span>
+                </div>
+                <div class="project-row second-project">
+                  <svg class="icon"><use href="#branch" /></svg><span>feature/workspace</span>
+                </div>
+                <div class="session-row muted">
+                  <svg class="icon"><use href="#terminal" /></svg><span>Terminal</span>
+                </div>
+                <div class="sidebar-heading section-gap">
+                  <span data-i18n="demoProjectsLabel">项目</span><span>+</span>
+                </div>
+                <div class="project-row muted">
+                  <svg class="icon"><use href="#folder" /></svg><span>my-website</span>
+                </div>
+                <div class="sidebar-heading section-gap">
+                  <span data-i18n="demoSshLabel">SSH 连接</span><span>+</span>
+                </div>
+                <div class="project-row">
+                  <svg class="icon"><use href="#server" /></svg><span>dev-server</span
+                  ><span class="tiny-dot"></span>
+                </div>
+                <div class="sidebar-heading section-gap">
+                  <span data-i18n="demoDatabaseLabel">数据库</span><span>+</span>
+                </div>
+                <div class="project-row muted">
+                  <svg class="icon"><use href="#database" /></svg><span>local-postgres</span>
+                </div>
+                <div class="sidebar-footer">
+                  <span>+</span
+                  ><span class="sidebar-footer-icons"
+                    ><svg class="icon"><use href="#server" /></svg
+                    ><svg class="icon"><use href="#database" /></svg><span>⚙</span></span
+                  >
+                </div>
+              </aside>
+              <div class="app-content">
+                <div class="app-toolbar">
+                  <span
+                    ><svg class="icon"><use href="#branch" /></svg><span class="mono">release</span
+                    ><span class="toolbar-caret">⌄</span></span
+                  ><span class="toolbar-path mono">~/Projects/uterm</span
+                  ><span class="toolbar-icons" aria-hidden="true">⌕ &nbsp; ◫</span>
+                </div>
+                <div
+                  id="demo-terminal"
+                  class="demo-panel"
+                  role="tabpanel"
+                  aria-labelledby="tab-terminal"
+                  tabindex="0"
+                >
+                  <div class="terminal-split">
+                    <div class="terminal-pane">
+                      <div class="pane-heading">
+                        <span
+                          ><svg class="icon"><use href="#terminal" /></svg> Terminal</span
+                        ><span class="mono">zsh</span>
+                      </div>
+                      <div class="terminal-code mono">
+                        <p>
+                          <span class="code-green">➜</span> <span class="code-blue">uterm</span>
+                          <span class="code-muted">git:(</span><span class="code-red">release</span
+                          ><span class="code-muted">)</span>
+                        </p>
+                        <p><span class="code-muted">$</span> pnpm dev</p>
+                        <p class="terminal-spacer code-muted">&gt; uterm dev<br />&gt; vite</p>
+                        <p>
+                          <span class="vite-logo">ϟ</span> <strong>VITE</strong>
+                          <span class="code-muted">ready</span>
+                        </p>
+                        <p class="terminal-spacer">
+                          <span class="code-green">➜</span> <strong>Local:</strong>
+                          <span class="code-blue">http://localhost:1420/</span>
+                        </p>
+                        <p class="code-muted">&nbsp; press h + enter to show help</p>
+                        <p class="terminal-spacer">
+                          <span class="code-green">➜</span> <span class="code-blue">uterm</span>
+                          <span class="cursor"></span>
+                        </p>
+                      </div>
+                      <div class="pane-status mono">
+                        <span class="tiny-dot"></span><span data-i18n="demoLocal">本地会话</span
+                        ><span class="pane-status-right">UTF-8</span>
+                      </div>
+                    </div>
+                    <div class="terminal-pane agent-pane">
+                      <div class="pane-heading">
+                        <span><span class="agent-glyph">✳</span> Claude</span
+                        ><span class="code-green" data-i18n="demoRunning">运行中</span>
+                      </div>
+                      <div class="terminal-code agent-code mono">
+                        <p class="agent-intro">
+                          ╭─ <span class="code-warm">Claude Code</span> ─────────────╮
+                        </p>
+                        <p class="code-muted">│ ~/Projects/uterm &nbsp; &nbsp; &nbsp; &nbsp;│</p>
+                        <p class="code-muted">╰───────────────────────────╯</p>
+                        <p class="terminal-spacer">
+                          <span class="code-warm">❯</span>
+                          <span data-i18n="demoAgentPrompt">梳理项目结构和入口</span>
+                        </p>
+                        <p class="terminal-spacer" data-i18n="demoAgentResponse">
+                          我会先查看项目目录和配置文件。
+                        </p>
+                        <p class="terminal-spacer code-muted">
+                          ● Read <span class="code-normal">package.json</span><br />● Read
+                          <span class="code-normal">src/App.tsx</span><br />● Read
+                          <span class="code-normal">src-tauri/tauri.conf.json</span>
+                        </p>
+                        <div class="agent-input">
+                          <span class="code-warm">❯</span
+                          ><span class="code-muted" data-i18n="demoAgentInput">继续你的想法…</span
+                          ><span class="cursor"></span>
+                        </div>
+                        <p class="code-muted agent-help" data-i18n="demoAgentHelp">
+                          终端与 Agent，并排工作。
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  id="demo-git"
+                  class="demo-panel"
+                  role="tabpanel"
+                  aria-labelledby="tab-git"
+                  tabindex="0"
+                  hidden
+                >
+                  <div class="demo-subbar">
+                    <span class="mono">workspace.ts</span
+                    ><span class="diff-stat mono">+ 8 &nbsp; − 3</span>
+                  </div>
+                  <div class="git-layout">
+                    <div class="diff-code mono">
+                      <div class="diff-line code-muted">
+                        &nbsp; 1 &nbsp; import { createSession } from "./session";
+                      </div>
+                      <div class="diff-line">&nbsp; 2 &nbsp;</div>
+                      <div class="diff-line">
+                        &nbsp; 3 &nbsp; export function openWorkspace(project) {
+                      </div>
+                      <div class="diff-line removed">
+                        − 4 &nbsp; &nbsp; return createSession(project.path);
+                      </div>
+                      <div class="diff-line added">
+                        + 4 &nbsp; &nbsp; const root = project.worktree ?? project.path;
+                      </div>
+                      <div class="diff-line added">+ 5 &nbsp; &nbsp; return createSession({</div>
+                      <div class="diff-line added">+ 6 &nbsp; &nbsp; &nbsp; cwd: root,</div>
+                      <div class="diff-line added">
+                        + 7 &nbsp; &nbsp; &nbsp; workspaceId: project.workspaceId,
+                      </div>
+                      <div class="diff-line added">+ 8 &nbsp; &nbsp; });</div>
+                      <div class="diff-line">&nbsp; 9 &nbsp; }</div>
+                      <div class="git-context">
+                        <svg class="icon"><use href="#branch" /></svg
+                        ><span data-i18n="demoGitContext">每个 Worktree，保留自己的工作现场。</span>
+                      </div>
+                    </div>
+                    <div class="git-inspector">
+                      <div class="inspector-title">Git</div>
+                      <p class="code-muted" data-i18n="demoChanges">工作区更改</p>
+                      <div class="changed-file mono">
+                        <span>workspace.ts</span><span class="code-warm">M</span>
+                      </div>
+                      <div class="changed-file mono">
+                        <span>session.ts</span><span class="code-green">A</span>
+                      </div>
+                      <div class="git-branch-label">
+                        <svg class="icon"><use href="#branch" /></svg
+                        ><span class="mono">feature/workspace</span>
+                      </div>
+                      <p class="code-muted" data-i18n="demoGitNote">
+                        查看差异、暂存和提交，不必离开项目。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  id="demo-ssh"
+                  class="demo-panel"
+                  role="tabpanel"
+                  aria-labelledby="tab-ssh"
+                  tabindex="0"
+                  hidden
+                >
+                  <div class="demo-subbar">
+                    <span><span class="tiny-dot"></span> dev-server</span
+                    ><span class="mono">SSH / SFTP</span>
+                  </div>
+                  <div class="remote-layout">
+                    <div class="terminal-code mono">
+                      <p>
+                        <span class="code-green">dev</span
+                        ><span class="code-muted">@dev-server</span>
+                        <span class="code-blue">~/app</span>
+                      </p>
+                      <p class="terminal-spacer"><span class="code-muted">$</span> ls -la</p>
+                      <p class="terminal-spacer code-muted">
+                        drwxr-xr-x &nbsp; dev &nbsp; src/<br />drwxr-xr-x &nbsp; dev &nbsp;
+                        public/<br />-rw-r--r-- &nbsp; dev &nbsp; package.json<br />-rw-r--r--
+                        &nbsp; dev &nbsp; README.md
+                      </p>
+                      <p class="terminal-spacer"><span class="code-muted">$</span> git status</p>
+                      <p class="terminal-spacer" data-i18n="demoSshClean">
+                        工作区干净，所有更改已提交。
+                      </p>
+                      <p class="terminal-spacer">
+                        <span class="code-green">dev</span
+                        ><span class="code-muted">@dev-server</span>
+                        <span class="code-blue">~/app</span> <span class="cursor"></span>
+                      </p>
+                    </div>
+                    <div class="remote-files">
+                      <div class="inspector-title" data-i18n="demoRemoteFiles">远程文件</div>
+                      <p class="mono code-muted">/home/dev/app</p>
+                      <div>
+                        <svg class="icon"><use href="#folder" /></svg>src
+                      </div>
+                      <div>
+                        <svg class="icon"><use href="#folder" /></svg>public
+                      </div>
+                      <div class="mono">&nbsp; {} &nbsp;package.json</div>
+                      <div class="mono">&nbsp; ≡ &nbsp; README.md</div>
+                      <p class="remote-note code-muted" data-i18n="demoRemoteNote">
+                        浏览、编辑、上传与下载，和远程终端放在一起。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  id="demo-data"
+                  class="demo-panel"
+                  role="tabpanel"
+                  aria-labelledby="tab-data"
+                  tabindex="0"
+                  hidden
+                >
+                  <div class="demo-subbar">
+                    <span
+                      ><svg class="icon"><use href="#database" /></svg> local-postgres
+                      <span class="code-muted mono">/ app</span></span
+                    ><span class="readonly-label" data-i18n="demoReadOnly">只读</span>
+                  </div>
+                  <div class="sql-editor mono">
+                    <div>
+                      <span class="line-number">1</span><span class="code-purple">SELECT</span> id,
+                      name, status
+                    </div>
+                    <div>
+                      <span class="line-number">2</span
+                      ><span class="code-purple">FROM</span> projects
+                    </div>
+                    <div>
+                      <span class="line-number">3</span
+                      ><span class="code-purple">WHERE</span> status =
+                      <span class="code-green">'active'</span>;
+                    </div>
+                  </div>
+                  <div class="results-heading">
+                    <span data-i18n="demoResults">查询结果</span
+                    ><span class="mono code-muted">projects</span>
+                  </div>
+                  <div class="table-scroll">
+                    <table class="demo-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>id <span>int8</span></th>
+                          <th>name <span>varchar</span></th>
+                          <th>status <span>varchar</span></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>1</td>
+                          <td>1</td>
+                          <td>uterm</td>
+                          <td><span class="data-status">active</span></td>
+                        </tr>
+                        <tr>
+                          <td>2</td>
+                          <td>2</td>
+                          <td>my-website</td>
+                          <td><span class="data-status">active</span></td>
+                        </tr>
+                        <tr>
+                          <td>3</td>
+                          <td>3</td>
+                          <td>api-service</td>
+                          <td><span class="data-status">active</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="results-footer">
+                    <span data-i18n="demoRows">3 行 · 示例数据</span
+                    ><span data-i18n="demoExport">CSV / JSON 导出</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption>
+            <span
+              ><span class="caption-marker"></span
+              ><span data-i18n="demoCaption"
+                >交互式界面示意 · 示例内容，不连接真实会话或服务</span
+              ></span
+            ><span class="mono">DESIGNED FOR YOUR DESKTOP</span>
+          </figcaption>
+        </figure>
+        <div class="theme-bar">
+          <span data-i18n="tryTheme">选一个顺眼的配色</span>
+          <div class="theme-options" role="group" aria-label="预览配色" data-i18n-aria="themeGroup">
+            <button type="button" data-theme-choice="black" aria-pressed="true">
+              <i class="swatch swatch-black"></i><span data-i18n="themeBlack">暗黑</span></button
+            ><button type="button" data-theme-choice="sand" aria-pressed="false">
+              <i class="swatch swatch-sand"></i><span data-i18n="themeSand">砂岩</span></button
+            ><button type="button" data-theme-choice="ocean" aria-pressed="false">
+              <i class="swatch swatch-ocean"></i><span data-i18n="themeOcean">深海</span></button
+            ><button type="button" data-theme-choice="moss" aria-pressed="false">
+              <i class="swatch swatch-moss"></i><span data-i18n="themeMoss">青苔</span></button
+            ><button type="button" data-theme-choice="paper" aria-pressed="false">
+              <i class="swatch swatch-paper"></i><span data-i18n="themePaper">纸白</span></button
+            ><button type="button" data-theme-choice="sky" aria-pressed="false">
+              <i class="swatch swatch-sky"></i><span data-i18n="themeSky">晴空</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="features container" id="features" aria-labelledby="features-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">
+              <span class="red-square"></span
+              ><span data-i18n="featuresEyebrow">工作流，不必被窗口打断</span>
+            </p>
+            <h2 id="features-title">
+              <span data-i18n="featuresFirst">从本机到远程，</span><br /><span
+                class="muted"
+                data-i18n="featuresSecond"
+                >上下文始终在场。</span
+              >
+            </h2>
+          </div>
+          <p class="section-intro" data-i18n="featuresIntro">
+            把每天会用到的工具放在触手可及的地方。按项目组织，用熟悉的方式工作。
+          </p>
+        </div>
+        <div class="feature-list">
+          <article class="feature">
+            <div class="feature-top">
+              <span class="mono">01 / WORKSPACE</span><svg class="icon"><use href="#folder" /></svg>
+            </div>
+            <h3 data-i18n="featureWorkspaceTitle">按项目，理清工作现场。</h3>
+            <p data-i18n="featureWorkspaceBody">
+              用工作区、项目和 Git Worktree 组织终端与
+              Agent。分屏并排处理任务，重新连接后台会话，接着上次的思路。
+            </p>
+            <div class="feature-tags">
+              <span>Workspaces</span><span>Worktrees</span><span data-i18n="splitPanes">分屏</span>
+            </div>
+          </article>
+          <article class="feature">
+            <div class="feature-top">
+              <span class="mono">02 / REMOTE</span><svg class="icon"><use href="#server" /></svg>
+            </div>
+            <h3 data-i18n="featureRemoteTitle">远程，也在手边。</h3>
+            <p data-i18n="featureRemoteBody">
+              复用系统 OpenSSH 和已有连接配置。打开远程终端，用 SFTP
+              浏览、编辑和传输文件，无需来回寻找窗口。
+            </p>
+            <div class="feature-tags"><span>SSH</span><span>SFTP</span><span>ssh-agent</span></div>
+          </article>
+          <article class="feature">
+            <div class="feature-top">
+              <span class="mono">03 / DATA</span><svg class="icon"><use href="#database" /></svg>
+            </div>
+            <h3 data-i18n="featureDataTitle">查数据，留在当前思路。</h3>
+            <p data-i18n="featureDataBody">
+              浏览 Redis Key，查询 MySQL、PostgreSQL 与
+              Oracle。默认只读，按需开启编辑，预览修改后再明确提交。
+            </p>
+            <div class="feature-tags">
+              <span>Redis</span><span>SQL</span><span data-i18n="readOnlyDefault">默认只读</span>
+            </div>
+          </article>
+          <article class="feature">
+            <div class="feature-top">
+              <span class="mono">04 / CONTEXT</span><svg class="icon"><use href="#branch" /></svg>
+            </div>
+            <h3 data-i18n="featureContextTitle">代码、差异，一起看。</h3>
+            <p data-i18n="featureContextBody">
+              查看文件、Git 差异和提交，预览 Markdown 与
+              PDF。文本编辑保留冲突检查和草稿恢复，让操作有据可循。
+            </p>
+            <div class="feature-tags"><span>Git</span><span>Markdown</span><span>PDF</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="details container" aria-labelledby="details-title">
+        <div class="details-title">
+          <span class="mono red-label">LESS FRICTION. MORE FLOW.</span>
+          <h2 id="details-title" data-i18n="detailsTitle">熟悉的习惯，<br />值得被保留。</h2>
+        </div>
+        <div class="detail-item">
+          <span class="detail-symbol mono">⌘ / Ctrl</span>
+          <h3 data-i18n="detailsKeyboardTitle">键盘优先</h3>
+          <p data-i18n="detailsKeyboardBody">命令面板、分屏导航、自定义快捷键。让手留在键盘上。</p>
+        </div>
+        <div class="detail-item">
+          <span class="detail-symbol theme-symbol" aria-hidden="true"><i></i><i></i><i></i></span>
+          <h3 data-i18n="detailsThemeTitle">照顾你的偏好</h3>
+          <p data-i18n="detailsThemeBody">
+            六种界面配色、可配置字体与独立终端颜色。支持简体中文和英文。
+          </p>
+        </div>
+        <div class="detail-item">
+          <span class="detail-symbol mono">&gt;_</span>
+          <h3 data-i18n="detailsSessionTitle">会话，在后台继续</h3>
+          <p data-i18n="detailsSessionBody">
+            退出应用只分离窗口。再次打开，重新连接后台会话；“关闭会话”才终止进程。
+          </p>
+        </div>
+      </section>
+
+      <section class="download-section" id="download" aria-labelledby="download-title">
+        <div class="container">
+          <div class="download-heading">
+            <div>
+              <p class="eyebrow">
+                <span class="red-square"></span
+                ><span data-i18n="downloadEyebrow">准备好，进入工作状态</span>
+              </p>
+              <h2 id="download-title">
+                <span data-i18n="downloadFirst">下一个项目，</span><br /><span
+                  data-i18n="downloadSecond"
+                  >从这里开始<span class="hero-period">。</span></span
+                >
+              </h2>
+            </div>
+            <p data-i18n="downloadIntro">选择你的平台，<br />给开发留一个专注的空间。</p>
+          </div>
+          <div class="download-options">
+            <a
+              class="download-option"
+              data-download="windows"
+              href="https://github.com/YondFane/uTerm/releases/latest"
+              ><svg class="icon platform-icon"><use href="#windows" /></svg><strong>Windows</strong
+              ><span class="mono">x64 · .exe</span
+              ><svg class="icon download-arrow"><use href="#icon-download" /></svg></a
+            ><a
+              class="download-option"
+              data-download="mac-arm"
+              href="https://github.com/YondFane/uTerm/releases/latest"
+              ><svg class="icon platform-icon"><use href="#apple" /></svg><strong>macOS</strong
+              ><span class="mono">Apple Silicon · .dmg</span
+              ><svg class="icon download-arrow"><use href="#icon-download" /></svg></a
+            ><a
+              class="download-option"
+              data-download="mac-intel"
+              href="https://github.com/YondFane/uTerm/releases/latest"
+              ><svg class="icon platform-icon"><use href="#apple" /></svg><strong>macOS</strong
+              ><span class="mono">Intel · .dmg</span
+              ><svg class="icon download-arrow"><use href="#icon-download" /></svg
+            ></a>
+          </div>
+          <div class="download-meta">
+            <p id="release-state" aria-live="polite" data-i18n="releaseFallback">
+              下载入口指向 GitHub 稳定版发布页。
+            </p>
+            <a href="https://github.com/YondFane/uTerm/releases" class="text-link"
+              ><span data-i18n="releaseNotes">所有版本与发布说明</span
+              ><svg class="icon small"><use href="#external" /></svg
+            ></a>
+          </div>
+          <div class="install-section">
+            <div class="install-heading">
+              <h3 data-i18n="installTitle">或者，一行命令。</h3>
+              <span data-i18n="installSubtitle">复制到你的终端中运行</span>
+            </div>
+            <div class="install-box">
+              <div
+                class="install-tabs"
+                role="tablist"
+                data-tabs="install"
+                aria-label="安装方式"
+                data-i18n-aria="installTabs"
+              >
+                <button
+                  id="install-tab-npm"
+                  type="button"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="install-npm"
+                  data-tab="npm"
+                >
+                  npm</button
+                ><button
+                  id="install-tab-mac"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="install-mac"
+                  tabindex="-1"
+                  data-tab="mac"
+                >
+                  macOS</button
+                ><button
+                  id="install-tab-win"
+                  type="button"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="install-win"
+                  tabindex="-1"
+                  data-tab="win"
+                >
+                  PowerShell
+                </button>
+              </div>
+              <div class="install-command-row">
+                <div id="install-npm" role="tabpanel" aria-labelledby="install-tab-npm">
+                  <code>npx @yondfane/uterm-install</code>
+                </div>
+                <div id="install-mac" role="tabpanel" aria-labelledby="install-tab-mac" hidden>
+                  <code
+                    >curl -fsSL
+                    https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/install.sh
+                    | bash</code
+                  >
+                </div>
+                <div id="install-win" role="tabpanel" aria-labelledby="install-tab-win" hidden>
+                  <code
+                    >irm
+                    https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/install.ps1
+                    | iex</code
+                  >
+                </div>
+                <button type="button" id="copy-command" class="copy-button">
+                  <svg class="icon"><use href="#copy" /></svg><span data-i18n="copy">复制</span>
+                </button>
+              </div>
+            </div>
+            <p class="install-note" id="install-note" data-i18n="installNpmNote">
+              npm 方式需要 Node.js 22.13 或以上。命令会启动桌面应用安装器。
+            </p>
+            <p class="copy-status" id="copy-status" role="status"></p>
+          </div>
+          <p class="download-footnote" data-i18n="downloadFootnote">
+            下载需要访问 GitHub。macOS 安装包未经 Apple
+            公证，首次打开可能需要在“隐私与安全”中批准。数据库连接按需使用 Java 17+
+            与对应驱动，可在应用内管理。
+          </p>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer container">
+      <div class="footer-main">
+        <a class="wordmark" href="#" aria-label="uTerm"
+          ><img src="./icon.svg" alt="" width="32" height="32" /><span
+            >uTerm<span class="wordmark-dot">.</span></span
+          ></a
+        >
+        <p data-i18n="footerTagline">给专注，留一个位置。</p>
+        <a class="text-link" href="https://github.com/YondFane/uTerm/issues"
+          ><span data-i18n="feedback">反馈与建议</span
+          ><svg class="icon small"><use href="#external" /></svg
+        ></a>
+      </div>
+      <div class="footer-bottom">
+        <span>© 2026 YondFane</span><span class="mono">BUILT WITH TAURI · REACT · RUST</span
+        ><a href="https://github.com/YondFane/uTerm">GitHub <span aria-hidden="true">↗</span></a>
+      </div>
+    </footer>
+  </body>
+</html>
