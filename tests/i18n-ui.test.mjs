@@ -107,6 +107,7 @@ test("real settings tabs, commands and panels render in both languages without u
     install: noop,
   };
   const calls = [];
+  const openedUrls = [];
   let autostart = false;
   let autostartFail = false;
   let installFail = false;
@@ -116,6 +117,10 @@ test("real settings tabs, commands and panels render in both languages without u
   const usageReads = [];
   mockIPC((cmd, args) => {
     calls.push(cmd);
+    if (cmd === "open_external") {
+      openedUrls.push(args.url);
+      return null;
+    }
     if (cmd === "file_copy") {
       copiedFiles = args;
       if (copyFail) throw new Error("无法粘贴：同名文件或目录已存在。");
@@ -597,6 +602,11 @@ test("real settings tabs, commands and panels render in both languages without u
         "en",
       );
       await click("Software update");
+      assert.ok(
+        [...host.querySelectorAll("button")].some(
+          (button) => button.textContent === "Download installer manually",
+        ),
+      );
       const downloadProgress = host.querySelector(".update-download-progress");
       assert.ok(downloadProgress);
       assert.equal(downloadProgress.firstElementChild.tagName, "PROGRESS");
@@ -604,6 +614,8 @@ test("real settings tabs, commands and panels render in both languages without u
       assert.equal(downloadProgress.firstElementChild.value, 1992294);
       assert.match(downloadProgress.textContent, /Downloaded 1.9 MB/);
       assert.match(host.textContent, /Update downloaded and signature verified/);
+      await click("Download installer manually");
+      assert.equal(openedUrls.at(-1), "https://github.com/YondFane/uTerm/releases/latest");
       const notes = host.querySelector(".update-release-notes");
       assert.equal(notes.querySelectorAll("h2").length, 2);
       assert.equal(notes.querySelectorAll("li").length, 2);

@@ -478,8 +478,29 @@ async fn download_file(
             let response = tokio::select! {
                 biased;
                 _ = cancelled(flag) => bail!("DB_COMPONENT_CANCELLED"),
-                response = request.send() => response.context("DB_COMPONENT_DOWNLOAD")?,
+                response = request.send() => response.map_err(crate::downloads::network_error)?,
             };
+            if response.status() == reqwest::StatusCode::NOT_FOUND {
+                bail!("DOWNLOAD_NOT_FOUND");
+            }
+            if response.status() == reqwest::StatusCode::UNAUTHORIZED
+                || response.status() == reqwest::StatusCode::FORBIDDEN
+            {
+                bail!("DOWNLOAD_ACCESS");
+            }
+            if response.status() == reqwest::StatusCode::REQUEST_TIMEOUT {
+                bail!("DOWNLOAD_TIMEOUT");
+            }
+            if response.status() == reqwest::StatusCode::TOO_MANY_REQUESTS
+                || response
+                    .headers()
+                    .contains_key(reqwest::header::RETRY_AFTER)
+            {
+                bail!("DOWNLOAD_RETRY_LATER");
+            }
+            if response.status().is_server_error() {
+                bail!("DOWNLOAD_SERVER");
+            }
             if let Some((start, end)) = response_range(&response, received, artifact.size) {
                 if start == 0 {
                     // A server may ignore Range; replace the partial file instead of appending it. 服务端可能忽略 Range，此时覆盖分片，避免拼接损坏。
@@ -506,7 +527,7 @@ async fn download_file(
                 let chunk = tokio::select! {
                     biased;
                     _ = cancelled(flag) => bail!("DB_COMPONENT_CANCELLED"),
-                    chunk = response.chunk() => chunk.context("DB_COMPONENT_DOWNLOAD")?,
+                    chunk = response.chunk() => chunk.map_err(crate::downloads::network_error)?,
                 };
                 let Some(chunk) = chunk else {
                     break;
@@ -522,7 +543,7 @@ async fn download_file(
                 }
             }
             if received != artifact.size {
-                bail!("DB_COMPONENT_DOWNLOAD");
+                bail!("DOWNLOAD_NETWORK");
             }
             Ok::<_, anyhow::Error>(())
         }
@@ -545,31 +566,105 @@ async fn download_file(
         tempfile::TempPath::try_from_path(path)?,
     ))
 }
-async fn download(
-    app: &tauri::AppHandle,
-    id: &str,
-    artifact: &Artifact,
-) -> Result<tempfile::NamedTempFile> {
-    download_file(
-        &root(app)?,
-        artifact,
-        &app.state::<Components>().1,
-        |received| {
-            app.emit(
-                "database-component-progress",
-                serde_json::json!({"id":id,"received":received,"total":artifact.size}),
+async fn download(app: &tauri::AppHandle, id: &str, artifact: &Artifact) -> Result<PathBuf> {
+    let directory = root(app)?;
+    let path = partial_path(&directory, artifact);
+    crate::downloads::prune(path.parent().context("DOWNLOAD_STORAGE")?, &path).await?;
+    for attempt in 0..crate::downloads::ATTEMPTS {
+        let result = download_file(
+            &directory,
+            artifact,
+            &app.state::<Components>().1,
+            |received| {
+                app.emit(
+                    "database-component-progress",
+                    serde_json::json!({"id":id,"received":received,"total":artifact.size}),
+                )?;
+                Ok(())
+            },
+        )
+        .await;
+        crate::downloads::prune(path.parent().context("DOWNLOAD_STORAGE")?, &path).await?;
+        match result {
+            Ok(mut file) => {
+                let artifact = artifact.clone();
+                return tauri::async_runtime::spawn_blocking(move || {
+                    if !valid_file(file.as_file_mut(), &artifact)? {
+                        bail!("DB_COMPONENT_HASH");
+                    }
+                    let (_, path) = file.keep().map_err(|error| anyhow::anyhow!(error.error))?;
+                    Ok(path)
+                })
+                .await?;
+            }
+            Err(error)
+                if crate::downloads::retryable(&error)
+                    && attempt + 1 < crate::downloads::ATTEMPTS =>
+            {
+                crate::downloads::delay(attempt, &app.state::<Components>().1).await?;
+            }
+            Err(error) => {
+                return Err(
+                    if error.chain().any(|source| source.is::<std::io::Error>()) {
+                        anyhow::anyhow!("DOWNLOAD_STORAGE")
+                    } else {
+                        error
+                    },
+                )
+            }
+        }
+    }
+    bail!("DB_COMPONENT_DOWNLOAD")
+}
+
+enum InstallPackage {
+    Cached(fs::File),
+    Staged(tempfile::NamedTempFile),
+}
+impl InstallPackage {
+    fn open(
+        directory: &Path,
+        artifact: &Artifact,
+        source: Option<PathBuf>,
+        downloaded: Option<PathBuf>,
+    ) -> Result<Self> {
+        if let Some(path) = source {
+            let mut temporary = tempfile::NamedTempFile::new_in(directory)?;
+            std::io::copy(
+                &mut fs::File::open(path)?.take(artifact.size + 1),
+                &mut temporary,
             )?;
-            Ok(())
-        },
-    )
-    .await
+            Ok(Self::Staged(temporary))
+        } else {
+            Ok(Self::Cached(fs::File::open(
+                downloaded.context("DB_COMPONENT_DOWNLOAD")?,
+            )?))
+        }
+    }
+    fn file(&mut self) -> &mut fs::File {
+        match self {
+            Self::Cached(file) => file,
+            Self::Staged(file) => file.as_file_mut(),
+        }
+    }
+    fn stage(self, directory: &Path) -> Result<tempfile::NamedTempFile> {
+        match self {
+            Self::Staged(file) => Ok(file),
+            Self::Cached(mut file) => {
+                file.rewind()?;
+                let mut staged = tempfile::NamedTempFile::new_in(directory)?;
+                std::io::copy(&mut file, &mut staged)?;
+                Ok(staged)
+            }
+        }
+    }
 }
 
 fn install(
     app: &tauri::AppHandle,
     id: &str,
     source: Option<PathBuf>,
-    downloaded: Option<tempfile::NamedTempFile>,
+    downloaded: Option<PathBuf>,
 ) -> Result<()> {
     let artifact = artifacts()?
         .into_iter()
@@ -578,39 +673,27 @@ fn install(
         .1;
     let root = root(app)?;
     fs::create_dir_all(&root)?;
-    // Stage and verify files with bounded buffers, including offline imports. 使用有界缓冲暂存并校验文件，离线导入也采用相同限制。
+    // Extract verified caches directly; only imports and installed drivers need staging copies.
+    // 直接解压已校验缓存；仅离线导入和安装驱动需要暂存副本。
     let online = source.is_none();
-    let mut staged = if let Some(path) = source {
-        let mut temporary = tempfile::NamedTempFile::new_in(&root)?;
-        std::io::copy(
-            &mut fs::File::open(path)?.take(artifact.size + 1),
-            &mut temporary,
-        )?;
-        temporary
-    } else {
-        downloaded.context("DB_COMPONENT_DOWNLOAD")?
-    };
+    let mut package = InstallPackage::open(&root, &artifact, source, downloaded)?;
     if app.state::<Components>().1.load(Ordering::SeqCst) {
-        if online {
-            staged.keep()?;
-        }
         bail!("DB_COMPONENT_CANCELLED");
     }
-    staged.flush()?;
-    if !valid_file(staged.as_file_mut(), &artifact)? {
+    if id != "runtime" {
+        package = InstallPackage::Staged(package.stage(&root)?);
+    }
+    if !valid_file(package.file(), &artifact)? {
         bail!("DB_COMPONENT_HASH");
     }
     if id == "runtime" {
         let temporary = tempfile::Builder::new()
             .prefix("runtime-")
             .tempdir_in(&root)?;
-        extract(staged.as_file_mut(), &artifact.filename, temporary.path())?;
+        extract(package.file(), &artifact.filename, temporary.path())?;
         let executable = find_java(temporary.path(), 0).context("DB_JAVA")?;
         validate_java(&executable)?;
         if app.state::<Components>().1.load(Ordering::SeqCst) {
-            if online {
-                staged.keep()?;
-            }
             bail!("DB_COMPONENT_CANCELLED");
         }
         let destination = root.join("runtime");
@@ -622,6 +705,7 @@ fn install(
             fs::remove_file(root.join("java-path.txt"))?;
         }
     } else {
+        let staged = package.stage(&root)?;
         staged.as_file().sync_all()?;
         staged
             .persist(root.join(&artifact.filename))

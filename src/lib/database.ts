@@ -1,4 +1,5 @@
 import { sshError } from "./file-target.ts";
+import { downloadError } from "./download-error.ts";
 import { tx } from "./i18n.ts";
 import { validSshTarget, type SshTarget } from "./workspace.ts";
 
@@ -227,6 +228,8 @@ export function databaseError(reason: unknown): string {
   if (code.includes("DB_COMPONENT_CANCELLED")) return tx("组件安装已取消。");
   if (code.includes("DB_COMPONENT_MISSING"))
     return tx("请选择本机 Java 或安装 Java 运行时，并安装对应数据库驱动。");
+  const downloadMessage = downloadError(reason);
+  if (downloadMessage) return downloadMessage;
   if (code.includes("DB_COMPONENT_DOWNLOAD"))
     return tx("组件下载中断，已保留下载进度。请重试继续下载，或使用离线安装。");
   if (code.includes("DB_ENGINE_INVALID")) return tx("内置连接引擎不可用，请重新安装 uTerm。");

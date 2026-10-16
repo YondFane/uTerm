@@ -1,4 +1,33 @@
 export const messages: Record<string, string> = {
+  "下载被拒绝，请检查访问权限或代理设置，或手动下载。":
+    "The download was denied. Check access permissions or proxy settings, or download manually.",
+  "下载连接的证书验证失败，请检查系统时间、证书或代理设置。":
+    "The download certificate could not be verified. Check the system clock, certificates or proxy settings.",
+  "下载超时，请检查网络或代理后重试。":
+    "The download timed out. Check the network or proxy and retry.",
+  "下载连接中断，请检查网络或代理后重试。":
+    "The download connection was interrupted. Check the network or proxy and retry.",
+  "下载源暂时限制请求，请稍后重试或手动下载。":
+    "The download source is temporarily limiting requests. Retry later or download manually.",
+  "下载源暂时不可用，请稍后重试或手动下载。":
+    "The download source is temporarily unavailable. Retry later or download manually.",
+  "下载文件不存在，请重新检查版本或使用手动下载入口。":
+    "The download file was not found. Check the version again or download manually.",
+  "无法读写下载缓存，请检查磁盘空间和目录权限。":
+    "The download cache could not be read or written. Check disk space and directory permissions.",
+  "更新签名校验失败，未安装。请重新下载官方更新包。":
+    "Update signature verification failed; nothing was installed. Download the official update again.",
+  "下载信息无效，请重新检查版本或使用手动下载入口。":
+    "The download information is invalid. Check the version again or download manually.",
+  "下载已取消，已保留下载进度。": "The download was cancelled and progress was kept.",
+  "Agent 安装目录不可写，请检查 npm 全局目录权限或按官方说明安装。":
+    "The Agent installation directory is not writable. Check npm global directory permissions or follow the official installation instructions.",
+  "Node.js 版本不满足此 Agent 的要求，请按官方说明更新后重试。":
+    "The Node.js version does not meet this Agent's requirements. Update it following the official instructions and retry.",
+  "Agent 安装失败，请查看安装输出或按官方说明安装。":
+    "Agent installation failed. Check the installation output or follow the official instructions.",
+  手动下载安装包: "Download installer manually",
+  手动下载: "Download manually",
   未连接: "Disconnected",
   "例如 user:*": "Example: user:*",
   "字段不存在，请重新读取。": "The field no longer exists. Reload it.",

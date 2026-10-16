@@ -39,6 +39,7 @@ pub struct Control {
     endpoint: Endpoint,
     enabled: AtomicBool,
     queue: Mutex<VecDeque<Pending>>,
+    ready: tokio::sync::Notify,
     clients: AtomicUsize,
     _ownership: File,
 }
@@ -133,6 +134,7 @@ impl Control {
             endpoint,
             enabled: AtomicBool::new(enabled),
             queue: Mutex::new(VecDeque::new()),
+            ready: tokio::sync::Notify::new(),
             clients: AtomicUsize::new(0),
             _ownership: ownership,
         });
@@ -231,6 +233,7 @@ impl Control {
                 claimed: false,
             });
         }
+        self.ready.notify_waiters();
         let result = receive
             .recv_timeout(Duration::from_secs(15))
             .map_err(|_| "Control request timed out; check the app before retrying".to_string());
@@ -244,6 +247,7 @@ impl Control {
         valid_link(value)?;
         let (reply, _) = mpsc::sync_channel(1);
         let mut queue = self.queue.lock().map_err(|e| e.to_string())?;
+        queue.retain(|pending| pending.expires > Instant::now());
         if queue.len() >= 16 {
             return Err("会话链接队列已满。".into());
         }
@@ -257,8 +261,35 @@ impl Control {
             reply,
             claimed: false,
         });
+        drop(queue);
+        self.ready.notify_waiters();
         Ok(())
     }
+
+    async fn wait(&self) -> Result<bool, String> {
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            let notified = self.ready.notified();
+            tokio::pin!(notified);
+            // Register before checking so queued requests cannot race a sleeping renderer.
+            // 先登记通知再检查队列，避免请求入队与界面休眠之间的竞态。
+            notified.as_mut().enable();
+            {
+                let mut queue = self.queue.lock().map_err(|error| error.to_string())?;
+                queue.retain(|pending| pending.expires > Instant::now());
+                if queue.iter().any(|pending| !pending.claimed) {
+                    return Ok(true);
+                }
+            }
+            if tokio::time::timeout_at(deadline, notified).await.is_err() {
+                return Ok(false);
+            }
+        }
+    }
+}
+#[tauri::command]
+pub async fn control_wait(state: tauri::State<'_, Arc<Control>>) -> Result<bool, String> {
+    state.inner().clone().wait().await
 }
 #[tauri::command]
 pub fn control_status(state: tauri::State<'_, Arc<Control>>) -> Value {
@@ -431,11 +462,9 @@ fn parse_arguments(args: &[String]) -> Result<(&str, Value), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn control_authentication_and_queued_reply_use_real_sockets() {
-        let directory = tempfile::tempdir().unwrap();
-        let state = Arc::new(Control {
-            root: directory.path().to_owned(),
+    fn service(directory: &Path) -> Arc<Control> {
+        Arc::new(Control {
+            root: directory.to_owned(),
             endpoint: Endpoint {
                 version: 1,
                 port: 0,
@@ -443,9 +472,15 @@ mod tests {
             },
             enabled: AtomicBool::new(true),
             queue: Mutex::new(VecDeque::new()),
+            ready: tokio::sync::Notify::new(),
             clients: AtomicUsize::new(0),
-            _ownership: private_file(&directory.path().join("lock")).unwrap(),
-        });
+            _ownership: private_file(&directory.join("lock")).unwrap(),
+        })
+    }
+    #[test]
+    fn control_authentication_and_queued_reply_use_real_sockets() {
+        let directory = tempfile::tempdir().unwrap();
+        let state = service(directory.path());
         for (token, enabled) in [("wrong", true), ("test-token", false)] {
             state.enabled.store(enabled, Ordering::SeqCst);
             let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
@@ -479,6 +514,70 @@ mod tests {
             std::thread::sleep(Duration::from_millis(5));
         }
         assert_eq!(handle.join().unwrap().unwrap()["result"]["id"], "test");
+    }
+    #[test]
+    fn idle_waiters_wake_without_claiming_requests_or_losing_a_reloaded_view() {
+        let directory = tempfile::tempdir().unwrap();
+        let state = service(directory.path());
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+                let first = state.wait();
+                let reloaded = state.wait();
+                tokio::pin!(first, reloaded);
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(20), first.as_mut())
+                        .await
+                        .is_err()
+                );
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(20), reloaded.as_mut())
+                        .await
+                        .is_err()
+                );
+                state.enabled.store(false, Ordering::SeqCst);
+                state
+                    .open_link("uterm://session/12345678-1234-1234-1234-123456789abc")
+                    .unwrap();
+                assert!(tokio::time::timeout(Duration::from_secs(1), first)
+                    .await
+                    .unwrap()
+                    .unwrap());
+                assert!(tokio::time::timeout(Duration::from_secs(1), reloaded)
+                    .await
+                    .unwrap()
+                    .unwrap());
+                assert_eq!(state.queue.lock().unwrap().len(), 1);
+                assert!(!state.queue.lock().unwrap()[0].claimed);
+                assert!(state.wait().await.unwrap());
+                state.queue.lock().unwrap()[0].claimed = true;
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(20), state.wait())
+                        .await
+                        .is_err()
+                );
+                state.queue.lock().unwrap()[0].expires = Instant::now() - Duration::from_secs(1);
+                assert!(
+                    tokio::time::timeout(Duration::from_millis(20), state.wait())
+                        .await
+                        .is_err()
+                );
+                assert!(state.queue.lock().unwrap().is_empty());
+                for _ in 0..16 {
+                    state
+                        .open_link("uterm://session/12345678-1234-1234-1234-123456789abc")
+                        .unwrap();
+                }
+                for pending in state.queue.lock().unwrap().iter_mut() {
+                    pending.expires = Instant::now() - Duration::from_secs(1);
+                }
+                state
+                    .open_link("uterm://session/12345678-1234-1234-1234-123456789abc")
+                    .unwrap();
+                assert_eq!(state.queue.lock().unwrap().len(), 1);
+            });
     }
     #[test]
     fn oversized_messages_are_rejected_before_dispatch() {

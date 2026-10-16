@@ -1,5 +1,7 @@
 use anyhow::{bail, Context, Result};
-use portable_pty::{Child, CommandBuilder, MasterPty};
+#[cfg(unix)]
+use portable_pty::MasterPty;
+use portable_pty::{Child, CommandBuilder};
 use std::path::PathBuf;
 
 pub(crate) struct ProcessEntry {
@@ -355,7 +357,7 @@ impl ProcessGroup {
         Ok(Self(job))
     }
 
-    pub fn terminate(&self, _child: &mut dyn Child, _master: Option<&dyn MasterPty>) -> Result<()> {
+    pub fn terminate(&self) -> Result<()> {
         use std::os::windows::io::AsRawHandle;
         use windows_sys::Win32::System::JobObjects::TerminateJobObject;
         if unsafe { TerminateJobObject(self.0.as_raw_handle(), 1) } == 0 {

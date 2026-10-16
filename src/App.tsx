@@ -1391,6 +1391,12 @@ export function App() {
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       try {
+        const ready = await invoke<boolean>("control_wait");
+        if (disposed) return;
+        if (!ready) {
+          timer = setTimeout(() => void poll(), 250);
+          return;
+        }
         const request = await invoke<{
           id: string;
           method: string;

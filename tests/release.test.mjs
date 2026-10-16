@@ -168,6 +168,11 @@ test("a feed requires every target, matching signatures, unchanged bytes, and a 
     const feed = manifest("uTerm-v1.2.3", output, { version: "1.2.2" });
     assert.deepEqual(Object.keys(feed.platforms), ["windows-x86_64"]);
     assert.equal(
+      feed.installers["windows-x86_64"].size,
+      Buffer.byteLength("bundle for windows-x86_64"),
+    );
+    assert.match(feed.installers["windows-x86_64"].sha256, /^[a-f0-9]{64}$/);
+    assert.equal(
       feed.platforms["windows-x86_64"].url,
       "https://github.com/test-owner/uterm/releases/download/uTerm-v1.2.3/uTerm-1.2.3-windows-x86_64-setup.exe",
     );
@@ -204,6 +209,8 @@ test("macOS artifacts and feeds remain separate from Windows and other architect
         /uTerm-v1\.2\.3\/uTerm-1\.2\.3-darwin-.*\.app\.tar\.gz$/,
       );
       assert.equal(feedFilename(target), `latest-${target}.json`);
+      assert.equal(feed.installers[target].size, Buffer.byteLength(`installer-${target}`));
+      assert.ok(feed.installers[target].url.endsWith(".dmg"));
       writeFileSync(join(output, "latest.json"), "existing Windows feed");
       execFileSync(process.execPath, [
         fileURLToPath(new URL("../scripts/release.mjs", import.meta.url)),
@@ -223,6 +230,11 @@ test("macOS artifacts and feeds remain separate from Windows and other architect
       assert.equal(
         readFileSync(join(output, `uTerm-1.2.3-${target}.dmg`), "utf8"),
         `installer-${target}`,
+      );
+      writeFileSync(join(output, `uTerm-1.2.3-${target}.dmg`), "modified installer");
+      assert.throws(
+        () => manifest("uTerm-v1.2.3", output, { version: "1.2.2" }, [target]),
+        /Installer changed/,
       );
     }
     assert.equal(feedFilename("windows-x86_64"), "latest.json");

@@ -66,12 +66,17 @@ impl Control {
         self.closing.store(true, Ordering::Release);
         self.acknowledged.notify_all();
         lock(&self.input).take();
-        let mut child = lock(&self.child);
-        let master = lock(&self.master);
-        self.group.terminate(
-            child.as_mut(),
-            master.as_deref().map(|value| value as &dyn MasterPty),
-        )
+        #[cfg(windows)]
+        return self.group.terminate();
+        #[cfg(unix)]
+        {
+            let mut child = lock(&self.child);
+            let master = lock(&self.master);
+            self.group.terminate(
+                child.as_mut(),
+                master.as_deref().map(|value| value as &dyn MasterPty),
+            )
+        }
     }
 
     fn fail(&self, sink: &Sink, error: impl std::fmt::Display) {
@@ -181,6 +186,14 @@ impl Session {
         if let Err(error) = std::thread::Builder::new()
             .name("local-pty-wait".into())
             .spawn(move || {
+                // Windows job termination does not need the child mutex, so idle waits can block.
+                // Windows 作业对象终止不需要子进程锁，因此空闲时可阻塞等待退出。
+                #[cfg(windows)]
+                match lock(&waiter.child).wait() {
+                    Ok(status) => *lock(&waiter.exit_code) = Some(status.exit_code()),
+                    Err(error) => waiter.fail(&wait_sink, error),
+                }
+                #[cfg(unix)]
                 loop {
                     let status = lock(&waiter.child).try_wait();
                     match status {
@@ -195,7 +208,11 @@ impl Session {
                         }
                     }
                 }
-                waiter.finished.store(true, Ordering::Release);
+                {
+                    let _pending = lock(&waiter.pending);
+                    waiter.finished.store(true, Ordering::Release);
+                    waiter.acknowledged.notify_all();
+                }
                 lock(&waiter.input).take();
                 // Close ConPTY on a worker while the reader continues draining its pipe.
                 // ClosePseudoConsole can block until that output has been consumed.
@@ -304,6 +321,96 @@ mod tests {
             PathBuf::from(r"D:\TRAE_WORKSPACE\GitHub\StudyEnglish")
         );
     }
+
+    #[test]
+    fn blocking_windows_exit_wait_keeps_close_available_and_drains_output() {
+        use super::*;
+        let (events, received) = mpsc::channel();
+        let mut command =
+            CommandBuilder::new(std::env::var_os("COMSPEC").unwrap_or_else(|| "cmd.exe".into()));
+        command.args([
+            "/d",
+            "/q",
+            "/c",
+            "echo qa-ready & ping -n 31 127.0.0.1 >nul",
+        ]);
+        let session = Arc::new(
+            Session::spawn_background(command, &std::env::temp_dir(), 24, 80, move |event| {
+                events.send(event)?;
+                Ok(())
+            })
+            .unwrap(),
+        );
+        let started = std::time::Instant::now();
+        // Supply the initial cursor reply normally produced by the host's VT parser.
+        // 提供通常由主机 VT 解析器生成的初始光标位置响应。
+        session.write(b"\x1b[1;1R".to_vec()).unwrap();
+        let mut output = Vec::new();
+        while !String::from_utf8_lossy(&output).contains("qa-ready") {
+            assert!(started.elapsed() < Duration::from_secs(5));
+            if let Event::Output { data, .. } =
+                received.recv_timeout(Duration::from_secs(3)).unwrap()
+            {
+                output.extend(data);
+            }
+        }
+        while session.control.child.try_lock().is_ok() {
+            assert!(started.elapsed() < Duration::from_secs(5));
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let closing = session.clone();
+        let (finished, completed) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            finished.send(closing.close()).unwrap();
+        });
+        let result = completed.recv_timeout(Duration::from_secs(3));
+        if result.is_err() {
+            session.control.group.terminate().unwrap();
+        }
+        result
+            .expect("Close Session must not wait for the child mutex")
+            .unwrap();
+        worker.join().unwrap();
+        loop {
+            if let Event::Exit { code } = received.recv_timeout(Duration::from_secs(5)).unwrap() {
+                assert!(code.is_some());
+                break;
+            }
+        }
+    }
+
+    #[test]
+    fn blocking_windows_wait_preserves_normal_exit_code_and_output_order() {
+        use super::*;
+        let (events, received) = mpsc::channel();
+        let mut command =
+            CommandBuilder::new(std::env::var_os("COMSPEC").unwrap_or_else(|| "cmd.exe".into()));
+        command.args(["/d", "/q", "/c", "echo qa-normal-exit & exit /b 7"]);
+        let session =
+            Session::spawn_background(command, &std::env::temp_dir(), 24, 80, move |event| {
+                events.send(event)?;
+                Ok(())
+            })
+            .unwrap();
+        let _ = session.write(b"\x1b[1;1R".to_vec());
+        let mut output = Vec::new();
+        let mut last = 0;
+        loop {
+            match received.recv_timeout(Duration::from_secs(5)).unwrap() {
+                Event::Output { sequence, data } => {
+                    assert!(sequence > last);
+                    last = sequence;
+                    output.extend(data);
+                }
+                Event::Exit { code } => {
+                    assert_eq!(code, Some(7));
+                    break;
+                }
+                Event::Error { message } => panic!("{message}"),
+            }
+        }
+        assert!(String::from_utf8_lossy(&output).contains("qa-normal-exit"));
+    }
 }
 
 impl Drop for Session {
@@ -384,9 +491,14 @@ fn read_output(mut reader: Box<dyn Read + Send>, control: Arc<Control>, sink: Si
                 .0;
         }
     }
+    let mut pending = lock(&control.pending);
     while !control.finished.load(Ordering::Acquire) {
-        std::thread::sleep(POLL);
+        pending = control
+            .acknowledged
+            .wait(pending)
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
     }
+    drop(pending);
     if let Err(error) = sink(Event::Exit {
         code: *lock(&control.exit_code),
     }) {

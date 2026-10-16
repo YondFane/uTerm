@@ -1,5 +1,32 @@
 use super::*;
 
+#[test]
+fn cached_archives_are_opened_without_copying_and_driver_staging_preserves_the_cache() {
+    let bytes = vec![42; 400_000];
+    let artifact = download_artifact(&bytes, "https://example.invalid/package".into());
+    let directory = tempfile::tempdir().unwrap();
+    let cache = directory.path().join("cached-package.part");
+    fs::write(&cache, &bytes).unwrap();
+    let mut package =
+        InstallPackage::open(directory.path(), &artifact, None, Some(cache.clone())).unwrap();
+    assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    assert!(valid_file(package.file(), &artifact).unwrap());
+    let staged = package.stage(directory.path()).unwrap();
+    staged.persist(directory.path().join("driver.jar")).unwrap();
+    assert_eq!(fs::read(&cache).unwrap(), bytes);
+    assert_eq!(
+        fs::read(directory.path().join("driver.jar")).unwrap(),
+        bytes
+    );
+    let before = fs::read_dir(directory.path()).unwrap().count();
+    let mut imported =
+        InstallPackage::open(directory.path(), &artifact, Some(cache.clone()), None).unwrap();
+    assert!(valid_file(imported.file(), &artifact).unwrap());
+    drop(imported);
+    assert_eq!(fs::read_dir(directory.path()).unwrap().count(), before);
+    assert_eq!(fs::read(cache).unwrap(), bytes);
+}
+
 fn download_server(
     responses: Vec<Vec<u8>>,
     cancel: Option<(std::sync::Arc<AtomicBool>, PathBuf)>,

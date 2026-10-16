@@ -8,6 +8,7 @@ import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notif
 import type { AgentDefinition, RuntimeInfo } from "../lib/desktop";
 import { agentNames, SessionIcon, ToolbarIcon } from "./SidebarIcon";
 import { agentInstallers } from "../lib/agent-install";
+import { downloadError } from "../lib/download-error";
 export const notificationKey = "uterm.desktop.agentNotifications";
 interface Usage {
   input: number;
@@ -94,7 +95,16 @@ export function AgentSettings({
     try {
       await action();
     } catch (reason) {
-      setError(String(reason));
+      const message = downloadError(reason);
+      setError(
+        message
+          ? `${message}\n${String(reason)
+              .replace(/^Error: /, "")
+              .split("\n")
+              .slice(1)
+              .join("\n")}`
+          : String(reason),
+      );
     } finally {
       setBusy(false);
     }

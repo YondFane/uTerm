@@ -44,8 +44,10 @@ fn install(agent: &str) -> Result<bool, String> {
         package,
         "--no-audit",
         "--no-fund",
-        "--fetch-retries=1",
-        "--fetch-timeout=60000",
+        "--fetch-retries=2",
+        "--fetch-retry-mintimeout=2000",
+        "--fetch-retry-maxtimeout=10000",
+        "--fetch-timeout=120000",
     ]);
     if let Some(home) = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }) {
         command.current_dir(home);
@@ -91,13 +93,48 @@ fn install(agent: &str) -> Result<bool, String> {
         log.take(16 * 1024)
             .read_to_end(&mut bytes)
             .map_err(|error| error.to_string())?;
-        return Err(format!(
-            "{}\n{}",
-            "安装失败，请检查网络、权限和 Node.js 版本。",
-            String::from_utf8_lossy(&bytes)
-        ));
+        let output = String::from_utf8_lossy(&bytes);
+        return Err(format!("{}\n{}", install_error(&output), output));
     }
     Ok(utermd_local::agent_program(agent).is_ok())
+}
+
+fn install_error(output: &str) -> &'static str {
+    if ["EACCES", "EPERM"].iter().any(|code| output.contains(code)) {
+        "AGENT_PERMISSION"
+    } else if output.contains("ENOSPC") {
+        "DOWNLOAD_STORAGE"
+    } else if [
+        "CERT_HAS_EXPIRED",
+        "UNABLE_TO_VERIFY",
+        "SELF_SIGNED_CERT",
+        "ERR_TLS_CERT",
+    ]
+    .iter()
+    .any(|code| output.contains(code))
+    {
+        "DOWNLOAD_TLS"
+    } else if ["ETIMEDOUT", "ESOCKETTIMEDOUT"]
+        .iter()
+        .any(|code| output.contains(code))
+    {
+        "DOWNLOAD_TIMEOUT"
+    } else if ["ECONNRESET", "ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN"]
+        .iter()
+        .any(|code| output.contains(code))
+    {
+        "DOWNLOAD_NETWORK"
+    } else if output.contains("E404") {
+        "DOWNLOAD_NOT_FOUND"
+    } else if output.contains("E401") || output.contains("E403") {
+        "DOWNLOAD_ACCESS"
+    } else if output.contains("E429") {
+        "DOWNLOAD_RATE_LIMIT"
+    } else if output.contains("EBADENGINE") {
+        "AGENT_NODE_VERSION"
+    } else {
+        "AGENT_INSTALL_FAILED"
+    }
 }
 
 #[tauri::command]
@@ -120,6 +157,20 @@ mod tests {
         for name in ["grok", "kimi", "custom", "opencode;echo", "--prefix=/tmp"] {
             assert!(package(name).is_err());
             assert!(install(name).is_err());
+        }
+    }
+
+    #[test]
+    fn installation_failures_distinguish_network_permissions_and_runtime_requirements() {
+        for (output, code) in [
+            ("npm error code ECONNRESET", "DOWNLOAD_NETWORK"),
+            ("npm error code EACCES", "AGENT_PERMISSION"),
+            ("npm error code ENOSPC", "DOWNLOAD_STORAGE"),
+            ("npm error CERT_HAS_EXPIRED", "DOWNLOAD_TLS"),
+            ("npm error code EBADENGINE", "AGENT_NODE_VERSION"),
+            ("postinstall failed", "AGENT_INSTALL_FAILED"),
+        ] {
+            assert_eq!(install_error(output), code);
         }
     }
 }

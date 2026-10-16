@@ -16,7 +16,7 @@ function run(options = {}) {
     uname: 'if [ "$1" = -s ]; then echo "${TEST_OS:-Darwin}"; else echo "${TEST_ARCH:-arm64}"; fi',
     sysctl: 'echo "${TEST_TRANSLATED:-0}"',
     curl: 'printf "%s\\n" "$*" >> "$TEST_ROOT/downloads"; [ "${TEST_FAIL:-0}" = 0 ] || exit 22; while [ "$1" != -o ]; do shift; done; echo "{}" > "$2"',
-    plutil: 'echo "${TEST_VERSION:-0.1.6}"',
+    plutil: '[ "$2" = version ] || exit 1; echo "${TEST_VERSION:-0.1.6}"',
     hdiutil:
       'if [ "$1" = attach ]; then while [ "$1" != -mountpoint ]; do shift; done; mkdir -p "$2/uTerm.app"; echo app > "$2/uTerm.app/payload"; else echo detached > "$TEST_ROOT/detached"; fi',
     ditto: 'cp -R "$1" "$2"',
