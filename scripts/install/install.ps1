@@ -115,8 +115,10 @@
         }
         Write-Host "Downloading uTerm $version / 正在下载 uTerm $version"
         Get-UtermInstaller "$base/uTerm-v$version/uTerm-$version-windows-x86_64-setup.exe" $installer $hash $size
+        $executable = Join-Path $work 'uTerm-setup.exe'
+        if ($installer -ne $executable) { Copy-Item -LiteralPath $installer -Destination $executable }
         Write-Host 'Follow the installation wizard. / 请按照安装向导完成安装。'
-        $process = Start-Process -FilePath $installer -Wait -PassThru
+        $process = Start-Process -FilePath $executable -Wait -PassThru
         if ($process.ExitCode -notin @(0, 3010)) { throw "Installer exited with code $($process.ExitCode). / 安装程序退出码：$($process.ExitCode)。" }
         Write-Host 'Installer completed. / 安装程序已完成。'
     }
