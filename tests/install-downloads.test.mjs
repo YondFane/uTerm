@@ -12,7 +12,7 @@ test(
   { skip: process.platform !== "win32" },
   async () => {
     const root = mkdtempSync(join(tmpdir(), "uterm-download-test-"));
-    const bytes = Buffer.from("verified installer fixture");
+    const bytes = readFileSync(join(process.env.SystemRoot, "System32", "cmd.exe"));
     const hash = createHash("sha256").update(bytes).digest("hex");
     const requests = [];
     let mode = "interrupted";
@@ -70,8 +70,17 @@ test(
     );
     writeFileSync(
       fixture,
-      "\ufeff[Console]::OutputEncoding = [Text.UTF8Encoding]::new()\nfunction Start-Process { param($FilePath, [switch]$Wait, [switch]$PassThru) Add-Content -LiteralPath $env:TEST_INSTALL_LOG -Value 'started'; return [pscustomobject]@{ ExitCode = 0 } }\n" +
+      [
+        "\ufeff[Console]::OutputEncoding = [Text.UTF8Encoding]::new()",
+        "function Start-Process {",
+        "  param($FilePath, [switch]$Wait, [switch]$PassThru)",
+        "  if ([IO.Path]::GetExtension($FilePath) -ne '.exe') { throw 'Installer requires an executable extension' }",
+        "  $process = Microsoft.PowerShell.Management\\Start-Process -FilePath $FilePath -ArgumentList @('/d', '/c', 'exit', '0') -WindowStyle Hidden -Wait -PassThru",
+        "  Add-Content -LiteralPath $env:TEST_INSTALL_LOG -Value 'started'",
+        "  return $process",
+        "}",
         source,
+      ].join("\n"),
     );
     const log = join(root, "launched.txt");
     const run = () =>
