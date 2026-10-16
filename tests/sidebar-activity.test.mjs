@@ -103,6 +103,7 @@ test("active project trees move between sections without duplicating pinned chil
     const selected = [];
     const menus = [];
     const closed = [];
+    const created = [];
     const noop = () => {};
     let disabled = false;
     let providerKey = 0;
@@ -127,7 +128,7 @@ test("active project trees move between sections without duplicating pinned chil
               newWorkspace: noop,
               renameWorkspace: noop,
               addLoose: noop,
-              addSession: noop,
+              addSession: (...args) => created.push(args),
               agentStates: {},
               detectedAgents: {},
               unreadCompletedSessions: new Set(),
@@ -149,8 +150,8 @@ test("active project trees move between sections without duplicating pinned chil
     const sessions = () => [...section().querySelectorAll(".session-row > .row-label")];
     const projectRow = (id) => document.querySelector(`[data-project-id="${id}"]`);
     const toggle = (name) =>
-      [...section().querySelectorAll(".folder-toggle")].find((button) =>
-        button.getAttribute("aria-label").endsWith(name),
+      [...section().querySelectorAll(".folder-row > .row-label")].find(
+        (button) => button.textContent === name,
       );
     await render();
     for (const name of ["shell", "agent", "wt", "loose", "chat"]) {
@@ -188,6 +189,8 @@ test("active project trees move between sections without duplicating pinned chil
       null,
     );
     assert.equal(section().querySelector(".activity-count"), null);
+    assert.equal(document.querySelector(".folder-toggle, .folder-chevron"), null);
+    assert.equal(section().querySelector(".folder-row .icon-chevron"), null);
     assert.equal(sessions().length, 5);
     assert.equal(toggle("Tree").getAttribute("aria-expanded"), "true");
     assert.ok(toggle("Unused"));
@@ -199,12 +202,38 @@ test("active project trees move between sections without duplicating pinned chil
     );
     assert.equal(menus.at(-1).kind, "project");
     assert.equal(menus.at(-1).id, "z");
+    assert.equal(toggle("Zulu").getAttribute("aria-expanded"), "true");
+    await click(projectRow("z").querySelector(".row-actions button"));
+    assert.deepEqual(created, [["z", undefined]]);
+    assert.equal(toggle("Zulu").getAttribute("aria-expanded"), "true");
+    assert.deepEqual(selected, []);
+    const draggedLabel = rows()[1];
+    draggedLabel.setPointerCapture = () => {};
+    draggedLabel.hasPointerCapture = () => false;
+    await act(async () => {
+      for (const [type, x] of [
+        ["pointerdown", 20],
+        ["pointermove", 40],
+        ["pointerup", 40],
+      ])
+        draggedLabel.dispatchEvent(
+          new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: 20 }),
+        );
+      draggedLabel.click();
+    });
+    assert.equal(toggle("Zulu").getAttribute("aria-expanded"), "true");
+    assert.deepEqual(selected, []);
     await click(rows()[1]);
+    await render();
     assert.equal(selected.at(-1), "shell");
+    assert.equal(toggle("Zulu").getAttribute("aria-expanded"), "false");
+    assert.equal(toggle("Tree"), undefined);
     workspace = { ...workspace, selectedProject: "a", selectedSession: "alpha" };
     await render();
     await click(rows()[1]);
+    await render();
     assert.equal(selected.at(-1), "wt");
+    assert.equal(toggle("Zulu").getAttribute("aria-expanded"), "true");
     assert.equal(workspace.selectedWorktree, "tree");
     await click(sessions().find((button) => button.title === "Zulu / agent"));
     assert.equal(selected.at(-1), "agent");
@@ -225,6 +254,7 @@ test("active project trees move between sections without duplicating pinned chil
     await click(toggle("Tree"));
     await render();
     assert.equal(toggle("Tree").getAttribute("aria-expanded"), "false");
+    assert.equal(workspace.projects[0].worktrees[0].collapsed, true);
     await click(section().querySelector(".section-action"));
     await render();
     assert.equal(rows().length, 3);
@@ -272,10 +302,28 @@ test("active project trees move between sections without duplicating pinned chil
     await render();
     assert.equal(document.querySelectorAll('[data-project-id="z"]').length, 1);
     assert.equal(
-      projectRow("z").querySelector(".folder-toggle").getAttribute("aria-expanded"),
+      projectRow("z").querySelector(".row-label").getAttribute("aria-expanded"),
       "false",
     );
     assert.match(document.querySelector('section[aria-label="Pinned"]').textContent, /Tree/);
+    const inactiveTree = [...document.querySelectorAll(".folder-row > .row-label")].find(
+      (button) => button.textContent === "Tree",
+    );
+    await click(inactiveTree);
+    await render();
+    assert.equal(
+      workspace.projects.find((project) => project.id === "z").worktrees[0].collapsed,
+      false,
+    );
+    const empty = () => projectRow("empty").querySelector(".row-label");
+    await click(empty());
+    await render();
+    assert.equal(empty().getAttribute("aria-expanded"), "false");
+    assert.equal(workspace.projects.find((project) => project.id === "empty").collapsed, true);
+    assert.equal(workspace.selectedProject, "empty");
+    await click(empty());
+    await render();
+    assert.equal(empty().getAttribute("aria-expanded"), "true");
     workspace = {
       ...workspace,
       projects: workspace.projects.map((p) =>

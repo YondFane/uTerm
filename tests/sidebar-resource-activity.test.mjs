@@ -126,9 +126,9 @@ test("sidebar activity rings follow open sessions and successful connections ins
         ),
       );
     const folder = (name) =>
-      [...document.querySelectorAll(".folder-toggle")].find((button) =>
-        button.getAttribute("aria-label").endsWith(name),
-      );
+      [...document.querySelectorAll(".folder-row > .row-label")]
+        .find((button) => button.textContent === name)
+        ?.querySelector(".sidebar-resource-icon");
     const connection = (name) =>
       [...document.querySelectorAll(".row-label")]
         .find((button) => {
@@ -143,7 +143,10 @@ test("sidebar activity rings follow open sessions and successful connections ins
     assert.equal(active(folder("Open tree")), true);
     assert.equal(active(folder("Unused tree")), false);
     assert.equal(active(folder("Selected project")), false);
-    assert.equal(folder("Open tree").getAttribute("aria-description"), "Has open sessions");
+    assert.equal(
+      folder("Open tree").parentElement.getAttribute("aria-description"),
+      "Has open sessions",
+    );
     assert.equal(active(connection("Open SSH")), true);
     assert.equal(active(connection("Idle SSH")), false);
     assert.equal(active(connection("Redis connected")), true);
@@ -155,10 +158,10 @@ test("sidebar activity rings follow open sessions and successful connections ins
       connection("Database connected").parentElement.getAttribute("aria-description"),
       "Connected",
     );
-    await act(async () => folder("Active project").click());
+    await act(async () => folder("Active project").parentElement.click());
     assert.equal(active(folder("Active project")), true);
     assert.equal(JSON.stringify(workspace), original);
-    await act(async () => folder("Active project").click());
+    await act(async () => folder("Active project").parentElement.click());
     workspace.projects[0].sessions = [session("retained-exit", { agent: "codex" })];
     group.sshConnections[0].sessions = [];
     redisStatuses.connected = { connected: false, opening: true, dirty: true };
@@ -174,7 +177,10 @@ test("sidebar activity rings follow open sessions and successful connections ins
       false,
     );
     await act(async () => setUiLanguage("zh-Hans"));
-    assert.equal(folder("Active project").getAttribute("aria-description"), "有未关闭的会话");
+    assert.equal(
+      folder("Active project").parentElement.getAttribute("aria-description"),
+      "有未关闭的会话",
+    );
     workspace.projects[0].sessions = [];
     await render();
     assert.equal(document.querySelector("[data-resource-active]"), null);

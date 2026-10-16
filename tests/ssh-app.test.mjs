@@ -133,8 +133,17 @@ test("App restores SSH sessions without authorizing new logins or running local 
         ),
       ),
     );
-    const newTerminal = [...document.querySelectorAll("button")].find(
-      (button) => button.getAttribute("aria-label") === "New SSH terminal: Remote QA",
+    const connectionRow = [...document.querySelectorAll(".ssh-connection .row-label")].find(
+      (button) => button.textContent === "Remote QA",
+    );
+    assert.ok(connectionRow);
+    await act(async () =>
+      connectionRow.dispatchEvent(
+        new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
+      ),
+    );
+    const newTerminal = [...document.querySelectorAll('[role="menuitem"]')].find(
+      (button) => button.textContent === "New SSH terminal",
     );
     assert.ok(newTerminal);
     await act(async () => newTerminal.click());
