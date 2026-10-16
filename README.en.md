@@ -1,14 +1,8 @@
 # uTerm
 
-[简体中文](README.md) · [Feature guide](docs/features.md)
+[简体中文](README.md) · [Feature guide](docs/features.md) · [Website](https://yondfane.github.io/uTerm/)
 
 uTerm is a self-contained desktop terminal for Windows and macOS, free for noncommercial use and built with Tauri, React, TypeScript, Rust, and xterm.js.
-
-## License and commercial authorization
-
-This source tree uses [PolyForm Noncommercial 1.0.0](LICENSE). Noncommercial use and other purposes expressly permitted by the license are free of charge. Commercial use outside those permissions requires **prior, separate written authorization from YondFane**. The license's personal-use, noncommercial-organization and fair-use provisions remain intact. Commercial business operations, commercial redistribution or resale, integration into commercial products, and paid or hosted services require separate authorization when not already permitted by the license.
-
-See [NOTICE](NOTICE) for authorization requests and the aligned English/Chinese explanation. YondFane retains the right to commercialize and separately license code for which YondFane holds the necessary rights. This is source-available software, not OSI-approved open source. Third-party dependencies and assets retain their own licenses.
 
 ## Features
 
@@ -101,6 +95,12 @@ pnpm uterm:dev
 
 `pnpm dev` starts a browser-only frontend preview; desktop file, process and OS integrations require the Tauri app.
 
+## Project website
+
+The GitHub Pages website lives in `site/` as an independent static page with no build step. It provides English/Chinese content, illustrative feature previews, color themes, stable downloads and installation-command copying. Run `pnpm site:dev` to preview at `http://127.0.0.1:1431/uTerm/` and `pnpm site:check` to verify interactions; `UTERM_SITE_PORT` overrides the preview port.
+
+Before deployment, select **GitHub Actions** as Source under repository Settings → Pages → Build and deployment, and allow `release` in the `github-pages` environment's deployment rules. `.github/workflows/pages.yml` publishes `site/` when website files change on `release`, or when manually run from that branch. The desktop application's `index.html` is not published. No additional domain or secret is required.
+
 ## Validation
 
 ```sh
@@ -141,6 +141,7 @@ The release workflow builds Windows x64 and macOS ARM64/x64. Create reviewed `uT
 | `scripts/`, `packaging/` | Build, release and documentation tools |
 | `.github/workflows/` | CI and releases |
 | `docs/` | Current feature and validation reference |
+| `site/` | Bilingual GitHub Pages website and static assets |
 | `LICENSE`, `NOTICE` | Public license, copyright and English/Chinese commercial authorization guidance |
 | `DESIGN.md` | Bilingual interface rules, color tokens and design references |
 

@@ -14,6 +14,16 @@ updated: 2026-10-16
 
 uTerm is a Windows and macOS desktop terminal. Local terminal and Agent processes run locally; SSH remote shells run on their servers. The interface supports Simplified Chinese and English.
 
+## Project website
+
+The independent GitHub Pages website in `site/` introduces terminals and agents, projects and Git, SSH/SFTP, and Redis/databases. Its four tabs are labeled illustrations with sample content, not live desktop sessions or server connections. Six interface palettes change only the preview. English/Simplified Chinese switching updates content, accessible labels, metadata and documentation links; a blocked browser storage setting does not prevent switching. Keyboard users can navigate tabs with arrow keys, Home and End.
+
+Windows x64, macOS Apple Silicon and macOS Intel download links initially open the stable GitHub release. When the public latest-release API succeeds, they resolve to the exact matching installer assets from this repository. Missing assets, rate limits or network failure retain the release-page fallback. Installation tabs expose the existing npm/macOS/PowerShell commands; copying reports success or selects the command with visible manual-copy guidance when clipboard access fails. Database use still requires Java 17+ and the selected driver, and macOS first launch may require Privacy & Security approval.
+
+Run `pnpm site:dev` for a loopback-only preview under `/uTerm/`; `pnpm site:check` runs focused interaction checks. The Pages workflow uploads only `site/` from `release`; repository Pages must use GitHub Actions and the `github-pages` environment must allow that branch. Publication requires the reviewed website changes to reach `release`. Local browser checks do not establish hosted Pages deployment or desktop runtime acceptance.
+
+Website validation on Windows: all seven focused checks and the complete frontend/build-helper suite pass (225 passed, ten optional/platform checks skipped). Changed-file formatting, script syntax, documentation checks and TypeScript/production build pass. Browser inspection covers Chinese/English, 1280×720, 768×1024 and 390×844 layouts without page overflow, preview tabs, light/dark palettes, keyboard focus and actual installation-command copying. Public release metadata and installer names were checked; the browser retains the release-page fallback when its API request cannot resolve, and fixture checks cover direct-asset resolution. The preview serves only website assets and rejects repository-file paths. Repository-wide formatting reports 92 existing files; the suite retains Vite WebSocket-port/React act warnings, and the application build retains its large-chunk warning. Hosted Pages publication remains unverified.
+
 ## Installation
 
 The repository sidebar’s Latest entry points to the stable installer release. The release workflow marks a version Latest only after public downloads are verified and the stable update feed is published. The prerelease update channel is never marked Latest.

@@ -1,14 +1,8 @@
 # uTerm
 
-[English](README.en.md) · [功能说明](docs/features.zh-CN.md)
+[English](README.en.md) · [功能说明](docs/features.zh-CN.md) · [官网](https://yondfane.github.io/uTerm/)
 
 uTerm 是非商业用途免费的独立桌面终端，面向 Windows 和 macOS，使用 Tauri、React、TypeScript、Rust 和 xterm.js 构建。
-
-## 许可与商业授权
-
-本源码树采用 [PolyForm Noncommercial 1.0.0](LICENSE)，非商业用途及协议明确允许的其他用途免费，超出这些许可范围的商业使用须事先取得 **YondFane 的单独书面授权**。协议中的个人使用、非商业组织及合理使用条款完整保留。企业商业运营、商业分发或转售、集成商业产品及收费或托管服务，如不属于协议已允许的用途，均需另行授权。
-
-授权申请方式及中英文说明见 [NOTICE](NOTICE)。YondFane 保留对其具有充分权利的代码自行商业化及另行授权的权利；本项目属于源码可用软件，不属于 OSI 认可的开源软件。第三方依赖及资源继续适用各自的许可。
 
 ## 功能
 
@@ -101,6 +95,12 @@ pnpm uterm:dev
 
 `pnpm dev` 仅启动浏览器前端预览；桌面文件、进程和系统集成需要运行 Tauri 应用。
 
+## 项目官网
+
+GitHub Pages 官网源码位于 `site/`，为无需构建的独立静态页面，支持中英文、功能示意、配色预览、稳定版下载及安装命令复制。使用 `pnpm site:dev` 在 `http://127.0.0.1:1431/uTerm/` 预览，使用 `pnpm site:check` 验证官网交互；可通过 `UTERM_SITE_PORT` 修改预览端口。
+
+部署前，在仓库 Settings → Pages → Build and deployment 中将 Source 选择为 **GitHub Actions**，并确保 `github-pages` 环境允许 `release` 分支部署。`.github/workflows/pages.yml` 在 `release` 上官网文件变化时发布 `site/`，也可从该分支手动运行；不会发布桌面应用的 `index.html`。无需新增域名或密钥。
+
 ## 验证
 
 ```sh
@@ -141,6 +141,7 @@ macOS 上如果 Rust 构建报告过程宏动态库的 `mis-aligned LINKEDIT str
 | `scripts/`、`packaging/` | 构建、发布和文档工具 |
 | `.github/workflows/` | CI 与发布 |
 | `docs/` | 当前功能与验证说明 |
+| `site/` | GitHub Pages 双语官网及静态资源 |
 | `LICENSE`、`NOTICE` | 公开许可、版权及中英文商业授权说明 |
 | `DESIGN.md` | 中英文界面规范、颜色变量与设计参考 |
 
