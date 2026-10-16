@@ -973,8 +973,7 @@ export const messages: Record<string, string> = {
   "{p0}：已用{p1} {p2}%": "{p0}: {p1} {p2}% used",
   "重置于{p0} {p1}": "Resets at{p0} {p1}",
   "{p0} 小时": "{p0} hours",
-  "日志较大，当前统计仅包含已读取的部分。":
-    "Logs are large. Statistics include only the portion read.",
+  "当前统计仅包含可读取的日志记录。": "The current totals include only readable log records.",
   "未找到近 7 天的 Token 记录。": "No token records found for the past 7 days.",
   "{p0}剩余 {p1}%": "{p0}: {p1}% remaining",
   "GitHub 面板": "GitHub panel",

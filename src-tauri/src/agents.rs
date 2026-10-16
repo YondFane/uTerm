@@ -383,31 +383,36 @@ fn scan_usage(agent: &str, root: &Path) -> Result<Usage, String> {
             .map_err(|error| error.to_string())?;
         let mut reader = BufReader::with_capacity(64 * 1024, file.take(length));
         if offset > 0 {
-            let mut first = String::new();
+            // A tail offset can split a UTF-8 character; discard bytes before decoding records.
+            // 尾部读取起点可能截断 UTF-8 字符，解码记录前先按字节丢弃不完整的前缀。
             reader
-                .read_line(&mut first)
+                .skip_until(b'\n')
                 .map_err(|error| error.to_string())?;
             usage.partial = true;
         }
         let mut seen = HashSet::new();
-        let mut line = String::new();
+        let mut line_bytes = Vec::new();
         loop {
             if started.elapsed() > Duration::from_secs(5) {
                 usage.partial = true;
                 break;
             }
-            line.clear();
+            line_bytes.clear();
             if reader
-                .read_line(&mut line)
+                .read_until(b'\n', &mut line_bytes)
                 .map_err(|error| error.to_string())?
                 == 0
             {
                 break;
             }
+            let Ok(line) = std::str::from_utf8(&line_bytes) else {
+                usage.partial = true;
+                continue;
+            };
             if agent == "claude" {
                 // Ignore conversation content and retain only fixed-size counters for deduplication.
                 // 忽略对话正文，去重时仅保留固定大小的计数。
-                let Some(record) = claude_usage_line(&line) else {
+                let Some(record) = claude_usage_line(line) else {
                     continue;
                 };
                 if !record
@@ -428,7 +433,7 @@ fn scan_usage(agent: &str, root: &Path) -> Result<Usage, String> {
                 }
                 continue;
             }
-            let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            let Ok(value) = serde_json::from_str::<Value>(line) else {
                 continue;
             };
             if matches!(agent, "kimi" | "grok") {
@@ -842,6 +847,64 @@ mod tests {
         .unwrap();
         let usage = scan_usage("claude", root.path()).unwrap();
         assert_eq!((usage.records, usage.input, usage.output), (1, 8, 2));
+    }
+    #[test]
+    fn usage_tail_can_start_inside_a_valid_utf8_character() {
+        let root = tempfile::tempdir().unwrap();
+        let now = chrono::Utc::now().to_rfc3339();
+        let record = format!(
+            "{}\n",
+            json!({"timestamp":now,"payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":100},"last_token_usage":{"input_tokens":10,"cached_input_tokens":8,"output_tokens":3}}}})
+        );
+        let prefix = b"{\"content\":\"";
+        let offset = prefix.len() + 1;
+        let mut bytes = prefix.to_vec();
+        bytes.extend_from_slice("中".as_bytes());
+        bytes.resize(8 * 1024 * 1024 + offset - record.len() - 3, b'x');
+        bytes.extend_from_slice(b"\"}\n");
+        bytes.extend_from_slice(record.as_bytes());
+        assert!(std::str::from_utf8(&bytes).is_ok());
+        assert!(std::str::from_utf8(&bytes[offset..]).is_err());
+        std::fs::write(root.path().join("usage.jsonl"), bytes).unwrap();
+        let usage = scan_usage("codex", root.path()).unwrap();
+        assert!(usage.partial);
+        assert_eq!(
+            (usage.records, usage.input, usage.output, usage.cache_read),
+            (1, 2, 3, 8)
+        );
+    }
+    #[test]
+    fn usage_skips_invalid_utf8_records_and_incomplete_characters_for_each_agent() {
+        for agent in ["codex", "claude", "kimi", "grok"] {
+            let root = tempfile::tempdir().unwrap();
+            let now = chrono::Utc::now();
+            let record = |id: u64| match agent {
+                "codex" => {
+                    json!({"timestamp":now.to_rfc3339(),"payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":id},"last_token_usage":{"input_tokens":10,"cached_input_tokens":8,"output_tokens":3}}}})
+                }
+                "claude" => {
+                    json!({"timestamp":now.to_rfc3339(),"message":{"id":id.to_string(),"usage":{"input_tokens":2,"cache_read_input_tokens":8,"output_tokens":3}}})
+                }
+                "kimi" => {
+                    json!({"time":now.timestamp_millis(),"type":"usage.record","usage":{"inputOther":2,"inputCacheRead":8,"output":3}})
+                }
+                _ => {
+                    json!({"timestamp":now.timestamp(),"params":{"update":{"sessionUpdate":"turn_completed","prompt_id":id.to_string(),"usage":{"inputTokens":10,"cachedReadTokens":8,"outputTokens":3}}}})
+                }
+            };
+            let mut bytes = format!("{}\r\n", record(1)).into_bytes();
+            bytes.extend_from_slice(b"{\"content\":\"\xff\"}\n");
+            bytes.extend_from_slice(format!("{}\n", record(2)).as_bytes());
+            bytes.extend_from_slice(b"{\"content\":\"\xf0\x9f");
+            std::fs::write(root.path().join("usage.jsonl"), bytes).unwrap();
+            let usage = scan_usage(agent, root.path()).unwrap();
+            assert!(usage.partial, "{agent}");
+            assert_eq!(
+                (usage.records, usage.input, usage.output, usage.cache_read),
+                (2, 4, 6, 16),
+                "{agent}"
+            );
+        }
     }
     #[test]
     fn usage_logs_deduplicate_updates_and_exclude_old_records() {
