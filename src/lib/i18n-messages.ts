@@ -245,6 +245,9 @@ export const messages: Record<string, string> = {
   数据库: "Databases",
   "编辑数据库连接：{name}": "Edit database connection: {name}",
   移除数据库连接: "Remove database connection",
+  确认移除: "Confirm removal",
+  "确定移除连接“{name}”？此操作会删除保存的连接配置及其已记住的密码。":
+    "Remove connection “{name}”? This deletes the saved connection profile and its remembered password.",
   "移除数据库连接：{name}": "Remove database connection: {name}",
   隐藏数据库连接: "Hide database connections",
   显示数据库连接: "Show database connections",
