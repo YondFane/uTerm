@@ -65,6 +65,23 @@ export function RedisWorkspace({
   const [selection, setSelection] = useState<RedisKey | null>(null);
   const [data, setData] = useState<RedisDocument | null>(null);
   const [offset, setOffset] = useState(0);
+  const [fieldData, setFieldData] = useState<{ field: RedisBlob; document: RedisDocument } | null>(
+    null,
+  );
+  const [emptyBatch, setEmptyBatch] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [browserWidth, setBrowserWidth] = useState(280);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [narrow, setNarrow] = useState(false);
+  const workspace = useRef<HTMLElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const browser = useRef<HTMLElement>(null);
+  const browserToggle = useRef<HTMLButtonElement>(null);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const dialogOrigin = useRef<HTMLElement | null>(null);
+  const restoreActionFocus = useRef(false);
+  const fieldOrigin = useRef<HTMLButtonElement | null>(null);
+  const restoreFieldFocus = useRef(false);
   const [memberPattern, setMemberPattern] = useState("*");
   const [draft, setDraft] = useState<Draft | null>(null);
   const dirty = !!draft && (draft.fresh || draft.text !== draft.saved);
@@ -75,7 +92,6 @@ export function RedisWorkspace({
   const [mutation, setMutation] = useState<{ action: string; argument: string } | null>(null);
   const mutationDialog = useRef<HTMLDialogElement>(null);
   const [newKey, setNewKey] = useState("");
-  const [newKeyTarget, setNewKeyTarget] = useState<RedisBlob | null>(null);
   const [newField, setNewField] = useState("");
   const [newKind, setNewKind] = useState("string");
   const [rename, setRename] = useState("");
@@ -119,6 +135,36 @@ export function RedisWorkspace({
     else action();
   }
   useEffect(() => {
+    if (!workspace.current || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => setNarrow(entry.contentRect.width < 720));
+    observer.observe(workspace.current);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    if (browserOpen && narrow) searchInput.current?.focus();
+  }, [browserOpen, narrow]);
+  useEffect(() => {
+    const dismiss = (event: PointerEvent | KeyboardEvent) => {
+      workspace.current
+        ?.querySelectorAll<HTMLDetailsElement>(".redis-menu[open]")
+        .forEach((menu) => {
+          if (
+            (event.type === "keydown" && (event as KeyboardEvent).key === "Escape") ||
+            (event.type === "pointerdown" && !menu.contains(event.target as Node))
+          ) {
+            menu.open = false;
+            if (event.type === "keydown") menu.querySelector("summary")?.focus();
+          }
+        });
+    };
+    window.addEventListener("pointerdown", dismiss);
+    window.addEventListener("keydown", dismiss);
+    return () => {
+      window.removeEventListener("pointerdown", dismiss);
+      window.removeEventListener("keydown", dismiss);
+    };
+  }, []);
+  useEffect(() => {
     if (pending) guardDialog.current?.showModal();
     else guardDialog.current?.close();
   }, [pending]);
@@ -126,6 +172,18 @@ export function RedisWorkspace({
     if (mutation) mutationDialog.current?.showModal();
     else mutationDialog.current?.close();
   }, [mutation]);
+  useEffect(() => {
+    if (!mutation && !busy && restoreActionFocus.current) {
+      dialogOrigin.current?.focus();
+      restoreActionFocus.current = false;
+    }
+  }, [mutation, busy]);
+  useEffect(() => {
+    if (!fieldData && !busy && restoreFieldFocus.current) {
+      fieldOrigin.current?.focus();
+      restoreFieldFocus.current = false;
+    }
+  }, [!!fieldData, busy]);
   useEffect(() => {
     let disposed = false;
     let stop: (() => void) | undefined;
@@ -172,7 +230,8 @@ export function RedisWorkspace({
     setData(null);
     setDraft(null);
     setOffset(0);
-    setNewKeyTarget(null);
+    setFieldData(null);
+    setEmptyBatch(false);
   }
   async function scan(restart: boolean, id = currentHandle.current) {
     const pattern = restart ? filter : scanPattern;
@@ -185,6 +244,7 @@ export function RedisWorkspace({
       for (const item of response.entries) entries.set(item.key.data, item);
       return [...entries.values()].slice(0, 10000);
     });
+    setEmptyBatch(response.entries.length === 0);
     setCursor(response.cursor);
     setScanned(true);
     setScanPattern(pattern);
@@ -275,18 +335,29 @@ export function RedisWorkspace({
       });
     });
   }
-  async function read(item: RedisKey, field?: RedisBlob, at = 0, cursor = "0") {
+  async function read(
+    item: RedisKey,
+    field?: RedisBlob,
+    at = 0,
+    cursor = "0",
+    pattern = memberPattern,
+  ) {
     const document = await request<RedisDocument>({
       op: "read",
       key: item.key.data,
       field: field?.data ?? null,
       cursor,
       offset: at,
-      pattern: memberPattern,
+      pattern,
     });
     setSelection(item);
-    setData(document);
-    setOffset(at);
+    if (field) setFieldData({ field, document });
+    else {
+      setData(document);
+      setFieldData(null);
+      setOffset(at);
+      setMemberPattern(pattern);
+    }
     setDraft(
       document.value?.text !== null &&
         document.value?.text !== undefined &&
@@ -321,6 +392,81 @@ export function RedisWorkspace({
           ? { ...current, saved: snapshot.text, version: value.version, fresh: false }
           : current,
       );
+      const blob = {
+        data: redisEncode(snapshot.text),
+        text: snapshot.text,
+        size: new TextEncoder().encode(snapshot.text).length,
+        truncated: false,
+      };
+      if (snapshot.field) {
+        setFieldData({
+          field: snapshot.field,
+          document: {
+            kind: "hash",
+            ttl: data?.ttl ?? -1,
+            db,
+            value: blob,
+            version: value.version,
+          },
+        });
+        setData((current) => {
+          if (!current) return current;
+          const items = [...(current.items ?? [])];
+          const index = items.findIndex(
+            (item, index) => index % 2 === 0 && item.data === snapshot.field!.data,
+          );
+          const previewBytes = new TextEncoder().encode(snapshot.text).slice(0, 64 * 1024);
+          let binary = "";
+          for (let index = 0; index < previewBytes.length; index += 8192)
+            binary += String.fromCharCode(...previewBytes.subarray(index, index + 8192));
+          const preview = {
+            ...blob,
+            data: btoa(binary),
+            text: new TextDecoder().decode(previewBytes),
+            truncated: blob.size > 64 * 1024,
+          };
+          if (index >= 0) items[index + 1] = preview;
+          else if (snapshot.fresh && memberPattern === "*" && items.length < 2000)
+            items.push(snapshot.field!, preview);
+          return {
+            ...current,
+            items,
+            size: current.size === undefined ? undefined : current.size + (snapshot.fresh ? 1 : 0),
+          };
+        });
+      } else
+        setData((current) =>
+          current ? { ...current, value: blob, size: blob.size, version: value.version } : current,
+        );
+      let savedTtl = data?.ttl ?? -1;
+      if (snapshot.field && data?.size === undefined) {
+        try {
+          const collection = await request<RedisDocument>({
+            op: "read",
+            key: snapshot.key.data,
+            field: null,
+            cursor: "0",
+            offset: 0,
+            pattern: memberPattern,
+          });
+          setData(collection);
+          savedTtl = collection.ttl;
+        } catch (error) {
+          setError(redisError(error));
+        }
+      }
+      const savedKey = {
+        key: snapshot.key,
+        kind: snapshot.field ? "hash" : "string",
+        ttl: savedTtl,
+      };
+      setKeys((previous) =>
+        previous.some((item) => item.key.data === snapshot.key.data)
+          ? previous.map((item) => (item.key.data === snapshot.key.data ? savedKey : item))
+          : previous.length < 10000
+            ? [...previous, savedKey]
+            : previous,
+      );
       dirtyNow.current = false;
       await redisGuard(config.id, false);
       return true;
@@ -341,21 +487,159 @@ export function RedisWorkspace({
     action?.();
   }
   const keyLabel = (item: RedisBlob) => redisDisplay(item) || tx("空 Key");
+  async function copyKey() {
+    try {
+      await navigator.clipboard.writeText(selection?.key.text ?? "");
+    } catch {
+      setError(tx("无法复制 Key。"));
+    }
+  }
+  function ttlLabel(value: number) {
+    if (value === -2) return tx("Key 已过期");
+    if (value < 0) return tx("无过期时间");
+    const seconds = Math.ceil(value / 1000);
+    return seconds < 60
+      ? tx("{count} 秒", { count: seconds })
+      : seconds < 3600
+        ? tx("{count} 分钟", { count: Math.ceil(seconds / 60) })
+        : tx("{count} 小时", { count: Math.ceil(seconds / 3600) });
+  }
+  function ttlTitle(value: number) {
+    return tx("读取时 TTL：{count} 毫秒", { count: value });
+  }
+  function closeBrowser() {
+    setBrowserOpen(false);
+    if (narrow) browserToggle.current?.focus();
+  }
+  function closeMenus() {
+    workspace.current?.querySelectorAll<HTMLDetailsElement>(".redis-menu[open]").forEach((menu) => {
+      menu.open = false;
+      menu.querySelector("summary")?.focus();
+    });
+  }
+  function openAction(action: string) {
+    closeMenus();
+    dialogOrigin.current = document.activeElement as HTMLElement;
+    before(() => {
+      setRename(selection?.key.text ?? "");
+      setTtl(data && data.ttl > 0 ? String(Math.ceil(data.ttl / 1000)) : "3600");
+      setNextDb(db);
+      setNewKey("");
+      setNewField("");
+      setNewKind("string");
+      setMutation({ action, argument: fieldData?.field.data ?? "" });
+    });
+  }
+  function closeAction() {
+    setMutation(null);
+    restoreActionFocus.current = true;
+  }
+  function closeField() {
+    before(() => {
+      restoreFieldFocus.current = true;
+      setDraft(null);
+      setFieldData(null);
+    });
+  }
+  function createDraft() {
+    const blob = (text: string): RedisBlob => ({
+      text,
+      data: redisEncode(text),
+      size: new TextEncoder().encode(text).length,
+      truncated: false,
+    });
+    const adding = mutation?.action === "field";
+    const key = adding ? selection!.key : blob(newKey);
+    const kind = adding ? "hash" : newKind;
+    const field = kind === "hash" ? blob(newField) : undefined;
+    if (key.size > 4096 || (field && field.size > 4096)) {
+      setError(tx("Key 或字段名超过 4096 字节。"));
+      return;
+    }
+    if (!adding) {
+      setSelection({ key, kind, ttl: -1 });
+      setData({
+        kind,
+        ttl: -1,
+        db,
+        size: field ? undefined : 0,
+        ...(field ? { items: [], cursor: "0" } : {}),
+      });
+      setOffset(0);
+      setMemberPattern("*");
+    }
+    setFieldData(field ? { field, document: { kind: "hash", ttl: data?.ttl ?? -1, db } } : null);
+    setDraft({
+      key,
+      field,
+      text: "",
+      saved: "",
+      version: null,
+      fresh: true,
+      id: nextDocument++,
+      separator: "\n",
+    });
+    closeAction();
+    closeBrowser();
+  }
+  async function mutate(action: string, argument: string) {
+    if (!selection) return;
+    const target = selection;
+    await run(async () => {
+      await request({ op: "mutate", db, key: target.key.data, action, argument });
+      closeAction();
+      setDraft(null);
+      setFieldData(null);
+      if (action === "delete") {
+        setSelection(null);
+        setData(null);
+      } else {
+        const next =
+          action === "rename"
+            ? {
+                ...target,
+                key: {
+                  ...target.key,
+                  data: argument,
+                  text: rename,
+                  size: new TextEncoder().encode(rename).length,
+                },
+              }
+            : target;
+        try {
+          await read(next);
+        } catch (error) {
+          setSelection(null);
+          setData(null);
+          if (action !== "hdelete" || !String(error).includes("REDIS_KEY_MISSING")) throw error;
+        }
+      }
+      await scan(true);
+    });
+  }
   const keyRow = (item: RedisKey) => (
     <button
       key={item.key.data}
       className={`redis-key${selection?.key.data === item.key.data ? " selected" : ""}`}
+      aria-pressed={selection?.key.data === item.key.data}
       disabled={busy}
       title={keyLabel(item.key)}
       onClick={() =>
         before(() => {
-          void run(() => read(item));
+          void run(async () => {
+            await read(item, undefined, 0, "0", "*");
+            closeBrowser();
+          });
         })
       }
     >
       <span>{keyLabel(item.key)}</span>
-      <small>{item.kind}</small>
-      <small>{item.ttl < 0 ? "—" : `${Math.ceil(item.ttl / 1000)}s`}</small>
+      <small className="redis-type" data-kind={item.kind}>
+        {item.kind}
+      </small>
+      <small className="redis-key-ttl" title={ttlTitle(item.ttl)}>
+        {ttlLabel(item.ttl)}
+      </small>
     </button>
   );
   const groups = new Map<string, RedisKey[]>();
@@ -381,62 +665,76 @@ export function RedisWorkspace({
         jump: 0,
       }
     : null;
+  const valueDocument = fieldData?.document ?? data;
+  const value = valueDocument?.value;
+  const actionTitles: Record<string, string> = {
+    create: tx("新 Key"),
+    field: tx("添加字段"),
+    rename: tx("重命名"),
+    ttl: tx("设置 TTL"),
+    delete: tx("删除 Key"),
+    hdelete: tx("删除字段"),
+    db: tx("数据库 DB"),
+  };
+  const action = mutation?.action;
+  const collection = data && ["hash", "list", "set", "zset"].includes(data.kind);
   return (
     <section
+      ref={workspace}
       className="redis-workspace"
       hidden={!active}
       inert={!active}
       aria-label={tx("Redis 工作台")}
+      onClickCapture={(event) => {
+        // macOS may leave clicked buttons unfocused, so modal return targets need explicit focus.
+        // macOS 可能不会聚焦点击的按钮，因此需显式聚焦以保留对话框返回目标。
+        (event.target as HTMLElement).closest<HTMLElement>("button, summary")?.focus();
+      }}
       onKeyDown={(event) => {
         if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
           event.preventDefault();
           event.stopPropagation();
-          void save();
+          if (!mutation && !pending) void save();
         }
       }}
     >
       <header className="redis-toolbar">
-        <strong>{config.name}</strong>
-        <span>
-          {config.ssh_host ? `${config.ssh_host} → ` : ""}
+        {handle && (
+          <button
+            ref={browserToggle}
+            className="redis-browser-toggle"
+            aria-label={tx("浏览 Key")}
+            title={tx("浏览 Key")}
+            aria-expanded={browserOpen}
+            onClick={() => (browserOpen ? closeBrowser() : setBrowserOpen(true))}
+          >
+            ☰
+          </button>
+        )}
+        <span
+          className={handle ? "redis-connected" : "muted"}
+          title={handle ? tx("已连接") : tx("未连接")}
+        >
+          ●
+        </span>
+        <strong className="redis-connection-name" title={config.name}>
+          {config.name}
+        </strong>
+        <span className="redis-endpoint" title={`${config.host}:${config.port}`}>
           {config.host}:{config.port}
           {config.tls ? " · TLS" : ""}
         </span>
         {handle ? (
           <>
-            <span className="redis-connected">{info || tx("已连接")}</span>
-            <label>
-              {tx("数据库 DB")}{" "}
-              <input
-                aria-label={tx("数据库 DB")}
-                type="number"
-                min={0}
-                max={1024}
-                value={nextDb}
-                disabled={busy}
-                onChange={(event) => setNextDb(Number(event.target.value))}
-              />
-            </label>
-            <button
-              disabled={busy || nextDb === db}
-              onClick={() =>
-                before(() => {
-                  void run(async () => {
-                    await request({ op: "select", db: nextDb });
-                    setDb(nextDb);
-                    resetData();
-                    await scan(true);
-                  });
-                })
-              }
-            >
-              {tx("切换")}
+            <button disabled={busy} onClick={() => openAction("db")} title={tx("数据库 DB")}>
+              {tx("数据库 DB")} {db} ▾
             </button>
-            <label className="redis-checkbox">
+            <label className="redis-checkbox redis-write-toggle">
               <input
                 type="checkbox"
                 checked={writable}
                 disabled={busy || dirty}
+                aria-label={tx("允许编辑")}
                 onChange={(event) => {
                   const value = event.target.checked;
                   void run(async () => {
@@ -445,15 +743,47 @@ export function RedisWorkspace({
                   });
                 }}
               />
-              {tx("允许编辑")}
+              {writable ? tx("可编辑") : tx("只读")}
             </label>
-            <span>{writable ? tx("可编辑") : tx("只读")}</span>
-            <button disabled={busy} onClick={reconnect}>
-              {tx("重新连接")}
-            </button>
-            <button disabled={busy} onClick={disconnect}>
-              {tx("断开")}
-            </button>
+            <details className="redis-menu redis-info">
+              <summary aria-label={tx("连接信息")} title={tx("连接信息")}>
+                ⓘ
+              </summary>
+              <div className="redis-menu-content">
+                <strong>{tx("连接信息")}</strong>
+                <p>{info || tx("已连接")}</p>
+                <p>
+                  {config.ssh_host ? `${config.ssh_host} → ` : ""}
+                  {config.host}:{config.port}
+                  {config.tls ? " · TLS" : ""}
+                </p>
+              </div>
+            </details>
+            <details className="redis-menu">
+              <summary aria-label={tx("连接操作")} title={tx("连接操作")}>
+                ⋯
+              </summary>
+              <div className="redis-menu-content">
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    closeMenus();
+                    reconnect();
+                  }}
+                >
+                  {tx("重新连接")}
+                </button>
+                <button
+                  disabled={busy}
+                  onClick={() => {
+                    closeMenus();
+                    disconnect();
+                  }}
+                >
+                  {tx("断开")}
+                </button>
+              </div>
+            </details>
           </>
         ) : (
           <>
@@ -478,339 +808,379 @@ export function RedisWorkspace({
         </p>
       )}
       {handle && (
-        <div className="redis-body">
-          <aside className="redis-browser">
-            <form
-              className="redis-search"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void run(() => scan(true));
+        <>
+          <div className="redis-body" ref={body} data-drawer-open={browserOpen || undefined}>
+            {browserOpen && (
+              <button
+                className="redis-browser-backdrop"
+                tabIndex={-1}
+                aria-label={tx("关闭 Key 导航")}
+                onClick={closeBrowser}
+              />
+            )}
+            <aside
+              className="redis-browser"
+              ref={browser}
+              aria-label={tx("浏览 Key")}
+              style={{ width: browserWidth }}
+              onKeyDown={(event) => {
+                if (!narrow || !browserOpen) return;
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  closeBrowser();
+                }
+                if (event.key === "Tab") {
+                  const items = [
+                    ...browser.current!.querySelectorAll<HTMLElement>(
+                      "button:not(:disabled), input:not(:disabled), summary",
+                    ),
+                  ].filter(
+                    (item) => item.tagName === "SUMMARY" || !item.closest("details:not([open])"),
+                  );
+                  const first = items[0],
+                    last = items.at(-1);
+                  if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last?.focus();
+                  } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first?.focus();
+                  }
+                }
               }}
             >
-              <input
-                aria-label={tx("Key 匹配规则")}
-                value={filter}
-                disabled={busy}
-                onChange={(event) => setFilter(event.target.value)}
-              />
-              <button disabled={busy}>{tx("搜索")}</button>
-            </form>
-            <label className="redis-checkbox">
-              <input
-                type="checkbox"
-                checked={grouped}
-                onChange={(event) => setGrouped(event.target.checked)}
-              />
-              {tx("按冒号分组")}
-            </label>
-            <div className="redis-key-list">
-              {grouped
-                ? [...groups].map(([group, items]) => (
-                    <details open key={group}>
-                      <summary>{group}</summary>
-                      {items.map(keyRow)}
-                    </details>
-                  ))
-                : keys.map(keyRow)}
-            </div>
-            <footer>
-              <span>{tx("已加载 {count} 个 Key", { count: keys.length })}</span>
-              <button
-                disabled={busy || (scanned && cursor === "0") || keys.length >= 10000}
-                onClick={() => void run(() => scan(false))}
-              >
-                {tx("加载更多")}
-              </button>
-            </footer>
-            {keys.length >= 10000 && (
-              <p role="status">{tx("已达 10000 个 Key 上限，请缩小匹配范围。")}</p>
-            )}
-          </aside>
-          <div className="redis-detail">
-            {writable && (
               <form
-                className="redis-create"
+                className="redis-search"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  before(() => {
-                    const key = newKeyTarget ?? {
-                      data: redisEncode(newKey),
-                      text: newKey,
-                      size: new TextEncoder().encode(newKey).length,
-                      truncated: false,
-                    };
-                    const field =
-                      newKind === "hash"
-                        ? {
-                            data: redisEncode(newField),
-                            text: newField,
-                            size: new TextEncoder().encode(newField).length,
-                            truncated: false,
-                          }
-                        : undefined;
-                    setSelection({ key, kind: newKind, ttl: -1 });
-                    setData({ kind: newKind, ttl: -1, db });
-                    setDraft({
-                      key,
-                      field,
-                      text: "",
-                      saved: "",
-                      version: null,
-                      fresh: true,
-                      id: nextDocument++,
-                      separator: "\n",
-                    });
-                  });
+                  void run(() => scan(true));
                 }}
               >
-                <input
-                  aria-label={tx("新 Key")}
-                  placeholder={tx("新 Key")}
-                  value={newKey}
-                  onChange={(e) => {
-                    setNewKey(e.target.value);
-                    setNewKeyTarget(null);
-                  }}
-                />
-                <select
-                  aria-label={tx("值类型")}
-                  value={newKind}
-                  onChange={(e) => setNewKind(e.target.value)}
-                >
-                  <option value="string">{tx("String")}</option>
-                  <option value="hash">{tx("Hash")}</option>
-                </select>
-                {newKind === "hash" && (
+                <label htmlFor={`redis-pattern-${config.id}`}>{tx("Key 匹配规则")}</label>
+                <div className="redis-search-controls">
                   <input
-                    aria-label={tx("Hash 字段")}
-                    placeholder={tx("Hash 字段")}
-                    value={newField}
-                    onChange={(e) => setNewField(e.target.value)}
-                  />
-                )}
-                <button disabled={busy}>{tx("新建")}</button>
-              </form>
-            )}
-            {selection && data ? (
-              <>
-                <div className="redis-value-heading">
-                  <strong title={keyLabel(selection.key)}>{keyLabel(selection.key)}</strong>
-                  <span>
-                    {data.kind} · {data.size ?? "—"} · {tx("TTL")}:{" "}
-                    {data.ttl < 0 ? "—" : `${Math.ceil(data.ttl / 1000)}s`}
-                  </span>
-                  <button
+                    ref={searchInput}
+                    id={`redis-pattern-${config.id}`}
+                    value={filter}
+                    placeholder={tx("例如 user:*")}
                     disabled={busy}
-                    onClick={() =>
-                      before(() => {
-                        void run(() => read(selection, draft?.field));
-                      })
-                    }
+                    onChange={(event) => setFilter(event.target.value)}
+                  />
+                  <button disabled={busy} title={tx("搜索")}>
+                    {tx("搜索")}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    aria-label={tx("刷新 Key")}
+                    title={tx("刷新 Key")}
+                    onClick={() => void run(() => scan(true))}
                   >
-                    {tx("重新读取")}
+                    ↻
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !writable}
+                    aria-label={tx("新 Key")}
+                    title={writable ? tx("新 Key") : tx("允许编辑")}
+                    onClick={() => openAction("create")}
+                  >
+                    ＋
                   </button>
                 </div>
-                {writable && (
-                  <div className="redis-key-actions">
-                    <input
-                      aria-label={tx("新 Key 名称")}
-                      placeholder={tx("新 Key 名称")}
-                      value={rename}
-                      onChange={(e) => setRename(e.target.value)}
-                    />
+              </form>
+              <div className="redis-browser-options">
+                <label className="redis-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={grouped}
+                    onChange={(event) => setGrouped(event.target.checked)}
+                  />
+                  {tx("按冒号分组")}
+                </label>
+                <button
+                  className="redis-drawer-close"
+                  aria-label={tx("关闭 Key 导航")}
+                  title={tx("关闭 Key 导航")}
+                  onClick={closeBrowser}
+                >
+                  ×
+                </button>
+              </div>
+              <div className="redis-key-list">
+                {grouped
+                  ? [...groups].map(([group, items]) => (
+                      <details
+                        open={!collapsed.has(group)}
+                        key={group}
+                        onToggle={(event) => {
+                          const open = event.currentTarget.open;
+                          setCollapsed((previous) => {
+                            if (previous.has(group) === !open) return previous;
+                            const next = new Set(previous);
+                            if (open) next.delete(group);
+                            else next.add(group);
+                            return next;
+                          });
+                        }}
+                      >
+                        <summary>
+                          <span>{group}</span>
+                          <small>{tx("已加载 {count}", { count: items.length })}</small>
+                        </summary>
+                        {items.map(keyRow)}
+                      </details>
+                    ))
+                  : keys.map(keyRow)}
+                {!keys.length && (
+                  <p className="muted redis-list-empty">
+                    {busy ? tx("正在读取…") : tx("本批次无匹配")}
+                  </p>
+                )}
+              </div>
+            </aside>
+            <div
+              role="separator"
+              tabIndex={0}
+              className="redis-resizer"
+              aria-label={tx("调整 Key 导航宽度")}
+              aria-orientation="vertical"
+              aria-valuemin={180}
+              aria-valuemax={420}
+              aria-valuenow={browserWidth}
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.currentTarget.focus();
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+                const rect = body.current?.getBoundingClientRect();
+                if (rect)
+                  setBrowserWidth(
+                    Math.max(180, Math.min(420, rect.width * 0.45, event.clientX - rect.left)),
+                  );
+              }}
+              onPointerUp={(event) => {
+                if (event.currentTarget.hasPointerCapture(event.pointerId))
+                  event.currentTarget.releasePointerCapture(event.pointerId);
+              }}
+              onKeyDown={(event) => {
+                if (["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+                  event.preventDefault();
+                  const max = Math.min(420, (body.current?.clientWidth || 940) * 0.45);
+                  setBrowserWidth((value) =>
+                    Math.max(
+                      180,
+                      Math.min(
+                        max,
+                        event.key === "Home"
+                          ? 180
+                          : event.key === "End"
+                            ? max
+                            : value + (event.key === "ArrowLeft" ? -10 : 10),
+                      ),
+                    ),
+                  );
+                }
+              }}
+            />
+            <div className="redis-detail">
+              {selection && data ? (
+                <>
+                  <div className="redis-value-heading">
+                    <span className="redis-type" data-kind={data.kind}>
+                      {data.kind}
+                    </span>
+                    <strong title={keyLabel(selection.key)}>{keyLabel(selection.key)}</strong>
+                    <button
+                      disabled={selection.key.text === null}
+                      aria-label={tx("复制 Key")}
+                      title={tx("复制 Key")}
+                      onClick={() => {
+                        void copyKey();
+                      }}
+                    >
+                      ⧉
+                    </button>
                     <button
                       disabled={busy}
+                      title={tx("重新读取")}
+                      aria-label={tx("重新读取")}
                       onClick={() =>
-                        before(() =>
-                          setMutation({ action: "rename", argument: redisEncode(rename) }),
+                        before(
+                          () =>
+                            void run(async () => {
+                              const field = fieldData?.field;
+                              await read(selection);
+                              if (field) await read(selection, field);
+                            }),
                         )
                       }
                     >
-                      {tx("重命名")}
-                    </button>
-                    <input
-                      aria-label={tx("TTL（秒）")}
-                      type="number"
-                      min={1}
-                      max={3153600000}
-                      value={ttl}
-                      onChange={(e) => setTtl(e.target.value)}
-                    />
-                    <button
-                      disabled={busy}
-                      onClick={() => before(() => setMutation({ action: "ttl", argument: ttl }))}
-                    >
-                      {tx("设置 TTL")}
+                      ↻
                     </button>
                     <button
-                      disabled={busy}
-                      onClick={() => before(() => setMutation({ action: "persist", argument: "" }))}
+                      disabled={busy || !writable}
+                      title={ttlTitle(data.ttl)}
+                      onClick={() => openAction("ttl")}
                     >
-                      {tx("清除 TTL")}
+                      {tx("TTL")} · {ttlLabel(data.ttl)}
                     </button>
-                    <button
-                      disabled={busy}
-                      onClick={() => before(() => setMutation({ action: "delete", argument: "" }))}
-                    >
-                      {tx("删除 Key")}
-                    </button>
-                  </div>
-                )}
-                {draft && editorDocument ? (
-                  <>
-                    <div className="redis-editor-actions">
-                      <span>
-                        {draft.field ? `${tx("Hash 字段")}: ${keyLabel(draft.field)}` : tx("值")}
-                        {dirty ? " *" : ""}
-                      </span>
-                      <button disabled={busy || !writable || !dirty} onClick={() => void save()}>
-                        {tx("保存")}
-                      </button>
-                      <button
-                        disabled={busy || !writable}
-                        onClick={() => {
-                          try {
-                            const text = JSON.stringify(JSON.parse(draft.text), null, 2);
-                            setDraft({ ...draft, text, id: nextDocument++ });
-                          } catch {
-                            setError(tx("内容不是有效的 JSON。"));
-                          }
-                        }}
-                      >
-                        {tx("格式化 JSON")}
-                      </button>
-                      {draft.field && writable && (
-                        <button
-                          disabled={busy}
-                          onClick={() =>
-                            before(() =>
-                              setMutation({ action: "hdelete", argument: draft.field!.data }),
-                            )
-                          }
-                        >
-                          {tx("删除字段")}
+                    <details className="redis-menu">
+                      <summary aria-label={tx("Key 操作")} title={tx("Key 操作")}>
+                        ⋯
+                      </summary>
+                      <div className="redis-menu-content">
+                        <button disabled={busy || !writable} onClick={() => openAction("rename")}>
+                          {tx("重命名")}
                         </button>
-                      )}
-                    </div>
-                    <div className="redis-editor">
-                      {editorModule ? (
-                        <editorModule.CodeEditor
-                          document={editorDocument}
-                          controls={controls}
-                          blocked={busy || !active}
-                          change={(text) =>
-                            setDraft((value) => (value ? { ...value, text } : value))
-                          }
-                          save={() => void save()}
-                          close={() => {}}
-                        />
-                      ) : (
-                        <p role="status">{tx("正在打开文件…")}</p>
-                      )}
-                    </div>
-                  </>
-                ) : data.value ? (
-                  <>
-                    <p>
-                      {data.value.text === null
-                        ? tx("二进制内容，仅供预览。")
-                        : tx("值超过 1 MB，不能完整编辑。")}
-                    </p>
-                    {data.value.text === null ? (
-                      <RedisBinaryPreview value={data.value} offset={offset} />
-                    ) : (
-                      <pre className="redis-preview">{redisDisplay(data.value)}</pre>
-                    )}
-                    {data.kind === "string" && (
-                      <div className="redis-pagination">
                         <button
-                          disabled={busy || offset === 0}
-                          onClick={() =>
-                            void run(() =>
-                              read(selection, undefined, Math.max(0, offset - 1024 * 1024)),
-                            )
-                          }
+                          disabled={busy || !writable}
+                          className="redis-danger"
+                          onClick={() => openAction("delete")}
                         >
-                          {tx("上一页")}
-                        </button>
-                        <span>
-                          {offset} / {data.size}
-                        </span>
-                        <button
-                          disabled={busy || offset + 1024 * 1024 >= (data.size ?? 0)}
-                          onClick={() =>
-                            void run(() => read(selection, undefined, offset + 1024 * 1024))
-                          }
-                        >
-                          {tx("下一页")}
+                          {tx("删除 Key")}
                         </button>
                       </div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    {(data.kind === "hash" || data.kind === "set") && (
-                      <form
-                        className="redis-search"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          void run(() => read(selection));
-                        }}
-                      >
-                        <input
-                          aria-label={tx("成员匹配规则")}
-                          value={memberPattern}
-                          onChange={(e) => setMemberPattern(e.target.value)}
-                        />
-                        <button disabled={busy}>{tx("搜索成员")}</button>
-                        {data.kind === "hash" && writable && (
-                          <button
-                            type="button"
+                    </details>
+                  </div>
+                  <div className="redis-value-meta">
+                    <span>
+                      {data.size === undefined
+                        ? "—"
+                        : data.kind === "string"
+                          ? tx("{count} 字节", { count: data.size })
+                          : tx("{count} 个成员", { count: data.size })}
+                    </span>
+                    <span title={ttlTitle(data.ttl)}>{ttlLabel(data.ttl)}</span>
+                    {busy && <span role="status">{tx("正在读取…")}</span>}
+                  </div>
+                  {collection && (
+                    <div
+                      className={`redis-collection${fieldData || draft?.field ? " has-field" : ""}`}
+                    >
+                      {(data.kind === "hash" || data.kind === "set") && (
+                        <form
+                          className="redis-member-search"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            before(() => void run(() => read(selection)));
+                          }}
+                        >
+                          <input
+                            aria-label={tx("成员匹配规则")}
+                            placeholder={tx("成员匹配规则")}
+                            value={memberPattern}
                             disabled={busy}
-                            onClick={() => {
-                              setNewKey(redisDisplay(selection.key));
-                              setNewKeyTarget(selection.key);
-                              setNewKind("hash");
-                            }}
+                            onChange={(event) => setMemberPattern(event.target.value)}
+                          />
+                          <button disabled={busy}>{tx("搜索成员")}</button>
+                          {data.kind === "hash" && (
+                            <button
+                              type="button"
+                              disabled={busy || !writable}
+                              onClick={() => openAction("field")}
+                            >
+                              {tx("添加字段")}
+                            </button>
+                          )}
+                        </form>
+                      )}
+                      {data.partial && (
+                        <p role="status" className="muted">
+                          {tx("本批次超过显示上限，请缩小成员匹配范围。")}
+                        </p>
+                      )}
+                      <div className="redis-members">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>
+                                {data.kind === "hash"
+                                  ? tx("字段名")
+                                  : data.kind === "list"
+                                    ? tx("索引")
+                                    : tx("成员")}
+                              </th>
+                              {data.kind !== "set" && (
+                                <th>{data.kind === "zset" ? tx("分数") : tx("值预览")}</th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(data.items ?? [])
+                              .filter(
+                                (_, index) =>
+                                  data.kind === "list" || data.kind === "set" || index % 2 === 0,
+                              )
+                              .map((item, index) => (
+                                <tr
+                                  key={`${index}:${item.data}`}
+                                  data-selected={fieldData?.field.data === item.data || undefined}
+                                >
+                                  <td>
+                                    {data.kind === "hash" ? (
+                                      <button
+                                        disabled={busy || item.truncated}
+                                        onClick={(event) => {
+                                          const origin = event.currentTarget;
+                                          before(
+                                            () =>
+                                              void run(async () => {
+                                                await read(selection, item);
+                                                fieldOrigin.current = origin;
+                                              }),
+                                          );
+                                        }}
+                                      >
+                                        {keyLabel(item)}
+                                      </button>
+                                    ) : data.kind === "list" ? (
+                                      offset + index
+                                    ) : (
+                                      redisDisplay(item)
+                                    )}
+                                  </td>
+                                  {data.kind !== "set" && (
+                                    <td>
+                                      <pre>
+                                        {redisDisplay(
+                                          data.kind === "list" ? item : data.items![index * 2 + 1],
+                                        )}
+                                      </pre>
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                        {!data.items?.length && (
+                          <p className="muted redis-list-empty">{tx("本批次无匹配")}</p>
+                        )}
+                      </div>
+                      <div className="redis-pagination">
+                        {(data.kind === "list" || data.kind === "zset") && (
+                          <button
+                            disabled={busy || offset === 0}
+                            onClick={() =>
+                              void run(() => read(selection, undefined, Math.max(0, offset - 200)))
+                            }
                           >
-                            {tx("添加字段")}
+                            {tx("上一页")}
                           </button>
                         )}
-                      </form>
-                    )}
-                    {data.unsupported && <p>{tx("该数据类型暂不支持专用视图。")}</p>}
-                    {data.partial && (
-                      <p role="status">{tx("本批次超过显示上限，请缩小成员匹配范围。")}</p>
-                    )}
-                    <div className="redis-members">
-                      {(data.items ?? [])
-                        .filter(
-                          (_, index) =>
-                            data.kind === "list" || data.kind === "set" || index % 2 === 0,
-                        )
-                        .map((item, index) => (
-                          <div className="redis-member" key={`${index}:${item.data}`}>
-                            {data.kind === "hash" ? (
-                              <button
-                                disabled={busy || item.truncated}
-                                onClick={() => void run(() => read(selection, item))}
-                              >
-                                {keyLabel(item)}
-                              </button>
-                            ) : (
-                              <span>
-                                {data.kind === "list" ? `${offset + index}: ` : ""}
-                                {redisDisplay(item)}
-                              </span>
-                            )}
-                            {(data.kind === "hash" || data.kind === "zset") && (
-                              <pre>{redisDisplay(data.items![index * 2 + 1])}</pre>
-                            )}
-                          </div>
-                        ))}
-                    </div>
-                    {data.items && (
-                      <div className="redis-pagination">
+                        <span>
+                          {data.kind === "hash" || data.kind === "set"
+                            ? data.cursor === "0"
+                              ? tx("扫描完成")
+                              : tx("扫描未完成")
+                            : tx("成员 {start}–{end} / {count}", {
+                                start: data.size ? offset + 1 : 0,
+                                end: Math.min(offset + 200, data.size ?? 0),
+                                count: data.size ?? 0,
+                              })}
+                        </span>
                         <button
                           disabled={
                             busy ||
@@ -819,76 +1189,229 @@ export function RedisWorkspace({
                               : offset + 200 >= (data.size ?? 0))
                           }
                           onClick={() =>
-                            void run(() =>
-                              read(
-                                selection,
-                                undefined,
-                                data.kind === "hash" || data.kind === "set" ? 0 : offset + 200,
-                                data.cursor ?? "0",
-                              ),
+                            before(
+                              () =>
+                                void run(() =>
+                                  read(
+                                    selection,
+                                    undefined,
+                                    data.kind === "hash" || data.kind === "set" ? 0 : offset + 200,
+                                    data.cursor ?? "0",
+                                  ),
+                                ),
                             )
                           }
                         >
                           {tx("下一页")}
                         </button>
                       </div>
-                    )}
-                  </>
-                )}
+                    </div>
+                  )}
+                  {(draft || value || fieldData) && (
+                    <div className="redis-value-pane">
+                      <div className="redis-editor-actions">
+                        <strong title={fieldData ? keyLabel(fieldData.field) : tx("值")}>
+                          {fieldData ? keyLabel(fieldData.field) : tx("值")}
+                        </strong>
+                        {fieldData && value && (
+                          <span>{tx("{count} 字节", { count: value.size })}</span>
+                        )}
+                        {dirty && <span className="redis-dirty">{tx("未保存")}</span>}
+                        {draft && (
+                          <>
+                            <button
+                              disabled={busy || !writable || !dirty}
+                              title={tx("保存（Cmd/Ctrl+S）")}
+                              onClick={() => void save()}
+                            >
+                              {tx("保存")}
+                            </button>
+                            <button
+                              disabled={busy || !writable}
+                              onClick={() => {
+                                try {
+                                  setDraft({
+                                    ...draft,
+                                    text: JSON.stringify(JSON.parse(draft.text), null, 2),
+                                    id: nextDocument++,
+                                  });
+                                } catch {
+                                  setError(tx("内容不是有效的 JSON。"));
+                                }
+                              }}
+                            >
+                              {tx("格式化 JSON")}
+                            </button>
+                          </>
+                        )}
+                        {fieldData && (
+                          <>
+                            <button
+                              className="redis-danger"
+                              disabled={busy || !writable || draft?.fresh}
+                              onClick={() => openAction("hdelete")}
+                            >
+                              {tx("删除字段")}
+                            </button>
+                            <button
+                              disabled={busy}
+                              title={tx("关闭字段编辑")}
+                              aria-label={tx("关闭字段编辑")}
+                              onClick={closeField}
+                            >
+                              ×
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      {draft && editorDocument ? (
+                        <div className="redis-editor">
+                          {editorModule ? (
+                            <editorModule.CodeEditor
+                              document={editorDocument}
+                              controls={controls}
+                              blocked={busy || !active}
+                              change={(text) =>
+                                setDraft((value) => (value ? { ...value, text } : value))
+                              }
+                              save={() => {
+                                if (!mutation && !pending) void save();
+                              }}
+                              close={() => {
+                                if (fieldData) closeField();
+                              }}
+                            />
+                          ) : (
+                            <p role="status">{tx("正在打开文件…")}</p>
+                          )}
+                        </div>
+                      ) : value ? (
+                        <div className="redis-value-preview">
+                          <p className="muted">
+                            {value.text === null
+                              ? tx("二进制内容，仅供预览。")
+                              : tx("值超过 1 MB，不能完整编辑。")}
+                          </p>
+                          {value.text === null ? (
+                            <RedisBinaryPreview value={value} offset={fieldData ? 0 : offset} />
+                          ) : (
+                            <pre className="redis-preview">{redisDisplay(value)}</pre>
+                          )}
+                          {data.kind === "string" && (
+                            <div className="redis-pagination">
+                              <button
+                                disabled={busy || offset === 0}
+                                onClick={() =>
+                                  void run(() =>
+                                    read(selection, undefined, Math.max(0, offset - 1024 * 1024)),
+                                  )
+                                }
+                              >
+                                {tx("上一页")}
+                              </button>
+                              <span>
+                                {tx("字节 {start}–{end} / {count}", {
+                                  start: (data.size ?? 0) ? offset + 1 : 0,
+                                  end: Math.min(offset + 1024 * 1024, data.size ?? 0),
+                                  count: data.size ?? 0,
+                                })}
+                              </span>
+                              <button
+                                disabled={busy || offset + 1024 * 1024 >= (data.size ?? 0)}
+                                onClick={() =>
+                                  void run(() => read(selection, undefined, offset + 1024 * 1024))
+                                }
+                              >
+                                {tx("下一页")}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="muted redis-list-empty">{tx("字段不存在，请重新读取。")}</p>
+                      )}
+                    </div>
+                  )}
+                  {data.unsupported && (
+                    <p className="muted redis-empty">{tx("该数据类型暂不支持专用视图。")}</p>
+                  )}
+                </>
+              ) : (
+                <p className="muted redis-empty">
+                  {tx("选择 Key 查看内容。连接默认只读，开启允许编辑后可新建或修改数据。")}
+                </p>
+              )}
+            </div>
+          </div>
+          <footer className="redis-scan-status" role="status">
+            <span>
+              {tx("已加载 {count} 个 Key", { count: keys.length })} ·{" "}
+              {busy
+                ? tx("正在读取…")
+                : scanned && cursor === "0"
+                  ? tx("扫描完成")
+                  : tx("扫描未完成")}
+              {emptyBatch && !busy ? ` · ${tx("本批次无匹配")}` : ""}
+            </span>
+            {keys.length >= 10000 && <span>{tx("已达 10000 个 Key 上限，请缩小匹配范围。")}</span>}
+            <button
+              disabled={busy || (scanned && cursor === "0") || keys.length >= 10000}
+              onClick={() => void run(() => scan(false))}
+            >
+              {tx("加载更多")}
+            </button>
+          </footer>
+          <div className="redis-console">
+            <button
+              className="redis-console-toggle"
+              aria-expanded={consoleOpen}
+              onClick={() => setConsoleOpen((value) => !value)}
+            >
+              <span aria-hidden="true">{consoleOpen ? "▾" : "▸"}</span> {tx("命令台")}
+            </button>
+            {consoleOpen && (
+              <>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void run(async () => {
+                      setResult("");
+                      setElapsed(null);
+                      const response = await request<{ result: unknown; elapsed: number }>({
+                        op: "console",
+                        args: redisArguments(command),
+                      });
+                      const value = response.result;
+                      setResult(
+                        typeof value === "object" && value !== null && "data" in value
+                          ? redisDisplay(value as RedisBlob)
+                          : JSON.stringify(value, null, 2),
+                      );
+                      setElapsed(response.elapsed);
+                    });
+                  }}
+                >
+                  <input
+                    aria-label={tx("Redis 命令")}
+                    autoComplete="off"
+                    value={command}
+                    onChange={(event) => setCommand(event.target.value)}
+                  />
+                  <button disabled={busy}>{tx("执行")}</button>
+                  {elapsed !== null && <small>{tx("{elapsed} 毫秒", { elapsed })}</small>}
+                </form>
+                <p className="muted">
+                  {tx("支持 PING、INFO、DBSIZE、TYPE、TTL、PTTL、EXISTS 和长度命令。")}
+                </p>
+                <pre>{result}</pre>
               </>
-            ) : (
-              <p className="muted redis-empty">
-                {tx("选择 Key 查看内容。连接默认只读，开启允许编辑后可新建或修改数据。")}
-              </p>
             )}
           </div>
-        </div>
-      )}
-      {handle && (
-        <div className="redis-console">
-          <button aria-expanded={consoleOpen} onClick={() => setConsoleOpen((value) => !value)}>
-            {tx("命令台")}
-          </button>
-          {consoleOpen && (
-            <>
-              <form
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void run(async () => {
-                    const response = await request<{ result: unknown; elapsed: number }>({
-                      op: "console",
-                      args: redisArguments(command),
-                    });
-                    const value = response.result;
-                    setResult(
-                      typeof value === "object" && value !== null && "data" in value
-                        ? redisDisplay(value as RedisBlob)
-                        : JSON.stringify(value, null, 2),
-                    );
-                    setElapsed(response.elapsed);
-                  });
-                }}
-              >
-                <input
-                  aria-label={tx("Redis 命令")}
-                  autoComplete="off"
-                  value={command}
-                  onChange={(e) => setCommand(e.target.value)}
-                />
-                <button disabled={busy}>{tx("执行")}</button>
-              </form>
-              <p className="muted">
-                {tx("支持 PING、INFO、DBSIZE、TYPE、TTL、PTTL、EXISTS 和长度命令。")}
-              </p>
-              {elapsed !== null && <small>{tx("{elapsed} 毫秒", { elapsed })}</small>}
-              <pre>{result}</pre>
-            </>
-          )}
-        </div>
+        </>
       )}
       <dialog
         ref={guardDialog}
-        className="ssh-dialog"
+        className="ssh-dialog redis-action-dialog"
         onCancel={(event) => {
           event.preventDefault();
           if (!busy) setPending(null);
@@ -914,46 +1437,156 @@ export function RedisWorkspace({
       </dialog>
       <dialog
         ref={mutationDialog}
-        className="ssh-dialog"
+        className="ssh-dialog redis-action-dialog"
         onCancel={(event) => {
           event.preventDefault();
-          setMutation(null);
+          if (!busy) closeAction();
         }}
         aria-labelledby={`redis-confirm-${config.id}`}
       >
-        <h2 id={`redis-confirm-${config.id}`}>{tx("确认 Redis 操作")}</h2>
-        <p>
-          {selection ? keyLabel(selection.key) : ""} · {tx("数据库 DB")} {db}
-        </p>
-        <p>
-          {mutation?.action === "delete"
-            ? tx("删除该 Key？此操作无法撤销。")
-            : mutation?.action === "hdelete"
-              ? tx("删除该 Hash 字段？此操作无法撤销。")
-              : tx("将修改此 Key 的名称或过期时间。")}
-        </p>
-        <footer>
-          <button disabled={busy} onClick={() => setMutation(null)}>
-            {tx("取消")}
-          </button>
-          <button
-            disabled={busy}
-            onClick={() => {
-              if (!mutation || !selection) return;
-              const current = mutation;
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!action || busy) return;
+            if (action === "create" || action === "field") createDraft();
+            else if (action === "db") {
               void run(async () => {
-                await request({ op: "mutate", db, key: selection.key.data, ...current });
-                setMutation(null);
-                setDraft(null);
-                setData(null);
-                setSelection(null);
+                await request({ op: "select", db: nextDb });
+                setDb(nextDb);
+                resetData();
+                closeAction();
                 await scan(true);
               });
-            }}
-          >
-            {tx("确认")}
-          </button>
-        </footer>
+            } else
+              void mutate(
+                action,
+                action === "rename"
+                  ? redisEncode(rename)
+                  : action === "ttl"
+                    ? ttl
+                    : mutation.argument,
+              );
+          }}
+        >
+          <h2 id={`redis-confirm-${config.id}`}>{action ? actionTitles[action] : ""}</h2>
+          <p className="redis-dialog-target">
+            {config.name} · {config.host}:{config.port} · {tx("数据库 DB")} {db}
+          </p>
+          {action !== "create" && action !== "db" && selection && (
+            <p className="redis-dialog-target">
+              {keyLabel(selection.key)}
+              {action === "hdelete" && fieldData ? ` / ${keyLabel(fieldData.field)}` : ""}
+            </p>
+          )}
+          {action === "create" && (
+            <>
+              <label>
+                {tx("新 Key")}
+                <input
+                  autoFocus
+                  aria-label={tx("新 Key")}
+                  value={newKey}
+                  disabled={busy}
+                  onChange={(event) => setNewKey(event.target.value)}
+                />
+              </label>
+              <label>
+                {tx("值类型")}
+                <select
+                  aria-label={tx("值类型")}
+                  value={newKind}
+                  onChange={(event) => setNewKind(event.target.value)}
+                >
+                  <option value="string">{tx("String")}</option>
+                  <option value="hash">{tx("Hash")}</option>
+                </select>
+              </label>
+            </>
+          )}
+          {(action === "field" || (action === "create" && newKind === "hash")) && (
+            <label>
+              {tx("Hash 字段")}
+              <input
+                autoFocus={action === "field"}
+                aria-label={tx("Hash 字段")}
+                value={newField}
+                disabled={busy}
+                onChange={(event) => setNewField(event.target.value)}
+              />
+            </label>
+          )}
+          {action === "rename" && (
+            <label>
+              {tx("新 Key 名称")}
+              <input
+                autoFocus
+                aria-label={tx("新 Key 名称")}
+                value={rename}
+                disabled={busy}
+                onChange={(event) => setRename(event.target.value)}
+              />
+            </label>
+          )}
+          {action === "ttl" && (
+            <label>
+              {tx("TTL（秒）")}
+              <input
+                autoFocus
+                aria-label={tx("TTL（秒）")}
+                type="number"
+                min={1}
+                max={3153600000}
+                required
+                value={ttl}
+                disabled={busy}
+                onChange={(event) => setTtl(event.target.value)}
+              />
+            </label>
+          )}
+          {action === "db" && (
+            <label>
+              {tx("数据库 DB")}
+              <input
+                autoFocus
+                aria-label={tx("数据库 DB")}
+                type="number"
+                min={0}
+                max={1024}
+                required
+                value={nextDb}
+                disabled={busy}
+                onChange={(event) => setNextDb(Number(event.target.value))}
+              />
+            </label>
+          )}
+          {action === "delete" && <p>{tx("删除该 Key？此操作无法撤销。")}</p>}
+          {action === "hdelete" && <p>{tx("删除该 Hash 字段？此操作无法撤销。")}</p>}
+          {error && (
+            <p className="remote-file-error" role="alert">
+              {error}
+            </p>
+          )}
+          <footer>
+            <button type="button" disabled={busy} onClick={closeAction}>
+              {tx("取消")}
+            </button>
+            {action === "ttl" && (
+              <button type="button" disabled={busy} onClick={() => void mutate("persist", "")}>
+                {tx("清除 TTL")}
+              </button>
+            )}
+            <button
+              disabled={busy || (action === "db" && nextDb === db)}
+              className={action === "delete" || action === "hdelete" ? "redis-danger" : undefined}
+            >
+              {action === "create" || action === "field"
+                ? tx("新建")
+                : action === "db"
+                  ? tx("切换")
+                  : tx("确认")}
+            </button>
+          </footer>
+        </form>
       </dialog>
     </section>
   );
