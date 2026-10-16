@@ -1,4 +1,5 @@
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import {
@@ -19,6 +20,7 @@ export const DatabaseObjects = memo(function DatabaseObjects({
   generate,
   refresh,
   loaded,
+  visible = true,
 }: {
   kind: DatabaseKind;
   scopes: DatabaseResult | null;
@@ -29,6 +31,7 @@ export const DatabaseObjects = memo(function DatabaseObjects({
   generate: (object: DatabaseObject) => void;
   refresh: () => void;
   loaded?: (namespace: string, objects: DatabaseObject[]) => void;
+  visible?: boolean;
 }) {
   useUiLanguage();
   const [filter, setFilter] = useState("");
@@ -36,27 +39,69 @@ export const DatabaseObjects = memo(function DatabaseObjects({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [system, setSystem] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState("");
-  const tree = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<{
+    object: DatabaseObject;
+    trigger: HTMLButtonElement;
+  } | null>(null);
+  const popup = useRef<HTMLDivElement>(null);
+  function closeMenu(focus = false) {
+    if (focus) menu?.trigger.focus();
+    setMenu(null);
+  }
+  useLayoutEffect(() => {
+    if (!menu || !popup.current) return;
+    if (!menu.trigger.isConnected || disabled || !visible) {
+      closeMenu();
+      return;
+    }
+    const anchor = menu.trigger.getBoundingClientRect();
+    const bounds = popup.current.getBoundingClientRect();
+    const left = Math.max(8, Math.min(anchor.left, window.innerWidth - bounds.width - 8));
+    const top = Math.max(
+      8,
+      Math.min(
+        anchor.bottom + bounds.height <= window.innerHeight - 8
+          ? anchor.bottom
+          : anchor.top - bounds.height,
+        window.innerHeight - bounds.height - 8,
+      ),
+    );
+    popup.current.style.left = `${left}px`;
+    popup.current.style.top = `${top}px`;
+  });
   useEffect(() => {
+    if (!menu) return;
+    popup.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     const dismiss = (event: PointerEvent | KeyboardEvent) => {
       if ("key" in event && event.key !== "Escape") return;
-      for (const menu of tree.current?.querySelectorAll<HTMLDetailsElement>(
-        ".database-object-menu[open]",
-      ) ?? []) {
-        if ("key" in event || !menu.contains(event.target as Node)) {
-          if ("key" in event && menu.contains(document.activeElement))
-            menu.querySelector("summary")?.focus();
-          menu.open = false;
+      if (
+        "key" in event ||
+        (!popup.current?.contains(event.target as Node) &&
+          !menu.trigger.contains(event.target as Node))
+      ) {
+        if ("key" in event) {
+          event.preventDefault();
+          event.stopPropagation();
         }
+        closeMenu("key" in event);
       }
+    };
+    const dismissOnMove = (event: Event) => {
+      if (event.type !== "scroll" || !popup.current?.contains(event.target as Node)) closeMenu();
     };
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("keydown", dismiss, true);
+    document.addEventListener("scroll", dismissOnMove, true);
+    window.addEventListener("resize", dismissOnMove);
+    window.addEventListener("blur", dismissOnMove);
     return () => {
       document.removeEventListener("pointerdown", dismiss, true);
       document.removeEventListener("keydown", dismiss, true);
+      document.removeEventListener("scroll", dismissOnMove, true);
+      window.removeEventListener("resize", dismissOnMove);
+      window.removeEventListener("blur", dismissOnMove);
     };
-  }, []);
+  }, [menu]);
   const names = databaseObjects(scopes ?? {});
   const isSystem = (object: DatabaseObject) =>
     /SYSTEM/i.test(object.type) ||
@@ -145,27 +190,22 @@ export const DatabaseObjects = memo(function DatabaseObjects({
                     >
                       {object.name}
                     </button>
-                    <details className="database-object-menu">
-                      <summary aria-label={tx("对象操作：{name}", { name: object.name })}>
-                        ⋯
-                      </summary>
-                      <div
-                        onClick={(event) => {
-                          if ((event.target as HTMLElement).closest("button"))
-                            event.currentTarget.parentElement?.removeAttribute("open");
-                        }}
-                      >
-                        <button disabled={disabled} onClick={() => open(object, "data")}>
-                          {tx("查看数据")}
-                        </button>
-                        <button disabled={disabled} onClick={() => open(object, "columns")}>
-                          {tx("查看结构")}
-                        </button>
-                        <button disabled={disabled} onClick={() => generate(object)}>
-                          {tx("生成 SELECT")}
-                        </button>
-                      </div>
-                    </details>
+                    <button
+                      className="database-object-menu"
+                      disabled={disabled}
+                      aria-label={tx("对象操作：{name}", { name: object.name })}
+                      aria-haspopup="menu"
+                      aria-expanded={
+                        !!menu && databaseObjectKey(menu.object) === databaseObjectKey(object)
+                      }
+                      onClick={(event) =>
+                        menu?.trigger === event.currentTarget
+                          ? closeMenu()
+                          : setMenu({ object, trigger: event.currentTarget })
+                      }
+                    >
+                      ⋯
+                    </button>
                   </div>
                 ))}
               </div>
@@ -217,7 +257,7 @@ export const DatabaseObjects = memo(function DatabaseObjects({
         value={filter}
         onChange={(event) => setFilter(event.target.value)}
       />
-      <div className="database-object-tree" aria-label={tx("数据库对象")} ref={tree}>
+      <div className="database-object-tree" aria-label={tx("数据库对象")}>
         {names.filter((object) => !isSystem(object)).map(renderScope)}
         {names.some(isSystem) && (
           <details
@@ -231,6 +271,63 @@ export const DatabaseObjects = memo(function DatabaseObjects({
         {!names.length && <p className="database-empty">{tx("连接后浏览对象")}</p>}
         {scopes?.more && <p>{tx("元数据超过 500 项，请缩小库或模式范围。")}</p>}
       </div>
+      {menu &&
+        createPortal(
+          <div
+            ref={popup}
+            className="context-menu database-object-popup"
+            role="menu"
+            aria-label={tx("对象操作：{name}", { name: menu.object.name })}
+            onKeyDown={(event) => {
+              if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+              event.preventDefault();
+              const buttons = Array.from(
+                event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
+              );
+              const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+              buttons[
+                event.key === "Home"
+                  ? 0
+                  : event.key === "End"
+                    ? buttons.length - 1
+                    : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+                      buttons.length
+              ]?.focus();
+            }}
+          >
+            <button
+              role="menuitem"
+              disabled={disabled}
+              onClick={() => {
+                closeMenu(true);
+                open(menu.object, "data");
+              }}
+            >
+              {tx("查看数据")}
+            </button>
+            <button
+              role="menuitem"
+              disabled={disabled}
+              onClick={() => {
+                closeMenu(true);
+                open(menu.object, "columns");
+              }}
+            >
+              {tx("查看结构")}
+            </button>
+            <button
+              role="menuitem"
+              disabled={disabled}
+              onClick={() => {
+                closeMenu(true);
+                generate(menu.object);
+              }}
+            >
+              {tx("生成 SELECT")}
+            </button>
+          </div>,
+          document.body,
+        )}
     </>
   );
 });

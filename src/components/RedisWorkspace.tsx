@@ -759,31 +759,26 @@ export function RedisWorkspace({
                 </p>
               </div>
             </details>
-            <details className="redis-menu">
-              <summary aria-label={tx("连接操作")} title={tx("连接操作")}>
-                ⋯
-              </summary>
-              <div className="redis-menu-content">
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    closeMenus();
-                    reconnect();
-                  }}
-                >
-                  {tx("重新连接")}
-                </button>
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    closeMenus();
-                    disconnect();
-                  }}
-                >
-                  {tx("断开")}
-                </button>
-              </div>
-            </details>
+            <div className="redis-connection-actions">
+              <button
+                disabled={busy}
+                onClick={() => {
+                  closeMenus();
+                  reconnect();
+                }}
+              >
+                {tx("重新连接")}
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  closeMenus();
+                  disconnect();
+                }}
+              >
+                {tx("断开")}
+              </button>
+            </div>
           </>
         ) : (
           <>

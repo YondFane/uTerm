@@ -3409,6 +3409,12 @@ textarea:focus-visible {
 .redis-toolbar {
   min-height: 40px;
 }
+.redis-connection-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+  white-space: nowrap;
+}
 .redis-connection-name,
 .redis-endpoint {
   overflow: hidden;
@@ -4225,34 +4231,15 @@ textarea:focus-visible {
   border-radius: 5px;
 }
 .database-object-menu {
-  position: relative;
   flex-shrink: 0;
-}
-.database-object-menu > summary {
-  cursor: pointer;
   padding: 5px 8px;
-  list-style: none;
 }
-.database-object-menu > div {
-  position: absolute;
-  right: 0;
-  z-index: 20;
+.database-object-popup {
+  width: 150px;
   min-width: 150px;
-  padding: 5px;
-  border: 1px solid var(--ui-border);
-  border-radius: 6px;
-  background: var(--ui-surface);
-  box-shadow: 0 6px 20px #0004;
-}
-.database-object-menu > div {
-  position: fixed;
-  left: auto;
-  right: auto;
-}
-.database-object-menu button {
-  display: block;
-  width: 100%;
-  text-align: left;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
 }
 .database-content {
   flex: 1;

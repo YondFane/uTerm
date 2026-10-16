@@ -901,6 +901,7 @@ export function DatabaseWorkspace({
       <div className="database-body" ref={body}>
         <aside className="database-browser" hidden={!browserOpen}>
           <DatabaseObjects
+            visible={active && browserOpen}
             key={handle ?? "disconnected"}
             kind={config.kind}
             scopes={metadata}

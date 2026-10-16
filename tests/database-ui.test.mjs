@@ -145,25 +145,26 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
     );
     await click("qa_table");
     const menu = document.querySelector(".database-object-menu");
-    await act(async () => menu.querySelector("summary").click());
-    assert.equal(menu.open, true);
+    await act(async () => menu.click());
+    assert.equal(menu.getAttribute("aria-expanded"), "true");
     await act(async () =>
-      menu
-        .querySelector("div")
+      document
+        .querySelector(".database-object-popup")
         .dispatchEvent(new window.MouseEvent("pointerdown", { bubbles: true })),
     );
-    assert.equal(menu.open, true);
+    assert.equal(menu.getAttribute("aria-expanded"), "true");
     await act(async () =>
       button("Copy SQL").dispatchEvent(new window.MouseEvent("pointerdown", { bubbles: true })),
     );
-    assert.equal(menu.open, false);
-    await act(async () => menu.querySelector("summary").click());
+    assert.equal(menu.getAttribute("aria-expanded"), "false");
+    await act(async () => menu.click());
     await act(async () => {
-      menu.querySelector("summary").focus();
-      menu.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      document.activeElement.dispatchEvent(
+        new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
     });
-    assert.equal(menu.open, false);
-    assert.equal(document.activeElement, menu.querySelector("summary"));
+    assert.equal(menu.getAttribute("aria-expanded"), "false");
+    assert.equal(document.activeElement, menu);
     assert.equal(globalThis.databaseEditorProps.document.text, "SELECT 'draft'");
     const originalResult = document.querySelector(".database-results td").textContent;
     await act(async () =>
@@ -181,9 +182,11 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
     );
     await act(async () => document.querySelector('[role="tab"]').click());
     assert.equal(document.querySelector(".database-results td").textContent, originalResult);
+    await act(async () => menu.click());
     await click("Generate SELECT");
     await click("Cancel");
     assert.equal(globalThis.databaseEditorProps.document.text, "SELECT 'draft'");
+    await act(async () => menu.click());
     await click("Generate SELECT");
     await click("Confirm");
     assert.equal(
@@ -207,6 +210,7 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
     const transactions = calls.filter((call) =>
       ["commit", "rollback"].includes(call.args?.request?.op),
     ).length;
+    await act(async () => menu.click());
     await click("View data");
     await click("Structure");
     assert.equal(
