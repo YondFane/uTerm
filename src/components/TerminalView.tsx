@@ -15,6 +15,7 @@ import {
 } from "../lib/terminal-input";
 import { autoCloseAgent, closeAttachedSession } from "../lib/session-lifecycle";
 import { decodeTerminalFrame } from "../lib/terminal-frame";
+import { attachTerminalScrollInput } from "../lib/terminal-scroll";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import type { DragEventHandler, PointerEventHandler } from "react";
@@ -272,10 +273,7 @@ export function TerminalView({
           .writeText(term.getSelection())
           .catch((reason) => setError(String(reason)));
     });
-    const input = term.onData((value) => send(new TextEncoder().encode(value)));
-    const binary = term.onBinary((value) =>
-      send(Uint8Array.from(value, (character) => character.charCodeAt(0))),
-    );
+    const disposeScrollInput = attachTerminalScrollInput(term, send);
     let resizeQueue = Promise.resolve();
     const resize = term.onResize(({ rows, cols }) => {
       const current = connection.current;
@@ -311,8 +309,7 @@ export function TerminalView({
       search.current = null;
       queryHandlers.forEach((handler) => handler.dispose());
       selection.dispose();
-      input.dispose();
-      binary.dispose();
+      disposeScrollInput();
       resize.dispose();
       disposePunctuation();
       term.dispose();
@@ -696,7 +693,7 @@ export function TerminalView({
               terminal.current?.focus();
             }}
           >
-            ×
+            <ToolbarIcon name="close" />
           </button>
         </form>
       )}

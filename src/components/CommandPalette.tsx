@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { binding, commands, shortcutLabel } from "../lib/settings";
 import type { CommandId } from "../lib/settings";
 import { useSettings } from "../lib/SettingsContext";
+import { ToolbarIcon } from "./SidebarIcon";
 export function CommandPalette({
   mac,
   available,
@@ -74,7 +75,7 @@ export function CommandPalette({
           }}
         />
         <button aria-label={tx("关闭命令面板")} onClick={close}>
-          ×
+          <ToolbarIcon name="close" />
         </button>
       </header>
       <div className="command-results" role="listbox" aria-label={tx("命令")}>

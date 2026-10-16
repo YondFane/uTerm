@@ -638,15 +638,66 @@ select:focus-visible {
   flex: 0 0 22px;
   width: 22px;
   height: 22px;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ui-muted);
 }
-.sidebar .icon-button:hover:not(:disabled) {
-  background: #ffffff16;
+.sidebar .icon-button:is(:hover, :focus-visible):not(:disabled) {
+  border-color: color-mix(in srgb, var(--ui-border) 80%, var(--ui-text));
+  background: color-mix(in srgb, var(--ui-hover) 72%, var(--ui-text));
+  color: var(--ui-text);
 }
 .sidebar .folder-toggle {
   position: relative;
   width: 16px;
   flex-basis: 16px;
   margin-right: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+.sidebar .row-label > .sidebar-resource-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 22px;
+  overflow: visible;
+}
+.sidebar .row-label > .sidebar-resource-icon + span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar [data-resource-active] {
+  --resource-ring-color: #62d98a;
+  --resource-ring-glow: #48c87866;
+  color: var(--resource-ring-color);
+}
+:root[data-appearance="light"] .sidebar [data-resource-active] {
+  --resource-ring-color: #23874b;
+  --resource-ring-glow: #2aa75b44;
+}
+.sidebar [data-resource-active]::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--resource-ring-color);
+  border-radius: 50%;
+  box-shadow: 0 0 5px 1px var(--resource-ring-glow);
+  pointer-events: none;
+}
+.sidebar-resource-icon[data-resource-active] .redis-sidebar-icon {
+  color: inherit;
+  border-color: currentColor;
 }
 .folder-chevron {
   display: none;
@@ -751,8 +802,11 @@ select:focus-visible {
   width: 230px;
   max-height: min(400px, calc(100vh - 90px));
 }
-.sidebar-popover.workspace {
+.sidebar .sidebar-popover.workspace {
   top: 56px;
+  width: 180px;
+  max-width: calc(100vw - 16px);
+  padding: 4px;
 }
 .sidebar-popover.add {
   bottom: 40px;
@@ -763,6 +817,12 @@ select:focus-visible {
   gap: 8px;
   padding: 7px 8px;
   font-size: 13px;
+}
+.sidebar .sidebar-popover.workspace button {
+  gap: 6px;
+  padding: 5px 7px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .sidebar-popover hr {
   border: 0;
@@ -1333,10 +1393,31 @@ select:focus-visible {
 }
 .file-options {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 4px;
   padding: 6px 12px;
   font-size: 11px;
   color: var(--ui-muted);
+}
+.file-options > .toolbar-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+.file-options > .toolbar-icon-button:hover:not(:disabled) {
+  background: var(--ui-hover);
+  color: var(--ui-text);
+}
+.file-options .toolbar-icon {
+  width: 14px;
+  height: 14px;
 }
 .file-options label {
   display: flex;
@@ -2070,9 +2151,8 @@ select:focus-visible {
 .sidebar-footer-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   margin-left: auto;
-  padding-right: 4px;
 }
 
 .inspector-switcher {
@@ -2080,6 +2160,54 @@ select:focus-visible {
   align-items: center;
   flex-shrink: 0;
   gap: 2px;
+}
+.inspector-switcher,
+.sidebar-connection-toggles,
+.sidebar-footer-actions,
+.sidebar .row-actions {
+  padding: 3px;
+  border: 1px solid color-mix(in srgb, var(--ui-border) 80%, var(--ui-text));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ui-hover) 86%, var(--ui-text));
+}
+.sidebar .row-actions {
+  padding: 2px;
+}
+.sidebar .row-actions .icon-button {
+  border: 0;
+  background: transparent;
+}
+.sidebar-footer .toolbar-icon-button,
+.sidebar .sidebar-connection-toggle {
+  width: 26px;
+  height: 26px;
+  padding: 4px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ui-muted);
+}
+.sidebar-footer .icon-button .sidebar-icon {
+  color: inherit;
+}
+.inspector-switcher .toolbar-icon-button {
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+  border-radius: 50%;
+  color: var(--ui-muted);
+}
+.inspector-switcher .toolbar-icon-button:hover:not(:disabled),
+.inspector-switcher .toolbar-icon-button[aria-pressed="true"],
+.sidebar-footer .toolbar-icon-button:hover:not(:disabled),
+.sidebar .sidebar-connection-toggle:hover:not(:disabled),
+.sidebar .sidebar-connection-toggle[aria-pressed="true"],
+.sidebar .row-actions .icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ui-text) 18%, transparent);
+  color: var(--ui-text);
+}
+.inspector-switcher .toolbar-icon-button:focus-visible {
+  outline-offset: 0;
 }
 
 .workspace-heading {
@@ -2128,13 +2256,14 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  padding: 5px;
-  border: 0;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  padding: 8px;
+  border: 1px solid transparent;
   background: transparent;
-  border-radius: 6px;
+  border-radius: 50%;
+  color: var(--ui-muted);
 }
 .sidebar-toggle .sidebar-icon,
 .sidebar-reopen .sidebar-icon,
@@ -2142,8 +2271,15 @@ select:focus-visible {
   width: 18px;
   height: 18px;
 }
-.sidebar-reopen:hover {
-  background: #8883;
+.sidebar .sidebar-toggle:is(:hover, :focus-visible):not(:disabled),
+.sidebar-reopen:is(:hover, :focus-visible):not(:disabled),
+.toolbar .inspector-toggle:is(:hover, :focus-visible):not(:disabled) {
+  border-color: color-mix(in srgb, var(--ui-border) 80%, var(--ui-text));
+  background: color-mix(in srgb, var(--ui-hover) 72%, var(--ui-text));
+  color: var(--ui-text);
+}
+.toolbar .toolbar-icon-button {
+  border-radius: 50%;
 }
 .toolbar button[data-collapse-hint] {
   color: var(--ui-accent);
@@ -2191,6 +2327,15 @@ select:focus-visible {
 .session-close .toolbar-icon {
   width: 13px;
   height: 13px;
+}
+.sidebar .session-close > .close-icon > circle {
+  opacity: 0;
+  transition:
+    fill 120ms ease,
+    opacity 120ms ease;
+}
+.sidebar .session-close:is(:hover, :focus-visible):not(:disabled) > .close-icon > circle {
+  opacity: 1;
 }
 .sidebar .session-close:hover {
   color: inherit;
@@ -2427,6 +2572,9 @@ select:focus-visible {
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-canvas);
 }
+.toolbar-actions > .inspector-toggle {
+  margin-right: -10px;
+}
 .workspace-heading {
   gap: 10px;
 }
@@ -2481,19 +2629,12 @@ select:focus-visible {
 }
 .sidebar-header .sidebar-toggle {
   flex-shrink: 0;
+  margin-right: -7px;
 }
 .sidebar .workspace-switcher {
   flex: 1;
   font-size: 12px;
   font-weight: 500;
-  background: var(--ui-surface);
-  border: 1px solid var(--ui-border);
-  border-radius: 6px;
-}
-.sidebar .workspace-switcher::after {
-  content: "⌄";
-  margin-left: auto;
-  color: var(--ui-muted);
 }
 .project-list {
   padding: 0 2px;
@@ -2538,9 +2679,24 @@ select:focus-visible {
   height: auto;
   min-height: 46px;
   flex-wrap: wrap;
+  column-gap: 4px;
   row-gap: 4px;
   margin-top: 12px;
   padding-top: 8px;
+}
+.sidebar-footer > .icon-button {
+  flex-basis: 34px;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+}
+.sidebar-footer > .icon-button:is(:hover, :focus-visible):not(:disabled) {
+  background: transparent;
+}
+.sidebar-footer > .icon-button > .icon-plus {
+  stroke-width: 2.8;
 }
 .sidebar .sidebar-popover {
   background: var(--ui-surface);
@@ -2624,6 +2780,23 @@ textarea:focus-visible {
 }
 .settings-dialog > header {
   padding: 20px 24px;
+}
+.settings-dialog > header .settings-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  border: 1px solid color-mix(in srgb, var(--ui-border) 80%, var(--ui-text));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ui-hover) 86%, var(--ui-text));
+  color: var(--ui-muted);
+}
+.settings-dialog > header .settings-close:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ui-hover) 72%, var(--ui-text));
+  color: var(--ui-text);
 }
 .settings-layout nav {
   background: var(--ui-sidebar);
@@ -4606,5 +4779,42 @@ textarea:focus-visible {
   }
   .database-grid-actions > span {
     display: none;
+  }
+}
+
+/* Share close-icon states while preserving the Redis drawer's responsive visibility.
+   统一关闭图标状态，同时保留 Redis 抽屉按宽度显示的规则。 */
+:root button:has(> .close-icon) {
+  min-width: 22px;
+  min-height: 22px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+:root button:has(> .close-icon):not(.redis-drawer-close):not([hidden]) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+:root button:has(> .close-icon):hover:not(:disabled) {
+  background: transparent;
+}
+:root button > .close-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+}
+.close-icon > circle {
+  fill: #707070;
+  transition: fill 120ms ease;
+}
+button:hover:not(:disabled) > .close-icon > circle {
+  fill: #b44e53;
+}
+@container (max-width: 719px) {
+  .redis-drawer-close:has(> .close-icon) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }

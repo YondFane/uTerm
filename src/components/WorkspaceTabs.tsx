@@ -4,7 +4,7 @@ import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { isDirty, type OpenFile } from "../lib/file-document";
 import type { SessionConfig } from "../lib/workspace";
-import { SessionIcon } from "./SidebarIcon";
+import { SessionIcon, ToolbarIcon } from "./SidebarIcon";
 
 export function WorkspaceTabs({
   sessions,
@@ -131,7 +131,7 @@ export function WorkspaceTabs({
             disabled={disabled}
             onClick={closeDiff}
           >
-            ×
+            <ToolbarIcon name="close" />
           </button>
         </div>
       )}
@@ -188,7 +188,7 @@ export function WorkspaceTabs({
               disabled={disabled}
               onClick={() => closeFile(file.id)}
             >
-              ×
+              <ToolbarIcon name="close" />
             </button>
           </div>
         );

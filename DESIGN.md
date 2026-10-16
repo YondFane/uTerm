@@ -24,8 +24,10 @@ The table shows the Sandstone palette. Black (black and silver) is the default. 
 
 ## Components / 组件
 
-- Keep chrome compact: 56 px toolbars, 5–6 px control corners, one-pixel dividers. Use accent sparingly for selected items and focus.
-- 保持紧凑：56 px 工具栏、5–6 px 控件圆角、1 px 分隔线。强调色只突出选中项和焦点。
+- In-app close icons use an 18 px circular ×, gray by default and muted red on hover, with existing accessible names, disabled states and keyboard focus. Sidebar session rows reveal the circle only on hover or keyboard focus.
+- 应用内关闭图标使用 18 px 圆形 ×，默认灰色、悬停时柔和红色，保留原有无障碍名称、禁用状态和键盘焦点。侧栏会话行仅在悬停或键盘聚焦时显示圆形底色。
+- Keep chrome compact: 56 px toolbars, 5–6 px control corners, one-pixel dividers. Inspector, sidebar footer and project quick-action icons share capsules with circular hover/selected states. Panel toggles retain 36 px targets, and sidebar section actions stay compact; both reveal circular frames only on hover or keyboard focus. Settings close uses a compact circular button. Use accent sparingly for selected items and focus.
+- 保持紧凑：56 px 工具栏、5–6 px 控件圆角、1 px 分隔线。工具面板、侧栏底部及项目快捷操作图标共用胶囊底座并采用圆形悬停／选中状态。侧栏开关保留 36 px 点击区域，侧栏分区操作保持紧凑，两者仅在悬停或键盘聚焦时显示圆框。设置关闭采用紧凑的圆形按钮。强调色只突出选中项和焦点。
 - The welcome page provides real project, terminal and chat actions. Disable unavailable actions; do not show placeholder metrics or simulated sessions.
 - 欢迎页提供真实的项目、终端和聊天入口。不可用操作应禁用，不展示虚构指标或模拟会话。
 - Preserve pane geometry, keyboard shortcuts, accessible names and visible focus. Respect reduced-motion preferences. Hide an inspector's column when it has no content.

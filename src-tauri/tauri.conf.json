@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "uTerm",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "identifier": "sh.uterm.desktop.dev",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -23,7 +23,7 @@
         "dragDropEnabled": false,
         "trafficLightPosition": {
           "x": 16,
-          "y": 22
+          "y": 30
         },
         "backgroundColor": "#000000",
         "transparent": true

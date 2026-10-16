@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { RedisBinaryPreview } from "./RedisBinaryPreview";
+import { ToolbarIcon } from "./SidebarIcon";
 import {
   redisArguments,
   redisDisplay,
@@ -899,7 +900,7 @@ export function RedisWorkspace({
                   title={tx("关闭 Key 导航")}
                   onClick={closeBrowser}
                 >
-                  ×
+                  <ToolbarIcon name="close" />
                 </button>
               </div>
               <div className="redis-key-list">
@@ -1254,7 +1255,7 @@ export function RedisWorkspace({
                               aria-label={tx("关闭字段编辑")}
                               onClick={closeField}
                             >
-                              ×
+                              <ToolbarIcon name="close" />
                             </button>
                           </>
                         )}

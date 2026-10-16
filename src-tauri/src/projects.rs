@@ -191,6 +191,83 @@ fn delete_worktree_at(directory: &str, path: &str) -> Result<Vec<Worktree>, Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gitlab_remotes_support_web_ssh_and_nested_groups() {
+        for remote in [
+            "https://gitlab.com/team/subgroup/repo.git",
+            "git@gitlab.com:team/subgroup/repo.git",
+            "ssh://git@gitlab.com/team/subgroup/repo.git",
+        ] {
+            assert_eq!(
+                gitlab_remote_url(remote).as_deref(),
+                Some("https://gitlab.com/team/subgroup/repo")
+            );
+        }
+        for (remote, expected) in [
+            (
+                "https://user:token@gitlab.example.com:8443/team/repo.git/",
+                "https://gitlab.example.com:8443/team/repo",
+            ),
+            (
+                "http://code-gitlab.example.com/team/repo",
+                "http://code-gitlab.example.com/team/repo",
+            ),
+            (
+                "ssh://git@GITLAB.example.com:2222/team/repo.git",
+                "https://gitlab.example.com/team/repo",
+            ),
+            (
+                "git@company-gitlab.example.com:team/repo.git",
+                "https://company-gitlab.example.com/team/repo",
+            ),
+        ] {
+            assert_eq!(gitlab_remote_url(remote).as_deref(), Some(expected));
+        }
+    }
+
+    #[test]
+    fn gitlab_remotes_require_a_matching_host_and_repository_path() {
+        for remote in [
+            "https://github.com/team/gitlab",
+            "https://gitlab.com@github.com/team/repo",
+            "https://example.com/gitlab/team/repo",
+            "file:///tmp/gitlab/team/repo",
+            "/tmp/gitlab/team/repo",
+            "https://gitlab.com/team",
+            "https://gitlab.com/team//repo",
+            "https://gitlab.com/team/-repo",
+            "https://gitlab.com/team/repo?token=secret",
+            "https://gitlab.com/team/repo#fragment",
+            "https://gitlab.com/team/repo with spaces",
+        ] {
+            assert!(gitlab_remote_url(remote).is_none(), "{remote}");
+        }
+    }
+
+    #[test]
+    fn directory_links_prefer_origin_for_the_requested_provider() {
+        let remotes = "upstream git@gitlab.com:upstream/repo.git (fetch)\n\
+            origin https://gitlab.example.com/team/repo.git (fetch)\n\
+            mirror git@gitlab.com:mirror/repo.git (push)\n\
+            github git@github.com:team/repo.git (fetch)\n";
+        assert_eq!(
+            directory_remote_url(remotes, "gitlab").as_deref(),
+            Some("https://gitlab.example.com/team/repo")
+        );
+        assert_eq!(
+            directory_remote_url(remotes, "github").as_deref(),
+            Some("https://github.com/team/repo")
+        );
+        let fallback = "origin git@github.com:team/repo.git (fetch)\n\
+            upstream git@gitlab.com:team/repo.git (fetch)";
+        assert_eq!(
+            directory_remote_url(fallback, "gitlab").as_deref(),
+            Some("https://gitlab.com/team/repo")
+        );
+        assert!(directory_remote_url("origin /tmp/repo (fetch)", "gitlab").is_none());
+    }
+
     #[test]
     fn parses_paths_with_spaces_newlines_and_detached_branches() {
         let items = parse_worktrees(b"worktree /tmp/a b\nrepo\0HEAD abc\0branch refs/heads/feature/foo\0\0worktree C:/tree\0HEAD def\0detached\0\0").expect("parse");
@@ -356,6 +433,61 @@ pub async fn directory_tools() -> Result<Vec<DirectoryTool>, String> {
     .await
     .map_err(|error| error.to_string())
 }
+
+fn gitlab_remote_url(value: &str) -> Option<String> {
+    let value = value.trim();
+    let remote = if value.contains("://") {
+        tauri::Url::parse(value).ok()?
+    } else {
+        let (host, path) = value.split_once(':')?;
+        tauri::Url::parse(&format!("ssh://{host}/{path}")).ok()?
+    };
+    let host = remote.host_str()?.to_ascii_lowercase();
+    if !host.contains("gitlab") || remote.query().is_some() || remote.fragment().is_some() {
+        return None;
+    }
+    let (scheme, port) = match remote.scheme() {
+        "http" | "https" => (remote.scheme(), remote.port()),
+        "ssh" => ("https", None),
+        _ => return None,
+    };
+    let repository = remote.path().trim_matches('/');
+    let repository = repository.strip_suffix(".git").unwrap_or(repository);
+    let parts: Vec<_> = repository.split('/').collect();
+    (parts.len() >= 2
+        && parts.iter().all(|part| {
+            !part.is_empty()
+                && ![".", ".."].contains(part)
+                && !part.starts_with('-')
+                && part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"-_.".contains(&byte))
+        }))
+    .then(|| {
+        let port = port.map(|port| format!(":{port}")).unwrap_or_default();
+        format!("{scheme}://{host}{port}/{repository}")
+    })
+}
+
+fn directory_remote_url(remotes: &str, target: &str) -> Option<String> {
+    remotes
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split_whitespace();
+            let name = parts.next()?;
+            let remote = parts.next()?;
+            let url = match target {
+                "github" => crate::github::remote_slug(remote)
+                    .map(|repository| format!("https://github.com/{repository}")),
+                "gitlab" => gitlab_remote_url(remote),
+                _ => None,
+            }?;
+            Some((name == "origin", url))
+        })
+        .max_by_key(|(origin, _)| *origin)
+        .map(|(_, url)| url)
+}
+
 #[tauri::command]
 pub async fn directory_open(
     app: tauri::AppHandle,
@@ -376,22 +508,18 @@ pub async fn directory_open(
                 .open_path(path.to_string_lossy(), None::<&str>)
                 .map_err(|error| error.to_string());
         }
-        if target == "github" {
+        if target == "github" || target == "gitlab" {
             let remotes = crate::git::run(&directory, &["remote", "-v"])?;
-            let repository = String::from_utf8_lossy(&remotes)
-                .lines()
-                .filter_map(|line| {
-                    let mut parts = line.split_whitespace();
-                    let name = parts.next()?;
-                    let slug = crate::github::remote_slug(parts.next()?)?;
-                    Some((name == "origin", slug))
-                })
-                .max_by_key(|(origin, _)| *origin)
-                .map(|(_, slug)| slug)
-                .ok_or("此工作目录没有 GitHub 远程仓库。")?;
+            let url = directory_remote_url(&String::from_utf8_lossy(&remotes), &target).ok_or(
+                if target == "github" {
+                    "此工作目录没有 GitHub 远程仓库。"
+                } else {
+                    "此工作目录没有 GitLab 远程仓库。"
+                },
+            )?;
             return app
                 .opener()
-                .open_url(format!("https://github.com/{repository}"), None::<&str>)
+                .open_url(url, None::<&str>)
                 .map_err(|error| error.to_string());
         }
         let editor = editor_path(&target).ok_or("编辑器未安装或无法找到。")?;

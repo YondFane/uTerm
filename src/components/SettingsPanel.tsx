@@ -25,6 +25,7 @@ import type { Updates } from "../lib/useUpdates";
 import type { RuntimeInfo } from "../lib/desktop";
 import { themes, importTheme } from "../lib/themes";
 import { activeLanguage, languageOptions, translate } from "../lib/i18n";
+import { ToolbarIcon } from "./SidebarIcon";
 const releaseMarkdown = new MarkdownIt({ html: false, linkify: false });
 const interfaceFonts = [
   ["系统默认", defaults.interfaceFont],
@@ -195,11 +196,12 @@ export function SettingsPanel({
       <header className="inspector-header">
         <h2 id="settings-title">{t("设置")}</h2>
         <button
+          className="settings-close"
           disabled={updates.phase === "installing"}
           onClick={close}
           aria-label={t("关闭设置")}
         >
-          ×
+          <ToolbarIcon name="close" />
         </button>
       </header>
       <div className="settings-layout" inert={updates.phase === "installing"}>

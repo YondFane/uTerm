@@ -370,6 +370,9 @@ export function Sidebar({
   function folderRow(project: Project, depth: number, worktree?: Worktree) {
     const item = worktree ?? project;
     const active = project.sessions.length > 0;
+    const hasOpenSessions = worktree
+      ? project.sessions.some((session) => session.worktreeId === worktree.id)
+      : active;
     const folded = folderCollapsed(project, worktree);
     const selected =
       workspace?.selectedProject === project.id &&
@@ -386,6 +389,9 @@ export function Sidebar({
       >
         <button
           className="folder-toggle icon-button"
+          data-resource-active={hasOpenSessions || undefined}
+          aria-description={hasOpenSessions ? tx("有未关闭的会话") : undefined}
+          title={hasOpenSessions ? tx("有未关闭的会话") : undefined}
           aria-label={`${folded ? tx("展开") : tx("折叠")}${item.name}`}
           aria-expanded={!folded}
           onClick={() => {
@@ -674,7 +680,7 @@ export function Sidebar({
             <SidebarIcon name="chevron" />
           </span>
         </button>
-        {section && (
+        {section && folders.length > 0 && (
           <button
             className="icon-button section-action"
             aria-label={tx("{p0}：{p1}项目会话", {
@@ -683,7 +689,6 @@ export function Sidebar({
             })}
             title={allFoldersCollapsed ? tx("全部展开项目会话") : tx("全部折叠项目会话")}
             aria-expanded={!allFoldersCollapsed}
-            disabled={!folders.length}
             onClick={() => setSectionCollapsed(section, !allFoldersCollapsed)}
           >
             <ToolbarIcon name={allFoldersCollapsed ? "expandAll" : "collapseAll"} />
@@ -806,10 +811,19 @@ export function Sidebar({
                       <button
                         className="row-label"
                         title={`${connection.host} · ${connection.root || tx("服务端登录目录")}`}
+                        aria-description={
+                          connection.sessions.length ? tx("有未关闭的会话") : undefined
+                        }
                         disabled={activityDisabled}
                         onClick={() => selectSsh?.(connection)}
                       >
-                        <SessionIcon />
+                        <span
+                          className="sidebar-resource-icon"
+                          data-resource-active={connection.sessions.length > 0 || undefined}
+                          aria-hidden="true"
+                        >
+                          <SessionIcon />
+                        </span>
                         <span>{connection.name}</span>
                       </button>
                       <button
@@ -877,15 +891,21 @@ export function Sidebar({
                     <button
                       className="row-label"
                       title={`${connection.host}:${connection.port}`}
+                      aria-description={status?.connected ? tx("已连接") : undefined}
                       disabled={activityDisabled}
                       onClick={() => selectRedis?.(connection)}
                     >
                       <span
-                        className="redis-sidebar-icon"
-                        data-connected={status?.connected || undefined}
+                        className="sidebar-resource-icon"
+                        data-resource-active={status?.connected || undefined}
                         aria-hidden="true"
                       >
-                        {"R"}
+                        <span
+                          className="redis-sidebar-icon"
+                          data-connected={status?.connected || undefined}
+                        >
+                          {"R"}
+                        </span>
                       </span>
                       <span>
                         {connection.name}
@@ -955,10 +975,17 @@ export function Sidebar({
                     <button
                       className="row-label"
                       title={`${connection.host}:${connection.port}`}
+                      aria-description={status?.connected ? tx("已连接") : undefined}
                       disabled={activityDisabled}
                       onClick={() => selectDatabase?.(connection)}
                     >
-                      <SidebarIcon name="sqlDatabase" />
+                      <span
+                        className="sidebar-resource-icon"
+                        data-resource-active={status?.connected || undefined}
+                        aria-hidden="true"
+                      >
+                        <SidebarIcon name="sqlDatabase" />
+                      </span>
                       <span>
                         {connection.name}
                         {status?.dirty ? " *" : ""}

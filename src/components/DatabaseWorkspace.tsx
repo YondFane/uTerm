@@ -1,5 +1,6 @@
 import { createRef, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { DatabaseGrid } from "./DatabaseGrid";
+import { ToolbarIcon } from "./SidebarIcon";
 import { DatabaseObjects } from "./DatabaseObjects";
 import { EditorView, keymap } from "@codemirror/view";
 import { EditorState, Prec } from "@codemirror/state";
@@ -933,7 +934,7 @@ export function DatabaseWorkspace({
                     disabled={busy}
                     onClick={() => closeQuery(query.id)}
                   >
-                    ×
+                    <ToolbarIcon name="close" />
                   </button>
                 )}
               </div>
