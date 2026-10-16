@@ -2404,6 +2404,44 @@ export function App() {
                         </kbd>
                       </button>
                     )}
+                    <div className="welcome-connections">
+                      {settings.showSshConnections && (
+                        <button
+                          className="welcome-action"
+                          disabled={!runtime || !workspace}
+                          onClick={() => setSshDialog({})}
+                        >
+                          <SidebarIcon name="terminal" />
+                          <span>
+                            <strong>{tx("添加 SSH 连接")}</strong>
+                          </span>
+                        </button>
+                      )}
+                      {settings.showRedisConnections && (
+                        <button
+                          className="welcome-action"
+                          disabled={!runtime || !workspace}
+                          onClick={() => setRedisDialog({})}
+                        >
+                          <SidebarIcon name="database" />
+                          <span>
+                            <strong>{tx("添加 Redis 连接")}</strong>
+                          </span>
+                        </button>
+                      )}
+                      {settings.showDatabaseConnections && (
+                        <button
+                          className="welcome-action"
+                          disabled={!runtime || !workspace}
+                          onClick={() => setDatabaseDialog({})}
+                        >
+                          <SidebarIcon name="sqlDatabase" />
+                          <span>
+                            <strong>{tx("添加数据库连接")}</strong>
+                          </span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="welcome-footer">
                     <span>{t("本地运行 · 自由掌控")}</span>

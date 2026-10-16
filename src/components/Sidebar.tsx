@@ -1411,10 +1411,22 @@ export function Sidebar({
                 <SidebarIcon name="folder" />
                 {tx("添加项目…")}
               </button>
-              {addSsh && (
+              {addSsh && settings.showSshConnections && (
                 <button role="menuitem" onClick={() => act(addSsh)}>
                   <SessionIcon />
                   {tx("添加 SSH 连接")}
+                </button>
+              )}
+              {addRedis && settings.showRedisConnections && (
+                <button role="menuitem" onClick={() => act(addRedis)}>
+                  <SidebarIcon name="database" />
+                  {tx("添加 Redis 连接")}
+                </button>
+              )}
+              {addDatabase && settings.showDatabaseConnections && (
+                <button role="menuitem" onClick={() => act(addDatabase)}>
+                  <SidebarIcon name="sqlDatabase" />
+                  {tx("添加数据库连接")}
                 </button>
               )}
               <button role="menuitem" onClick={() => act(() => addLoose("terminals"))}>

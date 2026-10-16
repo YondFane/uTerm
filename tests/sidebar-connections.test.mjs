@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { createServer } from "vite";
 import React, { act } from "react";
 
-test("sidebar sections fold independently, retain active data and persist visibility with visible storage failures", async () => {
+test("sidebar folding, add actions and visibility retain active data and report storage failures", async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
   for (const key of ["window", "document", "navigator", "HTMLElement", "localStorage"])
     Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
@@ -98,12 +98,12 @@ test("sidebar sections fold independently, retain active data and persist visibi
               onSessionViewed: record,
               onActivitySession: record,
               footerActions: null,
-              addSsh: record,
+              addSsh: () => actions.push("add SSH"),
               selectSsh: record,
-              addDatabase: record,
+              addDatabase: () => actions.push("add database"),
               manageDatabase: record,
               selectDatabase: record,
-              addRedis: record,
+              addRedis: () => actions.push("add Redis"),
               selectRedis: record,
               redisStatuses: { redis: { connected: true, dirty: true, opening: false } },
               selectedRedisId: "redis",
@@ -146,6 +146,56 @@ test("sidebar sections fold independently, retain active data and persist visibi
     assert.equal(JSON.stringify(workspace), originalWorkspace);
     assert.equal(localStorage.getItem(settingsKey), originalSettings);
     assert.deepEqual(actions, []);
+    const addTrigger = () => document.querySelector('.sidebar-footer button[aria-haspopup="menu"]');
+    const addItems = () => [...document.querySelectorAll('.sidebar-popover.add [role="menuitem"]')];
+    const connectionAdds = [
+      "Add SSH connection",
+      "Add Redis connection",
+      "Add database connection",
+    ];
+    await act(async () => addTrigger().click());
+    assert.deepEqual(
+      addItems()
+        .slice(0, 5)
+        .map((item) => item.textContent),
+      ["Add project…", ...connectionAdds, "New terminal"],
+    );
+    for (let mask = 0; mask < 8; mask++) {
+      await act(async () =>
+        settings.save(
+          {
+            ...settings.settings,
+            showSshConnections: !!(mask & 1),
+            showRedisConnections: !!(mask & 2),
+            showDatabaseConnections: !!(mask & 4),
+          },
+          true,
+        ),
+      );
+      assert.deepEqual(
+        addItems().map((item) => item.textContent),
+        [
+          "Add project…",
+          ...connectionAdds.filter((_, index) => mask & (1 << index)),
+          "New terminal",
+        ],
+      );
+      assert.deepEqual(actions, []);
+      assert.equal(JSON.stringify(workspace), originalWorkspace);
+    }
+    const allVisibleSettings = localStorage.getItem(settingsKey);
+    for (const [index, name] of connectionAdds.entries()) {
+      if (index > 0) await act(async () => addTrigger().click());
+      await act(async () =>
+        addItems()
+          .find((item) => item.textContent === name)
+          .click(),
+      );
+      assert.equal(document.querySelector(".sidebar-popover.add"), null);
+      assert.equal(addTrigger().getAttribute("aria-expanded"), "false");
+      assert.deepEqual(actions.splice(0), [["add SSH", "add Redis", "add database"][index]]);
+    }
+    assert.equal(localStorage.getItem(settingsKey), allVisibleSettings);
     await click("SSH");
     await click("SSH");
     assert.equal(heading("SSH").getAttribute("aria-expanded"), "false");
@@ -201,6 +251,12 @@ test("sidebar sections fold independently, retain active data and persist visibi
     await act(async () =>
       document.querySelector('.sidebar-footer button[aria-label="数据库连接"]').click(),
     );
+    await act(async () => addTrigger().click());
+    assert.deepEqual(
+      addItems().map((item) => item.textContent),
+      ["添加项目…", "添加 SSH 连接", "添加 Redis 连接", "添加数据库连接", "新建终端"],
+    );
+    await act(async () => addTrigger().click());
     const chineseDatabase = document.querySelector('section[aria-label="数据库"] .section-toggle');
     assert.equal(chineseDatabase.textContent, "数据库");
     await act(async () => chineseDatabase.click());

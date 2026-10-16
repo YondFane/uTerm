@@ -547,11 +547,13 @@ select:focus-visible {
 .sidebar .section-toggle {
   display: flex;
   align-items: center;
+  flex: 1;
+  min-width: 0;
   gap: 4px;
   color: var(--ui-muted);
   font-size: 12px;
   font-weight: 600;
-  height: 26px;
+  height: 100%;
 }
 .section-toggle .sidebar-icon {
   width: 10px;
@@ -785,6 +787,7 @@ select:focus-visible {
 }
 .sidebar-popover.add {
   bottom: 40px;
+  max-width: calc(100% - 16px);
 }
 .sidebar .sidebar-popover button {
   display: flex;
@@ -2810,7 +2813,7 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: safe center;
   overflow: auto;
   padding: 32px;
   background: var(--ui-canvas);
@@ -2852,6 +2855,18 @@ textarea:focus-visible {
 .welcome-actions {
   display: grid;
   gap: 8px;
+}
+.welcome-connections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+.welcome-connections:empty {
+  display: none;
+}
+.welcome-connections .welcome-action {
+  padding: 12px;
+  gap: 10px;
 }
 .welcome-action {
   display: flex;
