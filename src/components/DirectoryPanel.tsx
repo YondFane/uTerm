@@ -80,6 +80,10 @@ export function DirectoryPanel({
           <ToolbarIcon name="github" />
           {tx("在 GitHub 上查看")}
         </button>
+        <button disabled={busy} onClick={() => void open("gitlab")}>
+          <ToolbarIcon name="gitlab" />
+          {tx("在 GitLab 上查看")}
+        </button>
         {tools.map((tool) => (
           <button key={tool.id} disabled={busy} onClick={() => void open(tool.id)}>
             <ToolbarIcon name="command" />

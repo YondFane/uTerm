@@ -33,7 +33,7 @@ test("database components install only chosen dependencies, stop on verification
     })),
   };
   const calls = [];
-  let fail = true;
+  let failure = "DB_COMPONENT_HASH";
   const handlers = new Map();
   mockIPC((command, args) => {
     if (command === "plugin:event|listen") {
@@ -43,7 +43,7 @@ test("database components install only chosen dependencies, stop on verification
     if (command !== "database_components") return null;
     calls.push(args);
     if (args.action === "install") {
-      if (fail) throw new Error("DB_COMPONENT_HASH");
+      if (failure) throw new Error(failure);
       state.items.find((item) => item.id === args.id).installed = true;
     }
     if (args.action === "cancel") state.busy = false;
@@ -76,7 +76,7 @@ test("database components install only chosen dependencies, stop on verification
       state.items.some((item) => item.installed),
       false,
     );
-    fail = false;
+    failure = null;
     await click("Install required components");
     assert.deepEqual(
       calls.filter((call) => call.action === "install").map((call) => call.id),
@@ -107,6 +107,50 @@ test("database components install only chosen dependencies, stop on verification
       }),
     );
     assert.equal(button("Cancel installation"), undefined);
+    const runtime = state.items.find((item) => item.id === "runtime");
+    runtime.external = true;
+    state.java = "/local Java/bin/java";
+    state.items.find((item) => item.id === "mysql").installed = false;
+    await render("mysql");
+    await click("Refresh");
+    const runtimeRow = () =>
+      [...document.querySelectorAll(".database-component-row")].find(
+        (row) => row.querySelector("strong").textContent === "Java runtime",
+      );
+    assert.match(runtimeRow().textContent, /Using local Java · Ready/);
+    assert.equal(runtimeRow().querySelectorAll("button").length, 0);
+    assert.doesNotMatch(runtimeRow().textContent, /example.com|KB/);
+    assert.match(button("Install required components").textContent, /1 KB/);
+    const before = calls.filter((call) => call.action === "install").length;
+    await click("Install required components");
+    assert.deepEqual(
+      calls
+        .filter((call) => call.action === "install")
+        .slice(before)
+        .map((call) => call.id),
+      ["mysql"],
+    );
+    state.java = null;
+    runtime.external = false;
+    runtime.installed = false;
+    runtime.downloaded = 500;
+    await click("Refresh");
+    assert.match(
+      document.querySelector("section").textContent,
+      /No working Java 17 or newer was detected/,
+    );
+    assert.match(runtimeRow().textContent, /Downloaded 1 KB/);
+    assert.ok(button("Resume download"));
+    failure = "DB_COMPONENT_DOWNLOAD";
+    await click("Resume download");
+    assert.match(document.querySelector('[role="alert"]').textContent, /progress was kept/);
+    assert.ok(button("Resume download"));
+    await act(async () => setUiLanguage("zh-Hans"));
+    assert.match(document.querySelector("section").textContent, /未检测到可用的 Java 17/);
+    assert.ok(button("继续下载"));
+    failure = null;
+    await click("继续下载");
+    assert.equal(calls.filter((call) => call.action === "install").at(-1).id, "runtime");
   } finally {
     await act(async () => root.unmount());
     clearMocks();

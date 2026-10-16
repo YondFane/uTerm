@@ -38,6 +38,7 @@ public final class DatabaseBridge {
     private volatile boolean working;
     private volatile boolean writable;
     private String kind;
+    private final String planSavepoint = "UTERM_PLAN_" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 16);
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
 
     /** Runs the versioned, line-framed local protocol. 运行带版本的本地逐行协议。 */
@@ -94,6 +95,14 @@ public final class DatabaseBridge {
                                 || error instanceof SQLRecoverableException
                                 || (state != null && state.startsWith("08"))
                                 ? "DB_DISCONNECTED" : "DB_SQL:" + error.getErrorCode() + ":" + state;
+                            if (!failure.equals("DB_DISCONNECTED") && error.getMessage() != null) {
+                                var position = java.util.regex.Pattern.compile("(?i)\\bPosition\\s*:\\s*([0-9]{1,7})\\b").matcher(error.getMessage());
+                                var lineNumber = java.util.regex.Pattern.compile("(?i)\\bat line\\s+([0-9]{1,7})\\b").matcher(error.getMessage());
+                                // Return numeric locations only; vendor messages may contain SQL values.
+                                // 仅返回数字位置，厂商错误文本可能包含 SQL 数据值。
+                                if (position.find()) failure += ":POSITION:" + position.group(1);
+                                else if (lineNumber.find()) failure += ":LINE:" + lineNumber.group(1);
+                            }
                         } catch (Exception error) {
                             String code = error.getMessage();
                             failure = code != null && code.matches("DB_[A-Z_]+") ? code : "DB_OPERATION_FAILED";
@@ -217,10 +226,64 @@ public final class DatabaseBridge {
             try (ResultSet rows = values) { return result(rows, 500, 0); }
             finally { connection.rollback(); }
         }
+        if (op.equals("table") || op.equals("preview") || op.equals("apply")) {
+            if (op.equals("apply") && !writable) throw new IllegalArgumentException("DB_READ_ONLY");
+            if (!writable && kind.equals("oracle")) try (Statement s = connection.createStatement()) { s.execute("SET TRANSACTION READ ONLY"); }
+            try {
+                long start = System.nanoTime();
+                Map<String, Object> response = op.equals("table") ? DatabaseTable.read(connection, kind, request)
+                    : op.equals("preview") ? DatabaseTable.preview(connection, kind, request) : DatabaseTable.apply(connection, kind, request);
+                response.put("elapsed", (System.nanoTime() - start) / 1000000);
+                response.put("pending", writable);
+                return response;
+            } finally { if (!writable) connection.rollback(); }
+        }
+        if (op.equals("explain")) {
+            String sql = text(request, "sql");
+            if (!Sql.readOnly(sql, kind)) throw new IllegalArgumentException("DB_READ_ONLY");
+            if (kind.equals("oracle")) {
+                if (!writable) throw new IllegalArgumentException("DB_EXPLAIN_WRITABLE");
+                java.sql.Savepoint point = connection.setSavepoint(planSavepoint);
+                String identity = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 24);
+                try {
+                    try (Statement plan = connection.createStatement()) {
+                        running = plan;
+                        plan.setQueryTimeout(15);
+                        plan.execute("EXPLAIN PLAN SET STATEMENT_ID = '" + identity + "' FOR " + sql);
+                    }
+                    try (java.sql.PreparedStatement plan = connection.prepareStatement("SELECT PLAN_TABLE_OUTPUT FROM TABLE(DBMS_XPLAN.DISPLAY('PLAN_TABLE', ?, 'TYPICAL'))")) {
+                        running = plan;
+                        plan.setString(1, identity);
+                        plan.setQueryTimeout(15);
+                        plan.setMaxRows(201);
+                        try (ResultSet rows = plan.executeQuery()) {
+                            Map<String, Object> response = result(rows, 200, 0);
+                            response.put("pending", true);
+                            return response;
+                        }
+                    }
+                } finally {
+                    try { connection.rollback(point); }
+                    catch (Exception rollback) { connection.close(); throw new IllegalArgumentException("DB_WRITE_UNKNOWN"); }
+                }
+            }
+            Map<String, Object> explain = new LinkedHashMap<>(request);
+            explain.put("op", "query");
+            explain.put("sql", (kind.equals("postgresql") ? "EXPLAIN (FORMAT JSON) " : "EXPLAIN ") + sql);
+            return execute(explain, true);
+        }
         if (!op.equals("query")) throw new IllegalArgumentException("DB_INVALID_REQUEST");
+        return execute(request, false);
+    }
+
+    private Object execute(Map<String, Object> request, boolean explain) throws Exception {
         String sql = text(request, "sql").trim();
         if (sql.isEmpty() || sql.length() > 262144) throw new IllegalArgumentException("DB_INPUT_LIMIT");
-        if (!writable && !sql.matches("(?is)^SELECT\\b.*")) throw new IllegalArgumentException("DB_READ_ONLY");
+        List<Sql.Token> command = explain ? List.of() : Sql.tokens(sql, kind);
+        if (!explain) {
+            boolean readOnly = Sql.readOnly(command, kind);
+            if (!writable && !readOnly) throw new IllegalArgumentException("DB_READ_ONLY");
+        }
         if (!writable && kind.equals("oracle")) try (Statement s = connection.createStatement()) {
             s.execute("SET TRANSACTION READ ONLY");
         }
@@ -236,7 +299,8 @@ public final class DatabaseBridge {
                 response = result(rows, 200, offset);
             } else response = new LinkedHashMap<>(Map.of("affected", statement.getUpdateCount()));
             response.put("elapsed", (System.nanoTime() - start) / 1000000);
-            response.put("pending", writable);
+            boolean finished = command.size() == 1 && List.of("COMMIT", "ROLLBACK", "END").contains(command.get(0).text().toUpperCase(java.util.Locale.ROOT));
+            response.put("pending", writable && !finished);
             if (!writable) connection.rollback();
             return response;
         } catch (Exception error) {
@@ -256,7 +320,7 @@ public final class DatabaseBridge {
             .replace("%", escape + "%").replace("_", escape + "_");
     }
 
-    private static Map<String, Object> result(ResultSet result, int limit, int offset) throws Exception {
+    static Map<String, Object> result(ResultSet result, int limit, int offset) throws Exception {
         ResultSetMetaData metadata = result.getMetaData();
         int count = metadata.getColumnCount();
         if (count > 256) throw new IllegalArgumentException("DB_REPLY_LIMIT");
@@ -264,6 +328,7 @@ public final class DatabaseBridge {
         for (int index = 1; index <= count; index++) columns.add(Map.of(
             "name", metadata.getColumnLabel(index), "type", metadata.getColumnTypeName(index)));
         List<Object> rows = new ArrayList<>();
+        List<Object> partial = new ArrayList<>();
         int budget = 0;
         for (int index = 0; index < offset && result.next(); index++) { }
         boolean more = false;
@@ -272,12 +337,14 @@ public final class DatabaseBridge {
             List<Object> row = new ArrayList<>();
             for (int index = 1; index <= count; index++) {
                 Object cell;
+                boolean truncated = false;
                 switch (metadata.getColumnType(index)) {
                     case Types.BLOB, Types.BINARY, Types.VARBINARY, Types.LONGVARBINARY -> {
                         InputStream stream = result.getBinaryStream(index);
                         if (stream == null) cell = null;
                         else try (stream) {
                             byte[] bytes = stream.readNBytes(4097);
+                            truncated = bytes.length > 4096;
                             cell = Map.of("binary", Base64.getEncoder().encodeToString(Arrays.copyOf(bytes, Math.min(4096, bytes.length))),
                                 "truncated", bytes.length > 4096);
                         }
@@ -291,17 +358,20 @@ public final class DatabaseBridge {
                             char[] chars = new char[16385];
                             int read = 0, next;
                             while (read < chars.length && (next = reader.read(chars, read, chars.length - read)) > 0) read += next;
+                            truncated = read > 16384;
                             cell = new String(chars, 0, Math.min(16384, read)) + (read > 16384 ? " …" : "");
                         }
                     }
                     default -> {
                         String value = result.getString(index);
+                        truncated = value != null && value.length() > 16384;
                         cell = value == null ? null : value.substring(0, Math.min(16384, value.length())) + (value.length() > 16384 ? " …" : "");
                     }
                 }
-                budget += Json.write(cell).length();
+                budget += Json.length(cell);
                 if (budget > 1048576) throw new IllegalArgumentException("DB_REPLY_LIMIT");
                 row.add(cell);
+                if (truncated) partial.add(List.of(rows.size(), index - 1));
             }
             rows.add(row);
         }
@@ -309,6 +379,7 @@ public final class DatabaseBridge {
         response.put("columns", columns);
         response.put("rows", rows);
         response.put("more", more);
+        if (!partial.isEmpty()) response.put("partial", partial);
         return response;
     }
 

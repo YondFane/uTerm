@@ -2024,7 +2024,7 @@ export function App() {
       >
         <p>
           {tx(
-            "数据库仍有操作、事务或 SQL 草稿。请等待操作完成，提交或回滚事务，并保存或放弃草稿后退出。",
+            "数据库仍有操作、事务或未保存修改。请等待操作完成，提交或回滚事务，并保存或放弃修改后退出。",
           )}
         </p>
         <button onClick={() => setDatabaseExit(false)}>{tx("返回工作台")}</button>
@@ -2033,7 +2033,7 @@ export function App() {
             void invoke("database_exit").catch((reason) => setError(databaseError(reason)));
           }}
         >
-          {tx("放弃 SQL 草稿并退出")}
+          {tx("放弃未保存修改并退出")}
         </button>
       </dialog>
       {redisDialog && (
@@ -2521,7 +2521,7 @@ export function App() {
           )}
         </div>
       </main>
-      {directoryOpen && fileDirectory && !activeSsh && (
+      {inspectorVisible && directoryOpen && fileDirectory && !activeSsh && (
         <DirectoryPanel
           key={fileDirectory}
           directory={fileDirectory}
@@ -2530,7 +2530,7 @@ export function App() {
           headerActions={inspectorActions}
         />
       )}
-      {filesOpen && activeSsh && (
+      {inspectorVisible && filesOpen && activeSsh && (
         <RemoteFiles
           key={sshTargetKey}
           connection={activeSsh}
@@ -2547,7 +2547,7 @@ export function App() {
           }}
         />
       )}
-      {filesOpen && fileDirectory && !activeSsh && (
+      {inspectorVisible && filesOpen && fileDirectory && !activeSsh && (
         <FilePanel
           resizeHandle={resizeHandle}
           headerActions={inspectorActions}
@@ -2560,7 +2560,7 @@ export function App() {
           beforeMutation={(action) => void editor.closeDirectory(fileDirectory, action)}
         />
       )}
-      {githubOpen && selected && (
+      {inspectorVisible && githubOpen && selected && (
         <GitHubPanel
           resizeHandle={resizeHandle}
           headerActions={inspectorActions}
@@ -2639,7 +2639,7 @@ export function App() {
           updateWorkspace={update}
         />
       )}
-      {gitOpen && workspace && !activeSsh && (
+      {inspectorVisible && gitOpen && workspace && !activeSsh && (
         <GitPanel
           resizeHandle={resizeHandle}
           diffTarget={gitDiffTarget}

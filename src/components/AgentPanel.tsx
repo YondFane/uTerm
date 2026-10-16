@@ -6,7 +6,7 @@ import type { KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 import type { AgentDefinition, RuntimeInfo } from "../lib/desktop";
-import { agentNames, SessionIcon } from "./SidebarIcon";
+import { agentNames, SessionIcon, ToolbarIcon } from "./SidebarIcon";
 import { agentInstallers } from "../lib/agent-install";
 export const notificationKey = "uterm.desktop.agentNotifications";
 interface Usage {
@@ -46,7 +46,7 @@ export function AgentPanel({
       <header className="inspector-header">
         <h2 id="agent-dialog-title">Agent</h2>
         <button onClick={close} aria-label={tx("关闭 Agent 设置")}>
-          ×
+          <ToolbarIcon name="close" />
         </button>
       </header>
       <AgentSettings runtime={runtime} reload={reload} />

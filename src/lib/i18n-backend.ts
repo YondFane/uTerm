@@ -200,6 +200,7 @@ export const backendMessages: Record<string, string> = {
   "项目目录不存在。": "Project directory does not exist.",
   "工作目录不存在。": "Working directory does not exist.",
   "此工作目录没有 GitHub 远程仓库。": "This working directory has no GitHub remote.",
+  "此工作目录没有 GitLab 远程仓库。": "This working directory has no GitLab remote.",
   "编辑器未安装或无法找到。": "The editor is not installed or could not be found.",
   "无法打开编辑器，请检查应用是否可用。":
     "Could not open the editor. Check whether it is available.",

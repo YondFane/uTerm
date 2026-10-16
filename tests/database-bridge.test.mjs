@@ -8,6 +8,25 @@ import { once } from "node:events";
 import { createConnection, createServer } from "node:net";
 
 test(
+  "backend SQL guards reject unsafe statements independently of the frontend",
+  { skip: !process.env.UTERM_DATABASE_JAVA_TEST },
+  () => {
+    assert.match(
+      execFileSync(
+        process.env.UTERM_DATABASE_JAVA || "java",
+        [
+          "-cp",
+          resolve("components/database/engine.jar"),
+          resolve("tests/fixtures/DatabaseSqlProbe.java"),
+        ],
+        { timeout: 20000 },
+      ).toString(),
+      /SQL guards passed/,
+    );
+  },
+);
+
+test(
   "bundled JSON preserves controls, Unicode, nested values and decimal precision",
   {
     skip: !process.env.UTERM_DATABASE_JAVA_TEST,

@@ -94,6 +94,29 @@ final class Json {
         return output.toString();
     }
 
+    /** Counts the transport budget without allocating a second serialized cell. 计算传输预算，避免重复分配已序列化单元格。 */
+    static int length(Object value) {
+        if (value == null) return 4;
+        if (value instanceof Boolean || value instanceof Number) return value.toString().length();
+        if (value instanceof Map<?, ?> map) {
+            int size = 2, index = 0;
+            for (var entry : map.entrySet()) size += (index++ == 0 ? 0 : 1) + length(entry.getKey().toString()) + 1 + length(entry.getValue());
+            return size;
+        }
+        if (value instanceof Iterable<?> items) {
+            int size = 2, index = 0;
+            for (Object item : items) size += (index++ == 0 ? 0 : 1) + length(item);
+            return size;
+        }
+        String text = value.toString();
+        int size = 2;
+        for (int index = 0; index < text.length(); index++) {
+            char c = text.charAt(index);
+            size += c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t' ? 2 : c < 32 ? 6 : 1;
+        }
+        return size;
+    }
+
     private static void append(StringBuilder output, Object value) {
         if (value == null || value instanceof Boolean || value instanceof Number) {
             output.append(value);

@@ -124,6 +124,7 @@ const toolbarPaths = {
   agent: "M9 3h6m-3 0v3M5 7h14v13H5ZM8 11v2m8-2v2m-7 4h6M2 11v5m20-5v5",
   github:
     "M9 19c-4 1-4-2-6-2m12 5v-4c0-1-.3-1.7-1-2 3-.3 6-1.5 6-6 0-1.3-.4-2.3-1.2-3.2.2-1 .1-2-.3-3-1.5 0-3 .7-3.8 1.3a13 13 0 0 0-6.4 0C7.5 4.5 6 3.8 4.5 3.8c-.4 1-.5 2-.3 3C3.4 7.7 3 8.7 3 10c0 4.5 3 5.7 6 6-.7.3-1 1-1 2v4",
+  gitlab: "M12 21 2 14 5 3l4 8h6l4-8 3 11ZM2 14h7l3 7 3-7h7M9 11v3m6-3v3",
   files: "M8 3h8l4 4v13H8ZM16 3v5h4M4 7v15h12",
   newFile: "M5 3h9l4 4v4M14 3v5h4M5 3v18h7m5-7v8m-4-4h8",
   newFolder: "M3 7V5h6l2 2h10v6M3 7v13h9m5-6v8m-4-4h8",
@@ -143,6 +144,19 @@ export function ToolbarIcon({ name }: { name: keyof typeof toolbarPaths | "git" 
   useUiLanguage();
 
   if (name === "git") return <SidebarIcon name="branch" />;
+  if (name === "close")
+    return (
+      <svg
+        className="toolbar-icon close-icon"
+        viewBox="0 0 18 18"
+        fill="none"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <circle cx="9" cy="9" r="8" />
+        <path d="m6 6 6 6M12 6l-6 6" stroke="#d0d0d0" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    );
   return (
     <svg
       className="toolbar-icon"

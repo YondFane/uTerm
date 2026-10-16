@@ -1,9 +1,9 @@
 {
   "protocol": 1,
   "engine": {
-    "version": "1.0.0",
-    "sha256": "67ae7d0c9d9eda63e05c83002c6f0b6313a6a5d37695cb6f038c6b5784475bec",
-    "size": 11276
+    "version": "1.1.0",
+    "sha256": "53ee592bf5f6ab822525d36e00b72f3d6d46bf9daf90a11f20d15b2f0b61158a",
+    "size": 28972
   },
   "drivers": {
     "mysql": {
@@ -30,22 +30,22 @@
   },
   "runtimes": {
     "mac-aarch64": {
-      "version": "jdk-21.0.12.1+1",
-      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_aarch64_mac_hotspot_21.0.12.1_1.tar.gz",
+      "version": "Temurin 21.0.12.1+1",
+      "url": "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/21/jre/aarch64/mac/OpenJDK21U-jre_aarch64_mac_hotspot_21.0.12.1_1.tar.gz",
       "sha256": "dec50fc6f9fcd4fe3ae8cabf5a5fa68f6afc48841f7698e468e9aa5d54beed84",
       "size": 48144965,
       "filename": "OpenJDK21U-jre_aarch64_mac_hotspot_21.0.12.1_1.tar.gz"
     },
     "mac-x64": {
-      "version": "jdk-21.0.12.1+1",
-      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_mac_hotspot_21.0.12.1_1.tar.gz",
+      "version": "Temurin 21.0.12.1+1",
+      "url": "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/21/jre/x64/mac/OpenJDK21U-jre_x64_mac_hotspot_21.0.12.1_1.tar.gz",
       "sha256": "6717ec641fd9ce0bb209ca083ee23b42202ac68cb6fcc5753496e0e4a0f41989",
       "size": 42131876,
       "filename": "OpenJDK21U-jre_x64_mac_hotspot_21.0.12.1_1.tar.gz"
     },
     "windows-x64": {
-      "version": "jdk-21.0.12.1+1",
-      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.12.1%2B1/OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip",
+      "version": "Temurin 21.0.12.1+1",
+      "url": "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/21/jre/x64/windows/OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip",
       "sha256": "d35f31e712f0fcf6ac5a093edc90204fbff22f720ba3950bd09d331d5e621636",
       "size": 48999141,
       "filename": "OpenJDK21U-jre_x64_windows_hotspot_21.0.12.1_1.zip"

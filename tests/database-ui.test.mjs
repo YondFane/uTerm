@@ -83,7 +83,20 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
       if (args.request.op === "query" && failQuery) throw new Error(String(failQuery));
       if (args.request.op === "query")
         return { columns: [{ name: "value", type: "BINARY" }], rows: [[binaryCell]] };
-      if (args.request.op === "metadata" && args.request.view === "tables")
+      if (args.request.op === "browse" && args.request.view === "catalogs")
+        return {
+          columns: [{ name: "TABLE_CAT", type: "VARCHAR" }],
+          rows: [["metadata_db"], ["information_schema"]],
+        };
+      if (args.request.op === "browse" && args.request.view === "table")
+        return {
+          columns: [{ name: "preview", type: "VARCHAR" }],
+          rows: [["table data"]],
+          more: args.request.offset === 0,
+        };
+      if (args.request.op === "browse" && args.request.view === "columns")
+        return { columns: [{ name: "COLUMN_NAME", type: "VARCHAR" }], rows: [["id"]] };
+      if (args.request.op === "browse" && args.request.view === "tables")
         return {
           columns: [
             { name: "TABLE_NAME", type: "VARCHAR" },
@@ -113,6 +126,9 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
   const click = (text) => act(async () => button(text).click());
   try {
     await render(true);
+    assert.equal(document.querySelector(".database-query-menu"), null);
+    for (const text of ["Copy SQL", "Discard SQL changes"])
+      assert.ok(button(text).closest(".database-query-actions"));
     await click("Connect");
     assert.ok(button("Disconnect"));
     const editorDeadline = Date.now() + 5000;
@@ -124,12 +140,54 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
     assert.ok(reads > 0);
     await act(async () => globalThis.databaseEditorProps.change("SELECT 'draft'"));
     assert.equal(cellReads, reads, "Editing SQL must not rerender unchanged result cells");
-    await click("Tables and views");
+    await act(async () =>
+      document.querySelector('.database-tree-scope[title="metadata_db"]').click(),
+    );
     await click("qa_table");
+    const menu = document.querySelector(".database-object-menu");
+    await act(async () => menu.click());
+    assert.equal(menu.getAttribute("aria-expanded"), "true");
+    await act(async () =>
+      document
+        .querySelector(".database-object-popup")
+        .dispatchEvent(new window.MouseEvent("pointerdown", { bubbles: true })),
+    );
+    assert.equal(menu.getAttribute("aria-expanded"), "true");
+    await act(async () =>
+      button("Copy SQL").dispatchEvent(new window.MouseEvent("pointerdown", { bubbles: true })),
+    );
+    assert.equal(menu.getAttribute("aria-expanded"), "false");
+    await act(async () => menu.click());
+    await act(async () => {
+      document.activeElement.dispatchEvent(
+        new window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      );
+    });
+    assert.equal(menu.getAttribute("aria-expanded"), "false");
+    assert.equal(document.activeElement, menu);
     assert.equal(globalThis.databaseEditorProps.document.text, "SELECT 'draft'");
+    const originalResult = document.querySelector(".database-results td").textContent;
+    await act(async () =>
+      button("qa_table").dispatchEvent(new window.MouseEvent("dblclick", { bubbles: true })),
+    );
+    assert.equal(document.querySelector(".database-results td").textContent, "table data");
+    assert.equal(globalThis.databaseEditorProps.document.text, "SELECT 'draft'");
+    await click("Structure");
+    assert.equal(document.querySelector(".database-results td").textContent, "id");
+    await click("Data");
+    await click("Next page");
+    assert.equal(
+      calls.filter((call) => call.args?.request?.view === "table").at(-1).args.request.offset,
+      200,
+    );
+    await act(async () => document.querySelector('[role="tab"]').click());
+    assert.equal(document.querySelector(".database-results td").textContent, originalResult);
+    await act(async () => menu.click());
+    await click("Generate SELECT");
     await click("Cancel");
     assert.equal(globalThis.databaseEditorProps.document.text, "SELECT 'draft'");
-    await click("qa_table");
+    await act(async () => menu.click());
+    await click("Generate SELECT");
     await click("Confirm");
     assert.equal(
       globalThis.databaseEditorProps.document.text,
@@ -142,13 +200,25 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
     const before = calls.filter((call) => call.args?.request?.op === "query").length;
     await click("Execute SQL");
     assert.equal(calls.filter((call) => call.args?.request?.op === "query").length, before);
-    assert.equal(document.querySelector("dialog").open, true);
+    assert.equal(document.querySelector(".database-confirm-dialog").open, true);
     failQuery = "DB_SQL:1064:42000";
     await click("Confirm");
     assert.match(document.querySelector('[role="alert"]').textContent, /1064/);
     assert.equal(globalThis.databaseEditorProps.document.text, "SET @qa_value = 1");
     assert.equal(button("Commit transaction").disabled, false);
     assert.equal(checkbox.disabled, true);
+    const transactions = calls.filter((call) =>
+      ["commit", "rollback"].includes(call.args?.request?.op),
+    ).length;
+    await act(async () => menu.click());
+    await click("View data");
+    await click("Structure");
+    assert.equal(
+      calls.filter((call) => ["commit", "rollback"].includes(call.args?.request?.op)).length,
+      transactions,
+    );
+    assert.equal(button("Commit transaction").disabled, false);
+    await act(async () => document.querySelector('[role="tab"]').click());
     await click("Roll back transaction");
     await click("Confirm");
     assert.equal(button("Commit transaction").disabled, true);

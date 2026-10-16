@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     io::{Read, Seek, Write},
     path::{Component, Path, PathBuf},
@@ -41,6 +41,7 @@ pub struct ComponentInfo {
     source: String,
     installed: bool,
     external: bool,
+    downloaded: u64,
 }
 #[derive(Serialize)]
 pub struct ComponentStatus {
@@ -170,14 +171,103 @@ fn find_java(directory: &Path, depth: usize) -> Option<PathBuf> {
     None
 }
 pub fn java(app: &tauri::AppHandle) -> Result<PathBuf> {
-    let root = root(app)?;
-    if let Ok(path) = fs::read_to_string(root.join("java-path.txt")) {
-        let path = PathBuf::from(path);
-        if path.is_absolute() && path.is_file() {
-            return Ok(path);
+    select_java(&root(app)?, system_java_candidates)
+        .map(|(path, _)| path)
+        .context("DB_COMPONENT_MISSING")
+}
+fn installation_candidates(directory: &Path, suffix: &str, candidates: &mut Vec<PathBuf>) {
+    if let Ok(entries) = fs::read_dir(directory) {
+        candidates.extend(
+            entries
+                .flatten()
+                .take(64)
+                .map(|entry| entry.path().join(suffix)),
+        );
+    }
+}
+fn system_java_candidates() -> Vec<PathBuf> {
+    let executable = if cfg!(windows) { "java.exe" } else { "java" };
+    let mut candidates = Vec::new();
+    if let Some(home) = std::env::var_os("JAVA_HOME") {
+        candidates.push(PathBuf::from(home).join("bin").join(executable));
+    }
+    if let Some(paths) = std::env::var_os("PATH") {
+        candidates.extend(
+            std::env::split_paths(&paths)
+                .filter(|path| path.is_absolute())
+                .map(|path| path.join(executable)),
+        );
+    }
+    #[cfg(target_os = "macos")]
+    {
+        installation_candidates(
+            Path::new("/Library/Java/JavaVirtualMachines"),
+            "Contents/Home/bin/java",
+            &mut candidates,
+        );
+        if let Some(home) = std::env::var_os("HOME") {
+            installation_candidates(
+                &PathBuf::from(home).join("Library/Java/JavaVirtualMachines"),
+                "Contents/Home/bin/java",
+                &mut candidates,
+            );
+        }
+        for prefix in ["/opt/homebrew/opt", "/usr/local/opt"] {
+            if let Ok(entries) = fs::read_dir(prefix) {
+                for entry in entries.flatten().take(512) {
+                    if entry.file_name().to_string_lossy().starts_with("openjdk") {
+                        candidates.push(entry.path().join("bin/java"));
+                    }
+                }
+            }
         }
     }
-    find_java(&root.join("runtime"), 0).context("DB_COMPONENT_MISSING")
+    #[cfg(windows)]
+    for variable in ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"] {
+        if let Some(directory) = std::env::var_os(variable) {
+            for vendor in [
+                "Java",
+                "Eclipse Adoptium",
+                "Microsoft",
+                "Amazon Corretto",
+                "Programs/Java",
+                "Programs/Eclipse Adoptium",
+            ] {
+                installation_candidates(
+                    &PathBuf::from(&directory).join(vendor),
+                    "bin/java.exe",
+                    &mut candidates,
+                );
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    installation_candidates(Path::new("/usr/lib/jvm"), "bin/java", &mut candidates);
+    candidates
+}
+fn select_java(directory: &Path, system: impl FnOnce() -> Vec<PathBuf>) -> Option<(PathBuf, bool)> {
+    // Keep an explicit choice first, then prefer working system Java over the portable copy. 先保留显式选择，再优先使用可运行的系统 Java，最后使用便携副本。
+    let mut seen = HashSet::new();
+    if let Ok(path) = fs::read_to_string(directory.join("java-path.txt")) {
+        let path = PathBuf::from(path);
+        seen.insert(path.clone());
+        if validate_java(&path).is_ok() {
+            return Some((path, true));
+        }
+    }
+    let start = std::time::Instant::now();
+    for path in system() {
+        if start.elapsed() >= Duration::from_secs(8) {
+            break;
+        }
+        let identity = fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+        if seen.insert(identity) && validate_java(&path).is_ok() {
+            return Some((path, true));
+        }
+    }
+    let path = find_java(&directory.join("runtime"), 0)?;
+    validate_java(&path).ok()?;
+    Some((path, false))
 }
 fn java_major(value: &str) -> Option<u32> {
     let version = value.split(char::from(34)).nth(1)?;
@@ -197,7 +287,10 @@ fn validate_java(path: &Path) -> Result<()> {
     let error = child.take_stderr().context("DB_JAVA")?;
     let start = std::time::Instant::now();
     loop {
-        if child.try_wait()?.is_some() {
+        if let Some(status) = child.try_wait()? {
+            if !status.success() {
+                bail!("DB_JAVA");
+            }
             break;
         }
         if start.elapsed() > Duration::from_secs(8) {
@@ -214,7 +307,7 @@ fn validate_java(path: &Path) -> Result<()> {
 }
 pub fn status(app: &tauri::AppHandle) -> Result<ComponentStatus> {
     let root = root(app)?;
-    let java = java(app).ok();
+    let java = select_java(&root, system_java_candidates);
     let items = artifacts()?
         .into_iter()
         .map(|(id, artifact)| {
@@ -225,19 +318,23 @@ pub fn status(app: &tauri::AppHandle) -> Result<ComponentStatus> {
                     .ok()
                     .is_some_and(|mut file| valid_file(&mut file, &artifact).unwrap_or(false))
             };
+            let downloaded = fs::metadata(partial_path(&root, &artifact))
+                .map(|metadata| metadata.len().min(artifact.size))
+                .unwrap_or(0);
             ComponentInfo {
                 id: id.clone(),
                 version: artifact.version,
                 size: artifact.size,
                 source: artifact.url,
-                external: id == "runtime" && root.join("java-path.txt").is_file() && java.is_some(),
+                external: id == "runtime" && java.as_ref().is_some_and(|(_, external)| *external),
                 installed,
+                downloaded,
             }
         })
         .collect();
     Ok(ComponentStatus {
         items,
-        java: java.map(|path| path.to_string_lossy().into()),
+        java: java.map(|(path, _)| path.to_string_lossy().into()),
         busy: app.state::<Components>().0.load(Ordering::SeqCst),
     })
 }
@@ -304,58 +401,170 @@ fn extract(source: impl Read + Seek, name: &str, destination: &Path) -> Result<(
     }
     Ok(())
 }
-async fn cancelled(app: &tauri::AppHandle) {
+fn partial_path(directory: &Path, artifact: &Artifact) -> PathBuf {
+    // Pin resumable bytes to the expected content, even when its mirror URL changes. 即使镜像地址变化，续传数据仍绑定预期内容。
+    directory
+        .join("downloads")
+        .join(format!("{}.part", artifact.sha256))
+}
+async fn cancelled(flag: &AtomicBool) {
     loop {
-        if app.state::<Components>().1.load(Ordering::SeqCst) {
+        if flag.load(Ordering::SeqCst) {
             return;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
+}
+fn response_range(response: &reqwest::Response, offset: u64, size: u64) -> Option<(u64, u64)> {
+    if response.status() == reqwest::StatusCode::OK {
+        return Some((0, size));
+    }
+    if response.status() != reqwest::StatusCode::PARTIAL_CONTENT {
+        return None;
+    }
+    let range = response
+        .headers()
+        .get(reqwest::header::CONTENT_RANGE)?
+        .to_str()
+        .ok()?;
+    let (bounds, total) = range.strip_prefix("bytes ")?.split_once('/')?;
+    let (start, end) = bounds.split_once('-')?;
+    let (start, end, total) = (
+        start.parse::<u64>().ok()?,
+        end.parse::<u64>().ok()?,
+        total.parse::<u64>().ok()?,
+    );
+    (start == offset && end >= start && end < size && total == size).then(|| (start, end + 1))
+}
+async fn download_file(
+    directory: &Path,
+    artifact: &Artifact,
+    flag: &AtomicBool,
+    progress: impl Fn(u64) -> Result<()>,
+) -> Result<tempfile::NamedTempFile> {
+    let path = partial_path(directory, artifact);
+    tokio::fs::create_dir_all(path.parent().context("DB_COMPONENT_DOWNLOAD")?).await?;
+    let mut output = tokio::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&path)
+        .await?;
+    let mut received = output.metadata().await?.len();
+    if received > artifact.size {
+        output.set_len(0).await?;
+        received = 0;
+    }
+    progress(received)?;
+    if flag.load(Ordering::SeqCst) {
+        bail!("DB_COMPONENT_CANCELLED");
+    }
+    if received < artifact.size {
+        let client = reqwest::Client::builder()
+            // The mirror requires a User-Agent for HTTP/1.1 downloads. 镜像的 HTTP/1.1 下载需要 User-Agent。
+            .user_agent(concat!("uTerm/", env!("CARGO_PKG_VERSION")))
+            .connect_timeout(Duration::from_secs(15))
+            .timeout(Duration::from_secs(300))
+            .build()?;
+        let mut retry = received > 0;
+        let (mut response, end) = loop {
+            let mut request = client
+                .get(&artifact.url)
+                .header(reqwest::header::ACCEPT_ENCODING, "identity");
+            if received > 0 {
+                request = request.header(reqwest::header::RANGE, format!("bytes={received}-"));
+            }
+            let response = tokio::select! {
+                biased;
+                _ = cancelled(flag) => bail!("DB_COMPONENT_CANCELLED"),
+                response = request.send() => response.context("DB_COMPONENT_DOWNLOAD")?,
+            };
+            if let Some((start, end)) = response_range(&response, received, artifact.size) {
+                if start == 0 {
+                    // A server may ignore Range; replace the partial file instead of appending it. 服务端可能忽略 Range，此时覆盖分片，避免拼接损坏。
+                    output.set_len(0).await?;
+                    received = 0;
+                }
+                break (response, end);
+            }
+            if retry
+                && (response.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE
+                    || response.status() == reqwest::StatusCode::PARTIAL_CONTENT)
+            {
+                retry = false;
+                received = 0;
+                continue;
+            }
+            bail!("DB_COMPONENT_DOWNLOAD");
+        };
+        tokio::io::AsyncSeekExt::seek(&mut output, std::io::SeekFrom::Start(received)).await?;
+        progress(received)?;
+        let mut reported = std::time::Instant::now();
+        let result = async {
+            loop {
+                let chunk = tokio::select! {
+                    biased;
+                    _ = cancelled(flag) => bail!("DB_COMPONENT_CANCELLED"),
+                    chunk = response.chunk() => chunk.context("DB_COMPONENT_DOWNLOAD")?,
+                };
+                let Some(chunk) = chunk else {
+                    break;
+                };
+                if chunk.len() as u64 > end - received {
+                    bail!("DB_COMPONENT_HASH");
+                }
+                output.write_all(&chunk).await?;
+                received += chunk.len() as u64;
+                if reported.elapsed() >= Duration::from_millis(100) || received == artifact.size {
+                    progress(received)?;
+                    reported = std::time::Instant::now();
+                }
+            }
+            if received != artifact.size {
+                bail!("DB_COMPONENT_DOWNLOAD");
+            }
+            Ok::<_, anyhow::Error>(())
+        }
+        .await;
+        // Flush before returning an error so a later attempt sees the retained prefix. 出错返回前刷新文件，确保下次续传能读取已保存的前缀。
+        output.flush().await?;
+        drop(output);
+        if result
+            .as_ref()
+            .is_err_and(|error| error.to_string() == "DB_COMPONENT_HASH")
+        {
+            tokio::fs::remove_file(&path).await?;
+        }
+        result?;
+    } else {
+        drop(output);
+    }
+    Ok(tempfile::NamedTempFile::from_parts(
+        fs::OpenOptions::new().read(true).write(true).open(&path)?,
+        tempfile::TempPath::try_from_path(path)?,
+    ))
 }
 async fn download(
     app: &tauri::AppHandle,
     id: &str,
     artifact: &Artifact,
 ) -> Result<tempfile::NamedTempFile> {
-    let directory = root(app)?;
-    tokio::fs::create_dir_all(&directory).await?;
-    let temporary = tempfile::NamedTempFile::new_in(directory)?;
-    let mut output = tokio::fs::File::from_std(temporary.reopen()?);
-    let client = reqwest::Client::builder()
-        .connect_timeout(Duration::from_secs(15))
-        .timeout(Duration::from_secs(300))
-        .build()?;
-    let mut response = tokio::select! {
-        response = client.get(&artifact.url).send() => response.context("DB_COMPONENT_DOWNLOAD")?.error_for_status().context("DB_COMPONENT_DOWNLOAD")?,
-        _ = cancelled(app) => bail!("DB_COMPONENT_CANCELLED"),
-    };
-    let mut received = 0u64;
-    let mut reported = std::time::Instant::now();
-    loop {
-        let chunk = tokio::select! {
-            chunk = response.chunk() => chunk.context("DB_COMPONENT_DOWNLOAD")?,
-            _ = cancelled(app) => bail!("DB_COMPONENT_CANCELLED"),
-        };
-        let Some(chunk) = chunk else {
-            break;
-        };
-        received += chunk.len() as u64;
-        if received > artifact.size {
-            bail!("DB_COMPONENT_HASH");
-        }
-        output.write_all(&chunk).await?;
-        if reported.elapsed() >= Duration::from_millis(100) || received == artifact.size {
+    download_file(
+        &root(app)?,
+        artifact,
+        &app.state::<Components>().1,
+        |received| {
             app.emit(
                 "database-component-progress",
                 serde_json::json!({"id":id,"received":received,"total":artifact.size}),
             )?;
-            reported = std::time::Instant::now();
-        }
-    }
-    output.flush().await?;
-    drop(output);
-    Ok(temporary)
+            Ok(())
+        },
+    )
+    .await
 }
+
 fn install(
     app: &tauri::AppHandle,
     id: &str,
@@ -370,6 +579,7 @@ fn install(
     let root = root(app)?;
     fs::create_dir_all(&root)?;
     // Stage and verify files with bounded buffers, including offline imports. 使用有界缓冲暂存并校验文件，离线导入也采用相同限制。
+    let online = source.is_none();
     let mut staged = if let Some(path) = source {
         let mut temporary = tempfile::NamedTempFile::new_in(&root)?;
         std::io::copy(
@@ -381,6 +591,9 @@ fn install(
         downloaded.context("DB_COMPONENT_DOWNLOAD")?
     };
     if app.state::<Components>().1.load(Ordering::SeqCst) {
+        if online {
+            staged.keep()?;
+        }
         bail!("DB_COMPONENT_CANCELLED");
     }
     staged.flush()?;
@@ -395,6 +608,9 @@ fn install(
         let executable = find_java(temporary.path(), 0).context("DB_JAVA")?;
         validate_java(&executable)?;
         if app.state::<Components>().1.load(Ordering::SeqCst) {
+            if online {
+                staged.keep()?;
+            }
             bail!("DB_COMPONENT_CANCELLED");
         }
         let destination = root.join("runtime");
@@ -410,6 +626,10 @@ fn install(
         staged
             .persist(root.join(&artifact.filename))
             .map_err(|_| anyhow::anyhow!("DB_COMPONENT_INSTALL"))?;
+    }
+    let partial = partial_path(&root, &artifact);
+    if !online && partial.exists() {
+        fs::remove_file(partial)?;
     }
     Ok(())
 }
@@ -496,6 +716,7 @@ pub async fn database_components(
                     .find(|(key, _)| key == &id)
                     .context("DB_INVALID_REQUEST")?
                     .1;
+                let partial = partial_path(&root(&handle)?, &artifact);
                 if id == "runtime" {
                     let root = root(&handle)?;
                     if root.join("runtime").exists() {
@@ -509,6 +730,9 @@ pub async fn database_components(
                     if file.exists() {
                         fs::remove_file(file)?;
                     }
+                }
+                if partial.exists() {
+                    fs::remove_file(partial)?;
                 }
             } else {
                 bail!("DB_INVALID_REQUEST");
@@ -528,6 +752,10 @@ pub async fn database_components(
         .map_err(|_| "DB_OPERATION_FAILED")?
         .map_err(|error| error.to_string())
 }
+
+#[cfg(test)]
+#[path = "database_components_tests.rs"]
+mod resume_tests;
 
 #[cfg(test)]
 mod tests {

@@ -370,6 +370,7 @@ fn main() {
             database::database_guard,
             database::database_exit,
             database::database_export_sql,
+            database::database_export_result,
             redis::redis_pick_ca,
             redis::redis_connect,
             redis::redis_reconnect,

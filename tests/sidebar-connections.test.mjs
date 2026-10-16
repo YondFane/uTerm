@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { createServer } from "vite";
 import React, { act } from "react";
 
-test("sidebar connection toggles persist independently, retain active data and report storage failures", async () => {
+test("sidebar sections fold independently, retain active data and persist visibility with visible storage failures", async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
   for (const key of ["window", "document", "navigator", "HTMLElement", "localStorage"])
     Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
@@ -101,20 +101,64 @@ test("sidebar connection toggles persist independently, retain active data and r
               addSsh: record,
               selectSsh: record,
               addDatabase: record,
+              manageDatabase: record,
               selectDatabase: record,
               addRedis: record,
               selectRedis: record,
               redisStatuses: { redis: { connected: true, dirty: true, opening: false } },
               selectedRedisId: "redis",
+              databaseStatuses: { database: { connected: true, busy: true, dirty: true } },
+              selectedDatabaseId: "database",
             }),
           ),
         ),
       );
-    const section = (name) => document.querySelector(`section[aria-label="${name} connections"]`);
+    const section = (name) =>
+      document.querySelector(`section[aria-label="${name === "Database" ? "Databases" : name}"]`);
+    const heading = (name) => section(name).querySelector(".section-header .section-toggle");
     const toggle = (name) =>
       document.querySelector(`.sidebar-footer button[aria-label="${name} connections"]`);
     const click = (name) => act(async () => toggle(name).click());
     await render();
+    const originalSettings = localStorage.getItem(settingsKey);
+    for (const name of ["SSH", "Redis", "Database"]) {
+      assert.equal(heading(name).textContent, name === "Database" ? "Databases" : name);
+      assert.equal(heading(name).getAttribute("aria-expanded"), "true");
+      assert.ok(section(name).querySelector(".row-label"));
+      await act(async () => heading(name).click());
+      assert.equal(heading(name).getAttribute("aria-expanded"), "false");
+      assert.equal(section(name).querySelector(".row-label"), null);
+      assert.equal(
+        section(name).querySelector('.section-header-actions button[aria-label^="Add"]').disabled,
+        false,
+      );
+    }
+    assert.equal(
+      section("Database").querySelector('button[aria-label="Database components"]').disabled,
+      false,
+    );
+    assert.equal(
+      document
+        .querySelector('section[aria-label="Projects"] .section-toggle')
+        .getAttribute("aria-expanded"),
+      "true",
+    );
+    assert.equal(JSON.stringify(workspace), originalWorkspace);
+    assert.equal(localStorage.getItem(settingsKey), originalSettings);
+    assert.deepEqual(actions, []);
+    await click("SSH");
+    await click("SSH");
+    assert.equal(heading("SSH").getAttribute("aria-expanded"), "false");
+    for (const name of ["SSH", "Redis", "Database"]) {
+      await act(async () => heading(name).click());
+      assert.equal(heading(name).getAttribute("aria-expanded"), "true");
+      assert.ok(section(name).querySelector(".row-label"));
+    }
+    assert.match(section("SSH").textContent, /Remote shell/);
+    assert.match(section("Redis").textContent, /Redis QA \*/);
+    assert.match(section("Database").textContent, /Database QA \*/);
+    assert.ok(section("Redis").querySelector(".sidebar-row.selected"));
+    assert.ok(section("Database").querySelector(".sidebar-row.selected"));
     assert.ok(section("Database"));
     assert.equal(toggle("Database").getAttribute("aria-pressed"), "true");
     await click("Database");
@@ -154,12 +198,24 @@ test("sidebar connection toggles persist independently, retain active data and r
     assert.equal(JSON.stringify(workspace), originalWorkspace);
     assert.deepEqual(actions, []);
     await act(async () => settings.save({ ...settings.settings, language: "zh-Hans" }, true));
+    await act(async () =>
+      document.querySelector('.sidebar-footer button[aria-label="数据库连接"]').click(),
+    );
+    const chineseDatabase = document.querySelector('section[aria-label="数据库"] .section-toggle');
+    assert.equal(chineseDatabase.textContent, "数据库");
+    await act(async () => chineseDatabase.click());
+    assert.equal(chineseDatabase.getAttribute("aria-expanded"), "false");
+    assert.equal(document.querySelector('section[aria-label="数据库"] .row-label'), null);
+    assert.equal(
+      document.querySelector('section[aria-label="Redis"] .section-toggle').textContent,
+      "Redis",
+    );
     const chineseSsh = document.querySelector('.sidebar-footer button[aria-label="SSH 连接"]');
     assert.equal(chineseSsh.title, "隐藏 SSH 连接");
     assert.equal(chineseSsh.getAttribute("aria-pressed"), "true");
     await act(async () => chineseSsh.click());
     assert.equal(chineseSsh.title, "显示 SSH 连接");
-    assert.equal(document.querySelector('section[aria-label="SSH 连接"]'), null);
+    assert.equal(document.querySelector('section[aria-label="SSH"]'), null);
     workspace.groups[0].sshConnections = [];
     workspace.groups[0].redisConnections = [];
     workspace.groups.push({
