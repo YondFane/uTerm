@@ -33,9 +33,14 @@ test("database components install only chosen dependencies, stop on verification
     })),
   };
   const calls = [];
+  const opened = [];
   let failure = "DB_COMPONENT_HASH";
   const handlers = new Map();
   mockIPC((command, args) => {
+    if (command === "open_external") {
+      opened.push(args.url);
+      return null;
+    }
     if (command === "plugin:event|listen") {
       handlers.set(args.event, args.handler);
       return handlers.size;
@@ -60,6 +65,8 @@ test("database components install only chosen dependencies, stop on verification
   const click = (prefix) => act(async () => button(prefix).click());
   try {
     await render("mysql");
+    await click("Download manually");
+    assert.deepEqual(opened, ["https://example.com/component"]);
     assert.match(button("Install required components").textContent, /2 KB/);
     assert.match(document.querySelector("section").textContent, /connection engine is built in/);
     assert.equal(

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
+import { downloadError } from "./download-error";
 
 type Phase = "idle" | "checking" | "available" | "downloading" | "ready" | "installing" | "current";
 interface Availability {
@@ -35,7 +36,7 @@ export function useUpdates(
       setAvailable(result);
       setPhase(result.version ? "available" : "current");
     } catch (reason) {
-      setError(String(reason));
+      setError(downloadError(reason) ?? String(reason));
       setPhase("idle");
     } finally {
       busy.current = false;
@@ -75,7 +76,7 @@ export function useUpdates(
       await invoke("update_download", { events });
       setPhase("ready");
     } catch (reason) {
-      setError(String(reason));
+      setError(downloadError(reason) ?? String(reason));
       setPhase("available");
     } finally {
       busy.current = false;
@@ -90,8 +91,8 @@ export function useUpdates(
       await prepare();
       await invoke("update_install");
     } catch (reason) {
-      setError(String(reason));
-      setPhase("ready");
+      setError(downloadError(reason) ?? String(reason));
+      setPhase(downloadError(reason) ? "available" : "ready");
       try {
         await restore();
       } catch (restoreError) {

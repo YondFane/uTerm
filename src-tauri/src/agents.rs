@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
@@ -247,22 +247,75 @@ pub struct Usage {
     windows: Vec<Value>,
     notice: Option<String>,
 }
+#[derive(Clone, Copy, Default)]
+struct TokenCounts {
+    input: u64,
+    output: u64,
+    cache_read: u64,
+    cache_write: u64,
+}
+
+impl TokenCounts {
+    fn from_value(value: &Value, codex: bool) -> Self {
+        let count = |key: &str| value[key].as_u64().unwrap_or(0);
+        let cache = if codex {
+            count("cached_input_tokens")
+        } else {
+            count("cache_read_input_tokens")
+        };
+        Self {
+            input: if codex {
+                count("input_tokens").saturating_sub(cache)
+            } else {
+                count("input_tokens")
+            },
+            output: count("output_tokens"),
+            cache_read: cache,
+            cache_write: count("cache_creation_input_tokens"),
+        }
+    }
+    fn tally(&self, usage: &mut Usage) {
+        usage.input += self.input;
+        usage.output += self.output;
+        usage.cache_read += self.cache_read;
+        usage.cache_write += self.cache_write;
+        usage.records += 1;
+    }
+}
+
 fn tally(value: &Value, codex: bool, usage: &mut Usage) {
-    let count = |key: &str| value[key].as_u64().unwrap_or(0);
-    let cache = if codex {
-        count("cached_input_tokens")
-    } else {
-        count("cache_read_input_tokens")
-    };
-    usage.input += if codex {
-        count("input_tokens").saturating_sub(cache)
-    } else {
-        count("input_tokens")
-    };
-    usage.output += count("output_tokens");
-    usage.cache_read += cache;
-    usage.cache_write += count("cache_creation_input_tokens");
-    usage.records += 1;
+    TokenCounts::from_value(value, codex).tally(usage);
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ClaudeMessage {
+    id: Value,
+    usage: Value,
+}
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ClaudeUsageLine {
+    timestamp: Value,
+    #[serde(rename = "requestId")]
+    request_id: Value,
+    message: ClaudeMessage,
+}
+fn claude_usage_line(line: &str) -> Option<ClaudeUsageLine> {
+    if let Ok(record) = serde_json::from_str(line) {
+        return Some(record);
+    }
+    // Preserve the previous last-key-wins behavior for duplicate fields and unusual records.
+    // 对重复字段和非常规记录保留原有的最后字段生效行为。
+    let value: Value = serde_json::from_str(line).ok()?;
+    Some(ClaudeUsageLine {
+        timestamp: value["timestamp"].clone(),
+        request_id: value["requestId"].clone(),
+        message: ClaudeMessage {
+            id: value["message"]["id"].clone(),
+            usage: value["message"]["usage"].clone(),
+        },
+    })
 }
 fn scan_usage(agent: &str, root: &Path) -> Result<Usage, String> {
     let mut usage = Usage::default();
@@ -328,7 +381,7 @@ fn scan_usage(agent: &str, root: &Path) -> Result<Usage, String> {
         let offset = metadata.len().saturating_sub(length);
         file.seek(SeekFrom::Start(offset))
             .map_err(|error| error.to_string())?;
-        let mut reader = BufReader::new(file.take(length));
+        let mut reader = BufReader::with_capacity(64 * 1024, file.take(length));
         if offset > 0 {
             let mut first = String::new();
             reader
@@ -337,12 +390,44 @@ fn scan_usage(agent: &str, root: &Path) -> Result<Usage, String> {
             usage.partial = true;
         }
         let mut seen = HashSet::new();
-        for line in reader.lines() {
+        let mut line = String::new();
+        loop {
             if started.elapsed() > Duration::from_secs(5) {
                 usage.partial = true;
                 break;
             }
-            let line = line.map_err(|error| error.to_string())?;
+            line.clear();
+            if reader
+                .read_line(&mut line)
+                .map_err(|error| error.to_string())?
+                == 0
+            {
+                break;
+            }
+            if agent == "claude" {
+                // Ignore conversation content and retain only fixed-size counters for deduplication.
+                // 忽略对话正文，去重时仅保留固定大小的计数。
+                let Some(record) = claude_usage_line(&line) else {
+                    continue;
+                };
+                if !record
+                    .timestamp
+                    .as_str()
+                    .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                    .is_some_and(|time| time >= cutoff)
+                {
+                    continue;
+                }
+                if let Some(id) = record.message.id.as_str().or(record.request_id.as_str()) {
+                    if record.message.usage.is_object() {
+                        claude.insert(
+                            id.to_owned(),
+                            TokenCounts::from_value(&record.message.usage, false),
+                        );
+                    }
+                }
+                continue;
+            }
             let Ok(value) = serde_json::from_str::<Value>(&line) else {
                 continue;
             };
@@ -399,20 +484,11 @@ fn scan_usage(agent: &str, root: &Path) -> Result<Usage, String> {
                 if info["last_token_usage"].is_object() {
                     tally(&info["last_token_usage"], true, &mut usage);
                 }
-            } else if agent == "claude" {
-                if let (Some(id), Some(tokens)) = (
-                    value["message"]["id"]
-                        .as_str()
-                        .or(value["requestId"].as_str()),
-                    value["message"]["usage"].as_object(),
-                ) {
-                    claude.insert(id.to_owned(), Value::Object(tokens.clone()));
-                }
             }
         }
     }
     for tokens in claude.values() {
-        tally(tokens, false, &mut usage);
+        tokens.tally(&mut usage);
     }
     Ok(usage)
 }
@@ -646,6 +722,30 @@ pub async fn agent_usage(
 #[cfg(test)]
 mod tests {
     #[test]
+    #[ignore = "synthetic resource benchmark / 合成资源基准"]
+    fn usage_resource_profile() {
+        let root = tempfile::tempdir().unwrap();
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        let body = "x".repeat(2048);
+        for file in 0..2 {
+            let mut output = std::io::BufWriter::new(
+                std::fs::File::create(root.path().join(format!("{file}.jsonl"))).unwrap(),
+            );
+            use std::io::Write;
+            for row in 0..3000 {
+                writeln!(output, "{}", json!({"timestamp":timestamp,"message":{"id":format!("{file}-{row}"),"content":[{"type":"text","text":body}],"usage":{"input_tokens":123,"output_tokens":17,"cache_read_input_tokens":3,"cache_creation_input_tokens":2}}})).unwrap();
+            }
+        }
+        let started = Instant::now();
+        for _ in 0..5 {
+            let usage = scan_usage("claude", root.path()).unwrap();
+            assert!(!usage.partial);
+            assert_eq!(usage.records, 6000);
+            assert_eq!(usage.input, 738000);
+        }
+        println!("usage_profile_ms={}", started.elapsed().as_millis());
+    }
+    #[test]
     fn kimi_and_grok_usage_windows_and_logs() {
         use super::*;
         let kimi = parse_limits("kimi", &json!({"usage":{"limit":"100","remaining":25},"limits":[{"detail":{"limit":20,"used":5}}]})).unwrap();
@@ -726,6 +826,22 @@ mod tests {
             &mut usage,
         );
         assert_eq!((usage.input, usage.cache_read, usage.output), (20, 80, 12));
+    }
+    #[test]
+    fn claude_usage_keeps_fallback_ids_duplicate_keys_and_counter_types() {
+        let root = tempfile::tempdir().unwrap();
+        let now = chrono::Utc::now().to_rfc3339();
+        let first = json!({"timestamp":now,"requestId":"fallback","message":{"id":null,"content":[{"text":"ignored".repeat(1000)}],"usage":{"input_tokens":5,"output_tokens":"invalid"}}});
+        let duplicate = format!(
+            r#"{{"timestamp":"{now}","message":{{"id":"duplicate","id":"fallback","usage":{{"input_tokens":8,"output_tokens":2}}}}}}"#
+        );
+        std::fs::write(
+            root.path().join("usage.jsonl"),
+            format!("{first}\r\nnot JSON\n{duplicate}\n{{\"message\":null}}\n"),
+        )
+        .unwrap();
+        let usage = scan_usage("claude", root.path()).unwrap();
+        assert_eq!((usage.records, usage.input, usage.output), (1, 8, 2));
     }
     #[test]
     fn usage_logs_deduplicate_updates_and_exclude_old_records() {

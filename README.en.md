@@ -78,6 +78,8 @@ irm https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/ins
 
 GitHub access is required. macOS installs to `~/Applications/uTerm.app`; open it from Finder when finished. An existing user or system installation stops the script; use in-app updates instead. The build is not notarized by Apple, so first launch may require approval in Privacy & Security. Windows downloads the stable installer and opens its wizard; follow its prompts. Node.js, Rust and an administrator terminal are not required.
 
+Installer payloads support bounded retries. Feeds with installer size and SHA-256 also enable resume and verified complete-cache reuse; older feeds still install using fresh downloads. Caches are stored in `%LOCALAPPDATA%/uTerm/installer-cache-v1` on Windows or `~/Library/Caches/sh.uterm.desktop/installer-cache-v1` on macOS, keeping up to four files and pruning inactive files older than seven days on subsequent use. After forcibly terminating the macOS script, confirm no installer is running before removing its cached `installer.lock` directory.
+
 Scripts live in `scripts/install/`; the remote commands read scripts from the `release` branch. You can also download installers manually from [Releases](https://github.com/YondFane/uTerm/releases).
 
 ## Development

@@ -959,6 +959,16 @@ export function SettingsPanel({
                   {localizeMessage(updates.error)}
                 </p>
               )}
+              <button
+                disabled={updates.phase === "installing"}
+                onClick={() => {
+                  void invoke("open_external", {
+                    url: "https://github.com/YondFane/uTerm/releases/latest",
+                  }).catch((reason) => setMessage(localizeMessage(String(reason))));
+                }}
+              >
+                {tx("手动下载安装包")}
+              </button>
               {updates.available?.notes && (
                 <section className="update-release-notes" aria-label={tx("版本说明")}>
                   <h4>{tx("版本说明")}</h4>

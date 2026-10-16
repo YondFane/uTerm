@@ -35,10 +35,12 @@ test("automatic updates download and install once, preserve file guards and stop
     let updates;
     let automatic = false;
     let rejectPrepare = true;
+    let corruptCache = false;
     mockIPC((command) => {
       calls.push(command);
-      if (command === "update_status")
+      if (command === "update_status" || command === "update_check")
         return { enabled: true, version: "2.0.0", notes: null, downloaded: false };
+      if (command === "update_install" && corruptCache) throw new Error("DOWNLOAD_VERIFY");
     });
     function Harness() {
       updates = useUpdates(
@@ -90,6 +92,17 @@ test("automatic updates download and install once, preserve file guards and stop
     });
     await act(async () => t.mock.timers.tick(20_000));
     assert.equal(calls.filter((item) => item === "update_install").length, 1);
+    await act(async () => updates.check());
+    corruptCache = true;
+    await act(async () => updates.install());
+    await act(async () => updates.confirmInstall());
+    assert.equal(updates.phase, "available");
+    assert.ok(updates.error);
+    const attempts = calls.filter((item) => item === "update_download").length;
+    await act(async () => root.render(React.createElement(Harness)));
+    assert.equal(calls.filter((item) => item === "update_download").length, attempts);
+    await act(async () => updates.download());
+    assert.equal(updates.phase, "ready");
   } finally {
     await act(async () => root.unmount());
     t.mock.timers.reset();

@@ -74,8 +74,14 @@ test("welcome connection actions follow visibility and open the existing dialogs
     localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
     const calls = [];
     let resolveRuntime;
+    let controlReady;
     mockIPC((command) => {
       calls.push(command);
+      if (command === "control_wait")
+        return new Promise((resolve) => {
+          controlReady = resolve;
+        });
+      if (command === "control_poll") return { id: "qa-control", method: "status", params: {} };
       if (command === "runtime_info")
         return new Promise((resolve) => {
           resolveRuntime = resolve;
@@ -167,6 +173,11 @@ test("welcome connection actions follow visibility and open the existing dialogs
         ),
       ),
     );
+    assert.equal(calls.filter((command) => command === "control_wait").length, 1);
+    assert.equal(calls.includes("control_poll"), false);
+    await act(async () => controlReady(true));
+    assert.equal(calls.filter((command) => command === "control_poll").length, 1);
+    assert.equal(calls.filter((command) => command === "control_reply").length, 1);
   } finally {
     await act(async () => root.unmount());
     clearMocks();

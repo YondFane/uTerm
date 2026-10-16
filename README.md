@@ -78,6 +78,8 @@ irm https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/ins
 
 需要访问 GitHub。macOS 安装到 `~/Applications/uTerm.app`，完成后从访达打开；已有用户级或系统级安装时停止，请使用应用内更新。安装包未经 Apple 公证，首次启动可能需要在“隐私与安全”中批准。Windows 下载稳定版安装程序并打开向导，按提示完成安装。无需 Node.js、Rust 或管理员终端。
 
+安装包下载支持有限重试；更新清单提供大小和 SHA-256 时，还支持断点续传及校验后复用完整缓存。旧清单仍可安装，但重新下载。缓存位于 Windows 的 `%LOCALAPPDATA%/uTerm/installer-cache-v1` 或 macOS 的 `~/Library/Caches/sh.uterm.desktop/installer-cache-v1`，最多保留四个文件，后续使用时清理超过七天的非当前文件。macOS 强制终止脚本后，确认没有安装器运行再移除缓存中的 `installer.lock` 目录。
+
 脚本位于 `scripts/install/`，远程命令读取 `release` 分支中的脚本。也可从 [Releases](https://github.com/YondFane/uTerm/releases) 手动下载安装包。
 
 ## 开发
