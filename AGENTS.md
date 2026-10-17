@@ -62,6 +62,10 @@ These instructions apply to this repository. It is a self-contained Tauri deskto
 
 ## Required documentation update on every development change
 
+- Before creating or editing documentation, read and follow
+  [Documentation writing rules](docs/writing-rules.md). Use clear heading levels,
+  short paragraphs, meaningful lists and blank lines; keep usage, limits and
+  validation easy to scan in both languages.
 - Read `docs/features.md` and `docs/features.zh-CN.md` before changing behavior.
 - Update **both** guides in the same change: affected behavior, limitations,
   and current validation evidence. Describe only the current product; do not add
