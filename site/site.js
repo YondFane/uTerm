@@ -1,9 +1,9 @@
 (() => {
   const copy = {
     "zh-CN": {
-      pageTitle: "uTerm — 让开发，回到专注。",
+      pageTitle: "uTerm — 项目式终端与 Agent 工作台",
       pageDescription:
-        "uTerm 将终端、Agent、Git、SSH 和数据库放进同一个桌面工作区，支持 Windows 与 macOS。",
+        "面向 Windows 与 macOS 的项目式终端工作台，集中管理编程 Agent、Git Worktree 与远程开发。",
       skip: "跳转到内容",
       navigation: "主导航",
       navWorkflow: "工作流",
@@ -11,10 +11,16 @@
       navDocs: "文档",
       releaseDefault: "uTerm · 桌面开发工作区",
       releaseVersion: "稳定版",
-      heroFirst: "让开发，",
-      heroSecond: "回到专注。",
-      heroDescription: "终端、Agent 与开发工具，\n一个窗口，有序展开。",
-      heroDetail: "把项目、远程连接和数据放回同一处，让思路留在正在做的事情上。",
+      heroFirst: "你的会话，",
+      heroSecond: "按项目展开。",
+      heroDescription: "按项目组织终端与编程 Agent，\n把 Git Worktree 和远程开发放在一起。",
+      heroDetail: "适用于 Windows 与 macOS，非商业用途免费。查看项目、处理任务、重新连接本地会话。",
+      nativeDemoTitle: "看看实际工作区",
+      nativeDemoSteps: "逐步查看导览 ↗",
+      nativeDemoLabel: "uTerm 30 秒截图导览",
+      nativeDemoDownload: "下载截图导览视频",
+      nativeDemoCaption:
+        "真实 Windows 应用截图与本地演示项目，英文界面。30 秒标注截图导览，并非连续录屏，不展示模型请求或远程连接。",
       getUterm: "下载 uTerm",
       takeLook: "看看工作区",
       heroBaseline: "少一点切换，多一点沉浸。",
@@ -103,9 +109,9 @@
       feedback: "反馈与建议",
     },
     en: {
-      pageTitle: "uTerm — Make room for your flow.",
+      pageTitle: "uTerm — A terminal workspace for coding agents",
       pageDescription:
-        "uTerm brings terminals, agents, Git, SSH and databases into one desktop workspace for Windows and macOS.",
+        "A project-based terminal workspace for coding agents, Git Worktrees and remote development on Windows and macOS.",
       skip: "Skip to content",
       navigation: "Main navigation",
       navWorkflow: "Workflow",
@@ -113,11 +119,18 @@
       navDocs: "Docs",
       releaseDefault: "uTerm · Your desktop workspace",
       releaseVersion: "Stable release",
-      heroFirst: "Make room.",
-      heroSecond: "For your flow.",
-      heroDescription: "Terminals, agents, and dev tools.\nOne window. Everything in place.",
+      heroFirst: "Your sessions.",
+      heroSecond: "By project.",
+      heroDescription:
+        "Organize terminals and coding agents by project.\nKeep Git Worktrees and remote development together.",
       heroDetail:
-        "Keep projects, remote connections, and data together. Keep your attention on the work in front of you.",
+        "For Windows and macOS, free for noncommercial use. Review projects, run tasks and reconnect to local sessions.",
+      nativeDemoTitle: "See the actual workspace",
+      nativeDemoSteps: "Explore the tour steps ↗",
+      nativeDemoLabel: "uTerm 30-second screenshot tour",
+      nativeDemoDownload: "Download the screenshot tour video",
+      nativeDemoCaption:
+        "Actual Windows app screenshot with a local sample project and the English interface. A 30-second annotated screenshot tour, not a continuous recording; no model requests or remote connections are shown.",
       getUterm: "Get uTerm",
       takeLook: "Explore the workspace",
       heroBaseline: "Less switching. More focus.",
@@ -276,6 +289,9 @@
     );
     for (const link of document.querySelectorAll("[data-guide-link]")) {
       link.href = `https://github.com/YondFane/uTerm/blob/release/docs/features${language === "zh-CN" ? ".zh-CN" : ""}.md`;
+    }
+    for (const link of document.querySelectorAll("[data-tour-link]")) {
+      link.href = `./media/tour.html?lang=${language}`;
     }
     updateInstallNote();
     updateReleaseText();

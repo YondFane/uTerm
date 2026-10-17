@@ -8,7 +8,8 @@ updated: 2026-10-17
 
 # uTerm feature guide
 
-[简体中文](features.zh-CN.md) · [Setup and commands](../README.en.md)
+[简体中文](features.zh-CN.md) · [Download and quick start](../README.md) ·
+[Development](development.md)
 
 **Contents**
 
@@ -46,6 +47,20 @@ not prevent switching.
 
 Keyboard users can navigate tabs with arrow keys, Home and End.
 
+### Repository guides and presentation media
+
+The repository opens with an English README; its language link opens `README.zh-CN.md`.
+`README.en.md` remains an identical English compatibility copy. Downloads and a three-step quick
+start precede the detailed feature and development guides.
+
+The README and website show an actual isolated Windows app screenshot with a disposable project, two
+real local shells and a Git Worktree. The website's video and interactive five-step tour explain
+that screenshot; the 30-second GIF/MP4 are annotated screenshot tours, not continuous recordings.
+They do not demonstrate model requests or remote connections.
+
+Reusable media and its provenance live in `site/media/`. The editable social card and PNG support
+website sharing metadata; GitHub's repository social preview must be uploaded separately.
+
 ### Downloads and installation commands
 
 Windows x64, macOS Apple Silicon and macOS Intel download links initially open the stable GitHub
@@ -70,21 +85,24 @@ establish hosted Pages deployment or desktop runtime acceptance.
 
 #### Website checks on Windows
 
-- Website validation on Windows: all seven focused checks and the complete frontend/build-helper
-  suite pass (225 passed, ten optional/platform checks skipped). Changed-file formatting, script
-  syntax, documentation checks and TypeScript/production build pass.
+- Website validation on Windows: all seven focused checks pass, together with changed-file
+  formatting, script syntax, local documentation links and documentation metadata/index checks. The
+  updated release skill passes its skill validator.
 
 - Browser inspection covers Chinese/English, 1280×720, 768×1024 and 390×844 layouts without page
-  overflow, preview tabs, light/dark palettes, keyboard focus and actual installation-command
-  copying. Public release metadata and installer names were checked; the browser retains the
-  release-page fallback when its API request cannot resolve, and fixture checks cover direct-asset
-  resolution.
+  overflow, the screenshot tour and actual MP4 playback. Public release metadata resolves to the
+  three matching stable installers; focused checks also cover download fallbacks, preview tabs,
+  palettes, keyboard navigation and installation-command copying.
 
-- The preview serves only website assets and rejects repository-file paths. Repository-wide
-  formatting reports 92 existing files; the suite retains Vite WebSocket-port/React act warnings,
-  and the application build retains its large-chunk warning.
+- The preview serves the explicit website/media allowlist and rejects repository-file paths.
+  Bilingual README/development pages are inspected at wide and narrow reading widths.
 
-- Pages deployment completes successfully, and the public homepage returns HTTP 200.
+- An isolated Windows native QA app provides the screenshot using actual product components and
+  disposable sessions. Its frontend and desktop builds pass, with the existing large-chunk warning.
+  The media does not establish macOS/Linux, authenticated Agent, SSH or database acceptance.
+
+- The Pages workflow publishes the presentation from `release`; local checks alone do not verify
+  hosted publication or GitHub's separately configured social preview.
 
 ## Installation
 
@@ -96,6 +114,11 @@ published.
 
 The prerelease update channel is never marked Latest.
 
+After an authorized stable release passes CI, public-download, stable-feed and Latest verification,
+the release skill requires merging its published commit into `main` and pushing it. The workflow
+preserves both histories, excludes later unpublished commits and checks remote ancestry. Branch
+protection or unresolved conflicts leave synchronization explicitly incomplete.
+
 #### Stable-release checks
 
 - Latest validation: six release-helper tests, workflow formatting, step-order and shell syntax
@@ -104,11 +127,11 @@ The prerelease update channel is never marked Latest.
 
 ### One-line installation
 
-The [README](../README.en.md#one-line-installation) provides one-line Terminal and PowerShell
-commands backed by `scripts/install/install.sh` and `scripts/install/install.ps1`. They read the
-platform stable update feed and download the matching versioned installer over HTTPS from this
-repository. macOS selects Apple Silicon or Intel, including Rosetta detection, mounts the DMG
-read-only and installs to `~/Applications/uTerm.app` without sudo or launching the app.
+The [README](../README.md#one-line-installation) provides one-line Terminal and PowerShell commands
+backed by `scripts/install/install.sh` and `scripts/install/install.ps1`. They read the platform
+stable update feed and download the matching versioned installer over HTTPS from this repository.
+macOS selects Apple Silicon or Intel, including Rosetta detection, mounts the DMG read-only and
+installs to `~/Applications/uTerm.app` without sudo or launching the app.
 
 Existing user/system installations are preserved; use in-app updates. Windows x64 opens the
 installation wizard and reports unsuccessful exit codes.

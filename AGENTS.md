@@ -24,6 +24,9 @@ These instructions apply to this repository. It is a self-contained Tauri deskto
 - Create `uTerm-vMAJOR.MINOR.PATCH` release tags from reviewed commits on
   `release`, push that branch first, then push the version tag. CI builds the
   tag's immutable commit and verifies it belongs to `origin/release`.
+- After each authorized stable release is verified, merge its published
+  `release` commit into `main` and push `main`, following the release skill.
+  Preserve both histories and exclude later, unpublished changes.
 
 ## Boundaries and layout
 
@@ -73,6 +76,8 @@ These instructions apply to this repository. It is a self-contained Tauri deskto
 - Keep the two translations aligned and update their front-matter `updated`
   dates. Never mark platform acceptance complete on build evidence alone.
 - Update both READMEs when setup, commands, dependencies, or layout change.
+- `README.md` is the English entry point; keep `README.en.md` as its matching
+  compatibility copy and `README.zh-CN.md` as the aligned Simplified Chinese guide.
 - Run `pnpm docs:sync` after editing documentation and `pnpm docs:check` before
   completion. The index is generated from front matter; do not edit its rows.
   The checker verifies metadata/index consistency, not semantic translation or

@@ -7,6 +7,12 @@ const assets = new Map([
   ["style.css", ["style.css", "text/css; charset=utf-8"]],
   ["site.js", ["site.js", "text/javascript; charset=utf-8"]],
   ["icon.svg", ["icon.svg", "image/svg+xml"]],
+  ["media/workspace.png", ["media/workspace.png", "image/png"]],
+  ["media/workflow.mp4", ["media/workflow.mp4", "video/mp4"]],
+  ["media/workflow.gif", ["media/workflow.gif", "image/gif"]],
+  ["media/social-preview.png", ["media/social-preview.png", "image/png"]],
+  ["media/social-preview.svg", ["media/social-preview.svg", "image/svg+xml"]],
+  ["media/tour.html", ["media/tour.html", "text/html; charset=utf-8"]],
 ]);
 const port = Number(process.env.UTERM_SITE_PORT ?? 1431);
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
