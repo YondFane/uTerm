@@ -40,7 +40,8 @@ function fixture(type = "normal", tracking = "none") {
   });
   const dispose = attachTerminalScrollInput(terminal, (data) => writes.push(data));
   const wheel = (deltaY, options = {}) => {
-    const { at = (clock += 20), ...init } = options;
+    const { at = clock + 20, ...init } = options;
+    clock = at;
     const event = new dom.window.WheelEvent("wheel", {
       bubbles: true,
       cancelable: true,
@@ -67,16 +68,89 @@ function fixture(type = "normal", tracking = "none") {
   };
 }
 
-test("mouse-wheel distance scrolls history immediately without writing terminal input", () => {
+test("isolated wheel notches use small steps while page and large scrolling remain bounded", () => {
   const value = fixture();
   try {
     assert.equal(value.wheel(3, { deltaMode: 1 }).defaultPrevented, true);
     value.wheel(-160);
     value.wheel(1, { deltaMode: 2 });
     value.wheel(100000);
-    assert.deepEqual(value.scrolls, [6, -20, 40, 80]);
+    assert.deepEqual(value.scrolls, [1, -1, 20, 80]);
     assert.equal(value.events.length, 0);
     assert.equal(value.writes.length, 0);
+  } finally {
+    value.close();
+  }
+});
+
+test("equal mouse-wheel notches scroll fewer lines slowly and accelerate when turned quickly", () => {
+  for (const [deltaY, deltaMode] of [
+    [100, 0],
+    [120, 0],
+    [3, 1],
+  ]) {
+    const slow = fixture();
+    const fast = fixture();
+    try {
+      for (let index = 0; index < 4; index++) {
+        slow.wheel(deltaY, { deltaMode, at: index * 300 });
+        fast.wheel(deltaY, { deltaMode, at: index * 30 });
+      }
+      assert.deepEqual(slow.scrolls, [1, 1, 1, 1]);
+      assert.equal(fast.scrolls[0], 1);
+      assert.ok(fast.scrolls.slice(1).every((lines) => lines >= 4 && lines <= 5));
+      assert.ok(fast.scrolls.reduce((total, lines) => total + lines, 0) > 3 * slow.scrolls.length);
+      assert.equal(fast.writes.length, 0);
+    } finally {
+      slow.close();
+      fast.close();
+    }
+  }
+});
+
+test("wheel acceleration resets after a pause, reversal, buffer change or input-mode change", () => {
+  const value = fixture();
+  try {
+    value.wheel(100, { at: 0 });
+    value.wheel(100, { at: 20 });
+    value.wheel(100, { at: 400 });
+    value.wheel(-100, { at: 420 });
+    value.wheel(-100, { at: 440 });
+    assert.deepEqual(value.scrolls, [1, 6, 1, -1, -6]);
+    value.terminal.modes.mouseTrackingMode = "vt200";
+    value.wheel(-100, { at: 460 });
+    assert.equal(value.events.length, 1);
+    value.wheel(-100, { at: 480 });
+    assert.equal(value.events.length, 7);
+    value.wheel(-3, { deltaMode: 1, at: 500 });
+    assert.equal(value.events.length, 13);
+    value.wheel(-8, { at: 520 });
+    value.wheel(-100, { at: 540 });
+    assert.equal(value.events.length, 14);
+    value.terminal.buffer.active.type = "alternate";
+    value.terminal.modes.mouseTrackingMode = "none";
+    value.wheel(-100, { at: 560 });
+    assert.equal(value.events.length, 15);
+    value.wheel(-100, { at: 100 });
+    assert.equal(value.events.length, 16);
+  } finally {
+    value.close();
+  }
+});
+
+test("rapid wheel input keeps a bounded multiplier, Alt acceleration and one batched application write", () => {
+  const value = fixture("alternate");
+  try {
+    value.wheel(100, { at: 0 });
+    value.wheel(100, { at: 0 });
+    assert.equal(value.events.length, 7);
+    value.wheel(100, { altKey: true, at: 1 });
+    assert.equal(value.events.length, 19);
+    assert.equal(value.writes.length, 3);
+    assert.equal(new TextDecoder().decode(value.writes[2]), "\x1bOA".repeat(12));
+    value.terminal.rows = 5;
+    value.wheel(100, { at: 2 });
+    assert.equal(value.events.length, 24);
   } finally {
     value.close();
   }
@@ -102,13 +176,13 @@ test("fine trackpad movement accumulates without acceleration or stale direction
   }
 });
 
-test("application scrolling retains distance, coordinates and modifiers in one bounded input write", () => {
+test("application scrolling preserves coordinates and modifiers in one bounded input write", () => {
   const value = fixture("normal", "vt200");
   try {
     value.wheel(4, { deltaMode: 1, clientX: 90, clientY: 70, buttons: 1 });
-    assert.equal(value.events.length, 8);
+    assert.equal(value.events.length, 1);
     assert.equal(value.writes.length, 1);
-    assert.equal(new TextDecoder().decode(value.writes[0]), "\x1b[<65;6;4M".repeat(8));
+    assert.equal(new TextDecoder().decode(value.writes[0]), "\x1b[<65;6;4M");
     for (const event of value.events) {
       assert.equal(event.deltaMode, 1);
       assert.equal(event.deltaY, 1);
@@ -117,9 +191,9 @@ test("application scrolling retains distance, coordinates and modifiers in one b
       assert.equal(event.buttons, 1);
     }
     value.wheel(-100000, { altKey: true });
-    assert.equal(value.events.length, 20);
+    assert.equal(value.events.length, 13);
     assert.equal(value.writes.length, 2);
-    assert.ok(value.events.slice(8).every((event) => event.deltaY === -1 && event.altKey));
+    assert.ok(value.events.slice(1).every((event) => event.deltaY === -1 && event.altKey));
     assert.deepEqual(value.scrolls, []);
   } finally {
     value.close();
@@ -130,13 +204,10 @@ test("alternate-screen arrow scrolling and legacy binary mouse reports keep xter
   const value = fixture("alternate");
   try {
     value.wheel(-48);
-    assert.equal(new TextDecoder().decode(value.writes[0]), "\x1bOA".repeat(6));
+    assert.equal(new TextDecoder().decode(value.writes[0]), "\x1bOA");
     value.terminal.modes.mouseTrackingMode = "drag";
     value.wheel(2, { deltaMode: 1 });
-    assert.deepEqual(
-      [...value.writes[1]],
-      Array.from({ length: 4 }, () => [27, 91, 77, 255, 33, 34]).flat(),
-    );
+    assert.deepEqual([...value.writes[1]], [27, 91, 77, 255, 33, 34]);
     assert.equal(value.writes.length, 2);
   } finally {
     value.close();
@@ -147,7 +218,7 @@ test("mouse protocols without wheel reporting still use local history; buffer ch
   const value = fixture("normal", "x10");
   try {
     value.wheel(3, { deltaMode: 1 });
-    assert.deepEqual(value.scrolls, [6]);
+    assert.deepEqual(value.scrolls, [1]);
     value.wheel(12);
     value.terminal.buffer.active.type = "alternate";
     value.wheel(4);
@@ -173,7 +244,7 @@ test("modifiers, horizontal gestures, disabled application input and non-cancela
     assert.deepEqual(value.scrolls, []);
     value.terminal.options.disableStdin = true;
     value.wheel(3, { deltaMode: 1 });
-    assert.deepEqual(value.scrolls, [6]);
+    assert.deepEqual(value.scrolls, [1]);
     value.terminal.buffer.active.type = "alternate";
     assert.equal(value.wheel(160).defaultPrevented, false);
     assert.equal(value.writes.length, 0);

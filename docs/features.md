@@ -3,397 +3,3098 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-16
+updated: 2026-10-17
 ---
 
 # uTerm feature guide
 
-[简体中文](features.zh-CN.md) · [Setup and commands](../README.en.md)
+[简体中文](features.zh-CN.md) · [Download and quick start](../README.md) ·
+[Development](development.md)
+
+**Contents**
+
+- [Product scope](#product-scope)
+- [Project website](#project-website)
+- [Installation](#installation)
+- [Workspaces and sessions](#workspaces-and-sessions)
+- [SSH and remote files](#ssh-and-remote-files)
+- [Redis connections and workbench](#redis-connections-and-workbench)
+- [Files and source control](#files-and-source-control)
+- [Agents and settings](#agents-and-settings)
+- [Interface](#interface)
+- [Architecture](#architecture)
+- [Validation and limits](#validation-and-limits)
+- [Database connections and optional components](#database-connections-and-optional-components)
 
 ## Product scope
 
-uTerm is a Windows and macOS desktop terminal. Local terminal and Agent processes run locally; SSH remote shells run on their servers. The interface supports Simplified Chinese and English.
+uTerm is a Windows and macOS desktop terminal. Local terminal and Agent processes run locally; SSH
+remote shells run on their servers.
+
+The interface supports Simplified Chinese and English.
 
 ## Project website
 
-The independent GitHub Pages website in `site/` introduces terminals and agents, projects and Git, SSH/SFTP, and Redis/databases. Its four tabs are labeled illustrations with sample content, not live desktop sessions or server connections. Six interface palettes change only the preview. English/Simplified Chinese switching updates content, accessible labels, metadata and documentation links; a blocked browser storage setting does not prevent switching. Keyboard users can navigate tabs with arrow keys, Home and End.
+### Website preview
 
-Windows x64, macOS Apple Silicon and macOS Intel download links initially open the stable GitHub release. When the public latest-release API succeeds, they resolve to the exact matching installer assets from this repository. Missing assets, rate limits or network failure retain the release-page fallback. Installation tabs expose the existing npm/macOS/PowerShell commands; copying reports success or selects the command with visible manual-copy guidance when clipboard access fails. Database use still requires Java 17+ and the selected driver, and macOS first launch may require Privacy & Security approval.
+The independent GitHub Pages website in `site/` introduces terminals and agents, projects and Git,
+SSH/SFTP, and Redis/databases. Its four tabs are labeled illustrations with sample content, not live
+desktop sessions or server connections.
 
-Run `pnpm site:dev` for a loopback-only preview under `/uTerm/`; `pnpm site:check` runs focused interaction checks. The Pages workflow uploads only `site/` from `release`; repository Pages must use GitHub Actions and the `github-pages` environment must allow that branch. Publication requires the reviewed website changes to reach `release`. Local browser checks do not establish hosted Pages deployment or desktop runtime acceptance.
+Six interface palettes change only the preview. English/Simplified Chinese switching updates
+content, accessible labels, metadata and documentation links; a blocked browser storage setting does
+not prevent switching.
 
-Website validation on Windows: all seven focused checks and the complete frontend/build-helper suite pass (225 passed, ten optional/platform checks skipped). Changed-file formatting, script syntax, documentation checks and TypeScript/production build pass. Browser inspection covers Chinese/English, 1280×720, 768×1024 and 390×844 layouts without page overflow, preview tabs, light/dark palettes, keyboard focus and actual installation-command copying. Public release metadata and installer names were checked; the browser retains the release-page fallback when its API request cannot resolve, and fixture checks cover direct-asset resolution. The preview serves only website assets and rejects repository-file paths. Repository-wide formatting reports 92 existing files; the suite retains Vite WebSocket-port/React act warnings, and the application build retains its large-chunk warning. Hosted Pages publication remains unverified.
+Keyboard users can navigate tabs with arrow keys, Home and End.
+
+### Repository guides and presentation media
+
+The repository opens with an English README; its language link opens `README.zh-CN.md`.
+`README.en.md` remains an identical English compatibility copy. Downloads and a three-step quick
+start precede the detailed feature and development guides.
+
+The README and website show an actual isolated Windows app screenshot with a disposable project, two
+real local shells and a Git Worktree. The website's video and interactive five-step tour explain
+that screenshot; the 30-second GIF/MP4 are annotated screenshot tours, not continuous recordings.
+They do not demonstrate model requests or remote connections.
+
+Reusable media and its provenance live in `site/media/`. The editable social card and PNG support
+website sharing metadata; GitHub's repository social preview must be uploaded separately.
+
+### Downloads and installation commands
+
+Windows x64, macOS Apple Silicon and macOS Intel download links initially open the stable GitHub
+release. When the public latest-release API succeeds, they resolve to the exact matching installer
+assets from this repository.
+
+Missing assets, rate limits or network failure retain the release-page fallback. Installation tabs
+expose the existing npm/macOS/PowerShell commands; copying reports success or selects the command
+with visible manual-copy guidance when clipboard access fails.
+
+Database use still requires Java 17+ and the selected driver, and macOS first launch may require
+Privacy & Security approval.
+
+### Local preview and publication
+
+Run `pnpm site:dev` for a loopback-only preview under `/uTerm/`; `pnpm site:check` runs focused
+interaction checks. The Pages workflow uploads only `site/` from `release`; repository Pages must
+use GitHub Actions and the `github-pages` environment must allow that branch.
+
+Publication requires the reviewed website changes to reach `release`. Local browser checks do not
+establish hosted Pages deployment or desktop runtime acceptance.
+
+#### Website checks on Windows
+
+- Website validation on Windows: all seven focused checks pass, together with changed-file
+  formatting, script syntax, local documentation links and documentation metadata/index checks. The
+  updated release skill passes its skill validator.
+
+- Browser inspection covers Chinese/English, 1280×720, 768×1024 and 390×844 layouts without page
+  overflow, the screenshot tour and actual MP4 playback. Public release metadata resolves to the
+  three matching stable installers; focused checks also cover download fallbacks, preview tabs,
+  palettes, keyboard navigation and installation-command copying.
+
+- The preview serves the explicit website/media allowlist and rejects repository-file paths.
+  Bilingual README/development pages are inspected at wide and narrow reading widths.
+
+- An isolated Windows native QA app provides the screenshot using actual product components and
+  disposable sessions. Its frontend and desktop builds pass, with the existing large-chunk warning.
+  The media does not establish macOS/Linux, authenticated Agent, SSH or database acceptance.
+
+- The Pages workflow publishes the presentation from `release`; local checks alone do not verify
+  hosted publication or GitHub's separately configured social preview.
 
 ## Installation
 
-The repository sidebar’s Latest entry points to the stable installer release. The release workflow marks a version Latest only after public downloads are verified and the stable update feed is published. The prerelease update channel is never marked Latest.
+### Stable releases
 
-Latest validation: six release-helper tests, workflow formatting, step-order and shell syntax checks, and documentation checks pass. The live latest-release API resolves to a published stable release, with its name, notes and all 11 uploaded asset records intact.
+The repository sidebar’s Latest entry points to the stable installer release. The release workflow
+marks a version Latest only after public downloads are verified and the stable update feed is
+published.
 
-The [README](../README.en.md#one-line-installation) provides one-line Terminal and PowerShell commands backed by `scripts/install/install.sh` and `scripts/install/install.ps1`. They read the platform stable update feed and download the matching versioned installer over HTTPS from this repository. macOS selects Apple Silicon or Intel, including Rosetta detection, mounts the DMG read-only and installs to `~/Applications/uTerm.app` without sudo or launching the app. Existing user/system installations are preserved; use in-app updates. Windows x64 opens the installation wizard and reports unsuccessful exit codes. Temporary downloads are cleaned up on completion or failure. GitHub access is required; no development toolchain is needed. Apple notarization is unavailable, and first launch may require Privacy & Security approval. The commands require the scripts to be published on `release`.
+The prerelease update channel is never marked Latest.
 
-The standalone npm package in `scripts/install` exposes `uterm-install` through npx, pnpm dlx or a global installation. Node.js 22.13 or newer is required. It invokes the bundled platform script with separate arguments and no shell interpolation, preserving installer exit status. Help and invalid arguments never start installation. There are no install lifecycle hooks; installing/removing the npm package only manages the command, not the desktop application. The package is published on npm as `@yondfane/uterm-install`.
+After an authorized stable release passes CI, public-download, stable-feed and Latest verification,
+the release skill requires merging its published commit into `main` and pushing it. The workflow
+preserves both histories, excludes later unpublished commits and checks remote ancestry. Branch
+protection or unresolved conflicts leave synchronization explicitly incomplete.
 
-Validation: all 150 frontend/build-helper tests, 39 backend tests, local-session service tests, locked dependency installation, formatting, localization, documentation checks and TypeScript/production and desktop builds pass on macOS. Shell syntax and mocked macOS installer tests cover native/Rosetta architecture selection, paths with spaces, unsupported platforms, malformed versions, download failure and existing-install protection. The npm entry test covers platform dispatch, separate arguments, help, invalid input and failure exit status. A locally packed tarball passes both npm exec and pnpm dlx help smoke tests on macOS; npm pack confirms both platform scripts are included. The published npm 0.1.0 package also passes npx and pnpm dlx help checks. These tests do not download or install an application. Actual macOS installation and Windows PowerShell/runtime acceptance remain unverified.
+#### Stable-release checks
+
+- Latest validation: six release-helper tests, workflow formatting, step-order and shell syntax
+  checks, and documentation checks pass. The live latest-release API resolves to a published stable
+  release, with its name, notes and all 11 uploaded asset records intact.
+
+### One-line installation
+
+The [README](../README.md#one-line-installation) provides one-line Terminal and PowerShell commands
+backed by `scripts/install/install.sh` and `scripts/install/install.ps1`. They read the platform
+stable update feed and download the matching versioned installer over HTTPS from this repository.
+macOS selects Apple Silicon or Intel, including Rosetta detection, mounts the DMG read-only and
+installs to `~/Applications/uTerm.app` without sudo or launching the app.
+
+Existing user/system installations are preserved; use in-app updates. Windows x64 opens the
+installation wizard and reports unsuccessful exit codes.
+
+Installer payloads make at most three download attempts. With installer size and SHA-256 in the
+stable feed, interrupted payloads are retained and resumed, and complete cached files are verified
+before reuse.
+
+Older feeds remain usable through fresh downloads without persistent payload reuse. Temporary
+mount/staging files are cleaned up; verified installer caches retain up to four files and remove
+inactive files older than seven days on subsequent use.
+
+Windows uses a cache lock; macOS uses a lock directory that may need manual removal after a forced
+termination. Failures print the official manual-download page.
+
+GitHub access is required; no development toolchain is needed. Apple notarization is unavailable,
+and first launch may require Privacy & Security approval.
+
+The commands require the scripts to be published on `release`.
+
+### npm installation command
+
+The standalone npm package in `scripts/install` exposes `uterm-install` through npx, pnpm dlx or a
+global installation. Node.js 22.13 or newer is required.
+
+It invokes the bundled platform script with separate arguments and no shell interpolation,
+preserving installer exit status. Help and invalid arguments never start installation.
+
+There are no install lifecycle hooks; installing/removing the npm package only manages the command,
+not the desktop application. The package is published on npm as `@yondfane/uterm-install`.
+
+#### Installer checks and pending acceptance
+
+- Validation: all 150 frontend/build-helper tests, 39 backend tests, local-session service tests,
+  locked dependency installation, formatting, localization, documentation checks and
+  TypeScript/production and desktop builds pass on macOS. Shell syntax and mocked macOS installer
+  tests cover native/Rosetta architecture selection, paths with spaces, unsupported platforms,
+  malformed versions, download failure and existing-install protection.
+
+- The npm entry test covers platform dispatch, separate arguments, help, invalid input and failure
+  exit status. A locally packed tarball passes both npm exec and pnpm dlx help smoke tests on macOS;
+  npm pack confirms both platform scripts are included.
+
+- The published npm 0.1.0 package also passes npx and pnpm dlx help checks. These tests do not
+  download or install an application.
+
+- Actual macOS installation and Windows PowerShell/runtime acceptance remain unverified.
 
 ## Workspaces and sessions
 
-Project and Worktree rows keep their folder icons when hovered or focused, with no separate dropdown button. Left-click the icon, name or remaining row-label space to expand or collapse the children; Enter/Space on the focused row performs the same action. Existing project/session selection and editor transition guards remain in effect. Right-click menus, dragging and the row's quick-action buttons do not toggle folding. Active-tree folding stays in memory, while inactive project/Worktree folding retains its existing saved setting; activity rings remain visible when folded.
+### Project and Worktree rows
 
-Folder-row validation on Windows: both focused sidebar regressions pass, covering row toggling, independent Worktrees, retained activity rings, unchanged active-tree saved settings, inactive-folder persistence, drag-click suppression, right-click/quick-action isolation and pending-transition guards. Changed source/style/test formatting, localization, TypeScript/production build and documentation checks pass. An isolated native Tauri/WebView2 QA host (`sh.uterm.desktop.qa.sidebarmenus`) renders the real Sidebar with temporary state and verifies icon/name clicks, no hover arrow, Enter/Space, right-click and quick actions, saved inactive folding, dark/light appearance and a 176 px sidebar in Chinese/English. This verifies Sidebar layout and callbacks without starting real sessions or restarting the installed app. Full-application editor transitions and macOS/Linux runtime acceptance remain unverified; repository-wide formatting retains existing issues and the production build retains its large-chunk warning.
+Project and Worktree rows keep their folder icons when hovered or focused, with no separate dropdown
+button. Their inline actions show New terminal and enabled Agents, without a More actions (ellipsis)
+button; right-click the row for its existing menu.
 
-Sidebar session Close Session buttons and SSH/Redis/database Remove buttons appear only while their row is hovered or contains keyboard focus. Selection alone does not keep them visible. Hidden buttons ignore pointer input and retain their space, so row labels do not shift; keyboard navigation still reveals the controls.
+Left-click the icon, name or remaining row-label space to expand or collapse the children;
+Enter/Space on the focused row performs the same action. Existing project/session selection and
+editor transition guards remain in effect.
 
-Close-button visibility validation: two focused sidebar/connection regressions, changed-source formatting, localization/documentation checks and TypeScript/production build pass. An isolated Windows Tauri/WebView2 host (`sh.uterm.desktop.qa.sidebarclose`) renders the real Sidebar and verifies all five fixture rows hiding/showing on pointer entry/exit, unchanged label bounds, a selected mouse-focused row hiding after pointer exit, keyboard focus/Enter activation, disabled connection controls and dark/light appearance with both languages. Callbacks use temporary fixtures without launching or terminating sessions or connecting to servers. macOS/Linux runtime acceptance remains pending; the production build retains its existing large-chunk warning.
+Right-click menus, dragging and the row's quick-action buttons do not toggle folding. Active-tree
+folding stays in memory, while inactive project/Worktree folding retains its existing saved setting;
+activity rings remain visible when folded.
 
-Right-click an SSH connection row for New SSH terminal and Edit SSH connection; right-click a Redis or database connection row to edit its profile. These actions no longer appear as inline plus/ellipsis buttons. Section Add buttons and row Remove buttons remain available. Opening a menu does not select or connect its target. Existing session, transfer, connection and draft protections still disable editing. Shift+F10 or the Menu key opens the focused row's menu; arrows and Home/End navigate available actions, and Escape returns focus to the row. Menus stay within the window and close on outside input, scrolling, resize, loss of window focus, hiding/folding the section, changing workspace or removing the target.
+#### Project-action checks on Windows
 
-Connection-menu validation on Windows: the focused regression and three existing sidebar regressions pass, covering target identity, no selection on right-click, live edit guards, bilingual labels, keyboard focus/navigation and stale-target dismissal. Changed-source/test formatting, localization, documentation and TypeScript/production build pass. An isolated native Tauri/WebView2 QA host (`sh.uterm.desktop.qa.sidebarmenus`) renders the real Sidebar with temporary profiles and verifies hidden inline actions, right-click menus, all four action targets, arrows/Escape and returned focus, Chinese/English labels, dark/light appearance, a 176 px sidebar, window-edge placement and protected editing. This covers WebView layout and callbacks; it does not connect to servers or validate the complete application lifecycle. macOS/Linux menu acceptance remains incomplete. Repository-wide formatting retains existing issues, and the existing large-chunk build warning remains. The installed application was not restarted.
+- Project-action validation on Windows: six existing sidebar checks, changed-source formatting,
+  localization/documentation checks and TypeScript/production build pass. An isolated native
+  Tauri/WebView2 host (`sh.uterm.desktop.qa.hidemore`) renders the real Sidebar with temporary
+  state.
 
-Sidebar project, Worktree, SSH, Redis and database icons keep their normal colors while in use; only their outer ring and soft glow turn green. Projects count all unclosed terminal/Agent sessions, including those in Worktrees; each Worktree counts only its own sessions. SSH profiles count unclosed SSH sessions. Idle or exited sessions still count until closed. A registered Worktree without sessions and a merely selected profile do not light up. Redis and database rings require a successful connected state; opening, disconnected, busy or dirty state alone does not qualify. Rings disappear after the last session closes or a connection disconnects, remain visible when a project is folded, and use a darker green in light mode. Accessible descriptions identify open sessions or a connection. This steady indicator is separate from the blinking unread-completion hint on session icons.
+- Visual inspection covers absent ellipsis buttons on active project, Worktree and inactive project
+  rows, Chinese/dark 248 px and English/light 176 px layouts, correct right-click target callbacks
+  and retained terminal/Agent quick actions. The fixture does not launch sessions; full-application
+  menu integration and macOS/Linux runtime acceptance remain unverified.
 
-Resource-ring validation: 217 frontend/build-helper tests pass, with eight optional Java/database checks skipped; the final focused sidebar regressions also pass. Changed source/test formatting, localization, documentation checks, TypeScript, the production frontend build and an isolated macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.resourcerings`) renders the real Sidebar with isolated fixture state and verifies green rings for all five resource types, dark/light contrast, retained indication when folded, disappearance after sessions/connections close, and single-line name truncation at 176 px. The fixtures do not connect to servers; live SSH/Redis/database and Windows/Linux runtime acceptance remain pending.
+- Repository-wide formatting reports existing issues in 103 unchanged files; the production build
+  retains its large-chunk warning.
 
-Ring-color validation on Windows: the focused activity-state regression, changed-style formatting, documentation checks and TypeScript/production build pass. An isolated Tauri/WebView2 host (`sh.uterm.desktop.qa.sidebarclose`) verifies all five resource types in dark/light mode: active icons and Redis glyph borders retain their inactive colors, while only the outer ring and glow are green. Folding retains the ring and original icon color. The fixture uses no real sessions or server connections; macOS/Linux runtime acceptance remains pending.
+#### Folder-row checks on Windows
 
-The sidebar headings SSH, Redis and Databases share the Projects heading's indentation, typography and chevron. Click a heading or activate its button with Enter/Space to collapse or expand that section independently. Sections start expanded; folding is kept for the current app run and retained when the footer hides and shows a section. Folding only hides the sidebar entries, preserving SSH sessions, connected workbenches, selection, drafts and transactions. Add buttons and database-component management remain available while folded. The bulk expand/collapse button appears only when its section contains project or Worktree folders; an empty Projects section retains its heading and Add project entry.
+- Folder-row validation on Windows: both focused sidebar regressions pass, covering row toggling,
+  independent Worktrees, retained activity rings, unchanged active-tree saved settings,
+  inactive-folder persistence, drag-click suppression, right-click/quick-action isolation and
+  pending-transition guards. Changed source/style/test formatting, localization,
+  TypeScript/production build and documentation checks pass.
 
-Bulk-action visibility validation: rendering the actual Sidebar component confirms that the action is absent with no projects, appears enabled after adding a project, still folds its folders, and disappears after the last project is removed. Five sidebar tests, TypeScript and changed-source formatting pass. Native visual acceptance of this visibility rule remains pending.
+- An isolated native Tauri/WebView2 QA host (`sh.uterm.desktop.qa.sidebarmenus`) renders the real
+  Sidebar with temporary state and verifies icon/name clicks, no hover arrow, Enter/Space,
+  right-click and quick actions, saved inactive folding, dark/light appearance and a 176 px sidebar
+  in Chinese/English. This verifies Sidebar layout and callbacks without starting real sessions or
+  restarting the installed app.
 
-Section-heading validation: 194 frontend/build-helper tests pass, with six optional Java/database checks skipped. Regression coverage includes independent folding, retained sessions and selection, dirty connection rows, visibility restoration, unchanged saved data and bilingual headings. Formatting of the changed sidebar/style/localization/test files, localization checks, TypeScript/production build and an isolated macOS app build pass. Native QA (`sh.uterm.desktop.qa.sidebarsections`) verifies aligned headings at 248 and 176 pixel widths, independent folding, Enter/Space activation, retained folding after hiding/showing and opening the Add dialog while folded. Windows runtime acceptance remains unverified.
+- Full-application editor transitions and macOS/Linux runtime acceptance remain unverified;
+  repository-wide formatting retains existing issues and the production build retains its
+  large-chunk warning.
 
-The sidebar footer provides separate icon-only buttons to show or hide connection sections: a terminal window for SSH, three stacked square layers for Redis and a cylinder for databases. Hover labels describe the action, and accessible names identify each connection type. All three sections are visible by default, including for older saved settings; highlighted buttons indicate visible sections. The three choices are saved independently as application settings, apply across workspaces and persist after restart. Hiding a section retains its profiles, SSH sessions and active Redis/database workbenches, connections, drafts and database transactions. If saving a preference fails, the previous visibility is retained and an error appears. The footer wraps its controls when the sidebar is narrow.
+### Close and Remove buttons
 
-Connection-section controls validation: all 184 frontend/build-helper tests, formatting, localization, documentation checks, TypeScript/production build and the isolated macOS desktop build pass. Regression tests cover legacy defaults, independent choices, provider reload, unchanged active profile/session data, visible storage failures and both languages. Native QA (`sh.uterm.desktop.qa.redisbinary`) verifies showing/hiding both sections, retaining the connected Redis view, restart persistence and footer controls at 248 and 176 pixel sidebar widths. Icon-only controls pass the focused connection-toggle regression, formatting, localization, documentation, TypeScript/production and isolated macOS build checks; separate native QA (`sh.uterm.desktop.qa.icons`) verifies the SSH terminal and Redis stacked-square glyphs, highlighted/dimmed states, accessible action labels and section toggling at both sidebar widths. Windows/Linux runtime acceptance remains pending.
+Sidebar session Close Session buttons and SSH/Redis/database Remove buttons appear only while their
+row is hovered or contains keyboard focus. Selection alone does not keep them visible.
 
-Middle-click a sidebar session row or a terminal pane's title to Close Session, terminating that session's process through the existing close flow. This works for project, Worktree, pinned and standalone terminal/Agent sessions. Middle-click does not select the sidebar target or trigger its context menu; terminal content retains its existing mouse behavior. Close failures remain visible and retain the session for retry. Windows validation: 158 frontend/build-helper tests pass, with two platform-specific tests skipped; 40 backend tests, 16 local-service tests, locked dependency installation, TypeScript/production build, localization and documentation checks pass. Component regression coverage includes project terminals, Agents, Worktrees and standalone terminals/chats, default-event suppression and right-button exclusion. Native Windows/macOS mouse acceptance remains pending. Repository-wide formatting is blocked by existing issues in 39 files; the production build retains its large-chunk warning.
+Hidden buttons ignore pointer input and retain their space, so row labels do not shift; keyboard
+navigation still reveals the controls.
 
-The sidebar’s Active section shows complete project trees for projects in the current workspace with unclosed terminal or Agent sessions, including idle and Worktree sessions. Each project appears only once, with its sessions and all Worktrees beneath it; no session count is shown. Pinned projects, Worktrees and sessions join the same active tree while retaining their pin flags and ordering. Closing the last session returns the project and its children to their original Projects/Pinned sections. Active is hidden when no projects have sessions; standalone terminals and chats stay in their own sections. Active projects and Worktrees with sessions initially expand, with separate in-memory folding that does not overwrite the original folder settings. Section-wide folding affects only that section; project dragging stays within the same section and pin status. Selecting an active project retains its selected session or opens its first stored session; selecting a session or a Worktree with sessions uses the editor save/close guard and is disabled during pending transitions. Project removal stays disabled until every session closes. Session and workspace changes update the tree immediately.
+#### Close-button visibility checks
 
-Project context menus offer Copy project path for the absolute local directory and Move to workspace, whose submenu lists other workspaces by name. Hover, click or Right Arrow expands it; Up/Down selects a destination and Left Arrow/Escape returns to the parent menu. The submenu opens toward the available space near window edges and scrolls for long lists. With no other workspace, moving is disabled. Moving changes workspace membership only, preserving project files and sessions. New Worktree remains in the project menu; New terminal and Refresh Worktrees are not offered there. Terminal creation remains available through the toolbar, welcome page and shortcuts, and Worktrees are discovered automatically when projects load. Clipboard failures remain visible.
+- Close-button visibility validation: two focused sidebar/connection regressions, changed-source
+  formatting, localization/documentation checks and TypeScript/production build pass. An isolated
+  Windows Tauri/WebView2 host (`sh.uterm.desktop.qa.sidebarclose`) renders the real Sidebar and
+  verifies all five fixture rows hiding/showing on pointer entry/exit, unchanged label bounds, a
+  selected mouse-focused row hiding after pointer exit, keyboard focus/Enter activation, disabled
+  connection controls and dark/light appearance with both languages.
 
-Close Session brings its target workspace and session into view before requesting termination, including targets in other workspaces. Each invocation closes only one session; a failed close retains the target for retry. Regression tests cover draining another workspace's project, Worktree, standalone terminal and chat sessions. Native cross-workspace shortcut acceptance remains pending.
+- Callbacks use temporary fixtures without launching or terminating sessions or connecting to
+  servers. macOS/Linux runtime acceptance remains pending; the production build retains its existing
+  large-chunk warning.
 
-Next session and Previous session cycle across all workspaces in stored workspace order, visiting project sessions and then standalone terminals/chats within each workspace. Empty workspaces are skipped and both directions wrap around. Navigation selects the destination workspace, project and Worktree together and remembers the previous workspace selection. With no active session it selects the first/last session in the current workspace, falling back to all workspaces. Editor and pending-transition guards remain active. Regression tests cover cross-workspace navigation, wrapping, empty collections and selection restoration; native shortcut acceptance remains pending.
+### Connection context menus
 
-Agent chats close automatically only on a successful exit (code 0), removing the chat pane and sidebar entry after final output acknowledgement and successful host cleanup. Failed or unknown exits retain diagnostics, as do ordinary shell terminals. A failed Close Session retains the attachment and retries must confirm termination before removing it; disconnected sessions may require reconnection first. Disconnection alone does not close a chat; acknowledgement or cleanup failures remain visible. Native Claude/Codex exit acceptance remains pending.
+Right-click an SSH connection row for New SSH terminal and Edit SSH connection; right-click a Redis
+or database connection row to edit its profile. These actions no longer appear as inline
+plus/ellipsis buttons.
 
-Close Session closes one session per shortcut invocation: the active session in the selected project, then its remaining sessions (including Worktrees), then other projects in stored order and finally standalone sessions across workspaces. With no project selected, an active standalone session takes priority. When a file is displayed, the same Close Session shortcut (Cmd+W on macOS, Ctrl+W on Windows by default) closes that file tab first, saving changes through the existing conflict/draft guard without terminating a session. It is disabled during a pending file transition/dialog, or when neither a file nor sessions remain. Sequence tests cover draining all collections; an App shortcut regression test covers saving and removing the active file while preserving sessions. Native shortcut acceptance remains pending.
+Section Add buttons and row Remove buttons remain available. Opening a menu does not select or
+connect its target.
 
-Add Project supports selecting multiple folders in the native chooser. Review the selected paths and confirm Add to insert them into the workspace selected at confirmation. All directories are validated before the batch is saved; existing projects in that workspace are reused. Manual path entry replaces the multi-selection with a single path. Native multi-selection interaction remains pending runtime acceptance.
+Existing session, transfer, connection and draft protections still disable editing. Shift+F10 or the
+Menu key opens the focused row's menu; arrows and Home/End navigate available actions, and Escape
+returns focus to the row.
 
-New chat from the welcome page, command palette or shortcut uses the selected project's directory (or selected Worktree directory) and belongs to that project. Without a selected project it uses the standalone chat directory. This routing uses the existing project-session creation flow; live Agent working-directory acceptance remains pending.
+Menus stay within the window and close on outside input, scrolling, resize, loss of window focus,
+hiding/folding the section, changing workspace or removing the target.
 
-Background local-session discovery retries every two seconds after each attempt. Connection timeouts do not show an error banner; other synchronization failures remain visible. A timeout does not clear saved sessions. Focused automated tests cover timeout suppression and visibility of other failures; live timeout recovery remains unverified.
+#### Connection-menu checks on Windows
 
-Workspaces contain projects, standalone terminals and chats. Projects can contain Git worktrees. Sessions support pinning, ordering, grouping, ungrouping, split resizing and directional focus. Groups cannot cross project, worktree or standalone collection boundaries.
+- Connection-menu validation on Windows: the focused regression and three existing sidebar
+  regressions pass, covering target identity, no selection on right-click, live edit guards,
+  bilingual labels, keyboard focus/navigation and stale-target dismissal. Changed-source/test
+  formatting, localization, documentation and TypeScript/production build pass.
 
-The Rust local service owns PTYs and output replay. Quitting detaches the UI; Close Session terminates a process. Reconnection retains session identity and acknowledges replay in order. The service requires authentication and binds only to loopback. Running sessions prevent replacement of their service executable.
+- An isolated native Tauri/WebView2 QA host (`sh.uterm.desktop.qa.sidebarmenus`) renders the real
+  Sidebar with temporary profiles and verifies hidden inline actions, right-click menus, all four
+  action targets, arrows/Escape and returned focus, Chinese/English labels, dark/light appearance, a
+  176 px sidebar, window-edge placement and protected editing. This covers WebView layout and
+  callbacks; it does not connect to servers or validate the complete application lifecycle.
+  macOS/Linux menu acceptance remains incomplete.
 
-Workspace storage uses schema version 7, accepts versions 3, 4, 5 and 6 and retains each original version backup before saving upgraded data; settings accept version 1 and require valid current fields. Invalid or unsupported saved data produces an error without overwriting the original value. Startup reads only this application's workspace, without importing another application's state.
+- Repository-wide formatting retains existing issues, and the existing large-chunk build warning
+  remains. The installed application was not restarted.
 
-Ordinary shell sessions on macOS and Windows recognize descendant Claude/Codex executables and display their Agent icon in the sidebar. Unix process snapshots retain full executable paths even beyond the default ps column width; a real subprocess regression covers a long path with spaces. Detection refreshes at most once per second; exiting the Agent restores the terminal icon. Only executable names `claude`/`codex` (or their Windows `.exe` names) are recognized; Node.js wrappers and custom Agent names are not identified. Process-tree tests cover session isolation, ambiguous matches, paths with spaces and clearing identity after exit; all local-service tests, formatting, documentation checks and frontend/desktop builds pass on macOS. Native icon switching and Windows runtime acceptance remain unverified.
+### Resource activity rings
 
-Removing an SSH, Redis or database connection opens a confirmation dialog showing the connection name and explaining that its saved profile and remembered password will be deleted. Only Confirm removal starts removal; Cancel or Escape keeps the profile and password and returns focus to the entry. Cancel receives initial focus. Existing session, file, transfer, connection, draft and SSH-dependency protections still apply. A pending confirmation is cancelled if the profile changes, becomes protected, disappears, the workspace changes or the sidebar/connection section is hidden.
+Sidebar project, Worktree, SSH, Redis and database icons keep their normal colors while in use; only
+their outer ring and soft glow turn green. Projects count all unclosed terminal/Agent sessions,
+including those in Worktrees; each Worktree counts only its own sessions.
 
-Connection-removal validation: five connection-related frontend regressions pass. Focused component coverage includes all three connection types in Simplified Chinese and English, cancellation, Escape, initial/returned focus, a single callback after confirmation, live protection changes and invalidated targets. An isolated Windows desktop app (`sh.uterm.desktop.qa.connectionremoval`) verifies both languages, Cancel/Escape preserving saved profiles, returned focus and confirmed profile removal for all three types using disposable profiles without credentials or server connections. Dark/light dialogs and long-name wrapping pass visual inspection. Frozen dependency installation, changed-file formatting, localization/documentation checks, TypeScript/production build and the isolated desktop build pass. The full frontend suite encountered a Vite SSR module-loading timeout; repository-wide formatting reports existing issues in other files. Remembered-credential integration and macOS/Linux runtime acceptance remain unverified; the production build retains its large-chunk warning.
+- SSH profiles count unclosed SSH sessions. Idle or exited sessions still count until closed.
+
+- A registered Worktree without sessions and a merely selected profile do not light up. Redis and
+  database rings require a successful connected state; opening, disconnected, busy or dirty state
+  alone does not qualify.
+
+- Rings disappear after the last session closes or a connection disconnects, remain visible when a
+  project is folded, and use a darker green in light mode. Accessible descriptions identify open
+  sessions or a connection.
+
+- This steady indicator is separate from the blinking unread-completion hint on session icons.
+
+#### Resource-ring checks
+
+- Resource-ring validation: 217 frontend/build-helper tests pass, with eight optional Java/database
+  checks skipped; the final focused sidebar regressions also pass. Changed source/test formatting,
+  localization, documentation checks, TypeScript, the production frontend build and an isolated
+  macOS desktop build pass.
+
+- Native QA (`sh.uterm.desktop.qa.resourcerings`) renders the real Sidebar with isolated fixture
+  state and verifies green rings for all five resource types, dark/light contrast, retained
+  indication when folded, disappearance after sessions/connections close, and single-line name
+  truncation at 176 px. The fixtures do not connect to servers; live SSH/Redis/database and
+  Windows/Linux runtime acceptance remain pending.
+
+#### Ring-color checks on Windows
+
+- Ring-color validation on Windows: the focused activity-state regression, changed-style formatting,
+  documentation checks and TypeScript/production build pass. An isolated Tauri/WebView2 host
+  (`sh.uterm.desktop.qa.sidebarclose`) verifies all five resource types in dark/light mode: active
+  icons and Redis glyph borders retain their inactive colors, while only the outer ring and glow are
+  green.
+
+- Folding retains the ring and original icon color. The fixture uses no real sessions or server
+  connections; macOS/Linux runtime acceptance remains pending.
+
+### Section folding and bulk actions
+
+Sidebar section headings, including Active, Pinned, SSH, Redis, Databases and Projects, let you
+click the name, arrow or remaining blank space across the full heading height to expand or collapse
+the section independently. Enter/Space on the focused heading performs the same action.
+
+- Right-side Add, database-component and bulk expand/collapse buttons act independently without
+  toggling the section. Sections start expanded; folding is kept for the current app run and
+  retained when the footer hides and shows a section.
+
+- Folding only hides the sidebar entries, preserving SSH sessions, connected workbenches, selection,
+  drafts and transactions. Add buttons and database-component management remain available while
+  folded.
+
+- The bulk expand/collapse button appears only when its section contains project or Worktree
+  folders; an empty Projects section retains its heading and Add project entry.
+
+#### Bulk-action visibility checks
+
+- Bulk-action visibility validation: rendering the actual Sidebar component confirms that the action
+  is absent with no projects, appears enabled after adding a project, still folds its folders, and
+  disappears after the last project is removed. Five sidebar tests, TypeScript and changed-source
+  formatting pass.
+
+- Native visual acceptance of this visibility rule remains pending.
+
+#### Section-heading checks on Windows
+
+- Section-heading validation on Windows: all six focused sidebar checks, changed-style formatting,
+  localization, documentation checks and TypeScript/production build pass. An isolated native
+  Tauri/WebView2 QA host (`sh.uterm.desktop.qa.sidebarmenus`) renders the real Sidebar with
+  temporary state and verifies all six headings: blank-space clicks at the top/bottom of the
+  full-height button, independent folding, name/arrow clicks, Enter/Space, right-click isolation,
+  independent Add/component/bulk actions, retained sessions/profiles/selection and retained folding
+  after hiding/showing.
+
+- Chinese/dark 248 px and English/light 176 px layouts pass visual inspection. The fixtures do not
+  start real sessions, connect to servers or open application dialogs; full-application integration
+  and macOS/Linux acceptance of the expanded click area remain unverified.
+
+- Repository-wide formatting reports existing issues in 88 unchanged files. The focused suite
+  retains existing Vite WebSocket-port warnings, and the production build retains its large-chunk
+  warning.
+
+### Connection visibility switches
+
+The sidebar footer provides separate icon-only buttons to show or hide connection sections: a
+terminal window for SSH, three stacked square layers for Redis and a cylinder for databases. Hover
+labels describe the action, and accessible names identify each connection type.
+
+- All three sections are visible by default, including for older saved settings; highlighted buttons
+  indicate visible sections. The three choices are saved independently as application settings,
+  apply across workspaces and persist after restart.
+
+- Hiding a section retains its profiles, SSH sessions and active Redis/database workbenches,
+  connections, drafts and database transactions. If saving a preference fails, the previous
+  visibility is retained and an error appears.
+
+- The footer wraps its controls when the sidebar is narrow.
+
+### Adding connections from the footer
+
+The footer's + menu offers Add SSH connection, Add Redis connection and Add database connection
+alongside Add project, New terminal and enabled Agent chats. Each connection item follows its
+section's visibility switch: hiding the section hides its Add item, and showing it restores that
+item independently.
+
+Collapsing a visible section keeps its Add item available. Choosing an item closes the menu and
+opens the existing connection dialog.
+
+The menu fits within the sidebar and wraps long labels when narrow.
+
+#### Connection-switch and Add-menu checks
+
+- Connection controls and Add-menu validation on Windows: all six focused sidebar checks,
+  changed-file formatting, localization, documentation checks and TypeScript/production build pass.
+  Regression coverage includes all eight visibility combinations, legacy defaults, independent
+  choices, provider reload, retained profiles/sessions/selection, visible storage failures,
+  bilingual labels and a single correct Add callback with menu dismissal.
+
+- An isolated native Tauri/WebView2 host (`sh.uterm.desktop.qa.sidebarmenus`) renders the real
+  Sidebar with temporary profiles and verifies all eight combinations through footer clicks, adding
+  while folded, each callback and dismissal, keyboard navigation/Enter/Escape and returned focus.
+  Chinese/dark 248 px and English/light 176 px menus with both enabled Agent chats pass visual
+  inspection; narrow labels wrap completely within the sidebar.
+
+- The fixture does not open real connection dialogs or connect to servers; full-application dialog
+  integration and macOS/Linux acceptance of the expanded menu remain unverified. Repository-wide
+  formatting reports existing issues in 88 unchanged files; Vite WebSocket-port and production
+  large-chunk warnings remain.
+
+### Middle-click to Close Session
+
+Middle-click a sidebar session row or a terminal pane's title to Close Session, terminating that
+session's process through the existing close flow. This works for project, Worktree, pinned and
+standalone terminal/Agent sessions.
+
+Middle-click does not select the sidebar target or trigger its context menu; terminal content
+retains its existing mouse behavior. Close failures remain visible and retain the session for retry.
+
+#### Validation and limits
+
+- Windows validation: 158 frontend/build-helper tests pass, with two platform-specific tests
+  skipped; 40 backend tests, 16 local-service tests, locked dependency installation,
+  TypeScript/production build, localization and documentation checks pass. Component regression
+  coverage includes project terminals, Agents, Worktrees and standalone terminals/chats,
+  default-event suppression and right-button exclusion.
+
+- Native Windows/macOS mouse acceptance remains pending. Repository-wide formatting is blocked by
+  existing issues in 39 files; the production build retains its large-chunk warning.
+
+### Active project tree
+
+The sidebar’s Active section shows complete project trees for projects in the current workspace with
+unclosed terminal or Agent sessions, including idle and Worktree sessions. Each project appears only
+once, with its sessions and all Worktrees beneath it; no session count is shown.
+
+- Pinned projects, Worktrees and sessions join the same active tree while retaining their pin flags
+  and ordering. Closing the last session returns the project and its children to their original
+  Projects/Pinned sections.
+
+- Active is hidden when no projects have sessions; standalone terminals and chats stay in their own
+  sections. Active projects and Worktrees with sessions initially expand, with separate in-memory
+  folding that does not overwrite the original folder settings.
+
+- Section-wide folding affects only that section; project dragging stays within the same section and
+  pin status. Selecting an active project retains its selected session or opens its first stored
+  session; selecting a session or a Worktree with sessions uses the editor save/close guard and is
+  disabled during pending transitions.
+
+- Project removal stays disabled until every session closes. Session and workspace changes update
+  the tree immediately.
+
+### Project paths and workspace moves
+
+Project context menus offer Copy project path for the absolute local directory and Move to
+workspace, whose submenu lists other workspaces by name. Hover, click or Right Arrow expands it;
+Up/Down selects a destination and Left Arrow/Escape returns to the parent menu.
+
+- The submenu opens toward the available space near window edges and scrolls for long lists. With no
+  other workspace, moving is disabled.
+
+- Moving changes workspace membership only, preserving project files and sessions. New Worktree
+  remains in the project menu; New terminal and Refresh Worktrees are not offered there.
+
+- Terminal creation remains available through the toolbar, welcome page and shortcuts, and Worktrees
+  are discovered automatically when projects load. Clipboard failures remain visible.
+
+### Closing a session in another workspace
+
+Close Session brings its target workspace and session into view before requesting termination,
+including targets in other workspaces. Each invocation closes only one session; a failed close
+retains the target for retry.
+
+#### Validation and limits
+
+- Regression tests cover draining another workspace's project, Worktree, standalone terminal and
+  chat sessions. Native cross-workspace shortcut acceptance remains pending.
+
+### Next and Previous session
+
+Next session and Previous session cycle across all workspaces in stored workspace order, visiting
+project sessions and then standalone terminals/chats within each workspace. Empty workspaces are
+skipped and both directions wrap around.
+
+- Navigation selects the destination workspace, project and Worktree together and remembers the
+  previous workspace selection. With no active session it selects the first/last session in the
+  current workspace, falling back to all workspaces.
+
+- Editor and pending-transition guards remain active.
+
+#### Validation and limits
+
+- Regression tests cover cross-workspace navigation, wrapping, empty collections and selection
+  restoration; native shortcut acceptance remains pending.
+
+### Agent exit and close failures
+
+Agent chats close automatically only on a successful exit (code 0), removing the chat pane and
+sidebar entry after final output acknowledgement and successful host cleanup. Failed or unknown
+exits retain diagnostics, as do ordinary shell terminals.
+
+A failed Close Session retains the attachment and retries must confirm termination before removing
+it; disconnected sessions may require reconnection first. Disconnection alone does not close a chat;
+acknowledgement or cleanup failures remain visible.
+
+Native Claude/Codex exit acceptance remains pending.
+
+### Close Session shortcut order
+
+Close Session closes one session per shortcut invocation: the active session in the selected
+project, then its remaining sessions (including Worktrees), then other projects in stored order and
+finally standalone sessions across workspaces. With no project selected, an active standalone
+session takes priority.
+
+When a file is displayed, the same Close Session shortcut (Cmd+W on macOS, Ctrl+W on Windows by
+default) closes that file tab first, saving changes through the existing conflict/draft guard
+without terminating a session. It is disabled during a pending file transition/dialog, or when
+neither a file nor sessions remain.
+
+#### Validation and limits
+
+- Sequence tests cover draining all collections; an App shortcut regression test covers saving and
+  removing the active file while preserving sessions. Native shortcut acceptance remains pending.
+
+### Adding multiple projects
+
+Add Project supports selecting multiple folders in the native chooser. Review the selected paths and
+confirm Add to insert them into the workspace selected at confirmation.
+
+All directories are validated before the batch is saved; existing projects in that workspace are
+reused. Manual path entry replaces the multi-selection with a single path.
+
+Native multi-selection interaction remains pending runtime acceptance.
+
+### New chat working directory
+
+New chat from the welcome page, command palette or shortcut uses the selected project's directory
+(or selected Worktree directory) and belongs to that project. Without a selected project it uses the
+standalone chat directory.
+
+This routing uses the existing project-session creation flow; live Agent working-directory
+acceptance remains pending.
+
+### Background session discovery
+
+Background local-session discovery retries every two seconds after each attempt. Connection timeouts
+do not show an error banner; other synchronization failures remain visible.
+
+A timeout does not clear saved sessions.
+
+#### Validation and limits
+
+- Focused automated tests cover timeout suppression and visibility of other failures; live timeout
+  recovery remains unverified.
+
+### Session grouping
+
+Workspaces contain projects, standalone terminals and chats. Projects can contain Git worktrees.
+
+Sessions support pinning, ordering, grouping, ungrouping, split resizing and directional focus.
+Groups cannot cross project, worktree or standalone collection boundaries.
+
+### Detachment and reconnection
+
+The Rust local service owns PTYs and output replay. Quitting detaches the UI; Close Session
+terminates a process.
+
+Reconnection retains session identity and acknowledges replay in order. The service requires
+authentication and binds only to loopback.
+
+Running sessions prevent replacement of their service executable.
+
+### Saved workspace data
+
+Workspace storage uses schema version 7, accepts versions 3, 4, 5 and 6 and retains each original
+version backup before saving upgraded data; settings accept version 1 and require valid current
+fields. Invalid or unsupported saved data produces an error without overwriting the original value.
+
+Startup reads only this application's workspace, without importing another application's state.
+
+### Agent detection in shell sessions
+
+Ordinary shell sessions on macOS and Windows recognize descendant Claude/Codex executables and
+display their Agent icon in the sidebar. Unix process snapshots retain full executable paths even
+beyond the default ps column width; a real subprocess regression covers a long path with spaces.
+
+Detection refreshes at most once per second; exiting the Agent restores the terminal icon. Only
+executable names `claude`/`codex` (or their Windows `.exe` names) are recognized; Node.js wrappers
+and custom Agent names are not identified.
+
+#### Validation and limits
+
+- Process-tree tests cover session isolation, ambiguous matches, paths with spaces and clearing
+  identity after exit; all local-service tests, formatting, documentation checks and
+  frontend/desktop builds pass on macOS. Native icon switching and Windows runtime acceptance remain
+  unverified.
+
+### Removing a saved connection
+
+Removing an SSH, Redis or database connection opens a confirmation dialog showing the connection
+name and explaining that its saved profile and remembered password will be deleted. Only Confirm
+removal starts removal; Cancel or Escape keeps the profile and password and returns focus to the
+entry.
+
+Cancel receives initial focus. Existing session, file, transfer, connection, draft and
+SSH-dependency protections still apply.
+
+A pending confirmation is cancelled if the profile changes, becomes protected, disappears, the
+workspace changes or the sidebar/connection section is hidden.
+
+#### Connection-removal checks
+
+- Connection-removal validation: five connection-related frontend regressions pass. Focused
+  component coverage includes all three connection types in Simplified Chinese and English,
+  cancellation, Escape, initial/returned focus, a single callback after confirmation, live
+  protection changes and invalidated targets.
+
+- An isolated Windows desktop app (`sh.uterm.desktop.qa.connectionremoval`) verifies both languages,
+  Cancel/Escape preserving saved profiles, returned focus and confirmed profile removal for all
+  three types using disposable profiles without credentials or server connections. Dark/light
+  dialogs and long-name wrapping pass visual inspection.
+
+- Frozen dependency installation, changed-file formatting, localization/documentation checks,
+  TypeScript/production build and the isolated desktop build pass. The full frontend suite
+  encountered a Vite SSR module-loading timeout; repository-wide formatting reports existing issues
+  in other files.
+
+- Remembered-credential integration and macOS/Linux runtime acceptance remain unverified; the
+  production build retains its large-chunk warning.
 
 ## SSH and remote files
 
-The sidebar’s SSH connections belong to the current workspace. Add a connection using a host address, port (default 22), username, remote system (Linux/macOS or Windows) and optional file root. A blank username uses OpenSSH configuration or the local account; a blank root uses the server login directory. Host alias mode retains existing profiles and reads `~/.ssh/config`, including Include files, without rewriting it. Blank port/username in alias mode inherit OpenSSH values. Authentication supports OpenSSH automatic selection, a private-key file/ssh-agent, or a password entered in the connection dialog. System OpenSSH must be installed; Windows users can install the OpenSSH Client optional feature. No SSH executable, JVM or new runtime dependency is bundled for these connection options.
+### Connection setup
 
-Passwords last for the current app run unless Remember password is selected. Remembered SSH passwords are stored in macOS Keychain or Windows Credential Manager; workspace/session data contains only an opaque reference. Editing can keep a password by leaving its field blank, or move it between temporary memory and the system store. Passwords bind to the connection and resolved endpoint, so target changes require reentry. Storage failures roll back only newly created credentials and preserve the old profile. Secrets are not returned from the store to the frontend or placed in process arguments, environment variables, workspace files or logs. A short-lived authenticated loopback helper supplies the password once through OpenSSH askpass; the helper reuses the app executable. Password mode supports ordinary password authentication, with a native confirmation for unknown host fingerprints. It rejects ProxyJump/ProxyCommand, verification codes and password-change prompts. Automatic/key modes retain OpenSSH jump-host behavior; add encrypted keys to ssh-agent before using files or tunnels.
+The sidebar’s SSH connections belong to the current workspace. Add a connection using a host
+address, port (default 22), username, remote system (Linux/macOS or Windows) and optional file root.
 
-Each connection supports multiple terminal sessions, pinning, ordering and splits within that connection. SSH runs inside the existing local PTY service with normal terminal input, resizing and output replay. Automatic/key modes retain terminal fingerprint and interactive authentication prompts; password mode uses the configured password and native fingerprint confirmation. Quitting detaches while the local SSH process continues; Close Session terminates that SSH process. Remote process survival depends on the server. Reopening attaches to existing sessions without silently starting new network logins. Restart creates a new session and retains the old output. A network failure does not restore the original remote shell; persistent server tasks require a tool such as tmux. Older background services must be safely restarted after closing their sessions to enable SSH.
+- A blank username uses OpenSSH configuration or the local account; a blank root uses the server
+  login directory. Host alias mode retains existing profiles and reads `~/.ssh/config`, including
+  Include files, without rewriting it.
 
-Selecting a connection opens its SFTP file panel using that profile’s host, port, username and authentication. Automatic/key modes require a trusted host and noninteractive key/ssh-agent authentication; confirm an unknown host in an SSH terminal first. Password mode can also confirm a new host in a native dialog. File roots are independent of shell `cd`; Windows roots must use local drive paths, not UNC shares. Remote Git, GitHub, local directory tools, full-tree search, directory transfers, recursive deletion and transfer resume are unavailable.
+- Blank port/username in alias mode inherit OpenSSH values. Authentication supports OpenSSH
+  automatic selection, a private-key file/ssh-agent, or a password entered in the connection dialog.
 
-The file tree supports hidden files, text editing, supported image/PDF previews, creating files/directories, renaming and deleting files or empty directories. Text retains the existing 2 MB limit, UTF-8/BOM and line-ending handling, conflict checks, save/close guards and local recovery drafts. A file’s identity includes its SSH connection, resolved endpoint and canonical root, so drafts cannot silently move to another server after configuration changes. Symbolic-link reads stay inside the root; mutations through links are rejected. Paths are interpreted using server rules. Remote filenames containing backslashes, colons or control characters are excluded.
+- System OpenSSH must be installed; Windows users can install the OpenSSH Client optional feature.
+  No SSH executable, JVM or new runtime dependency is bundled for these connection options.
 
-Saves use a same-directory temporary file, content version checks and the server’s `posix-rename@openssh.com` extension; the original is never deleted as an overwrite fallback. Servers without safe replacement allow reading, downloads and new-file uploads but open existing files read-only. Normal permission bits are retained when available; uTerm does not preserve Windows ACLs. Conflict checks are optimistic and do not lock out other server writers. Network failure after a commit can leave its result uncertain; retain the draft and reread before retrying.
+### Passwords and host verification
 
-Upload files from the toolbar or a directory’s context menu; download an ordinary file from its context menu into a native save dialog. Transfers stream bounded chunks and show byte progress, completion, errors and cancellation. Upload overwrite is off until explicitly selected; directory and link transfers are rejected. Cancellation attempts to remove temporary files, while disconnection may leave a `.uterm-*` temporary file for manual cleanup. Quitting with active transfers offers waiting or cancelling transfers before the editor save guard. Updates are blocked during transfers. At most four transfers and sixteen cached remote file connections are allowed; Reconnect releases that connection’s previous file channels. Editing and removal are disabled while a connection has sessions, retained file tabs, active transfers or a connected/busy/dirty Redis workbench using it. Removal also requires removing dependent Redis profiles. Saving an idle SSH profile updates dependent Redis profiles; remembered Redis credentials remain bound to their original endpoint. Existing sessions retain their target.
+Passwords last for the current app run unless Remember password is selected. Remembered SSH
+passwords are stored in macOS Keychain or Windows Credential Manager; workspace/session data
+contains only an opaque reference.
 
-Validation: macOS automated tests exercise migration, connection/session isolation, grouping, target validation, remote draft identity, attach-only restoration, exclusion of local tools and bounded progress updates. Real system SFTP-server tests cover Chinese names, safe saves, conflicts, root escape/link rejection, file mutations, streamed upload/download, cancelled overwrite and temporary-file cleanup. An isolated native app (`sh.uterm.desktop.qa.ssh`) connected to a loopback OpenSSH server and verified fingerprint confirmation, remote shell output, detach/relaunch attachment and replay, independent split closing, file editing, conflict retention, upload/download with matching bytes, file-channel reconnection, transfer progress, cancellation cleanup and the transfer exit guard. Additional password/connection validation: 187 frontend/build-helper tests, 32 host tests, 56 regular backend tests and all six Redis-specific tests pass on macOS. Coverage includes legacy option serialization, schema 6 upgrades, invalid/secret-field rejection, distinct port/user/key arguments, credential target binding, failed-save cleanup, full Redis tunnel snapshots and authenticated one-use askpass with bounded messages, fingerprint approval/rejection and unexpected-prompt rejection. Isolated native QA (`sh.uterm.desktop.qa.sshauth`) uses real system OpenSSH with a disposable loopback password server to verify explicit port/username, alias inheritance/HostKeyAlias, password SFTP reading and Chinese-text saving, terminal output/reattachment, Redis tunnel PING and value reads, Keychain save/read after app restart, credential removal, temporary-password expiry on restart, and approving/cancelling the native host-fingerprint sheet. Windows client/server, Credential Manager and Linux runtime remain unverified; password-mode jump hosts and OTP are unsupported.
+Editing can keep a password by leaving its field blank, or move it between temporary memory and the
+system store. Passwords bind to the connection and resolved endpoint, so target changes require
+reentry.
 
-Current SSH authentication options add code without new runtime dependencies. Current release installer sizes have not been measured; the isolated debug application build is validation evidence, not an installer-size estimate.
+Storage failures roll back only newly created credentials and preserve the old profile. Secrets are
+not returned from the store to the frontend or placed in process arguments, environment variables,
+workspace files or logs.
+
+A short-lived authenticated loopback helper supplies the password once through OpenSSH askpass; the
+helper reuses the app executable. Password mode supports ordinary password authentication, with a
+native confirmation for unknown host fingerprints.
+
+It rejects ProxyJump/ProxyCommand, verification codes and password-change prompts. Automatic/key
+modes retain OpenSSH jump-host behavior; add encrypted keys to ssh-agent before using files or
+tunnels.
+
+### SSH session lifecycle
+
+Each connection supports multiple terminal sessions, pinning, ordering and splits within that
+connection. SSH runs inside the existing local PTY service with normal terminal input, resizing and
+output replay.
+
+Automatic/key modes retain terminal fingerprint and interactive authentication prompts; password
+mode uses the configured password and native fingerprint confirmation. Quitting detaches while the
+local SSH process continues; Close Session terminates that SSH process.
+
+Remote process survival depends on the server. Reopening attaches to existing sessions without
+silently starting new network logins.
+
+Restart creates a new session and retains the old output. A network failure does not restore the
+original remote shell; persistent server tasks require a tool such as tmux.
+
+Older background services must be safely restarted after closing their sessions to enable SSH.
+
+### Opening remote files
+
+Selecting a connection opens its SFTP file panel using that profile’s host, port, username and
+authentication. Automatic/key modes require a trusted host and noninteractive key/ssh-agent
+authentication; confirm an unknown host in an SSH terminal first.
+
+Password mode can also confirm a new host in a native dialog. File roots are independent of shell
+`cd`; Windows roots must use local drive paths, not UNC shares.
+
+Remote Git, GitHub, local directory tools, full-tree search, directory transfers, recursive deletion
+and transfer resume are unavailable.
+
+### Editing within the remote root
+
+The file tree supports hidden files, text editing, supported image/PDF previews, creating
+files/directories, renaming and deleting files or empty directories. Text retains the existing 2 MB
+limit, UTF-8/BOM and line-ending handling, conflict checks, save/close guards and local recovery
+drafts.
+
+A file’s identity includes its SSH connection, resolved endpoint and canonical root, so drafts
+cannot silently move to another server after configuration changes. Symbolic-link reads stay inside
+the root; mutations through links are rejected.
+
+Paths are interpreted using server rules. Remote filenames containing backslashes, colons or control
+characters are excluded.
+
+### Safe saves and conflicts
+
+Saves use a same-directory temporary file, content version checks and the server’s
+`posix-rename@openssh.com` extension; the original is never deleted as an overwrite fallback.
+Servers without safe replacement allow reading, downloads and new-file uploads but open existing
+files read-only.
+
+Normal permission bits are retained when available; uTerm does not preserve Windows ACLs. Conflict
+checks are optimistic and do not lock out other server writers.
+
+Network failure after a commit can leave its result uncertain; retain the draft and reread before
+retrying.
+
+### Transfers and connection protection
+
+Upload files from the toolbar or a directory’s context menu; download an ordinary file from its
+context menu into a native save dialog. Transfers stream bounded chunks and show byte progress,
+completion, errors and cancellation.
+
+- Upload overwrite is off until explicitly selected; directory and link transfers are rejected.
+  Cancellation attempts to remove temporary files, while disconnection may leave a `.uterm-*`
+  temporary file for manual cleanup.
+
+- Quitting with active transfers offers waiting or cancelling transfers before the editor save
+  guard. Updates are blocked during transfers.
+
+- At most four transfers and sixteen cached remote file connections are allowed; Reconnect releases
+  that connection’s previous file channels. Editing and removal are disabled while a connection has
+  sessions, retained file tabs, active transfers or a connected/busy/dirty Redis workbench using it.
+
+- Removal also requires removing dependent Redis profiles. Saving an idle SSH profile updates
+  dependent Redis profiles; remembered Redis credentials remain bound to their original endpoint.
+
+- Existing sessions retain their target.
+
+#### SSH and SFTP checks
+
+- Validation: macOS automated tests exercise migration, connection/session isolation, grouping,
+  target validation, remote draft identity, attach-only restoration, exclusion of local tools and
+  bounded progress updates. Real system SFTP-server tests cover Chinese names, safe saves,
+  conflicts, root escape/link rejection, file mutations, streamed upload/download, cancelled
+  overwrite and temporary-file cleanup.
+
+- An isolated native app (`sh.uterm.desktop.qa.ssh`) connected to a loopback OpenSSH server and
+  verified fingerprint confirmation, remote shell output, detach/relaunch attachment and replay,
+  independent split closing, file editing, conflict retention, upload/download with matching bytes,
+  file-channel reconnection, transfer progress, cancellation cleanup and the transfer exit guard.
+  Additional password/connection validation: 187 frontend/build-helper tests, 32 host tests, 56
+  regular backend tests and all six Redis-specific tests pass on macOS.
+
+- Coverage includes legacy option serialization, schema 6 upgrades, invalid/secret-field rejection,
+  distinct port/user/key arguments, credential target binding, failed-save cleanup, full Redis
+  tunnel snapshots and authenticated one-use askpass with bounded messages, fingerprint
+  approval/rejection and unexpected-prompt rejection.
+
+- Isolated native QA (`sh.uterm.desktop.qa.sshauth`) uses real system OpenSSH with a disposable
+  loopback password server to verify explicit port/username, alias inheritance/HostKeyAlias,
+  password SFTP reading and Chinese-text saving, terminal output/reattachment, Redis tunnel PING and
+  value reads, Keychain save/read after app restart, credential removal, temporary-password expiry
+  on restart, and approving/cancelling the native host-fingerprint sheet.
+
+- Windows client/server, Credential Manager and Linux runtime remain unverified; password-mode jump
+  hosts and OTP are unsupported.
+
+Current SSH authentication options add code without new runtime dependencies. Current release
+installer sizes have not been measured; the isolated debug application build is validation evidence,
+not an installer-size estimate.
 
 ## Redis connections and workbench
 
-Redis connections belong to a workspace. Add a name, host, port, database number and optional ACL username/password from the sidebar. Test connection performs authentication and PING, then releases its temporary connection. Profiles are restored without connecting automatically. Connections support direct TCP, TLS, or a system OpenSSH tunnel selected from an existing SSH connection. In tunnel mode the SSH server connects to the configured Redis host; `127.0.0.1` refers to that server. Tunnels reuse the selected profile’s host, port, username and automatic/key/password authentication and require TCP forwarding permission. Legacy alias-only Redis profiles remain supported. Password-mode host confirmation and credential lifetime follow the SSH profile. TLS can also run inside a tunnel and always verifies the Redis server name; use an optional PEM CA certificate and server-name override. System trust is used when CA is blank. Mutual TLS is unavailable.
+### Redis connection setup
 
-The workbench shows server version, role and PING latency when permitted; unavailable metadata does not prevent browsing. Select DB explicitly; server restrictions remain visible. Each connection starts read-only, including after Reconnect. Rust enforces the write switch independently of the UI, while Redis ACLs remain authoritative. Multiple workbenches retain their connection and in-memory editor state when hidden or when another workspace is selected. Cmd/Ctrl+W hides the Redis view without closing a local terminal. Explicit Disconnect closes the database connection and SSH process. Reconnect creates a fresh connection, retains the selected DB and verifies the original endpoint before reusing the in-memory password. Quit releases Redis connections and tunnels; terminal sessions keep their existing detach behavior.
+Redis connections belong to a workspace. Add a name, host, port, database number and optional ACL
+username/password from the sidebar.
 
-The compact workbench keeps the connection name, endpoint, DB and read-only/editing switch in its toolbar. Reconnect and Disconnect are always visible side by side in the connected toolbar, without an actions menu. The two buttons stay together if a narrow toolbar wraps. Connection information retains its own menu. Key navigation starts at 280 pixels and supports pointer or keyboard resizing; grouping and width stay in memory for this run. Below 720 pixels of workbench width, Browse keys opens a drawer with search focus, trapped Tab navigation and Escape/backdrop dismissal. Selecting a key closes the drawer. Small windows scroll the detail area independently. Controls, menus and dialogs use the current interface theme and language.
+- Test connection performs authentication and PING, then releases its temporary connection. Profiles
+  are restored without connecting automatically.
 
-Connection-toolbar validation: all nine existing Redis UI regressions, formatting, localization and TypeScript/production build checks pass. The isolated macOS app (`sh.uterm.desktop.qa.redistoolbar`) uses simulated Redis replies and verifies directly visible, side-by-side Reconnect/Disconnect buttons at 900 and 640 pixel workbench widths, Simplified Chinese/English labels, and both actions. This checks WebView interaction rather than a live Redis connection. Windows/Linux runtime acceptance remains pending; production builds retain the existing large-chunk warning.
+- Connections support direct TCP, TLS, or a system OpenSSH tunnel selected from an existing SSH
+  connection. In tunnel mode the SSH server connects to the configured Redis host; `127.0.0.1`
+  refers to that server.
 
-Key search accepts the entered Redis glob pattern without adding wildcards; Enter or Search starts a new scan. Refresh keys restarts with the current input and retains the selected detail and draft, including when that key is absent from the current scan batch. Group counts describe loaded keys, not database totals. The footer distinguishes incomplete/completed scans, empty batches and the 10,000-key limit. Empty batches remain resumable until the cursor reaches zero. There is no background scanning or TTL polling.
+- Tunnels reuse the selected profile’s host, port, username and automatic/key/password
+  authentication and require TCP forwarding permission. Legacy alias-only Redis profiles remain
+  supported.
 
-Hash browsing retains its current member batch and pattern while a separate lower pane opens a field. Changing fields, member searches/pages, reloading or closing the field editor protects unsaved changes. Successful field saves update a loaded row; initial Hash creation reads the server's member count and TTL without closing the saved field. List tables show index/value, Set tables show members and ZSet tables show member/score; range-based collections provide previous/next navigation. String metadata reports bytes, collection metadata reports member counts, and field metadata reports value bytes rather than Redis memory usage. TTL displays an explicit duration or No expiration, with the millisecond snapshot available on hover. New keys, added fields, renames and TTL changes use dialogs; delete actions identify the connection, DB and target. Creation dialogs open an unsaved value draft; Save writes it. Rename, TTL and deletion dialogs use a single final confirmation. Dialogs and field panes restore focus to their entry points. Binary keys keep their original bytes; copying a key is available only for text names. Binary and oversized values retain their bounded read-only previews. The Console starts collapsed and continues to accept only the registered read-only commands.
+- Password-mode host confirmation and credential lifetime follow the SSH profile. TLS can also run
+  inside a tunnel and always verifies the Redis server name; use an optional PEM CA certificate and
+  server-name override.
 
-Redis layout validation: nine focused UI regressions cover retained dirty drafts and collapsed groups during refresh, resumable empty batches, Hash batch retention and save/discard/cancel guards, failed mutations, single confirmations and DB targeting, binary identities, type-specific tables, bounded large-value paging, initial Hash metadata and drawer/resizer keyboard behavior. On macOS, the full frontend suite passes 208 tests with eight skipped; 73 regular backend tests pass with four opt-in tests ignored, and explicitly running the Redis suite passes all seven tests including real Redis integration. Formatting, localization, documentation, TypeScript/production build and isolated desktop build checks pass. Native QA (`sh.uterm.desktop.qa.redislayout`) connects to disposable loopback Redis and verifies 1440×900 and 1024×768 layouts, the 640×420 drawer and scrollable editor, Simplified Chinese/dark and English/light interfaces, Hash editing/formatting and save guards. Windows/Linux runtime acceptance of this layout remains pending.
+- System trust is used when CA is blank. Mutual TLS is unavailable.
 
-Keys use cursor-based SCAN with a COUNT hint of 200, optional glob patterns, deduplication and colon grouping. Empty scan pages return without a metadata request or timeout and do not imply completion; continue until cursor zero. At most 10,000 keys are retained per workbench; narrow the pattern at the limit. String values support 1 MB byte-range previews and editing when the complete value is valid UTF-8 and no larger than 1 MB. Hash fields support incremental browsing and individual editing. Lists and sorted sets use 200-member ranges; sets and hashes use cursor scanning with member patterns. Collection cells show at most 64 KB; unusually large scan batches are marked partial and require a narrower pattern. Keys/field names are limited to 4096 bytes. Binary keys retain their original byte identity, and invalid UTF-8 values show a hexadecimal preview. A 16 MB protocol-read budget closes oversized responses rather than retaining an unbounded reply.
+### Read-only mode and connection lifecycle
 
-Binary String values and individual binary Hash fields show serialization information below the first 256 hexadecimal bytes. Java Object Serialization previews identify the stream version and, when readable, the first ordinary class descriptor, serialVersionUID and field names/types; expand Fields to inspect them. Readable UTF-8 text preserves visible strings, replaces control characters with · and invalid bytes with �, and is limited to the current page’s first 64 KB. Metadata inspection is limited to 256 fields and 4096 bytes per name/type string. Truncated or unsupported descriptors retain recognized information with a partial-information message; later String pages do not infer a stream header. The view remains read-only and does not reconstruct full objects, inherited/nested descriptors or custom codecs. No JVM or additional runtime dependency is required.
+The workbench shows server version, role and PING latency when permitted; unavailable metadata does
+not prevent browsing. Select DB explicitly; server restrictions remain visible.
 
-Enable editing to create String/Hash data, edit a String or individual Hash field, delete a Hash field, rename without overwriting another key, delete a key, or set/clear TTL. Saves serialize WATCH/read/compare/MULTI/EXEC on the connection, reject stale or missing originals, and preserve the current TTL on existing String values. The server must support KEEPTTL for that save. Save failures retain the draft. Write timeouts close the connection and report an uncertain result; reread before trying another write. No write is replayed automatically. Key deletion and key/TTL mutations require confirmation. The console accepts only PING, restricted INFO sections, DBSIZE, TYPE, TTL/PTTL, EXISTS and length commands; it does not execute arbitrary commands. Cluster/Sentinel discovery, subscriptions, Monitor, scripts, bulk import/export and dedicated Stream/module views are unavailable.
+Each connection starts read-only, including after Reconnect. Rust enforces the write switch
+independently of the UI, while Redis ACLs remain authoritative.
 
-Passwords are temporary by default. Remember password stores a target-bound entry in macOS Keychain or Windows Credential Manager; workspace storage contains only its opaque reference. Changing the endpoint, username, TLS trust or resolved SSH target requires entering and saving the password again. Passwords are not returned to the frontend from the credential store, added to command arguments, or written to logs. Redis values and editor drafts are not written to local storage. Save/discard/cancel guards protect changing the edited value or DB, disconnecting and reconnecting; quitting also reveals a hidden dirty workbench. Active handshakes/writes delay quitting, and unsaved edits or active operations block update installation. At most eight Redis connections are open at once. Connected, busy or dirty profiles cannot be edited or removed.
+Multiple workbenches retain their connection and in-memory editor state when hidden or when another
+workspace is selected. Cmd/Ctrl+W hides the Redis view without closing a local terminal.
 
-Validation: all six Redis-specific backend tests pass on macOS, including four opt-in real Redis tests executed by `pnpm test:redis`. They cover authentication, binary values, DB isolation, SCAN, collections, permissions, TTL retention, conflicting concurrent saves, name collisions, large-value limits, trusted/untrusted TLS and incorrect certificate names. A deterministic lost-EXEC-reply test verifies an uncertain write is never replayed. Frontend tests cover schema upgrades, secret rejection, byte identities, quoting, read-only defaults, retained hidden drafts, conflicts, reconnection, late connection cleanup and avoiding local-session closure. Isolated native QA (`sh.uterm.desktop.qa.redis`) with loopback Redis 8.8 and OpenSSH verifies direct/TLS/SSH connections, Keychain save/read, Chinese String editing, Hash-field editing, conflict retention, draft discard/reload, the exit guard and tunnel cleanup. Windows runtime/Credential Manager, Linux server runtime, Redis 6/7, external cloud services and credentialed ProxyJump remain unverified.
+Explicit Disconnect closes the database connection and SSH process. Reconnect creates a fresh
+connection, retains the selected DB and verifies the original endpoint before reusing the in-memory
+password.
 
-Binary preview validation: regression tests use a real ObjectOutputStream fixture and cover shared type references, modified UTF-8 metadata, signed serialVersionUID, every truncated prefix, malformed references/lengths, field/text limits, later-page detection and literal markup display without writes. An isolated macOS app (`sh.uterm.desktop.qa.redisbinary`) with loopback Redis verifies Java String and Hash-field previews, ordinary binary text and the 64 KB truncation message. Windows/Linux runtime acceptance of this preview remains pending.
+Quit releases Redis connections and tunnels; terminal sessions keep their existing detach behavior.
 
-Package measurement with the same macOS ARM64 QA identifier and build parameters: DMG size rises from 10,440,236 bytes (10.44 MB) to 10,866,289 bytes (10.87 MB), approximately +0.43 MB; the app bundle rises from 29,025,292 bytes (29.03 MB) to 30,484,572 bytes (30.48 MB), approximately +1.46 MB. Both builds use the README's `CARGO_PROFILE_RELEASE_STRIP=none` workaround. No Redis/SSH executables, frontend runtime dependencies or second TLS cryptography backend are bundled by this feature. Final native checks additionally verify saved credentials after relaunch, read-only reset on reconnect, TLS-over-SSH connection testing and dialog button layout. Windows/x64 and signed installer sizes are unmeasured.
+### Toolbar and narrow-window layout
+
+The compact workbench keeps the connection name, endpoint, DB and read-only/editing switch in its
+toolbar. Reconnect and Disconnect are always visible side by side in the connected toolbar, without
+an actions menu.
+
+- The two buttons stay together if a narrow toolbar wraps. Connection information retains its own
+  menu.
+
+- Key navigation starts at 280 pixels and supports pointer or keyboard resizing; grouping and width
+  stay in memory for this run. Below 720 pixels of workbench width, Browse keys opens a drawer with
+  search focus, trapped Tab navigation and Escape/backdrop dismissal.
+
+- Selecting a key closes the drawer. Small windows scroll the detail area independently.
+
+- Controls, menus and dialogs use the current interface theme and language.
+
+#### Redis toolbar checks
+
+- Connection-toolbar validation: all nine existing Redis UI regressions, formatting, localization
+  and TypeScript/production build checks pass. The isolated macOS app
+  (`sh.uterm.desktop.qa.redistoolbar`) uses simulated Redis replies and verifies directly visible,
+  side-by-side Reconnect/Disconnect buttons at 900 and 640 pixel workbench widths, Simplified
+  Chinese/English labels, and both actions.
+
+- This checks WebView interaction rather than a live Redis connection. Windows/Linux runtime
+  acceptance remains pending; production builds retain the existing large-chunk warning.
+
+### Key search and refresh
+
+Key search accepts the entered Redis glob pattern without adding wildcards; Enter or Search starts a
+new scan. Refresh keys restarts with the current input and retains the selected detail and draft,
+including when that key is absent from the current scan batch.
+
+Group counts describe loaded keys, not database totals. The footer distinguishes
+incomplete/completed scans, empty batches and the 10,000-key limit.
+
+Empty batches remain resumable until the cursor reaches zero. There is no background scanning or TTL
+polling.
+
+### Collection browsing and drafts
+
+Hash browsing retains its current member batch and pattern while a separate lower pane opens a
+field. Changing fields, member searches/pages, reloading or closing the field editor protects
+unsaved changes.
+
+Successful field saves update a loaded row; initial Hash creation reads the server's member count
+and TTL without closing the saved field. List tables show index/value, Set tables show members and
+ZSet tables show member/score; range-based collections provide previous/next navigation.
+
+String metadata reports bytes, collection metadata reports member counts, and field metadata reports
+value bytes rather than Redis memory usage. TTL displays an explicit duration or No expiration, with
+the millisecond snapshot available on hover.
+
+New keys, added fields, renames and TTL changes use dialogs; delete actions identify the connection,
+DB and target. Creation dialogs open an unsaved value draft; Save writes it.
+
+Rename, TTL and deletion dialogs use a single final confirmation. Dialogs and field panes restore
+focus to their entry points.
+
+Binary keys keep their original bytes; copying a key is available only for text names. Binary and
+oversized values retain their bounded read-only previews.
+
+The Console starts collapsed and continues to accept only the registered read-only commands.
+
+#### Redis layout checks
+
+- Redis layout validation: nine focused UI regressions cover retained dirty drafts and collapsed
+  groups during refresh, resumable empty batches, Hash batch retention and save/discard/cancel
+  guards, failed mutations, single confirmations and DB targeting, binary identities, type-specific
+  tables, bounded large-value paging, initial Hash metadata and drawer/resizer keyboard behavior.
+
+- On macOS, the full frontend suite passes 208 tests with eight skipped; 73 regular backend tests
+  pass with four opt-in tests ignored, and explicitly running the Redis suite passes all seven tests
+  including real Redis integration. Formatting, localization, documentation, TypeScript/production
+  build and isolated desktop build checks pass.
+
+- Native QA (`sh.uterm.desktop.qa.redislayout`) connects to disposable loopback Redis and verifies
+  1440×900 and 1024×768 layouts, the 640×420 drawer and scrollable editor, Simplified Chinese/dark
+  and English/light interfaces, Hash editing/formatting and save guards. Windows/Linux runtime
+  acceptance of this layout remains pending.
+
+### Scan and value limits
+
+Keys use cursor-based SCAN with a COUNT hint of 200, optional glob patterns, deduplication and colon
+grouping. Empty scan pages return without a metadata request or timeout and do not imply completion;
+continue until cursor zero.
+
+- At most 10,000 keys are retained per workbench; narrow the pattern at the limit. String values
+  support 1 MB byte-range previews and editing when the complete value is valid UTF-8 and no larger
+  than 1 MB.
+
+- Hash fields support incremental browsing and individual editing. Lists and sorted sets use
+  200-member ranges; sets and hashes use cursor scanning with member patterns.
+
+- Collection cells show at most 64 KB; unusually large scan batches are marked partial and require a
+  narrower pattern. Keys/field names are limited to 4096 bytes.
+
+- Binary keys retain their original byte identity, and invalid UTF-8 values show a hexadecimal
+  preview. A 16 MB protocol-read budget closes oversized responses rather than retaining an
+  unbounded reply.
+
+### Binary and Java serialization previews
+
+Binary String values and individual binary Hash fields show serialization information below the
+first 256 hexadecimal bytes. Java Object Serialization previews identify the stream version and,
+when readable, the first ordinary class descriptor, serialVersionUID and field names/types; expand
+Fields to inspect them.
+
+- Readable UTF-8 text preserves visible strings, replaces control characters with · and invalid
+  bytes with �, and is limited to the current page’s first 64 KB. Metadata inspection is limited to
+  256 fields and 4096 bytes per name/type string.
+
+- Truncated or unsupported descriptors retain recognized information with a partial-information
+  message; later String pages do not infer a stream header. The view remains read-only and does not
+  reconstruct full objects, inherited/nested descriptors or custom codecs.
+
+- No JVM or additional runtime dependency is required.
+
+### Editing and write protection
+
+Enable editing to create String/Hash data, edit a String or individual Hash field, delete a Hash
+field, rename without overwriting another key, delete a key, or set/clear TTL. Saves serialize
+WATCH/read/compare/MULTI/EXEC on the connection, reject stale or missing originals, and preserve the
+current TTL on existing String values.
+
+- The server must support KEEPTTL for that save. Save failures retain the draft.
+
+- Write timeouts close the connection and report an uncertain result; reread before trying another
+  write. No write is replayed automatically.
+
+- Key deletion and key/TTL mutations require confirmation. The console accepts only PING, restricted
+  INFO sections, DBSIZE, TYPE, TTL/PTTL, EXISTS and length commands; it does not execute arbitrary
+  commands.
+
+- Cluster/Sentinel discovery, subscriptions, Monitor, scripts, bulk import/export and dedicated
+  Stream/module views are unavailable.
+
+### Credentials and unsaved changes
+
+Passwords are temporary by default. Remember password stores a target-bound entry in macOS Keychain
+or Windows Credential Manager; workspace storage contains only its opaque reference.
+
+Changing the endpoint, username, TLS trust or resolved SSH target requires entering and saving the
+password again. Passwords are not returned to the frontend from the credential store, added to
+command arguments, or written to logs.
+
+Redis values and editor drafts are not written to local storage. Save/discard/cancel guards protect
+changing the edited value or DB, disconnecting and reconnecting; quitting also reveals a hidden
+dirty workbench.
+
+Active handshakes/writes delay quitting, and unsaved edits or active operations block update
+installation. At most eight Redis connections are open at once.
+
+Connected, busy or dirty profiles cannot be edited or removed.
+
+#### Redis connection and write checks
+
+- Validation: all six Redis-specific backend tests pass on macOS, including four opt-in real Redis
+  tests executed by `pnpm test:redis`. They cover authentication, binary values, DB isolation, SCAN,
+  collections, permissions, TTL retention, conflicting concurrent saves, name collisions,
+  large-value limits, trusted/untrusted TLS and incorrect certificate names.
+
+- A deterministic lost-EXEC-reply test verifies an uncertain write is never replayed. Frontend tests
+  cover schema upgrades, secret rejection, byte identities, quoting, read-only defaults, retained
+  hidden drafts, conflicts, reconnection, late connection cleanup and avoiding local-session
+  closure.
+
+- Isolated native QA (`sh.uterm.desktop.qa.redis`) with loopback Redis 8.8 and OpenSSH verifies
+  direct/TLS/SSH connections, Keychain save/read, Chinese String editing, Hash-field editing,
+  conflict retention, draft discard/reload, the exit guard and tunnel cleanup. Windows
+  runtime/Credential Manager, Linux server runtime, Redis 6/7, external cloud services and
+  credentialed ProxyJump remain unverified.
+
+#### Binary-preview checks
+
+- Binary preview validation: regression tests use a real ObjectOutputStream fixture and cover shared
+  type references, modified UTF-8 metadata, signed serialVersionUID, every truncated prefix,
+  malformed references/lengths, field/text limits, later-page detection and literal markup display
+  without writes. An isolated macOS app (`sh.uterm.desktop.qa.redisbinary`) with loopback Redis
+  verifies Java String and Hash-field previews, ordinary binary text and the 64 KB truncation
+  message.
+
+- Windows/Linux runtime acceptance of this preview remains pending.
+
+#### Package measurements and scope
+
+- Package measurement with the same macOS ARM64 QA identifier and build parameters: DMG size rises
+  from 10,440,236 bytes (10.44 MB) to 10,866,289 bytes (10.87 MB), approximately +0.43 MB; the app
+  bundle rises from 29,025,292 bytes (29.03 MB) to 30,484,572 bytes (30.48 MB), approximately +1.46
+  MB. Both builds use the README's `CARGO_PROFILE_RELEASE_STRIP=none` workaround.
+
+- No Redis/SSH executables, frontend runtime dependencies or second TLS cryptography backend are
+  bundled by this feature. Final native checks additionally verify saved credentials after relaunch,
+  read-only reset on reconnect, TLS-over-SSH connection testing and dialog button layout.
+
+- Windows/x64 and signed installer sizes are unmeasured.
 
 ## Files and source control
 
-In Git → Changes, right-click a file in Staged or Working directory (or focus it and press Shift+F10), choose Roll back file, review the path and confirm. This restores both the file's staged and working changes to HEAD. Added files, including untracked files and staged files before the first commit, are deleted; staged renames restore the original path and remove the new path. The prompt states that rollback cannot be undone and initially focuses Cancel. Compare and History do not offer rollback. Links, submodules, directories and paths outside the selected directory are rejected; a renamed file's original path with other changes must be resolved in a terminal. Other files are retained.
+### Rolling back one file
 
-Rollback runs off the UI thread and is serialized with branch operations. The editor saves and closes the directory's cached files first; save conflicts retain the draft and block rollback through the existing Retry/Discard/Cancel flow. Changing repositories while a save is pending cancels the deferred rollback. A changed file status or HEAD rejects the request. Completion refreshes the file, Git and GitHub panels; failures remain visible through background refreshes. Windows validation: 163 frontend/build-helper tests pass with two platform-specific skips, and all 48 backend tests pass. Focused regression coverage includes bilingual confirmation/cancellation, menu dismissal and focus restoration, save conflicts, duplicate requests, delayed actions, persistent errors, staged/working content, deletion, additions, renames, literal Unicode paths, root boundaries, links, submodules and stale requests. Locked dependency installation, TypeScript/production build, localization, documentation, changed-file formatting, both Cargo formatting checks and the isolated desktop build pass. Native QA (`sh.uterm.desktop.qa.gitrollback`) verifies the right-click menu, the added-file warning and cancellation preserving its content. Native staged/rename rollback, editor-conflict interaction and macOS/Linux runtime acceptance remain unverified. Repository-wide formatting still reports existing issues in 29 other files; the production build retains its large-chunk warning.
+In Git → Changes, right-click a file in Staged or Working directory (or focus it and press
+Shift+F10), choose Roll back file, review the path and confirm. This restores both the file's staged
+and working changes to HEAD.
 
-The toolbar branch picker groups local branches under Local and server branches under Remote (`remote/branch`). Opening the list queries every configured remote for all advertised branch heads, including branches not fetched locally and branches outside a single-branch clone's fetch configuration; tags and symbolic remote HEAD entries are excluded. Local branches refresh periodically and on window focus. Remote reads show a loading state and per-remote failures without hiding successful results. Network access and existing Git credentials are required; authentication or timeout failures remain visible and reopening retries the query. Non-Git directories have no picker. Detached HEAD and repositories without a first commit can select an available branch.
+- Added files, including untracked files and staged files before the first commit, are deleted;
+  staged renames restore the original path and remove the new path. The prompt states that rollback
+  cannot be undone and initially focuses Cancel.
 
-Selecting a remote branch fetches it and creates a same-named local tracking branch, extending a narrow fetch configuration when needed. An existing local branch is reused only if it tracks that exact remote branch; conflicting names are rejected without resetting the branch. Selecting an existing local branch uses Git's normal switch checks. The editor saves and closes before switching or syncing; save conflicts retain the draft and block the operation until resolved or explicitly discarded. Git rejects switches that would overwrite file changes or use a branch occupied by another Worktree. No force, automatic stash or file discard is used.
+- Compare and History do not offer rollback. Links, submodules, directories and paths outside the
+  selected directory are rejected; a renamed file's original path with other changes must be
+  resolved in a terminal.
 
-Right-click anywhere on the branch control (or press Shift+F10) for Push, Pull (fast-forward only), Fetch and Refresh branches. Push explicitly targets the current branch's configured upstream without force or automatic tag pushing. Pull requires a clean working tree, fetches the upstream and fast-forwards only; divergent history is rejected without creating a merge commit or rebasing. Push/Pull are disabled for detached/unborn branches or missing upstreams; configure the upstream in a terminal first. Fetch updates all branch references from each configured remote and prunes deleted remote references without switching or merging. Refresh branches re-reads the Local/Remote lists. Git actions run off the UI thread and are serialized; the control shows progress and its context menu reports completion. Failures are displayed, and file/Git/GitHub panels refresh after operations, including partial failures. Menu navigation supports arrows, Home/End, Enter, Escape and outside-click dismissal; application shortcuts are suppressed while the menu is open. Switching blocks duplicate requests and editor transitions, and stale responses cannot replace newer branch state.
+- Other files are retained.
 
-Expanded comparisons also appear as a closable Git/file-name tab in the central tab bar. Selecting a terminal or file hides the comparison while retaining its tab; selecting the comparison tab restores it. Closing its tab returns the comparison to the inspector. Main toolbar and Git tools remain available. All 156 frontend/build-helper tests, localization checks, frontend build and isolated macOS desktop build pass. Component regression checks cover selection and retained diff content. The isolated QA app launched, but the native automation connection closed before comparison-tab inspection; native acceptance of the new tab and Windows runtime validation remain pending.
+Rollback runs off the UI thread and is serialized with branch operations. The editor saves and
+closes the directory's cached files first; save conflicts retain the draft and block rollback
+through the existing Retry/Discard/Cancel flow.
 
-Git file comparisons offer Expand diff to show the selected diff in the central content area while retaining the main toolbar, workspace tabs, inspector toolbar and Git file list. The diff toolbar moves with the diff and retains Copy Diff, unified/side-by-side comparison, previous/next file, inspector-only display and Close diff. Inspector-only display returns the diff to the inspector; closing the diff restores the previous central terminal/editor without terminating sessions or discarding file buffers. The inspector remains resizable in central display mode. Component regression tests verify the portal placement, retained main toolbar and inspector file list, and returning to inspector display. All 152 frontend/build-helper tests, formatting, localization, documentation checks and frontend/isolated desktop builds pass on macOS. The isolated native QA app (`sh.uterm.desktop.qa.gitcenter`) verifies central diff display with both toolbars and the Git file list visible, and returning to inspector-only display. Windows runtime acceptance remains pending.
+Changing repositories while a save is pending cancels the deferred rollback. A changed file status
+or HEAD rejects the request.
 
-Settings → General → File tab limit sets the maximum number of open file tabs per directory (default 10, minimum 1, whole numbers only). The preference persists across restarts. Opening a file beyond the limit closes the earliest opened file tab; switching to an existing tab does not change its opening order. Lowering the limit also removes the oldest excess files. Terminal and Agent sessions are excluded and remain running. Saves and conflict protection run before automatic removal; failed saves retain drafts and require resolution. All 157 frontend/build-helper tests, localization checks and frontend/isolated macOS desktop builds pass. Tests cover old-settings defaults, invalid values, FIFO eviction, existing-tab selection, reducing to one, conflict protection and retaining the session tab. Native QA (`sh.uterm.desktop.qa.tablimit`) verifies the General layout, default 10 and saving 1. Native automatic eviction and Windows runtime acceptance remain pending.
+Completion refreshes the file, Git and GitHub panels; failures remain visible through background
+refreshes.
 
-File-tab selection directly uses the guarded open operation, avoiding a nested hide/open transition that would block opening the target. App regression checks verify switching between retained files, saving edits and returning from a terminal to a file. All 156 frontend/build-helper tests and frontend/isolated macOS desktop builds pass. Native QA (`sh.uterm.desktop.qa.tabswitch`) verifies switching between two file tabs and returning from a file to the terminal; the QA app exited before the final terminal-to-file native check. Windows runtime acceptance remains pending.
+#### Validation and limits
 
-Middle-clicking a file or Git diff tab closes it through its existing close action. File save/conflict guards still apply; closing a background file retains the visible tab. Middle clicks never close terminal or Agent sessions, and disabled transitions ignore closing. Component tests cover file closing, conflict protection, disabled guards, ignored right clicks, retained terminals and Git diff closing. All 159 frontend/build-helper tests and frontend/isolated macOS desktop builds pass. Native QA (`sh.uterm.desktop.qa.middletab`) verifies current/background file closing and keeping a terminal session. Native Git diff middle-click and Windows runtime acceptance remain pending.
+- Windows validation: 163 frontend/build-helper tests pass with two platform-specific skips, and all
+  48 backend tests pass. Focused regression coverage includes bilingual confirmation/cancellation,
+  menu dismissal and focus restoration, save conflicts, duplicate requests, delayed actions,
+  persistent errors, staged/working content, deletion, additions, renames, literal Unicode paths,
+  root boundaries, links, submodules and stale requests.
 
-The main workspace has a horizontally scrollable tab bar showing only the currently selected terminal or Agent session, plus files opened in the current directory. The tab bar is hidden when there are no file or Git diff tabs, even if terminal or Agent sessions are running. Opening a file or diff shows it again. Component checks cover session-only hiding and hiding after the last file closes; native layout acceptance remains pending. Other running sessions remain in the sidebar and take no space in the central tab bar. Selecting a different sidebar session replaces the session tab, including while a file is visible; the session tab remains available to return from a file to that session. Opening another file adds a tab; reopening the same directory/path selects its existing tab. File tabs show an unsaved marker and a close button on the right. Closing a background file leaves the active view unchanged; closing the active file returns to the selected terminal or welcome page. Terminal and Agent tabs, and terminal pane headers, have no close button; the sidebar retains Close Session. Selecting a session from the tab bar or sidebar retains open file tabs and running terminal output. Switching or closing the active file saves changes first; save/conflict failures block the action and preserve the recovery draft until Retry, Discard or Cancel. Git operations and file-tree mutations retain their save guard and close cached files in the affected root to avoid stale content. File tabs remain in memory for this run and are scoped by directory; they are not restored after restart. File text is retained between switches, while editor view history and cursor position are recreated. Keyboard arrows/Home/End navigate the tab bar, long names are truncated with full paths in tooltips, and language switching updates tab labels. All 152 frontend/build-helper tests, formatting, localization, documentation checks and frontend/isolated desktop builds pass on macOS. An isolated QA app (`sh.uterm.desktop.qa.tabs`) verifies two-file switching, saved edit retention, terminal output retention, active/background file closing, sidebar-only session close controls in the visible workspace, and long-label truncation with a fully visible close button in a 720×520 window. The isolated macOS QA app (`sh.uterm.desktop.qa.focusedtab`) verifies that two running terminals produce only one central session tab, sidebar selection replaces that tab, and an open file tab is retained. Native Agent, conflict-dialog and Windows runtime acceptance remain pending.
+- Locked dependency installation, TypeScript/production build, localization, documentation,
+  changed-file formatting, both Cargo formatting checks and the isolated desktop build pass. Native
+  QA (`sh.uterm.desktop.qa.gitrollback`) verifies the right-click menu, the added-file warning and
+  cancellation preserving its content.
 
-The visible file tree automatically refreshes its root and expanded folders five seconds after each directory read completes. Manual Refresh files remains available. Refresh retains expanded folders, scroll position and inline name inputs; it does not reload editor contents. Slow reads do not overlap within a folder’s refresh cycle, and collapsing a folder, changing projects or closing the panel cancels its timer and ignores late results. Quick-open and content-search results are not periodically queried. Component tests cover updated listings, scheduling after completion and timer cleanup; frontend tests, TypeScript/production build, formatting, localization and documentation checks pass on macOS. Native timing and Windows runtime acceptance remain pending.
+- Native staged/rename rollback, editor-conflict interaction and macOS/Linux runtime acceptance
+  remain unverified. Repository-wide formatting still reports existing issues in 29 other files; the
+  production build retains its large-chunk warning.
 
-File-list operation errors (creation, renaming, deletion, copying, pasting and opening in the file manager) disappear after three seconds. Each failed action restarts the timer, including identical errors; typed names remain intact. Directory-loading and search errors remain visible. Component timer tests cover dismissal and repeated failures; native timing acceptance remains pending.
+### Local and remote branches
 
-The file tree supports Copy/Paste from its context menu and Ctrl+C/Ctrl+V (Cmd+C/Cmd+V on macOS) while the list is focused. A folder receives the copy; a file targets its parent, and blank space targets the project root. This single-entry internal clipboard retains the source project across project changes and panel remounts, allowing pasting into another project. It resets when the application reloads and does not import files from the system clipboard. Source and destination are separately validated within their project roots; missing sources report an error. Component and Windows backend tests cover cross-project copying, conflicts, missing sources and traversal. Files, binary content and complete directories are supported without overwriting existing names. Links, special files, root copies and self/descendant destinations are rejected. Copy runs off the UI thread, stages content locally and limits recursion to 64 levels and 100,000 entries; extra disk space is required. A final write failure may leave an incomplete destination, reported visibly for inspection. Component and backend tests cover destination routing, recursive copying, conflicts and traversal; a mocked browser preview verifies the menu and refreshed tree. Native WebView and macOS acceptance remain pending.
+The toolbar branch picker groups local branches under Local and server branches under Remote
+(`remote/branch`). Opening the list queries every configured remote for all advertised branch heads,
+including branches not fetched locally and branches outside a single-branch clone's fetch
+configuration; tags and symbolic remote HEAD entries are excluded.
 
-HTML and HTM files open in static preview, with an Edit/Preview toggle that previews unsaved text without saving. Full-document head styles, inline CSS and embedded data images are preserved. The isolated frame blocks scripts, external/local linked resources, forms and navigation; pages needing JavaScript (including Vite/React entry HTML) must use their development server. Such dependencies display a limitation notice rather than an unexplained blank panel. Regression tests cover style preservation and active-content removal. Native WebView acceptance remains pending.
+- Local branches refresh periodically and on window focus. Remote reads show a loading state and
+  per-remote failures without hiding successful results.
 
-Project, Worktree and file-tree context menus offer Open in File Manager. The Worktree action opens that Worktree's own directory and is disabled for a missing Worktree. Folders open directly; files are revealed in their containing folder. File-tree paths are checked against the selected root before opening. Opening failures remain visible. An isolated macOS QA app (`sh.uterm.desktop.qa.worktreeopen`) verified the Worktree menu layout, dismissal after activation and Finder opening the Worktree directory. The 139 frontend/build-helper tests, formatting, localization, TypeScript/production build and isolated desktop build passed. Windows/Linux runtime behavior and file selection in native file managers remain unverified.
+- Network access and existing Git credentials are required; authentication or timeout failures
+  remain visible and reopening retries the query. Non-Git directories have no picker.
 
-Creation and renaming report conflicts separately for files and folders, including cross-type collisions. Renaming to the unchanged name succeeds without writing. Editing the input clears the previous validation message. Files and folders still cannot share a name in the same parent directory. Backend regression tests cover these rules; native interaction acceptance remains pending.
+- Detached HEAD and repositories without a first commit can select an available branch.
 
-The file-panel footer and its tooltip display Windows paths without the extended-length prefix, preserving UNC server/share paths. Internal filesystem paths remain unchanged. Path-formatting tests cover drive and UNC paths; native visual acceptance remains pending.
+### Switching branches
 
-New files and folders are named inline inside the target folder in the file tree; renaming edits the existing row. Enter confirms and Escape cancels; failures retain the input. Creation from a folder's context menu expands that folder. Refresh preserves expanded folders. Deletion still requires explicit confirmation. Native inline-edit focus and input-method acceptance remain unverified.
+Selecting a remote branch fetches it and creates a same-named local tracking branch, extending a
+narrow fetch configuration when needed. An existing local branch is reused only if it tracks that
+exact remote branch; conflicting names are rejected without resetting the branch.
 
-File access stays within the selected project root. Text saves check for conflicts and retain unsaved drafts for recovery. Markdown is sanitized before rendering; PDF canvas dimensions are bounded. Git views include status, diffs and commits, with worktree management. GitHub integration requires the user's credentials and access.
+Selecting an existing local branch uses Git's normal switch checks. The editor saves and closes
+before switching or syncing; save conflicts retain the draft and block the operation until resolved
+or explicitly discarded.
 
-The Working directory panel places View on GitLab directly below View on GitHub. It opens a repository whose remote hostname contains `gitlab` (case-insensitive), including self-hosted instances and nested groups, preferring a matching `origin`. HTTP/HTTPS remotes retain their web port; SSH remotes open the corresponding HTTPS site on its default port. Custom web ports must be provided through an HTTP/HTTPS remote. Embedded credentials are omitted from the browser link. Missing remotes and opening failures remain visible. Component tests cover button order, invocation, busy state and bilingual errors; backend tests cover remote conversion and selection. All 218 frontend/build-helper tests and 76 backend tests pass, with eight frontend tests skipped and four backend tests ignored. Formatting, localization, TypeScript/production build, documentation checks and an isolated macOS app build pass. The isolated app (`sh.uterm.desktop.qa.gitlab`) verifies the button order, icon and visible error when the directory is not a Git repository. Authenticated GitLab access and Windows runtime acceptance remain unverified.
+Git rejects switches that would overwrite file changes or use a branch occupied by another Worktree.
+No force, automatic stash or file discard is used.
+
+### Push, Pull, Fetch and Refresh
+
+Right-click anywhere on the branch control (or press Shift+F10) for Push, Pull (fast-forward only),
+Fetch and Refresh branches. Push explicitly targets the current branch's configured upstream without
+force or automatic tag pushing.
+
+- Pull requires a clean working tree, fetches the upstream and fast-forwards only; divergent history
+  is rejected without creating a merge commit or rebasing. Push/Pull are disabled for
+  detached/unborn branches or missing upstreams; configure the upstream in a terminal first.
+
+- Fetch updates all branch references from each configured remote and prunes deleted remote
+  references without switching or merging. Refresh branches re-reads the Local/Remote lists.
+
+- Git actions run off the UI thread and are serialized; the control shows progress and its context
+  menu reports completion. Failures are displayed, and file/Git/GitHub panels refresh after
+  operations, including partial failures.
+
+- Menu navigation supports arrows, Home/End, Enter, Escape and outside-click dismissal; application
+  shortcuts are suppressed while the menu is open. Switching blocks duplicate requests and editor
+  transitions, and stale responses cannot replace newer branch state.
+
+### Git comparison tabs
+
+Expanded comparisons also appear as a closable Git/file-name tab in the central tab bar. Selecting a
+terminal or file hides the comparison while retaining its tab; selecting the comparison tab restores
+it.
+
+Closing its tab returns the comparison to the inspector. Main toolbar and Git tools remain
+available.
+
+#### Validation and limits
+
+- All 156 frontend/build-helper tests, localization checks, frontend build and isolated macOS
+  desktop build pass. Component regression checks cover selection and retained diff content.
+
+- The isolated QA app launched, but the native automation connection closed before comparison-tab
+  inspection; native acceptance of the new tab and Windows runtime validation remain pending.
+
+### Expanded Git diffs
+
+Git file comparisons offer Expand diff to show the selected diff in the central content area while
+retaining the main toolbar, workspace tabs, inspector toolbar and Git file list. The diff toolbar
+moves with the diff and retains Copy Diff, unified/side-by-side comparison, previous/next file,
+inspector-only display and Close diff.
+
+Inspector-only display returns the diff to the inspector; closing the diff restores the previous
+central terminal/editor without terminating sessions or discarding file buffers. The inspector
+remains resizable in central display mode.
+
+#### Validation and limits
+
+- Component regression tests verify the portal placement, retained main toolbar and inspector file
+  list, and returning to inspector display. All 152 frontend/build-helper tests, formatting,
+  localization, documentation checks and frontend/isolated desktop builds pass on macOS.
+
+- The isolated native QA app (`sh.uterm.desktop.qa.gitcenter`) verifies central diff display with
+  both toolbars and the Git file list visible, and returning to inspector-only display. Windows
+  runtime acceptance remains pending.
+
+### File tab limit
+
+Settings → General → File tab limit sets the maximum number of open file tabs per directory (default
+10, minimum 1, whole numbers only). The preference persists across restarts.
+
+- Opening a file beyond the limit closes the earliest opened file tab; switching to an existing tab
+  does not change its opening order. Lowering the limit also removes the oldest excess files.
+
+- Terminal and Agent sessions are excluded and remain running. Saves and conflict protection run
+  before automatic removal; failed saves retain drafts and require resolution.
+
+#### Validation and limits
+
+- All 157 frontend/build-helper tests, localization checks and frontend/isolated macOS desktop
+  builds pass. Tests cover old-settings defaults, invalid values, FIFO eviction, existing-tab
+  selection, reducing to one, conflict protection and retaining the session tab.
+
+- Native QA (`sh.uterm.desktop.qa.tablimit`) verifies the General layout, default 10 and saving 1.
+  Native automatic eviction and Windows runtime acceptance remain pending.
+
+### Switching file tabs
+
+File-tab selection directly uses the guarded open operation, avoiding a nested hide/open transition
+that would block opening the target.
+
+#### Validation and limits
+
+- App regression checks verify switching between retained files, saving edits and returning from a
+  terminal to a file. All 156 frontend/build-helper tests and frontend/isolated macOS desktop builds
+  pass.
+
+- Native QA (`sh.uterm.desktop.qa.tabswitch`) verifies switching between two file tabs and returning
+  from a file to the terminal; the QA app exited before the final terminal-to-file native check.
+  Windows runtime acceptance remains pending.
+
+### Middle-click to close file and diff tabs
+
+Middle-clicking a file or Git diff tab closes it through its existing close action. File
+save/conflict guards still apply; closing a background file retains the visible tab.
+
+Middle clicks never close terminal or Agent sessions, and disabled transitions ignore closing.
+
+#### Validation and limits
+
+- Component tests cover file closing, conflict protection, disabled guards, ignored right clicks,
+  retained terminals and Git diff closing. All 159 frontend/build-helper tests and frontend/isolated
+  macOS desktop builds pass.
+
+- Native QA (`sh.uterm.desktop.qa.middletab`) verifies current/background file closing and keeping a
+  terminal session. Native Git diff middle-click and Windows runtime acceptance remain pending.
+
+### Central tab bar
+
+The main workspace has a horizontally scrollable tab bar showing only the currently selected
+terminal or Agent session, plus files opened in the current directory. The tab bar is hidden when
+there are no file or Git diff tabs, even if terminal or Agent sessions are running.
+
+- Opening a file or diff shows it again. Component checks cover session-only hiding and hiding after
+  the last file closes; native layout acceptance remains pending.
+
+- Other running sessions remain in the sidebar and take no space in the central tab bar. Selecting a
+  different sidebar session replaces the session tab, including while a file is visible; the session
+  tab remains available to return from a file to that session.
+
+- Opening another file adds a tab; reopening the same directory/path selects its existing tab. File
+  tabs show an unsaved marker and a close button on the right.
+
+- Closing a background file leaves the active view unchanged; closing the active file returns to the
+  selected terminal or welcome page. Terminal and Agent tabs, and terminal pane headers, have no
+  close button; the sidebar retains Close Session.
+
+- Selecting a session from the tab bar or sidebar retains open file tabs and running terminal
+  output. Switching or closing the active file saves changes first; save/conflict failures block the
+  action and preserve the recovery draft until Retry, Discard or Cancel.
+
+- Git operations and file-tree mutations retain their save guard and close cached files in the
+  affected root to avoid stale content. File tabs remain in memory for this run and are scoped by
+  directory; they are not restored after restart.
+
+- File text is retained between switches, while editor view history and cursor position are
+  recreated. Keyboard arrows/Home/End navigate the tab bar, long names are truncated with full paths
+  in tooltips, and language switching updates tab labels.
+
+#### Validation and limits
+
+- All 152 frontend/build-helper tests, formatting, localization, documentation checks and
+  frontend/isolated desktop builds pass on macOS. An isolated QA app (`sh.uterm.desktop.qa.tabs`)
+  verifies two-file switching, saved edit retention, terminal output retention, active/background
+  file closing, sidebar-only session close controls in the visible workspace, and long-label
+  truncation with a fully visible close button in a 720×520 window.
+
+- The isolated macOS QA app (`sh.uterm.desktop.qa.focusedtab`) verifies that two running terminals
+  produce only one central session tab, sidebar selection replaces that tab, and an open file tab is
+  retained. Native Agent, conflict-dialog and Windows runtime acceptance remain pending.
+
+### Automatic file-tree refresh
+
+The visible file tree automatically refreshes its root and expanded folders five seconds after each
+directory read completes. Manual Refresh files remains available.
+
+Refresh retains expanded folders, scroll position and inline name inputs; it does not reload editor
+contents. Slow reads do not overlap within a folder’s refresh cycle, and collapsing a folder,
+changing projects or closing the panel cancels its timer and ignores late results.
+
+Quick-open and content-search results are not periodically queried.
+
+#### Validation and limits
+
+- Component tests cover updated listings, scheduling after completion and timer cleanup; frontend
+  tests, TypeScript/production build, formatting, localization and documentation checks pass on
+  macOS. Native timing and Windows runtime acceptance remain pending.
+
+### File-operation errors
+
+File-list operation errors (creation, renaming, deletion, copying, pasting and opening in the file
+manager) disappear after three seconds. Each failed action restarts the timer, including identical
+errors; typed names remain intact.
+
+Directory-loading and search errors remain visible.
+
+#### Validation and limits
+
+- Component timer tests cover dismissal and repeated failures; native timing acceptance remains
+  pending.
+
+### Copying files and folders
+
+The file tree supports Copy/Paste from its context menu and Ctrl+C/Ctrl+V (Cmd+C/Cmd+V on macOS)
+while the list is focused. A folder receives the copy; a file targets its parent, and blank space
+targets the project root.
+
+- This single-entry internal clipboard retains the source project across project changes and panel
+  remounts, allowing pasting into another project. It resets when the application reloads and does
+  not import files from the system clipboard.
+
+- Source and destination are separately validated within their project roots; missing sources report
+  an error. Component and Windows backend tests cover cross-project copying, conflicts, missing
+  sources and traversal.
+
+- Files, binary content and complete directories are supported without overwriting existing names.
+  Links, special files, root copies and self/descendant destinations are rejected.
+
+- Copy runs off the UI thread, stages content locally and limits recursion to 64 levels and 100,000
+  entries; extra disk space is required. A final write failure may leave an incomplete destination,
+  reported visibly for inspection.
+
+#### Validation and limits
+
+- Component and backend tests cover destination routing, recursive copying, conflicts and traversal;
+  a mocked browser preview verifies the menu and refreshed tree. Native WebView and macOS acceptance
+  remain pending.
+
+### Static HTML preview
+
+HTML and HTM files open in static preview, with an Edit/Preview toggle that previews unsaved text
+without saving. Full-document head styles, inline CSS and embedded data images are preserved.
+
+The isolated frame blocks scripts, external/local linked resources, forms and navigation; pages
+needing JavaScript (including Vite/React entry HTML) must use their development server. Such
+dependencies display a limitation notice rather than an unexplained blank panel.
+
+#### Validation and limits
+
+- Regression tests cover style preservation and active-content removal. Native WebView acceptance
+  remains pending.
+
+### Open in File Manager
+
+Project, Worktree and local file-tree context menus offer Open in File Manager. The file-tree menu
+expands to show its actions, including this entry after Copy path, and uses its measured size to
+stay inside the window.
+
+It scrolls only when the available window height cannot fit all actions; arrow keys still reach the
+lower entries. The action is disabled for SSH remote files.
+
+The Worktree action opens that Worktree's own directory and is disabled for a missing Worktree.
+Folders open directly; files are revealed in their containing folder.
+
+File-tree paths are checked against the selected root before opening. Opening failures remain
+visible.
+
+#### Validation and limits
+
+- An isolated macOS QA app (`sh.uterm.desktop.qa.worktreeopen`) verified the Worktree menu layout,
+  dismissal after activation and Finder opening the Worktree directory.
+
+#### File-menu checks on Windows
+
+- File-menu validation on Windows: 19 related frontend checks, changed-source/test formatting,
+  localization/documentation checks and TypeScript/production build pass. The focused regression
+  covers measured edge positioning, language-dependent height changes, short viewports, keyboard
+  access, file/folder/root targets, menu dismissal and visible opening failures.
+
+- An isolated native host (`sh.uterm.desktop.qa.filemenu`) uses the real FilePanel and
+  filesystem/opener commands with a temporary root. Chinese/dark and English/light menus show all
+  local actions without scrolling, including at the window's bottom-right edge; file and root
+  actions open Explorer at the correct directory.
+
+- Explorer file selection, Windows project/Worktree actions and macOS/Linux file-menu layout remain
+  unverified. Repository-wide formatting reports existing issues in 102 unchanged files; the
+  production build retains its large-chunk warning.
+
+### Name conflicts
+
+Creation and renaming report conflicts separately for files and folders, including cross-type
+collisions. Renaming to the unchanged name succeeds without writing.
+
+Editing the input clears the previous validation message. Files and folders still cannot share a
+name in the same parent directory.
+
+#### Validation and limits
+
+- Backend regression tests cover these rules; native interaction acceptance remains pending.
+
+### Windows path display
+
+The file-panel footer and its tooltip display Windows paths without the extended-length prefix,
+preserving UNC server/share paths. Internal filesystem paths remain unchanged.
+
+#### Validation and limits
+
+- Path-formatting tests cover drive and UNC paths; native visual acceptance remains pending.
+
+### Inline creation and renaming
+
+New files and folders are named inline inside the target folder in the file tree; renaming edits the
+existing row. Enter confirms and Escape cancels; failures retain the input.
+
+Creation from a folder's context menu expands that folder. Refresh preserves expanded folders.
+
+Deletion still requires explicit confirmation. Native inline-edit focus and input-method acceptance
+remain unverified.
+
+### Root boundaries and recovery drafts
+
+File access stays within the selected project root. Text saves check for conflicts and retain
+unsaved drafts for recovery.
+
+Markdown is sanitized before rendering; PDF canvas dimensions are bounded. Git views include status,
+diffs and commits, with worktree management.
+
+GitHub integration requires the user's credentials and access.
+
+### View on GitLab
+
+The Working directory panel places View on GitLab directly below View on GitHub. It opens a
+repository whose remote hostname contains `gitlab` (case-insensitive), including self-hosted
+instances and nested groups, preferring a matching `origin`.
+
+HTTP/HTTPS remotes retain their web port; SSH remotes open the corresponding HTTPS site on its
+default port. Custom web ports must be provided through an HTTP/HTTPS remote.
+
+Embedded credentials are omitted from the browser link. Missing remotes and opening failures remain
+visible.
+
+#### Validation and limits
+
+- Component tests cover button order, invocation, busy state and bilingual errors; backend tests
+  cover remote conversion and selection. All 218 frontend/build-helper tests and 76 backend tests
+  pass, with eight frontend tests skipped and four backend tests ignored.
+
+- Formatting, localization, TypeScript/production build, documentation checks and an isolated macOS
+  app build pass. The isolated app (`sh.uterm.desktop.qa.gitlab`) verifies the button order, icon
+  and visible error when the directory is not a Git repository.
+
+- Authenticated GitLab access and Windows runtime acceptance remain unverified.
 
 ## Agents and settings
 
-Settings → Agent and the standalone Agent panel place an Enable switch after each program’s availability status. Agents start disabled until explicitly enabled; the choice is saved across restarts. Only enabled, detected Agents appear in project/Worktree creation buttons, the Add menu and the default chat Agent selector. Missing programs cannot be enabled; a previously enabled program that becomes unavailable can still be disabled. New chat uses the preferred Agent when enabled and available, otherwise the first enabled, available Agent; without one, the action is disabled. Turning an Agent off hides its creation entries without closing existing sessions or removing its program, configuration or Hooks. Saving failures remain visible and preserve the previous selection.
+### Enabling Agents
 
-Settings → Usage provides separate Claude, Codex, Kimi and Grok tabs. Opening Usage immediately queries Claude, and selecting another Agent tab directly queries that Agent, including its local seven-day token totals and available provider quota windows. Each tab retains its latest result and error while switching between Agents; macOS automatically allows the Claude query to request credentials from Keychain. The Usage page also sets the remaining-usage refresh interval to a whole 10–3600 seconds (60 seconds by default); the value is saved across restarts. For an active supported Agent session, the workspace title bar queries immediately and then at that interval, without overlapping a still-running request. Clicking the remaining percentage opens every valid quota window with its remaining percentage, progress and reset time; clicking outside or pressing Escape closes the details. A failed or credential-less quota query hides the title-bar indicator until a later refresh succeeds. The 147 frontend/build-helper tests, localization check and production build pass, including settings compatibility, interval validation, automatic tab queries, non-overlapping refresh and the clickable details; authenticated provider queries and native interaction remain pending.
+Settings → Agent and the standalone Agent panel place an Enable switch after each program’s
+availability status. Agents start disabled until explicitly enabled; the choice is saved across
+restarts.
 
-Agent enablement validation: all 145 frontend/build-helper tests, 39 backend tests, local-session service tests, locked dependency installation, formatting, localization, documentation checks, TypeScript/production build and the isolated macOS desktop build pass. Settings and component tests cover explicit defaults, invalid saved values, built-in/custom Agents, immediate entry updates, default-chat fallback, existing-session retention, persistence, bilingual labels and storage failures. The isolated macOS QA app (`sh.uterm.desktop.qa.agentenable`) verifies switch alignment after availability, the unavailable-program disabled state, shared settings/Agent-panel state, and Codex disappearing from and returning to the Add menu when toggled. Native restart persistence, keyboard interaction and Windows runtime acceptance remain pending.
+- Only enabled, detected Agents appear in project/Worktree creation buttons, the Add menu and the
+  default chat Agent selector. Missing programs cannot be enabled; a previously enabled program that
+  becomes unavailable can still be disabled.
 
-Kimi detection and Agent launch search `~/.kimi-code/bin` after inherited PATH entries, alongside the existing default installation directories. This lets macOS apps launched with a minimal GUI PATH find Kimi without depending on a terminal startup environment. Explicit program paths and PATH precedence are preserved. Custom installation locations still need a configured absolute executable path. An isolated subprocess regression test with an empty PATH verifies detection and the launch PATH; another verifies PATH precedence. Local-service tests, 39 backend tests and the desktop/production build pass on macOS. The installed application has not been replaced, and authenticated Kimi sessions and Windows runtime behavior remain unverified.
+- New chat uses the preferred Agent when enabled and available, otherwise the first enabled,
+  available Agent; without one, the action is disabled. Turning an Agent off hides its creation
+  entries without closing existing sessions or removing its program, configuration or Hooks.
 
-Kimi, OpenCode and Grok use project-drawn K, code-bracket and G symbols in Agent settings and session controls, with theme-inherited colors and no network dependency. Unknown agents retain the terminal icon. Component tests cover distinct symbols and fallback. Twenty focused component/localization tests, formatting of the changed icon/test/configuration files, localization checks, TypeScript/production build and the isolated macOS debug app build pass. Native QA (`sh.uterm.desktop.qa.iconslicense`) verifies all three symbols beside their Agent settings labels in the default dark theme. Windows/Linux visual acceptance remains pending. Repository-wide formatting passes on the current checkout.
+- Saving failures remain visible and preserve the previous selection.
 
-OpenCode is a built-in Agent: its `opencode` executable is detected on PATH and in `~/.opencode/bin`, and it uses the existing project/chat launch flow. Missing programs expose an installation panel. OpenCode, Claude, Codex and Gemini support confirmed global npm installation (Node.js/npm and network access required; no privilege elevation). Only fixed package identifiers are accepted; installation runs off the UI thread, concurrent installs are rejected, and errors remain visible. Completion refreshes program detection; custom npm prefixes may require configuring the executable path or restarting uTerm. Kimi links to its official installation instructions; Grok and custom executables require publisher-directed manual installation and path configuration. OpenCode does not yet expose Hooks or usage integration. Bilingual component tests cover confirmation, failure/retry and refresh; backend tests cover the package allowlist. Actual package downloads, native Agent launch and macOS installation remain unverified.
+### Usage and quota refresh
 
-Clicking blank space inside or outside a break reminder, or pressing Escape, does not dismiss it. Use Keep working to close it manually, or wait ten seconds for automatic dismissal. Component interaction and timer tests pass for these paths; native WebView interaction remains unverified.
+Settings → Usage provides separate Claude, Codex, Kimi and Grok tabs. Opening Usage immediately
+queries Claude, and selecting another Agent tab directly queries that Agent, including its local
+seven-day token totals and available provider quota windows.
 
-The break reminder switch and interval input share one row in General settings, without the auto-dismiss helper text. Reminder timing and validation are unchanged. A browser preview verifies the row alignment; bilingual component tests check both controls and removal of the helper text.
+- Each tab retains its latest result and error while switching between Agents; macOS automatically
+  allows the Claude query to request credentials from Keychain. The Usage page also sets the
+  remaining-usage refresh interval to a whole 10–3600 seconds (60 seconds by default); the value is
+  saved across restarts.
 
-Settings → General includes a Break reminder switch (off by default) and an interval of 1–1440 whole minutes (default 60). Interval edits save on leaving the field. While the app runs, a non-blocking reminder appears without taking focus, closes automatically after ten seconds, and can be dismissed with Keep working. Dismissal restarts the interval; changing the interval or restarting the app also resets it. Disabling cancels pending reminders. Missed intervals during sleep are not queued, and the app does not force its window to the foreground. Timer and settings regression tests cover automatic/manual dismissal, cleanup and invalid values; native timing and visual acceptance remain pending.
+- For an active supported Agent session, the workspace title bar queries immediately and then at
+  that interval, without overlapping a still-running request. Clicking the remaining percentage
+  opens every valid quota window with its remaining percentage, progress and reset time; clicking
+  outside or pressing Escape closes the details.
 
-The global Reset interface and terminal settings action appears only in Settings → General. Other settings categories do not repeat it, so its scope is distinct from category-specific controls. Resetting keeps the existing backup and visible error behavior.
+- A failed or credential-less quota query hides the title-bar indicator until a later refresh
+  succeeds.
 
-Settings → General → Launch at login controls automatic startup after OS sign-in on Windows and macOS. Login startup keeps the main window hidden and runs in the system tray (macOS menu bar); click the tray icon to open it. Manual launches and session links still open the window, while repeated background launches leave an existing window hidden. For an existing startup entry, turn this setting off and on to apply background startup. Opening settings reads the system registration without enabling it. Changes apply immediately; failures remain visible and can be retried. Resetting interface settings does not change the OS registration. Development builds use a separate startup entry. Mocked component tests cover enabling, disabling and failure recovery. An isolated browser preview verifies the General settings layout. A Windows build with an isolated application identifier passes native window visibility checks: background startup and repeated background requests keep the main window hidden, and a subsequent manual launch shows it. All 41 backend tests, 13 settings/bilingual UI tests, frontend and desktop builds, localization and documentation checks pass. Repository formatting remains blocked by existing issues in 39 files. Actual OS sign-in, visual tray-click acceptance and macOS acceptance remain pending.
+#### Validation and limits
 
-Agent definitions specify a program and argument list. Hooks report activity; usage can combine local logs with provider requests when enabled. Provider credentials and permissions determine availability. Terminal input and process I/O are handled independently of UI rendering.
+- The 147 frontend/build-helper tests, localization check and production build pass, including
+  settings compatibility, interval validation, automatic tab queries, non-overlapping refresh and
+  the clickable details; authenticated provider queries and native interaction remain pending.
 
-Settings include appearance, color themes, fonts, terminal cursor and scrollback, keyboard shortcuts, default shell and Agent. Theme import accepts supported color fields only.
+### Token logs and incomplete UTF-8 records
 
-Terminal and Agent panes retain mouse-wheel distance when scrolling history or application-owned content. Mouse-wheel notches move farther, while fine trackpad movement accumulates precisely; Alt/Option retains faster scrolling. Horizontal/Shift and Ctrl/Cmd gestures retain their existing handling. History moves immediately, bounded to four viewports per event. Application scrolling delegates its original mouse or cursor-key encoding to xterm, with at most 12 steps (or the pane's row count when smaller) per event, combined into one input write to avoid a queue of individual reports. The application decides how many rows each step moves; saved scrollback limits still apply.
+Local token logs are read as bounded byte records. When reading a large file tail, the incomplete
+first record is discarded before UTF-8 decoding.
 
-Scrolling validation: 14 focused input/scroll tests pass; the current frontend/build-helper suite has 217 passing tests and eight optional checks skipped. Changed-source formatting and TypeScript/production build pass. Five checks with the real xterm renderer in a browser verify distance-based history scrolling, batched SGR and legacy binary mouse reports, alternate-screen cursor encoding and disabled-input protection. The history sample moves 16 lines in one event; eight SGR reports use one input write. Native physical-wheel/trackpad and live Agent acceptance on macOS, Windows and Linux remain pending.
+Records containing invalid UTF-8, including unfinished characters in logs being written, are skipped
+and the totals show a partial-record notice; valid records and provider quota requests can still be
+processed. Real filesystem read errors remain visible.
 
-Settings → Appearance provides independent File font size and Git diff font size controls alongside the existing font controls. Both default to 14 px and accept whole numbers from 10 to 32 px. Enter or leaving the field applies and saves the value; existing files and diffs update immediately, and the values persist across restarts. File font size covers editable/read-only text and Markdown previews, with headings and code scaling proportionally. Git diff font size covers working/staged changes, branch comparisons and commit history in unified, side-by-side and expanded views. Interface and terminal sizes remain independent; PDF zoom and HTML page styles retain their existing behavior. Older version-1 settings receive the defaults for missing fields; invalid values and save failures remain visible without replacing saved data. Reset interface and terminal settings resets both sizes. Font changes preserve the mounted editor, draft, selection and undo history and do not save or reload the file.
+The seven-day filter, 8 MiB per-file limit, 64 MiB total budget, five-second scan limit and
+deduplication rules remain in effect.
 
-Windows validation: 161 frontend/build-helper tests pass with two platform-specific skips, including old-settings defaults, integer/range validation, independent persistence, failed saves, reset, editable/read-only files, Markdown switching and all Git diff modes with portal expansion. A real CodeMirror component regression retains the editor instance, unsaved text, selection and undo across font changes. Production and isolated-identifier desktop builds, TypeScript, localization and documentation checks pass. The isolated Windows app starts without logged errors; changed files pass formatting, while the repository-wide formatting check remains blocked by existing issues in 32 other files. Native Windows and macOS visual acceptance at 14/20/32 px remains pending: the Windows/browser automation runtime could not initialize (missing kernel assets), and the remote-debugging browser fallback was rejected by automatic approval review. Production builds retain the large-chunk warning.
+#### UTF-8 usage checks on Windows
 
-Settings → Software update → Automatic updates is off by default and persists across restarts. In builds with online updates enabled, turning it on checks immediately and then hourly while running, automatically downloads available updates, verifies their signature through the existing updater, and prompts before installing and restarting. The confirmation dialog offers Install now and Cancel, with automatic installation after ten seconds without a response. Cancel or Escape stops the countdown and suppresses automatic installation of the same version for this run; manual installation remains available in Software update. Manual Install and restart uses the same confirmation. Closing settings does not dismiss the prompt. Disabling automatic updates cancels an automatic prompt. Turning it off stops future automatic steps; an already running download may finish. Unsaved files block installation through the existing editor guard. Failures are shown in Software update and stop automatic progression until a manual retry. Hook tests cover opt-in behavior, automatic download, installation guards, restoration after failure, avoiding retry loops and manual retry; settings tests cover old-data defaults and validation. All 159 frontend/build-helper tests, formatting, localization, documentation checks and frontend/isolated macOS desktop builds pass. Native QA (`sh.uterm.desktop.qa.autoupdate`) verifies the switch layout and disabled state in a build without online updates. Actual signed download/install/restart and Windows runtime acceptance remain pending.
+- UTF-8 usage validation on Windows: all 84 backend checks pass (six optional/resource checks
+  ignored), together with 18 focused usage and bilingual interface checks. Regression fixtures cover
+  a fully valid UTF-8 file whose 8 MiB tail starts inside a Chinese character, invalid bytes between
+  valid records and incomplete final characters for Claude, Codex, Kimi and Grok.
 
-Update confirmation validation: all 159 frontend/build-helper tests, formatting, documentation/localization checks, frontend production and isolated macOS desktop builds pass. Hook/component tests cover cancel-button focus, cancellation preventing timeout installation, ten-second installation, duplicate confirmation guards and unsaved-file protection. A browser preview of the real dialog component verifies the Chinese layout and Cancel button. The preview uses mock update callbacks; native signed-update confirmation, installation/restart and Windows runtime acceptance remain pending.
+- Interface checks retain token totals and quota windows alongside the partial-record notice in both
+  languages. Changed-source formatting, localization, documentation, TypeScript/production and the
+  isolated Windows desktop build (`sh.uterm.desktop.qa.usageutf8`) pass.
 
-Settings → Software update checks for updates after startup. Progress, action buttons and error messages appear before Release notes at the bottom. Release notes render Markdown headings and lists with spacing and their own scrolling region, so long notes do not push actions below them. HTML, images and interactive content are excluded. Component regression checks verify headings/lists, excluded script elements and progress/install controls preceding notes. All 159 frontend/build-helper tests and the frontend production build pass; native signed-update notes and Windows runtime acceptance remain pending. While an update downloads, and after its download has completed, its progress bar remains visible with the downloaded size immediately beside it. A completed update additionally reports successful signature verification before Install and restart is available. The bilingual settings component regression test covers this completed-download layout; signed-update runtime acceptance remains pending.
+- Repository-wide formatting reports existing issues in 99 unchanged files, and the production build
+  retains its large-chunk warning. Authenticated provider queries and macOS/Linux runtime acceptance
+  of these paths remain unverified.
 
-In a focused Windows terminal, Ctrl+C copies selected terminal text; without a selection it remains the terminal interrupt key. Ctrl+V and Ctrl+Shift+V paste clipboard text using the terminal's bracketed-paste mode when enabled. Ctrl+Shift+C also copies selected text. macOS sends Cmd+C/Cmd+V through native copy/paste events to xterm, without requesting asynchronous browser clipboard access: pasting needs no extra WebKit “Paste” click and does not produce that API's `NotAllowedError` banner. Control keys remain available to terminal programs. Native paste retains bracketed-paste handling and disabled-input protection. Other clipboard and session failures remain visible; a pending asynchronous paste is discarded if its connection closes or changes. Shortcut regression tests cover native macOS routing, selection states and Shift modifiers, alongside Windows copy/paste and Control passthrough; native acceptance is recorded below.
+#### Agent-enablement checks
 
-Terminal and Agent sessions let the input method transform punctuation before forwarding committed punctuation through the normal terminal input queue. The handler avoids changing the IME textarea, preserving composition, paste and Control/Alt/Meta shortcuts, and respects disabled input. Regression tests cover Chinese and ASCII punctuation, composition boundaries, cancellation, disabled input and listener cleanup. All 154 frontend/build-helper tests, formatting, localization, TypeScript/production build and an isolated macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.imenative`) verifies ASCII punctuation in a shell. Automated Unicode keystroke injection does not reliably reproduce native IME commits; real Chinese IME, live Agent, Windows and Linux runtime acceptance remain pending.
+- Agent enablement validation: all 145 frontend/build-helper tests, 39 backend tests, local-session
+  service tests, locked dependency installation, formatting, localization, documentation checks,
+  TypeScript/production build and the isolated macOS desktop build pass. Settings and component
+  tests cover explicit defaults, invalid saved values, built-in/custom Agents, immediate entry
+  updates, default-chat fallback, existing-session retention, persistence, bilingual labels and
+  storage failures.
+
+- The isolated macOS QA app (`sh.uterm.desktop.qa.agentenable`) verifies switch alignment after
+  availability, the unavailable-program disabled state, shared settings/Agent-panel state, and Codex
+  disappearing from and returning to the Add menu when toggled. Native restart persistence, keyboard
+  interaction and Windows runtime acceptance remain pending.
+
+### Kimi executable discovery
+
+Kimi detection and Agent launch search `~/.kimi-code/bin` after inherited PATH entries, alongside
+the existing default installation directories. This lets macOS apps launched with a minimal GUI PATH
+find Kimi without depending on a terminal startup environment.
+
+Explicit program paths and PATH precedence are preserved. Custom installation locations still need a
+configured absolute executable path.
+
+#### Validation and limits
+
+- An isolated subprocess regression test with an empty PATH verifies detection and the launch PATH;
+  another verifies PATH precedence. Local-service tests, 39 backend tests and the desktop/production
+  build pass on macOS.
+
+- The installed application has not been replaced, and authenticated Kimi sessions and Windows
+  runtime behavior remain unverified.
+
+### Agent brand icons
+
+Kimi, OpenCode and Grok use their brand icons in Agent settings, sidebar creation/session controls
+and session tabs. Their SVG paths are bundled locally from the MIT-licensed Lobe Icons collection,
+with the pinned source revision and license retained in `NOTICE`.
+
+Icons inherit the interface color in dark and light themes and need no network request. Unknown
+agents retain the terminal icon.
+
+#### Brand-icon checks on Windows
+
+- Brand-icon validation on Windows: all 15 focused component/localization and Agent-enablement
+  checks, changed-source/test formatting, localization checks and TypeScript/production build pass.
+  An isolated native Tauri/WebView2 QA host (`sh.uterm.desktop.qa.agenticons`) renders the real
+  Agent settings and shared session icons with temporary state; visual inspection verifies all three
+  marks, label alignment and compact controls in dark/light themes with Chinese/English labels.
+
+- The fixture does not launch Agents or restart the installed application; macOS/Linux visual
+  acceptance remains pending. Repository-wide formatting reports existing issues in 100 other files;
+  the tests retain existing Vite WebSocket-port/React act warnings, and the production build retains
+  its large-chunk warning.
+
+### Agent installation
+
+OpenCode is a built-in Agent: its `opencode` executable is detected on PATH and in
+`~/.opencode/bin`, and it uses the existing project/chat launch flow. Missing programs expose an
+installation panel.
+
+- OpenCode, Claude, Codex and Gemini support confirmed global npm installation (Node.js/npm and
+  network access required; no privilege elevation). Only fixed package identifiers are accepted;
+  installation runs off the UI thread, concurrent installs are rejected, and errors remain visible.
+
+- Completion refreshes program detection; custom npm prefixes may require configuring the executable
+  path or restarting uTerm. Kimi links to its official installation instructions; Grok and custom
+  executables require publisher-directed manual installation and path configuration.
+
+- OpenCode does not yet expose Hooks or usage integration.
+
+#### Validation and limits
+
+- Bilingual component tests cover confirmation, failure/retry and refresh; backend tests cover the
+  package allowlist. Actual package downloads, native Agent launch and macOS installation remain
+  unverified.
+
+### Dismissing break reminders
+
+Clicking blank space inside or outside a break reminder, or pressing Escape, does not dismiss it.
+Use Keep working to close it manually, or wait ten seconds for automatic dismissal.
+
+#### Validation and limits
+
+- Component interaction and timer tests pass for these paths; native WebView interaction remains
+  unverified.
+
+### Break reminder settings layout
+
+The break reminder switch and interval input share one row in General settings, without the
+auto-dismiss helper text. Reminder timing and validation are unchanged.
+
+#### Validation and limits
+
+- A browser preview verifies the row alignment; bilingual component tests check both controls and
+  removal of the helper text.
+
+### Break reminder timing
+
+Settings → General includes a Break reminder switch (off by default) and an interval of 1–1440 whole
+minutes (default 60). Interval edits save on leaving the field.
+
+- While the app runs, a non-blocking reminder appears without taking focus, closes automatically
+  after ten seconds, and can be dismissed with Keep working. Dismissal restarts the interval;
+  changing the interval or restarting the app also resets it.
+
+- Disabling cancels pending reminders. Missed intervals during sleep are not queued, and the app
+  does not force its window to the foreground.
+
+#### Validation and limits
+
+- Timer and settings regression tests cover automatic/manual dismissal, cleanup and invalid values;
+  native timing and visual acceptance remain pending.
+
+### Resetting interface settings
+
+The global Reset interface and terminal settings action appears only in Settings → General. Other
+settings categories do not repeat it, so its scope is distinct from category-specific controls.
+
+Resetting keeps the existing backup and visible error behavior.
+
+### Launch at login
+
+Settings → General → Launch at login controls automatic startup after OS sign-in on Windows and
+macOS. Login startup keeps the main window hidden and runs in the system tray (macOS menu bar);
+click the tray icon to open it.
+
+- Manual launches and session links still open the window, while repeated background launches leave
+  an existing window hidden. For an existing startup entry, turn this setting off and on to apply
+  background startup.
+
+- Opening settings reads the system registration without enabling it. Changes apply immediately;
+  failures remain visible and can be retried.
+
+- Resetting interface settings does not change the OS registration. Development builds use a
+  separate startup entry.
+
+#### Validation and limits
+
+- Mocked component tests cover enabling, disabling and failure recovery. An isolated browser preview
+  verifies the General settings layout.
+
+- A Windows build with an isolated application identifier passes native window visibility checks:
+  background startup and repeated background requests keep the main window hidden, and a subsequent
+  manual launch shows it. All 41 backend tests, 13 settings/bilingual UI tests, frontend and desktop
+  builds, localization and documentation checks pass.
+
+- Repository formatting remains blocked by existing issues in 39 files. Actual OS sign-in, visual
+  tray-click acceptance and macOS acceptance remain pending.
+
+### Agent definitions and activity
+
+Agent definitions specify a program and argument list. Hooks report activity; usage can combine
+local logs with provider requests when enabled.
+
+Provider credentials and permissions determine availability. Terminal input and process I/O are
+handled independently of UI rendering.
+
+### Installing and removing Hooks
+
+Settings → Agent → Install Hooks configures Claude, Codex and Gemini. Reinstalling keeps one uTerm
+reporter per supported event, replacing recognized entries from other release, development or QA
+installations even when their paths differ.
+
+- Remove Hooks also removes these recognized entries for the selected Agent. Other tools' commands
+  and settings, including commands in the same group, are preserved.
+
+- Only literal standalone uTerm reporter commands are managed; double-quoted command substitutions
+  or variable expressions, custom wrappers and combined shell commands remain untouched.
+  Configuration conflict checks and backups remain in effect, and changes apply to new Agent
+  sessions.
+
+### Windows Hook commands
+
+Windows Hooks explicitly invoke PowerShell with a literal executable path, so PowerShell and cmd.exe
+runners support spaces, Chinese and shell metacharacters without treating the quoted path as an
+expression. To configure reporting, select Install Hooks and open a new Agent session.
+
+Other tools' Hooks remain independently configured and may need their own Windows commands.
+
+### Agent state and notifications
+
+The sidebar and Agent pane header display the same idle, working, needs-attention or completed
+state. Unviewed completion highlights the sidebar icon until acknowledged.
+
+- Settings → Agent → Notify when tasks finish or need attention is off by default and requests
+  system notification permission when enabled. Completion and attention notify when the app is
+  unfocused or another session is selected; development builds, restored history and repeated
+  identical states do not send notifications.
+
+- Pending permission results are ignored after a newer Agent state, session closure or view unmount;
+  dispatch also rechecks the current notification setting, focus and selected session. Native
+  dispatch failures remain visible.
+
+#### Hook and notification automated checks
+
+- Hook and notification validation on Windows: the complete frontend/build-helper suite passes (233
+  passed, ten optional/platform checks skipped), together with 24 local-service checks and all 89
+  backend checks in a serialized run (six optional/resource checks ignored). Hook regressions cover
+  idempotent installation, old/encoded paths, mixed groups, removal, unrelated commands,
+  preservation of dynamic shell expressions and actual PowerShell/cmd execution with literal
+  special-character paths.
+
+- The App regression covers indicator states, unread acknowledgement, opt-in, focus, permissions,
+  replay, duplicate suppression, development builds and dispatch failures. Deferred permission
+  checks verify cancellation after opting out, viewing/closing a session, receiving a newer state or
+  unmounting, including delivery of only the latest pending state.
+
+- Changed-source/test and Rust formatting, localization, documentation checks, TypeScript/production
+  and the isolated Windows desktop build (`sh.uterm.desktop.qa.branchaudit`) pass. Repository-wide
+  formatting retains existing issues in 97 other files, and tests/builds retain the Vite
+  WebSocket-port, React act and large-chunk warnings.
+
+- The deferred-notification checks use mocked native commands; installed notification branding,
+  authenticated providers and macOS/Linux acceptance remain unverified.
+
+#### Hook and notification native checks
+
+- An isolated native app (`sh.uterm.desktop.qa.agenthooks`, unoptimized with the production
+  notification gate enabled) runs the installed Codex CLI 0.163.0 against a deterministic loopback
+  model fixture. Real prompt/Stop Hooks update both working/completed indicators without Hook
+  failures, and the completed sidebar icon glows.
+
+- Executing the generated attention Hook with 64 KiB of stdin verifies yellow indicators;
+  acknowledgement clears completion. Windows toast history confirms completion and attention
+  messages.
+
+- Repeated attention reports and reattachment do not resend notifications, and repeated installation
+  retains one reporter per event. A combined CLI smoke test also preserves another tool's
+  Windows-specific Hook overrides with its remote-session environment cleared.
+
+- The unpackaged QA app uses the notification plugin's PowerShell identity; installed-app
+  notification branding, authenticated provider runs and macOS/Linux runtime acceptance remain
+  unverified. The user's active app and sessions are not restarted.
+
+### Appearance and terminal preferences
+
+Settings include appearance, color themes, fonts, terminal cursor and scrollback, keyboard
+shortcuts, default shell and Agent. Theme import accepts supported color fields only.
+
+### Mouse wheel and trackpad scrolling
+
+Terminal and Agent panes use small steps for slow mouse-wheel scrolling and accelerate consecutive
+faster turns. A typical isolated notch moves about one history row; faster same-direction input
+increases the multiplier up to six times.
+
+- Pausing for more than 200 ms, reversing direction or changing the scrolling context resets
+  acceleration and fractional carry. Fine trackpad pixels retain proportional distance and
+  fractional accumulation without extra acceleration; larger pixel deltas and line-based events use
+  wheel normalization, since browsers do not identify the physical device.
+
+- Alt/Option adds its existing speed multiplier. Horizontal/Shift and Ctrl/Cmd gestures retain their
+  existing handling.
+
+- History moves immediately, bounded to four viewports per event; page-based events move by viewport
+  height. Application scrolling keeps xterm's original mouse or cursor-key encoding, with at most 12
+  steps (or the pane's row count when smaller) per event, combined into one input write.
+
+- Applications decide how many rows each step moves; saved scrollback limits still apply.
+
+#### Scrolling checks on Windows
+
+- Scrolling validation on Windows: all 17 focused input/scroll regressions, changed-source/test
+  formatting, localization/documentation checks and TypeScript/production build pass. A probe of
+  1,000 discrete wheel events and ten page events records zero layout measurements; a fine pixel
+  event still measures the rendered row height.
+
+- Tests cover slow/fast pixel and line notches, bounded acceleration, pause/reversal/context resets,
+  fractional trackpad input, modifiers, mouse protocols, disabled input and cleanup. An isolated
+  native Tauri/WebView2 host (`sh.uterm.desktop.qa.terminalscroll`) runs seven scenarios with the
+  real xterm renderer and injected wheel events: four 300 ms-spaced notches move four history rows,
+  four 30 ms-spaced notches move 13, and eight 2 px events move one row.
+
+- SGR/legacy binary mouse and alternate-screen cursor reports retain encoding and use one batched
+  input write per event; disabled application input sends nothing. The fixture uses no real
+  processes or Agent credentials and does not restart the installed application.
+
+- Physical-wheel/trackpad feel, live Agent behavior and macOS/Linux runtime acceptance remain
+  pending. Repository-wide formatting reports existing issues in 97 other files; the production
+  build retains its large-chunk warning.
+
+### File and Git diff font sizes
+
+Settings → Appearance provides independent File font size and Git diff font size controls alongside
+the existing font controls. Both default to 14 px and accept whole numbers from 10 to 32 px.
+
+- Enter or leaving the field applies and saves the value; existing files and diffs update
+  immediately, and the values persist across restarts. File font size covers editable/read-only text
+  and Markdown previews, with headings and code scaling proportionally.
+
+- Git diff font size covers working/staged changes, branch comparisons and commit history in
+  unified, side-by-side and expanded views. Interface and terminal sizes remain independent; PDF
+  zoom and HTML page styles retain their existing behavior.
+
+- Older version-1 settings receive the defaults for missing fields; invalid values and save failures
+  remain visible without replacing saved data. Reset interface and terminal settings resets both
+  sizes.
+
+- Font changes preserve the mounted editor, draft, selection and undo history and do not save or
+  reload the file.
+
+#### Font-size checks on Windows
+
+- Windows validation: 161 frontend/build-helper tests pass with two platform-specific skips,
+  including old-settings defaults, integer/range validation, independent persistence, failed saves,
+  reset, editable/read-only files, Markdown switching and all Git diff modes with portal expansion.
+  A real CodeMirror component regression retains the editor instance, unsaved text, selection and
+  undo across font changes.
+
+- Production and isolated-identifier desktop builds, TypeScript, localization and documentation
+  checks pass. The isolated Windows app starts without logged errors; changed files pass formatting,
+  while the repository-wide formatting check remains blocked by existing issues in 32 other files.
+
+- Native Windows and macOS visual acceptance at 14/20/32 px remains pending: the Windows/browser
+  automation runtime could not initialize (missing kernel assets), and the remote-debugging browser
+  fallback was rejected by automatic approval review. Production builds retain the large-chunk
+  warning.
+
+### Automatic updates and confirmation
+
+Settings → Software update → Automatic updates is off by default and persists across restarts. In
+builds with online updates enabled, turning it on checks immediately and then hourly while running,
+automatically downloads available updates, verifies their signature through the existing updater,
+and prompts before installing and restarting.
+
+- The confirmation dialog offers Install now and Cancel, with automatic installation after ten
+  seconds without a response. Cancel or Escape stops the countdown and suppresses automatic
+  installation of the same version for this run; manual installation remains available in Software
+  update.
+
+- Manual Install and restart uses the same confirmation. Closing settings does not dismiss the
+  prompt.
+
+- Disabling automatic updates cancels an automatic prompt. Turning it off stops future automatic
+  steps; an already running download may finish.
+
+- Unsaved files block installation through the existing editor guard. Failures are shown in Software
+  update and stop automatic progression until a manual retry.
+
+#### Validation and limits
+
+- Hook tests cover opt-in behavior, automatic download, installation guards, restoration after
+  failure, avoiding retry loops and manual retry; settings tests cover old-data defaults and
+  validation. All 159 frontend/build-helper tests, formatting, localization, documentation checks
+  and frontend/isolated macOS desktop builds pass.
+
+- Native QA (`sh.uterm.desktop.qa.autoupdate`) verifies the switch layout and disabled state in a
+  build without online updates. Actual signed download/install/restart and Windows runtime
+  acceptance remain pending.
+
+#### Update-confirmation checks
+
+- Update confirmation validation: all 159 frontend/build-helper tests, formatting,
+  documentation/localization checks, frontend production and isolated macOS desktop builds pass.
+  Hook/component tests cover cancel-button focus, cancellation preventing timeout installation,
+  ten-second installation, duplicate confirmation guards and unsaved-file protection.
+
+- A browser preview of the real dialog component verifies the Chinese layout and Cancel button. The
+  preview uses mock update callbacks; native signed-update confirmation, installation/restart and
+  Windows runtime acceptance remain pending.
+
+### Update progress and release notes
+
+Settings → Software update checks for updates after startup. Progress, action buttons and error
+messages appear before Release notes at the bottom.
+
+Release notes render Markdown headings and lists with spacing and their own scrolling region, so
+long notes do not push actions below them. HTML, images and interactive content are excluded.
+
+Component regression checks verify headings/lists, excluded script elements and progress/install
+controls preceding notes. All 159 frontend/build-helper tests and the frontend production build
+pass; native signed-update notes and Windows runtime acceptance remain pending.
+
+While an update downloads, and after its download has completed, its progress bar remains visible
+with the downloaded size immediately beside it. A completed update additionally reports successful
+signature verification before Install and restart is available.
+
+The bilingual settings component regression test covers this completed-download layout;
+signed-update runtime acceptance remains pending.
+
+### Terminal clipboard shortcuts
+
+In a focused Windows terminal, Ctrl+C copies selected terminal text; without a selection it remains
+the terminal interrupt key. Ctrl+V and Ctrl+Shift+V paste clipboard text using the terminal's
+bracketed-paste mode when enabled.
+
+- Ctrl+Shift+C also copies selected text. macOS sends Cmd+C/Cmd+V through native copy/paste events
+  to xterm, without requesting asynchronous browser clipboard access: pasting needs no extra WebKit
+  “Paste” click and does not produce that API's `NotAllowedError` banner. Control keys remain
+  available to terminal programs.
+
+- Native paste retains bracketed-paste handling and disabled-input protection. Other clipboard and
+  session failures remain visible; a pending asynchronous paste is discarded if its connection
+  closes or changes.
+
+#### Validation and limits
+
+- Shortcut regression tests cover native macOS routing, selection states and Shift modifiers,
+  alongside Windows copy/paste and Control passthrough; native acceptance is recorded below.
+
+### Input-method punctuation
+
+Terminal and Agent sessions let the input method transform punctuation before forwarding committed
+punctuation through the normal terminal input queue. The handler avoids changing the IME textarea,
+preserving composition, paste and Control/Alt/Meta shortcuts, and respects disabled input.
+
+#### Validation and limits
+
+- Regression tests cover Chinese and ASCII punctuation, composition boundaries, cancellation,
+  disabled input and listener cleanup. All 154 frontend/build-helper tests, formatting,
+  localization, TypeScript/production build and an isolated macOS desktop build pass.
+
+- Native QA (`sh.uterm.desktop.qa.imenative`) verifies ASCII punctuation in a shell. Automated
+  Unicode keystroke injection does not reliably reproduce native IME commits; real Chinese IME, live
+  Agent, Windows and Linux runtime acceptance remain pending.
+
+### Update download retries and caches
+
+Update downloads make at most three attempts for transient connection/server failures, preserve
+partial bytes across restarts, and reuse complete disk caches only after checking the current public
+key, Minisign signature and signed-version policy. Unsupported or inconsistent Range responses
+restart the download.
+
+- Verification runs off the UI thread before the existing installer, confirmation and
+  session/editor/database/Redis/SFTP guards. Network, timeout, certificate, missing-file,
+  access-denied, rate-limit, server, metadata/response and cache-storage errors have separate
+  bilingual guidance.
+
+- Software update always offers Download installer manually, including builds without online
+  updates. Cache cleanup runs on use, retaining the selected file and at most three other files
+  within a 512 MiB budget and removing inactive files older than seven days; each update is limited
+  to 512 MiB.
+
+- Downloads still require access to their configured source.
+
+### Agent package download failures
+
+Agent installation continues through npm with its existing cache and user registry/proxy
+configuration. Package fetches allow two retries, 2–10 second retry delays and a 120 second request
+timeout, within the existing ten minute installation limit.
+
+- Permission and Node.js-version failures are distinguished from network failures; raw installation
+  output remains available. The installation command and lifecycle scripts are never automatically
+  rerun.
+
+- Official installation instructions remain available.
+
+### Windows installer launch
+
+Windows launches a temporary `.exe` copy after validating a cached installer, preserving the normal
+installation wizard and elevation behavior. The cached `.part` remains reusable; the launch copy is
+removed when the script exits.
+
+This requires temporary disk space for one additional installer payload.
+
+#### Download checks on Windows
+
+- Download validation on Windows: 82 backend checks pass, including bounded retries, resumed
+  prefixes, complete-cache reuse, ignored/malformed ranges, permanent HTTP failures, long
+  Retry-After, storage/cancellation/certificate classification and signed content/key/version
+  rejection. The PowerShell integration check uses real loopback HTTP and a disposable native
+  Windows executable in place of an installer to cover 503, interrupted responses, resume,
+  verified-cache reuse, actual process launch, modified-content rejection and 404 without
+  installation retries.
+
+- Frozen dependency installation, the complete frontend suite (228 passed), 31 affected-module
+  checks, 15 UI/localization regressions, seven Windows installer/release-helper checks and 24 host
+  checks pass; ten optional/platform frontend checks are skipped. Changed-file formatting,
+  localization, documentation and TypeScript/production checks pass.
+
+- Native isolated Windows QA (`sh.uterm.desktop.qa.downloads`) inspects the actual
+  settings/components views in English/dark at 900×650 and Chinese/light at 640×600, and confirms
+  the manual-release target with mocked external navigation. No real packages are installed.
+
+- The isolated desktop build uses `sh.uterm.desktop.qa.downloadcheck`; the installed app is not
+  restarted. Repository-wide formatting still reports 85 existing files, and the production build
+  retains its large-chunk warning.
+
+- Real signed application installation/restart, Agent package installation and macOS
+  installer/runtime acceptance remain unverified.
 
 ## Interface
 
-In-app close icons share a small circular ×: gray by default and muted red on hover. This applies to dialog headers, file/diff tabs, session controls, terminal search, SQL query tabs and Redis drawer/field-editor controls. Sidebar session rows show only the × at rest, revealing its circle on hover or keyboard focus. Existing actions, accessible names, disabled states and keyboard focus are retained, including the Redis drawer close control's responsive visibility.
+### Shared close icons
 
-Close-icon validation: 217 frontend/build-helper tests pass, with eight optional checks skipped. Changed-source formatting, localization, TypeScript checks, production frontend and isolated macOS desktop builds pass. Native QA (`sh.uterm.desktop.qa.closeicons`) verifies the gray and red hover states in Settings, matching Command/Agent dialog icons, visible keyboard focus, click dismissal and Enter activation. Native Redis/database close controls and Windows/Linux runtime acceptance remain unverified.
+In-app close icons share a small circular ×: gray by default and muted red on hover. This applies to
+dialog headers, file/diff tabs, session controls, terminal search, SQL query tabs and Redis
+drawer/field-editor controls.
 
-On macOS, the close, minimize and zoom/full-screen controls use the original system window buttons, vertically centered with the 56 px toolbar. macOS manages their colors, hover symbols, accessibility and full-screen menu. Closing hides the window while keeping sessions; the buttons remain usable above application dialogs.
+Sidebar session rows show only the × at rest, revealing its circle on hover or keyboard focus.
+Existing actions, accessible names, disabled states and keyboard focus are retained, including the
+Redis drawer close control's responsive visibility.
 
-Native window-button validation: configuration formatting, Cargo formatting, documentation checks, TypeScript/production build and an isolated macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.trafficlights`) confirms the system close/minimize/full-screen accessibility roles and entering/exiting full screen with the green button and Ctrl+Cmd+F. The macOS screen-capture badge obscures direct visual acceptance of button alignment and hover symbols in this capture session.
+#### Close-icon checks
 
-The inspector's Files, Git, GitHub and Working directory icons share a rounded capsule with a fine border. Each icon has a circular hover/selected background. The sidebar hide/reopen and inspector show/hide buttons show only their icons at rest, adding a circular background and border on hover or keyboard focus. The sidebar hide icon aligns with the section actions below it; the right-side inspector toggle has an 8 px inset from the toolbar edge. Both retain a 36 px click target. These controls follow the selected interface palette in both dark and light modes and retain visible keyboard focus.
+- Close-icon validation: 217 frontend/build-helper tests pass, with eight optional checks skipped.
+  Changed-source formatting, localization, TypeScript checks, production frontend and isolated macOS
+  desktop builds pass.
 
-Panel-toggle alignment validation: source formatting, TypeScript/production build and an isolated macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.togglealignment`) verifies sidebar icon alignment, the tighter right inset with the inspector hidden and visible, and sidebar/inspector collapse and reopen. Windows/Linux runtime acceptance remains pending.
+- Native QA (`sh.uterm.desktop.qa.closeicons`) verifies the gray and red hover states in Settings,
+  matching Command/Agent dialog icons, visible keyboard focus, click dismissal and Enter activation.
+  Native Redis/database close controls and Windows/Linux runtime acceptance remain unverified.
 
-Sidebar section actions show only their icons at rest, revealing compact circular borders and backgrounds on hover or keyboard focus without changing button size. Project/Worktree quick actions, footer connection switches and Command/Settings/Agent controls use capsule groups with circular buttons; project actions still appear on row hover or keyboard focus, and the footer wraps when narrow. The Settings close button uses the shared circular close icon, retaining its accessible name and installation-time disabled state.
+### macOS window controls
 
-The footer's Add project or session button uses a bold plus with no circular frame or background, including on hover. Its 34 px click target, action menu, tooltip and visible keyboard focus are retained.
+On macOS, the close, minimize and zoom/full-screen controls use the original system window buttons,
+vertically centered with the 56 px toolbar. macOS manages their colors, hover symbols, accessibility
+and full-screen menu. Closing hides the window while keeping sessions; the buttons remain usable
+above application dialogs.
 
-Footer Add validation: the sidebar connection regression test, formatting, documentation checks, TypeScript/production build and an isolated macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.footerplus`) verifies the unframed bold plus in dark mode, opening the Add menu and dismissing it with Escape. Light-mode and Windows/Linux runtime acceptance remain pending.
+#### macOS window-button checks
 
-Hover-frame validation: 16 focused sidebar and bilingual UI tests, formatting, documentation checks, TypeScript/production build and an isolated macOS desktop build pass. Native preview (`sh.uterm.desktop.qa.hovercontrols`) confirms icon-only default controls and their alignment while resizing the sidebar. Pointer/focus transition acceptance and Windows/Linux runtime acceptance remain pending.
+- Native window-button validation: configuration formatting, Cargo formatting, documentation checks,
+  TypeScript/production build and an isolated macOS desktop build pass. Native QA
+  (`sh.uterm.desktop.qa.trafficlights`) confirms the system close/minimize/full-screen accessibility
+  roles and entering/exiting full screen with the green button and Ctrl+Cmd+F.
 
-The file list's New file, New folder and Refresh controls use compact 24 px circular buttons with 14 px icons and 4 px gaps. They have no persistent border/background; hover and keyboard focus remain visible, and action tooltips and accessible names are retained.
+- The macOS screen-capture badge obscures direct visual acceptance of button alignment and hover
+  symbols in this capture session.
 
-Compact file controls validation: 15 focused file-refresh and bilingual UI tests, formatting, documentation checks, TypeScript/production build and an isolated macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.compactfiles`) verifies the smaller controls in the dark file list, refresh interaction, hover and the visible keyboard focus ring. Windows/Linux runtime acceptance remains pending.
+### Inspector tools and panel toggles
 
-Rounded controls validation: 209 frontend/build-helper tests pass, with eight optional Java/database checks skipped. Formatting, localization, documentation checks, TypeScript/production build and an isolated macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.roundtoolbar`) verifies the toolbar, sidebar section buttons, project quick-action capsule, footer groups and Settings close button in dark/light modes at the default 248 px sidebar width, plus the dark layout and footer wrapping at 176 px. It also verifies Files/Git/Working directory selection, keyboard activation and visible circular focus, hiding/reopening both panels, connection-switch states and closing Settings with Enter. Windows/Linux runtime acceptance remains pending.
+The inspector's Files, Git, GitHub and Working directory icons share a rounded capsule with a fine
+border. Each icon has a circular hover/selected background.
 
-Opening Database components from the sidebar temporarily hides the inspector together with its layout column. Files, Git, GitHub and Working directory controls stay out of the sidebar footer; returning to the project restores the selected tool and its left/right position. Database and Redis workbenches also hide project inspectors.
+- The sidebar hide/reopen and inspector show/hide buttons show only their icons at rest, adding a
+  circular background and border on hover or keyboard focus. The sidebar hide icon aligns with the
+  section actions below it; the right-side inspector toggle has an 8 px inset from the toolbar edge.
 
-Inspector visibility validation: 192 frontend/build-helper tests pass, with eight optional Java/database or macOS-only checks skipped. Component coverage exercises all four local tools on both sides, absence of inspector requests while components are open, tool restoration and retained local sessions. An isolated Windows app (`sh.uterm.desktop.qa.dbtoolbar`) verifies opening components from Git at the default 248 px sidebar width, the footer remaining at the bottom without a stray Git toolbar/error area, and Git restoration on returning to the project. Narrow-sidebar and left-side native interaction, and macOS runtime acceptance of this layout remain pending. Locked dependency installation, localization/documentation checks, changed source/test/feature-guide formatting, both Cargo formatting checks, TypeScript/production build and the isolated Windows desktop build pass. Repository-wide formatting still reports issues in 72 other files; the READMEs retain existing table-formatting issues, and the production build retains its large-chunk warning.
+- Both retain a 36 px click target. These controls follow the selected interface palette in both
+  dark and light modes and retain visible keyboard focus.
 
-Right-clicking the application page suppresses the browser's default menu, including Print, Save as and More tools. Project, Worktree, session, file-tree and branch menus remain available. Windows also disables WebView2's default menus for embedded frames, including isolated HTML previews, without relaxing their sandbox. Windows validation: 158 frontend/build-helper tests pass, with two platform-specific tests skipped; 40 backend tests, 16 local-service tests, locked dependency installation, TypeScript/production build, localization and documentation checks pass. Event tests cover blank space, inputs, dialogs and application handlers that stop propagation. Native Windows menu acceptance and macOS interaction (including isolated previews) remain unverified. Existing repository-wide formatting issues in 39 files and the production build's large-chunk warning remain.
+#### Panel-toggle alignment checks
 
-The Swap left and right panes button is centered vertically on the divider between the main workspace and inspector. It stays hidden until the pointer hovers over the divider or the button; moving away hides it again. Keyboard focus also reveals it. Clicking it exchanges the main workspace (terminal/editor, including its toolbar) and the inspector (Files, Git, GitHub or Working directory). The project sidebar stays in place. Widths follow their content, and the position is saved globally across projects and application restarts; resetting interface settings restores the inspector to the right. The button supports keyboard activation, and the command palette and shortcut settings expose the same action without a default binding. Swapping retains mounted terminal/editor instances, output, drafts, file-tree expansion and scroll state. It does not request a file save or close; existing editor autosave still applies. The inspector show/hide button follows the inspector side while remaining in the main title bar: it sits at the title bar’s left edge beside a left-side inspector and at the right edge for a right-side inspector. It never joins the inspector’s Files/Git action bar, and the left-side restore button keeps the same title-bar position while the inspector is hidden. The control is unavailable while the inspector is hidden or empty, Git diff is displayed in the central content area, a divider is being dragged or an editor transition is pending. Restoring the inspector or leaving expanded diff restores the chosen position. Settings-save failures remain visible and leave the layout unchanged. Separator dragging and Left/Right keys follow the displayed side; double-click or Enter restores the default width, and releasing at 30 px or less collapses the inspector toward its side of the working area. Inspector width remains a preference for the current run only.
+- Panel-toggle alignment validation: source formatting, TypeScript/production build and an isolated
+  macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.togglealignment`) verifies sidebar icon
+  alignment, the tighter right inset with the inspector hidden and visible, and sidebar/inspector
+  collapse and reopen.
 
-The project sidebar and inspector highlight at a requested width of 30 px or less and collapse only on pointer release. The inspector can occupy either side of the main workspace. Dragging back above the threshold while holding cancels the snap. The inspector checks this threshold before applying its minimum width, remembers the current panel and reopens through its button or shortcut. Release restores the pre-drag width for reopening; pointer cancellation clears the highlight without hiding. Window resizing alone does not trigger collapse. Both panel toggles use 18 px icons in 36 px circular buttons. After a drag is released at the collapse threshold, the corresponding reopen icon blinks for three seconds; reopening stops the hint immediately. Manual hiding, cancelled drags and dragging back outside the threshold do not trigger it. Each panel has its own hint timer; reduced-motion mode uses a steady three-second highlight. Boundary tests cover both sides; native right-panel drag acceptance remains pending.
+- Windows/Linux runtime acceptance remains pending.
 
-Toggle left sidebar uses Ctrl+B on Windows and Cmd+B on macOS; toggle inspector uses Ctrl+Alt+B or Cmd+Option+B. Both appear in Settings → Keyboard shortcuts and the command palette, and can be rebound or disabled. The inspector shortcut restores the last panel (falling back to Files when its project is unavailable) and requires a working directory. Dialogs and pending editor transitions suppress these shortcuts. Automated tests cover defaults, conflicts and custom bindings; native terminal shortcut acceptance remains pending.
+### Sidebar action buttons
 
-The sidebar header places the workspace name and hide button on one row, vertically centered with the main toolbar and to the right of the window controls on macOS. There is no separate uTerm/Local brand row. The workspace name appears as text without a field border or dropdown arrow. Clicking it opens a compact 180 px menu below the header, with smaller item padding; keyboard activation and menu navigation remain available. Long names are truncated in the header with their full name in a tooltip and wrap inside the menu. Drag its right edge to resize between 30 px and the smaller of 320 px or 30% of the window (with a 180 px floor). Dragging to 30 px or less highlights it; releasing hides it; the toolbar button reopens it. Width is retained for the current app run. The separator also supports arrow keys, Home to hide, End for maximum width and Enter/double-click to reset. Boundary tests cover collapse and narrow-window limits; native pointer acceptance remains pending.
+Sidebar section actions show only their icons at rest, revealing compact circular borders and
+backgrounds on hover or keyboard focus without changing button size. Project/Worktree quick actions,
+footer connection switches and Command/Settings/Agent controls use capsule groups with circular
+buttons; project actions still appear on row hover or keyboard focus, and the footer wraps when
+narrow.
 
-Central error banners hide after 1.5 seconds without clearing the underlying error state. A different message starts a new timer; unchanged background errors do not keep reopening the banner. Workspace-load retry remains available after the banner hides. Native timing acceptance remains pending.
+The Settings close button uses the shared circular close icon, retaining its accessible name and
+installation-time disabled state.
 
-Settings, the command palette and the Agent dialog close when a primary pointer click starts and ends outside their bounds. Internal clicks and drags starting inside do not dismiss them. Settings cannot be dismissed during update installation. Boundary tests cover inside/outside coordinates; native pointer interaction remains unverified.
+### Footer Add button
 
-Settings → General switches Simplified Chinese and English immediately, including open panels, menus, command search, validation messages, accessible labels and editor search controls. Switching language does not recreate terminal sessions or replace editor documents. Application-owned backend diagnostics are localized at display time; unknown OS/provider output, terminal content, filenames and user-entered names remain unchanged. Native operating-system dialog controls follow the OS language; the project chooser title follows the app language.
+The footer's Add project or session button uses a bold plus with no circular frame or background,
+including on hover. Its 34 px click target, action menu, tooltip and visible keyboard focus are
+retained.
 
-Missing message keys produce an explicit diagnostic marker and a deduplicated console error instead of silently returning Chinese. `pnpm i18n:check` rejects unregistered Chinese source literals, untranslated JSX text/accessibility attributes and invalid literal-key parameters. Tests verify all registered translations and placeholder parity, negative checker fixtures, live language subscriptions, all nine settings tabs and major panel rendering in both languages. Source analysis and mocked component tests are regression gates, not proof of every dynamic or native runtime state.
+#### Footer Add checks
 
-Settings → Appearance → Interface theme offers Black (black and silver, the default), Sandstone (warm charcoal and sand), Ocean (navy and ice blue), Moss (forest green and mint), Paper (warm white and terracotta), and Clear Sky (cool white and sky blue), with preview cards. Paper and Clear Sky always use light interface colors without changing terminal color-mode preferences. The other four support dark, light and system color modes. Selection applies immediately and saves automatically without changing terminal color selections or recreating sessions. Missing interface-theme settings default to Black; invalid values are rejected.
+- Footer Add validation: the sidebar connection regression test, formatting, documentation checks,
+  TypeScript/production build and an isolated macOS desktop build pass. Native QA
+  (`sh.uterm.desktop.qa.footerplus`) verifies the unframed bold plus in dark mode, opening the Add
+  menu and dismissing it with Escape.
 
-The interface uses warm charcoal surfaces, a restrained sand accent, fine dividers and compact controls, with a matching light palette. Sidebar selection, terminal pane focus and inspector tabs use consistent states. A welcome page offers project, terminal and chat actions with configured shortcut hints; unavailable actions are disabled. Empty inspectors do not reserve screen space. UI colors and terminal ANSI colors are independent, and reduced-motion preferences are respected. See [DESIGN.md](../DESIGN.md) for tokens and design references.
+- Light-mode and Windows/Linux runtime acceptance remain pending.
+
+#### Hover-frame checks
+
+- Hover-frame validation: 16 focused sidebar and bilingual UI tests, formatting, documentation
+  checks, TypeScript/production build and an isolated macOS desktop build pass. Native preview
+  (`sh.uterm.desktop.qa.hovercontrols`) confirms icon-only default controls and their alignment
+  while resizing the sidebar.
+
+- Pointer/focus transition acceptance and Windows/Linux runtime acceptance remain pending.
+
+### File-list controls
+
+The file list's New file, New folder and Refresh controls use compact 24 px circular buttons with 14
+px icons and 4 px gaps. They have no persistent border/background; hover and keyboard focus remain
+visible, and action tooltips and accessible names are retained.
+
+#### Compact file-control checks
+
+- Compact file controls validation: 15 focused file-refresh and bilingual UI tests, formatting,
+  documentation checks, TypeScript/production build and an isolated macOS desktop build pass. Native
+  QA (`sh.uterm.desktop.qa.compactfiles`) verifies the smaller controls in the dark file list,
+  refresh interaction, hover and the visible keyboard focus ring.
+
+- Windows/Linux runtime acceptance remains pending.
+
+#### Rounded-control checks
+
+- Rounded controls validation: 209 frontend/build-helper tests pass, with eight optional
+  Java/database checks skipped. Formatting, localization, documentation checks,
+  TypeScript/production build and an isolated macOS desktop build pass.
+
+- Native QA (`sh.uterm.desktop.qa.roundtoolbar`) verifies the toolbar, sidebar section buttons,
+  project quick-action capsule, footer groups and Settings close button in dark/light modes at the
+  default 248 px sidebar width, plus the dark layout and footer wrapping at 176 px. It also verifies
+  Files/Git/Working directory selection, keyboard activation and visible circular focus,
+  hiding/reopening both panels, connection-switch states and closing Settings with Enter.
+
+- Windows/Linux runtime acceptance remains pending.
+
+### Inspector visibility in workbenches
+
+Opening Database components from the sidebar temporarily hides the inspector together with its
+layout column. Files, Git, GitHub and Working directory controls stay out of the sidebar footer;
+returning to the project restores the selected tool and its left/right position.
+
+Database and Redis workbenches also hide project inspectors.
+
+#### Inspector visibility checks
+
+- Inspector visibility validation: 192 frontend/build-helper tests pass, with eight optional
+  Java/database or macOS-only checks skipped. Component coverage exercises all four local tools on
+  both sides, absence of inspector requests while components are open, tool restoration and retained
+  local sessions.
+
+- An isolated Windows app (`sh.uterm.desktop.qa.dbtoolbar`) verifies opening components from Git at
+  the default 248 px sidebar width, the footer remaining at the bottom without a stray Git
+  toolbar/error area, and Git restoration on returning to the project. Narrow-sidebar and left-side
+  native interaction, and macOS runtime acceptance of this layout remain pending.
+
+- Locked dependency installation, localization/documentation checks, changed
+  source/test/feature-guide formatting, both Cargo formatting checks, TypeScript/production build
+  and the isolated Windows desktop build pass. Repository-wide formatting still reports issues in 72
+  other files; the READMEs retain existing table-formatting issues, and the production build retains
+  its large-chunk warning.
+
+### Application context menus
+
+Right-clicking the application page suppresses the browser's default menu, including Print, Save as
+and More tools. Project, Worktree, session, file-tree and branch menus remain available.
+
+Windows also disables WebView2's default menus for embedded frames, including isolated HTML
+previews, without relaxing their sandbox.
+
+#### Validation and limits
+
+- Windows validation: 158 frontend/build-helper tests pass, with two platform-specific tests
+  skipped; 40 backend tests, 16 local-service tests, locked dependency installation,
+  TypeScript/production build, localization and documentation checks pass. Event tests cover blank
+  space, inputs, dialogs and application handlers that stop propagation.
+
+- Native Windows menu acceptance and macOS interaction (including isolated previews) remain
+  unverified. Existing repository-wide formatting issues in 39 files and the production build's
+  large-chunk warning remain.
+
+### Swapping the workspace and inspector
+
+The Swap left and right panes button is centered vertically on the divider between the main
+workspace and inspector. It stays hidden until the pointer hovers over the divider or the button;
+moving away hides it again.
+
+- Keyboard focus also reveals it. Clicking it exchanges the main workspace (terminal/editor,
+  including its toolbar) and the inspector (Files, Git, GitHub or Working directory).
+
+- The project sidebar stays in place. Widths follow their content, and the position is saved
+  globally across projects and application restarts; resetting interface settings restores the
+  inspector to the right.
+
+- The button supports keyboard activation, and the command palette and shortcut settings expose the
+  same action without a default binding. Swapping retains mounted terminal/editor instances, output,
+  drafts, file-tree expansion and scroll state.
+
+- It does not request a file save or close; existing editor autosave still applies. The inspector
+  show/hide button follows the inspector side while remaining in the main title bar: it sits at the
+  title bar’s left edge beside a left-side inspector and at the right edge for a right-side
+  inspector.
+
+- It never joins the inspector’s Files/Git action bar, and the left-side restore button keeps the
+  same title-bar position while the inspector is hidden. The control is unavailable while the
+  inspector is hidden or empty, Git diff is displayed in the central content area, a divider is
+  being dragged or an editor transition is pending.
+
+- Restoring the inspector or leaving expanded diff restores the chosen position. Settings-save
+  failures remain visible and leave the layout unchanged.
+
+- Separator dragging and Left/Right keys follow the displayed side; double-click or Enter restores
+  the default width, and releasing at 30 px or less collapses the inspector toward its side of the
+  working area. Inspector width remains a preference for the current run only.
+
+### Drag-to-collapse and reopen hints
+
+The project sidebar and inspector highlight at a requested width of 30 px or less and collapse only
+on pointer release. The inspector can occupy either side of the main workspace.
+
+- Dragging back above the threshold while holding cancels the snap. The inspector checks this
+  threshold before applying its minimum width, remembers the current panel and reopens through its
+  button or shortcut.
+
+- Release restores the pre-drag width for reopening; pointer cancellation clears the highlight
+  without hiding. Window resizing alone does not trigger collapse.
+
+- Both panel toggles use 18 px icons in 36 px circular buttons. After a drag is released at the
+  collapse threshold, the corresponding reopen icon blinks for three seconds; reopening stops the
+  hint immediately.
+
+- Manual hiding, cancelled drags and dragging back outside the threshold do not trigger it. Each
+  panel has its own hint timer; reduced-motion mode uses a steady three-second highlight.
+
+#### Validation and limits
+
+- Boundary tests cover both sides; native right-panel drag acceptance remains pending.
+
+### Panel keyboard shortcuts
+
+Toggle left sidebar uses Ctrl+B on Windows and Cmd+B on macOS; toggle inspector uses Ctrl+Alt+B or
+Cmd+Option+B. Both appear in Settings → Keyboard shortcuts and the command palette, and can be
+rebound or disabled.
+
+The inspector shortcut restores the last panel (falling back to Files when its project is
+unavailable) and requires a working directory. Dialogs and pending editor transitions suppress these
+shortcuts.
+
+#### Validation and limits
+
+- Automated tests cover defaults, conflicts and custom bindings; native terminal shortcut acceptance
+  remains pending.
+
+### Workspace header and sidebar width
+
+The sidebar header places the workspace name and hide button on one row, vertically centered with
+the main toolbar and to the right of the window controls on macOS. There is no separate uTerm/Local
+brand row.
+
+- The workspace name appears as text without a field border or dropdown arrow. Clicking it opens a
+  compact 180 px menu below the header, with smaller item padding; keyboard activation and menu
+  navigation remain available.
+
+- Long names are truncated in the header with their full name in a tooltip and wrap inside the menu.
+  Drag its right edge to resize between 30 px and the smaller of 320 px or 30% of the window (with a
+  180 px floor).
+
+- Dragging to 30 px or less highlights it; releasing hides it; the toolbar button reopens it. Width
+  is retained for the current app run.
+
+- The separator also supports arrow keys, Home to hide, End for maximum width and Enter/double-click
+  to reset.
+
+#### Validation and limits
+
+- Boundary tests cover collapse and narrow-window limits; native pointer acceptance remains pending.
+
+### Error-banner timing
+
+Central error banners hide after 1.5 seconds without clearing the underlying error state. A
+different message starts a new timer; unchanged background errors do not keep reopening the banner.
+
+Workspace-load retry remains available after the banner hides. Native timing acceptance remains
+pending.
+
+### Clicking outside dialogs
+
+Settings, the command palette and the Agent dialog close when a primary pointer click starts and
+ends outside their bounds. Internal clicks and drags starting inside do not dismiss them.
+
+Settings cannot be dismissed during update installation.
+
+#### Validation and limits
+
+- Boundary tests cover inside/outside coordinates; native pointer interaction remains unverified.
+
+### Language switching
+
+Settings → General switches Simplified Chinese and English immediately, including open panels,
+menus, command search, validation messages, accessible labels and editor search controls. Switching
+language does not recreate terminal sessions or replace editor documents.
+
+Application-owned backend diagnostics are localized at display time; unknown OS/provider output,
+terminal content, filenames and user-entered names remain unchanged. Native operating-system dialog
+controls follow the OS language; the project chooser title follows the app language.
+
+### Translation diagnostics and checks
+
+Missing message keys produce an explicit diagnostic marker and a deduplicated console error instead
+of silently returning Chinese. `pnpm i18n:check` rejects unregistered Chinese source literals,
+untranslated JSX text/accessibility attributes and invalid literal-key parameters.
+
+Tests verify all registered translations and placeholder parity, negative checker fixtures, live
+language subscriptions, all nine settings tabs and major panel rendering in both languages. Source
+analysis and mocked component tests are regression gates, not proof of every dynamic or native
+runtime state.
+
+### Interface themes
+
+Settings → Appearance → Interface theme offers Black (black and silver, the default), Sandstone
+(warm charcoal and sand), Ocean (navy and ice blue), Moss (forest green and mint), Paper (warm white
+and terracotta), and Clear Sky (cool white and sky blue), with preview cards. Paper and Clear Sky
+always use light interface colors without changing terminal color-mode preferences.
+
+- The other four support dark, light and system color modes. Selection applies immediately and saves
+  automatically without changing terminal color selections or recreating sessions.
+
+- Missing interface-theme settings default to Black; invalid values are rejected.
+
+### Welcome page and connection actions
+
+The interface uses warm charcoal surfaces, a restrained sand accent, fine dividers and compact
+controls, with a matching light palette. Sidebar selection, terminal pane focus and inspector tabs
+use consistent states.
+
+- A welcome page offers project, terminal and chat actions with configured shortcut hints;
+  unavailable actions are disabled. Below these actions, compact Add SSH connection, Add Redis
+  connection and Add database connection buttons follow the same saved visibility switches as the
+  sidebar and its + menu.
+
+- Hiding a connection section hides its welcome action; showing it restores the action, while
+  folding the section keeps it available. Each button opens the existing connection dialog and
+  remains disabled until the runtime and workspace are ready.
+
+- The buttons reflow with the available width; short windows scroll without losing access to the
+  heading or footer. Empty inspectors do not reserve screen space.
+
+- UI colors and terminal ANSI colors are independent, and reduced-motion preferences are respected.
+  See [DESIGN.md](../DESIGN.md) for tokens and design references.
+
+#### Welcome-action checks on Windows
+
+- Welcome connection-action validation on Windows: the complete frontend/build-helper suite passes
+  (226 passed, ten optional/platform checks skipped), including the focused App regression and
+  existing SSH/Redis/database/sidebar checks. Changed-file formatting, localization, documentation
+  checks and TypeScript/production build also pass.
+
+- Coverage includes startup-disabled controls, all eight visibility combinations, preserved existing
+  welcome actions, both languages and opening/cancelling each real connection dialog without
+  changing profiles. An isolated native Tauri/WebView2 host (`sh.uterm.desktop.qa.sidebarmenus`)
+  renders the real App with temporary workspace state and mocked desktop commands.
+
+- It verifies footer/welcome/+ menu agreement, retained actions while folded, all three dialog
+  targets in Chinese/English, cancellation, dark/light layouts, a three-button row with tools
+  hidden, complete labels and scrolling at 680×500, and an accessible heading at 900×650. No real
+  sessions or server connections are created.
+
+- Live desktop-command integration and macOS/Linux runtime acceptance remain unverified.
+  Repository-wide formatting reports existing issues in 88 unchanged files; Vite WebSocket-port and
+  production large-chunk warnings remain.
 
 ## Architecture
 
-Terminal output crosses the desktop-to-WebView boundary as binary frames with a small JSON metadata header. The renderer passes a byte view of the received buffer to xterm without constructing a JSON number array or copying the output again; consumption acknowledgements retain only metadata. The desktop releases the source frame before waiting for acknowledgement. Session IDs, replay dimensions/order, output backpressure, scrollback settings and the local host protocol are preserved. Malformed frames show a connection error and detach the affected view. Tauri may internally encode small binary messages as JavaScript byte arrays; large frames use its binary IPC response path.
+### Binary terminal output
 
-Validation: 156 frontend/build-helper tests and 40 backend tests, formatting, localization, TypeScript/production build and an isolated macOS desktop build pass. Local-service tests pass on a full rerun; the initial run encountered intermittent host startup lock contention. Tests cover every byte value, empty output, metadata preservation, shared-buffer decoding and malformed headers. A 1 MiB sample cycling through all byte values occupies 3,743,840 bytes as the previous JSON frame and 1,048,667 bytes as a binary frame (about 72% less transport data); this is not a total application memory measurement. Native QA (`sh.uterm.desktop.qa.memory`) verifies 10,000 output lines through the completion marker, detach/relaunch replay, green ANSI text with Chinese/Unicode characters, exit code 7 and Close Session. Long-running memory reduction, real Agent traffic and Windows/Linux runtime acceptance remain unmeasured.
+Terminal output crosses the desktop-to-WebView boundary as binary frames with a small JSON metadata
+header. The renderer passes a byte view of the received buffer to xterm without constructing a JSON
+number array or copying the output again; consumption acknowledgements retain only metadata.
 
-The file editor and its Markdown/syntax dependencies load on demand, with loading and failure states. Unchanged Git branch polls preserve React state identity. PDF thumbnails render near the viewport and release offscreen canvas buffers. The development server streams local PDF resources instead of retaining all resource bytes in memory; production retains the complete PDF resources for offline compatibility. Key resource-lifetime decisions have English/Chinese comments.
+The desktop releases the source frame before waiting for acknowledgement. Session IDs, replay
+dimensions/order, output backpressure, scrollback settings and the local host protocol are
+preserved.
 
-The Git panel issues one snapshot read when window focus or visibility returns. Selected working/staged diffs refresh after that read succeeds, including when Git status is unchanged but file contents have changed. Hidden-window polls skip reads; failures remain visible and keep the current diff available. Directory listings cache sort keys while retaining directories-first, case-insensitive name ordering and the original-name tie-breaker. Case-sensitive file search borrows paths and lines; LF-only content skips newline-copying, while CRLF/CR normalization, Unicode matching, line numbers, ignore rules and search limits remain intact. Terminal delta replay reserves one output buffer and copies whole retained chunks in order, preserving reset decisions, sequence numbers, empty output and exit metadata.
+Malformed frames show a connection error and detach the affected view. Tauri may internally encode
+small binary messages as JavaScript byte arrays; large frames use its binary IPC response path.
 
-Windows validation of these paths: 162 frontend/build-helper tests pass with two platform-specific skips, alongside 43 backend and 18 local-service tests. Five focused regressions cover focus/visibility request counts, unchanged-status diff refresh, hidden polls, failure recovery and cleanup, directory ordering, Unicode/case-sensitive search, mixed line endings, all byte values, replay order, exit metadata and expired/future cursors. Frozen dependency installation, TypeScript/production build, localization, documentation checks, changed-file formatting, both Cargo format checks and desktop compilation with isolated identifier `sh.uterm.desktop.qa.optimization` pass. Repository-wide formatting remains blocked by existing issues in 31 other files; the production build retains its large-chunk warning. Native focus/visibility interaction, whole-app CPU/RSS gains and macOS/Linux runtime acceptance remain unmeasured; the installed application was not restarted.
+#### Binary-output checks
 
-Connection resource controls: Redis handshakes reserve slots without holding the connection-map lock, leaving other connections usable and disconnectable. Both Redis and database eight-connection limits include handshakes and release reservations on failure. Component downloads retain partial files for resuming after interruption or cancellation; offline imports and extraction use temporary files that are removed on failure/cancellation. Verification uses a 64 KiB buffer and extraction reads directly from files. Completion events refresh component status without rehashing drivers every second; closed component details and hidden disconnected workbenches do not load status. Database replies transfer ownership without a result clone, and editing SQL preserves unchanged result-cell renders. Disconnects release cached rows/metadata while preserving SQL drafts; hiding a connected workbench keeps its results. JSON serialization shares one output buffer; Redis hex previews decode at most 258 bytes. The parent owns each database worker temporary directory and removes certificate files after disconnect or unexpected worker exit. One-use SSH password servers check idle state every 100 ms, wake immediately on disposal and stop after rejecting a fingerprint.
+- Validation: 156 frontend/build-helper tests and 40 backend tests, formatting, localization,
+  TypeScript/production build and an isolated macOS desktop build pass. Local-service tests pass on
+  a full rerun; the initial run encountered intermittent host startup lock contention.
 
-Resource validation: five independent-process stress microbenchmarks on macOS ARM64/Java 26.0.2.1 with `-Xmx192m`, 200×32 Chinese/control-character cells, 10 warmups and 40 serializations reduce median elapsed time from 621 ms to 103 ms and median peak process RSS from 153,124,864 to 103,809,024 bytes. This synthetic stress sample compares serialization, not whole-app gains. In a five-second idle sample after connecting the isolated Release app to TLS MySQL, native-main CPU is approximately 0.39% with 45.6 MB RSS; JDBC CPU is approximately 0% with 21.4–21.5 MB RSS. The snapshot excludes WebView/session-service processes, and RSS depends on system paging. Each database worker retains a 192 MiB Java heap cap excluding native memory; long-running/multiple-connection process-tree peaks remain unmeasured.
+- Tests cover every byte value, empty output, metadata preservation, shared-buffer decoding and
+  malformed headers. A 1 MiB sample cycling through all byte values occupies 3,743,840 bytes as the
+  previous JSON frame and 1,048,667 bytes as a binary frame (about 72% less transport data); this is
+  not a total application memory measurement.
 
-React components live in `src/components/`; state and pure logic in `src/lib/`; Tauri commands in `src-tauri/src/`; PTYs, replay and hooks in `crates/utermd-local/`. The backend and session service use separate Cargo manifests and lockfiles.
+- Native QA (`sh.uterm.desktop.qa.memory`) verifies 10,000 output lines through the completion
+  marker, detach/relaunch replay, green ANSI text with Chinese/Unicode characters, exit code 7 and
+  Close Session. Long-running memory reduction, real Agent traffic and Windows/Linux runtime
+  acceptance remain unmeasured.
+
+### On-demand editor and PDF resources
+
+The file editor and its Markdown/syntax dependencies load on demand, with loading and failure
+states. Unchanged Git branch polls preserve React state identity.
+
+- PDF thumbnails render near the viewport and release offscreen canvas buffers. The development
+  server streams local PDF resources instead of retaining all resource bytes in memory; production
+  retains the complete PDF resources for offline compatibility.
+
+- Key resource-lifetime decisions have English/Chinese comments.
+
+### Git refresh, file search and replay
+
+The Git panel issues one snapshot read when window focus or visibility returns. Selected
+working/staged diffs refresh after that read succeeds, including when Git status is unchanged but
+file contents have changed.
+
+- Hidden-window polls skip reads; failures remain visible and keep the current diff available.
+  Directory listings cache sort keys while retaining directories-first, case-insensitive name
+  ordering and the original-name tie-breaker.
+
+- Case-sensitive file search borrows paths and lines; LF-only content skips newline-copying, while
+  CRLF/CR normalization, Unicode matching, line numbers, ignore rules and search limits remain
+  intact. Terminal delta replay reserves one output buffer and copies whole retained chunks in
+  order, preserving reset decisions, sequence numbers, empty output and exit metadata.
+
+#### Refresh, search and replay checks
+
+- Windows validation of these paths: 162 frontend/build-helper tests pass with two platform-specific
+  skips, alongside 43 backend and 18 local-service tests. Five focused regressions cover
+  focus/visibility request counts, unchanged-status diff refresh, hidden polls, failure recovery and
+  cleanup, directory ordering, Unicode/case-sensitive search, mixed line endings, all byte values,
+  replay order, exit metadata and expired/future cursors.
+
+- Frozen dependency installation, TypeScript/production build, localization, documentation checks,
+  changed-file formatting, both Cargo format checks and desktop compilation with isolated identifier
+  `sh.uterm.desktop.qa.optimization` pass. Repository-wide formatting remains blocked by existing
+  issues in 31 other files; the production build retains its large-chunk warning.
+
+- Native focus/visibility interaction, whole-app CPU/RSS gains and macOS/Linux runtime acceptance
+  remain unmeasured; the installed application was not restarted.
+
+### Connection and component resources
+
+Connection resource controls: Redis handshakes reserve slots without holding the connection-map
+lock, leaving other connections usable and disconnectable. Both Redis and database eight-connection
+limits include handshakes and release reservations on failure.
+
+- Component downloads retain partial files for resuming after interruption or cancellation; offline
+  imports and extraction use temporary files that are removed on failure/cancellation. Verification
+  uses a 64 KiB buffer and extraction reads directly from files.
+
+- Completion events refresh component status without rehashing drivers every second; closed
+  component details and hidden disconnected workbenches do not load status. Database replies
+  transfer ownership without a result clone, and editing SQL preserves unchanged result-cell
+  renders.
+
+- Disconnects release cached rows/metadata while preserving SQL drafts; hiding a connected workbench
+  keeps its results. JSON serialization shares one output buffer; Redis hex previews decode at most
+  258 bytes.
+
+- The parent owns each database worker temporary directory and removes certificate files after
+  disconnect or unexpected worker exit. One-use SSH password servers check idle state every 100 ms,
+  wake immediately on disposal and stop after rejecting a fingerprint.
+
+#### Connection-resource measurements
+
+- Resource validation: five independent-process stress microbenchmarks on macOS ARM64/Java 26.0.2.1
+  with `-Xmx192m`, 200×32 Chinese/control-character cells, 10 warmups and 40 serializations reduce
+  median elapsed time from 621 ms to 103 ms and median peak process RSS from 153,124,864 to
+  103,809,024 bytes. This synthetic stress sample compares serialization, not whole-app gains.
+
+- In a five-second idle sample after connecting the isolated Release app to TLS MySQL, native-main
+  CPU is approximately 0.39% with 45.6 MB RSS; JDBC CPU is approximately 0% with 21.4–21.5 MB RSS.
+  The snapshot excludes WebView/session-service processes, and RSS depends on system paging.
+
+- Each database worker retains a 192 MiB Java heap cap excluding native memory;
+  long-running/multiple-connection process-tree peaks remain unmeasured.
+
+### Idle control and PTY monitoring
+
+Idle resource handling uses queue notifications for local control, with a 30 second wait deadline
+instead of repeated empty reads. Waiting does not claim requests, so reloaded views can still
+process them; expired queue entries are removed before reuse.
+
+- Authentication, loopback binding, request expiry and reply handling remain in effect. Windows PTY
+  exit monitoring blocks in the operating system, while Close Session terminates the job
+  independently of the child wait lock.
+
+- The output reader waits on a condition variable for exit, preserving output order and
+  acknowledgement. Unix child monitoring retains its existing behavior.
+
+### Update verification and log scanning
+
+Ready updates retain a verified cache path rather than the complete payload in memory. Prehashed
+Minisign signatures are checked in 64 KiB chunks; legacy signatures retain the compatible bounded
+byte-verification fallback.
+
+- Installation loads and rechecks the payload before the existing session/editor/database/Redis/SFTP
+  guards and installer. A missing or invalidated cache returns to Download update; a bad signature
+  discards the corrupt cache without installing or automatically retrying.
+
+- Online Java archives are read directly from their verified cache, avoiding a complete archive
+  staging copy; driver replacement and offline import retain staging and atomic installation. Agent
+  log scans reuse line buffers and 64 KiB readers.
+
+- Claude parsing ignores conversation content and stores four integer token counters per response
+  ID; duplicate fields, fallback request IDs, seven-day filtering, deduplication and read/time
+  limits retain their existing behavior.
+
+#### Idle and verification resource checks
+
+- Resource validation on Windows: 82 backend checks, six focused control checks and 24 local-session
+  service checks pass. Real ConPTY checks cover a blocked exit waiter with independent Close
+  Session, normal exit code 7 and output sequence/order.
+
+- Renderer regression coverage verifies no control claim while waiting, one reply after
+  notification, unchanged update confirmation/guards, and manual recovery after cache verification
+  failure. Component checks verify direct cache reads, retained cached content, driver staging and
+  offline temporary-file cleanup.
+
+- A synthetic 64 MiB signed update is checked in six independent debug-test processes (three per
+  method), with a 500 ms post-verification hold for sampling: median peak working set is 73,662,464
+  bytes with whole-payload verification and 6,586,368 bytes with streaming verification (about 70.3
+  and 6.3 MiB). This measures the verification process, not whole-app RSS or installation peaks; the
+  installer still needs a complete byte buffer.
+
+- A two-file, 6,000-row Claude sample with 2 KiB message bodies scanned five times takes 925 ms with
+  the baseline parser and 936 ms with the reduced-allocation parser; this sample does not
+  demonstrate a CPU-time improvement. Whole-app idle CPU, long-running process-tree memory and
+  macOS/Linux runtime acceptance of these paths remain unmeasured.
+
+### Source layout
+
+React components live in `src/components/`; state and pure logic in `src/lib/`; Tauri commands in
+`src-tauri/src/`; PTYs, replay and hooks in `crates/utermd-local/`. The backend and session service
+use separate Cargo manifests and lockfiles.
 
 ## Validation and limits
 
-Automated validation: the complete frontend/build-helper suite passes in both Windows and macOS CI. Windows locked dependency installation, 72 backend tests (four optional Redis checks ignored), 22 local-session service tests, changed-file formatting, both Rust formatting checks, localization, documentation and TypeScript/production build pass. The isolated Windows desktop check (`sh.uterm.desktop.qa.release0122`) also passes. Native acceptance remains feature-specific as recorded above; build and CI results do not establish untested native interactions or live credential/server integration. Repository-wide formatting retains existing issues in other files, and production builds retain the large-chunk warning.
+### Windows automated checks
 
-Current validation on macOS: 218 frontend/build-helper tests and 76 backend tests pass, with eight optional frontend checks skipped and four backend tests ignored. The complete local-session service suite passes on a serial rerun after initial host startup lock contention. Frozen dependency installation, formatting, localization, documentation checks, TypeScript/production build and desktop compilation pass. The production build retains its large-chunk warning. Native acceptance and credential limitations remain as described for each feature; macOS compilation does not establish Windows/Linux runtime acceptance.
+- Automated validation: the current Windows run passes the complete frontend/build-helper suite (228
+  passed, ten optional/platform checks skipped), 84 backend tests (four optional Redis checks and
+  two explicit resource profiles ignored), 24 local-session service tests and six release-helper
+  tests. Frozen dependency installation, changed-file formatting, both Rust formatting checks,
+  localization, documentation and TypeScript/production build pass.
 
-Panel collapse hint validation: 143 frontend/build-helper tests pass, including three-second expiry, manual-hide exclusion, cancelled/reversed drags, either inspector position, independent timers, immediate reopen cancellation and repeat-trigger timing. Source formatting, localization, documentation checks, TypeScript/production build and isolated macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.collapsehint`) verifies matching icon sizes, hints after dragging each panel closed, return to normal appearance and reopening both panels. Native reduced-motion and Windows acceptance remain pending.
+- The isolated Windows desktop build (`sh.uterm.desktop.qa.resources`) also passes. Application,
+  desktop configuration, Cargo manifest and lockfile versions agree; the versioned bilingual release
+  body loads through `releaseNotes(tag)` and both production updater configurations use the stable
+  platform feeds without a notes override.
 
-Sidebar header validation: 143 frontend/build-helper tests, formatting for the changed source files, localization, documentation checks, TypeScript/production build and the isolated macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.compactheader`) verifies the compact header, workspace menu placement, switching workspaces, long-name truncation and sidebar hide/reopen. Additional native QA (`sh.uterm.desktop.qa.headeralign`) verifies vertical alignment with the main toolbar and the menu opening below the aligned header. The text-only workspace trigger and compact menu pass 16 targeted sidebar/localization tests, source formatting, TypeScript/production build and an isolated macOS desktop build. Native QA (`sh.uterm.desktop.qa.workspacetext`) verifies the text-only appearance, compact menu, click/Enter activation, arrow-key navigation and Escape dismissal with focus returned to the trigger. Windows runtime and narrow-sidebar menu acceptance remain pending.
+- Native acceptance remains feature-specific as recorded above; build and CI results do not
+  establish untested native interactions or live credential/server integration. Repository-wide
+  formatting reports existing issues in 85 unchanged files, and production builds retain the
+  large-chunk warning.
 
-Divider button validation: all 143 frontend/build-helper tests, 39 backend tests, local-session service tests, formatting, localization, documentation checks, TypeScript/production build and macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.dividerhover`) verifies default hiding, hover reveal at the vertical midpoint with the inspector on either side, clicking to swap, hiding after moving away, and following the divider after resizing. Native keyboard-focus and Windows acceptance remain pending.
+### macOS automated checks
 
-Active-tree validation: all 140 frontend/build-helper tests, formatting, localization, documentation checks, TypeScript/production build and the isolated macOS desktop build pass. Component coverage includes complete trees, pinned descendants without duplicates, workspace filtering and moves, section-specific folding, independent folder-state restoration, selection guards, removal protection and drag boundaries. Native QA (`sh.uterm.desktop.qa.activitytree`) verifies project migration into Active, root and Worktree terminal creation and selection, Worktree folding, disabled project removal, pinned projects remaining only in Active, long names at 248 and 176 pixel sidebar widths, retention with only a Worktree session, and returning to Pinned while hiding Active after the last session closes. Native drag ordering, save-conflict handling and Windows runtime behavior remain unverified. Existing large-chunk and Rust unused-code warnings remain.
+- Current validation on macOS: 218 frontend/build-helper tests and 76 backend tests pass, with eight
+  optional frontend checks skipped and four backend tests ignored. The complete local-session
+  service suite passes on a serial rerun after initial host startup lock contention.
 
-Pane swap validation: 143 frontend/build-helper tests pass, including old-settings defaults, position round trips, custom shortcuts, persistence failure, retained terminal/editor nodes and drafts, file-tree expansion/scroll preservation, hidden/expanded inspector guards, reset and mirrored resizing. Formatting, localization, TypeScript/production build and an isolated macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.paneswap`) verifies swapping with retained terminal output/focus and unsaved editor text/focus, width following content, resizing on both sides, left-side collapse/reopen, custom shortcut activation, Git expand/restore, light/dark layouts, a 700×520 window with the project sidebar hidden, and position persistence after quitting and reopening the QA app. Component tests use terminal/editor rendering adapters; the native checks exercise the real renderers. Windows runtime acceptance remains pending. Existing bundle-size and Rust unused-code warnings remain.
+- Frozen dependency installation, formatting, localization, documentation checks,
+  TypeScript/production build and desktop compilation pass. The production build retains its
+  large-chunk warning.
 
-Project-menu validation on macOS: 139 frontend/build-helper tests, formatting, localization, TypeScript/production build and an isolated desktop build pass. Component tests cover path copying and failure reporting, bilingual labels, keyboard expansion/return, destination selection, empty destinations and edge positioning. Native QA (`sh.uterm.desktop.qa.projectmenu`) verifies the removed entries, submenu layout and Escape behavior, copying the exact project path and moving a test project into another workspace while retaining its files. Windows/Linux native menu interaction and long-list scrolling remain unverified.
+- Native acceptance and credential limitations remain as described for each feature; macOS
+  compilation does not establish Windows/Linux runtime acceptance.
 
-Branch picker regression tests cover editor save conflicts, deferred actions after repository changes, repeated requests, stale polling, Local/Remote groups, remote switching, context actions, missing upstreams, visible remote/authentication failures and keyboard dismissal. Backend tests use temporary local/bare repositories for unfetched remote listings, partial remote failures, narrow clone tracking, name collisions, dirty-worktree protection, upstream push/pull, divergent history and force-push prevention. On macOS, 139 frontend/build-helper tests, 39 backend tests, formatting, localization, documentation checks, TypeScript/production build and an isolated desktop build passed. Native QA (`sh.uterm.desktop.qa.remotebranches`) verified both menu layouts, selecting an unfetched remote branch from a single-branch clone, creating its tracking configuration, pushing a test commit to a local bare remote, pulling a newer remote commit with file-list refresh, and fetching a new remote reference without changing the current branch. Windows/Linux runtime and authenticated network remotes still require acceptance testing. Existing large-chunk and Rust dead-code warnings remain.
+### Panel collapse hints
 
-Clipboard validation on macOS: 137 frontend/build-helper tests, frozen dependency installation, formatting, documentation and localization checks, TypeScript/production build and an isolated desktop debug build pass. Native QA with bundle ID `sh.uterm.desktop.qa.clipboard` shows Chinese text pasted directly into a shell without a WebKit “Paste” confirmation or `NotAllowedError` banner. The installed app was not restarted. Native copy, multiline paste and live Agent clipboard acceptance remain pending; Windows and Linux runtime behavior was not retested on macOS. Existing large-chunk and Rust dead-code warnings remain.
+- Panel collapse hint validation: 143 frontend/build-helper tests pass, including three-second
+  expiry, manual-hide exclusion, cancelled/reversed drags, either inspector position, independent
+  timers, immediate reopen cancellation and repeat-trigger timing. Source formatting, localization,
+  documentation checks, TypeScript/production build and isolated macOS desktop build pass.
 
-File-copy validation on Windows: 135 frontend tests, 32 backend tests, TypeScript, production build and localization checks pass. The browser preview uses mocked filesystem commands; native integration remains unverified. The production build retains its large-chunk warning.
+- Native QA (`sh.uterm.desktop.qa.collapsehint`) verifies matching icon sizes, hints after dragging
+  each panel closed, return to normal appearance and reopening both panels. Native reduced-motion
+  and Windows acceptance remain pending.
 
-Lifecycle regression tests cover successful versus failed/unknown Agent exits, repeated close failures and duplicate close requests. Windows process tests verify that installer cleanup terminates both its parent and child processes using an isolated Job Object; Unix uses an isolated process group and still needs native acceptance. HTML sanitization tests reject SVG `xlink:href` navigation as well as ordinary links. No Agent package installation is performed by these tests.
+### Sidebar header and workspace menu
 
-Agent installation and lifecycle validation: 133 frontend tests, 31 backend tests, 15 local-service tests, production build, formatting and localization checks pass. A browser preview verifies the OpenCode installation panel and confirmation command. Tests do not install packages on the user's machine; native download/install/launch and macOS acceptance remain pending. The build still reports chunks over 500 kB.
+- Sidebar header validation: 143 frontend/build-helper tests, formatting for the changed source
+  files, localization, documentation checks, TypeScript/production build and the isolated macOS
+  desktop build pass. Native QA (`sh.uterm.desktop.qa.compactheader`) verifies the compact header,
+  workspace menu placement, switching workspaces, long-name truncation and sidebar hide/reopen.
 
-Snap eligibility tests cover entering and leaving the threshold during a drag. Browser checks confirm release-to-collapse on the left; held-pointer highlight/reversal and native right-panel interaction still require runtime acceptance.
+- Additional native QA (`sh.uterm.desktop.qa.headeralign`) verifies vertical alignment with the main
+  toolbar and the menu opening below the aligned header. The text-only workspace trigger and compact
+  menu pass 16 targeted sidebar/localization tests, source formatting, TypeScript/production build
+  and an isolated macOS desktop build.
 
-Both panel minimum widths equal the 30 px collapse threshold. Layout tests verify 31 px remains visible and 30 px arms collapse during dragging; a browser check verifies left-panel resizing through 50 px to collapse without content spilling into the main area. Native right-panel acceptance remains pending.
+- Native QA (`sh.uterm.desktop.qa.workspacetext`) verifies the text-only appearance, compact menu,
+  click/Enter activation, arrow-key navigation and Escape dismissal with focus returned to the
+  trigger. Windows runtime and narrow-sidebar menu acceptance remain pending.
 
-Sidebar browser acceptance verifies the top-right hide button, the 320 px drag limit and automatic hiding below the collapse threshold. Native desktop and macOS pointer acceptance remain pending.
+### Divider-button interaction
 
-HTML preview validation: 122 frontend tests, production build and localization checks pass. A browser run of the real file editor verifies full-document styles and content. Native WebView acceptance is not covered by this preview.
+- Divider button validation: all 143 frontend/build-helper tests, 39 backend tests, local-session
+  service tests, formatting, localization, documentation checks, TypeScript/production build and
+  macOS desktop build pass. Native QA (`sh.uterm.desktop.qa.dividerhover`) verifies default hiding,
+  hover reveal at the vertical midpoint with the inspector on either side, clicking to swap, hiding
+  after moving away, and following the divider after resizing.
 
-Performance validation: 119 frontend/build-helper tests, localization checks and the TypeScript/production build pass. The main JavaScript chunk measures 909.45 kB versus a 1,343.64 kB baseline (approximately 32% smaller); this is startup chunk size, not total installer size. Total installer reduction and runtime CPU/RSS improvements have not been measured. Deferred-editor failure/recovery and offscreen PDF rendering still need desktop interaction checks; the >500 kB chunk warning remains.
+- Native keyboard-focus and Windows acceptance remain pending.
 
-Localization validation on Windows: 119 frontend/build-helper tests, 29 backend tests and the TypeScript/production build pass. An isolated browser preview of the real settings components verifies English → Chinese → English without reload and the translated reset button. Component tests mock desktop APIs and terminal/PDF rendering; live native dialogs, tray interactions, authenticated provider states and macOS localization still require runtime acceptance. The running desktop app is not restarted for these checks.
+### Active-tree coverage
 
-Theme validation: frontend/build-helper tests and TypeScript checks pass, including settings round-trips, invalid values and text contrast for all palettes. An isolated browser preview of the real settings components verifies Ocean selection, Moss light rendering and persistence after reload. Black, Paper and Clear Sky visual acceptance, desktop theme-switching interaction and macOS acceptance remain unverified.
+- Active-tree validation: all 140 frontend/build-helper tests, formatting, localization,
+  documentation checks, TypeScript/production build and the isolated macOS desktop build pass.
+  Component coverage includes complete trees, pinned descendants without duplicates, workspace
+  filtering and moves, section-specific folding, independent folder-state restoration, selection
+  guards, removal protection and drag boundaries.
 
-Current macOS validation: frozen dependency installation, all 187 frontend/build-helper tests, 56 standard backend tests plus four explicitly executed real Redis integration tests, 32 local-session service tests, formatting, documentation/localization checks, TypeScript/production build, desktop compilation and an isolated ARM64 app build pass. Native feature-specific acceptance remains as recorded above; Windows/Linux runtime acceptance is not inferred from these macOS checks.
+- Native QA (`sh.uterm.desktop.qa.activitytree`) verifies project migration into Active, root and
+  Worktree terminal creation and selection, Worktree folding, disabled project removal, pinned
+  projects remaining only in Active, long names at 248 and 176 pixel sidebar widths, retention with
+  only a Worktree session, and returning to Pinned while hiding Active after the last session
+  closes. Native drag ordering, save-conflict handling and Windows runtime behavior remain
+  unverified.
 
-Automated checks cover state validation, session identity and layout, file recovery, input handling, build helpers, Rust backend and local service behavior. Run the commands in the README on the target OS.
+- Existing large-chunk and Rust unused-code warnings remain.
 
-Current Windows verification: frozen dependency installation, documentation/localization checks, 163 frontend/build-helper tests (two platform-specific tests skipped), 18 local-service tests, 48 backend tests, six release-helper tests and the TypeScript/frontend production build pass. The full frontend suite passes with test-file concurrency limited to four; the initial parallel run encountered Vite SSR loading timeouts. Backend tests and desktop compilation with the isolated identifier `sh.uterm.desktop.qa.release014` pass with single-job compilation, without restarting the installed app. Frontend, desktop configuration, Cargo manifest and lockfile versions agree; the versioned bilingual release body loads through `releaseNotes(tag)` and agrees with the Windows/macOS updater configuration without an override. Changed version files and both Cargo formatting checks pass; repository-wide formatting still reports existing issues in 34 other files. Native mouse, localization, signed-update and installer acceptance remain as recorded for each feature; build results do not establish runtime acceptance. Shortcut tests cover selection-dependent copying, Control interrupt passthrough, paste keys, macOS modifiers and composition/AltGr exclusion. Clipboard shortcuts in live Claude/Codex sessions still require interactive verification. The frontend build reports a bundle-size warning for chunks above 500 kB.
+### Pane-swap coverage
 
-The Windows app was built and visually inspected in a separate design-QA window. Browser checks cover the welcome page at 680×500 without overflow and light-palette rendering. Full keyboard, split-pane, file/editor/dialog and macOS visual acceptance remains unverified.
+- Pane swap validation: 143 frontend/build-helper tests pass, including old-settings defaults,
+  position round trips, custom shortcuts, persistence failure, retained terminal/editor nodes and
+  drafts, file-tree expansion/scroll preservation, hidden/expanded inspector guards, reset and
+  mirrored resizing. Formatting, localization, TypeScript/production build and an isolated macOS
+  desktop build pass.
 
-Interactive Windows/macOS acceptance, installer execution, credential-dependent GitHub/provider calls and signed updates require separate runtime checks. Browser preview does not exercise desktop commands. Unix-only PTY tests do not run on Windows.
+- Native QA (`sh.uterm.desktop.qa.paneswap`) verifies swapping with retained terminal output/focus
+  and unsaved editor text/focus, width following content, resizing on both sides, left-side
+  collapse/reopen, custom shortcut activation, Git expand/restore, light/dark layouts, a 700×520
+  window with the project sidebar hidden, and position persistence after quitting and reopening the
+  QA app. Component tests use terminal/editor rendering adapters; the native checks exercise the
+  real renderers.
+
+- Windows runtime acceptance remains pending. Existing bundle-size and Rust unused-code warnings
+  remain.
+
+### Project-menu coverage
+
+- Project-menu validation on macOS: 139 frontend/build-helper tests, formatting, localization,
+  TypeScript/production build and an isolated desktop build pass. Component tests cover path copying
+  and failure reporting, bilingual labels, keyboard expansion/return, destination selection, empty
+  destinations and edge positioning.
+
+- Native QA (`sh.uterm.desktop.qa.projectmenu`) verifies the removed entries, submenu layout and
+  Escape behavior, copying the exact project path and moving a test project into another workspace
+  while retaining its files. Windows/Linux native menu interaction and long-list scrolling remain
+  unverified.
+
+### Branch-picker coverage
+
+- Branch picker regression tests cover editor save conflicts, deferred actions after repository
+  changes, repeated requests, stale polling, Local/Remote groups, remote switching, context actions,
+  missing upstreams, visible remote/authentication failures and keyboard dismissal. Backend tests
+  use temporary local/bare repositories for unfetched remote listings, partial remote failures,
+  narrow clone tracking, name collisions, dirty-worktree protection, upstream push/pull, divergent
+  history and force-push prevention.
+
+- On macOS, 139 frontend/build-helper tests, 39 backend tests, formatting, localization,
+  documentation checks, TypeScript/production build and an isolated desktop build passed.
+
+- Native QA (`sh.uterm.desktop.qa.remotebranches`) verified both menu layouts, selecting an
+  unfetched remote branch from a single-branch clone, creating its tracking configuration, pushing a
+  test commit to a local bare remote, pulling a newer remote commit with file-list refresh, and
+  fetching a new remote reference without changing the current branch. Windows/Linux runtime and
+  authenticated network remotes still require acceptance testing.
+
+- Existing large-chunk and Rust dead-code warnings remain.
+
+### Clipboard coverage
+
+- Clipboard validation on macOS: 137 frontend/build-helper tests, frozen dependency installation,
+  formatting, documentation and localization checks, TypeScript/production build and an isolated
+  desktop debug build pass. Native QA with bundle ID `sh.uterm.desktop.qa.clipboard` shows Chinese
+  text pasted directly into a shell without a WebKit “Paste” confirmation or `NotAllowedError`
+  banner.
+
+- The installed app was not restarted. Native copy, multiline paste and live Agent clipboard
+  acceptance remain pending; Windows and Linux runtime behavior was not retested on macOS.
+
+- Existing large-chunk and Rust dead-code warnings remain.
+
+### File-copy coverage
+
+- File-copy validation on Windows: 135 frontend tests, 32 backend tests, TypeScript, production
+  build and localization checks pass. The browser preview uses mocked filesystem commands; native
+  integration remains unverified.
+
+- The production build retains its large-chunk warning.
+
+### Lifecycle and sanitization coverage
+
+- Lifecycle regression tests cover successful versus failed/unknown Agent exits, repeated close
+  failures and duplicate close requests. Windows process tests verify that installer cleanup
+  terminates both its parent and child processes using an isolated Job Object; Unix uses an isolated
+  process group and still needs native acceptance.
+
+- HTML sanitization tests reject SVG `xlink:href` navigation as well as ordinary links. No Agent
+  package installation is performed by these tests.
+
+### Agent-installation coverage
+
+- Agent installation and lifecycle validation: 133 frontend tests, 31 backend tests, 15
+  local-service tests, production build, formatting and localization checks pass. A browser preview
+  verifies the OpenCode installation panel and confirmation command.
+
+- Tests do not install packages on the user's machine; native download/install/launch and macOS
+  acceptance remain pending. The build still reports chunks over 500 kB.
+
+### Panel drag boundaries
+
+- Snap eligibility tests cover entering and leaving the threshold during a drag. Browser checks
+  confirm release-to-collapse on the left; held-pointer highlight/reversal and native right-panel
+  interaction still require runtime acceptance.
+
+- Both panel minimum widths equal the 30 px collapse threshold. Layout tests verify 31 px remains
+  visible and 30 px arms collapse during dragging; a browser check verifies left-panel resizing
+  through 50 px to collapse without content spilling into the main area.
+
+- Native right-panel acceptance remains pending.
+
+- Sidebar browser acceptance verifies the top-right hide button, the 320 px drag limit and automatic
+  hiding below the collapse threshold. Native desktop and macOS pointer acceptance remain pending.
+
+### HTML-preview coverage
+
+- HTML preview validation: 122 frontend tests, production build and localization checks pass. A
+  browser run of the real file editor verifies full-document styles and content.
+
+- Native WebView acceptance is not covered by this preview.
+
+### Performance measurements
+
+- Performance validation: 119 frontend/build-helper tests, localization checks and the
+  TypeScript/production build pass. The main JavaScript chunk measures 909.45 kB versus a 1,343.64
+  kB baseline (approximately 32% smaller); this is startup chunk size, not total installer size.
+
+- Total installer reduction and runtime CPU/RSS improvements have not been measured. Deferred-editor
+  failure/recovery and offscreen PDF rendering still need desktop interaction checks; the >500 kB
+  chunk warning remains.
+
+### Localization coverage
+
+- Localization validation on Windows: 119 frontend/build-helper tests, 29 backend tests and the
+  TypeScript/production build pass. An isolated browser preview of the real settings components
+  verifies English → Chinese → English without reload and the translated reset button.
+
+- Component tests mock desktop APIs and terminal/PDF rendering; live native dialogs, tray
+  interactions, authenticated provider states and macOS localization still require runtime
+  acceptance. The running desktop app is not restarted for these checks.
+
+### Theme coverage
+
+- Theme validation: frontend/build-helper tests and TypeScript checks pass, including settings
+  round-trips, invalid values and text contrast for all palettes. An isolated browser preview of the
+  real settings components verifies Ocean selection, Moss light rendering and persistence after
+  reload.
+
+- Black, Paper and Clear Sky visual acceptance, desktop theme-switching interaction and macOS
+  acceptance remain unverified.
+
+### macOS integration scope
+
+- Current macOS validation: frozen dependency installation, all 187 frontend/build-helper tests, 56
+  standard backend tests plus four explicitly executed real Redis integration tests, 32
+  local-session service tests, formatting, documentation/localization checks, TypeScript/production
+  build, desktop compilation and an isolated ARM64 app build pass. Native feature-specific
+  acceptance remains as recorded above; Windows/Linux runtime acceptance is not inferred from these
+  macOS checks.
+
+### Target-system checks
+
+Automated checks cover state validation, session identity and layout, file recovery, input handling,
+build helpers, Rust backend and local service behavior. Run the commands in the README on the target
+OS.
+
+### Windows integration scope
+
+- Current Windows verification: frozen dependency installation, documentation/localization checks,
+  163 frontend/build-helper tests (two platform-specific tests skipped), 18 local-service tests, 48
+  backend tests, six release-helper tests and the TypeScript/frontend production build pass. The
+  full frontend suite passes with test-file concurrency limited to four; the initial parallel run
+  encountered Vite SSR loading timeouts.
+
+- Backend tests and desktop compilation with the isolated identifier
+  `sh.uterm.desktop.qa.release014` pass with single-job compilation, without restarting the
+  installed app. Frontend, desktop configuration, Cargo manifest and lockfile versions agree; the
+  versioned bilingual release body loads through `releaseNotes(tag)` and agrees with the
+  Windows/macOS updater configuration without an override.
+
+- Changed version files and both Cargo formatting checks pass; repository-wide formatting still
+  reports existing issues in 34 other files. Native mouse, localization, signed-update and installer
+  acceptance remain as recorded for each feature; build results do not establish runtime acceptance.
+
+- Shortcut tests cover selection-dependent copying, Control interrupt passthrough, paste keys, macOS
+  modifiers and composition/AltGr exclusion. Clipboard shortcuts in live Claude/Codex sessions still
+  require interactive verification.
+
+- The frontend build reports a bundle-size warning for chunks above 500 kB.
+
+### Visual acceptance and platform limits
+
+- The Windows app was built and visually inspected in a separate design-QA window. Browser checks
+  cover the welcome page at 680×500 without overflow and light-palette rendering.
+
+- Full keyboard, split-pane, file/editor/dialog and macOS visual acceptance remains unverified.
+
+- Interactive Windows/macOS acceptance, installer execution, credential-dependent GitHub/provider
+  calls and signed updates require separate runtime checks. Browser preview does not exercise
+  desktop commands.
+
+- Unix-only PTY tests do not run on Windows.
+
+### Documentation checks
+
+Documentation metadata, the generated index, Markdown formatting, heading structure and local
+navigation links pass their checks. These checks validate documentation only and do not change the
+runtime acceptance recorded for each feature.
 
 ## Database connections and optional components
 
-The workspace's Databases section supports MySQL, PostgreSQL and Oracle service-name connections. Add a profile with the section's plus button, select it and click Connect. The footer database icon independently shows/hides the section, retaining its connections, SQL and transactions. Connected, busy or dirty profiles cannot be edited or removed; referenced SSH profiles and workspaces are protected. Opening Database components from the sidebar temporarily hides the project inspector and returning restores its selected tool and position.
+### Database setup and visibility
 
-Profiles retain endpoint, database/service, username, verified TLS/PEM CA, optional system OpenSSH target and opaque credential reference. Passwords remain in memory unless Remember password stores them in macOS Keychain or Windows Credential Manager. Credentials bind to the configured endpoint, TLS trust and resolved SSH identity; changing those requires reentry. Secrets pass through worker stdin, never process arguments or diagnostics. Workspace schema 7 retains a backup when upgrading older data; older apps reject it rather than silently dropping database profiles.
+The workspace's Databases section supports MySQL, PostgreSQL and Oracle service-name connections.
+Add a profile with the section's plus button, select it and click Connect.
 
-The JDBC engine is bundled (28,972 bytes); its checked-in source, checksum and JAR are verified together. Connection restores missing or modified versioned cache copies atomically. Main builds need no JDK. Java and vendor drivers remain optional and excluded from installers. The app validates an explicitly selected Java first, then detects working Java 17+ from JAVA_HOME, PATH and platform locations, then uses a managed runtime. Component management is available in Settings, the sidebar section and connection dialog; an unavailable component never replaces the SQL editor. Install required components displays the missing download size and installs only selected dependencies. No automatic downloads or system Java changes occur. Online/offline installation requires catalog versions, exact sizes and SHA-256; the portable Temurin 21 runtime uses TUNA mirror packages. Archive extraction bounds paths, size and file count. Interrupted/cancelled downloads retain their prefix across restarts; Resume uses validated HTTP Range or restarts when unsupported. Successful installation removes the partial file. Uninstall retains profiles and is disabled while a database connection is open.
+- The footer database icon independently shows/hides the section, retaining its connections, SQL and
+  transactions. Connected, busy or dirty profiles cannot be edited or removed; referenced SSH
+  profiles and workspaces are protected.
 
-Direct TCP, verified TLS and existing OpenSSH profiles are supported. Tunnels use a destination-restricted loopback SOCKS proxy with a one-time authentication token; JDBC retains the original hostname for certificate verification. TLS uses the selected Java trust store or provided PEM CA without disabling hostname checks. MySQL/PostgreSQL use official JDBC drivers; Oracle uses JDBC Thin service names. SID, Wallet/cloud presets, arbitrary JDBC URLs, custom driver imports and server installation are unavailable.
+- Opening Database components from the sidebar temporarily hides the project inspector and returning
+  restores its selected tool and position.
 
-Expand catalogs/schemas to load tables and views; system objects are folded. Object filtering searches loaded names. Double-click, Enter or View data opens the current table's Data/Structure views without replacing SQL. Object menus open beside their table's action button, stay within the window and open upward near the bottom, outside the scrolling tree's clipping area. View data, View structure and Generate SELECT remain available for tables at the bottom of a long list. Only one object menu opens at a time. Outside pointer input, Escape, scrolling the tree, resizing, losing window focus or hiding the browser/workbench closes it; Escape returns focus to its trigger. Arrow keys and Home/End navigate the actions. Generate SELECT quotes actual names and confirms replacing an unsaved draft. Metadata treats `%` and `_` literally. Eight loaded namespace groups are cached per workbench, with up to 500 metadata rows per request.
+### Database credentials
 
-Up to eight SQL query tabs retain separate drafts, undo, selections and results during this run. All tabs explicitly share one connection and transaction. Execute SQL runs the selection or caret statement by default; the scope selector also offers current/selection/all. Ctrl/Cmd+Enter uses automatic scope; Ctrl/Cmd+Shift+Enter runs all. Batches contain at most 100 statements, execute sequentially and stop on the first failure. Statement boundaries understand MySQL strings/comments, PostgreSQL dollar quotes/nested comments and Oracle alternative quotes. DELIMITER scripts and Oracle procedural blocks are rejected rather than split incorrectly. Commented SELECT and nonwriting WITH queries work read-only; mutating CTEs, locks and ambiguous MySQL backslash-quote strings require editing. Server account permissions remain authoritative.
+Profiles retain endpoint, database/service, username, verified TLS/PEM CA, optional system OpenSSH
+target and opaque credential reference. Passwords remain in memory unless Remember password stores
+them in macOS Keychain or Windows Credential Manager.
 
-Completion uses the selected dialect and loaded object/column names. Formatting changes whitespace, retains identifier case, literals, comments and compound operators, and has its own undo step. Format a selection or the entire draft. Numeric server error positions/lines support Jump to failed statement; otherwise it jumps to that statement's start. Vendor error messages and SQL values are not returned in diagnostics. History retains the latest 50 attempts within 262,144 SQL characters in memory; restore confirms replacing an unsaved draft, and Clear removes history. Restart recovery is unavailable. Each SQL draft is limited to 262,144 characters; each tab retains up to four recent result sets within a two-million-cell-character cache budget. Disconnection clears results, while SQL drafts remain. Copy SQL and Discard SQL changes are flat toolbar buttons; copy retains draft protection and discard requires confirmation. Save SQL clears that draft's guard only after the selected file is written.
+- Credentials bind to the configured endpoint, TLS trust and resolved SSH identity; changing those
+  requires reentry. Secrets pass through worker stdin, never process arguments or diagnostics.
 
-Hide/resize the object browser and resize the editor/result split with pointer or focused arrow keys. Toolbars scroll horizontally on narrow windows and pagination stays at the bottom. Column headers and row numbers stay fixed while scrolling, with opaque backgrounds covering the cells beneath them. When columns exceed the result viewport, a visible horizontal scrollbar at its bottom lets you drag to additional columns without scrolling to the last row. The grid renders visible rows and columns rather than a complete wide table. Drag/Shift-arrow selection, row selection, Ctrl/Cmd+A/C, TSV copying with optional headers and adjustable column widths are supported. Double-click/Enter inspects the complete loaded value as literal text. NULL differs from empty text; truncated values are never fetched in full. Filter loaded page searches only the current result, including draft overlays. Server-side filtering instead issues a prepared table query; equality, comparison, literal substring and NULL conditions apply before paging. Pages use primary-key order when available and rerun the query; they do not hold a snapshot or count the entire table.
+- Workspace schema 7 retains a backup when upgrading older data; older apps reject it rather than
+  silently dropping database profiles.
 
-Connections start read-only. In this mode browsing reuses the existing worker and rolls back reads; enabling editing opens an independent read-only browser worker only when needed, so browsing never settles SQL writes. Turning editing off releases that auxiliary worker. Disconnect closes both. The eight-worker limit includes owners, auxiliary browser workers and opening connections: eight read-only workbenches or four using both workers fill it. Browser-worker failure preserves the SQL connection and transaction; retry opens a fresh browser worker. SQL reply timeout/confirmed loss closes the connection and retains drafts. Queries have a 30-second server timeout and a 40-second reply deadline. Cancel query deliberately closes the connection; connection-preserving driver cancellation remains deferred because write outcomes must stay explicit. Uncertain writes are never retried automatically.
+### Java and driver components
 
-Enable editing to execute other SQL after confirmation. Commit and Roll back explicitly settle the shared transaction; DDL may commit automatically. The pending indicator is conservative, including SELECT in editing mode. Editable table grids require an ordinary table, non-null primary key, supported scalar columns and transaction support (InnoDB for MySQL). Views, missing primary keys, BLOB/CLOB/vendor-specific columns and nontransactional tables stay read-only; arbitrary SQL query results are also read-only. Primary keys/generated columns cannot be updated; generated insert values are omitted. Double-click a writable cell or use Edit cell, distinguish NULL from text, then Stage cell change. Add row and Delete/Restore current row create drafts. At most 100 row changes and 768 KiB of draft payload are retained; values are limited to 16,384 characters. Rows with truncated values cannot be edited or deleted.
+The JDBC engine is bundled (28,972 bytes); its checked-in source, checksum and JAR are verified
+together. Connection restores missing or modified versioned cache copies atomically.
 
-Preview table changes shows generated SQL with placeholders and bound parameters. Apply to transaction locks rows by primary key and compares original scalar values; stale/deleted rows or changed table metadata fail visibly. A failure rolls back this batch's savepoint, retaining drafts and earlier SQL writes. The batch has a 25-second execution budget before its bounded refresh. Successful apply displays the current transaction's data and still requires Commit; Roll back restores committed data. Refresh, server filtering, export and paging cannot replace unapplied table drafts; switching tables, disconnecting or discarding requires confirmation. Unexpected connection loss retains the table snapshot and drafts for inspection, but requires reconnecting and checking server state before reuse. Quit/update guards cover all SQL and table drafts, active work and transactions, revealing hidden workbenches that require action.
+- Main builds need no JDK. Java and vendor drivers remain optional and excluded from installers.
 
-Export CSV/JSON writes only the loaded page through a native save dialog, with an 8 MiB output limit and atomic save. CSV uses UTF-8 BOM, quoted fields, `\N` for NULL and spreadsheet-formula protection; JSON preserves column descriptors, precision strings, NULL, binary and truncation markers. Export excludes unapplied grid drafts and does not query all rows. Execution plan explains one selected/current read query without ANALYZE. MySQL uses EXPLAIN and PostgreSQL uses EXPLAIN (FORMAT JSON). Oracle requires editing plus PLAN_TABLE/DBMS_XPLAN permissions; it uses a savepoint to remove plan rows without settling earlier writes. PostgreSQL/Oracle live acceptance remains pending.
+- The app validates an explicitly selected Java first, then detects working Java 17+ from JAVA_HOME,
+  PATH and platform locations, then uses a managed runtime. Component management is available in
+  Settings, the sidebar section and connection dialog; an unavailable component never replaces the
+  SQL editor.
 
-Result limits: 256 columns, 200 rows per page, offset at most 10,000, 16,384 text characters or 4,096 binary bytes per cell, 1,048,576 serialized-cell characters and 8 MiB transport. Numerics remain strings and binary is Base64. Each JVM has a 192 MiB heap cap; drivers may buffer data internally, so these result limits are not process RSS guarantees. History, drafts and result caches stay in memory unless explicitly saved/exported. Development JDKs, Cargo targets, test databases and node_modules never enter installers.
+- Install required components displays the missing download size and installs only selected
+  dependencies. No automatic downloads or system Java changes occur.
 
-Grid scrolling validation on macOS: 209 frontend/build-helper tests pass, with eight optional checks skipped. The isolated native app (`sh.uterm.desktop.qa.dbgrid`) uses simulated 256-column, 200-row results to verify fixed opaque headers and row numbers, visible draggable bottom horizontal scrollbars, access to the final column and retained pagination at 900×600 and 640×420. Both light and dark appearances are inspected after scrolling. Formatting, localization, TypeScript/production build and isolated desktop builds pass; production builds retain the existing large-chunk warning. This validates the WebView layout rather than a live database connection. Windows/Linux runtime acceptance of this scrolling layout remains pending.
+- Online/offline installation requires catalog versions, exact sizes and SHA-256; the portable
+  Temurin 21 runtime uses TUNA mirror packages. Archive extraction bounds paths, size and file
+  count.
 
-Object-menu validation on macOS: 209 frontend/build-helper tests pass, with eight optional checks skipped. A focused 40-table regression covers bottom/right edge positioning, all three actions on the final table, one open menu, keyboard focus/navigation, scroll/resize/blur dismissal and cleanup when hidden, disabled, collapsed or unmounted. Formatting, localization, TypeScript/production build and the isolated macOS QA application build pass. Native QA (`sh.uterm.desktop.qa.dbmenufix`) at 900×600 verifies the menu opening upward on the final table of a 39-table list and all three actions targeting `user_roles`, using the real workbench with simulated database replies. This validates WebView interaction, not a live database connection. Production builds retain the existing large-chunk warning. Windows/Linux runtime acceptance of menu positioning remains pending.
+- Interrupted/cancelled downloads retain their prefix across restarts; Resume uses validated HTTP
+  Range or restarts when unsupported. Verified complete packages are retained for installation
+  retries; every reuse checks catalog size and SHA-256, online runtime archives are verified and
+  extracted directly from the retained cache, while offline imports and driver replacement use
+  separate temporary staging.
 
-Validation on Windows: 200 frontend/build-helper tests pass and ten opt-in/platform checks skip; 69 backend tests and 22 local-session service tests pass, with four opt-in Redis tests ignored. Focused regressions cover SQL dialect boundaries/read-only guards, formatting (including Unicode prefixes, variables and compound operators), NULL/precision/CSV safety, draft coalescing, bounded wide-grid rendering and keyboard navigation, menu dismissal, retained SQL/results and transaction guards. An explicitly enabled write suite passes using uniquely named tables in a disposable loopback MySQL 5.7.33 schema on port 33379. It verifies bound Unicode/quoted values, preview, observer isolation, commit/rollback, duplicate-key batch rollback preserving earlier SQL, stale-row rejection, literal filters, insertion/deletion, read-only table restrictions and EXPLAIN. Java probes verify independent SQL guards and allocation-free JSON length accounting; real read-only MySQL checks pass directly and through authenticated SOCKS.
+- Transient network/server failures allow at most three download attempts; cancellation,
+  certificate, storage, missing-file and verification failures do not loop. Rate limits and server
+  Retry-After guidance return a retry-later error.
 
-The isolated native Windows app (`sh.uterm.desktop.qa.dbmenus`, local Java 21) verifies batch execution shortcuts without modifying SQL, query/result retention across tabs, formatting undo, in-memory history, loaded-table completion, outside-click/Escape menu dismissal and focus, staged cell editing, parameter previews, apply and rollback. Table viewports at 1280×800, 900×600 and 640×420 keep the result footer visible. Turning editing off removes the auxiliary Java worker (two workers become one). An idle two-second snapshot records no CPU increase for the app/Java workers: the app main process is about 47 MiB RSS and Java workers about 66–68 MiB each; these exclude WebView subprocesses and do not establish peaks. Frozen installation, TypeScript/production build, pinned-JDK engine verification, isolated desktop build, changed-source formatting, localization and documentation checks pass. Repository-wide formatting retains issues in 63 other files, and production builds retain the existing large-chunk warning. New native export-save dialogs, macOS UI, PostgreSQL/Oracle live servers and complete database SSH/TLS acceptance remain unverified; authenticated SOCKS does not establish full SSH acceptance. The installed app/database service was not restarted.
+- Each component offers Download manually beside Offline installation. Complete and partial caches
+  use the same bounded cleanup policy as update caches.
+
+- Uninstall retains profiles and is disabled while a database connection is open.
+
+### Database TLS and SSH
+
+Direct TCP, verified TLS and existing OpenSSH profiles are supported. Tunnels use a
+destination-restricted loopback SOCKS proxy with a one-time authentication token; JDBC retains the
+original hostname for certificate verification.
+
+- TLS uses the selected Java trust store or provided PEM CA without disabling hostname checks.
+  MySQL/PostgreSQL use official JDBC drivers; Oracle uses JDBC Thin service names.
+
+- SID, Wallet/cloud presets, arbitrary JDBC URLs, custom driver imports and server installation are
+  unavailable.
+
+### Object browsing and menus
+
+Expand catalogs/schemas to load tables and views; system objects are folded. Object filtering
+searches loaded names.
+
+- Double-click, Enter or View data opens the current table's Data/Structure views without replacing
+  SQL. Object menus open beside their table's action button, stay within the window and open upward
+  near the bottom, outside the scrolling tree's clipping area.
+
+- View data, View structure and Generate SELECT remain available for tables at the bottom of a long
+  list. Only one object menu opens at a time.
+
+- Outside pointer input, Escape, scrolling the tree, resizing, losing window focus or hiding the
+  browser/workbench closes it; Escape returns focus to its trigger. Arrow keys and Home/End navigate
+  the actions.
+
+- Generate SELECT quotes actual names and confirms replacing an unsaved draft. Metadata treats `%`
+  and `_` literally.
+
+- Eight loaded namespace groups are cached per workbench, with up to 500 metadata rows per request.
+
+### SQL tabs and execution scope
+
+Up to eight SQL query tabs retain separate drafts, undo, selections and results during this run. All
+tabs explicitly share one connection and transaction.
+
+- Execute SQL runs the selection or caret statement by default; the scope selector also offers
+  current/selection/all. Ctrl/Cmd+Enter uses automatic scope; Ctrl/Cmd+Shift+Enter runs all.
+
+- Batches contain at most 100 statements, execute sequentially and stop on the first failure.
+  Statement boundaries understand MySQL strings/comments, PostgreSQL dollar quotes/nested comments
+  and Oracle alternative quotes.
+
+- DELIMITER scripts and Oracle procedural blocks are rejected rather than split incorrectly.
+  Commented SELECT and nonwriting WITH queries work read-only; mutating CTEs, locks and ambiguous
+  MySQL backslash-quote strings require editing.
+
+- Server account permissions remain authoritative.
+
+### Completion, formatting and SQL drafts
+
+Completion uses the selected dialect and loaded object/column names. Formatting changes whitespace,
+retains identifier case, literals, comments and compound operators, and has its own undo step.
+
+- Format a selection or the entire draft. Numeric server error positions/lines support Jump to
+  failed statement; otherwise it jumps to that statement's start.
+
+- Vendor error messages and SQL values are not returned in diagnostics. History retains the latest
+  50 attempts within 262,144 SQL characters in memory; restore confirms replacing an unsaved draft,
+  and Clear removes history.
+
+- Restart recovery is unavailable. Each SQL draft is limited to 262,144 characters; each tab retains
+  up to four recent result sets within a two-million-cell-character cache budget.
+
+- Disconnection clears results, while SQL drafts remain. Copy SQL and Discard SQL changes are flat
+  toolbar buttons; copy retains draft protection and discard requires confirmation.
+
+- Save SQL clears that draft's guard only after the selected file is written.
+
+### Result-grid layout and filtering
+
+Hide/resize the object browser and resize the editor/result split with pointer or focused arrow
+keys. Toolbars scroll horizontally on narrow windows and pagination stays at the bottom.
+
+- Column headers and row numbers stay fixed while scrolling, with opaque backgrounds covering the
+  cells beneath them. When columns exceed the result viewport, a visible horizontal scrollbar at its
+  bottom lets you drag to additional columns without scrolling to the last row.
+
+- The grid renders visible rows and columns rather than a complete wide table. Drag/Shift-arrow
+  selection, row selection, Ctrl/Cmd+A/C, TSV copying with optional headers and adjustable column
+  widths are supported.
+
+- Double-click/Enter inspects the complete loaded value as literal text. NULL differs from empty
+  text; truncated values are never fetched in full.
+
+- Filter loaded page searches only the current result, including draft overlays. Server-side
+  filtering instead issues a prepared table query; equality, comparison, literal substring and NULL
+  conditions apply before paging.
+
+- Pages use primary-key order when available and rerun the query; they do not hold a snapshot or
+  count the entire table.
+
+### Read-only workers and cancellation
+
+Connections start read-only. In this mode browsing reuses the existing worker and rolls back reads;
+enabling editing opens an independent read-only browser worker only when needed, so browsing never
+settles SQL writes.
+
+- Turning editing off releases that auxiliary worker. Disconnect closes both.
+
+- The eight-worker limit includes owners, auxiliary browser workers and opening connections: eight
+  read-only workbenches or four using both workers fill it. Browser-worker failure preserves the SQL
+  connection and transaction; retry opens a fresh browser worker.
+
+- SQL reply timeout/confirmed loss closes the connection and retains drafts. Queries have a
+  30-second server timeout and a 40-second reply deadline.
+
+- Cancel query deliberately closes the connection; connection-preserving driver cancellation remains
+  deferred because write outcomes must stay explicit. Uncertain writes are never retried
+  automatically.
+
+### Editing tables and transactions
+
+Enable editing to execute other SQL after confirmation. Commit and Roll back explicitly settle the
+shared transaction; DDL may commit automatically.
+
+- The pending indicator is conservative, including SELECT in editing mode. Editable table grids
+  require an ordinary table, non-null primary key, supported scalar columns and transaction support
+  (InnoDB for MySQL).
+
+- Views, missing primary keys, BLOB/CLOB/vendor-specific columns and nontransactional tables stay
+  read-only; arbitrary SQL query results are also read-only. Primary keys/generated columns cannot
+  be updated; generated insert values are omitted.
+
+- Double-click a writable cell or use Edit cell, distinguish NULL from text, then Stage cell change.
+  Add row and Delete/Restore current row create drafts.
+
+- At most 100 row changes and 768 KiB of draft payload are retained; values are limited to 16,384
+  characters. Rows with truncated values cannot be edited or deleted.
+
+### Applying drafts and recovering failures
+
+Preview table changes shows generated SQL with placeholders and bound parameters. Apply to
+transaction locks rows by primary key and compares original scalar values; stale/deleted rows or
+changed table metadata fail visibly.
+
+- A failure rolls back this batch's savepoint, retaining drafts and earlier SQL writes. The batch
+  has a 25-second execution budget before its bounded refresh.
+
+- Successful apply displays the current transaction's data and still requires Commit; Roll back
+  restores committed data. Refresh, server filtering, export and paging cannot replace unapplied
+  table drafts; switching tables, disconnecting or discarding requires confirmation.
+
+- Unexpected connection loss retains the table snapshot and drafts for inspection, but requires
+  reconnecting and checking server state before reuse. Quit/update guards cover all SQL and table
+  drafts, active work and transactions, revealing hidden workbenches that require action.
+
+### Export and execution plans
+
+Export CSV/JSON writes only the loaded page through a native save dialog, with an 8 MiB output limit
+and atomic save. CSV uses UTF-8 BOM, quoted fields, `\N` for NULL and spreadsheet-formula
+protection; JSON preserves column descriptors, precision strings, NULL, binary and truncation
+markers.
+
+- Export excludes unapplied grid drafts and does not query all rows. Execution plan explains one
+  selected/current read query without ANALYZE.
+
+- MySQL uses EXPLAIN and PostgreSQL uses EXPLAIN (FORMAT JSON). Oracle requires editing plus
+  PLAN_TABLE/DBMS_XPLAN permissions; it uses a savepoint to remove plan rows without settling
+  earlier writes.
+
+- PostgreSQL/Oracle live acceptance remains pending.
+
+### Result and memory limits
+
+Result limits: 256 columns, 200 rows per page, offset at most 10,000, 16,384 text characters or
+4,096 binary bytes per cell, 1,048,576 serialized-cell characters and 8 MiB transport. Numerics
+remain strings and binary is Base64.
+
+- Each JVM has a 192 MiB heap cap; drivers may buffer data internally, so these result limits are
+  not process RSS guarantees. History, drafts and result caches stay in memory unless explicitly
+  saved/exported.
+
+- Development JDKs, Cargo targets, test databases and node_modules never enter installers.
+
+### Database validation
+
+#### Grid-scrolling checks on macOS
+
+- Grid scrolling validation on macOS: 209 frontend/build-helper tests pass, with eight optional
+  checks skipped. The isolated native app (`sh.uterm.desktop.qa.dbgrid`) uses simulated 256-column,
+  200-row results to verify fixed opaque headers and row numbers, visible draggable bottom
+  horizontal scrollbars, access to the final column and retained pagination at 900×600 and 640×420.
+
+- Both light and dark appearances are inspected after scrolling. Formatting, localization,
+  TypeScript/production build and isolated desktop builds pass; production builds retain the
+  existing large-chunk warning.
+
+- This validates the WebView layout rather than a live database connection. Windows/Linux runtime
+  acceptance of this scrolling layout remains pending.
+
+#### Object-menu checks on macOS
+
+- Object-menu validation on macOS: 209 frontend/build-helper tests pass, with eight optional checks
+  skipped. A focused 40-table regression covers bottom/right edge positioning, all three actions on
+  the final table, one open menu, keyboard focus/navigation, scroll/resize/blur dismissal and
+  cleanup when hidden, disabled, collapsed or unmounted.
+
+- Formatting, localization, TypeScript/production build and the isolated macOS QA application build
+  pass. Native QA (`sh.uterm.desktop.qa.dbmenufix`) at 900×600 verifies the menu opening upward on
+  the final table of a 39-table list and all three actions targeting `user_roles`, using the real
+  workbench with simulated database replies.
+
+- This validates WebView interaction, not a live database connection. Production builds retain the
+  existing large-chunk warning.
+
+- Windows/Linux runtime acceptance of menu positioning remains pending.
+
+#### Database automated checks on Windows
+
+- Validation on Windows: 200 frontend/build-helper tests pass and ten opt-in/platform checks skip;
+  69 backend tests and 22 local-session service tests pass, with four opt-in Redis tests ignored.
+  Focused regressions cover SQL dialect boundaries/read-only guards, formatting (including Unicode
+  prefixes, variables and compound operators), NULL/precision/CSV safety, draft coalescing, bounded
+  wide-grid rendering and keyboard navigation, menu dismissal, retained SQL/results and transaction
+  guards.
+
+- An explicitly enabled write suite passes using uniquely named tables in a disposable loopback
+  MySQL 5.7.33 schema on port 33379. It verifies bound Unicode/quoted values, preview, observer
+  isolation, commit/rollback, duplicate-key batch rollback preserving earlier SQL, stale-row
+  rejection, literal filters, insertion/deletion, read-only table restrictions and EXPLAIN.
+
+- Java probes verify independent SQL guards and allocation-free JSON length accounting; real
+  read-only MySQL checks pass directly and through authenticated SOCKS.
+
+#### Database native checks on Windows
+
+- The isolated native Windows app (`sh.uterm.desktop.qa.dbmenus`, local Java 21) verifies batch
+  execution shortcuts without modifying SQL, query/result retention across tabs, formatting undo,
+  in-memory history, loaded-table completion, outside-click/Escape menu dismissal and focus, staged
+  cell editing, parameter previews, apply and rollback. Table viewports at 1280×800, 900×600 and
+  640×420 keep the result footer visible.
+
+- Turning editing off removes the auxiliary Java worker (two workers become one). An idle two-second
+  snapshot records no CPU increase for the app/Java workers: the app main process is about 47 MiB
+  RSS and Java workers about 66–68 MiB each; these exclude WebView subprocesses and do not establish
+  peaks.
+
+- Frozen installation, TypeScript/production build, pinned-JDK engine verification, isolated desktop
+  build, changed-source formatting, localization and documentation checks pass. Repository-wide
+  formatting retains issues in 63 other files, and production builds retain the existing large-chunk
+  warning.
+
+- New native export-save dialogs, macOS UI, PostgreSQL/Oracle live servers and complete database
+  SSH/TLS acceptance remain unverified; authenticated SOCKS does not establish full SSH acceptance.
+  The installed app/database service was not restarted.

@@ -107,6 +107,7 @@ test("real settings tabs, commands and panels render in both languages without u
     install: noop,
   };
   const calls = [];
+  const openedUrls = [];
   let autostart = false;
   let autostartFail = false;
   let installFail = false;
@@ -116,6 +117,10 @@ test("real settings tabs, commands and panels render in both languages without u
   const usageReads = [];
   mockIPC((cmd, args) => {
     calls.push(cmd);
+    if (cmd === "open_external") {
+      openedUrls.push(args.url);
+      return null;
+    }
     if (cmd === "file_copy") {
       copiedFiles = args;
       if (copyFail) throw new Error("无法粘贴：同名文件或目录已存在。");
@@ -145,7 +150,7 @@ test("real settings tabs, commands and panels render in both languages without u
         cache_read: 30,
         cache_write: 40,
         records: 1,
-        partial: false,
+        partial: args.agent === "codex",
         notice: null,
         windows: [{ label: "主要额度", percent: 25 }],
       };
@@ -279,7 +284,7 @@ test("real settings tabs, commands and panels render in both languages without u
       });
     });
     await context.test(
-      "built-in agents render distinct project-drawn symbols and preserve safe fallback",
+      "built-in agents render distinct bundled brand icons and preserve safe fallback",
       () => {
         const marks = ["kimi", "opencode", "grok"].map((agent) => {
           const markup = renderToStaticMarkup(React.createElement(SessionIcon, { agent }));
@@ -572,9 +577,18 @@ test("real settings tabs, commands and panels render in both languages without u
       await click("Codex");
       assert.match(host.textContent, /Codex · Past 7 days/);
       assert.match(host.textContent, /222/);
+      assert.match(host.textContent, /The current totals include only readable log records\./);
+      assert.equal(host.querySelector(".agent-usage progress").value, 25);
+      await act(async () => i18n.setUiLanguage("zh-Hans"));
+      assert.match(host.textContent, /当前统计仅包含可读取的日志记录。/);
+      await act(async () => i18n.setUiLanguage("en"));
       await click("Claude");
       assert.match(host.textContent, /Claude · Past 7 days/);
       assert.match(host.textContent, /111/);
+      assert.doesNotMatch(
+        host.textContent,
+        /The current totals include only readable log records\./,
+      );
       assert.deepEqual(usageReads, ["claude", "codex", "claude"]);
       await mount(
         React.createElement(SettingsPanel, {
@@ -597,6 +611,11 @@ test("real settings tabs, commands and panels render in both languages without u
         "en",
       );
       await click("Software update");
+      assert.ok(
+        [...host.querySelectorAll("button")].some(
+          (button) => button.textContent === "Download installer manually",
+        ),
+      );
       const downloadProgress = host.querySelector(".update-download-progress");
       assert.ok(downloadProgress);
       assert.equal(downloadProgress.firstElementChild.tagName, "PROGRESS");
@@ -604,6 +623,8 @@ test("real settings tabs, commands and panels render in both languages without u
       assert.equal(downloadProgress.firstElementChild.value, 1992294);
       assert.match(downloadProgress.textContent, /Downloaded 1.9 MB/);
       assert.match(host.textContent, /Update downloaded and signature verified/);
+      await click("Download installer manually");
+      assert.equal(openedUrls.at(-1), "https://github.com/YondFane/uTerm/releases/latest");
       const notes = host.querySelector(".update-release-notes");
       assert.equal(notes.querySelectorAll("h2").length, 2);
       assert.equal(notes.querySelectorAll("li").length, 2);

@@ -135,7 +135,7 @@ export function DatabaseComponents({ selectedKind }: { selectedKind?: DatabaseKi
                 {item.external ? tx("已就绪") : item.installed ? tx("已安装") : tx("未安装")}
               </small>
               {!item.external && <small title={item.source}>{new URL(item.source).hostname}</small>}
-              {!item.external && !!item.downloaded && (
+              {!item.external && !item.installed && !!item.downloaded && (
                 <small>{tx("已下载 {size}", { size: sizeLabel(item.downloaded) })}</small>
               )}
             </div>
@@ -146,7 +146,17 @@ export function DatabaseComponents({ selectedKind }: { selectedKind?: DatabaseKi
                   disabled={busy || status.busy}
                   onClick={() => void act("install", item.id)}
                 >
-                  {item.downloaded ? tx("继续下载") : item.installed ? tx("重新安装") : tx("安装")}
+                  {item.installed ? tx("重新安装") : item.downloaded ? tx("继续下载") : tx("安装")}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void invoke("open_external", { url: item.source }).catch((reason) =>
+                      setError(databaseError(reason)),
+                    );
+                  }}
+                >
+                  {tx("手动下载")}
                 </button>
                 <button
                   type="button"

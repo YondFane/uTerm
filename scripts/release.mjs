@@ -101,14 +101,24 @@ export function collect(tag, target, bundle, output) {
   const filename = `uTerm-${version}-${target}${extension}`;
   copyFileSync(source, join(output, filename));
   copyFileSync(`${source}.sig`, join(output, `${filename}.sig`));
+  let installer = { filename, sha256: sha256(source), size: readFileSync(source).length };
   if (target.startsWith("darwin")) {
     const dmgs = files(bundle).filter((path) => path.endsWith(".dmg"));
     if (dmgs.length !== 1) throw new Error("Expected one DMG installer.");
     copyFileSync(dmgs[0], join(output, `uTerm-${version}-${target}.dmg`));
+    installer = {
+      filename: `uTerm-${version}-${target}.dmg`,
+      sha256: sha256(dmgs[0]),
+      size: readFileSync(dmgs[0]).length,
+    };
   }
   writeFileSync(
     join(output, `${target}.json`),
-    JSON.stringify({ version, target, filename, signature, sha256: sha256(source) }, null, 2),
+    JSON.stringify(
+      { version, target, filename, signature, sha256: sha256(source), installer },
+      null,
+      2,
+    ),
   );
 }
 export function manifest(tag, directory, previous, selectedTargets = targets) {
@@ -126,6 +136,7 @@ export function manifest(tag, directory, previous, selectedTargets = targets) {
       throw new Error("The stable feed must advance to a newer version.");
   }
   const platforms = {};
+  const installers = {};
   for (const target of selectedTargets) {
     const entry = JSON.parse(readFileSync(join(directory, `${target}.json`), "utf8"));
     if (
@@ -144,12 +155,24 @@ export function manifest(tag, directory, previous, selectedTargets = targets) {
       url: `${releaseBase()}/${tag}/${entry.filename}`,
       signature: entry.signature,
     };
+    const installer = entry.installer;
+    if (
+      !installer ||
+      basename(installer.filename) !== installer.filename ||
+      !Number.isSafeInteger(installer.size) ||
+      installer.size <= 0 ||
+      readFileSync(join(directory, installer.filename)).length !== installer.size ||
+      sha256(join(directory, installer.filename)) !== installer.sha256
+    )
+      throw new Error(`Installer changed: ${target}`);
+    installers[target] = { ...installer, url: `${releaseBase()}/${tag}/${installer.filename}` };
   }
   return {
     version,
     notes: process.env.DESKTOP_RELEASE_NOTES || releaseNotes(tag),
     pub_date: new Date().toISOString(),
     platforms,
+    installers,
   };
 }
 async function main() {

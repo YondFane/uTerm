@@ -1,4 +1,5 @@
-use serde::Serialize;
+use base64::Engine;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
@@ -103,6 +104,88 @@ pub async fn save_agents(
     .await
     .map_err(|error| error.to_string())?
 }
+const WINDOWS_HOOK_PREFIX: &str =
+    "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ";
+
+fn report_hook_command(command: &str, state: &str, windows: bool) -> String {
+    let script = format!("{command} {state}");
+    if windows {
+        let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        format!(
+            "{WINDOWS_HOOK_PREFIX}{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        )
+    } else {
+        script
+    }
+}
+
+fn decoded_windows_hook(text: &str) -> Option<String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(text.strip_prefix(WINDOWS_HOOK_PREFIX)?)
+        .ok()?;
+    if bytes.len() % 2 != 0 {
+        return None;
+    }
+    String::from_utf16(
+        &bytes
+            .chunks_exact(2)
+            .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+            .collect::<Vec<_>>(),
+    )
+    .ok()
+}
+
+// Release, development and QA builds share Agent settings but use different reporter paths.
+// 正式版、开发版和 QA 构建共用 Agent 设置，但上报程序路径不同。
+fn is_uterm_report_hook(text: &str, command: &str) -> bool {
+    let decoded = decoded_windows_hook(text);
+    let text = decoded.as_deref().unwrap_or(text);
+    let powershell = text.starts_with("& ");
+    let text = text.strip_prefix("& ").unwrap_or(text);
+    let command = command.strip_prefix("& ").unwrap_or(command);
+    let Some((program, state)) = text.rsplit_once(" --agent-report ") else {
+        return false;
+    };
+    if !matches!(state, "idle" | "working" | "waiting" | "done") {
+        return false;
+    }
+    if command.strip_suffix(" --agent-report") == Some(program) {
+        return true;
+    }
+    // Double-quoted expressions may run user commands instead of invoking a literal reporter.
+    // 双引号中的表达式可能执行用户命令，而非调用字面路径的上报程序。
+    let path = if let Some(quoted) = program.strip_prefix('"') {
+        let Some(path) = quoted
+            .strip_suffix('"')
+            .filter(|path| !path.contains(['"', '$', '`']))
+        else {
+            return false;
+        };
+        path
+    } else if let Some(quoted) = program.strip_prefix('\'') {
+        let Some(path) = quoted.strip_suffix('\'').filter(|path| {
+            !path
+                .replace(if powershell { "''" } else { "'\\''" }, "")
+                .contains('\'')
+        }) else {
+            return false;
+        };
+        path
+    } else {
+        if program.contains(|ch: char| ch.is_whitespace() || "\"';&|`$<>()".contains(ch)) {
+            return false;
+        }
+        program
+    };
+    let mut components = path.rsplit(['/', '\\']);
+    components
+        .next()
+        .is_some_and(|name| name.eq_ignore_ascii_case("uterm-report.exe") || name == "uterm-report")
+        && components
+            .next()
+            .is_some_and(|name| name.eq_ignore_ascii_case("integration"))
+}
 fn merge_hooks(
     mut value: Value,
     agent: &str,
@@ -127,7 +210,7 @@ fn merge_hooks(
                     !entry
                         .get("command")
                         .and_then(Value::as_str)
-                        .is_some_and(|text| text.starts_with(command))
+                        .is_some_and(|text| is_uterm_report_hook(text, command))
                 });
             }
         }
@@ -164,7 +247,7 @@ fn merge_hooks(
                 .or_insert_with(|| json!([]))
                 .as_array_mut()
                 .ok_or("Hooks 列表无效。")?;
-            groups.push(json!({"matcher":"*","hooks":[{"type":"command","command":format!("{command} {state}"),"timeout":10}]}));
+            groups.push(json!({"matcher":"*","hooks":[{"type":"command","command":report_hook_command(command, state, cfg!(windows)),"timeout":10}]}));
         }
     }
     Ok(value)
@@ -197,7 +280,9 @@ pub async fn agent_hooks(
         #[cfg(unix)]
         let quoted = format!("'{}'", reporter.to_string_lossy().replace('\'', "'\\''"));
         #[cfg(windows)]
-        let quoted = format!("\"{}\"", reporter.display());
+        // An encoded literal invocation works under both cmd.exe and PowerShell hook runners.
+        // 编码后的字面调用同时适用于 cmd.exe 和 PowerShell 的 Hook 执行环境。
+        let quoted = format!("& '{}'", reporter.to_string_lossy().replace('\'', "''"));
         let command = format!("{quoted} --agent-report");
         let path = agent_home(&agent)?.join(if agent == "codex" {
             "hooks.json"
@@ -247,22 +332,75 @@ pub struct Usage {
     windows: Vec<Value>,
     notice: Option<String>,
 }
+#[derive(Clone, Copy, Default)]
+struct TokenCounts {
+    input: u64,
+    output: u64,
+    cache_read: u64,
+    cache_write: u64,
+}
+
+impl TokenCounts {
+    fn from_value(value: &Value, codex: bool) -> Self {
+        let count = |key: &str| value[key].as_u64().unwrap_or(0);
+        let cache = if codex {
+            count("cached_input_tokens")
+        } else {
+            count("cache_read_input_tokens")
+        };
+        Self {
+            input: if codex {
+                count("input_tokens").saturating_sub(cache)
+            } else {
+                count("input_tokens")
+            },
+            output: count("output_tokens"),
+            cache_read: cache,
+            cache_write: count("cache_creation_input_tokens"),
+        }
+    }
+    fn tally(&self, usage: &mut Usage) {
+        usage.input += self.input;
+        usage.output += self.output;
+        usage.cache_read += self.cache_read;
+        usage.cache_write += self.cache_write;
+        usage.records += 1;
+    }
+}
+
 fn tally(value: &Value, codex: bool, usage: &mut Usage) {
-    let count = |key: &str| value[key].as_u64().unwrap_or(0);
-    let cache = if codex {
-        count("cached_input_tokens")
-    } else {
-        count("cache_read_input_tokens")
-    };
-    usage.input += if codex {
-        count("input_tokens").saturating_sub(cache)
-    } else {
-        count("input_tokens")
-    };
-    usage.output += count("output_tokens");
-    usage.cache_read += cache;
-    usage.cache_write += count("cache_creation_input_tokens");
-    usage.records += 1;
+    TokenCounts::from_value(value, codex).tally(usage);
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ClaudeMessage {
+    id: Value,
+    usage: Value,
+}
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ClaudeUsageLine {
+    timestamp: Value,
+    #[serde(rename = "requestId")]
+    request_id: Value,
+    message: ClaudeMessage,
+}
+fn claude_usage_line(line: &str) -> Option<ClaudeUsageLine> {
+    if let Ok(record) = serde_json::from_str(line) {
+        return Some(record);
+    }
+    // Preserve the previous last-key-wins behavior for duplicate fields and unusual records.
+    // 对重复字段和非常规记录保留原有的最后字段生效行为。
+    let value: Value = serde_json::from_str(line).ok()?;
+    Some(ClaudeUsageLine {
+        timestamp: value["timestamp"].clone(),
+        request_id: value["requestId"].clone(),
+        message: ClaudeMessage {
+            id: value["message"]["id"].clone(),
+            usage: value["message"]["usage"].clone(),
+        },
+    })
 }
 fn scan_usage(agent: &str, root: &Path) -> Result<Usage, String> {
     let mut usage = Usage::default();
@@ -328,22 +466,59 @@ fn scan_usage(agent: &str, root: &Path) -> Result<Usage, String> {
         let offset = metadata.len().saturating_sub(length);
         file.seek(SeekFrom::Start(offset))
             .map_err(|error| error.to_string())?;
-        let mut reader = BufReader::new(file.take(length));
+        let mut reader = BufReader::with_capacity(64 * 1024, file.take(length));
         if offset > 0 {
-            let mut first = String::new();
+            // A tail offset can split a UTF-8 character; discard bytes before decoding records.
+            // 尾部读取起点可能截断 UTF-8 字符，解码记录前先按字节丢弃不完整的前缀。
             reader
-                .read_line(&mut first)
+                .skip_until(b'\n')
                 .map_err(|error| error.to_string())?;
             usage.partial = true;
         }
         let mut seen = HashSet::new();
-        for line in reader.lines() {
+        let mut line_bytes = Vec::new();
+        loop {
             if started.elapsed() > Duration::from_secs(5) {
                 usage.partial = true;
                 break;
             }
-            let line = line.map_err(|error| error.to_string())?;
-            let Ok(value) = serde_json::from_str::<Value>(&line) else {
+            line_bytes.clear();
+            if reader
+                .read_until(b'\n', &mut line_bytes)
+                .map_err(|error| error.to_string())?
+                == 0
+            {
+                break;
+            }
+            let Ok(line) = std::str::from_utf8(&line_bytes) else {
+                usage.partial = true;
+                continue;
+            };
+            if agent == "claude" {
+                // Ignore conversation content and retain only fixed-size counters for deduplication.
+                // 忽略对话正文，去重时仅保留固定大小的计数。
+                let Some(record) = claude_usage_line(line) else {
+                    continue;
+                };
+                if !record
+                    .timestamp
+                    .as_str()
+                    .and_then(|value| chrono::DateTime::parse_from_rfc3339(value).ok())
+                    .is_some_and(|time| time >= cutoff)
+                {
+                    continue;
+                }
+                if let Some(id) = record.message.id.as_str().or(record.request_id.as_str()) {
+                    if record.message.usage.is_object() {
+                        claude.insert(
+                            id.to_owned(),
+                            TokenCounts::from_value(&record.message.usage, false),
+                        );
+                    }
+                }
+                continue;
+            }
+            let Ok(value) = serde_json::from_str::<Value>(line) else {
                 continue;
             };
             if matches!(agent, "kimi" | "grok") {
@@ -399,20 +574,11 @@ fn scan_usage(agent: &str, root: &Path) -> Result<Usage, String> {
                 if info["last_token_usage"].is_object() {
                     tally(&info["last_token_usage"], true, &mut usage);
                 }
-            } else if agent == "claude" {
-                if let (Some(id), Some(tokens)) = (
-                    value["message"]["id"]
-                        .as_str()
-                        .or(value["requestId"].as_str()),
-                    value["message"]["usage"].as_object(),
-                ) {
-                    claude.insert(id.to_owned(), Value::Object(tokens.clone()));
-                }
             }
         }
     }
     for tokens in claude.values() {
-        tally(tokens, false, &mut usage);
+        tokens.tally(&mut usage);
     }
     Ok(usage)
 }
@@ -646,6 +812,30 @@ pub async fn agent_usage(
 #[cfg(test)]
 mod tests {
     #[test]
+    #[ignore = "synthetic resource benchmark / 合成资源基准"]
+    fn usage_resource_profile() {
+        let root = tempfile::tempdir().unwrap();
+        let timestamp = chrono::Utc::now().to_rfc3339();
+        let body = "x".repeat(2048);
+        for file in 0..2 {
+            let mut output = std::io::BufWriter::new(
+                std::fs::File::create(root.path().join(format!("{file}.jsonl"))).unwrap(),
+            );
+            use std::io::Write;
+            for row in 0..3000 {
+                writeln!(output, "{}", json!({"timestamp":timestamp,"message":{"id":format!("{file}-{row}"),"content":[{"type":"text","text":body}],"usage":{"input_tokens":123,"output_tokens":17,"cache_read_input_tokens":3,"cache_creation_input_tokens":2}}})).unwrap();
+            }
+        }
+        let started = Instant::now();
+        for _ in 0..5 {
+            let usage = scan_usage("claude", root.path()).unwrap();
+            assert!(!usage.partial);
+            assert_eq!(usage.records, 6000);
+            assert_eq!(usage.input, 738000);
+        }
+        println!("usage_profile_ms={}", started.elapsed().as_millis());
+    }
+    #[test]
     fn kimi_and_grok_usage_windows_and_logs() {
         use super::*;
         let kimi = parse_limits("kimi", &json!({"usage":{"limit":"100","remaining":25},"limits":[{"detail":{"limit":20,"used":5}}]})).unwrap();
@@ -718,6 +908,167 @@ mod tests {
         assert!(merge_hooks(json!({"hooks":[]}), "claude", "reporter", true).is_err());
     }
     #[test]
+    fn hooks_replace_reporters_from_other_installations_for_every_agent() {
+        let commands = [
+            r#""C:\Users\测试 用户\AppData\Roaming\sh.uterm.desktop.dev\integration\uterm-report.exe" --agent-report"#,
+            r#""C:/Users/测试 用户/AppData/Roaming/sh.uterm.desktop/integration/UTERM-REPORT.EXE" --agent-report"#,
+            "'/Users/test/Library/Application Support/sh.uterm.desktop.qa/integration/uterm-report' --agent-report",
+            "'/Users/test'\\''s Library/sh.uterm.desktop/integration/uterm-report' --agent-report",
+            "/tmp/sh.uterm.desktop/integration/uterm-report --agent-report",
+        ];
+        for agent in ["claude", "codex", "gemini"] {
+            let mut value = json!({"theme":"dark"});
+            for command in commands {
+                value = merge_hooks(value, agent, command, true).expect("install");
+            }
+            let events = value["hooks"].as_object().expect("events");
+            assert_eq!(events.len(), 6);
+            for groups in events.values() {
+                let groups = groups.as_array().expect("groups");
+                assert_eq!(groups.len(), 1, "{agent}: {groups:?}");
+                let text = groups[0]["hooks"][0]["command"].as_str().expect("command");
+                let decoded = decoded_windows_hook(text);
+                assert!(decoded
+                    .as_deref()
+                    .unwrap_or(text)
+                    .starts_with(commands.last().unwrap()));
+            }
+            assert_eq!(value["theme"], "dark");
+            assert_eq!(
+                merge_hooks(value.clone(), agent, commands.last().unwrap(), true)
+                    .expect("reinstall"),
+                value
+            );
+        }
+    }
+    #[test]
+    fn hooks_clean_existing_duplicates_in_mixed_groups_and_old_events() {
+        let old = r#""C:\old app\integration\uterm-report.exe" --agent-report done"#;
+        let command = r#""C:\current app\integration\uterm-report.exe" --agent-report"#;
+        let user_hook = json!({"type":"command","command":"my-hook","timeout":42});
+        let user_group = json!({"matcher":"custom","timeout":99,"hooks":[user_hook]});
+        let mut original = json!({"theme":"dark","hooks":{
+            "Stop":[user_group, {"hooks":[{"type":"command","command":old}]}],
+            "LegacyEvent":[{"hooks":[{"type":"command","command":old}]}]
+        }});
+        original["hooks"]["Stop"][0]["hooks"]
+            .as_array_mut()
+            .unwrap()
+            .extend(vec![json!({"type":"command","command":old}); 2]);
+        let enabled = merge_hooks(original.clone(), "codex", command, true).expect("install");
+        assert_eq!(enabled["hooks"]["Stop"][0], user_group);
+        assert_eq!(enabled["hooks"]["Stop"].as_array().unwrap().len(), 2);
+        assert!(enabled["hooks"]["LegacyEvent"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        let removed = merge_hooks(original, "codex", command, false).expect("remove old hooks");
+        assert_eq!(removed["hooks"]["Stop"], json!([user_group]));
+        assert_eq!(removed["theme"], "dark");
+        let removed = merge_hooks(enabled, "codex", command, false).expect("remove current hooks");
+        assert_eq!(removed["hooks"]["Stop"], json!([user_group]));
+        assert_eq!(
+            merge_hooks(removed.clone(), "codex", command, false).expect("remove twice"),
+            removed
+        );
+    }
+    #[test]
+    fn hooks_preserve_unrelated_commands_with_similar_reporter_text() {
+        let command = r#""C:\app\integration\uterm-report.exe" --agent-report"#;
+        let commands = [
+            format!("{command}-extra done"),
+            r#""C:\app\integration\uterm-report.exe.backup" --agent-report done"#.into(),
+            r#""C:\app\custom\uterm-report.exe" --agent-report done"#.into(),
+            format!("echo {command} done"),
+            format!("my-hook && {command} done"),
+            format!("{command}er done"),
+            format!("{command} done && my-hook"),
+            r#""C:\app\integration\other-report.exe" --agent-report done"#.into(),
+            "'/tmp/app/integration/uterm-report' --agent-report done && my-hook".into(),
+            r#""/tmp/$(my-hook)/integration/uterm-report" --agent-report done"#.into(),
+            r#""/tmp/`my-hook`/integration/uterm-report" --agent-report done"#.into(),
+            report_hook_command(
+                r#"& "C:\$env:QA\integration\uterm-report.exe" --agent-report"#,
+                "done",
+                true,
+            ),
+        ];
+        let original = json!({"hooks":{"Stop":[{"hooks":commands.iter()
+            .map(|command| json!({"type":"command","command":command}))
+            .collect::<Vec<_>>()}]}});
+        assert_eq!(
+            merge_hooks(original.clone(), "codex", command, false).expect("remove"),
+            original
+        );
+    }
+    #[test]
+    fn windows_hooks_replace_encoded_and_legacy_reporters_without_touching_other_commands() {
+        let old =
+            "& 'C:\\旧路径 '' $env:USERPROFILE\\integration\\uterm-report.exe' --agent-report";
+        let current = "& 'C:\\当前路径\\integration\\uterm-report.exe' --agent-report";
+        let encoded = report_hook_command(old, "done", true);
+        assert_eq!(
+            decoded_windows_hook(&encoded).as_deref(),
+            Some(format!("{old} done").as_str())
+        );
+        assert!(is_uterm_report_hook(&encoded, current));
+        assert!(!is_uterm_report_hook(
+            &format!("{encoded} unexpected"),
+            current
+        ));
+        let unrelated = report_hook_command("Write-Output", "done", true);
+        let value = json!({"hooks":{"Stop":[{"hooks":[
+            {"type":"command","command":encoded},
+            {"type":"command","command":unrelated}
+        ]}]}});
+        let removed = merge_hooks(value, "codex", current, false).unwrap();
+        assert_eq!(
+            removed["hooks"]["Stop"][0]["hooks"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            removed["hooks"]["Stop"][0]["hooks"][0]["command"],
+            unrelated
+        );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn windows_hook_commands_execute_literal_paths_in_powershell_and_cmd() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("测试 ' $(throw 1) ` &");
+        std::fs::create_dir(&directory).unwrap();
+        let reporter = directory.join("reporter.cmd");
+        std::fs::write(&reporter, "@echo off\r\nif not \"%~1\"==\"--agent-report\" exit /b 9\r\nif not \"%~2\"==\"done\" exit /b 8\r\necho {}\r\n").unwrap();
+        let command = format!(
+            "& '{}' --agent-report",
+            reporter.to_string_lossy().replace('\'', "''")
+        );
+        let command = report_hook_command(&command, "done", true);
+        for (shell, arguments) in [
+            (
+                "powershell.exe",
+                vec!["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"],
+            ),
+            ("cmd.exe", vec!["/d", "/s", "/c"]),
+        ] {
+            let output = std::process::Command::new(shell)
+                .args(arguments)
+                .arg(&command)
+                .stdin(std::process::Stdio::null())
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{shell}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "{}");
+        }
+    }
+    #[test]
     fn token_tallies_do_not_count_cached_input_twice() {
         let mut usage = Usage::default();
         tally(
@@ -726,6 +1077,80 @@ mod tests {
             &mut usage,
         );
         assert_eq!((usage.input, usage.cache_read, usage.output), (20, 80, 12));
+    }
+    #[test]
+    fn claude_usage_keeps_fallback_ids_duplicate_keys_and_counter_types() {
+        let root = tempfile::tempdir().unwrap();
+        let now = chrono::Utc::now().to_rfc3339();
+        let first = json!({"timestamp":now,"requestId":"fallback","message":{"id":null,"content":[{"text":"ignored".repeat(1000)}],"usage":{"input_tokens":5,"output_tokens":"invalid"}}});
+        let duplicate = format!(
+            r#"{{"timestamp":"{now}","message":{{"id":"duplicate","id":"fallback","usage":{{"input_tokens":8,"output_tokens":2}}}}}}"#
+        );
+        std::fs::write(
+            root.path().join("usage.jsonl"),
+            format!("{first}\r\nnot JSON\n{duplicate}\n{{\"message\":null}}\n"),
+        )
+        .unwrap();
+        let usage = scan_usage("claude", root.path()).unwrap();
+        assert_eq!((usage.records, usage.input, usage.output), (1, 8, 2));
+    }
+    #[test]
+    fn usage_tail_can_start_inside_a_valid_utf8_character() {
+        let root = tempfile::tempdir().unwrap();
+        let now = chrono::Utc::now().to_rfc3339();
+        let record = format!(
+            "{}\n",
+            json!({"timestamp":now,"payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":100},"last_token_usage":{"input_tokens":10,"cached_input_tokens":8,"output_tokens":3}}}})
+        );
+        let prefix = b"{\"content\":\"";
+        let offset = prefix.len() + 1;
+        let mut bytes = prefix.to_vec();
+        bytes.extend_from_slice("中".as_bytes());
+        bytes.resize(8 * 1024 * 1024 + offset - record.len() - 3, b'x');
+        bytes.extend_from_slice(b"\"}\n");
+        bytes.extend_from_slice(record.as_bytes());
+        assert!(std::str::from_utf8(&bytes).is_ok());
+        assert!(std::str::from_utf8(&bytes[offset..]).is_err());
+        std::fs::write(root.path().join("usage.jsonl"), bytes).unwrap();
+        let usage = scan_usage("codex", root.path()).unwrap();
+        assert!(usage.partial);
+        assert_eq!(
+            (usage.records, usage.input, usage.output, usage.cache_read),
+            (1, 2, 3, 8)
+        );
+    }
+    #[test]
+    fn usage_skips_invalid_utf8_records_and_incomplete_characters_for_each_agent() {
+        for agent in ["codex", "claude", "kimi", "grok"] {
+            let root = tempfile::tempdir().unwrap();
+            let now = chrono::Utc::now();
+            let record = |id: u64| match agent {
+                "codex" => {
+                    json!({"timestamp":now.to_rfc3339(),"payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":id},"last_token_usage":{"input_tokens":10,"cached_input_tokens":8,"output_tokens":3}}}})
+                }
+                "claude" => {
+                    json!({"timestamp":now.to_rfc3339(),"message":{"id":id.to_string(),"usage":{"input_tokens":2,"cache_read_input_tokens":8,"output_tokens":3}}})
+                }
+                "kimi" => {
+                    json!({"time":now.timestamp_millis(),"type":"usage.record","usage":{"inputOther":2,"inputCacheRead":8,"output":3}})
+                }
+                _ => {
+                    json!({"timestamp":now.timestamp(),"params":{"update":{"sessionUpdate":"turn_completed","prompt_id":id.to_string(),"usage":{"inputTokens":10,"cachedReadTokens":8,"outputTokens":3}}}})
+                }
+            };
+            let mut bytes = format!("{}\r\n", record(1)).into_bytes();
+            bytes.extend_from_slice(b"{\"content\":\"\xff\"}\n");
+            bytes.extend_from_slice(format!("{}\n", record(2)).as_bytes());
+            bytes.extend_from_slice(b"{\"content\":\"\xf0\x9f");
+            std::fs::write(root.path().join("usage.jsonl"), bytes).unwrap();
+            let usage = scan_usage(agent, root.path()).unwrap();
+            assert!(usage.partial, "{agent}");
+            assert_eq!(
+                (usage.records, usage.input, usage.output, usage.cache_read),
+                (2, 4, 6, 16),
+                "{agent}"
+            );
+        }
     }
     #[test]
     fn usage_logs_deduplicate_updates_and_exclude_old_records() {

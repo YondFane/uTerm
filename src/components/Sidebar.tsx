@@ -402,18 +402,6 @@ export function Sidebar({
     setConnectionMenu(null);
     menu({ kind, id, project, x: event.clientX, y: event.clientY });
   };
-  function moreButton(kind: SidebarMenu["kind"], id: string, project: string, name: string) {
-    return (
-      <button
-        className="icon-button"
-        aria-label={tx("{p0}的操作", { p0: name })}
-        title={tx("更多操作")}
-        onClick={(event) => openMenu(event, kind, id, project)}
-      >
-        <SidebarIcon name="more" />
-      </button>
-    );
-  }
   function quickActions(project: Project, worktree?: Worktree) {
     return (
       <div className="row-actions">
@@ -449,12 +437,6 @@ export function Sidebar({
             <SessionIcon agent={agent} />
           </button>
         ))}
-        {moreButton(
-          worktree ? "worktree" : "project",
-          worktree?.id ?? project.id,
-          project.id,
-          worktree?.name ?? project.name,
-        )}
       </div>
     );
   }
@@ -1411,10 +1393,22 @@ export function Sidebar({
                 <SidebarIcon name="folder" />
                 {tx("添加项目…")}
               </button>
-              {addSsh && (
+              {addSsh && settings.showSshConnections && (
                 <button role="menuitem" onClick={() => act(addSsh)}>
                   <SessionIcon />
                   {tx("添加 SSH 连接")}
+                </button>
+              )}
+              {addRedis && settings.showRedisConnections && (
+                <button role="menuitem" onClick={() => act(addRedis)}>
+                  <SidebarIcon name="database" />
+                  {tx("添加 Redis 连接")}
+                </button>
+              )}
+              {addDatabase && settings.showDatabaseConnections && (
+                <button role="menuitem" onClick={() => act(addDatabase)}>
+                  <SidebarIcon name="sqlDatabase" />
+                  {tx("添加数据库连接")}
                 </button>
               )}
               <button role="menuitem" onClick={() => act(() => addLoose("terminals"))}>

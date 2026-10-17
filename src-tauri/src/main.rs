@@ -7,6 +7,7 @@ mod agents;
 mod control;
 mod database;
 mod database_components;
+mod downloads;
 mod files;
 mod git;
 mod github;
@@ -394,6 +395,7 @@ fn main() {
             control::control_status,
             control::control_configure,
             control::control_poll,
+            control::control_wait,
             control::control_reply,
             control::control_focus,
             control::control_install,

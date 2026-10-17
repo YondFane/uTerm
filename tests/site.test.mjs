@@ -35,8 +35,9 @@ test("website assets and anchors resolve under the GitHub Pages project prefix",
   const dom = new JSDOM(source, { url: "https://yondfane.github.io/uTerm/" });
   const ids = [...dom.window.document.querySelectorAll("[id]")].map((node) => node.id);
   assert.equal(new Set(ids).size, ids.length, "IDs must be unique, including SVG symbols");
-  for (const element of dom.window.document.querySelectorAll("[href], [src]")) {
-    const value = element.getAttribute("href") ?? element.getAttribute("src");
+  for (const element of dom.window.document.querySelectorAll("[href], [src], [poster]")) {
+    const value =
+      element.getAttribute("href") ?? element.getAttribute("src") ?? element.getAttribute("poster");
     if (value.startsWith("#")) {
       if (value !== "#") assert.ok(ids.includes(value.slice(1)), value);
     } else if (!value.startsWith("https://")) {
@@ -53,7 +54,7 @@ test("website language switching translates copy, metadata and labels with stora
   assert.equal(document.documentElement.lang, "zh-CN");
   document.querySelector("#language-toggle").click();
   assert.equal(document.documentElement.lang, "en");
-  assert.match(document.title, /Make room/);
+  assert.match(document.title, /terminal workspace for coding agents/);
   for (const element of document.querySelectorAll("[data-i18n], [data-i18n-aria]")) {
     const value = element.hasAttribute("data-i18n")
       ? element.textContent
@@ -62,10 +63,10 @@ test("website language switching translates copy, metadata and labels with stora
     assert.doesNotMatch(value, /[\u4e00-\u9fff]/, element.outerHTML);
   }
   assert.match(document.querySelector("[data-guide-link]").href, /features\.md$/);
-  assert.match(document.querySelector('meta[property="og:title"]').content, /Make room/);
+  assert.match(document.querySelector('meta[property="og:title"]').content, /terminal workspace/);
   assert.equal(new URL(window.location.href).searchParams.get("lang"), "en");
   document.querySelector("#language-toggle").click();
-  assert.match(document.querySelector("h1").textContent, /回到专注/);
+  assert.match(document.querySelector("h1").textContent, /按项目展开/);
   assert.match(document.querySelector("[data-guide-link]").href, /features\.zh-CN\.md$/);
 });
 

@@ -5220,7 +5220,7 @@ dependencies = [
 
 [[package]]
 name = "uterm"
-version = "0.1.22"
+version = "0.1.26"
 dependencies = [
  "anyhow",
  "base64 0.22.1",
@@ -5228,11 +5228,13 @@ dependencies = [
  "flate2",
  "glob",
  "ignore",
+ "minisign-verify",
  "redis",
  "reqwest 0.12.28",
  "russh-sftp",
  "rustls-native-certs",
  "security-framework",
+ "semver",
  "serde",
  "serde_json",
  "sha2",

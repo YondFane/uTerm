@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>uTerm screenshot tour</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        height: 100vh;
+        padding: 20px 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        background: #0d1117;
+        color: #f0f3f6;
+        font:
+          16px/1.5 "Segoe UI",
+          sans-serif;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 26px;
+        font-weight: 650;
+      }
+      .brand img {
+        width: 32px;
+        height: 32px;
+      }
+      .badge {
+        font:
+          12px/1.4 Consolas,
+          monospace;
+        color: #b7c4d3;
+        letter-spacing: 0.06em;
+      }
+      .viewport {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .capture {
+        position: relative;
+        width: min(100%, calc((100vh - 220px) * 1.708));
+        height: auto;
+        aspect-ratio: 1283 / 751;
+        border-radius: 8px;
+        box-shadow: 0 16px 50px #0007;
+      }
+      .capture > img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        border-radius: 8px;
+      }
+      .highlight {
+        position: absolute;
+        border: 3px solid #8fbfff;
+        border-radius: 6px;
+        box-shadow:
+          0 0 0 9999px #0004,
+          0 0 24px #509bff44;
+        pointer-events: none;
+      }
+      .capture {
+        overflow: hidden;
+      }
+      footer {
+        min-height: 106px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        column-gap: 24px;
+        align-items: center;
+      }
+      h1 {
+        font-size: 24px;
+        line-height: 1.25;
+        margin: 0 0 6px;
+      }
+      p {
+        color: #b7c4d3;
+        font-size: 16px;
+        margin: 0;
+        max-width: 920px;
+      }
+      nav {
+        display: flex;
+        gap: 6px;
+      }
+      button {
+        width: 32px;
+        height: 32px;
+        color: #b7c4d3;
+        border: 1px solid #4a5666;
+        border-radius: 50%;
+        background: transparent;
+        cursor: pointer;
+      }
+      button[aria-pressed="true"] {
+        color: #0d1117;
+        background: #8fbfff;
+        border-color: #8fbfff;
+      }
+      .note {
+        color: #748398;
+        font-size: 11px;
+        margin-top: 5px;
+      }
+      @media (max-width: 700px) {
+        body {
+          padding: 12px;
+        }
+        h1 {
+          font-size: 18px;
+        }
+        p {
+          font-size: 13px;
+        }
+        footer {
+          grid-template-columns: 1fr;
+          gap: 8px;
+        }
+        .badge {
+          max-width: 150px;
+          text-align: right;
+          font-size: 10px;
+        }
+        .capture {
+          width: min(100%, calc((100vh - 260px) * 1.708));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand"><img src="../icon.svg" alt="" />uTerm</div>
+      <div class="badge">WINDOWS APP · SAMPLE PROJECT<br />ANNOTATED SCREENSHOT TOUR</div>
+    </header>
+    <div class="viewport">
+      <div class="capture">
+        <img
+          src="./workspace.png"
+          alt="Actual uTerm Windows app with a disposable sample project"
+        />
+        <div class="highlight"></div>
+      </div>
+    </div>
+    <footer>
+      <div>
+        <h1></h1>
+        <p></p>
+        <div class="note">
+          Real local shell output · No model requests or remote connections · English interface
+          shown
+        </div>
+      </div>
+      <nav aria-label="Tour steps"></nav>
+    </footer>
+    <script>
+      const language = new URL(location.href).searchParams.get("lang") === "zh-CN" ? "zh-CN" : "en";
+      document.documentElement.lang = language;
+      const steps =
+        language === "en"
+          ? [
+              [
+                "01 · Keep a project in view",
+                "Terminals and Git Worktrees stay under their project in the sidebar.",
+                [1, 11, 18, 29],
+              ],
+              [
+                "02 · Keep local sessions together",
+                "The sample API and its real local tests run in grouped terminal panes.",
+                [19.4, 11.3, 52.2, 87],
+              ],
+              [
+                "03 · Find each Worktree",
+                "Each Worktree has its own directory, branch and sessions.",
+                [1, 29, 18, 10],
+              ],
+              [
+                "04 · Review project changes",
+                "The Git panel stays beside the running sessions, showing the sample file change.",
+                [72, 11, 27, 85],
+              ],
+              [
+                "05 · Return to your sessions",
+                "Quitting detaches the window. Reopen to reconnect; Close Session ends a process.",
+                [19.4, 11.3, 52.2, 87],
+              ],
+            ]
+          : [
+              ["01 · 保留项目上下文", "终端和 Git Worktree 都在所属项目下展开。", [1, 11, 18, 29]],
+              [
+                "02 · 集中管理本地会话",
+                "演示 API 与真实本地测试在分组终端中运行。",
+                [19.4, 11.3, 52.2, 87],
+              ],
+              [
+                "03 · 找到各个 Worktree",
+                "每个 Worktree 有各自的目录、分支与会话。",
+                [1, 29, 18, 10],
+              ],
+              [
+                "04 · 查看项目修改",
+                "Git 面板与运行中的会话并排显示，当前列出示例文件修改。",
+                [72, 11, 27, 85],
+              ],
+              [
+                "05 · 继续原有会话",
+                "退出应用只分离窗口，重开后可重新连接；关闭会话才终止进程。",
+                [19.4, 11.3, 52.2, 87],
+              ],
+            ];
+      if (language === "zh-CN") {
+        document.title = "uTerm 截图导览";
+        document.querySelector(".badge").textContent = "Windows 应用 · 演示项目 · 标注截图导览";
+        document.querySelector(".note").textContent =
+          "真实本地 Shell 输出 · 不请求模型或远程服务 · 截图界面为英文";
+        document.querySelector(".capture > img").alt = "真实 uTerm Windows 应用中的临时演示项目";
+        document.querySelector("nav").setAttribute("aria-label", "导览步骤");
+      }
+      const navigation = document.querySelector("nav");
+      steps.forEach((step, index) => {
+        const button = document.createElement("button");
+        button.textContent = String(index + 1);
+        button.setAttribute("aria-label", step[0]);
+        button.addEventListener("click", () => show(index));
+        navigation.append(button);
+      });
+      function show(index) {
+        const [title, text, box] = steps[index];
+        document.querySelector("h1").textContent = title;
+        document.querySelector("footer p").textContent = text;
+        document.querySelector(".highlight").style.cssText =
+          `left:${box[0]}%;top:${box[1]}%;width:${box[2]}%;height:${box[3]}%`;
+        [...navigation.children].forEach((button, item) =>
+          button.setAttribute("aria-pressed", String(item === index)),
+        );
+      }
+      show(0);
+    </script>
+  </body>
+</html>

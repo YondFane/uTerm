@@ -49,7 +49,7 @@ import { isDirty } from "./lib/file-document";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { agentNames, SidebarIcon, ToolbarIcon } from "./components/SidebarIcon";
-import { sendNotification, isPermissionGranted } from "@tauri-apps/plugin-notification";
+import { isPermissionGranted } from "@tauri-apps/plugin-notification";
 import { AgentPanel, notificationKey } from "./components/AgentPanel";
 import { GitHubPanel } from "./components/GitHubPanel";
 import { DirectoryPanel } from "./components/DirectoryPanel";
@@ -358,6 +358,11 @@ export function App() {
   );
   const [detectedAgents, setDetectedAgents] = useState<Record<string, string>>({});
   const agentStateValues = useRef<Record<string, string>>({});
+  const pendingAgentNotifications = useRef(new Map<string, symbol>());
+  useEffect(() => {
+    const pending = pendingAgentNotifications.current;
+    return () => pending.clear();
+  }, []);
   const [repositoryRevision, setRepositoryRevision] = useState(0);
   const lastInspector = useRef<"files" | "git" | "github" | "directory">("files");
   const [directoryOpen, setDirectoryOpen] = useState(false);
@@ -1391,6 +1396,12 @@ export function App() {
     let timer: ReturnType<typeof setTimeout>;
     async function poll() {
       try {
+        const ready = await invoke<boolean>("control_wait");
+        if (disposed) return;
+        if (!ready) {
+          timer = setTimeout(() => void poll(), 250);
+          return;
+        }
         const request = await invoke<{
           id: string;
           method: string;
@@ -2404,6 +2415,44 @@ export function App() {
                         </kbd>
                       </button>
                     )}
+                    <div className="welcome-connections">
+                      {settings.showSshConnections && (
+                        <button
+                          className="welcome-action"
+                          disabled={!runtime || !workspace}
+                          onClick={() => setSshDialog({})}
+                        >
+                          <SidebarIcon name="terminal" />
+                          <span>
+                            <strong>{tx("添加 SSH 连接")}</strong>
+                          </span>
+                        </button>
+                      )}
+                      {settings.showRedisConnections && (
+                        <button
+                          className="welcome-action"
+                          disabled={!runtime || !workspace}
+                          onClick={() => setRedisDialog({})}
+                        >
+                          <SidebarIcon name="database" />
+                          <span>
+                            <strong>{tx("添加 Redis 连接")}</strong>
+                          </span>
+                        </button>
+                      )}
+                      {settings.showDatabaseConnections && (
+                        <button
+                          className="welcome-action"
+                          disabled={!runtime || !workspace}
+                          onClick={() => setDatabaseDialog({})}
+                        >
+                          <SidebarIcon name="sqlDatabase" />
+                          <span>
+                            <strong>{tx("添加数据库连接")}</strong>
+                          </span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="welcome-footer">
                     <span>{t("本地运行 · 自由掌控")}</span>
@@ -2443,6 +2492,7 @@ export function App() {
                 update={update}
                 onAgentState={(id, state, initial) => {
                   if (agentStateValues.current[id] === state) return;
+                  pendingAgentNotifications.current.delete(id);
                   agentStateValues.current = { ...agentStateValues.current, [id]: state };
                   setAgentStates(agentStateValues.current);
                   const selectedSession = currentWorkspace.current?.selectedSession;
@@ -2462,23 +2512,46 @@ export function App() {
                     !runtime.debug &&
                     ["waiting", "done"].includes(state) &&
                     localStorage.getItem(notificationKey) === "true" &&
-                    (!document.hasFocus() || workspace.selectedSession !== id)
+                    (!document.hasFocus() || selectedSession !== id)
                   ) {
-                    const name =
-                      sessionEntries(workspace).find((entry) => entry.session.id === id)?.session
-                        .name ?? "Agent";
+                    const request = Symbol();
+                    pendingAgentNotifications.current.set(id, request);
                     void isPermissionGranted()
-                      .then((granted) => {
-                        if (granted)
-                          sendNotification({
-                            title: name,
+                      .then(async (granted) => {
+                        const current = currentWorkspace.current;
+                        // Permission checks can finish after the session or notification preference changes.
+                        // 权限检查可能在会话或通知偏好改变后才完成。
+                        if (
+                          !granted ||
+                          pendingAgentNotifications.current.get(id) !== request ||
+                          localStorage.getItem(notificationKey) !== "true" ||
+                          !current ||
+                          (document.hasFocus() && current.selectedSession === id)
+                        )
+                          return;
+                        const session = sessionEntries(current).find(
+                          (entry) => entry.session.id === id,
+                        )?.session;
+                        if (!session) return;
+                        await invoke("plugin:notification|notify", {
+                          options: {
+                            title: session.name,
                             body: state === "waiting" ? tx("需要你处理") : tx("任务已完成"),
-                          });
+                          },
+                        });
                       })
-                      .catch((reason) => setError(String(reason)));
+                      .catch((reason) => {
+                        if (pendingAgentNotifications.current.get(id) === request)
+                          setError(String(reason));
+                      })
+                      .finally(() => {
+                        if (pendingAgentNotifications.current.get(id) === request)
+                          pendingAgentNotifications.current.delete(id);
+                      });
                   }
                 }}
                 onClosed={(id) => {
+                  pendingAgentNotifications.current.delete(id);
                   delete agentStateValues.current[id];
                   setAgentStates({ ...agentStateValues.current });
                   setUnreadCompletedSessions((previous) => {
