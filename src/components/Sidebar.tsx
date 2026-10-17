@@ -402,18 +402,6 @@ export function Sidebar({
     setConnectionMenu(null);
     menu({ kind, id, project, x: event.clientX, y: event.clientY });
   };
-  function moreButton(kind: SidebarMenu["kind"], id: string, project: string, name: string) {
-    return (
-      <button
-        className="icon-button"
-        aria-label={tx("{p0}的操作", { p0: name })}
-        title={tx("更多操作")}
-        onClick={(event) => openMenu(event, kind, id, project)}
-      >
-        <SidebarIcon name="more" />
-      </button>
-    );
-  }
   function quickActions(project: Project, worktree?: Worktree) {
     return (
       <div className="row-actions">
@@ -449,12 +437,6 @@ export function Sidebar({
             <SessionIcon agent={agent} />
           </button>
         ))}
-        {moreButton(
-          worktree ? "worktree" : "project",
-          worktree?.id ?? project.id,
-          project.id,
-          worktree?.name ?? project.name,
-        )}
       </div>
     );
   }

@@ -3,7 +3,7 @@ import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
 import type { ReactNode } from "react";
 import { ToolbarIcon } from "./SidebarIcon";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { fileInvoke, isRemoteDirectory, displayDirectory } from "../lib/file-target";
 import { invoke } from "@tauri-apps/api/core";
 import { clipboardPath } from "../lib/file-document";
@@ -271,6 +271,13 @@ export function FilePanel({
     setName(operation === "rename" ? entry.name : "");
     setError("");
   };
+  useLayoutEffect(() => {
+    const popup = menuElement.current;
+    if (!menu || !popup) return;
+    const bounds = popup.getBoundingClientRect();
+    popup.style.left = `${Math.max(8, Math.min(menu.x, window.innerWidth - bounds.width - 8))}px`;
+    popup.style.top = `${Math.max(8, Math.min(menu.y, window.innerHeight - bounds.height - 8))}px`;
+  });
   useEffect(() => {
     if (!menu) return;
     menuElement.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
@@ -629,8 +636,10 @@ export function FilePanel({
           role="menu"
           aria-label={tx("文件操作")}
           style={{
-            left: Math.max(0, Math.min(menu.x, window.innerWidth - 220)),
-            top: Math.max(0, Math.min(menu.y, window.innerHeight - 390)),
+            left: menu.x,
+            top: menu.y,
+            maxWidth: "calc(100vw - 16px)",
+            maxHeight: "calc(100vh - 16px)",
           }}
           onKeyDown={(event) => {
             const buttons = Array.from(

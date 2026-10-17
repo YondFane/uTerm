@@ -284,7 +284,7 @@ test("real settings tabs, commands and panels render in both languages without u
       });
     });
     await context.test(
-      "built-in agents render distinct project-drawn symbols and preserve safe fallback",
+      "built-in agents render distinct bundled brand icons and preserve safe fallback",
       () => {
         const marks = ["kimi", "opencode", "grok"].map((agent) => {
           const markup = renderToStaticMarkup(React.createElement(SessionIcon, { agent }));

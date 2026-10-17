@@ -58,3 +58,43 @@ License 1.0.0。非商业用途及协议明确允许的其他用途可免费使�
 
 这是附带用途限制的源码可用软件，不属于 OSI 认可的开源软件。公开许可以
 英文 LICENSE 正文为准，中文说明供理解参考。
+
+Third-party brand icons / 第三方品牌图标
+
+The Kimi, OpenCode and Grok SVG paths in src/components/SidebarIcon.tsx
+are adapted from Lobe Icons, commit 8a1b2821bb768c484fe8da20c5e1838b6bf551a9.
+Kimi、OpenCode 和 Grok 的 SVG 路径改编自 Lobe Icons，版本见上述提交。
+Only the Kimi subpaths are combined; the original geometry is retained.
+仅合并 Kimi 的子路径，保留原始几何形状。
+
+Source / 来源：
+https://github.com/lobehub/lobe-icons/tree/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons
+Files / 文件：kimi.svg, opencode.svg, grok.svg
+
+The MIT license below covers the copied icon code. Brand names and marks
+remain the property of their respective owners and identify the integrated
+services; no affiliation or endorsement is implied.
+以下 MIT 许可适用于复制的图标代码；品牌名称及标志仍归各自权利人所有，
+仅用于识别所集成的服务，不表示关联或背书。
+
+MIT License
+
+Copyright (c) 2023 LobeHub
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
