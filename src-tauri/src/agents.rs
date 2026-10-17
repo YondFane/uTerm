@@ -1,3 +1,4 @@
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -103,6 +104,88 @@ pub async fn save_agents(
     .await
     .map_err(|error| error.to_string())?
 }
+const WINDOWS_HOOK_PREFIX: &str =
+    "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ";
+
+fn report_hook_command(command: &str, state: &str, windows: bool) -> String {
+    let script = format!("{command} {state}");
+    if windows {
+        let bytes: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+        format!(
+            "{WINDOWS_HOOK_PREFIX}{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        )
+    } else {
+        script
+    }
+}
+
+fn decoded_windows_hook(text: &str) -> Option<String> {
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(text.strip_prefix(WINDOWS_HOOK_PREFIX)?)
+        .ok()?;
+    if bytes.len() % 2 != 0 {
+        return None;
+    }
+    String::from_utf16(
+        &bytes
+            .chunks_exact(2)
+            .map(|bytes| u16::from_le_bytes([bytes[0], bytes[1]]))
+            .collect::<Vec<_>>(),
+    )
+    .ok()
+}
+
+// Release, development and QA builds share Agent settings but use different reporter paths.
+// 正式版、开发版和 QA 构建共用 Agent 设置，但上报程序路径不同。
+fn is_uterm_report_hook(text: &str, command: &str) -> bool {
+    let decoded = decoded_windows_hook(text);
+    let text = decoded.as_deref().unwrap_or(text);
+    let powershell = text.starts_with("& ");
+    let text = text.strip_prefix("& ").unwrap_or(text);
+    let command = command.strip_prefix("& ").unwrap_or(command);
+    let Some((program, state)) = text.rsplit_once(" --agent-report ") else {
+        return false;
+    };
+    if !matches!(state, "idle" | "working" | "waiting" | "done") {
+        return false;
+    }
+    if command.strip_suffix(" --agent-report") == Some(program) {
+        return true;
+    }
+    // Double-quoted expressions may run user commands instead of invoking a literal reporter.
+    // 双引号中的表达式可能执行用户命令，而非调用字面路径的上报程序。
+    let path = if let Some(quoted) = program.strip_prefix('"') {
+        let Some(path) = quoted
+            .strip_suffix('"')
+            .filter(|path| !path.contains(['"', '$', '`']))
+        else {
+            return false;
+        };
+        path
+    } else if let Some(quoted) = program.strip_prefix('\'') {
+        let Some(path) = quoted.strip_suffix('\'').filter(|path| {
+            !path
+                .replace(if powershell { "''" } else { "'\\''" }, "")
+                .contains('\'')
+        }) else {
+            return false;
+        };
+        path
+    } else {
+        if program.contains(|ch: char| ch.is_whitespace() || "\"';&|`$<>()".contains(ch)) {
+            return false;
+        }
+        program
+    };
+    let mut components = path.rsplit(['/', '\\']);
+    components
+        .next()
+        .is_some_and(|name| name.eq_ignore_ascii_case("uterm-report.exe") || name == "uterm-report")
+        && components
+            .next()
+            .is_some_and(|name| name.eq_ignore_ascii_case("integration"))
+}
 fn merge_hooks(
     mut value: Value,
     agent: &str,
@@ -127,7 +210,7 @@ fn merge_hooks(
                     !entry
                         .get("command")
                         .and_then(Value::as_str)
-                        .is_some_and(|text| text.starts_with(command))
+                        .is_some_and(|text| is_uterm_report_hook(text, command))
                 });
             }
         }
@@ -164,7 +247,7 @@ fn merge_hooks(
                 .or_insert_with(|| json!([]))
                 .as_array_mut()
                 .ok_or("Hooks 列表无效。")?;
-            groups.push(json!({"matcher":"*","hooks":[{"type":"command","command":format!("{command} {state}"),"timeout":10}]}));
+            groups.push(json!({"matcher":"*","hooks":[{"type":"command","command":report_hook_command(command, state, cfg!(windows)),"timeout":10}]}));
         }
     }
     Ok(value)
@@ -197,7 +280,9 @@ pub async fn agent_hooks(
         #[cfg(unix)]
         let quoted = format!("'{}'", reporter.to_string_lossy().replace('\'', "'\\''"));
         #[cfg(windows)]
-        let quoted = format!("\"{}\"", reporter.display());
+        // An encoded literal invocation works under both cmd.exe and PowerShell hook runners.
+        // 编码后的字面调用同时适用于 cmd.exe 和 PowerShell 的 Hook 执行环境。
+        let quoted = format!("& '{}'", reporter.to_string_lossy().replace('\'', "''"));
         let command = format!("{quoted} --agent-report");
         let path = agent_home(&agent)?.join(if agent == "codex" {
             "hooks.json"
@@ -821,6 +906,167 @@ mod tests {
             merge_hooks(enabled, "claude", "'reporter' --agent-report", false).expect("remove");
         assert_eq!(removed["hooks"]["Stop"], original["hooks"]["Stop"]);
         assert!(merge_hooks(json!({"hooks":[]}), "claude", "reporter", true).is_err());
+    }
+    #[test]
+    fn hooks_replace_reporters_from_other_installations_for_every_agent() {
+        let commands = [
+            r#""C:\Users\测试 用户\AppData\Roaming\sh.uterm.desktop.dev\integration\uterm-report.exe" --agent-report"#,
+            r#""C:/Users/测试 用户/AppData/Roaming/sh.uterm.desktop/integration/UTERM-REPORT.EXE" --agent-report"#,
+            "'/Users/test/Library/Application Support/sh.uterm.desktop.qa/integration/uterm-report' --agent-report",
+            "'/Users/test'\\''s Library/sh.uterm.desktop/integration/uterm-report' --agent-report",
+            "/tmp/sh.uterm.desktop/integration/uterm-report --agent-report",
+        ];
+        for agent in ["claude", "codex", "gemini"] {
+            let mut value = json!({"theme":"dark"});
+            for command in commands {
+                value = merge_hooks(value, agent, command, true).expect("install");
+            }
+            let events = value["hooks"].as_object().expect("events");
+            assert_eq!(events.len(), 6);
+            for groups in events.values() {
+                let groups = groups.as_array().expect("groups");
+                assert_eq!(groups.len(), 1, "{agent}: {groups:?}");
+                let text = groups[0]["hooks"][0]["command"].as_str().expect("command");
+                let decoded = decoded_windows_hook(text);
+                assert!(decoded
+                    .as_deref()
+                    .unwrap_or(text)
+                    .starts_with(commands.last().unwrap()));
+            }
+            assert_eq!(value["theme"], "dark");
+            assert_eq!(
+                merge_hooks(value.clone(), agent, commands.last().unwrap(), true)
+                    .expect("reinstall"),
+                value
+            );
+        }
+    }
+    #[test]
+    fn hooks_clean_existing_duplicates_in_mixed_groups_and_old_events() {
+        let old = r#""C:\old app\integration\uterm-report.exe" --agent-report done"#;
+        let command = r#""C:\current app\integration\uterm-report.exe" --agent-report"#;
+        let user_hook = json!({"type":"command","command":"my-hook","timeout":42});
+        let user_group = json!({"matcher":"custom","timeout":99,"hooks":[user_hook]});
+        let mut original = json!({"theme":"dark","hooks":{
+            "Stop":[user_group, {"hooks":[{"type":"command","command":old}]}],
+            "LegacyEvent":[{"hooks":[{"type":"command","command":old}]}]
+        }});
+        original["hooks"]["Stop"][0]["hooks"]
+            .as_array_mut()
+            .unwrap()
+            .extend(vec![json!({"type":"command","command":old}); 2]);
+        let enabled = merge_hooks(original.clone(), "codex", command, true).expect("install");
+        assert_eq!(enabled["hooks"]["Stop"][0], user_group);
+        assert_eq!(enabled["hooks"]["Stop"].as_array().unwrap().len(), 2);
+        assert!(enabled["hooks"]["LegacyEvent"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+        let removed = merge_hooks(original, "codex", command, false).expect("remove old hooks");
+        assert_eq!(removed["hooks"]["Stop"], json!([user_group]));
+        assert_eq!(removed["theme"], "dark");
+        let removed = merge_hooks(enabled, "codex", command, false).expect("remove current hooks");
+        assert_eq!(removed["hooks"]["Stop"], json!([user_group]));
+        assert_eq!(
+            merge_hooks(removed.clone(), "codex", command, false).expect("remove twice"),
+            removed
+        );
+    }
+    #[test]
+    fn hooks_preserve_unrelated_commands_with_similar_reporter_text() {
+        let command = r#""C:\app\integration\uterm-report.exe" --agent-report"#;
+        let commands = [
+            format!("{command}-extra done"),
+            r#""C:\app\integration\uterm-report.exe.backup" --agent-report done"#.into(),
+            r#""C:\app\custom\uterm-report.exe" --agent-report done"#.into(),
+            format!("echo {command} done"),
+            format!("my-hook && {command} done"),
+            format!("{command}er done"),
+            format!("{command} done && my-hook"),
+            r#""C:\app\integration\other-report.exe" --agent-report done"#.into(),
+            "'/tmp/app/integration/uterm-report' --agent-report done && my-hook".into(),
+            r#""/tmp/$(my-hook)/integration/uterm-report" --agent-report done"#.into(),
+            r#""/tmp/`my-hook`/integration/uterm-report" --agent-report done"#.into(),
+            report_hook_command(
+                r#"& "C:\$env:QA\integration\uterm-report.exe" --agent-report"#,
+                "done",
+                true,
+            ),
+        ];
+        let original = json!({"hooks":{"Stop":[{"hooks":commands.iter()
+            .map(|command| json!({"type":"command","command":command}))
+            .collect::<Vec<_>>()}]}});
+        assert_eq!(
+            merge_hooks(original.clone(), "codex", command, false).expect("remove"),
+            original
+        );
+    }
+    #[test]
+    fn windows_hooks_replace_encoded_and_legacy_reporters_without_touching_other_commands() {
+        let old =
+            "& 'C:\\旧路径 '' $env:USERPROFILE\\integration\\uterm-report.exe' --agent-report";
+        let current = "& 'C:\\当前路径\\integration\\uterm-report.exe' --agent-report";
+        let encoded = report_hook_command(old, "done", true);
+        assert_eq!(
+            decoded_windows_hook(&encoded).as_deref(),
+            Some(format!("{old} done").as_str())
+        );
+        assert!(is_uterm_report_hook(&encoded, current));
+        assert!(!is_uterm_report_hook(
+            &format!("{encoded} unexpected"),
+            current
+        ));
+        let unrelated = report_hook_command("Write-Output", "done", true);
+        let value = json!({"hooks":{"Stop":[{"hooks":[
+            {"type":"command","command":encoded},
+            {"type":"command","command":unrelated}
+        ]}]}});
+        let removed = merge_hooks(value, "codex", current, false).unwrap();
+        assert_eq!(
+            removed["hooks"]["Stop"][0]["hooks"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            removed["hooks"]["Stop"][0]["hooks"][0]["command"],
+            unrelated
+        );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn windows_hook_commands_execute_literal_paths_in_powershell_and_cmd() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("测试 ' $(throw 1) ` &");
+        std::fs::create_dir(&directory).unwrap();
+        let reporter = directory.join("reporter.cmd");
+        std::fs::write(&reporter, "@echo off\r\nif not \"%~1\"==\"--agent-report\" exit /b 9\r\nif not \"%~2\"==\"done\" exit /b 8\r\necho {}\r\n").unwrap();
+        let command = format!(
+            "& '{}' --agent-report",
+            reporter.to_string_lossy().replace('\'', "''")
+        );
+        let command = report_hook_command(&command, "done", true);
+        for (shell, arguments) in [
+            (
+                "powershell.exe",
+                vec!["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"],
+            ),
+            ("cmd.exe", vec!["/d", "/s", "/c"]),
+        ] {
+            let output = std::process::Command::new(shell)
+                .args(arguments)
+                .arg(&command)
+                .stdin(std::process::Stdio::null())
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{shell}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "{}");
+        }
     }
     #[test]
     fn token_tallies_do_not_count_cached_input_twice() {
