@@ -228,6 +228,14 @@ pub async fn start_session(
                 .map_err(|error| error.to_string())?;
         }
         let is_ssh = ssh.is_some();
+        if ssh
+            .as_ref()
+            .is_some_and(|target| target.jump_host.is_some())
+        {
+            client
+                .require_ssh_jump_support()
+                .map_err(|error| error.to_string())?;
+        }
         if is_ssh {
             client
                 .require_ssh_support()

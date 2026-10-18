@@ -494,6 +494,8 @@ fn command_path() -> Vec<PathBuf> {
             ".npm-global/bin",
             ".opencode/bin",
             ".kimi-code/bin",
+            ".pi/agent/bin",
+            ".minimax-code/bin",
         ] {
             paths.push(PathBuf::from(&home).join(relative));
         }
@@ -507,6 +509,12 @@ fn command_path() -> Vec<PathBuf> {
     }
     #[cfg(windows)]
     {
+        if let Some(home) = std::env::var_os("USERPROFILE") {
+            paths.push(PathBuf::from(home).join(".minimax-code"));
+        }
+        if let Some(root) = std::env::var_os("LOCALAPPDATA") {
+            paths.push(PathBuf::from(root).join("hermes/bin"));
+        }
         if let Some(root) = std::env::var_os("APPDATA") {
             paths.push(PathBuf::from(root).join("npm"));
         }
@@ -515,10 +523,10 @@ fn command_path() -> Vec<PathBuf> {
 }
 
 pub fn agent_program(name: &str) -> Result<PathBuf> {
-    if !["codex", "claude", "gemini", "opencode", "kimi", "grok"].contains(&name) {
+    if !crate::agents::BUILTIN_AGENTS.contains(&name) {
         bail!("Unsupported chat agent");
     }
-    resolve_program(name)
+    resolve_program(if name == "minimax" { "mcode" } else { name })
 }
 
 pub fn resolve_program(name: &str) -> Result<PathBuf> {
@@ -606,6 +614,115 @@ pub fn launch_command(
 #[cfg(test)]
 mod program_tests {
     use super::*;
+
+    #[test]
+    fn additional_agents_use_their_commands_install_directories_and_custom_definitions() {
+        const FIXTURE: &str = "UTERM_ADDITIONAL_AGENTS_FIXTURE";
+        let agents = [
+            ("hermes", "hermes"),
+            ("pi", "pi"),
+            ("minimax", "mcode"),
+            ("qwen", "qwen"),
+            ("copilot", "copilot"),
+            ("iflow", "iflow"),
+        ];
+        let directory_for = |home: &std::path::Path, agent| match agent {
+            "hermes" if cfg!(windows) => home.join("local/hermes/bin"),
+            "pi" => home.join(".pi/agent/bin"),
+            "minimax" if cfg!(windows) => home.join(".minimax-code"),
+            "minimax" => home.join(".minimax-code/bin"),
+            _ => home.join(".local/bin"),
+        };
+        if let Some(home) = std::env::var_os(FIXTURE) {
+            let home = PathBuf::from(home);
+            let preferred = std::env::var_os("PATH").is_some_and(|path| !path.is_empty());
+            for (agent, program) in agents {
+                let directory = if preferred {
+                    home.join("preferred")
+                } else {
+                    directory_for(&home, agent)
+                };
+                let executable = if cfg!(windows) {
+                    format!("{program}.cmd")
+                } else {
+                    program.into()
+                };
+                let expected = directory.join(executable);
+                assert_eq!(agent_program(agent).unwrap(), expected);
+                let (resolved, arguments) = crate::agents::resolve(&home, agent).unwrap();
+                assert_eq!(resolved, expected);
+                assert!(arguments.is_empty());
+                let command = launch_command("default", Some(agent), &home).unwrap();
+                let path = command.get_env("PATH").unwrap();
+                assert!(std::env::split_paths(path).any(|path| path == directory));
+                assert!(command
+                    .get_argv()
+                    .iter()
+                    .any(|value| value.to_string_lossy().contains(program)));
+            }
+            assert!(agent_program("mcode").is_err());
+            let program = agent_program("pi").unwrap();
+            std::fs::write(
+                home.join("agents.json"),
+                serde_json::to_vec(&vec![crate::agents::AgentDefinition {
+                    id: "minimax".into(),
+                    name: "Custom MiniMax".into(),
+                    program: program.to_string_lossy().into(),
+                    arguments: vec!["--profile".into(), "custom profile".into()],
+                }])
+                .unwrap(),
+            )
+            .unwrap();
+            let (resolved, arguments) = crate::agents::resolve(&home, "minimax").unwrap();
+            assert_eq!(resolved, program);
+            assert_eq!(arguments, ["--profile", "custom profile"]);
+            std::fs::remove_file(home.join("agents.json")).unwrap();
+            return;
+        }
+        let home = std::env::temp_dir().join(format!("uterm-agents-{}", uuid::Uuid::new_v4()));
+        for (agent, program) in agents {
+            for directory in [directory_for(&home, agent), home.join("preferred")] {
+                std::fs::create_dir_all(&directory).unwrap();
+                let executable = if cfg!(windows) {
+                    format!("{program}.cmd")
+                } else {
+                    program.into()
+                };
+                let path = directory.join(executable);
+                std::fs::write(&path, b"fixture").unwrap();
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+                        .unwrap();
+                }
+            }
+        }
+        for path in [
+            std::ffi::OsString::new(),
+            home.join("preferred").into_os_string(),
+        ] {
+            let result = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "process::program_tests::additional_agents_use_their_commands_install_directories_and_custom_definitions",
+                ])
+                .env(FIXTURE, &home)
+                .env(if cfg!(windows) { "USERPROFILE" } else { "HOME" }, &home)
+                .env("LOCALAPPDATA", home.join("local"))
+                .env("APPDATA", home.join("roaming"))
+                .env("PATH", path)
+                .output()
+                .unwrap();
+            assert!(
+                result.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&result.stdout),
+                String::from_utf8_lossy(&result.stderr)
+            );
+        }
+        std::fs::remove_dir_all(home).unwrap();
+    }
 
     #[test]
     fn kimi_default_install_is_detected_without_shell_path() {

@@ -26,6 +26,66 @@ pub struct SshTarget {
     pub credential_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remember_password: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub jump_host: Option<String>,
+}
+
+pub fn validate_jump(value: &str) -> Result<()> {
+    if value.is_empty() {
+        return Ok(());
+    }
+    if value.len() > 512 || value.contains(',') {
+        bail!("SSH_INVALID_CONNECTION");
+    }
+    let mut pieces = value.split('@');
+    let first = pieces.next().unwrap_or_default();
+    let endpoint = if let Some(endpoint) = pieces.next() {
+        if first.is_empty()
+            || first.starts_with('-')
+            || !first
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"_.-".contains(&b))
+            || pieces.next().is_some()
+        {
+            bail!("SSH_INVALID_CONNECTION");
+        }
+        endpoint
+    } else {
+        first
+    };
+    let (host, port) = if endpoint.starts_with('[') {
+        let end = endpoint
+            .find(']')
+            .ok_or_else(|| anyhow::anyhow!("SSH_INVALID_CONNECTION"))?;
+        let host = &endpoint[1..end];
+        if host.parse::<std::net::Ipv6Addr>().is_err() {
+            bail!("SSH_INVALID_CONNECTION");
+        }
+        (
+            host,
+            endpoint[end + 1..]
+                .strip_prefix(':')
+                .or_else(|| {
+                    if end + 1 == endpoint.len() {
+                        Some("")
+                    } else {
+                        None
+                    }
+                })
+                .ok_or_else(|| anyhow::anyhow!("SSH_INVALID_CONNECTION"))?,
+        )
+    } else {
+        endpoint.split_once(':').unwrap_or((endpoint, ""))
+    };
+    validate_host(host)?;
+    if host.contains('@')
+        || (!endpoint.starts_with('[') && host.contains(['[', ']', ':']))
+        || (endpoint.ends_with(':')
+            || (!port.is_empty() && port.parse::<u16>().ok().filter(|v| *v > 0).is_none()))
+    {
+        bail!("SSH_INVALID_CONNECTION");
+    }
+    Ok(())
 }
 
 pub fn validate_host(host: &str) -> Result<()> {
@@ -44,6 +104,17 @@ pub fn validate_host(host: &str) -> Result<()> {
 impl SshTarget {
     pub fn validate(&self) -> Result<()> {
         validate_host(&self.host)?;
+        if let Some(jump) = &self.jump_host {
+            validate_jump(jump)?;
+        }
+        if self.authentication.as_deref() == Some("password")
+            && self
+                .jump_host
+                .as_ref()
+                .is_some_and(|value| !value.is_empty())
+        {
+            bail!("SSH_PASSWORD_PROXY_UNSUPPORTED");
+        }
         if self.connection_id.is_empty()
             || self.workspace_id.is_empty()
             || self.name.trim().is_empty()
@@ -84,6 +155,9 @@ impl SshTarget {
 
     pub fn options(&self) -> Vec<String> {
         let mut args = Vec::new();
+        if let Some(jump) = self.jump_host.as_ref().filter(|value| !value.is_empty()) {
+            args.extend(["-J".into(), jump.clone()]);
+        }
         if self.mode.as_deref() == Some("direct") {
             args.extend([
                 "-o".into(),
@@ -216,6 +290,46 @@ pub fn configured_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn jump_hosts_are_single_safe_endpoints_and_remain_separate_arguments() {
+        let mut target = SshTarget {
+            connection_id: "id".into(),
+            workspace_id: "local".into(),
+            name: "Host".into(),
+            host: "remote".into(),
+            os: "posix".into(),
+            ..Default::default()
+        };
+        for value in [
+            "bastion",
+            "user@bastion:2222",
+            "[::1]:22",
+            "user@[2001:db8::1]",
+        ] {
+            target.jump_host = Some(value.into());
+            target.validate().unwrap();
+            assert!(target
+                .options()
+                .windows(2)
+                .any(|args| args == ["-J", value]));
+        }
+        for value in [
+            "-oProxyCommand=bad",
+            "a,b",
+            "a;bad",
+            "user@a@b",
+            "a:0",
+            "a:65536",
+            "a:",
+            "[bad]",
+            "a b",
+            "a\n",
+        ] {
+            assert!(validate_jump(value).is_err(), "{value}");
+        }
+        target.authentication = Some("password".into());
+        assert!(target.validate().is_err());
+    }
 
     #[test]
     fn host_names_cannot_be_options_or_shell_code() {

@@ -383,7 +383,7 @@ public final class DatabaseBridge {
         return response;
     }
 
-    private static void installTrust(String path) throws Exception {
+    static void installTrust(String path) throws Exception {
         if (path.isEmpty()) return;
         Path source = Path.of(path);
         if (Files.size(source) > 1048576) throw new IllegalArgumentException("DB_CA_FAILED");

@@ -94,7 +94,7 @@ async function setup() {
   };
   const server = await createServer({
     configFile: false,
-    server: { middlewareMode: true, hmr: false },
+    server: { middlewareMode: true, hmr: false, watch: null },
     optimizeDeps: { noDiscovery: true, include: [] },
     appType: "custom",
   });
@@ -139,6 +139,7 @@ test("SSH dialog keeps existing aliases, rolls back new credentials on failed st
   const saved = [];
   let accept = false;
   let closed = 0;
+  const launches = [];
   mockIPC((command, args) => {
     calls.push({ command, args });
     if (command === "ssh_info") return { available: true, aliases: ["lab"] };
@@ -158,35 +159,52 @@ test("SSH dialog keeps existing aliases, rolls back new credentials on failed st
             return accept;
           },
           close: () => closed++,
+          connect: (value) => launches.push(value),
         }),
       ),
     );
     const selects = document.querySelectorAll("select");
-    assert.equal(selects[0].value, "alias");
-    assert.equal(selects[1].value, "config");
+    assert.equal(
+      [...document.querySelectorAll(".ssh-connection-modes button")]
+        .find((button) => button.textContent === "OpenSSH configuration")
+        .getAttribute("aria-pressed"),
+      "true",
+    );
+    assert.equal(selects[0].value, "config");
     assert.equal(document.querySelector('input[type="number"]').value, "");
-    await change(selects[0], "direct");
+    await act(async () =>
+      [...document.querySelectorAll(".ssh-connection-modes button")]
+        .find((button) => button.textContent === "Host address")
+        .click(),
+    );
     assert.equal(document.querySelector('input[type="number"]').value, "22");
-    await change(document.querySelectorAll("input")[1], "127.0.0.1");
+    await change(document.querySelector('input[name="host"]'), "127.0.0.1");
     await change(document.querySelector('input[type="number"]'), "2222");
-    await change(selects[1], "key");
+    await change(selects[0], "key");
     await act(async () =>
       [...document.querySelectorAll("button")]
         .find((v) => v.textContent === "Choose file…")
         .click(),
     );
     assert.equal(document.querySelector(".ssh-key-picker input").value, "/keys/qa key");
-    await change(selects[1], "password");
+    await change(selects[0], "password");
     await change(document.querySelector('input[type="password"]'), "fixture-secret");
     await act(async () => document.querySelector('input[type="checkbox"]').click());
-    const submit = () =>
+    const submit = (start = false) =>
       act(async () =>
-        document
-          .querySelector("form")
-          .dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })),
+        document.querySelector("form").dispatchEvent(
+          new window.SubmitEvent("submit", {
+            bubbles: true,
+            cancelable: true,
+            submitter: document.querySelector(
+              start ? 'button[value="connect"]' : 'button[value="save"]',
+            ),
+          }),
+        ),
       );
-    await submit();
+    await submit(true);
     assert.equal(closed, 0);
+    assert.equal(launches.length, 0, "Failed storage never starts a network login");
     assert.match(
       document.querySelector('[role="alert"]').textContent,
       /Could not save the connection/,
@@ -206,6 +224,10 @@ test("SSH dialog keeps existing aliases, rolls back new credentials on failed st
     accept = true;
     await submit();
     assert.equal(closed, 1);
+    assert.equal(launches.length, 0, "Save only does not start a network login");
+    await submit(true);
+    assert.equal(launches.length, 1);
+    assert.equal(launches[0].credential_id, reference);
   } finally {
     await view.cleanup();
   }

@@ -19,6 +19,8 @@ use tokio::{
 };
 use utermd_local::BackgroundChild;
 
+mod document;
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -34,6 +36,10 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     ssh_target: Option<utermd_local::ssh::SshTarget>,
     credential_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    auth_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    auth_mode: Option<String>,
 }
 impl Config {
     fn validate(&self) -> Result<()> {
@@ -41,7 +47,8 @@ impl Config {
         let clean = |value: &str, limit: usize| {
             value.len() <= limit && !value.chars().any(char::is_control)
         };
-        if !["mysql", "postgresql", "oracle"].contains(&self.kind.as_str())
+        if !["mysql", "postgresql", "oracle", "elasticsearch", "mongodb"]
+            .contains(&self.kind.as_str())
             || self.port == 0
             || self.name.trim().is_empty()
             || !clean(&self.name, 800)
@@ -60,6 +67,17 @@ impl Config {
                 .bytes()
                 .all(|c| c.is_ascii_alphanumeric() || b"_$.-".contains(&c))
             || (self.kind == "oracle" && self.database.is_empty())
+            || self.auth_source.as_ref().is_some_and(|source| {
+                self.kind != "mongodb"
+                    || source.is_empty()
+                    || source.len() > 255
+                    || !source
+                        .bytes()
+                        .all(|c| c.is_ascii_alphanumeric() || b"_$.-".contains(&c))
+            })
+            || self.auth_mode.as_ref().is_some_and(|mode| {
+                self.kind != "elasticsearch" || !["basic", "api_key"].contains(&mode.as_str())
+            })
         {
             bail!("DB_INVALID_CONFIG");
         }
@@ -88,19 +106,20 @@ impl Config {
         } else {
             String::new()
         };
-        Ok(format!(
-            "{:x}",
-            Sha256::digest(serde_json::to_vec(&(
-                &self.kind,
-                self.host.to_lowercase(),
-                self.port,
-                &self.database,
-                &self.username,
-                self.tls,
-                ca,
-                ssh
-            ))?)
-        ))
+        let mut identity = serde_json::to_vec(&(
+            &self.kind,
+            self.host.to_lowercase(),
+            self.port,
+            &self.database,
+            &self.username,
+            self.tls,
+            ca,
+            ssh,
+        ))?;
+        if ["mongodb", "elasticsearch"].contains(&self.kind.as_str()) {
+            identity.extend(serde_json::to_vec(&(&self.auth_source, &self.auth_mode))?);
+        }
+        Ok(format!("{:x}", Sha256::digest(identity)))
     }
 }
 
@@ -123,7 +142,9 @@ struct Connection {
     session_lock: AsyncMutex<()>,
     browser_config: Option<(Config, String, String)>,
     child: Mutex<Option<BackgroundChild>>,
-    input: AsyncMutex<tokio::fs::File>,
+    input: Option<AsyncMutex<tokio::fs::File>>,
+    elastic: Option<document::Elasticsearch>,
+    cancelled: tokio::sync::Notify,
     pending: Pending,
     sequence: AtomicU64,
     busy: AtomicBool,
@@ -137,6 +158,7 @@ struct Connection {
 impl Connection {
     fn stop(&self) {
         self.dead.store(true, Ordering::SeqCst);
+        self.cancelled.notify_waiters();
         if let Ok(mut browser) = self.browser.lock() {
             if let Some((_, browser)) = browser.take() {
                 browser.stop();
@@ -163,6 +185,9 @@ impl Connection {
         }
     }
     async fn send(&self, mut request: Value) -> Result<Value, String> {
+        // Subscribe before checking dead so a concurrent stop cannot lose its notification.
+        // 先订阅再检查关闭状态，避免并发停止时丢失通知。
+        let cancelled = self.cancelled.notified();
         if self.dead.load(Ordering::SeqCst) {
             return Err("DB_DISCONNECTED".into());
         }
@@ -170,6 +195,15 @@ impl Connection {
             return Err("DB_BUSY".into());
         }
         let result = async {
+            if let Some(elastic) = &self.elastic {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancelled => Err("DB_DISCONNECTED".into()),
+                    result = elastic.send(&request) => result,
+                };
+                if matches!(&result, Err(error) if error == "DB_DISCONNECTED" || error == "DB_TIMEOUT") { self.stop(); }
+                return result;
+            }
             let id = self.sequence.fetch_add(1, Ordering::Relaxed);
             request["id"] = id.into();
             let mut bytes = serde_json::to_vec(&request).map_err(|_| "DB_INVALID_REQUEST")?;
@@ -185,7 +219,7 @@ impl Connection {
             if !matches!(
                 tokio::time::timeout(
                     Duration::from_secs(8),
-                    self.input.lock().await.write_all(&bytes)
+                    self.input.as_ref().ok_or("DB_DISCONNECTED")?.lock().await.write_all(&bytes)
                 )
                 .await,
                 Ok(Ok(()))
@@ -435,27 +469,47 @@ pub async fn database_connect(
             if saved["target"].as_str() != Some(&identity) { bail!("DB_CREDENTIAL_TARGET_CHANGED"); }
             saved["password"].as_str().context("DB_CREDENTIAL_MISSING")?.to_owned()
         } else { String::new() };
+        let (proxy_port, proxy_token, tunnel) = socks(&app, &config).await?;
+        if config.kind == "elasticsearch" {
+            let elastic = document::Elasticsearch::new(&config, &password, proxy_port, &proxy_token).await.map_err(anyhow::Error::msg)?;
+            let info = elastic.connect().await.map_err(anyhow::Error::msg)?;
+            if config.identity().await? != identity { bail!("DB_CREDENTIAL_TARGET_CHANGED"); }
+            let connection = Arc::new(Connection {
+                browser: Mutex::new(None), browser_lock: AsyncMutex::new(()), session_lock: AsyncMutex::new(()),
+                browser_config: Some((config, String::new(), identity)), child: Mutex::new(None), input: None,
+                elastic: Some(elastic), cancelled: tokio::sync::Notify::new(), pending: Arc::new(Mutex::new(HashMap::new())),
+                sequence: AtomicU64::new(1), busy: AtomicBool::new(false), writable: AtomicBool::new(false),
+                transaction: AtomicBool::new(false), dead: AtomicBool::new(false), tunnel: Mutex::new(tunnel),
+                reader: Mutex::new(None), temporary: Mutex::new(None),
+            });
+            let id = uuid::Uuid::new_v4().to_string();
+            state.connections.lock().map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))?.insert(id.clone(), connection);
+            return Ok(json!({"handle":id,"info":info}));
+        }
         let handle = app.clone();
         let kind = config.kind.clone();
         let (java, classpath) = tokio::task::spawn_blocking(move || -> Result<_> {
             let java = crate::database_components::java(&handle)?;
             let engine = crate::database_components::bundled_engine(&handle)?;
-            let driver = crate::database_components::checked_file(&handle, &kind)?;
-            Ok((java, std::env::join_paths([engine, driver])?))
+            let mut paths = vec![engine, crate::database_components::checked_file(&handle, &kind)?];
+            if kind == "mongodb" {
+                paths.push(crate::database_components::checked_file(&handle, "mongodb-core")?);
+                paths.push(crate::database_components::checked_file(&handle, "mongodb-bson")?);
+            }
+            Ok((java, std::env::join_paths(paths)?))
         }).await??;
-        let (proxy_port, proxy_token, tunnel) = socks(&app, &config).await?;
         let temporary = tempfile::Builder::new().prefix("uterm-database-").tempdir()?;
         let mut command = Command::new(java);
         // SIGKILL skips Java's deleteOnExit, so the parent owns each worker's temporary files. SIGKILL 不执行 Java 的 deleteOnExit，因此由父进程清理每个连接的临时文件。
         command.arg(format!("-Djava.io.tmpdir={}", temporary.path().display()));
-        command.args(["-Xmx192m", "-Djava.awt.headless=true", "-cp"]).arg(classpath).arg("DatabaseBridge")
+        command.args(["-Xmx192m", "-Djava.awt.headless=true", "-cp"]).arg(classpath).arg(if config.kind == "mongodb" { "MongoBridge" } else { "DatabaseBridge" })
             .env_remove("JAVA_TOOL_OPTIONS").env_remove("JDK_JAVA_OPTIONS").env_remove("_JAVA_OPTIONS")
             .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
         let mut child = BackgroundChild::spawn(&mut command).context("DB_JAVA")?;
         let input = crate::ssh::pipe_file(child.take_stdin().context("DB_PROTOCOL")?);
         let output = crate::ssh::pipe_file(child.take_stdout().context("DB_PROTOCOL")?);
         let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
-        let connection = Arc::new(Connection { browser: Mutex::new(None), browser_lock: AsyncMutex::new(()), session_lock: AsyncMutex::new(()), browser_config: Some((config.clone(), password.clone(), identity.clone())), child: Mutex::new(Some(child)), input: AsyncMutex::new(input), pending: pending.clone(), sequence: AtomicU64::new(1), busy: AtomicBool::new(false), writable: AtomicBool::new(false), transaction: AtomicBool::new(false), dead: AtomicBool::new(false), tunnel: Mutex::new(tunnel), reader: Mutex::new(None), temporary: Mutex::new(Some(temporary)) });
+        let connection = Arc::new(Connection { browser: Mutex::new(None), browser_lock: AsyncMutex::new(()), session_lock: AsyncMutex::new(()), browser_config: Some((config.clone(), password.clone(), identity.clone())), child: Mutex::new(Some(child)), input: Some(AsyncMutex::new(input)), elastic: None, cancelled: tokio::sync::Notify::new(), pending: pending.clone(), sequence: AtomicU64::new(1), busy: AtomicBool::new(false), writable: AtomicBool::new(false), transaction: AtomicBool::new(false), dead: AtomicBool::new(false), tunnel: Mutex::new(tunnel), reader: Mutex::new(None), temporary: Mutex::new(Some(temporary)) });
         let weak = Arc::downgrade(&connection);
         let pending_reader = pending.clone();
         let reader = tokio::spawn(async move {
@@ -552,6 +606,23 @@ pub async fn database_request(
         .to_owned();
     let op = op.as_str();
     let _session = connection.session_lock.lock().await;
+    if connection
+        .browser_config
+        .as_ref()
+        .is_some_and(|(config, _, _)| ["mongodb", "elasticsearch"].contains(&config.kind.as_str()))
+    {
+        document::validate(&request, connection.writable.load(Ordering::SeqCst))?;
+        let action = request["action"].as_str().ok_or("DB_INVALID_REQUEST")?;
+        let result = connection.send(request.clone()).await;
+        if action == "writable" {
+            if let Ok(value) = &result {
+                connection
+                    .writable
+                    .store(value["writable"] == true, Ordering::SeqCst);
+            }
+        }
+        return result;
+    }
     if op == "browse" {
         let (config, password, identity) = connection
             .browser_config
@@ -956,7 +1027,11 @@ mod tests {
             session_lock: AsyncMutex::new(()),
             browser_config: None,
             child: Mutex::new(None),
-            input: AsyncMutex::new(tokio::fs::File::from_std(tempfile::tempfile().unwrap())),
+            input: Some(AsyncMutex::new(tokio::fs::File::from_std(
+                tempfile::tempfile().unwrap(),
+            ))),
+            elastic: None,
+            cancelled: tokio::sync::Notify::new(),
             pending: Arc::new(Mutex::new(HashMap::new())),
             sequence: AtomicU64::new(1),
             busy: AtomicBool::new(false),
@@ -1011,6 +1086,62 @@ mod tests {
         assert_eq!(receiver.await.unwrap(), Err("DB_DISCONNECTED".into()));
         assert!(connection.dead.load(Ordering::SeqCst));
         assert!(connection.send(json!({"op":"query"})).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn disconnect_cancels_a_pending_elasticsearch_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (started, received) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut bytes = [0; 4096];
+            assert!(stream.read(&mut bytes).await.unwrap() > 0);
+            started.send(()).unwrap();
+            while stream.read(&mut bytes).await.unwrap() != 0 {}
+        });
+        let config: Config = serde_json::from_value(json!({
+            "id": uuid::Uuid::new_v4(), "name":"QA", "kind":"elasticsearch",
+            "host":"127.0.0.1", "port":port, "database":"qa", "username":"",
+            "tls":false, "ca_file":"", "credential_id":null
+        }))
+        .unwrap();
+        let mut connection = fixture();
+        connection.elastic = Some(
+            document::Elasticsearch::new(&config, "", 0, "")
+                .await
+                .unwrap(),
+        );
+        let connection = Arc::new(connection);
+        let requested = connection.clone();
+        let response = tokio::spawn(async move {
+            requested
+                .send(json!({"op":"document", "action":"query", "collection":"qa", "query":"{}"}))
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(5), received)
+            .await
+            .unwrap()
+            .unwrap();
+        connection.stop();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), response)
+                .await
+                .unwrap()
+                .unwrap(),
+            Err("DB_DISCONNECTED".into())
+        );
+        assert!(!connection.busy.load(Ordering::SeqCst));
+        assert_eq!(
+            connection
+                .send(json!({"op":"document", "action":"query"}))
+                .await,
+            Err("DB_DISCONNECTED".into())
+        );
+        tokio::time::timeout(Duration::from_secs(2), server)
+            .await
+            .unwrap()
+            .unwrap();
     }
 
     #[tokio::test]

@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-17
+updated: 2026-10-18
 ---
 
 # uTerm 功能说明
@@ -58,8 +58,8 @@ Worktree。官网视频和五步交互导览解释这张截图；30 秒 GIF／MP
 Windows x64、macOS Apple Silicon 和 macOS
 Intel 下载入口初始指向 GitHub 稳定版发布页。公开的最新发布 API 成功时，解析为本仓库该版本对应的安装包；缺少资源、请求限流或网络失败时保留发布页入口。
 
-安装标签提供已有的 npm／macOS／PowerShell 命令，复制成功会提示，剪贴板不可用时选中命令并显示手动复制说明。数据库使用仍需 Java
-17+ 和所选驱动，macOS 首次启动可能需要在“隐私与安全”中批准。
+安装标签提供已有的 npm／macOS／PowerShell 命令，复制成功会提示，剪贴板不可用时选中命令并显示手动复制说明。SQL 与 MongoDB 使用仍需 Java
+17+ 和所选驱动；Elasticsearch 无需额外运行时，macOS 首次启动可能需要在“隐私与安全”中批准。
 
 ### 本地预览与发布
 
@@ -430,12 +430,56 @@ macOS 和 Windows 的普通 Shell 会话会识别子进程中的 Claude/Codex �
 
 侧栏中的 SSH 连接属于当前工作区。添加连接时可填写主机地址、端口（默认 22）、用户名、远端系统（Linux/macOS 或 Windows）和可选文件根目录。
 
+- 选择“主机地址”或“OpenSSH 配置”，认证默认使用 OpenSSH 自动选择。“更多设置”包含可选连接名称、远端系统和文件根目录；名称留空使用主机名。“仅保存”只保存配置，“保存并连接”先保存再新建终端。保存失败不会授权新的登录。
+
+- “查看生效配置”调用系统客户端解析配置，不建立远程登录，显示实际用户名、地址、端口及是否配置跳板机或代理。明确填写的用户名和端口覆盖继承配置，别名模式中留空则继续继承。
+
 - 用户名留空使用 OpenSSH 配置或本机账户，根目录留空使用服务端登录目录。Host 别名模式保留已有配置，读取
   `~/.ssh/config` 及 Include 文件，不改写原文件；别名模式中端口和用户名留空时继承 OpenSSH 配置。
 
 - 认证支持 OpenSSH 自动选择、私钥文件/ssh-agent，以及在连接窗口输入密码。需要系统已安装 OpenSSH；Windows 可安装 OpenSSH 客户端可选功能。
 
 - 这些连接选项不捆绑 SSH 可执行文件、JVM 或新增运行时依赖。
+
+### 快速连接与主机搜索
+
+在 SSH 侧栏选择**快速 SSH 连接**，输入 Host 别名、`user@host:port` 或
+`ssh://user@host:port`。带端口的 IPv6 地址需要方括号，例如
+`user@[::1]:2222`。单独的别名继承 OpenSSH 配置，明确地址默认端口为 22。拒绝命令、内嵌密码、URL 路径和无效端口。
+
+快速连接在终端使用 OpenSSH 自动认证，主机显示为“临时”。本地配置会为重开应用后的附着保留；关闭最后会话且释放文件通道、文件标签、传输和隧道后，自动移除临时连接。
+**保存为常用连接**保留配置，不改变已有会话。用于 Redis 或数据库隧道前，需要先保存为常用连接。
+
+**搜索 SSH 主机**按名称、地址和用户名筛选当前工作区的主机，忽略大小写。清空搜索后恢复全部主机；筛选保留已有会话和连接。
+
+### 跳板机
+
+在**更多设置 → 跳板机（可选）**中选择 OpenSSH 别名，或填写一台跳板机的地址，例如
+`ops@bastion:2222`。留空时继承 OpenSSH 配置。生效配置预览包含跳板机设置，不建立登录。
+
+终端、SFTP、端口转发和 Redis 隧道使用同一跳板机设置。跳板机通过自己的 OpenSSH 配置或 ssh-agent 认证，目标机保存的密码或专用私钥不会自动用于跳板机。密码模式不支持跳板机。多级跳转和 ProxyCommand 可通过已有 OpenSSH 别名配置。旧会话后台需要先安全重启，才能创建带有明确跳板机设置的会话。
+
+### 本地端口转发
+
+从 SSH 连接标题打开**端口转发**，填写本地端口、远端地址和远端端口，然后选择**添加转发**。规则随连接保存，只有点击**启动转发**后才启动。远端地址由 SSH 服务器访问，因此
+`127.0.0.1` 指该服务器；本地监听只绑定 `127.0.0.1`。
+
+启动中、监听中、失败和已停止状态独立于终端及 SFTP 显示。监听中只确认本机 SSH 监听已建立，不代表远端服务可用。
+**停止转发**释放进程和端口，运行中的规则不能移除。隐藏面板保留转发；退出应用停止转发，重开应用不会自动重启。终端附着继续遵循原有生命周期。
+
+打开端口转发时收起远程文件面板，文件连接继续保留；打开远程文件时收起转发面板，运行中的转发继续保留。
+
+- 每个连接最多保存 16 条规则，同一连接内的本地端口不能重复；应用最多同时运行 16 个转发。端口范围为 1–65535。端口占用及认证失败会明确显示，启动最多等待 60 秒。
+- 自动／密钥认证需要可信主机及非交互密钥／ssh-agent，密码认证沿用已有密码和指纹策略。启动或转发期间禁止编辑和移除连接。
+- 支持本地 TCP 转发，暂不提供远端转发、动态 SOCKS 转发和自动启动。此面板拒绝已包含 OpenSSH 转发规则的配置，需使用不含这些规则的别名，避免打开非预期监听。
+
+### 连接工作区
+
+选择主机时返回本次应用运行中上次选中的会话；没有会话时显示连接概览，列出远端系统、认证方式和文件根目录。选择主机不会建立 SFTP 连接。
+
+连接标题区域显示当前会话的目标、生效地址、终端进程状态与文件连接状态，并就近提供“新建 SSH 终端”“远程文件”和“编辑 SSH 连接”。连接仍有会话、文件连接、保留的文件标签、传输或依赖工作台时，继续禁止编辑。
+
+终端状态只说明本机 SSH 进程或附着状态，不代表服务端认证已完成。主机指纹及交互认证提示仍需在终端完成。已结束会话保留旧输出；重新附着恢复已有本机附着，新建终端则建立新的远程登录。
 
 ### 密码与主机验证
 
@@ -461,7 +505,9 @@ askpass 提供一次密码，并复用应用自身可执行文件。
 
 ### 打开远程文件
 
-选择连接可打开 SFTP 文件面板，使用该配置的主机、端口、用户名和认证方式。自动/密钥模式需要可信主机及密钥/ssh-agent 非交互认证；未知主机应先在 SSH 终端确认。
+打开“远程文件”后，点击“连接文件”才会使用该配置的主机、端口、用户名和认证方式建立 SFTP。连接进度和错误与终端状态分别显示。隐藏面板保留缓存连接；“断开文件连接”经过编辑器保存保护后，只释放文件通道。“重新连接”也经过保存保护，并保留先前解析的目标和根目录作为预期目标。选择主机或断开文件都不会自动建立登录。
+
+自动/密钥模式需要可信主机及密钥/ssh-agent 非交互认证；未知主机应先在 SSH 终端确认。
 
 密码模式也可通过原生对话框确认新主机。文件根目录独立于 Shell 中的
 `cd`；Windows 根目录必须位于本地盘符下，不支持 UNC 共享。
@@ -496,13 +542,22 @@ ACL。冲突检查采用乐观校验，不能阻止其他服务端程序并发�
 
 - 有传输进行时退出，会先提供等待或取消传输的选择，再经过编辑器保存保护。传输期间不能安装更新。
 
-- 最多同时传输四个任务、缓存十六个远程文件连接；“重新连接”释放该连接此前的文件通道。连接仍有会话、保留的文件标签、进行中的传输，或依赖它的 Redis 工作台已连接、忙碌或有草稿时，禁止编辑和移除。
+- 最多同时传输四个任务、缓存十六个远程文件连接；“重新连接”释放该连接此前的文件通道。连接仍有会话、保留的文件标签、进行中的传输、正在启动／运行的端口转发，或依赖它的 Redis 工作台已连接、忙碌或有草稿时，禁止编辑和移除。
 
 - 移除前还需移除依赖的 Redis 配置。保存空闲 SSH 配置时同步更新依赖的 Redis 配置；已记住的 Redis 凭据仍绑定原目标。
 
 - 已有会话保留原目标。
 
 #### SSH 与 SFTP 检查
+
+- Windows 自动化检查：17 项前端专项测试通过，覆盖快速地址校验、临时连接清理／保存、主机筛选、跳板机与规则存储、Redis 配置引用、转发保存失败与显式启停，以及既有 SSH／SFTP 保护。全部 102 项常规后端测试和 26 项本地服务测试通过；六项可选后端测试仍忽略。进程模拟覆盖监听就绪、启动退出、超时、取消与清理，不代表真实 SSH 转发连接验收。
+
+- Windows 全量前端运行通过，241 项通过、11 项跳过。修改文件格式、TypeScript、国际化、文档检查及隔离桌面构建通过。全仓库格式检查仍报告其他文件的问题。
+
+- 隔离 Windows 应用（`sh.uterm.desktop.qa.sshredesign`）验证了原生连接表单、默认自动认证、“仅保存”返回零会话概览、生效 OpenSSH 地址、按需连接前保持未连接的远程文件面板，以及独立的 SFTP 连接进度和失败反馈。检查使用回环地址配置，没有连接已成功认证的远程服务。真实 Windows
+  SSH/SFTP 认证、Credential Manager 及重设计界面的 macOS/Linux 验收仍待完成。
+
+- 隔离 Windows 应用（`sh.uterm.desktop.qa.sshp1`）针对不可用的回环端点，检查了快速连接创建、临时标记、保存连接、显式启动转发和独立失败反馈。重开后保留规则且没有自动启动，并目视检查了 640×420 下的连接标题、转发规则和可滚动的跳板机表单。成功转发、真实跳板机、密码转发及重设计界面的 macOS/Linux 运行仍待验收。
 
 - 验证：macOS 自动化测试覆盖数据升级、连接/会话隔离、分组、目标校验、远程草稿身份、恢复时仅附着已有会话、排除本地工具及限制进度更新频率。真实系统 SFTP 服务测试覆盖中文名称、安全保存、冲突、根目录越界/链接拒绝、文件操作、流式上传下载、取消覆盖及临时文件清理。
 
@@ -528,6 +583,8 @@ Redis 连接属于工作区。从侧栏添加名称、地址、端口、数据�
   指该服务器。
 
 - 隧道复用所选配置的主机、端口、用户名和自动/密钥/密码认证，并需要 TCP 转发权限；继续兼容只有别名的旧 Redis 配置。密码模式的主机确认和凭据有效期遵循 SSH 配置。
+
+- SSH 选择器引用已保存配置，并包含跳板机设置。打开 Redis 连接编辑器或选择工作台时解析当前配置；保存空闲 SSH 配置时也会更新依赖的 Redis 设置。活跃工作台在断开前保留受保护的原目标，临时 SSH 连接需先保存。Redis 单独管理隧道进程，独立于终端、SFTP 和本地端口转发进程。
 
 - TLS 也可用于隧道内部，始终验证 Redis 服务端名称；可选 PEM
   CA 证书及服务端名称覆盖，CA 留空时使用系统信任。不提供双向 TLS。
@@ -995,35 +1052,69 @@ Kimi 检测和 Agent 启动在继承的 PATH 条目之后补充搜索
 
 ### Agent 品牌图标
 
-Kimi、OpenCode 和 Grok 在 Agent 设置、侧栏新建／会话入口及会话标签中使用各自的品牌图标。SVG 路径取自采用 MIT 许可的 Lobe
-Icons 图标集，随应用本地打包，固定来源版本及许可保留在 `NOTICE` 中。
+Kimi、OpenCode、Grok、Hermes、Pi、MiniMax、Qwen Code、Copilot CLI 和 iFlow
+CLI 在 Agent 设置、侧栏新建／会话入口及会话标签中使用各自的品牌图标。Hermes、MiniMax、Qwen
+Code 和 Copilot CLI 使用 Lobe
+Icons 的原始品牌路径；Pi 使用官方 SVG 几何形状，iFlow 使用 CLI 官网的原始页签图标。来源及适用权利保留在
+`NOTICE` 中。
 
-图标在深浅主题下跟随界面颜色显示，无需网络请求。未知 Agent 保留终端图标。
+矢量图标在深浅主题下跟随界面颜色，iFlow 保留原图颜色。资源均随应用本地打包，无需网络请求。未知 Agent 保留终端图标。
 
 #### 品牌图标 Windows 检查
 
-- 品牌图标 Windows 验证：15 项专项组件／国际化及 Agent 启用检查、修改源码／测试格式、本地化检查及 TypeScript／生产构建通过。
+- Windows 验证通过 17 项专项前端检查、修改源码／测试格式与 TypeScript／生产构建。图标检查覆盖本地路径、iFlow 原图、标志差异及未知标识的安全回退。
 
-- 隔离原生 Tauri／WebView2
-  QA 宿主（`sh.uterm.desktop.qa.agenticons`）使用真实 Agent 设置和共享会话图标及临时状态；视觉检查验证了深浅主题、中英文标签下的三种标志、名称对齐和紧凑控件。临时界面不启动 Agent，也未重启安装版应用；macOS／Linux 视觉验收仍待完成。
-
-- 全仓格式检查报告其他 100 个文件的既有问题；测试保留既有 Vite WebSocket 端口／React
-  act 警告，生产构建保留既有大代码包警告。
+- 隔离原生 Tauri／WebView2 临时界面（`sh.uterm.desktop.qa.agenthooksicons`）使用真实 Agent 设置及模拟可用性数据。视觉检查确认中文／深色和英文／浅色视图中的六个新增图标及 Hook 控件。不启动服务商或重启安装版应用；macOS／Linux 视觉验收仍待完成。测试保留 Vite
+  WebSocket 端口／React act 警告，生产构建保留大代码包警告。
 
 ### Agent 安装
 
-OpenCode 是内置 Agent：从 PATH 及 `~/.opencode/bin` 检测 `opencode`
-程序，复用现有项目/聊天启动流程。未找到程序时可打开安装面板。
+设置 →
+Agent 和独立 Agent 面板提供 Claude、Codex、Gemini、OpenCode、Kimi、Grok、Hermes、Pi、MiniMax、Qwen
+Code、Copilot CLI 与 iFlow CLI，均复用现有项目／聊天启动流程，默认关闭。
 
-- OpenCode、Claude、Codex 和 Gemini 支持确认后通过 npm 全局安装（需要 Node.js/npm 和网络，不自动提权）。仅接受固定包名，安装不占用界面线程，拒绝并发安装，错误保持可见。
+1. 未找到程序时，点击“安装程序”，再确认安装或打开官方安装说明。
+2. 安装后点击“重新检测”，自定义安装位置可通过“配置”指定程序路径。
+3. 打开“启用”开关，再从项目／Worktree 行或添加菜单新建会话。
+
+| Agent                                                                                                        | 默认命令  | 安装入口                               |
+| ------------------------------------------------------------------------------------------------------------ | --------- | -------------------------------------- |
+| [Hermes](https://hermes-agent.nousresearch.com/docs/getting-started/installation/)                           | `hermes`  | 官方安装脚本                           |
+| [Pi](https://pi.dev/)                                                                                        | `pi`      | npm：`@earendil-works/pi-coding-agent` |
+| [MiniMax](https://agent.minimax.io/docs/cli/quick-start)                                                     | `mcode`   | npm：`@minimax-ai/code`                |
+| [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/quickstart/)                                    | `qwen`    | npm：`@qwen-code/qwen-code`            |
+| [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli) | `copilot` | npm：`@github/copilot`                 |
+| [iFlow CLI](https://docs.iflow.cn/cli/quickstart/)                                                           | `iflow`   | npm：`@iflow-ai/iflow-cli`             |
+
+- OpenCode、Claude、Codex、Gemini、Pi、MiniMax、Qwen Code、Copilot CLI 和 iFlow
+  CLI 支持确认后通过 npm 全局安装，需要 Node.js/npm、CLI 支持的版本和网络，不自动提权。仅接受固定包名，安装不占用界面线程，拒绝并发安装，错误保持可见。
 
 - 完成后刷新程序检测；自定义 npm 安装位置可能需要配置可执行文件路径或重启 uTerm。Kimi 提供官方安装说明；Grok 与自定义程序需要按发布方说明手动安装并配置路径。
 
-- OpenCode 暂不提供 Hooks 或用量集成。
+- 检测保留继承的 PATH 优先级。默认搜索目录包含
+  `~/.local/bin`、`~/.opencode/bin`、`~/.kimi-code/bin`、`~/.pi/agent/bin` 和
+  `~/.minimax-code/bin`。Windows 还搜索 `%APPDATA%\npm`、`%LOCALAPPDATA%\hermes\bin` 与
+  `%USERPROFILE%\.minimax-code`。
+
+- Hermes 下载官方平台脚本后，以非交互方式运行，跳过登录配置、浏览器和计算机操作组件安装。脚本下载限制为 1
+  MiB，执行限制为十分钟及 10
+  MiB 输出，不自动提权或绕过 PowerShell 执行策略。MiniMax 的 npm 安装包含可选依赖，并允许 SQLite 安装脚本。
+
+- 服务商登录和模型配置在各 CLI 内完成。这六个新增 Agent 暂不提供 uTerm 用量集成。iFlow 项目已公告停止服务，保留安装器与 Hooks 不代表其托管服务可用。
 
 #### 验证与限制
 
-- 双语组件测试覆盖确认、失败重试与刷新；后端测试覆盖安装包白名单。实际软件包下载、原生 Agent 启动及 macOS 安装仍未验证。
+- 双语组件测试覆盖确认、失败重试、刷新、官方安装链接、启用入口与 MiniMax 的 `mcode`
+  配置默认值；后端测试覆盖安装包白名单。Windows 本地服务模拟程序验证六个新增命令映射、默认安装目录、继承的 PATH 优先级、启动命令构造与自定义程序覆盖。
+
+- Windows 验证通过 19 项专项前端检查、104 项后端检查（六项可选检查忽略）及 26 项本地服务检查。测试覆盖自定义标识隔离、安装器字面路径、MiniMax 依赖参数、不产生多余文件或备份的 Hook 重装／移除、保留用户条目、无效 JSON、配置冲突，以及 Pi 稳定结束后回报与关闭上报程序输入。修改源码／测试与 Rust 文件格式、文档、TypeScript／生产及隔离桌面构建（`sh.uterm.desktop.qa.additionalagentscheck`）通过。
+
+- 完整前端／构建工具套件通过 241 项检查，11 项可选／平台检查跳过；国际化检查通过。全仓格式检查仍报告其他 148 个工作区文件存在问题。自动化检查不代表真实服务商、数据库或 SSH 服务已验收。
+
+- 独立原生 Tauri／WebView2 临时界面（`sh.uterm.desktop.qa.additionalagents`）使用真实 Agent 设置及模拟可用性、临时设置数据。视觉检查确认中文深色界面的六个名称、可用状态与开关对齐、英文标签切换及 MiniMax 的
+  `mcode` 配置字段。临时界面不启动服务商 CLI，也不替换安装版应用。
+
+- 实际软件包下载、需认证的 Agent 会话及 macOS／Linux 运行验收仍未验证。
 
 ### 关闭休息提醒
 
@@ -1079,16 +1170,39 @@ OpenCode 是内置 Agent：从 PATH 及 `~/.opencode/bin` 检测 `opencode`
 
 Agent 定义指定程序及参数列表。Hooks 上报活动；启用时，用量可组合本地日志与服务商请求。
 
+自定义标识保留自己的配置操作，不继承内置安装说明或默认值，包括 `constructor` 等标识。
+
 可用性取决于服务商凭证和权限。终端输入及进程 I/O 与界面渲染分开处理。
 
 ### 安装与移除 Hooks
 
-设置 → Agent
-→ 安装 Hooks 支持 Claude、Codex 和 Gemini。重复安装时，每个受支持事件只保留一条 uTerm 上报命令；即使路径不同，也会替换其他正式版、开发版或 QA 安装留下的可识别条目。
+设置 → Agent → 安装 Hooks 支持 Claude、Codex、Gemini、Pi、MiniMax、Qwen Code、Copilot CLI 和 iFlow
+CLI。重复安装时，每个受支持事件只保留一条 uTerm 上报命令；即使路径不同，也会替换其他正式版、开发版或 QA 安装留下的可识别条目。
 
 - 移除 Hooks 同样会清理所选 Agent 的这些可识别条目。其他工具的命令和设置完整保留，包括同组内的命令。
 
+- Hook 配置没有变化时，不重复写入或生成备份。移除尚未安装的 Hooks 不创建配置文件或扩展；无关的空 Hook 分组保留。
+
 - 仅管理使用字面路径的独立 uTerm 上报命令；双引号中的命令替换或变量表达式、自定义包装程序及组合 Shell 命令保持原样。配置冲突检查与备份继续生效，修改对新建 Agent 会话生效。
+
+| Agent       | Hook 文件或扩展                            | 活动回报                       |
+| ----------- | ------------------------------------------ | ------------------------------ |
+| Qwen Code   | `~/.qwen/settings.json`                    | 空闲、工作中、权限等待、已完成 |
+| iFlow CLI   | `~/.iflow/settings.json`                   | 空闲、工作中、通知、已完成     |
+| Copilot CLI | `~/.copilot/hooks/uterm-activity.json`     | 空闲、工作中、已完成           |
+| Pi          | `~/.pi/agent/extensions/uterm-activity.js` | 空闲、工作中、稳定结束后完成   |
+| MiniMax     | `~/.minimax/plugins/uterm-activity/`       | 空闲、工作中、权限等待、已完成 |
+
+Copilot 使用直接执行的程序与参数配置。Pi 在界面线程之外运行上报程序，关闭其输入并等待
+`agent_settled`，避免把中间的 `agent_end`
+当作任务完成。Pi 需要支持该事件的版本，旧版请先更新。Pi 和 Copilot 暂不单独回报权限等待状态。
+
+MiniMax 使用本地兼容插件；如果曾手动禁用，请在 `/plugins` 中启用 `uterm-activity`。自定义目录遵循
+`COPILOT_HOME`、`PI_CODING_AGENT_DIR`、`MINIMAX_DATA_DIR` 与
+`MAVIS_DATA_DIR`，使用 MiniMax 自定义 profile 时需将数据目录设为相应目录。保留原有 Hook 禁用设置与其他插件。“移除 Hooks”使 Pi 扩展失效，并从 JSON 配置中清除 uTerm 命令，保留备份。
+
+Hermes 提供 Hook 配置说明，不自动接入 uTerm 状态。其共享网关可能同时服务多个终端客户端，且不包含各自的 uTerm 环境，因此网关 Hook 无法可靠对应终端会话。可按官方说明手动配置 Hermes
+Hook，但这不代表已接入 uTerm 会话状态。
 
 ### Windows Hook 命令
 
@@ -1108,13 +1222,13 @@ Hooks 显式调用 PowerShell，并将程序路径作为字面值处理，因此
 
 #### Hooks 与通知自动化检查
 
-- Hooks 与通知 Windows 验证：完整前端／构建工具套件通过（233 项通过、十项可选／平台检查跳过），24 项本地会话服务检查及串行运行的全部 89 项后端检查通过（六项可选／资源检查忽略）。
+- Hooks 与通知 Windows 验证：完整前端／构建工具套件通过（241 项通过、11 项可选／平台检查跳过），26 项本地会话服务检查及串行运行的全部 104 项后端检查通过（六项可选／资源检查忽略）。
 
-- Hooks 回归覆盖重复安装、旧版／编码路径、混合分组、移除、无关命令、保留动态 Shell 表达式，以及包含特殊字符的字面路径在真实 PowerShell／cmd 中执行。App 回归覆盖指示灯状态、未读确认、通知开关、焦点、权限、回放、重复抑制、开发构建及分发失败。
+- Hooks 回归覆盖重复安装、旧版／编码路径、混合分组、移除、无关命令、保留动态 Shell 表达式、无变化时保留文件与备份，以及包含特殊字符的字面路径在真实 PowerShell／cmd 中执行。App 回归覆盖指示灯状态、未读确认、通知开关、焦点、权限、回放、重复抑制、开发构建及分发失败。
 
 - 延迟权限检查验证关闭通知、查看／关闭会话、接收新状态或卸载后丢弃旧请求，并只发送最新的待处理状态。修改源码／测试及 Rust 格式、国际化、文档检查、TypeScript／生产构建和独立 Windows 桌面构建（`sh.uterm.desktop.qa.branchaudit`）通过。
 
-- 全仓格式检查保留其他 97 个文件的既有问题，测试／构建保留 Vite WebSocket 端口、React
+- 全仓格式检查保留其他 148 个文件的既有问题，测试／构建保留 Vite WebSocket 端口、React
   act 和大代码包警告。延迟通知检查使用模拟原生命令；安装版通知品牌、真实登录模型请求及 macOS／Linux 验收仍未验证。
 
 #### Hooks 与通知原生检查
@@ -1788,7 +1902,7 @@ React 组件位于 `src/components/`，状态和纯逻辑位于 `src/lib/`，Tau
 
 ### 数据库配置与区域显示
 
-工作区的“数据库”区域支持 MySQL、PostgreSQL 和 Oracle 服务名连接。点击区域加号添加配置，选择后点击“连接”。
+工作区的“数据库”区域支持 MySQL、PostgreSQL、Oracle 服务名、Elasticsearch 和 MongoDB 连接。点击区域加号添加配置，选择后点击“连接”。SQL 数据库打开 SQL 工作台，Elasticsearch 与 MongoDB 打开文档工作台。
 
 - 底部数据库图标独立显示／隐藏该区域，保留连接、SQL 和事务。已连接、忙碌或有草稿的配置不能编辑或移除，引用的 SSH 配置与所属工作区同样受保护。
 
@@ -1805,7 +1919,7 @@ CA、可选系统 OpenSSH 目标及不透明凭据引用。密码默认仅在内
 
 ### Java 与驱动组件
 
-JDBC 引擎内置于应用（28,972 字节），源码、校验值与 JAR 一起校验。连接时原子恢复缺失或被修改的带版本缓存。
+SQL 与 MongoDB 连接引擎内置于应用（35,462 字节），源码、校验值与 JAR 一起校验。连接时原子恢复缺失或被修改的带版本缓存。
 
 - 主应用构建无需 JDK。Java 与厂商驱动仍为可选组件，不进入主安装包。
 
@@ -1832,6 +1946,55 @@ JDBC 引擎内置于应用（28,972 字节），源码、校验值与 JAR 一起
   CA，不关闭主机名检查。MySQL／PostgreSQL 使用官方 JDBC 驱动，Oracle 使用 JDBC Thin 服务名。
 
 - 暂不支持 SID、Wallet／云预设、任意 JDBC URL、自定义驱动导入或安装服务端。
+
+### Elasticsearch 与 MongoDB 文档工作台
+
+从“数据库”区域添加连接，选择 Elasticsearch 或 MongoDB。Elasticsearch 默认端口为 9200，可选用户名／密码或已编码的 API
+Key；MongoDB 默认端口为 27017，可单独设置认证数据库，默认
+`admin`。不填写凭据可连接允许匿名访问的服务。
+
+- Elasticsearch 复用内置 HTTP 客户端，无需 Java 或驱动下载。MongoDB 通过“数据库组件”按需安装 Sync、Core 与 BSON 三个固定版本驱动，合计下载 2,779,903 字节；它们与可选 Java 运行时不进入主安装包。
+
+- MongoDB 使用单个主机和端口，设置
+  `directConnection=true`。支持独立服务或可直接访问的副本集成员，不提供 SRV、多主机发现、分片路由配置或任意连接 URI。SQL 工作台的事务、表格编辑和执行计划不适用于文档连接。
+
+#### 浏览与查询文档
+
+1. 连接后选择数据库及集合，或指定一个 Elasticsearch 索引。“刷新对象”最多加载 500 个名称；也可直接输入有权限访问的名称。
+2. Elasticsearch 输入 Query DSL 请求体，例如
+   `{"query":{"match_all":{}}}`，可查看索引 Mapping。MongoDB 输入
+   `{"filter":{},"sort":{"_id":1}}`，可选 `projection`，或使用 `{"pipeline":[{"$match":{}}]}`
+   执行只读聚合。
+3. 点击“执行查询”或按 Ctrl/Cmd+Enter。结果每页最多 50 个文档，可翻阅前 10,000 条；分页重新查询，不保留快照。修改查询后，先从首页重新执行，再使用分页。Elasticsearch 的
+   `from`、`size`、`search_after` 等分页参数由工作台管理，不能在查询中指定。
+
+MongoDB 使用规范 Extended
+JSON 保留 ObjectId、日期和数值类型；查询、编辑与导出保持 JSON 文本，不经过前端数字重新序列化。聚合的
+`$out`、`$merge`
+和服务器 JavaScript 操作被拒绝，包括嵌套管道中的这些操作。Elasticsearch 结果保留大整数，来源筛选后的文档不允许替换或删除。
+
+- 查询和单个文档最多 262,144 字符；每页文档预算约 1 MiB，Elasticsearch 附加元数据与文档合计最多 2
+  MiB，传输上限 8
+  MiB。超限明确报错，不以截断文档继续编辑。查询服务端预算为 30 秒；“取消查询并断开”关闭连接并保留草稿。
+
+- “保存 JSON”保存当前查询；“导出本页 JSON”仅导出已加载文档。查询与文档草稿保留在内存中，隐藏工作台仍保留连接和草稿；切换目标或文档前，未保存的文档修改需要确认放弃。退出保护同时覆盖两类草稿。
+
+#### 文档写入与连接保护
+
+连接默认只读。开启“允许编辑”后，可新建文档，或选择查询结果后替换／删除文档；每次写入均需确认。写入立即生效，不提供提交、回滚或自动重试。MongoDB 账号权限与 Elasticsearch 服务端权限仍然有效。
+
+- 替换和删除使用冲突检查：Elasticsearch 发送原始序列号与主分片任期；MongoDB 按 `_id`
+  和完整原始文档匹配，保留 BSON 类型。文档变化、投影缺失字段或聚合改变文档后，操作可能失败，草稿保留供核对。MongoDB 替换不得改变
+  `_id`。
+
+- TLS 验证证书和主机名，可指定 PEM CA。两者沿用经过认证且仅绑定回环地址的 SSH
+  SOCKS 通道，固定转发至配置端点；MongoDB 不自动发现其他节点。密码和 API
+  Key 可使用原有系统凭据库保存，绑定端点、认证方式／认证库、TLS 信任及 SSH 身份。
+
+- 超时或连接丢失时，写入结果可能未知，需要重连并核对服务端状态后再操作。诊断返回固定错误码，不回显厂商错误中的文档或凭据。连接和正在握手的请求沿用八个数据库名额，文档连接不创建 SQL 辅助浏览进程。
+
+协议依据：[Elasticsearch Search API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-search)、[MongoDB Extended JSON](https://www.mongodb.com/docs/drivers/java/sync/current/data-formats/document-data-format-extended-json/)
+和 [MongoDB SOCKS5](https://www.mongodb.com/docs/drivers/java/sync/current/security/socks/)。
 
 ### 对象浏览与菜单
 
@@ -1929,6 +2092,21 @@ MiB。数值保持字符串，二进制为 Base64。
 - 开发 JDK、Cargo target、测试数据库和 node_modules 不进入安装包。
 
 ### 数据库验证
+
+#### 文档数据库 Windows 检查
+
+- 常规 `pnpm test`
+  完整套件通过（241 项通过，11 项可选／平台检查跳过）。单独显式开启 MongoDB 驱动协议模拟测试后，两项文档数据库检查通过。最终 19 项前端专项检查通过，包含修改查询后的分页保护和保留草稿。后端 104 项通过、六项可选检查跳过；本地会话服务 26 项通过。
+
+- 专项覆盖 JSON／BSON 精确数值、ObjectId、NULL、嵌套聚合写入保护、默认只读、明确写入确认、原始文档冲突、Elasticsearch 文档 ID 编码、序列号／主分片任期条件、来源投影保护、有界分页和断开正在请求的 Elasticsearch 连接。MongoDB 测试使用固定版本的真实 Java 驱动连接临时回环协议模拟服务，不连接现有数据库。
+
+- 锁定依赖安装、TypeScript／生产构建、内置引擎校验及 `pnpm desktop:check`
+  通过。数据库相关源码格式与全仓国际化检查通过。全仓格式检查仍报告其他 148 个工作区文件存在问题。文档元数据／索引与修改 Markdown 的格式检查通过，生产构建保留既有大代码包警告。
+
+- 独立 Windows 应用（`sh.uterm.desktop.qa.documents` 与
+  `.documents.narrow`）使用真实工作台和模拟响应，检查 Elasticsearch／MongoDB 查询、40 个对象名、每页 50 个文档、立即写入确认、中英文切换及浅深主题。1,000 像素宽窗口与 640 像素宽的窄窗口均可操作查询与分页；窄窗口在结果滚动时保留分页栏。
+
+- 这些模拟检查不代表真实 Elasticsearch／MongoDB 部署、认证 TLS／SSH 服务或原生凭据／导出窗口验收。macOS／Linux 运行验收仍待完成，未重启安装版应用或现有数据库服务。Java、MongoDB 驱动和数据库服务端仍不进入主安装包，尚未测量隔离的最终安装包大小差值。
 
 #### 表格滚动 macOS 检查
 

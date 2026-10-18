@@ -9,8 +9,18 @@ import {
 } from "./lib/database";
 import { RedisConnectionDialog } from "./components/RedisConnectionDialog";
 import { RedisWorkspace } from "./components/RedisWorkspace";
-import { redisError, redisSnapshot, subscribeRedis, type RedisConfig } from "./lib/redis";
+import {
+  redisError,
+  redisSnapshot,
+  subscribeRedis,
+  resolveRedisSsh,
+  type RedisConfig,
+} from "./lib/redis";
 import { SshConnectionDialog } from "./components/SshConnectionDialog";
+import { SshConnectionHeader } from "./components/SshConnectionHeader";
+import { SshQuickConnect } from "./components/SshQuickConnect";
+import { SshTunnels } from "./components/SshTunnels";
+import type { SshFileStatus, TerminalStatus, SshTunnelStatus } from "./lib/ssh";
 import { RemoteFiles, RemoteTransferShelf } from "./components/RemoteFiles";
 import { fileTarget, sshError } from "./lib/file-target";
 import { subscribeTransfers, transferSnapshot } from "./lib/remote-transfers";
@@ -341,8 +351,28 @@ export function App() {
   const [selectedRedisId, setSelectedRedisId] = useState<string | null>(null);
   const [redisPasswords, setRedisPasswords] = useState<Record<string, string>>({});
   const [sshDialog, setSshDialog] = useState<{ connection?: SshConnection } | null>(null);
+  const [quickSshOpen, setQuickSshOpen] = useState(false);
+  const [tunnelsOpen, setTunnelsOpen] = useState(false);
+  const [tunnelStatuses, setTunnelStatuses] = useState<SshTunnelStatus[]>([]);
+  const [tunnelError, setTunnelError] = useState("");
+  const tunnelRevision = useRef(0);
+  const tunnelRequests = useRef(0);
   const [selectedSshId, setSelectedSshId] = useState<string | null>(null);
   const [remoteDirectories, setRemoteDirectories] = useState<Record<string, string>>({});
+  const [remoteFileStates, setRemoteFileStates] = useState<
+    Record<string, { connectionId: string; status: SshFileStatus; error: string }>
+  >({});
+  const [terminalStatuses, setTerminalStatuses] = useState<Record<string, TerminalStatus>>({});
+  const lastSshSessions = useRef<Record<string, string>>({});
+  const onTerminalStatus = useCallback((id: string, status: TerminalStatus | null) => {
+    setTerminalStatuses((previous) => {
+      if (previous[id] === (status ?? undefined)) return previous;
+      const next = { ...previous };
+      if (status) next[id] = status;
+      else delete next[id];
+      return next;
+    });
+  }, []);
   const [sshLaunches, setSshLaunches] = useState<ReadonlySet<string>>(() => new Set());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -986,7 +1016,16 @@ export function App() {
   }
   function sshInUse(connection: SshConnection): boolean {
     return (
+      !!tunnelError ||
+      tunnelStatuses.some(
+        (item) => item.connection_id === connection.id && item.state !== "error",
+      ) ||
       !!connection.sessions.length ||
+      Object.values(remoteFileStates).some(
+        (value) =>
+          value.connectionId === connection.id &&
+          ["connected", "connecting", "disconnecting"].includes(value.status),
+      ) ||
       editor.documents.some((file) => {
         const target = fileTarget(file.directory);
         return target.kind === "ssh" && target.root.connection.connection_id === connection.id;
@@ -1001,6 +1040,76 @@ export function App() {
       })
     );
   }
+  function canEditSsh(connection: SshConnection): boolean {
+    return (
+      !sshInUse(connection) &&
+      !workspace?.groups?.some((group) =>
+        group.databaseConnections?.some((item) => item.ssh_target?.connection_id === connection.id),
+      )
+    );
+  }
+  useEffect(() => {
+    if (!runtime) return;
+    let disposed = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      const revision = tunnelRevision.current;
+      try {
+        const statuses = await invoke<SshTunnelStatus[]>("ssh_tunnel_list");
+        if (!disposed && revision === tunnelRevision.current && !tunnelRequests.current) {
+          setTunnelStatuses((previous) =>
+            JSON.stringify(previous) === JSON.stringify(statuses ?? [])
+              ? previous
+              : (statuses ?? []),
+          );
+          setTunnelError("");
+        }
+      } catch (reason) {
+        if (!disposed) setTunnelError(sshError(reason));
+      } finally {
+        if (!disposed) timer = setTimeout(() => void refresh(), 1500);
+      }
+    };
+    void refresh();
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+    };
+  }, [!!runtime]);
+  useEffect(() => {
+    const removable =
+      workspace?.groups?.flatMap((group) =>
+        (group.sshConnections ?? []).filter(
+          (connection) =>
+            connection.temporary &&
+            !sshInUse(connection) &&
+            !group.redisConnections?.some(
+              (item) => item.ssh_target?.connection_id === connection.id,
+            ) &&
+            !group.databaseConnections?.some(
+              (item) => item.ssh_target?.connection_id === connection.id,
+            ),
+        ),
+      ) ?? [];
+    if (!removable.length) return;
+    const ids = new Set(removable.map((item) => item.id));
+    const removed = update((previous) => ({
+      ...previous,
+      groups: previous.groups?.map((group) => ({
+        ...group,
+        sshConnections: group.sshConnections?.filter((connection) => !ids.has(connection.id)),
+      })),
+    }));
+    if (removed && selectedSshId && ids.has(selectedSshId)) setSelectedSshId(null);
+  }, [
+    workspace,
+    remoteFileStates,
+    tunnelStatuses,
+    tunnelError,
+    transfers,
+    editor.documents,
+    redisStatuses,
+  ]);
   function newSshTerminal(connection: SshConnection) {
     const start = () => {
       const id = crypto.randomUUID();
@@ -1031,6 +1140,10 @@ export function App() {
   const activeSession = roster?.sessions.find(
     (session) => session.id === workspace?.selectedSession,
   );
+  useEffect(() => {
+    if (activeSession?.ssh)
+      lastSshSessions.current[activeSession.ssh.connection_id] = activeSession.id;
+  }, [activeSession?.id]);
   const activeDatabaseConfig = workspace?.groups
     ?.find((group) => group.id === workspace.selectedWorkspace)
     ?.databaseConnections?.find((connection) => connection.id === selectedDatabaseId);
@@ -1785,6 +1898,10 @@ export function App() {
         redisStatuses={redisStatuses}
         selectedRedisId={activeRedis?.id ?? null}
         selectRedis={(connection) => {
+          const owner = currentWorkspace.current?.groups?.find((group) =>
+            group.redisConnections?.some((item) => item.id === connection.id),
+          );
+          if (owner) connection = resolveRedisSsh(connection, owner.sshConnections ?? [], owner.id);
           const reveal = () => {
             update((previous) => ({
               ...previous,
@@ -1850,6 +1967,10 @@ export function App() {
           void remove().catch((error) => setError(redisError(error)));
         }}
         addSsh={() => setSshDialog({})}
+        quickSsh={() => {
+          if (editor.document) void editor.hide(() => setQuickSshOpen(true));
+          else setQuickSshOpen(true);
+        }}
         editSsh={(connection) => setSshDialog({ connection })}
         selectSsh={(connection) => {
           const select = () => {
@@ -1859,10 +1980,15 @@ export function App() {
             setGitOpen(false);
             setGithubOpen(false);
             setDirectoryOpen(false);
-            setFilesOpen(true);
+            setFilesOpen(false);
             update((previous) =>
               connection.sessions.length
-                ? selectSession(previous, connection.sessions[0].id)
+                ? selectSession(
+                    previous,
+                    connection.sessions.find(
+                      (session) => session.id === lastSshSessions.current[connection.id],
+                    )?.id ?? connection.sessions[0].id,
+                  )
                 : {
                     ...previous,
                     selectedProject: null,
@@ -1875,14 +2001,7 @@ export function App() {
           else select();
         }}
         newSshTerminal={newSshTerminal}
-        canEditSsh={(connection) =>
-          !sshInUse(connection) &&
-          !workspace?.groups?.some((group) =>
-            group.databaseConnections?.some(
-              (item) => item.ssh_target?.connection_id === connection.id,
-            ),
-          )
-        }
+        canEditSsh={canEditSsh}
         canRemoveSsh={(connection) =>
           !sshInUse(connection) &&
           !workspace?.groups?.some((group) =>
@@ -2084,11 +2203,55 @@ export function App() {
           }}
         />
       )}
+      {quickSshOpen && (
+        <SshQuickConnect
+          close={() => setQuickSshOpen(false)}
+          connect={(connection) => {
+            const current = currentWorkspace.current;
+            const group = current?.groups?.find((item) => item.id === current.selectedWorkspace);
+            if (!group || !runtime) return false;
+            const id = crypto.randomUUID();
+            const value = {
+              ...connection,
+              sessions: [
+                {
+                  id,
+                  name: connection.name,
+                  shell: "default" as const,
+                  directory: runtime.home,
+                  ssh: sshTarget(connection, group.id),
+                },
+              ],
+            };
+            const saved = update((previous) =>
+              selectSession(
+                {
+                  ...previous,
+                  groups: previous.groups?.map((item) =>
+                    item.id === group.id
+                      ? { ...item, sshConnections: [...(item.sshConnections ?? []), value] }
+                      : item,
+                  ),
+                },
+                id,
+              ),
+            );
+            if (saved) {
+              setSshLaunches((previous) => new Set(previous).add(id));
+              setSelectedSshId(connection.id);
+              setFilesOpen(false);
+              setTunnelsOpen(false);
+            }
+            return saved;
+          }}
+        />
+      )}
       {sshDialog && (
         <SshConnectionDialog
           workspaceId={workspace?.selectedWorkspace ?? "local"}
           connection={sshDialog.connection}
           close={() => setSshDialog(null)}
+          connect={newSshTerminal}
           save={(connection) => {
             const updateRedis = (value: RedisConfig): RedisConfig =>
               value.ssh_target?.connection_id === connection.id
@@ -2122,7 +2285,19 @@ export function App() {
                   : {}),
               })),
             }));
-            if (saved) setRedisViews((previous) => previous.map(updateRedis));
+            if (saved) {
+              setRedisViews((previous) => previous.map(updateRedis));
+              setSelectedRedisId(null);
+              setSelectedDatabaseId(null);
+              setSelectedSshId(connection.id);
+              setFilesOpen(false);
+              update((previous) => ({
+                ...previous,
+                selectedProject: null,
+                selectedSession: null,
+                selectedWorktree: null,
+              }));
+            }
             return saved;
           }}
         />
@@ -2263,6 +2438,114 @@ export function App() {
           <TransientError key={error || sessionSyncError} message={error || sessionSyncError} />
         )}
         {!workspace && error && <button onClick={() => void load()}>{tx("重试读取")}</button>}
+        {activeSsh && activeSshConnection && (
+          <SshConnectionHeader
+            target={activeSsh}
+            terminalStatus={activeSession ? terminalStatuses[activeSession.id] : undefined}
+            sessions={activeSshConnection.sessions.length}
+            filesStatus={remoteFileStates[sshTargetKey]?.status ?? "idle"}
+            filesVisible={filesOpen}
+            disabled={!runtime || editor.transitioning || editor.pending}
+            canEdit={canEditSsh(activeSshConnection)}
+            newTerminal={() => newSshTerminal(activeSshConnection)}
+            showFiles={() => {
+              setTunnelsOpen(false);
+              setFilesOpen((value) => !value);
+              setGitOpen(false);
+              setGithubOpen(false);
+              setDirectoryOpen(false);
+            }}
+            edit={() => setSshDialog({ connection: activeSshConnection })}
+            temporary={activeSshConnection.temporary}
+            promote={() =>
+              update((previous) => ({
+                ...previous,
+                groups: previous.groups?.map((group) => ({
+                  ...group,
+                  sshConnections: group.sshConnections?.map((connection) =>
+                    connection.id === activeSshConnection.id
+                      ? { ...connection, temporary: false }
+                      : connection,
+                  ),
+                })),
+              }))
+            }
+            tunnelsVisible={tunnelsOpen}
+            showTunnels={() => {
+              if (!tunnelsOpen) setFilesOpen(false);
+              setTunnelsOpen((value) => !value);
+            }}
+          />
+        )}
+        {activeSsh && activeSshConnection && tunnelsOpen && (
+          <SshTunnels
+            key={activeSshConnection.id}
+            rules={activeSshConnection.forwards ?? []}
+            statuses={tunnelStatuses.filter(
+              (item) => item.connection_id === activeSshConnection.id,
+            )}
+            error={tunnelError}
+            save={(forwards) =>
+              update((previous) => ({
+                ...previous,
+                groups: previous.groups?.map((group) => ({
+                  ...group,
+                  sshConnections: group.sshConnections?.map((connection) =>
+                    connection.id === activeSshConnection.id
+                      ? { ...connection, forwards }
+                      : connection,
+                  ),
+                })),
+              }))
+            }
+            start={async (rule) => {
+              tunnelRevision.current++;
+              tunnelRequests.current++;
+              const status: SshTunnelStatus = {
+                id: rule.id,
+                connection_id: activeSshConnection.id,
+                state: "starting",
+              };
+              const put = (value: SshTunnelStatus) =>
+                setTunnelStatuses((previous) => [
+                  ...previous.filter(
+                    (item) => item.id !== rule.id || item.connection_id !== value.connection_id,
+                  ),
+                  value,
+                ]);
+              put(status);
+              try {
+                put(
+                  await invoke<SshTunnelStatus>("ssh_tunnel_start", {
+                    connection: activeSsh,
+                    rule,
+                  }),
+                );
+              } catch (reason) {
+                put({ ...status, state: "error", error: String(reason) });
+                throw reason;
+              } finally {
+                tunnelRevision.current++;
+                tunnelRequests.current--;
+              }
+            }}
+            stop={async (id) => {
+              tunnelRevision.current++;
+              tunnelRequests.current++;
+              try {
+                await invoke("ssh_tunnel_stop", { connectionId: activeSshConnection.id, id });
+                setTunnelStatuses((previous) =>
+                  previous.filter(
+                    (item) => item.id !== id || item.connection_id !== activeSshConnection.id,
+                  ),
+                );
+              } finally {
+                tunnelRevision.current++;
+                tunnelRequests.current--;
+              }
+            }}
+          />
+        )}
         <WorkspaceTabs
           sessions={roster?.sessions ?? []}
           documents={editor.documents.filter((item) => item.directory === fileDirectory)}
@@ -2331,6 +2614,29 @@ export function App() {
                 <div className="welcome-content">
                   <h2>{activeSsh.name}</h2>
                   <p className="welcome-description">{activeSsh.host}</p>
+                  <p className="welcome-description">
+                    {tx("选择已有会话，或新建终端。文件通过 SFTP 单独连接。")}
+                  </p>
+                  <dl className="ssh-overview-details">
+                    <div>
+                      <dt>{tx("远端系统")}</dt>
+                      <dd>{activeSsh.os === "windows" ? "Windows" : "Linux / macOS"}</dd>
+                    </div>
+                    <div>
+                      <dt>{tx("远程文件根目录")}</dt>
+                      <dd>{activeSsh.root || tx("服务端登录目录")}</dd>
+                    </div>
+                    <div>
+                      <dt>{tx("认证方式")}</dt>
+                      <dd>
+                        {activeSsh.authentication === "password"
+                          ? tx("密码")
+                          : activeSsh.authentication === "key"
+                            ? tx("私钥 / ssh-agent")
+                            : tx("OpenSSH 自动认证")}
+                      </dd>
+                    </div>
+                  </dl>
                   <button
                     className="welcome-action primary"
                     onClick={() => newSshTerminal(activeSshConnection)}
@@ -2465,6 +2771,7 @@ export function App() {
             )}
             {runtime && workspace && (
               <TerminalWorkspace
+                onTerminalStatus={onTerminalStatus}
                 sshLaunches={sshLaunches}
                 onSshRestart={(id) => {
                   const entry = sessionRosters(currentWorkspace.current!).find((roster) =>
@@ -2608,6 +2915,14 @@ export function App() {
           key={sshTargetKey}
           connection={activeSsh}
           directory={remoteDirectories[sshTargetKey]}
+          status={remoteFileStates[sshTargetKey]?.status ?? "idle"}
+          lastError={remoteFileStates[sshTargetKey]?.error}
+          onStatus={(status, error = "") =>
+            setRemoteFileStates((previous) => ({
+              ...previous,
+              [sshTargetKey]: { connectionId: activeSsh.connection_id, status, error },
+            }))
+          }
           onRoot={(directory) =>
             setRemoteDirectories((previous) => ({ ...previous, [sshTargetKey]: directory }))
           }

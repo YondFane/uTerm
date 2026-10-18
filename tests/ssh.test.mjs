@@ -17,6 +17,98 @@ import {
 } from "../src/lib/workspace.ts";
 import { fileTarget, remoteDirectory, displayDirectory } from "../src/lib/file-target.ts";
 import { readDraft } from "../src/lib/file-document.ts";
+import { sshEndpoint, parseQuickSsh, matchesSsh } from "../src/lib/ssh.ts";
+import { validSshJump, validSshForward, sshTargetFor } from "../src/lib/workspace.ts";
+import { resolveRedisSsh } from "../src/lib/redis.ts";
+
+test("quick connections parse addresses without accepting commands, passwords or malformed ports", () => {
+  assert.equal(parseQuickSsh("prod").mode, "alias");
+  assert.equal(parseQuickSsh("prod").port, undefined);
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(parseQuickSsh("ssh://dev@[::1]:2222")).filter(([key]) =>
+        ["host", "username", "port", "temporary"].includes(key),
+      ),
+    ),
+    { host: "::1", username: "dev", port: 2222, temporary: true },
+  );
+  assert.equal(parseQuickSsh("127.0.0.1").port, 22);
+  for (const address of [
+    "",
+    "ssh user@host",
+    "-oProxyCommand=bad",
+    "ssh://user:password@host",
+    "host:0",
+    "host:65536",
+    "host:",
+    "a@b@c",
+    "host/path",
+    "host?x",
+    "$(whoami)",
+    "host;ls",
+    "[::1]bad",
+    "ssh://%61@host",
+  ])
+    assert.equal(parseQuickSsh(address), null, address);
+  assert.equal(
+    matchesSsh({ name: "Production", host: "db.internal", username: "ops" }, " INternal "),
+    true,
+  );
+  assert.equal(
+    matchesSsh({ name: "Production", host: "db.internal", username: "ops" }, "OPS"),
+    true,
+  );
+});
+test("SSH jump and forwarding settings survive storage without entering terminal forwarding options", () => {
+  const state = emptyWorkspace();
+  const profile = {
+    id: "jump",
+    name: "Jump",
+    host: "prod",
+    os: "posix",
+    root: "",
+    sessions: [],
+    temporary: false,
+    jump_host: "ops@bastion:2222",
+    forwards: [
+      {
+        id: "12345678-1234-1234-1234-123456789abc",
+        local_port: 18080,
+        remote_host: "127.0.0.1",
+        remote_port: 80,
+      },
+    ],
+  };
+  state.groups[0].sshConnections = [profile];
+  const restored = readWorkspace(JSON.stringify(state)).groups[0].sshConnections[0];
+  assert.deepEqual(restored.forwards, profile.forwards);
+  assert.equal(restored.jump_host, profile.jump_host);
+  assert.equal(sshTargetFor(restored, "local").forwards, undefined);
+  for (const jump of ["a,b", "-x", "a:0", "a:65536", "a;exec"])
+    assert.equal(validSshJump(jump), false);
+  const rule = profile.forwards[0];
+  assert.equal(validSshForward({ ...rule, local_port: 0 }), false);
+  assert.equal(validSshForward({ ...rule, remote_host: "user@host" }), false);
+  const redis = { ssh_host: "old", ssh_target: { ...sshTargetFor(profile, "local"), port: 22 } };
+  const current = resolveRedisSsh(redis, [{ ...profile, port: 2222 }], "local");
+  assert.equal(current.ssh_host, "prod");
+  assert.equal(current.ssh_target.port, 2222);
+  assert.equal(current.ssh_target.jump_host, profile.jump_host);
+  assert.equal(resolveRedisSsh(redis, [{ ...profile, temporary: true }], "local"), redis);
+});
+
+test("SSH endpoints bracket IPv6 and never invent inherited usernames or ports", () => {
+  const target = { host: "prod", mode: "alias" };
+  assert.equal(sshEndpoint(target), "prod");
+  assert.equal(
+    sshEndpoint({ ...target, host: "2001:db8::1", username: "dev", port: 2222 }),
+    "dev@[2001:db8::1]:2222",
+  );
+  assert.equal(
+    sshEndpoint(target, { hostname: "[::1]", username: "resolved", port: "2200", proxy: false }),
+    "resolved@[::1]:2200",
+  );
+});
 const connection = (id, workspace = "local") => ({
   id,
   name: id,

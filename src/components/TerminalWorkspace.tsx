@@ -15,6 +15,7 @@ import {
   moveSessionPane,
 } from "../lib/workspace";
 import type { Divider, PaneFrame, Workspace } from "../lib/workspace";
+import type { TerminalStatus } from "../lib/ssh";
 
 const frameStyle = (frame: PaneFrame): CSSProperties => ({
   left: `${frame.x * 100}%`,
@@ -27,6 +28,7 @@ export function TerminalWorkspace({
   workspace,
   sshLaunches,
   onSshRestart,
+  onTerminalStatus,
   zoomed,
   focusRequest,
   closeRequest,
@@ -39,6 +41,7 @@ export function TerminalWorkspace({
 }: {
   sshLaunches?: ReadonlySet<string>;
   onSshRestart?: (id: string) => void;
+  onTerminalStatus?: (id: string, status: TerminalStatus | null) => void;
   agentStates: Record<string, string>;
   onAgentState: (id: string, state: string, initial: boolean) => void;
   onDetectedAgent: (id: string, agent: string | null) => void;
@@ -154,6 +157,7 @@ export function TerminalWorkspace({
           session={session}
           allowSshCreate={sshLaunches?.has(session.id)}
           onSshRestart={() => onSshRestart?.(session.id)}
+          onStatus={session.ssh ? (status) => onTerminalStatus?.(session.id, status) : undefined}
           agentState={agentStates[session.id]}
           closeRequest={closeRequest?.id === session.id ? closeRequest.sequence : 0}
           active={session.id === workspace.selectedSession}

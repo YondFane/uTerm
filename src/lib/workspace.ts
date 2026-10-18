@@ -9,6 +9,7 @@ export interface SshOptions {
   identity_file?: string;
   credential_id?: string | null;
   remember_password?: boolean;
+  jump_host?: string;
 }
 export interface SshTarget extends SshOptions {
   connection_id: string;
@@ -19,6 +20,8 @@ export interface SshTarget extends SshOptions {
   root: string;
 }
 export interface SshConnection extends SshOptions {
+  temporary?: boolean;
+  forwards?: SshForward[];
   id: string;
   name: string;
   host: string;
@@ -26,6 +29,50 @@ export interface SshConnection extends SshOptions {
   root: string;
   sessions: SessionConfig[];
   splitGroups?: SplitNode[];
+}
+export interface SshForward {
+  id: string;
+  local_port: number;
+  remote_host: string;
+  remote_port: number;
+}
+export function validSshJump(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 512) return false;
+  if (!value) return true;
+  const match =
+    /^(?:[a-zA-Z0-9_][a-zA-Z0-9_.-]*@)?(?:[a-zA-Z0-9_][a-zA-Z0-9_.-]*|\[[0-9a-fA-F:.]+\])(?::([0-9]{1,5}))?$/.exec(
+      value,
+    );
+  const ipv6 = value.match(/\[([^\]]+)\]/)?.[1];
+  return (
+    !!match &&
+    (!ipv6 || validSshIpv6(ipv6)) &&
+    (!match[1] || (Number(match[1]) > 0 && Number(match[1]) <= 65535))
+  );
+}
+export function validSshIpv6(host: string): boolean {
+  try {
+    return new URL(`http://[${host}]/`).hostname.includes(":");
+  } catch {
+    return false;
+  }
+}
+export function validSshForward(value: unknown): value is SshForward {
+  const rule = value as SshForward;
+  return (
+    !!rule &&
+    Object.keys(rule).every((key) =>
+      ["id", "local_port", "remote_host", "remote_port"].includes(key),
+    ) &&
+    typeof rule.id === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rule.id) &&
+    [rule.local_port, rule.remote_port].every(
+      (port) => Number.isInteger(port) && port > 0 && port <= 65535,
+    ) &&
+    validSshHost(rule.remote_host) &&
+    (!rule.remote_host.includes(":") || validSshIpv6(rule.remote_host)) &&
+    !/[@\[\]]/.test(rule.remote_host)
+  );
 }
 const sshOptionKeys = [
   "mode",
@@ -35,6 +82,7 @@ const sshOptionKeys = [
   "identity_file",
   "credential_id",
   "remember_password",
+  "jump_host",
 ] as const;
 export function sshOptions(value: SshOptions): SshOptions {
   return Object.fromEntries(
@@ -71,6 +119,8 @@ function validSshOptions(value: SshOptions & { host: string }): boolean {
           value.credential_id,
         ))) &&
     (value.remember_password === undefined || typeof value.remember_password === "boolean") &&
+    (value.jump_host === undefined || validSshJump(value.jump_host)) &&
+    !(value.authentication === "password" && value.jump_host) &&
     (value.mode !== "direct" ||
       (typeof value.host === "string" && !value.host.includes("@") && value.port !== undefined))
   );
@@ -518,10 +568,21 @@ export function readWorkspace(serialized: string | null): Workspace {
             "root",
             "sessions",
             "splitGroups",
+            "temporary",
+            "forwards",
             ...sshOptionKeys,
           ].includes(key),
         ) ||
         !validSshOptions(connection) ||
+        (connection.temporary !== undefined && typeof connection.temporary !== "boolean") ||
+        (connection.forwards !== undefined &&
+          (!Array.isArray(connection.forwards) ||
+            connection.forwards.length > 16 ||
+            !connection.forwards.every(validSshForward) ||
+            new Set(connection.forwards.map((rule: SshForward) => rule.id)).size !==
+              connection.forwards.length ||
+            new Set(connection.forwards.map((rule: SshForward) => rule.local_port)).size !==
+              connection.forwards.length)) ||
         !identifier(connection.id) ||
         !text(connection.name) ||
         !validSshHost(connection.host) ||
@@ -549,6 +610,8 @@ export function readWorkspace(serialized: string | null): Workspace {
         os: connection.os,
         root: connection.root,
         ...sshOptions(connection),
+        ...(connection.temporary !== undefined ? { temporary: connection.temporary } : {}),
+        ...(connection.forwards !== undefined ? { forwards: connection.forwards } : {}),
         sessions,
         splitGroups: readSplitGroups(connection.splitGroups, sessions),
       };

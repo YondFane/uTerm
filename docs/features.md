@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-17
+updated: 2026-10-18
 ---
 
 # uTerm feature guide
@@ -71,8 +71,8 @@ Missing assets, rate limits or network failure retain the release-page fallback.
 expose the existing npm/macOS/PowerShell commands; copying reports success or selects the command
 with visible manual-copy guidance when clipboard access fails.
 
-Database use still requires Java 17+ and the selected driver, and macOS first launch may require
-Privacy & Security approval.
+SQL and MongoDB use require Java 17+ and the selected drivers; Elasticsearch requires no additional
+runtime, and macOS first launch may require Privacy & Security approval.
 
 ### Local preview and publication
 
@@ -643,6 +643,16 @@ workspace changes or the sidebar/connection section is hidden.
 The sidebar’s SSH connections belong to the current workspace. Add a connection using a host
 address, port (default 22), username, remote system (Linux/macOS or Windows) and optional file root.
 
+- Choose Host address or OpenSSH configuration. Authentication defaults to OpenSSH automatic
+  selection. More settings contains the optional connection name, remote system and file root; a
+  blank name uses the host. Save only stores the profile; Save and connect stores it before creating
+  a terminal. Failed storage never authorizes a new login.
+
+- Show effective configuration runs the system client's configuration resolution without opening a
+  remote login. It shows the effective username, address, port and whether a jump host or proxy is
+  configured. Explicit username/port values override inherited configuration; blank values in alias
+  mode remain inherited.
+
 - A blank username uses OpenSSH configuration or the local account; a blank root uses the server
   login directory. Host alias mode retains existing profiles and reads `~/.ssh/config`, including
   Include files, without rewriting it.
@@ -652,6 +662,76 @@ address, port (default 22), username, remote system (Linux/macOS or Windows) and
 
 - System OpenSSH must be installed; Windows users can install the OpenSSH Client optional feature.
   No SSH executable, JVM or new runtime dependency is bundled for these connection options.
+
+### Quick connections and host search
+
+Choose **Quick SSH connection** in the SSH sidebar and enter a Host alias, `user@host:port` or
+`ssh://user@host:port`. IPv6 addresses with a port use brackets, such as `user@[::1]:2222`. A plain
+alias inherits OpenSSH configuration; explicit addresses default to port 22. Commands, embedded
+passwords, URL paths and invalid ports are rejected.
+
+Quick connections use automatic OpenSSH authentication in the terminal. They appear as Temporary;
+their local settings remain available for attachment after reopening the app. Closing the last
+session removes a temporary connection after file channels, file tabs, transfers and tunnels have
+been released. **Save connection** keeps the profile without changing existing sessions. Save it
+before selecting it for a Redis or database tunnel.
+
+**Search SSH hosts** filters the current workspace by connection name, host and username, ignoring
+case. Clearing the search restores all hosts; filtering preserves sessions and connections.
+
+### Jump hosts
+
+In **More settings → Jump host (optional)**, choose an OpenSSH alias or enter one jump endpoint,
+such as `ops@bastion:2222`. Leaving it blank inherits OpenSSH configuration. The effective
+configuration preview includes the jump setting without logging in.
+
+The same jump setting is used by terminals, SFTP, port forwarding and Redis tunnels. The jump host
+uses its own OpenSSH configuration or ssh-agent; a saved target password or target-specific key is
+not automatically applied to the jump host. Password mode does not support jump hosts. Multiple
+jumps and ProxyCommand remain available through existing OpenSSH aliases. Older session hosts must
+be safely restarted before creating sessions with an explicit jump setting.
+
+### Local port forwarding
+
+Open **Port forwarding** in the SSH connection header. Enter a local port, a remote address and a
+remote port, then select **Add forwarding**. Rules are saved with the connection and start only when
+**Start forwarding** is selected. The SSH server accesses the remote address, so `127.0.0.1` refers
+to that server. Local listeners bind only to `127.0.0.1`.
+
+Startup, listening, failure and stopped states are shown independently of terminals and SFTP. A
+listening status confirms the local SSH listener, not remote service availability. **Stop
+forwarding** releases the process and port; active rules cannot be removed. Hiding the panel keeps
+forwarding active. Quitting stops these forwards; reopening does not restart them. Terminal
+attachment continues to follow its existing lifecycle.
+
+Opening Port forwarding hides the remote file panel while preserving its connection. Opening Remote
+files hides the forwarding panel while leaving active forwards running.
+
+- Up to 16 rules can be saved per connection, with no duplicate local ports within that connection;
+  up to 16 forwards can run across the app. Ports must be 1–65535. Occupied ports and authentication
+  failures remain visible; startup waits up to 60 seconds.
+- Automatic/key authentication requires trusted hosts and noninteractive keys/ssh-agent. Password
+  authentication follows the existing password and fingerprint policy. The connection remains
+  protected from editing or removal during startup or forwarding.
+- Local TCP forwarding is supported. Remote forwarding, dynamic SOCKS forwarding and automatic
+  startup are not exposed. Profiles that already contain OpenSSH forwarding rules are rejected for
+  this panel; use an alias without those rules to avoid opening unintended listeners.
+
+### Connection workspace
+
+Selecting a host returns to its last selected session in the current app run, or shows the
+connection overview if it has no sessions. The overview lists the remote system, authentication and
+file root. Selection does not open an SFTP connection.
+
+The connection header shows the current session's target, resolved endpoint, terminal process status
+and file connection status. New SSH terminal, Remote files and Edit SSH connection stay nearby.
+Editing remains disabled while sessions, file connections, retained file tabs, transfers or
+dependent workbenches use the connection.
+
+Terminal status describes the local SSH process or attachment, not successful server authentication.
+Complete fingerprint and interactive authentication prompts in the terminal. Ended sessions retain
+their output; reattaching restores an existing local attachment, while a new terminal starts a new
+remote login.
 
 ### Passwords and host verification
 
@@ -695,9 +775,15 @@ Older background services must be safely restarted after closing their sessions 
 
 ### Opening remote files
 
-Selecting a connection opens its SFTP file panel using that profile’s host, port, username and
-authentication. Automatic/key modes require a trusted host and noninteractive key/ssh-agent
-authentication; confirm an unknown host in an SSH terminal first.
+Open Remote files, then choose Connect files to start SFTP using the profile's host, port, username
+and authentication. Connection progress and errors are separate from terminal status. Closing the
+panel retains its cached connection; Disconnect files passes through editor save protection and
+releases only file channels. Reconnect also passes through that protection and keeps the previously
+resolved endpoint and root as its expected target. Neither selecting a host nor disconnecting files
+starts a login automatically.
+
+Automatic/key modes require a trusted host and noninteractive key/ssh-agent authentication; confirm
+an unknown host in an SSH terminal first.
 
 Password mode can also confirm a new host in a native dialog. File roots are independent of shell
 `cd`; Windows roots must use local drive paths, not UNC shares.
@@ -747,7 +833,8 @@ completion, errors and cancellation.
 
 - At most four transfers and sixteen cached remote file connections are allowed; Reconnect releases
   that connection’s previous file channels. Editing and removal are disabled while a connection has
-  sessions, retained file tabs, active transfers or a connected/busy/dirty Redis workbench using it.
+  sessions, retained file tabs, active transfers, starting/running port forwards or a
+  connected/busy/dirty Redis workbench using it.
 
 - Removal also requires removing dependent Redis profiles. Saving an idle SSH profile updates
   dependent Redis profiles; remembered Redis credentials remain bound to their original endpoint.
@@ -755,6 +842,31 @@ completion, errors and cancellation.
 - Existing sessions retain their target.
 
 #### SSH and SFTP checks
+
+- Windows automated checks: 17 focused frontend tests pass, including quick-address validation,
+  temporary connection cleanup/promotion, host filtering, jump/rule persistence, Redis profile
+  resolution, forwarding save failures and explicit start/stop, plus the existing SSH/SFTP guards.
+  All 102 regular backend tests and 26 local-service tests pass; six optional backend tests remain
+  ignored. Process fixtures cover listener readiness, startup exit, timeout, cancellation and
+  cleanup; they do not establish a real SSH forwarding connection.
+
+- The full Windows frontend run passes with 241 passed and 11 skipped. Changed-file formatting,
+  TypeScript, localization, documentation checks and the isolated desktop build pass.
+  Repository-wide formatting still reports unrelated files.
+
+- An isolated Windows application (`sh.uterm.desktop.qa.sshredesign`) verified the native connection
+  form, default automatic authentication, Save only returning to an overview with zero sessions,
+  effective OpenSSH endpoint display, a remote file panel that stays disconnected until requested,
+  and independent SFTP connection progress and failure feedback. These checks used a loopback
+  profile, not a successfully authenticated remote service. Real Windows SSH/SFTP authentication,
+  Credential Manager and macOS/Linux acceptance of the redesigned interface remain pending.
+
+- An isolated Windows application (`sh.uterm.desktop.qa.sshp1`) checked quick connection creation,
+  the Temporary marker, saving a connection, explicit forwarding startup and separate failure
+  feedback against an unavailable loopback endpoint. Reopening retained saved rules without starting
+  them. At 640×420, the connection header, forwarding rules and scrollable jump-host form were
+  visually inspected. Successful forwarding, a real jump server, password forwarding and the
+  redesigned macOS/Linux runtime remain pending acceptance.
 
 - Validation: macOS automated tests exercise migration, connection/session isolation, grouping,
   target validation, remote draft identity, attach-only restoration, exclusion of local tools and
@@ -804,6 +916,12 @@ username/password from the sidebar.
 - Tunnels reuse the selected profile’s host, port, username and automatic/key/password
   authentication and require TCP forwarding permission. Legacy alias-only Redis profiles remain
   supported.
+
+- The SSH selector references saved profiles, including their jump setting. Opening the Redis
+  connection editor or selecting a workbench resolves the current profile; saving an idle SSH
+  profile also updates dependent Redis settings. Active workbenches retain their protected target
+  until disconnected. Temporary SSH connections must be saved first. Redis owns its tunnel process
+  independently of terminal, SFTP and local port forwarding processes.
 
 - Password-mode host confirmation and credential lifetime follow the SSH profile. TLS can also run
   inside a tunnel and always verifies the Redis server name; use an optional PEM CA certificate and
@@ -1529,46 +1647,98 @@ configured absolute executable path.
 
 ### Agent brand icons
 
-Kimi, OpenCode and Grok use their brand icons in Agent settings, sidebar creation/session controls
-and session tabs. Their SVG paths are bundled locally from the MIT-licensed Lobe Icons collection,
-with the pinned source revision and license retained in `NOTICE`.
+Kimi, OpenCode, Grok, Hermes, Pi, MiniMax, Qwen Code, Copilot CLI and iFlow CLI use their brand
+icons in Agent settings, sidebar creation/session controls and session tabs. Hermes, MiniMax, Qwen
+Code and Copilot CLI use Lobe Icons' original brand paths; Pi uses its official SVG geometry, and
+iFlow uses the official CLI site's favicon. Sources and applicable rights are retained in `NOTICE`.
 
-Icons inherit the interface color in dark and light themes and need no network request. Unknown
-agents retain the terminal icon.
+Vector marks inherit the interface color in dark and light themes; iFlow retains its original image
+colors. All assets ship locally and need no network request. Unknown agents retain the terminal
+icon.
 
 #### Brand-icon checks on Windows
 
-- Brand-icon validation on Windows: all 15 focused component/localization and Agent-enablement
-  checks, changed-source/test formatting, localization checks and TypeScript/production build pass.
-  An isolated native Tauri/WebView2 QA host (`sh.uterm.desktop.qa.agenticons`) renders the real
-  Agent settings and shared session icons with temporary state; visual inspection verifies all three
-  marks, label alignment and compact controls in dark/light themes with Chinese/English labels.
+- Windows validation passes 17 focused frontend checks, changed-source/test formatting and
+  TypeScript/production build. Icon checks cover the bundled paths, original iFlow image, distinct
+  marks and safe fallback for unknown identifiers.
 
-- The fixture does not launch Agents or restart the installed application; macOS/Linux visual
-  acceptance remains pending. Repository-wide formatting reports existing issues in 100 other files;
-  the tests retain existing Vite WebSocket-port/React act warnings, and the production build retains
-  its large-chunk warning.
+- The isolated native Tauri/WebView2 fixture (`sh.uterm.desktop.qa.agenthooksicons`) renders the
+  real Agent settings with temporary availability data. Visual inspection confirms all six
+  additional marks and Hook controls in Chinese/dark and English/light views. It does not launch
+  providers or restart the installed app; macOS/Linux visual acceptance remains pending. The tests
+  retain Vite WebSocket-port/React act warnings and production builds retain the large-chunk
+  warning.
 
 ### Agent installation
 
-OpenCode is a built-in Agent: its `opencode` executable is detected on PATH and in
-`~/.opencode/bin`, and it uses the existing project/chat launch flow. Missing programs expose an
-installation panel.
+Settings → Agent and the standalone Agent panel include Claude, Codex, Gemini, OpenCode, Kimi, Grok,
+Hermes, Pi, MiniMax, Qwen Code, Copilot CLI and iFlow CLI. Each uses the existing project/chat
+launch flow and starts disabled.
 
-- OpenCode, Claude, Codex and Gemini support confirmed global npm installation (Node.js/npm and
-  network access required; no privilege elevation). Only fixed package identifiers are accepted;
-  installation runs off the UI thread, concurrent installs are rejected, and errors remain visible.
+1. For a missing program, select Install program, then confirm installation or open the official
+   installation guide.
+2. After installation, select Check again. Configure a custom executable path when needed.
+3. Turn on Enable, then create a session from a project/Worktree row or the Add menu.
+
+| Agent                                                                                                        | Default command | Installation entry                     |
+| ------------------------------------------------------------------------------------------------------------ | --------------- | -------------------------------------- |
+| [Hermes](https://hermes-agent.nousresearch.com/docs/getting-started/installation/)                           | `hermes`        | Official installer script              |
+| [Pi](https://pi.dev/)                                                                                        | `pi`            | npm: `@earendil-works/pi-coding-agent` |
+| [MiniMax](https://agent.minimax.io/docs/cli/quick-start)                                                     | `mcode`         | npm: `@minimax-ai/code`                |
+| [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/quickstart/)                                    | `qwen`          | npm: `@qwen-code/qwen-code`            |
+| [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli) | `copilot`       | npm: `@github/copilot`                 |
+| [iFlow CLI](https://docs.iflow.cn/cli/quickstart/)                                                           | `iflow`         | npm: `@iflow-ai/iflow-cli`             |
+
+- OpenCode, Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot CLI and iFlow CLI support
+  confirmed global npm installation. Node.js/npm, a version supported by the CLI and network access
+  are required; installation does not elevate privileges. Only fixed package identifiers are
+  accepted; installation runs off the UI thread, concurrent installs are rejected, and errors remain
+  visible.
 
 - Completion refreshes program detection; custom npm prefixes may require configuring the executable
-  path or restarting uTerm. Kimi links to its official installation instructions; Grok and custom
+  path or restarting uTerm. Kimi links to official installation instructions; Grok and custom
   executables require publisher-directed manual installation and path configuration.
 
-- OpenCode does not yet expose Hooks or usage integration.
+- Detection preserves inherited PATH precedence. Default search paths include `~/.local/bin`,
+  `~/.opencode/bin`, `~/.kimi-code/bin`, `~/.pi/agent/bin` and `~/.minimax-code/bin`. Windows also
+  searches `%APPDATA%\npm`, `%LOCALAPPDATA%\hermes\bin` and `%USERPROFILE%\.minimax-code`.
+
+- Hermes downloads its official platform script and runs it without interactive setup, browser or
+  computer-use installation. The download is limited to 1 MiB; execution is limited to ten minutes
+  and 10 MiB of output. It does not elevate privileges or bypass PowerShell execution policy.
+  MiniMax's npm installation includes optional dependencies and permits its SQLite install scripts.
+
+- Complete provider login and model configuration in the CLI itself. These six additional Agents do
+  not provide uTerm usage integration. The iFlow project has announced service shutdown; retaining
+  its installer and Hooks does not guarantee that its hosted services are available.
 
 #### Validation and limits
 
-- Bilingual component tests cover confirmation, failure/retry and refresh; backend tests cover the
-  package allowlist. Actual package downloads, native Agent launch and macOS installation remain
+- Bilingual component tests cover confirmation, failure/retry, refresh, official installation links,
+  enablement and the MiniMax `mcode` configuration default. Backend tests cover the package
+  allowlist. Windows local-service fixtures verify all six additional command mappings, default
+  installation directories, inherited PATH precedence, launch command construction and custom
+  program overrides.
+
+- Windows validation passes 19 focused frontend checks, 104 backend checks (six optional checks
+  ignored) and 26 local-service checks. Tests cover custom identifier isolation, literal installer
+  paths, MiniMax dependency flags, Hook reinstall/removal without unnecessary files or backups,
+  retained user entries, malformed JSON, configuration conflicts and Pi's settled completion and
+  closed reporter input. Formatting of the changed source/tests and Rust files, documentation,
+  TypeScript/production and the isolated desktop build (`sh.uterm.desktop.qa.additionalagentscheck`)
+  pass.
+
+- The full frontend/build-helper suite passes 241 checks with 11 optional/platform checks skipped;
+  localization passes. Repository-wide formatting reports issues in 148 other working-tree files.
+  These automated checks do not establish live provider, database or SSH acceptance.
+
+- An isolated native Tauri/WebView2 fixture (`sh.uterm.desktop.qa.additionalagents`) renders the
+  real Agent settings with temporary availability and settings data. Visual inspection confirms the
+  six names, availability and switch alignment in the Chinese dark interface, English label
+  switching and the MiniMax `mcode` field. The fixture does not launch provider CLIs or replace the
+  installed app.
+
+- Actual package downloads, authenticated Agent sessions and macOS/Linux runtime acceptance remain
   unverified.
 
 ### Dismissing break reminders
@@ -1649,22 +1819,52 @@ click the tray icon to open it.
 Agent definitions specify a program and argument list. Hooks report activity; usage can combine
 local logs with provider requests when enabled.
 
+Custom identifiers keep their own configuration actions and do not inherit built-in installation
+guides or defaults, including identifiers such as `constructor`.
+
 Provider credentials and permissions determine availability. Terminal input and process I/O are
 handled independently of UI rendering.
 
 ### Installing and removing Hooks
 
-Settings → Agent → Install Hooks configures Claude, Codex and Gemini. Reinstalling keeps one uTerm
-reporter per supported event, replacing recognized entries from other release, development or QA
-installations even when their paths differ.
+Settings → Agent → Install Hooks configures Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot
+CLI and iFlow CLI. Reinstalling keeps one uTerm reporter per supported event, replacing recognized
+entries from other release, development or QA installations even when their paths differ.
 
 - Remove Hooks also removes these recognized entries for the selected Agent. Other tools' commands
   and settings, including commands in the same group, are preserved.
+
+- Unchanged Hook configurations are not rewritten or backed up again. Removing absent Hooks does not
+  create configuration files or extensions; unrelated empty Hook groups are preserved.
 
 - Only literal standalone uTerm reporter commands are managed; double-quoted command substitutions
   or variable expressions, custom wrappers and combined shell commands remain untouched.
   Configuration conflict checks and backups remain in effect, and changes apply to new Agent
   sessions.
+
+| Agent       | Hook file or extension                     | Activity                                     |
+| ----------- | ------------------------------------------ | -------------------------------------------- |
+| Qwen Code   | `~/.qwen/settings.json`                    | Idle, working, permission waiting, completed |
+| iFlow CLI   | `~/.iflow/settings.json`                   | Idle, working, notification, completed       |
+| Copilot CLI | `~/.copilot/hooks/uterm-activity.json`     | Idle, working, completed                     |
+| Pi          | `~/.pi/agent/extensions/uterm-activity.js` | Idle, working, settled completion            |
+| MiniMax     | `~/.minimax/plugins/uterm-activity/`       | Idle, working, permission waiting, completed |
+
+Copilot uses direct executable/argument entries. Pi runs its reporter off the UI thread, closes the
+reporter's input and waits for `agent_settled`, so an intermediate `agent_end` does not report a
+finished task. Pi requires a version that exposes this event; update older installations. Pi and
+Copilot do not report a separate permission-waiting state.
+
+MiniMax uses a local compatible plugin. If it was manually disabled, enable `uterm-activity` in
+`/plugins`. Custom directories honor `COPILOT_HOME`, `PI_CODING_AGENT_DIR`, `MINIMAX_DATA_DIR` and
+`MAVIS_DATA_DIR`; set the MiniMax data directory to the active custom profile when applicable.
+Existing hook-disable settings and unrelated plugins are preserved. Remove Hooks leaves Pi's
+extension inactive and removes uTerm commands from the JSON configurations, retaining backups.
+
+Hermes provides a Hook setup guide instead of automatic uTerm state integration. Its shared gateway
+can serve multiple terminal clients without their individual uTerm environment, so gateway hooks
+cannot reliably identify a terminal session. Follow its official guide for manual hooks; enabling
+them does not establish uTerm session-state integration.
 
 ### Windows Hook commands
 
@@ -1690,12 +1890,12 @@ state. Unviewed completion highlights the sidebar icon until acknowledged.
 
 #### Hook and notification automated checks
 
-- Hook and notification validation on Windows: the complete frontend/build-helper suite passes (233
-  passed, ten optional/platform checks skipped), together with 24 local-service checks and all 89
+- Hook and notification validation on Windows: the complete frontend/build-helper suite passes (241
+  passed, 11 optional/platform checks skipped), together with 26 local-service checks and all 104
   backend checks in a serialized run (six optional/resource checks ignored). Hook regressions cover
   idempotent installation, old/encoded paths, mixed groups, removal, unrelated commands,
-  preservation of dynamic shell expressions and actual PowerShell/cmd execution with literal
-  special-character paths.
+  preservation of dynamic shell expressions, no-op file/backup protection and actual PowerShell/cmd
+  execution with literal special-character paths.
 
 - The App regression covers indicator states, unread acknowledgement, opt-in, focus, permissions,
   replay, duplicate suppression, development builds and dispatch failures. Deferred permission
@@ -1704,7 +1904,7 @@ state. Unviewed completion highlights the sidebar icon until acknowledged.
 
 - Changed-source/test and Rust formatting, localization, documentation checks, TypeScript/production
   and the isolated Windows desktop build (`sh.uterm.desktop.qa.branchaudit`) pass. Repository-wide
-  formatting retains existing issues in 97 other files, and tests/builds retain the Vite
+  formatting retains existing issues in 148 other files, and tests/builds retain the Vite
   WebSocket-port, React act and large-chunk warnings.
 
 - The deferred-notification checks use mocked native commands; installed notification branding,
@@ -2794,8 +2994,9 @@ runtime acceptance recorded for each feature.
 
 ### Database setup and visibility
 
-The workspace's Databases section supports MySQL, PostgreSQL and Oracle service-name connections.
-Add a profile with the section's plus button, select it and click Connect.
+The workspace's Databases section supports MySQL, PostgreSQL, Oracle service-name, Elasticsearch and
+MongoDB connections. SQL databases open the SQL workbench; Elasticsearch and MongoDB open the
+document workbench. Add a profile with the section's plus button, select it and click Connect.
 
 - The footer database icon independently shows/hides the section, retaining its connections, SQL and
   transactions. Connected, busy or dirty profiles cannot be edited or removed; referenced SSH
@@ -2818,8 +3019,9 @@ them in macOS Keychain or Windows Credential Manager.
 
 ### Java and driver components
 
-The JDBC engine is bundled (28,972 bytes); its checked-in source, checksum and JAR are verified
-together. Connection restores missing or modified versioned cache copies atomically.
+The SQL and MongoDB connection engine is bundled (35,462 bytes); its checked-in source, checksum and
+JAR are verified together. Connection restores missing or modified versioned cache copies
+atomically.
 
 - Main builds need no JDK. Java and vendor drivers remain optional and excluded from installers.
 
@@ -2861,6 +3063,76 @@ original hostname for certificate verification.
 
 - SID, Wallet/cloud presets, arbitrary JDBC URLs, custom driver imports and server installation are
   unavailable.
+
+### Elasticsearch and MongoDB document workbench
+
+Add a connection from Databases and choose Elasticsearch or MongoDB. Elasticsearch defaults to port
+9200 and accepts username/password or an encoded API Key. MongoDB defaults to port 27017 with a
+separate authentication database, defaulting to `admin`. Leave credentials empty for services that
+permit anonymous access.
+
+- Elasticsearch reuses the built-in HTTP client without Java or driver downloads. Install MongoDB's
+  pinned Sync, Core and BSON drivers on demand through Database components: 2,779,903 bytes in
+  total. These drivers and the optional Java runtime stay outside the main installer.
+
+- MongoDB uses one host and port with `directConnection=true`. Standalone servers and directly
+  reachable replica-set members are supported; SRV, multiple-host discovery, sharded routing
+  configuration and arbitrary connection URIs are unavailable. SQL transactions, grid editing and
+  execution plans do not apply to document connections.
+
+#### Browse and query documents
+
+1. Connect and select a database and collection, or specify one Elasticsearch index. Refresh objects
+   loads at most 500 names; you can also enter an authorized name directly.
+2. Enter an Elasticsearch Query DSL body such as `{"query":{"match_all":{}}}` and inspect index
+   Mapping. For MongoDB, enter `{"filter":{},"sort":{"_id":1}}` with an optional `projection`, or
+   use `{"pipeline":[{"$match":{}}]}` for read-only aggregation.
+3. Click Run query or press Ctrl/Cmd+Enter. Each page contains at most 50 documents within the first
+   10,000 results. Pagination reissues the query without a snapshot. After editing a query, run it
+   again from the first page before using pagination. Elasticsearch pagination fields including
+   `from`, `size` and `search_after` are managed by the workbench and cannot be supplied in the
+   query.
+
+MongoDB uses canonical Extended JSON to preserve ObjectId, dates and numeric types. Queries, edits
+and exports retain JSON text without frontend number reserialization. Aggregation rejects `$out`,
+`$merge` and server JavaScript operations, including nested pipelines. Elasticsearch preserves large
+integers; source-filtered documents cannot be replaced or deleted.
+
+- Queries and individual documents are limited to 262,144 characters, page documents to about 1 MiB,
+  Elasticsearch documents plus additional metadata to 2 MiB, and transport to 8 MiB. Excess results
+  fail explicitly instead of allowing edits to truncated documents. Server query budgets are 30
+  seconds; Cancel query and disconnect closes the connection and retains drafts.
+
+- Save JSON saves the current query; Export page JSON exports only loaded documents. Query and
+  document drafts stay in memory. Hidden workbenches retain connections and drafts; switching
+  targets or documents requires confirmation before discarding unsaved document changes. Exit guards
+  cover both draft types.
+
+#### Document writes and connection protection
+
+Connections start read-only. Enable editing to create documents or replace/delete a selected query
+result; each write requires confirmation. Writes take effect immediately without commit, rollback or
+automatic retries. MongoDB account permissions and Elasticsearch server permissions still apply.
+
+- Replacement and deletion check for conflicts. Elasticsearch sends the original sequence number and
+  primary term; MongoDB matches `_id` and the entire original document with BSON types preserved.
+  Changed documents, incomplete projections or transformed aggregation results can fail the check,
+  retaining drafts for review. MongoDB replacement cannot change `_id`.
+
+- TLS verifies certificates and hostnames, with optional PEM CA files. Both reuse the authenticated
+  loopback-only SSH SOCKS channel, restricted to the configured endpoint; MongoDB does not discover
+  additional nodes. Passwords and API Keys can use the existing system credential store, bound to
+  endpoint, authentication method/database, TLS trust and SSH identity.
+
+- Timeouts or lost connections can leave write results unknown. Reconnect and check server state
+  before trying again. Fixed diagnostic codes avoid echoing documents or credentials from vendor
+  errors. Connections and handshakes share the existing eight database slots; document connections
+  do not create SQL browsing workers.
+
+Protocol references:
+[Elasticsearch Search API](https://www.elastic.co/docs/api/doc/elasticsearch/operation/operation-search),
+[MongoDB Extended JSON](https://www.mongodb.com/docs/drivers/java/sync/current/data-formats/document-data-format-extended-json/)
+and [MongoDB SOCKS5](https://www.mongodb.com/docs/drivers/java/sync/current/security/socks/).
 
 ### Object browsing and menus
 
@@ -3028,6 +3300,38 @@ remain strings and binary is Base64.
 - Development JDKs, Cargo targets, test databases and node_modules never enter installers.
 
 ### Database validation
+
+#### Document database checks on Windows
+
+- The ordinary `pnpm test` suite passes with 241 tests and 11 opt-in/platform skips. A separate run
+  enabling the MongoDB driver wire fixture passes both document-database tests. The final 19 focused
+  frontend checks pass, including query-change pagination protection and retained drafts. Backend
+  validation passes with 104 tests and six opt-in skips; the local-session service passes 26 tests.
+
+- Focused checks cover exact JSON/BSON numbers, ObjectId, NULL, nested aggregation write guards,
+  default read-only access, explicit write confirmation, original-document conflicts, encoded
+  Elasticsearch document IDs, sequence/primary-term conditions, projection protection and bounded
+  pagination and disconnecting an in-flight Elasticsearch request. The MongoDB fixture uses the real
+  pinned Java driver against a disposable loopback protocol server; it does not connect to an
+  existing database.
+
+- Frozen dependency installation, TypeScript/production build, bundled-engine verification and
+  `pnpm desktop:check` pass. Database source formatting and the global localization check pass. The
+  repository-wide formatting check reports issues in 148 other working-tree files. Documentation
+  metadata/index and changed Markdown formatting pass. Production builds retain the existing
+  large-chunk warning.
+
+- Isolated Windows applications (`sh.uterm.desktop.qa.documents` and `.documents.narrow`) use the
+  real workbench with simulated replies to inspect Elasticsearch and MongoDB queries, 40 object
+  names, 50-document pages, immediate-write confirmation, Chinese/English switching and light/dark
+  appearances. The 1,000-pixel window and the 640-pixel narrow window keep query and pagination
+  controls usable; the narrow layout retains the pagination bar while results scroll.
+
+- These fixtures do not establish acceptance against live Elasticsearch/MongoDB deployments,
+  authenticated TLS/SSH servers or native credential/export dialogs. macOS/Linux runtime acceptance
+  remains pending. The installed application and existing database services were not restarted.
+  Java, MongoDB drivers and database servers remain outside the main installer; an isolated final
+  installer-size comparison has not been measured.
 
 #### Grid-scrolling checks on macOS
 

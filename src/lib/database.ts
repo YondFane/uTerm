@@ -3,18 +3,30 @@ import { downloadError } from "./download-error.ts";
 import { tx } from "./i18n.ts";
 import { validSshTarget, type SshTarget } from "./workspace.ts";
 
-export const databaseKinds = ["mysql", "postgresql", "oracle"] as const;
+export const databaseKinds = ["mysql", "postgresql", "oracle", "elasticsearch", "mongodb"] as const;
 export type DatabaseKind = (typeof databaseKinds)[number];
 export const databaseNames: Record<DatabaseKind, string> = {
   mysql: "MySQL",
   postgresql: "PostgreSQL",
   oracle: "Oracle",
+  elasticsearch: "Elasticsearch",
+  mongodb: "MongoDB",
 };
 export const databasePorts: Record<DatabaseKind, number> = {
   mysql: 3306,
   postgresql: 5432,
   oracle: 1521,
+  elasticsearch: 9200,
+  mongodb: 27017,
 };
+export const isDocumentDatabase = (kind: DatabaseKind) =>
+  kind === "elasticsearch" || kind === "mongodb";
+export function databaseDependencies(kind?: DatabaseKind): string[] {
+  if (!kind || kind === "elasticsearch") return [];
+  return kind === "mongodb"
+    ? ["runtime", "mongodb", "mongodb-core", "mongodb-bson"]
+    : ["runtime", kind];
+}
 export interface DatabaseConfig {
   id: string;
   name: string;
@@ -27,6 +39,8 @@ export interface DatabaseConfig {
   ca_file: string;
   ssh_target?: SshTarget;
   credential_id: string | null;
+  auth_source?: string;
+  auth_mode?: "basic" | "api_key";
 }
 export interface DatabaseComponent {
   id: string;
@@ -171,6 +185,8 @@ export function validDatabaseConfig(value: unknown): value is DatabaseConfig {
         "ca_file",
         "ssh_target",
         "credential_id",
+        "auth_source",
+        "auth_mode",
       ].includes(key),
     ) &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(config.id) &&
@@ -187,6 +203,12 @@ export function validDatabaseConfig(value: unknown): value is DatabaseConfig {
     /^[a-zA-Z0-9_$.-]*$/.test(config.database) &&
     (config.kind !== "oracle" || !!config.database) &&
     clean(config.username, 512) &&
+    (config.auth_source === undefined ||
+      (config.kind === "mongodb" &&
+        clean(config.auth_source, 255) &&
+        /^[a-zA-Z0-9_$.-]+$/.test(config.auth_source))) &&
+    (config.auth_mode === undefined ||
+      (config.kind === "elasticsearch" && ["basic", "api_key"].includes(config.auth_mode))) &&
     typeof config.tls === "boolean" &&
     clean(config.ca_file, 4096) &&
     (config.ssh_target === undefined || validSshTarget(config.ssh_target)) &&
@@ -198,6 +220,14 @@ export function validDatabaseConfig(value: unknown): value is DatabaseConfig {
 /** Maps backend codes without exposing credential-bearing diagnostics. 映射后端错误码，不显示可能含凭据的诊断信息。 */
 export function databaseError(reason: unknown): string {
   const code = String(reason);
+  if (code.includes("DB_DOCUMENT_QUERY"))
+    return tx("查询必须是受支持的 JSON 对象，请检查操作和字段。");
+  if (code.includes("DB_DOCUMENT_TARGET")) return tx("请选择数据库和集合，或指定一个索引。");
+  if (code.includes("DB_DOCUMENT_CONFLICT")) return tx("文档已变化或不存在，请重新读取后再修改。");
+  if (code.includes("DB_DOCUMENT_READ_ONLY")) return tx("请先开启允许编辑，并确认文档写入。");
+  if (code.includes("DB_HTTP_AUTH")) return tx("认证失败或权限不足，请检查凭据和服务端权限。");
+  if (code.includes("DB_HTTP_STATUS"))
+    return tx("Elasticsearch 拒绝了请求，请检查查询、索引和服务端状态。");
   if (code.includes("DB_SQL_UNSUPPORTED"))
     return tx("SQL 语句边界、引号或注释不完整，或包含不支持的语句块。");
   if (code.includes("DB_SQL_EMPTY")) return tx("没有可执行的 SQL，请选择语句或输入查询。");

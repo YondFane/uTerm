@@ -40,7 +40,7 @@ test("App restores SSH sessions without authorizing new logins or running local 
   };
   const server = await createServer({
     configFile: false,
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, hmr: false, watch: null },
     optimizeDeps: { noDiscovery: true, include: [] },
     appType: "custom",
     plugins: [
@@ -123,6 +123,10 @@ test("App restores SSH sessions without authorizing new logins or running local 
     );
     assert.ok(document.body.textContent.includes("Remote QA"));
     assert.ok(
+      !calls.some((call) => call.command === "ssh_files_open"),
+      "Restoring a terminal does not open an SFTP channel",
+    );
+    assert.ok(
       !document.querySelector('select[aria-label="New session shell"]'),
       "Local shell selector stays hidden for SSH",
     );
@@ -162,6 +166,67 @@ test("App restores SSH sessions without authorizing new logins or running local 
     const welcome = document.querySelector('section.welcome[aria-label="SSH connections"]');
     assert.ok(welcome);
     assert.match(welcome.textContent, /New SSH terminal/);
+    const click = async (label) => {
+      const button = [...document.querySelectorAll("button")].find(
+        (item) => item.textContent === label,
+      );
+      assert.ok(button, label);
+      await act(async () => button.click());
+    };
+    const input = async (element, value) => {
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set.call(
+          element,
+          value,
+        );
+        element.dispatchEvent(new window.Event("input", { bubbles: true }));
+      });
+    };
+    await click("Quick SSH connection");
+    const quick = document.querySelector("dialog[open]");
+    assert.ok(quick);
+    await input(quick.querySelector("input"), "dev@127.0.0.1:2222");
+    await act(async () =>
+      quick
+        .querySelector("form")
+        .dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })),
+    );
+    const temporary = JSON.parse(localStorage.getItem(workspaceKey)).groups[0].sshConnections.find(
+      (item) => item.temporary,
+    );
+    assert.ok(temporary);
+    assert.equal(temporary.sessions[0].ssh.port, 2222);
+    assert.equal(globalThis.sshWorkspaceProps.sshLaunches.has(temporary.sessions[0].id), true);
+    const search = document.querySelector('input[aria-label="Search SSH hosts"]');
+    await input(search, "no-such-host");
+    assert.match(document.body.textContent, /No matching SSH hosts/);
+    assert.equal(JSON.parse(localStorage.getItem(workspaceKey)).groups[0].sshConnections.length, 2);
+    await input(search, "");
+    await act(async () => globalThis.sshWorkspaceProps.onClosed(temporary.sessions[0].id));
+    assert.equal(
+      JSON.parse(localStorage.getItem(workspaceKey)).groups[0].sshConnections.some(
+        (item) => item.id === temporary.id,
+      ),
+      false,
+    );
+    await click("Quick SSH connection");
+    await input(document.querySelector("dialog[open] input"), "saved-alias");
+    await act(async () =>
+      document
+        .querySelector("dialog[open] form")
+        .dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })),
+    );
+    await click("Save connection");
+    const saved = JSON.parse(localStorage.getItem(workspaceKey)).groups[0].sshConnections.find(
+      (item) => item.host === "saved-alias",
+    );
+    await act(async () => globalThis.sshWorkspaceProps.onClosed(saved.sessions[0].id));
+    assert.equal(
+      JSON.parse(localStorage.getItem(workspaceKey)).groups[0].sshConnections.find(
+        (item) => item.id === saved.id,
+      ).temporary,
+      false,
+    );
   } finally {
     await act(async () => root.unmount());
     clearMocks();

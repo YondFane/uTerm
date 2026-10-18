@@ -3426,6 +3426,196 @@ textarea:focus-visible {
 .ssh-dialog .ssh-password-remember input {
   width: auto;
 }
+.ssh-connection-modes {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 7px;
+  background: var(--ui-sidebar);
+}
+.ssh-connection-modes button {
+  flex: 1;
+  min-width: 0;
+}
+.ssh-connection-modes button[aria-pressed="true"] {
+  background: var(--ui-selected);
+  color: var(--ui-text);
+}
+.ssh-advanced {
+  border-top: 1px solid var(--ui-border);
+  padding-top: 10px;
+}
+.ssh-advanced summary {
+  padding: 4px 0;
+  cursor: pointer;
+}
+.ssh-advanced label {
+  margin-top: 14px;
+}
+.ssh-config-preview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+.ssh-config-preview output {
+  overflow-wrap: anywhere;
+}
+.ssh-sidebar-tools {
+  display: grid;
+  gap: 6px;
+  padding: 4px 8px 8px;
+}
+.ssh-quick-dialog {
+  width: min(540px, calc(100vw - 32px));
+}
+.ssh-quick-dialog label {
+  display: grid;
+  gap: 6px;
+}
+.ssh-quick-dialog input {
+  width: 100%;
+}
+.ssh-quick-dialog p {
+  line-height: 1.6;
+}
+.ssh-sidebar-tools input {
+  width: 100%;
+  min-width: 0;
+}
+.ssh-tunnels {
+  flex: 0 0 auto;
+  max-height: 45vh;
+  overflow: auto;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.ssh-tunnels h3 {
+  margin: 0 0 6px;
+}
+.ssh-tunnels p {
+  margin: 6px 0;
+}
+.ssh-forward-list {
+  display: grid;
+  gap: 8px;
+}
+.ssh-forward {
+  display: flex;
+  align-items: center;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+.ssh-forward code {
+  overflow-wrap: anywhere;
+}
+.ssh-forward-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.ssh-forward p {
+  flex-basis: 100%;
+}
+.ssh-forward-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+  margin-top: 12px;
+}
+.ssh-forward-form label {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 110px;
+  min-width: 0;
+}
+.ssh-forward-form input {
+  width: 100%;
+  min-width: 0;
+}
+.ssh-context {
+  flex-shrink: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-sidebar);
+  font-size: 12px;
+}
+.ssh-context-heading,
+.ssh-context-actions,
+.ssh-channel-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.ssh-context-heading strong {
+  overflow-wrap: anywhere;
+}
+.ssh-endpoint {
+  font-family: "Cascadia Code", Consolas, monospace;
+  overflow-wrap: anywhere;
+  color: var(--ui-muted);
+}
+.ssh-context-actions {
+  margin-top: 8px;
+  gap: 6px;
+}
+.ssh-context-actions button {
+  padding: 5px 9px;
+}
+.ssh-channel-status {
+  margin-top: 8px;
+  color: var(--ui-muted);
+}
+.ssh-channel-status [data-state="error"] {
+  color: #ef9ca7;
+}
+.ssh-context-hint,
+.ssh-context-error {
+  margin: 5px 0 0;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.ssh-context-hint {
+  color: var(--ui-muted);
+}
+.ssh-overview-details {
+  margin: 20px 0;
+  font-size: 12px;
+}
+.ssh-overview-details > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 8px 0;
+}
+.ssh-overview-details dt {
+  min-width: 100px;
+  color: var(--ui-muted);
+}
+.ssh-overview-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.remote-file-root {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--ui-border);
+  overflow-wrap: anywhere;
+}
+.remote-file-empty {
+  padding: 18px 12px;
+  font-size: 12px;
+}
+.remote-file-empty p {
+  color: var(--ui-muted);
+  line-height: 1.7;
+}
 .ssh-connection .row-label {
   min-width: 0;
 }
@@ -3450,7 +3640,7 @@ textarea:focus-visible {
   font-size: 11px;
 }
 .remote-file-status > span {
-  flex: 1;
+  flex: 1 0 100%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -4121,6 +4311,126 @@ textarea:focus-visible {
     flex-wrap: wrap;
   }
 }
+.document-workspace .document-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.document-access-state {
+  margin: 6px 12px;
+  color: var(--ui-muted);
+  font-size: 12px;
+}
+.document-browser {
+  display: flex;
+  flex: 0 0 200px;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border-right: 1px solid var(--ui-border);
+  overflow: auto;
+}
+.document-browser label {
+  display: grid;
+  gap: 4px;
+}
+.document-browser input {
+  width: 100%;
+  min-width: 0;
+}
+.document-names {
+  display: grid;
+  gap: 3px;
+  overflow: auto;
+}
+.document-names button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.document-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow: auto;
+}
+.document-content > .database-actions,
+.document-editor > .database-actions {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.document-query,
+.document-editor textarea {
+  width: 100%;
+  min-height: 100px;
+  padding: 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  resize: vertical;
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  tab-size: 2;
+}
+.document-query {
+  flex: 0 0 120px;
+}
+.document-results {
+  flex: 1 0 120px;
+  min-height: 120px;
+  overflow: auto;
+}
+.document-result {
+  display: flex;
+  width: 100%;
+  gap: 10px;
+  margin-bottom: 5px;
+  text-align: left;
+}
+.document-result pre,
+.document-metadata {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.document-names [aria-pressed="true"],
+.document-result[aria-pressed="true"] {
+  outline: 1px solid var(--ui-accent);
+  outline-offset: -1px;
+}
+.document-editor textarea {
+  min-height: 150px;
+}
+.document-pagination {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: var(--ui-canvas);
+}
+@media (max-height: 600px) {
+  .document-query {
+    flex-basis: 80px;
+    min-height: 60px;
+  }
+  .document-results {
+    flex-basis: 80px;
+    min-height: 60px;
+  }
+}
+@media (max-width: 760px) {
+  .document-browser {
+    flex-basis: 150px;
+  }
+}
+
 .database-workspace {
   display: flex;
   flex: 1;

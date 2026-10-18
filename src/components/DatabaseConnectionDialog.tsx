@@ -31,6 +31,7 @@ export function DatabaseConnectionDialog({
   report: (message: string) => void;
 }) {
   useUiLanguage();
+  ssh = ssh.filter((item) => !item.temporary);
   const [config, setConfig] = useState<DatabaseConfig>(
     connection ?? {
       id: crypto.randomUUID(),
@@ -174,6 +175,8 @@ export function DatabaseConnectionDialog({
                   kind,
                   port: databasePorts[kind],
                   credential_id: null,
+                  auth_source: undefined,
+                  auth_mode: undefined,
                 }));
               }}
             >
@@ -213,13 +216,38 @@ export function DatabaseConnectionDialog({
             />
           </label>
           <label>
-            {config.kind === "oracle" ? tx("Oracle 服务名") : tx("数据库名称（可选）")}
+            {config.kind === "oracle"
+              ? tx("Oracle 服务名")
+              : config.kind === "elasticsearch"
+                ? tx("默认索引（可选）")
+                : tx("数据库名称（可选）")}
             <input
               required={config.kind === "oracle"}
               value={config.database}
               onChange={(event) => field("database", event.target.value)}
             />
           </label>
+          {config.kind === "mongodb" && (
+            <label>
+              {tx("认证数据库")}
+              <input
+                value={config.auth_source ?? "admin"}
+                onChange={(event) => field("auth_source", event.target.value)}
+              />
+            </label>
+          )}
+          {config.kind === "elasticsearch" && (
+            <label>
+              {tx("认证方式")}
+              <select
+                value={config.auth_mode ?? "basic"}
+                onChange={(event) => field("auth_mode", event.target.value as "basic" | "api_key")}
+              >
+                <option value="basic">{tx("用户名和密码")}</option>
+                <option value="api_key">{tx("API Key")}</option>
+              </select>
+            </label>
+          )}
           <label>
             {tx("用户名")}
             <input
@@ -229,7 +257,9 @@ export function DatabaseConnectionDialog({
             />
           </label>
           <label>
-            {tx("密码")}
+            {config.kind === "elasticsearch" && config.auth_mode === "api_key"
+              ? "API Key"
+              : tx("密码")}
             <input
               type="password"
               value={password}

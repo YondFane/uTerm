@@ -16,6 +16,27 @@ fn home() -> Result<PathBuf, String> {
         .ok_or("找不到用户目录。".into())
 }
 fn agent_home(agent: &str) -> Result<PathBuf, String> {
+    let custom = match agent {
+        "pi" => Some(("PI_CODING_AGENT_DIR", ".pi/agent")),
+        "copilot" => Some(("COPILOT_HOME", ".copilot")),
+        "minimax" => Some(("MINIMAX_DATA_DIR", ".minimax")),
+        _ => None,
+    };
+    if let Some((variable, fallback)) = custom {
+        return Ok(std::env::var_os(variable)
+            .or_else(|| {
+                if agent == "minimax" {
+                    std::env::var_os("MAVIS_DATA_DIR")
+                } else {
+                    None
+                }
+            })
+            .map(PathBuf::from)
+            .unwrap_or(home()?.join(fallback)));
+    }
+    if matches!(agent, "qwen" | "iflow") {
+        return Ok(home()?.join(format!(".{agent}")));
+    }
     if matches!(agent, "kimi" | "grok") {
         let (variable, fallback) = if agent == "kimi" {
             ("KIMI_CODE_HOME", ".kimi-code")
@@ -195,6 +216,9 @@ fn merge_hooks(
     let object = value
         .as_object_mut()
         .ok_or("Agent 配置必须是 JSON 对象，原文件已保留。")?;
+    if !enabled && !object.contains_key("hooks") {
+        return Ok(value);
+    }
     let hooks = object
         .entry("hooks")
         .or_insert_with(|| json!({}))
@@ -204,21 +228,18 @@ fn merge_hooks(
         let groups = groups
             .as_array_mut()
             .ok_or("Hooks 列表无效，原文件已保留。")?;
-        for group in groups.iter_mut() {
+        groups.retain_mut(|group| {
             if let Some(entries) = group.get_mut("hooks").and_then(Value::as_array_mut) {
+                let previous = entries.len();
                 entries.retain(|entry| {
                     !entry
                         .get("command")
                         .and_then(Value::as_str)
                         .is_some_and(|text| is_uterm_report_hook(text, command))
                 });
+                return entries.len() == previous || !entries.is_empty();
             }
-        }
-        groups.retain(|group| {
-            !group
-                .get("hooks")
-                .and_then(Value::as_array)
-                .is_some_and(Vec::is_empty)
+            true
         });
     }
     if enabled {
@@ -230,6 +251,15 @@ fn merge_hooks(
                 ("AfterTool", "working"),
                 ("Notification", "waiting"),
                 ("AfterAgent", "done"),
+            ]
+        } else if agent == "iflow" {
+            vec![
+                ("SessionStart", "idle"),
+                ("UserPromptSubmit", "working"),
+                ("PreToolUse", "working"),
+                ("PostToolUse", "working"),
+                ("Notification", "waiting"),
+                ("Stop", "done"),
             ]
         } else {
             vec![
@@ -247,11 +277,164 @@ fn merge_hooks(
                 .or_insert_with(|| json!([]))
                 .as_array_mut()
                 .ok_or("Hooks 列表无效。")?;
-            groups.push(json!({"matcher":"*","hooks":[{"type":"command","command":report_hook_command(command, state, cfg!(windows)),"timeout":10}]}));
+            let mut group = json!({"hooks":[{"type":"command","command":report_hook_command(command, state, cfg!(windows)),"timeout":10}]});
+            if !matches!(event, "UserPromptSubmit" | "Stop") {
+                group["matcher"] = json!(if agent == "iflow" { ".*" } else { "*" });
+            }
+            groups.push(group);
         }
     }
     Ok(value)
 }
+
+fn merge_copilot_hooks(mut value: Value, reporter: &Path, enabled: bool) -> Result<Value, String> {
+    let object = value
+        .as_object_mut()
+        .ok_or("Agent 配置必须是 JSON 对象，原文件已保留。")?;
+    if object
+        .get("version")
+        .is_some_and(|version| version != &json!(1))
+    {
+        return Err("配置 JSON 无效，原文件已保留。".into());
+    }
+    if !enabled && !object.contains_key("hooks") {
+        return Ok(value);
+    }
+    if enabled {
+        object.insert("version".into(), json!(1));
+    }
+    let hooks = object
+        .entry("hooks")
+        .or_insert_with(|| json!({}))
+        .as_object_mut()
+        .ok_or("Hooks 配置不是对象，原文件已保留。")?;
+    for entries in hooks.values_mut() {
+        let entries = entries
+            .as_array_mut()
+            .ok_or("Hooks 列表无效，原文件已保留。")?;
+        entries.retain(|entry| {
+            let Some(program) = entry["exec"].as_str() else {
+                return true;
+            };
+            let Some(arguments) = entry["args"].as_array() else {
+                return true;
+            };
+            if arguments.len() != 2 || arguments[0] != "--agent-report" {
+                return true;
+            }
+            let Some(state) = arguments[1].as_str() else {
+                return true;
+            };
+            !is_uterm_report_hook(
+                &format!(
+                    "'{}' --agent-report {state}",
+                    program.replace('\'', "'\\''")
+                ),
+                "",
+            )
+        });
+    }
+    if enabled {
+        for (event, state) in [
+            ("sessionStart", "idle"),
+            ("userPromptSubmitted", "working"),
+            ("preToolUse", "working"),
+            ("postToolUse", "working"),
+            ("agentStop", "done"),
+        ] {
+            hooks.entry(event).or_insert_with(|| json!([])).as_array_mut().ok_or("Hooks 列表无效，原文件已保留。")?.push(json!({"type":"command","exec":reporter,"args":["--agent-report",state],"timeoutSec":10}));
+        }
+    }
+    Ok(value)
+}
+
+fn update_hook_json(
+    path: &Path,
+    update: impl FnOnce(Value) -> Result<Value, String>,
+) -> Result<(), String> {
+    let previous = match std::fs::read(path) {
+        Ok(bytes) => Some(bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.to_string()),
+    };
+    let value = match &previous {
+        Some(bytes) => {
+            serde_json::from_slice(bytes).map_err(|_| "配置 JSON 无效，原文件已保留。")?
+        }
+        None => json!({}),
+    };
+    let next = update(value.clone())?;
+    if std::fs::read(path).ok() != previous {
+        return Err("配置已被其他程序修改，请重试。".into());
+    }
+    if next == value {
+        return Ok(());
+    }
+    replace(
+        path,
+        &serde_json::to_vec_pretty(&next).map_err(|error| error.to_string())?,
+    )
+}
+
+fn pi_hook_source(reporter: &Path) -> Result<String, String> {
+    Ok(include_str!("../integrations/pi-activity.js").replace(
+        "__UTERM_REPORTER__",
+        &serde_json::to_string(reporter).map_err(|error| error.to_string())?,
+    ))
+}
+
+fn configure_pi_hook(path: &Path, reporter: &Path, enabled: bool) -> Result<(), String> {
+    let previous = match std::fs::read(path) {
+        Ok(bytes) => Some(bytes),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.to_string()),
+    };
+    if !enabled && previous.is_none() {
+        return Ok(());
+    }
+    if previous
+        .as_ref()
+        .is_some_and(|bytes| !bytes.starts_with(b"// uTerm activity hooks v1 /"))
+    {
+        return Err("配置已被其他程序修改，请重试。".into());
+    }
+    let source = if enabled {
+        pi_hook_source(reporter)?
+    } else {
+        format!(
+            "{}\nexport default function () {{}}\n",
+            include_str!("../integrations/pi-activity.js")
+                .lines()
+                .next()
+                .unwrap_or_default()
+        )
+    };
+    if std::fs::read(path).ok() != previous {
+        return Err("配置已被其他程序修改，请重试。".into());
+    }
+    if previous.as_deref() == Some(source.as_bytes()) {
+        return Ok(());
+    }
+    replace(path, source.as_bytes())
+}
+
+fn configure_minimax_hooks(root: &Path, command: &str, enabled: bool) -> Result<(), String> {
+    let plugin = root.join("plugins/uterm-activity");
+    let manifest = json!({"name":"uterm-activity","version":"1.0.0","description":"uTerm","hooks":"hooks/hooks.json"});
+    let path = plugin.join(".claude-plugin/plugin.json");
+    if enabled {
+        update_hook_json(&path, |value| {
+            if value != json!({}) && value != manifest {
+                return Err("配置已被其他程序修改，请重试。".into());
+            }
+            Ok(manifest)
+        })?;
+    }
+    update_hook_json(&plugin.join("hooks/hooks.json"), |value| {
+        merge_hooks(value, "minimax", command, enabled)
+    })
+}
+
 #[tauri::command]
 pub async fn agent_hooks(
     app: tauri::AppHandle,
@@ -259,7 +442,11 @@ pub async fn agent_hooks(
     enabled: bool,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        if !["claude", "codex", "gemini"].contains(&agent.as_str()) {
+        if ![
+            "claude", "codex", "gemini", "pi", "minimax", "qwen", "copilot", "iflow",
+        ]
+        .contains(&agent.as_str())
+        {
             return Err("此 Agent 需自行配置状态回报命令。".into());
         }
         let _guard = CONFIG_LOCK.lock().map_err(|error| error.to_string())?;
@@ -284,31 +471,26 @@ pub async fn agent_hooks(
         // 编码后的字面调用同时适用于 cmd.exe 和 PowerShell 的 Hook 执行环境。
         let quoted = format!("& '{}'", reporter.to_string_lossy().replace('\'', "''"));
         let command = format!("{quoted} --agent-report");
-        let path = agent_home(&agent)?.join(if agent == "codex" {
-            "hooks.json"
-        } else {
-            "settings.json"
-        });
-        let previous = match std::fs::read(&path) {
-            Ok(bytes) => Some(bytes),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-            Err(error) => return Err(error.to_string()),
-        };
-        let value = match &previous {
-            Some(bytes) => {
-                serde_json::from_slice(bytes).map_err(|_| "配置 JSON 无效，原文件已保留。")?
-            }
-            None => json!({}),
-        };
-        let next = merge_hooks(value, &agent, &command, enabled)?;
-        // Don't overwrite a concurrent edit made by the CLI while the merge was prepared.
-        if std::fs::read(&path).ok() != previous {
-            return Err("配置已被其他程序修改，请重试。".into());
+        let root = agent_home(&agent)?;
+        match agent.as_str() {
+            "pi" => configure_pi_hook(
+                &root.join("extensions/uterm-activity.js"),
+                &reporter,
+                enabled,
+            )?,
+            "copilot" => update_hook_json(&root.join("hooks/uterm-activity.json"), |value| {
+                merge_copilot_hooks(value, &reporter, enabled)
+            })?,
+            "minimax" => configure_minimax_hooks(&root, &command, enabled)?,
+            _ => update_hook_json(
+                &root.join(if agent == "codex" {
+                    "hooks.json"
+                } else {
+                    "settings.json"
+                }),
+                |value| merge_hooks(value, &agent, &command, enabled),
+            )?,
         }
-        replace(
-            &path,
-            &serde_json::to_vec_pretty(&next).map_err(|error| error.to_string())?,
-        )?;
         Ok(format!(
             "{}。新会话生效；原配置已备份。",
             if enabled {
@@ -811,6 +993,175 @@ pub async fn agent_usage(
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn hook_updates_skip_unchanged_files_and_missing_removals() {
+        let directory = tempfile::tempdir().unwrap();
+        let command = "'/tmp/app/integration/uterm-report' --agent-report";
+        let reporter = Path::new("/tmp/app/integration/uterm-report");
+        let grouped = directory.path().join("grouped/settings.json");
+        let copilot = directory.path().join("copilot/hooks.json");
+        let pi = directory.path().join("pi/extensions/uterm-activity.js");
+        let minimax = directory.path().join("minimax");
+        update_hook_json(&grouped, |value| merge_hooks(value, "qwen", command, false)).unwrap();
+        update_hook_json(&copilot, |value| {
+            merge_copilot_hooks(value, reporter, false)
+        })
+        .unwrap();
+        configure_pi_hook(&pi, reporter, false).unwrap();
+        configure_minimax_hooks(&minimax, command, false).unwrap();
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
+
+        std::fs::create_dir_all(grouped.parent().unwrap()).unwrap();
+        let original = b"{\"hooks\":{\"Stop\":[{\"hooks\":[]}]},\"custom\":true}";
+        std::fs::write(&grouped, original).unwrap();
+        update_hook_json(&grouped, |value| merge_hooks(value, "qwen", command, false)).unwrap();
+        assert_eq!(std::fs::read(&grouped).unwrap(), original);
+        assert_eq!(
+            std::fs::read_dir(grouped.parent().unwrap())
+                .unwrap()
+                .count(),
+            1
+        );
+
+        for _ in 0..2 {
+            update_hook_json(&grouped, |value| merge_hooks(value, "qwen", command, true)).unwrap();
+            update_hook_json(&copilot, |value| merge_copilot_hooks(value, reporter, true)).unwrap();
+            configure_pi_hook(&pi, reporter, true).unwrap();
+            configure_minimax_hooks(&minimax, command, true).unwrap();
+        }
+        assert_eq!(
+            std::fs::read_dir(grouped.parent().unwrap())
+                .unwrap()
+                .count(),
+            2
+        );
+        assert_eq!(
+            std::fs::read_dir(copilot.parent().unwrap())
+                .unwrap()
+                .count(),
+            1
+        );
+        assert_eq!(std::fs::read_dir(pi.parent().unwrap()).unwrap().count(), 1);
+        for relative in [".claude-plugin", "hooks"] {
+            assert_eq!(
+                std::fs::read_dir(minimax.join("plugins/uterm-activity").join(relative))
+                    .unwrap()
+                    .count(),
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn additional_grouped_hooks_keep_user_entries_and_only_register_supported_events() {
+        let command = "'/tmp/app/integration/uterm-report' --agent-report";
+        let original = json!({"theme":"custom","hooks":{"Stop":[{"hooks":[{"type":"command","command":"user-hook"}]}]}});
+        for agent in ["qwen", "iflow", "minimax"] {
+            let once = merge_hooks(original.clone(), agent, command, true).unwrap();
+            let twice = merge_hooks(once.clone(), agent, command, true).unwrap();
+            assert_eq!(once, twice);
+            assert_eq!(twice["hooks"]["Stop"].as_array().unwrap().len(), 2);
+            assert_eq!(
+                twice["hooks"]["UserPromptSubmit"][0]["matcher"],
+                Value::Null
+            );
+            if agent == "iflow" {
+                assert_eq!(twice["hooks"]["Notification"][0]["matcher"], ".*");
+                assert_eq!(twice["hooks"]["PermissionRequest"], Value::Null);
+            }
+            let removed = merge_hooks(twice, agent, command, false).unwrap();
+            assert_eq!(removed["hooks"]["Stop"], original["hooks"]["Stop"]);
+            assert_eq!(removed["theme"], "custom");
+        }
+    }
+
+    #[test]
+    fn copilot_hooks_use_literal_exec_arguments_preserve_custom_entries_and_reinstall() {
+        let reporter = Path::new("C:/用户 files/$'&/integration/uterm-report.exe");
+        let original = json!({"version":1,"custom":true,"hooks":{"agentStop":[{"type":"command","exec":"user-tool","args":["--agent-report","done"]}]}});
+        let once = merge_copilot_hooks(original.clone(), reporter, true).unwrap();
+        let twice = merge_copilot_hooks(once.clone(), reporter, true).unwrap();
+        assert_eq!(once, twice);
+        let entry = &twice["hooks"]["preToolUse"][0];
+        assert_eq!(entry["exec"], reporter.to_string_lossy().as_ref());
+        assert_eq!(entry["args"], json!(["--agent-report", "working"]));
+        assert_eq!(entry["command"], Value::Null);
+        assert_eq!(entry["powershell"], Value::Null);
+        assert_eq!(twice["hooks"]["agentStop"].as_array().unwrap().len(), 2);
+        let removed = merge_copilot_hooks(twice, reporter, false).unwrap();
+        assert_eq!(
+            removed["hooks"]["agentStop"],
+            original["hooks"]["agentStop"]
+        );
+        assert_eq!(removed["custom"], true);
+        assert!(merge_copilot_hooks(json!({"version":2}), reporter, true).is_err());
+        assert!(merge_copilot_hooks(json!({"hooks":{"agentStop":{}}}), reporter, true).is_err());
+    }
+
+    #[test]
+    fn plugin_and_extension_files_keep_backups_reject_conflicts_and_remove_activity() {
+        let directory = tempfile::tempdir().unwrap();
+        let reporter = directory
+            .path()
+            .join("用户 ' &/integration/uterm-report.exe");
+        let extension = directory.path().join("extensions/uterm-activity.js");
+        configure_pi_hook(&extension, &reporter, true).unwrap();
+        let source = std::fs::read_to_string(&extension).unwrap();
+        assert!(source.contains(&serde_json::to_string(&reporter).unwrap()));
+        assert!(!source.contains("__UTERM_REPORTER__"));
+        configure_pi_hook(&extension, &reporter, true).unwrap();
+        configure_pi_hook(&extension, &reporter, false).unwrap();
+        assert!(!std::fs::read_to_string(&extension)
+            .unwrap()
+            .contains("execFile"));
+        std::fs::write(&extension, "user extension").unwrap();
+        assert!(configure_pi_hook(&extension, &reporter, true).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&extension).unwrap(),
+            "user extension"
+        );
+        let command = "'/tmp/app/integration/uterm-report' --agent-report";
+        configure_minimax_hooks(directory.path(), command, true).unwrap();
+        configure_minimax_hooks(directory.path(), command, true).unwrap();
+        let hooks = directory
+            .path()
+            .join("plugins/uterm-activity/hooks/hooks.json");
+        let value: Value = serde_json::from_slice(&std::fs::read(&hooks).unwrap()).unwrap();
+        assert_eq!(value["hooks"]["Stop"].as_array().unwrap().len(), 1);
+        configure_minimax_hooks(directory.path(), command, false).unwrap();
+        let removed: Value = serde_json::from_slice(&std::fs::read(&hooks).unwrap()).unwrap();
+        assert!(removed["hooks"]
+            .as_object()
+            .unwrap()
+            .values()
+            .all(|entries| entries.as_array().unwrap().is_empty()));
+        let manifest = directory
+            .path()
+            .join("plugins/uterm-activity/.claude-plugin/plugin.json");
+        std::fs::write(&manifest, r#"{"name":"user-plugin"}"#).unwrap();
+        assert!(configure_minimax_hooks(directory.path(), command, true).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&manifest).unwrap(),
+            r#"{"name":"user-plugin"}"#
+        );
+    }
+
+    #[test]
+    fn hook_json_updates_do_not_overwrite_invalid_or_concurrently_saved_data() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        std::fs::write(&path, b"{").unwrap();
+        assert!(update_hook_json(&path, Ok).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"{");
+        std::fs::write(&path, b"{}").unwrap();
+        assert!(update_hook_json(&path, |value| {
+            std::fs::write(&path, b"{\"new\":true}").unwrap();
+            Ok(value)
+        })
+        .is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"{\"new\":true}");
+    }
+
     #[test]
     #[ignore = "synthetic resource benchmark / 合成资源基准"]
     fn usage_resource_profile() {

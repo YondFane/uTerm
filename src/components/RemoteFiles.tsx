@@ -18,6 +18,7 @@ import {
 } from "../lib/remote-transfers";
 import type { SshTarget } from "../lib/workspace";
 import { FilePanel } from "./FilePanel";
+import { sshFilesLabel, type SshFileStatus } from "../lib/ssh";
 
 function transferSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -28,6 +29,9 @@ export function RemoteFiles({
   connection,
   directory,
   onRoot,
+  status,
+  onStatus,
+  lastError,
   open,
   beforeMutation,
   resizeHandle,
@@ -37,6 +41,9 @@ export function RemoteFiles({
   connection: SshTarget;
   directory?: string;
   onRoot: (directory: string) => void;
+  status?: SshFileStatus;
+  onStatus?: (status: SshFileStatus, error?: string) => void;
+  lastError?: string;
   open: (directory: string, path: string) => void;
   beforeMutation: (directory: string, action: () => void) => void;
   resizeHandle: ReactNode;
@@ -45,11 +52,16 @@ export function RemoteFiles({
 }) {
   useUiLanguage();
   const [root, setRoot] = useState<RemoteRoot | null>(() =>
-    directory ? (fileTarget(directory) as { kind: "ssh"; root: RemoteRoot }).root : null,
+    directory && (status === undefined || status === "connected")
+      ? (fileTarget(directory) as { kind: "ssh"; root: RemoteRoot }).root
+      : null,
   );
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [retry, setRetry] = useState(0);
+  const [error, setError] = useState(lastError ?? "");
+  const [phase, setPhase] = useState<SshFileStatus>(root ? "connected" : "idle");
+  const loading = [phase, status].some(
+    (value) => value === "connecting" || value === "disconnecting",
+  );
+  const operation = useRef(false);
   const [overwrite, setOverwrite] = useState(false);
   const [revision, setRevision] = useState(0);
   const mounted = useRef(true);
@@ -59,73 +71,117 @@ export function RemoteFiles({
       mounted.current = false;
     };
   }, []);
-  const initial = useRef(root);
+  const initial = useRef(
+    directory ? (fileTarget(directory) as { kind: "ssh"; root: RemoteRoot }).root : null,
+  );
   const rootCallback = useRef(onRoot);
   rootCallback.current = onRoot;
+  const statusCallback = useRef(onStatus);
+  statusCallback.current = onStatus;
   useEffect(() => {
-    if (initial.current && retry === 0) return;
-    let disposed = false;
-    setLoading(true);
+    if (status === "connected" && directory) {
+      const value = (fileTarget(directory) as { kind: "ssh"; root: RemoteRoot }).root;
+      initial.current = value;
+      setRoot(value);
+      setPhase("connected");
+    }
+  }, [directory, status]);
+  function report(value: SshFileStatus, message = "") {
+    if (mounted.current) setPhase(value);
+    statusCallback.current?.(value, message);
+  }
+  async function connect(reconnect = false) {
+    if (operation.current || loading) return;
+    operation.current = true;
+    setRoot(null);
+    report("connecting");
     setError("");
-    invoke<RemoteRoot>("ssh_files_open", { connection, expected: initial.current })
-      .then((value) => {
-        if (disposed) return;
-        initial.current = value;
-        setRoot(value);
-        rootCallback.current(remoteDirectory(value));
-      })
-      .catch((error) => {
-        if (!disposed) setError(sshError(error));
-      })
-      .finally(() => {
-        if (!disposed) setLoading(false);
+    try {
+      if (reconnect)
+        await invoke("ssh_files_disconnect", { connectionId: connection.connection_id });
+      const value = await invoke<RemoteRoot>("ssh_files_open", {
+        connection,
+        expected: initial.current,
       });
-    return () => {
-      disposed = true;
-    };
-  }, [retry]);
+      initial.current = value;
+      if (mounted.current) setRoot(value);
+      rootCallback.current(remoteDirectory(value));
+      report("connected");
+    } catch (reason) {
+      if (mounted.current) setError(sshError(reason));
+      report("error", sshError(reason));
+    } finally {
+      operation.current = false;
+    }
+  }
+  async function disconnect() {
+    if (operation.current || loading) return;
+    operation.current = true;
+    const previous = root;
+    setRoot(null);
+    report("disconnecting");
+    setError("");
+    try {
+      await invoke("ssh_files_disconnect", { connectionId: connection.connection_id });
+      report("idle");
+    } catch (reason) {
+      if (mounted.current) {
+        setRoot(previous);
+        setError(sshError(reason));
+      }
+      report(previous ? "connected" : "error", sshError(reason));
+    } finally {
+      operation.current = false;
+    }
+  }
   const key = root ? remoteDirectory(root) : "";
   return (
     <div className="file-panel remote-files">
       {resizeHandle}
       <header className="inspector-header">{headerActions}</header>
       <div className="remote-file-status">
-        <span title={key ? displayDirectory(key) : connection.host}>{connection.host}</span>
+        <span title={key ? displayDirectory(key) : connection.host}>
+          {sshFilesLabel(status ?? phase)}
+        </span>
         <button
           disabled={loading}
-          onClick={async () => {
-            try {
-              await invoke("ssh_files_disconnect", { connectionId: connection.connection_id });
-              setRetry((value) => value + 1);
-            } catch (error) {
-              setError(sshError(error));
-            }
-          }}
+          onClick={() =>
+            root ? beforeMutation(key, () => void connect(true)) : void connect(!!initial.current)
+          }
         >
-          {tx("重新连接")}
+          {root ? tx("重新连接") : tx("连接文件")}
         </button>
         <button
           disabled={!root || loading}
           onClick={() => {
-            beforeMutation(key, () => {
-              void invoke("ssh_files_disconnect", { connectionId: connection.connection_id })
-                .then(() => setRoot(null))
-                .catch((error) => setError(sshError(error)));
-            });
+            beforeMutation(key, () => void disconnect());
           }}
         >
           {tx("断开文件连接")}
         </button>
         <button onClick={newTerminal}>{tx("SSH 终端")}</button>
-        <label>
-          <input
-            type="checkbox"
-            checked={overwrite}
-            onChange={(event) => setOverwrite(event.target.checked)}
-          />
-          {tx("上传时覆盖同名文件")}
-        </label>
+        {root && (
+          <label>
+            <input
+              type="checkbox"
+              checked={overwrite}
+              onChange={(event) => setOverwrite(event.target.checked)}
+            />
+            {tx("上传时覆盖同名文件")}
+          </label>
+        )}
       </div>
+      {!root && !loading && !error && (
+        <div className="remote-file-empty">
+          <strong>{tx("文件尚未连接")}</strong>
+          <p>{tx("连接 SFTP 后可浏览和编辑远程文件。终端会话独立运行。")}</p>
+        </div>
+      )}
+      {root && (
+        <p className="remote-file-root" title={root.path}>
+          {root.path}
+        </p>
+      )}
       {loading && <p role="status">{tx("正在连接远程文件…")}</p>}
       {error && (
         <p className="remote-file-error" role="alert">

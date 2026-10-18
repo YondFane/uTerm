@@ -3,7 +3,7 @@ title: uTerm 开发指南
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-10-17
+updated: 2026-10-18
 ---
 
 # uTerm 开发指南
@@ -24,7 +24,8 @@ updated: 2026-10-17
 
 ## 开发
 
-Agent 设置可在确认后使用本机 Node.js/npm 安装 OpenCode、Claude、Codex 和 Gemini，需要网络及 npm 全局目录写入权限。
+Agent 设置可在确认后使用本机 Node.js/npm 安装 OpenCode、Claude、Codex、Gemini、Pi、MiniMax、Qwen
+Code、Copilot CLI 和 iFlow CLI，需要网络及 npm 全局目录写入权限。Hermes 使用官方平台安装脚本。
 
 Agent 软件包为可选组件，不随 uTerm 打包；其他程序可手动安装并配置可执行文件路径。
 
@@ -50,7 +51,7 @@ pnpm uterm:dev
 内置连接引擎源码位于 `components/database/src/`，纳入版本控制的 `components/database/engine.jar`
 嵌入桌面可执行文件。`components/database/catalog.json` 固定引擎校验值及可选驱动/运行时下载信息。
 
-构建主应用不需要 Java；重新构建引擎需要与校验目录一致的 JDK 26.0.2.1，运行 `pnpm database:build`
+构建主应用不需要 Java；重新构建引擎需要与校验目录一致的 JDK 21.0.2，运行 `pnpm database:build`
 校验生成结果与内置 JAR 一致。
 
 修改源码后运行 `node scripts/database-component.mjs --record`，审核并同步提交源码、内置 JAR 及目录。
@@ -69,6 +70,19 @@ pnpm uterm:dev
 如需验证三种驱动的代理认证，将匹配的 `mysql.jar`、`postgresql.jar` 和 `oracle.jar`
 放入同一忽略目录，并设置
 `UTERM_DATABASE_PROXY_TEST=1`；此路由测试使用可丢弃的回环 SOCKS 代理，无需数据库服务。
+
+### MongoDB 驱动协议检查
+
+目录固定使用 Apache-2.0 许可的官方 MongoDB
+Java 驱动 5.13.0（Sync、Core、BSON），按大小和 SHA-256 校验，运行时按需安装，不进入主安装包。源码中的反射适配使主应用与内置引擎构建无需下载这些驱动。
+
+将目录中相同版本的三个 JAR 下载到忽略的 `components/database/target/mongodb/`，文件名分别为
+`mongodb-driver-sync.jar`、`mongodb-driver-core.jar` 与 `bson.jar`。设置
+`UTERM_MONGODB_DRIVER_TEST=1` 后运行
+`node --experimental-strip-types --test tests/document-database.test.mjs`，使用真实 Java 驱动连接临时回环协议模拟服务，检查 BSON 保真、查询、聚合、写入保护与原始文档冲突检查。此测试不连接现有数据库，也不代表真实 MongoDB 部署验收。
+
+Elasticsearch 在 `pnpm test:backend`
+中使用临时 HTTP 模拟服务检查分页、精确数字、来源投影和写入版本条件，无需安装服务端。桌面原生检查使用独立应用标识符，不重启用户正在运行的应用。
 
 ### Java 与 TLS 检查
 

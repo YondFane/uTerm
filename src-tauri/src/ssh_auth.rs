@@ -235,6 +235,7 @@ mod tests {
             ..Default::default()
         };
         let effective = crate::ssh::EffectiveSsh {
+            forwarding: false,
             identity: "endpoint-one".into(),
             hostname: "host".into(),
             user: "qa".into(),

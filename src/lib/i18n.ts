@@ -57,6 +57,11 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     "正在安装…": "Installing…",
     官方安装说明: "Official installation guide",
     重新检测: "Check again",
+    "Hook 配置说明": "Hook setup guide",
+    "Hermes Hook 需按官方说明手动配置。":
+      "Configure Hermes hooks manually using the official guide.",
+    "将运行官方安装脚本，下载程序及所需依赖，不会自动提权或配置登录。":
+      "The official installer will download the program and its dependencies without elevating privileges or configuring sign-in.",
     "将通过 npm 全局安装程序，需要 Node.js 和网络连接，不会自动提权。":
       "Installs globally with npm. Requires Node.js and internet access; no automatic elevation.",
     "请按发布方说明安装程序，再配置可执行文件路径。":
