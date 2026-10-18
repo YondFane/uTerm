@@ -35,7 +35,10 @@ test("active project trees move between sections without duplicating pinned chil
       removeProject,
       reorderProject,
     } = await server.ssrLoadModule("/src/lib/workspace.ts");
-    localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
+    localStorage.setItem(
+      settingsKey,
+      JSON.stringify({ ...defaults, language: "en", enabledAgents: ["claude", "codex"] }),
+    );
     const session = (id, extra = {}) => ({ id, name: id, shell: "default", ...extra });
     let workspace = emptyWorkspace();
     const local = workspace.selectedWorkspace;
@@ -118,7 +121,7 @@ test("active project trees move between sections without duplicating pinned chil
               toggleVisibility: noop,
               closeSession: (id) => closed.push(id),
               workspace,
-              runtime: null,
+              runtime: { platform: "windows", agents: ["claude", "codex"], agent_definitions: [] },
               update: (change) => {
                 workspace = change(workspace);
               },
@@ -181,7 +184,7 @@ test("active project trees move between sections without duplicating pinned chil
     assert.deepEqual(selected, []);
     assert.equal(workspace.selectedSession, "shell");
     assert.deepEqual(names(), ["Pinned", "Zulu", "Alpha"]);
-    assert.equal(rows()[1].title, "/z");
+    assert.equal(rows()[1].title, "Zulu — /z");
     assert.equal(document.querySelectorAll('[data-project-id="z"]').length, 1);
     assert.equal(document.querySelector('section[aria-label="Pinned"]'), null);
     assert.equal(
@@ -207,6 +210,43 @@ test("active project trees move between sections without duplicating pinned chil
     assert.deepEqual(created, [["z", undefined]]);
     assert.equal(toggle("Zulu").getAttribute("aria-expanded"), "true");
     assert.deepEqual(selected, []);
+    await click(projectRow("z").querySelector(".row-more"));
+    assert.equal(document.querySelector('[role="menuitem"]').textContent, "New terminal");
+    await click(document.querySelector('[role="menuitem"]'));
+    assert.deepEqual(created.at(-1), ["z", undefined]);
+    assert.equal(document.querySelector('[role="menu"]'), null);
+    const treeMore = toggle("Tree").closest(".folder-row").querySelector(".row-more");
+    await click(treeMore);
+    const quickItems = [...document.querySelectorAll('[role="menuitem"]')];
+    assert.deepEqual(
+      quickItems.map((item) => item.textContent),
+      ["New terminal", "New Claude session", "New Codex session"],
+    );
+    await click(quickItems[2]);
+    assert.deepEqual(created.at(-1), ["z", "tree", "codex"]);
+    assert.deepEqual(selected, []);
+    await click(treeMore);
+    await act(async () =>
+      document.dispatchEvent(
+        new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      ),
+    );
+    assert.equal(document.querySelector('[role="menu"]'), null);
+    assert.equal(document.activeElement, treeMore);
+    workspace.projects[0].worktrees[0].missing = true;
+    await render();
+    const missingTree = [...document.querySelectorAll(".folder-row .sidebar-row-name")].find(
+      (label) => label.textContent === "Tree",
+    );
+    await click(missingTree.closest(".folder-row").querySelector(".row-more"));
+    assert.ok([...document.querySelectorAll('[role="menuitem"]')].every((item) => item.disabled));
+    await act(async () =>
+      document.dispatchEvent(
+        new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+      ),
+    );
+    delete workspace.projects[0].worktrees[0].missing;
+    await render();
     const draggedLabel = rows()[1];
     draggedLabel.setPointerCapture = () => {};
     draggedLabel.hasPointerCapture = () => false;

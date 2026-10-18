@@ -25,3 +25,13 @@ test("sidebar bounds preserve the main area and collapse only at the drag thresh
   assert.equal(sidebarLayout(640, 9999).width, 192);
   assert.equal(sidebarLayout(1100, 248).width, 248);
 });
+
+test("navigation resizing reserves the rail and collapses only the list", () => {
+  assert.equal(sidebarLayout(1100, 0, true).width, 48);
+  assert.equal(sidebarLayout(1100, 48, true).minimum, 48);
+  assert.equal(sidebarLayout(1100, 78, true).hidden, true);
+  assert.equal(sidebarLayout(1100, 79, true).hidden, false);
+  assert.equal(sidebarLayout(1100, 248, true).width, 248);
+  assert.equal(sidebarLayout(640, 9999, true).width, 192);
+  assert.equal(sidebarLayout(1100, 30).hidden, true);
+});

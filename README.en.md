@@ -67,6 +67,14 @@ MongoDB connections require Java 17+ and the selected drivers, managed on demand
 Elasticsearch requires no additional runtime. See the [feature guide](docs/features.md) for
 supported behavior, limits and platform acceptance.
 
+Settings → Appearance → Sidebar style offers the default Classic sidebar and an Icon navigation
+sidebar with a vertical icon rail beside the content list. Its Add button joins Commands, Settings
+and Agent at the bottom of the rail. The choice saves immediately. Drag the sidebar edge to resize
+it; narrow widths use compact actions and icons, with footer controls wrapping to stay accessible.
+In navigation style, hiding or collapsing the sidebar keeps the icon rail visible; click a category
+to reopen the content list. The Add menu starts with New terminal, then project and Agent actions,
+before SSH, Redis and database connection actions.
+
 ## One-line installation
 
 macOS, in Terminal:

@@ -49,6 +49,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     for (const [key, value] of Object.entries(palette))
       root.style.setProperty(`--ui-${key}`, value);
     root.style.setProperty("--ui-selected", palette.accent + (interfaceLight ? "12" : "16"));
+    root.style.setProperty("--ui-active-icon", settings.activeIconColor || palette.accent);
     const theme =
       [...themes, ...settings.customThemes].find(
         (theme) => theme.id === (light ? settings.lightTheme : settings.darkTheme),

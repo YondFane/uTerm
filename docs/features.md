@@ -375,9 +375,12 @@ The sidebar footer provides separate icon-only buttons to show or hide connectio
 terminal window for SSH, three stacked square layers for Redis and a cylinder for databases. Hover
 labels describe the action, and accessible names identify each connection type.
 
-- All three sections are visible by default, including for older saved settings; highlighted buttons
-  indicate visible sections. The three choices are saved independently as application settings,
-  apply across workspaces and persist after restart.
+- All three sections are visible by default, including for older saved settings; highlighted icons
+  indicate visible sections, while hidden sections use muted icons. The three choices are saved
+  independently as application settings, apply across workspaces and persist after restart.
+
+- Highlight colors follow the interface theme by default. Settings → Appearance → Icon highlight can
+  apply a custom color to these switches and the inspector tool switcher.
 
 - Hiding a section retains its profiles, SSH sessions and active Redis/database workbenches,
   connections, drafts and database transactions. If saving a preference fails, the previous
@@ -2273,7 +2276,19 @@ above application dialogs.
 ### Inspector tools and panel toggles
 
 The inspector's Files, Git, GitHub and Working directory icons share a rounded capsule with a fine
-border. Each icon has a circular hover/selected background.
+border. Each icon has a circular hover/selected background. The selected tool's icon uses the
+highlight color and retains it on hover; the other icons retain their normal colors. Connection
+visibility switches and the selected sidebar navigation icon use the same highlight color.
+
+Settings → Appearance → Icon highlight defaults to Follow theme, using the current interface theme's
+accent color as the theme or color mode changes. Older saved settings also use this default.
+
+- Choose Custom color to use the color picker or enter a six-digit hexadecimal color such as
+  `#62d98a`. Press Enter or leave the text field to apply it. Changes save automatically and persist
+  after restart; a custom color stays the same across themes and dark/light modes.
+
+- Choose Follow theme to restore automatic colors. Restore interface and terminal defaults also
+  restores this mode. Invalid colors or failed saves show an error and retain the saved highlight.
 
 - The sidebar hide/reopen and inspector show/hide buttons show only their icons at rest, adding a
   circular background and border on hover or keyboard focus. The sidebar hide icon aligns with the
@@ -2290,6 +2305,22 @@ border. Each icon has a circular hover/selected background.
   collapse and reopen.
 
 - Windows/Linux runtime acceptance remains pending.
+
+#### Highlight-color checks on Windows
+
+- The complete frontend/build-helper suite passes on Windows (252 passed, 11 optional/platform
+  checks skipped), together with changed-file formatting, localization, documentation checks and
+  TypeScript/production build. Tests cover old settings, all six palettes in both color modes,
+  custom-color persistence and provider reload, invalid colors, save failures and restoring
+  defaults. Repository-wide formatting reports existing issues in 172 unchanged files; the existing
+  Vite WebSocket-port and production large-chunk warnings remain.
+
+- An isolated Tauri/WebView2 host (`sh.uterm.desktop.qa.activeicons`) runs the real App with
+  temporary settings and mocked desktop commands. Visual inspection verifies the appearance
+  controls, default theme highlighting and applying a custom color to visible connection switches
+  and the selected tool. The custom color survives an app restart, dark/light mode and a theme
+  change; choosing Follow theme restores the selected palette's accent. No real server connections
+  are used; macOS/Linux runtime acceptance of these controls remains pending.
 
 ### Sidebar action buttons
 
@@ -2472,29 +2503,109 @@ shortcuts.
 - Automated tests cover defaults, conflicts and custom bindings; native terminal shortcut acceptance
   remains pending.
 
+### Sidebar styles
+
+Settings → Appearance → Sidebar style provides two preview cards. Classic sidebar is the default,
+including for existing saved settings. Icon navigation sidebar places a vertical icon rail beside
+the content list. Choosing a card applies and saves it immediately across workspaces and restarts; a
+failed save displays an error and keeps the saved style. Restoring interface and terminal defaults
+selects Classic sidebar.
+
+- The navigation rail offers All, Projects and sessions, SSH connections, Redis connections and
+  Database connections. Each connection category follows its saved visibility preference. Use the
+  Classic sidebar's footer switches to change these preferences; hiding the current category returns
+  the list to All.
+- Selecting a category filters only the sidebar list, preserving the current project, session,
+  workbench and connections. The current category is retained during this app run and starts at All
+  after restart.
+- In the navigation style, Hide sidebar, the sidebar shortcut and drag collapse hide only the
+  content list. The 48 px icon rail stays visible with its category and footer buttons. Click a
+  category or Show sidebar to restore the list at its previous width, or drag the rail's right edge
+  to expand it. The Classic sidebar still hides completely.
+- Add, Commands, Settings and Agent share the button group at the bottom of the rail. The Add menu
+  starts with New terminal, followed by Add project and enabled Agent chats. Add SSH connection, Add
+  Redis connection and Add database connection appear at the end of the menu. Both sidebar styles
+  use this order. The navigation style has no connection switches or footer below the content list;
+  the Classic sidebar retains its footer controls. Selected navigation icons use the configured Icon
+  highlight color; both styles adapt to narrow sidebar widths.
+
+#### Sidebar-style checks on Windows
+
+- The complete frontend/build-helper suite passes on Windows (252 passed, 11 optional/platform
+  checks skipped). Coverage includes old settings, saved style reload, settings cards, category
+  filtering, hidden category fallback, save failures, restoring defaults and unchanged workspace
+  data. Sidebar regressions verify retained rail/footer controls,
+  category/toolbar/shortcut/keyboard/drag restoration, drag cancellation, both inspector positions,
+  style switching and menu dismissal when Classic is hidden.
+- Local-session service tests and all 105 backend checks pass, with nine optional checks ignored.
+  The SSH startup timing check passes in isolated and full reruns after an initial timeout. Locked
+  dependency installation, changed-file formatting, both Cargo format checks, localization,
+  documentation, TypeScript/production and Windows desktop builds pass. Repository-wide formatting
+  retains issues in 172 unchanged files.
+- Both Add-menu regressions pass, covering New terminal first and the final connection-action order
+  in Chinese/English, all eight visibility combinations and retained action targets. Native Windows
+  inspection confirms that New terminal is first and all three connection actions follow the enabled
+  Agent chat actions.
+- An isolated Tauri/WebView2 app (`sh.uterm.desktop.qa.sidebarstyles`) runs the real App with
+  temporary profiles and mocked desktop commands. Native inspection verifies the two settings cards,
+  switching to the navigation layout, project/SSH filtering, rail footer controls, Chinese dark and
+  English light layouts, and the compact 176 px navigation layout. The rail Add button opens its
+  complete menu and Escape returns visible focus to it. The content footer is absent, and the rail
+  group remains accessible at 248 px and 88 px in light/dark appearance. Native Chinese/dark
+  inspection also verifies button and drag collapse to a retained 48 px rail, category/drag
+  restoration and the complete Add menu while the list is hidden.
+- The UI fixture uses no real processes or server connections. Native acceptance of
+  shortcut-triggered menu dismissal, expanded navigation below 88 px, restart persistence and
+  macOS/Linux interaction remains pending. The production build retains its existing large-chunk
+  warning.
+
 ### Workspace header and sidebar width
 
-The sidebar header places the workspace name and hide button on one row, vertically centered with
-the main toolbar and to the right of the window controls on macOS. There is no separate uTerm/Local
-brand row.
+At normal widths, the sidebar header places the workspace name and hide button on one row,
+vertically centered with the main toolbar and to the right of the window controls on macOS. There is
+no separate uTerm/Local brand row.
 
 - The workspace name appears as text without a field border or dropdown arrow. Clicking it opens a
   compact 180 px menu below the header, with smaller item padding; keyboard activation and menu
   navigation remain available.
 
 - Long names are truncated in the header with their full name in a tooltip and wrap inside the menu.
-  Drag its right edge to resize between 30 px and the smaller of 320 px or 30% of the window (with a
-  180 px floor).
+  Drag its right edge to resize, with a minimum of 30 px in Classic or 48 px in navigation style.
+  The maximum is the smaller of 320 px or 30% of the window (with a 180 px floor).
 
-- Dragging to 30 px or less highlights it; releasing hides it; the toolbar button reopens it. Width
-  is retained for the current app run.
+- Dragging to 30 px or less in Classic, or 78 px or less in navigation style, highlights it.
+  Releasing hides Classic completely or keeps the navigation rail while hiding its list. The toolbar
+  button reopens the list. Width is retained for the current app run.
 
 - The separator also supports arrow keys, Home to hide, End for maximum width and Enter/double-click
   to reset.
 
+- Narrow sidebars keep section headings on one line and replace project/Worktree quick-action
+  capsules with a More actions button on hover or keyboard focus. Its menu offers a new terminal and
+  sessions for enabled Agents, retaining the original project or Worktree target and missing-folder
+  restrictions.
+
+- Very narrow sidebars stack header controls and use resource/session icons with full names in
+  tooltips and accessible labels. Section actions wrap, and footer buttons wrap within their groups
+  instead of being clipped. The footer scrolls when needed to leave room for the project list. SSH
+  host search and its quick-connect button return when the sidebar is widened.
+
+- Add and workspace menus open outside the sidebar with their normal readable widths, bounded by the
+  window. Near the collapse threshold, content is hidden to avoid crushed controls. Widening
+  restores the complete layout while preserving selection, sessions and connection settings.
+
 #### Validation and limits
 
-- Boundary tests cover collapse and narrow-window limits; native pointer acceptance remains pending.
+- On Windows, 23 focused sidebar, welcome and bilingual UI checks pass, together with changed-file
+  formatting, localization/documentation checks and TypeScript/production build. Coverage includes
+  project/Worktree quick-menu targets, enabled Agents, missing folders, Escape focus return,
+  connection guards, visibility settings and collapse boundaries.
+
+- An isolated Tauri/WebView2 app (`sh.uterm.desktop.qa.activeicons`) runs the real App with long
+  names, temporary profiles and mocked desktop commands. Native pointer drags verify the compact 176
+  px layout and the 88 px icon layout, single-line Chinese headings and fully visible footer
+  controls. No real processes or servers are used. Native acceptance of the final popup placement,
+  narrow light/English layouts and macOS/Linux interaction remains pending.
 
 ### Error-banner timing
 
