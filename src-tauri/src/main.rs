@@ -17,6 +17,7 @@ mod redis_credentials;
 mod sessions;
 mod ssh;
 mod ssh_auth;
+mod ssh_tunnels;
 mod taskbar;
 mod updates;
 
@@ -78,9 +79,9 @@ fn runtime_info(app: tauri::AppHandle) -> Result<RuntimeInfo, String> {
         .path()
         .app_data_dir()
         .map_err(|error| error.to_string())?;
-    let mut available: Vec<String> = ["codex", "claude", "gemini", "opencode", "kimi", "grok"]
-        .into_iter()
-        .map(String::from)
+    let mut available: Vec<String> = utermd_local::agents::BUILTIN_AGENTS
+        .iter()
+        .map(|id| String::from(*id))
         .chain(definitions.iter().map(|item| item.id.clone()))
         .collect();
     available.sort();
@@ -359,6 +360,7 @@ fn main() {
         .manage(files::EditorGuard::default())
         .manage(ssh::SshFiles::default())
         .manage(ssh_auth::SshAuth::default())
+        .manage(ssh_tunnels::SshTunnels::default())
         .manage(redis::RedisState::default())
         .manage(database::DatabaseState::default())
         .manage(database_components::Components::default())
@@ -406,6 +408,10 @@ fn main() {
             ssh_auth::ssh_forget_auth,
             ssh_auth::ssh_pick_identity,
             ssh::ssh_info,
+            ssh::ssh_resolve,
+            ssh_tunnels::ssh_tunnel_start,
+            ssh_tunnels::ssh_tunnel_stop,
+            ssh_tunnels::ssh_tunnel_list,
             ssh::ssh_files_open,
             ssh::ssh_files_disconnect,
             ssh::ssh_files_list,
@@ -538,6 +544,7 @@ fn main() {
                 _ => {}
             }
             if matches!(event, tauri::RunEvent::Exit) {
+                handle.state::<ssh_tunnels::SshTunnels>().stop();
                 handle.state::<redis::RedisState>().stop();
                 handle.state::<database::DatabaseState>().stop();
                 handle

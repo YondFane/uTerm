@@ -1,5 +1,6 @@
 import { createRef, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { DatabaseGrid } from "./DatabaseGrid";
+import { DocumentWorkspace } from "./DocumentWorkspace";
 import { ToolbarIcon } from "./SidebarIcon";
 import { DatabaseObjects } from "./DatabaseObjects";
 import { EditorView, keymap } from "@codemirror/view";
@@ -17,6 +18,7 @@ import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import {
   databaseError,
+  isDocumentDatabase,
   databaseNames,
   databaseStatus,
   databaseSelect,
@@ -77,7 +79,19 @@ function resultWeight(result: DatabaseResult) {
   return size;
 }
 
-export function DatabaseWorkspace({
+export function DatabaseWorkspace(props: {
+  config: DatabaseConfig;
+  active: boolean;
+  password: string;
+}) {
+  return isDocumentDatabase(props.config.kind) ? (
+    <DocumentWorkspace {...props} />
+  ) : (
+    <SqlDatabaseWorkspace {...props} />
+  );
+}
+
+function SqlDatabaseWorkspace({
   config,
   active,
   password: initialPassword,

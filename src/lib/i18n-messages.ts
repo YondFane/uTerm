@@ -1,4 +1,130 @@
 export const messages: Record<string, string> = {
+  "连接正在使用，请先关闭相关会话、文件和依赖的工作台，并停止转发。":
+    "Connection in use. Close related sessions, files and dependent workbenches, and stop forwarding first.",
+  "无法监听本地端口，请检查端口权限或更换端口。":
+    "Could not listen on the local port. Check port permissions or choose another port.",
+  "快速 SSH 连接": "Quick SSH connection",
+  "搜索 SSH 主机": "Search SSH hosts",
+  "没有匹配的 SSH 主机": "No matching SSH hosts",
+  临时: "Temporary",
+  "跳板机（可选）": "Jump host (optional)",
+  "bastion / user@bastion:22": "bastion / user@bastion:22",
+  "user@host:22": "user@host:22",
+  "选择 OpenSSH 别名或填写一台跳板机地址，留空继承配置。跳板机使用自己的 OpenSSH 配置或 ssh-agent；密码模式不支持跳板机。":
+    "Choose an OpenSSH alias or enter one jump host. Leave blank to inherit configuration. The jump host uses its own OpenSSH settings or ssh-agent; password mode does not support jump hosts.",
+  保存为常用连接: "Save connection",
+  端口转发: "Port forwarding",
+  "请输入 Host 别名、user@host:port 或 ssh://user@host:port，不包含密码或命令。":
+    "Enter a Host alias, user@host:port or ssh://user@host:port, without a password or command.",
+  "无法保存连接，未启动 SSH 登录。": "Could not save the connection. SSH login has not started.",
+  "SSH 地址": "SSH address",
+  "使用 OpenSSH 自动认证，在终端完成认证。临时配置为恢复会话保留；关闭最后会话且释放文件和隧道后自动移除，也可保存为常用连接。":
+    "Uses OpenSSH automatic authentication; complete authentication in the terminal. Temporary settings are kept for session recovery and removed after the last session closes and files and tunnels are released. You can also save the connection.",
+  本地端口转发: "Local port forwarding",
+  "仅监听 127.0.0.1，远端地址由 SSH 服务器访问。手动启动，退出应用时停止；本地监听不代表远端服务可用。":
+    "Listens on 127.0.0.1 only; the SSH server accesses the remote address. Start manually; forwarding stops when the app quits. A local listener does not confirm remote service availability.",
+  "正在启动转发…": "Starting forwarding…",
+  本地端口正在监听: "Local port listening",
+  转发失败: "Forwarding failed",
+  已停止: "Stopped",
+  停止转发: "Stop forwarding",
+  启动转发: "Start forwarding",
+  移除转发: "Remove forwarding",
+  "无法保存端口转发配置。": "Could not save forwarding settings.",
+  "端口转发配置无效或本地端口重复。每个连接最多 16 条规则。":
+    "Invalid forwarding settings or duplicate local port. Each connection supports up to 16 rules.",
+  本地端口: "Local port",
+  远端地址: "Remote address",
+  远端端口: "Remote port",
+  添加转发: "Add forwarding",
+  "端口转发配置无效。": "Invalid forwarding settings.",
+  "转发已启动或正在启动。": "Forwarding is running or starting.",
+  "最多同时运行 16 个端口转发。": "Up to 16 forwards can run at once.",
+  "本地端口已占用，请更换端口。": "Local port is in use. Choose another port.",
+  "端口转发失败，请检查主机指纹、认证、端口和服务端转发权限。":
+    "Forwarding failed. Check host trust, authentication, ports and server forwarding permissions.",
+  "SSH 转发进程已结束，请检查网络后重新启动。":
+    "The SSH forwarding process ended. Check the network and start it again.",
+  "端口转发已取消。": "Forwarding cancelled.",
+  "此 OpenSSH 配置已有转发规则，请选择不含转发规则的 Host 别名。":
+    "This OpenSSH configuration already contains forwarding rules. Choose a Host alias without forwarding rules.",
+  "API Key": "API Key",
+  映射: "Mapping",
+  "SSH 进程未启动": "SSH process has not started",
+  "正在启动 SSH 进程": "Starting SSH process",
+  "SSH 进程运行中": "SSH process running",
+  "SSH 会话已结束": "SSH session ended",
+  终端附着已断开: "Terminal attachment disconnected",
+  文件尚未连接: "Files not connected",
+  "SFTP 已连接": "SFTP connected",
+  "正在断开文件连接…": "Disconnecting files…",
+  文件连接失败: "File connection failed",
+  连接文件: "Connect files",
+  "连接 SFTP 后可浏览和编辑远程文件。终端会话独立运行。":
+    "Connect SFTP to browse and edit remote files. Terminal sessions run independently.",
+  "SSH 连接详情": "SSH connection details",
+  "用户名与端口按 OpenSSH 配置生效": "Username and port follow OpenSSH configuration",
+  使用跳板机或代理: "Jump host or proxy configured",
+  远程文件: "Remote files",
+  "连接正在使用，请先关闭相关会话、文件和依赖的工作台。":
+    "The connection is in use. Close its sessions, files and dependent workbenches first.",
+  "已保存会话：{count}": "Saved sessions: {count}",
+  "进程状态不代表认证已完成，请在终端完成指纹或认证提示。":
+    "Process status does not confirm authentication. Complete host verification or authentication in the terminal.",
+  "旧输出已保留。重新附着只恢复本机连接；新建 SSH 终端会建立新的远程登录。":
+    "Previous output is retained. Reattaching restores the local attachment; a new SSH terminal starts a new remote login.",
+  "OpenSSH 配置": "OpenSSH configuration",
+  "持续引用 OpenSSH 配置；用户名和端口留空时继承配置，已有跳板机设置继续生效。":
+    "Keeps using OpenSSH configuration. Blank username and port inherit its values, including existing jump host settings.",
+  查看生效配置: "Show effective configuration",
+  更多设置: "More settings",
+  "连接名称（可选）": "Connection name (optional)",
+  默认使用主机名: "Defaults to the hostname",
+  仅保存: "Save only",
+  保存并连接: "Save and connect",
+  "选择已有会话，或新建终端。文件通过 SFTP 单独连接。":
+    "Select an existing session or create a terminal. Files connect separately over SFTP.",
+  "查询必须是受支持的 JSON 对象，请检查操作和字段。":
+    "Enter a supported JSON object. Check the operation and fields.",
+  "请选择数据库和集合，或指定一个索引。": "Select a database and collection, or specify an index.",
+  "文档已变化或不存在，请重新读取后再修改。":
+    "The document changed or no longer exists. Read it again before editing.",
+  "请先开启允许编辑，并确认文档写入。": "Enable editing and confirm the document write first.",
+  "认证失败或权限不足，请检查凭据和服务端权限。":
+    "Authentication failed or access was denied. Check credentials and server permissions.",
+  "Elasticsearch 拒绝了请求，请检查查询、索引和服务端状态。":
+    "Elasticsearch rejected the request. Check the query, index and server status.",
+  "Elasticsearch 直接连接，无需 Java 或额外驱动；MongoDB 需要 Java 与三个驱动组件。":
+    "Elasticsearch connects directly without Java or an additional driver. MongoDB requires Java and three driver components.",
+  "默认索引（可选）": "Default index (optional)",
+  认证数据库: "Authentication database",
+  用户名和密码: "Username and password",
+  "文档有未保存修改，确认放弃后继续？": "Discard unsaved document changes and continue?",
+  "此操作立即写入服务器，不支持提交或回滚。确认继续？":
+    "This writes to the server immediately, without commit or rollback. Continue?",
+  "文档操作成功，请重新执行查询查看结果。":
+    "Document operation succeeded. Run the query again to view results.",
+  "默认只读。文档写入立即生效，不提供 SQL 事务。":
+    "Read-only by default. Document writes take effect immediately without SQL transactions.",
+  取消查询并断开: "Cancel query and disconnect",
+  数据库名称: "Database name",
+  刷新对象: "Refresh objects",
+  集合: "Collection",
+  "查询 JSON（filter 或 pipeline）": "Query JSON (filter or pipeline)",
+  执行查询: "Run query",
+  "保存 JSON": "Save JSON",
+  放弃查询修改: "Discard query changes",
+  "确认放弃查询修改？": "Discard query changes?",
+  "查询 JSON": "Query JSON",
+  "本页 {count} 条": "{count} documents on this page",
+  "导出本页 JSON": "Export page JSON",
+  新建文档: "New document",
+  "文档 JSON": "Document JSON",
+  替换文档: "Replace document",
+  插入文档: "Insert document",
+  删除文档: "Delete document",
+  放弃文档修改: "Discard document changes",
+  "确认放弃文档修改？": "Discard document changes?",
   "下载被拒绝，请检查访问权限或代理设置，或手动下载。":
     "The download was denied. Check access permissions or proxy settings, or download manually.",
   "下载连接的证书验证失败，请检查系统时间、证书或代理设置。":

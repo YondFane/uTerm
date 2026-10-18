@@ -2,6 +2,11 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
+pub const BUILTIN_AGENTS: &[&str] = &[
+    "codex", "claude", "gemini", "opencode", "kimi", "grok", "hermes", "pi", "minimax", "qwen",
+    "copilot", "iflow",
+];
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AgentDefinition {
     pub id: String,

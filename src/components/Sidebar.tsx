@@ -4,6 +4,7 @@ import { availableAgents } from "../lib/settings";
 import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
+import { matchesSsh } from "../lib/ssh";
 import { useSettings } from "../lib/SettingsContext";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -69,6 +70,7 @@ export function Sidebar({
   activityDisabled = false,
   footerActions,
   addSsh,
+  quickSsh,
   editSsh,
   selectSsh,
   newSshTerminal,
@@ -103,6 +105,7 @@ export function Sidebar({
   redisStatuses?: Record<string, RedisStatus>;
   selectedRedisId?: string | null;
   addSsh?: () => void;
+  quickSsh?: () => void;
   editSsh?: (connection: SshConnection) => void;
   selectSsh?: (connection: SshConnection) => void;
   newSshTerminal?: (connection: SshConnection) => void;
@@ -131,6 +134,7 @@ export function Sidebar({
   addLoose: (kind: "terminals" | "chats", agent?: SessionConfig["agent"]) => void;
   addSession: (project: string, worktree?: string, agent?: SessionConfig["agent"]) => void;
 }) {
+  const [sshQuery, setSshQuery] = useState("");
   useUiLanguage();
 
   const { settings, save } = useSettings();
@@ -964,52 +968,77 @@ export function Sidebar({
                 <SidebarIcon name="plus" />
               </button>,
             )}
+            {!collapsed.ssh && (
+              <div className="ssh-sidebar-tools">
+                {quickSsh && (
+                  <button disabled={!runtime || activityDisabled} onClick={quickSsh}>
+                    {tx("快速 SSH 连接")}
+                  </button>
+                )}
+                <input
+                  type="search"
+                  aria-label={tx("搜索 SSH 主机")}
+                  placeholder={tx("搜索 SSH 主机")}
+                  value={sshQuery}
+                  onChange={(event) => setSshQuery(event.target.value)}
+                />
+                {sshQuery.trim() &&
+                  !(group?.sshConnections ?? []).some((item) => matchesSsh(item, sshQuery)) && (
+                    <p className="muted">{tx("没有匹配的 SSH 主机")}</p>
+                  )}
+              </div>
+            )}
             {!collapsed.ssh &&
-              (group?.sshConnections ?? []).map((connection) => {
-                const roster = rosters.find((item) => item.id === `ssh:${connection.id}`)!;
-                return (
-                  <div key={connection.id} className="ssh-connection">
-                    <div
-                      className="sidebar-row"
-                      onContextMenu={(event) => openConnectionMenu(event, "ssh", connection.id)}
-                      onKeyDown={(event) => openConnectionMenu(event, "ssh", connection.id)}
-                    >
-                      <button
-                        className="row-label"
-                        title={`${connection.host} · ${connection.root || tx("服务端登录目录")}`}
-                        aria-description={
-                          connection.sessions.length ? tx("有未关闭的会话") : undefined
-                        }
-                        disabled={activityDisabled}
-                        onClick={() => selectSsh?.(connection)}
+              (group?.sshConnections ?? [])
+                .filter((connection) => matchesSsh(connection, sshQuery))
+                .map((connection) => {
+                  const roster = rosters.find((item) => item.id === `ssh:${connection.id}`)!;
+                  return (
+                    <div key={connection.id} className="ssh-connection">
+                      <div
+                        className="sidebar-row"
+                        onContextMenu={(event) => openConnectionMenu(event, "ssh", connection.id)}
+                        onKeyDown={(event) => openConnectionMenu(event, "ssh", connection.id)}
                       >
-                        <span
-                          className="sidebar-resource-icon"
-                          data-resource-active={connection.sessions.length > 0 || undefined}
-                          aria-hidden="true"
+                        <button
+                          className="row-label"
+                          title={`${connection.host} · ${connection.root || tx("服务端登录目录")}`}
+                          aria-description={
+                            connection.sessions.length ? tx("有未关闭的会话") : undefined
+                          }
+                          disabled={activityDisabled}
+                          onClick={() => selectSsh?.(connection)}
                         >
-                          <SessionIcon />
-                        </span>
-                        <span>{connection.name}</span>
-                      </button>
-                      <button
-                        className="icon-button row-close"
-                        aria-label={tx("移除 SSH 连接：{p0}", { p0: connection.name })}
-                        title={tx("移除 SSH 连接")}
-                        disabled={!canRemoveSsh?.(connection)}
-                        onClick={() =>
-                          setRemoval({ kind: "ssh", connection, workspaceId: group!.id })
-                        }
-                      >
-                        <ToolbarIcon name="close" />
-                      </button>
+                          <span
+                            className="sidebar-resource-icon"
+                            data-resource-active={connection.sessions.length > 0 || undefined}
+                            aria-hidden="true"
+                          >
+                            <SessionIcon />
+                          </span>
+                          <span>
+                            {connection.name}
+                            {connection.temporary ? " · " + tx("临时") : ""}
+                          </span>
+                        </button>
+                        <button
+                          className="icon-button row-close"
+                          aria-label={tx("移除 SSH 连接：{p0}", { p0: connection.name })}
+                          title={tx("移除 SSH 连接")}
+                          disabled={!canRemoveSsh?.(connection)}
+                          onClick={() =>
+                            setRemoval({ kind: "ssh", connection, workspaceId: group!.id })
+                          }
+                        >
+                          <ToolbarIcon name="close" />
+                        </button>
+                      </div>
+                      {ordered(connection.sessions).map((session) =>
+                        sessionRow(session, roster, 1, connection.name, true),
+                      )}
                     </div>
-                    {ordered(connection.sessions).map((session) =>
-                      sessionRow(session, roster, 1, connection.name, true),
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
           </section>
         )}
         {addRedis && settings.showRedisConnections && (

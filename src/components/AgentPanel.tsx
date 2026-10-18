@@ -7,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 import type { AgentDefinition, RuntimeInfo } from "../lib/desktop";
 import { agentNames, SessionIcon, ToolbarIcon } from "./SidebarIcon";
-import { agentInstallers } from "../lib/agent-install";
+import { agentHookAgents, agentInstallers } from "../lib/agent-install";
 import { downloadError } from "../lib/download-error";
 export const notificationKey = "uterm.desktop.agentNotifications";
 interface Usage {
@@ -85,6 +85,12 @@ export function AgentSettings({
       "opencode",
       "kimi",
       "grok",
+      "hermes",
+      "pi",
+      "minimax",
+      "qwen",
+      "copilot",
+      "iflow",
       ...definitions.map((item) => item.id),
     ]),
   ];
@@ -129,7 +135,10 @@ export function AgentSettings({
         {ids.map((id) => {
           const definition = definitions.find((item) => item.id === id);
           const installer = agentInstallers[id];
-          const automatic = installer?.package && (!definition || definition.program === id);
+          const program = installer?.program ?? id;
+          const automatic =
+            (installer?.package || installer?.script) &&
+            (!definition || definition.program === program);
           return (
             <section key={id} className="agent-definition">
               <header>
@@ -173,14 +182,14 @@ export function AgentSettings({
                   onClick={() => {
                     setCreating(false);
                     setEditing(
-                      definition ?? { id, name: agentNames[id] ?? id, program: id, arguments: [] },
+                      definition ?? { id, name: agentNames[id] ?? id, program, arguments: [] },
                     );
                     setArgumentsText(JSON.stringify(definition?.arguments ?? []));
                   }}
                 >
                   {tx("配置")}
                 </button>
-                {["codex", "claude", "gemini"].includes(id) && (
+                {agentHookAgents.includes(id) && (
                   <>
                     <button
                       disabled={busy}
@@ -208,6 +217,18 @@ export function AgentSettings({
                     </button>
                   </>
                 )}
+                {installer?.hookGuide && (
+                  <button
+                    disabled={busy}
+                    onClick={() =>
+                      void perform(async () => {
+                        await invoke("open_external", { url: installer.hookGuide });
+                      })
+                    }
+                  >
+                    {tx("Hook 配置说明")}
+                  </button>
+                )}
                 {definition && (
                   <button
                     disabled={busy}
@@ -219,14 +240,21 @@ export function AgentSettings({
                   </button>
                 )}
               </div>
+              {id === "hermes" && (
+                <p className="muted">{tx("Hermes Hook 需按官方说明手动配置。")}</p>
+              )}
               {installTarget === id && (
                 <div className="agent-editor">
                   <p>
                     {automatic
-                      ? tx("将通过 npm 全局安装程序，需要 Node.js 和网络连接，不会自动提权。")
+                      ? installer.script
+                        ? tx("将运行官方安装脚本，下载程序及所需依赖，不会自动提权或配置登录。")
+                        : tx("将通过 npm 全局安装程序，需要 Node.js 和网络连接，不会自动提权。")
                       : tx("请按发布方说明安装程序，再配置可执行文件路径。")}
                   </p>
-                  {automatic && <code>{`npm install -g ${installer.package}`}</code>}
+                  {automatic && installer.package && (
+                    <code>{`npm install -g ${installer.package}${installer.npmArgs?.length ? " " + installer.npmArgs.join(" ") : ""}`}</code>
+                  )}
                   <div className="agent-buttons">
                     {automatic && (
                       <button

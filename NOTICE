@@ -71,6 +71,32 @@ Source / 来源：
 https://github.com/lobehub/lobe-icons/tree/8a1b2821bb768c484fe8da20c5e1838b6bf551a9/packages/static-svg/icons
 Files / 文件：kimi.svg, opencode.svg, grok.svg
 
+The Hermes, MiniMax, Qwen Code and Copilot CLI paths in src/lib/agent-brands.ts
+are copied from hermesagent.svg, minimax.svg, qwen.svg and githubcopilot.svg
+at the same Lobe Icons revision. Geometry is retained; subpaths are combined.
+src/lib/agent-brands.ts 中的 Hermes、MiniMax、Qwen Code 和 Copilot CLI 路径
+取自同版本 Lobe Icons 的上述 SVG 文件，保留几何形状并合并子路径。
+
+The Pi path is adapted from https://pi.dev/logo-auto.svg, retrieved 2026-10-18.
+The three original paths are combined and rendered in the interface color;
+the viewport excludes excess whitespace without changing their geometry.
+Pi 路径取自上述官方 SVG（获取日期 2026-10-18），合并三条原始路径并使用界面颜色；
+视口去除多余留白，不改变几何形状。
+Pi source and its MIT license: https://github.com/earendil-works/pi/blob/main/LICENSE
+Pi 源码及 MIT 许可见上述地址。
+Pi copyright / Pi 版权：Copyright (c) 2025 Mario Zechner.
+The MIT permission and warranty terms reproduced below also apply to the copied Pi paths.
+下文所载 MIT 授权及免责声明同样适用于复制的 Pi 路径。
+
+The iFlow CLI favicon in src/assets/agents/iflow.png is copied unchanged from
+https://cli.iflow.cn/img/favicon.ico, retrieved 2026-10-18. Its original bytes
+are PNG despite the source URL's suffix. The mark retains its owner's rights
+and is used only to identify the integrated CLI; no MIT license is asserted
+for this brand asset.
+src/assets/agents/iflow.png 原样取自上述 iFlow CLI 官方网站（获取日期
+2026-10-18）；源地址虽以 ico 结尾，原始文件实际为 PNG。该品牌资源保留
+原权利人的权利，仅用于识别所集成的 CLI，不声明其采用 MIT 许可。
+
 The MIT license below covers the copied icon code. Brand names and marks
 remain the property of their respective owners and identify the integrated
 services; no affiliation or endorsement is implied.

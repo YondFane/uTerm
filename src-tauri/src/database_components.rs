@@ -847,7 +847,7 @@ mod tests {
     #[test]
     fn catalog_and_extraction_are_bounded() {
         let catalog = catalog().unwrap();
-        assert_eq!(catalog.drivers.len(), 3);
+        assert_eq!(catalog.drivers.len(), 6);
         assert!(artifacts().unwrap().iter().all(|(id, _)| id != "engine"));
         for (_, artifact) in artifacts().unwrap() {
             assert!(artifact.url.starts_with("https://"));

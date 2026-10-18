@@ -189,6 +189,13 @@ impl Client {
         }
         bail!("SSH_HOST_UPGRADE_REQUIRED");
     }
+    pub fn require_ssh_jump_support(&self) -> Result<()> {
+        if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "ssh-jump-v1"))
+        {
+            return Ok(());
+        }
+        bail!("SSH_HOST_UPGRADE_REQUIRED");
+    }
     pub fn request(&self, operation: Operation) -> Result<Reply> {
         let address = SocketAddr::from(([127, 0, 0, 1], self.endpoint.port));
         let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))?;
@@ -745,6 +752,7 @@ impl Host {
                         "agent-reports-v1".into(),
                         "ssh-sessions-v1".into(),
                         "ssh-options-v1".into(),
+                        "ssh-jump-v1".into(),
                         "local-session-list-v1".into(),
                         "local-session-snapshot-v1".into(),
                         "local-host-management-v1".into(),

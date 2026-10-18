@@ -61,7 +61,7 @@ test("real settings tabs, commands and panels render in both languages without u
         },
       },
     ],
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, watch: null },
     optimizeDeps: { noDiscovery: true, include: [] },
     appType: "custom",
   });
@@ -108,6 +108,7 @@ test("real settings tabs, commands and panels render in both languages without u
   };
   const calls = [];
   const openedUrls = [];
+  const hookCalls = [];
   let autostart = false;
   let autostartFail = false;
   let installFail = false;
@@ -117,6 +118,12 @@ test("real settings tabs, commands and panels render in both languages without u
   const usageReads = [];
   mockIPC((cmd, args) => {
     calls.push(cmd);
+    if (cmd === "agent_hooks") {
+      hookCalls.push(args);
+      return args.enabled
+        ? "Hooks 已安装。新会话生效；原配置已备份。"
+        : "Hooks 已移除。新会话生效；原配置已备份。";
+    }
     if (cmd === "open_external") {
       openedUrls.push(args.url);
       return null;
@@ -286,14 +293,27 @@ test("real settings tabs, commands and panels render in both languages without u
     await context.test(
       "built-in agents render distinct bundled brand icons and preserve safe fallback",
       () => {
-        const marks = ["kimi", "opencode", "grok"].map((agent) => {
+        const marks = [
+          "kimi",
+          "opencode",
+          "grok",
+          "hermes",
+          "pi",
+          "minimax",
+          "qwen",
+          "copilot",
+        ].map((agent) => {
           const markup = renderToStaticMarkup(React.createElement(SessionIcon, { agent }));
           assert.match(markup, new RegExp(`agent-${agent}`));
           assert.match(markup, /fill="currentColor"/);
           assert.doesNotMatch(markup, /icon-terminal|<image|<img/);
           return markup.match(/ d="([^"]+)"/)[1];
         });
-        assert.equal(new Set(marks).size, 3);
+        assert.equal(new Set(marks).size, 8);
+        const iflow = renderToStaticMarkup(React.createElement(SessionIcon, { agent: "iflow" }));
+        assert.match(iflow, /agent-iflow/);
+        assert.match(iflow, /<img[^>]+src="[^\"]*iflow.png"/);
+        assert.doesNotMatch(iflow, /https?:/);
         for (const agent of [undefined, "custom", "constructor", "__proto__"])
           assert.match(
             renderToStaticMarkup(React.createElement(SessionIcon, { agent })),
@@ -338,6 +358,153 @@ test("real settings tabs, commands and panels render in both languages without u
         }
       },
     );
+    await context.test(
+      "additional agents use verified installers and MiniMax edits the mcode command",
+      async () => {
+        for (const language of ["en", "zh-Hans"]) {
+          for (const [id, name, packageName, url] of [
+            ["pi", "Pi", "@earendil-works/pi-coding-agent", "https://pi.dev/"],
+            [
+              "qwen",
+              "Qwen Code",
+              "@qwen-code/qwen-code",
+              "https://qwenlm.github.io/qwen-code-docs/en/users/quickstart/",
+            ],
+            [
+              "copilot",
+              "Copilot CLI",
+              "@github/copilot",
+              "https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli",
+            ],
+            ["iflow", "iFlow CLI", "@iflow-ai/iflow-cli", "https://docs.iflow.cn/cli/quickstart/"],
+            [
+              "hermes",
+              "Hermes",
+              null,
+              "https://hermes-agent.nousresearch.com/docs/getting-started/installation/",
+            ],
+            [
+              "minimax",
+              "MiniMax",
+              "@minimax-ai/code",
+              "https://agent.minimax.io/docs/cli/quick-start",
+            ],
+          ]) {
+            let reloads = 0;
+            await mount(
+              React.createElement(AgentSettings, {
+                runtime,
+                reload: async () => {
+                  reloads++;
+                },
+              }),
+              language,
+            );
+            const section = [...host.querySelectorAll(".agent-definition")].find(
+              (element) => element.querySelector("strong").textContent === name,
+            );
+            assert.ok(section, name);
+            assert.equal(section.querySelector('[role="switch"]').disabled, true);
+            assert.equal(section.querySelectorAll("button").length, id === "hermes" ? 3 : 4);
+            await act(async () => section.querySelector("button").click());
+            await click(language === "en" ? "Official installation guide" : "官方安装说明");
+            assert.equal(openedUrls.at(-1), url);
+            if (packageName || id === "hermes") {
+              if (packageName)
+                assert.equal(
+                  section.querySelector("code").textContent,
+                  `npm install -g ${packageName}${id === "minimax" ? " --ignore-scripts=false --include=optional --allow-scripts=@minimax-ai/code,better-sqlite3" : ""}`,
+                );
+              else
+                assert.match(
+                  section.textContent,
+                  language === "en" ? /official installer/ : /官方安装脚本/,
+                );
+              await click(language === "en" ? "Confirm installation" : "确认安装");
+              assert.equal(installedAgent, id);
+              assert.equal(reloads, 1);
+            } else {
+              assert.equal(section.querySelector("code"), null);
+              assert.equal(
+                [...section.querySelectorAll("button")].some((button) =>
+                  ["Confirm installation", "确认安装"].includes(button.textContent),
+                ),
+                false,
+              );
+            }
+            await act(async () =>
+              [...section.querySelectorAll("button")]
+                .find((button) => button.textContent === (language === "en" ? "Configure" : "配置"))
+                .click(),
+            );
+            assert.equal(
+              host.querySelectorAll("form input")[2].value,
+              id === "minimax" ? "mcode" : id,
+            );
+            if (id === "hermes") {
+              await click(language === "en" ? "Hook setup guide" : "Hook 配置说明");
+              assert.equal(
+                openedUrls.at(-1),
+                "https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks/",
+              );
+            } else {
+              for (const enabled of [true, false]) {
+                const label = enabled
+                  ? language === "en"
+                    ? "Install hooks"
+                    : "安装 Hooks"
+                  : language === "en"
+                    ? "Remove hooks"
+                    : "移除 Hooks";
+                await act(async () =>
+                  [...section.querySelectorAll("button")]
+                    .find((button) => button.textContent === label)
+                    .click(),
+                );
+                assert.deepEqual(hookCalls.at(-1), { agent: id, enabled });
+                assert.ok(host.querySelector('[role="status"]'));
+              }
+            }
+            if (language === "en") assertEnglish();
+          }
+        }
+      },
+    );
+    await context.test("custom Agent identifiers cannot inherit built-in metadata", async () => {
+      for (const id of ["constructor", "__proto__", "toString"]) {
+        await mount(
+          React.createElement(AgentSettings, {
+            runtime: {
+              ...runtime,
+              agent_definitions: [{ id, name: `Custom ${id}`, program: "custom", arguments: [] }],
+            },
+            reload: async () => {},
+          }),
+          "en",
+        );
+        const section = [...host.querySelectorAll(".agent-definition")].find(
+          (element) => element.querySelector("strong").textContent === `Custom ${id}`,
+        );
+        assert.ok(
+          [...section.querySelectorAll("button")].some(
+            (button) => button.textContent === "Remove configuration",
+          ),
+        );
+        await act(async () => section.querySelector("button").click());
+        assert.equal(
+          [...section.querySelectorAll("button")].some(
+            (button) => button.textContent === "Official installation guide",
+          ),
+          false,
+        );
+        assert.equal(
+          [...section.querySelectorAll("button")].some(
+            (button) => button.textContent === "Confirm installation",
+          ),
+          false,
+        );
+      }
+    });
     await context.test(
       "editor, unsaved dialog and terminal chrome render in both languages",
       async () => {

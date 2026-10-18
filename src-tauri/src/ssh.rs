@@ -126,6 +126,7 @@ pub(crate) struct EffectiveSsh {
     pub user: String,
     pub port: String,
     pub proxy: bool,
+    pub forwarding: bool,
     pub password_host: String,
 }
 pub(crate) async fn effective_identity(host: &str) -> Result<EffectiveSsh> {
@@ -219,6 +220,11 @@ async fn effective_config(host: &str, options: Vec<String>) -> Result<EffectiveS
                 line.strip_prefix(key)
                     .is_some_and(|v| !v.is_empty() && v != "none")
             })
+        }),
+        forwarding: text.lines().any(|line| {
+            ["localforward ", "remoteforward ", "dynamicforward "]
+                .iter()
+                .any(|prefix| line.starts_with(prefix))
         }),
     })
 }
@@ -683,6 +689,16 @@ fn aliases(path: &Path, seen: &mut HashSet<PathBuf>, values: &mut HashSet<String
             }
         }
     }
+}
+#[tauri::command]
+pub async fn ssh_resolve(connection: SshTarget) -> Result<serde_json::Value, String> {
+    let effective = effective_target(&connection).await.map_err(failure)?;
+    Ok(serde_json::json!({
+        "hostname": effective.hostname,
+        "username": effective.user,
+        "port": effective.port,
+        "proxy": effective.proxy,
+    }))
 }
 #[tauri::command]
 pub async fn ssh_info() -> Result<SshInfo, String> {

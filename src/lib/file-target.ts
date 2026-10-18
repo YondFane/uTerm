@@ -45,6 +45,17 @@ export function sshError(value: unknown): string {
   const message = value instanceof Error ? value.message : String(value);
   if (message.startsWith("CONFLICT:")) return message;
   const codes: Record<string, string> = {
+    SSH_INVALID_FORWARD: tx("端口转发配置无效。"),
+    SSH_FORWARD_BUSY: tx("转发已启动或正在启动。"),
+    SSH_FORWARD_LIMIT: tx("最多同时运行 16 个端口转发。"),
+    SSH_FORWARD_PORT_BUSY: tx("本地端口已占用，请更换端口。"),
+    SSH_FORWARD_BIND_FAILED: tx("无法监听本地端口，请检查端口权限或更换端口。"),
+    SSH_FORWARD_FAILED: tx("端口转发失败，请检查主机指纹、认证、端口和服务端转发权限。"),
+    SSH_FORWARD_ENDED: tx("SSH 转发进程已结束，请检查网络后重新启动。"),
+    SSH_FORWARD_CANCELLED: tx("端口转发已取消。"),
+    SSH_FORWARD_CONFIG_CONFLICT: tx(
+      "此 OpenSSH 配置已有转发规则，请选择不含转发规则的 Host 别名。",
+    ),
     SSH_PASSWORD_REQUIRED: tx("请编辑 SSH 连接并输入密码。未记住的密码在重开应用后需重新输入。"),
     SSH_PASSWORD_INVALID: tx("SSH 密码不能为空或包含换行，且不能超过 1023 字节。"),
     SSH_CREDENTIAL_FAILED: tx("无法访问 SSH 系统凭据库，请检查权限或取消记住密码。"),

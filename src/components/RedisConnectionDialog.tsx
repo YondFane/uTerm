@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { useDialogBackdrop } from "../lib/useDialogBackdrop";
-import { redisError, validRedisConfig, type RedisConfig } from "../lib/redis";
+import { redisError, validRedisConfig, resolveRedisSsh, type RedisConfig } from "../lib/redis";
 import { sshTargetFor, type SshConnection } from "../lib/workspace";
 
 export function RedisConnectionDialog({
@@ -20,20 +20,23 @@ export function RedisConnectionDialog({
   close: () => void;
 }) {
   useUiLanguage();
+  ssh = ssh.filter((item) => !item.temporary);
   const [config, setConfig] = useState<RedisConfig>(
-    connection ?? {
-      id: crypto.randomUUID(),
-      name: "",
-      host: "127.0.0.1",
-      port: 6379,
-      db: 0,
-      username: "",
-      tls: false,
-      ca_file: "",
-      server_name: "",
-      ssh_host: "",
-      credential_id: null,
-    },
+    connection
+      ? resolveRedisSsh(connection, ssh, workspaceId)
+      : {
+          id: crypto.randomUUID(),
+          name: "",
+          host: "127.0.0.1",
+          port: 6379,
+          db: 0,
+          username: "",
+          tls: false,
+          ca_file: "",
+          server_name: "",
+          ssh_host: "",
+          credential_id: null,
+        },
   );
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(!!connection?.credential_id);
@@ -53,7 +56,10 @@ export function RedisConnectionDialog({
     setConfig((previous) => ({ ...previous, [key]: value }));
   };
   async function testConnection() {
-    const value = { ...config, name: config.name.trim() || `${config.host}:${config.port}` };
+    const value = {
+      ...resolveRedisSsh(config, ssh, workspaceId),
+      name: config.name.trim() || `${config.host}:${config.port}`,
+    };
     if (!validRedisConfig(value)) {
       setError(tx("Redis 连接配置无效。"));
       return;
@@ -88,7 +94,7 @@ export function RedisConnectionDialog({
   }
   async function submit() {
     const value = {
-      ...config,
+      ...resolveRedisSsh(config, ssh, workspaceId),
       name: config.name.trim() || `${config.host}:${config.port}`,
       credential_id: remember ? config.credential_id : null,
     };

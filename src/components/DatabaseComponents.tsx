@@ -5,6 +5,7 @@ import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import {
   databaseError,
+  databaseDependencies,
   databaseNames,
   type DatabaseKind,
   type DatabaseComponents as ComponentStatus,
@@ -63,7 +64,13 @@ export function DatabaseComponents({ selectedKind }: { selectedKind?: DatabaseKi
     };
   }, []);
   const label = (id: string) =>
-    id === "runtime" ? tx("Java 运行时") : (databaseNames[id as DatabaseKind] ?? id);
+    id === "runtime"
+      ? tx("Java 运行时")
+      : id === "mongodb-core"
+        ? "MongoDB Core"
+        : id === "mongodb-bson"
+          ? "MongoDB BSON"
+          : (databaseNames[id as DatabaseKind] ?? id);
   async function act(action: string, id: string) {
     if (busy) return;
     setBusy(true);
@@ -75,7 +82,7 @@ export function DatabaseComponents({ selectedKind }: { selectedKind?: DatabaseKi
           action: "status",
           id: null,
         });
-        for (const key of ["runtime", id]) {
+        for (const key of databaseDependencies(id as DatabaseKind)) {
           if (!current.items.some((item) => item.id === key && item.installed)) {
             current = await invoke<ComponentStatus>("database_components", {
               action: "install",
@@ -96,7 +103,7 @@ export function DatabaseComponents({ selectedKind }: { selectedKind?: DatabaseKi
   }
   const needed =
     status?.items.filter(
-      (item) => ["runtime", selectedKind].includes(item.id) && !item.installed,
+      (item) => databaseDependencies(selectedKind).includes(item.id) && !item.installed,
     ) ?? [];
   const sizeLabel = (bytes: number) =>
     bytes < 1000000 ? `${Math.ceil(bytes / 1000)} KB` : `${(bytes / 1000000).toFixed(1)} MB`;
@@ -106,8 +113,11 @@ export function DatabaseComponents({ selectedKind }: { selectedKind?: DatabaseKi
       <p>
         {tx("连接引擎已内置，自动检测并优先使用本机 Java 17 或更新版本，再按需安装数据库驱动。")}
       </p>
+      <p>
+        {tx("Elasticsearch 直接连接，无需 Java 或额外驱动；MongoDB 需要 Java 与三个驱动组件。")}
+      </p>
       {!status && <p role="status">{tx("正在检测 Java 与组件…")}</p>}
-      {status && !status.java && (
+      {status && !status.java && selectedKind !== "elasticsearch" && (
         <p>{tx("未检测到可用的 Java 17 或更新版本。请选择本机 Java，或在线/离线安装运行时。")}</p>
       )}
       {status?.java && <p>{tx("Java 路径：{path}", { path: status.java })}</p>}

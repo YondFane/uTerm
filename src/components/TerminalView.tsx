@@ -23,6 +23,7 @@ import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { FitAddon } from "@xterm/addon-fit";
 import type { PaneFrame, SessionConfig } from "../lib/workspace";
+import type { TerminalStatus } from "../lib/ssh";
 import "@xterm/xterm/css/xterm.css";
 
 type Connection = {
@@ -41,6 +42,7 @@ export function TerminalView({
   directory,
   allowSshCreate = false,
   onSshRestart,
+  onStatus,
   session,
   active,
   visible,
@@ -60,6 +62,7 @@ export function TerminalView({
 }: {
   allowSshCreate?: boolean;
   onSshRestart?: () => void;
+  onStatus?: (status: TerminalStatus | null) => void;
   agentState?: string;
   onPaneDragStart: PointerEventHandler<HTMLElement>;
   onAgentState: (state: string, initial: boolean) => void;
@@ -134,7 +137,13 @@ export function TerminalView({
       find(false, true);
     } else search.current?.clearDecorations();
   }, [searchOpen, query, matchCase]);
-  const [status, setStatus] = useState("idle");
+  const [status, setStatus] = useState<TerminalStatus>("idle");
+  const statusCallback = useRef(onStatus);
+  statusCallback.current = onStatus;
+  useEffect(() => {
+    statusCallback.current?.(status);
+  }, [status]);
+  useEffect(() => () => statusCallback.current?.(null), []);
   const [error, setError] = useState("");
 
   useEffect(() => {

@@ -56,7 +56,7 @@ test("Agent switches gate creation, persist, preserve sessions and report storag
         },
       },
     ],
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, watch: null },
     optimizeDeps: { noDiscovery: true, include: [] },
     appType: "custom",
   });
@@ -65,7 +65,17 @@ test("Agent switches gate creation, persist, preserve sessions and report storag
       return {
         platform: "macos",
         home: "/test",
-        agents: ["claude", "codex", "custom"],
+        agents: [
+          "claude",
+          "codex",
+          "custom",
+          "hermes",
+          "pi",
+          "minimax",
+          "qwen",
+          "copilot",
+          "iflow",
+        ],
         agent_definitions: [{ id: "custom", name: "Custom", program: "custom", arguments: [] }],
         version: "test",
         debug: true,
@@ -141,6 +151,22 @@ test("Agent switches gate creation, persist, preserve sessions and report storag
     await click(button("Agent"));
     assert.equal(toggle("Codex").checked, false);
     assert.equal(toggle("Grok").disabled, true);
+    for (const [id, name] of [
+      ["hermes", "Hermes"],
+      ["pi", "Pi"],
+      ["minimax", "MiniMax"],
+      ["qwen", "Qwen Code"],
+      ["copilot", "Copilot CLI"],
+      ["iflow", "iFlow CLI"],
+    ]) {
+      assert.equal(toggle(name).checked, false);
+      assert.equal(toggle(name).disabled, false);
+      await click(toggle(name));
+      assert.ok(document.querySelector(`[title="New ${name} session"]`));
+      assert.deepEqual(JSON.parse(localStorage.getItem(settingsKey)).enabledAgents, [id]);
+      await click(toggle(name));
+      assert.equal(document.querySelector(`[title="New ${name} session"]`), null);
+    }
     await click(toggle("Claude"));
     assert.ok(document.querySelector('[title="New Claude session"]'));
     assert.equal(document.querySelector('[title="New Codex session"]'), null);

@@ -1,15 +1,23 @@
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
 import type { SessionConfig } from "../lib/workspace";
+import { additionalAgentBrands } from "../lib/agent-brands";
+import iflowIcon from "../assets/agents/iflow.png";
 
-export const agentNames: Record<string, string> = {
+export const agentNames: Record<string, string> = Object.assign(Object.create(null), {
   codex: "Codex",
   claude: "Claude",
   gemini: "Gemini",
   opencode: "OpenCode",
   kimi: "Kimi",
   grok: "Grok",
-};
+  hermes: "Hermes",
+  pi: "Pi",
+  minimax: "MiniMax",
+  qwen: "Qwen Code",
+  copilot: "Copilot CLI",
+  iflow: "iFlow CLI",
+});
 export function AgentStatusIndicator({ state = "idle" }: { state?: string }) {
   useUiLanguage();
 
@@ -90,6 +98,29 @@ export function SidebarIcon({ name }: { name: IconName }) {
 export function SessionIcon({ agent }: { agent?: SessionConfig["agent"] }) {
   useUiLanguage();
 
+  if (agent === "iflow")
+    return (
+      <img
+        className="sidebar-icon agent-iflow"
+        src={iflowIcon}
+        alt=""
+        draggable={false}
+        aria-hidden="true"
+      />
+    );
+  const additional =
+    agent && Object.hasOwn(additionalAgentBrands, agent) ? additionalAgentBrands[agent] : undefined;
+  if (additional)
+    return (
+      <svg
+        className={`sidebar-icon agent-${agent}`}
+        viewBox={additional.viewBox}
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path fillRule="evenodd" d={additional.path} />
+      </svg>
+    );
   if (!agent || (agent !== "gemini" && !Object.hasOwn(brands, agent)))
     return <SidebarIcon name="terminal" />;
   return (

@@ -1,9 +1,9 @@
 {
   "protocol": 1,
   "engine": {
-    "version": "1.1.0",
-    "sha256": "53ee592bf5f6ab822525d36e00b72f3d6d46bf9daf90a11f20d15b2f0b61158a",
-    "size": 28972
+    "version": "1.2.0",
+    "sha256": "5fd174cd657b2cb04c6003d7844ddcbc0687046b0cb00e15730d30e26d422183",
+    "size": 35462
   },
   "drivers": {
     "mysql": {
@@ -26,6 +26,27 @@
       "sha256": "764cc3f88454d1be117e155d01ed617467b984c9c68f13090dd6083799d2bb8c",
       "size": 7779716,
       "filename": "oracle.jar"
+    },
+    "mongodb": {
+      "version": "5.13.0",
+      "url": "https://repo.maven.apache.org/maven2/org/mongodb/mongodb-driver-sync/5.13.0/mongodb-driver-sync-5.13.0.jar",
+      "sha256": "b1042221132552cdf56f95bcd61d524b745923d7bc3ace1aaa882a7fd51fb94e",
+      "size": 179578,
+      "filename": "mongodb.jar"
+    },
+    "mongodb-core": {
+      "version": "5.13.0",
+      "url": "https://repo.maven.apache.org/maven2/org/mongodb/mongodb-driver-core/5.13.0/mongodb-driver-core-5.13.0.jar",
+      "sha256": "44f0bc54cba2ef1cbfff8ad5f84e0f1bfccf4886661a93b0e4882ed9c4fdb81d",
+      "size": 2068639,
+      "filename": "mongodb-core.jar"
+    },
+    "mongodb-bson": {
+      "version": "5.13.0",
+      "url": "https://repo.maven.apache.org/maven2/org/mongodb/bson/5.13.0/bson-5.13.0.jar",
+      "sha256": "51f583ee96fda9bc0897e73321c5ae1485102bfd8f95d0d34d7d57919cbc650a",
+      "size": 531686,
+      "filename": "mongodb-bson.jar"
     }
   },
   "runtimes": {

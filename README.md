@@ -55,16 +55,17 @@ remote-server connections are shown. [Media details](site/media/README.md).
 
 ## What you can do
 
-| Workflow                          | In uTerm                                                                                                                          |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| Work on several tasks             | Organize terminals and Agents by workspace, project and Git Worktree; split panes and see Agent activity through supported Hooks. |
-| Keep project context nearby       | Review Git status, diffs and commits; edit files with conflict checks and draft recovery; preview Markdown and PDF.               |
-| Work with remote systems and data | Use system OpenSSH for SSH/SFTP; browse Redis and query MySQL, PostgreSQL or Oracle with read-only defaults and guarded editing.  |
+| Workflow                          | In uTerm                                                                                                                                                 |
+| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Work on several tasks             | Organize terminals and Agents by workspace, project and Git Worktree; split panes and see Agent activity through supported Hooks.                        |
+| Keep project context nearby       | Review Git status, diffs and commits; edit files with conflict checks and draft recovery; preview Markdown and PDF.                                      |
+| Work with remote systems and data | Use system OpenSSH for SSH/SFTP; browse Redis and query MySQL, PostgreSQL, Oracle, Elasticsearch or MongoDB with read-only defaults and guarded editing. |
 
 The interface supports English and Simplified Chinese, six palettes, configurable fonts and keyboard
-shortcuts. Agent programs are optional; install or configure the CLI you want to use. Database
-connections require Java 17+ and the selected driver, managed separately in the app. See the
-[feature guide](docs/features.md) for supported behavior, limits and platform acceptance.
+shortcuts. Agent programs are optional; install or configure the CLI you want to use. SQL and
+MongoDB connections require Java 17+ and the selected drivers, managed on demand in the app.
+Elasticsearch requires no additional runtime. See the [feature guide](docs/features.md) for
+supported behavior, limits and platform acceptance.
 
 ## One-line installation
 

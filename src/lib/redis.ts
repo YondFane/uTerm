@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { tx } from "./i18n.ts";
-import { validSshHost, validSshTarget, type SshTarget } from "./workspace.ts";
+import {
+  validSshHost,
+  validSshTarget,
+  sshTargetFor,
+  type SshTarget,
+  type SshConnection,
+} from "./workspace.ts";
 import { sshError } from "./file-target.ts";
 
 export interface RedisConfig {
@@ -16,6 +22,18 @@ export interface RedisConfig {
   ssh_host: string;
   ssh_target?: SshTarget;
   credential_id: string | null;
+}
+export function resolveRedisSsh(
+  config: RedisConfig,
+  profiles: SshConnection[],
+  workspaceId: string,
+): RedisConfig {
+  const profile = profiles.find(
+    (item) => !item.temporary && item.id === config.ssh_target?.connection_id,
+  );
+  return profile
+    ? { ...config, ssh_host: profile.host, ssh_target: sshTargetFor(profile, workspaceId) }
+    : config;
 }
 export interface RedisBlob {
   data: string;

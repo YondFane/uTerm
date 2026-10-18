@@ -28,7 +28,7 @@ test("remote file panels reject stale roots and editor save guards use only SFTP
   };
   const server = await createServer({
     configFile: false,
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, hmr: false, watch: null },
     optimizeDeps: { noDiscovery: true, include: [] },
     appType: "custom",
   });
@@ -54,6 +54,7 @@ test("remote file panels reject stale roots and editor save guards use only SFTP
   });
   let resolveA, resolveB, editor;
   let conflict = false;
+  let allowMutation = true;
   const calls = [];
   mockIPC((command, args) => {
     calls.push({ command, args });
@@ -90,6 +91,7 @@ test("remote file panels reject stale roots and editor save guards use only SFTP
       return "1".repeat(64);
     }
     if (command === "editor_guard" || command.startsWith("plugin:event|")) return null;
+    if (command === "ssh_files_disconnect") return null;
     throw new Error(`Unexpected local/remote command: ${command}`);
   });
   const props = (id) => ({
@@ -98,7 +100,7 @@ test("remote file panels reject stale roots and editor save guards use only SFTP
     onRoot() {},
     open() {},
     beforeMutation(_directory, action) {
-      action();
+      if (allowMutation) action();
     },
     resizeHandle: null,
     headerActions: null,
@@ -106,7 +108,22 @@ test("remote file panels reject stale roots and editor save guards use only SFTP
   });
   try {
     await act(async () => root.render(React.createElement(RemoteFiles, props("a"))));
+    assert.equal(
+      calls.some((call) => call.command === "ssh_files_open"),
+      false,
+      "Selecting a host does not log in",
+    );
+    await act(async () =>
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent === "Connect files")
+        .click(),
+    );
     await act(async () => root.render(React.createElement(RemoteFiles, props("b"))));
+    await act(async () =>
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent === "Connect files")
+        .click(),
+    );
     await act(async () => resolveA(descriptor("a")));
     assert.doesNotMatch(document.body.textContent, /a\.txt/);
     await act(async () => resolveB(descriptor("b")));
@@ -117,6 +134,40 @@ test("remote file panels reject stale roots and editor save guards use only SFTP
       1,
       "Remote directories expose only the file tree",
     );
+    allowMutation = false;
+    await act(async () =>
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent === "Disconnect files")
+        .click(),
+    );
+    assert.equal(
+      calls.filter((call) => call.command === "ssh_files_disconnect").length,
+      0,
+      "A pending editor guard blocks disconnection",
+    );
+    allowMutation = true;
+    await act(async () =>
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent === "Disconnect files")
+        .click(),
+    );
+    assert.match(document.body.textContent, /Files not connected/);
+    assert.equal(
+      calls.filter((call) => call.command === "ssh_files_open").length,
+      2,
+      "Disconnecting never reconnects automatically",
+    );
+    await act(async () =>
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent === "Connect files")
+        .click(),
+    );
+    assert.deepEqual(
+      calls.filter((call) => call.command === "ssh_files_open").at(-1).args.expected,
+      descriptor("b"),
+      "Reconnect remains bound to the previously resolved root",
+    );
+    await act(async () => resolveB(descriptor("b")));
     function EditorHarness() {
       editor = useFileDocument();
       return null;
@@ -161,7 +212,7 @@ test("transfer progress bursts keep UI updates bounded and retain final bytes on
   Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
   const server = await createServer({
     configFile: false,
-    server: { middlewareMode: true },
+    server: { middlewareMode: true, hmr: false, watch: null },
     optimizeDeps: { noDiscovery: true, include: [] },
     appType: "custom",
   });

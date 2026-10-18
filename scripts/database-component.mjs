@@ -26,7 +26,7 @@ run("javac", [
     .sort()
     .map((name) => join(root, "src", name)),
 ]);
-const jar = join(root, "target", "uterm-database-1.1.0.jar");
+const jar = join(root, "target", "uterm-database-1.2.0.jar");
 run("jar", [
   "--create",
   "--no-manifest",
@@ -42,7 +42,7 @@ const bundledJar = join(root, "engine.jar");
 const catalogPath = join(root, "catalog.json");
 const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
 const engine = {
-  version: "1.1.0",
+  version: "1.2.0",
   sha256: createHash("sha256").update(bytes).digest("hex"),
   size: bytes.length,
 };
