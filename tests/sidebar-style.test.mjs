@@ -14,6 +14,12 @@ test("sidebar navigation filters existing lists without changing sessions, profi
     addEventListener() {},
     removeEventListener() {},
   });
+  dom.window.HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  dom.window.HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
   const server = await createServer({
     configFile: false,
     server: { middlewareMode: true, hmr: false },
@@ -80,8 +86,13 @@ test("sidebar navigation filters existing lists without changing sessions, profi
         onSessionViewed: record,
         onActivitySession: record,
         addSsh: record,
+        editSsh: record,
+        canRemoveSsh: () => true,
+        removeSsh: record,
         addRedis: record,
+        editRedis: record,
         addDatabase: record,
+        editDatabase: record,
         redisStatuses: { redis: { connected: true } },
         databaseStatuses: { database: { connected: true } },
         footerActions: React.createElement(
@@ -107,6 +118,13 @@ test("sidebar navigation filters existing lists without changing sessions, profi
     assert.ok(document.querySelector('.sidebar-footer [aria-label="Settings"]'));
     assert.equal(document.querySelectorAll(".sidebar-connection-toggles button").length, 3);
     assert.ok(document.querySelector(".sidebar-footer .sidebar-add"));
+    const hiddenConnections = {
+      showSshConnections: false,
+      showRedisConnections: false,
+      showDatabaseConnections: false,
+    };
+    await save(hiddenConnections);
+    for (const name of ["SSH", "Redis", "数据库"]) assert.equal(section(name), null);
     await save({ sidebarStyle: "navigation" });
     assert.equal(document.querySelectorAll(".sidebar-rail-items button").length, 5);
     assert.equal(nav("全部").getAttribute("aria-pressed"), "true");
@@ -118,6 +136,12 @@ test("sidebar navigation filters existing lists without changing sessions, profi
     assert.ok(add);
     await click(add);
     assert.ok(document.querySelector('[aria-label="Add menu"]'));
+    for (const name of ["Add SSH connection", "Add Redis connection", "Add database connection"])
+      assert.ok(
+        [...document.querySelectorAll('[aria-label="Add menu"] button')].some(
+          (button) => button.textContent === name,
+        ),
+      );
     assert.equal(add.getAttribute("aria-expanded"), "true");
     await act(async () =>
       window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape" })),
@@ -128,6 +152,21 @@ test("sidebar navigation filters existing lists without changing sessions, profi
     assert.ok(section("SSH"));
     assert.equal(section("活动"), null);
     assert.equal(section("Redis"), null);
+    await act(async () =>
+      section("SSH")
+        .querySelector(".sidebar-row")
+        .dispatchEvent(new dom.window.MouseEvent("contextmenu", { bubbles: true })),
+    );
+    assert.ok(document.querySelector('[role="menu"]'));
+    assert.ok(document.querySelector('[role="menuitem"]:not(:disabled)'));
+    await act(async () =>
+      document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape" })),
+    );
+    await click(section("SSH").querySelector(".row-close"));
+    assert.ok(document.querySelector("dialog[open]"));
+    assert.equal(document.querySelector('dialog button[type="submit"]').disabled, false);
+    await click(document.querySelector('dialog button[type="button"]'));
+    assert.equal(document.querySelector("dialog"), null);
     await click(nav("项目与会话"));
     assert.ok(section("活动").querySelector('.session-row [aria-current="true"]'));
     assert.equal(section("SSH"), null);
@@ -138,18 +177,26 @@ test("sidebar navigation filters existing lists without changing sessions, profi
       await click(nav(label));
       assert.ok(section(name));
       assert.equal(section("活动"), null);
+      await act(async () =>
+        section(name)
+          .querySelector(".sidebar-row")
+          .dispatchEvent(new dom.window.MouseEvent("contextmenu", { bubbles: true })),
+      );
+      assert.ok(document.querySelector('[role="menu"]'));
+      await act(async () =>
+        document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape" })),
+      );
     }
-    await save({ showDatabaseConnections: false });
-    assert.equal(nav("数据库连接"), null);
-    assert.equal(nav("全部").getAttribute("aria-pressed"), "true");
-    assert.ok(section("活动"));
-    await save({ showDatabaseConnections: true });
+    assert.equal(nav("数据库连接").getAttribute("aria-pressed"), "true");
+    assert.ok(section("数据库"));
+    for (const [name, value] of Object.entries(hiddenConnections))
+      assert.equal(context.settings[name], value);
     await click(nav("Redis 连接"));
     dom.window.Storage.prototype.setItem = () => {
       throw Error("Storage denied");
     };
     assert.throws(
-      () => context.save({ ...context.settings, showRedisConnections: false }, false),
+      () => context.save({ ...context.settings, showRedisConnections: true }, false),
       /Storage denied/,
     );
     assert.ok(section("Redis"));
@@ -159,15 +206,21 @@ test("sidebar navigation filters existing lists without changing sessions, profi
     assert.equal(document.querySelector(".sidebar-rail"), null);
     assert.equal(document.querySelectorAll(".sidebar-connection-toggles button").length, 3);
     assert.ok(document.querySelector(".sidebar-footer .sidebar-add"));
-    assert.ok(section("SSH"));
-    assert.ok(section("Redis"));
-    assert.ok(section("数据库"));
+    for (const name of ["SSH", "Redis", "数据库"]) assert.equal(section(name), null);
+    assert.ok(
+      [...document.querySelectorAll(".sidebar-connection-toggles button")].every(
+        (button) => button.getAttribute("aria-pressed") === "false",
+      ),
+    );
     await save({ sidebarStyle: "navigation" });
     key++;
     await render();
     assert.ok(document.querySelector(".sidebar-rail"));
     assert.equal(nav("全部").getAttribute("aria-pressed"), "true");
     assert.equal(context.settings.sidebarStyle, "navigation");
+    for (const name of ["SSH", "Redis", "数据库"]) assert.ok(section(name));
+    for (const [name, value] of Object.entries(hiddenConnections))
+      assert.equal(context.settings[name], value);
     assert.equal(JSON.stringify(workspace), original);
     assert.deepEqual(actions, []);
   } finally {

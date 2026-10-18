@@ -142,12 +142,15 @@ export function Sidebar({
   const [sidebarView, setSidebarView] = useState<SidebarView>("all");
   const navigationRef = useRef<HTMLElement>(null);
   const navigation = settings.sidebarStyle === "navigation";
+  const showSsh = navigation || settings.showSshConnections;
+  const showRedis = navigation || settings.showRedisConnections;
+  const showDatabase = navigation || settings.showDatabaseConnections;
   const viewAvailable = {
     all: true,
     projects: true,
-    ssh: !!addSsh && settings.showSshConnections,
-    redis: !!addRedis && settings.showRedisConnections,
-    database: !!addDatabase && settings.showDatabaseConnections,
+    ssh: !!addSsh && showSsh,
+    redis: !!addRedis && showRedis,
+    database: !!addDatabase && showDatabase,
   };
   const shownView = viewAvailable[sidebarView] ? sidebarView : "all";
   useEffect(() => {
@@ -286,9 +289,9 @@ export function Sidebar({
   const connectionMenuVisible = !!(
     visible &&
     group?.id === connectionMenu?.workspaceId &&
-    ((menuSsh && settings.showSshConnections && !collapsed.ssh) ||
-      (menuRedis && settings.showRedisConnections && !collapsed.redis) ||
-      (menuDatabase && settings.showDatabaseConnections && !collapsed.database) ||
+    ((menuSsh && showSsh && !collapsed.ssh) ||
+      (menuRedis && showRedis && !collapsed.redis) ||
+      (menuDatabase && showDatabase && !collapsed.database) ||
       quickProject)
   );
   const redisRetained = menuRedis && redisStatuses[menuRedis.id];
@@ -417,18 +420,18 @@ export function Sidebar({
     visible &&
     removal.workspaceId === group?.id &&
     (removal.kind === "ssh"
-      ? settings.showSshConnections &&
+      ? showSsh &&
         group.sshConnections?.includes(removal.connection) &&
         !!removeSsh &&
         !!canRemoveSsh?.(removal.connection)
       : removal.kind === "redis"
-        ? settings.showRedisConnections &&
+        ? showRedis &&
           group.redisConnections?.includes(removal.connection) &&
           !!removeRedis &&
           !redisStatuses[removal.connection.id]?.connected &&
           !redisStatuses[removal.connection.id]?.opening &&
           !redisStatuses[removal.connection.id]?.dirty
-        : settings.showDatabaseConnections &&
+        : showDatabase &&
           group.databaseConnections?.includes(removal.connection) &&
           !!removeDatabase &&
           !databaseStatuses[removal.connection.id]?.connected &&
@@ -1115,7 +1118,7 @@ export function Sidebar({
           )}
           {dragError && <p role="alert">{localizeMessage(dragError)}</p>}
           {visibilityError && <p role="alert">{localizeMessage(visibilityError)}</p>}
-          {showing("ssh") && addSsh && settings.showSshConnections && (
+          {showing("ssh") && addSsh && showSsh && (
             <section className="sidebar-section" aria-label={tx("SSH")}>
               {sectionHeader(
                 tx("SSH"),
@@ -1205,7 +1208,7 @@ export function Sidebar({
                   })}
             </section>
           )}
-          {showing("redis") && addRedis && settings.showRedisConnections && (
+          {showing("redis") && addRedis && showRedis && (
             <section className="sidebar-section" aria-label={tx("Redis")}>
               {sectionHeader(
                 tx("Redis"),
@@ -1273,7 +1276,7 @@ export function Sidebar({
                 })}
             </section>
           )}
-          {showing("database") && addDatabase && settings.showDatabaseConnections && (
+          {showing("database") && addDatabase && showDatabase && (
             <section className="sidebar-section" aria-label={tx("数据库")}>
               {sectionHeader(
                 tx("数据库"),
@@ -1608,19 +1611,19 @@ export function Sidebar({
                     })}
                   </button>
                 ))}
-                {addSsh && settings.showSshConnections && (
+                {addSsh && showSsh && (
                   <button role="menuitem" onClick={() => act(addSsh)}>
                     <SessionIcon />
                     {tx("添加 SSH 连接")}
                   </button>
                 )}
-                {addRedis && settings.showRedisConnections && (
+                {addRedis && showRedis && (
                   <button role="menuitem" onClick={() => act(addRedis)}>
                     <SidebarIcon name="database" />
                     {tx("添加 Redis 连接")}
                   </button>
                 )}
-                {addDatabase && settings.showDatabaseConnections && (
+                {addDatabase && showDatabase && (
                   <button role="menuitem" onClick={() => act(addDatabase)}>
                     <SidebarIcon name="sqlDatabase" />
                     {tx("添加数据库连接")}

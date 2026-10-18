@@ -4,7 +4,6 @@ import { useSettings } from "../lib/SettingsContext";
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 import type { AgentDefinition, RuntimeInfo } from "../lib/desktop";
 import { agentNames, SessionIcon, ToolbarIcon } from "./SidebarIcon";
 import { agentHookAgents, agentInstallers } from "../lib/agent-install";
@@ -387,10 +386,12 @@ export function AgentSettings({
           onChange={(event) => {
             const checked = event.target.checked;
             void perform(async () => {
+              // Query native permissions because the WebView cache can disagree on Windows.
+              // 查询原生权限，因为 Windows 下 WebView 缓存的权限可能与其不同。
               if (
                 checked &&
-                !(await isPermissionGranted()) &&
-                (await requestPermission()) !== "granted"
+                !(await invoke<boolean | null>("plugin:notification|is_permission_granted")) &&
+                (await invoke<string>("plugin:notification|request_permission")) !== "granted"
               )
                 throw new Error(tx("通知权限未开启，请在系统设置中允许通知。"));
               localStorage.setItem(notificationKey, String(checked));

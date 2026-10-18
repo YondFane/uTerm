@@ -141,6 +141,34 @@ test("welcome connection actions follow visibility and open the existing dialogs
       );
       assert.equal(document.querySelectorAll(".welcome-actions > button").length, 3);
     }
+    const hiddenConnections = {
+      showSshConnections: false,
+      showRedisConnections: false,
+      showDatabaseConnections: false,
+    };
+    await act(async () => settings.save({ ...settings.settings, ...hiddenConnections }, false));
+    assert.equal(buttons().length, 0);
+    await act(async () =>
+      settings.save({ ...settings.settings, sidebarStyle: "navigation" }, false),
+    );
+    assert.deepEqual(
+      buttons().map((button) => button.textContent),
+      names,
+    );
+    assert.equal(document.querySelectorAll(".sidebar-rail-items button").length, 5);
+    for (const [name, value] of Object.entries(hiddenConnections))
+      assert.equal(settings.settings[name], value);
+    await act(async () => settings.save({ ...settings.settings, sidebarStyle: "classic" }, false));
+    assert.equal(buttons().length, 0);
+    await act(async () =>
+      settings.save(
+        {
+          ...settings.settings,
+          sidebarStyle: "navigation",
+        },
+        false,
+      ),
+    );
     const saved = localStorage.getItem(workspaceKey);
     for (const language of ["en", "zh-Hans"]) {
       await act(async () => settings.save({ ...settings.settings, language }, false));

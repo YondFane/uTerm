@@ -73,7 +73,9 @@ and Agent at the bottom of the rail. The choice saves immediately. Drag the side
 it; narrow widths use compact actions and icons, with footer controls wrapping to stay accessible.
 In navigation style, hiding or collapsing the sidebar keeps the icon rail visible; click a category
 to reopen the content list. The Add menu starts with New terminal, then project and Agent actions,
-before SSH, Redis and database connection actions.
+before SSH, Redis and database connection actions. All three connection categories stay available in
+navigation style, regardless of Classic sidebar visibility switches; switching back restores those
+saved choices.
 
 ## One-line installation
 
