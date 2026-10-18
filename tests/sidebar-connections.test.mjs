@@ -158,7 +158,7 @@ test("sidebar folding, add actions and visibility retain active data and report 
       addItems()
         .slice(0, 5)
         .map((item) => item.textContent),
-      ["Add project…", ...connectionAdds, "New terminal"],
+      ["New terminal", "Add project…", ...connectionAdds],
     );
     for (let mask = 0; mask < 8; mask++) {
       await act(async () =>
@@ -175,9 +175,9 @@ test("sidebar folding, add actions and visibility retain active data and report 
       assert.deepEqual(
         addItems().map((item) => item.textContent),
         [
+          "New terminal",
           "Add project…",
           ...connectionAdds.filter((_, index) => mask & (1 << index)),
-          "New terminal",
         ],
       );
       assert.deepEqual(actions, []);
@@ -254,7 +254,7 @@ test("sidebar folding, add actions and visibility retain active data and report 
     await act(async () => addTrigger().click());
     assert.deepEqual(
       addItems().map((item) => item.textContent),
-      ["添加项目…", "添加 SSH 连接", "添加 Redis 连接", "添加数据库连接", "新建终端"],
+      ["新建终端", "添加项目…", "添加 SSH 连接", "添加 Redis 连接", "添加数据库连接"],
     );
     await act(async () => addTrigger().click());
     const chineseDatabase = document.querySelector('section[aria-label="数据库"] .section-toggle');

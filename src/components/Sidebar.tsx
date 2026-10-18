@@ -47,6 +47,7 @@ type ConnectionRemoval = { workspaceId: string } & (
   | { kind: "redis"; connection: RedisConfig }
   | { kind: "database"; connection: DatabaseConfig }
 );
+type SidebarView = "all" | "projects" | "ssh" | "redis" | "database";
 export function Sidebar({
   resizeHandle,
   visible,
@@ -138,6 +139,21 @@ export function Sidebar({
   useUiLanguage();
 
   const { settings, save } = useSettings();
+  const [sidebarView, setSidebarView] = useState<SidebarView>("all");
+  const navigationRef = useRef<HTMLElement>(null);
+  const navigation = settings.sidebarStyle === "navigation";
+  const viewAvailable = {
+    all: true,
+    projects: true,
+    ssh: !!addSsh && settings.showSshConnections,
+    redis: !!addRedis && settings.showRedisConnections,
+    database: !!addDatabase && settings.showDatabaseConnections,
+  };
+  const shownView = viewAvailable[sidebarView] ? sidebarView : "all";
+  useEffect(() => {
+    setSidebarView(shownView);
+  }, [shownView]);
+  const showing = (view: SidebarView) => !navigation || shownView === "all" || shownView === view;
   const draggedProject = useRef<{ id: string; x: number; y: number; moved: boolean } | null>(null);
   const suppressProjectClick = useRef(false);
   const [projectDrop, setProjectDrop] = useState<{ id: string; after: boolean } | null>(null);
@@ -145,7 +161,7 @@ export function Sidebar({
   const [visibilityError, setVisibilityError] = useState("");
   const [popover, setPopover] = useState<"workspace" | "add" | null>(null);
   const [connectionMenu, setConnectionMenu] = useState<{
-    kind: "ssh" | "redis" | "database";
+    kind: "ssh" | "redis" | "database" | "project" | "worktree";
     id: string;
     workspaceId: string;
     trigger: HTMLButtonElement;
@@ -160,6 +176,9 @@ export function Sidebar({
   const cancelRemoval = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (!visible && (!navigation || popover === "workspace")) setPopover(null);
+  }, [visible, navigation, popover]);
   function toggleConnections(
     key: "showSshConnections" | "showRedisConnections" | "showDatabaseConnections",
   ) {
@@ -170,6 +189,15 @@ export function Sidebar({
       setVisibilityError(String(reason));
     }
   }
+  useLayoutEffect(() => {
+    if (!popover || !popoverRef.current || !triggerRef.current) return;
+    const popup = popoverRef.current;
+    const bounds = popup.getBoundingClientRect();
+    const anchor = triggerRef.current.getBoundingClientRect();
+    popup.style.left = `${Math.max(8, Math.min(anchor.left, window.innerWidth - bounds.width - 8))}px`;
+    const top = popover === "workspace" ? anchor.bottom + 4 : anchor.top - bounds.height - 4;
+    popup.style.top = `${Math.max(8, Math.min(top, window.innerHeight - bounds.height - 8))}px`;
+  });
   useEffect(() => {
     if (!popover) return;
     popoverRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
@@ -186,11 +214,19 @@ export function Sidebar({
         triggerRef.current?.focus();
       }
     };
+    const moved = (event: Event) => {
+      if (event.type !== "scroll" || !popoverRef.current?.contains(event.target as Node))
+        setPopover(null);
+    };
     window.addEventListener("pointerdown", dismiss);
     window.addEventListener("keydown", escape);
+    document.addEventListener("scroll", moved, true);
+    window.addEventListener("resize", moved);
     return () => {
       window.removeEventListener("pointerdown", dismiss);
       window.removeEventListener("keydown", escape);
+      document.removeEventListener("scroll", moved, true);
+      window.removeEventListener("resize", moved);
     };
   }, [popover]);
   const activeKey = (project: Project, worktree?: Worktree) =>
@@ -233,12 +269,27 @@ export function Sidebar({
     connectionMenu?.kind === "database"
       ? group?.databaseConnections?.find((connection) => connection.id === connectionMenu.id)
       : undefined;
+  const quickProject =
+    connectionMenu?.kind === "project" || connectionMenu?.kind === "worktree"
+      ? workspace?.projects.find(
+          (project) =>
+            project.workspaceId === group?.id &&
+            (connectionMenu.kind === "project"
+              ? project.id === connectionMenu.id
+              : project.worktrees?.some((worktree) => worktree.id === connectionMenu.id)),
+        )
+      : undefined;
+  const quickWorktree =
+    connectionMenu?.kind === "worktree"
+      ? quickProject?.worktrees?.find((worktree) => worktree.id === connectionMenu.id)
+      : undefined;
   const connectionMenuVisible = !!(
     visible &&
     group?.id === connectionMenu?.workspaceId &&
     ((menuSsh && settings.showSshConnections && !collapsed.ssh) ||
       (menuRedis && settings.showRedisConnections && !collapsed.redis) ||
-      (menuDatabase && settings.showDatabaseConnections && !collapsed.database))
+      (menuDatabase && settings.showDatabaseConnections && !collapsed.database) ||
+      quickProject)
   );
   const redisRetained = menuRedis && redisStatuses[menuRedis.id];
   const databaseRetained = menuDatabase && databaseStatuses[menuDatabase.id];
@@ -278,7 +329,25 @@ export function Sidebar({
               run: () => editDatabase?.(menuDatabase),
             },
           ]
-        : [];
+        : quickProject
+          ? [
+              {
+                label: tx("新建终端"),
+                disabled: !!quickWorktree?.missing,
+                run: () => addSession(quickProject.id, quickWorktree?.id),
+              },
+              ...availableAgents(settings, runtime?.agents ?? []).map((agent) => ({
+                label: tx("新建 {p0} 会话", {
+                  p0:
+                    runtime?.agent_definitions.find((item) => item.id === agent)?.name ??
+                    agentNames[agent] ??
+                    agent,
+                }),
+                disabled: !!quickWorktree?.missing,
+                run: () => addSession(quickProject.id, quickWorktree?.id, agent),
+              })),
+            ]
+          : [];
   useLayoutEffect(() => {
     if (!connectionMenuVisible || !connectionMenu || !connectionMenuRef.current) return;
     const popup = connectionMenuRef.current;
@@ -408,40 +477,66 @@ export function Sidebar({
   };
   function quickActions(project: Project, worktree?: Worktree) {
     return (
-      <div className="row-actions">
-        <button
-          className="icon-button"
-          disabled={worktree?.missing}
-          aria-label={tx("在{p0}中新建终端", { p0: worktree?.name ?? project.name })}
-          title={tx("新建终端")}
-          onClick={() => addSession(project.id, worktree?.id)}
-        >
-          <SessionIcon />
-        </button>
-        {availableAgents(settings, runtime?.agents ?? []).map((agent) => (
+      <>
+        <div className="row-actions">
           <button
-            key={agent}
             className="icon-button"
             disabled={worktree?.missing}
-            aria-label={tx("在{p0}中新建 {p1} 会话", {
-              p0: worktree?.name ?? project.name,
-              p1:
-                runtime?.agent_definitions.find((item) => item.id === agent)?.name ??
-                agentNames[agent] ??
-                agent,
-            })}
-            title={tx("新建 {p0} 会话", {
-              p0:
-                runtime?.agent_definitions.find((item) => item.id === agent)?.name ??
-                agentNames[agent] ??
-                agent,
-            })}
-            onClick={() => addSession(project.id, worktree?.id, agent)}
+            aria-label={tx("在{p0}中新建终端", { p0: worktree?.name ?? project.name })}
+            title={tx("新建终端")}
+            onClick={() => addSession(project.id, worktree?.id)}
           >
-            <SessionIcon agent={agent} />
+            <SessionIcon />
           </button>
-        ))}
-      </div>
+          {availableAgents(settings, runtime?.agents ?? []).map((agent) => (
+            <button
+              key={agent}
+              className="icon-button"
+              disabled={worktree?.missing}
+              aria-label={tx("在{p0}中新建 {p1} 会话", {
+                p0: worktree?.name ?? project.name,
+                p1:
+                  runtime?.agent_definitions.find((item) => item.id === agent)?.name ??
+                  agentNames[agent] ??
+                  agent,
+              })}
+              title={tx("新建 {p0} 会话", {
+                p0:
+                  runtime?.agent_definitions.find((item) => item.id === agent)?.name ??
+                  agentNames[agent] ??
+                  agent,
+              })}
+              onClick={() => addSession(project.id, worktree?.id, agent)}
+            >
+              <SessionIcon agent={agent} />
+            </button>
+          ))}
+        </div>
+        <button
+          className="icon-button row-more"
+          aria-label={tx("更多操作：{p0}", { p0: worktree?.name ?? project.name })}
+          title={tx("更多操作：{p0}", { p0: worktree?.name ?? project.name })}
+          aria-haspopup="menu"
+          aria-expanded={
+            connectionMenu?.kind === (worktree ? "worktree" : "project") &&
+            connectionMenu.id === (worktree?.id ?? project.id)
+          }
+          onClick={(event) => {
+            const bounds = event.currentTarget.getBoundingClientRect();
+            setPopover(null);
+            setConnectionMenu({
+              kind: worktree ? "worktree" : "project",
+              id: worktree?.id ?? project.id,
+              workspaceId: project.workspaceId!,
+              trigger: event.currentTarget,
+              x: bounds.right,
+              y: bounds.top,
+            });
+          }}
+        >
+          <SidebarIcon name="more" />
+        </button>
+      </>
     );
   }
   function sessionRow(
@@ -491,7 +586,7 @@ export function Sidebar({
           <span className="session-icon-frame">
             <SessionIcon agent={session.agent ?? detectedAgents[session.id]} />
           </span>
-          <span>{session.name}</span>
+          <span className="sidebar-row-name">{session.name}</span>
           {(session.agent || agentStates[session.id]) && (
             <AgentStatusIndicator state={agentStates[session.id]} />
           )}
@@ -639,8 +734,8 @@ export function Sidebar({
           }}
           title={
             worktree
-              ? `${worktree.path}${worktree.missing ? tx(" — 目录不可用") : ""}`
-              : project.directory
+              ? `${worktree.name} — ${worktree.path}${worktree.missing ? tx(" — 目录不可用") : ""}`
+              : `${project.name} — ${project.directory}`
           }
           onClick={() => {
             if (!worktree && suppressProjectClick.current) {
@@ -686,7 +781,7 @@ export function Sidebar({
           >
             <SidebarIcon name={folded ? "folderClosed" : "folder"} />
           </span>
-          <span>{item.name}</span>
+          <span className="sidebar-row-name">{item.name}</span>
           {worktree && (
             <span className="worktree-mark">
               <SidebarIcon name="branch" />
@@ -839,8 +934,13 @@ export function Sidebar({
     const allFoldersCollapsed = folders.length > 0 && folders.every((folder) => folder.collapsed);
     return (
       <div className="section-header">
-        <button className="section-toggle" aria-expanded={!isCollapsed} onClick={toggle}>
-          {name}
+        <button
+          className="section-toggle"
+          title={name}
+          aria-expanded={!isCollapsed}
+          onClick={toggle}
+        >
+          <span className="section-name">{name}</span>
           <span className={isCollapsed ? "" : "expanded"}>
             <SidebarIcon name="chevron" />
           </span>
@@ -900,356 +1000,421 @@ export function Sidebar({
     setPopover(null);
     action();
   }
+  function navigationButton(view: SidebarView, name: string, icon: ReactNode) {
+    return (
+      <button
+        className="sidebar-rail-button"
+        aria-label={name}
+        title={name}
+        aria-pressed={shownView === view}
+        aria-controls="sidebar-sections"
+        onClick={() => {
+          setPopover(null);
+          setConnectionMenu(null);
+          setSidebarView(view);
+          if (!visible) toggleVisibility();
+        }}
+      >
+        {icon}
+      </button>
+    );
+  }
+  const addButton = (
+    <button
+      className={`sidebar-add ${navigation ? "toolbar-icon-button" : "icon-button"}`}
+      disabled={!runtime || !workspace}
+      aria-label={tx("添加项目或会话")}
+      title={tx("添加项目或会话")}
+      aria-haspopup="menu"
+      aria-expanded={popover === "add"}
+      onClick={(event) => togglePopover(event, "add")}
+    >
+      <SidebarIcon name="plus" />
+    </button>
+  );
   return (
-    <aside id="workspace-sidebar" className="sidebar" aria-label={tx("工作区")} hidden={!visible}>
+    <aside
+      id="workspace-sidebar"
+      className="sidebar"
+      data-sidebar-style={settings.sidebarStyle}
+      data-sidebar-collapsed={(navigation && !visible) || undefined}
+      aria-label={tx("工作区")}
+      hidden={!visible && !navigation}
+    >
       {resizeHandle}
-      <header className="sidebar-header" data-tauri-drag-region>
-        <button
-          className="workspace-switcher"
-          disabled={!workspace}
-          aria-label={tx("切换工作区")}
-          aria-haspopup="menu"
-          aria-expanded={popover === "workspace"}
-          title={group?.name}
-          onClick={(event) => togglePopover(event, "workspace")}
-        >
-          <span>{group?.name ?? tx("工作区")}</span>
-        </button>
-        <button
-          className="icon-button sidebar-toggle"
-          aria-label={tx("隐藏侧栏")}
-          title={tx("隐藏侧栏")}
-          aria-expanded={true}
-          aria-controls="workspace-sidebar"
-          onClick={() => act(toggleVisibility)}
-        >
-          <SidebarIcon name="sidebar" />
-        </button>
-      </header>
-      <nav className="project-list" aria-label={tx("项目与会话")}>
-        {activeProjects.length > 0 && (
-          <section className="sidebar-section" aria-label={tx("活动")}>
-            {sectionHeader(
-              tx("活动"),
-              !!collapsed.active,
-              () => setCollapsed((value) => ({ ...value, active: !value.active })),
-              "active",
-            )}
-            {!collapsed.active && activeProjects.map(projectBlock)}
-          </section>
-        )}
-        {pinned.length > 0 && (
-          <section className="sidebar-section" aria-label={tx("已固定")}>
-            {sectionHeader(
-              tx("已固定"),
-              !!collapsed.pinned,
-              () => setCollapsed((value) => ({ ...value, pinned: !value.pinned })),
-              "pinned",
-            )}
-            {!collapsed.pinned && pinned}
-          </section>
-        )}
-        {dragError && <p role="alert">{localizeMessage(dragError)}</p>}
-        {visibilityError && <p role="alert">{localizeMessage(visibilityError)}</p>}
-        {addSsh && settings.showSshConnections && (
-          <section className="sidebar-section" aria-label={tx("SSH")}>
-            {sectionHeader(
-              tx("SSH"),
-              !!collapsed.ssh,
-              () => setCollapsed((value) => ({ ...value, ssh: !value.ssh })),
-              undefined,
-              <button
-                className="icon-button"
-                aria-label={tx("添加 SSH 连接")}
-                title={tx("添加 SSH 连接")}
-                disabled={!runtime}
-                onClick={addSsh}
-              >
-                <SidebarIcon name="plus" />
-              </button>,
-            )}
-            {!collapsed.ssh && (
-              <div className="ssh-sidebar-tools">
-                {quickSsh && (
-                  <button disabled={!runtime || activityDisabled} onClick={quickSsh}>
-                    {tx("快速 SSH 连接")}
-                  </button>
-                )}
-                <input
-                  type="search"
-                  aria-label={tx("搜索 SSH 主机")}
-                  placeholder={tx("搜索 SSH 主机")}
-                  value={sshQuery}
-                  onChange={(event) => setSshQuery(event.target.value)}
-                />
-                {sshQuery.trim() &&
-                  !(group?.sshConnections ?? []).some((item) => matchesSsh(item, sshQuery)) && (
-                    <p className="muted">{tx("没有匹配的 SSH 主机")}</p>
+      {navigation && (
+        <nav ref={navigationRef} className="sidebar-rail" aria-label={tx("侧栏导航")}>
+          <div className="sidebar-rail-items">
+            {navigationButton("all", tx("全部"), <SidebarIcon name="home" />)}
+            {navigationButton("projects", tx("项目与会话"), <SidebarIcon name="folder" />)}
+            {viewAvailable.ssh &&
+              navigationButton("ssh", tx("SSH 连接"), <SidebarIcon name="terminal" />)}
+            {viewAvailable.redis &&
+              navigationButton("redis", tx("Redis 连接"), <SidebarIcon name="database" />)}
+            {viewAvailable.database &&
+              navigationButton("database", tx("数据库连接"), <SidebarIcon name="sqlDatabase" />)}
+          </div>
+          <div className="sidebar-rail-footer">
+            {addButton}
+            {footerActions}
+          </div>
+        </nav>
+      )}
+      <div className="sidebar-main" hidden={!visible}>
+        <header className="sidebar-header" data-tauri-drag-region>
+          <button
+            className="workspace-switcher"
+            disabled={!workspace}
+            aria-label={tx("切换工作区")}
+            aria-haspopup="menu"
+            aria-expanded={popover === "workspace"}
+            title={group?.name}
+            onClick={(event) => togglePopover(event, "workspace")}
+          >
+            <span>{group?.name ?? tx("工作区")}</span>
+          </button>
+          <button
+            className="icon-button sidebar-toggle"
+            aria-label={tx("隐藏侧栏")}
+            title={tx("隐藏侧栏")}
+            aria-expanded={true}
+            aria-controls="workspace-sidebar"
+            onClick={() => {
+              if (navigation)
+                navigationRef.current
+                  ?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')
+                  ?.focus();
+              act(toggleVisibility);
+            }}
+          >
+            <SidebarIcon name="sidebar" />
+          </button>
+        </header>
+        <nav id="sidebar-sections" className="project-list" aria-label={tx("项目与会话")}>
+          {showing("projects") && activeProjects.length > 0 && (
+            <section className="sidebar-section" aria-label={tx("活动")}>
+              {sectionHeader(
+                tx("活动"),
+                !!collapsed.active,
+                () => setCollapsed((value) => ({ ...value, active: !value.active })),
+                "active",
+              )}
+              {!collapsed.active && activeProjects.map(projectBlock)}
+            </section>
+          )}
+          {showing("projects") && pinned.length > 0 && (
+            <section className="sidebar-section" aria-label={tx("已固定")}>
+              {sectionHeader(
+                tx("已固定"),
+                !!collapsed.pinned,
+                () => setCollapsed((value) => ({ ...value, pinned: !value.pinned })),
+                "pinned",
+              )}
+              {!collapsed.pinned && pinned}
+            </section>
+          )}
+          {dragError && <p role="alert">{localizeMessage(dragError)}</p>}
+          {visibilityError && <p role="alert">{localizeMessage(visibilityError)}</p>}
+          {showing("ssh") && addSsh && settings.showSshConnections && (
+            <section className="sidebar-section" aria-label={tx("SSH")}>
+              {sectionHeader(
+                tx("SSH"),
+                !!collapsed.ssh,
+                () => setCollapsed((value) => ({ ...value, ssh: !value.ssh })),
+                undefined,
+                <button
+                  className="icon-button"
+                  aria-label={tx("添加 SSH 连接")}
+                  title={tx("添加 SSH 连接")}
+                  disabled={!runtime}
+                  onClick={addSsh}
+                >
+                  <SidebarIcon name="plus" />
+                </button>,
+              )}
+              {!collapsed.ssh && (
+                <div className="ssh-sidebar-tools">
+                  {quickSsh && (
+                    <button disabled={!runtime || activityDisabled} onClick={quickSsh}>
+                      {tx("快速 SSH 连接")}
+                    </button>
                   )}
-              </div>
-            )}
-            {!collapsed.ssh &&
-              (group?.sshConnections ?? [])
-                .filter((connection) => matchesSsh(connection, sshQuery))
-                .map((connection) => {
-                  const roster = rosters.find((item) => item.id === `ssh:${connection.id}`)!;
+                  <input
+                    type="search"
+                    aria-label={tx("搜索 SSH 主机")}
+                    placeholder={tx("搜索 SSH 主机")}
+                    value={sshQuery}
+                    onChange={(event) => setSshQuery(event.target.value)}
+                  />
+                  {sshQuery.trim() &&
+                    !(group?.sshConnections ?? []).some((item) => matchesSsh(item, sshQuery)) && (
+                      <p className="muted">{tx("没有匹配的 SSH 主机")}</p>
+                    )}
+                </div>
+              )}
+              {!collapsed.ssh &&
+                (group?.sshConnections ?? [])
+                  .filter((connection) => matchesSsh(connection, sshQuery))
+                  .map((connection) => {
+                    const roster = rosters.find((item) => item.id === `ssh:${connection.id}`)!;
+                    return (
+                      <div key={connection.id} className="ssh-connection">
+                        <div
+                          className="sidebar-row"
+                          onContextMenu={(event) => openConnectionMenu(event, "ssh", connection.id)}
+                          onKeyDown={(event) => openConnectionMenu(event, "ssh", connection.id)}
+                        >
+                          <button
+                            className="row-label"
+                            title={`${connection.name} — ${connection.host} · ${connection.root || tx("服务端登录目录")}`}
+                            aria-description={
+                              connection.sessions.length ? tx("有未关闭的会话") : undefined
+                            }
+                            disabled={activityDisabled}
+                            onClick={() => selectSsh?.(connection)}
+                          >
+                            <span
+                              className="sidebar-resource-icon"
+                              data-resource-active={connection.sessions.length > 0 || undefined}
+                              aria-hidden="true"
+                            >
+                              <SessionIcon />
+                            </span>
+                            <span className="sidebar-row-name">
+                              {connection.name}
+                              {connection.temporary ? " · " + tx("临时") : ""}
+                            </span>
+                          </button>
+                          <button
+                            className="icon-button row-close"
+                            aria-label={tx("移除 SSH 连接：{p0}", { p0: connection.name })}
+                            title={tx("移除 SSH 连接")}
+                            disabled={!canRemoveSsh?.(connection)}
+                            onClick={() =>
+                              setRemoval({ kind: "ssh", connection, workspaceId: group!.id })
+                            }
+                          >
+                            <ToolbarIcon name="close" />
+                          </button>
+                        </div>
+                        {ordered(connection.sessions).map((session) =>
+                          sessionRow(session, roster, 1, connection.name, true),
+                        )}
+                      </div>
+                    );
+                  })}
+            </section>
+          )}
+          {showing("redis") && addRedis && settings.showRedisConnections && (
+            <section className="sidebar-section" aria-label={tx("Redis")}>
+              {sectionHeader(
+                tx("Redis"),
+                !!collapsed.redis,
+                () => setCollapsed((value) => ({ ...value, redis: !value.redis })),
+                undefined,
+                <button
+                  className="icon-button"
+                  aria-label={tx("添加 Redis 连接")}
+                  title={tx("添加 Redis 连接")}
+                  disabled={!runtime}
+                  onClick={addRedis}
+                >
+                  <SidebarIcon name="plus" />
+                </button>,
+              )}
+              {!collapsed.redis &&
+                (group?.redisConnections ?? []).map((connection) => {
+                  const status = redisStatuses[connection.id];
+                  const retained = status?.connected || status?.dirty || status?.opening;
                   return (
-                    <div key={connection.id} className="ssh-connection">
-                      <div
-                        className="sidebar-row"
-                        onContextMenu={(event) => openConnectionMenu(event, "ssh", connection.id)}
-                        onKeyDown={(event) => openConnectionMenu(event, "ssh", connection.id)}
+                    <div
+                      className={`sidebar-row${selectedRedisId === connection.id ? " selected" : ""}`}
+                      key={connection.id}
+                      onContextMenu={(event) => openConnectionMenu(event, "redis", connection.id)}
+                      onKeyDown={(event) => openConnectionMenu(event, "redis", connection.id)}
+                    >
+                      <button
+                        className="row-label"
+                        title={`${connection.name} — ${connection.host}:${connection.port}`}
+                        aria-description={status?.connected ? tx("已连接") : undefined}
+                        disabled={activityDisabled}
+                        onClick={() => selectRedis?.(connection)}
                       >
-                        <button
-                          className="row-label"
-                          title={`${connection.host} · ${connection.root || tx("服务端登录目录")}`}
-                          aria-description={
-                            connection.sessions.length ? tx("有未关闭的会话") : undefined
-                          }
-                          disabled={activityDisabled}
-                          onClick={() => selectSsh?.(connection)}
+                        <span
+                          className="sidebar-resource-icon"
+                          data-resource-active={status?.connected || undefined}
+                          aria-hidden="true"
                         >
                           <span
-                            className="sidebar-resource-icon"
-                            data-resource-active={connection.sessions.length > 0 || undefined}
-                            aria-hidden="true"
+                            className="redis-sidebar-icon"
+                            data-connected={status?.connected || undefined}
                           >
-                            <SessionIcon />
+                            {"R"}
                           </span>
-                          <span>
-                            {connection.name}
-                            {connection.temporary ? " · " + tx("临时") : ""}
-                          </span>
-                        </button>
-                        <button
-                          className="icon-button row-close"
-                          aria-label={tx("移除 SSH 连接：{p0}", { p0: connection.name })}
-                          title={tx("移除 SSH 连接")}
-                          disabled={!canRemoveSsh?.(connection)}
-                          onClick={() =>
-                            setRemoval({ kind: "ssh", connection, workspaceId: group!.id })
-                          }
-                        >
-                          <ToolbarIcon name="close" />
-                        </button>
-                      </div>
-                      {ordered(connection.sessions).map((session) =>
-                        sessionRow(session, roster, 1, connection.name, true),
-                      )}
+                        </span>
+                        <span className="sidebar-row-name">
+                          {connection.name}
+                          {status?.dirty ? " *" : ""}
+                        </span>
+                      </button>
+                      <button
+                        className="icon-button row-close"
+                        title={tx("移除 Redis 连接")}
+                        aria-label={tx("移除 Redis 连接：{name}", { name: connection.name })}
+                        disabled={!!retained}
+                        onClick={() =>
+                          setRemoval({ kind: "redis", connection, workspaceId: group!.id })
+                        }
+                      >
+                        <ToolbarIcon name="close" />
+                      </button>
                     </div>
                   );
                 })}
-          </section>
-        )}
-        {addRedis && settings.showRedisConnections && (
-          <section className="sidebar-section" aria-label={tx("Redis")}>
-            {sectionHeader(
-              tx("Redis"),
-              !!collapsed.redis,
-              () => setCollapsed((value) => ({ ...value, redis: !value.redis })),
-              undefined,
-              <button
-                className="icon-button"
-                aria-label={tx("添加 Redis 连接")}
-                title={tx("添加 Redis 连接")}
-                disabled={!runtime}
-                onClick={addRedis}
-              >
-                <SidebarIcon name="plus" />
-              </button>,
-            )}
-            {!collapsed.redis &&
-              (group?.redisConnections ?? []).map((connection) => {
-                const status = redisStatuses[connection.id];
-                const retained = status?.connected || status?.dirty || status?.opening;
-                return (
-                  <div
-                    className={`sidebar-row${selectedRedisId === connection.id ? " selected" : ""}`}
-                    key={connection.id}
-                    onContextMenu={(event) => openConnectionMenu(event, "redis", connection.id)}
-                    onKeyDown={(event) => openConnectionMenu(event, "redis", connection.id)}
+            </section>
+          )}
+          {showing("database") && addDatabase && settings.showDatabaseConnections && (
+            <section className="sidebar-section" aria-label={tx("数据库")}>
+              {sectionHeader(
+                tx("数据库"),
+                !!collapsed.database,
+                () => setCollapsed((value) => ({ ...value, database: !value.database })),
+                undefined,
+                <>
+                  <button
+                    className="icon-button"
+                    aria-label={tx("数据库组件")}
+                    title={tx("数据库组件")}
+                    disabled={!runtime}
+                    onClick={manageDatabase}
                   >
-                    <button
-                      className="row-label"
-                      title={`${connection.host}:${connection.port}`}
-                      aria-description={status?.connected ? tx("已连接") : undefined}
-                      disabled={activityDisabled}
-                      onClick={() => selectRedis?.(connection)}
+                    <ToolbarIcon name="settings" />
+                  </button>
+                  <button
+                    className="icon-button"
+                    aria-label={tx("添加数据库连接")}
+                    title={tx("添加数据库连接")}
+                    disabled={!runtime}
+                    onClick={addDatabase}
+                  >
+                    <SidebarIcon name="plus" />
+                  </button>
+                </>,
+              )}
+              {!collapsed.database &&
+                (group?.databaseConnections ?? []).map((connection) => {
+                  const status = databaseStatuses[connection.id];
+                  const retained = status?.connected || status?.busy || status?.dirty;
+                  return (
+                    <div
+                      className={`sidebar-row${selectedDatabaseId === connection.id ? " selected" : ""}`}
+                      key={connection.id}
+                      onContextMenu={(event) =>
+                        openConnectionMenu(event, "database", connection.id)
+                      }
+                      onKeyDown={(event) => openConnectionMenu(event, "database", connection.id)}
                     >
-                      <span
-                        className="sidebar-resource-icon"
-                        data-resource-active={status?.connected || undefined}
-                        aria-hidden="true"
+                      <button
+                        className="row-label"
+                        title={`${connection.name} — ${connection.host}:${connection.port}`}
+                        aria-description={status?.connected ? tx("已连接") : undefined}
+                        disabled={activityDisabled}
+                        onClick={() => selectDatabase?.(connection)}
                       >
                         <span
-                          className="redis-sidebar-icon"
-                          data-connected={status?.connected || undefined}
+                          className="sidebar-resource-icon"
+                          data-resource-active={status?.connected || undefined}
+                          aria-hidden="true"
                         >
-                          {"R"}
+                          <SidebarIcon name="sqlDatabase" />
                         </span>
-                      </span>
-                      <span>
-                        {connection.name}
-                        {status?.dirty ? " *" : ""}
-                      </span>
-                    </button>
-                    <button
-                      className="icon-button row-close"
-                      title={tx("移除 Redis 连接")}
-                      aria-label={tx("移除 Redis 连接：{name}", { name: connection.name })}
-                      disabled={!!retained}
-                      onClick={() =>
-                        setRemoval({ kind: "redis", connection, workspaceId: group!.id })
-                      }
-                    >
-                      <ToolbarIcon name="close" />
-                    </button>
-                  </div>
-                );
-              })}
-          </section>
-        )}
-        {addDatabase && settings.showDatabaseConnections && (
-          <section className="sidebar-section" aria-label={tx("数据库")}>
-            {sectionHeader(
-              tx("数据库"),
-              !!collapsed.database,
-              () => setCollapsed((value) => ({ ...value, database: !value.database })),
-              undefined,
-              <>
-                <button
-                  className="icon-button"
-                  aria-label={tx("数据库组件")}
-                  title={tx("数据库组件")}
-                  disabled={!runtime}
-                  onClick={manageDatabase}
-                >
-                  <ToolbarIcon name="settings" />
-                </button>
-                <button
-                  className="icon-button"
-                  aria-label={tx("添加数据库连接")}
-                  title={tx("添加数据库连接")}
-                  disabled={!runtime}
-                  onClick={addDatabase}
-                >
-                  <SidebarIcon name="plus" />
-                </button>
-              </>,
-            )}
-            {!collapsed.database &&
-              (group?.databaseConnections ?? []).map((connection) => {
-                const status = databaseStatuses[connection.id];
-                const retained = status?.connected || status?.busy || status?.dirty;
-                return (
-                  <div
-                    className={`sidebar-row${selectedDatabaseId === connection.id ? " selected" : ""}`}
-                    key={connection.id}
-                    onContextMenu={(event) => openConnectionMenu(event, "database", connection.id)}
-                    onKeyDown={(event) => openConnectionMenu(event, "database", connection.id)}
-                  >
-                    <button
-                      className="row-label"
-                      title={`${connection.host}:${connection.port}`}
-                      aria-description={status?.connected ? tx("已连接") : undefined}
-                      disabled={activityDisabled}
-                      onClick={() => selectDatabase?.(connection)}
-                    >
-                      <span
-                        className="sidebar-resource-icon"
-                        data-resource-active={status?.connected || undefined}
-                        aria-hidden="true"
+                        <span className="sidebar-row-name">
+                          {connection.name}
+                          {status?.dirty ? " *" : ""}
+                        </span>
+                      </button>
+                      <button
+                        className="icon-button row-close"
+                        title={tx("移除数据库连接")}
+                        aria-label={tx("移除数据库连接：{name}", { name: connection.name })}
+                        disabled={!!retained}
+                        onClick={() =>
+                          setRemoval({ kind: "database", connection, workspaceId: group!.id })
+                        }
                       >
-                        <SidebarIcon name="sqlDatabase" />
-                      </span>
-                      <span>
-                        {connection.name}
-                        {status?.dirty ? " *" : ""}
-                      </span>
-                    </button>
-                    <button
-                      className="icon-button row-close"
-                      title={tx("移除数据库连接")}
-                      aria-label={tx("移除数据库连接：{name}", { name: connection.name })}
-                      disabled={!!retained}
-                      onClick={() =>
-                        setRemoval({ kind: "database", connection, workspaceId: group!.id })
-                      }
-                    >
-                      <ToolbarIcon name="close" />
-                    </button>
-                  </div>
-                );
-              })}
-          </section>
+                        <ToolbarIcon name="close" />
+                      </button>
+                    </div>
+                  );
+                })}
+            </section>
+          )}
+          {showing("projects") && looseSection("terminals")}
+          {showing("projects") && looseSection("chats")}
+          {showing("projects") && (
+            <section className="sidebar-section" aria-label={tx("项目")}>
+              {sectionHeader(
+                tx("项目"),
+                !!collapsed.projects,
+                () => setCollapsed((value) => ({ ...value, projects: !value.projects })),
+                "projects",
+              )}
+              {!collapsed.projects &&
+                inactiveProjects.filter((project) => !project.pinned).map(projectBlock)}
+              {!projects.length && (
+                <button className="sidebar-empty" disabled={!runtime} onClick={addProject}>
+                  {tx("添加项目…")}
+                </button>
+              )}
+            </section>
+          )}
+        </nav>
+        {!navigation && (
+          <footer className="sidebar-footer">
+            {addButton}
+            <div className="sidebar-connection-toggles">
+              {addSsh && (
+                <button
+                  className="sidebar-connection-toggle"
+                  aria-label={tx("SSH 连接")}
+                  aria-pressed={settings.showSshConnections}
+                  title={settings.showSshConnections ? tx("隐藏 SSH 连接") : tx("显示 SSH 连接")}
+                  onClick={() => toggleConnections("showSshConnections")}
+                >
+                  <SidebarIcon name="terminal" />
+                </button>
+              )}
+              {addRedis && (
+                <button
+                  className="sidebar-connection-toggle"
+                  aria-label={tx("Redis 连接")}
+                  aria-pressed={settings.showRedisConnections}
+                  title={
+                    settings.showRedisConnections ? tx("隐藏 Redis 连接") : tx("显示 Redis 连接")
+                  }
+                  onClick={() => toggleConnections("showRedisConnections")}
+                >
+                  <SidebarIcon name="database" />
+                </button>
+              )}
+              {addDatabase && (
+                <button
+                  className="sidebar-connection-toggle"
+                  aria-label={tx("数据库连接")}
+                  aria-pressed={settings.showDatabaseConnections}
+                  title={
+                    settings.showDatabaseConnections ? tx("隐藏数据库连接") : tx("显示数据库连接")
+                  }
+                  onClick={() => toggleConnections("showDatabaseConnections")}
+                >
+                  <SidebarIcon name="sqlDatabase" />
+                </button>
+              )}
+            </div>
+            {footerActions}
+          </footer>
         )}
-        {looseSection("terminals")}
-        {looseSection("chats")}
-        <section className="sidebar-section" aria-label={tx("项目")}>
-          {sectionHeader(
-            tx("项目"),
-            !!collapsed.projects,
-            () => setCollapsed((value) => ({ ...value, projects: !value.projects })),
-            "projects",
-          )}
-          {!collapsed.projects &&
-            inactiveProjects.filter((project) => !project.pinned).map(projectBlock)}
-          {!projects.length && (
-            <button className="sidebar-empty" disabled={!runtime} onClick={addProject}>
-              {tx("添加项目…")}
-            </button>
-          )}
-        </section>
-      </nav>
-      <footer className="sidebar-footer">
-        <button
-          className="icon-button"
-          disabled={!runtime || !workspace}
-          aria-label={tx("添加项目或会话")}
-          title={tx("添加项目或会话")}
-          aria-haspopup="menu"
-          aria-expanded={popover === "add"}
-          onClick={(event) => togglePopover(event, "add")}
-        >
-          <SidebarIcon name="plus" />
-        </button>
-        <div className="sidebar-connection-toggles">
-          {addSsh && (
-            <button
-              className="sidebar-connection-toggle"
-              aria-label={tx("SSH 连接")}
-              aria-pressed={settings.showSshConnections}
-              title={settings.showSshConnections ? tx("隐藏 SSH 连接") : tx("显示 SSH 连接")}
-              onClick={() => toggleConnections("showSshConnections")}
-            >
-              <SidebarIcon name="terminal" />
-            </button>
-          )}
-          {addRedis && (
-            <button
-              className="sidebar-connection-toggle"
-              aria-label={tx("Redis 连接")}
-              aria-pressed={settings.showRedisConnections}
-              title={settings.showRedisConnections ? tx("隐藏 Redis 连接") : tx("显示 Redis 连接")}
-              onClick={() => toggleConnections("showRedisConnections")}
-            >
-              <SidebarIcon name="database" />
-            </button>
-          )}
-          {addDatabase && (
-            <button
-              className="sidebar-connection-toggle"
-              aria-label={tx("数据库连接")}
-              aria-pressed={settings.showDatabaseConnections}
-              title={settings.showDatabaseConnections ? tx("隐藏数据库连接") : tx("显示数据库连接")}
-              onClick={() => toggleConnections("showDatabaseConnections")}
-            >
-              <SidebarIcon name="sqlDatabase" />
-            </button>
-          )}
-        </div>
-        {footerActions}
-      </footer>
+      </div>
       {removal && (
         <dialog
           ref={removalDialog}
@@ -1338,131 +1503,134 @@ export function Sidebar({
           </div>,
           document.body,
         )}
-      {popover && (
-        <div
-          ref={popoverRef}
-          role="menu"
-          aria-label={popover === "workspace" ? tx("工作区菜单") : tx("添加菜单")}
-          className={`sidebar-popover context-menu ${popover}`}
-          onKeyDown={(event) => {
-            if (!["ArrowDown", "ArrowUp", "Home", "End", "Tab"].includes(event.key)) return;
-            if (event.key === "Tab") {
-              setPopover(null);
-              return;
-            }
-            event.preventDefault();
-            const buttons = Array.from(
-              event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
-            );
-            const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-            buttons[
-              event.key === "Home"
-                ? 0
-                : event.key === "End"
-                  ? buttons.length - 1
-                  : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length
-            ]?.focus();
-          }}
-        >
-          {popover === "workspace" ? (
-            <>
-              {workspace?.groups?.map((item) => (
-                <button
-                  key={item.id}
-                  role="menuitemradio"
-                  aria-checked={item.id === group?.id}
-                  onClick={() =>
-                    act(() => update((previous) => switchWorkspace(previous, item.id)))
-                  }
-                >
-                  <span className="menu-check">{item.id === group?.id ? "✓" : ""}</span>
-                  {item.name}
-                </button>
-              ))}
-              <hr />
-              <button role="menuitem" onClick={() => act(newWorkspace)}>
-                {tx("新建工作区…")}
-              </button>
-              <button role="menuitem" onClick={() => act(renameWorkspace)}>
-                {tx("重命名工作区…")}
-              </button>
-              {(workspace?.groups?.length ?? 0) > 1 &&
-                !projects.length &&
-                !group?.sshConnections?.length &&
-                !group?.redisConnections?.length &&
-                !group?.databaseConnections?.length &&
-                !rosters.some((roster) => roster.sessions.length) && (
+      {popover &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            role="menu"
+            aria-label={popover === "workspace" ? tx("工作区菜单") : tx("添加菜单")}
+            className={`sidebar-popover context-menu ${popover}`}
+            onKeyDown={(event) => {
+              if (!["ArrowDown", "ArrowUp", "Home", "End", "Tab"].includes(event.key)) return;
+              if (event.key === "Tab") {
+                setPopover(null);
+                return;
+              }
+              event.preventDefault();
+              const buttons = Array.from(
+                event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
+              );
+              const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+              buttons[
+                event.key === "Home"
+                  ? 0
+                  : event.key === "End"
+                    ? buttons.length - 1
+                    : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+                      buttons.length
+              ]?.focus();
+            }}
+          >
+            {popover === "workspace" ? (
+              <>
+                {workspace?.groups?.map((item) => (
                   <button
-                    role="menuitem"
+                    key={item.id}
+                    role="menuitemradio"
+                    aria-checked={item.id === group?.id}
                     onClick={() =>
-                      act(() =>
-                        update((previous) => {
-                          const target = previous.groups?.find(
-                            (item) => item.id !== previous.selectedWorkspace,
-                          );
-                          if (!target) return previous;
-                          const next = switchWorkspace(previous, target.id);
-                          return {
-                            ...next,
-                            groups: next.groups?.filter(
-                              (item) => item.id !== previous.selectedWorkspace,
-                            ),
-                          };
-                        }),
-                      )
+                      act(() => update((previous) => switchWorkspace(previous, item.id)))
                     }
                   >
-                    {tx("移除工作区")}
+                    <span className="menu-check">{item.id === group?.id ? "✓" : ""}</span>
+                    {item.name}
+                  </button>
+                ))}
+                <hr />
+                <button role="menuitem" onClick={() => act(newWorkspace)}>
+                  {tx("新建工作区…")}
+                </button>
+                <button role="menuitem" onClick={() => act(renameWorkspace)}>
+                  {tx("重命名工作区…")}
+                </button>
+                {(workspace?.groups?.length ?? 0) > 1 &&
+                  !projects.length &&
+                  !group?.sshConnections?.length &&
+                  !group?.redisConnections?.length &&
+                  !group?.databaseConnections?.length &&
+                  !rosters.some((roster) => roster.sessions.length) && (
+                    <button
+                      role="menuitem"
+                      onClick={() =>
+                        act(() =>
+                          update((previous) => {
+                            const target = previous.groups?.find(
+                              (item) => item.id !== previous.selectedWorkspace,
+                            );
+                            if (!target) return previous;
+                            const next = switchWorkspace(previous, target.id);
+                            return {
+                              ...next,
+                              groups: next.groups?.filter(
+                                (item) => item.id !== previous.selectedWorkspace,
+                              ),
+                            };
+                          }),
+                        )
+                      }
+                    >
+                      {tx("移除工作区")}
+                    </button>
+                  )}
+              </>
+            ) : (
+              <>
+                <button role="menuitem" onClick={() => act(() => addLoose("terminals"))}>
+                  <SessionIcon />
+                  {tx("新建终端")}
+                </button>
+                <button role="menuitem" onClick={() => act(addProject)}>
+                  <SidebarIcon name="folder" />
+                  {tx("添加项目…")}
+                </button>
+                {availableAgents(settings, runtime?.agents ?? []).map((agent) => (
+                  <button
+                    key={agent}
+                    role="menuitem"
+                    onClick={() => act(() => addLoose("chats", agent))}
+                  >
+                    <SessionIcon agent={agent} />
+                    {tx("新建 {p0} 聊天", {
+                      p0:
+                        runtime?.agent_definitions.find((item) => item.id === agent)?.name ??
+                        agentNames[agent] ??
+                        agent,
+                    })}
+                  </button>
+                ))}
+                {addSsh && settings.showSshConnections && (
+                  <button role="menuitem" onClick={() => act(addSsh)}>
+                    <SessionIcon />
+                    {tx("添加 SSH 连接")}
                   </button>
                 )}
-            </>
-          ) : (
-            <>
-              <button role="menuitem" onClick={() => act(addProject)}>
-                <SidebarIcon name="folder" />
-                {tx("添加项目…")}
-              </button>
-              {addSsh && settings.showSshConnections && (
-                <button role="menuitem" onClick={() => act(addSsh)}>
-                  <SessionIcon />
-                  {tx("添加 SSH 连接")}
-                </button>
-              )}
-              {addRedis && settings.showRedisConnections && (
-                <button role="menuitem" onClick={() => act(addRedis)}>
-                  <SidebarIcon name="database" />
-                  {tx("添加 Redis 连接")}
-                </button>
-              )}
-              {addDatabase && settings.showDatabaseConnections && (
-                <button role="menuitem" onClick={() => act(addDatabase)}>
-                  <SidebarIcon name="sqlDatabase" />
-                  {tx("添加数据库连接")}
-                </button>
-              )}
-              <button role="menuitem" onClick={() => act(() => addLoose("terminals"))}>
-                <SessionIcon />
-                {tx("新建终端")}
-              </button>
-              {availableAgents(settings, runtime?.agents ?? []).map((agent) => (
-                <button
-                  key={agent}
-                  role="menuitem"
-                  onClick={() => act(() => addLoose("chats", agent))}
-                >
-                  <SessionIcon agent={agent} />
-                  {tx("新建 {p0} 聊天", {
-                    p0:
-                      runtime?.agent_definitions.find((item) => item.id === agent)?.name ??
-                      agentNames[agent] ??
-                      agent,
-                  })}
-                </button>
-              ))}
-            </>
-          )}
-        </div>
-      )}
+                {addRedis && settings.showRedisConnections && (
+                  <button role="menuitem" onClick={() => act(addRedis)}>
+                    <SidebarIcon name="database" />
+                    {tx("添加 Redis 连接")}
+                  </button>
+                )}
+                {addDatabase && settings.showDatabaseConnections && (
+                  <button role="menuitem" onClick={() => act(addDatabase)}>
+                    <SidebarIcon name="sqlDatabase" />
+                    {tx("添加数据库连接")}
+                  </button>
+                )}
+              </>
+            )}
+          </div>,
+          document.body,
+        )}
     </aside>
   );
 }

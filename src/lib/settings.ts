@@ -42,6 +42,8 @@ export interface Settings {
   breakInterval: number;
   inspectorPosition: "left" | "right";
   interfaceTheme: InterfaceThemeId;
+  activeIconColor: string;
+  sidebarStyle: "classic" | "navigation";
   darkTheme: string;
   lightTheme: string;
   customThemes: Theme[];
@@ -82,6 +84,8 @@ export const defaults: Settings = {
   breakInterval: 60,
   inspectorPosition: "right",
   interfaceTheme: "black",
+  activeIconColor: "",
+  sidebarStyle: "classic",
   darkTheme: "default-dark",
   lightTheme: "default-light",
   customThemes: [],
@@ -184,6 +188,9 @@ export function readSettings(raw: string | null): Settings {
         : parsed.inspectorPosition,
     interfaceTheme:
       parsed.interfaceTheme === undefined ? defaults.interfaceTheme : parsed.interfaceTheme,
+    activeIconColor:
+      parsed.activeIconColor === undefined ? defaults.activeIconColor : parsed.activeIconColor,
+    sidebarStyle: parsed.sidebarStyle === undefined ? defaults.sidebarStyle : parsed.sidebarStyle,
     usageRefreshInterval:
       parsed.usageRefreshInterval === undefined
         ? defaults.usageRefreshInterval
@@ -239,6 +246,9 @@ export function readSettings(raw: string | null): Settings {
     throw new Error(tx("设置文件无效，原数据已保留。请恢复默认设置后重试。"));
   if (
     !Array.isArray(v.customThemes) ||
+    typeof v.activeIconColor !== "string" ||
+    !["classic", "navigation"].includes(v.sidebarStyle) ||
+    (v.activeIconColor !== "" && !/^#[0-9a-f]{6}$/i.test(v.activeIconColor)) ||
     v.customThemes.length > 30 ||
     !v.customThemes.every(validTheme) ||
     ![...themes, ...v.customThemes].some((theme) => theme.id === v.darkTheme) ||

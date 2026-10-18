@@ -145,7 +145,8 @@ test("App isolates Database views from inspectors, restores the selected tool an
     assert.equal(localStorage.getItem(`${workspaceKey}.v6-backup`), original);
     const shell = () => document.querySelector(".app-shell");
     const inspector = () => document.querySelector(".app-shell > :is(.file-panel, .git-panel)");
-    const project = () => document.querySelector('.project-list button[title="/local/project"]');
+    const project = () =>
+      document.querySelector('.folder-row[data-project-id="project"] > .row-label');
     for (const position of ["left", "right"]) {
       await act(async () =>
         preferences.save({ ...preferences.settings, inspectorPosition: position }),

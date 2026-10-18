@@ -49,6 +49,39 @@ test("connection sections default visible for old settings and preserve independ
     for (const value of [null, 0, 1, "false", []])
       assert.throws(() => readSettings(JSON.stringify({ ...defaults, [key]: value })));
 });
+test("active icon colors default to the theme and reject invalid saved colors", () => {
+  const { activeIconColor, ...old } = defaults;
+  assert.equal(readSettings(null).activeIconColor, "");
+  assert.equal(readSettings(JSON.stringify(old)).activeIconColor, "");
+  for (const color of ["", "#62d98a", "#AABBCC", "#000000", "#ffffff"]) {
+    const saved = readSettings(JSON.stringify({ ...defaults, activeIconColor: color }));
+    assert.equal(readSettings(JSON.stringify(saved)).activeIconColor, color);
+  }
+  for (const color of [
+    null,
+    false,
+    123,
+    [],
+    "red",
+    "#abc",
+    "#gg1234",
+    "#12345678",
+    "var(--ui-text)",
+  ])
+    assert.throws(() => readSettings(JSON.stringify({ ...defaults, activeIconColor: color })));
+});
+test("sidebar styles default to classic for old settings and persist valid choices", () => {
+  const { sidebarStyle, ...old } = defaults;
+  assert.equal(readSettings(null).sidebarStyle, "classic");
+  assert.equal(readSettings(JSON.stringify(old)).sidebarStyle, "classic");
+  for (const style of ["classic", "navigation"]) {
+    const saved = readSettings(JSON.stringify({ ...defaults, sidebarStyle: style }));
+    assert.equal(readSettings(JSON.stringify(saved)).sidebarStyle, style);
+  }
+  for (const style of [null, false, 0, "", "compact", [], {}])
+    assert.throws(() => readSettings(JSON.stringify({ ...defaults, sidebarStyle: style })));
+});
+
 test("platform shortcuts avoid project and terminal search collisions", () => {
   for (const mac of [true, false]) {
     validateShortcuts(defaults, mac);

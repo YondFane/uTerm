@@ -7,6 +7,7 @@
   --ui-text: #f2f2f2;
   --ui-muted: #ababab;
   --ui-accent: #d4d4d4;
+  --ui-active-icon: var(--ui-accent);
   --ui-selected: #d4d4d416;
   --ui-shadow: 0 18px 60px #0006;
 }
@@ -458,6 +459,7 @@ select:focus-visible {
 
 .sidebar {
   position: relative;
+  container: sidebar-shell / inline-size;
   min-width: 30px;
   overflow: clip;
   display: flex;
@@ -559,6 +561,18 @@ select:focus-visible {
   width: 10px;
   height: 10px;
   stroke-width: 2;
+}
+.section-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.section-toggle > span:last-child {
+  flex-shrink: 0;
+}
+.sidebar .icon-button.row-more {
+  display: none;
 }
 .section-action {
   opacity: 0;
@@ -773,30 +787,28 @@ select:focus-visible {
 .sidebar-connection-toggle:hover {
   background: var(--ui-hover);
 }
-.sidebar .sidebar-popover {
-  position: absolute;
+.sidebar-popover {
+  position: fixed;
   left: 8px;
   width: 230px;
   max-height: min(400px, calc(100vh - 90px));
 }
-.sidebar .sidebar-popover.workspace {
-  top: 56px;
+.sidebar-popover.workspace {
   width: 180px;
   max-width: calc(100vw - 16px);
   padding: 4px;
 }
 .sidebar-popover.add {
-  bottom: 40px;
   max-width: calc(100% - 16px);
 }
-.sidebar .sidebar-popover button {
+.sidebar-popover button {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 7px 8px;
   font-size: 13px;
 }
-.sidebar .sidebar-popover.workspace button {
+.sidebar-popover.workspace button {
   gap: 6px;
   padding: 5px 7px;
   font-size: 12px;
@@ -1849,6 +1861,82 @@ select:focus-visible {
   width: auto;
   margin-right: 0;
 }
+.settings-content .active-icon-color {
+  display: flex;
+  gap: 8px;
+  width: 60%;
+  min-width: 0;
+}
+.sidebar-style-picker {
+  margin: 0 0 20px;
+  padding: 0;
+  border: 0;
+}
+.sidebar-style-picker legend {
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+.sidebar-style-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.sidebar-style-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  text-align: left;
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+}
+.sidebar-style-option[aria-pressed="true"] {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 1px var(--ui-accent);
+}
+.sidebar-style-option small {
+  color: var(--ui-muted);
+}
+.sidebar-style-preview {
+  display: flex;
+  width: 100%;
+  height: 58px;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  background: var(--ui-sidebar);
+}
+.sidebar-style-preview > span {
+  display: grid;
+  align-content: start;
+  flex: 1;
+  gap: 6px;
+}
+.sidebar-style-preview > span > i {
+  width: 75%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--ui-muted);
+}
+.sidebar-style-preview > span > i:first-child {
+  background: var(--ui-accent);
+}
+.sidebar-style-preview-rail {
+  flex: 0 0 12px;
+  border-right: 1px solid var(--ui-border);
+  background: repeating-linear-gradient(to bottom, var(--ui-accent) 0 4px, transparent 4px 12px);
+}
+.settings-content .active-icon-color input[type="color"] {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 30px;
+  padding: 3px;
+}
+.settings-content .active-icon-color input:not([type="color"]) {
+  flex: 1;
+  width: 0;
+}
 .settings-content label:has(input[type="checkbox"]) {
   justify-content: start;
 }
@@ -2183,6 +2271,10 @@ select:focus-visible {
 .sidebar .row-actions .icon-button:hover:not(:disabled) {
   background: color-mix(in srgb, var(--ui-text) 18%, transparent);
   color: var(--ui-text);
+}
+.inspector-switcher .toolbar-icon-button[aria-pressed="true"]:not(:disabled),
+.sidebar .sidebar-connection-toggle[aria-pressed="true"]:not(:disabled) {
+  color: var(--ui-active-icon);
 }
 .inspector-switcher .toolbar-icon-button:focus-visible {
   outline-offset: 0;
@@ -2573,9 +2665,156 @@ select:focus-visible {
     monospace;
 }
 .sidebar {
-  padding: 0 10px 10px;
+  padding: 0;
   background: var(--ui-sidebar);
   border-color: var(--ui-border);
+}
+.sidebar-main {
+  container: sidebar / inline-size;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 10px 10px;
+}
+.sidebar-main[hidden] {
+  display: none;
+}
+.sidebar[data-sidebar-style="navigation"] {
+  flex-direction: row;
+}
+.sidebar-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 0 0 48px;
+  min-height: 0;
+  gap: 12px;
+  padding: 12px 6px 8px;
+  overflow-y: auto;
+  border-right: 1px solid var(--ui-border);
+  background: color-mix(in srgb, var(--ui-sidebar) 80%, var(--ui-hover));
+}
+.platform-macos .sidebar-rail {
+  padding-top: 42px;
+}
+.platform-macos .sidebar[data-sidebar-style="navigation"] .sidebar-header {
+  padding-left: 36px;
+}
+.sidebar-rail-items {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  gap: 6px;
+}
+.sidebar .sidebar-rail-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  color: var(--ui-muted);
+}
+.sidebar-rail-button .sidebar-icon {
+  width: 18px;
+  height: 18px;
+}
+.sidebar .sidebar-rail-button[aria-pressed="true"]:not(:disabled) {
+  background: var(--ui-selected);
+  color: var(--ui-active-icon);
+}
+.sidebar-rail-button[aria-pressed="true"]::before {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: 9px;
+  bottom: 9px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--ui-active-icon);
+}
+.sidebar-rail-footer {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--ui-border);
+}
+.sidebar-rail .sidebar-footer-actions {
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.sidebar-rail .toolbar-icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+  border-radius: 8px;
+  color: var(--ui-muted);
+}
+@container sidebar-shell (max-width: 180px) {
+  .sidebar[data-sidebar-style="navigation"] .sidebar-rail {
+    flex-basis: 32px;
+    padding-left: 2px;
+    padding-right: 2px;
+  }
+  .sidebar[data-sidebar-style="navigation"] .sidebar-rail-button,
+  .sidebar[data-sidebar-style="navigation"] .sidebar-rail .toolbar-icon-button {
+    width: 26px;
+    height: 30px;
+    padding: 4px;
+  }
+  .sidebar[data-sidebar-style="navigation"] .sidebar-main {
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .sidebar[data-sidebar-style="navigation"] .sidebar-rail-button[aria-pressed="true"]::before {
+    left: -1px;
+  }
+}
+.sidebar[data-sidebar-style="navigation"][data-sidebar-collapsed] .sidebar-rail {
+  flex-basis: 48px;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+.sidebar[data-sidebar-style="navigation"][data-sidebar-collapsed] .sidebar-rail-button {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+.sidebar[data-sidebar-style="navigation"][data-sidebar-collapsed]
+  .sidebar-rail
+  .toolbar-icon-button {
+  width: 32px;
+  height: 32px;
+  padding: 7px;
+}
+.sidebar[data-sidebar-style="navigation"][data-sidebar-collapsed]
+  .sidebar-rail-button[aria-pressed="true"]::before {
+  left: -5px;
+}
+.platform-macos[data-sidebar-style="navigation"][data-sidebar-collapsed]:not(
+    .with-inspector[data-inspector-position="left"]
+  )
+  > main
+  > .toolbar {
+  padding-left: 52px;
+}
+.platform-macos[data-sidebar-style="navigation"][data-sidebar-collapsed].with-inspector[data-inspector-position="left"]
+  > :is(.file-panel, .git-panel)
+  > .inspector-header {
+  padding-top: 38px;
 }
 .sidebar-resizer {
   position: absolute;
@@ -2677,15 +2916,118 @@ select:focus-visible {
 .sidebar-footer > .icon-button:is(:hover, :focus-visible):not(:disabled) {
   background: transparent;
 }
-.sidebar-footer > .icon-button > .icon-plus {
+.sidebar-add > .icon-plus {
   stroke-width: 2.8;
 }
-.sidebar .sidebar-popover {
+@container sidebar (max-width: 180px) {
+  .sidebar .row-actions {
+    display: none;
+  }
+  .folder-row:is(:hover, :focus-within) > .row-more {
+    display: flex;
+  }
+  .sidebar-footer {
+    justify-content: center;
+    padding-left: 0;
+  }
+  .sidebar-connection-toggles,
+  .sidebar-footer-actions {
+    flex-shrink: 1;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 100%;
+    margin-left: 0;
+  }
+}
+@container sidebar (max-width: 80px) {
+  .sidebar-header {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    flex-basis: 86px;
+    padding: 0;
+  }
+  .platform-macos .sidebar[data-sidebar-style] .sidebar-header {
+    flex-basis: 124px;
+    padding: 38px 0 0;
+  }
+  .sidebar .workspace-switcher {
+    flex: 0 0 26px;
+    justify-content: center;
+    width: 100%;
+    padding: 3px;
+  }
+  .sidebar-header .sidebar-toggle {
+    margin-right: 0;
+  }
+  .section-header {
+    flex-wrap: wrap;
+    justify-content: center;
+    height: auto;
+    min-height: 28px;
+    padding: 0;
+  }
+  .sidebar .section-toggle {
+    flex: 0 0 100%;
+    justify-content: center;
+    height: 28px;
+  }
+  .section-header-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 100%;
+  }
+  .section-action {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .sidebar-row {
+    padding: 0;
+  }
+  .sidebar .row-label {
+    position: relative;
+    justify-content: center;
+    gap: 0;
+  }
+  .sidebar .sidebar-row-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+  .sidebar .row-label > .agent-state {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+  }
+  .worktree-mark,
+  .group-mark,
+  .sidebar-row > .row-close {
+    display: none;
+  }
+  .sidebar-row:is(:hover, :focus-within) > .row-close {
+    display: flex;
+  }
+  .sidebar .ssh-sidebar-tools {
+    display: none;
+  }
+  .sidebar-footer {
+    max-height: 42%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+}
+@container sidebar (max-width: 32px) {
+  .sidebar-header,
+  .project-list,
+  .sidebar-footer {
+    visibility: hidden;
+  }
+}
+.sidebar-popover {
   background: var(--ui-surface);
   box-shadow: var(--ui-shadow);
-}
-.sidebar-popover.add {
-  bottom: 58px;
 }
 .session-panel {
   border-color: var(--ui-border);

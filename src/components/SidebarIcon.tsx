@@ -51,6 +51,7 @@ const brands = {
 };
 
 type IconName =
+  | "home"
   | "folder"
   | "folderClosed"
   | "terminal"
@@ -66,6 +67,7 @@ export function SidebarIcon({ name }: { name: IconName }) {
   useUiLanguage();
 
   const paths: Record<IconName, string> = {
+    home: "M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9",
     folder: "M3 8V6a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v1M3 8h5l2 3h11l-2 8H5a2 2 0 0 1-2-2Z",
     folderClosed: "M3 7V6a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z",
     terminal: "M8 9l3 3-3 3m6 0h3M8 3h8q5 0 5 5v8q0 5-5 5H8q-5 0-5-5V8q0-5 5-5Z",

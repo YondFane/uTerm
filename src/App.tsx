@@ -114,17 +114,24 @@ import type {
   LocalSessionSnapshot,
 } from "./lib/workspace";
 
-import { sidebarLayout, panelCollapseWidth } from "./lib/sidebar-layout";
+import { sidebarLayout, sidebarRailWidth } from "./lib/sidebar-layout";
 
 export function App() {
   useUiLanguage();
 
   const { settings, save: saveSettings } = useSettings();
   const inspectorOnLeft = settings.inspectorPosition === "left";
+  const navigationSidebar = settings.sidebarStyle === "navigation";
   const t = (key: string) => translate(activeLanguage(settings.language), key);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [requestedSidebarWidth, setRequestedSidebarWidth] = useState(248);
-  const sidebarDrag = useRef<{ x: number; width: number; collapse?: boolean } | null>(null);
+  const sidebarDrag = useRef<{
+    x: number;
+    width: number;
+    restoreWidth: number;
+    wasVisible: boolean;
+    collapse?: boolean;
+  } | null>(null);
   const [sidebarSnap, setSidebarSnap] = useState(false);
   const [inspectorSnap, setInspectorSnap] = useState(false);
   const [sidebarCollapseHint, setSidebarCollapseHint] = useState(false);
@@ -150,15 +157,36 @@ export function App() {
     observer.observe(shell);
     return () => observer.disconnect();
   }, []);
-  const sidebarSize = sidebarLayout(shellWidth, requestedSidebarWidth);
-  const sidebarWidth = sidebarVisible ? sidebarSize.width : 0;
+  const sidebarSize = sidebarLayout(shellWidth, requestedSidebarWidth, navigationSidebar);
+  const sidebarWidth = sidebarVisible
+    ? sidebarSize.width
+    : navigationSidebar
+      ? sidebarRailWidth
+      : 0;
+  useEffect(() => {
+    if (navigationSidebar)
+      setRequestedSidebarWidth((width) => (width <= sidebarSize.collapseWidth ? 248 : width));
+  }, [navigationSidebar, sidebarSize.collapseWidth]);
+  function cancelSidebarResize() {
+    const drag = sidebarDrag.current;
+    if (navigationSidebar && drag) {
+      setRequestedSidebarWidth(drag.restoreWidth);
+      setSidebarVisible(drag.wasVisible);
+    }
+    setSidebarSnap(false);
+    sidebarDrag.current = null;
+    setResizingSidebar(false);
+  }
   function resizeSidebar(width: number) {
-    const next = sidebarLayout(shellWidth, width);
+    const next = sidebarLayout(shellWidth, width, navigationSidebar);
     if (next.hidden) {
       sidebarDrag.current = null;
       setResizingSidebar(false);
       setSidebarVisible(false);
-    } else setRequestedSidebarWidth(next.width);
+    } else {
+      setRequestedSidebarWidth(next.width);
+      setSidebarVisible(true);
+    }
   }
   const sidebarResizeHandle = (
     <div
@@ -167,27 +195,37 @@ export function App() {
       tabIndex={0}
       aria-label={tx("调整左侧栏宽度")}
       aria-orientation="vertical"
-      aria-valuemin={panelCollapseWidth}
+      aria-valuemin={sidebarSize.minimum}
       aria-valuemax={Math.round(sidebarSize.maximum)}
       aria-valuenow={Math.round(sidebarWidth)}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
-        sidebarDrag.current = { x: event.clientX, width: sidebarWidth };
+        sidebarDrag.current = {
+          x: event.clientX,
+          width: sidebarWidth,
+          restoreWidth: sidebarSize.width,
+          wasVisible: sidebarVisible,
+        };
         setResizingSidebar(true);
       }}
       onPointerMove={(event) => {
         const drag = sidebarDrag.current;
         if (!drag) return;
-        const next = sidebarLayout(shellWidth, drag.width + event.clientX - drag.x);
+        const next = sidebarLayout(
+          shellWidth,
+          drag.width + event.clientX - drag.x,
+          navigationSidebar,
+        );
         drag.collapse = next.hidden;
         setSidebarSnap(next.hidden);
         setRequestedSidebarWidth(next.width);
+        if (navigationSidebar && !next.hidden) setSidebarVisible(true);
       }}
       onPointerUp={(event) => {
         if (sidebarDrag.current?.collapse) {
-          setRequestedSidebarWidth(sidebarDrag.current.width);
+          setRequestedSidebarWidth(sidebarDrag.current.restoreWidth);
           setSidebarVisible(false);
           setSidebarCollapseHint(true);
         }
@@ -197,28 +235,25 @@ export function App() {
         if (event.currentTarget.hasPointerCapture(event.pointerId))
           event.currentTarget.releasePointerCapture(event.pointerId);
       }}
-      onLostPointerCapture={() => {
-        setSidebarSnap(false);
-        sidebarDrag.current = null;
-        setResizingSidebar(false);
+      onLostPointerCapture={cancelSidebarResize}
+      onPointerCancel={cancelSidebarResize}
+      onDoubleClick={() => {
+        setRequestedSidebarWidth(248);
+        setSidebarVisible(true);
       }}
-      onPointerCancel={() => {
-        setSidebarSnap(false);
-        sidebarDrag.current = null;
-        setResizingSidebar(false);
-      }}
-      onDoubleClick={() => setRequestedSidebarWidth(248)}
       onKeyDown={(event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End", "Enter"].includes(event.key)) return;
         event.preventDefault();
         resizeSidebar(
           event.key === "Home"
-            ? panelCollapseWidth
+            ? sidebarSize.collapseWidth
             : event.key === "End"
               ? sidebarSize.maximum
               : event.key === "Enter"
                 ? 248
-                : sidebarWidth + (event.key === "ArrowLeft" ? -24 : 24),
+                : navigationSidebar && !sidebarVisible && event.key === "ArrowRight"
+                  ? sidebarSize.collapseWidth + 24
+                  : sidebarWidth + (event.key === "ArrowLeft" ? -24 : 24),
         );
       }}
     />
@@ -1784,6 +1819,8 @@ export function App() {
         } as CSSProperties
       }
       data-inspector-position={settings.inspectorPosition}
+      data-sidebar-style={settings.sidebarStyle}
+      data-sidebar-collapsed={(navigationSidebar && !sidebarVisible) || undefined}
       data-resizing-inspector={resizingInspector || undefined}
       data-resizing-sidebar={resizingSidebar || undefined}
       data-sidebar-snap={sidebarSnap || undefined}
@@ -1791,7 +1828,7 @@ export function App() {
       data-expanded-inspector={
         (inspectorVisible && gitOpen && gitExpanded && gitDiffActive) || undefined
       }
-      className={`app-shell${sidebarVisible ? "" : " sidebar-hidden"}${runtime?.platform === "macos" ? " platform-macos" : ""}${inspectorVisible ? " with-inspector" : ""}${inspectorVisible && (filesOpen || directoryOpen) ? " with-files" : ""}`}
+      className={`app-shell${sidebarVisible || navigationSidebar ? "" : " sidebar-hidden"}${runtime?.platform === "macos" ? " platform-macos" : ""}${inspectorVisible ? " with-inspector" : ""}${inspectorVisible && (filesOpen || directoryOpen) ? " with-files" : ""}`}
     >
       <BreakReminder />
       <Sidebar
