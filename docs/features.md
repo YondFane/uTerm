@@ -371,8 +371,8 @@ the section independently. Enter/Space on the focused heading performs the same 
 
 ### Connection visibility switches
 
-The sidebar footer provides separate icon-only buttons to show or hide connection sections: a
-terminal window for SSH, three stacked square layers for Redis and a cylinder for databases. Hover
+The Classic sidebar footer provides separate icon-only buttons to show or hide connection sections:
+a terminal window for SSH, three stacked square layers for Redis and a cylinder for databases. Hover
 labels describe the action, and accessible names identify each connection type.
 
 - All three sections are visible by default, including for older saved settings; highlighted icons
@@ -388,12 +388,15 @@ labels describe the action, and accessible names identify each connection type.
 
 - The footer wraps its controls when the sidebar is narrow.
 
+The Icon navigation sidebar always offers all three connection categories and their lists,
+regardless of these saved switches. Switching back to Classic sidebar restores the saved choices.
+
 ### Adding connections from the footer
 
 The footer's + menu offers Add SSH connection, Add Redis connection and Add database connection
-alongside Add project, New terminal and enabled Agent chats. Each connection item follows its
-section's visibility switch: hiding the section hides its Add item, and showing it restores that
-item independently.
+alongside Add project, New terminal and enabled Agent chats. In Classic sidebar, each connection
+item follows its section's visibility switch: hiding the section hides its Add item, and showing it
+restores that item independently. Icon navigation sidebar always offers all three connection items.
 
 Collapsing a visible section keeps its Add item available. Choosing an item closes the menu and
 opens the existing connection dialog.
@@ -1939,9 +1942,12 @@ The sidebar and Agent pane header display the same idle, working, needs-attentio
 state. Unviewed completion highlights the sidebar icon until acknowledged.
 
 - Settings → Agent → Notify when tasks finish or need attention is off by default and requests
-  system notification permission when enabled. Completion and attention notify when the app is
-  unfocused or another session is selected; development builds, restored history and repeated
-  identical states do not send notifications.
+  permission through the native notification service when enabled. The switch and delivery checks
+  use native permission results, so a stale WebView denial does not block enabling native
+  notifications. A failed permission request or preference save leaves the switch unchanged and
+  displays an error. Completion and attention notify when the app is unfocused or another session is
+  selected; development builds, restored history and repeated identical states do not send
+  notifications.
 
 - Pending permission results are ignored after a newer Agent state, session closure or view unmount;
   dispatch also rechecks the current notification setting, focus and selected session. Native
@@ -1949,25 +1955,30 @@ state. Unviewed completion highlights the sidebar icon until acknowledged.
 
 #### Hook and notification automated checks
 
-- Hook and notification validation on Windows: the complete frontend/build-helper suite passes (241
-  passed, 11 optional/platform checks skipped), together with 26 local-service checks and all 104
-  backend checks in a serialized run (six optional/resource checks ignored). Hook regressions cover
-  idempotent installation, old/encoded paths, mixed groups, removal, unrelated commands,
-  preservation of dynamic shell expressions, no-op file/backup protection and actual PowerShell/cmd
-  execution with literal special-character paths.
+- Hook regressions cover idempotent installation, old/encoded paths, mixed groups, removal,
+  unrelated commands, preservation of dynamic shell expressions, no-op file/backup protection and
+  actual PowerShell/cmd execution with literal special-character paths.
 
-- The App regression covers indicator states, unread acknowledgement, opt-in, focus, permissions,
+- The complete Windows frontend/build-helper suite passes (253 passed, 11 optional/platform checks
+  skipped), including two notification regressions and 16 settings/localization checks. The App
+  regression covers indicator states, unread acknowledgement, opt-in, focus, native permissions,
   replay, duplicate suppression, development builds and dispatch failures. Deferred permission
   checks verify cancellation after opting out, viewing/closing a session, receiving a newer state or
   unmounting, including delivery of only the latest pending state.
 
-- Changed-source/test and Rust formatting, localization, documentation checks, TypeScript/production
-  and the isolated Windows desktop build (`sh.uterm.desktop.qa.branchaudit`) pass. Repository-wide
-  formatting retains existing issues in 148 other files, and tests/builds retain the Vite
-  WebSocket-port, React act and large-chunk warnings.
+- Settings coverage includes a denied WebView cache with native permission granted, native
+  permission requests, denial, query/save failures, pending requests, provider reload and disabling
+  without requesting permission.
 
-- The deferred-notification checks use mocked native commands; installed notification branding,
-  authenticated providers and macOS/Linux acceptance remain unverified.
+- Changed-source/test and Rust formatting, localization, documentation checks, TypeScript/production
+  and the isolated Windows desktop build (`sh.uterm.desktop.qa.notificationpermission`) pass.
+  Repository-wide formatting retains existing issues in 183 other files, and tests/builds retain the
+  Vite WebSocket-port, React act and large-chunk warnings.
+
+- Permission and deferred-notification regressions use mocked native commands. Native acceptance of
+  enabling and delivering notifications through the updated permission path in installed Windows
+  builds, installed notification branding, authenticated providers and macOS/Linux acceptance remain
+  unverified.
 
 #### Hook and notification native checks
 
@@ -2512,9 +2523,9 @@ failed save displays an error and keeps the saved style. Restoring interface and
 selects Classic sidebar.
 
 - The navigation rail offers All, Projects and sessions, SSH connections, Redis connections and
-  Database connections. Each connection category follows its saved visibility preference. Use the
-  Classic sidebar's footer switches to change these preferences; hiding the current category returns
-  the list to All.
+  Database connections. All three connection categories, their lists and Add actions remain
+  available even when their Classic sidebar switches are off. Switching styles preserves these saved
+  switches; returning to Classic sidebar restores its original visibility choices.
 - Selecting a category filters only the sidebar list, preserving the current project, session,
   workbench and connections. The current category is retained during this app run and starts at All
   after restart.
@@ -2531,21 +2542,14 @@ selects Classic sidebar.
 
 #### Sidebar-style checks on Windows
 
-- The complete frontend/build-helper suite passes on Windows (252 passed, 11 optional/platform
-  checks skipped). Coverage includes old settings, saved style reload, settings cards, category
-  filtering, hidden category fallback, save failures, restoring defaults and unchanged workspace
-  data. Sidebar regressions verify retained rail/footer controls,
-  category/toolbar/shortcut/keyboard/drag restoration, drag cancellation, both inspector positions,
-  style switching and menu dismissal when Classic is hidden.
-- Local-session service tests and all 105 backend checks pass, with nine optional checks ignored.
-  The SSH startup timing check passes in isolated and full reruns after an initial timeout. Locked
-  dependency installation, changed-file formatting, both Cargo format checks, localization,
-  documentation, TypeScript/production and Windows desktop builds pass. Repository-wide formatting
-  retains issues in 172 unchanged files.
-- Both Add-menu regressions pass, covering New terminal first and the final connection-action order
-  in Chinese/English, all eight visibility combinations and retained action targets. Native Windows
-  inspection confirms that New terminal is first and all three connection actions follow the enabled
-  Agent chat actions.
+- The complete Windows frontend/build-helper suite passes (253 passed, 11 optional/platform checks
+  skipped), including five sidebar/App regressions. Coverage includes all three Classic switches
+  being off, navigation categories and lists remaining available, style switching without changing
+  saved choices, provider reload, context menus, SSH removal confirmation/cancellation, Add-menu
+  order and welcome dialogs in both languages, and unchanged profiles/sessions/selection. Classic
+  visibility combinations and the retained rail/collapse interactions also pass.
+- Changed-file formatting, localization, documentation and TypeScript/production build pass.
+  Repository-wide formatting reports issues in 183 unchanged files.
 - An isolated Tauri/WebView2 app (`sh.uterm.desktop.qa.sidebarstyles`) runs the real App with
   temporary profiles and mocked desktop commands. Native inspection verifies the two settings cards,
   switching to the navigation layout, project/SSH filtering, rail footer controls, Chinese dark and
@@ -2553,7 +2557,9 @@ selects Classic sidebar.
   complete menu and Escape returns visible focus to it. The content footer is absent, and the rail
   group remains accessible at 248 px and 88 px in light/dark appearance. Native Chinese/dark
   inspection also verifies button and drag collapse to a retained 48 px rail, category/drag
-  restoration and the complete Add menu while the list is hidden.
+  restoration and the complete Add menu while the list is hidden. With all Classic connection
+  switches off, native inspection confirms all three navigation icons, lists, welcome actions and
+  Add items, database filtering and the retained hidden sections after returning to Classic.
 - The UI fixture uses no real processes or server connections. Native acceptance of
   shortcut-triggered menu dismissal, expanded navigation below 88 px, restart persistence and
   macOS/Linux interaction remains pending. The production build retains its existing large-chunk
@@ -2667,12 +2673,12 @@ use consistent states.
 
 - A welcome page offers project, terminal and chat actions with configured shortcut hints;
   unavailable actions are disabled. Below these actions, compact Add SSH connection, Add Redis
-  connection and Add database connection buttons follow the same saved visibility switches as the
-  sidebar and its + menu.
+  connection and Add database connection buttons follow the sidebar and its + menu: all three are
+  available in Icon navigation sidebar, while Classic sidebar uses the saved visibility switches.
 
-- Hiding a connection section hides its welcome action; showing it restores the action, while
-  folding the section keeps it available. Each button opens the existing connection dialog and
-  remains disabled until the runtime and workspace are ready.
+- In Classic sidebar, hiding a connection section hides its welcome action; showing it restores the
+  action, while folding the section keeps it available. Each button opens the existing connection
+  dialog and remains disabled until the runtime and workspace are ready.
 
 - The buttons reflow with the available width; short windows scroll without losing access to the
   heading or footer. Empty inspectors do not reserve screen space.
@@ -2682,15 +2688,15 @@ use consistent states.
 
 #### Welcome-action checks on Windows
 
-- Welcome connection-action validation on Windows: the complete frontend/build-helper suite passes
-  (226 passed, ten optional/platform checks skipped), including the focused App regression and
-  existing SSH/Redis/database/sidebar checks. Changed-file formatting, localization, documentation
-  checks and TypeScript/production build also pass.
+- Welcome connection-action validation on Windows: the focused App regression and four sidebar
+  regressions pass. Changed-file formatting, localization, documentation checks and
+  TypeScript/production build also pass.
 
 - Coverage includes startup-disabled controls, all eight visibility combinations, preserved existing
-  welcome actions, both languages and opening/cancelling each real connection dialog without
-  changing profiles. An isolated native Tauri/WebView2 host (`sh.uterm.desktop.qa.sidebarmenus`)
-  renders the real App with temporary workspace state and mocked desktop commands.
+  welcome actions, navigation actions with all Classic switches off, retained choices when switching
+  styles, both languages and opening/cancelling each real connection dialog without changing
+  profiles. An isolated native Tauri/WebView2 host (`sh.uterm.desktop.qa.sidebarmenus`) renders the
+  real App with temporary workspace state and mocked desktop commands.
 
 - It verifies footer/welcome/+ menu agreement, retained actions while folded, all three dialog
   targets in Chinese/English, cancellation, dark/light layouts, a three-button row with tools

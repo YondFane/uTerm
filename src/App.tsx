@@ -59,7 +59,6 @@ import { isDirty } from "./lib/file-document";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { agentNames, SidebarIcon, ToolbarIcon } from "./components/SidebarIcon";
-import { isPermissionGranted } from "@tauri-apps/plugin-notification";
 import { AgentPanel, notificationKey } from "./components/AgentPanel";
 import { GitHubPanel } from "./components/GitHubPanel";
 import { DirectoryPanel } from "./components/DirectoryPanel";
@@ -2759,7 +2758,7 @@ export function App() {
                       </button>
                     )}
                     <div className="welcome-connections">
-                      {settings.showSshConnections && (
+                      {(navigationSidebar || settings.showSshConnections) && (
                         <button
                           className="welcome-action"
                           disabled={!runtime || !workspace}
@@ -2771,7 +2770,7 @@ export function App() {
                           </span>
                         </button>
                       )}
-                      {settings.showRedisConnections && (
+                      {(navigationSidebar || settings.showRedisConnections) && (
                         <button
                           className="welcome-action"
                           disabled={!runtime || !workspace}
@@ -2783,7 +2782,7 @@ export function App() {
                           </span>
                         </button>
                       )}
-                      {settings.showDatabaseConnections && (
+                      {(navigationSidebar || settings.showDatabaseConnections) && (
                         <button
                           className="welcome-action"
                           disabled={!runtime || !workspace}
@@ -2860,7 +2859,7 @@ export function App() {
                   ) {
                     const request = Symbol();
                     pendingAgentNotifications.current.set(id, request);
-                    void isPermissionGranted()
+                    void invoke<boolean | null>("plugin:notification|is_permission_granted")
                       .then(async (granted) => {
                         const current = currentWorkspace.current;
                         // Permission checks can finish after the session or notification preference changes.

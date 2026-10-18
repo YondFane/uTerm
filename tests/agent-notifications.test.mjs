@@ -40,7 +40,7 @@ test("Agent reports update indicators, unread completion and guarded native noti
   };
   let focused = true;
   document.hasFocus = () => focused;
-  window.Notification = { permission: "granted" };
+  window.Notification = { permission: "denied" };
   const server = await createServer({
     configFile: false,
     server: { middlewareMode: true, hmr: false },
@@ -65,6 +65,8 @@ test("Agent reports update indicators, unread completion and guarded native noti
   });
   let debug = false;
   let failNotification = false;
+  let permissionGranted = true;
+  let deferPermission = false;
   const permissionChecks = [];
   const notices = [];
   const acknowledgements = [];
@@ -89,7 +91,9 @@ test("Agent reports update indicators, unread completion and guarded native noti
     if (command === "autostart_configure") return false;
     if (command === "control_session") acknowledgements.push(args);
     if (command === "plugin:notification|is_permission_granted")
-      return new Promise((resolve) => permissionChecks.push(resolve));
+      return deferPermission
+        ? new Promise((resolve) => permissionChecks.push(resolve))
+        : permissionGranted;
     if (command === "plugin:notification|notify") {
       if (failNotification) throw Error("QA notification failed");
       notices.push(args.options);
@@ -175,17 +179,17 @@ test("Agent reports update indicators, unread completion and guarded native noti
     await report("background", "done");
     assert.equal(notices.length, 3, "Notifications are opt in");
     localStorage.setItem(notificationKey, "true");
-    window.Notification.permission = "denied";
+    permissionGranted = false;
     await report("background", "waiting");
     assert.equal(notices.length, 3, "Denied OS permission suppresses the toast");
-    window.Notification.permission = "granted";
+    permissionGranted = true;
     failNotification = true;
     await report("background", "done");
     assert.match(document.body.textContent, /QA notification failed/);
     failNotification = false;
     const settlePermissions = () =>
       act(async () => permissionChecks.splice(0).forEach((resolve) => resolve(true)));
-    window.Notification.permission = "default";
+    deferPermission = true;
     await report("background", "working");
     await report("background", "waiting");
     assert.equal(permissionChecks.length, 1);
@@ -221,7 +225,7 @@ test("Agent reports update indicators, unread completion and guarded native noti
     await act(async () => root.unmount());
     await settlePermissions();
     assert.equal(notices.length, 4, "Unmounting cancels pending notifications");
-    window.Notification.permission = "granted";
+    deferPermission = false;
     debug = true;
     await mount();
     await report("background", "working");
