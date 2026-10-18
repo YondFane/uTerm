@@ -29,6 +29,7 @@ use tokio_rustls::{
 use utermd_local::BackgroundChild;
 
 const PREVIEW: usize = 1024 * 1024;
+const LIST_EDIT_MEMBERS: usize = 10000;
 const WIRE_LIMIT: usize = 16 * 1024 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(12);
 const MAX_CONNECTIONS: usize = 8;
@@ -452,7 +453,10 @@ impl Connection {
         }
     }
     async fn request(&self, request: Request) -> Result<serde_json::Value> {
-        let _mutation = if matches!(&request, Request::Save { .. } | Request::Mutate { .. }) {
+        let _mutation = if matches!(
+            &request,
+            Request::Save { .. } | Request::Mutate { .. } | Request::Collection { .. }
+        ) {
             self.mutations.fetch_add(1, Ordering::SeqCst);
             Some(MutationGuard(&self.mutations))
         } else {
@@ -604,7 +608,42 @@ impl Connection {
                         )?
                         .into();
                     }
-                    "list" | "zset" => {
+                    "list" => {
+                        let snapshot = self.list_snapshot(&mut wire, &key).await?;
+                        let (size, bytes, version) = if let Some(bytes) = snapshot {
+                            let version = list_version(&bytes);
+                            let page = bytes
+                                .iter()
+                                .skip(offset)
+                                .take(200)
+                                .cloned()
+                                .collect::<Vec<_>>();
+                            (bytes.len() as u64, page, Some(version))
+                        } else {
+                            let size = redis::from_redis_value::<u64>(
+                                self.query(&mut wire, redis::cmd("LLEN").arg(&key), false)
+                                    .await?,
+                            )?;
+                            let bytes = redis::from_redis_value::<Vec<Vec<u8>>>(
+                                self.query(
+                                    &mut wire,
+                                    redis::cmd("LRANGE").arg(&key).arg(offset).arg(offset + 199),
+                                    false,
+                                )
+                                .await?,
+                            )?;
+                            (size, bytes, None)
+                        };
+                        result["items"] = serde_json::to_value(
+                            bytes
+                                .iter()
+                                .map(|bytes| blob(bytes, 64 * 1024))
+                                .collect::<Vec<_>>(),
+                        )?;
+                        result["size"] = size.into();
+                        result["version"] = version.into();
+                    }
+                    "zset" => {
                         let mut command =
                             redis::cmd(if kind == "list" { "LRANGE" } else { "ZRANGE" });
                         command.arg(&key).arg(offset).arg(offset + 199);
@@ -681,6 +720,21 @@ impl Connection {
                     Ok(serde_json::json!({"version":digest(&bytes)}))
                 }
                 .await;
+                if result.is_err() {
+                    let _ = self.query(&mut wire, &redis::cmd("DISCARD"), false).await;
+                }
+                let _ = self.query(&mut wire, &redis::cmd("UNWATCH"), false).await;
+                result
+            }
+            Request::Collection { key, db, change } => {
+                self.require_write(db)?;
+                let key = key_bytes(&key)?;
+                let values = change.validate()?;
+                self.query(&mut wire, redis::cmd("WATCH").arg(&key), false)
+                    .await?;
+                let result = self
+                    .collection_change(&mut wire, &key, &change, values)
+                    .await;
                 if result.is_err() {
                     let _ = self.query(&mut wire, &redis::cmd("DISCARD"), false).await;
                 }
@@ -769,6 +823,176 @@ impl Connection {
             bail!("REDIS_DB_CHANGED");
         }
         Ok(())
+    }
+    async fn list_snapshot(
+        &self,
+        wire: &mut MultiplexedConnection,
+        key: &[u8],
+    ) -> Result<Option<Vec<Vec<u8>>>> {
+        let size: usize =
+            redis::from_redis_value(self.query(wire, redis::cmd("LLEN").arg(key), false).await?)?;
+        if size > LIST_EDIT_MEMBERS {
+            return Ok(None);
+        }
+        let mut bytes = Vec::new();
+        let mut total = 0;
+        // Bound aggregate reads before fetching another page; oversized lists remain browsable. 读取下一页前限制累计体积，超大列表仍可浏览。
+        for start in (0..size).step_by(200) {
+            let page: Vec<Vec<u8>> = redis::from_redis_value(
+                self.query(
+                    wire,
+                    redis::cmd("LRANGE")
+                        .arg(key)
+                        .arg(start)
+                        .arg((start + 199).min(size - 1)),
+                    false,
+                )
+                .await?,
+            )?;
+            total += page.iter().map(Vec::len).sum::<usize>();
+            if total > PREVIEW {
+                return Ok(None);
+            }
+            bytes.extend(page);
+        }
+        Ok(Some(bytes))
+    }
+    async fn collection_change(
+        &self,
+        wire: &mut MultiplexedConnection,
+        key: &[u8],
+        change: &CollectionChange,
+        (member, value): (Vec<u8>, Vec<u8>),
+    ) -> Result<serde_json::Value> {
+        let kind: String =
+            redis::from_redis_value(self.query(wire, redis::cmd("TYPE").arg(key), false).await?)?;
+        let creating = change.action == "create";
+        if creating && kind != "none" {
+            bail!("REDIS_NAME_EXISTS");
+        }
+        if !creating && kind != change.kind {
+            bail!("REDIS_CONFLICT");
+        }
+        let mut commands = Vec::new();
+        if change.kind == "list" {
+            if matches!(change.action.as_str(), "update" | "delete") {
+                let snapshot = self
+                    .list_snapshot(wire, key)
+                    .await?
+                    .context("REDIS_LIST_EDIT_LIMIT")?;
+                if change.expected.as_deref() != Some(list_version(&snapshot).as_str()) {
+                    bail!("REDIS_CONFLICT");
+                }
+                let index = change.index.context("REDIS_INPUT_LIMIT")?;
+                if index >= snapshot.len() {
+                    bail!("REDIS_CONFLICT");
+                }
+                if change.action == "update" {
+                    let mut command = redis::cmd("LSET");
+                    command.arg(key).arg(index).arg(&value);
+                    commands.push(command);
+                } else if index == 0 || index + 1 == snapshot.len() {
+                    let mut command = redis::cmd(if index == 0 { "LPOP" } else { "RPOP" });
+                    command.arg(key);
+                    commands.push(command);
+                } else {
+                    // Trim the prefix and append the bounded tail; duplicate values keep their positions. 保留前缀并追加有界尾部，重复值不会影响删除位置。
+                    let mut trim = redis::cmd("LTRIM");
+                    trim.arg(key).arg(0).arg(index - 1);
+                    commands.push(trim);
+                    let mut push = redis::cmd("RPUSH");
+                    push.arg(key).arg(&snapshot[index + 1..]);
+                    commands.push(push);
+                }
+            } else {
+                let mut command = redis::cmd(if change.position.as_deref() == Some("head") {
+                    "LPUSH"
+                } else {
+                    "RPUSH"
+                });
+                command.arg(key).arg(&value);
+                commands.push(command);
+            }
+        } else {
+            let zset = change.kind == "zset";
+            let original = if creating {
+                Value::Nil
+            } else {
+                self.query(
+                    wire,
+                    redis::cmd(if zset { "ZSCORE" } else { "SISMEMBER" })
+                        .arg(key)
+                        .arg(&member),
+                    false,
+                )
+                .await?
+            };
+            if matches!(change.action.as_str(), "update" | "delete") {
+                let expected = if zset {
+                    if original == Value::Nil {
+                        None
+                    } else {
+                        Some(redis::from_redis_value::<String>(original)?)
+                    }
+                } else if redis::from_redis_value::<bool>(original)? {
+                    Some("present".into())
+                } else {
+                    None
+                };
+                if expected.is_none() || expected != change.expected {
+                    bail!("REDIS_CONFLICT");
+                }
+            }
+            if change.action != "delete"
+                && (change.action != "update" || value != member)
+                && !creating
+            {
+                let exists = self
+                    .query(
+                        wire,
+                        redis::cmd(if zset { "ZSCORE" } else { "SISMEMBER" })
+                            .arg(key)
+                            .arg(&value),
+                        false,
+                    )
+                    .await?;
+                if if zset {
+                    exists != Value::Nil
+                } else {
+                    redis::from_redis_value::<bool>(exists)?
+                } {
+                    bail!("REDIS_MEMBER_EXISTS");
+                }
+            }
+            if change.action == "delete" || (change.action == "update" && value != member) {
+                let mut command = redis::cmd(if zset { "ZREM" } else { "SREM" });
+                command.arg(key).arg(&member);
+                commands.push(command);
+            }
+            if change.action != "delete" {
+                // Add before removing so replacing the last member preserves the key and its TTL. 先添加再移除，替换最后一个成员时保留 Key 及 TTL。
+                let mut command = redis::cmd(if zset { "ZADD" } else { "SADD" });
+                command.arg(key);
+                if zset {
+                    command.arg(change.score.as_deref().unwrap());
+                }
+                command.arg(&value);
+                commands.insert(0, command);
+            }
+        }
+        self.query(wire, &redis::cmd("MULTI"), false).await?;
+        for command in &commands {
+            self.query(wire, command, false).await?;
+        }
+        let executed = self.query(wire, &redis::cmd("EXEC"), true).await?;
+        match executed {
+            Value::Nil => bail!("REDIS_CONFLICT"),
+            Value::Array(values) if values.iter().any(|v| matches!(v, Value::ServerError(_))) => {
+                self.stop();
+                bail!("REDIS_WRITE_UNCERTAIN")
+            }
+            _ => Ok(serde_json::json!({"ok": true})),
+        }
     }
     async fn current(
         &self,
@@ -877,6 +1101,11 @@ pub enum Request {
         expected: Option<String>,
         db: u16,
     },
+    Collection {
+        key: String,
+        db: u16,
+        change: CollectionChange,
+    },
     Mutate {
         key: String,
         action: String,
@@ -889,6 +1118,90 @@ pub enum Request {
     Console {
         args: Vec<String>,
     },
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CollectionChange {
+    kind: String,
+    action: String,
+    member: Option<String>,
+    value: Option<String>,
+    index: Option<usize>,
+    score: Option<String>,
+    expected: Option<String>,
+    position: Option<String>,
+}
+impl CollectionChange {
+    fn validate(&self) -> Result<(Vec<u8>, Vec<u8>)> {
+        if !matches!(self.kind.as_str(), "list" | "set" | "zset")
+            || !matches!(self.action.as_str(), "create" | "add" | "update" | "delete")
+            || self
+                .expected
+                .as_ref()
+                .is_some_and(|value| value.len() > 128)
+            || self.index.is_some_and(|index| index >= LIST_EDIT_MEMBERS)
+            || self
+                .position
+                .as_deref()
+                .is_some_and(|value| !matches!(value, "head" | "tail"))
+        {
+            bail!("REDIS_INPUT_LIMIT");
+        }
+        let editing = matches!(self.action.as_str(), "update" | "delete");
+        if editing
+            && (self.expected.is_none()
+                || (self.kind == "list" && self.index.is_none())
+                || (self.kind != "list" && self.member.is_none()))
+        {
+            bail!("REDIS_INPUT_LIMIT");
+        }
+        if self.action != "delete" && self.value.is_none() {
+            bail!("REDIS_INPUT_LIMIT");
+        }
+        if self.kind == "zset" && self.action != "delete" {
+            if !self.score.as_deref().is_some_and(valid_score) {
+                bail!("REDIS_INVALID_SCORE");
+            }
+        }
+        let decode = |value: Option<&str>| -> Result<Vec<u8>> {
+            let value = value.unwrap_or("");
+            if value.len() > PREVIEW.div_ceil(3) * 4 {
+                bail!("REDIS_VALUE_LIMIT");
+            }
+            let bytes = STANDARD.decode(value).context("REDIS_INPUT_LIMIT")?;
+            if bytes.len() > PREVIEW {
+                bail!("REDIS_VALUE_LIMIT");
+            }
+            Ok(bytes)
+        };
+        Ok((
+            decode(self.member.as_deref())?,
+            decode(self.value.as_deref())?,
+        ))
+    }
+}
+fn valid_score(value: &str) -> bool {
+    // Reject underflow before queuing a member replacement. 拒绝下溢分数，避免成员替换时提交不一致的指令。
+    !value.is_empty()
+        && value.len() <= 128
+        && value.parse::<f64>().is_ok_and(|score| {
+            score.is_finite()
+                && (score != 0.0
+                    || !value
+                        .split(['e', 'E'])
+                        .next()
+                        .unwrap_or("")
+                        .bytes()
+                        .any(|byte| matches!(byte, b'1'..=b'9')))
+        })
+}
+fn list_version(values: &[Vec<u8>]) -> String {
+    let mut hash = Sha256::new();
+    for value in values {
+        hash.update((value.len() as u64).to_be_bytes());
+        hash.update(value);
+    }
+    format!("{:x}", hash.finalize())
 }
 fn check_key(key: &[u8]) -> Result<()> {
     if key.len() > 4096 {
@@ -1192,6 +1505,170 @@ mod tests {
         net::TcpListener,
         process::{Child, Command, Stdio},
     };
+    fn collection(key: &str, change: serde_json::Value) -> Request {
+        serde_json::from_value(serde_json::json!({"op":"collection", "key":STANDARD.encode(key), "db":0, "change":change})).unwrap()
+    }
+    #[test]
+    fn collection_inputs_bound_payloads_scores_indexes_and_snapshot_identity() {
+        for value in [
+            "0",
+            "-0",
+            "0e-999",
+            "1.25",
+            "+.5",
+            "1e-20",
+            "-1.2345678901234567e100",
+        ] {
+            assert!(valid_score(value));
+        }
+        for value in [
+            "",
+            " ",
+            " 1",
+            "0x12",
+            "NaN",
+            "inf",
+            "-Infinity",
+            "1e999",
+            "1e-999",
+            "-1e-999",
+            "1,2",
+        ] {
+            assert!(!valid_score(value));
+        }
+        let change = |value| serde_json::from_value::<CollectionChange>(value).unwrap();
+        assert!(change(
+            serde_json::json!({"kind":"zset","action":"create","value":"","score":"NaN"})
+        )
+        .validate()
+        .is_err());
+        assert!(change(serde_json::json!({"kind":"list","action":"update","value":"","expected":"version","index":10000})).validate().is_err());
+        assert!(
+            change(serde_json::json!({"kind":"set","action":"delete","member":""}))
+                .validate()
+                .is_err()
+        );
+        assert!(change(serde_json::json!({"kind":"set","action":"create","value":STANDARD.encode(vec![b'x'; PREVIEW+1])})).validate().is_err());
+        assert!(
+            change(serde_json::json!({"kind":"string","action":"create","value":""}))
+                .validate()
+                .is_err()
+        );
+        assert!(change(
+            serde_json::json!({"kind":"list","action":"create","value":"","position":"middle"})
+        )
+        .validate()
+        .is_err());
+        assert_ne!(
+            list_version(&[b"ab".to_vec(), b"c".to_vec()]),
+            list_version(&[b"a".to_vec(), b"bc".to_vec()])
+        );
+    }
+    #[test]
+    #[ignore = "requires redis-server; uses a disposable loopback server"]
+    fn collection_creation_permissions_collisions_and_empty_members() {
+        let server = server(false);
+        runtime().block_on(async {
+            let connection = open(&server).await;
+            for kind in ["list", "set", "zset"] {
+                let create = || collection(kind, serde_json::json!({"kind":kind,"action":"create","value":"","score":"1.25","position":"tail"}));
+                assert!(connection.request(create()).await.unwrap_err().to_string().contains("REDIS_READ_ONLY"));
+                connection.writable.store(true, Ordering::Release);
+                connection.request(create()).await.unwrap();
+                let data = connection.request(read(kind,None)).await.unwrap();
+                assert_eq!(data["size"],1);
+                assert_eq!(data["items"][0]["text"],"");
+                assert!(connection.request(create()).await.unwrap_err().to_string().contains("REDIS_NAME_EXISTS"));
+                let mut wrong_db = serde_json::json!({"op":"collection","key":STANDARD.encode(kind),"db":1,"change":{"kind":kind,"action":"add","value":"","score":"0"}});
+                assert!(connection.request(serde_json::from_value(wrong_db.take()).unwrap()).await.unwrap_err().to_string().contains("REDIS_DB_CHANGED"));
+                connection.writable.store(false, Ordering::Release);
+            }
+            assert_eq!(connection.request(read("zset",None)).await.unwrap()["items"][1]["text"],"1.25");
+        });
+    }
+    #[test]
+    #[ignore = "requires redis-server; uses a disposable loopback server"]
+    fn list_edits_preserve_duplicate_positions_ttl_and_reject_changed_snapshots() {
+        let server = server(false);
+        runtime().block_on(async {
+            let connection = Arc::new(open(&server).await);
+            connection.writable.store(true, Ordering::Release);
+            seed(&connection, &["RPUSH","list","same","middle","same","tail"]).await;
+            seed(&connection, &["PEXPIRE","list","600000"]).await;
+            let version = connection.request(read("list",None)).await.unwrap()["version"].as_str().unwrap().to_owned();
+            connection.request(collection("list",serde_json::json!({"kind":"list","action":"delete","index":2,"expected":version}))).await.unwrap();
+            let data = connection.request(read("list",None)).await.unwrap();
+            assert_eq!(data["items"].as_array().unwrap().iter().map(|v|v["text"].as_str().unwrap()).collect::<Vec<_>>(),vec!["same","middle","tail"]);
+            assert!(data["ttl"].as_i64().unwrap()>590000);
+            assert!(connection.request(collection("list",serde_json::json!({"kind":"list","action":"update","index":1,"expected":version,"value":STANDARD.encode("wrong")}))).await.unwrap_err().to_string().contains("REDIS_CONFLICT"));
+            let expected = data["version"].as_str().unwrap();
+            let edit = |value:&str|collection("list",serde_json::json!({"kind":"list","action":"update","index":1,"expected":expected,"value":STANDARD.encode(value)}));
+            let (left,right) = tokio::join!(connection.request(edit("左")),connection.request(edit("右")));
+            assert_eq!(usize::from(left.is_ok())+usize::from(right.is_ok()),1);
+            connection.request(collection("list",serde_json::json!({"kind":"list","action":"add","position":"head","value":STANDARD.encode("first")}))).await.unwrap();
+            connection.request(collection("list",serde_json::json!({"kind":"list","action":"add","position":"tail","value":STANDARD.encode("last")}))).await.unwrap();
+            let data = connection.request(read("list",None)).await.unwrap();
+            assert_eq!(data["items"][0]["text"],"first");
+            assert_eq!(data["items"][4]["text"],"last");
+            let outsider = open(&server).await;
+            seed(&outsider,&["LPUSH","list","shift"]).await;
+            assert!(connection.request(collection("list",serde_json::json!({"kind":"list","action":"delete","index":1,"expected":data["version"]}))).await.unwrap_err().to_string().contains("REDIS_CONFLICT"));
+            seed(&connection,&["RPUSH","big","a"]).await;
+            {
+                let mut wire=connection.wire.lock().await;
+                connection.query(&mut wire,redis::cmd("RPUSH").arg("big").arg(vec![b'x'; PREVIEW]),true).await.unwrap();
+                let mut command=redis::cmd("RPUSH"); command.arg("many");
+                for _ in 0..=LIST_EDIT_MEMBERS {command.arg("x");}
+                connection.query(&mut wire,&command,true).await.unwrap();
+            }
+            for key in ["big","many"] {
+                assert!(connection.request(read(key,None)).await.unwrap()["version"].is_null());
+                assert!(connection.request(collection(key,serde_json::json!({"kind":"list","action":"delete","index":0,"expected":"old"}))).await.unwrap_err().to_string().contains("REDIS_LIST_EDIT_LIMIT"));
+                connection.request(collection(key,serde_json::json!({"kind":"list","action":"add","value":""}))).await.unwrap();
+            }
+            seed(&connection,&["RPUSH","single","only"]).await;
+            let data=connection.request(read("single",None)).await.unwrap();
+            connection.request(collection("single",serde_json::json!({"kind":"list","action":"delete","index":0,"expected":data["version"]}))).await.unwrap();
+            assert!(connection.request(read("single",None)).await.unwrap_err().to_string().contains("REDIS_KEY_MISSING"));
+        });
+    }
+    #[test]
+    #[ignore = "requires redis-server; uses a disposable loopback server"]
+    fn set_and_zset_members_preserve_ttl_reject_duplicates_and_stale_scores() {
+        let server = server(false);
+        runtime().block_on(async {
+            let connection=open(&server).await;
+            connection.writable.store(true,Ordering::Release);
+            for kind in ["set","zset"] {
+                connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"create","value":STANDARD.encode("original"),"score":"1.25"}))).await.unwrap();
+                seed(&connection,&["PEXPIRE",kind,"600000"]).await;
+                let expected=if kind=="set" {"present"}else{"1.25"};
+                connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"update","member":STANDARD.encode("original"),"value":STANDARD.encode("中文"),"score":"-2.5","expected":expected}))).await.unwrap();
+                let data=connection.request(read(kind,None)).await.unwrap();
+                assert_eq!(data["size"],1);
+                assert_eq!(data["items"][0]["text"],"中文");
+                if kind == "zset" {
+                    assert!(connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"update","member":STANDARD.encode("中文"),"value":STANDARD.encode("replacement"),"score":"1e-999","expected":"-2.5"}))).await.unwrap_err().to_string().contains("REDIS_INVALID_SCORE"));
+                    let unchanged = connection.request(read(kind,None)).await.unwrap();
+                    assert_eq!(unchanged["items"][0]["text"],"中文");
+                    assert_eq!(unchanged["items"][1]["text"],"-2.5");
+                }
+                assert!(data["ttl"].as_i64().unwrap()>590000);
+                assert!(connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"add","value":STANDARD.encode("中文"),"score":"9"}))).await.unwrap_err().to_string().contains("REDIS_MEMBER_EXISTS"));
+                assert!(connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"update","member":STANDARD.encode("original"),"value":"","score":"9","expected":expected}))).await.unwrap_err().to_string().contains("REDIS_CONFLICT"));
+                connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"add","value":"","score":"3"}))).await.unwrap();
+                let expected=if kind=="set" {"present"}else{"-2.5"};
+                assert!(connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"update","member":STANDARD.encode("中文"),"value":"","score":"9","expected":expected}))).await.unwrap_err().to_string().contains("REDIS_MEMBER_EXISTS"));
+                connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"delete","member":STANDARD.encode("中文"),"expected":expected}))).await.unwrap();
+                if kind=="zset" {
+                    assert!(connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"update","member":"","value":"","score":"8","expected":"2"}))).await.unwrap_err().to_string().contains("REDIS_CONFLICT"));
+                    connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"update","member":"","value":"","score":"0e-999","expected":"3"}))).await.unwrap();
+                }
+                connection.request(collection(kind,serde_json::json!({"kind":kind,"action":"delete","member":"","expected":if kind=="set" {"present"}else{"0"}}))).await.unwrap();
+                assert!(connection.request(read(kind,None)).await.unwrap_err().to_string().contains("REDIS_KEY_MISSING"));
+            }
+        });
+    }
     #[tokio::test]
     async fn opening_slots_are_bounded_released_and_leave_other_connections_accessible() {
         let state = RedisState::default();

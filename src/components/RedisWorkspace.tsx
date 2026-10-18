@@ -13,6 +13,8 @@ import {
   redisError,
   redisGuard,
   redisStatus,
+  redisValidScore,
+  type RedisCollectionChange,
   type RedisConfig,
   type RedisDocument,
   type RedisKey,
@@ -29,6 +31,8 @@ interface Draft {
   fresh: boolean;
   id: number;
   separator: string;
+  collection?: RedisCollectionChange;
+  savedScore?: string;
 }
 let nextDocument = 1;
 export function RedisWorkspace({
@@ -85,7 +89,9 @@ export function RedisWorkspace({
   const restoreFieldFocus = useRef(false);
   const [memberPattern, setMemberPattern] = useState("*");
   const [draft, setDraft] = useState<Draft | null>(null);
-  const dirty = !!draft && (draft.fresh || draft.text !== draft.saved);
+  const dirty =
+    !!draft &&
+    (draft.fresh || draft.text !== draft.saved || draft.collection?.score !== draft.savedScore);
   const dirtyNow = useRef(dirty);
   dirtyNow.current = dirty;
   const [pending, setPending] = useState<(() => void) | null>(null);
@@ -95,6 +101,7 @@ export function RedisWorkspace({
   const [newKey, setNewKey] = useState("");
   const [newField, setNewField] = useState("");
   const [newKind, setNewKind] = useState("string");
+  const [memberTarget, setMemberTarget] = useState<RedisCollectionChange | null>(null);
   const [rename, setRename] = useState("");
   const [ttl, setTtl] = useState("3600");
   const [consoleOpen, setConsoleOpen] = useState(false);
@@ -175,16 +182,23 @@ export function RedisWorkspace({
   }, [mutation]);
   useEffect(() => {
     if (!mutation && !busy && restoreActionFocus.current) {
-      dialogOrigin.current?.focus();
+      (dialogOrigin.current?.isConnected
+        ? dialogOrigin.current
+        : (workspace.current?.querySelector<HTMLButtonElement>(".redis-member-search button") ??
+          (narrow ? browserToggle.current : searchInput.current))
+      )?.focus();
       restoreActionFocus.current = false;
     }
-  }, [mutation, busy]);
+  }, [mutation, busy, narrow]);
   useEffect(() => {
-    if (!fieldData && !busy && restoreFieldFocus.current) {
-      fieldOrigin.current?.focus();
+    if (!fieldData && !draft?.collection && !busy && restoreFieldFocus.current) {
+      (fieldOrigin.current?.isConnected
+        ? fieldOrigin.current
+        : workspace.current?.querySelector<HTMLButtonElement>(".redis-member-search button")
+      )?.focus();
       restoreFieldFocus.current = false;
     }
-  }, [!!fieldData, busy]);
+  }, [!!fieldData, !!draft?.collection, busy]);
   useEffect(() => {
     let disposed = false;
     let stop: (() => void) | undefined;
@@ -375,10 +389,38 @@ export function RedisWorkspace({
           }
         : null,
     );
+    return document;
   }
   async function save(): Promise<boolean> {
     if (!draft || !dirtyNow.current) return true;
     const snapshot = draft;
+    if (snapshot.collection) {
+      if (
+        snapshot.collection.kind === "zset" &&
+        !redisValidScore(snapshot.collection.score ?? "")
+      ) {
+        setError(tx("分数必须是有限且可表示的数值。"));
+        return false;
+      }
+      const saved = await run(async () => {
+        await request({
+          op: "collection",
+          db,
+          key: snapshot.key.data,
+          change: { ...snapshot.collection, value: redisEncode(snapshot.text) },
+        });
+        setDraft(null);
+        restoreFieldFocus.current = true;
+        dirtyNow.current = false;
+        await redisGuard(config.id, false);
+        await refreshCollection(
+          { key: snapshot.key, kind: snapshot.collection!.kind, ttl: data?.ttl ?? -1 },
+          snapshot.collection!.action === "create" ? 0 : offset,
+        );
+        return true;
+      });
+      return saved === true;
+    }
     const saved = await run(async () => {
       const value = await request<{ version: string }>({
         op: "save",
@@ -579,9 +621,92 @@ export function RedisWorkspace({
       fresh: true,
       id: nextDocument++,
       separator: "\n",
+      ...(["list", "set", "zset"].includes(kind)
+        ? {
+            collection: {
+              kind: kind as RedisCollectionChange["kind"],
+              action: "create" as const,
+              ...(kind === "zset" ? { score: "0" } : {}),
+              ...(kind === "list" ? { position: "tail" as const } : {}),
+            },
+            savedScore: kind === "zset" ? "0" : undefined,
+          }
+        : {}),
     });
     closeAction();
     closeBrowser();
+  }
+  function openMember(item?: RedisBlob, index = 0, deleting = false, origin?: HTMLButtonElement) {
+    if (!selection || !data || !["list", "set", "zset"].includes(data.kind)) return;
+    const kind = data.kind as RedisCollectionChange["kind"];
+    const change: RedisCollectionChange = {
+      kind,
+      action: item ? (deleting ? "delete" : "update") : "add",
+      ...(item
+        ? {
+            member: item.data,
+            ...(kind === "list"
+              ? { index: offset + index, expected: data.version ?? undefined }
+              : {
+                  expected:
+                    kind === "zset" ? (data.items?.[index * 2 + 1]?.text ?? undefined) : "present",
+                }),
+          }
+        : {}),
+      ...(kind === "zset"
+        ? { score: item ? (data.items?.[index * 2 + 1]?.text ?? "0") : "0" }
+        : {}),
+      ...(kind === "list" ? { position: "tail" } : {}),
+    };
+    before(() => {
+      fieldOrigin.current = origin ?? null;
+      if (deleting) {
+        dialogOrigin.current = origin ?? null;
+        setMemberTarget(change);
+        setMutation({ action: "member-delete", argument: item?.text ?? tx("二进制成员") });
+      } else {
+        setFieldData(null);
+        setDraft({
+          key: selection.key,
+          text: item?.text ?? "",
+          saved: item?.text ?? "",
+          version: null,
+          fresh: !item,
+          id: nextDocument++,
+          separator: item?.text?.match(/\r\n|\r|\n/)?.[0] ?? "\n",
+          collection: change,
+          savedScore: change.score,
+        });
+      }
+    });
+  }
+  async function refreshCollection(target: RedisKey, at: number) {
+    try {
+      const loaded = await read(target, undefined, at);
+      if ((loaded.kind === "list" || loaded.kind === "zset") && loaded.size && at >= loaded.size)
+        await read(target, undefined, Math.floor((loaded.size - 1) / 200) * 200);
+    } catch (error) {
+      if (String(error).includes("REDIS_KEY_MISSING")) {
+        setSelection(null);
+        setData(null);
+        setKeys((keys) => keys.filter((item) => item.key.data !== target.key.data));
+      } else setError(redisError(error));
+    }
+    try {
+      await scan(true);
+    } catch (error) {
+      setError(redisError(error));
+    }
+  }
+  async function deleteMember() {
+    if (!selection || !memberTarget) return;
+    const target = selection;
+    await run(async () => {
+      await request({ op: "collection", db, key: target.key.data, change: memberTarget });
+      closeAction();
+      setMemberTarget(null);
+      await refreshCollection(target, offset);
+    });
   }
   async function mutate(action: string, argument: string) {
     if (!selection) return;
@@ -675,6 +800,7 @@ export function RedisWorkspace({
     ttl: tx("设置 TTL"),
     delete: tx("删除 Key"),
     hdelete: tx("删除字段"),
+    "member-delete": tx("删除成员"),
     db: tx("数据库 DB"),
   };
   const action = mutation?.action;
@@ -1054,8 +1180,25 @@ export function RedisWorkspace({
                   </div>
                   {collection && (
                     <div
-                      className={`redis-collection${fieldData || draft?.field ? " has-field" : ""}`}
+                      className={`redis-collection${fieldData || draft?.field || draft?.collection ? " has-field" : ""}`}
                     >
+                      {data.kind !== "hash" && (
+                        <div className="redis-member-search">
+                          <button
+                            disabled={busy || !writable}
+                            onClick={(event) =>
+                              openMember(undefined, 0, false, event.currentTarget)
+                            }
+                          >
+                            {tx("添加成员")}
+                          </button>
+                          {data.kind === "list" && data.size !== 0 && !data.version && (
+                            <span className="muted">
+                              {tx("List 超过 10000 个成员或总值超过 1 MB，只能添加成员和浏览。")}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       {(data.kind === "hash" || data.kind === "set") && (
                         <form
                           className="redis-member-search"
@@ -1102,6 +1245,9 @@ export function RedisWorkspace({
                               {data.kind !== "set" && (
                                 <th>{data.kind === "zset" ? tx("分数") : tx("值预览")}</th>
                               )}
+                              {data.kind !== "hash" && (
+                                <th className="redis-member-actions">{tx("操作")}</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody>
@@ -1147,6 +1293,38 @@ export function RedisWorkspace({
                                       </pre>
                                     </td>
                                   )}
+                                  {data.kind !== "hash" && (
+                                    <td className="redis-member-actions">
+                                      <button
+                                        disabled={
+                                          busy ||
+                                          !writable ||
+                                          item.truncated ||
+                                          item.text === null ||
+                                          (data.kind === "list" && !data.version)
+                                        }
+                                        onClick={(event) =>
+                                          openMember(item, index, false, event.currentTarget)
+                                        }
+                                      >
+                                        {tx("编辑成员")}
+                                      </button>
+                                      <button
+                                        className="redis-danger"
+                                        disabled={
+                                          busy ||
+                                          !writable ||
+                                          item.truncated ||
+                                          (data.kind === "list" && !data.version)
+                                        }
+                                        onClick={(event) =>
+                                          openMember(item, index, true, event.currentTarget)
+                                        }
+                                      >
+                                        {tx("删除成员")}
+                                      </button>
+                                    </td>
+                                  )}
                                 </tr>
                               ))}
                           </tbody>
@@ -1160,7 +1338,12 @@ export function RedisWorkspace({
                           <button
                             disabled={busy || offset === 0}
                             onClick={() =>
-                              void run(() => read(selection, undefined, Math.max(0, offset - 200)))
+                              before(
+                                () =>
+                                  void run(() =>
+                                    read(selection, undefined, Math.max(0, offset - 200)),
+                                  ),
+                              )
                             }
                           >
                             {tx("上一页")}
@@ -1206,8 +1389,23 @@ export function RedisWorkspace({
                   {(draft || value || fieldData) && (
                     <div className="redis-value-pane">
                       <div className="redis-editor-actions">
-                        <strong title={fieldData ? keyLabel(fieldData.field) : tx("值")}>
-                          {fieldData ? keyLabel(fieldData.field) : tx("值")}
+                        <strong
+                          title={
+                            fieldData
+                              ? keyLabel(fieldData.field)
+                              : draft?.collection
+                                ? tx("成员")
+                                : tx("值")
+                          }
+                        >
+                          {fieldData
+                            ? keyLabel(fieldData.field)
+                            : draft?.collection
+                              ? draft.collection.kind === "list" &&
+                                draft.collection.index !== undefined
+                                ? `${tx("索引")} ${draft.collection.index}`
+                                : tx("成员")
+                              : tx("值")}
                         </strong>
                         {fieldData && value && (
                           <span>{tx("{count} 字节", { count: value.size })}</span>
@@ -1259,7 +1457,71 @@ export function RedisWorkspace({
                             </button>
                           </>
                         )}
+                        {draft?.collection && (
+                          <button
+                            disabled={busy}
+                            aria-label={tx("关闭成员编辑")}
+                            title={tx("关闭成员编辑")}
+                            onClick={closeField}
+                          >
+                            <ToolbarIcon name="close" />
+                          </button>
+                        )}
                       </div>
+                      {draft?.collection && (
+                        <div className="redis-member-options">
+                          {draft.collection.kind === "zset" && (
+                            <label>
+                              {tx("分数")}
+                              <input
+                                aria-label={tx("分数")}
+                                value={draft.collection.score ?? ""}
+                                disabled={busy || !writable}
+                                onChange={(event) =>
+                                  setDraft((draft) =>
+                                    draft?.collection
+                                      ? {
+                                          ...draft,
+                                          collection: {
+                                            ...draft.collection,
+                                            score: event.target.value,
+                                          },
+                                        }
+                                      : draft,
+                                  )
+                                }
+                              />
+                            </label>
+                          )}
+                          {draft.collection.kind === "list" &&
+                            draft.collection.action !== "update" && (
+                              <label>
+                                {tx("添加位置")}
+                                <select
+                                  aria-label={tx("添加位置")}
+                                  value={draft.collection.position ?? "tail"}
+                                  disabled={busy || !writable}
+                                  onChange={(event) =>
+                                    setDraft((draft) =>
+                                      draft?.collection
+                                        ? {
+                                            ...draft,
+                                            collection: {
+                                              ...draft.collection,
+                                              position: event.target.value as "head" | "tail",
+                                            },
+                                          }
+                                        : draft,
+                                    )
+                                  }
+                                >
+                                  <option value="tail">{tx("列表末尾")}</option>
+                                  <option value="head">{tx("列表开头")}</option>
+                                </select>
+                              </label>
+                            )}
+                        </div>
+                      )}
                       {draft && editorDocument ? (
                         <div className="redis-editor">
                           {editorModule ? (
@@ -1274,7 +1536,7 @@ export function RedisWorkspace({
                                 if (!mutation && !pending) void save();
                               }}
                               close={() => {
-                                if (fieldData) closeField();
+                                if (fieldData || draft.collection) closeField();
                               }}
                             />
                           ) : (
@@ -1445,6 +1707,7 @@ export function RedisWorkspace({
             event.preventDefault();
             if (!action || busy) return;
             if (action === "create" || action === "field") createDraft();
+            else if (action === "member-delete") void deleteMember();
             else if (action === "db") {
               void run(async () => {
                 await request({ op: "select", db: nextDb });
@@ -1495,6 +1758,9 @@ export function RedisWorkspace({
                 >
                   <option value="string">{tx("String")}</option>
                   <option value="hash">{tx("Hash")}</option>
+                  <option value="list">{tx("List")}</option>
+                  <option value="set">{tx("Set")}</option>
+                  <option value="zset">{tx("ZSet")}</option>
                 </select>
               </label>
             </>
@@ -1557,6 +1823,16 @@ export function RedisWorkspace({
           )}
           {action === "delete" && <p>{tx("删除该 Key？此操作无法撤销。")}</p>}
           {action === "hdelete" && <p>{tx("删除该 Hash 字段？此操作无法撤销。")}</p>}
+          {action === "member-delete" && (
+            <>
+              <p className="redis-dialog-target">
+                {memberTarget?.kind === "list"
+                  ? `${tx("索引")} ${memberTarget.index}`
+                  : mutation?.argument}
+              </p>
+              <p>{tx("删除该成员？删除最后一个成员会同时删除 Key。此操作无法撤销。")}</p>
+            </>
+          )}
           {error && (
             <p className="remote-file-error" role="alert">
               {error}
@@ -1573,7 +1849,11 @@ export function RedisWorkspace({
             )}
             <button
               disabled={busy || (action === "db" && nextDb === db)}
-              className={action === "delete" || action === "hdelete" ? "redis-danger" : undefined}
+              className={
+                action === "delete" || action === "hdelete" || action === "member-delete"
+                  ? "redis-danger"
+                  : undefined
+              }
             >
               {action === "create" || action === "field"
                 ? tx("新建")

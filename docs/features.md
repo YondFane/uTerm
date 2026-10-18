@@ -1067,12 +1067,41 @@ Fields to inspect them.
 
 ### Editing and write protection
 
-Enable editing to create String/Hash data, edit a String or individual Hash field, delete a Hash
-field, rename without overwriting another key, delete a key, or set/clear TTL. Saves serialize
-WATCH/read/compare/MULTI/EXEC on the connection, reject stale or missing originals, and preserve the
-current TTL on existing String values.
+Enable editing to create String, Hash, List, Set or ZSet data, edit a String or individual Hash
+field, delete a Hash field, rename without overwriting another key, delete a key, or set/clear TTL.
+Saves serialize WATCH/read/compare/MULTI/EXEC on the connection and reject stale or missing
+originals.
 
-- The server must support KEEPTTL for that save. Save failures retain the draft.
+For List, Set and ZSet, choose **New key**, enter a name and select the type, then choose **Create**
+to open the initial member draft. Enter the value and choose **Save** to create the key. An empty
+value is a valid member; creating an empty collection without a member is unavailable. An existing
+key is never overwritten.
+
+- Use **Add member**, **Edit member** and **Delete member** above or inside the member table. List
+  additions go to the start or end, and edits/deletions target the displayed zero-based index,
+  including when values are duplicated. Set edits replace a member. ZSet edits change the member,
+  its score, or both; scores accept finite, representable decimal numbers and scientific notation.
+  Nonzero inputs that underflow to zero are rejected. Adding or replacing a Set/ZSet member refuses
+  an existing destination member.
+
+- Adding and editing open a draft; only **Save** writes. Score-only changes also count as unsaved.
+  Changing members, paging, closing the editor, switching targets, disconnecting or exiting uses the
+  save/discard/cancel guard. Failed saves retain the value and score. Deleting a member uses one
+  confirmation showing the connection, DB, key and member/index; deleting the last member also
+  deletes the key.
+
+- List index edits compare a complete snapshot, limited to 10,000 members and 1 MB of combined value
+  bytes. Larger lists remain browsable and accept start/end additions. Set edits check the original
+  member; ZSet edits also compare its original score. Existing collection TTLs survive additions,
+  edits and deletion of a member when the key remains.
+
+- Complete UTF-8 members shown in the 64 KB table previews can be edited; binary or truncated
+  previews cannot be edited. Complete binary members can be deleted. Each new member value is
+  limited to 1 MB. Successful writes reread the collection and refresh keys; Set filters and ZSet
+  ordering can place the changed member outside the displayed batch.
+
+- Existing String saves preserve their current TTL and require server support for KEEPTTL. Save
+  failures retain the draft.
 
 - Write timeouts close the connection and report an uncertain result; reread before trying another
   write. No write is replayed automatically.
@@ -1083,6 +1112,33 @@ current TTL on existing String values.
 
 - Cluster/Sentinel discovery, subscriptions, Monitor, scripts, bulk import/export and dedicated
   Stream/module views are unavailable.
+
+#### Redis collection editing checks on Windows
+
+- Four focused backend checks pass, including input/score limits and three checks against disposable
+  loopback Redis 5.0.14 servers. They cover creation, read-only and DB protection, collisions,
+  empty/Unicode members, duplicate list positions, stale snapshots, concurrent edits, TTL
+  preservation, score changes, rejection of underflowing scores without changing the original
+  member, and removal of the last member.
+
+- On Windows, the full frontend suite passes 246 checks with 11 optional/platform checks skipped.
+  All 17 Redis UI/logic checks pass; the two final regressions also pass after the last adjustment,
+  covering guarded previous-page navigation and returning to a valid page after deleting a member.
+  The regular backend suite passes 105 checks with nine optional checks ignored. Locked dependency
+  installation, localization, TypeScript/production build, desktop build, changed-source formatting
+  and documentation checks pass. Repository-wide formatting still reports 180 other files, and the
+  production build retains its existing large-chunk warning.
+
+- An isolated native Tauri/WebView2 app (`sh.uterm.desktop.qa.redismembers`) renders the real
+  workbench and CodeMirror editor with simulated responses. It verifies all five creation options,
+  List/Set/ZSet creation and member operations, list insertion position, score-only drafts, retained
+  conflict drafts and one deletion confirmation. English/dark and Chinese/light inspection covers
+  the wide layout and a 640×420 viewport, including visible Save and save/discard/cancel protection.
+
+- The native UI fixture does not connect to a database; real-service coverage comes from the
+  separate disposable Redis checks. macOS/Linux runtime acceptance and authenticated TLS/SSH service
+  acceptance remain unverified for these member operations. Existing app and database processes were
+  not restarted.
 
 ### Credentials and unsaved changes
 

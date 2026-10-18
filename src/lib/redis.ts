@@ -58,6 +58,25 @@ export interface RedisDocument {
   partial?: boolean;
   unsupported?: boolean;
 }
+export interface RedisCollectionChange {
+  kind: "list" | "set" | "zset";
+  action: "create" | "add" | "update" | "delete";
+  member?: string;
+  value?: string;
+  index?: number;
+  score?: string;
+  expected?: string;
+  position?: "head" | "tail";
+}
+export function redisValidScore(value: string): boolean {
+  const score = Number(value);
+  return (
+    value.length <= 128 &&
+    /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(value) &&
+    Number.isFinite(score) &&
+    (score !== 0 || !/[1-9]/.test(value.split(/[eE]/)[0]))
+  );
+}
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Validates persisted profiles and rejects embedded secrets. 校验持久化配置，并拒绝其中嵌入的凭据。 */
 export function validRedisConfig(value: unknown): value is RedisConfig {
@@ -119,6 +138,9 @@ export function redisError(error: unknown): string {
     REDIS_DB_CHANGED: () => tx("Redis 数据库已切换，请重新读取。"),
     REDIS_KEY_MISSING: () => tx("Redis Key 已不存在。"),
     REDIS_NAME_EXISTS: () => tx("目标 Key 已存在，未覆盖。"),
+    REDIS_MEMBER_EXISTS: () => tx("目标成员已存在，未覆盖。"),
+    REDIS_INVALID_SCORE: () => tx("分数必须是有限且可表示的数值。"),
+    REDIS_LIST_EDIT_LIMIT: () => tx("List 超过 10000 个成员或总值超过 1 MB，只能添加成员和浏览。"),
     REDIS_WRITE_UNCERTAIN: () => tx("写入结果未知。请重新连接并读取确认，不要直接重复提交。"),
     REDIS_SCAN_FAILED: () => tx("Redis 扫描失败，请检查读取权限并重新连接。"),
     REDIS_RECONNECT: () => tx("Redis 连接已中断或请求超时，请重新连接。"),

@@ -65,9 +65,9 @@ async function setup() {
       },
     ],
   });
+  const { RedisWorkspace } = await server.ssrLoadModule("/src/components/RedisWorkspace.tsx");
   const { setUiLanguage } = await server.ssrLoadModule("/src/lib/i18n.ts");
   setUiLanguage("en");
-  const { RedisWorkspace } = await server.ssrLoadModule("/src/components/RedisWorkspace.tsx");
   const { createRoot } = await import("react-dom/client");
   const root = createRoot(document.getElementById("root"));
   return {
@@ -86,7 +86,10 @@ async function setup() {
 }
 function button(text, scope = document) {
   const result = [...scope.querySelectorAll("button")].find((item) => item.textContent === text);
-  assert.ok(result, `Missing button ${text}`);
+  assert.ok(
+    result,
+    `Missing button ${text}; available: ${[...scope.querySelectorAll("button")].map((item) => item.textContent).join(" | ")}`,
+  );
   return result;
 }
 test("Redis workbench starts read-only, retains hidden drafts and prevents conflicting saves or accidental disconnects", async () => {
@@ -667,7 +670,7 @@ test("collection tables use type-specific columns and large and binary values st
         await act(async () => button("Previous page").click());
         assert.equal(calls.at(-1).offset, 0);
       } else if (kind === "set") {
-        assert.equal(document.querySelectorAll("thead th").length, 1);
+        assert.equal(document.querySelectorAll("thead th").length, 2);
         assert.match(document.querySelector("thead").textContent, /Member/);
       } else if (kind === "zset") {
         assert.match(document.querySelector("thead").textContent, /Member.*Score/);
@@ -688,6 +691,259 @@ test("collection tables use type-specific columns and large and binary values st
       }
     }
     assert.ok(calls.every((call) => call.op !== "save"));
+  } finally {
+    await view.cleanup();
+  }
+});
+
+test("new List, Set and ZSet keys keep initial members in guarded drafts until Save", async () => {
+  const view = await setup();
+  const calls = [];
+  const documents = new Map();
+  try {
+    await mountConnected(view, (request) => {
+      calls.push(request);
+      if (request.op === "scan")
+        return {
+          cursor: "0",
+          entries: [...documents].map(([key, value]) => ({
+            key: blob(key),
+            kind: value.kind,
+            ttl: -1,
+          })),
+        };
+      if (request.op === "collection") {
+        const change = request.change;
+        documents.set(Buffer.from(request.key, "base64").toString(), {
+          kind: change.kind,
+          ttl: -1,
+          db: 0,
+          size: 1,
+          version: "list-v1",
+          items: [
+            blob(Buffer.from(change.value, "base64").toString()),
+            ...(change.kind === "zset" ? [blob(change.score)] : []),
+          ],
+          cursor: "0",
+        });
+        return { ok: true };
+      }
+      if (request.op === "read")
+        return documents.get(Buffer.from(request.key, "base64").toString());
+      throw Error(`Unexpected ${request.op}`);
+    });
+    await act(async () => document.querySelector('[aria-label="Allow editing"]').click());
+    for (const kind of ["list", "set", "zset"]) {
+      await act(async () => document.querySelector('[aria-label="New key"]').click());
+      assert.deepEqual(
+        [...document.querySelector('[aria-label="Value type"]').options].map(
+          (option) => option.value,
+        ),
+        ["string", "hash", "list", "set", "zset"],
+      );
+      await inputValue(view, "New key", `new:${kind}`);
+      await act(async () => {
+        const select = document.querySelector('[aria-label="Value type"]');
+        select.value = kind;
+        select.dispatchEvent(new view.dom.window.Event("change", { bubbles: true }));
+      });
+      const before = calls.filter((call) => call.op === "collection").length;
+      await act(async () => button("Create", document.querySelector("dialog[open]")).click());
+      await waitEditor();
+      assert.equal(calls.filter((call) => call.op === "collection").length, before);
+      await act(async () => globalThis.redisEditorProps.change("中文\nvalue"));
+      if (kind === "zset") {
+        for (const score of ["NaN", "1e-999"]) {
+          await inputValue(view, "Score", score);
+          await act(async () => button("Save").click());
+          assert.match(document.querySelector('[role="alert"]').textContent, /finite/);
+          assert.equal(calls.filter((call) => call.op === "collection").length, before);
+        }
+        await inputValue(view, "Score", "-1.25e2");
+      }
+      await act(async () => button("Save").click());
+      const saved = calls.filter((call) => call.op === "collection").at(-1);
+      assert.equal(saved.change.kind, kind);
+      assert.equal(saved.change.action, "create");
+      assert.equal(saved.change.value, blob("中文\nvalue").data);
+      assert.equal(saved.db, 0);
+      if (kind === "zset") assert.equal(saved.change.score, "-1.25e2");
+      assert.equal(document.querySelector(".redis-editor"), null);
+      assert.match(document.querySelector("tbody").textContent, /中文/);
+    }
+    assert.equal(localStorage.length, 0);
+  } finally {
+    await view.cleanup();
+  }
+});
+
+test("collection edits retain failed drafts, guard score changes, reject lost targets and confirm member deletion once", async () => {
+  const view = await setup();
+  const calls = [];
+  const kinds = ["list", "set", "zset"];
+  let conflict = true,
+    removed = false;
+  try {
+    await mountConnected(view, (request) => {
+      calls.push(request);
+      if (request.op === "scan")
+        return {
+          cursor: "0",
+          entries: kinds
+            .filter((kind) => !removed || kind !== "zset")
+            .map((kind) => ({ key: blob(kind), kind, ttl: 60000 })),
+        };
+      if (request.op === "read") {
+        const kind = Buffer.from(request.key, "base64").toString();
+        if (kind === "zset" && removed) throw Error("REDIS_KEY_MISSING");
+        return {
+          kind,
+          ttl: 60000,
+          db: 0,
+          size: 1,
+          version: "list-snapshot",
+          items: [blob("old"), ...(kind === "zset" ? [blob("1.25")] : [])],
+          cursor: "0",
+        };
+      }
+      if (request.op === "collection") {
+        if (conflict) throw Error("REDIS_CONFLICT");
+        if (request.change.action === "delete") removed = true;
+        return { ok: true };
+      }
+      throw Error(`Unexpected ${request.op}`);
+    });
+    await act(async () => document.querySelector('.redis-key[title="list"]').click());
+    assert.equal(button("Edit member").disabled, true);
+    await act(async () => document.querySelector('[aria-label="Allow editing"]').click());
+    for (const kind of kinds) {
+      await act(async () => document.querySelector(`.redis-key[title="${kind}"]`).click());
+      await act(async () => button("Edit member").click());
+      await waitEditor();
+      if (kind === "zset") await inputValue(view, "Score", "2.5");
+      else await act(async () => globalThis.redisEditorProps.change("修改"));
+      assert.equal(button("Save").disabled, false);
+      await act(async () => document.querySelector('[aria-label="Close member editor"]').click());
+      assert.ok(document.querySelector("dialog[open]"));
+      await act(async () => button("Cancel", document.querySelector("dialog[open]")).click());
+      conflict = true;
+      await act(async () => button("Save").click());
+      assert.match(document.querySelector('[role="alert"]').textContent, /changed/);
+      assert.equal(button("Save").disabled, false);
+      if (kind === "zset")
+        assert.equal(document.querySelector('[aria-label="Score"]').value, "2.5");
+      else assert.equal(globalThis.redisEditorProps.document.text, "修改");
+      const change = calls.filter((call) => call.op === "collection").at(-1).change;
+      assert.equal(change.action, "update");
+      assert.equal(
+        change.expected,
+        kind === "list" ? "list-snapshot" : kind === "set" ? "present" : "1.25",
+      );
+      if (kind === "list") assert.equal(change.index, 0);
+      conflict = false;
+      await act(async () => button("Save").click());
+      assert.equal(document.querySelector(".redis-editor"), null);
+    }
+    await act(async () => button("Delete member").click());
+    let dialog = document.querySelector("dialog[open]");
+    assert.match(dialog.textContent, /Redis QA.*127\.0\.0\.1:6379.*Database DB 0.*zset.*old/s);
+    const before = calls.filter((call) => call.op === "collection").length;
+    await act(async () => button("Cancel", dialog).click());
+    assert.equal(calls.filter((call) => call.op === "collection").length, before);
+    await act(async () => button("Delete member").click());
+    dialog = document.querySelector("dialog[open]");
+    await act(async () => button("Confirm", dialog).click());
+    assert.equal(document.querySelector("dialog[open]"), null);
+    assert.equal(document.querySelector('.redis-key[title="zset"]'), null);
+    assert.equal(document.activeElement, document.getElementById(`redis-pattern-${config.id}`));
+    assert.equal(calls.filter((call) => call.op === "collection").length, before + 1);
+  } finally {
+    await view.cleanup();
+  }
+});
+
+test("member additions select list position, page transitions guard drafts and binary or truncated previews cannot be edited", async () => {
+  const view = await setup();
+  const calls = [];
+  let listSize = 401;
+  try {
+    await mountConnected(view, (request) => {
+      calls.push(request);
+      if (request.op === "scan")
+        return {
+          cursor: "0",
+          entries: ["list", "large", "set"].map((kind) => ({
+            key: blob(kind),
+            kind: kind === "large" ? "list" : kind,
+            ttl: -1,
+          })),
+        };
+      if (request.op === "collection") {
+        if (request.change.action === "delete") listSize = 200;
+        return { ok: true };
+      }
+      if (request.op === "read") {
+        const key = Buffer.from(request.key, "base64").toString();
+        return key === "set"
+          ? {
+              kind: "set",
+              ttl: -1,
+              db: 0,
+              size: 2,
+              cursor: "0",
+              items: [
+                { data: "AP8=", text: null, size: 2, truncated: false },
+                { ...blob("prefix"), truncated: true },
+              ],
+            }
+          : {
+              kind: "list",
+              ttl: -1,
+              db: 0,
+              size: listSize,
+              version: key === "large" ? null : "snapshot",
+              items: [blob("row")],
+            };
+      }
+    });
+    await act(async () => document.querySelector('[aria-label="Allow editing"]').click());
+    await act(async () => document.querySelector('.redis-key[title="list"]').click());
+    await act(async () => button("Next page").click());
+    await act(async () => button("Edit member").click());
+    await waitEditor();
+    await act(async () => globalThis.redisEditorProps.change("draft"));
+    await act(async () => button("Previous page").click());
+    assert.ok(document.querySelector("dialog[open]"));
+    await act(async () =>
+      button("Save and continue", document.querySelector("dialog[open]")).click(),
+    );
+    const update = calls.find((call) => call.op === "collection");
+    assert.equal(update.change.index, 200);
+    assert.equal(update.change.expected, "snapshot");
+    assert.equal(calls.filter((call) => call.op === "read").at(-1).offset, 0);
+    await act(async () => button("Add member").click());
+    await act(async () => {
+      const select = document.querySelector('[aria-label="Insert at"]');
+      select.value = "head";
+      select.dispatchEvent(new view.dom.window.Event("change", { bubbles: true }));
+    });
+    await act(async () => button("Save").click());
+    assert.equal(calls.filter((call) => call.op === "collection").at(-1).change.position, "head");
+    assert.equal(calls.filter((call) => call.op === "collection").at(-1).change.value, "");
+    await act(async () => button("Next page").click());
+    await act(async () => button("Delete member").click());
+    await act(async () => button("Confirm", document.querySelector("dialog[open]")).click());
+    assert.equal(calls.filter((call) => call.op === "read").at(-1).offset, 0);
+    await act(async () => document.querySelector('.redis-key[title="large"]').click());
+    assert.equal(button("Edit member").disabled, true);
+    assert.equal(button("Delete member").disabled, true);
+    assert.equal(button("Add member").disabled, false);
+    await act(async () => document.querySelector('.redis-key[title="set"]').click());
+    const rows = document.querySelectorAll("tbody tr");
+    assert.equal(button("Edit member", rows[0]).disabled, true);
+    assert.equal(button("Delete member", rows[0]).disabled, false);
+    assert.equal(button("Edit member", rows[1]).disabled, true);
+    assert.equal(button("Delete member", rows[1]).disabled, true);
   } finally {
     await view.cleanup();
   }
