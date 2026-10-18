@@ -4136,6 +4136,28 @@ textarea:focus-visible {
   text-align: left;
   overflow-wrap: anywhere;
 }
+.redis-members .redis-member-actions {
+  width: 150px;
+}
+.redis-member-actions button {
+  margin: 0 4px 4px 0;
+}
+.redis-member-options {
+  padding: 6px 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.redis-member-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.redis-member-options input {
+  min-width: 0;
+  width: 150px;
+}
 .redis-empty {
   padding: 20px;
   line-height: 1.7;

@@ -1,6 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validRedisConfig, redisArguments, redisEncode, redisDisplay } from "../src/lib/redis.ts";
+import {
+  validRedisConfig,
+  redisArguments,
+  redisEncode,
+  redisDisplay,
+  redisValidScore,
+} from "../src/lib/redis.ts";
 import {
   emptyWorkspace,
   readWorkspace,
@@ -20,6 +26,25 @@ const config = () => ({
   server_name: "",
   ssh_host: "",
   credential_id: null,
+});
+test("ZSet scores accept finite decimal values without converting the submitted text", () => {
+  for (const value of ["0", "-0", "0e-999", "+.5", "1.25", "1e-20", "-1.2345678901234567e100"])
+    assert.equal(redisValidScore(value), true, value);
+  for (const value of [
+    "",
+    " ",
+    " 1",
+    "1 ",
+    "0x12",
+    "NaN",
+    "inf",
+    "-Infinity",
+    "1e999",
+    "1e-999",
+    "-1e-999",
+    "1,2",
+  ])
+    assert.equal(redisValidScore(value), false, value);
 });
 test("binary hex previews decode only the displayed prefix", () => {
   const original = globalThis.atob;
