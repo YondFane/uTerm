@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { createServer } from "vite";
 import React, { act } from "react";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
+import { emit } from "@tauri-apps/api/event";
 
 test("real settings tabs, commands and panels render in both languages without untranslated UI", async (context) => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
@@ -116,68 +117,71 @@ test("real settings tabs, commands and panels render in both languages without u
   let copiedFiles;
   let copyFail = false;
   const usageReads = [];
-  mockIPC((cmd, args) => {
-    calls.push(cmd);
-    if (cmd === "agent_hooks") {
-      hookCalls.push(args);
-      return args.enabled
-        ? "Hooks 已安装。新会话生效；原配置已备份。"
-        : "Hooks 已移除。新会话生效；原配置已备份。";
-    }
-    if (cmd === "open_external") {
-      openedUrls.push(args.url);
-      return null;
-    }
-    if (cmd === "file_copy") {
-      copiedFiles = args;
-      if (copyFail) throw new Error("无法粘贴：同名文件或目录已存在。");
-      return null;
-    }
-    if (cmd === "files_list")
-      return {
-        entries: args.path
-          ? []
-          : [
-              { path: "file.txt", name: "file.txt", directory: false, symlink: false },
-              { path: "folder", name: "folder", directory: true, symlink: false },
-            ],
-        partial: false,
-        skipped: 0,
-      };
-    if (cmd === "install_agent") {
-      installedAgent = args.agent;
-      if (installFail) throw new Error("未找到 npm，请先安装 Node.js，再重启 uTerm 后重试。");
-      return true;
-    }
-    if (cmd === "agent_usage") {
-      usageReads.push(args.agent);
-      return {
-        input: args.agent === "codex" ? 222 : 111,
-        output: 20,
-        cache_read: 30,
-        cache_write: 40,
-        records: 1,
-        partial: args.agent === "codex",
-        notice: null,
-        windows: [{ label: "主要额度", percent: 25 }],
-      };
-    }
-    if (cmd === "autostart_configure") {
-      if (autostartFail) throw new Error("Access denied");
-      if (typeof args.enabled === "boolean") autostart = args.enabled;
-      return autostart;
-    }
-    if (cmd === "control_status")
-      return { enabled: true, port: 1234, directory: "C:/fixture", endpoint: "loopback" };
-    if (cmd === "directory_tools" || cmd === "github_repositories") return [];
-    if (cmd === "git_snapshot") return { changes: [], branches: [], branch: "release" };
-    if (cmd === "list_files" || cmd === "file_list")
-      return { entries: [], partial: false, skipped: 0 };
-    if (cmd === "search_files" || cmd === "file_search")
-      return { matches: [], partial: false, skipped: 0 };
-    if (cmd === "window_appearance") return null;
-    throw new Error(`Unexpected test command: ${cmd}`);
-  });
+  mockIPC(
+    (cmd, args) => {
+      calls.push(cmd);
+      if (cmd === "agent_hooks") {
+        hookCalls.push(args);
+        return args.enabled
+          ? "Hooks 已安装。新会话生效；原配置已备份。"
+          : "Hooks 已移除。新会话生效；原配置已备份。";
+      }
+      if (cmd === "open_external") {
+        openedUrls.push(args.url);
+        return null;
+      }
+      if (cmd === "file_copy") {
+        copiedFiles = args;
+        if (copyFail) throw new Error("无法粘贴：同名文件或目录已存在。");
+        return null;
+      }
+      if (cmd === "files_list")
+        return {
+          entries: args.path
+            ? []
+            : [
+                { path: "file.txt", name: "file.txt", directory: false, symlink: false },
+                { path: "folder", name: "folder", directory: true, symlink: false },
+              ],
+          partial: false,
+          skipped: 0,
+        };
+      if (cmd === "install_agent") {
+        installedAgent = args.agent;
+        if (installFail) throw new Error("未找到 npm，请先安装 Node.js，再重启 uTerm 后重试。");
+        return true;
+      }
+      if (cmd === "agent_usage") {
+        usageReads.push(args.agent);
+        return {
+          input: args.agent === "codex" ? 222 : 111,
+          output: 20,
+          cache_read: 30,
+          cache_write: 40,
+          records: 1,
+          partial: args.agent === "codex",
+          notice: null,
+          windows: [{ label: "主要额度", percent: 25 }],
+        };
+      }
+      if (cmd === "autostart_configure") {
+        if (autostartFail) throw new Error("Access denied");
+        if (typeof args.enabled === "boolean") autostart = args.enabled;
+        return autostart;
+      }
+      if (cmd === "control_status")
+        return { enabled: true, port: 1234, directory: "C:/fixture", endpoint: "loopback" };
+      if (cmd === "directory_tools" || cmd === "github_repositories") return [];
+      if (cmd === "git_snapshot") return { changes: [], branches: [], branch: "release" };
+      if (cmd === "list_files" || cmd === "file_list")
+        return { entries: [], partial: false, skipped: 0 };
+      if (cmd === "search_files" || cmd === "file_search")
+        return { matches: [], partial: false, skipped: 0 };
+      if (cmd === "window_appearance") return null;
+      throw new Error(`Unexpected test command: ${cmd}`);
+    },
+    { shouldMockEvents: true },
+  );
   let root;
   const host = document.getElementById("root");
   async function mount(component, language) {
@@ -676,9 +680,15 @@ test("real settings tabs, commands and panels render in both languages without u
       assert.equal(startupSwitch.checked, true);
       assert.match(host.textContent, /Unable to configure launch at login:.*Access denied/);
       autostartFail = false;
+      await act(async () => emit("autostart-changed", true));
+      assert.doesNotMatch(host.textContent, /Access denied/);
       await act(async () => startupSwitch.click());
       assert.equal(startupSwitch.checked, false);
       assert.equal(autostart, false);
+      await act(async () => emit("autostart-changed", true));
+      assert.equal(startupSwitch.checked, true);
+      await act(async () => emit("autostart-changed", false));
+      assert.equal(startupSwitch.checked, false);
       const originalDialog = host.querySelector("dialog");
       const select = host.querySelector("select");
       await act(async () => {

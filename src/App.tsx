@@ -48,11 +48,10 @@ import { quotaAgent, remainingUsage, scheduleUsageRefresh, type UsageWindow } fr
 import {
   availableAgents,
   binding,
-  chord,
-  commands,
   sessionLink,
   sessionFromLink,
   shortcutLabel,
+  shortcutCommand,
 } from "./lib/settings";
 import type { CommandId } from "./lib/settings";
 import { isDirty } from "./lib/file-document";
@@ -118,7 +117,7 @@ import { sidebarLayout, sidebarRailWidth } from "./lib/sidebar-layout";
 export function App() {
   useUiLanguage();
 
-  const { settings, save: saveSettings } = useSettings();
+  const { settings, save: saveSettings, resizeFont } = useSettings();
   const inspectorOnLeft = settings.inspectorPosition === "left";
   const navigationSidebar = settings.sidebarStyle === "navigation";
   const t = (key: string) => translate(activeLanguage(settings.language), key);
@@ -423,6 +422,44 @@ export function App() {
   const [detectedAgents, setDetectedAgents] = useState<Record<string, string>>({});
   const agentStateValues = useRef<Record<string, string>>({});
   const pendingAgentNotifications = useRef(new Map<string, symbol>());
+  const seenAgentEvents = useRef(new Map<string, Set<string>>());
+  const lastAgentEvent = useRef(new Map<string, string>());
+
+  function notifyAgentActivity(id: string, body: string) {
+    const current = currentWorkspace.current;
+    if (
+      !runtime ||
+      runtime.debug ||
+      localStorage.getItem(notificationKey) !== "true" ||
+      !current ||
+      (document.hasFocus() && current.selectedSession === id)
+    )
+      return;
+    const request = Symbol();
+    pendingAgentNotifications.current.set(id, request);
+    void invoke<boolean | null>("plugin:notification|is_permission_granted")
+      .then(async (granted) => {
+        const current = currentWorkspace.current;
+        if (
+          !granted ||
+          pendingAgentNotifications.current.get(id) !== request ||
+          localStorage.getItem(notificationKey) !== "true" ||
+          !current ||
+          (document.hasFocus() && current.selectedSession === id)
+        )
+          return;
+        const session = sessionEntries(current).find((entry) => entry.session.id === id)?.session;
+        if (!session) return;
+        await invoke("plugin:notification|notify", { options: { title: session.name, body } });
+      })
+      .catch((reason) => {
+        if (pendingAgentNotifications.current.get(id) === request) setError(String(reason));
+      })
+      .finally(() => {
+        if (pendingAgentNotifications.current.get(id) === request)
+          pendingAgentNotifications.current.delete(id);
+      });
+  }
   useEffect(() => {
     const pending = pendingAgentNotifications.current;
     return () => pending.clear();
@@ -611,10 +648,16 @@ export function App() {
       next.delete(id);
       return next;
     });
-    if (agentStateValues.current[id] !== "done") return;
-    void invoke("control_session", { id, action: "acknowledge" })
+    const acknowledged = agentStateValues.current[id];
+    if (acknowledged !== "done" && acknowledged !== "notice") return;
+    const activityEvent = lastAgentEvent.current.get(id);
+    void invoke("control_session", { id, action: "acknowledge", activityEvent })
       .then(() => {
-        if (agentStateValues.current[id] !== "done") return;
+        if (
+          agentStateValues.current[id] !== acknowledged ||
+          lastAgentEvent.current.get(id) !== activityEvent
+        )
+          return;
         agentStateValues.current = { ...agentStateValues.current, [id]: "idle" };
         setAgentStates(agentStateValues.current);
       })
@@ -1291,8 +1334,17 @@ export function App() {
   useEffect(() => {
     setZoomedGroup(null);
   }, [workspace?.selectedProject, workspace?.selectedWorkspace, activeGroupId]);
+  function contentFontKey(): "fontSize" | "fileFontSize" | "gitDiffFontSize" | null {
+    if (gitOpen && gitExpanded && gitDiffActive) return "gitDiffFontSize";
+    if (editor.document)
+      return editor.document.kind === "text" && !document.querySelector(".html-preview")
+        ? "fileFontSize"
+        : null;
+    return workspace?.selectedSession && !activeRedis && !activeDatabase ? "fontSize" : null;
+  }
   function commandAvailable(id: CommandId): boolean {
     if (!runtime || !workspace || editor.transitioning || editor.pending) return false;
+    if (id === "fontDecrease" || id === "fontIncrease") return contentFontKey() !== null;
     if (
       (activeRedis || activeDatabase) &&
       !["palette", "project", "terminal", "close", "toggleSidebar"].includes(id)
@@ -1334,7 +1386,16 @@ export function App() {
       return;
     }
     if (activeRedis && id === "terminal") setSelectedRedisId(null);
-    if (id === "palette") setPaletteOpen(true);
+    if (id === "fontDecrease" || id === "fontIncrease") {
+      const key = contentFontKey();
+      if (key) {
+        try {
+          resizeFont(key, id === "fontIncrease" ? 1 : -1, runtime?.platform === "macos");
+        } catch (reason) {
+          setError(tx("无法保存字号：{p0}", { p0: String(reason) }));
+        }
+      }
+    } else if (id === "palette") setPaletteOpen(true);
     else if (id === "toggleSidebar") setSidebarVisible((value) => !value);
     else if (id === "toggleInspector") toggleInspector();
     else if (id === "swapPanes") swapPanes();
@@ -1423,15 +1484,14 @@ export function App() {
         !runtime
       )
         return;
-      const key = chord(event, runtime.platform === "macos");
-      if (!key) return;
-      const command = commands.find(
-        ([id]) => binding(settings, id, runtime.platform === "macos") === key,
-      );
-      if (command && commandAvailable(command[0])) {
+      const command = shortcutCommand(settings, event, runtime.platform === "macos");
+      const contextMenu = document.querySelector(".context-menu");
+      if (contextMenu && (command !== "toggleSidebar" || !contextMenu.matches(".sidebar-popover")))
+        return;
+      if (command && commandAvailable(command)) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        runCommand(command[0]);
+        runCommand(command);
       }
     };
     window.addEventListener("keydown", shortcut, true);
@@ -2833,7 +2893,7 @@ export function App() {
                 focusRequest={focusRequest}
                 closeRequest={closeRequest}
                 update={update}
-                onAgentState={(id, state, initial) => {
+                onAgentState={(id, state, initial, eventDriven) => {
                   if (agentStateValues.current[id] === state) return;
                   pendingAgentNotifications.current.delete(id);
                   agentStateValues.current = { ...agentStateValues.current, [id]: state };
@@ -2849,51 +2909,60 @@ export function App() {
                       return next;
                     });
                   }
-                  if (state === "done" && selectedSession === id) acknowledgeCompletedSession(id);
+                  if (
+                    ["done", "notice"].includes(state) &&
+                    selectedSession === id &&
+                    (!eventDriven || initial)
+                  )
+                    acknowledgeCompletedSession(id);
                   if (
                     !initial &&
+                    !eventDriven &&
                     !runtime.debug &&
                     ["waiting", "done"].includes(state) &&
                     localStorage.getItem(notificationKey) === "true" &&
                     (!document.hasFocus() || selectedSession !== id)
                   ) {
-                    const request = Symbol();
-                    pendingAgentNotifications.current.set(id, request);
-                    void invoke<boolean | null>("plugin:notification|is_permission_granted")
-                      .then(async (granted) => {
-                        const current = currentWorkspace.current;
-                        // Permission checks can finish after the session or notification preference changes.
-                        // 权限检查可能在会话或通知偏好改变后才完成。
-                        if (
-                          !granted ||
-                          pendingAgentNotifications.current.get(id) !== request ||
-                          localStorage.getItem(notificationKey) !== "true" ||
-                          !current ||
-                          (document.hasFocus() && current.selectedSession === id)
-                        )
-                          return;
-                        const session = sessionEntries(current).find(
-                          (entry) => entry.session.id === id,
-                        )?.session;
-                        if (!session) return;
-                        await invoke("plugin:notification|notify", {
-                          options: {
-                            title: session.name,
-                            body: state === "waiting" ? tx("需要你处理") : tx("任务已完成"),
-                          },
-                        });
-                      })
-                      .catch((reason) => {
-                        if (pendingAgentNotifications.current.get(id) === request)
-                          setError(String(reason));
-                      })
-                      .finally(() => {
-                        if (pendingAgentNotifications.current.get(id) === request)
-                          pendingAgentNotifications.current.delete(id);
-                      });
+                    notifyAgentActivity(
+                      id,
+                      state === "waiting" ? tx("需要你处理") : tx("任务已完成"),
+                    );
                   }
                 }}
+                onAgentEvent={(id, event) => {
+                  const seen = seenAgentEvents.current.get(id) ?? new Set<string>();
+                  if (seen.has(event.id)) return;
+                  seen.add(event.id);
+                  if (seen.size > 128) seen.delete(seen.values().next().value!);
+                  seenAgentEvents.current.set(id, seen);
+                  lastAgentEvent.current.set(id, event.id);
+                  pendingAgentNotifications.current.delete(id);
+                  if (event.kind !== agentStateValues.current[id]) return;
+                  if (event.kind === "done" && currentWorkspace.current?.selectedSession !== id)
+                    setUnreadCompletedSessions((previous) => new Set(previous).add(id));
+                  if (["idle", "working"].includes(event.kind)) return;
+                  if (
+                    ["done", "notice"].includes(event.kind) &&
+                    currentWorkspace.current?.selectedSession === id
+                  )
+                    acknowledgeCompletedSession(id);
+                  const body =
+                    event.kind === "notice"
+                      ? tx("会话有新提醒")
+                      : event.kind === "waiting"
+                        ? tx("需要你处理")
+                        : event.kind === "error"
+                          ? event.source === "process"
+                            ? tx("会话异常退出")
+                            : tx("任务执行失败")
+                          : event.source === "process"
+                            ? tx("会话已结束")
+                            : tx("任务已完成");
+                  notifyAgentActivity(id, body);
+                }}
                 onClosed={(id) => {
+                  seenAgentEvents.current.delete(id);
+                  lastAgentEvent.current.delete(id);
                   pendingAgentNotifications.current.delete(id);
                   delete agentStateValues.current[id];
                   setAgentStates({ ...agentStateValues.current });

@@ -148,6 +148,8 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     "自动检查并安装更新。": "Automatically check for and install updates.",
     应用语言: "App language",
     开机自启动: "Launch at login",
+    开启自启动: "Launch at login",
+    无法设置自启动: "Unable to configure launch at login",
     重试: "Retry",
     休息提醒: "Break reminder",
     "提醒间隔（分钟）": "Reminder interval (minutes)",

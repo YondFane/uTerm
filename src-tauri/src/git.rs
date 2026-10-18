@@ -313,6 +313,7 @@ pub struct Commit {
     id: String,
     parents: Vec<String>,
     subject: String,
+    message: String,
     author: String,
     timestamp: String,
 }
@@ -864,40 +865,47 @@ pub async fn git_diff(
 }
 #[tauri::command]
 pub async fn git_history(directory: String, skip: u32) -> Result<Vec<Commit>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        if skip > 100_000 {
-            return Err("请在终端中查看更早的提交。".into());
-        }
-        if run(&directory, &["rev-parse", "--verify", "HEAD"]).is_err() {
-            snapshot(&directory)?;
-            return Ok(vec![]);
-        }
-        let output = run(
-            &directory,
-            &[
-                "log",
-                "-100",
-                &format!("--skip={skip}"),
-                "--topo-order",
-                "--format=%H%x00%s%x00%an%x00%aI%x00%P%x00",
-            ],
-        )?;
-        let raw = String::from_utf8_lossy(&output);
-        let fields: Vec<_> = raw.split('\0').collect();
-        Ok(fields
-            .chunks(5)
-            .filter(|parts| parts.len() == 5)
-            .map(|parts| Commit {
-                id: parts[0].trim().into(),
-                subject: parts[1].into(),
-                author: parts[2].into(),
-                timestamp: parts[3].into(),
-                parents: parts[4].split_whitespace().map(String::from).collect(),
-            })
-            .collect())
-    })
-    .await
-    .map_err(|error| error.to_string())?
+    tauri::async_runtime::spawn_blocking(move || history(&directory, skip))
+        .await
+        .map_err(|error| error.to_string())?
+}
+fn history(directory: &str, skip: u32) -> Result<Vec<Commit>, String> {
+    if skip > 100_000 {
+        return Err("请在终端中查看更早的提交。".into());
+    }
+    if run(&directory, &["rev-parse", "--verify", "HEAD"]).is_err() {
+        snapshot(&directory)?;
+        return Ok(vec![]);
+    }
+    let output = run(
+        &directory,
+        &[
+            "log",
+            "-100",
+            &format!("--skip={skip}"),
+            "--topo-order",
+            "--no-show-signature",
+            "--no-notes",
+            "--format=%H%x00%s%x00%an%x00%aI%x00%P%x00%B%x00",
+        ],
+    )?;
+    if output.len() > LIMIT {
+        return Err("提交信息过大，请在终端中查看 git log。".into());
+    }
+    let raw = String::from_utf8_lossy(&output);
+    let fields: Vec<_> = raw.split('\0').collect();
+    Ok(fields
+        .chunks(6)
+        .filter(|parts| parts.len() == 6)
+        .map(|parts| Commit {
+            id: parts[0].trim().into(),
+            subject: parts[1].into(),
+            message: parts[5].trim_end_matches('\n').into(),
+            author: parts[2].into(),
+            timestamp: parts[3].into(),
+            parents: parts[4].split_whitespace().map(String::from).collect(),
+        })
+        .collect())
 }
 #[tauri::command]
 pub async fn git_files(
@@ -956,6 +964,72 @@ pub async fn git_files(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn history_retains_multiline_messages_metadata_and_page_offsets() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let parent = revision(directory, "HEAD").unwrap();
+        let message = "feat: show commit details\n\nShow full messages and changed files.\n显示完整提交信息和变动文件。\n\n- Preserve paragraphs, <tags> and \u{1f} separators.";
+        std::fs::write(temp.path().join("file.txt"), "changed\n").unwrap();
+        run(
+            directory,
+            &[
+                "-c",
+                "user.name=Test Author",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "--no-gpg-sign",
+                "--cleanup=verbatim",
+                "-am",
+                message,
+            ],
+        )
+        .unwrap();
+        let id = revision(directory, "HEAD").unwrap();
+        let commits = history(directory, 0).unwrap();
+        assert_eq!(commits.len(), 2);
+        assert_eq!(commits[0].id, id);
+        assert_eq!(commits[0].subject, "feat: show commit details");
+        assert_eq!(commits[0].message, message);
+        assert_eq!(commits[0].author, "Test Author");
+        assert!(!commits[0].timestamp.is_empty());
+        assert_eq!(commits[0].parents, vec![parent.clone()]);
+        assert!(commits[1].parents.is_empty());
+        assert_eq!(commits[1].message, "fixture");
+        let older = history(directory, 1).unwrap();
+        assert_eq!(older.len(), 1);
+        assert_eq!(older[0].id, parent);
+        assert!(history(directory, 2).unwrap().is_empty());
+    }
+
+    #[test]
+    fn history_reports_oversized_messages_instead_of_partial_records() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let path = temp.path().join(".git/large-message.txt");
+        std::fs::write(&path, "x".repeat(LIMIT + 1)).unwrap();
+        run(
+            directory,
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "--no-gpg-sign",
+                "--allow-empty",
+                "-F",
+                path.to_str().unwrap(),
+            ],
+        )
+        .unwrap();
+        assert_eq!(
+            history(directory, 0).err().unwrap(),
+            "提交信息过大，请在终端中查看 git log。"
+        );
+    }
+
     fn branch_fixture() -> tempfile::TempDir {
         let temp = tempfile::tempdir().unwrap();
         let directory = temp.path().to_str().unwrap();

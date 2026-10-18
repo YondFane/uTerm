@@ -302,6 +302,8 @@ pub async fn start_session(
             if let Err(error) = result {
                 if !link.stopped.load(Ordering::Acquire) {
                     let frame = Frame {
+                        agent_events: None,
+                        agent_activity_error: None,
                         agent_state: None,
                         foreground_agent: None,
                         sequence: 0,
@@ -334,6 +336,8 @@ fn encode_frame(frame: &Frame) -> Vec<u8> {
     // 跨 WebView 边界时避免将终端字节转换为 JSON 数字数组。
     let metadata = serde_json::json!({
         "agent_state": frame.agent_state,
+        "agent_events": frame.agent_events,
+        "agent_activity_error": frame.agent_activity_error,
         "foreground_agent": frame.foreground_agent,
         "sequence": frame.sequence,
         "reset": frame.reset,
@@ -492,6 +496,7 @@ pub async fn control_session(
     id: String,
     action: String,
     text: Option<String>,
+    activity_event: Option<String>,
 ) -> Result<(), String> {
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -518,6 +523,11 @@ pub async fn control_session(
             "close" => Operation::Close {
                 id,
                 generation: link.generation.clone(),
+            },
+            "acknowledge" if activity_event.is_some() => Operation::AcknowledgeAgentEvent {
+                id,
+                generation: link.generation.clone(),
+                event: activity_event.unwrap(),
             },
             "acknowledge" => Operation::Report {
                 id,
@@ -615,6 +625,8 @@ mod update_tests {
     #[test]
     fn binary_frame_preserves_metadata_and_raw_output() {
         let frame = Frame {
+            agent_events: None,
+            agent_activity_error: None,
             agent_state: Some("idle".into()),
             foreground_agent: None,
             sequence: 42,

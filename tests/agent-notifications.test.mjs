@@ -232,6 +232,45 @@ test("Agent reports update indicators, unread completion and guarded native noti
     await report("background", "waiting");
     await report("background", "done");
     assert.equal(notices.length, 4, "Development builds do not send task notifications");
+    await act(async () => root.unmount());
+    debug = false;
+    await mount();
+    const activity = (id, kind, source = "events") => ({ id, sequence: 10, kind, source });
+    const emit = (event) =>
+      act(async () => globalThis.agentNotificationProps.onAgentEvent("background", event));
+    await act(async () =>
+      globalThis.agentNotificationProps.onAgentState("background", "done", false, true),
+    );
+    assert.equal(notices.length, 4, "Event-capable hosts do not also notify for state changes");
+    await emit(activity("turn-a", "done"));
+    await emit(activity("turn-a", "done"));
+    assert.equal(notices.length, 5, "Replayed event IDs are ignored");
+    await emit(activity("turn-b", "done"));
+    assert.equal(
+      notices.length,
+      6,
+      "Consecutive completions each notify without an intermediate working state",
+    );
+    await act(async () =>
+      globalThis.agentNotificationProps.onAgentState("background", "notice", false, true),
+    );
+    await emit(activity("bell", "notice", "terminal"));
+    assert.equal(notices.at(-1).body, "Session has a new notification");
+    assert.equal(indicator("background").title, "Session has a new notification");
+    assert.ok(!row("background").classList.contains("completion-unread"));
+    await act(async () =>
+      globalThis.agentNotificationProps.onAgentState("background", "error", false, true),
+    );
+    await emit(activity("failed-turn", "error"));
+    assert.equal(notices.at(-1).body, "Task failed");
+    const latestCount = notices.length;
+    await emit(activity("older-completion", "done"));
+    assert.equal(
+      notices.length,
+      latestCount,
+      "A completion preceding a newer failure does not notify or highlight",
+    );
+    assert.ok(!row("background").classList.contains("completion-unread"));
   } finally {
     if (root) await act(async () => root.unmount());
     clearMocks();

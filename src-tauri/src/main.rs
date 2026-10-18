@@ -23,21 +23,14 @@ mod updates;
 
 #[tauri::command]
 async fn autostart_configure(app: tauri::AppHandle, enabled: Option<bool>) -> Result<bool, String> {
-    use tauri_plugin_autostart::ManagerExt;
-    tauri::async_runtime::spawn_blocking(move || {
-        let manager = app.autolaunch();
-        if let Some(enabled) = enabled {
-            if enabled {
-                manager.enable()
-            } else {
-                manager.disable()
-            }
-            .map_err(|error| error.to_string())?;
-        }
-        manager.is_enabled().map_err(|error| error.to_string())
-    })
+    taskbar::configure_autostart(
+        app,
+        enabled.map_or(
+            taskbar::AutostartRequest::Read,
+            taskbar::AutostartRequest::Set,
+        ),
+    )
     .await
-    .map_err(|error| error.to_string())?
 }
 
 pub(crate) fn show_main_window(app: &tauri::AppHandle) -> Result<(), String> {

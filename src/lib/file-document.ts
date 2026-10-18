@@ -1,4 +1,9 @@
-import { displayDirectory, fileTarget, isRemoteDirectory } from "./file-target.ts";
+import {
+  displayDirectory,
+  displayLocalPath,
+  fileTarget,
+  isRemoteDirectory,
+} from "./file-target.ts";
 import { tx } from "./i18n.ts";
 export interface FileData {
   kind: "text" | "image" | "pdf";
@@ -19,10 +24,7 @@ export interface OpenFile extends FileData {
 }
 export function clipboardPath(path: string): string {
   if (isRemoteDirectory(path)) return displayDirectory(path);
-  const windows = path.replace(/\//g, "\\");
-  if (/^\\\\\?\\[a-z]:\\/i.test(windows)) return windows.slice(4);
-  if (/^\\\\\?\\UNC\\/i.test(windows)) return `\\\\${windows.slice(8)}`;
-  return /^[a-z]:[\\/]|^\\\\/i.test(path) ? windows : path;
+  return displayLocalPath(path);
 }
 export function fileBytes(document: Pick<FileData, "text" | "bom">): string {
   return `${document.bom ? "\ufeff" : ""}${document.text}`;

@@ -2,13 +2,16 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use tauri::image::Image;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager};
+use tauri_plugin_autostart::ManagerExt;
+use tauri_plugin_dialog::DialogExt;
 
 const TRAY_ID: &str = "uterm-tasks";
 const OPEN_ID: &str = "taskbar-open";
 const QUIT_ID: &str = "taskbar-quit";
+const AUTOSTART_ID: &str = "taskbar-autostart";
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -17,6 +20,7 @@ enum TaskState {
     Waiting,
     Done,
     Error,
+    Notice,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
@@ -34,9 +38,12 @@ struct Labels {
     open: String,
     empty: String,
     quit: String,
+    autostart: String,
+    autostart_error: String,
     idle: String,
     working: String,
     needs_you: String,
+    notice: String,
     done: String,
     exited: String,
 }
@@ -65,6 +72,20 @@ pub struct Snapshot {
 pub struct Taskbar {
     snapshot: Mutex<Option<Snapshot>>,
     sessions: Mutex<HashMap<String, String>>,
+    autostart: Mutex<Autostart>,
+    autostart_operation: Mutex<()>,
+}
+
+#[derive(Default)]
+struct Autostart {
+    item: Option<CheckMenuItem<tauri::Wry>>,
+    enabled: bool,
+}
+
+pub enum AutostartRequest {
+    Read,
+    Set(bool),
+    Toggle,
 }
 
 fn default_snapshot() -> Snapshot {
@@ -74,11 +95,14 @@ fn default_snapshot() -> Snapshot {
             open: "打开 uTerm".into(),
             empty: "全部处理完毕".into(),
             quit: "退出 uTerm".into(),
+            autostart: "开启自启动".into(),
+            autostart_error: "无法设置自启动".into(),
             idle: "空闲".into(),
             working: "工作中".into(),
             needs_you: "需要你".into(),
+            notice: "会话有新提醒".into(),
             done: "已完成".into(),
-            exited: "已退出".into(),
+            exited: "任务执行失败".into(),
         },
         groups: vec![],
     }
@@ -89,10 +113,12 @@ fn aggregate(groups: &[Group]) -> AggregateStatus {
         .iter()
         .flat_map(|group| group.tasks.iter().map(|task| task.state))
         .collect::<Vec<_>>();
-    if states
-        .iter()
-        .any(|state| matches!(state, TaskState::Waiting | TaskState::Error))
-    {
+    if states.iter().any(|state| {
+        matches!(
+            state,
+            TaskState::Waiting | TaskState::Error | TaskState::Notice
+        )
+    }) {
         AggregateStatus::Attention
     } else if states.contains(&TaskState::Done) {
         AggregateStatus::Done
@@ -114,9 +140,12 @@ fn validate(snapshot: &Snapshot) -> Result<(), String> {
             &snapshot.labels.open,
             &snapshot.labels.empty,
             &snapshot.labels.quit,
+            &snapshot.labels.autostart,
+            &snapshot.labels.autostart_error,
             &snapshot.labels.idle,
             &snapshot.labels.working,
             &snapshot.labels.needs_you,
+            &snapshot.labels.notice,
             &snapshot.labels.done,
             &snapshot.labels.exited,
         ]
@@ -165,6 +194,7 @@ fn state_label<'a>(state: TaskState, labels: &'a Labels) -> &'a str {
     match state {
         TaskState::Working => &labels.working,
         TaskState::Waiting => &labels.needs_you,
+        TaskState::Notice => &labels.notice,
         TaskState::Done => &labels.done,
         TaskState::Error => &labels.exited,
     }
@@ -224,6 +254,33 @@ fn menu(
         }
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
+    let state = app.state::<Taskbar>();
+    let (item, enabled) = {
+        let autostart = state
+            .autostart
+            .lock()
+            .map_err(|error| std::io::Error::other(error.to_string()))?;
+        (autostart.item.clone(), autostart.enabled)
+    };
+    let item = if let Some(item) = item {
+        item.set_text(menu_text(&snapshot.labels.autostart))?;
+        item
+    } else {
+        CheckMenuItem::with_id(
+            app,
+            AUTOSTART_ID,
+            menu_text(&snapshot.labels.autostart),
+            false,
+            enabled,
+            None::<&str>,
+        )?
+    };
+    menu.append(&item)?;
+    state
+        .autostart
+        .lock()
+        .map_err(|error| std::io::Error::other(error.to_string()))?
+        .item = Some(item);
     menu.append(&MenuItem::with_id(
         app,
         QUIT_ID,
@@ -308,7 +365,91 @@ fn opens_window_on_tray_click(button: MouseButton) -> bool {
     button == MouseButton::Left
 }
 
+pub async fn configure_autostart(
+    app: tauri::AppHandle,
+    request: AutostartRequest,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<Taskbar>();
+        let _operation = state
+            .autostart_operation
+            .lock()
+            .map_err(|error| error.to_string())?;
+        let manager = app.autolaunch();
+        let result = (|| {
+            let enabled = match request {
+                AutostartRequest::Read => None,
+                AutostartRequest::Set(enabled) => Some(enabled),
+                AutostartRequest::Toggle => {
+                    Some(!manager.is_enabled().map_err(|error| error.to_string())?)
+                }
+            };
+            if let Some(enabled) = enabled {
+                if enabled {
+                    manager.enable()
+                } else {
+                    manager.disable()
+                }
+                .map_err(|error| error.to_string())?;
+            }
+            let actual = manager.is_enabled().map_err(|error| error.to_string())?;
+            if enabled.is_some_and(|enabled| enabled != actual) {
+                return Err("Autostart state mismatch".into());
+            }
+            Ok(actual)
+        })();
+        let actual = result
+            .as_ref()
+            .ok()
+            .copied()
+            .or_else(|| manager.is_enabled().ok());
+        let (item, checked) = {
+            let mut autostart = state.autostart.lock().map_err(|error| error.to_string())?;
+            if let Some(actual) = actual {
+                autostart.enabled = actual;
+            }
+            (autostart.item.clone(), autostart.enabled)
+        };
+        if let Some(item) = item {
+            item.set_checked(checked)
+                .map_err(|error| error.to_string())?;
+            item.set_enabled(true).map_err(|error| error.to_string())?;
+        }
+        if let Some(actual) = actual {
+            app.emit("autostart-changed", actual)
+                .map_err(|error| error.to_string())?;
+        }
+        result
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+fn request_autostart(app: &tauri::AppHandle, request: AutostartRequest) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = configure_autostart(app.clone(), request).await {
+            let message = app
+                .state::<Taskbar>()
+                .snapshot
+                .lock()
+                .ok()
+                .and_then(|snapshot| snapshot.as_ref().map(|s| s.labels.autostart_error.clone()))
+                .unwrap_or_else(|| default_snapshot().labels.autostart_error);
+            app.dialog()
+                .message(format!("{message}: {error}"))
+                .title("uTerm")
+                .kind(tauri_plugin_dialog::MessageDialogKind::Error)
+                .show(|_| {});
+        }
+    });
+}
+
 fn handle_menu(app: &tauri::AppHandle, item_id: &str) {
+    if item_id == AUTOSTART_ID {
+        request_autostart(app, AutostartRequest::Toggle);
+        return;
+    }
     if item_id == OPEN_ID {
         if let Err(error) = crate::show_main_window(app) {
             eprintln!("Show desktop: {error}");
@@ -355,6 +496,7 @@ pub fn install(app: &mut tauri::App) -> tauri::Result<()> {
             }
         })
         .build(app)?;
+    request_autostart(app.handle(), AutostartRequest::Read);
     Ok(())
 }
 
@@ -401,6 +543,22 @@ mod tests {
             title: title.into(),
             state,
         }
+    }
+
+    #[test]
+    fn generic_reminders_use_attention_with_distinct_menu_copy() {
+        let labels = labels();
+        let snapshot = Snapshot {
+            status: AggregateStatus::Attention,
+            labels: labels.clone(),
+            groups: vec![Group {
+                title: "Terminal".into(),
+                tasks: vec![task("notice", "Terminal", TaskState::Notice)],
+            }],
+        };
+        assert!(validate(&snapshot).is_ok());
+        assert_eq!(state_label(TaskState::Notice, &labels), "会话有新提醒");
+        assert_eq!(state_label(TaskState::Error, &labels), "任务执行失败");
     }
 
     #[test]

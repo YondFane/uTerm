@@ -202,7 +202,9 @@ export function FilePanel({
   const [action, setAction] = useState("file");
   const [name, setName] = useState("");
   const [mutating, setMutating] = useState(false);
-  const [menu, setMenu] = useState<{ entry: Entry; x: number; y: number } | null>(null);
+  const [menu, setMenu] = useState<{ entry: Entry; x: number; y: number; quick?: boolean } | null>(
+    null,
+  );
   const menuElement = useRef<HTMLDivElement>(null);
   const fileClipboard = useFileClipboard();
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
@@ -220,6 +222,18 @@ export function FilePanel({
     setError("");
   }, [directory]);
   const rootEntry: Entry = { path: "", name: tx("项目根目录"), directory: true, symlink: false };
+  function resultMenu(path: string, index: number, x: number, y: number) {
+    if (mode !== "quick" || mutating) return;
+    const entry = {
+      path,
+      name: path.split(/[\\/]/).at(-1) ?? path,
+      directory: false,
+      symlink: false,
+    };
+    setSelected(index);
+    setFocusedEntry(entry);
+    setMenu({ entry, x, y, quick: true });
+  }
   const copyFile = (entry: Entry) => {
     if (remote) return;
     if (!entry.path || entry.symlink || mutating) return;
@@ -288,6 +302,8 @@ export function FilePanel({
       if (event.key === "Escape") {
         event.preventDefault();
         setMenu(null);
+        if (menu.quick)
+          results.current?.querySelector<HTMLButtonElement>(".file-hit.selected")?.focus();
       }
     };
     const scroll = () => setMenu(null);
@@ -314,6 +330,7 @@ export function FilePanel({
     }
   }
   const [query, setQuery] = useState("");
+  useEffect(() => setMenu(null), [mode, query]);
   const [sensitive, setSensitive] = useState(false);
   const [result, setResult] = useState<Matches | null>(null);
   const [notice, setNotice] = useState({ message: "", transient: false });
@@ -601,6 +618,21 @@ export function FilePanel({
                 key={`${hit.path}:${hit.line}`}
                 title={hit.path}
                 onFocus={() => setSelected(index)}
+                aria-haspopup={mode === "quick" ? "menu" : undefined}
+                onContextMenu={(event) => {
+                  if (mode !== "quick" || mutating) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  resultMenu(hit.path, index, event.clientX, event.clientY);
+                }}
+                onKeyDown={(event) => {
+                  if (mode !== "quick" || mutating) return;
+                  if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+                    event.preventDefault();
+                    const bounds = event.currentTarget.getBoundingClientRect();
+                    resultMenu(hit.path, index, bounds.left, bounds.bottom);
+                  }
+                }}
                 onClick={() => open(hit.path, hit.line || undefined)}
               >
                 <span>
@@ -662,70 +694,79 @@ export function FilePanel({
           >
             {tx("复制")}
           </button>
-          <button
-            role="menuitem"
-            disabled={remote || !fileClipboard || menu.entry.symlink || mutating}
-            onClick={() => void pasteFile(menu.entry)}
-          >
-            {tx("粘贴")}
-          </button>
-          <button
-            role="menuitem"
-            disabled={!menu.entry.path || menu.entry.symlink || mutating}
-            onClick={() => manage(menu.entry, "rename")}
-          >
-            {tx("重命名")}
-          </button>
-          <button
-            role="menuitem"
-            disabled={!menu.entry.path || menu.entry.symlink || mutating}
-            onClick={() => manage(menu.entry, "delete")}
-          >
-            {tx("删除")}
-          </button>
-          <button
-            role="menuitem"
-            disabled={menu.entry.directory && menu.entry.symlink}
-            onClick={() => manage(menu.entry, "file")}
-          >
-            {tx("新建文件")}
-          </button>
-          <button
-            role="menuitem"
-            disabled={menu.entry.directory && menu.entry.symlink}
-            onClick={() => manage(menu.entry, "directory")}
-          >
-            {tx("新建目录")}
-          </button>
-          {transfer && !menu.entry.directory && !menu.entry.symlink && (
-            <button
-              role="menuitem"
-              onClick={() => {
-                transfer(menu.entry.path, "download");
-                setMenu(null);
-              }}
-            >
-              {tx("下载文件")}
-            </button>
+          {!menu.quick && (
+            <>
+              <button
+                role="menuitem"
+                disabled={remote || !fileClipboard || menu.entry.symlink || mutating}
+                onClick={() => void pasteFile(menu.entry)}
+              >
+                {tx("粘贴")}
+              </button>
+              <button
+                role="menuitem"
+                disabled={!menu.entry.path || menu.entry.symlink || mutating}
+                onClick={() => manage(menu.entry, "rename")}
+              >
+                {tx("重命名")}
+              </button>
+              <button
+                role="menuitem"
+                disabled={!menu.entry.path || menu.entry.symlink || mutating}
+                onClick={() => manage(menu.entry, "delete")}
+              >
+                {tx("删除")}
+              </button>
+              <button
+                role="menuitem"
+                disabled={menu.entry.directory && menu.entry.symlink}
+                onClick={() => manage(menu.entry, "file")}
+              >
+                {tx("新建文件")}
+              </button>
+              <button
+                role="menuitem"
+                disabled={menu.entry.directory && menu.entry.symlink}
+                onClick={() => manage(menu.entry, "directory")}
+              >
+                {tx("新建目录")}
+              </button>
+              {transfer && !menu.entry.directory && !menu.entry.symlink && (
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    transfer(menu.entry.path, "download");
+                    setMenu(null);
+                  }}
+                >
+                  {tx("下载文件")}
+                </button>
+              )}
+              {transfer && (
+                <button
+                  role="menuitem"
+                  onClick={() => {
+                    transfer(
+                      menu.entry.directory
+                        ? menu.entry.path
+                        : menu.entry.path.split("/").slice(0, -1).join("/"),
+                      "upload",
+                    );
+                    setMenu(null);
+                  }}
+                >
+                  {tx("上传文件")}
+                </button>
+              )}
+            </>
           )}
-          {transfer && (
-            <button
-              role="menuitem"
-              onClick={() => {
-                transfer(
-                  menu.entry.directory
-                    ? menu.entry.path
-                    : menu.entry.path.split("/").slice(0, -1).join("/"),
-                  "upload",
-                );
-                setMenu(null);
-              }}
-            >
-              {tx("上传文件")}
+          {menu.quick && (
+            <button role="menuitem" onClick={() => void copyEntry(menu.entry, false)}>
+              {tx("复制文件名")}
             </button>
           )}
           <button role="menuitem" onClick={() => void copyEntry(menu.entry, true)}>
-            {tx("复制路径")}
+            {menu.quick ? tx("复制文件路径") : tx("复制路径")}
           </button>
           <button
             role="menuitem"
@@ -741,9 +782,11 @@ export function FilePanel({
           >
             {tx("在文件管理器中打开")}
           </button>
-          <button role="menuitem" onClick={() => void copyEntry(menu.entry, false)}>
-            {tx("复制文件名")}
-          </button>
+          {!menu.quick && (
+            <button role="menuitem" onClick={() => void copyEntry(menu.entry, false)}>
+              {tx("复制文件名")}
+            </button>
+          )}
         </div>
       )}
     </aside>

@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 
 # uTerm feature guide
@@ -1300,6 +1300,38 @@ force or automatic tag pushing.
   shortcuts are suppressed while the menu is open. Switching blocks duplicate requests and editor
   transitions, and stale responses cannot replace newer branch state.
 
+### Git commit history
+
+Open Git → History and hover over a commit to see its full message, complete hash, author and
+timestamp. Clicking the commit opens its details in the inspector: the message retains paragraphs
+and line breaks, followed by the changed-file count and file list. Long messages scroll within the
+details area, and text remains selectable.
+
+- Click a changed file to inspect its diff. Existing unified/side-by-side views, file navigation and
+  expansion remain available. Empty commits show an explicit message instead of an empty list.
+- Back to history returns to the loaded commit list. Switching repositories leaves the old commit
+  details, and late file-list responses cannot replace a newer selection. Read failures remain
+  visible; returning to the list and opening the commit again retries the read.
+- History loads 100 commits per page and supports Load earlier commits. A page of commit messages
+  exceeding the 2 MB output limit shows an error and directs the user to `git log` in a terminal.
+  Messages are displayed as plain text.
+
+#### Commit-history checks on Windows
+
+- Eleven focused Git/history/diff/refresh and content-font tests pass. Coverage includes full
+  multiline and bilingual messages, plain-text rendering, metadata, file counts, diff references,
+  empty commits, failed reads/retry, stale responses and repository switching. Backend checks report
+  108 passed and nine ignored tests; Git regressions use temporary local repositories and cover
+  message preservation, pagination, root commits and the output-size limit.
+- An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.gitdetails`) runs the real Git panel
+  and Git read commands against a temporary repository. Checks cover tooltip contents, native
+  commit/file clicks, keyboard activation, empty/root commits, real diffs and expanded diffs with
+  commit details retained. Visual inspection covers Chinese/dark and English/light views and
+  wrapping in a 280 px panel.
+- Production and desktop builds, TypeScript, localization, documentation, changed-file formatting
+  and Cargo formatting pass. Repository-wide formatting reports existing issues in 162 other files;
+  production builds retain the large-chunk warning. macOS/Linux runtime acceptance remains pending.
+
 ### Git comparison tabs
 
 Expanded comparisons also appear as a closable Git/file-name tab in the central tab bar. Selecting a
@@ -1433,6 +1465,38 @@ there are no file or Git diff tabs, even if terminal or Agent sessions are runni
   produce only one central session tab, sidebar selection replaces that tab, and an open file tab is
   retained. Native Agent, conflict-dialog and Windows runtime acceptance remain pending.
 
+### File-tab context menu
+
+Right-click an open file tab, or focus it and press Shift+F10, to open its file menu:
+
+- **Copy** places the file in the application's file clipboard; use Paste in the file tree to copy
+  it into a folder, including a different project.
+- **Copy file name** copies the final name to the system clipboard.
+- **Copy file path** copies the full path. Windows drive and UNC paths omit the extended-path
+  prefix.
+- **Open in File Manager** reveals the local file in its containing folder.
+
+The menu acts on the clicked tab without switching the active file or saving its draft. Copy uses
+the file on disk; save edits first to include them in the copy. Remote tabs allow copying their name
+or SSH path; file copying and opening a local file manager are disabled.
+
+The menu stays within the window and outside the tab bar's scroll clipping. Arrow keys and Home/End
+navigate actions; Esc closes it and returns focus to the tab. Clicking outside, scrolling the tab
+bar, resizing or leaving the window closes it. Copy and opening failures appear visibly.
+
+#### File-tab menu checks on Windows
+
+- Three focused component checks pass, including existing tab/draft guards and file-tree menus. The
+  new regression covers background-tab targeting, cross-project paste, normalized Windows clipboard
+  paths, remote restrictions, keyboard focus, edge positioning and visible failures. TypeScript,
+  localization, changed-source formatting and production build pass.
+- An isolated Windows app (`sh.uterm.desktop.qa.tabmenu`) uses the real tab bar, file panel and
+  filesystem commands with disposable files. Chinese/dark and English/light views verify all four
+  actions, system clipboard writes, real file copy/paste, file-manager command success, retained
+  active tab, keyboard controls and an unclipped menu at 640×420.
+- Explorer's selected-file highlight and macOS/Linux runtime behavior for this tab menu remain
+  unverified. The production build retains its existing large-chunk warning.
+
 ### Automatic file-tree refresh
 
 The visible file tree automatically refreshes its root and expanded folders five seconds after each
@@ -1462,6 +1526,35 @@ Directory-loading and search errors remain visible.
 
 - Component timer tests cover dismissal and repeated failures; native timing acceptance remains
   pending.
+
+### Quick-open file menu
+
+Under Files → Quick open, right-click a result or press Shift+F10 on the focused result to open its
+menu. Arrow keys move between actions; Escape closes the menu and returns focus to that result.
+
+- **Copy** keeps the selected local file in uTerm's internal clipboard. Switch to the file tree and
+  choose Paste on the destination folder; the existing copy rules and conflict checks apply.
+
+- **Copy file name** copies the final name to the system text clipboard.
+
+- **Copy file path** copies the absolute path, omitting Windows extended-length prefixes.
+
+- **Open in File Manager** reveals the local file in its containing folder; it is disabled for SSH
+  files. Clipboard and opening failures remain visible.
+
+The menu targets the result that opened it without opening the file. It is available in Quick open;
+content-search results keep their existing behavior.
+
+#### Validation and limits
+
+- Windows component regression covers the four actions in both languages, the selected target,
+  normalized paths, internal Copy/Paste, keyboard dismissal and visible failures.
+
+- The isolated Windows app (`sh.uterm.desktop.qa.contentcontrols`) uses the real App, a temporary
+  project and filesystem commands. Quick-open Copy followed by file-tree Paste writes the expected
+  file in that root. Chinese/dark and English/light menus were visually inspected, including a 1000
+  × 700 viewport. Clipboard and file-manager calls use fixtures; this check does not launch
+  Explorer. macOS/Linux runtime acceptance remains pending.
 
 ### Copying files and folders
 
@@ -1554,12 +1647,25 @@ name in the same parent directory.
 
 ### Windows path display
 
-The file-panel footer and its tooltip display Windows paths without the extended-length prefix,
-preserving UNC server/share paths. Internal filesystem paths remain unchanged.
+The session header, file-viewer header, file-panel footer and their tooltips display Windows paths
+without the extended-length prefix (`\\?\` or `//?/`). Local paths start at the drive letter, such
+as `D:\project\AGENTS.md`; UNC paths retain `\\server\share\…`. Internal filesystem paths remain
+unchanged.
 
 #### Validation and limits
 
-- Path-formatting tests cover drive and UNC paths; native visual acceptance remains pending.
+- Nine focused file-document and viewer-header checks pass on Windows. The header regression covers
+  both prefix spellings, mixed separators, Unicode, drive roots, UNC shares and unchanged POSIX
+  paths; it also checks that display formatting preserves the document's file identity.
+
+- An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.filepath`) uses the real FileEditor,
+  sample Markdown documents and mocked desktop commands. Six path cases pass for the visible header
+  and tooltip, with screenshots inspected for drive and UNC paths. TypeScript, the fixture's
+  frontend and native builds, changed-test formatting and documentation checks pass. The real App
+  fixture (`sh.uterm.desktop.qa.contentcontrols`) also verifies drive-letter paths in session/file
+  headers and the file-panel footer. A focused path regression covers drive, UNC and POSIX display
+  while desktop commands retain the original directory. macOS/Linux runtime acceptance remains
+  pending.
 
 ### Inline creation and renaming
 
@@ -1853,33 +1959,42 @@ Settings → General → Launch at login controls automatic startup after OS sig
 macOS. Login startup keeps the main window hidden and runs in the system tray (macOS menu bar);
 click the tray icon to open it.
 
+Right-click the tray icon and left-click **Launch at login** to turn it on or off. A check mark
+means startup is enabled. This item and the General settings switch share the same system
+registration; changes also update an open settings dialog. The menu follows the application's
+language.
+
 - Manual launches and session links still open the window, while repeated background launches leave
   an existing window hidden. For an existing startup entry, turn this setting off and on to apply
   background startup.
 
 - Opening settings reads the system registration without enabling it. Changes apply immediately;
-  failures remain visible and can be retried.
+  failures remain visible and can be retried. A failed tray-menu change restores the last confirmed
+  check mark and shows an error dialog.
 
 - Resetting interface settings does not change the OS registration. Development builds use a
   separate startup entry.
 
 #### Validation and limits
 
-- Mocked component tests cover enabling, disabling and failure recovery. An isolated browser preview
-  verifies the General settings layout.
+- On Windows, all 22 focused taskbar, settings/localization and highlight-setting checks pass,
+  including bilingual tray labels, enabling/disabling, failure recovery and updates to an open
+  settings dialog from mocked tray events. TypeScript and the production frontend build pass. An
+  isolated browser preview verifies the General settings layout.
 
-- A Windows build with an isolated application identifier passes native window visibility checks:
-  background startup and repeated background requests keep the main window hidden, and a subsequent
-  manual launch shows it. All 41 backend tests, 13 settings/bilingual UI tests, frontend and desktop
-  builds, localization and documentation checks pass.
+- Windows backend checks pass with 107 tests passed and nine optional checks ignored. The isolated
+  desktop build (`sh.uterm.desktop.qa.tray-autostart`), localization and documentation checks pass.
+  Native startup and visual inspection confirm that background startup keeps the main window hidden
+  and a subsequent manual launch shows the application without startup errors.
 
-- Repository formatting remains blocked by existing issues in 39 files. Actual OS sign-in, visual
+- Repository formatting remains blocked by existing issues in 172 files. Actual OS sign-in, visual
   tray-click acceptance and macOS acceptance remain pending.
 
 ### Agent definitions and activity
 
-Agent definitions specify a program and argument list. Hooks report activity; usage can combine
-local logs with provider requests when enabled.
+Agent definitions specify a program and argument list. Structured events and native terminal
+reminders report activity; Hooks remain optional. Usage can combine local logs with provider
+requests when enabled.
 
 Custom identifiers keep their own configuration actions and do not inherit built-in installation
 guides or defaults, including identifiers such as `constructor`.
@@ -1936,10 +2051,105 @@ expression. To configure reporting, select Install Hooks and open a new Agent se
 
 Other tools' Hooks remain independently configured and may need their own Windows commands.
 
+### Notifications without Hooks
+
+Enable Settings → Agent → Notify when tasks finish or need attention, then open a new Agent session.
+The original interactive terminal interface is retained. Installing Hooks is optional.
+
+| Agent                                                                      | Notification source                                                                                                                                                                |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Codex                                                                      | A dedicated authenticated loopback app-server and the original TUI connected through `--remote`; unsupported versions or invocation-specific configuration use terminal reminders. |
+| OpenCode                                                                   | Its own authenticated loopback server and SSE session/permission events. Custom server or attach arguments retain terminal reminders.                                              |
+| Claude                                                                     | A terminal bell enabled for this launch with `--settings`; explicit later CLI settings retain precedence.                                                                          |
+| Gemini, Kimi, Grok, Hermes, Pi, MiniMax, Qwen Code, Copilot CLI, iFlow CLI | Native terminal notifications or BEL when the CLI emits them. Availability and enablement depend on the CLI version and settings.                                                  |
+
+- All twelve built-in Agents, custom Agents and ordinary terminals share the OSC 9, OSC 777, basic
+  OSC 99 and BEL reminder channel. A generic signal displays “Session has a new notification” with
+  an amber indicator; it never establishes task completion or permission waiting. Viewing the
+  session acknowledges the reminder. OSC title, clipboard, directory and progress controls do not
+  trigger reminders.
+
+- Generic reminders also appear in the tray task list with an amber attention indicator and their
+  own label. Failure labels say “Task failed”, including failures while the Agent process remains
+  running.
+
+- Codex invocation-specific profiles, config/feature overrides, OSS selection, worktree creation and
+  starting-directory overrides retain the original local launch with terminal reminders, so an
+  independent server cannot silently change those settings. Configuration from `CODEX_HOME` remains
+  available to the managed event server.
+
+- Codex and OpenCode use structured status to distinguish work, completion, attention and failure.
+  Codex excludes subagents and temporary helper threads and supports both paginated and legacy
+  history. A cancelled Codex turn does not report success. OpenCode ignores child sessions and
+  requires observed work before reporting completion; an error followed by idle is not completion.
+
+- Native reminders may require a CLI setting: Gemini uses `general.enableNotifications`; Hermes
+  offers `display.bell_on_complete`; Copilot uses `beep`. Other CLIs must emit a supported terminal
+  notification or bell themselves. If no signal is emitted, only process exit can be detected;
+  silence, CPU usage and displayed prose are not treated as completion. Process-exit notifications
+  say “Session ended” on success or “Session exited with an error” on failure, independently of a
+  turn completing while its process remains alive.
+
+- Each event has its own ID, so consecutive completed turns can notify without an intervening
+  working frame. Up to 128 recent events are retained per session. Replay and reattachment do not
+  resend history, and acknowledging an older event does not clear a newer one. Bell bursts are
+  combined, and structured events take precedence over terminal reminders and compatible Hooks.
+
+- Event connections stay on authenticated loopback endpoints and retry after disconnection. Their
+  errors appear separately from terminal connection errors and clear after recovery. Existing Hooks
+  and user configuration files are preserved. Codex WebSocket app-server transport remains
+  experimental upstream; unsupported API behavior is visible and retains terminal reminders.
+
+- Starting an Agent's event service does not hold the session-list lock, so existing sessions remain
+  available while a CLI probe or server startup is pending. New-session creation and safe host
+  shutdown remain serialized.
+
+- Existing host processes keep their current capabilities until safely replaced; existing sessions
+  are not restarted automatically. Notifications require the application to remain running,
+  including in the background. Reopening after quitting restores state without sending historical
+  notifications. SSH and terminal-multiplexer forwarding remain dependent on those tools passing the
+  escape sequences through.
+
+#### No-Hook notification validation
+
+Windows host regressions cover every built-in Agent's generic event path, split escape sequences,
+non-notification controls, replay, independent event IDs and structured-event precedence. Frontend
+regressions cover old-host frames, invalid event metadata, repeated completed turns, generic copy,
+failure copy, native permissions and duplicate suppression.
+
+- Windows serial host checks pass (38 checks); two installed-CLI checks run separately and pass.
+  Serial backend checks pass (108 passed, nine opt-in checks ignored). Serial execution avoids
+  process-startup and executable-cleanup timing failures in the QA environment.
+
+- The complete frontend/build-helper suite passes (269 passed, 11 optional/platform checks skipped).
+  Focused checks cover batched font adjustments, tray reminder labels, repository switching, legacy
+  Codex turn ordering and retaining custom invocation settings. A slow-CLI regression verifies that
+  host requests remain responsive during startup.
+
+- Changed-source/test and Rust formatting, localization, documentation, TypeScript/production and
+  Windows desktop checks pass. Repository-wide formatting retains issues in 162 other files; Vite's
+  WebSocket-port and large-chunk warnings remain.
+
+The installed Codex CLI 0.163.0 runs its real TUI against an isolated deterministic loopback model
+fixture, with no Hooks or real provider credentials. Two successive turns produce distinct
+authenticated completion events, and closing the session removes its temporary authentication file.
+OpenCode CLI 1.18.32 runs its original TUI with authenticated SSE and rejects unauthenticated
+requests; it makes no model request in this check. A loopback SSE fixture covers child-session
+filtering, permissions, failures and completion.
+
+An isolated native Tauri/WebView2 app (`sh.uterm.desktop.qa.nativeactivity`) renders the real
+settings and indicators with fixture availability. Chinese/dark and English/light screenshots
+confirm the six-pixel generic reminder indicator, labels and notification description without
+horizontal overflow. A real native tray sync accepts the generic reminder with attention status; two
+file-font increments and one diff-font increment persist independently before another render. The
+installed app and active sessions are not restarted. Real-provider acceptance for all Agents,
+installed notification delivery/branding and macOS/Linux runtime acceptance remain unverified.
+
 ### Agent state and notifications
 
 The sidebar and Agent pane header display the same idle, working, needs-attention or completed
-state. Unviewed completion highlights the sidebar icon until acknowledged.
+state, plus a distinct generic-reminder state. Unviewed completion highlights the sidebar icon until
+acknowledged.
 
 - Settings → Agent → Notify when tasks finish or need attention is off by default and requests
   permission through the native notification service when enabled. The switch and delivery checks
@@ -1947,7 +2157,8 @@ state. Unviewed completion highlights the sidebar icon until acknowledged.
   notifications. A failed permission request or preference save leaves the switch unchanged and
   displays an error. Completion and attention notify when the app is unfocused or another session is
   selected; development builds, restored history and repeated identical states do not send
-  notifications.
+  notifications. Independent events from capable hosts are deduplicated by event ID rather than
+  state, so successive completed turns can each notify.
 
 - Pending permission results are ignored after a newer Agent state, session closure or view unmount;
   dispatch also rechecks the current notification setting, focus and selected session. Native
@@ -1959,21 +2170,20 @@ state. Unviewed completion highlights the sidebar icon until acknowledged.
   unrelated commands, preservation of dynamic shell expressions, no-op file/backup protection and
   actual PowerShell/cmd execution with literal special-character paths.
 
-- The complete Windows frontend/build-helper suite passes (253 passed, 11 optional/platform checks
-  skipped), including two notification regressions and 16 settings/localization checks. The App
-  regression covers indicator states, unread acknowledgement, opt-in, focus, native permissions,
-  replay, duplicate suppression, development builds and dispatch failures. Deferred permission
-  checks verify cancellation after opting out, viewing/closing a session, receiving a newer state or
-  unmounting, including delivery of only the latest pending state.
+- Notification and settings regressions pass. The App regression covers indicator states, unread
+  acknowledgement, opt-in, focus, native permissions, replay, duplicate suppression, development
+  builds and dispatch failures. Deferred permission checks verify cancellation after opting out,
+  viewing/closing a session, receiving a newer state or unmounting, including delivery of only the
+  latest pending state.
 
 - Settings coverage includes a denied WebView cache with native permission granted, native
   permission requests, denial, query/save failures, pending requests, provider reload and disabling
   without requesting permission.
 
 - Changed-source/test and Rust formatting, localization, documentation checks, TypeScript/production
-  and the isolated Windows desktop build (`sh.uterm.desktop.qa.notificationpermission`) pass.
-  Repository-wide formatting retains existing issues in 183 other files, and tests/builds retain the
-  Vite WebSocket-port, React act and large-chunk warnings.
+  and the isolated Windows desktop build (`sh.uterm.desktop.qa.nativeactivity`) pass.
+  Repository-wide formatting retains existing issues in 162 other files, and tests/builds retain the
+  Vite WebSocket-port and large-chunk warnings.
 
 - Permission and deferred-notification regressions use mocked native commands. Native acceptance of
   enabling and delivering notifications through the updated permission path in installed Windows
@@ -2003,6 +2213,42 @@ state. Unviewed completion highlights the sidebar icon until acknowledged.
 
 Settings include appearance, color themes, fonts, terminal cursor and scrollback, keyboard
 shortcuts, default shell and Agent. Theme import accepts supported color fields only.
+
+### Content font shortcuts and session headers
+
+Use Ctrl+- to decrease or Ctrl++ to increase the font of the content shown in the middle workspace.
+Ctrl+= also increases it; Ctrl+Shift+= produces Ctrl++ on common keyboards. macOS uses Command in
+place of Ctrl. Settings → Shortcuts provides Decrease content font size and Increase content font
+size; existing custom shortcuts keep priority over these defaults.
+
+Terminal and Agent sessions share the terminal font setting. Text, HTML source and Markdown use the
+file setting; an expanded Git diff in the middle workspace uses the Git diff setting. These three
+sizes are independent, change by 1 px within 10–32 px and save immediately. Consecutive adjustments
+retain each increment, including when different content types change before the next render. Images,
+PDF and static HTML previews keep their existing sizing behavior. Dialogs and context menus retain
+their own keyboard handling.
+
+Session headers show the configured starting directory beside the session name, with the complete
+path in its tooltip. This directory does not follow shell `cd` commands. Long paths truncate to keep
+**A−**, the current pixel size and **A+** accessible. The buttons adjust the shared terminal font
+setting and disable at its bounds; save failures appear in the session.
+
+#### Windows checks and limits
+
+- All 29 focused settings, path, viewer-header, content-font and file-menu tests pass. Coverage
+  includes Ctrl and Command combinations, the shifted plus alias, custom-binding priority,
+  independent saved sizes, menu targets and visible failures. TypeScript, localization,
+  production/native QA builds and changed-file formatting checks pass; the production build retains
+  its large-chunk warning.
+
+- An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.contentcontrols`) runs the real App,
+  shell and temporary Git project. Native key input verifies all three font targets, terminal input
+  suppression, terminal buttons and the upper bound, and retained CodeMirror instance/selection.
+  Visual inspection covers session headers, file text and an expanded Git diff in Chinese/dark, plus
+  the header and menu in English/light at 1000 × 700. Clipboard and reveal calls are mocked; no
+  model requests are used. macOS/Linux runtime acceptance remains pending.
+
+- Repository-wide formatting reports existing issues in 162 other files; changed files pass.
 
 ### Mouse wheel and trackpad scrolling
 
@@ -2050,6 +2296,11 @@ increases the multiplier up to six times.
 Settings → Appearance provides independent File font size and Git diff font size controls alongside
 the existing font controls. Both default to 14 px and accept whole numbers from 10 to 32 px.
 
+File viewing also provides **A−**, the current pixel size and **A+** in the file header, before the
+save status. Each click changes the shared file font size by 1 px and saves it immediately. The
+buttons disable at the size limits and are available for editable/read-only text, HTML source and
+Markdown previews. Image, PDF and static HTML previews keep their own sizing controls or styles.
+
 - Enter or leaving the field applies and saves the value; existing files and diffs update
   immediately, and the values persist across restarts. File font size covers editable/read-only text
   and Markdown previews, with headings and code scaling proportionally.
@@ -2067,20 +2318,26 @@ the existing font controls. Both default to 14 px and accept whole numbers from 
 
 #### Font-size checks on Windows
 
-- Windows validation: 161 frontend/build-helper tests pass with two platform-specific skips,
-  including old-settings defaults, integer/range validation, independent persistence, failed saves,
-  reset, editable/read-only files, Markdown switching and all Git diff modes with portal expansion.
-  A real CodeMirror component regression retains the editor instance, unsaved text, selection and
-  undo across font changes.
+- Windows validation: 21 content-font, settings and localization tests pass, including toolbar
+  clicks, 10/32 px disabled states, immediate persistence, visible save failures and retry,
+  old-setting defaults and independent font settings. The real CodeMirror regression retains its
+  instance, unsaved text, selection and undo history, covers read-only text/Markdown switching and
+  all Git diff modes with portal expansion, and confirms that font changes do not save files or
+  reload diffs.
 
-- Production and isolated-identifier desktop builds, TypeScript, localization and documentation
-  checks pass. The isolated Windows app starts without logged errors; changed files pass formatting,
-  while the repository-wide formatting check remains blocked by existing issues in 32 other files.
+- Production build, TypeScript, localization, documentation and changed-file formatting checks pass.
+  The production build retains its large-chunk warning.
 
-- Native Windows and macOS visual acceptance at 14/20/32 px remains pending: the Windows/browser
-  automation runtime could not initialize (missing kernel assets), and the remote-debugging browser
-  fallback was rejected by automatic approval review. Production builds retain the large-chunk
-  warning.
+- An isolated Windows Tauri/WebView2 fixture (`sh.uterm.desktop.qa.filefont`) runs the real file
+  editor with sample documents and mocked desktop commands. Native clicks verify immediate sizing,
+  retained drafts/selection, disabled limits, save failure/retry and persistence after reloading.
+  Visual inspection covers Chinese/dark text at 20 px, English/light text at 32 px in a 640 px
+  viewport and Markdown at 20 px. HTML source offers the buttons; static HTML and image previews
+  hide them. No real file writes are used.
+
+- The expanded unified Git diff was visually checked with the content shortcuts above; other Git
+  diff layouts and macOS/Linux runtime acceptance remain pending. Repository-wide formatting reports
+  existing issues in 162 other files; changed files pass formatting.
 
 ### Automatic updates and confirmation
 
@@ -2323,7 +2580,7 @@ accent color as the theme or color mode changes. Older saved settings also use t
   checks skipped), together with changed-file formatting, localization, documentation checks and
   TypeScript/production build. Tests cover old settings, all six palettes in both color modes,
   custom-color persistence and provider reload, invalid colors, save failures and restoring
-  defaults. Repository-wide formatting reports existing issues in 172 unchanged files; the existing
+  defaults. Repository-wide formatting reports existing issues in 162 unchanged files; the existing
   Vite WebSocket-port and production large-chunk warnings remain.
 
 - An isolated Tauri/WebView2 host (`sh.uterm.desktop.qa.activeicons`) runs the real App with
@@ -2542,14 +2799,14 @@ selects Classic sidebar.
 
 #### Sidebar-style checks on Windows
 
-- The complete Windows frontend/build-helper suite passes (253 passed, 11 optional/platform checks
+- The complete Windows frontend/build-helper suite passes (269 passed, 11 optional/platform checks
   skipped), including five sidebar/App regressions. Coverage includes all three Classic switches
   being off, navigation categories and lists remaining available, style switching without changing
   saved choices, provider reload, context menus, SSH removal confirmation/cancellation, Add-menu
   order and welcome dialogs in both languages, and unchanged profiles/sessions/selection. Classic
   visibility combinations and the retained rail/collapse interactions also pass.
 - Changed-file formatting, localization, documentation and TypeScript/production build pass.
-  Repository-wide formatting reports issues in 183 unchanged files.
+  Repository-wide formatting reports issues in 162 unchanged files.
 - An isolated Tauri/WebView2 app (`sh.uterm.desktop.qa.sidebarstyles`) runs the real App with
   temporary profiles and mocked desktop commands. Native inspection verifies the two settings cards,
   switching to the navigation layout, project/SSH filtering, rail footer controls, Chinese dark and
@@ -2612,6 +2869,36 @@ no separate uTerm/Local brand row.
   px layout and the 88 px icon layout, single-line Chinese headings and fully visible footer
   controls. No real processes or servers are used. Native acceptance of the final popup placement,
   narrow light/English layouts and macOS/Linux interaction remains pending.
+
+### Terminal resizing
+
+Drag the project sidebar, inspector or session divider to adjust the central terminal area. The
+terminal keeps its current character grid while the layout changes and fits after the size has
+remained stable for 120 ms. Existing output is consumed before fitting. During a drag, the viewport
+may clip the old grid or temporarily leave extra space until fitting finishes.
+
+The host processes one resize at a time and retains only the latest pending size. Replaying a
+session keeps its saved dimensions until replay completes; closing or reconnecting drops pending
+resizes for the old attachment. Resize errors remain visible in the session.
+
+#### Resize checks on Windows
+
+- All 51 focused terminal, sidebar/inspector layout and workspace tests pass, including seven resize
+  regressions for continuous dragging, output consumption, replay, hidden/disposed terminals, slow
+  hosts, failures and attachment cleanup. Changed-file formatting, localization and
+  TypeScript/production build pass, together with an isolated desktop build.
+
+- An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.terminalresize`) runs real local
+  sessions. Repeated project-sidebar and inspector drags with OpenCode 1.18.32 show aligned content
+  during and after resizing, without model requests. A continuously redrawing Node terminal fixture
+  verifies split-divider resizing and consecutive row markers in both panes, including a narrow
+  eight-column pane. OpenCode emitted a Bun 1.3.14 segmentation-fault report during narrow split
+  testing; acceptance of that OpenCode scenario remains incomplete.
+
+- The complete frontend/build-helper suite passes (269 passed, 11 optional/platform checks skipped),
+  including the pane-swap App regression. Repository-wide formatting reports issues in 162 unchanged
+  files; Vite's WebSocket-port and large-chunk warnings remain. macOS and Linux runtime acceptance
+  remains pending.
 
 ### Error-banner timing
 

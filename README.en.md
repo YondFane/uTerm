@@ -43,6 +43,10 @@ Privacy & Security**. Windows uses its installation wizard. Downloads require Gi
 Quitting detaches the window while local sessions keep running. Reopen to reconnect; **Close
 Session** terminates the selected process.
 
+Enable task notifications in **Settings → Agent**. Codex and OpenCode can report precise events
+without Hooks; all Agents can forward their native terminal notifications or bells as general
+reminders. See [notification sources and limits](docs/features.md#notifications-without-hooks).
+
 ## See the workflow
 
 [Watch the 30-second screenshot tour](site/media/workflow.mp4)
@@ -66,6 +70,11 @@ shortcuts. Agent programs are optional; install or configure the CLI you want to
 MongoDB connections require Java 17+ and the selected drivers, managed on demand in the app.
 Elasticsearch requires no additional runtime. See the [feature guide](docs/features.md) for
 supported behavior, limits and platform acceptance.
+
+Ctrl+- and Ctrl++ adjust the font of the visible terminal, Agent session or file content; macOS uses
+Command instead of Ctrl. Session and file headers also offer font buttons. Session headers show the
+starting directory, with Windows paths displayed from the drive letter. Right-click a Files → Quick
+open result to copy the file, its name or path, or reveal it in the file manager.
 
 Settings → Appearance → Sidebar style offers the default Classic sidebar and an Icon navigation
 sidebar with a vertical icon rail beside the content list. Its Add button joins Commands, Settings

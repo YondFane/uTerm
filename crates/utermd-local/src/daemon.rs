@@ -36,6 +36,10 @@ pub struct SessionSpec {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Frame {
     #[serde(default)]
+    pub agent_activity_error: Option<String>,
+    #[serde(default)]
+    pub agent_events: Option<Vec<crate::activity::ActivityEvent>>,
+    #[serde(default)]
     pub agent_state: Option<String>,
     #[serde(default)]
     pub foreground_agent: Option<String>,
@@ -99,6 +103,11 @@ pub enum Operation {
         id: String,
         generation: String,
         state: String,
+    },
+    AcknowledgeAgentEvent {
+        id: String,
+        generation: String,
+        event: String,
     },
     ShutdownIfEmpty,
 }
@@ -368,8 +377,8 @@ fn receive<T: DeserializeOwned, R: Read>(stream: &mut R) -> Result<T> {
 }
 
 #[derive(Default)]
-struct TerminalReplies {
-    bytes: Vec<u8>,
+pub(crate) struct TerminalReplies {
+    pub(crate) bytes: Vec<u8>,
 }
 impl vt100::Callbacks for TerminalReplies {
     fn unhandled_csi(
@@ -433,6 +442,12 @@ impl vt100::Callbacks for TerminalReplies {
 }
 
 struct Output {
+    notifications: crate::activity::TerminalNotifications,
+    activity_events: VecDeque<crate::activity::ActivityEvent>,
+    pending_notice: Option<Instant>,
+    precise_activity: Option<Instant>,
+    activity_error: Option<String>,
+    structured_activity: bool,
     parser: vt100::Parser<TerminalReplies>,
     sequence: u64,
     chunks: VecDeque<(u64, Vec<u8>)>,
@@ -447,6 +462,12 @@ struct Output {
 impl Output {
     fn new(rows: u16, cols: u16, agent: Option<&str>) -> Self {
         Self {
+            notifications: Default::default(),
+            activity_events: VecDeque::new(),
+            pending_notice: None,
+            precise_activity: None,
+            activity_error: None,
+            structured_activity: false,
             parser: vt100::Parser::new_with_callbacks(rows, cols, 3000, TerminalReplies::default()),
             sequence: 0,
             chunks: VecDeque::new(),
@@ -468,6 +489,9 @@ impl Output {
         self.sequence += 1;
         match event {
             Event::Output { data, .. } => {
+                if self.notifications.feed(&data) {
+                    self.pending_notice.get_or_insert_with(Instant::now);
+                }
                 let (rows, cols) = self.parser.screen().size();
                 let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     self.parser.process(&data);
@@ -495,11 +519,76 @@ impl Output {
                 self.foreground_agent = None;
                 if self.agent_state.is_some() {
                     self.agent_state = Some(if code == Some(0) { "done" } else { "error" }.into());
+                    if code != Some(0)
+                        || self
+                            .activity_events
+                            .back()
+                            .is_none_or(|event| event.kind != "done")
+                        || self
+                            .precise_activity
+                            .is_none_or(|time| time.elapsed() > Duration::from_secs(1))
+                    {
+                        self.activity(if code == Some(0) { "done" } else { "error" }, "process");
+                    }
                 }
             }
             Event::Error { message } => {
                 self.error = Some(message);
             }
+        }
+    }
+    fn activity(&mut self, kind: &str, source: &str) {
+        self.sequence += 1;
+        if source != "terminal" {
+            self.pending_notice = None;
+            if matches!(kind, "done" | "waiting" | "error") {
+                self.precise_activity = Some(Instant::now());
+            }
+            self.agent_state = Some(kind.into());
+        } else {
+            self.agent_state = Some("notice".into());
+        }
+        self.activity_events
+            .push_back(crate::activity::ActivityEvent {
+                id: uuid::Uuid::new_v4().to_string(),
+                sequence: self.sequence,
+                kind: kind.into(),
+                source: source.into(),
+            });
+        while self.activity_events.len() > 128 {
+            self.activity_events.pop_front();
+        }
+    }
+    fn flush_notice(&mut self) {
+        if self
+            .precise_activity
+            .is_some_and(|time| time.elapsed() < Duration::from_secs(1))
+        {
+            self.pending_notice = None;
+            return;
+        }
+        if self.pending_notice.is_some_and(|time| {
+            time.elapsed()
+                >= Duration::from_millis(if self.structured_activity { 1500 } else { 400 })
+        }) {
+            self.pending_notice = None;
+            if self
+                .precise_activity
+                .is_none_or(|time| time.elapsed() > Duration::from_secs(1))
+            {
+                self.activity("notice", "terminal");
+            }
+        }
+    }
+    fn acknowledge_activity(&mut self, expected: Option<&str>) {
+        if expected.is_none_or(|id| {
+            self.activity_events
+                .back()
+                .is_some_and(|event| event.id == id)
+        }) && matches!(self.agent_state.as_deref(), Some("done" | "notice"))
+        {
+            self.agent_state = Some("idle".into());
+            self.sequence += 1;
         }
     }
     fn frame(&self, after: Option<u64>) -> Frame {
@@ -529,6 +618,16 @@ impl Output {
             data
         };
         Frame {
+            agent_activity_error: self.activity_error.clone(),
+            agent_events: Some(if reset {
+                vec![]
+            } else {
+                self.activity_events
+                    .iter()
+                    .filter(|event| after.is_some_and(|cursor| event.sequence > cursor))
+                    .cloned()
+                    .collect()
+            }),
             agent_state: self.agent_state.clone(),
             foreground_agent: self.foreground_agent.clone(),
             sequence: self.sequence,
@@ -573,9 +672,23 @@ struct Entry {
     generation: String,
     session: Arc<Session>,
     output: Arc<(Mutex<Output>, Condvar)>,
+    activity_stopped: AtomicBool,
+    activity: Mutex<Option<std::thread::JoinHandle<()>>>,
+}
+impl Entry {
+    fn stop_activity(&self) -> Result<()> {
+        self.activity_stopped.store(true, Ordering::Release);
+        let task = lock(&self.activity).take();
+        if let Some(task) = task {
+            task.join()
+                .map_err(|_| anyhow::anyhow!("Agent 事件服务停止失败。"))?;
+        }
+        Ok(())
+    }
 }
 struct Host {
     directory: PathBuf,
+    opening: Mutex<()>,
     sessions: Mutex<HashMap<String, Arc<Entry>>>,
     closed_sessions: Mutex<HashSet<String>>,
     stopping: Arc<AtomicBool>,
@@ -628,7 +741,10 @@ impl Host {
         if spec.id.is_empty() || spec.id.len() > 200 {
             bail!("Invalid session identifier");
         }
-        let mut sessions = lock(&self.sessions);
+        // Serialize creation without holding up I/O for already-running sessions.
+        // 串行创建会话，同时避免阻塞已有会话的 I/O。
+        let _opening = lock(&self.opening);
+        let sessions = lock(&self.sessions);
         if self.stopping.load(Ordering::Acquire) {
             bail!("Session host is restarting; reconnect before opening a session");
         }
@@ -658,6 +774,7 @@ impl Host {
                 "Session history limit reached; close running sessions and safely restart the host"
             );
         }
+        drop(sessions);
         let output = Arc::new((
             Mutex::new(Output::new(rows, cols, spec.agent.as_deref())),
             Condvar::new(),
@@ -665,12 +782,39 @@ impl Host {
         let sink = output.clone();
         let (reply_sender, reply_receiver) = mpsc::sync_channel::<Vec<u8>>(64);
         let generation = uuid::Uuid::new_v4().to_string();
+        let mut observer = None;
+        let mut environment = vec![];
+        let mut activity_error = None;
         let mut command = if let Some(target) = &spec.ssh {
             crate::ssh::configured_command(
                 target,
                 configured.as_ref().map(|v| &v.0),
                 configured.as_ref().and_then(|v| v.1.as_ref()),
             )?
+        } else if let Some(agent) = spec.agent.as_deref() {
+            let configuration = self
+                .directory
+                .parent()
+                .context("Host directory has no parent")?;
+            let (program, arguments) = crate::agents::resolve(configuration, agent)?;
+            let arguments = match crate::activity_bridge::prepare(
+                agent,
+                &program,
+                arguments.clone(),
+                &spec.directory,
+                &self.directory,
+            ) {
+                Ok(launch) => {
+                    observer = launch.observer;
+                    environment = launch.environment;
+                    launch.arguments
+                }
+                Err(error) => {
+                    activity_error = Some(format!("Agent 事件不可用，仍可接收终端提醒：{error}"));
+                    arguments
+                }
+            };
+            crate::process::launch_resolved(&program, &arguments)?
         } else {
             crate::process::launch_command(
                 &spec.shell,
@@ -680,6 +824,10 @@ impl Host {
                     .context("Host directory has no parent")?,
             )?
         };
+        for (key, value) in environment {
+            command.env(key, value);
+        }
+        lock(&output.0).activity_error = activity_error;
         if spec.ssh.is_none() {
             command.env("UTERM_DESKTOP_HOST", &self.directory);
             command.env("UTERM_DESKTOP_REPORTER", std::env::current_exe()?);
@@ -716,17 +864,74 @@ impl Host {
             }
         });
         let entry = Arc::new(Entry {
+            activity_stopped: AtomicBool::new(false),
+            activity: Mutex::new(None),
             spec,
             generation,
             session,
             output,
         });
-        sessions.insert(entry.spec.id.clone(), entry.clone());
+        lock(&self.sessions).insert(entry.spec.id.clone(), entry.clone());
+        if let Some(observer) = observer {
+            let alive = Arc::downgrade(&entry);
+            let sink = Arc::downgrade(&entry);
+            let errors = Arc::downgrade(&entry);
+            let hints = Arc::downgrade(&entry);
+            let task = std::thread::spawn(move || {
+                crate::activity_bridge::observe(
+                    observer,
+                    move || {
+                        alive.upgrade().is_some_and(|entry| {
+                            !entry.activity_stopped.load(Ordering::Acquire)
+                                && !entry.session.has_exited()
+                        })
+                    },
+                    move || {
+                        hints
+                            .upgrade()
+                            .is_some_and(|entry| lock(&entry.output.0).pending_notice.is_some())
+                    },
+                    move |kind| {
+                        if let Some(entry) = sink.upgrade() {
+                            let mut output = lock(&entry.output.0);
+                            if !output.exited
+                                && (kind == "done" || output.agent_state.as_deref() != Some(kind))
+                            {
+                                output.activity(kind, "events");
+                                entry.output.1.notify_all();
+                            }
+                        }
+                    },
+                    move |error| {
+                        if let Some(entry) = errors.upgrade() {
+                            let mut output = lock(&entry.output.0);
+                            output.structured_activity = error.is_none();
+                            if output.activity_error != error {
+                                output.activity_error = error;
+                                output.sequence += 1;
+                                entry.output.1.notify_all();
+                            }
+                        }
+                    },
+                );
+            });
+            *lock(&entry.activity) = Some(task);
+        }
         Ok(entry)
     }
 
     fn dispatch(&self, operation: Operation) -> Result<Reply> {
         match operation {
+            Operation::AcknowledgeAgentEvent {
+                id,
+                generation,
+                event,
+            } => {
+                let entry = self.entry(&id, &generation)?;
+                lock(&entry.output.0).acknowledge_activity(Some(&event));
+                entry.output.1.notify_all();
+                Ok(Reply::Done)
+            }
             Operation::Report {
                 id,
                 generation,
@@ -737,9 +942,14 @@ impl Host {
                 }
                 let entry = self.entry(&id, &generation)?;
                 let mut output = lock(&entry.output.0);
-                if !output.exited && output.agent_state.as_ref() != Some(&state) {
-                    output.agent_state = Some(state);
-                    output.sequence += 1;
+                if state == "idle" {
+                    output.acknowledge_activity(None);
+                }
+                if !output.exited
+                    && !output.structured_activity
+                    && output.agent_state.as_ref() != Some(&state)
+                {
+                    output.activity(&state, "hook");
                 }
                 drop(output);
                 entry.output.1.notify_all();
@@ -750,6 +960,7 @@ impl Host {
                 capabilities: {
                     let mut values = vec![
                         "agent-reports-v1".into(),
+                        "agent-events-v1".into(),
                         "ssh-sessions-v1".into(),
                         "ssh-options-v1".into(),
                         "ssh-jump-v1".into(),
@@ -779,9 +990,13 @@ impl Host {
                     .collect(),
             })),
             Operation::ShutdownIfIdle => {
+                let _opening = lock(&self.opening);
                 let sessions = lock(&self.sessions);
                 if sessions.values().any(|entry| !lock(&entry.output.0).exited) {
                     bail!("Sessions are still running; restart cancelled");
+                }
+                for entry in sessions.values() {
+                    entry.stop_activity()?;
                 }
                 self.stopping.store(true, Ordering::Release);
                 Ok(Reply::Done)
@@ -874,7 +1089,8 @@ impl Host {
                         Err(error) => eprintln!("Could not identify foreground agent: {error:#}"),
                     }
                 }
-                let output = lock(&entry.output.0);
+                let mut output = lock(&entry.output.0);
+                output.flush_notice();
                 let output = if after == Some(output.sequence) && !output.exited {
                     entry
                         .output
@@ -885,6 +1101,8 @@ impl Host {
                 } else {
                     output
                 };
+                let mut output = output;
+                output.flush_notice();
                 Ok(Reply::Frame(output.frame(after)))
             }
             Operation::Write {
@@ -920,11 +1138,16 @@ impl Host {
                     }
                     entry.session.close()?;
                     lock(&self.closed_sessions).insert(id.clone());
-                    sessions.remove(&id);
+                    let entry = sessions.remove(&id);
+                    drop(sessions);
+                    if let Some(entry) = entry {
+                        entry.stop_activity()?;
+                    }
                 }
                 Ok(Reply::Done)
             }
             Operation::ShutdownIfEmpty => {
+                let _opening = lock(&self.opening);
                 if !lock(&self.sessions).is_empty() {
                     bail!("Sessions are still running");
                 }
@@ -954,6 +1177,7 @@ pub fn serve(directory: &Path) -> Result<()> {
     file.sync_all()?;
     let host = Arc::new(Host {
         directory: directory.to_owned(),
+        opening: Mutex::new(()),
         sessions: Mutex::new(HashMap::new()),
         closed_sessions: Mutex::new(HashSet::new()),
         stopping: Arc::new(AtomicBool::new(false)),
@@ -1030,6 +1254,171 @@ pub fn report_from_environment(state: String) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn slow_agent_startup_keeps_host_requests_responsive() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("target/startup-test")
+            .join(uuid::Uuid::new_v4().to_string());
+        let directory = root.join("host");
+        std::fs::create_dir_all(&directory).unwrap();
+        let ready = root.join("ready");
+        #[cfg(windows)]
+        let program = {
+            let path = root.join("codex.cmd");
+            std::fs::write(&path, "@echo off\r\nif \"%1\"==\"--help\" (\r\n echo ready>\"%~dp0ready\"\r\n ping -n 6 127.0.0.1 >nul\r\n)\r\nexit /b 0\r\n").unwrap();
+            path
+        };
+        #[cfg(unix)]
+        let program = {
+            use std::os::unix::fs::PermissionsExt;
+            let path = root.join("codex");
+            std::fs::write(
+                &path,
+                "#!/bin/sh\nif [ \"$1\" = --help ]; then\n : > \"${0%/*}/ready\"\n sleep 5\nfi\n",
+            )
+            .unwrap();
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
+            path
+        };
+        std::fs::write(
+            root.join("agents.json"),
+            serde_json::to_vec(&vec![crate::agents::AgentDefinition {
+                id: "codex".into(),
+                name: "Codex".into(),
+                program: program.to_string_lossy().into(),
+                arguments: vec![],
+            }])
+            .unwrap(),
+        )
+        .unwrap();
+        let host = Arc::new(Host {
+            directory,
+            opening: Mutex::new(()),
+            sessions: Mutex::new(HashMap::new()),
+            closed_sessions: Mutex::new(HashSet::new()),
+            stopping: Arc::new(AtomicBool::new(false)),
+            processes: Mutex::new(ProcessCache::default()),
+        });
+        let starting = host.clone();
+        let work = root.clone();
+        let task = std::thread::spawn(move || {
+            starting.open_session(
+                SessionSpec {
+                    id: "slow".into(),
+                    directory: work,
+                    shell: "default".into(),
+                    agent: Some("codex".into()),
+                    ssh: None,
+                },
+                24,
+                80,
+                true,
+                None,
+            )
+        });
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !ready.exists() {
+            assert!(Instant::now() < deadline, "CLI probe did not start");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let reading = host.clone();
+        let (sent, received) = mpsc::channel();
+        let reader = std::thread::spawn(move || {
+            sent.send(reading.dispatch(Operation::HostStatus).is_ok())
+                .unwrap();
+        });
+        let responsive = received.recv_timeout(Duration::from_secs(1));
+        let entry = task.join().unwrap().unwrap();
+        host.dispatch(Operation::Close {
+            id: "slow".into(),
+            generation: entry.generation.clone(),
+        })
+        .unwrap();
+        reader.join().unwrap();
+        assert_eq!(responsive.ok(), Some(true));
+    }
+
+    #[test]
+    fn every_builtin_agent_receives_distinct_terminal_events_without_replaying_them() {
+        for agent in crate::agents::BUILTIN_AGENTS {
+            let mut output = Output::new(24, 80, Some(agent));
+            for _ in 0..2 {
+                let cursor = output.sequence;
+                let data = b"\x1b]777;notify;Agent;Ready\x07".to_vec();
+                output.record(Event::Output {
+                    sequence: 0,
+                    data: data.clone(),
+                });
+                output.pending_notice = Some(Instant::now() - Duration::from_secs(1));
+                output.flush_notice();
+                let frame = output.frame(Some(cursor));
+                assert_eq!(frame.data, data, "{agent}");
+                let events = frame.agent_events.unwrap();
+                assert_eq!(events.len(), 1);
+                assert_eq!(events[0].kind, "notice");
+                assert_eq!(frame.agent_state.as_deref(), Some("notice"));
+                assert!(output.frame(None).agent_events.unwrap().is_empty());
+                assert!(output
+                    .frame(Some(output.sequence))
+                    .agent_events
+                    .unwrap()
+                    .is_empty());
+            }
+        }
+    }
+
+    #[test]
+    fn structured_or_hook_activity_suppresses_duplicate_terminal_notifications() {
+        let mut output = Output::new(24, 80, Some("claude"));
+        output.record(Event::Output {
+            sequence: 0,
+            data: vec![7],
+        });
+        output.activity("done", "hook");
+        output.flush_notice();
+        assert_eq!(output.activity_events.len(), 1);
+        output.structured_activity = true;
+        output.record(Event::Output {
+            sequence: 0,
+            data: vec![7],
+        });
+        output.flush_notice();
+        assert!(output.pending_notice.is_none());
+        output.activity("done", "events");
+        assert_eq!(output.activity_events.len(), 2);
+        assert_ne!(output.activity_events[0].id, output.activity_events[1].id);
+    }
+
+    #[test]
+    fn old_acknowledgements_cannot_clear_new_completions_and_crashes_still_notify() {
+        let mut output = Output::new(24, 80, Some("codex"));
+        output.activity("done", "events");
+        let old = output.activity_events.back().unwrap().id.clone();
+        output.activity("done", "events");
+        output.acknowledge_activity(Some(&old));
+        assert_eq!(output.agent_state.as_deref(), Some("done"));
+        let latest = output.activity_events.back().unwrap().id.clone();
+        output.acknowledge_activity(Some(&latest));
+        assert_eq!(output.agent_state.as_deref(), Some("idle"));
+        output.activity("waiting", "events");
+        output.record(Event::Exit { code: Some(1) });
+        assert_eq!(output.activity_events.back().unwrap().source, "process");
+        assert_eq!(output.activity_events.back().unwrap().kind, "error");
+    }
+
+    #[test]
+    fn structured_observers_retain_a_delayed_generic_fallback_when_no_precise_event_arrives() {
+        let mut output = Output::new(24, 80, Some("codex"));
+        output.structured_activity = true;
+        output.record(Event::Output {
+            sequence: 0,
+            data: b"\x1b]9;Ready\x07".to_vec(),
+        });
+        output.pending_notice = Some(Instant::now() - Duration::from_secs(2));
+        output.flush_notice();
+        assert_eq!(output.activity_events.back().unwrap().kind, "notice");
+    }
 
     #[test]
     fn delta_frames_preserve_bytes_order_and_exit_metadata() {

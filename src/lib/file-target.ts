@@ -38,8 +38,14 @@ export function remoteDirectory(root: RemoteRoot): string {
 export function displayDirectory(directory: string): string {
   const target = fileTarget(directory);
   return target.kind === "local"
-    ? directory
+    ? displayLocalPath(directory)
     : `ssh://${target.root.connection.host}/${target.root.path.replace(/^\/+/, "")}`;
+}
+export function displayLocalPath(path: string): string {
+  const windows = path.replace(/\//g, "\\");
+  if (/^\\\\\?\\[a-z]:\\/i.test(windows)) return windows.slice(4);
+  if (/^\\\\\?\\UNC\\/i.test(windows)) return `\\\\${windows.slice(8)}`;
+  return /^[a-z]:[\\/]|^\\\\/i.test(path) ? windows : path;
 }
 export function sshError(value: unknown): string {
   const message = value instanceof Error ? value.message : String(value);

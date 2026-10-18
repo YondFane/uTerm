@@ -1,4 +1,11 @@
 export const backendMessages: Record<string, string> = {
+  "Agent 事件服务停止失败。": "Could not stop the Agent event service.",
+  "Codex 事件服务已退出。": "The Codex event server exited.",
+  "Agent 事件连接失败：{p0}": "Agent event connection failed: {p0}",
+  "Agent 事件不可用，仍可接收终端提醒：{p0}":
+    "Agent events unavailable; terminal reminders remain available: {p0}",
+  "提交信息过大，请在终端中查看 git log。":
+    "Commit messages are too large. View git log in the terminal.",
   "请先保存或放弃 Redis 修改，再安装更新。":
     "Save or discard Redis changes before installing the update.",
   "请选择已配置的远程仓库。": "Select a configured remote.",

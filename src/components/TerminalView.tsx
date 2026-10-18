@@ -1,4 +1,4 @@
-import { sshError } from "../lib/file-target";
+import { displayDirectory, displayLocalPath, sshError } from "../lib/file-target";
 import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
@@ -15,7 +15,9 @@ import {
 } from "../lib/terminal-input";
 import { autoCloseAgent, closeAttachedSession } from "../lib/session-lifecycle";
 import { decodeTerminalFrame } from "../lib/terminal-frame";
+import type { AgentActivityEvent } from "../lib/terminal-frame";
 import { attachTerminalScrollInput } from "../lib/terminal-scroll";
+import { attachTerminalFit, createTerminalResizeQueue } from "../lib/terminal-resize";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import type { DragEventHandler, PointerEventHandler } from "react";
@@ -34,6 +36,7 @@ type Connection = {
   replaying: boolean;
   queue: Promise<void>;
   bytes: number;
+  resize: ReturnType<typeof createTerminalResizeQueue>;
 };
 const action = (id: string, action: string, values = {}) =>
   invoke<void>("session_action", { id, action, ...values });
@@ -52,6 +55,7 @@ export function TerminalView({
   onFocus,
   onClosed,
   onAgentState,
+  onAgentEvent,
   onDetectedAgent,
   agentState,
   dropEdge,
@@ -65,7 +69,8 @@ export function TerminalView({
   onStatus?: (status: TerminalStatus | null) => void;
   agentState?: string;
   onPaneDragStart: PointerEventHandler<HTMLElement>;
-  onAgentState: (state: string, initial: boolean) => void;
+  onAgentState: (state: string, initial: boolean, eventDriven?: boolean) => void;
+  onAgentEvent?: (event: AgentActivityEvent) => void;
   onDetectedAgent: (agent: string | null) => void;
   dropEdge?: string;
   onDragOver: DragEventHandler<HTMLElement>;
@@ -83,11 +88,25 @@ export function TerminalView({
 }) {
   const uiLanguage = useUiLanguage();
 
-  const { settings, light } = useSettings();
+  const { settings, light, resizeFont } = useSettings();
+  const [fontError, setFontError] = useState("");
+  const sessionDirectory = session.ssh
+    ? `${session.ssh.host}${session.ssh.root ? `:${displayLocalPath(session.ssh.root)}` : ""}`
+    : displayDirectory(directory);
+  function adjustFontSize(delta: number) {
+    try {
+      resizeFont("fontSize", delta, navigator.platform.startsWith("Mac"));
+      setFontError("");
+    } catch (reason) {
+      setFontError(tx("无法保存字号：{p0}", { p0: String(reason) }));
+    }
+  }
   const preferences = useRef(settings);
   preferences.current = settings;
   const agentStateRef = useRef(onAgentState);
   agentStateRef.current = onAgentState;
+  const agentEventRef = useRef(onAgentEvent);
+  agentEventRef.current = onAgentEvent;
   const detectedAgentRef = useRef(onDetectedAgent);
   detectedAgentRef.current = onDetectedAgent;
   const lastFrame = useRef<PaneFrame>({ x: 0, y: 0, width: 1, height: 1 });
@@ -98,7 +117,7 @@ export function TerminalView({
   activeRef.current = active;
   const container = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
-  const fitAddon = useRef<FitAddon | null>(null);
+  const fitLayout = useRef<ReturnType<typeof attachTerminalFit> | null>(null);
   const connection = useRef<Connection | null>(null);
   const closeRef = useRef(close);
   closeRef.current = close;
@@ -145,6 +164,7 @@ export function TerminalView({
   }, [status]);
   useEffect(() => () => statusCallback.current?.(null), []);
   const [error, setError] = useState("");
+  const [activityError, setActivityError] = useState("");
 
   useEffect(() => {
     if (!container.current) return;
@@ -161,7 +181,6 @@ export function TerminalView({
       theme: { background: "#212121", foreground: "#c8cdd3" },
     });
     const fit = new FitAddon();
-    fitAddon.current = fit;
     term.loadAddon(fit);
     const searchAddon = new SearchAddon();
     term.loadAddon(searchAddon);
@@ -283,37 +302,30 @@ export function TerminalView({
           .catch((reason) => setError(String(reason)));
     });
     const disposeScrollInput = attachTerminalScrollInput(term, send);
-    let resizeQueue = Promise.resolve();
     const resize = term.onResize(({ rows, cols }) => {
       const current = connection.current;
       if (!current || current.replaying) return;
-      resizeQueue = resizeQueue
-        .then(async () => {
-          await current.ready;
-          if (!current.closed) await action(current.id, "resize", { rows, cols });
-        })
-        .catch((reason: unknown) => {
-          if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
-        });
+      current.resize.request({ rows, cols });
     });
-    let frame = 0;
-    const observer = new ResizeObserver(() => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        if (container.current?.clientHeight && container.current?.clientWidth) fit.fit();
-      });
-    });
-    observer.observe(container.current);
+    const layout = attachTerminalFit(
+      term,
+      container.current,
+      () => fit.fit(),
+      () => !connection.current?.replaying,
+      (reason) => setError(String(reason)),
+    );
+    fitLayout.current = layout;
     return () => {
       const current = connection.current;
       connection.current = null;
       if (current) {
         current.closed = true;
+        current.resize.dispose();
         // Unmounting releases the view, not the daemon-owned shell.
         current.ready.then(() => action(current.id, "detach")).catch(console.error);
       }
-      observer.disconnect();
-      cancelAnimationFrame(frame);
+      layout.dispose();
+      fitLayout.current = null;
       searchListener.dispose();
       search.current = null;
       queryHandlers.forEach((handler) => handler.dispose());
@@ -343,7 +355,7 @@ export function TerminalView({
       scrollback: settings.scrollback,
       theme: { ...theme, background: "#00000000" },
     });
-    fitAddon.current?.fit();
+    fitLayout.current?.schedule();
     Terminal.strings.promptLabel = tx("终端输入");
     Terminal.strings.tooMuchOutput = tx("输出过多，请移动到各行以读取。");
     container.current?.querySelector("textarea")?.setAttribute("aria-label", tx("终端输入"));
@@ -381,6 +393,22 @@ export function TerminalView({
       ready: Promise.resolve(),
       queue: Promise.resolve(),
       bytes: 0,
+      resize: createTerminalResizeQueue(
+        async ({ rows, cols }) => {
+          await current.ready;
+          if (
+            !current.closed &&
+            !current.replaying &&
+            connection.current === current &&
+            term.rows === rows &&
+            term.cols === cols
+          )
+            await action(current.id, "resize", { rows, cols });
+        },
+        (reason) => {
+          if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
+        },
+      ),
     };
     connection.current = current;
     events.onmessage = (payload) => {
@@ -389,6 +417,7 @@ export function TerminalView({
       try {
         decoded = decodeTerminalFrame(payload);
       } catch (reason) {
+        current.resize.dispose();
         setError(session.ssh ? sshError(reason) : String(reason));
         setStatus("disconnected");
         term.options.disableStdin = true;
@@ -396,7 +425,11 @@ export function TerminalView({
         return;
       }
       const { data, ...event } = decoded;
-      if (event.agent_state) agentStateRef.current(event.agent_state, event.reset);
+      setActivityError(event.agent_activity_error ?? "");
+      if (event.agent_state)
+        agentStateRef.current(event.agent_state, event.reset, Array.isArray(event.agent_events));
+      if (!event.reset)
+        for (const activity of event.agent_events ?? []) agentEventRef.current?.(activity);
       if (event.foreground_agent !== undefined) detectedAgentRef.current(event.foreground_agent);
       if (event.error) {
         setError(event.error);
@@ -409,6 +442,7 @@ export function TerminalView({
       // Replay at the saved dimensions before fitting, so wrapped output stays intact.
       if (event.reset) {
         current.replaying = true;
+        fitLayout.current?.cancel();
         term.reset();
         term.resize(event.cols, event.rows);
       }
@@ -416,7 +450,7 @@ export function TerminalView({
         if (current.closed) return;
         if (event.reset) {
           current.replaying = false;
-          fitAddon.current?.fit();
+          fitLayout.current?.schedule();
         }
         if (event.exited) {
           current.exited = true;
@@ -470,6 +504,7 @@ export function TerminalView({
       }
     } catch (reason) {
       if (!current.closed) {
+        current.resize.dispose();
         connection.current = null;
         setStatus("idle");
         setError(session.ssh ? sshError(reason) : String(reason));
@@ -492,6 +527,7 @@ export function TerminalView({
     if (terminal.current) terminal.current.options.disableStdin = true;
     try {
       if (!(await closeAttachedSession(current, () => action(current.id, "close")))) return;
+      current.resize.dispose();
       connection.current = null;
       setStatus("idle");
       onClosed();
@@ -506,6 +542,7 @@ export function TerminalView({
     const current = connection.current;
     if (current) {
       current.closed = true;
+      current.resize.dispose();
       try {
         await action(current.id, "detach");
       } catch (reason) {
@@ -569,10 +606,38 @@ export function TerminalView({
             event.stopPropagation();
             void close();
           }}
-          title={`${session.name} — ${session.ssh?.host ?? directory}`}
+          title={`${session.name} — ${sessionDirectory}`}
         >
           {session.name}
         </span>
+        <span className="session-working-directory" title={sessionDirectory}>
+          {sessionDirectory}
+        </span>
+        <div
+          className="terminal-font-controls editor-font-controls"
+          role="group"
+          aria-label={tx("终端字号")}
+        >
+          <button
+            type="button"
+            title={tx("减小终端字号")}
+            aria-label={tx("减小终端字号")}
+            disabled={settings.fontSize <= 10}
+            onClick={() => adjustFontSize(-1)}
+          >
+            {tx("A−")}
+          </button>
+          <output aria-live="polite">{tx("{p0} px", { p0: settings.fontSize })}</output>
+          <button
+            type="button"
+            title={tx("增大终端字号")}
+            aria-label={tx("增大终端字号")}
+            disabled={settings.fontSize >= 32}
+            onClick={() => adjustFontSize(1)}
+          >
+            {tx("A+")}
+          </button>
+        </div>
         <button
           className="toolbar-icon-button"
           aria-label={tx("搜索")}
@@ -706,7 +771,9 @@ export function TerminalView({
           </button>
         </form>
       )}
-      {error && <p role="alert">{localizeMessage(error)}</p>}
+      {(fontError || error || activityError) && (
+        <p role="alert">{localizeMessage(fontError || error || activityError)}</p>
+      )}
       <div ref={container} className="terminal" aria-label={tx("本地终端")} />
     </section>
   );

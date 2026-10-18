@@ -41,6 +41,7 @@ test("terminal frames reject truncation, invalid UTF-8/JSON and invalid replay m
     { ...metadata, sequence: -1 },
     { ...metadata, rows: 0 },
     { ...metadata, reset: "true" },
+    { ...metadata, agent_activity_error: 5 },
   ])
     assert.throws(() => decodeTerminalFrame(encode(header)));
   const invalid = encode();
@@ -48,4 +49,24 @@ test("terminal frames reject truncation, invalid UTF-8/JSON and invalid replay m
   assert.throws(() => decodeTerminalFrame(invalid));
   new Uint8Array(invalid)[4] = 33;
   assert.throws(() => decodeTerminalFrame(invalid));
+});
+
+test("terminal frames validate independent activity events while accepting older hosts", () => {
+  const event = { id: "event-a", sequence: 41, kind: "notice", source: "terminal" };
+  assert.deepEqual(
+    decodeTerminalFrame(encode({ ...metadata, agent_events: [event] })).agent_events,
+    [event],
+  );
+  assert.equal(decodeTerminalFrame(encode(metadata)).agent_events, undefined);
+  for (const agent_events of [
+    false,
+    Array(129).fill(event),
+    [null],
+    [{ ...event, sequence: 43 }],
+    [{ ...event, kind: "success" }],
+    [{ ...event, source: "external" }],
+    [{ ...event, id: "" }],
+  ]) {
+    assert.throws(() => decodeTerminalFrame(encode({ ...metadata, agent_events })));
+  }
 });
