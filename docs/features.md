@@ -2269,20 +2269,38 @@ Redis drawer close control's responsive visibility.
 
 ### macOS window controls
 
-On macOS, the close, minimize and zoom/full-screen controls use the original system window buttons,
-vertically centered with the 56 px toolbar. macOS manages their colors, hover symbols, accessibility
-and full-screen menu. Closing hides the window while keeping sessions; the buttons remain usable
-above application dialogs.
+On macOS, the close, minimize and zoom/full-screen controls use the original system window buttons
+at their system-managed positions, without custom offsets. macOS manages their hit areas, colors,
+hover symbols, accessibility and full-screen menu. The 56 px title bar reserves space for the
+buttons.
+
+Closing hides the window while keeping sessions; the buttons remain usable above application
+dialogs.
+
+The title bar shares the sidebar background, including when the sidebar list is collapsed. In the
+Icon navigation sidebar, the rail background and divider start below the 56 px title bar, with an 8
+px gap before the first navigation button. The window buttons keep a continuous background and clear
+separation from navigation controls in both light and dark themes.
+
+The sidebar title bar has a 1 px bottom divider aligned with the main toolbar, separating the window
+controls and workspace name from the navigation and project lists.
 
 #### macOS window-button checks
 
-- Native window-button validation: configuration formatting, Cargo formatting, documentation checks,
-  TypeScript/production build and an isolated macOS desktop build pass. Native QA
-  (`sh.uterm.desktop.qa.trafficlights`) confirms the system close/minimize/full-screen accessibility
-  roles and entering/exiting full screen with the green button and Ctrl+Cmd+F.
+- macOS validation: 258 frontend/build-helper tests pass with ten optional checks skipped; 108
+  backend tests pass with nine optional tests ignored, and local-session service tests pass. Locked
+  dependency installation, repository formatting, localization/documentation checks and
+  TypeScript/production build and desktop compilation pass. The production build retains the
+  existing large-chunk warning.
 
-- The macOS screen-capture badge obscures direct visual acceptance of button alignment and hover
-  symbols in this capture session.
+- Native QA (`sh.uterm.desktop.qa.titlebarhover`) checks the continuous divider in Black and Paper
+  themes with the Icon navigation sidebar expanded and collapsed. The system
+  close/minimize/full-screen accessibility roles are present; the green button enters full screen
+  and Ctrl+Cmd+F exits it.
+
+- The macOS screen-capture badge obscures the buttons, so the corrected hover behavior has not been
+  directly visually accepted in this capture session. Windows/Linux runtime checks were not run for
+  this macOS-only layout change.
 
 ### macOS menu bar
 
@@ -2527,6 +2545,9 @@ moving away hides it again.
 
 ### Drag-to-collapse and reopen hints
 
+The sidebar and inspector dividers use the same thin, theme-colored highlight on hover or keyboard
+focus, including when the inspector is on the left. Drag either divider to resize its panel.
+
 The project sidebar and inspector highlight at a requested width of 30 px or less and collapse only
 on pointer release. The inspector can occupy either side of the main workspace.
 
@@ -2546,7 +2567,14 @@ on pointer release. The inspector can occupy either side of the main workspace.
 
 #### Validation and limits
 
-- Boundary tests cover both sides; native right-panel drag acceptance remains pending.
+- Nine focused sidebar/inspector layout and pane-swap tests pass, together with repository
+  formatting, documentation checks, TypeScript/production build and an isolated macOS desktop build.
+  The production build retains its existing large-chunk warning.
+
+- Native macOS QA (`sh.uterm.desktop.qa.panelhover`) verifies matching dark-theme divider
+  highlights, inspector resizing on both sides, pane swapping, drag collapse and reopen hints with
+  the previous width restored. Windows/Linux runtime acceptance of these divider styles remains
+  pending.
 
 ### Panel keyboard shortcuts
 
