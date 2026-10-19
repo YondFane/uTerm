@@ -46,8 +46,9 @@ test("all palettes have complete tokens and readable normal text", () => {
         for (const background of ["canvas", "sidebar", "surface"]) {
           const a = luminance(palette[foreground]),
             b = luminance(palette[background]);
+          const minimumContrast = foreground === "muted" ? 7 : 4.5;
           assert.ok(
-            (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= 4.5,
+            (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) >= minimumContrast,
             `${theme.id} ${light} ${foreground}/${background}`,
           );
         }

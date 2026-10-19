@@ -114,6 +114,11 @@ published.
 
 The prerelease update channel is never marked Latest.
 
+The release skill requires notes to start with `# uTerm MAJOR.MINOR.PATCH`, followed by matching
+Chinese and English feature highlights and usage instructions. Release preparation checks that this
+heading matches the application version, notes filename and release tag; publication verification
+also checks the heading in the release body and stable update feed.
+
 After an authorized stable release passes CI, public-download, stable-feed and Latest verification,
 the release skill requires merging its published commit into `main` and pushing it. The workflow
 preserves both histories, excludes later unpublished commits and checks remote ancestry. Branch
@@ -124,6 +129,9 @@ protection or unresolved conflicts leave synchronization explicitly incomplete.
 - Latest validation: six release-helper tests, workflow formatting, step-order and shell syntax
   checks, and documentation checks pass. The live latest-release API resolves to a published stable
   release, with its name, notes and all 11 uploaded asset records intact.
+
+- Release skill structure, Markdown formatting and documentation checks pass. Version-heading
+  matching is reviewed during release preparation and publication verification.
 
 ### One-line installation
 
@@ -1329,7 +1337,7 @@ details area, and text remains selectable.
   commit details retained. Visual inspection covers Chinese/dark and English/light views and
   wrapping in a 280 px panel.
 - Production and desktop builds, TypeScript, localization, documentation, changed-file formatting
-  and Cargo formatting pass. Repository-wide formatting reports existing issues in 162 other files;
+  and Cargo formatting pass. Repository-wide formatting reports existing issues in 166 other files;
   production builds retain the large-chunk warning. macOS/Linux runtime acceptance remains pending.
 
 ### Git comparison tabs
@@ -2121,13 +2129,13 @@ failure copy, native permissions and duplicate suppression.
   Serial backend checks pass (108 passed, nine opt-in checks ignored). Serial execution avoids
   process-startup and executable-cleanup timing failures in the QA environment.
 
-- The complete frontend/build-helper suite passes (269 passed, 11 optional/platform checks skipped).
+- The complete frontend/build-helper suite passes (273 passed, 11 optional/platform checks skipped).
   Focused checks cover batched font adjustments, tray reminder labels, repository switching, legacy
   Codex turn ordering and retaining custom invocation settings. A slow-CLI regression verifies that
   host requests remain responsive during startup.
 
 - Changed-source/test and Rust formatting, localization, documentation, TypeScript/production and
-  Windows desktop checks pass. Repository-wide formatting retains issues in 162 other files; Vite's
+  Windows desktop checks pass. Repository-wide formatting retains issues in 166 other files; Vite's
   WebSocket-port and large-chunk warnings remain.
 
 The installed Codex CLI 0.163.0 runs its real TUI against an isolated deterministic loopback model
@@ -2182,7 +2190,7 @@ acknowledged.
 
 - Changed-source/test and Rust formatting, localization, documentation checks, TypeScript/production
   and the isolated Windows desktop build (`sh.uterm.desktop.qa.nativeactivity`) pass.
-  Repository-wide formatting retains existing issues in 162 other files, and tests/builds retain the
+  Repository-wide formatting retains existing issues in 166 other files, and tests/builds retain the
   Vite WebSocket-port and large-chunk warnings.
 
 - Permission and deferred-notification regressions use mocked native commands. Native acceptance of
@@ -2248,7 +2256,7 @@ setting and disable at its bounds; save failures appear in the session.
   the header and menu in English/light at 1000 × 700. Clipboard and reveal calls are mocked; no
   model requests are used. macOS/Linux runtime acceptance remains pending.
 
-- Repository-wide formatting reports existing issues in 162 other files; changed files pass.
+- Repository-wide formatting reports existing issues in 166 other files; changed files pass.
 
 ### Mouse wheel and trackpad scrolling
 
@@ -2337,7 +2345,7 @@ Markdown previews. Image, PDF and static HTML previews keep their own sizing con
 
 - The expanded unified Git diff was visually checked with the content shortcuts above; other Git
   diff layouts and macOS/Linux runtime acceptance remain pending. Repository-wide formatting reports
-  existing issues in 162 other files; changed files pass formatting.
+  existing issues in 166 other files; changed files pass formatting.
 
 ### Automatic updates and confirmation
 
@@ -2526,20 +2534,87 @@ Redis drawer close control's responsive visibility.
 
 ### macOS window controls
 
-On macOS, the close, minimize and zoom/full-screen controls use the original system window buttons,
-vertically centered with the 56 px toolbar. macOS manages their colors, hover symbols, accessibility
-and full-screen menu. Closing hides the window while keeping sessions; the buttons remain usable
-above application dialogs.
+On macOS, the close, minimize and zoom/full-screen controls use the original system window buttons
+at their system-managed positions, without custom offsets. macOS manages their hit areas, colors,
+hover symbols, accessibility and full-screen menu. The 56 px title bar reserves space for the
+buttons.
+
+Closing hides the window while keeping sessions; the buttons remain usable above application
+dialogs.
+
+The title bar shares the sidebar background, including when the sidebar list is collapsed. In the
+Icon navigation sidebar, the rail background and divider start below the 56 px title bar, with an 8
+px gap before the first navigation button. The window buttons keep a continuous background and clear
+separation from navigation controls in both light and dark themes.
+
+The sidebar title bar has a 1 px bottom divider aligned with the main toolbar, separating the window
+controls and workspace name from the navigation and project lists.
 
 #### macOS window-button checks
 
-- Native window-button validation: configuration formatting, Cargo formatting, documentation checks,
-  TypeScript/production build and an isolated macOS desktop build pass. Native QA
-  (`sh.uterm.desktop.qa.trafficlights`) confirms the system close/minimize/full-screen accessibility
-  roles and entering/exiting full screen with the green button and Ctrl+Cmd+F.
+- macOS validation: 258 frontend/build-helper tests pass with ten optional checks skipped; 108
+  backend tests pass with nine optional tests ignored, and local-session service tests pass. Locked
+  dependency installation, repository formatting, localization/documentation checks and
+  TypeScript/production build and desktop compilation pass. The production build retains the
+  existing large-chunk warning.
 
-- The macOS screen-capture badge obscures direct visual acceptance of button alignment and hover
-  symbols in this capture session.
+- Native QA (`sh.uterm.desktop.qa.titlebarhover`) checks the continuous divider in Black and Paper
+  themes with the Icon navigation sidebar expanded and collapsed. The system
+  close/minimize/full-screen accessibility roles are present; the green button enters full screen
+  and Ctrl+Cmd+F exits it.
+
+- The macOS screen-capture badge obscures the buttons, so the corrected hover behavior has not been
+  directly visually accepted in this capture session. Windows/Linux runtime checks were not run for
+  this macOS-only layout change.
+
+### macOS menu bar
+
+The macOS menu bar provides the same commands as the application controls and command palette.
+
+- **uTerm** opens Settings, Agent configuration and About, with the standard Services, Hide and Quit
+  actions. **File** adds projects, opens terminals or chats, quickly opens files and closes the
+  current session, file or workbench. Close Window hides the window and keeps sessions running.
+
+- **Edit** provides native undo, redo, cut, copy, paste and select-all actions for the focused
+  control. **View** opens the command palette, toggles the sidebar and inspector tools, swaps panes
+  and searches the project.
+
+- **Session** switches to the previous or next session, or selects one by workspace and project, SSH
+  connection or standalone session type. It also provides splitting, pane focus, zoom, Ungroup,
+  terminal search and Copy session link.
+
+- **Workspace** creates or selects a workspace. Current sessions, workspaces and visible panels are
+  checked. **Window** provides native minimize, zoom, full-screen and bring-to-front actions.
+  **Help** opens the feature guide, website and issue form.
+
+Menu labels follow Settings → General → App language immediately. Help links select the matching
+guide and website language; user-entered names keep their original text. macOS manages the language
+of system-provided Services entries and other system additions.
+
+Command shortcuts follow Settings → Keyboard shortcuts, including custom and disabled bindings.
+Unavailable actions are disabled; dialogs and pending file operations block session and workspace
+changes. File switching and Quit retain the existing draft, conflict and exit safeguards.
+
+#### Menu-bar checks on macOS
+
+- On macOS, 258 frontend/build-helper tests pass with 10 optional/platform checks skipped, and 108
+  backend tests pass with 9 ignored. Repository formatting, localization/documentation checks,
+  TypeScript/production build and an isolated desktop build pass. The production build retains its
+  large-chunk warning.
+
+- Automated checks cover bilingual labels, stable session/workspace targets, SSH and Worktree
+  grouping, panel checks, custom and disabled shortcuts, dialog guards, stale menu replacement and
+  visible native-menu failures. Native menus are installed only on macOS.
+
+- An isolated Tauri app (`sh.uterm.desktop.qa.macosmenu`) uses the real App and native menu APIs
+  with temporary workspaces and simulated sessions. Native inspection verifies menu clicks, sidebar
+  switching with Cmd+B, Settings with Cmd+Comma, cross-workspace session selection, workspace
+  selection, a custom Cmd+Option+L binding and immediate Chinese/English switching. Session actions
+  are disabled while Settings is open. Names containing an ampersand remain intact.
+
+- Real process/SSH switching, dirty-file exit interaction and system-managed menu additions remain
+  unverified. Native popup screenshots are unavailable in the current capture tool; menu labels and
+  resulting application states are verified through native accessibility.
 
 ### Inspector tools and panel toggles
 
@@ -2580,7 +2655,7 @@ accent color as the theme or color mode changes. Older saved settings also use t
   checks skipped), together with changed-file formatting, localization, documentation checks and
   TypeScript/production build. Tests cover old settings, all six palettes in both color modes,
   custom-color persistence and provider reload, invalid colors, save failures and restoring
-  defaults. Repository-wide formatting reports existing issues in 162 unchanged files; the existing
+  defaults. Repository-wide formatting reports existing issues in 166 unchanged files; the existing
   Vite WebSocket-port and production large-chunk warnings remain.
 
 - An isolated Tauri/WebView2 host (`sh.uterm.desktop.qa.activeicons`) runs the real App with
@@ -2735,6 +2810,9 @@ moving away hides it again.
 
 ### Drag-to-collapse and reopen hints
 
+The sidebar and inspector dividers use the same thin, theme-colored highlight on hover or keyboard
+focus, including when the inspector is on the left. Drag either divider to resize its panel.
+
 The project sidebar and inspector highlight at a requested width of 30 px or less and collapse only
 on pointer release. The inspector can occupy either side of the main workspace.
 
@@ -2754,7 +2832,14 @@ on pointer release. The inspector can occupy either side of the main workspace.
 
 #### Validation and limits
 
-- Boundary tests cover both sides; native right-panel drag acceptance remains pending.
+- Nine focused sidebar/inspector layout and pane-swap tests pass, together with repository
+  formatting, documentation checks, TypeScript/production build and an isolated macOS desktop build.
+  The production build retains its existing large-chunk warning.
+
+- Native macOS QA (`sh.uterm.desktop.qa.panelhover`) verifies matching dark-theme divider
+  highlights, inspector resizing on both sides, pane swapping, drag collapse and reopen hints with
+  the previous width restored. Windows/Linux runtime acceptance of these divider styles remains
+  pending.
 
 ### Panel keyboard shortcuts
 
@@ -2799,14 +2884,14 @@ selects Classic sidebar.
 
 #### Sidebar-style checks on Windows
 
-- The complete Windows frontend/build-helper suite passes (269 passed, 11 optional/platform checks
+- The complete Windows frontend/build-helper suite passes (273 passed, 11 optional/platform checks
   skipped), including five sidebar/App regressions. Coverage includes all three Classic switches
   being off, navigation categories and lists remaining available, style switching without changing
   saved choices, provider reload, context menus, SSH removal confirmation/cancellation, Add-menu
   order and welcome dialogs in both languages, and unchanged profiles/sessions/selection. Classic
   visibility combinations and the retained rail/collapse interactions also pass.
 - Changed-file formatting, localization, documentation and TypeScript/production build pass.
-  Repository-wide formatting reports issues in 162 unchanged files.
+  Repository-wide formatting reports issues in 166 unchanged files.
 - An isolated Tauri/WebView2 app (`sh.uterm.desktop.qa.sidebarstyles`) runs the real App with
   temporary profiles and mocked desktop commands. Native inspection verifies the two settings cards,
   switching to the navigation layout, project/SSH filtering, rail footer controls, Chinese dark and
@@ -2895,7 +2980,7 @@ resizes for the old attachment. Resize errors remain visible in the session.
   eight-column pane. OpenCode emitted a Bun 1.3.14 segmentation-fault report during narrow split
   testing; acceptance of that OpenCode scenario remains incomplete.
 
-- The complete frontend/build-helper suite passes (269 passed, 11 optional/platform checks skipped),
+- The complete frontend/build-helper suite passes (273 passed, 11 optional/platform checks skipped),
   including the pane-swap App regression. Repository-wide formatting reports issues in 162 unchanged
   files; Vite's WebSocket-port and large-chunk warnings remain. macOS and Linux runtime acceptance
   remains pending.
@@ -2951,6 +3036,11 @@ always use light interface colors without changing terminal color-mode preferenc
   automatically without changing terminal color selections or recreating sessions.
 
 - Missing interface-theme settings default to Black; invalid values are rejected.
+
+Workspace and section names, project entries, branch selectors, panel tabs and settings labels use
+semibold text. Shared buttons and form controls also use heavier text, and navigation and toolbar
+icons use thicker outlines. Secondary text has stronger contrast in both dark and light themes;
+selected icons retain the configured Icon highlight color.
 
 ### Welcome page and connection actions
 
@@ -3185,9 +3275,9 @@ use separate Cargo manifests and lockfiles.
 
 ### macOS automated checks
 
-- Current validation on macOS: 218 frontend/build-helper tests and 76 backend tests pass, with eight
-  optional frontend checks skipped and four backend tests ignored. The complete local-session
-  service suite passes on a serial rerun after initial host startup lock contention.
+- Current validation on macOS: 258 frontend/build-helper tests and 108 backend tests pass, with ten
+  optional frontend checks skipped and nine backend tests ignored. The complete local-session
+  service suite passes.
 
 - Frozen dependency installation, formatting, localization, documentation checks,
   TypeScript/production build and desktop compilation pass. The production build retains its
@@ -3384,13 +3474,24 @@ use separate Cargo manifests and lockfiles.
 
 ### Theme coverage
 
-- Theme validation: frontend/build-helper tests and TypeScript checks pass, including settings
-  round-trips, invalid values and text contrast for all palettes. An isolated browser preview of the
-  real settings components verifies Ocean selection, Moss light rendering and persistence after
-  reload.
+- On macOS, 254 frontend/build-helper tests pass, with 10 optional/platform checks skipped. Coverage
+  includes settings round-trips, invalid values, custom icon highlights and at least 7:1 secondary
+  text contrast against the canvas, sidebar and surface in all six themes and both color modes.
 
-- Black, Paper and Clear Sky visual acceptance, desktop theme-switching interaction and macOS
-  acceptance remain unverified.
+- Repository formatting, localization/documentation checks, TypeScript/production build and an
+  isolated desktop build pass. The production build retains its large-chunk warning.
+
+- An isolated macOS Tauri app (`sh.uterm.desktop.qa.legibility`) runs the real App with temporary
+  profiles and mocked desktop commands. Native inspection verifies Chinese dark and English light
+  settings labels, navigation, reset and close buttons; heavier sidebar, toolbar and Git icons; and
+  branch labels.
+
+  Native inspection also covers Black, Paper and Clear Sky theme switching and readable
+  Classic/navigation sidebars at 248 and 176 px. An existing browser check covers Ocean selection,
+  Moss light rendering and persistence after reload.
+
+- No real sessions or server connections are used. Native Windows/Linux inspection, the other
+  themes' desktop appearance and custom interface fonts remain unverified.
 
 ### macOS integration scope
 

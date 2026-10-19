@@ -5,7 +5,7 @@ const paperPalette = {
   hover: "#e8e0d1",
   border: "#d7cbb8",
   text: "#322d25",
-  muted: "#716451",
+  muted: "#574b3c",
   accent: "#87502f",
 };
 const skyPalette = {
@@ -15,7 +15,7 @@ const skyPalette = {
   hover: "#d8e8f5",
   border: "#bdd1e3",
   text: "#22364b",
-  muted: "#536b81",
+  muted: "#3c5165",
   accent: "#22628e",
 };
 
@@ -31,7 +31,7 @@ export const interfaceThemes = [
       hover: "#272727",
       border: "#363636",
       text: "#f2f2f2",
-      muted: "#ababab",
+      muted: "#c4c4c4",
       accent: "#d4d4d4",
     },
     light: {
@@ -41,7 +41,7 @@ export const interfaceThemes = [
       hover: "#e0e0e0",
       border: "#cccccc",
       text: "#202020",
-      muted: "#626262",
+      muted: "#4e4e4e",
       accent: "#404040",
     },
   },
@@ -56,7 +56,7 @@ export const interfaceThemes = [
       hover: "#35312d",
       border: "#403b35",
       text: "#f0ebe3",
-      muted: "#ada59a",
+      muted: "#c4bbb0",
       accent: "#d9b987",
     },
     light: {
@@ -66,7 +66,7 @@ export const interfaceThemes = [
       hover: "#e8e2d8",
       border: "#d9d2c7",
       text: "#302b25",
-      muted: "#70665a",
+      muted: "#554c42",
       accent: "#866126",
     },
   },
@@ -81,7 +81,7 @@ export const interfaceThemes = [
       hover: "#253448",
       border: "#34465d",
       text: "#e5edf7",
-      muted: "#a0b2ca",
+      muted: "#b9c8dd",
       accent: "#8dbfff",
     },
     light: {
@@ -91,7 +91,7 @@ export const interfaceThemes = [
       hover: "#dae5f4",
       border: "#c6d3e5",
       text: "#203047",
-      muted: "#536985",
+      muted: "#3b4f67",
       accent: "#245f9e",
     },
   },
@@ -106,7 +106,7 @@ export const interfaceThemes = [
       hover: "#2b3c32",
       border: "#3c5144",
       text: "#e6efe8",
-      muted: "#a5b8aa",
+      muted: "#bfd0c4",
       accent: "#91ceb0",
     },
     light: {
@@ -116,7 +116,7 @@ export const interfaceThemes = [
       hover: "#dce8d8",
       border: "#c8d6c3",
       text: "#27382c",
-      muted: "#5a6e5d",
+      muted: "#3e5242",
       accent: "#326c4d",
     },
   },

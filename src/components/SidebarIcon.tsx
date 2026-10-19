@@ -89,7 +89,7 @@ export function SidebarIcon({ name }: { name: IconName }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.7}
+      strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
@@ -188,7 +188,7 @@ export function ToolbarIcon({ name }: { name: keyof typeof toolbarPaths | "git" 
         focusable="false"
       >
         <circle cx="9" cy="9" r="8" />
-        <path d="m6 6 6 6M12 6l-6 6" stroke="#d0d0d0" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="m6 6 6 6M12 6l-6 6" stroke="#f2f2f2" strokeWidth="2" strokeLinecap="round" />
       </svg>
     );
   return (
@@ -197,7 +197,7 @@ export function ToolbarIcon({ name }: { name: keyof typeof toolbarPaths | "git" 
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.6}
+      strokeWidth={2}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"

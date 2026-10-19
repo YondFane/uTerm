@@ -48,6 +48,7 @@ import { quotaAgent, remainingUsage, scheduleUsageRefresh, type UsageWindow } fr
 import {
   availableAgents,
   binding,
+  commands,
   sessionLink,
   sessionFromLink,
   shortcutLabel,
@@ -75,6 +76,7 @@ import { TerminalWorkspace } from "./components/TerminalWorkspace";
 import { getRuntimeInfo, isDesktop } from "./lib/desktop";
 import type { RuntimeInfo } from "./lib/desktop";
 import { buildTaskbarSnapshot, taskbarSnapshotSignature } from "./lib/taskbar";
+import { useMacosMenu } from "./lib/useMacosMenu";
 import {
   emptyWorkspace,
   sshTargetFor,
@@ -1347,7 +1349,9 @@ export function App() {
     if (id === "fontDecrease" || id === "fontIncrease") return contentFontKey() !== null;
     if (
       (activeRedis || activeDatabase) &&
-      !["palette", "project", "terminal", "close", "toggleSidebar"].includes(id)
+      !["palette", "settings", "agents", "project", "terminal", "close", "toggleSidebar"].includes(
+        id,
+      )
     )
       return false;
     if ((activeRedis || activeDatabase) && id === "close") return true;
@@ -1736,6 +1740,83 @@ export function App() {
         git: gitOpen,
         github: githubOpen,
       }));
+  const nativeMenuBlocked = !!(
+    settingsOpen ||
+    paletteOpen ||
+    agentOpen ||
+    editing ||
+    menu ||
+    showProjectDialog ||
+    databaseDialog ||
+    redisDialog ||
+    sshDialog ||
+    quickSshOpen ||
+    tunnelsOpen ||
+    databaseExit ||
+    updates.confirmation !== null ||
+    editor.transitioning ||
+    editor.pending
+  );
+  useMacosMenu(
+    runtime?.platform === "macos",
+    {
+      settings,
+      workspace,
+      version: runtime?.version ?? "",
+      enabled: Object.fromEntries(
+        commands.map(([id]) => [id, !nativeMenuBlocked && commandAvailable(id)]),
+      ),
+      checked: {
+        toggleSidebar: sidebarVisible,
+        toggleInspector: inspectorVisible,
+        files: filesOpen && inspectorVisible,
+        git: gitOpen && inspectorVisible,
+        github: githubOpen && inspectorVisible,
+        zoom: zoomed,
+      },
+      navigationEnabled: !!runtime && !!workspace && !nativeMenuBlocked,
+      closeLabel: t(
+        editor.document
+          ? "关闭文件"
+          : activeRedis
+            ? "关闭 Redis 工作台"
+            : activeDatabase
+              ? "关闭数据库工作台"
+              : "关闭会话",
+      ),
+    },
+    (action) => {
+      const language = activeLanguage(settings.language);
+      const links: Record<string, string> = {
+        guide: `https://github.com/YondFane/uTerm/blob/release/docs/features${language === "zh-Hans" ? ".zh-CN" : ""}.md`,
+        website: `https://yondfane.github.io/uTerm/?lang=${language === "zh-Hans" ? "zh-CN" : "en"}`,
+        issues: "https://github.com/YondFane/uTerm/issues/new",
+      };
+      if (Object.hasOwn(links, action)) {
+        void invoke("open_external", { url: links[action] }).catch((reason) =>
+          setError(String(reason)),
+        );
+        return;
+      }
+      if (nativeMenuBlocked || document.querySelector("dialog[open]")) return;
+      if (action.startsWith("command:")) {
+        const command = commands.find(([id]) => id === action.slice("command:".length));
+        if (command) runCommand(command[0]);
+      } else if (action.startsWith("session:"))
+        revealTaskbarSession(action.slice("session:".length));
+      else if (action.startsWith("workspace:")) {
+        const id = action.slice("workspace:".length);
+        const change = () => {
+          if (!currentWorkspace.current?.groups?.some((group) => group.id === id)) return;
+          update((previous) => switchWorkspace(previous, id));
+          setFocusRequest((value) => value + 1);
+        };
+        if (editor.document) void editor.hide(change);
+        else change();
+      } else if (action === "new-workspace") setEditing({ kind: "new", id: "", name: "" });
+    },
+    setError,
+  );
   useEffect(() => {
     if (!sidebarCollapseHint) return;
     if (sidebarVisible) {
