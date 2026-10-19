@@ -16,6 +16,7 @@ import {
 } from "../lib/workspace";
 import type { Divider, PaneFrame, Workspace } from "../lib/workspace";
 import type { TerminalStatus } from "../lib/ssh";
+import type { AgentActivityEvent } from "../lib/terminal-frame";
 
 const frameStyle = (frame: PaneFrame): CSSProperties => ({
   left: `${frame.x * 100}%`,
@@ -35,6 +36,7 @@ export function TerminalWorkspace({
   update,
   onClosed,
   onAgentState,
+  onAgentEvent,
   onDetectedAgent,
   onSessionViewed,
   agentStates,
@@ -43,7 +45,8 @@ export function TerminalWorkspace({
   onSshRestart?: (id: string) => void;
   onTerminalStatus?: (id: string, status: TerminalStatus | null) => void;
   agentStates: Record<string, string>;
-  onAgentState: (id: string, state: string, initial: boolean) => void;
+  onAgentState: (id: string, state: string, initial: boolean, eventDriven?: boolean) => void;
+  onAgentEvent?: (id: string, event: AgentActivityEvent) => void;
   onDetectedAgent: (id: string, agent: string | null) => void;
   onSessionViewed: (id: string) => void;
   workspace: Workspace;
@@ -205,7 +208,10 @@ export function TerminalWorkspace({
               update((previous) => selectSession(previous, session.id));
             onSessionViewed(session.id);
           }}
-          onAgentState={(state, initial) => onAgentState(session.id, state, initial)}
+          onAgentState={(state, initial, eventDriven) =>
+            onAgentState(session.id, state, initial, eventDriven)
+          }
+          onAgentEvent={(event) => onAgentEvent?.(session.id, event)}
           onClosed={() => onClosed(session.id)}
         />
       ))}

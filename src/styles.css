@@ -357,6 +357,24 @@ select:focus-visible {
 }
 .session-panel .session-directory {
   min-width: 45px;
+  flex: 0 1 auto;
+  max-width: 25%;
+}
+.session-working-directory {
+  flex: 1 1 100px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--ui-muted);
+}
+.terminal-font-controls {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 .pane-divider {
   position: absolute;
@@ -987,6 +1005,40 @@ select:focus-visible {
   margin: 4px 8px;
   font-size: 12px;
 }
+.git-commit-details {
+  padding: 0 12px 12px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.git-commit-details h3 {
+  margin: 8px 0;
+  padding: 0;
+  color: var(--ui-text);
+}
+.git-commit-meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 5px 8px;
+  margin: 10px 0;
+  font-size: 11px;
+}
+.git-commit-meta dt {
+  color: var(--ui-muted);
+}
+.git-commit-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.git-commit-message {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 12px 0 0;
+  user-select: text;
+}
 .git-diff {
   margin-top: 10px;
   border-top: 1px solid var(--ui-border);
@@ -1089,7 +1141,8 @@ select:focus-visible {
 .agent-state.working {
   background: var(--ui-accent);
 }
-.agent-state.waiting {
+.agent-state.waiting,
+.agent-state.reminder {
   background: #e8b46b;
 }
 .agent-state.done {
@@ -1543,6 +1596,20 @@ select:focus-visible {
 .editor-header button {
   font-size: 11px;
   padding: 4px 7px;
+}
+.editor-header > .editor-font-controls {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.editor-font-controls output {
+  min-width: 32px;
+  text-align: center;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ui-muted);
 }
 .editor-save-state {
   color: var(--ui-muted);

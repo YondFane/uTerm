@@ -33,6 +33,8 @@ export const commands = [
   ["close", "关闭会话", "Mod+KeyW"],
   ["link", "复制会话链接", ""],
   ["terminalSearch", "搜索终端输出", "Mod+KeyF"],
+  ["fontDecrease", "减小内容字号", "Mod+Minus"],
+  ["fontIncrease", "增大内容字号", "Mod+Equal"],
 ] as const;
 export type CommandId = (typeof commands)[number][0];
 export interface Settings {
@@ -124,7 +126,13 @@ export function binding(settings: Settings, id: CommandId, mac: boolean): string
   if (value !== undefined) return value;
   if (!mac && id === "terminalSearch") return "Mod+Shift+KeyF";
   if (!mac && id === "search") return "Mod+Alt+KeyF";
-  return commands.find((item) => item[0] === id)?.[2] ?? "";
+  const fallback = commands.find((item) => item[0] === id)?.[2] ?? "";
+  if (
+    (id === "fontDecrease" || id === "fontIncrease") &&
+    Object.entries(settings.shortcuts).some(([other, key]) => other !== id && key === fallback)
+  )
+    return "";
+  return fallback;
 }
 export function chord(
   event: Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altKey" | "shiftKey" | "code">,
@@ -153,7 +161,21 @@ export function shortcutLabel(value: string, mac: boolean): string {
     .replace("Comma", ",")
     .replace("BracketLeft", "[")
     .replace("BracketRight", "]")
+    .replace("Minus", "-")
+    .replace("Equal", "+")
     .replace("Arrow", "");
+}
+export function shortcutCommand(
+  settings: Settings,
+  event: Parameters<typeof chord>[0],
+  mac: boolean,
+): CommandId | undefined {
+  const key = chord(event, mac);
+  if (!key) return;
+  const exact = commands.find(([id]) => binding(settings, id, mac) === key);
+  if (exact) return exact[0];
+  if (key === "Mod+Shift+Equal" && binding(settings, "fontIncrease", mac) === "Mod+Equal")
+    return "fontIncrease";
 }
 export function readSettings(raw: string | null): Settings {
   if (raw === null) return { ...defaults, shortcuts: {} };

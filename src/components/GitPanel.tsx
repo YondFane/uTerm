@@ -16,6 +16,7 @@ interface Commit {
   id: string;
   parents: string[];
   subject: string;
+  message?: string;
   author: string;
   timestamp: string;
 }
@@ -56,7 +57,9 @@ export function GitPanel({
   const graph = useMemo(() => (showGraph ? commitGraph(commits) : []), [commits, showGraph]);
   const graphWidth = Math.max(1, ...graph.map((row) => row.width)) * 16 + 8;
   const graphColors = ["#78b85b", "#d6a04a", "#728ee5", "#b778cf", "#54b7af", "#d87878"];
-  const [commit, setCommit] = useState<string | null>(null);
+  const [selectedCommit, setCommit] = useState<(Commit & { directory: string }) | null>(null);
+  const commit = selectedCommit?.directory === directory ? selectedCommit : null;
+  useEffect(() => setCommit(null), [directory]);
   const [files, setFiles] = useState<Change[]>([]);
   const [selection, setSelection] = useState<{ path: string; mode: string } | null>(null);
   const [diff, setDiff] = useState<{ text: string; truncated: boolean } | null>(null);
@@ -258,7 +261,7 @@ export function GitPanel({
     setLoading(true);
     invoke<Change[]>("git_files", {
       directory,
-      reference: tab === "compare" ? base : commit,
+      reference: tab === "compare" ? base : commit?.id,
       compare: tab === "compare",
     })
       .then((result) => {
@@ -292,7 +295,7 @@ export function GitPanel({
     invoke<{ text: string; truncated: boolean }>("git_diff", {
       directory,
       ...selection,
-      reference: tab === "compare" ? base : tab === "history" ? commit : null,
+      reference: tab === "compare" ? base : tab === "history" ? commit?.id : null,
     })
       .then((result) => {
         if (current === request.current) {
@@ -637,17 +640,34 @@ export function GitPanel({
           {tab === "history" && (
             <>
               {commit ? (
-                <button className="history-back" onClick={() => setCommit(null)}>
-                  {tx("‹ 返回历史 · {p0}", { p0: commit.slice(0, 8) })}
-                </button>
+                <>
+                  <button className="history-back" onClick={() => setCommit(null)}>
+                    {tx("‹ 返回历史 · {p0}", { p0: commit.id.slice(0, 8) })}
+                  </button>
+                  <section className="git-commit-details" aria-label={tx("提交详情")}>
+                    <h3>{tx("提交信息")}</h3>
+                    <dl className="git-commit-meta">
+                      <dt>{tx("作者")}</dt>
+                      <dd>{commit.author}</dd>
+                      <dt>{tx("提交时间")}</dt>
+                      <dd>{formatCommitTimestamp(commit.timestamp, getUiLanguage())}</dd>
+                      <dt>{tx("提交哈希")}</dt>
+                      <dd>
+                        <code>{commit.id}</code>
+                      </dd>
+                    </dl>
+                    <pre className="git-commit-message">{commit.message || commit.subject}</pre>
+                  </section>
+                  {!loading && !error && <h3>{tx("变动文件（{p0}）", { p0: files.length })}</h3>}
+                </>
               ) : (
                 <>
                   {commits.map((item, index) => (
                     <button
                       key={item.id}
                       className="git-commit"
-                      title={item.id}
-                      onClick={() => setCommit(item.id)}
+                      title={`${item.message || item.subject}\n\n${item.id}\n${item.author} · ${formatCommitTimestamp(item.timestamp, getUiLanguage())}`}
+                      onClick={() => setCommit({ ...item, directory })}
                     >
                       {showGraph && (
                         <svg
@@ -713,6 +733,9 @@ export function GitPanel({
                 </>
               )}
               {commit && fileList(files, "commit")}
+              {commit && !loading && !files.length && !error && (
+                <p className="inspector-message">{tx("此提交没有变动文件。")}</p>
+              )}
             </>
           )}
           {(loading || (tab === "history" && history.loading)) && (

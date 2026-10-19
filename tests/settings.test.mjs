@@ -6,10 +6,44 @@ import {
   readSettings,
   binding,
   chord,
+  shortcutCommand,
+  shortcutLabel,
   validateShortcuts,
   sessionFromLink,
   sessionLink,
 } from "../src/lib/settings.ts";
+test("font shortcuts accept plus and equals, respect platform modifiers and custom bindings", () => {
+  const key = (code, patch = {}) => ({
+    code,
+    ctrlKey: true,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+    ...patch,
+  });
+  assert.equal(shortcutCommand(defaults, key("Minus"), false), "fontDecrease");
+  assert.equal(shortcutCommand(defaults, key("Equal"), false), "fontIncrease");
+  assert.equal(shortcutCommand(defaults, key("Equal", { shiftKey: true }), false), "fontIncrease");
+  assert.equal(shortcutCommand(defaults, key("Equal", { altKey: true }), false), undefined);
+  assert.equal(shortcutCommand(defaults, key("Equal"), true), undefined);
+  assert.equal(
+    shortcutCommand(defaults, key("Equal", { ctrlKey: false, metaKey: true }), true),
+    "fontIncrease",
+  );
+  const custom = {
+    ...defaults,
+    shortcuts: { fontIncrease: "Mod+Alt+KeyI", palette: "Mod+Shift+Equal" },
+  };
+  assert.equal(shortcutCommand(custom, key("Equal", { shiftKey: true }), false), "palette");
+  assert.equal(shortcutCommand(custom, key("Equal"), false), undefined);
+  assert.equal(shortcutCommand(custom, key("KeyI", { altKey: true }), false), "fontIncrease");
+  const older = { ...defaults, shortcuts: { palette: "Mod+Minus" } };
+  assert.equal(binding(older, "fontDecrease", false), "");
+  assert.doesNotThrow(() => validateShortcuts(older, false));
+  assert.equal(shortcutCommand(older, key("Minus"), false), "palette");
+  assert.equal(shortcutLabel("Mod+Minus", false), "Ctrl+-");
+  assert.equal(shortcutLabel("Mod+Equal", true), "⌘++");
+});
 test("settings round trip and invalid data is rejected without normalizing it away", () => {
   assert.deepEqual(readSettings(JSON.stringify(defaults)), defaults);
   for (const patch of [

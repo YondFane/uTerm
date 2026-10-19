@@ -1,5 +1,7 @@
 //! Local PTYs and the independent cross-platform desktop session host.
 
+pub mod activity;
+mod activity_bridge;
 pub mod agents;
 pub mod daemon;
 pub mod ssh;

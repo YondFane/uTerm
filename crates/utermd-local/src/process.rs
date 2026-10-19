@@ -268,23 +268,39 @@ pub fn shell_command(shell: &str) -> Result<CommandBuilder> {
 pub(crate) fn sanitize_environment(command: &mut CommandBuilder) {
     // A new desktop session must not inherit the launching agent's identity or
     // accidentally report to the original app's daemon through inherited hooks.
+    // 新会话不继承启动 Agent 的身份，避免继承的 Hooks 意外向原应用后台服务报告。
     for (key, _) in std::env::vars_os() {
         let name = key.to_string_lossy();
-        if name.starts_with("UTERM")
-            || name.starts_with("CLAUDE_CODE_")
-            || name.starts_with("VSCODE_")
-            || name.starts_with("GHOSTTY_")
-            || matches!(
-                name.as_ref(),
-                "CLAUDECODE" | "TMUX" | "TMUX_PANE" | "STY" | "WT_SESSION"
-            )
-        {
+        if inherited_agent_identity(&name) {
             command.env_remove(&key);
         }
     }
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
     command.env("TERM_PROGRAM", "uTermDesktop");
+}
+
+fn inherited_agent_identity(name: &str) -> bool {
+    name.starts_with("UTERM")
+        || name.starts_with("CLAUDE_CODE_")
+        || name.starts_with("VSCODE_")
+        || name.starts_with("GHOSTTY_")
+        || matches!(
+            name,
+            "CLAUDECODE" | "TMUX" | "TMUX_PANE" | "STY" | "WT_SESSION" | "CODEX_THREAD_ID"
+        )
+}
+
+fn sanitize_background(command: &mut std::process::Command) {
+    for (key, _) in std::env::vars_os() {
+        if inherited_agent_identity(&key.to_string_lossy()) {
+            command.env_remove(key);
+        }
+    }
+    command
+        .env("TERM", "xterm-256color")
+        .env("COLORTERM", "truecolor")
+        .env("TERM_PROGRAM", "uTermDesktop");
 }
 
 #[cfg(unix)]
@@ -574,10 +590,17 @@ pub fn launch_command(
         return shell_command(shell);
     };
     let (program, arguments) = crate::agents::resolve(configuration, agent)?;
+    launch_resolved(&program, &arguments)
+}
+
+pub(crate) fn launch_resolved(
+    program: &std::path::Path,
+    arguments: &[String],
+) -> Result<CommandBuilder> {
     #[cfg(unix)]
     let mut command = {
         let mut command = CommandBuilder::new(program);
-        command.args(&arguments);
+        command.args(arguments);
         command
     };
     #[cfg(windows)]
@@ -603,12 +626,42 @@ pub fn launch_command(
         command
     } else {
         let mut command = CommandBuilder::new(program);
-        command.args(&arguments);
+        command.args(arguments);
         command
     };
     sanitize_environment(&mut command);
     command.env("PATH", std::env::join_paths(command_path())?);
     Ok(command)
+}
+
+pub(crate) fn background_command(
+    program: &std::path::Path,
+    arguments: &[String],
+) -> std::process::Command {
+    use std::process::Command;
+    #[cfg(windows)]
+    if program
+        .extension()
+        .is_some_and(|value| value.eq_ignore_ascii_case("cmd"))
+    {
+        let mut command = Command::new("powershell.exe");
+        command.args(["-NoLogo", "-NoProfile", "-NonInteractive", "-Command"]);
+        command.arg(format!(
+            "& '{}' {}",
+            program.to_string_lossy().replace('\'', "''"),
+            arguments
+                .iter()
+                .map(|value| format!("'{}'", value.replace('\'', "''")))
+                .collect::<Vec<_>>()
+                .join(" ")
+        ));
+        sanitize_background(&mut command);
+        return command;
+    }
+    let mut command = Command::new(program);
+    command.args(arguments);
+    sanitize_background(&mut command);
+    command
 }
 
 #[cfg(test)]

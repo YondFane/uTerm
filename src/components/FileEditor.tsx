@@ -17,7 +17,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
 import { htmlPreview } from "../lib/html-preview";
-import { isDirty, editorText, documentText } from "../lib/file-document";
+import { isDirty, editorText, documentText, clipboardPath } from "../lib/file-document";
 import type { OpenFile } from "../lib/file-document";
 import type { useFileDocument } from "../lib/useFileDocument";
 
@@ -203,6 +203,17 @@ export function CodeEditor({
 }
 export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocument> }) {
   const uiLanguage = useUiLanguage();
+  const { settings, resizeFont: adjustFontSize } = useSettings();
+  const [fontError, setFontError] = useState("");
+
+  function resizeFont(delta: number) {
+    try {
+      adjustFontSize("fileFontSize", delta, navigator.platform.startsWith("Mac"));
+      setFontError("");
+    } catch (reason) {
+      setFontError(tx("无法保存字号：{p0}", { p0: String(reason) }));
+    }
+  }
 
   const { document } = editor;
   const view = useRef<EditorView | null>(null);
@@ -233,15 +244,39 @@ export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocume
     [previewSource, uiLanguage],
   );
   if (!document) return null;
+  const filePath = clipboardPath(
+    `${displayDirectory(document.directory).replace(/[\\/]+$/, "")}/${document.path}`,
+  );
   return (
     <section className="file-editor" aria-label={tx("文件编辑器 {p0}", { p0: document.path })}>
       <header className="editor-header">
-        <div title={`${displayDirectory(document.directory)}/${document.path}`}>
+        <div title={filePath}>
           <strong>{document.path.split(/[\\/]/).at(-1)}</strong>
-          <small>
-            {displayDirectory(document.directory)}/{document.path}
-          </small>
+          <small>{filePath}</small>
         </div>
+        {document.kind === "text" && !(isHtml && preview) && (
+          <div className="editor-font-controls" role="group" aria-label={tx("文件查看字号")}>
+            <button
+              type="button"
+              aria-label={tx("减小文件字号")}
+              title={tx("减小文件字号")}
+              disabled={settings.fileFontSize <= 10}
+              onClick={() => resizeFont(-1)}
+            >
+              {tx("A−")}
+            </button>
+            <output aria-live="polite">{tx("{p0} px", { p0: settings.fileFontSize })}</output>
+            <button
+              type="button"
+              aria-label={tx("增大文件字号")}
+              title={tx("增大文件字号")}
+              disabled={settings.fileFontSize >= 32}
+              onClick={() => resizeFont(1)}
+            >
+              {tx("A+")}
+            </button>
+          </div>
+        )}
         <span className="editor-save-state" role="status">
           {editor.saving
             ? tx("正在保存…")
@@ -294,6 +329,11 @@ export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocume
           {tx("重新读取")}
         </button>
       </header>
+      {fontError && (
+        <p className="editor-error" role="alert">
+          {localizeMessage(fontError)}
+        </p>
+      )}
       {document.notice && <p className="editor-notice">{localizeMessage(document.notice)}</p>}
       {editor.error && (
         <div className="editor-error" role="alert">

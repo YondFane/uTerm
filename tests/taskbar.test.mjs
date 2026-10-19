@@ -107,3 +107,33 @@ test("taskbar only highlights completions that have not been viewed", () => {
   assert.equal(unread.status, "done");
   assert.deepEqual(unread.groups[0].tasks, [{ id: "done", title: "Done", state: "done" }]);
 });
+
+test("taskbar startup controls follow the selected language", () => {
+  const english = buildTaskbarSnapshot(emptyWorkspace(), {}, {}, "en");
+  const chinese = buildTaskbarSnapshot(emptyWorkspace(), {}, {}, "zh-Hans");
+  assert.equal(english.labels.autostart, "Launch at login");
+  assert.equal(english.labels.autostartError, "Unable to configure launch at login");
+  assert.equal(chinese.labels.autostart, "开启自启动");
+  assert.equal(chinese.labels.autostartError, "无法设置自启动");
+  assert.notEqual(taskbarSnapshotSignature(english), taskbarSnapshotSignature(chinese));
+});
+
+test("taskbar keeps generic reminders visible with distinct copy and attention priority", () => {
+  const workspace = fixture();
+  const snapshot = buildTaskbarSnapshot(
+    workspace,
+    { plain: "notice", done: "done" },
+    {},
+    "en",
+    undefined,
+    new Set(["done"]),
+  );
+  assert.equal(snapshot.status, "attention");
+  assert.deepEqual(snapshot.groups[0].tasks, [{ id: "plain", title: "Terminal", state: "notice" }]);
+  assert.equal(snapshot.labels.notice, "Session has a new notification");
+  assert.equal(snapshot.labels.exited, "Task failed");
+  const chinese = buildTaskbarSnapshot(workspace, { plain: "notice" }, {}, "zh-Hans");
+  assert.equal(chinese.labels.notice, "会话有新提醒");
+  assert.equal(chinese.labels.exited, "任务执行失败");
+  assert.equal(buildTaskbarSnapshot(workspace, { plain: "idle" }, {}, "en").status, "idle");
+});

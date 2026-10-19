@@ -161,6 +161,43 @@ test("content font changes retain editor state and all Git diff modes, including
       view.dispatch({ changes: { from: 6, insert: " draft" }, selection: { anchor: 8 } }),
     );
     assert.equal(changes, 1);
+    await click("Increase file font size");
+    assert.equal(JSON.parse(localStorage.getItem(settingsKey)).fileFontSize, 15);
+    assert.equal(host.querySelector(".editor-font-controls output").textContent, "15 px");
+    assert.equal(EditorView.findFromDOM(host.querySelector(".cm-editor")), view);
+    assert.equal(view.state.doc.toString(), "before draft");
+    assert.equal(view.state.selection.main.head, 8);
+    await click("Decrease file font size");
+    assert.equal(JSON.parse(localStorage.getItem(settingsKey)).fileFontSize, 14);
+    await act(async () => {
+      context.resizeFont("fileFontSize", 1, false);
+      context.resizeFont("fileFontSize", 1, false);
+      context.resizeFont("gitDiffFontSize", 1, false);
+    });
+    assert.equal(context.settings.fileFontSize, 16);
+    assert.equal(context.settings.gitDiffFontSize, 15);
+    assert.equal(JSON.parse(localStorage.getItem(settingsKey)).fileFontSize, 16);
+    assert.equal(JSON.parse(localStorage.getItem(settingsKey)).gitDiffFontSize, 15);
+    await resize(10, 14);
+    assert.equal(host.querySelector('[aria-label="Decrease file font size"]').disabled, true);
+    await resize(32, 14);
+    assert.equal(host.querySelector('[aria-label="Increase file font size"]').disabled, true);
+    const storage = Object.getPrototypeOf(localStorage);
+    const setItem = storage.setItem;
+    storage.setItem = () => {
+      throw new Error("Font storage denied");
+    };
+    try {
+      await click("Decrease file font size");
+      assert.equal(context.settings.fileFontSize, 32);
+      assert.equal(JSON.parse(localStorage.getItem(settingsKey)).fileFontSize, 32);
+      assert.match(host.querySelector(".editor-error").textContent, /Font storage denied/);
+    } finally {
+      storage.setItem = setItem;
+    }
+    await click("Decrease file font size");
+    assert.equal(context.settings.fileFontSize, 31);
+    assert.equal(host.querySelector(".editor-error"), null);
     await resize(20, 32);
     assert.equal(EditorView.findFromDOM(host.querySelector(".cm-editor")), view);
     assert.equal(view.state.doc.toString(), "before draft");
@@ -215,6 +252,8 @@ test("content font changes retain editor state and all Git diff modes, including
     };
     await act(async () => render());
     assert.ok(host.querySelector(".markdown-preview h1"));
+    await click("Increase file font size");
+    assert.equal(context.settings.fileFontSize, 15);
     await resize(20, 14);
     await click("Edit");
     assert.equal(host.querySelector(".cm-content").getAttribute("contenteditable"), "false");

@@ -2,7 +2,7 @@ import { activeLanguage, translate } from "./i18n.ts";
 import type { LanguagePreference } from "./i18n.ts";
 import type { SessionConfig, Workspace, WorkspaceGroup } from "./workspace.ts";
 
-export type TaskbarTaskState = "working" | "waiting" | "done" | "error";
+export type TaskbarTaskState = "working" | "waiting" | "done" | "error" | "notice";
 export type TaskbarStatus = "idle" | "working" | "done" | "attention";
 
 export interface TaskbarTask {
@@ -20,9 +20,12 @@ export interface TaskbarLabels {
   open: string;
   empty: string;
   quit: string;
+  autostart: string;
+  autostartError: string;
   idle: string;
   working: string;
   needsYou: string;
+  notice: string;
   done: string;
   exited: string;
 }
@@ -33,10 +36,10 @@ export interface TaskbarSnapshot {
   groups: TaskbarGroup[];
 }
 
-const taskStates = new Set<TaskbarTaskState>(["working", "waiting", "done", "error"]);
+const taskStates = new Set<TaskbarTaskState>(["working", "waiting", "done", "error", "notice"]);
 
 function priority(state: TaskbarTaskState) {
-  if (state === "waiting" || state === "error") return 0;
+  if (state === "waiting" || state === "error" || state === "notice") return 0;
   if (state === "done") return 1;
   return 2;
 }
@@ -105,7 +108,9 @@ export function buildTaskbarSnapshot(
   }
 
   const states = groups.flatMap((group) => group.tasks.map((task) => task.state));
-  const status: TaskbarStatus = states.some((state) => state === "waiting" || state === "error")
+  const status: TaskbarStatus = states.some(
+    (state) => state === "waiting" || state === "error" || state === "notice",
+  )
     ? "attention"
     : states.includes("done")
       ? "done"
@@ -118,11 +123,14 @@ export function buildTaskbarSnapshot(
       open: t("打开 uTerm"),
       empty: t("全部处理完毕"),
       quit: t("退出 uTerm"),
+      autostart: t("开启自启动"),
+      autostartError: t("无法设置自启动"),
       idle: t("空闲"),
       working: t("工作中"),
       needsYou: t("需要你"),
+      notice: t("会话有新提醒"),
       done: t("已完成"),
-      exited: t("已退出"),
+      exited: t("任务执行失败"),
     },
     groups,
   };

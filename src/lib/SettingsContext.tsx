@@ -1,7 +1,7 @@
 import { tx } from "./i18n.ts";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { themes } from "./themes";
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { defaults, readSettings, settingsKey, validateShortcuts } from "./settings";
 import type { Settings } from "./settings";
@@ -12,6 +12,11 @@ const Context = createContext<{
   light: boolean;
   error: string;
   save: (value: Settings, mac: boolean) => void;
+  resizeFont: (
+    key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
+    delta: number,
+    mac: boolean,
+  ) => void;
   reset: () => void;
 } | null>(null);
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -23,6 +28,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     }
   });
   const [settings, setSettings] = useState(initial.settings);
+  const currentSettings = useRef(settings);
   useEffect(() => {
     setUiLanguage(activeLanguage(settings.language));
   }, [settings.language]);
@@ -79,17 +85,30 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const checked = readSettings(JSON.stringify(value));
     validateShortcuts(checked, mac);
     localStorage.setItem(settingsKey, JSON.stringify(checked));
+    currentSettings.current = checked;
     setSettings(checked);
   }
   function reset() {
     const old = localStorage.getItem(settingsKey);
     if (old) localStorage.setItem(`${settingsKey}.backup`, old);
     localStorage.setItem(settingsKey, JSON.stringify(defaults));
-    setSettings({ ...defaults, shortcuts: {} });
+    const checked = { ...defaults, shortcuts: {} };
+    currentSettings.current = checked;
+    setSettings(checked);
     setError("");
   }
+  function resizeFont(
+    key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
+    delta: number,
+    mac: boolean,
+  ) {
+    const current = currentSettings.current;
+    save({ ...current, [key]: Math.max(10, Math.min(32, current[key] + delta)) }, mac);
+  }
   return (
-    <Context.Provider value={{ settings, light, error: error || appearanceError, save, reset }}>
+    <Context.Provider
+      value={{ settings, light, error: error || appearanceError, save, resizeFont, reset }}
+    >
       {children}
     </Context.Provider>
   );

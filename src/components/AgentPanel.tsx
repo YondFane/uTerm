@@ -401,6 +401,11 @@ export function AgentSettings({
         />
         {tx("任务完成或需要处理时通知")}
       </label>
+      <p className="muted">
+        {tx(
+          "通知无需安装 Hooks。Codex 和 OpenCode 可提供精确事件；其他情况的终端通知或响铃显示为通用提醒。",
+        )}
+      </p>
       {runtime.debug && <p className="muted">{tx("开发构建不发送任务通知。")}</p>}
       {busy && <p role="status">{tx("正在处理…")}</p>}
     </div>

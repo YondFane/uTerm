@@ -1,4 +1,13 @@
+export type AgentActivityEvent = {
+  id: string;
+  sequence: number;
+  kind: "idle" | "working" | "waiting" | "done" | "error" | "notice";
+  source: "terminal" | "events" | "hook" | "process";
+};
+
 export type TerminalFrame = {
+  agent_events?: AgentActivityEvent[] | null;
+  agent_activity_error?: string | null;
   agent_state?: string | null;
   foreground_agent?: string | null;
   sequence: number;
@@ -33,7 +42,23 @@ export function decodeTerminalFrame(payload: ArrayBuffer): TerminalFrame {
     (metadata.code !== null && !Number.isInteger(metadata.code)) ||
     (metadata.error !== null && typeof metadata.error !== "string") ||
     (metadata.agent_state != null && typeof metadata.agent_state !== "string") ||
-    (metadata.foreground_agent != null && typeof metadata.foreground_agent !== "string")
+    (metadata.foreground_agent != null && typeof metadata.foreground_agent !== "string") ||
+    (metadata.agent_activity_error != null && typeof metadata.agent_activity_error !== "string") ||
+    (metadata.agent_events != null &&
+      (!Array.isArray(metadata.agent_events) ||
+        metadata.agent_events.length > 128 ||
+        metadata.agent_events.some(
+          (event: AgentActivityEvent) =>
+            !event ||
+            typeof event.id !== "string" ||
+            !event.id ||
+            event.id.length > 100 ||
+            !Number.isSafeInteger(event.sequence) ||
+            event.sequence < 0 ||
+            event.sequence > metadata.sequence ||
+            !["idle", "working", "waiting", "done", "error", "notice"].includes(event.kind) ||
+            !["terminal", "events", "hook", "process"].includes(event.source),
+        )))
   )
     throw new Error("Invalid terminal frame metadata");
   // Share the IPC buffer; acknowledgements retain metadata, not another output copy.

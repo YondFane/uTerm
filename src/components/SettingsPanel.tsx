@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { interfacePalette, interfaceThemes } from "../lib/interface-themes";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { AgentSettings, AgentUsage } from "./AgentPanel";
 import { canRemoveWorkspace, createWorkspaceGroup, removeWorkspace } from "../lib/workspace";
 import type { Workspace } from "../lib/workspace";
@@ -156,8 +157,29 @@ export function SettingsPanel({
   const language = activeLanguage(settings.language);
   const t = (key: string) => translate(language, key);
   useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<boolean>("autostart-changed", ({ payload }) => {
+      if (!disposed) {
+        setAutostart(payload);
+        setAutostartError("");
+      }
+    })
+      .then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+        if (!disposed) void configureAutostart();
+      })
+      .catch((reason) => {
+        if (!disposed) setAutostartError(String(reason));
+      });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+  useEffect(() => {
     dialog.current?.showModal();
-    void configureAutostart();
     void invoke<ControlStatus>("control_status")
       .then(setControl)
       .catch((reason) => setMessage(String(reason)));

@@ -25,12 +25,13 @@ export function AgentStatusIndicator({ state = "idle" }: { state?: string }) {
     idle: tx("空闲"),
     working: tx("工作中"),
     waiting: tx("需要处理"),
+    notice: tx("会话有新提醒"),
     done: tx("已完成"),
-    error: tx("已退出"),
+    error: tx("任务执行失败"),
   };
   return (
     <span
-      className={`agent-state ${state}`}
+      className={`agent-state ${state === "notice" ? "reminder" : state}`}
       role="img"
       title={label[state]}
       aria-label={label[state]}

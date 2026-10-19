@@ -9,6 +9,13 @@ import {
   documentText,
   clipboardPath,
 } from "../src/lib/file-document.ts";
+import { displayDirectory } from "../src/lib/file-target.ts";
+test("displayed directories remove Windows prefixes without changing POSIX paths", () => {
+  assert.equal(displayDirectory(String.raw`\\?\D:\work\project`), String.raw`D:\work\project`);
+  assert.equal(displayDirectory("//?/D:/资料/project"), String.raw`D:\资料\project`);
+  assert.equal(displayDirectory(String.raw`\\?\UNC\server\share`), String.raw`\\server\share`);
+  assert.equal(displayDirectory("/home/user/project"), "/home/user/project");
+});
 test("copied Windows paths omit extended prefixes and preserve UNC shares", () => {
   assert.equal(clipboardPath(String.raw`\\?\D:\a\a-stock-data/1`), String.raw`D:\a\a-stock-data\1`);
   assert.equal(clipboardPath("//?/D:/资料/file.txt"), String.raw`D:\资料\file.txt`);
