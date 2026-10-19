@@ -2473,16 +2473,13 @@ select:focus-visible {
   position: absolute;
   top: 0;
   bottom: 0;
-  left: 0;
-  width: 8px;
+  left: -3px;
+  width: 6px;
   z-index: 20;
   cursor: col-resize;
   touch-action: none;
 }
-.inspector-resizer:hover,
-.inspector-resizer:focus-visible,
-[data-resizing-inspector] .inspector-resizer {
-  background: #759fdb55;
+.inspector-resizer:focus-visible {
   outline: none;
 }
 [data-resizing-inspector],
@@ -2650,6 +2647,20 @@ select:focus-visible {
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-canvas);
 }
+.platform-macos > main > .toolbar,
+.platform-macos > :is(.file-panel, .git-panel) > .inspector-header {
+  background: var(--ui-sidebar);
+}
+.platform-macos > .sidebar::after {
+  content: "";
+  position: absolute;
+  top: 55px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--ui-border);
+  pointer-events: none;
+}
 .toolbar-actions > .inspector-toggle {
   margin-right: -10px;
 }
@@ -2701,7 +2712,11 @@ select:focus-visible {
   background: color-mix(in srgb, var(--ui-sidebar) 80%, var(--ui-hover));
 }
 .platform-macos .sidebar-rail {
-  padding-top: 42px;
+  margin-top: 56px;
+  padding-top: 8px;
+}
+.platform-macos .sidebar[data-sidebar-style="navigation"][data-sidebar-collapsed] {
+  border-right-color: transparent;
 }
 .platform-macos .sidebar[data-sidebar-style="navigation"] .sidebar-header {
   padding-left: 36px;
@@ -2842,7 +2857,10 @@ select:focus-visible {
   box-shadow: 0 0 10px var(--ui-accent);
 }
 .sidebar-resizer:hover,
-.sidebar-resizer:focus-visible {
+.sidebar-resizer:focus-visible,
+.inspector-resizer:hover,
+.inspector-resizer:focus-visible,
+[data-resizing-inspector] .inspector-resizer {
   background: var(--ui-accent);
 }
 .app-shell[data-resizing-sidebar] {
@@ -3509,7 +3527,7 @@ textarea:focus-visible {
 }
 [data-inspector-position="left"] .inspector-resizer {
   left: auto;
-  right: 0;
+  right: -3px;
 }
 .platform-macos.sidebar-hidden.with-inspector[data-inspector-position="left"] > main > .toolbar {
   padding-left: 24px;
