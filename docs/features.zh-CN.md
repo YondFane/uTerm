@@ -2005,6 +2005,12 @@ React 组件位于 `src/components/`，状态和纯逻辑位于 `src/lib/`，Tau
   固定文本文件使用 LF，Windows `.cmd`／`.bat` 文件使用 CRLF。已在开启 `core.autocrlf=true`
   的 Windows 全新检出中验证 Prettier 通过、批处理文件保留 CRLF，二进制素材保持原样。
 
+- `.editorconfig`
+  将编辑器默认值与格式化工具对齐：UTF-8、LF、两空格缩进，Rust／Java 使用四空格，Windows 批处理使用 CRLF；Markdown 保留有意添加的行尾空格。PR／分支 CI 和稳定版构建在 macOS、Windows 上，锁定依赖安装后、测试／桌面编译前执行完整的
+  `pnpm format:check`。
+
+- Windows 验证通过全量格式检查、工作流／Markdown 格式及 10 项既有打包／发布辅助回归。工作流解析验证检查步骤无条件执行、顺序正确且安装了 rustfmt；Prettier 配置解析验证源码使用 LF、批处理使用 CRLF。
+
 - Windows 自动化验证通过完整前端／构建工具套件（273 项通过，11 项可选／平台检查跳过）、108 项后端测试（9 项可选检查忽略）和 38 项本地会话服务测试（两项可选的已安装 CLI 检查忽略）。
 
 - 锁定依赖安装、全仓格式、国际化、文档及 TypeScript／生产构建通过；Windows 桌面编译（`pnpm desktop:check`）也通过。

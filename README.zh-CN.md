@@ -109,3 +109,6 @@ uTerm 是采用 [PolyForm Noncommercial License 1.0.0](LICENSE)
 
 使用 Tauri、React、TypeScript、Rust 和 xterm.js 构建。环境配置、开发命令、数据库组件开发、验证与发布说明见[开发指南](docs/development.zh-CN.md)。参与贡献时请遵循
 [AGENTS.md](AGENTS.md) 和[文档编写规范](docs/writing-rules.md)。
+
+使用支持 EditorConfig 的编辑器及项目的 Prettier／rustfmt。提交前运行 `pnpm format` 和
+`pnpm format:check`；macOS、Windows CI 会检查全仓格式。

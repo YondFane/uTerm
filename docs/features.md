@@ -3235,6 +3235,16 @@ use separate Cargo manifests and lockfiles.
   checkout with `core.autocrlf=true` passes Prettier, preserves batch-file CRLF and leaves binary
   assets unchanged.
 
+- `.editorconfig` aligns editor defaults with the formatters: UTF-8, LF, two-space indentation, four
+  spaces for Rust/Java and CRLF for Windows batch files; Markdown keeps intentional trailing spaces.
+  PR/branch CI and stable-release builds run the complete `pnpm format:check` on macOS and Windows
+  after frozen dependency installation and before tests/desktop compilation.
+
+- Windows validation passes the full formatting check, workflow/Markdown formatting and ten existing
+  packaging/release-helper regressions. Workflow parsing verifies the unconditional check order and
+  rustfmt installation; Prettier configuration resolution verifies LF source files and CRLF batch
+  files.
+
 - Automated validation on Windows passes the complete frontend/build-helper suite (273 passed, 11
   optional/platform checks skipped), 108 backend tests (nine optional checks ignored) and 38
   local-session service tests (two optional installed-CLI checks ignored). Frozen dependency

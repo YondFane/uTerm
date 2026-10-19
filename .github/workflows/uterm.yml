@@ -30,11 +30,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - run: cargo fmt --manifest-path crates/utermd-local/Cargo.toml --check
-      - run: cargo test --manifest-path crates/utermd-local/Cargo.toml --locked
       - run: pnpm install --frozen-lockfile
+      - name: Check formatting
+        run: pnpm format:check
+      - run: cargo test --manifest-path crates/utermd-local/Cargo.toml --locked
       - run: pnpm docs:check
       - run: pnpm test
-      - run: cargo fmt --manifest-path src-tauri/Cargo.toml --check
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
       - run: node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle -- --locked

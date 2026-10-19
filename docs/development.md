@@ -3,7 +3,7 @@ title: uTerm development guide
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 
 # uTerm development guide
@@ -46,6 +46,23 @@ pnpm uterm:dev
 
 `pnpm dev` starts a browser-only frontend preview; desktop file, process and OS integrations require
 the Tauri app.
+
+### Editing and formatting
+
+Use an editor with EditorConfig support. `.editorconfig` sets UTF-8, LF and two-space indentation;
+Rust and Java use four spaces, Windows `.cmd`/`.bat` files use CRLF, and Markdown retains
+intentional trailing spaces. `.gitattributes` applies the same line endings when Git checks out
+files.
+
+Configure format on save with the project's Prettier for frontend files and rustfmt for Rust. Before
+committing, run `pnpm format` to apply the repository's formatters, then `pnpm format:check` to
+verify them. The check covers frontend source, tests, scripts, website files, root
+JSON/TypeScript/HTML, desktop JSON configuration and Rust sources under both Cargo manifests. Format
+changed Markdown separately as described in the [documentation writing rules](writing-rules.md).
+
+Both the PR/branch workflow and stable-release builds run `pnpm format:check` after frozen
+dependency installation on their macOS and Windows jobs. Formatting errors fail the job before tests
+and desktop compilation.
 
 ## Database component development
 

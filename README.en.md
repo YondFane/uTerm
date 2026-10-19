@@ -134,3 +134,6 @@ Built with Tauri, React, TypeScript, Rust and xterm.js. Setup, commands, databas
 development, validation and release instructions live in the
 [development guide](docs/development.md). Follow [AGENTS.md](AGENTS.md) and the
 [documentation writing rules](docs/writing-rules.md) when contributing.
+
+Use an editor with EditorConfig support and the project's Prettier/rustfmt. Run `pnpm format` and
+`pnpm format:check` before committing; macOS and Windows CI check repository formatting.
