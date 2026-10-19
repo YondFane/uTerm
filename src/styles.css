@@ -5,7 +5,7 @@
   --ui-hover: #272727;
   --ui-border: #363636;
   --ui-text: #f2f2f2;
-  --ui-muted: #ababab;
+  --ui-muted: #c4c4c4;
   --ui-accent: #d4d4d4;
   --ui-active-icon: var(--ui-accent);
   --ui-selected: #d4d4d416;
@@ -19,7 +19,7 @@
   --ui-hover: #e8e2d8;
   --ui-border: #d9d2c7;
   --ui-text: #302b25;
-  --ui-muted: #70665a;
+  --ui-muted: #554c42;
   --ui-accent: #866126;
   --ui-selected: #86612612;
   --ui-shadow: 0 18px 60px #302b2520;
@@ -177,9 +177,11 @@ button,
 input,
 select {
   font: inherit;
+  font-weight: 500;
 }
 button {
   cursor: pointer;
+  font-weight: 600;
 }
 button:disabled {
   cursor: default;
@@ -611,7 +613,7 @@ select:focus-visible {
   min-width: 0;
   text-align: left;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .sidebar .row-label:hover {
   background: transparent;
@@ -884,7 +886,7 @@ select:focus-visible {
   border-radius: 12px;
   padding: 4px 12px;
   font-size: 12px;
-  color: var(--ui-muted);
+  color: var(--ui-text);
 }
 .inspector-tabs button[aria-selected="true"] {
   color: var(--ui-text);
@@ -898,7 +900,7 @@ select:focus-visible {
 .git-content h3 {
   color: var(--ui-muted);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   padding: 5px 12px;
   margin: 6px 0;
 }
@@ -1531,7 +1533,7 @@ select:focus-visible {
 }
 .editor-header strong {
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .editor-header small {
   font-size: 10px;
@@ -1782,6 +1784,7 @@ select:focus-visible {
   padding: 0;
   max-height: 88vh;
   overflow: hidden;
+  font-weight: 500;
 }
 .settings-dialog > header {
   padding: 16px 20px;
@@ -1850,6 +1853,7 @@ select:focus-visible {
   justify-content: space-between;
   margin: 16px 0;
   font-size: 13px;
+  font-weight: 600;
 }
 .settings-content input:not([type="checkbox"]),
 .settings-content select {
@@ -2297,7 +2301,7 @@ select:focus-visible {
   align-items: center;
   gap: 5px;
   min-width: 0;
-  color: var(--ui-muted);
+  color: var(--ui-text);
   font-size: 12px;
 }
 .workspace-branch .branch-trigger {
@@ -2661,7 +2665,7 @@ select:focus-visible {
   border: 1px solid var(--ui-border);
   border-radius: 4px;
   font:
-    11px ui-monospace,
+    600 11px ui-monospace,
     monospace;
 }
 .sidebar {
@@ -2855,7 +2859,7 @@ select:focus-visible {
 .sidebar .workspace-switcher {
   flex: 1;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .project-list {
   padding: 0 2px;
@@ -2864,10 +2868,10 @@ select:focus-visible {
   margin-top: 18px;
 }
 .sidebar .section-toggle {
-  color: var(--ui-muted);
+  color: var(--ui-text);
   font-size: 11px;
   letter-spacing: 0.3px;
-  font-weight: 500;
+  font-weight: 600;
 }
 .sidebar-row {
   border: 1px solid transparent;
@@ -3159,6 +3163,7 @@ textarea:focus-visible {
   overflow: auto;
   padding: 32px;
   background: var(--ui-canvas);
+  font-weight: 500;
 }
 .welcome-content {
   width: min(100%, 530px);
@@ -3233,7 +3238,7 @@ textarea:focus-visible {
 }
 .welcome-action strong {
   font-size: 13px;
-  font-weight: 550;
+  font-weight: 600;
 }
 .welcome-action small {
   font-size: 11px;
@@ -4067,11 +4072,16 @@ textarea:focus-visible {
 .redis-workspace select,
 .redis-menu > summary {
   font: inherit;
+  font-weight: 500;
   color: var(--ui-text);
   background: var(--ui-surface);
   border: 1px solid var(--ui-border);
   border-radius: 4px;
   padding: 4px 7px;
+}
+.redis-workspace button,
+.redis-menu > summary {
+  font-weight: 600;
 }
 .redis-workspace button:disabled {
   opacity: 0.45;

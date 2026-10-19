@@ -5220,7 +5220,7 @@ dependencies = [
 
 [[package]]
 name = "uterm"
-version = "0.1.30"
+version = "0.1.31"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

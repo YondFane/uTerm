@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 
 # uTerm feature guide
@@ -2284,6 +2284,55 @@ above application dialogs.
 - The macOS screen-capture badge obscures direct visual acceptance of button alignment and hover
   symbols in this capture session.
 
+### macOS menu bar
+
+The macOS menu bar provides the same commands as the application controls and command palette.
+
+- **uTerm** opens Settings, Agent configuration and About, with the standard Services, Hide and Quit
+  actions. **File** adds projects, opens terminals or chats, quickly opens files and closes the
+  current session, file or workbench. Close Window hides the window and keeps sessions running.
+
+- **Edit** provides native undo, redo, cut, copy, paste and select-all actions for the focused
+  control. **View** opens the command palette, toggles the sidebar and inspector tools, swaps panes
+  and searches the project.
+
+- **Session** switches to the previous or next session, or selects one by workspace and project, SSH
+  connection or standalone session type. It also provides splitting, pane focus, zoom, Ungroup,
+  terminal search and Copy session link.
+
+- **Workspace** creates or selects a workspace. Current sessions, workspaces and visible panels are
+  checked. **Window** provides native minimize, zoom, full-screen and bring-to-front actions.
+  **Help** opens the feature guide, website and issue form.
+
+Menu labels follow Settings → General → App language immediately. Help links select the matching
+guide and website language; user-entered names keep their original text. macOS manages the language
+of system-provided Services entries and other system additions.
+
+Command shortcuts follow Settings → Keyboard shortcuts, including custom and disabled bindings.
+Unavailable actions are disabled; dialogs and pending file operations block session and workspace
+changes. File switching and Quit retain the existing draft, conflict and exit safeguards.
+
+#### Menu-bar checks on macOS
+
+- On macOS, 258 frontend/build-helper tests pass with 10 optional/platform checks skipped, and 108
+  backend tests pass with 9 ignored. Repository formatting, localization/documentation checks,
+  TypeScript/production build and an isolated desktop build pass. The production build retains its
+  large-chunk warning.
+
+- Automated checks cover bilingual labels, stable session/workspace targets, SSH and Worktree
+  grouping, panel checks, custom and disabled shortcuts, dialog guards, stale menu replacement and
+  visible native-menu failures. Native menus are installed only on macOS.
+
+- An isolated Tauri app (`sh.uterm.desktop.qa.macosmenu`) uses the real App and native menu APIs
+  with temporary workspaces and simulated sessions. Native inspection verifies menu clicks, sidebar
+  switching with Cmd+B, Settings with Cmd+Comma, cross-workspace session selection, workspace
+  selection, a custom Cmd+Option+L binding and immediate Chinese/English switching. Session actions
+  are disabled while Settings is open. Names containing an ampersand remain intact.
+
+- Real process/SSH switching, dirty-file exit interaction and system-managed menu additions remain
+  unverified. Native popup screenshots are unavailable in the current capture tool; menu labels and
+  resulting application states are verified through native accessibility.
+
 ### Inspector tools and panel toggles
 
 The inspector's Files, Git, GitHub and Working directory icons share a rounded capsule with a fine
@@ -2665,6 +2714,11 @@ always use light interface colors without changing terminal color-mode preferenc
 
 - Missing interface-theme settings default to Black; invalid values are rejected.
 
+Workspace and section names, project entries, branch selectors, panel tabs and settings labels use
+semibold text. Shared buttons and form controls also use heavier text, and navigation and toolbar
+icons use thicker outlines. Secondary text has stronger contrast in both dark and light themes;
+selected icons retain the configured Icon highlight color.
+
 ### Welcome page and connection actions
 
 The interface uses warm charcoal surfaces, a restrained sand accent, fine dividers and compact
@@ -2898,9 +2952,9 @@ use separate Cargo manifests and lockfiles.
 
 ### macOS automated checks
 
-- Current validation on macOS: 218 frontend/build-helper tests and 76 backend tests pass, with eight
-  optional frontend checks skipped and four backend tests ignored. The complete local-session
-  service suite passes on a serial rerun after initial host startup lock contention.
+- Current validation on macOS: 258 frontend/build-helper tests and 108 backend tests pass, with ten
+  optional frontend checks skipped and nine backend tests ignored. The complete local-session
+  service suite passes.
 
 - Frozen dependency installation, formatting, localization, documentation checks,
   TypeScript/production build and desktop compilation pass. The production build retains its
@@ -3097,13 +3151,24 @@ use separate Cargo manifests and lockfiles.
 
 ### Theme coverage
 
-- Theme validation: frontend/build-helper tests and TypeScript checks pass, including settings
-  round-trips, invalid values and text contrast for all palettes. An isolated browser preview of the
-  real settings components verifies Ocean selection, Moss light rendering and persistence after
-  reload.
+- On macOS, 254 frontend/build-helper tests pass, with 10 optional/platform checks skipped. Coverage
+  includes settings round-trips, invalid values, custom icon highlights and at least 7:1 secondary
+  text contrast against the canvas, sidebar and surface in all six themes and both color modes.
 
-- Black, Paper and Clear Sky visual acceptance, desktop theme-switching interaction and macOS
-  acceptance remain unverified.
+- Repository formatting, localization/documentation checks, TypeScript/production build and an
+  isolated desktop build pass. The production build retains its large-chunk warning.
+
+- An isolated macOS Tauri app (`sh.uterm.desktop.qa.legibility`) runs the real App with temporary
+  profiles and mocked desktop commands. Native inspection verifies Chinese dark and English light
+  settings labels, navigation, reset and close buttons; heavier sidebar, toolbar and Git icons; and
+  branch labels.
+
+  Native inspection also covers Black, Paper and Clear Sky theme switching and readable
+  Classic/navigation sidebars at 248 and 176 px. An existing browser check covers Ocean selection,
+  Moss light rendering and persistence after reload.
+
+- No real sessions or server connections are used. Native Windows/Linux inspection, the other
+  themes' desktop appearance and custom interface fonts remain unverified.
 
 ### macOS integration scope
 
