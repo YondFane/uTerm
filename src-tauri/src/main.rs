@@ -329,6 +329,15 @@ fn main() {
         })
         .menu(files::menu)
         .on_menu_event(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let Some(action) = event.id().as_ref().strip_prefix("app-menu:") {
+                if let Err(error) = show_main_window(app).and_then(|()| {
+                    app.emit_to("main", "app-menu-action", action)
+                        .map_err(|error| error.to_string())
+                }) {
+                    eprintln!("Application menu: {error}");
+                }
+            }
             if event.id().as_ref() == "editor-quit" {
                 app.exit(0);
             }
