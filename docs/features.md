@@ -114,6 +114,11 @@ published.
 
 The prerelease update channel is never marked Latest.
 
+The release skill requires notes to start with `# uTerm MAJOR.MINOR.PATCH`, followed by matching
+Chinese and English feature highlights and usage instructions. Release preparation checks that this
+heading matches the application version, notes filename and release tag; publication verification
+also checks the heading in the release body and stable update feed.
+
 After an authorized stable release passes CI, public-download, stable-feed and Latest verification,
 the release skill requires merging its published commit into `main` and pushing it. The workflow
 preserves both histories, excludes later unpublished commits and checks remote ancestry. Branch
@@ -124,6 +129,9 @@ protection or unresolved conflicts leave synchronization explicitly incomplete.
 - Latest validation: six release-helper tests, workflow formatting, step-order and shell syntax
   checks, and documentation checks pass. The live latest-release API resolves to a published stable
   release, with its name, notes and all 11 uploaded asset records intact.
+
+- Release skill structure, Markdown formatting and documentation checks pass. Version-heading
+  matching is reviewed during release preparation and publication verification.
 
 ### One-line installation
 
