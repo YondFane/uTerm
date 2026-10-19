@@ -2952,9 +2952,9 @@ use separate Cargo manifests and lockfiles.
 
 ### macOS automated checks
 
-- Current validation on macOS: 218 frontend/build-helper tests and 76 backend tests pass, with eight
-  optional frontend checks skipped and four backend tests ignored. The complete local-session
-  service suite passes on a serial rerun after initial host startup lock contention.
+- Current validation on macOS: 258 frontend/build-helper tests and 108 backend tests pass, with ten
+  optional frontend checks skipped and nine backend tests ignored. The complete local-session
+  service suite passes.
 
 - Frozen dependency installation, formatting, localization, documentation checks,
   TypeScript/production build and desktop compilation pass. The production build retains its
