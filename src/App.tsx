@@ -29,7 +29,14 @@ import { UpdateInstallDialog } from "./components/UpdateInstallDialog";
 import { getUiLanguage, localizeMessage } from "./lib/i18n";
 import { useUiLanguage } from "./lib/useUiLanguage";
 import { tx } from "./lib/i18n";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { sessionSyncErrorMessage } from "./lib/session-sync";
 import type { CSSProperties } from "react";
 import {
@@ -130,10 +137,10 @@ export function App() {
     width: number;
     restoreWidth: number;
     wasVisible: boolean;
+    nextWidth: number;
+    expanded: boolean;
     collapse?: boolean;
   } | null>(null);
-  const [sidebarSnap, setSidebarSnap] = useState(false);
-  const [inspectorSnap, setInspectorSnap] = useState(false);
   const [sidebarCollapseHint, setSidebarCollapseHint] = useState(false);
   const [inspectorCollapseHint, setInspectorCollapseHint] = useState(false);
   const [resizingSidebar, setResizingSidebar] = useState(false);
@@ -149,7 +156,25 @@ export function App() {
   const [shellWidth, setShellWidth] = useState(window.innerWidth);
   const [inspectorRatio, setInspectorRatio] = useState(0.35);
   const [resizingInspector, setResizingInspector] = useState(false);
-  const inspectorDrag = useRef<{ x: number; width: number; collapse?: boolean } | null>(null);
+  const inspectorDrag = useRef<{
+    x: number;
+    width: number;
+    ratio: number;
+    collapse?: boolean;
+  } | null>(null);
+  const panelPreview = useRef<(() => void) | null>(null);
+  const panelFrame = useRef<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    // Preserve the live preview when task activity causes an unrelated render.
+    // 任务活动触发无关渲染时，保留拖动中的实时预览。
+    panelPreview.current?.();
+  });
+  useEffect(
+    () => () => {
+      if (panelFrame.current !== undefined) window.cancelAnimationFrame(panelFrame.current);
+    },
+    [],
+  );
   useEffect(() => {
     const shell = shellElement.current;
     if (!shell) return;
@@ -167,21 +192,108 @@ export function App() {
     if (navigationSidebar)
       setRequestedSidebarWidth((width) => (width <= sidebarSize.collapseWidth ? 248 : width));
   }, [navigationSidebar, sidebarSize.collapseWidth]);
+  function applyPanelLayout(width: number, ratio: number) {
+    const shell = shellElement.current;
+    if (!shell) return;
+    const inspector = inspectorLayout(shellWidth - width, ratio);
+    shell.style.setProperty("--sidebar-width", `${width}px`);
+    shell.style.setProperty("--inspector-width", `${inspector.width}px`);
+    shell.style.setProperty(
+      "--inspector-boundary",
+      `${width + (inspectorOnLeft ? inspector.width : Math.max(320, shellWidth - width - inspector.width))}px`,
+    );
+    shell
+      .querySelector(".sidebar-resizer")
+      ?.setAttribute("aria-valuenow", String(Math.round(width)));
+    const separator = shell.querySelector(".inspector-resizer");
+    separator?.setAttribute("aria-valuenow", String(Math.round(inspector.ratio * 100)));
+    separator?.setAttribute(
+      "aria-valuemin",
+      String(Math.round((inspector.minimum / inspector.available) * 100)),
+    );
+    separator?.setAttribute(
+      "aria-valuemax",
+      String(Math.round((inspector.maximum / inspector.available) * 100)),
+    );
+  }
+  function previewPanelLayout(
+    width: number,
+    ratio: number,
+    panel: "sidebar" | "inspector",
+    collapse: boolean,
+  ) {
+    // Move the dividers once per frame without rendering every session on each pointer event.
+    // 每帧仅移动一次分隔条，避免每次指针事件都重新渲染所有会话。
+    panelPreview.current = () => {
+      applyPanelLayout(width, ratio);
+      shellElement.current?.toggleAttribute(`data-${panel}-snap`, collapse);
+    };
+    if (panelFrame.current !== undefined) return;
+    panelFrame.current = window.requestAnimationFrame(() => {
+      panelFrame.current = undefined;
+      panelPreview.current?.();
+    });
+  }
+  function clearPanelPreview() {
+    if (panelFrame.current !== undefined) window.cancelAnimationFrame(panelFrame.current);
+    panelFrame.current = undefined;
+    panelPreview.current = null;
+    // Restore React's committed values before handing layout ownership back to it.
+    // 交回布局控制权前，先恢复 React 已提交的值。
+    applyPanelLayout(sidebarWidth, inspectorRatio);
+    shellElement.current?.removeAttribute("data-sidebar-snap");
+    shellElement.current?.removeAttribute("data-inspector-snap");
+  }
+  function moveSidebarDivider(clientX: number) {
+    const drag = sidebarDrag.current;
+    if (!drag) return;
+    const next = sidebarLayout(shellWidth, drag.width + clientX - drag.x, navigationSidebar);
+    drag.collapse = next.hidden;
+    drag.nextWidth = next.width;
+    if (navigationSidebar && !next.hidden && !drag.expanded) {
+      drag.expanded = true;
+      setSidebarVisible(true);
+    }
+    previewPanelLayout(next.width, inspectorRatio, "sidebar", next.hidden);
+  }
   function cancelSidebarResize() {
     const drag = sidebarDrag.current;
-    if (navigationSidebar && drag) {
+    if (!drag) return;
+    clearPanelPreview();
+    if (navigationSidebar) {
       setRequestedSidebarWidth(drag.restoreWidth);
       setSidebarVisible(drag.wasVisible);
-    }
-    setSidebarSnap(false);
+    } else setRequestedSidebarWidth(drag.nextWidth);
     sidebarDrag.current = null;
     setResizingSidebar(false);
   }
+  function moveInspectorDivider(clientX: number) {
+    const drag = inspectorDrag.current;
+    if (!drag) return;
+    const next = inspectorDragLayout(
+      inspectorSize.available,
+      inspectorResizeWidth(drag.width, clientX - drag.x, settings.inspectorPosition),
+    );
+    drag.collapse = next.hidden;
+    drag.ratio = next.ratio;
+    previewPanelLayout(sidebarWidth, next.ratio, "inspector", next.hidden);
+  }
+  function cancelInspectorResize() {
+    const drag = inspectorDrag.current;
+    if (!drag) return;
+    clearPanelPreview();
+    setInspectorRatio(drag.ratio);
+    inspectorDrag.current = null;
+    setResizingInspector(false);
+  }
   function resizeSidebar(width: number) {
-    const next = sidebarLayout(shellWidth, width, navigationSidebar);
-    if (next.hidden) {
+    if (sidebarDrag.current) {
+      clearPanelPreview();
       sidebarDrag.current = null;
       setResizingSidebar(false);
+    }
+    const next = sidebarLayout(shellWidth, width, navigationSidebar);
+    if (next.hidden) {
       setSidebarVisible(false);
     } else {
       setRequestedSidebarWidth(next.width);
@@ -207,29 +319,24 @@ export function App() {
           width: sidebarWidth,
           restoreWidth: sidebarSize.width,
           wasVisible: sidebarVisible,
+          nextWidth: sidebarSize.width,
+          expanded: sidebarVisible,
         };
         setResizingSidebar(true);
       }}
       onPointerMove={(event) => {
-        const drag = sidebarDrag.current;
-        if (!drag) return;
-        const next = sidebarLayout(
-          shellWidth,
-          drag.width + event.clientX - drag.x,
-          navigationSidebar,
-        );
-        drag.collapse = next.hidden;
-        setSidebarSnap(next.hidden);
-        setRequestedSidebarWidth(next.width);
-        if (navigationSidebar && !next.hidden) setSidebarVisible(true);
+        moveSidebarDivider(event.clientX);
       }}
       onPointerUp={(event) => {
-        if (sidebarDrag.current?.collapse) {
-          setRequestedSidebarWidth(sidebarDrag.current.restoreWidth);
+        if (!sidebarDrag.current) return;
+        moveSidebarDivider(event.clientX);
+        const drag = sidebarDrag.current;
+        clearPanelPreview();
+        if (drag.collapse) {
+          setRequestedSidebarWidth(drag.restoreWidth);
           setSidebarVisible(false);
           setSidebarCollapseHint(true);
-        }
-        setSidebarSnap(false);
+        } else setRequestedSidebarWidth(drag.nextWidth);
         sidebarDrag.current = null;
         setResizingSidebar(false);
         if (event.currentTarget.hasPointerCapture(event.pointerId))
@@ -237,10 +344,7 @@ export function App() {
       }}
       onLostPointerCapture={cancelSidebarResize}
       onPointerCancel={cancelSidebarResize}
-      onDoubleClick={() => {
-        setRequestedSidebarWidth(248);
-        setSidebarVisible(true);
-      }}
+      onDoubleClick={() => resizeSidebar(248)}
       onKeyDown={(event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End", "Enter"].includes(event.key)) return;
         event.preventDefault();
@@ -253,7 +357,8 @@ export function App() {
                 ? 248
                 : navigationSidebar && !sidebarVisible && event.key === "ArrowRight"
                   ? sidebarSize.collapseWidth + 24
-                  : sidebarWidth + (event.key === "ArrowLeft" ? -24 : 24),
+                  : (sidebarDrag.current?.nextWidth ?? sidebarWidth) +
+                    (event.key === "ArrowLeft" ? -24 : 24),
         );
       }}
     />
@@ -273,48 +378,46 @@ export function App() {
         if (event.button !== 0) return;
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
-        inspectorDrag.current = { x: event.clientX, width: inspectorSize.width };
+        inspectorDrag.current = {
+          x: event.clientX,
+          width: inspectorSize.width,
+          ratio: inspectorSize.ratio,
+        };
         setResizingInspector(true);
       }}
       onPointerMove={(event) => {
-        const drag = inspectorDrag.current;
-        if (!drag) return;
-        const next = inspectorDragLayout(
-          inspectorSize.available,
-          inspectorResizeWidth(drag.width, event.clientX - drag.x, settings.inspectorPosition),
-        );
-        drag.collapse = next.hidden;
-        setInspectorSnap(next.hidden);
-        setInspectorRatio(next.ratio);
+        moveInspectorDivider(event.clientX);
       }}
       onPointerUp={(event) => {
-        if (inspectorDrag.current?.collapse) {
-          setInspectorRatio(inspectorDrag.current.width / inspectorSize.available);
+        if (!inspectorDrag.current) return;
+        moveInspectorDivider(event.clientX);
+        const drag = inspectorDrag.current;
+        clearPanelPreview();
+        if (drag.collapse) {
+          setInspectorRatio(drag.width / inspectorSize.available);
           if (inspectorVisible) {
             toggleInspector();
             setInspectorCollapseHint(true);
           }
-        }
-        setInspectorSnap(false);
+        } else setInspectorRatio(drag.ratio);
         inspectorDrag.current = null;
         setResizingInspector(false);
         if (event.currentTarget.hasPointerCapture(event.pointerId))
           event.currentTarget.releasePointerCapture(event.pointerId);
       }}
-      onLostPointerCapture={() => {
-        setInspectorSnap(false);
-        inspectorDrag.current = null;
-        setResizingInspector(false);
+      onLostPointerCapture={cancelInspectorResize}
+      onDoubleClick={() => {
+        cancelInspectorResize();
+        setInspectorRatio(0.35);
       }}
-      onDoubleClick={() => setInspectorRatio(0.35)}
-      onPointerCancel={() => {
-        setInspectorSnap(false);
-        inspectorDrag.current = null;
-        setResizingInspector(false);
-      }}
+      onPointerCancel={cancelInspectorResize}
       onKeyDown={(event) => {
         if (!["ArrowLeft", "ArrowRight", "Home", "End", "Enter"].includes(event.key)) return;
         event.preventDefault();
+        const currentSize = inspectorDrag.current
+          ? inspectorLayout(inspectorSize.available, inspectorDrag.current.ratio)
+          : inspectorSize;
+        cancelInspectorResize();
         const width =
           event.key === "Home"
             ? inspectorSize.minimum
@@ -323,7 +426,7 @@ export function App() {
               : event.key === "Enter"
                 ? inspectorSize.available * 0.35
                 : inspectorResizeWidth(
-                    inspectorSize.width,
+                    currentSize.width,
                     event.key === "ArrowLeft" ? -16 : 16,
                     settings.inspectorPosition,
                   );
@@ -1963,8 +2066,6 @@ export function App() {
       data-sidebar-collapsed={(navigationSidebar && !sidebarVisible) || undefined}
       data-resizing-inspector={resizingInspector || undefined}
       data-resizing-sidebar={resizingSidebar || undefined}
-      data-sidebar-snap={sidebarSnap || undefined}
-      data-inspector-snap={inspectorSnap || undefined}
       data-expanded-inspector={
         (inspectorVisible && gitOpen && gitExpanded && gitDiffActive) || undefined
       }

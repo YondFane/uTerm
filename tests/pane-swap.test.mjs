@@ -39,9 +39,17 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
   dom.window.HTMLElement.prototype.scrollIntoView = function () {};
   dom.window.HTMLElement.prototype.setPointerCapture = function () {};
   dom.window.HTMLElement.prototype.hasPointerCapture = () => false;
+  const frames = new Map();
+  let frameId = 0;
+  dom.window.requestAnimationFrame = (callback) => {
+    frames.set(++frameId, callback);
+    return frameId;
+  };
+  dom.window.cancelAnimationFrame = (id) => frames.delete(id);
   globalThis.isTauri = true;
   globalThis.paneMounts = 0;
   globalThis.paneUnmounts = 0;
+  globalThis.paneRenders = 0;
   const server = await createServer({
     configFile: false,
     plugins: [
@@ -56,7 +64,9 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
           if (id === "\0pane:TerminalWorkspace")
             return `
           import React, { useEffect } from 'react';
-          export function TerminalWorkspace({ closeRequest }) {
+          export function TerminalWorkspace({ closeRequest, onAgentState }) {
+            globalThis.paneRenders++;
+            globalThis.paneActivity = onAgentState;
             globalThis.paneCloseRequest = closeRequest;
             useEffect(() => { globalThis.paneMounts++; return () => { globalThis.paneUnmounts++; }; }, []);
             return React.createElement('div', { className: 'terminal-test' }, 'retained terminal output');
@@ -329,17 +339,115 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     await act(async () => prefs.reset());
     assert.equal(shell().dataset.inspectorPosition, "right");
     await act(async () => setUiLanguage("en"));
-    t.mock.timers.enable({ apis: ["setTimeout"] });
-    const hint = (selector) =>
-      document.querySelector(selector)?.hasAttribute("data-collapse-hint") ?? false;
     const pointer = (node, type, clientX) =>
       act(async () =>
         node.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX })),
       );
+    const paint = () =>
+      act(async () => {
+        const pending = [...frames.values()];
+        frames.clear();
+        pending.forEach((callback) => callback(0));
+      });
+    const retainedTerminal = document.querySelector(".terminal-test");
+    let activity = 0;
+    for (const side of ["right", "left"]) {
+      if (side === "left") await click(swap());
+      for (const selector of [".sidebar-resizer", ".inspector-resizer"]) {
+        const node = document.querySelector(selector);
+        const property = selector === ".sidebar-resizer" ? "--sidebar-width" : "--inspector-width";
+        const initialWidth = shell().style.getPropertyValue(property);
+        const direction = selector === ".sidebar-resizer" || side === "left" ? -1 : 1;
+        await pointer(node, "pointerdown", 600);
+        const renders = globalThis.paneRenders;
+        for (let index = 0; index < 60; index++) {
+          await pointer(node, "pointermove", 600 + direction * (10 + index));
+          assert.equal(frames.size, 1, "moves share one pending animation frame");
+          if (index === 0) assert.equal(shell().style.getPropertyValue(property), initialWidth);
+          if (index % 6 === 5) await paint();
+        }
+        assert.notEqual(shell().style.getPropertyValue(property), initialWidth);
+        assert.equal(globalThis.paneRenders, renders, "pointer moves must not render sessions");
+        const preview = shell().style.getPropertyValue(property);
+        await act(async () =>
+          globalThis.paneActivity("agent-session", activity++ % 2 ? "waiting" : "working", true),
+        );
+        assert.ok(globalThis.paneRenders > renders, "task activity still updates sessions");
+        assert.equal(shell().style.getPropertyValue(property), preview);
+        await pointer(node, "pointerup", 600 + direction * 75);
+        const committed = shell().style.getPropertyValue(property);
+        assert.notEqual(committed, preview, "release commits the final pointer position");
+        assert.equal(frames.size, 0, "release cancels the pending frame");
+        await paint();
+        assert.equal(shell().style.getPropertyValue(property), committed);
+        assert.equal(document.querySelector(".terminal-test"), retainedTerminal);
+        assert.equal(
+          Number(document.querySelector(selector).getAttribute("aria-valuenow")),
+          Math.round(
+            selector === ".sidebar-resizer"
+              ? parseFloat(committed)
+              : (parseFloat(committed) /
+                  (window.innerWidth -
+                    parseFloat(shell().style.getPropertyValue("--sidebar-width")))) *
+                  100,
+          ),
+        );
+      }
+    }
+    await click(swap());
+    for (const selector of [".sidebar-resizer", ".inspector-resizer"]) {
+      const node = document.querySelector(selector);
+      await pointer(node, "pointerdown", 600);
+      await pointer(node, "pointermove", 620);
+      await act(async () =>
+        node.dispatchEvent(
+          new dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }),
+        ),
+      );
+      assert.equal(frames.size, 0, "keyboard resizing cancels the held pointer preview");
+      const committed = shell().getAttribute("style");
+      await pointer(node, "pointermove", 650);
+      await paint();
+      assert.equal(shell().getAttribute("style"), committed);
+      await pointer(node, "lostpointercapture", 650);
+      await pointer(node, "pointerdown", 600);
+      await pointer(node, "pointermove", 620);
+      await pointer(node, "lostpointercapture", 620);
+      assert.equal(frames.size, 0);
+      assert.equal(shell().hasAttribute("data-sidebar-snap"), false);
+      assert.equal(shell().hasAttribute("data-inspector-snap"), false);
+    }
+    await act(async () => prefs.save({ ...prefs.settings, sidebarStyle: "navigation" }, false));
+    await click(document.querySelector(".sidebar-toggle"));
+    let divider = document.querySelector(".sidebar-resizer");
+    await pointer(divider, "pointerdown", 600);
+    await pointer(divider, "pointermove", 760);
+    await paint();
+    assert.equal(document.querySelector(".sidebar-main").hidden, false);
+    await pointer(divider, "pointercancel", 760);
+    assert.equal(document.querySelector(".sidebar-main").hidden, true);
+    assert.equal(shell().style.getPropertyValue("--sidebar-width"), "48px");
+    assert.equal(frames.size, 0);
+    await pointer(divider, "pointerdown", 600);
+    await pointer(divider, "pointermove", 760);
+    await pointer(divider, "pointerup", 770);
+    assert.equal(shell().style.getPropertyValue("--sidebar-width"), "218px");
+    assert.equal(document.querySelector(".sidebar-main").hidden, false);
+    await act(async () => prefs.save({ ...prefs.settings, sidebarStyle: "classic" }, false));
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const hint = (selector) =>
+      document.querySelector(selector)?.hasAttribute("data-collapse-hint") ?? false;
     const drag = async (selector, end, finish = "pointerup", back) => {
       const node = document.querySelector(selector);
       await pointer(node, "pointerdown", 600);
       await pointer(node, "pointermove", end);
+      await paint();
+      assert.equal(
+        shell().hasAttribute(
+          selector === ".sidebar-resizer" ? "data-sidebar-snap" : "data-inspector-snap",
+        ),
+        true,
+      );
       assert.equal(
         hint(selector === ".sidebar-resizer" ? ".sidebar-reopen" : ".inspector-toggle"),
         false,
@@ -441,6 +549,15 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
       sessionsBeforeClose,
     );
     assert.ok(calls.includes("file_save"));
+    if (!document.querySelector(".inspector-resizer"))
+      await click(document.querySelector(".inspector-toggle"));
+    divider = document.querySelector(".inspector-resizer");
+    await pointer(divider, "pointerdown", 600);
+    await pointer(divider, "pointermove", 650);
+    assert.equal(frames.size, 1);
+    await act(async () => root.unmount());
+    root = null;
+    assert.equal(frames.size, 0, "unmount cancels the pending preview");
   } finally {
     t.mock.timers.reset();
     dom.window.Storage.prototype.setItem = originalSetItem;
@@ -450,6 +567,8 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     dom.window.close();
     delete globalThis.paneEditor;
     delete globalThis.paneCloseRequest;
+    delete globalThis.paneActivity;
+    delete globalThis.paneRenders;
     delete globalThis.isTauri;
   }
 });
