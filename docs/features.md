@@ -1872,10 +1872,11 @@ configured absolute executable path.
 
 ### Agent brand icons
 
-Kimi, OpenCode, Grok, Hermes, Pi, MiniMax, Qwen Code, Copilot CLI and iFlow CLI use their brand
-icons in Agent settings, sidebar creation/session controls and session tabs. Hermes, MiniMax, Qwen
-Code and Copilot CLI use Lobe Icons' original brand paths; Pi uses its official SVG geometry, and
-iFlow uses the official CLI site's favicon. Sources and applicable rights are retained in `NOTICE`.
+Kimi, OpenCode, Grok, Hermes, Pi, MiniMax, Qwen Code, Copilot CLI, iFlow CLI and TRAE CLI use their
+brand icons in Agent settings, sidebar creation/session controls and session tabs. Hermes, MiniMax,
+Qwen Code, Copilot CLI and TRAE CLI use Lobe Icons' original brand paths; Pi uses its official SVG
+geometry, and iFlow uses the official CLI site's favicon. Sources and applicable rights are retained
+in `NOTICE`.
 
 Vector marks inherit the interface color in dark and light themes; iFlow retains its original image
 colors. All assets ship locally and need no network request. Unknown agents retain the terminal
@@ -1897,8 +1898,8 @@ icon.
 ### Agent installation
 
 Settings → Agent and the standalone Agent panel include Claude, Codex, Gemini, OpenCode, Kimi, Grok,
-Hermes, Pi, MiniMax, Qwen Code, Copilot CLI and iFlow CLI. Each uses the existing project/chat
-launch flow and starts disabled.
+Hermes, Pi, MiniMax, Qwen Code, Copilot CLI, iFlow CLI and TRAE CLI. Each uses the existing
+project/chat launch flow and starts disabled.
 
 1. For a missing program, select Install program, then confirm installation or open the official
    installation guide.
@@ -1913,6 +1914,7 @@ launch flow and starts disabled.
 | [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/quickstart/)                                    | `qwen`          | npm: `@qwen-code/qwen-code`            |
 | [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli) | `copilot`       | npm: `@github/copilot`                 |
 | [iFlow CLI](https://docs.iflow.cn/cli/quickstart/)                                                           | `iflow`         | npm: `@iflow-ai/iflow-cli`             |
+| [TRAE CLI](https://docs.trae.cn/cli_get-started-with-trae-cli-2)                                             | `traecli`       | Official TRAE CLI 2.0 installer script |
 
 - OpenCode, Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot CLI and iFlow CLI support
   confirmed global npm installation. Node.js/npm, a version supported by the CLI and network access
@@ -1926,35 +1928,36 @@ launch flow and starts disabled.
 
 - Detection preserves inherited PATH precedence. Default search paths include `~/.local/bin`,
   `~/.opencode/bin`, `~/.kimi-code/bin`, `~/.pi/agent/bin` and `~/.minimax-code/bin`. Windows also
-  searches `%APPDATA%\npm`, `%LOCALAPPDATA%\hermes\bin` and `%USERPROFILE%\.minimax-code`.
+  searches `%APPDATA%\npm`, `%LOCALAPPDATA%\hermes\bin`, `%USERPROFILE%\.minimax-code` and
+  `%LOCALAPPDATA%\Programs\TraeCLI\bin`.
 
 - Hermes downloads its official platform script and runs it without interactive setup, browser or
   computer-use installation. The download is limited to 1 MiB; execution is limited to ten minutes
   and 10 MiB of output. It does not elevate privileges or bypass PowerShell execution policy.
   MiniMax's npm installation includes optional dependencies and permits its SQLite install scripts.
 
-- Complete provider login and model configuration in the CLI itself. These six additional Agents do
-  not provide uTerm usage integration. The iFlow project has announced service shutdown; retaining
-  its installer and Hooks does not guarantee that its hosted services are available.
+- Complete provider login and model configuration in the CLI itself. Hermes, Pi, MiniMax, Qwen Code,
+  Copilot CLI, iFlow CLI and TRAE CLI do not provide uTerm usage integration. The iFlow project has
+  announced service shutdown; retaining its installer and Hooks does not guarantee that its hosted
+  services are available.
 
 #### Validation and limits
 
 - Bilingual component tests cover confirmation, failure/retry, refresh, official installation links,
   enablement and the MiniMax `mcode` configuration default. Backend tests cover the package
-  allowlist. Windows local-service fixtures verify all six additional command mappings, default
+  allowlist. Windows local-service fixtures verify all seven additional command mappings, default
   installation directories, inherited PATH precedence, launch command construction and custom
   program overrides.
 
-- Windows validation passes 19 focused frontend checks, 104 backend checks (six optional checks
-  ignored) and 26 local-service checks. Tests cover custom identifier isolation, literal installer
-  paths, MiniMax dependency flags, Hook reinstall/removal without unnecessary files or backups,
-  retained user entries, malformed JSON, configuration conflicts and Pi's settled completion and
-  closed reporter input. Formatting of the changed source/tests and Rust files, documentation,
-  TypeScript/production and the isolated desktop build (`sh.uterm.desktop.qa.additionalagentscheck`)
-  pass.
+- Windows validation passes 278 frontend/build-helper checks (11 optional/platform checks skipped),
+  111 backend checks (nine ignored) and 38 local-service checks (two ignored). Tests cover custom
+  identifier isolation, literal installer paths, MiniMax dependency flags, Hook reinstall/removal
+  without unnecessary files or backups, retained user entries, malformed JSON, configuration
+  conflicts and Pi's settled completion and closed reporter input. Formatting of the changed
+  source/tests and Rust files, documentation, TypeScript/production and the isolated desktop build
+  (`sh.uterm.desktop.qa.traebuild`) pass.
 
-- The full frontend/build-helper suite passes 241 checks with 11 optional/platform checks skipped;
-  localization passes. These automated checks do not establish live provider, database or SSH
+- Localization passes. These automated checks do not establish live provider, database or SSH
   acceptance.
 
 - An isolated native Tauri/WebView2 fixture (`sh.uterm.desktop.qa.additionalagents`) renders the
@@ -1964,6 +1967,43 @@ launch flow and starts disabled.
   installed app.
 
 - Actual package downloads, authenticated Agent sessions and macOS/Linux runtime acceptance remain
+  unverified.
+
+### TRAE CLI
+
+Open Settings → Agent → TRAE CLI, install the program, then enable it to create project, Worktree or
+standalone chat sessions. The default command is `traecli`; Configure accepts an absolute program
+path and a JSON array of arguments for custom installations. A `trae` editor launcher does not count
+as the CLI.
+
+Installation downloads the official TRAE CLI 2.0 platform script and runs it in the background with
+unattended confirmation. The script download is limited to 1 MiB; execution is limited to ten
+minutes and 10 MiB of output. PowerShell execution policy and installation errors remain visible.
+Sign in and complete any first-run sandbox setup inside the CLI using an account with the required
+access.
+
+TRAE CLI uses its bundled brand icon and generic terminal notifications when emitted by the CLI.
+Automatic uTerm Hooks, precise task-state events and usage/quota integration are unavailable.
+
+#### Validation and limits
+
+- Windows component fixtures verify bilingual installation confirmation, official guide links,
+  program defaults, brand icons and enablement. Local-service fixtures verify `traecli` detection
+  with an empty PATH, inherited PATH precedence, launch construction and custom program overrides.
+  Backend checks verify official script URLs, unattended confirmation and literal script paths
+  without Hermes-only arguments.
+
+- All 17 focused frontend checks, 111 backend checks (nine ignored) and 38 local-service checks (two
+  ignored) pass on Windows, together with formatting, localization, documentation,
+  TypeScript/production and the isolated Windows desktop build. The full frontend/build-helper suite
+  passes 278 checks with 11 optional/platform checks skipped.
+
+- The isolated native Tauri/WebView2 fixture (`sh.uterm.desktop.qa.trae`) renders the real Agent
+  settings with temporary availability and settings data. Visual inspection confirms the brand icon,
+  availability, enable switch, `traecli` configuration and installation prompt in Chinese/dark and
+  English/light views. The fixture does not install or launch TRAE or replace the installed app.
+
+- Actual TRAE installation, authenticated model requests and macOS/Linux runtime acceptance remain
   unverified.
 
 ### Dismissing break reminders
@@ -2112,14 +2152,14 @@ Other tools' Hooks remain independently configured and may need their own Window
 Enable Settings → Agent → Notify when tasks finish or need attention, then open a new Agent session.
 The original interactive terminal interface is retained. Installing Hooks is optional.
 
-| Agent                                                                      | Notification source                                                                                                                                                                |
-| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Codex                                                                      | A dedicated authenticated loopback app-server and the original TUI connected through `--remote`; unsupported versions or invocation-specific configuration use terminal reminders. |
-| OpenCode                                                                   | Its own authenticated loopback server and SSE session/permission events. Custom server or attach arguments retain terminal reminders.                                              |
-| Claude                                                                     | A terminal bell enabled for this launch with `--settings`; explicit later CLI settings retain precedence.                                                                          |
-| Gemini, Kimi, Grok, Hermes, Pi, MiniMax, Qwen Code, Copilot CLI, iFlow CLI | Native terminal notifications or BEL when the CLI emits them. Availability and enablement depend on the CLI version and settings.                                                  |
+| Agent                                                                                | Notification source                                                                                                                                                                |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Codex                                                                                | A dedicated authenticated loopback app-server and the original TUI connected through `--remote`; unsupported versions or invocation-specific configuration use terminal reminders. |
+| OpenCode                                                                             | Its own authenticated loopback server and SSE session/permission events. Custom server or attach arguments retain terminal reminders.                                              |
+| Claude                                                                               | A terminal bell enabled for this launch with `--settings`; explicit later CLI settings retain precedence.                                                                          |
+| Gemini, Kimi, Grok, Hermes, Pi, MiniMax, Qwen Code, Copilot CLI, iFlow CLI, TRAE CLI | Native terminal notifications or BEL when the CLI emits them. Availability and enablement depend on the CLI version and settings.                                                  |
 
-- All twelve built-in Agents, custom Agents and ordinary terminals share the OSC 9, OSC 777, basic
+- All thirteen built-in Agents, custom Agents and ordinary terminals share the OSC 9, OSC 777, basic
   OSC 99 and BEL reminder channel. A generic signal displays “Session has a new notification” with
   an amber indicator; it never establishes task completion or permission waiting. Viewing the
   session acknowledges the reminder. OSC title, clipboard, directory and progress controls do not

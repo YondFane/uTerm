@@ -1181,9 +1181,9 @@ Kimi 检测和 Agent 启动在继承的 PATH 条目之后补充搜索
 
 ### Agent 品牌图标
 
-Kimi、OpenCode、Grok、Hermes、Pi、MiniMax、Qwen Code、Copilot CLI 和 iFlow
+Kimi、OpenCode、Grok、Hermes、Pi、MiniMax、Qwen Code、Copilot CLI、iFlow CLI 和 TRAE
 CLI 在 Agent 设置、侧栏新建／会话入口及会话标签中使用各自的品牌图标。Hermes、MiniMax、Qwen
-Code 和 Copilot CLI 使用 Lobe
+Code、Copilot CLI 和 TRAE CLI 使用 Lobe
 Icons 的原始品牌路径；Pi 使用官方 SVG 几何形状，iFlow 使用 CLI 官网的原始页签图标。来源及适用权利保留在
 `NOTICE` 中。
 
@@ -1200,7 +1200,7 @@ Icons 的原始品牌路径；Pi 使用官方 SVG 几何形状，iFlow 使用 CL
 
 设置 →
 Agent 和独立 Agent 面板提供 Claude、Codex、Gemini、OpenCode、Kimi、Grok、Hermes、Pi、MiniMax、Qwen
-Code、Copilot CLI 与 iFlow CLI，均复用现有项目／聊天启动流程，默认关闭。
+Code、Copilot CLI、iFlow CLI 与 TRAE CLI，均复用现有项目／聊天启动流程，默认关闭。
 
 1. 未找到程序时，点击“安装程序”，再确认安装或打开官方安装说明。
 2. 安装后点击“重新检测”，自定义安装位置可通过“配置”指定程序路径。
@@ -1214,6 +1214,7 @@ Code、Copilot CLI 与 iFlow CLI，均复用现有项目／聊天启动流程，
 | [Qwen Code](https://qwenlm.github.io/qwen-code-docs/en/users/quickstart/)                                    | `qwen`    | npm：`@qwen-code/qwen-code`            |
 | [Copilot CLI](https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli) | `copilot` | npm：`@github/copilot`                 |
 | [iFlow CLI](https://docs.iflow.cn/cli/quickstart/)                                                           | `iflow`   | npm：`@iflow-ai/iflow-cli`             |
+| [TRAE CLI](https://docs.trae.cn/cli_get-started-with-trae-cli-2)                                             | `traecli` | 官方 TRAE CLI 2.0 安装脚本             |
 
 - OpenCode、Claude、Codex、Gemini、Pi、MiniMax、Qwen Code、Copilot CLI 和 iFlow
   CLI 支持确认后通过 npm 全局安装，需要 Node.js/npm、CLI 支持的版本和网络，不自动提权。仅接受固定包名，安装不占用界面线程，拒绝并发安装，错误保持可见。
@@ -1223,27 +1224,55 @@ Code、Copilot CLI 与 iFlow CLI，均复用现有项目／聊天启动流程，
 - 检测保留继承的 PATH 优先级。默认搜索目录包含
   `~/.local/bin`、`~/.opencode/bin`、`~/.kimi-code/bin`、`~/.pi/agent/bin` 和
   `~/.minimax-code/bin`。Windows 还搜索 `%APPDATA%\npm`、`%LOCALAPPDATA%\hermes\bin` 与
-  `%USERPROFILE%\.minimax-code`。
+  `%USERPROFILE%\.minimax-code`，以及 `%LOCALAPPDATA%\Programs\TraeCLI\bin`。
 
 - Hermes 下载官方平台脚本后，以非交互方式运行，跳过登录配置、浏览器和计算机操作组件安装。脚本下载限制为 1
   MiB，执行限制为十分钟及 10
   MiB 输出，不自动提权或绕过 PowerShell 执行策略。MiniMax 的 npm 安装包含可选依赖，并允许 SQLite 安装脚本。
 
-- 服务商登录和模型配置在各 CLI 内完成。这六个新增 Agent 暂不提供 uTerm 用量集成。iFlow 项目已公告停止服务，保留安装器与 Hooks 不代表其托管服务可用。
+- 服务商登录和模型配置在各 CLI 内完成。Hermes、Pi、MiniMax、Qwen Code、Copilot CLI、iFlow
+  CLI 与 TRAE
+  CLI 暂不提供 uTerm 用量集成。iFlow 项目已公告停止服务，保留安装器与 Hooks 不代表其托管服务可用。
 
 #### 验证与限制
 
 - 双语组件测试覆盖确认、失败重试、刷新、官方安装链接、启用入口与 MiniMax 的 `mcode`
-  配置默认值；后端测试覆盖安装包白名单。Windows 本地服务模拟程序验证六个新增命令映射、默认安装目录、继承的 PATH 优先级、启动命令构造与自定义程序覆盖。
+  配置默认值；后端测试覆盖安装包白名单。Windows 本地服务模拟程序验证七个新增命令映射、默认安装目录、继承的 PATH 优先级、启动命令构造与自定义程序覆盖。
 
-- Windows 验证通过 19 项专项前端检查、104 项后端检查（六项可选检查忽略）及 26 项本地服务检查。测试覆盖自定义标识隔离、安装器字面路径、MiniMax 依赖参数、不产生多余文件或备份的 Hook 重装／移除、保留用户条目、无效 JSON、配置冲突，以及 Pi 稳定结束后回报与关闭上报程序输入。修改源码／测试与 Rust 文件格式、文档、TypeScript／生产及隔离桌面构建（`sh.uterm.desktop.qa.additionalagentscheck`）通过。
+- Windows 验证通过 278 项前端／构建工具检查（11 项可选／平台检查跳过）、111 项后端检查（九项忽略）及 38 项本地服务检查（两项忽略）。测试覆盖自定义标识隔离、安装器字面路径、MiniMax 依赖参数、不产生多余文件或备份的 Hook 重装／移除、保留用户条目、无效 JSON、配置冲突，以及 Pi 稳定结束后回报与关闭上报程序输入。修改源码／测试与 Rust 文件格式、文档、TypeScript／生产及隔离桌面构建（`sh.uterm.desktop.qa.traebuild`）通过。
 
-- 完整前端／构建工具套件通过 241 项检查，11 项可选／平台检查跳过；国际化检查通过。自动化检查不代表真实服务商、数据库或 SSH 服务已验收。
+- 国际化检查通过。自动化检查不代表真实服务商、数据库或 SSH 服务已验收。
 
 - 独立原生 Tauri／WebView2 临时界面（`sh.uterm.desktop.qa.additionalagents`）使用真实 Agent 设置及模拟可用性、临时设置数据。视觉检查确认中文深色界面的六个名称、可用状态与开关对齐、英文标签切换及 MiniMax 的
   `mcode` 配置字段。临时界面不启动服务商 CLI，也不替换安装版应用。
 
 - 实际软件包下载、需认证的 Agent 会话及 macOS／Linux 运行验收仍未验证。
+
+### TRAE CLI
+
+打开设置 → Agent → TRAE CLI，安装程序后启用，即可新建项目、Worktree 或独立聊天会话。默认命令为
+`traecli`；自定义安装位置可在“配置”中填写程序绝对路径及 JSON 参数数组。`trae`
+编辑器启动命令不作为 CLI 检测结果。
+
+安装会下载官方 TRAE CLI 2.0 平台脚本，在后台使用无人值守确认方式执行。脚本下载限制为 1
+MiB，执行限制为十分钟及 10
+MiB 输出。PowerShell 执行策略与安装错误保持可见。请使用具备所需权限的账号，在 CLI 内完成登录及首次运行时要求的沙箱初始化。
+
+TRAE CLI 使用本地打包的品牌图标，并接收 CLI 发出的通用终端通知。暂不提供自动 uTerm
+Hooks、精确任务状态事件及用量／额度集成。
+
+#### 验证与限制
+
+- Windows 组件模拟测试验证双语安装确认、官方说明链接、程序默认值、品牌图标与启用入口。本地服务模拟程序验证空 PATH 下的
+  `traecli`
+  检测、继承的 PATH 优先级、启动构造与自定义程序覆盖。后端检查验证官方脚本地址、无人值守确认、字面脚本路径，以及不传入 Hermes 专用参数。
+
+- Windows 验证通过 17 项专项前端检查、111 项后端检查（九项忽略）及 38 项本地服务检查（两项忽略），格式、国际化、文档、TypeScript／生产与隔离 Windows 桌面构建均通过。完整前端／构建工具套件通过 278 项检查，11 项可选／平台检查跳过。
+
+- 隔离原生 Tauri／WebView2 临时界面（`sh.uterm.desktop.qa.trae`）使用真实 Agent 设置及模拟可用性、临时设置数据。视觉检查确认中文／深色和英文／浅色视图中的品牌图标、可用状态、启用开关、`traecli`
+  配置与安装提示。临时界面不安装或启动 TRAE，也不替换安装版应用。
+
+- 实际 TRAE 安装、登录后模型请求及 macOS／Linux 运行验收仍未验证。
 
 ### 关闭休息提醒
 
@@ -1347,14 +1376,14 @@ Hooks 显式调用 PowerShell，并将程序路径作为字面值处理，因此
 在设置 →
 Agent 中开启“任务完成或需要处理时通知”，再新建 Agent 会话。保留各 Agent 原有的交互终端界面，无需安装 Hooks。
 
-| Agent                                                                      | 通知来源                                                                                                                  |
-| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Codex                                                                      | 每个会话使用独立、带认证的回环 app-server，原生终端界面通过 `--remote` 连接；不支持的版本或本次启动专用配置使用终端提醒。 |
-| OpenCode                                                                   | 自身带认证的回环服务及 SSE 会话／权限事件；自定义服务或 attach 参数保留终端提醒。                                         |
-| Claude                                                                     | 通过本次启动的 `--settings` 开启终端响铃；后续显式 CLI 设置仍具有更高优先级。                                             |
-| Gemini、Kimi、Grok、Hermes、Pi、MiniMax、Qwen Code、Copilot CLI、iFlow CLI | CLI 发出的原生终端通知或 BEL；是否可用及如何开启取决于 CLI 版本和设置。                                                   |
+| Agent                                                                                | 通知来源                                                                                                                  |
+| ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| Codex                                                                                | 每个会话使用独立、带认证的回环 app-server，原生终端界面通过 `--remote` 连接；不支持的版本或本次启动专用配置使用终端提醒。 |
+| OpenCode                                                                             | 自身带认证的回环服务及 SSE 会话／权限事件；自定义服务或 attach 参数保留终端提醒。                                         |
+| Claude                                                                               | 通过本次启动的 `--settings` 开启终端响铃；后续显式 CLI 设置仍具有更高优先级。                                             |
+| Gemini、Kimi、Grok、Hermes、Pi、MiniMax、Qwen Code、Copilot CLI、iFlow CLI、TRAE CLI | CLI 发出的原生终端通知或 BEL；是否可用及如何开启取决于 CLI 版本和设置。                                                   |
 
-- 十二个内置 Agent、自定义 Agent 和普通终端共用 OSC 9、OSC 777、基础 OSC
+- 十三个内置 Agent、自定义 Agent 和普通终端共用 OSC 9、OSC 777、基础 OSC
   99 及 BEL 提醒通道。通用信号显示“会话有新提醒”和琥珀色指示灯，不据此判断任务完成或权限等待。查看会话后确认提醒。OSC 标题、剪贴板、目录及进度控制不会触发提醒。
 
 - 通用提醒同时进入托盘任务列表，使用琥珀色注意指示和独立文案。失败状态显示“任务执行失败”，也适用于 Agent 进程仍在运行时的失败。

@@ -17,6 +17,7 @@ export const agentNames: Record<string, string> = Object.assign(Object.create(nu
   qwen: "Qwen Code",
   copilot: "Copilot CLI",
   iflow: "iFlow CLI",
+  trae: "TRAE CLI",
 });
 export function AgentStatusIndicator({ state = "idle" }: { state?: string }) {
   useUiLanguage();
