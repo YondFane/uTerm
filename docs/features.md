@@ -1348,9 +1348,10 @@ force or automatic tag pushing.
 
 - The focused branch-selector regression passes, including retained branch names during switching
   and delayed Pull in Simplified Chinese/English, busy-state protection, completion, editor-save
-  conflicts, stale responses and visible Git errors. Repository formatting, localization,
-  documentation and TypeScript/production build checks pass; the build retains its existing
-  large-chunk warning.
+  conflicts, stale responses and visible Git errors. Windows validation passes frozen dependency
+  installation, repository formatting, localization, documentation, TypeScript/production and
+  isolated desktop builds, 278 frontend tests (11 skipped), 110 backend tests (nine ignored) and 38
+  host tests (two ignored). The production build retains its existing large-chunk warning.
 
 - An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.branchlabel`) renders the real
   selector with simulated Git replies. Native inspection verifies that a pending Pull retains
