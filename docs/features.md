@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-19
+updated: 2026-10-20
 ---
 
 # uTerm feature guide
@@ -1293,9 +1293,12 @@ Right-click anywhere on the branch control (or press Shift+F10) for Push, Pull (
 Fetch and Refresh branches. Push explicitly targets the current branch's configured upstream without
 force or automatic tag pushing.
 
-- Pull requires a clean working tree, fetches the upstream and fast-forwards only; divergent history
-  is rejected without creating a merge commit or rebasing. Push/Pull are disabled for
-  detached/unborn branches or missing upstreams; configure the upstream in a terminal first.
+- Pull fetches the upstream and fast-forwards without requiring a clean working tree. Unrelated
+  staged, unstaged and untracked files are retained; Git rejects updates that would overwrite local
+  changes. No automatic stash, merge commit or rebase is used, and divergent history is rejected.
+
+- Push/Pull are disabled for detached/unborn branches or missing upstreams; configure the upstream
+  in a terminal first.
 
 - Fetch updates all branch references from each configured remote and prunes deleted remote
   references without switching or merging. Refresh branches re-reads the Local/Remote lists.
@@ -3089,17 +3092,23 @@ use separate Cargo manifests and lockfiles.
   changes, repeated requests, stale polling, Local/Remote groups, remote switching, context actions,
   missing upstreams, visible remote/authentication failures and keyboard dismissal. Backend tests
   use temporary local/bare repositories for unfetched remote listings, partial remote failures,
-  narrow clone tracking, name collisions, dirty-worktree protection, upstream push/pull, divergent
-  history and force-push prevention.
+  narrow clone tracking, name collisions, branch-switch conflict protection, upstream push/pull,
+  divergent history and force-push prevention.
 
-- On macOS, 139 frontend/build-helper tests, 39 backend tests, formatting, localization,
-  documentation checks, TypeScript/production build and an isolated desktop build passed.
+- Pull coverage includes retaining unrelated staged, unstaged and untracked files both when already
+  up to date and during a fast-forward, and rejecting file overwrites even when automatic stash is
+  enabled in Git configuration.
+
+- On macOS, `pnpm test:backend` passes 110 tests with nine default-ignored service/benchmark tests;
+  seven focused branch-picker/localization tests also pass. TypeScript, repository formatting,
+  localization, documentation metadata/index and feature-guide formatting checks pass. The generated
+  `docs/README.md` retains a pre-existing Prettier formatting warning.
 
 - Native QA (`sh.uterm.desktop.qa.remotebranches`) verified both menu layouts, selecting an
   unfetched remote branch from a single-branch clone, creating its tracking configuration, pushing a
   test commit to a local bare remote, pulling a newer remote commit with file-list refresh, and
-  fetching a new remote reference without changing the current branch. Windows/Linux runtime and
-  authenticated network remotes still require acceptance testing.
+  fetching a new remote reference without changing the current branch. Native Pull with local
+  changes, Windows/Linux runtime and authenticated network remotes still require acceptance testing.
 
 - Existing large-chunk and Rust dead-code warnings remain.
 
