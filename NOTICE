@@ -77,6 +77,11 @@ at the same Lobe Icons revision. Geometry is retained; subpaths are combined.
 src/lib/agent-brands.ts 中的 Hermes、MiniMax、Qwen Code 和 Copilot CLI 路径
 取自同版本 Lobe Icons 的上述 SVG 文件，保留几何形状并合并子路径。
 
+The TRAE CLI path in src/lib/agent-brands.ts is copied unchanged from trae.svg
+at the same Lobe Icons revision and is covered by the MIT license below.
+src/lib/agent-brands.ts 中的 TRAE CLI 路径原样取自同版本 Lobe Icons 的
+trae.svg，适用下方 MIT 许可。
+
 The Pi path is adapted from https://pi.dev/logo-auto.svg, retrieved 2026-10-18.
 The three original paths are combined and rendered in the interface color;
 the viewport excludes excess whitespace without changing their geometry.

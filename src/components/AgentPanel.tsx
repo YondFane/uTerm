@@ -94,6 +94,7 @@ export function AgentSettings({
       "qwen",
       "copilot",
       "iflow",
+      "trae",
       ...definitions.map((item) => item.id),
     ]),
   ];

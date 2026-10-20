@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 pub const BUILTIN_AGENTS: &[&str] = &[
     "codex", "claude", "gemini", "opencode", "kimi", "grok", "hermes", "pi", "minimax", "qwen",
-    "copilot", "iflow",
+    "copilot", "iflow", "trae",
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

@@ -17,7 +17,21 @@ fn npm_extra_arguments(agent: &str) -> &'static [&'static str] {
     }
 }
 
-fn hermes_install_arguments(script: &std::path::Path, windows: bool) -> Vec<std::ffi::OsString> {
+fn script_install_url(agent: &str, windows: bool) -> Option<&'static str> {
+    match (agent, windows) {
+        ("hermes", true) => Some("https://hermes-agent.nousresearch.com/install.ps1"),
+        ("hermes", false) => Some("https://hermes-agent.nousresearch.com/install.sh"),
+        ("trae", true) => Some("https://trae.cn/trae-cli/install_v2.ps1"),
+        ("trae", false) => Some("https://trae.cn/trae-cli/install_v2.sh"),
+        _ => None,
+    }
+}
+
+fn script_install_arguments(
+    agent: &str,
+    script: &std::path::Path,
+    windows: bool,
+) -> Vec<std::ffi::OsString> {
     let mut arguments: Vec<std::ffi::OsString> = if windows {
         ["-NoLogo", "-NoProfile", "-NonInteractive", "-File"]
             .into_iter()
@@ -27,15 +41,17 @@ fn hermes_install_arguments(script: &std::path::Path, windows: bool) -> Vec<std:
         vec![]
     };
     arguments.push(script.as_os_str().to_owned());
-    arguments.extend(
-        if windows {
-            ["-NonInteractive", "-SkipBrowser", "-SkipComputerUse"]
-        } else {
-            ["--non-interactive", "--skip-browser", "--skip-computer-use"]
-        }
-        .into_iter()
-        .map(std::ffi::OsString::from),
-    );
+    if agent == "hermes" {
+        arguments.extend(
+            if windows {
+                ["-NonInteractive", "-SkipBrowser", "-SkipComputerUse"]
+            } else {
+                ["--non-interactive", "--skip-browser", "--skip-computer-use"]
+            }
+            .into_iter()
+            .map(std::ffi::OsString::from),
+        );
+    }
     arguments
 }
 
@@ -55,11 +71,11 @@ fn package(agent: &str) -> Result<&'static str, String> {
 }
 
 fn install(agent: &str) -> Result<bool, String> {
-    if agent == "hermes" {
+    if script_install_url(agent, cfg!(windows)).is_some() {
         let _guard = INSTALL_LOCK
             .try_lock()
             .map_err(|_| "已有 Agent 正在安装。")?;
-        return install_hermes();
+        return install_script(agent);
     }
     let package = package(agent)?;
     let _guard = INSTALL_LOCK
@@ -116,12 +132,9 @@ fn install(agent: &str) -> Result<bool, String> {
     Ok(utermd_local::agent_program(agent).is_ok())
 }
 
-fn install_hermes() -> Result<bool, String> {
-    let url = if cfg!(windows) {
-        "https://hermes-agent.nousresearch.com/install.ps1"
-    } else {
-        "https://hermes-agent.nousresearch.com/install.sh"
-    };
+fn install_script(agent: &str) -> Result<bool, String> {
+    let url = script_install_url(agent, cfg!(windows))
+        .ok_or("此 Agent 不支持自动安装，请按其发布方说明安装后配置程序路径。")?;
     let response = reqwest::blocking::Client::builder()
         .timeout(Duration::from_secs(60))
         .redirect(reqwest::redirect::Policy::limited(5))
@@ -148,22 +161,7 @@ fn install_hermes() -> Result<bool, String> {
         .write_all(&bytes)
         .map_err(|error| error.to_string())?;
     script.flush().map_err(|error| error.to_string())?;
-    #[cfg(windows)]
-    let mut command = {
-        let root = std::env::var_os("SystemRoot").ok_or("SystemRoot is not set")?;
-        let mut command = Command::new(
-            std::path::PathBuf::from(root).join("System32/WindowsPowerShell/v1.0/powershell.exe"),
-        );
-        command.args(hermes_install_arguments(script.path(), true));
-        command
-    };
-    #[cfg(not(windows))]
-    let mut command = {
-        let mut command =
-            Command::new(utermd_local::resolve_program("bash").map_err(|error| error.to_string())?);
-        command.args(hermes_install_arguments(script.path(), false));
-        command
-    };
+    let mut command = script_install_command(agent, script.path())?;
     let log = tempfile::tempfile().map_err(|error| error.to_string())?;
     command
         .stdin(Stdio::null())
@@ -172,7 +170,30 @@ fn install_hermes() -> Result<bool, String> {
     let mut child =
         utermd_local::BackgroundChild::spawn(&mut command).map_err(|error| error.to_string())?;
     wait_for_install(&mut child, log)?;
-    Ok(utermd_local::agent_program("hermes").is_ok())
+    Ok(utermd_local::agent_program(agent).is_ok())
+}
+
+fn script_install_command(agent: &str, script: &std::path::Path) -> Result<Command, String> {
+    #[cfg(windows)]
+    let mut command = {
+        let root = std::env::var_os("SystemRoot").ok_or("SystemRoot is not set")?;
+        let mut command = Command::new(
+            std::path::PathBuf::from(root).join("System32/WindowsPowerShell/v1.0/powershell.exe"),
+        );
+        command.args(script_install_arguments(agent, script, true));
+        command
+    };
+    #[cfg(not(windows))]
+    let mut command = {
+        let mut command =
+            Command::new(utermd_local::resolve_program("bash").map_err(|error| error.to_string())?);
+        command.args(script_install_arguments(agent, script, false));
+        command
+    };
+    if agent == "trae" {
+        command.env("TRAECLI_INSTALL_ASSUME_YES", "1");
+    }
+    Ok(command)
 }
 
 fn wait_for_install(
@@ -264,7 +285,7 @@ mod tests {
     #[test]
     fn native_install_arguments_keep_literal_paths_and_required_dependency_flags() {
         let script = std::path::Path::new("C:/用户 files/$literal'&/install.ps1");
-        let windows = hermes_install_arguments(script, true);
+        let windows = script_install_arguments("hermes", script, true);
         assert_eq!(windows[3], "-File");
         assert_eq!(windows[4], script.as_os_str());
         assert!(windows.iter().any(|argument| argument == "-NonInteractive"));
@@ -272,13 +293,45 @@ mod tests {
         assert!(!windows
             .iter()
             .any(|argument| argument == "-Command" || argument == "-ExecutionPolicy"));
-        let unix = hermes_install_arguments(script, false);
+        let unix = script_install_arguments("hermes", script, false);
         assert_eq!(unix[0], script.as_os_str());
         assert_eq!(unix[1], "--non-interactive");
         assert!(npm_extra_arguments("minimax").contains(&"--include=optional"));
         assert!(npm_extra_arguments("minimax").contains(&"--ignore-scripts=false"));
         assert!(npm_extra_arguments("pi").is_empty());
         assert!(package("hermes").is_err());
+    }
+
+    #[test]
+    fn trae_uses_official_platform_scripts_without_hermes_flags_or_shell_interpolation() {
+        let script = std::path::Path::new("C:/用户 files/$literal'&/install.ps1");
+        assert_eq!(
+            script_install_url("trae", true),
+            Some("https://trae.cn/trae-cli/install_v2.ps1")
+        );
+        assert_eq!(
+            script_install_url("trae", false),
+            Some("https://trae.cn/trae-cli/install_v2.sh")
+        );
+        assert_eq!(
+            script_install_arguments("trae", script, true),
+            ["-NoLogo", "-NoProfile", "-NonInteractive", "-File"]
+                .into_iter()
+                .map(std::ffi::OsString::from)
+                .chain([script.as_os_str().to_owned()])
+                .collect::<Vec<_>>()
+        );
+        assert_eq!(
+            script_install_arguments("trae", script, false),
+            vec![script.as_os_str().to_owned()]
+        );
+        assert!(package("trae").is_err());
+        assert!(script_install_url("custom", true).is_none());
+        assert!(script_install_url("trae;echo", false).is_none());
+        let command = script_install_command("trae", script).unwrap();
+        assert!(command.get_envs().any(|(name, value)| {
+            name == "TRAECLI_INSTALL_ASSUME_YES" && value == Some(std::ffi::OsStr::new("1"))
+        }));
     }
 
     #[test]
