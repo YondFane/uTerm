@@ -33,6 +33,7 @@ test("branch dropdown preserves editor changes, serializes switching and ignores
     let noUpstream = false;
     let remoteErrors = [];
     let finishSwitch;
+    let finishPull;
     let finishPoll;
     let holdPoll = false;
     let editor;
@@ -53,6 +54,7 @@ test("branch dropdown preserves editor changes, serializes switching and ignores
         return { branches: [{ remote: "origin", branch: "feature/remote" }], errors: remoteErrors };
       if (command === "git_branch_action") {
         if (actionFails) throw new Error("Authentication failed");
+        if (args.action === "pull") return new Promise((resolve) => (finishPull = resolve));
         return null;
       }
       if (command === "git_switch_remote_branch") {
@@ -129,6 +131,8 @@ test("branch dropdown preserves editor changes, serializes switching and ignores
     await act(async () => window.dispatchEvent(new dom.window.Event("focus")));
     await choose("feature/中文");
     assert.equal(select().disabled, true);
+    assert.equal(current(), "main");
+    assert.equal(select().getAttribute("aria-busy"), "true");
     assert.equal(editor.transitioning, true);
     assert.equal(editor.document, null);
     assert.deepEqual(switches()[0].args, {
@@ -174,6 +178,29 @@ test("branch dropdown preserves editor changes, serializes switching and ignores
       calls.filter((call) => call.command === "git_branch_action")[0].args.action,
       "fetch",
     );
+    for (const language of ["zh-Hans", "en"]) {
+      await act(async () => setUiLanguage(language));
+      await act(async () =>
+        select().dispatchEvent(new dom.window.MouseEvent("contextmenu", { bubbles: true })),
+      );
+      await act(async () =>
+        [...document.querySelectorAll('[role="menuitem"]')]
+          .find((button) => button.textContent.includes("Pull"))
+          .click(),
+      );
+      assert.equal(current(), "feature/中文");
+      assert.equal(select().disabled, true);
+      assert.equal(select().getAttribute("aria-busy"), "true");
+      assert.equal(
+        document.querySelector(".branch-announcement").textContent,
+        language === "en" ? "Running Pull…" : "正在执行 Pull…",
+      );
+      await act(async () => finishPull());
+      assert.equal(current(), "feature/中文");
+      assert.equal(select().disabled, false);
+      assert.equal(select().getAttribute("aria-busy"), "false");
+    }
+    await act(async () => setUiLanguage("zh-Hans"));
     await act(async () => select().click());
     assert.match(document.body.textContent, /Local/);
     assert.match(document.body.textContent, /Remote/);

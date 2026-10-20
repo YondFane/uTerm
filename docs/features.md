@@ -1335,13 +1335,28 @@ force or automatic tag pushing.
 - Fetch updates all branch references from each configured remote and prunes deleted remote
   references without switching or merging. Refresh branches re-reads the Local/Remote lists.
 
-- Git actions run off the UI thread and are serialized; the control shows progress and its context
-  menu reports completion. Failures are displayed, and file/Git/GitHub panels refresh after
-  operations, including partial failures.
+- Git actions run off the UI thread and are serialized. The control keeps the current branch name
+  during Push, Pull, Fetch and branch switching, and stays disabled until the operation finishes.
+  Screen readers receive progress announcements; the context menu reports completion. Failures are
+  displayed, and file/Git/GitHub panels refresh after operations, including partial failures.
 
 - Menu navigation supports arrows, Home/End, Enter, Escape and outside-click dismissal; application
   shortcuts are suppressed while the menu is open. Switching blocks duplicate requests and editor
   transitions, and stale responses cannot replace newer branch state.
+
+#### Branch-label checks on Windows
+
+- The focused branch-selector regression passes, including retained branch names during switching
+  and delayed Pull in Simplified Chinese/English, busy-state protection, completion, editor-save
+  conflicts, stale responses and visible Git errors. Repository formatting, localization,
+  documentation and TypeScript/production build checks pass; the build retains its existing
+  large-chunk warning.
+
+- An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.branchlabel`) renders the real
+  selector with simulated Git replies. Native inspection verifies that a pending Pull retains
+  `release` in Chinese/dark and English/light appearances, keeps the selector disabled, preserves
+  screen-reader status text and enables the control on completion. This does not validate live
+  remote operations or credentials; macOS/Linux runtime acceptance remains pending.
 
 ### Git commit history
 
