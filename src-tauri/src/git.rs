@@ -775,18 +775,6 @@ fn branch_action(directory: &str, action: &str, expected: &str) -> Result<(), St
             ],
         )?;
     } else {
-        let ensure_clean = || -> Result<(), String> {
-            if !run(
-                &directory,
-                &["status", "--porcelain=v1", "--untracked-files=all"],
-            )?
-            .is_empty()
-            {
-                return Err("Pull 前请先提交或暂存工作区修改。".into());
-            }
-            Ok(())
-        };
-        ensure_clean()?;
         // Merge the captured object, not FETCH_HEAD which another Git process can replace.
         // 合并已获取的对象，避免其他 Git 进程覆盖 FETCH_HEAD 后误合并。
         run(
@@ -802,7 +790,6 @@ fn branch_action(directory: &str, action: &str, expected: &str) -> Result<(), St
         )?;
         let commit = revision(&directory, "FETCH_HEAD")?;
         expect_branch(&directory, expected)?;
-        ensure_clean()?;
         run(
             &directory,
             &["merge", "--ff-only", "--no-autostash", &commit],
@@ -1406,7 +1393,84 @@ mod tests {
         assert!(switch_remote_branch(directory, "origin", "remote/中文", "main").is_err());
     }
     #[test]
-    fn sync_uses_explicit_upstream_rejects_dirty_or_diverged_pull_and_never_force_pushes() {
+    fn pull_preserves_unrelated_staged_working_and_untracked_changes() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        std::fs::write(temp.path().join("local.txt"), "original\n").unwrap();
+        run(directory, &["add", "local.txt"]).unwrap();
+        fixture_commit(directory);
+        let remote = remote_fixture(directory);
+        let other = tempfile::tempdir().unwrap();
+        let other_dir = other.path().to_str().unwrap();
+        run(other_dir, &["clone", remote.path().to_str().unwrap(), "."]).unwrap();
+        std::fs::write(temp.path().join("local.txt"), "staged\n").unwrap();
+        run(directory, &["add", "local.txt"]).unwrap();
+        std::fs::write(temp.path().join("local.txt"), "working\n").unwrap();
+        std::fs::write(temp.path().join("untracked.txt"), "untracked\n").unwrap();
+        let index = run(directory, &["diff", "--cached"]).unwrap();
+        let before = revision(directory, "HEAD").unwrap();
+        branch_action(directory, "pull", "main").unwrap();
+        assert_eq!(revision(directory, "HEAD").unwrap(), before);
+        std::fs::write(other.path().join("file.txt"), "remote change\n").unwrap();
+        fixture_commit(other_dir);
+        branch_action(other_dir, "push", "main").unwrap();
+        branch_action(directory, "pull", "main").unwrap();
+        assert_eq!(
+            revision(directory, "HEAD").unwrap(),
+            revision(other_dir, "HEAD").unwrap()
+        );
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
+            "remote change\n"
+        );
+        assert_eq!(run(directory, &["diff", "--cached"]).unwrap(), index);
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("local.txt")).unwrap(),
+            "working\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("untracked.txt")).unwrap(),
+            "untracked\n"
+        );
+    }
+    #[test]
+    fn pull_rejects_overwriting_staged_working_or_untracked_files_without_autostash() {
+        for kind in ["staged", "working", "untracked"] {
+            let temp = branch_fixture();
+            let directory = temp.path().to_str().unwrap();
+            let remote = remote_fixture(directory);
+            let other = tempfile::tempdir().unwrap();
+            let other_dir = other.path().to_str().unwrap();
+            run(other_dir, &["clone", remote.path().to_str().unwrap(), "."]).unwrap();
+            std::fs::write(other.path().join("file.txt"), "remote change\n").unwrap();
+            std::fs::write(other.path().join("new.txt"), "remote addition\n").unwrap();
+            run(other_dir, &["add", "new.txt"]).unwrap();
+            fixture_commit(other_dir);
+            branch_action(other_dir, "push", "main").unwrap();
+            let path = if kind == "untracked" {
+                "new.txt"
+            } else {
+                "file.txt"
+            };
+            std::fs::write(temp.path().join(path), "local change\n").unwrap();
+            if kind == "staged" {
+                run(directory, &["add", path]).unwrap();
+            }
+            run(directory, &["config", "merge.autostash", "true"]).unwrap();
+            let index = run(directory, &["diff", "--cached"]).unwrap();
+            let before = revision(directory, "HEAD").unwrap();
+            assert!(branch_action(directory, "pull", "main").is_err());
+            assert_eq!(revision(directory, "HEAD").unwrap(), before);
+            assert_eq!(run(directory, &["diff", "--cached"]).unwrap(), index);
+            assert_eq!(
+                std::fs::read_to_string(temp.path().join(path)).unwrap(),
+                "local change\n"
+            );
+            assert!(run(directory, &["stash", "list"]).unwrap().is_empty());
+        }
+    }
+    #[test]
+    fn sync_uses_explicit_upstream_rejects_diverged_pull_and_never_force_pushes() {
         let temp = branch_fixture();
         let directory = temp.path().to_str().unwrap();
         assert!(branch_action(directory, "push", "main").is_err());
@@ -1415,7 +1479,11 @@ mod tests {
         let other_dir = other.path().to_str().unwrap();
         run(other_dir, &["clone", remote.path().to_str().unwrap(), "."]).unwrap();
         std::fs::write(temp.path().join("file.txt"), "local change\n").unwrap();
-        assert!(branch_action(directory, "pull", "main").is_err());
+        branch_action(directory, "pull", "main").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(temp.path().join("file.txt")).unwrap(),
+            "local change\n"
+        );
         fixture_commit(directory);
         branch_action(directory, "push", "main").unwrap();
         branch_action(other_dir, "pull", "main").unwrap();
