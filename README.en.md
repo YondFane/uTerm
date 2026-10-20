@@ -130,8 +130,8 @@ other developers discover it.
 
 ## Development
 
-Built with Tauri, React, TypeScript, Rust and xterm.js. Setup, commands, database component
-development, validation and release instructions live in the
+Built with Tauri, React, TypeScript, Rust and xterm.js, with its WebGL addon for terminal rendering.
+Setup, commands, database component development, validation and release instructions live in the
 [development guide](docs/development.md). Follow [AGENTS.md](AGENTS.md) and the
 [documentation writing rules](docs/writing-rules.md) when contributing.
 
