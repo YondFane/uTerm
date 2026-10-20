@@ -2982,8 +2982,9 @@ resizes for the old attachment. Resize errors remain visible in the session.
   implementation; pointer-down, release and task-state changes still render normally.
 
 - The frontend/build-helper suite passes (274 passed, ten optional/platform checks skipped), along
-  with repository formatting, localization, TypeScript/production build, documentation checks and an
-  isolated desktop build. Vite's existing WebSocket-port and large-chunk warnings remain.
+  with repository formatting, localization, TypeScript/production build, documentation checks,
+  locked dependency installation, host/backend suites and desktop compilation. The isolated desktop
+  build also passes. Vite's existing WebSocket-port and large-chunk warnings remain.
 
 - The isolated native app (`sh.uterm.desktop.qa.paneldrag`) runs the real App and xterm views with
   45 fixture projects and six simulated terminal-output streams, redrawing 28 rows every 32 ms.
