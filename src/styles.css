@@ -3205,6 +3205,11 @@ textarea:focus-visible {
 .settings-dialog > header {
   padding: 20px 24px;
 }
+/* Static titles receive initial dialog focus without a control outline.
+   静态标题承接弹窗的初始焦点，不显示控件轮廓。 */
+:is(.settings-dialog, .agent-dialog) > header > h2:focus {
+  outline: none;
+}
 .settings-dialog > header .settings-close {
   display: inline-flex;
   align-items: center;

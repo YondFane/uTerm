@@ -163,6 +163,9 @@ export function buildMacosMenu(state: MacosMenuState) {
       submenu("app-menu-workspace", t("工作区"), [
         action("new-workspace", t("新建工作区…")),
         separator(),
+        command("previousWorkspace"),
+        command("nextWorkspace"),
+        separator(),
         ...(workspace?.groups ?? []).map((group) => ({
           id: `app-menu:workspace:${group.id}`,
           text: menuText(group.name),

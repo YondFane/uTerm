@@ -31,9 +31,11 @@ export function AgentPanel({
   useUiLanguage();
 
   const dialog = useRef<HTMLDialogElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
   const backdrop = useDialogBackdrop(close);
   useEffect(() => {
     dialog.current?.showModal();
+    title.current?.focus();
   }, []);
   return (
     <dialog
@@ -44,7 +46,9 @@ export function AgentPanel({
       onCancel={close}
     >
       <header className="inspector-header">
-        <h2 id="agent-dialog-title">Agent</h2>
+        <h2 id="agent-dialog-title" ref={title} tabIndex={-1}>
+          Agent
+        </h2>
         <button onClick={close} aria-label={tx("关闭 Agent 设置")}>
           <ToolbarIcon name="close" />
         </button>

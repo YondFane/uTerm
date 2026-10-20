@@ -100,6 +100,7 @@ import {
   selectedRoster,
   nextSessionToClose,
   cycleSession,
+  cycleWorkspace,
   sessionRosters,
   sessionEntries,
   updateRoster,
@@ -1449,6 +1450,8 @@ export function App() {
   }
   function commandAvailable(id: CommandId): boolean {
     if (!runtime || !workspace || editor.transitioning || editor.pending) return false;
+    if (id === "nextWorkspace" || id === "previousWorkspace")
+      return (workspace.groups?.length ?? 0) > 1;
     if (id === "fontDecrease" || id === "fontIncrease") return contentFontKey() !== null;
     if (
       (activeRedis || activeDatabase) &&
@@ -1483,6 +1486,15 @@ export function App() {
   }
   function runCommand(id: CommandId) {
     if (!commandAvailable(id)) return;
+    if (id === "nextWorkspace" || id === "previousWorkspace") {
+      const change = () => {
+        if (update((previous) => cycleWorkspace(previous, id === "nextWorkspace" ? 1 : -1)))
+          setFocusRequest((value) => value + 1);
+      };
+      if (editor.document) void editor.hide(change);
+      else change();
+      return;
+    }
     if (activeDatabase && id === "close") {
       setSelectedDatabaseId(null);
       return;
