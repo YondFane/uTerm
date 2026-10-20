@@ -874,6 +874,8 @@ export const messages: Record<string, string> = {
   聚焦下方窗格: "Focus pane below",
   下一个会话: "Next session",
   上一个会话: "Previous session",
+  下一个工作区: "Next workspace",
+  上一个工作区: "Previous workspace",
   复制会话链接: "Copy session link",
   搜索终端输出: "Search terminal output",
   交换左右窗格: "Swap left and right panes",

@@ -1,6 +1,6 @@
 {
   "name": "uterm",
-  "version": "0.1.35",
+  "version": "0.1.36",
   "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
@@ -46,6 +46,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.16.0",
     "@xterm/addon-web-links": "^0.12.0",
+    "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "codemirror": "^6.0.2",
     "dompurify": "^3.4.15",

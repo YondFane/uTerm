@@ -727,6 +727,20 @@ export function switchWorkspace(workspace: Workspace, id: string): Workspace {
   });
 }
 
+/** Cycles workspaces in stored order, restoring their selections. / 按存储顺序循环工作区并恢复各自的选择。 */
+export function cycleWorkspace(workspace: Workspace, direction: 1 | -1): Workspace {
+  const groups = workspace.groups ?? [];
+  if (groups.length < 2) return workspace;
+  const index = groups.findIndex((group) => group.id === workspace.selectedWorkspace);
+  const target =
+    index < 0
+      ? direction === 1
+        ? groups[0]
+        : groups[groups.length - 1]
+      : groups[(index + direction + groups.length) % groups.length];
+  return switchWorkspace(workspace, target.id);
+}
+
 export function ordered<T extends { pinned?: boolean }>(items: T[]): T[] {
   return [...items.filter((item) => item.pinned), ...items.filter((item) => !item.pinned)];
 }

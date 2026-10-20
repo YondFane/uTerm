@@ -147,6 +147,30 @@ test("sidebar shortcuts support platform modifiers, customization and disabling"
     validateShortcuts(settings, mac);
   }
 });
+test("workspace shortcuts use platform modifiers and preserve existing custom bindings", () => {
+  for (const mac of [true, false]) {
+    for (const [id, code] of [
+      ["nextWorkspace", "BracketRight"],
+      ["previousWorkspace", "BracketLeft"],
+    ]) {
+      const event = { metaKey: mac, ctrlKey: !mac, altKey: true, shiftKey: false, code };
+      assert.equal(binding(defaults, id, mac), `Mod+Alt+${code}`);
+      assert.equal(shortcutCommand(defaults, event, mac), id);
+      const disabled = readSettings(JSON.stringify({ ...defaults, shortcuts: { [id]: "" } }));
+      assert.equal(shortcutCommand(disabled, event, mac), undefined);
+      const existing = { ...defaults, shortcuts: { agents: `Mod+Alt+${code}` } };
+      assert.equal(binding(existing, id, mac), "");
+      assert.equal(shortcutCommand(existing, event, mac), "agents");
+      validateShortcuts(existing, mac);
+      const custom = readSettings(
+        JSON.stringify({ ...defaults, shortcuts: { [id]: "Mod+Shift+Digit9" } }),
+      );
+      assert.equal(binding(custom, id, mac), "Mod+Shift+Digit9");
+      validateShortcuts(custom, mac);
+    }
+  }
+});
+
 test("rebindings reject collisions and reserved editing keys", () => {
   assert.throws(() =>
     validateShortcuts({ ...defaults, shortcuts: { settings: "Mod+KeyP" } }, true),

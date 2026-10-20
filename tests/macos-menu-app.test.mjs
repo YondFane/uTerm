@@ -169,6 +169,51 @@ test("native App actions retain session identity, guard dialogs and synchronize 
       document.querySelector('[role="alert"]')?.textContent,
     );
     assert.equal(item("app-menu:session:local-session").checked, true);
+    const key = (code, patch = {}) =>
+      act(async () => {
+        const event = new dom.window.KeyboardEvent("keydown", {
+          code,
+          metaKey: true,
+          altKey: true,
+          bubbles: true,
+          cancelable: true,
+          ...patch,
+        });
+        window.dispatchEvent(event);
+      });
+    assert.equal(item("app-menu:command:nextWorkspace").accelerator, "Cmd+Alt+BracketRight");
+    await key("BracketRight");
+    assert.equal(state().selectedWorkspace, "other");
+    await key("BracketLeft");
+    assert.equal(state().selectedWorkspace, "local");
+    assert.equal(state().selectedSession, "local-session");
+    await key("BracketRight", { repeat: true });
+    await key("BracketRight", { isComposing: true });
+    assert.equal(state().selectedWorkspace, "local");
+    await save({ shortcuts: { nextWorkspace: "" } });
+    await key("BracketRight");
+    assert.equal(state().selectedWorkspace, "local");
+    await save({ shortcuts: { nextWorkspace: "Mod+Shift+Digit9" } });
+    await key("Digit9", { altKey: false, shiftKey: true });
+    assert.equal(state().selectedWorkspace, "other");
+    await action("command:previousWorkspace");
+    assert.equal(state().selectedWorkspace, "local");
+    await save({ shortcuts: {} });
+    const originalSetItem = dom.window.Storage.prototype.setItem;
+    try {
+      dom.window.Storage.prototype.setItem = function (key, value) {
+        if (key === workspaceKey) throw Error("Workspace storage denied");
+        return originalSetItem.call(this, key, value);
+      };
+      await key("BracketRight");
+      assert.equal(state().selectedWorkspace, "local");
+      assert.match(
+        document.querySelector('[role="alert"]').textContent,
+        /Workspace storage denied/,
+      );
+    } finally {
+      dom.window.Storage.prototype.setItem = originalSetItem;
+    }
     await action("command:toggleSidebar");
     assert.ok(document.querySelector('[aria-label="Show sidebar"]'));
     assert.equal(item("app-menu:command:toggleSidebar").checked, false);
@@ -188,6 +233,10 @@ test("native App actions retain session identity, guard dialogs and synchronize 
     assert.equal(state().groups[0].terminals[0].id, "local-session");
     await action("new-workspace");
     assert.ok(document.querySelector("dialog[open]"));
+    assert.equal(item("app-menu:command:nextWorkspace").enabled, false);
+    await key("BracketRight");
+    await action("command:previousWorkspace");
+    assert.equal(state().selectedWorkspace, "other");
     assert.equal(item("app-menu:workspace:local").enabled, false);
     await action("workspace:local");
     assert.equal(state().selectedWorkspace, "other");

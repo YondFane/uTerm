@@ -491,6 +491,38 @@ Up/Down selects a destination and Left Arrow/Escape returns to the parent menu.
 - Terminal creation remains available through the toolbar, welcome page and shortcuts, and Worktrees
   are discovered automatically when projects load. Clipboard failures remain visible.
 
+### Next and Previous workspace
+
+Use Next workspace and Previous workspace in the command palette or Settings → Keyboard shortcuts.
+The defaults are Cmd+Option+] / Cmd+Option+[ on macOS and Ctrl+Alt+] / Ctrl+Alt+[ on Windows. macOS
+also lists both commands in the Workspace menu. Shortcuts can be customized or disabled; an existing
+custom binding takes precedence over a new default that uses the same keys.
+
+Switching follows the workspace list order, includes empty workspaces and wraps at either end. Each
+workspace remembers its project, Worktree and session selection. With fewer than two workspaces,
+both commands are unavailable.
+
+Switching from a file uses the existing save/conflict and draft protections. Dialogs and pending
+editor transitions block the shortcuts; switching is also available from Redis/database views.
+Sessions remain running. Storage failures show an error and retain the current workspace.
+
+#### Workspace shortcut checks
+
+- Focused regression checks cover both platform modifiers, custom/disabled bindings, existing
+  binding precedence, list order, empty workspaces, wrapping and selection restoration. App checks
+  exercise actual keyboard events, native menu commands, dialog/repeat/composition guards and
+  storage failures with mocked desktop services.
+
+- On macOS, all 40 focused checks and 276 frontend/build-helper tests pass, with ten
+  optional/platform checks skipped in the full suite. Formatting, localization,
+  TypeScript/production and isolated desktop builds pass; the production build retains its
+  large-chunk warning.
+
+- Native QA (`sh.uterm.desktop.qa.workspaceshortcuts`) verifies both shortcuts and wrapping between
+  two empty workspaces, disabled menu commands with one workspace, the Chinese shortcut settings
+  layout and settings-dialog blocking. Windows/Linux runtime and native file-save/Redis/database
+  switching remain unverified.
+
 ### Closing a session in another workspace
 
 Close Session brings its target workspace and session into view before requesting termination,
@@ -2220,6 +2252,37 @@ acknowledged.
 Settings include appearance, color themes, fonts, terminal cursor and scrollback, keyboard
 shortcuts, default shell and Agent. Theme import accepts supported color fields only.
 
+### Terminal text selection and rendering
+
+Visible terminal and Agent panes use GPU rendering when WebGL2 is available. Dragging to select text
+updates the highlight without rebuilding the visible text nodes at every mouse movement. Copy
+shortcuts and the optional Copy on selection setting retain their existing behavior.
+
+Only visible panes keep GPU contexts; grouped panes can each use one. Hiding a pane releases its
+context while preserving the session, scrollback and selection. Unsupported GPUs, initialization
+failures and context loss that cannot be restored fall back to DOM rendering automatically. This
+fallback can still slow down when selecting dense output.
+
+#### Selection-rendering checks
+
+- On macOS, all 27 focused renderer, input, scrolling and resize regressions pass, alongside the
+  full frontend suite, backend and local-session-service tests, locked dependency installation,
+  repository formatting, localization, documentation, TypeScript, production build and desktop
+  compilation. The production build retains its large-chunk warning; optional/platform tests remain
+  skipped or ignored.
+
+- An isolated native Tauri/WebKit app (`sh.uterm.desktop.qa.terminalselection`) uses the real
+  terminal view and 600 rows of colored Chinese/English fixture output. Across 120 selection
+  updates, visible-screen node additions/removals fall from 424,257 with DOM rendering to zero with
+  GPU rendering; the longest measured frame falls from 66 ms to 18 ms. These fixture measurements do
+  not guarantee the same frame timings on other hardware or live workloads.
+
+- Native mouse dragging shows multi-line selection highlights. Hiding/showing the pane retains
+  selected text and coordinates without starting another session. Injected context loss returns to
+  DOM rendering, retains selection and accepts more output; showing the pane again enables GPU
+  rendering. Clipboard shortcut routing remains covered by automated tests; native clipboard,
+  grouped-pane and live Agent acceptance, plus Windows/Linux runtime checks, remain pending.
+
 ### Content font shortcuts and session headers
 
 Use Ctrl+- to decrease or Ctrl++ to increase the font of the content shown in the middle workspace.
@@ -2515,15 +2578,21 @@ Sidebar session rows show only the × at rest, revealing its circle on hover or 
 Existing actions, accessible names, disabled states and keyboard focus are retained, including the
 Redis drawer close control's responsive visibility.
 
+Settings and the Agent dialog initially focus their titles, so opening them does not draw an extra
+outline around the close icon. Tab moves to the close button and shows its keyboard focus outline;
+Enter activates it, and Escape dismisses the dialog when closing is allowed.
+
 #### Close-icon checks
 
-- Close-icon validation: 217 frontend/build-helper tests pass, with eight optional checks skipped.
-  Changed-source formatting, localization, TypeScript checks, production frontend and isolated macOS
-  desktop builds pass.
+- Close-icon validation on macOS: 274 frontend/build-helper tests pass, with ten optional/platform
+  checks skipped. Repository formatting, localization, TypeScript checks, production frontend and
+  isolated desktop builds pass. The build retains its large-chunk warning; tests report an occupied
+  Vite WebSocket port without failures.
 
-- Native QA (`sh.uterm.desktop.qa.closeicons`) verifies the gray and red hover states in Settings,
-  matching Command/Agent dialog icons, visible keyboard focus, click dismissal and Enter activation.
-  Native Redis/database close controls and Windows/Linux runtime acceptance remain unverified.
+- Native QA (`sh.uterm.desktop.qa.dialogfocus`) verifies Settings and Agent titles receive initial
+  focus without an outline around the title or close icon. Tab reveals the close button's focus
+  outline; Settings closes with Enter, and Agent closes with Escape or a mouse click. Native
+  Redis/database close controls and Windows/Linux runtime acceptance remain unverified.
 
 ### macOS window controls
 

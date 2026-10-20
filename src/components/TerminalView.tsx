@@ -18,12 +18,14 @@ import { decodeTerminalFrame } from "../lib/terminal-frame";
 import type { AgentActivityEvent } from "../lib/terminal-frame";
 import { attachTerminalScrollInput } from "../lib/terminal-scroll";
 import { attachTerminalFit, createTerminalResizeQueue } from "../lib/terminal-resize";
+import { attachTerminalRenderer } from "../lib/terminal-renderer";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import type { DragEventHandler, PointerEventHandler } from "react";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
 import type { PaneFrame, SessionConfig } from "../lib/workspace";
 import type { TerminalStatus } from "../lib/ssh";
 import "@xterm/xterm/css/xterm.css";
@@ -117,6 +119,7 @@ export function TerminalView({
   activeRef.current = active;
   const container = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
+  const disposeRenderer = useRef<(() => void) | null>(null);
   const fitLayout = useRef<ReturnType<typeof attachTerminalFit> | null>(null);
   const connection = useRef<Connection | null>(null);
   const closeRef = useRef(close);
@@ -333,6 +336,8 @@ export function TerminalView({
       disposeScrollInput();
       resize.dispose();
       disposePunctuation();
+      disposeRenderer.current?.();
+      disposeRenderer.current = null;
       term.dispose();
       terminal.current = null;
     };
@@ -360,6 +365,18 @@ export function TerminalView({
     Terminal.strings.tooMuchOutput = tx("输出过多，请移动到各行以读取。");
     container.current?.querySelector("textarea")?.setAttribute("aria-label", tx("终端输入"));
   }, [settings, light, uiLanguage]);
+  useEffect(() => {
+    const term = terminal.current;
+    if (!term || !visible) return;
+    // Reserve GPU contexts for visible panes, including every pane in a split group.
+    // 仅为可见窗格保留 GPU 上下文，分组中的各个可见窗格均包含在内。
+    const dispose = attachTerminalRenderer(term, () => new WebglAddon());
+    disposeRenderer.current = dispose;
+    return () => {
+      dispose();
+      if (disposeRenderer.current === dispose) disposeRenderer.current = null;
+    };
+  }, [visible]);
   useEffect(() => {
     const find = () => {
       if (activeRef.current) {

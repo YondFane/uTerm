@@ -127,6 +127,7 @@ export function SettingsPanel({
       ? Math.max(updates.progress.downloaded, 1)
       : undefined;
   const dialog = useRef<HTMLDialogElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
   const backdrop = useDialogBackdrop(() => {
     if (updates.phase !== "installing") close();
   });
@@ -180,6 +181,7 @@ export function SettingsPanel({
   }, []);
   useEffect(() => {
     dialog.current?.showModal();
+    title.current?.focus();
     void invoke<ControlStatus>("control_status")
       .then(setControl)
       .catch((reason) => setMessage(String(reason)));
@@ -216,7 +218,9 @@ export function SettingsPanel({
       }}
     >
       <header className="inspector-header">
-        <h2 id="settings-title">{t("设置")}</h2>
+        <h2 id="settings-title" ref={title} tabIndex={-1}>
+          {t("设置")}
+        </h2>
         <button
           className="settings-close"
           disabled={updates.phase === "installing"}
