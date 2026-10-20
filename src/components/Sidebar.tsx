@@ -141,6 +141,7 @@ export function Sidebar({
   const { settings, save } = useSettings();
   const [sidebarView, setSidebarView] = useState<SidebarView>("all");
   const navigationRef = useRef<HTMLElement>(null);
+  const floatingActions = useRef<HTMLDivElement | null>(null);
   const navigation = settings.sidebarStyle === "navigation";
   const showSsh = navigation || settings.showSshConnections;
   const showRedis = navigation || settings.showRedisConnections;
@@ -179,6 +180,58 @@ export function Sidebar({
   const cancelRemoval = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  function hideQuickActions(restoreFocus = true) {
+    const actions = floatingActions.current;
+    if (!actions) return;
+    if (restoreFocus && actions.contains(document.activeElement))
+      actions.parentElement?.querySelector<HTMLButtonElement>(".row-label")?.focus();
+    floatingActions.current = null;
+    if (actions.matches(":popover-open")) actions.hidePopover();
+    actions.removeAttribute("popover");
+    actions.style.removeProperty("left");
+    actions.style.removeProperty("top");
+  }
+  function showQuickActions(row: HTMLDivElement) {
+    const actions = row.querySelector<HTMLDivElement>(".row-actions");
+    if (!actions?.showPopover || actions === floatingActions.current) return;
+    hideQuickActions();
+    floatingActions.current = actions;
+    actions.setAttribute("popover", "manual");
+    actions.showPopover();
+    const bounds = actions.getBoundingClientRect();
+    const anchor = row.getBoundingClientRect();
+    if (anchor.width >= bounds.width + 96) {
+      hideQuickActions(false);
+      return;
+    }
+    // The top layer keeps quick actions clear of narrow labels and the scrolling list's clip.
+    // 顶层显示让快捷操作避开窄行标签，同时不受滚动列表裁剪。
+    actions.style.left = `${Math.max(8, Math.min(anchor.right - 4, window.innerWidth - bounds.width - 8))}px`;
+    actions.style.top = `${Math.max(8, Math.min(anchor.top + (anchor.height - bounds.height) / 2, window.innerHeight - bounds.height - 8))}px`;
+  }
+  useEffect(() => {
+    hideQuickActions();
+    const dismiss = (event: Event) => {
+      const actions = floatingActions.current;
+      if (!actions) return;
+      if (event.type === "keydown" && (event as KeyboardEvent).key !== "Escape") return;
+      if (event.type === "pointerdown" && actions.parentElement?.contains(event.target as Node))
+        return;
+      if (event.type === "scroll" && actions.contains(event.target as Node)) return;
+      hideQuickActions();
+    };
+    window.addEventListener("resize", dismiss);
+    document.addEventListener("scroll", dismiss, true);
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", dismiss);
+    return () => {
+      hideQuickActions();
+      window.removeEventListener("resize", dismiss);
+      document.removeEventListener("scroll", dismiss, true);
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", dismiss);
+    };
+  }, [visible, workspace?.selectedWorkspace, settings.sidebarStyle]);
   useEffect(() => {
     if (!visible && (!navigation || popover === "workspace")) setPopover(null);
   }, [visible, navigation, popover]);
@@ -652,6 +705,21 @@ export function Sidebar({
         className={`sidebar-row folder-row${selected ? " selected" : ""}${!worktree && projectDrop?.id === project.id ? (projectDrop.after ? " project-drop-after" : " project-drop-before") : ""}`}
         data-project-id={worktree ? undefined : project.id}
         style={{ "--depth": depth } as React.CSSProperties}
+        onPointerEnter={(event) => showQuickActions(event.currentTarget)}
+        onPointerLeave={(event) => {
+          if (!event.currentTarget.contains(document.activeElement)) hideQuickActions();
+        }}
+        onFocusCapture={(event) => {
+          if (!(event.target as HTMLElement).closest(".row-more"))
+            showQuickActions(event.currentTarget);
+        }}
+        onBlurCapture={(event) => {
+          if (
+            !event.currentTarget.contains(event.relatedTarget as Node | null) &&
+            !event.currentTarget.matches(":hover")
+          )
+            hideQuickActions();
+        }}
         onContextMenu={(event) =>
           openMenu(event, worktree ? "worktree" : "project", item.id, project.id)
         }

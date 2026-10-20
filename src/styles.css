@@ -2310,6 +2310,17 @@ select:focus-visible {
 .sidebar .row-actions {
   padding: 2px;
 }
+.sidebar .row-actions[popover] {
+  position: fixed;
+  inset: auto;
+  display: flex;
+  flex-wrap: wrap;
+  max-width: calc(100vw - 16px);
+  margin: 0;
+}
+.folder-row:has(.row-actions[popover]) > .row-more {
+  display: none;
+}
 .sidebar .row-actions .icon-button {
   border: 0;
   background: transparent;
@@ -3009,7 +3020,7 @@ select:focus-visible {
   stroke-width: 2.8;
 }
 @container sidebar (max-width: 180px) {
-  .sidebar .row-actions {
+  .sidebar .row-actions:not([popover]) {
     display: none;
   }
   .folder-row:is(:hover, :focus-within) > .row-more {

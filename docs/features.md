@@ -196,6 +196,10 @@ Project and Worktree rows keep their folder icons when hovered or focused, with 
 button. Their inline actions show New terminal and enabled Agents, without a More actions (ellipsis)
 button; right-click the row for its existing menu.
 
+When inline space is insufficient, the terminal/Agent capsule opens to the right of the row and can
+extend beyond the sidebar. Folder icons and names retain their space; wider rows keep the capsule
+inline.
+
 Left-click the icon, name or remaining row-label space to expand or collapse the children;
 Enter/Space on the focused row performs the same action. Existing project/session selection and
 editor transition guards remain in effect.
@@ -2907,10 +2911,11 @@ no separate uTerm/Local brand row.
 - The separator also supports arrow keys, Home to hide, End for maximum width and Enter/double-click
   to reset.
 
-- Narrow sidebars keep section headings on one line and replace project/Worktree quick-action
-  capsules with a More actions button on hover or keyboard focus. Its menu offers a new terminal and
-  sessions for enabled Agents, retaining the original project or Worktree target and missing-folder
-  restrictions.
+- Narrow sidebars keep section headings on one line. Hovering or focusing a project/Worktree row
+  floats its terminal/Agent capsule to the right when inline space is insufficient, retaining the
+  original target and missing-folder restrictions. Escape, outside clicks, scrolling or resizing
+  dismiss the floating capsule. The More actions menu remains a fallback when floating controls are
+  unavailable.
 
 - Very narrow sidebars stack header controls and use resource/session icons with full names in
   tooltips and accessible labels. Section actions wrap, and footer buttons wrap within their groups
@@ -2923,6 +2928,18 @@ no separate uTerm/Local brand row.
 
 #### Validation and limits
 
+- On macOS, nine focused sidebar tests, TypeScript/production build, repository formatting and
+  localization checks pass. Regression coverage includes floating placement, unchanged Agent targets
+  and folding, resize dismissal and retained keyboard focus in wide rows.
+
+- The isolated native app (`sh.uterm.desktop.qa.sidebaractions`) renders the real Sidebar with
+  temporary state. Visual checks cover 176 px and 112 px navigation sidebars, Chinese/dark and
+  English/light layouts, long names, project/Worktree Agent callbacks and Escape dismissal.
+
+  Browser inspection also verifies the inline layout at 248 px in Classic and keyboard focus
+  restoration. No real sessions or servers are used; Windows/Linux acceptance of floating controls
+  remains unverified. The production build retains its large-chunk warning.
+
 - On Windows, 23 focused sidebar, welcome and bilingual UI checks pass, together with changed-file
   formatting, localization/documentation checks and TypeScript/production build. Coverage includes
   project/Worktree quick-menu targets, enabled Agents, missing folders, Escape focus return,
@@ -2932,7 +2949,7 @@ no separate uTerm/Local brand row.
   names, temporary profiles and mocked desktop commands. Native pointer drags verify the compact 176
   px layout and the 88 px icon layout, single-line Chinese headings and fully visible footer
   controls. No real processes or servers are used. Native acceptance of the final popup placement,
-  narrow light/English layouts and macOS/Linux interaction remains pending.
+  narrow light/English layouts on Windows and Linux interaction remains pending.
 
 ### Terminal resizing
 
