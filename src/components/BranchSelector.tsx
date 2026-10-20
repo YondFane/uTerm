@@ -207,8 +207,7 @@ export function BranchSelector({
             }
           }}
         >
-          {busy ? tx("正在执行 {p0}…", { p0: busy }) : current || tx("分支读取失败")}{" "}
-          <span aria-hidden="true">⌄</span>
+          {current || tx("分支读取失败")} <span aria-hidden="true">⌄</span>
         </button>
         <span className="branch-announcement" role="status">
           {busy ? tx("正在执行 {p0}…", { p0: busy }) : result}
