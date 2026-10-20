@@ -126,6 +126,11 @@ protection or unresolved conflicts leave synchronization explicitly incomplete.
 
 #### Stable-release checks
 
+- Release preparation on macOS passes frozen dependency installation, 274 frontend/build-helper
+  tests (ten skipped), 113 backend tests (nine ignored) and 46 host tests (two native CLI tests
+  ignored). TypeScript/production build, desktop compilation, repository formatting, localization
+  and documentation checks pass. This does not establish Windows/Linux runtime acceptance.
+
 - Latest validation: six release-helper tests, workflow formatting, step-order and shell syntax
   checks, and documentation checks pass. The live latest-release API resolves to a published stable
   release, with its name, notes and all 11 uploaded asset records intact.
