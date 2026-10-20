@@ -2963,9 +2963,35 @@ terminal keeps its current character grid while the layout changes and fits afte
 remained stable for 120 ms. Existing output is consumed before fitting. During a drag, the viewport
 may clip the old grid or temporarily leave extra space until fitting finishes.
 
+Sidebar and inspector drags follow the latest pointer position once per display frame and commit the
+final width on release. Task output and activity indicators continue updating during the drag.
+Collapse highlights, keyboard resizing and either inspector position retain the same controls.
+Cancelling a drag clears the highlight without hiding the panel; a navigation sidebar returns to its
+previous width and collapsed state.
+
 The host processes one resize at a time and retains only the latest pending size. Replaying a
 session keeps its saved dimensions until replay completes; closing or reconnecting drops pending
 resizes for the old attachment. Resize errors remain visible in the session.
+
+#### Panel-drag checks on macOS
+
+- App regressions cover frame coalescing without session rerenders on pointer movement, task-state
+  updates during a drag, the final release position, cancellation, unmount cleanup, collapse hints,
+  navigation-rail reopening and either inspector position. A 60-move regression produces 60 extra
+  session renders with the previous implementation and none during pointer movement with the current
+  implementation; pointer-down, release and task-state changes still render normally.
+
+- The frontend/build-helper suite passes (274 passed, ten optional/platform checks skipped), along
+  with repository formatting, localization, TypeScript/production build, documentation checks,
+  locked dependency installation, host/backend suites and desktop compilation. The isolated desktop
+  build also passes. Vite's existing WebSocket-port and large-chunk warnings remain.
+
+- The isolated native app (`sh.uterm.desktop.qa.paneldrag`) runs the real App and xterm views with
+  45 fixture projects and six simulated terminal-output streams, redrawing 28 rows every 32 ms.
+  Native pointer checks at 1200×760 cover sidebar resizing, inspectors on either side, collapse and
+  reopening, navigation-rail expansion, Chinese/dark and English/light appearance, and aligned
+  output after fitting. This verifies WebView interaction with simulated output, not live Agent
+  tasks or SSH services. The updated drag preview still needs Windows and Linux runtime acceptance.
 
 #### Resize checks on Windows
 
@@ -2983,7 +3009,7 @@ resizes for the old attachment. Resize errors remain visible in the session.
 
 - The complete frontend/build-helper suite passes (273 passed, 11 optional/platform checks skipped),
   including the pane-swap App regression. Vite's WebSocket-port and large-chunk warnings remain.
-  macOS and Linux runtime acceptance remains pending.
+  Linux runtime acceptance remains pending; macOS panel-drag checks are described above.
 
 ### Error-banner timing
 
