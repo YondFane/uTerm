@@ -8,6 +8,7 @@ import {
   removeSession,
   selectProject,
   switchWorkspace,
+  cycleWorkspace,
   moveProject,
   reorder,
   ordered,
@@ -64,6 +65,46 @@ const fixture = () => ({
   ],
   selectedProject: "p1",
   selectedSession: "s2",
+});
+
+test("workspace cycling includes empty groups, wraps and restores project/Worktree selections", () => {
+  const workspace = readWorkspace(JSON.stringify(fixture()));
+  workspace.projects[0].worktrees = [
+    { id: "wt", name: "Feature", path: "/tmp/feature", branch: "feature" },
+  ];
+  workspace.projects[0].sessions[1].worktreeId = "wt";
+  workspace.selectedWorktree = "wt";
+  const other = createWorkspaceGroup("other", "Other");
+  other.terminals = [{ id: "loose", name: "Shell", shell: "default" }];
+  other.selectedSession = "loose";
+  workspace.groups.push(createWorkspaceGroup("empty", "Empty"), other);
+  const original = JSON.stringify(workspace);
+  const empty = cycleWorkspace(workspace, 1);
+  assert.equal(empty.selectedWorkspace, "empty");
+  assert.equal(empty.selectedProject, null);
+  assert.equal(empty.selectedSession, null);
+  const next = cycleWorkspace(empty, 1);
+  assert.equal(next.selectedWorkspace, "other");
+  assert.equal(next.selectedSession, "loose");
+  const restored = cycleWorkspace(next, 1);
+  assert.equal(restored.selectedWorkspace, "local");
+  assert.equal(restored.selectedProject, "p1");
+  assert.equal(restored.selectedSession, "s2");
+  assert.equal(restored.selectedWorktree, "wt");
+  assert.equal(cycleWorkspace(restored, -1).selectedWorkspace, "other");
+  assert.equal(cycleWorkspace(next, -1).selectedWorkspace, "empty");
+  assert.equal(JSON.stringify(workspace), original);
+  const missing = { ...workspace, selectedWorkspace: "missing" };
+  assert.equal(cycleWorkspace(missing, 1).selectedWorkspace, "local");
+  assert.equal(cycleWorkspace(missing, -1).selectedWorkspace, "other");
+  for (const state of [
+    readWorkspace(null),
+    { ...workspace, groups: [] },
+    { ...workspace, groups: undefined },
+  ]) {
+    assert.equal(cycleWorkspace(state, 1), state);
+    assert.equal(cycleWorkspace(state, -1), state);
+  }
 });
 
 test("explicit host closes remove their local records", () => {

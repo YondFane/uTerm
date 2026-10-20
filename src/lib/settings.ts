@@ -30,6 +30,8 @@ export const commands = [
   ["down", "聚焦下方窗格", "Mod+Alt+ArrowDown"],
   ["next", "下一个会话", "Mod+Shift+BracketRight"],
   ["previous", "上一个会话", "Mod+Shift+BracketLeft"],
+  ["nextWorkspace", "下一个工作区", "Mod+Alt+BracketRight"],
+  ["previousWorkspace", "上一个工作区", "Mod+Alt+BracketLeft"],
   ["close", "关闭会话", "Mod+KeyW"],
   ["link", "复制会话链接", ""],
   ["terminalSearch", "搜索终端输出", "Mod+KeyF"],
@@ -128,7 +130,7 @@ export function binding(settings: Settings, id: CommandId, mac: boolean): string
   if (!mac && id === "search") return "Mod+Alt+KeyF";
   const fallback = commands.find((item) => item[0] === id)?.[2] ?? "";
   if (
-    (id === "fontDecrease" || id === "fontIncrease") &&
+    ["fontDecrease", "fontIncrease", "nextWorkspace", "previousWorkspace"].includes(id) &&
     Object.entries(settings.shortcuts).some(([other, key]) => other !== id && key === fallback)
   )
     return "";
