@@ -17,7 +17,6 @@ export const backendMessages: Record<string, string> = {
   "当前分支没有上游，请先在终端中设置上游分支。":
     "This branch has no upstream. Set its upstream in the terminal first.",
   "上游分支配置无效。": "Invalid upstream branch configuration.",
-  "Pull 前请先提交或暂存工作区修改。": "Commit or stash working tree changes before Pull.",
   "分支列表过大，请在终端中切换。": "Too many branches. Switch branches in the terminal.",
   "分支名包含无法显示的字符。": "A branch name contains characters that cannot be displayed.",
   "当前分支已改变，请刷新后重试。": "The current branch has changed. Refresh and try again.",

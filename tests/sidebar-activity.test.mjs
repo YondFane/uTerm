@@ -210,6 +210,46 @@ test("active project trees move between sections without duplicating pinned chil
     assert.deepEqual(created, [["z", undefined]]);
     assert.equal(toggle("Zulu").getAttribute("aria-expanded"), "true");
     assert.deepEqual(selected, []);
+    const narrowRow = projectRow("z");
+    const actions = narrowRow.querySelector(".row-actions");
+    let open = false;
+    const originalMatches = actions.matches.bind(actions);
+    actions.matches = (selector) =>
+      selector === ":popover-open" ? open : originalMatches(selector);
+    actions.showPopover = () => (open = true);
+    actions.hidePopover = () => (open = false);
+    actions.getBoundingClientRect = () => ({ width: 74, height: 28 });
+    narrowRow.getBoundingClientRect = () => ({
+      left: 48,
+      right: 158,
+      top: 80,
+      width: 110,
+      height: 32,
+    });
+    await act(async () =>
+      narrowRow.dispatchEvent(new dom.window.MouseEvent("pointerover", { bubbles: true })),
+    );
+    assert.equal(actions.getAttribute("popover"), "manual");
+    assert.equal(actions.style.left, "154px");
+    assert.equal(actions.style.top, "82px");
+    assert.equal(open, true);
+    await click(actions.querySelectorAll("button")[1]);
+    assert.deepEqual(created.at(-1), ["z", undefined, "claude"]);
+    assert.equal(toggle("Zulu").getAttribute("aria-expanded"), "true");
+    await act(async () => window.dispatchEvent(new dom.window.Event("resize")));
+    assert.equal(actions.hasAttribute("popover"), false);
+    assert.equal(actions.style.left, "");
+    assert.equal(open, false);
+    narrowRow.getBoundingClientRect = () => ({
+      left: 48,
+      right: 348,
+      top: 80,
+      width: 300,
+      height: 32,
+    });
+    await act(async () => actions.querySelector("button").focus());
+    assert.equal(actions.hasAttribute("popover"), false);
+    assert.equal(document.activeElement, actions.querySelector("button"));
     await click(projectRow("z").querySelector(".row-more"));
     assert.equal(document.querySelector('[role="menuitem"]').textContent, "New terminal");
     await click(document.querySelector('[role="menuitem"]'));

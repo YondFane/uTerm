@@ -3,7 +3,7 @@ title: uTerm 开发指南
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-10-18
+updated: 2026-10-19
 ---
 
 # uTerm 开发指南
@@ -43,6 +43,19 @@ pnpm uterm:dev
 ```
 
 `pnpm dev` 仅启动浏览器前端预览；桌面文件、进程和系统集成需要运行 Tauri 应用。
+
+### 编辑与格式检查
+
+使用支持 EditorConfig 的编辑器。`.editorconfig`
+设置 UTF-8、LF 和两空格缩进；Rust 与 Java 使用四空格，Windows `.cmd`／`.bat`
+文件使用 CRLF，Markdown 保留有意添加的行尾空格。Git 检出时由 `.gitattributes` 应用相同的换行规则。
+
+前端文件使用项目的 Prettier，Rust 使用 rustfmt，按需开启保存时格式化。提交前运行 `pnpm format`
+应用仓库格式化工具，再运行 `pnpm format:check`
+验证。检查覆盖前端源码、测试、脚本、官网、根目录 JSON／TypeScript／HTML、桌面 JSON 配置及两个 Cargo 清单对应的源码。修改的 Markdown 按[文档编写规范](writing-rules.md)单独格式化。
+
+PR／分支工作流及稳定版构建均在各自的 macOS、Windows 任务中，锁定依赖安装后运行
+`pnpm format:check`。格式错误会在测试及桌面编译前使任务失败。
 
 ## 数据库组件开发
 

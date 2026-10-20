@@ -73,7 +73,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust }}
+          components: rustfmt
       - run: pnpm install --frozen-lockfile
+      - name: Check formatting
+        run: pnpm format:check
       - run: pnpm docs:check && pnpm test
       - run: cargo test --manifest-path crates/utermd-local/Cargo.toml --locked
       - run: cargo test --manifest-path src-tauri/Cargo.toml --locked

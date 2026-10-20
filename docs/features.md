@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-19
+updated: 2026-10-20
 ---
 
 # uTerm feature guide
@@ -126,6 +126,11 @@ protection or unresolved conflicts leave synchronization explicitly incomplete.
 
 #### Stable-release checks
 
+- Release preparation on macOS passes frozen dependency installation, 274 frontend/build-helper
+  tests (ten skipped), 113 backend tests (nine ignored) and 46 host tests (two native CLI tests
+  ignored). TypeScript/production build, desktop compilation, repository formatting, localization
+  and documentation checks pass. This does not establish Windows/Linux runtime acceptance.
+
 - Latest validation: six release-helper tests, workflow formatting, step-order and shell syntax
   checks, and documentation checks pass. The live latest-release API resolves to a published stable
   release, with its name, notes and all 11 uploaded asset records intact.
@@ -196,6 +201,10 @@ Project and Worktree rows keep their folder icons when hovered or focused, with 
 button. Their inline actions show New terminal and enabled Agents, without a More actions (ellipsis)
 button; right-click the row for its existing menu.
 
+When inline space is insufficient, the terminal/Agent capsule opens to the right of the row and can
+extend beyond the sidebar. Folder icons and names retain their space; wider rows keep the capsule
+inline.
+
 Left-click the icon, name or remaining row-label space to expand or collapse the children;
 Enter/Space on the focused row performs the same action. Existing project/session selection and
 editor transition guards remain in effect.
@@ -216,8 +225,7 @@ activity rings remain visible when folded.
   and retained terminal/Agent quick actions. The fixture does not launch sessions; full-application
   menu integration and macOS/Linux runtime acceptance remain unverified.
 
-- Repository-wide formatting reports existing issues in 103 unchanged files; the production build
-  retains its large-chunk warning.
+- The production build retains its large-chunk warning.
 
 #### Folder-row checks on Windows
 
@@ -233,9 +241,8 @@ activity rings remain visible when folded.
   in Chinese/English. This verifies Sidebar layout and callbacks without starting real sessions or
   restarting the installed app.
 
-- Full-application editor transitions and macOS/Linux runtime acceptance remain unverified;
-  repository-wide formatting retains existing issues and the production build retains its
-  large-chunk warning.
+- Full-application editor transitions and macOS/Linux runtime acceptance remain unverified; the
+  production build retains its large-chunk warning.
 
 ### Close and Remove buttons
 
@@ -288,8 +295,7 @@ hiding/folding the section, changing workspace or removing the target.
   callbacks; it does not connect to servers or validate the complete application lifecycle.
   macOS/Linux menu acceptance remains incomplete.
 
-- Repository-wide formatting retains existing issues, and the existing large-chunk build warning
-  remains. The installed application was not restarted.
+- The existing large-chunk build warning remains. The installed application was not restarted.
 
 ### Resource activity rings
 
@@ -373,9 +379,8 @@ the section independently. Enter/Space on the focused heading performs the same 
   start real sessions, connect to servers or open application dialogs; full-application integration
   and macOS/Linux acceptance of the expanded click area remain unverified.
 
-- Repository-wide formatting reports existing issues in 88 unchanged files. The focused suite
-  retains existing Vite WebSocket-port warnings, and the production build retains its large-chunk
-  warning.
+- The focused suite retains existing Vite WebSocket-port warnings, and the production build retains
+  its large-chunk warning.
 
 ### Connection visibility switches
 
@@ -426,9 +431,8 @@ The menu fits within the sidebar and wraps long labels when narrow.
   inspection; narrow labels wrap completely within the sidebar.
 
 - The fixture does not open real connection dialogs or connect to servers; full-application dialog
-  integration and macOS/Linux acceptance of the expanded menu remain unverified. Repository-wide
-  formatting reports existing issues in 88 unchanged files; Vite WebSocket-port and production
-  large-chunk warnings remain.
+  integration and macOS/Linux acceptance of the expanded menu remain unverified. Vite WebSocket-port
+  and production large-chunk warnings remain.
 
 ### Middle-click to Close Session
 
@@ -447,8 +451,8 @@ retains its existing mouse behavior. Close failures remain visible and retain th
   coverage includes project terminals, Agents, Worktrees and standalone terminals/chats,
   default-event suppression and right-button exclusion.
 
-- Native Windows/macOS mouse acceptance remains pending. Repository-wide formatting is blocked by
-  existing issues in 39 files; the production build retains its large-chunk warning.
+- Native Windows/macOS mouse acceptance remains pending. The production build retains its
+  large-chunk warning.
 
 ### Active project tree
 
@@ -644,8 +648,7 @@ workspace changes or the sidebar/connection section is hidden.
 
 - Frozen dependency installation, changed-file formatting, localization/documentation checks,
   TypeScript/production build and the isolated desktop build pass. The full frontend suite
-  encountered a Vite SSR module-loading timeout; repository-wide formatting reports existing issues
-  in other files.
+  encountered a Vite SSR module-loading timeout.
 
 - Remembered-credential integration and macOS/Linux runtime acceptance remain unverified; the
   production build retains its large-chunk warning.
@@ -866,7 +869,6 @@ completion, errors and cancellation.
 
 - The full Windows frontend run passes with 241 passed and 11 skipped. Changed-file formatting,
   TypeScript, localization, documentation checks and the isolated desktop build pass.
-  Repository-wide formatting still reports unrelated files.
 
 - An isolated Windows application (`sh.uterm.desktop.qa.sshredesign`) verified the native connection
   form, default automatic authentication, Save only returning to an overview with zero sessions,
@@ -1140,8 +1142,7 @@ key is never overwritten.
   covering guarded previous-page navigation and returning to a valid page after deleting a member.
   The regular backend suite passes 105 checks with nine optional checks ignored. Locked dependency
   installation, localization, TypeScript/production build, desktop build, changed-source formatting
-  and documentation checks pass. Repository-wide formatting still reports 180 other files, and the
-  production build retains its existing large-chunk warning.
+  and documentation checks pass. The production build retains its existing large-chunk warning.
 
 - An isolated native Tauri/WebView2 app (`sh.uterm.desktop.qa.redismembers`) renders the real
   workbench and CodeMirror editor with simulated responses. It verifies all five creation options,
@@ -1256,8 +1257,7 @@ refreshes.
   cancellation preserving its content.
 
 - Native staged/rename rollback, editor-conflict interaction and macOS/Linux runtime acceptance
-  remain unverified. Repository-wide formatting still reports existing issues in 29 other files; the
-  production build retains its large-chunk warning.
+  remain unverified. The production build retains its large-chunk warning.
 
 ### Local and remote branches
 
@@ -1293,9 +1293,12 @@ Right-click anywhere on the branch control (or press Shift+F10) for Push, Pull (
 Fetch and Refresh branches. Push explicitly targets the current branch's configured upstream without
 force or automatic tag pushing.
 
-- Pull requires a clean working tree, fetches the upstream and fast-forwards only; divergent history
-  is rejected without creating a merge commit or rebasing. Push/Pull are disabled for
-  detached/unborn branches or missing upstreams; configure the upstream in a terminal first.
+- Pull fetches the upstream and fast-forwards without requiring a clean working tree. Unrelated
+  staged, unstaged and untracked files are retained; Git rejects updates that would overwrite local
+  changes. No automatic stash, merge commit or rebase is used, and divergent history is rejected.
+
+- Push/Pull are disabled for detached/unborn branches or missing upstreams; configure the upstream
+  in a terminal first.
 
 - Fetch updates all branch references from each configured remote and prunes deleted remote
   references without switching or merging. Refresh branches re-reads the Local/Remote lists.
@@ -1337,8 +1340,8 @@ details area, and text remains selectable.
   commit details retained. Visual inspection covers Chinese/dark and English/light views and
   wrapping in a 280 px panel.
 - Production and desktop builds, TypeScript, localization, documentation, changed-file formatting
-  and Cargo formatting pass. Repository-wide formatting reports existing issues in 166 other files;
-  production builds retain the large-chunk warning. macOS/Linux runtime acceptance remains pending.
+  and Cargo formatting pass. Production builds retain the large-chunk warning. macOS/Linux runtime
+  acceptance remains pending.
 
 ### Git comparison tabs
 
@@ -1638,8 +1641,7 @@ visible.
   actions open Explorer at the correct directory.
 
 - Explorer file selection, Windows project/Worktree actions and macOS/Linux file-menu layout remain
-  unverified. Repository-wide formatting reports existing issues in 102 unchanged files; the
-  production build retains its large-chunk warning.
+  unverified. The production build retains its large-chunk warning.
 
 ### Name conflicts
 
@@ -1785,9 +1787,8 @@ deduplication rules remain in effect.
   languages. Changed-source formatting, localization, documentation, TypeScript/production and the
   isolated Windows desktop build (`sh.uterm.desktop.qa.usageutf8`) pass.
 
-- Repository-wide formatting reports existing issues in 99 unchanged files, and the production build
-  retains its large-chunk warning. Authenticated provider queries and macOS/Linux runtime acceptance
-  of these paths remain unverified.
+- The production build retains its large-chunk warning. Authenticated provider queries and
+  macOS/Linux runtime acceptance of these paths remain unverified.
 
 #### Agent-enablement checks
 
@@ -1905,8 +1906,8 @@ launch flow and starts disabled.
   pass.
 
 - The full frontend/build-helper suite passes 241 checks with 11 optional/platform checks skipped;
-  localization passes. Repository-wide formatting reports issues in 148 other working-tree files.
-  These automated checks do not establish live provider, database or SSH acceptance.
+  localization passes. These automated checks do not establish live provider, database or SSH
+  acceptance.
 
 - An isolated native Tauri/WebView2 fixture (`sh.uterm.desktop.qa.additionalagents`) renders the
   real Agent settings with temporary availability and settings data. Visual inspection confirms the
@@ -1995,8 +1996,7 @@ language.
   Native startup and visual inspection confirm that background startup keeps the main window hidden
   and a subsequent manual launch shows the application without startup errors.
 
-- Repository formatting remains blocked by existing issues in 172 files. Actual OS sign-in, visual
-  tray-click acceptance and macOS acceptance remain pending.
+- Actual OS sign-in, visual tray-click acceptance and macOS acceptance remain pending.
 
 ### Agent definitions and activity
 
@@ -2135,8 +2135,7 @@ failure copy, native permissions and duplicate suppression.
   host requests remain responsive during startup.
 
 - Changed-source/test and Rust formatting, localization, documentation, TypeScript/production and
-  Windows desktop checks pass. Repository-wide formatting retains issues in 166 other files; Vite's
-  WebSocket-port and large-chunk warnings remain.
+  Windows desktop checks pass. Vite's WebSocket-port and large-chunk warnings remain.
 
 The installed Codex CLI 0.163.0 runs its real TUI against an isolated deterministic loopback model
 fixture, with no Hooks or real provider credentials. Two successive turns produce distinct
@@ -2189,9 +2188,8 @@ acknowledged.
   without requesting permission.
 
 - Changed-source/test and Rust formatting, localization, documentation checks, TypeScript/production
-  and the isolated Windows desktop build (`sh.uterm.desktop.qa.nativeactivity`) pass.
-  Repository-wide formatting retains existing issues in 166 other files, and tests/builds retain the
-  Vite WebSocket-port and large-chunk warnings.
+  and the isolated Windows desktop build (`sh.uterm.desktop.qa.nativeactivity`) pass. Tests/builds
+  retain the Vite WebSocket-port and large-chunk warnings.
 
 - Permission and deferred-notification regressions use mocked native commands. Native acceptance of
   enabling and delivering notifications through the updated permission path in installed Windows
@@ -2256,8 +2254,6 @@ setting and disable at its bounds; save failures appear in the session.
   the header and menu in English/light at 1000 × 700. Clipboard and reveal calls are mocked; no
   model requests are used. macOS/Linux runtime acceptance remains pending.
 
-- Repository-wide formatting reports existing issues in 166 other files; changed files pass.
-
 ### Mouse wheel and trackpad scrolling
 
 Terminal and Agent panes use small steps for slow mouse-wheel scrolling and accelerate consecutive
@@ -2296,8 +2292,7 @@ increases the multiplier up to six times.
   processes or Agent credentials and does not restart the installed application.
 
 - Physical-wheel/trackpad feel, live Agent behavior and macOS/Linux runtime acceptance remain
-  pending. Repository-wide formatting reports existing issues in 97 other files; the production
-  build retains its large-chunk warning.
+  pending. The production build retains its large-chunk warning.
 
 ### File and Git diff font sizes
 
@@ -2344,8 +2339,7 @@ Markdown previews. Image, PDF and static HTML previews keep their own sizing con
   hide them. No real file writes are used.
 
 - The expanded unified Git diff was visually checked with the content shortcuts above; other Git
-  diff layouts and macOS/Linux runtime acceptance remain pending. Repository-wide formatting reports
-  existing issues in 166 other files; changed files pass formatting.
+  diff layouts and macOS/Linux runtime acceptance remain pending.
 
 ### Automatic updates and confirmation
 
@@ -2504,8 +2498,7 @@ This requires temporary disk space for one additional installer payload.
   the manual-release target with mocked external navigation. No real packages are installed.
 
 - The isolated desktop build uses `sh.uterm.desktop.qa.downloadcheck`; the installed app is not
-  restarted. Repository-wide formatting still reports 85 existing files, and the production build
-  retains its large-chunk warning.
+  restarted. The production build retains its large-chunk warning.
 
 - Real signed application installation/restart, Agent package installation and macOS
   installer/runtime acceptance remain unverified.
@@ -2655,8 +2648,7 @@ accent color as the theme or color mode changes. Older saved settings also use t
   checks skipped), together with changed-file formatting, localization, documentation checks and
   TypeScript/production build. Tests cover old settings, all six palettes in both color modes,
   custom-color persistence and provider reload, invalid colors, save failures and restoring
-  defaults. Repository-wide formatting reports existing issues in 166 unchanged files; the existing
-  Vite WebSocket-port and production large-chunk warnings remain.
+  defaults. The existing Vite WebSocket-port and production large-chunk warnings remain.
 
 - An isolated Tauri/WebView2 host (`sh.uterm.desktop.qa.activeicons`) runs the real App with
   temporary settings and mocked desktop commands. Visual inspection verifies the appearance
@@ -2751,9 +2743,7 @@ Database and Redis workbenches also hide project inspectors.
 
 - Locked dependency installation, localization/documentation checks, changed
   source/test/feature-guide formatting, both Cargo formatting checks, TypeScript/production build
-  and the isolated Windows desktop build pass. Repository-wide formatting still reports issues in 72
-  other files; the READMEs retain existing table-formatting issues, and the production build retains
-  its large-chunk warning.
+  and the isolated Windows desktop build pass. The production build retains its large-chunk warning.
 
 ### Application context menus
 
@@ -2771,8 +2761,7 @@ previews, without relaxing their sandbox.
   space, inputs, dialogs and application handlers that stop propagation.
 
 - Native Windows menu acceptance and macOS interaction (including isolated previews) remain
-  unverified. Existing repository-wide formatting issues in 39 files and the production build's
-  large-chunk warning remain.
+  unverified. The production build's large-chunk warning remains.
 
 ### Swapping the workspace and inspector
 
@@ -2891,7 +2880,6 @@ selects Classic sidebar.
   order and welcome dialogs in both languages, and unchanged profiles/sessions/selection. Classic
   visibility combinations and the retained rail/collapse interactions also pass.
 - Changed-file formatting, localization, documentation and TypeScript/production build pass.
-  Repository-wide formatting reports issues in 166 unchanged files.
 - An isolated Tauri/WebView2 app (`sh.uterm.desktop.qa.sidebarstyles`) runs the real App with
   temporary profiles and mocked desktop commands. Native inspection verifies the two settings cards,
   switching to the navigation layout, project/SSH filtering, rail footer controls, Chinese dark and
@@ -2928,10 +2916,11 @@ no separate uTerm/Local brand row.
 - The separator also supports arrow keys, Home to hide, End for maximum width and Enter/double-click
   to reset.
 
-- Narrow sidebars keep section headings on one line and replace project/Worktree quick-action
-  capsules with a More actions button on hover or keyboard focus. Its menu offers a new terminal and
-  sessions for enabled Agents, retaining the original project or Worktree target and missing-folder
-  restrictions.
+- Narrow sidebars keep section headings on one line. Hovering or focusing a project/Worktree row
+  floats its terminal/Agent capsule to the right when inline space is insufficient, retaining the
+  original target and missing-folder restrictions. Escape, outside clicks, scrolling or resizing
+  dismiss the floating capsule. The More actions menu remains a fallback when floating controls are
+  unavailable.
 
 - Very narrow sidebars stack header controls and use resource/session icons with full names in
   tooltips and accessible labels. Section actions wrap, and footer buttons wrap within their groups
@@ -2944,6 +2933,18 @@ no separate uTerm/Local brand row.
 
 #### Validation and limits
 
+- On macOS, nine focused sidebar tests, TypeScript/production build, repository formatting and
+  localization checks pass. Regression coverage includes floating placement, unchanged Agent targets
+  and folding, resize dismissal and retained keyboard focus in wide rows.
+
+- The isolated native app (`sh.uterm.desktop.qa.sidebaractions`) renders the real Sidebar with
+  temporary state. Visual checks cover 176 px and 112 px navigation sidebars, Chinese/dark and
+  English/light layouts, long names, project/Worktree Agent callbacks and Escape dismissal.
+
+  Browser inspection also verifies the inline layout at 248 px in Classic and keyboard focus
+  restoration. No real sessions or servers are used; Windows/Linux acceptance of floating controls
+  remains unverified. The production build retains its large-chunk warning.
+
 - On Windows, 23 focused sidebar, welcome and bilingual UI checks pass, together with changed-file
   formatting, localization/documentation checks and TypeScript/production build. Coverage includes
   project/Worktree quick-menu targets, enabled Agents, missing folders, Escape focus return,
@@ -2953,7 +2954,7 @@ no separate uTerm/Local brand row.
   names, temporary profiles and mocked desktop commands. Native pointer drags verify the compact 176
   px layout and the 88 px icon layout, single-line Chinese headings and fully visible footer
   controls. No real processes or servers are used. Native acceptance of the final popup placement,
-  narrow light/English layouts and macOS/Linux interaction remains pending.
+  narrow light/English layouts on Windows and Linux interaction remains pending.
 
 ### Terminal resizing
 
@@ -2981,9 +2982,8 @@ resizes for the old attachment. Resize errors remain visible in the session.
   testing; acceptance of that OpenCode scenario remains incomplete.
 
 - The complete frontend/build-helper suite passes (273 passed, 11 optional/platform checks skipped),
-  including the pane-swap App regression. Repository-wide formatting reports issues in 162 unchanged
-  files; Vite's WebSocket-port and large-chunk warnings remain. macOS and Linux runtime acceptance
-  remains pending.
+  including the pane-swap App regression. Vite's WebSocket-port and large-chunk warnings remain.
+  macOS and Linux runtime acceptance remains pending.
 
 ### Error-banner timing
 
@@ -3080,9 +3080,8 @@ use consistent states.
   hidden, complete labels and scrolling at 680×500, and an accessible heading at 900×650. No real
   sessions or server connections are created.
 
-- Live desktop-command integration and macOS/Linux runtime acceptance remain unverified.
-  Repository-wide formatting reports existing issues in 88 unchanged files; Vite WebSocket-port and
-  production large-chunk warnings remain.
+- Live desktop-command integration and macOS/Linux runtime acceptance remain unverified. Vite
+  WebSocket-port and production large-chunk warnings remain.
 
 ## Architecture
 
@@ -3151,8 +3150,7 @@ file contents have changed.
 
 - Frozen dependency installation, TypeScript/production build, localization, documentation checks,
   changed-file formatting, both Cargo format checks and desktop compilation with isolated identifier
-  `sh.uterm.desktop.qa.optimization` pass. Repository-wide formatting remains blocked by existing
-  issues in 31 other files; the production build retains its large-chunk warning.
+  `sh.uterm.desktop.qa.optimization` pass. The production build retains its large-chunk warning.
 
 - Native focus/visibility interaction, whole-app CPU/RSS gains and macOS/Linux runtime acceptance
   remain unmeasured; the installed application was not restarted.
@@ -3257,21 +3255,35 @@ use separate Cargo manifests and lockfiles.
 
 ### Windows automated checks
 
-- Automated validation: the current Windows run passes the complete frontend/build-helper suite (228
-  passed, ten optional/platform checks skipped), 84 backend tests (four optional Redis checks and
-  two explicit resource profiles ignored), 24 local-session service tests and six release-helper
-  tests. Frozen dependency installation, changed-file formatting, both Rust formatting checks,
-  localization, documentation and TypeScript/production build pass.
+- Repository-wide `pnpm format:check` passes, including Prettier and both Cargo workspaces.
+  `.gitattributes` keeps text files on LF and Windows `.cmd`/`.bat` files on CRLF. A fresh Windows
+  checkout with `core.autocrlf=true` passes Prettier, preserves batch-file CRLF and leaves binary
+  assets unchanged.
 
-- The isolated Windows desktop build (`sh.uterm.desktop.qa.resources`) also passes. Application,
-  desktop configuration, Cargo manifest and lockfile versions agree; the versioned bilingual release
-  body loads through `releaseNotes(tag)` and both production updater configurations use the stable
+- `.editorconfig` aligns editor defaults with the formatters: UTF-8, LF, two-space indentation, four
+  spaces for Rust/Java and CRLF for Windows batch files; Markdown keeps intentional trailing spaces.
+  PR/branch CI and stable-release builds run the complete `pnpm format:check` on macOS and Windows
+  after frozen dependency installation and before tests/desktop compilation.
+
+- Windows validation passes the full formatting check, workflow/Markdown formatting and ten existing
+  packaging/release-helper regressions. Workflow parsing verifies the unconditional check order and
+  rustfmt installation; Prettier configuration resolution verifies LF source files and CRLF batch
+  files.
+
+- Automated validation on Windows passes the complete frontend/build-helper suite (273 passed, 11
+  optional/platform checks skipped), 108 backend tests (nine optional checks ignored) and 38
+  local-session service tests (two optional installed-CLI checks ignored). Frozen dependency
+  installation, repository-wide formatting, localization, documentation and TypeScript/production
+  build pass.
+
+- Windows desktop compilation (`pnpm desktop:check`) also passes. Application, desktop
+  configuration, Cargo manifest and lockfile versions agree; the versioned bilingual release body
+  loads through `releaseNotes(tag)` and both production updater configurations use the stable
   platform feeds without a notes override.
 
 - Native acceptance remains feature-specific as recorded above; build and CI results do not
-  establish untested native interactions or live credential/server integration. Repository-wide
-  formatting reports existing issues in 85 unchanged files, and production builds retain the
-  large-chunk warning.
+  establish untested native interactions or live credential/server integration. Production builds
+  retain the large-chunk warning.
 
 ### macOS automated checks
 
@@ -3376,17 +3388,23 @@ use separate Cargo manifests and lockfiles.
   changes, repeated requests, stale polling, Local/Remote groups, remote switching, context actions,
   missing upstreams, visible remote/authentication failures and keyboard dismissal. Backend tests
   use temporary local/bare repositories for unfetched remote listings, partial remote failures,
-  narrow clone tracking, name collisions, dirty-worktree protection, upstream push/pull, divergent
-  history and force-push prevention.
+  narrow clone tracking, name collisions, branch-switch conflict protection, upstream push/pull,
+  divergent history and force-push prevention.
 
-- On macOS, 139 frontend/build-helper tests, 39 backend tests, formatting, localization,
-  documentation checks, TypeScript/production build and an isolated desktop build passed.
+- Pull coverage includes retaining unrelated staged, unstaged and untracked files both when already
+  up to date and during a fast-forward, and rejecting file overwrites even when automatic stash is
+  enabled in Git configuration.
+
+- On macOS, `pnpm test` passes 274 frontend/build-helper tests with ten skips; `pnpm test:backend`
+  passes 113 tests with nine default-ignored service/benchmark tests. TypeScript/production build,
+  repository formatting, localization, documentation metadata/index and feature-guide formatting
+  checks pass. The generated `docs/README.md` retains a pre-existing Prettier formatting warning.
 
 - Native QA (`sh.uterm.desktop.qa.remotebranches`) verified both menu layouts, selecting an
   unfetched remote branch from a single-branch clone, creating its tracking configuration, pushing a
   test commit to a local bare remote, pulling a newer remote commit with file-list refresh, and
-  fetching a new remote reference without changing the current branch. Windows/Linux runtime and
-  authenticated network remotes still require acceptance testing.
+  fetching a new remote reference without changing the current branch. Native Pull with local
+  changes, Windows/Linux runtime and authenticated network remotes still require acceptance testing.
 
 - Existing large-chunk and Rust dead-code warnings remain.
 
@@ -3522,9 +3540,9 @@ OS.
   versioned bilingual release body loads through `releaseNotes(tag)` and agrees with the
   Windows/macOS updater configuration without an override.
 
-- Changed version files and both Cargo formatting checks pass; repository-wide formatting still
-  reports existing issues in 34 other files. Native mouse, localization, signed-update and installer
-  acceptance remain as recorded for each feature; build results do not establish runtime acceptance.
+- Changed version files and both Cargo formatting checks pass. Native mouse, localization,
+  signed-update and installer acceptance remain as recorded for each feature; build results do not
+  establish runtime acceptance.
 
 - Shortcut tests cover selection-dependent copying, Control interrupt passthrough, paste keys, macOS
   modifiers and composition/AltGr exclusion. Clipboard shortcuts in live Claude/Codex sessions still
@@ -3877,10 +3895,9 @@ remain strings and binary is Base64.
   existing database.
 
 - Frozen dependency installation, TypeScript/production build, bundled-engine verification and
-  `pnpm desktop:check` pass. Database source formatting and the global localization check pass. The
-  repository-wide formatting check reports issues in 148 other working-tree files. Documentation
-  metadata/index and changed Markdown formatting pass. Production builds retain the existing
-  large-chunk warning.
+  `pnpm desktop:check` pass. Database source formatting and the global localization check pass.
+  Documentation metadata/index and changed Markdown formatting pass. Production builds retain the
+  existing large-chunk warning.
 
 - Isolated Windows applications (`sh.uterm.desktop.qa.documents` and `.documents.narrow`) use the
   real workbench with simulated replies to inspect Elasticsearch and MongoDB queries, 40 object
@@ -3956,9 +3973,8 @@ remain strings and binary is Base64.
   peaks.
 
 - Frozen installation, TypeScript/production build, pinned-JDK engine verification, isolated desktop
-  build, changed-source formatting, localization and documentation checks pass. Repository-wide
-  formatting retains issues in 63 other files, and production builds retain the existing large-chunk
-  warning.
+  build, changed-source formatting, localization and documentation checks pass. Production builds
+  retain the existing large-chunk warning.
 
 - New native export-save dialogs, macOS UI, PostgreSQL/Oracle live servers and complete database
   SSH/TLS acceptance remain unverified; authenticated SOCKS does not establish full SSH acceptance.
