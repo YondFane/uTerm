@@ -58,7 +58,28 @@ export function attachTerminalPunctuationInput(
   let composing = false;
   let finishing = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const alignCursor = () => {
+    if (!enabled() || composing) return;
+    // xterm reads new IME text from the old value's end, independently of the terminal cursor.
+    // xterm 从旧文本末尾读取新的输入法文本，该位置与终端光标相互独立。
+    const end = textarea.value.length;
+    if (textarea.selectionStart !== end || textarea.selectionEnd !== end)
+      textarea.setSelectionRange(end, end);
+  };
+  const keyDown = (event: KeyboardEvent) => {
+    if (
+      event.isComposing ||
+      composing ||
+      finishing ||
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey
+    )
+      return;
+    if (event.keyCode === 229 || event.key.length === 1) alignCursor();
+  };
   const start = () => {
+    alignCursor();
     clearTimeout(timer);
     composing = true;
     finishing = false;
@@ -89,12 +110,14 @@ export function attachTerminalPunctuationInput(
     event.stopImmediatePropagation();
     input(text);
   };
-  textarea.addEventListener("compositionstart", start);
+  textarea.addEventListener("keydown", keyDown, true);
+  textarea.addEventListener("compositionstart", start, true);
   textarea.addEventListener("compositionend", end);
   textarea.addEventListener("beforeinput", beforeInput);
   return () => {
     clearTimeout(timer);
-    textarea.removeEventListener("compositionstart", start);
+    textarea.removeEventListener("keydown", keyDown, true);
+    textarea.removeEventListener("compositionstart", start, true);
     textarea.removeEventListener("compositionend", end);
     textarea.removeEventListener("beforeinput", beforeInput);
   };
