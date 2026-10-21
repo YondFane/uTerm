@@ -2579,18 +2579,26 @@ bracketed-paste mode when enabled.
 ### Input-method punctuation
 
 Terminal and Agent sessions let the input method transform punctuation before forwarding committed
-punctuation through the normal terminal input queue. The handler avoids changing the IME textarea,
-preserving composition, paste and Control/Alt/Meta shortcuts, and respects disabled input.
+punctuation through the normal terminal input queue. After pasting text, use Left/Right to move the
+terminal cursor and continue typing Chinese at that position without resending old text.
+
+Before new typing or composition starts, the hidden input field's caret is aligned with the end of
+its committed value, independently of the terminal cursor. Its value, active composition, paste,
+navigation and Control/Alt/Meta shortcuts are preserved, and disabled input is respected.
 
 #### Validation and limits
 
-- Regression tests cover Chinese and ASCII punctuation, composition boundaries, cancellation,
-  disabled input and listener cleanup. All 154 frontend/build-helper tests, formatting,
-  localization, TypeScript/production build and an isolated macOS desktop build pass.
+- Ten focused tests cover Chinese and ASCII punctuation, composition boundaries, cancellation,
+  disabled input and listener cleanup, including real xterm composition and key-229 input after
+  caret movement. The frontend/build-helper suite passes 283 tests with ten optional/platform checks
+  skipped. Formatting, localization, TypeScript/production build and an isolated macOS desktop build
+  pass.
 
-- Native QA (`sh.uterm.desktop.qa.imenative`) verifies ASCII punctuation in a shell. Automated
-  Unicode keystroke injection does not reliably reproduce native IME commits; real Chinese IME, live
-  Agent, Windows and Linux runtime acceptance remain pending.
+- Native macOS QA (`sh.uterm.desktop.qa.imeediting`) uses the real Terminal view with a mock input
+  receiver. Injected composition verifies Chinese insertion after paste and Left; native paste,
+  Left/Right and trusted input-method commits, including Chinese text, send only the new committed
+  text at the requested position. Acceptance in the user's live Agent session and Windows/Linux
+  runtime acceptance remain pending. The installed application was not replaced or restarted.
 
 ### Update download retries and caches
 
