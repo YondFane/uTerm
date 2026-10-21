@@ -36,6 +36,9 @@ macOS 安装包未经 Apple 公证，首次打开可能需要在**系统设置 �
 3. 右键会话，选择**与…分组**，并排显示会话。打开 **Git** 查看修改；已有 Git
    Worktree 会显示在所属项目下。
 
+使用 TRAE CLI 时，打开**设置 → Agent → TRAE CLI**，安装并启用
+`traecli`，再在 CLI 内登录。配置与限制见[TRAE CLI 功能说明](docs/features.zh-CN.md#trae-cli)。
+
 退出应用只分离窗口，本地会话继续运行；重新打开后可连接原会话。**关闭会话**才会终止所选进程。
 
 在**设置 → Agent**

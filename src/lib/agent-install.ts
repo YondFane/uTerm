@@ -61,4 +61,9 @@ export const agentInstallers: Record<
     package: "@iflow-ai/iflow-cli",
     url: "https://docs.iflow.cn/cli/quickstart/",
   },
+  trae: {
+    program: "traecli",
+    script: true,
+    url: "https://docs.trae.cn/cli_get-started-with-trae-cli-2",
+  },
 });

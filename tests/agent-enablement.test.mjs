@@ -75,6 +75,7 @@ test("Agent switches gate creation, persist, preserve sessions and report storag
           "qwen",
           "copilot",
           "iflow",
+          "trae",
         ],
         agent_definitions: [{ id: "custom", name: "Custom", program: "custom", arguments: [] }],
         version: "test",
@@ -158,6 +159,7 @@ test("Agent switches gate creation, persist, preserve sessions and report storag
       ["qwen", "Qwen Code"],
       ["copilot", "Copilot CLI"],
       ["iflow", "iFlow CLI"],
+      ["trae", "TRAE CLI"],
     ]) {
       assert.equal(toggle(name).checked, false);
       assert.equal(toggle(name).disabled, false);

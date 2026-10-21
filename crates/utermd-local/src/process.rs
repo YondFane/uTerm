@@ -529,7 +529,8 @@ fn command_path() -> Vec<PathBuf> {
             paths.push(PathBuf::from(home).join(".minimax-code"));
         }
         if let Some(root) = std::env::var_os("LOCALAPPDATA") {
-            paths.push(PathBuf::from(root).join("hermes/bin"));
+            paths.push(PathBuf::from(&root).join("hermes/bin"));
+            paths.push(PathBuf::from(root).join("Programs/TraeCLI/bin"));
         }
         if let Some(root) = std::env::var_os("APPDATA") {
             paths.push(PathBuf::from(root).join("npm"));
@@ -542,7 +543,11 @@ pub fn agent_program(name: &str) -> Result<PathBuf> {
     if !crate::agents::BUILTIN_AGENTS.contains(&name) {
         bail!("Unsupported chat agent");
     }
-    resolve_program(if name == "minimax" { "mcode" } else { name })
+    resolve_program(match name {
+        "minimax" => "mcode",
+        "trae" => "traecli",
+        _ => name,
+    })
 }
 
 pub fn resolve_program(name: &str) -> Result<PathBuf> {
@@ -678,12 +683,14 @@ mod program_tests {
             ("qwen", "qwen"),
             ("copilot", "copilot"),
             ("iflow", "iflow"),
+            ("trae", "traecli"),
         ];
         let directory_for = |home: &std::path::Path, agent| match agent {
             "hermes" if cfg!(windows) => home.join("local/hermes/bin"),
             "pi" => home.join(".pi/agent/bin"),
             "minimax" if cfg!(windows) => home.join(".minimax-code"),
             "minimax" => home.join(".minimax-code/bin"),
+            "trae" if cfg!(windows) => home.join("local/Programs/TraeCLI/bin"),
             _ => home.join(".local/bin"),
         };
         if let Some(home) = std::env::var_os(FIXTURE) {
@@ -715,20 +722,22 @@ mod program_tests {
             }
             assert!(agent_program("mcode").is_err());
             let program = agent_program("pi").unwrap();
-            std::fs::write(
-                home.join("agents.json"),
-                serde_json::to_vec(&vec![crate::agents::AgentDefinition {
-                    id: "minimax".into(),
-                    name: "Custom MiniMax".into(),
-                    program: program.to_string_lossy().into(),
-                    arguments: vec!["--profile".into(), "custom profile".into()],
-                }])
-                .unwrap(),
-            )
-            .unwrap();
-            let (resolved, arguments) = crate::agents::resolve(&home, "minimax").unwrap();
-            assert_eq!(resolved, program);
-            assert_eq!(arguments, ["--profile", "custom profile"]);
+            for id in ["minimax", "trae"] {
+                std::fs::write(
+                    home.join("agents.json"),
+                    serde_json::to_vec(&vec![crate::agents::AgentDefinition {
+                        id: id.into(),
+                        name: "Custom CLI".into(),
+                        program: program.to_string_lossy().into(),
+                        arguments: vec!["--profile".into(), "custom profile".into()],
+                    }])
+                    .unwrap(),
+                )
+                .unwrap();
+                let (resolved, arguments) = crate::agents::resolve(&home, id).unwrap();
+                assert_eq!(resolved, program);
+                assert_eq!(arguments, ["--profile", "custom profile"]);
+            }
             std::fs::remove_file(home.join("agents.json")).unwrap();
             return;
         }

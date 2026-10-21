@@ -306,6 +306,7 @@ test("real settings tabs, commands and panels render in both languages without u
           "minimax",
           "qwen",
           "copilot",
+          "trae",
         ].map((agent) => {
           const markup = renderToStaticMarkup(React.createElement(SessionIcon, { agent }));
           assert.match(markup, new RegExp(`agent-${agent}`));
@@ -313,7 +314,7 @@ test("real settings tabs, commands and panels render in both languages without u
           assert.doesNotMatch(markup, /icon-terminal|<image|<img/);
           return markup.match(/ d="([^"]+)"/)[1];
         });
-        assert.equal(new Set(marks).size, 8);
+        assert.equal(new Set(marks).size, 9);
         const iflow = renderToStaticMarkup(React.createElement(SessionIcon, { agent: "iflow" }));
         assert.match(iflow, /agent-iflow/);
         assert.match(iflow, /<img[^>]+src="[^\"]*iflow.png"/);
@@ -381,6 +382,7 @@ test("real settings tabs, commands and panels render in both languages without u
               "https://docs.github.com/en/copilot/how-tos/copilot-cli/set-up-copilot-cli/install-copilot-cli",
             ],
             ["iflow", "iFlow CLI", "@iflow-ai/iflow-cli", "https://docs.iflow.cn/cli/quickstart/"],
+            ["trae", "TRAE CLI", null, "https://docs.trae.cn/cli_get-started-with-trae-cli-2"],
             [
               "hermes",
               "Hermes",
@@ -409,11 +411,14 @@ test("real settings tabs, commands and panels render in both languages without u
             );
             assert.ok(section, name);
             assert.equal(section.querySelector('[role="switch"]').disabled, true);
-            assert.equal(section.querySelectorAll("button").length, id === "hermes" ? 3 : 4);
+            assert.equal(
+              section.querySelectorAll("button").length,
+              id === "trae" ? 2 : id === "hermes" ? 3 : 4,
+            );
             await act(async () => section.querySelector("button").click());
             await click(language === "en" ? "Official installation guide" : "官方安装说明");
             assert.equal(openedUrls.at(-1), url);
-            if (packageName || id === "hermes") {
+            if (packageName || id === "hermes" || id === "trae") {
               if (packageName)
                 assert.equal(
                   section.querySelector("code").textContent,
@@ -443,7 +448,7 @@ test("real settings tabs, commands and panels render in both languages without u
             );
             assert.equal(
               host.querySelectorAll("form input")[2].value,
-              id === "minimax" ? "mcode" : id,
+              id === "minimax" ? "mcode" : id === "trae" ? "traecli" : id,
             );
             if (id === "hermes") {
               await click(language === "en" ? "Hook setup guide" : "Hook 配置说明");
@@ -451,7 +456,7 @@ test("real settings tabs, commands and panels render in both languages without u
                 openedUrls.at(-1),
                 "https://hermes-agent.nousresearch.com/docs/user-guide/features/hooks/",
               );
-            } else {
+            } else if (id !== "trae") {
               for (const enabled of [true, false]) {
                 const label = enabled
                   ? language === "en"

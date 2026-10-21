@@ -40,6 +40,9 @@ Privacy & Security**. Windows uses its installation wizard. Downloads require Gi
 3. Right-click a session and choose **Group with …** to place sessions side by side. Open **Git** to
    review changes; existing Git Worktrees appear under their project.
 
+For TRAE CLI, open **Settings → Agent → TRAE CLI** to install and enable `traecli`, then sign in
+inside the CLI. See [TRAE CLI setup and limits](docs/features.md#trae-cli).
+
 Quitting detaches the window while local sessions keep running. Reopen to reconnect; **Close
 Session** terminates the selected process.
 
