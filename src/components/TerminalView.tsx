@@ -19,6 +19,7 @@ import type { AgentActivityEvent } from "../lib/terminal-frame";
 import { attachTerminalScrollInput } from "../lib/terminal-scroll";
 import { attachTerminalFit, createTerminalResizeQueue } from "../lib/terminal-resize";
 import { attachTerminalRenderer } from "../lib/terminal-renderer";
+import { attachTerminalAccessibilityLimit } from "../lib/terminal-accessibility";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import type { DragEventHandler, PointerEventHandler } from "react";
@@ -175,7 +176,7 @@ export function TerminalView({
       allowTransparency: true,
       disableStdin: true,
       cursorBlink: true,
-      screenReaderMode: true,
+      screenReaderMode: visible,
       allowProposedApi: true,
       fontSize: 14,
       fontFamily: '"Cascadia Code", "SFMono-Regular", Consolas, monospace',
@@ -253,6 +254,9 @@ export function TerminalView({
     });
     term.open(container.current);
     terminal.current = term;
+    const disposeAccessibility = attachTerminalAccessibilityLimit(container.current, () =>
+      tx("输出过多，请移动到各行以读取。"),
+    );
     const disposePunctuation = term.textarea
       ? attachTerminalPunctuationInput(
           term.textarea,
@@ -336,6 +340,7 @@ export function TerminalView({
       disposeScrollInput();
       resize.dispose();
       disposePunctuation();
+      disposeAccessibility();
       disposeRenderer.current?.();
       disposeRenderer.current = null;
       term.dispose();
@@ -367,7 +372,11 @@ export function TerminalView({
   }, [settings, light, uiLanguage]);
   useEffect(() => {
     const term = terminal.current;
-    if (!term || !visible) return;
+    if (!term) return;
+    // Hidden sessions still consume output, but must not measure accessibility rows.
+    // 隐藏会话仍消费输出，但不应测量无障碍文本行的布局。
+    term.options.screenReaderMode = visible;
+    if (!visible) return;
     // Reserve GPU contexts for visible panes, including every pane in a split group.
     // 仅为可见窗格保留 GPU 上下文，分组中的各个可见窗格均包含在内。
     const dispose = attachTerminalRenderer(term, () => new WebglAddon());

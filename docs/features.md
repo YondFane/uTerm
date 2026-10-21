@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-20
+updated: 2026-10-21
 ---
 
 # uTerm feature guide
@@ -2315,17 +2315,25 @@ updates the highlight without rebuilding the visible text nodes at every mouse m
 shortcuts and the optional Copy on selection setting retain their existing behavior.
 
 Only visible panes keep GPU contexts; grouped panes can each use one. Hiding a pane releases its
-context while preserving the session, scrollback and selection. Unsupported GPUs, initialization
-failures and context loss that cannot be restored fall back to DOM rendering automatically. This
-fallback can still slow down when selecting dense output.
+context while preserving the session, scrollback and selection. Hidden panes leave the page layout,
+pausing DOM rendering and screen-reader row measurements. They continue consuming and acknowledging
+output; showing them resumes rendering and the screen-reader text layer without restarting sessions.
+
+Unsupported GPUs, initialization failures and context loss that cannot be restored fall back to DOM
+rendering automatically. This fallback can still slow down when selecting dense output.
+
+Live screen-reader announcements retain at most 8,192 UTF-16 code units, including the overflow
+message. Older announcement text is discarded when applications redraw without line feeds. The
+readable terminal rows, scrollback, selection and input remain intact.
 
 #### Selection-rendering checks
 
-- On macOS, all 27 focused renderer, input, scrolling and resize regressions pass, alongside the
-  full frontend suite, backend and local-session-service tests, locked dependency installation,
-  repository formatting, localization, documentation, TypeScript, production build and desktop
-  compilation. The production build retains its large-chunk warning; optional/platform tests remain
-  skipped or ignored.
+- On macOS, all 28 focused accessibility, renderer, input, scrolling and resize regressions pass.
+  The full frontend suite passes (280 passed, ten optional/platform checks skipped), alongside
+  repository formatting, localization, TypeScript, the production build and desktop compilation. The
+  production build retains its large-chunk warning. Locked dependency installation, local-session
+  service tests and backend tests pass; the backend suite has 114 passes and nine opt-in checks
+  ignored.
 
 - An isolated native Tauri/WebKit app (`sh.uterm.desktop.qa.terminalselection`) uses the real
   terminal view and 600 rows of colored Chinese/English fixture output. Across 120 selection
@@ -2333,11 +2341,37 @@ fallback can still slow down when selecting dense output.
   GPU rendering; the longest measured frame falls from 66 ms to 18 ms. These fixture measurements do
   not guarantee the same frame timings on other hardware or live workloads.
 
-- Native mouse dragging shows multi-line selection highlights. Hiding/showing the pane retains
-  selected text and coordinates without starting another session. Injected context loss returns to
-  DOM rendering, retains selection and accepts more output; showing the pane again enables GPU
-  rendering. Clipboard shortcut routing remains covered by automated tests; native clipboard,
-  grouped-pane and live Agent acceptance, plus Windows/Linux runtime checks, remain pending.
+- Native mouse dragging shows multi-line selection highlights. Injected context loss returns to DOM
+  rendering, retains selection and accepts more output; showing the pane again enables GPU
+  rendering.
+
+- An isolated macOS Tauri/WebKit fixture (`sh.uterm.desktop.qa.selectionfreeze`) exercises eight
+  real terminal views, 300 simulated project entries and 180 frames of colored Chinese/English
+  output and selection updates. Pausing hidden views reduces the measured 95th-percentile frame time
+  from 233 ms to 20 ms and accessibility-row measurements from 10,416 to 126. These fixture timings
+  are hardware/load dependent and do not establish live Agent acceptance.
+
+- The same fixture verifies hidden-session replay and live output, with both frames acknowledged.
+  Hiding/showing preserves selected text and coordinates, restores the visible screen-reader layer
+  and keeps the start count at eight. Native mouse dragging and subsequent input remain responsive.
+
+- The installed macOS app (0.1.37) reproduces the whole-window stall when the existing Codex session
+  is scrolled and selected manually. During the confirmed stall, a three-second sample stays almost
+  entirely in WebKit's `characterIndexForPoint` / `previousCandidate` text traversal and CPU usage
+  approaches 100%; a window screenshot request also times out. This is separate from background
+  rendering overhead.
+
+- The accessibility regression covers repeated redraws without line feeds, Chinese/emoji boundaries,
+  retained readable rows and selection, replacing the accessibility layer and observer disposal. An
+  isolated native Tauri/WebKit fixture (`sh.uterm.desktop.qa.selectionhittest`) writes 8,000
+  cursor-based redraws without line feeds through the real terminal. Announcements remain bounded at
+  8,192 code units, retain the latest text and preserve all 43 readable row elements and the input
+  textarea.
+
+The announcement limit still needs acceptance in the installed app against the same live Codex
+session; the running installation was not replaced or restarted. Clipboard shortcut routing remains
+covered by automated tests; native clipboard, grouped-pane acceptance and Windows/Linux runtime
+checks remain pending.
 
 ### Content font shortcuts and session headers
 
