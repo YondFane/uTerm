@@ -124,10 +124,37 @@ the release skill requires merging its published commit into `main` and pushing 
 preserves both histories, excludes later unpublished commits and checks remote ancestry. Branch
 protection or unresolved conflicts leave synchronization explicitly incomplete.
 
+#### Build dependency caches
+
+PR/branch CI and stable-release jobs cache the pnpm store and Cargo dependencies, including compiled
+dependencies under both `src-tauri/target` and `crates/utermd-local/target`. Rust debug/test and
+release artifacts remain separate. Cargo cache keys account for the runner image, CPU architecture,
+Rust compiler, build environment and both workspaces' manifests/lockfiles; pnpm keys include the OS,
+architecture, pnpm major version and `pnpm-lock.yaml`.
+
+The `uTerm build cache` workflow runs after pushes to `main`, or manually with `main` selected. It
+checks out `release` and compiles test targets and the release desktop application without running
+tests or packaging installers on macOS ARM64, macOS Intel and Windows x64.
+
+This seeds caches in the default branch's scope for later version tags; GitHub does not share caches
+between different tags. Prewarming consumes additional CI runner time and does not sign or publish a
+release.
+
+Cache hits never skip frozen dependency installation, formatting, documentation checks, tests,
+source/tag validation, signing or public-download/update-feed checks. A missing or expired cache
+falls back to a normal build; first runs and compiler changes can still require cold compilation.
+
 #### Stable-release checks
 
-- Release preparation on macOS passes frozen dependency installation, 274 frontend/build-helper
-  tests (ten skipped), 113 backend tests (nine ignored) and 46 host tests (two native CLI tests
+- Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
+  formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).
+  Parsed workflow comparisons confirm that all existing CI/release checks, triggers and permissions
+  remain unchanged, and prewarming uses matching cache settings and release platforms. Remote cache
+  restore/save and timing improvements await a workflow run; Windows cache-path execution has not
+  been tested locally.
+
+- Release preparation on macOS passes frozen dependency installation, 284 frontend/build-helper
+  tests (ten skipped), 114 backend tests (nine ignored) and 46 host tests (two native CLI tests
   ignored). TypeScript/production build, desktop compilation, repository formatting, localization
   and documentation checks pass. This does not establish Windows/Linux runtime acceptance.
 
@@ -1786,6 +1813,31 @@ restarts.
   entries without closing existing sessions or removing its program, configuration or Hooks.
 
 - Saving failures remain visible and preserve the previous selection.
+
+### Finding and configuring Agents
+
+Settings → Agent and the standalone Agent panel provide a compact list with enable switches. Search
+by name, ID or program command, or filter to available or enabled Agents. Select an Agent to see its
+availability, program and applicable installation, configuration and Hooks actions in the detail
+area. Use Add agent to configure a custom program.
+
+Wide panels place the list and details side by side with separate scrolling. Narrow panels stack
+them vertically. Search and filters affect this view only; they do not change which Agents are
+enabled or close existing sessions.
+
+#### Layout checks and limits
+
+- Nineteen focused interface checks pass, including search, empty results, filter and switch
+  interaction, custom Agents, installation confirmation/errors and Hooks targets in both languages.
+  The complete frontend/build-helper suite passes 284 tests with ten optional/platform checks
+  skipped. Formatting, localization, TypeScript/production build and an isolated macOS desktop build
+  pass.
+
+- Native macOS QA (`sh.uterm.desktop.qa.agentlayout`) uses the real Agent settings with mock
+  availability and temporary preferences. Visual inspection covers wide and narrow containers,
+  Chinese/dark and English/light views, search and the configuration form. Native dropdown
+  selection, a complete keyboard-only flow, actual installation/Hook changes and Windows/Linux
+  runtime acceptance remain unverified. The installed application was not replaced or restarted.
 
 ### Usage and quota refresh
 

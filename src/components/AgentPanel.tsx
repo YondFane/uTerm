@@ -1,7 +1,7 @@
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx, getUiLanguage, localizeMessage } from "../lib/i18n";
 import { useSettings } from "../lib/SettingsContext";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AgentDefinition, RuntimeInfo } from "../lib/desktop";
@@ -69,6 +69,10 @@ export function AgentSettings({
 
   const { settings, save: saveSettings } = useSettings();
   const [definitions, setDefinitions] = useState(runtime.agent_definitions);
+  const [selected, setSelected] = useState(() => runtime.agents[0] ?? "claude");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const detailId = useId();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AgentDefinition | null>(null);
   const [argumentsText, setArgumentsText] = useState("[]");
@@ -98,6 +102,20 @@ export function AgentSettings({
       ...definitions.map((item) => item.id),
     ]),
   ];
+  const name = (id: string) =>
+    definitions.find((item) => item.id === id)?.name ?? agentNames[id] ?? id;
+  const visibleIds = ids.filter((id) => {
+    const definition = definitions.find((item) => item.id === id);
+    const search = query.trim().toLowerCase();
+    return (
+      `${name(id)} ${id} ${definition?.program ?? agentInstallers[id]?.program ?? id}`
+        .toLowerCase()
+        .includes(search) &&
+      (filter !== "available" || runtime.agents.includes(id)) &&
+      (filter !== "enabled" || settings.enabledAgents.includes(id))
+    );
+  });
+  const activeId = visibleIds.includes(selected) ? selected : visibleIds[0];
   async function perform(action: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -135,25 +153,68 @@ export function AgentSettings({
         </p>
       )}
       {notice && <p role="status">{localizeMessage(notice)}</p>}
+      <div className="agent-catalog-toolbar">
+        <input
+          type="search"
+          aria-label={tx("搜索 Agent")}
+          placeholder={tx("搜索 Agent")}
+          value={query}
+          disabled={busy}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        <select
+          aria-label={tx("筛选 Agent")}
+          value={filter}
+          disabled={busy}
+          onChange={(event) => setFilter(event.target.value)}
+        >
+          <option value="all">{tx("全部 Agent")}</option>
+          <option value="available">{tx("可用")}</option>
+          <option value="enabled">{tx("已启用")}</option>
+        </select>
+        <button
+          disabled={busy}
+          onClick={() => {
+            setCreating(true);
+            setEditing({ id: "", name: "", program: "", arguments: [] });
+            setArgumentsText("[]");
+          }}
+        >
+          {tx("添加 Agent")}
+        </button>
+      </div>
       <div className="agent-catalog">
-        {ids.map((id) => {
-          const definition = definitions.find((item) => item.id === id);
-          const installer = agentInstallers[id];
-          const program = installer?.program ?? id;
-          const automatic =
-            (installer?.package || installer?.script) &&
-            (!definition || definition.program === program);
-          return (
-            <section key={id} className="agent-definition">
-              <header>
-                <SessionIcon agent={id} />
-                <strong>{definition?.name ?? agentNames[id] ?? id}</strong>
-                <span>{runtime.agents.includes(id) ? tx("可用") : tx("未找到程序")}</span>
+        <div className="agent-list" role="group" aria-label={tx("Agent 列表")}>
+          {visibleIds.map((id) => {
+            const available = runtime.agents.includes(id);
+            return (
+              <div key={id} className="agent-list-row" data-selected={activeId === id}>
+                <button
+                  className="agent-select"
+                  aria-pressed={activeId === id}
+                  aria-controls={detailId}
+                  disabled={busy}
+                  onClick={() => {
+                    setSelected(id);
+                    setEditing(null);
+                    setInstallTarget(null);
+                  }}
+                >
+                  <SessionIcon agent={id} />
+                  <span className="agent-list-name">{name(id)}</span>
+                  <span
+                    className="agent-availability"
+                    data-available={available}
+                    role="img"
+                    aria-label={available ? tx("可用") : tx("未找到程序")}
+                    title={available ? tx("可用") : tx("未找到程序")}
+                  />
+                </button>
                 <input
                   className="agent-enable"
                   type="checkbox"
                   role="switch"
-                  aria-label={tx("启用 {p0}", { p0: definition?.name ?? agentNames[id] ?? id })}
+                  aria-label={tx("启用 {p0}", { p0: name(id) })}
                   title={tx("启用后显示新建入口")}
                   checked={settings.enabledAgents.includes(id)}
                   disabled={
@@ -174,215 +235,229 @@ export function AgentSettings({
                     });
                   }}
                 />
-              </header>
-              <div className="agent-buttons">
-                {!runtime.agents.includes(id) && (
-                  <button disabled={busy} onClick={() => setInstallTarget(id)}>
-                    {tx("安装程序")}
-                  </button>
-                )}
-                <button
-                  disabled={busy}
-                  onClick={() => {
-                    setCreating(false);
-                    setEditing(
-                      definition ?? { id, name: agentNames[id] ?? id, program, arguments: [] },
-                    );
-                    setArgumentsText(JSON.stringify(definition?.arguments ?? []));
-                  }}
-                >
-                  {tx("配置")}
-                </button>
-                {agentHookAgents.includes(id) && (
-                  <>
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        void perform(async () => {
-                          setNotice(
-                            await invoke<string>("agent_hooks", { agent: id, enabled: true }),
-                          );
-                        })
-                      }
-                    >
-                      {tx("安装 Hooks")}
-                    </button>
-                    <button
-                      disabled={busy}
-                      onClick={() =>
-                        void perform(async () => {
-                          setNotice(
-                            await invoke<string>("agent_hooks", { agent: id, enabled: false }),
-                          );
-                        })
-                      }
-                    >
-                      {tx("移除 Hooks")}
-                    </button>
-                  </>
-                )}
-                {installer?.hookGuide && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void perform(async () => {
-                        await invoke("open_external", { url: installer.hookGuide });
-                      })
-                    }
-                  >
-                    {tx("Hook 配置说明")}
-                  </button>
-                )}
-                {definition && (
-                  <button
-                    disabled={busy}
-                    onClick={() =>
-                      void perform(() => save(definitions.filter((item) => item.id !== id)))
-                    }
-                  >
-                    {agentNames[id] ? tx("恢复默认") : tx("移除配置")}
-                  </button>
-                )}
               </div>
-              {id === "hermes" && (
-                <p className="muted">{tx("Hermes Hook 需按官方说明手动配置。")}</p>
-              )}
-              {installTarget === id && (
-                <div className="agent-editor">
-                  <p>
-                    {automatic
-                      ? installer.script
-                        ? tx("将运行官方安装脚本，下载程序及所需依赖，不会自动提权或配置登录。")
-                        : tx("将通过 npm 全局安装程序，需要 Node.js 和网络连接，不会自动提权。")
-                      : tx("请按发布方说明安装程序，再配置可执行文件路径。")}
-                  </p>
-                  {automatic && installer.package && (
-                    <code>{`npm install -g ${installer.package}${installer.npmArgs?.length ? " " + installer.npmArgs.join(" ") : ""}`}</code>
+            );
+          })}
+          {!visibleIds.length && <p className="muted">{tx("没有匹配的条目。")}</p>}
+        </div>
+        <div className="agent-detail" id={detailId}>
+          {(activeId ? [activeId] : []).map((id) => {
+            const definition = definitions.find((item) => item.id === id);
+            const installer = agentInstallers[id];
+            const program = installer?.program ?? id;
+            const automatic =
+              (installer?.package || installer?.script) &&
+              (!definition || definition.program === program);
+            return (
+              <section key={id} className="agent-definition">
+                <header>
+                  <SessionIcon agent={id} />
+                  <strong>{definition?.name ?? agentNames[id] ?? id}</strong>
+                  <span>{runtime.agents.includes(id) ? tx("可用") : tx("未找到程序")}</span>
+                </header>
+                <code className="agent-program">{definition?.program ?? program}</code>
+                <div className="agent-buttons">
+                  {!runtime.agents.includes(id) && (
+                    <button disabled={busy} onClick={() => setInstallTarget(id)}>
+                      {tx("安装程序")}
+                    </button>
                   )}
-                  <div className="agent-buttons">
-                    {automatic && (
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setCreating(false);
+                      setEditing(
+                        definition ?? { id, name: agentNames[id] ?? id, program, arguments: [] },
+                      );
+                      setArgumentsText(JSON.stringify(definition?.arguments ?? []));
+                    }}
+                  >
+                    {tx("配置")}
+                  </button>
+                  {agentHookAgents.includes(id) && (
+                    <>
                       <button
                         disabled={busy}
                         onClick={() =>
                           void perform(async () => {
-                            setInstalling(id);
-                            try {
-                              const available = await invoke<boolean>("install_agent", {
-                                agent: id,
-                              });
-                              setNotice(
-                                available
-                                  ? tx("安装完成，程序已可用。")
-                                  : tx(
-                                      "安装命令已完成，但未找到程序。请配置程序路径或重启 uTerm 后重新检测。",
-                                    ),
-                              );
-                              await reload();
-                            } finally {
-                              setInstalling(null);
-                            }
+                            setNotice(
+                              await invoke<string>("agent_hooks", { agent: id, enabled: true }),
+                            );
                           })
                         }
                       >
-                        {installing === id ? tx("正在安装…") : tx("确认安装")}
+                        {tx("安装 Hooks")}
                       </button>
-                    )}
-                    {installer && (
                       <button
                         disabled={busy}
                         onClick={() =>
                           void perform(async () => {
-                            await invoke("open_external", { url: installer.url });
+                            setNotice(
+                              await invoke<string>("agent_hooks", { agent: id, enabled: false }),
+                            );
                           })
                         }
                       >
-                        {tx("官方安装说明")}
+                        {tx("移除 Hooks")}
                       </button>
-                    )}
-                    <button disabled={busy} onClick={() => void perform(reload)}>
-                      {tx("重新检测")}
+                    </>
+                  )}
+                  {installer?.hookGuide && (
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void perform(async () => {
+                          await invoke("open_external", { url: installer.hookGuide });
+                        })
+                      }
+                    >
+                      {tx("Hook 配置说明")}
                     </button>
-                    <button disabled={busy} onClick={() => setInstallTarget(null)}>
-                      {tx("取消")}
+                  )}
+                  {definition && (
+                    <button
+                      disabled={busy}
+                      onClick={() =>
+                        void perform(() => save(definitions.filter((item) => item.id !== id)))
+                      }
+                    >
+                      {agentNames[id] ? tx("恢复默认") : tx("移除配置")}
                     </button>
-                  </div>
+                  )}
                 </div>
-              )}
-            </section>
-          );
-        })}
+                {id === "hermes" && (
+                  <p className="muted">{tx("Hermes Hook 需按官方说明手动配置。")}</p>
+                )}
+                {installTarget === id && (
+                  <div className="agent-editor">
+                    <p>
+                      {automatic
+                        ? installer.script
+                          ? tx("将运行官方安装脚本，下载程序及所需依赖，不会自动提权或配置登录。")
+                          : tx("将通过 npm 全局安装程序，需要 Node.js 和网络连接，不会自动提权。")
+                        : tx("请按发布方说明安装程序，再配置可执行文件路径。")}
+                    </p>
+                    {automatic && installer.package && (
+                      <code>{`npm install -g ${installer.package}${installer.npmArgs?.length ? " " + installer.npmArgs.join(" ") : ""}`}</code>
+                    )}
+                    <div className="agent-buttons">
+                      {automatic && (
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void perform(async () => {
+                              setInstalling(id);
+                              try {
+                                const available = await invoke<boolean>("install_agent", {
+                                  agent: id,
+                                });
+                                setNotice(
+                                  available
+                                    ? tx("安装完成，程序已可用。")
+                                    : tx(
+                                        "安装命令已完成，但未找到程序。请配置程序路径或重启 uTerm 后重新检测。",
+                                      ),
+                                );
+                                await reload();
+                              } finally {
+                                setInstalling(null);
+                              }
+                            })
+                          }
+                        >
+                          {installing === id ? tx("正在安装…") : tx("确认安装")}
+                        </button>
+                      )}
+                      {installer && (
+                        <button
+                          disabled={busy}
+                          onClick={() =>
+                            void perform(async () => {
+                              await invoke("open_external", { url: installer.url });
+                            })
+                          }
+                        >
+                          {tx("官方安装说明")}
+                        </button>
+                      )}
+                      <button disabled={busy} onClick={() => void perform(reload)}>
+                        {tx("重新检测")}
+                      </button>
+                      <button disabled={busy} onClick={() => setInstallTarget(null)}>
+                        {tx("取消")}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </section>
+            );
+          })}
+          {editing && (creating || editing.id === activeId) && (
+            <form
+              className="agent-editor"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void perform(async () => {
+                  if (creating && ids.includes(editing.id))
+                    throw new Error(tx("Agent 标识已存在，请使用其他标识。"));
+                  const argumentsValue: unknown = JSON.parse(argumentsText);
+                  if (
+                    !Array.isArray(argumentsValue) ||
+                    !argumentsValue.every((value) => typeof value === "string")
+                  )
+                    throw new Error(tx('参数应为字符串数组，例如 ["--model", "模型名"]。'));
+                  const next = { ...editing, arguments: argumentsValue as string[] };
+                  await save([...definitions.filter((item) => item.id !== next.id), next]);
+                  setSelected(next.id);
+                  setQuery("");
+                  setFilter("all");
+                  setEditing(null);
+                });
+              }}
+            >
+              <label>
+                {tx("标识")}
+                <input
+                  required
+                  value={editing.id}
+                  disabled={!creating}
+                  pattern="[a-zA-Z0-9_-]{1,80}"
+                  onChange={(event) => setEditing({ ...editing, id: event.target.value })}
+                />
+              </label>
+              <label>
+                {tx("名称")}
+                <input
+                  required
+                  value={editing.name}
+                  onChange={(event) => setEditing({ ...editing, name: event.target.value })}
+                />
+              </label>
+              <label>
+                {tx("程序路径或命令")}
+                <input
+                  required
+                  value={editing.program}
+                  onChange={(event) => setEditing({ ...editing, program: event.target.value })}
+                />
+              </label>
+              <label>
+                {tx("参数（JSON 数组）")}
+                <input
+                  value={argumentsText}
+                  onChange={(event) => setArgumentsText(event.target.value)}
+                />
+              </label>
+              <div>
+                <button type="button" onClick={() => setEditing(null)}>
+                  {tx("取消")}
+                </button>
+                <button disabled={busy}>{tx("保存")}</button>
+              </div>
+            </form>
+          )}
+        </div>
       </div>
-      <button
-        disabled={busy}
-        onClick={() => {
-          setCreating(true);
-          setEditing({ id: "", name: "", program: "", arguments: [] });
-          setArgumentsText("[]");
-        }}
-      >
-        {tx("添加 Agent")}
-      </button>
-      {editing && (
-        <form
-          className="agent-editor"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void perform(async () => {
-              if (creating && ids.includes(editing.id))
-                throw new Error(tx("Agent 标识已存在，请使用其他标识。"));
-              const argumentsValue: unknown = JSON.parse(argumentsText);
-              if (
-                !Array.isArray(argumentsValue) ||
-                !argumentsValue.every((value) => typeof value === "string")
-              )
-                throw new Error(tx('参数应为字符串数组，例如 ["--model", "模型名"]。'));
-              const next = { ...editing, arguments: argumentsValue as string[] };
-              await save([...definitions.filter((item) => item.id !== next.id), next]);
-              setEditing(null);
-            });
-          }}
-        >
-          <label>
-            {tx("标识")}
-            <input
-              required
-              value={editing.id}
-              disabled={!creating}
-              pattern="[a-zA-Z0-9_-]{1,80}"
-              onChange={(event) => setEditing({ ...editing, id: event.target.value })}
-            />
-          </label>
-          <label>
-            {tx("名称")}
-            <input
-              required
-              value={editing.name}
-              onChange={(event) => setEditing({ ...editing, name: event.target.value })}
-            />
-          </label>
-          <label>
-            {tx("程序路径或命令")}
-            <input
-              required
-              value={editing.program}
-              onChange={(event) => setEditing({ ...editing, program: event.target.value })}
-            />
-          </label>
-          <label>
-            {tx("参数（JSON 数组）")}
-            <input
-              value={argumentsText}
-              onChange={(event) => setArgumentsText(event.target.value)}
-            />
-          </label>
-          <div>
-            <button type="button" onClick={() => setEditing(null)}>
-              {tx("取消")}
-            </button>
-            <button disabled={busy}>{tx("保存")}</button>
-          </div>
-        </form>
-      )}
       <label className="notification-toggle">
         <input
           type="checkbox"

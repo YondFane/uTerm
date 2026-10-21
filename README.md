@@ -40,6 +40,9 @@ Privacy & Security**. Windows uses its installation wizard. Downloads require Gi
 3. Right-click a session and choose **Group with …** to place sessions side by side. Open **Git** to
    review changes; existing Git Worktrees appear under their project.
 
+In **Settings → Agent**, search or filter the compact list, then select an Agent to install or
+configure it and manage Hooks. Narrow panels place the details below the list.
+
 For TRAE CLI, open **Settings → Agent → TRAE CLI** to install and enable `traecli`, then sign in
 inside the CLI. See [TRAE CLI setup and limits](docs/features.md#trae-cli).
 
@@ -140,3 +143,7 @@ Setup, commands, database component development, validation and release instruct
 
 Use an editor with EditorConfig support and the project's Prettier/rustfmt. Run `pnpm format` and
 `pnpm format:check` before committing; macOS and Windows CI check repository formatting.
+
+CI caches pnpm and Cargo dependencies; pushes to `main` prewarm caches from `release` for later
+version tags. See [CI dependency caches](docs/development.md#ci-dependency-caches) for manual runs
+and limits.

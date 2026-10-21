@@ -36,6 +36,9 @@ macOS 安装包未经 Apple 公证，首次打开可能需要在**系统设置 �
 3. 右键会话，选择**与…分组**，并排显示会话。打开 **Git** 查看修改；已有 Git
    Worktree 会显示在所属项目下。
 
+在**设置 → Agent**
+中搜索或筛选紧凑列表，再选择 Agent 安装、配置程序或管理 Hooks。窄面板将详情放在列表下方。
+
 使用 TRAE CLI 时，打开**设置 → Agent → TRAE CLI**，安装并启用
 `traecli`，再在 CLI 内登录。配置与限制见[TRAE CLI 功能说明](docs/features.zh-CN.md#trae-cli)。
 
@@ -115,3 +118,6 @@ uTerm 是采用 [PolyForm Noncommercial License 1.0.0](LICENSE)
 
 使用支持 EditorConfig 的编辑器及项目的 Prettier／rustfmt。提交前运行 `pnpm format` 和
 `pnpm format:check`；macOS、Windows CI 会检查全仓格式。
+
+CI 缓存 pnpm 和 Cargo 依赖；推送 `main` 后从 `release`
+为后续版本标签预热缓存。手动运行方式及限制见[CI 依赖缓存](docs/development.zh-CN.md#ci-依赖缓存)。
