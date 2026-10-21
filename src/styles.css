@@ -227,13 +227,15 @@ select:focus-visible {
 .session-panel {
   position: absolute;
   padding: 10px;
-  visibility: hidden;
+  /* Remove hidden panes from layout so xterm pauses their DOM renderer.
+     将隐藏窗格移出布局，让 xterm 暂停其 DOM 渲染器。 */
+  display: none;
   pointer-events: none;
   border: 1px solid var(--ui-border);
   overflow: hidden;
 }
 .session-panel.visible {
-  visibility: visible;
+  display: flex;
   pointer-events: auto;
 }
 .session-controls {
