@@ -1814,6 +1814,31 @@ restarts.
 
 - Saving failures remain visible and preserve the previous selection.
 
+### Finding and configuring Agents
+
+Settings → Agent and the standalone Agent panel provide a compact list with enable switches. Search
+by name, ID or program command, or filter to available or enabled Agents. Select an Agent to see its
+availability, program and applicable installation, configuration and Hooks actions in the detail
+area. Use Add agent to configure a custom program.
+
+Wide panels place the list and details side by side with separate scrolling. Narrow panels stack
+them vertically. Search and filters affect this view only; they do not change which Agents are
+enabled or close existing sessions.
+
+#### Layout checks and limits
+
+- Nineteen focused interface checks pass, including search, empty results, filter and switch
+  interaction, custom Agents, installation confirmation/errors and Hooks targets in both languages.
+  The complete frontend/build-helper suite passes 284 tests with ten optional/platform checks
+  skipped. Formatting, localization, TypeScript/production build and an isolated macOS desktop build
+  pass.
+
+- Native macOS QA (`sh.uterm.desktop.qa.agentlayout`) uses the real Agent settings with mock
+  availability and temporary preferences. Visual inspection covers wide and narrow containers,
+  Chinese/dark and English/light views, search and the configuration form. Native dropdown
+  selection, a complete keyboard-only flow, actual installation/Hook changes and Windows/Linux
+  runtime acceptance remain unverified. The installed application was not replaced or restarted.
+
 ### Usage and quota refresh
 
 Settings → Usage provides separate Claude, Codex, Kimi and Grok tabs. Opening Usage immediately

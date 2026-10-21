@@ -327,6 +327,58 @@ test("real settings tabs, commands and panels render in both languages without u
       },
     );
     await context.test(
+      "Agent catalog searches names and commands and filters availability and enabled entries",
+      async () => {
+        for (const language of ["en", "zh-Hans"]) {
+          await mount(
+            React.createElement(AgentSettings, { runtime, reload: async () => {} }),
+            language,
+          );
+          assert.equal(host.querySelectorAll(".agent-definition").length, 1);
+          assert.equal(host.querySelector(".agent-definition strong").textContent, "Codex");
+          const search = host.querySelector('input[type="search"]');
+          const filter = host.querySelector(".agent-catalog-toolbar select");
+          const rows = () =>
+            [...host.querySelectorAll(".agent-list-name")].map((node) => node.textContent);
+          const change = async (element, value) => {
+            const prototype =
+              element.tagName === "INPUT"
+                ? dom.window.HTMLInputElement.prototype
+                : dom.window.HTMLSelectElement.prototype;
+            await act(async () => {
+              Object.getOwnPropertyDescriptor(prototype, "value").set.call(element, value);
+              element.dispatchEvent(
+                new dom.window.Event(element.tagName === "INPUT" ? "input" : "change", {
+                  bubbles: true,
+                }),
+              );
+            });
+          };
+          await change(search, " MCODE ");
+          assert.deepEqual(rows(), ["MiniMax"]);
+          assert.equal(host.querySelector(".agent-definition strong").textContent, "MiniMax");
+          await change(search, "missing-agent");
+          assert.deepEqual(rows(), []);
+          assert.equal(host.querySelector(".agent-definition"), null);
+          assert.match(host.textContent, language === "en" ? /No matching items/ : /没有匹配/);
+          await change(search, "");
+          await change(filter, "available");
+          assert.deepEqual(rows(), ["Codex"]);
+          await change(filter, "enabled");
+          assert.deepEqual(rows(), []);
+          await change(filter, "all");
+          await act(async () =>
+            host.querySelector('input[role="switch"][aria-label$=" Codex"]').click(),
+          );
+          await change(filter, "enabled");
+          assert.deepEqual(rows(), ["Codex"]);
+          await act(async () => host.querySelector('input[role="switch"]').click());
+          assert.deepEqual(rows(), []);
+          if (language === "en") assertEnglish();
+        }
+      },
+    );
+    await context.test(
       "agent installation requires confirmation, reports failures and refreshes",
       async () => {
         for (const language of ["en", "zh-Hans"]) {
@@ -340,9 +392,8 @@ test("real settings tabs, commands and panels render in both languages without u
             }),
             language,
           );
-          const section = [...host.querySelectorAll(".agent-definition")].find(
-            (el) => el.querySelector("strong").textContent === "OpenCode",
-          );
+          await click("OpenCode");
+          const section = host.querySelector(".agent-definition");
           assert.ok(section);
           const before = calls.filter((cmd) => cmd === "install_agent").length;
           await act(async () => section.querySelector("button").click());
@@ -406,11 +457,15 @@ test("real settings tabs, commands and panels render in both languages without u
               }),
               language,
             );
-            const section = [...host.querySelectorAll(".agent-definition")].find(
-              (element) => element.querySelector("strong").textContent === name,
-            );
+            await click(name);
+            const section = host.querySelector(".agent-definition");
             assert.ok(section, name);
-            assert.equal(section.querySelector('[role="switch"]').disabled, true);
+            assert.equal(
+              host.querySelector(
+                `input[aria-label="${language === "en" ? "Enable" : "启用"} ${name}"]`,
+              ).disabled,
+              true,
+            );
             assert.equal(
               section.querySelectorAll("button").length,
               id === "trae" ? 2 : id === "hermes" ? 3 : 4,
@@ -421,7 +476,7 @@ test("real settings tabs, commands and panels render in both languages without u
             if (packageName || id === "hermes" || id === "trae") {
               if (packageName)
                 assert.equal(
-                  section.querySelector("code").textContent,
+                  section.querySelector(".agent-editor code").textContent,
                   `npm install -g ${packageName}${id === "minimax" ? " --ignore-scripts=false --include=optional --allow-scripts=@minimax-ai/code,better-sqlite3" : ""}`,
                 );
               else
@@ -433,7 +488,7 @@ test("real settings tabs, commands and panels render in both languages without u
               assert.equal(installedAgent, id);
               assert.equal(reloads, 1);
             } else {
-              assert.equal(section.querySelector("code"), null);
+              assert.equal(section.querySelector(".agent-editor code"), null);
               assert.equal(
                 [...section.querySelectorAll("button")].some((button) =>
                   ["Confirm installation", "确认安装"].includes(button.textContent),
@@ -491,9 +546,8 @@ test("real settings tabs, commands and panels render in both languages without u
           }),
           "en",
         );
-        const section = [...host.querySelectorAll(".agent-definition")].find(
-          (element) => element.querySelector("strong").textContent === `Custom ${id}`,
-        );
+        await click(`Custom ${id}`);
+        const section = host.querySelector(".agent-definition");
         assert.ok(
           [...section.querySelectorAll("button")].some(
             (button) => button.textContent === "Remove configuration",
