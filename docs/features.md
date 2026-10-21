@@ -147,14 +147,14 @@ falls back to a normal build; first runs and compiler changes can still require 
 #### Stable-release checks
 
 - Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
-  formatting, documentation metadata/index checks and 283 frontend/build-helper tests (ten skipped).
+  formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).
   Parsed workflow comparisons confirm that all existing CI/release checks, triggers and permissions
   remain unchanged, and prewarming uses matching cache settings and release platforms. Remote cache
   restore/save and timing improvements await a workflow run; Windows cache-path execution has not
   been tested locally.
 
-- Release preparation on macOS passes frozen dependency installation, 274 frontend/build-helper
-  tests (ten skipped), 113 backend tests (nine ignored) and 46 host tests (two native CLI tests
+- Release preparation on macOS passes frozen dependency installation, 284 frontend/build-helper
+  tests (ten skipped), 114 backend tests (nine ignored) and 46 host tests (two native CLI tests
   ignored). TypeScript/production build, desktop compilation, repository formatting, localization
   and documentation checks pass. This does not establish Windows/Linux runtime acceptance.
 
