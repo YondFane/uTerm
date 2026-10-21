@@ -1142,6 +1142,11 @@ export const messages: Record<string, string> = {
   "高亮仅保存在本机，不修改 PDF。文件内容变化后单独记录。":
     "Highlights are stored locally without modifying the PDF. Changed files have separate records.",
   "关闭 Agent 设置": "Close agent settings",
+  "搜索 Agent": "Search agents",
+  "筛选 Agent": "Filter agents",
+  "全部 Agent": "All agents",
+  "Agent 列表": "Agent list",
+  已启用: "Enabled",
   可用: "Available",
   未找到程序: "Program not found",
   配置: "Configure",

@@ -40,6 +40,9 @@ Privacy & Security**. Windows uses its installation wizard. Downloads require Gi
 3. Right-click a session and choose **Group with …** to place sessions side by side. Open **Git** to
    review changes; existing Git Worktrees appear under their project.
 
+In **Settings → Agent**, search or filter the compact list, then select an Agent to install or
+configure it and manage Hooks. Narrow panels place the details below the list.
+
 For TRAE CLI, open **Settings → Agent → TRAE CLI** to install and enable `traecli`, then sign in
 inside the CLI. See [TRAE CLI setup and limits](docs/features.md#trae-cli).
 
