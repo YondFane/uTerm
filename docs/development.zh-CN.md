@@ -3,7 +3,7 @@ title: uTerm 开发指南
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-10-19
+updated: 2026-10-21
 ---
 
 # uTerm 开发指南
@@ -56,6 +56,17 @@ pnpm uterm:dev
 
 PR／分支工作流及稳定版构建均在各自的 macOS、Windows 任务中，锁定依赖安装后运行
 `pnpm format:check`。格式错误会在测试及桌面编译前使任务失败。
+
+### CI 依赖缓存
+
+PR／分支及稳定版工作流缓存 pnpm 存储和两个 Cargo
+target 目录，不跳过任何现有检查。Cargo 依赖按运行器镜像、架构及编译器／构建输入区分；pnpm 依赖以操作系统、架构、pnpm 主版本和锁文件为键。
+
+`.github/workflows/uterm-cache.yml` 在推送 `main` 后，从 `release`
+为三个发布平台预热调试／测试及发布依赖。手动预热时，打开 Actions → uTerm build cache → Run
+workflow，选择 `main`。工作流仅使用仓库只读权限，不执行测试、不创建安装器，也不需要签名密钥。
+
+它额外消耗运行器时间，让后续版本标签能够读取默认分支缓存，避开 GitHub 的标签隔离限制。缓存限制与验证状态见[功能指南](features.zh-CN.md#构建依赖缓存)。
 
 ## 数据库组件开发
 

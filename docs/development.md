@@ -3,7 +3,7 @@ title: uTerm development guide
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-10-19
+updated: 2026-10-21
 ---
 
 # uTerm development guide
@@ -63,6 +63,22 @@ changed Markdown separately as described in the [documentation writing rules](wr
 Both the PR/branch workflow and stable-release builds run `pnpm format:check` after frozen
 dependency installation on their macOS and Windows jobs. Formatting errors fail the job before tests
 and desktop compilation.
+
+### CI dependency caches
+
+The PR/branch and stable-release workflows cache the pnpm store and both Cargo target directories
+without skipping any existing checks. Cargo dependencies are separated by runner image, architecture
+and compiler/build inputs; pnpm dependencies are keyed by OS, architecture, pnpm major version and
+the lockfile.
+
+`.github/workflows/uterm-cache.yml` prewarms debug/test and release dependencies from `release` on
+all three release platforms after `main` is pushed. To prewarm manually, open Actions → uTerm build
+cache → Run workflow and select `main`. The workflow uses read-only repository permissions, runs no
+tests, creates no installers and needs no signing secrets.
+
+It consumes additional runner time so subsequent version tags can restore default-branch caches
+despite GitHub's tag isolation. See the [feature guide](features.md#build-dependency-caches) for
+cache limits and validation status.
 
 ## Database component development
 
