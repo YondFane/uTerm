@@ -70,10 +70,28 @@ jobs:
         with:
           node-version: 24
       - run: npm install --global pnpm@11.22.0
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ runner.arch }}-11-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-${{ runner.arch }}-11-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust }}
           components: rustfmt
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: desktop-${{ matrix.os }}-${{ runner.arch }}
+          workspaces: |
+            src-tauri -> target
+            crates/utermd-local -> target
+          cache-bin: false
       - run: pnpm install --frozen-lockfile
       - name: Check formatting
         run: pnpm format:check

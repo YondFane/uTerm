@@ -140,3 +140,7 @@ Setup, commands, database component development, validation and release instruct
 
 Use an editor with EditorConfig support and the project's Prettier/rustfmt. Run `pnpm format` and
 `pnpm format:check` before committing; macOS and Windows CI check repository formatting.
+
+CI caches pnpm and Cargo dependencies; pushes to `main` prewarm caches from `release` for later
+version tags. See [CI dependency caches](docs/development.md#ci-dependency-caches) for manual runs
+and limits.

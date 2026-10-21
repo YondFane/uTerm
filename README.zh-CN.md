@@ -115,3 +115,6 @@ uTerm 是采用 [PolyForm Noncommercial License 1.0.0](LICENSE)
 
 使用支持 EditorConfig 的编辑器及项目的 Prettier／rustfmt。提交前运行 `pnpm format` 和
 `pnpm format:check`；macOS、Windows CI 会检查全仓格式。
+
+CI 缓存 pnpm 和 Cargo 依赖；推送 `main` 后从 `release`
+为后续版本标签预热缓存。手动运行方式及限制见[CI 依赖缓存](docs/development.zh-CN.md#ci-依赖缓存)。

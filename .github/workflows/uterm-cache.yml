@@ -1,0 +1,73 @@
+name: uTerm build cache
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: uterm-build-cache
+  cancel-in-progress: true
+
+jobs:
+  warm-cache:
+    if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            rust: aarch64-apple-darwin
+          - os: macos-15-intel
+            rust: x86_64-apple-darwin
+          - os: windows-latest
+            rust: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    steps:
+      # Seed default-branch caches from release so subsequent version tags can restore them.
+      # 从 release 预热默认分支缓存，供后续版本标签恢复。
+      - uses: actions/checkout@v7
+        with:
+          ref: release
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --global pnpm@11.22.0
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ runner.arch }}-11-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-${{ runner.arch }}-11-
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust }}
+          components: rustfmt
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: desktop-${{ matrix.os }}-${{ runner.arch }}
+          workspaces: |
+            src-tauri -> target
+            crates/utermd-local -> target
+          cache-bin: false
+      - run: pnpm install --frozen-lockfile
+      - name: Compile host test dependencies
+        run: cargo test --manifest-path crates/utermd-local/Cargo.toml --locked --no-run
+      - name: Compile desktop test dependencies
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked --no-run
+      - name: Compile release dependencies without packaging
+        run: |
+          node node_modules/@tauri-apps/cli/tauri.js build --ci --no-bundle \
+            --target '${{ matrix.rust }}' -- --locked

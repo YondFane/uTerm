@@ -124,7 +124,34 @@ the release skill requires merging its published commit into `main` and pushing 
 preserves both histories, excludes later unpublished commits and checks remote ancestry. Branch
 protection or unresolved conflicts leave synchronization explicitly incomplete.
 
+#### Build dependency caches
+
+PR/branch CI and stable-release jobs cache the pnpm store and Cargo dependencies, including compiled
+dependencies under both `src-tauri/target` and `crates/utermd-local/target`. Rust debug/test and
+release artifacts remain separate. Cargo cache keys account for the runner image, CPU architecture,
+Rust compiler, build environment and both workspaces' manifests/lockfiles; pnpm keys include the OS,
+architecture, pnpm major version and `pnpm-lock.yaml`.
+
+The `uTerm build cache` workflow runs after pushes to `main`, or manually with `main` selected. It
+checks out `release` and compiles test targets and the release desktop application without running
+tests or packaging installers on macOS ARM64, macOS Intel and Windows x64.
+
+This seeds caches in the default branch's scope for later version tags; GitHub does not share caches
+between different tags. Prewarming consumes additional CI runner time and does not sign or publish a
+release.
+
+Cache hits never skip frozen dependency installation, formatting, documentation checks, tests,
+source/tag validation, signing or public-download/update-feed checks. A missing or expired cache
+falls back to a normal build; first runs and compiler changes can still require cold compilation.
+
 #### Stable-release checks
+
+- Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
+  formatting, documentation metadata/index checks and 283 frontend/build-helper tests (ten skipped).
+  Parsed workflow comparisons confirm that all existing CI/release checks, triggers and permissions
+  remain unchanged, and prewarming uses matching cache settings and release platforms. Remote cache
+  restore/save and timing improvements await a workflow run; Windows cache-path execution has not
+  been tested locally.
 
 - Release preparation on macOS passes frozen dependency installation, 274 frontend/build-helper
   tests (ten skipped), 113 backend tests (nine ignored) and 46 host tests (two native CLI tests
