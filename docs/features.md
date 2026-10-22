@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-21
+updated: 2026-10-22
 ---
 
 # uTerm feature guide
@@ -2747,9 +2747,9 @@ Enter activates it, and Escape dismisses the dialog when closing is allowed.
 ### macOS window controls
 
 On macOS, the close, minimize and zoom/full-screen controls use the original system window buttons
-at their system-managed positions, without custom offsets. macOS manages their hit areas, colors,
-hover symbols, accessibility and full-screen menu. The 56 px title bar reserves space for the
-buttons.
+in a 56 px title bar, aligned with the workspace name and toolbar buttons. The native button group
+is inset from the left edge; macOS manages its hit areas, colors, hover symbols, accessibility and
+the green button’s window arrangement and full-screen menu.
 
 Closing hides the window while keeping sessions; the buttons remain usable above application
 dialogs.
@@ -2760,24 +2760,25 @@ px gap before the first navigation button. The window buttons keep a continuous 
 separation from navigation controls in both light and dark themes.
 
 The sidebar title bar has a 1 px bottom divider aligned with the main toolbar, separating the window
-controls and workspace name from the navigation and project lists.
+controls and workspace name from the navigation and project lists. Collapsed and narrow sidebars
+reserve space for the native buttons in the adjacent toolbar, including a left-side tool panel. Very
+narrow Classic sidebars place their workspace controls below the window buttons.
 
 #### macOS window-button checks
 
-- macOS validation: 258 frontend/build-helper tests pass with ten optional checks skipped; 108
-  backend tests pass with nine optional tests ignored, and local-session service tests pass. Locked
-  dependency installation, repository formatting, localization/documentation checks and
-  TypeScript/production build and desktop compilation pass. The production build retains the
-  existing large-chunk warning.
+- On macOS, all ten focused sidebar layout, visibility, navigation, pane-swap and native-menu
+  regressions pass. Repository formatting and TypeScript/production frontend builds pass. The
+  production build retains its existing large-chunk warning; tests report an occupied Vite WebSocket
+  port without failures.
 
-- Native QA (`sh.uterm.desktop.qa.titlebarhover`) checks the continuous divider in Black and Paper
-  themes with the Icon navigation sidebar expanded and collapsed. The system
-  close/minimize/full-screen accessibility roles are present; the green button enters full screen
-  and Ctrl+Cmd+F exits it.
+- Native QA uses an isolated application (`sh.uterm.desktop.qa.nativetitlebar`) with its own data.
+  Desktop compilation, the native close/minimize/full-screen accessibility roles, Black/Paper
+  title-bar backgrounds, navigation-list collapse/reopen and full-screen entry/exit are verified.
+  Narrow Classic sidebars and a left-side tool panel still require native acceptance.
 
-- The macOS screen-capture badge obscures the buttons, so the corrected hover behavior has not been
-  directly visually accepted in this capture session. Windows/Linux runtime checks were not run for
-  this macOS-only layout change.
+- The macOS screen-capture badge obscures the button area during capture. Button hover symbols and
+  the green button’s arrangement menu have not been directly visually accepted. Windows/Linux
+  runtime checks were not run for this macOS-only layout change.
 
 ### macOS menu bar
 

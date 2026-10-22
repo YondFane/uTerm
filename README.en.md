@@ -92,6 +92,9 @@ before SSH, Redis and database connection actions. All three connection categori
 navigation style, regardless of Classic sidebar visibility switches; switching back restores those
 saved choices.
 
+On macOS, the native red, yellow and green window buttons share the top bar with workspace controls.
+The green button retains the system window arrangement and full-screen menu.
+
 ## One-line installation
 
 macOS, in Terminal:
