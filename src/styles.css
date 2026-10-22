@@ -2561,9 +2561,6 @@ select:focus-visible {
 .app-shell.sidebar-hidden.with-files {
   grid-template-columns: minmax(260px, 1fr) 280px;
 }
-.platform-macos.sidebar-hidden > main > .toolbar {
-  padding-left: 100px;
-}
 @media (max-width: 950px) {
   .app-shell.sidebar-hidden.with-inspector,
   .app-shell.sidebar-hidden.with-files {
@@ -2834,6 +2831,16 @@ select:focus-visible {
 .platform-macos > :is(.file-panel, .git-panel) > .inspector-header {
   background: var(--ui-sidebar);
 }
+/* Reserve native window controls even when the sidebar is narrower than their group.
+   即使侧栏比原生窗口按钮组更窄，也为窗口按钮保留空间。 */
+.platform-macos:not(.with-inspector[data-inspector-position="left"]) > main > .toolbar {
+  padding-left: max(18px, calc(96px - var(--sidebar-width, 0px)));
+}
+.platform-macos.with-inspector[data-inspector-position="left"]
+  > :is(.file-panel, .git-panel)
+  > .inspector-header {
+  padding-left: max(10px, calc(96px - var(--sidebar-width, 0px)));
+}
 .platform-macos > .sidebar::after {
   content: "";
   position: absolute;
@@ -3006,18 +3013,6 @@ select:focus-visible {
   .sidebar-rail-button[aria-pressed="true"]::before {
   left: -5px;
 }
-.platform-macos[data-sidebar-style="navigation"][data-sidebar-collapsed]:not(
-    .with-inspector[data-inspector-position="left"]
-  )
-  > main
-  > .toolbar {
-  padding-left: 52px;
-}
-.platform-macos[data-sidebar-style="navigation"][data-sidebar-collapsed].with-inspector[data-inspector-position="left"]
-  > :is(.file-panel, .git-panel)
-  > .inspector-header {
-  padding-top: 38px;
-}
 .sidebar-resizer {
   position: absolute;
   top: 0;
@@ -3144,6 +3139,12 @@ select:focus-visible {
     margin-left: 0;
   }
 }
+@container sidebar (max-width: 128px) {
+  .platform-macos .sidebar[data-sidebar-style="classic"] .sidebar-header {
+    flex-basis: 112px;
+    padding: 56px 0 0;
+  }
+}
 @container sidebar (max-width: 80px) {
   .sidebar-header {
     flex-direction: column;
@@ -3153,8 +3154,8 @@ select:focus-visible {
     padding: 0;
   }
   .platform-macos .sidebar[data-sidebar-style] .sidebar-header {
-    flex-basis: 124px;
-    padding: 38px 0 0;
+    flex-basis: 142px;
+    padding: 56px 0 0;
   }
   .sidebar .workspace-switcher {
     flex: 0 0 26px;
@@ -3719,11 +3720,6 @@ textarea:focus-visible {
 }
 .platform-macos.sidebar-hidden.with-inspector[data-inspector-position="left"] > main > .toolbar {
   padding-left: 24px;
-}
-.platform-macos.sidebar-hidden.with-inspector[data-inspector-position="left"]
-  > :is(.file-panel, .git-panel)
-  > .inspector-header {
-  padding-top: 38px;
 }
 .app-shell > .pane-swap-button {
   position: absolute;
