@@ -2747,7 +2747,7 @@ Enter activates it, and Escape dismisses the dialog when closing is allowed.
 ### macOS window controls
 
 On macOS, the close, minimize and zoom/full-screen controls use the original system window buttons
-in a 56 px title bar, aligned with the workspace name and toolbar buttons. The native button group
+in a 44 px title bar, aligned with the workspace name and toolbar buttons. The native button group
 is inset from the left edge; macOS manages its hit areas, colors, hover symbols, accessibility and
 the green button’s window arrangement and full-screen menu.
 
@@ -2755,7 +2755,7 @@ Closing hides the window while keeping sessions; the buttons remain usable above
 dialogs.
 
 The title bar shares the sidebar background, including when the sidebar list is collapsed. In the
-Icon navigation sidebar, the rail background and divider start below the 56 px title bar, with an 8
+Icon navigation sidebar, the rail background and divider start below the 44 px title bar, with an 8
 px gap before the first navigation button. The window buttons keep a continuous background and clear
 separation from navigation controls in both light and dark themes.
 
@@ -3119,7 +3119,8 @@ selects Classic sidebar.
 
 At normal widths, the sidebar header places the workspace name and hide button on one row,
 vertically centered with the main toolbar and to the right of the window controls on macOS. There is
-no separate uTerm/Local brand row.
+no separate uTerm/Local brand row. The sidebar header, main toolbar and tool-panel header use a
+compact 44 px height, with their controls vertically centered.
 
 - The workspace name appears as text without a field border or dropdown arrow. Clicking it opens a
   compact 180 px menu below the header, with smaller item padding; keyboard activation and menu
@@ -3152,6 +3153,17 @@ no separate uTerm/Local brand row.
   restores the complete layout while preserving selection, sessions and connection settings.
 
 #### Validation and limits
+
+- Compact-header validation on macOS: 11 focused sidebar, inspector and pane-swap checks, repository
+  formatting, TypeScript/production frontend build and an isolated desktop build pass. The
+  production build retains its large-chunk warning; tests report an occupied Vite WebSocket port
+  without failures.
+
+- Native QA (`sh.uterm.desktop.qa.compacttitlebar`) uses the real App with temporary workspace data
+  and simulated desktop responses to verify aligned headers in Black/Paper themes, the workspace
+  menu, File/Git switching and sidebar-list collapse. The screen-capture badge obscures the native
+  window buttons; their placement still needs direct visual acceptance. Windows/Linux runtime
+  acceptance of the compact headers remains pending.
 
 - On macOS, nine focused sidebar tests, TypeScript/production build, repository formatting and
   localization checks pass. Regression coverage includes floating placement, unchanged Agent targets

@@ -10,6 +10,7 @@
   --ui-active-icon: var(--ui-accent);
   --ui-selected: #d4d4d416;
   --ui-shadow: 0 18px 60px #0006;
+  --titlebar-height: 44px;
 }
 :root[data-appearance="light"] {
   color-scheme: light;
@@ -496,7 +497,7 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 0 0 56px;
+  flex: 0 0 var(--titlebar-height);
   min-width: 0;
   margin-bottom: 8px;
   padding: 0 5px;
@@ -2822,8 +2823,8 @@ select:focus-visible {
   background: var(--window-background);
 }
 .toolbar {
-  min-height: 56px;
-  padding: 8px 18px;
+  min-height: var(--titlebar-height);
+  padding: 3px 18px;
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-canvas);
 }
@@ -2844,7 +2845,7 @@ select:focus-visible {
 .platform-macos > .sidebar::after {
   content: "";
   position: absolute;
-  top: 55px;
+  top: calc(var(--titlebar-height) - 1px);
   left: 0;
   right: 0;
   height: 1px;
@@ -2902,7 +2903,7 @@ select:focus-visible {
   background: color-mix(in srgb, var(--ui-sidebar) 80%, var(--ui-hover));
 }
 .platform-macos .sidebar-rail {
-  margin-top: 56px;
+  margin-top: var(--titlebar-height);
   padding-top: 8px;
 }
 .platform-macos .sidebar[data-sidebar-style="navigation"][data-sidebar-collapsed] {
@@ -3141,8 +3142,8 @@ select:focus-visible {
 }
 @container sidebar (max-width: 128px) {
   .platform-macos .sidebar[data-sidebar-style="classic"] .sidebar-header {
-    flex-basis: 112px;
-    padding: 56px 0 0;
+    flex-basis: calc(var(--titlebar-height) + 56px);
+    padding: var(--titlebar-height) 0 0;
   }
 }
 @container sidebar (max-width: 80px) {
@@ -3154,8 +3155,8 @@ select:focus-visible {
     padding: 0;
   }
   .platform-macos .sidebar[data-sidebar-style] .sidebar-header {
-    flex-basis: 142px;
-    padding: 56px 0 0;
+    flex-basis: calc(var(--titlebar-height) + 86px);
+    padding: var(--titlebar-height) 0 0;
   }
   .sidebar .workspace-switcher {
     flex: 0 0 26px;
@@ -3280,9 +3281,9 @@ textarea:focus-visible {
   color: var(--ui-text);
 }
 .inspector-header {
-  min-height: 56px;
+  min-height: var(--titlebar-height);
   border-bottom: 1px solid var(--ui-border);
-  padding: 8px 12px;
+  padding: 3px 12px;
 }
 .inspector-tabs {
   padding-top: 10px;
