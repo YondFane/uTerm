@@ -2766,10 +2766,10 @@ narrow Classic sidebars place their workspace controls below the window buttons.
 
 #### macOS window-button checks
 
-- On macOS, all ten focused sidebar layout, visibility, navigation, pane-swap and native-menu
-  regressions pass. Repository formatting and TypeScript/production frontend builds pass. The
-  production build retains its existing large-chunk warning; tests report an occupied Vite WebSocket
-  port without failures.
+- On macOS, 284 frontend/build-helper tests pass, including the ten focused sidebar layout,
+  visibility, navigation, pane-swap and native-menu regressions; ten optional checks are skipped.
+  Repository formatting and TypeScript/production frontend builds pass. The production build retains
+  its existing large-chunk warning; tests report an occupied Vite WebSocket port without failures.
 
 - Native QA uses an isolated application (`sh.uterm.desktop.qa.nativetitlebar`) with its own data.
   Desktop compilation, the native close/minimize/full-screen accessibility roles, Black/Paper
@@ -3533,9 +3533,10 @@ use separate Cargo manifests and lockfiles.
 
 ### macOS automated checks
 
-- Current validation on macOS: 258 frontend/build-helper tests and 108 backend tests pass, with ten
+- Current validation on macOS: 284 frontend/build-helper tests and 114 backend tests pass, with ten
   optional frontend checks skipped and nine backend tests ignored. The complete local-session
-  service suite passes.
+  service suite passes on a serial rerun; the initial parallel run timed out reading a mock SSE
+  request.
 
 - Frozen dependency installation, formatting, localization, documentation checks,
   TypeScript/production build and desktop compilation pass. The production build retains its
