@@ -3545,10 +3545,9 @@ use separate Cargo manifests and lockfiles.
 
 ### macOS automated checks
 
-- Current validation on macOS: 284 frontend/build-helper tests and 114 backend tests pass, with ten
-  optional frontend checks skipped and nine backend tests ignored. The complete local-session
-  service suite passes on a serial rerun; the initial parallel run timed out reading a mock SSE
-  request.
+- Current validation on macOS: 284 frontend/build-helper tests, 114 backend tests and 46
+  local-session service tests pass. Ten optional frontend checks are skipped, nine backend tests and
+  two native CLI service tests are ignored.
 
 - Frozen dependency installation, formatting, localization, documentation checks,
   TypeScript/production build and desktop compilation pass. The production build retains its
