@@ -4184,8 +4184,9 @@ remain strings and binary is Base64.
   URL options/credentials, normalized connection tests and credential saves, default names and
   unchanged SQL URL restrictions. IPC replies are simulated and credentials are not stored in the
   system keychain during these tests.
-- TypeScript, localization, formatting, documentation checks, production and isolated desktop builds
-  pass. The production build retains its existing large-chunk warning.
+- TypeScript, localization, formatting, documentation checks, local-session and backend suites,
+  production and isolated desktop builds pass. The production build retains its existing large-chunk
+  warning.
 - The isolated macOS app (`sh.uterm.desktop.qa.esaddress`) verifies the Chinese connection dialog,
   HTTPS host/port normalization, explicit port retention and visible path errors without clipping
   the dialog controls. The installed app was not restarted. No credentialed Elasticsearch deployment
