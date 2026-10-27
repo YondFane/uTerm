@@ -887,20 +887,53 @@ pub async fn ssh_file_save(
         .map_err(failure)
 }
 impl RemoteFs {
+    async fn delete_tree(&self, path: &str) -> Result<()> {
+        let target = join(&self.root.path, path);
+        let attrs = self.sftp.lstat(&target).await?.attrs;
+        // Unlink nested links themselves; never traverse their targets.
+        // 只删除目录内的链接本身，绝不遍历其指向的目标。
+        if attrs.is_symlink() || !attrs.is_dir() {
+            self.sftp.remove(target).await?;
+            return Ok(());
+        }
+        let target = self.resolve(path, true).await?;
+        let handle = self.sftp.opendir(&target).await?.handle;
+        let result: Result<()> = async {
+            loop {
+                let packet = match self.sftp.readdir(&handle).await {
+                    Ok(packet) => packet,
+                    Err(error) if is_eof(&error) => break,
+                    Err(error) => return Err(error.into()),
+                };
+                for item in packet.files {
+                    if item.filename == "." || item.filename == ".." {
+                        continue;
+                    }
+                    relative(&item.filename)?;
+                    if item.filename.is_empty() || item.filename.contains('/') {
+                        bail!("SSH_INVALID_NAME");
+                    }
+                    Box::pin(self.delete_tree(&join(path, &item.filename))).await?;
+                }
+            }
+            Ok(())
+        }
+        .await;
+        let close = self.sftp.close(handle).await;
+        result?;
+        close?;
+        self.sftp.rmdir(target).await?;
+        Ok(())
+    }
     async fn mutate(&self, path: String, action: String, name: String) -> Result<()> {
         let remote = self;
         let _guard = remote.writes.lock().await;
         let target = remote.resolve(&path, true).await?;
         if action == "delete" {
-            if path.is_empty() {
+            if path.is_empty() || target == remote.root.path {
                 bail!("SSH_PATH_OUTSIDE_ROOT");
             }
-            if remote.sftp.lstat(&target).await?.attrs.is_dir() {
-                remote.sftp.rmdir(target).await?;
-            } else {
-                remote.sftp.remove(target).await?;
-            }
-            return Ok(());
+            return remote.delete_tree(&path).await;
         }
         relative(&name)?;
         if name.is_empty() || name.contains('/') || name != name.trim() {
@@ -1628,7 +1661,7 @@ mod tests {
     }
     #[cfg(unix)]
     #[tokio::test]
-    async fn real_sftp_file_management_rejects_overwrite_root_delete_and_nonempty_delete() {
+    async fn real_sftp_file_management_rejects_overwrite_and_root_delete() {
         let directory = tempfile::tempdir().unwrap();
         let remote = fixture(directory.path()).await;
         remote
@@ -1639,10 +1672,6 @@ mod tests {
             .mutate("folder".into(), "file".into(), "测试.txt".into())
             .await
             .unwrap();
-        assert!(remote
-            .mutate("folder".into(), "delete".into(), "".into())
-            .await
-            .is_err());
         assert!(remote
             .mutate("".into(), "delete".into(), "".into())
             .await
@@ -1686,5 +1715,64 @@ mod tests {
             std::fs::read(directory.path().join("original")).unwrap(),
             b"untouched"
         );
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn real_sftp_recursive_delete_includes_unlisted_files_and_does_not_follow_links() {
+        use std::os::unix::fs::symlink;
+        let directory = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(directory.path().join("folder/子目录/empty")).unwrap();
+        std::fs::write(directory.path().join("folder/子目录/测试.txt"), "nested").unwrap();
+        std::fs::write(directory.path().join("folder/.hidden"), "hidden").unwrap();
+        std::fs::write(directory.path().join("keep.txt"), "inside").unwrap();
+        std::fs::write(outside.path().join("keep.txt"), "outside").unwrap();
+        for index in 0..2100 {
+            std::fs::write(directory.path().join(format!("folder/{index}.txt")), "file").unwrap();
+        }
+        symlink(outside.path(), directory.path().join("folder/outside")).unwrap();
+        symlink(directory.path(), directory.path().join("folder/cycle")).unwrap();
+        symlink(
+            outside.path().join("missing"),
+            directory.path().join("folder/broken"),
+        )
+        .unwrap();
+        symlink(
+            directory.path().join("keep.txt"),
+            directory.path().join("link"),
+        )
+        .unwrap();
+        let remote = fixture(directory.path()).await;
+        for path in [
+            "",
+            ".",
+            "..",
+            "folder/..",
+            "/",
+            "link",
+            "folder/outside/keep.txt",
+        ] {
+            assert!(remote
+                .mutate(path.into(), "delete".into(), "".into())
+                .await
+                .is_err());
+        }
+        remote
+            .mutate("folder".into(), "delete".into(), "".into())
+            .await
+            .unwrap();
+        assert!(!directory.path().join("folder").exists());
+        assert_eq!(
+            std::fs::read(directory.path().join("keep.txt")).unwrap(),
+            b"inside"
+        );
+        assert_eq!(
+            std::fs::read(outside.path().join("keep.txt")).unwrap(),
+            b"outside"
+        );
+        assert!(remote
+            .mutate("folder".into(), "delete".into(), "".into())
+            .await
+            .is_err());
     }
 }

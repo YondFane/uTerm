@@ -90,7 +90,8 @@ export const backendMessages: Record<string, string> = {
   "保存失败，原文件已保留：{p0}": "Save failed. The original file was preserved: {p0}",
   "内容超过 2 MB 或包含二进制字符，未保存。":
     "Content exceeds 2 MB or contains binary characters. It was not saved.",
-  "删除失败（目录必须为空）：{error}": "Deletion failed (directories must be empty): {error}",
+  "删除失败，部分内容可能已删除：{error}":
+    "Deletion failed; some contents may already have been deleted: {error}",
   "变更列表过大，请在终端中查看 git status。":
     "The change list is too large. Run git status in a terminal.",
   "同名文件或目录已存在。": "A file or directory with this name already exists.",

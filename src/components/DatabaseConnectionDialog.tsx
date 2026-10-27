@@ -8,6 +8,7 @@ import {
   databaseKinds,
   databaseNames,
   databasePorts,
+  parseElasticsearchAddress,
   validDatabaseConfig,
   type DatabaseConfig,
   type DatabaseKind,
@@ -61,12 +62,35 @@ export function DatabaseConnectionDialog({
   }, []);
   const field = <K extends keyof DatabaseConfig>(key: K, value: DatabaseConfig[K]) =>
     setConfig((previous) => ({ ...previous, [key]: value }));
-  const value = () => ({
-    ...config,
-    name: config.name.trim() || `${databaseNames[config.kind]} ${config.host}:${config.port}`,
-  });
+  const addressError = () =>
+    tx("请输入有效的域名、IP 或 HTTP/HTTPS 根地址，不支持 URL 中的凭据、路径、查询参数或片段。");
+  const normalizeAddress = () => {
+    if (config.kind !== "elasticsearch") return config;
+    const address = parseElasticsearchAddress(config.host);
+    if (!address) {
+      setError(addressError());
+      return null;
+    }
+    const next = { ...config, ...address };
+    setConfig(next);
+    return next;
+  };
+  const value = () => {
+    const next = normalizeAddress();
+    if (!next) return null;
+    if (!Number.isInteger(next.port) || next.port < 1 || next.port > 65535) {
+      setError(tx("端口必须是 1 到 65535 之间的整数。"));
+      return null;
+    }
+    return {
+      ...next,
+      name: next.name.trim() || `${databaseNames[next.kind]} ${next.host}:${next.port}`,
+    };
+  };
   async function test() {
-    if (!validDatabaseConfig(value())) {
+    const next = value();
+    if (!next) return;
+    if (!validDatabaseConfig(next)) {
       setError(tx("数据库连接配置无效。"));
       return;
     }
@@ -76,7 +100,7 @@ export function DatabaseConnectionDialog({
     let handle: string | null = null;
     try {
       const result = await invoke<{ handle: string }>("database_connect", {
-        config: value(),
+        config: next,
         password: password || null,
       });
       handle = result.handle;
@@ -93,6 +117,7 @@ export function DatabaseConnectionDialog({
   }
   async function submit() {
     let next = value();
+    if (!next) return;
     if (!validDatabaseConfig(next)) {
       setError(tx("数据库连接配置无效。"));
       return;
@@ -201,7 +226,14 @@ export function DatabaseConnectionDialog({
             <input
               required
               value={config.host}
-              onChange={(event) => field("host", event.target.value)}
+              placeholder={config.kind === "elasticsearch" ? "https://example.com" : undefined}
+              onChange={(event) => {
+                field("host", event.target.value);
+                setError("");
+              }}
+              onBlur={() => {
+                if (config.kind === "elasticsearch") normalizeAddress();
+              }}
             />
           </label>
           <label>

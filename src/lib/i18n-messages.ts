@@ -400,6 +400,9 @@ export const messages: Record<string, string> = {
   "正在安装 {name}：{percent}%": "Installing {name}: {percent}%",
   "正在处理组件…": "Processing components…",
   "数据库连接配置无效。": "Invalid database connection configuration.",
+  "请输入有效的域名、IP 或 HTTP/HTTPS 根地址，不支持 URL 中的凭据、路径、查询参数或片段。":
+    "Enter a valid host, IP address or HTTP/HTTPS root URL. URL credentials, paths, query parameters and fragments are unsupported.",
+  "端口必须是 1 到 65535 之间的整数。": "Port must be an integer between 1 and 65535.",
   "数据库连接测试成功。": "Database connection test succeeded.",
   编辑数据库连接: "Edit database connection",
   添加数据库连接: "Add database connection",
@@ -1016,8 +1019,9 @@ export const messages: Record<string, string> = {
   刷新文件列表: "Refresh files",
   工作区标签: "Workspace tabs",
   "关闭文件 {p0}": "Close file {p0}",
-  "永久删除“{p0}”？目录必须为空，此操作无法撤销。":
-    "Permanently delete “{p0}”? Directories must be empty. This cannot be undone.",
+  "永久删除目录“{p0}”及其全部子目录和文件？此操作无法撤销。":
+    "Permanently delete directory “{p0}” and all its subdirectories and files? This cannot be undone.",
+  "永久删除文件“{p0}”？此操作无法撤销。": "Permanently delete file “{p0}”? This cannot be undone.",
   文件或目录名称: "File or directory name",
   确定: "OK",
   "链接不能在此修改。": "Links cannot be modified here.",

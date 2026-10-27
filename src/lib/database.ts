@@ -42,6 +42,38 @@ export interface DatabaseConfig {
   auth_source?: string;
   auth_mode?: "basic" | "api_key";
 }
+
+/** Parses a host or root HTTP(S) URL into connection fields; rejects unsupported URL parts.
+ * 将主机或根 HTTP(S) URL 解析为连接字段；拒绝不支持的 URL 部分。
+ */
+export function parseElasticsearchAddress(
+  value: string,
+): { host: string; port?: number; tls?: boolean } | null {
+  if (/[\x00-\x1f\x7f]/.test(value)) return null;
+  const address = value.trim();
+  const match = /^(https?):\/\/(\[[0-9a-f:.]+\]|[a-z0-9_.-]+)(?::([0-9]+))?\/?$/i.exec(address);
+  if (!match) {
+    return validDatabaseHost(address) && !/^https?:/i.test(address) ? { host: address } : null;
+  }
+  try {
+    const url = new URL(address);
+    const host = url.hostname.replace(/^\[|\]$/g, "");
+    const tls = url.protocol === "https:";
+    const port = url.port ? Number(url.port) : tls ? 443 : 80;
+    return validDatabaseHost(host) && port > 0 ? { host, port, tls } : null;
+  } catch {
+    return null;
+  }
+}
+
+function validDatabaseHost(host: unknown): host is string {
+  return (
+    typeof host === "string" &&
+    host.length <= 255 &&
+    /^[a-zA-Z0-9_.:-]+$/.test(host) &&
+    !host.startsWith("-")
+  );
+}
 export interface DatabaseComponent {
   id: string;
   version: string;
@@ -193,9 +225,7 @@ export function validDatabaseConfig(value: unknown): value is DatabaseConfig {
     databaseKinds.includes(config.kind) &&
     clean(config.name, 200) &&
     !!config.name.trim() &&
-    clean(config.host, 255) &&
-    /^[a-zA-Z0-9_.:-]+$/.test(config.host) &&
-    !config.host.startsWith("-") &&
+    validDatabaseHost(config.host) &&
     Number.isInteger(config.port) &&
     config.port > 0 &&
     config.port <= 65535 &&
