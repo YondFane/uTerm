@@ -400,6 +400,9 @@ export const messages: Record<string, string> = {
   "正在安装 {name}：{percent}%": "Installing {name}: {percent}%",
   "正在处理组件…": "Processing components…",
   "数据库连接配置无效。": "Invalid database connection configuration.",
+  "请输入有效的域名、IP 或 HTTP/HTTPS 根地址，不支持 URL 中的凭据、路径、查询参数或片段。":
+    "Enter a valid host, IP address or HTTP/HTTPS root URL. URL credentials, paths, query parameters and fragments are unsupported.",
+  "端口必须是 1 到 65535 之间的整数。": "Port must be an integer between 1 and 65535.",
   "数据库连接测试成功。": "Database connection test succeeded.",
   编辑数据库连接: "Edit database connection",
   添加数据库连接: "Add database connection",

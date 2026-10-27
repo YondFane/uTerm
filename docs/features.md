@@ -3937,6 +3937,16 @@ Add a connection from Databases and choose Elasticsearch or MongoDB. Elasticsear
 separate authentication database, defaulting to `admin`. Leave credentials empty for services that
 permit anonymous access.
 
+For Elasticsearch, Host address accepts a domain, IP address or HTTP/HTTPS root URL. Leaving the
+field, testing or saving a connection extracts the URL's host, port and TLS setting. For example,
+`https://es.example.com` becomes host `es.example.com`, port `443` and enabled TLS;
+`http://127.0.0.1:9200/` retains port `9200` without TLS. A URL without an explicit port uses `443`
+for HTTPS or `80` for HTTP. Entering only a host retains the separate port and TLS settings.
+
+URLs cannot contain credentials, index paths, query parameters or fragments; enter authentication
+and the default index in their separate fields. Invalid addresses and ports show specific errors.
+Saved profiles and desktop commands continue to use separate host, port and TLS fields.
+
 - Elasticsearch reuses the built-in HTTP client without Java or driver downloads. Install MongoDB's
   pinned Sync, Core and BSON drivers on demand through Database components: 2,779,903 bytes in
   total. These drivers and the optional Java runtime stay outside the main installer.
@@ -4166,6 +4176,20 @@ remain strings and binary is Base64.
 - Development JDKs, Cargo targets, test databases and node_modules never enter installers.
 
 ### Database validation
+
+#### Elasticsearch address checks on macOS
+
+- All 287 frontend/build-helper tests pass, with ten optional checks skipped. Address and dialog
+  regressions cover HTTP/HTTPS default and explicit ports, IPv6, retained manual settings, rejected
+  URL options/credentials, normalized connection tests and credential saves, default names and
+  unchanged SQL URL restrictions. IPC replies are simulated and credentials are not stored in the
+  system keychain during these tests.
+- TypeScript, localization, formatting, documentation checks, production and isolated desktop builds
+  pass. The production build retains its existing large-chunk warning.
+- The isolated macOS app (`sh.uterm.desktop.qa.esaddress`) verifies the Chinese connection dialog,
+  HTTPS host/port normalization, explicit port retention and visible path errors without clipping
+  the dialog controls. The installed app was not restarted. No credentialed Elasticsearch deployment
+  was contacted; Windows/Linux runtime acceptance remains pending.
 
 #### Document database checks on Windows
 
