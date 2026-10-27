@@ -1016,8 +1016,9 @@ export const messages: Record<string, string> = {
   刷新文件列表: "Refresh files",
   工作区标签: "Workspace tabs",
   "关闭文件 {p0}": "Close file {p0}",
-  "永久删除“{p0}”？目录必须为空，此操作无法撤销。":
-    "Permanently delete “{p0}”? Directories must be empty. This cannot be undone.",
+  "永久删除目录“{p0}”及其全部子目录和文件？此操作无法撤销。":
+    "Permanently delete directory “{p0}” and all its subdirectories and files? This cannot be undone.",
+  "永久删除文件“{p0}”？此操作无法撤销。": "Permanently delete file “{p0}”? This cannot be undone.",
   文件或目录名称: "File or directory name",
   确定: "OK",
   "链接不能在此修改。": "Links cannot be modified here.",

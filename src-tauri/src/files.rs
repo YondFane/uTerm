@@ -142,13 +142,14 @@ fn mutate_file(directory: &str, path: &str, action: &str, name: &str) -> Result<
         if target == root {
             return Err("不能删除项目根目录。".into());
         }
-        // Nonempty directories require their contents to be removed explicitly.
+        // Remove directory contents without following nested symbolic links.
+        // 删除目录内容时不跟随其中的符号链接。
         return if target.is_dir() {
-            std::fs::remove_dir(target)
+            std::fs::remove_dir_all(target)
         } else {
             std::fs::remove_file(target)
         }
-        .map_err(|error| format!("删除失败（目录必须为空）：{error}"));
+        .map_err(|error| format!("删除失败，部分内容可能已删除：{error}"));
     }
     if name.trim().is_empty()
         || name != name.trim()
@@ -868,14 +869,13 @@ mod tests {
         );
     }
     #[test]
-    fn file_management_rejects_root_traversal_overwrite_and_nonempty_delete() {
+    fn file_management_rejects_root_traversal_and_overwrite() {
         let fixture = tempfile::tempdir().unwrap();
         let root = fixture.path().to_str().unwrap();
         mutate_file(root, "", "directory", "folder").unwrap();
         mutate_file(root, "folder", "file", "中文.txt").unwrap();
         assert!(mutate_file(root, "folder", "file", "中文.txt").is_err());
         assert!(mutate_file(root, "", "delete", "").is_err());
-        assert!(mutate_file(root, "folder", "delete", "").is_err());
         assert!(mutate_file(root, "", "file", "../escape").is_err());
         assert!(mutate_file(root, "../", "file", "escape").is_err());
         mutate_file(root, "folder/中文.txt", "rename", "renamed.txt").unwrap();
@@ -883,6 +883,56 @@ mod tests {
         mutate_file(root, "folder/renamed.txt", "delete", "").unwrap();
         mutate_file(root, "folder", "delete", "").unwrap();
         assert!(!fixture.path().join("folder").exists());
+    }
+    #[test]
+    fn recursive_delete_removes_hidden_nested_contents_and_preserves_other_files() {
+        let fixture = tempfile::tempdir().unwrap();
+        let root = fixture.path().to_str().unwrap();
+        std::fs::create_dir_all(fixture.path().join("folder/子目录/empty")).unwrap();
+        std::fs::write(fixture.path().join("folder/子目录/data.bin"), [0, 255]).unwrap();
+        std::fs::write(fixture.path().join("folder/.hidden"), "hidden").unwrap();
+        std::fs::write(fixture.path().join("keep.txt"), "keep").unwrap();
+        for path in ["", ".", "..", "folder/..", "/"] {
+            assert!(mutate_file(root, path, "delete", "").is_err());
+        }
+        mutate_file(root, "folder", "delete", "").unwrap();
+        assert!(!fixture.path().join("folder").exists());
+        assert_eq!(
+            std::fs::read(fixture.path().join("keep.txt")).unwrap(),
+            b"keep"
+        );
+        assert!(mutate_file(root, "folder", "delete", "").is_err());
+    }
+    #[cfg(unix)]
+    #[test]
+    fn recursive_delete_unlinks_nested_links_without_deleting_their_targets() {
+        use std::os::unix::fs::symlink;
+        let fixture = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = fixture.path().to_str().unwrap();
+        std::fs::create_dir(fixture.path().join("folder")).unwrap();
+        std::fs::write(outside.path().join("keep.txt"), "outside").unwrap();
+        std::fs::write(fixture.path().join("keep.txt"), "inside").unwrap();
+        symlink(outside.path(), fixture.path().join("folder/outside")).unwrap();
+        symlink(fixture.path(), fixture.path().join("folder/cycle")).unwrap();
+        symlink(
+            outside.path().join("missing"),
+            fixture.path().join("folder/broken"),
+        )
+        .unwrap();
+        symlink(fixture.path().join("keep.txt"), fixture.path().join("link")).unwrap();
+        assert!(mutate_file(root, "link", "delete", "").is_err());
+        assert!(mutate_file(root, "folder/outside/keep.txt", "delete", "").is_err());
+        mutate_file(root, "folder", "delete", "").unwrap();
+        assert!(!fixture.path().join("folder").exists());
+        assert_eq!(
+            std::fs::read(outside.path().join("keep.txt")).unwrap(),
+            b"outside"
+        );
+        assert_eq!(
+            std::fs::read(fixture.path().join("keep.txt")).unwrap(),
+            b"inside"
+        );
     }
     #[test]
     fn mutation_conflicts_distinguish_operations_and_allow_unchanged_names() {

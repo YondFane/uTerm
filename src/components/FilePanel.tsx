@@ -409,13 +409,30 @@ export function FilePanel({
               setTarget(null);
               setRevision((value) => value + 1);
             })
-            .catch((reason) => setError(String(reason), true))
+            .catch((reason) => {
+              setError(
+                action === "delete" && remote
+                  ? tx("删除失败，部分内容可能已删除：{error}", {
+                      error: localizeMessage(String(reason)),
+                    })
+                  : String(reason),
+                true,
+              );
+              if (action === "delete") setRevision((value) => value + 1);
+            })
             .finally(() => setMutating(false));
         });
       }}
     >
       {action === "delete" ? (
-        <p>{tx("永久删除“{p0}”？目录必须为空，此操作无法撤销。", { p0: target.name })}</p>
+        <p>
+          {tx(
+            target.directory
+              ? "永久删除目录“{p0}”及其全部子目录和文件？此操作无法撤销。"
+              : "永久删除文件“{p0}”？此操作无法撤销。",
+            { p0: target.path },
+          )}
+        </p>
       ) : (
         <input
           autoFocus

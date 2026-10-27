@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-22
+updated: 2026-10-27
 ---
 
 # uTerm feature guide
@@ -864,15 +864,15 @@ an unknown host in an SSH terminal first.
 Password mode can also confirm a new host in a native dialog. File roots are independent of shell
 `cd`; Windows roots must use local drive paths, not UNC shares.
 
-Remote Git, GitHub, local directory tools, full-tree search, directory transfers, recursive deletion
-and transfer resume are unavailable.
+Remote Git, GitHub, local directory tools, full-tree search, directory transfers and transfer resume
+are unavailable.
 
 ### Editing within the remote root
 
 The file tree supports hidden files, text editing, supported image/PDF previews, creating
-files/directories, renaming and deleting files or empty directories. Text retains the existing 2 MB
-limit, UTF-8/BOM and line-ending handling, conflict checks, save/close guards and local recovery
-drafts.
+files/directories, renaming and deleting files or directories with all their contents. Deletion
+requires confirmation and cannot remove the selected root. Text retains the existing 2 MB limit,
+UTF-8/BOM and line-ending handling, conflict checks, save/close guards and local recovery drafts.
 
 A file’s identity includes its SSH connection, resolved endpoint and canonical root, so drafts
 cannot silently move to another server after configuration changes. Symbolic-link reads stay inside
@@ -1582,6 +1582,35 @@ bar, resizing or leaving the window closes it. Copy and opening failures appear 
   active tab, keyboard controls and an unclipped menu at 640×420.
 - Explorer's selected-file highlight and macOS/Linux runtime behavior for this tab menu remain
   unverified. The production build retains its existing large-chunk warning.
+
+### Deleting files and directories
+
+In the local or remote file tree, right-click a file or directory and choose Delete. Review its path
+and confirm deletion, or choose Cancel to retain it. Directory confirmation explicitly includes all
+subdirectories and files, including hidden entries and entries beyond the list's display limit.
+
+- Deletion is permanent and cannot be undone. The selected project or remote root cannot be deleted.
+  The existing editor save guard runs before deletion; save conflicts block the operation until
+  resolved or explicitly discarded.
+- Selecting a symbolic link or a path through a link remains read-only. Deleting a containing
+  directory removes its nested links without following their targets.
+- Completion refreshes the list. Failure also refreshes it and leaves the confirmation available;
+  some contents may already be deleted. Permission errors, connection loss or unsupported remote
+  filenames stop the operation without automatically retrying or restoring deleted contents.
+
+#### Deletion checks on macOS
+
+- Component regression checks cover Simplified Chinese and English confirmation, cancellation,
+  root/link restrictions, deferred editor protection, duplicate requests, visible failures and list
+  refresh for local and remote commands. All 285 frontend/build-helper tests pass, with ten optional
+  checks skipped. TypeScript, localization, formatting, documentation checks, the production build
+  and the debug desktop build pass.
+- All 117 regular backend tests pass, with nine optional checks ignored. Temporary filesystem and
+  real system SFTP-server fixtures cover nested/empty directories, hidden files, root/traversal
+  rejection, missing targets, preserved siblings and external, cyclic and broken links. The SFTP
+  fixture includes 2,100 files to verify deletion beyond the display limit.
+- Native deletion confirmation, credentialed remote servers and Windows/Linux runtime acceptance
+  remain unverified. The production build retains its existing large-chunk warning.
 
 ### Automatic file-tree refresh
 
