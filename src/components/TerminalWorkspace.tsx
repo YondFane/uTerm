@@ -1,6 +1,6 @@
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { TerminalView } from "./TerminalView";
 import {
@@ -65,22 +65,37 @@ export function TerminalWorkspace({
     edge: "left" | "right" | "top" | "bottom";
   } | null>(null);
   const moving = useRef<{ id: string; x: number; y: number } | null>(null);
-  const selected = selectedRoster(workspace);
+  const selected = useMemo(
+    () => selectedRoster(workspace),
+    [
+      workspace.projects,
+      workspace.groups,
+      workspace.selectedWorkspace,
+      workspace.selectedProject,
+      workspace.selectedSession,
+    ],
+  );
+  // Selection and activity changes keep the same session sources; invalidate on immutable edits.
+  // 选择和任务状态变化时会话来源不变，仅在不可变数据更新时重新生成列表。
+  const entries = useMemo(() => sessionEntries(workspace), [workspace.projects, workspace.groups]);
   const effective = drag
     ? resizeSplit(workspace, drag.project, drag.branch, drag.ratio)
     : workspace;
-  const project = selectedRoster(effective);
+  const project = drag ? selectedRoster(effective) : selected;
   const root =
     project && workspace.selectedSession
       ? splitGroup(project, workspace.selectedSession)
       : undefined;
-  const layout =
-    root && !zoomed
-      ? paneLayout(root)
-      : {
-          panes: workspace.selectedSession ? { [workspace.selectedSession]: fullFrame } : {},
-          dividers: [],
-        };
+  const layout = useMemo(
+    () =>
+      root && !zoomed
+        ? paneLayout(root)
+        : {
+            panes: workspace.selectedSession ? { [workspace.selectedSession]: fullFrame } : {},
+            dividers: [],
+          },
+    [root, zoomed, workspace.selectedSession],
+  );
 
   function pointerRatio(event: React.PointerEvent, divider: Divider) {
     const bounds = container.current?.getBoundingClientRect();
@@ -153,7 +168,7 @@ export function TerminalWorkspace({
       }}
     >
       {/* Keep sessions in one flat keyed list: moving a leaf must never remount its PTY. */}
-      {sessionEntries(workspace).map(({ session, directory }) => (
+      {entries.map(({ session, directory }) => (
         <TerminalView
           key={session.id}
           directory={directory}

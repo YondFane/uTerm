@@ -3430,6 +3430,48 @@ states. Unchanged Git branch polls preserve React state identity.
 
 - Key resource-lifetime decisions have English/Chinese comments.
 
+### Workspace and session lookups
+
+Session lists resolve project and Worktree directories in one pass. Explicit session directories,
+including an empty directory, retain their precedence. Project, SSH, terminal and chat order and
+session identities remain unchanged. Selection checks the selected project first and falls back to
+the other rosters when that selection is stale.
+
+The sidebar indexes project and roster IDs instead of scanning the lists for each row. Project
+ordering is reused until the project collection, active workspace or ordering preference changes;
+connection rosters are read on each render. Terminal views reuse session entries and split geometry
+across activity updates, while session edits, workspace switches and split changes refresh the
+affected data. Each view retains its current derived data without accumulating a cache of past
+workspaces.
+
+#### Workspace lookup checks
+
+- On macOS, six focused regressions cover linear lookup work, directory precedence and identity,
+  stale selection fallback, roster ID collisions, ordering reuse, source updates, split previews,
+  zoom and mounted-session retention. The full frontend/build-helper suite passes 293 tests with ten
+  skips. Frozen installation, repository formatting, localization, TypeScript/production build and
+  an isolated desktop build pass; the existing large-chunk warning remains.
+
+- A synthetic macOS ARM64/Node 26.3.0 benchmark compares the stable baseline with the current
+  implementation in five independent processes. Each operation uses five warmups and five
+  alternating before/after batches; each list batch runs five iterations. Median per-call list
+  calculation times are:
+
+  | Projects | Worktrees per project | Sessions per project | Baseline  | Current  |
+  | -------- | --------------------- | -------------------- | --------- | -------- |
+  | 100      | 8                     | 24                   | 0.398 ms  | 0.061 ms |
+  | 300      | 16                    | 32                   | 3.213 ms  | 0.282 ms |
+  | 1,000    | 32                    | 64                   | 86.907 ms | 1.615 ms |
+
+  In the largest fixture, selecting the last session's roster takes 0.008 ms versus 0.217 ms with
+  the baseline, using 100 iterations per batch. These are data-derivation measurements; they do not
+  measure terminal rendering, total application CPU/RSS or network performance.
+
+- The isolated native macOS app (`sh.uterm.desktop.qa.workspaceperformance`) verifies real PTY
+  startup in the project directory, keyboard and pointer split resizing, zoom/restore, session
+  switching, retained background output through a Chinese completion marker and Close Session.
+  Windows/Linux runtime behavior and long-running whole-app resource gains remain unmeasured.
+
 ### Git refresh, file search and replay
 
 The Git panel issues one snapshot read when window focus or visibility returns. Selected
