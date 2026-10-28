@@ -112,20 +112,20 @@ test("sidebar navigation filters existing lists without changing sessions, profi
     const click = (element) => act(async () => element.click());
     const section = (name) =>
       document.querySelector(`#sidebar-sections section[aria-label="${translate("en", name)}"]`);
-    localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
+    localStorage.setItem(
+      settingsKey,
+      JSON.stringify({ ...defaults, language: "en", sidebarStyle: "classic" }),
+    );
     await render();
-    assert.equal(document.querySelector(".sidebar-rail"), null);
-    assert.ok(document.querySelector('.sidebar-footer [aria-label="Settings"]'));
-    assert.equal(document.querySelectorAll(".sidebar-connection-toggles button").length, 3);
-    assert.ok(document.querySelector(".sidebar-footer .sidebar-add"));
+    assert.ok(document.querySelector(".sidebar-rail"));
+    assert.equal(context.settings.sidebarStyle, "navigation");
     const hiddenConnections = {
       showSshConnections: false,
       showRedisConnections: false,
       showDatabaseConnections: false,
     };
     await save(hiddenConnections);
-    for (const name of ["SSH", "Redis", "数据库"]) assert.equal(section(name), null);
-    await save({ sidebarStyle: "navigation" });
+    for (const name of ["SSH", "Redis", "数据库"]) assert.ok(section(name));
     assert.equal(document.querySelectorAll(".sidebar-rail-items button").length, 5);
     assert.equal(nav("全部").getAttribute("aria-pressed"), "true");
     assert.ok(document.querySelector('.sidebar-rail [aria-label="Settings"]'));
@@ -202,17 +202,6 @@ test("sidebar navigation filters existing lists without changing sessions, profi
     assert.ok(section("Redis"));
     assert.equal(nav("Redis 连接").getAttribute("aria-pressed"), "true");
     dom.window.Storage.prototype.setItem = setItem;
-    await save({ sidebarStyle: "classic" });
-    assert.equal(document.querySelector(".sidebar-rail"), null);
-    assert.equal(document.querySelectorAll(".sidebar-connection-toggles button").length, 3);
-    assert.ok(document.querySelector(".sidebar-footer .sidebar-add"));
-    for (const name of ["SSH", "Redis", "数据库"]) assert.equal(section(name), null);
-    assert.ok(
-      [...document.querySelectorAll(".sidebar-connection-toggles button")].every(
-        (button) => button.getAttribute("aria-pressed") === "false",
-      ),
-    );
-    await save({ sidebarStyle: "navigation" });
     key++;
     await render();
     assert.ok(document.querySelector(".sidebar-rail"));

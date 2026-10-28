@@ -196,11 +196,7 @@ test("connection removal requires confirmation, preserves cancellation and reche
     await act(async () =>
       preferences.save({ ...preferences.settings, showRedisConnections: false }),
     );
-    assert.equal(dialog(), null, "Hiding the connection section cancels removal");
-    await act(async () =>
-      preferences.save({ ...preferences.settings, showRedisConnections: true }),
-    );
-    await click(removeButton("redis"));
+    assert.ok(dialog(), "Legacy visibility settings do not hide a navigation connection");
     props.visible = false;
     await render();
     assert.equal(dialog(), null, "Hiding the sidebar cancels removal");

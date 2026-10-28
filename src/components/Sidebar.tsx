@@ -142,27 +142,22 @@ export function Sidebar({
   const [sidebarView, setSidebarView] = useState<SidebarView>("all");
   const navigationRef = useRef<HTMLElement>(null);
   const floatingActions = useRef<HTMLDivElement | null>(null);
-  const navigation = settings.sidebarStyle === "navigation";
-  const showSsh = navigation || settings.showSshConnections;
-  const showRedis = navigation || settings.showRedisConnections;
-  const showDatabase = navigation || settings.showDatabaseConnections;
   const viewAvailable = {
     all: true,
     projects: true,
-    ssh: !!addSsh && showSsh,
-    redis: !!addRedis && showRedis,
-    database: !!addDatabase && showDatabase,
+    ssh: !!addSsh,
+    redis: !!addRedis,
+    database: !!addDatabase,
   };
   const shownView = viewAvailable[sidebarView] ? sidebarView : "all";
   useEffect(() => {
     setSidebarView(shownView);
   }, [shownView]);
-  const showing = (view: SidebarView) => !navigation || shownView === "all" || shownView === view;
+  const showing = (view: SidebarView) => shownView === "all" || shownView === view;
   const draggedProject = useRef<{ id: string; x: number; y: number; moved: boolean } | null>(null);
   const suppressProjectClick = useRef(false);
   const [projectDrop, setProjectDrop] = useState<{ id: string; after: boolean } | null>(null);
   const [dragError, setDragError] = useState("");
-  const [visibilityError, setVisibilityError] = useState("");
   const [popover, setPopover] = useState<"workspace" | "add" | null>(null);
   const [connectionMenu, setConnectionMenu] = useState<{
     kind: "ssh" | "redis" | "database" | "project" | "worktree";
@@ -231,20 +226,10 @@ export function Sidebar({
       document.removeEventListener("pointerdown", dismiss);
       document.removeEventListener("keydown", dismiss);
     };
-  }, [visible, workspace?.selectedWorkspace, settings.sidebarStyle]);
+  }, [visible, workspace?.selectedWorkspace]);
   useEffect(() => {
-    if (!visible && (!navigation || popover === "workspace")) setPopover(null);
-  }, [visible, navigation, popover]);
-  function toggleConnections(
-    key: "showSshConnections" | "showRedisConnections" | "showDatabaseConnections",
-  ) {
-    try {
-      save({ ...settings, [key]: !settings[key] }, runtime?.platform === "macos");
-      setVisibilityError("");
-    } catch (reason) {
-      setVisibilityError(String(reason));
-    }
-  }
+    if (!visible && popover === "workspace") setPopover(null);
+  }, [visible, popover]);
   useLayoutEffect(() => {
     if (!popover || !popoverRef.current || !triggerRef.current) return;
     const popup = popoverRef.current;
@@ -342,9 +327,9 @@ export function Sidebar({
   const connectionMenuVisible = !!(
     visible &&
     group?.id === connectionMenu?.workspaceId &&
-    ((menuSsh && showSsh && !collapsed.ssh) ||
-      (menuRedis && showRedis && !collapsed.redis) ||
-      (menuDatabase && showDatabase && !collapsed.database) ||
+    ((menuSsh && !collapsed.ssh) ||
+      (menuRedis && !collapsed.redis) ||
+      (menuDatabase && !collapsed.database) ||
       quickProject)
   );
   const redisRetained = menuRedis && redisStatuses[menuRedis.id];
@@ -473,19 +458,16 @@ export function Sidebar({
     visible &&
     removal.workspaceId === group?.id &&
     (removal.kind === "ssh"
-      ? showSsh &&
-        group.sshConnections?.includes(removal.connection) &&
+      ? group.sshConnections?.includes(removal.connection) &&
         !!removeSsh &&
         !!canRemoveSsh?.(removal.connection)
       : removal.kind === "redis"
-        ? showRedis &&
-          group.redisConnections?.includes(removal.connection) &&
+        ? group.redisConnections?.includes(removal.connection) &&
           !!removeRedis &&
           !redisStatuses[removal.connection.id]?.connected &&
           !redisStatuses[removal.connection.id]?.opening &&
           !redisStatuses[removal.connection.id]?.dirty
-        : showDatabase &&
-          group.databaseConnections?.includes(removal.connection) &&
+        : group.databaseConnections?.includes(removal.connection) &&
           !!removeDatabase &&
           !databaseStatuses[removal.connection.id]?.connected &&
           !databaseStatuses[removal.connection.id]?.busy &&
@@ -1092,7 +1074,7 @@ export function Sidebar({
   }
   const addButton = (
     <button
-      className={`sidebar-add ${navigation ? "toolbar-icon-button" : "icon-button"}`}
+      className="sidebar-add toolbar-icon-button"
       disabled={!runtime || !workspace}
       aria-label={tx("添加项目或会话")}
       title={tx("添加项目或会话")}
@@ -1107,30 +1089,27 @@ export function Sidebar({
     <aside
       id="workspace-sidebar"
       className="sidebar"
-      data-sidebar-style={settings.sidebarStyle}
-      data-sidebar-collapsed={(navigation && !visible) || undefined}
+      data-sidebar-style="navigation"
+      data-sidebar-collapsed={!visible || undefined}
       aria-label={tx("工作区")}
-      hidden={!visible && !navigation}
     >
       {resizeHandle}
-      {navigation && (
-        <nav ref={navigationRef} className="sidebar-rail" aria-label={tx("侧栏导航")}>
-          <div className="sidebar-rail-items">
-            {navigationButton("all", tx("全部"), <SidebarIcon name="home" />)}
-            {navigationButton("projects", tx("项目与会话"), <SidebarIcon name="folder" />)}
-            {viewAvailable.ssh &&
-              navigationButton("ssh", tx("SSH 连接"), <SidebarIcon name="terminal" />)}
-            {viewAvailable.redis &&
-              navigationButton("redis", tx("Redis 连接"), <SidebarIcon name="database" />)}
-            {viewAvailable.database &&
-              navigationButton("database", tx("数据库连接"), <SidebarIcon name="sqlDatabase" />)}
-          </div>
-          <div className="sidebar-rail-footer">
-            {addButton}
-            {footerActions}
-          </div>
-        </nav>
-      )}
+      <nav ref={navigationRef} className="sidebar-rail" aria-label={tx("侧栏导航")}>
+        <div className="sidebar-rail-items">
+          {navigationButton("all", tx("全部"), <SidebarIcon name="home" />)}
+          {navigationButton("projects", tx("项目与会话"), <SidebarIcon name="folder" />)}
+          {viewAvailable.ssh &&
+            navigationButton("ssh", tx("SSH 连接"), <SidebarIcon name="terminal" />)}
+          {viewAvailable.redis &&
+            navigationButton("redis", tx("Redis 连接"), <SidebarIcon name="database" />)}
+          {viewAvailable.database &&
+            navigationButton("database", tx("数据库连接"), <SidebarIcon name="sqlDatabase" />)}
+        </div>
+        <div className="sidebar-rail-footer">
+          {addButton}
+          {footerActions}
+        </div>
+      </nav>
       <div className="sidebar-main" hidden={!visible}>
         <header className="sidebar-header" data-tauri-drag-region>
           <button
@@ -1151,10 +1130,9 @@ export function Sidebar({
             aria-expanded={true}
             aria-controls="workspace-sidebar"
             onClick={() => {
-              if (navigation)
-                navigationRef.current
-                  ?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')
-                  ?.focus();
+              navigationRef.current
+                ?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')
+                ?.focus();
               act(toggleVisibility);
             }}
           >
@@ -1185,8 +1163,7 @@ export function Sidebar({
             </section>
           )}
           {dragError && <p role="alert">{localizeMessage(dragError)}</p>}
-          {visibilityError && <p role="alert">{localizeMessage(visibilityError)}</p>}
-          {showing("ssh") && addSsh && showSsh && (
+          {showing("ssh") && addSsh && (
             <section className="sidebar-section" aria-label={tx("SSH")}>
               {sectionHeader(
                 tx("SSH"),
@@ -1276,7 +1253,7 @@ export function Sidebar({
                   })}
             </section>
           )}
-          {showing("redis") && addRedis && showRedis && (
+          {showing("redis") && addRedis && (
             <section className="sidebar-section" aria-label={tx("Redis")}>
               {sectionHeader(
                 tx("Redis"),
@@ -1344,7 +1321,7 @@ export function Sidebar({
                 })}
             </section>
           )}
-          {showing("database") && addDatabase && showDatabase && (
+          {showing("database") && addDatabase && (
             <section className="sidebar-section" aria-label={tx("数据库")}>
               {sectionHeader(
                 tx("数据库"),
@@ -1440,51 +1417,6 @@ export function Sidebar({
             </section>
           )}
         </nav>
-        {!navigation && (
-          <footer className="sidebar-footer">
-            {addButton}
-            <div className="sidebar-connection-toggles">
-              {addSsh && (
-                <button
-                  className="sidebar-connection-toggle"
-                  aria-label={tx("SSH 连接")}
-                  aria-pressed={settings.showSshConnections}
-                  title={settings.showSshConnections ? tx("隐藏 SSH 连接") : tx("显示 SSH 连接")}
-                  onClick={() => toggleConnections("showSshConnections")}
-                >
-                  <SidebarIcon name="terminal" />
-                </button>
-              )}
-              {addRedis && (
-                <button
-                  className="sidebar-connection-toggle"
-                  aria-label={tx("Redis 连接")}
-                  aria-pressed={settings.showRedisConnections}
-                  title={
-                    settings.showRedisConnections ? tx("隐藏 Redis 连接") : tx("显示 Redis 连接")
-                  }
-                  onClick={() => toggleConnections("showRedisConnections")}
-                >
-                  <SidebarIcon name="database" />
-                </button>
-              )}
-              {addDatabase && (
-                <button
-                  className="sidebar-connection-toggle"
-                  aria-label={tx("数据库连接")}
-                  aria-pressed={settings.showDatabaseConnections}
-                  title={
-                    settings.showDatabaseConnections ? tx("隐藏数据库连接") : tx("显示数据库连接")
-                  }
-                  onClick={() => toggleConnections("showDatabaseConnections")}
-                >
-                  <SidebarIcon name="sqlDatabase" />
-                </button>
-              )}
-            </div>
-            {footerActions}
-          </footer>
-        )}
       </div>
       {removal && (
         <dialog
@@ -1679,19 +1611,19 @@ export function Sidebar({
                     })}
                   </button>
                 ))}
-                {addSsh && showSsh && (
+                {addSsh && (
                   <button role="menuitem" onClick={() => act(addSsh)}>
                     <SessionIcon />
                     {tx("添加 SSH 连接")}
                   </button>
                 )}
-                {addRedis && showRedis && (
+                {addRedis && (
                   <button role="menuitem" onClick={() => act(addRedis)}>
                     <SidebarIcon name="database" />
                     {tx("添加 Redis 连接")}
                   </button>
                 )}
-                {addDatabase && showDatabase && (
+                {addDatabase && (
                   <button role="menuitem" onClick={() => act(addDatabase)}>
                     <SidebarIcon name="sqlDatabase" />
                     {tx("添加数据库连接")}

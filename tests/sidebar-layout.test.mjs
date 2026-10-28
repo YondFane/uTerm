@@ -4,34 +4,25 @@ import { sidebarLayout } from "../src/lib/sidebar-layout.ts";
 import { inspectorDragLayout } from "../src/lib/inspector-layout.ts";
 
 test("snap eligibility clears when a held drag returns above the threshold", () => {
-  for (const layout of [sidebarLayout, inspectorDragLayout]) {
+  for (const [layout, threshold, minimum] of [
+    [sidebarLayout, 78, 48],
+    [inspectorDragLayout, 30, 30],
+  ]) {
     assert.deepEqual(
-      [100, 30, 12, 31, 80].map((width) => layout(1000, width).hidden),
+      [100, threshold, 12, threshold + 1, 100].map((width) => layout(1000, width).hidden),
       [false, true, true, false, false],
     );
-    assert.equal(layout(1000, 12).width, 30);
-    assert.equal(layout(1000, 80).width, 80);
+    assert.equal(layout(1000, 12).width, minimum);
+    assert.equal(layout(1000, 100).width, 100);
   }
 });
 
-test("sidebar bounds preserve the main area and collapse only at the drag threshold", () => {
-  assert.equal(sidebarLayout(1100, 30).hidden, true);
-  assert.equal(sidebarLayout(1100, 31).hidden, false);
-  assert.equal(sidebarLayout(1100, 160).hidden, false);
-  assert.equal(sidebarLayout(1100, 31).width, 31);
-  assert.equal(sidebarLayout(1100, 30).width, 30);
-  assert.equal(sidebarLayout(1100, 100).width, 100);
+test("sidebar resizing reserves the rail, preserves the main area and collapses only the list", () => {
+  assert.equal(sidebarLayout(1100, 0).width, 48);
+  assert.equal(sidebarLayout(1100, 48).minimum, 48);
+  assert.equal(sidebarLayout(1100, 78).hidden, true);
+  assert.equal(sidebarLayout(1100, 79).hidden, false);
+  assert.equal(sidebarLayout(1100, 248).width, 248);
   assert.equal(sidebarLayout(1100, 9999).width, 320);
   assert.equal(sidebarLayout(640, 9999).width, 192);
-  assert.equal(sidebarLayout(1100, 248).width, 248);
-});
-
-test("navigation resizing reserves the rail and collapses only the list", () => {
-  assert.equal(sidebarLayout(1100, 0, true).width, 48);
-  assert.equal(sidebarLayout(1100, 48, true).minimum, 48);
-  assert.equal(sidebarLayout(1100, 78, true).hidden, true);
-  assert.equal(sidebarLayout(1100, 79, true).hidden, false);
-  assert.equal(sidebarLayout(1100, 248, true).width, 248);
-  assert.equal(sidebarLayout(640, 9999, true).width, 192);
-  assert.equal(sidebarLayout(1100, 30).hidden, true);
 });

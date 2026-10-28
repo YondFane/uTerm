@@ -360,37 +360,6 @@ export function SettingsPanel({
           )}
           {tab === "外观" && (
             <>
-              <fieldset className="sidebar-style-picker">
-                <legend>{t("侧栏样式")}</legend>
-                <div className="sidebar-style-options">
-                  {(
-                    [
-                      ["classic", t("经典侧栏"), t("分区列表与底部操作。")],
-                      ["navigation", t("图标导航侧栏"), t("左侧图标导航与右侧列表。")],
-                    ] as const
-                  ).map(([style, name, description]) => (
-                    <button
-                      type="button"
-                      key={style}
-                      className="sidebar-style-option"
-                      aria-pressed={settings.sidebarStyle === style}
-                      onClick={() => change({ sidebarStyle: style })}
-                    >
-                      <span className="sidebar-style-preview" data-style={style} aria-hidden="true">
-                        {style === "navigation" && <i className="sidebar-style-preview-rail" />}
-                        <span>
-                          <i />
-                          <i />
-                          <i />
-                        </span>
-                      </span>
-                      <strong>{name}</strong>
-                      <small>{description}</small>
-                    </button>
-                  ))}
-                </div>
-                <p className="muted">{t("侧栏样式立即生效并自动保存。")}</p>
-              </fieldset>
               <fieldset className="interface-theme-picker">
                 <legend>{t("界面主题")}</legend>
                 <div className="interface-theme-options">
@@ -474,9 +443,7 @@ export function SettingsPanel({
                   </span>
                 </label>
               )}
-              <p className="muted">
-                {t("用于 SSH、Redis、数据库显示开关、侧栏导航和工具面板切换，立即生效并自动保存。")}
-              </p>
+              <p className="muted">{t("用于侧栏导航和工具面板切换，立即生效并自动保存。")}</p>
               <label>
                 {t("颜色模式")}
                 <select

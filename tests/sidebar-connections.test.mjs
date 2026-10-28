@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import { createServer } from "vite";
 import React, { act } from "react";
 
-test("sidebar folding, add actions and visibility retain active data and report storage failures", async () => {
+test("sidebar folding and add actions retain active data regardless of legacy visibility settings", async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
   for (const key of ["window", "document", "navigator", "HTMLElement", "localStorage"])
     Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
@@ -116,9 +116,6 @@ test("sidebar folding, add actions and visibility retain active data and report 
     const section = (name) =>
       document.querySelector(`section[aria-label="${name === "Database" ? "Databases" : name}"]`);
     const heading = (name) => section(name).querySelector(".section-header .section-toggle");
-    const toggle = (name) =>
-      document.querySelector(`.sidebar-footer button[aria-label="${name} connections"]`);
-    const click = (name) => act(async () => toggle(name).click());
     await render();
     const originalSettings = localStorage.getItem(settingsKey);
     for (const name of ["SSH", "Redis", "Database"]) {
@@ -146,7 +143,8 @@ test("sidebar folding, add actions and visibility retain active data and report 
     assert.equal(JSON.stringify(workspace), originalWorkspace);
     assert.equal(localStorage.getItem(settingsKey), originalSettings);
     assert.deepEqual(actions, []);
-    const addTrigger = () => document.querySelector('.sidebar-footer button[aria-haspopup="menu"]');
+    const addTrigger = () =>
+      document.querySelector('.sidebar-rail-footer button[aria-haspopup="menu"]');
     const addItems = () => [...document.querySelectorAll('.sidebar-popover.add [role="menuitem"]')];
     const connectionAdds = [
       "Add SSH connection",
@@ -174,11 +172,7 @@ test("sidebar folding, add actions and visibility retain active data and report 
       );
       assert.deepEqual(
         addItems().map((item) => item.textContent),
-        [
-          "New terminal",
-          "Add project…",
-          ...connectionAdds.filter((_, index) => mask & (1 << index)),
-        ],
+        ["New terminal", "Add project…", ...connectionAdds],
       );
       assert.deepEqual(actions, []);
       assert.equal(JSON.stringify(workspace), originalWorkspace);
@@ -196,8 +190,6 @@ test("sidebar folding, add actions and visibility retain active data and report 
       assert.deepEqual(actions.splice(0), [["add SSH", "add Redis", "add database"][index]]);
     }
     assert.equal(localStorage.getItem(settingsKey), allVisibleSettings);
-    await click("SSH");
-    await click("SSH");
     assert.equal(heading("SSH").getAttribute("aria-expanded"), "false");
     for (const name of ["SSH", "Redis", "Database"]) {
       await act(async () => heading(name).click());
@@ -210,47 +202,12 @@ test("sidebar folding, add actions and visibility retain active data and report 
     assert.ok(section("Redis").querySelector(".sidebar-row.selected"));
     assert.ok(section("Database").querySelector(".sidebar-row.selected"));
     assert.ok(section("Database"));
-    assert.equal(toggle("Database").getAttribute("aria-pressed"), "true");
-    await click("Database");
-    assert.equal(section("Database"), null);
-    assert.ok(section("Redis"));
-    assert.ok(section("SSH"));
-    assert.ok(section("Redis"));
-    assert.equal(toggle("SSH").getAttribute("aria-pressed"), "true");
-    assert.equal(toggle("Redis").title, "Hide Redis connections");
-    await click("SSH");
-    assert.equal(section("SSH"), null);
-    assert.ok(section("Redis"));
-    assert.equal(toggle("SSH").getAttribute("aria-pressed"), "false");
-    assert.equal(toggle("SSH").title, "Show SSH connections");
-    await click("Redis");
-    assert.equal(section("Redis"), null);
-    assert.equal(JSON.parse(localStorage.getItem(settingsKey)).showRedisConnections, false);
     providerKey++;
     await render();
-    assert.equal(section("SSH"), null);
-    assert.equal(section("Redis"), null);
-    assert.equal(section("Database"), null);
-    dom.window.Storage.prototype.setItem = () => {
-      throw new Error("storage unavailable");
-    };
-    await click("SSH");
-    assert.match(document.querySelector('[role="alert"]').textContent, /storage unavailable/);
-    assert.equal(section("SSH"), null);
-    dom.window.Storage.prototype.setItem = setItem;
-    await click("SSH");
-    assert.ok(section("SSH"));
-    assert.match(section("SSH").textContent, /Remote shell/);
-    assert.equal(section("Redis"), null);
-    assert.equal(document.querySelector('[role="alert"]'), null);
-    await click("Redis");
-    assert.match(section("Redis").textContent, /Redis QA \*/);
+    for (const name of ["SSH", "Redis", "Database"]) assert.ok(section(name));
     assert.equal(JSON.stringify(workspace), originalWorkspace);
     assert.deepEqual(actions, []);
     await act(async () => settings.save({ ...settings.settings, language: "zh-Hans" }, true));
-    await act(async () =>
-      document.querySelector('.sidebar-footer button[aria-label="数据库连接"]').click(),
-    );
     await act(async () => addTrigger().click());
     assert.deepEqual(
       addItems().map((item) => item.textContent),
@@ -266,12 +223,6 @@ test("sidebar folding, add actions and visibility retain active data and report 
       document.querySelector('section[aria-label="Redis"] .section-toggle').textContent,
       "Redis",
     );
-    const chineseSsh = document.querySelector('.sidebar-footer button[aria-label="SSH 连接"]');
-    assert.equal(chineseSsh.title, "隐藏 SSH 连接");
-    assert.equal(chineseSsh.getAttribute("aria-pressed"), "true");
-    await act(async () => chineseSsh.click());
-    assert.equal(chineseSsh.title, "显示 SSH 连接");
-    assert.equal(document.querySelector('section[aria-label="SSH"]'), null);
     workspace.groups[0].sshConnections = [];
     workspace.groups[0].redisConnections = [];
     workspace.groups.push({

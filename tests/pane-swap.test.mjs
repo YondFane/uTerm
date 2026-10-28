@@ -417,7 +417,6 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
       assert.equal(shell().hasAttribute("data-sidebar-snap"), false);
       assert.equal(shell().hasAttribute("data-inspector-snap"), false);
     }
-    await act(async () => prefs.save({ ...prefs.settings, sidebarStyle: "navigation" }, false));
     await click(document.querySelector(".sidebar-toggle"));
     let divider = document.querySelector(".sidebar-resizer");
     await pointer(divider, "pointerdown", 600);
@@ -433,7 +432,6 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     await pointer(divider, "pointerup", 770);
     assert.equal(shell().style.getPropertyValue("--sidebar-width"), "218px");
     assert.equal(document.querySelector(".sidebar-main").hidden, false);
-    await act(async () => prefs.save({ ...prefs.settings, sidebarStyle: "classic" }, false));
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const hint = (selector) =>
       document.querySelector(selector)?.hasAttribute("data-collapse-hint") ?? false;

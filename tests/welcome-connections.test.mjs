@@ -128,16 +128,20 @@ test("welcome connection actions follow visibility and open the existing dialogs
     );
     assert.ok(buttons().every((button) => !button.disabled));
     for (let mask = 0; mask < 8; mask++) {
-      for (const [index, name] of ["SSH", "Redis", "Database"].entries()) {
-        const toggle = document.querySelector(
-          `.sidebar-footer button[aria-label="${name} connections"]`,
-        );
-        if ((toggle.getAttribute("aria-pressed") === "true") !== !!(mask & (1 << index)))
-          await act(async () => toggle.click());
-      }
+      await act(async () =>
+        settings.save(
+          {
+            ...settings.settings,
+            showSshConnections: !!(mask & 1),
+            showRedisConnections: !!(mask & 2),
+            showDatabaseConnections: !!(mask & 4),
+          },
+          false,
+        ),
+      );
       assert.deepEqual(
         buttons().map((button) => button.textContent),
-        names.filter((_, index) => mask & (1 << index)),
+        names,
       );
       assert.equal(document.querySelectorAll(".welcome-actions > button").length, 3);
     }
@@ -147,10 +151,6 @@ test("welcome connection actions follow visibility and open the existing dialogs
       showDatabaseConnections: false,
     };
     await act(async () => settings.save({ ...settings.settings, ...hiddenConnections }, false));
-    assert.equal(buttons().length, 0);
-    await act(async () =>
-      settings.save({ ...settings.settings, sidebarStyle: "navigation" }, false),
-    );
     assert.deepEqual(
       buttons().map((button) => button.textContent),
       names,
@@ -158,17 +158,6 @@ test("welcome connection actions follow visibility and open the existing dialogs
     assert.equal(document.querySelectorAll(".sidebar-rail-items button").length, 5);
     for (const [name, value] of Object.entries(hiddenConnections))
       assert.equal(settings.settings[name], value);
-    await act(async () => settings.save({ ...settings.settings, sidebarStyle: "classic" }, false));
-    assert.equal(buttons().length, 0);
-    await act(async () =>
-      settings.save(
-        {
-          ...settings.settings,
-          sidebarStyle: "navigation",
-        },
-        false,
-      ),
-    );
     const saved = localStorage.getItem(workspaceKey);
     for (const language of ["en", "zh-Hans"]) {
       await act(async () => settings.save({ ...settings.settings, language }, false));
