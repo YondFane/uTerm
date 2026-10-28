@@ -129,7 +129,6 @@ export function App() {
 
   const { settings, save: saveSettings, resizeFont } = useSettings();
   const inspectorOnLeft = settings.inspectorPosition === "left";
-  const navigationSidebar = settings.sidebarStyle === "navigation";
   const t = (key: string) => translate(activeLanguage(settings.language), key);
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [requestedSidebarWidth, setRequestedSidebarWidth] = useState(248);
@@ -183,16 +182,8 @@ export function App() {
     observer.observe(shell);
     return () => observer.disconnect();
   }, []);
-  const sidebarSize = sidebarLayout(shellWidth, requestedSidebarWidth, navigationSidebar);
-  const sidebarWidth = sidebarVisible
-    ? sidebarSize.width
-    : navigationSidebar
-      ? sidebarRailWidth
-      : 0;
-  useEffect(() => {
-    if (navigationSidebar)
-      setRequestedSidebarWidth((width) => (width <= sidebarSize.collapseWidth ? 248 : width));
-  }, [navigationSidebar, sidebarSize.collapseWidth]);
+  const sidebarSize = sidebarLayout(shellWidth, requestedSidebarWidth);
+  const sidebarWidth = sidebarVisible ? sidebarSize.width : sidebarRailWidth;
   function applyPanelLayout(width: number, ratio: number) {
     const shell = shellElement.current;
     if (!shell) return;
@@ -248,10 +239,10 @@ export function App() {
   function moveSidebarDivider(clientX: number) {
     const drag = sidebarDrag.current;
     if (!drag) return;
-    const next = sidebarLayout(shellWidth, drag.width + clientX - drag.x, navigationSidebar);
+    const next = sidebarLayout(shellWidth, drag.width + clientX - drag.x);
     drag.collapse = next.hidden;
     drag.nextWidth = next.width;
-    if (navigationSidebar && !next.hidden && !drag.expanded) {
+    if (!next.hidden && !drag.expanded) {
       drag.expanded = true;
       setSidebarVisible(true);
     }
@@ -261,10 +252,8 @@ export function App() {
     const drag = sidebarDrag.current;
     if (!drag) return;
     clearPanelPreview();
-    if (navigationSidebar) {
-      setRequestedSidebarWidth(drag.restoreWidth);
-      setSidebarVisible(drag.wasVisible);
-    } else setRequestedSidebarWidth(drag.nextWidth);
+    setRequestedSidebarWidth(drag.restoreWidth);
+    setSidebarVisible(drag.wasVisible);
     sidebarDrag.current = null;
     setResizingSidebar(false);
   }
@@ -293,7 +282,7 @@ export function App() {
       sidebarDrag.current = null;
       setResizingSidebar(false);
     }
-    const next = sidebarLayout(shellWidth, width, navigationSidebar);
+    const next = sidebarLayout(shellWidth, width);
     if (next.hidden) {
       setSidebarVisible(false);
     } else {
@@ -356,7 +345,7 @@ export function App() {
               ? sidebarSize.maximum
               : event.key === "Enter"
                 ? 248
-                : navigationSidebar && !sidebarVisible && event.key === "ArrowRight"
+                : !sidebarVisible && event.key === "ArrowRight"
                   ? sidebarSize.collapseWidth + 24
                   : (sidebarDrag.current?.nextWidth ?? sidebarWidth) +
                     (event.key === "ArrowLeft" ? -24 : 24),
@@ -2075,13 +2064,13 @@ export function App() {
       }
       data-inspector-position={settings.inspectorPosition}
       data-sidebar-style={settings.sidebarStyle}
-      data-sidebar-collapsed={(navigationSidebar && !sidebarVisible) || undefined}
+      data-sidebar-collapsed={!sidebarVisible || undefined}
       data-resizing-inspector={resizingInspector || undefined}
       data-resizing-sidebar={resizingSidebar || undefined}
       data-expanded-inspector={
         (inspectorVisible && gitOpen && gitExpanded && gitDiffActive) || undefined
       }
-      className={`app-shell${sidebarVisible || navigationSidebar ? "" : " sidebar-hidden"}${runtime?.platform === "macos" ? " platform-macos" : ""}${inspectorVisible ? " with-inspector" : ""}${inspectorVisible && (filesOpen || directoryOpen) ? " with-files" : ""}`}
+      className={`app-shell${runtime?.platform === "macos" ? " platform-macos" : ""}${inspectorVisible ? " with-inspector" : ""}${inspectorVisible && (filesOpen || directoryOpen) ? " with-files" : ""}`}
     >
       <BreakReminder />
       <Sidebar
@@ -3012,42 +3001,36 @@ export function App() {
                       </button>
                     )}
                     <div className="welcome-connections">
-                      {(navigationSidebar || settings.showSshConnections) && (
-                        <button
-                          className="welcome-action"
-                          disabled={!runtime || !workspace}
-                          onClick={() => setSshDialog({})}
-                        >
-                          <SidebarIcon name="terminal" />
-                          <span>
-                            <strong>{tx("添加 SSH 连接")}</strong>
-                          </span>
-                        </button>
-                      )}
-                      {(navigationSidebar || settings.showRedisConnections) && (
-                        <button
-                          className="welcome-action"
-                          disabled={!runtime || !workspace}
-                          onClick={() => setRedisDialog({})}
-                        >
-                          <SidebarIcon name="database" />
-                          <span>
-                            <strong>{tx("添加 Redis 连接")}</strong>
-                          </span>
-                        </button>
-                      )}
-                      {(navigationSidebar || settings.showDatabaseConnections) && (
-                        <button
-                          className="welcome-action"
-                          disabled={!runtime || !workspace}
-                          onClick={() => setDatabaseDialog({})}
-                        >
-                          <SidebarIcon name="sqlDatabase" />
-                          <span>
-                            <strong>{tx("添加数据库连接")}</strong>
-                          </span>
-                        </button>
-                      )}
+                      <button
+                        className="welcome-action"
+                        disabled={!runtime || !workspace}
+                        onClick={() => setSshDialog({})}
+                      >
+                        <SidebarIcon name="terminal" />
+                        <span>
+                          <strong>{tx("添加 SSH 连接")}</strong>
+                        </span>
+                      </button>
+                      <button
+                        className="welcome-action"
+                        disabled={!runtime || !workspace}
+                        onClick={() => setRedisDialog({})}
+                      >
+                        <SidebarIcon name="database" />
+                        <span>
+                          <strong>{tx("添加 Redis 连接")}</strong>
+                        </span>
+                      </button>
+                      <button
+                        className="welcome-action"
+                        disabled={!runtime || !workspace}
+                        onClick={() => setDatabaseDialog({})}
+                      >
+                        <SidebarIcon name="sqlDatabase" />
+                        <span>
+                          <strong>{tx("添加数据库连接")}</strong>
+                        </span>
+                      </button>
                     </div>
                   </div>
                   <div className="welcome-footer">

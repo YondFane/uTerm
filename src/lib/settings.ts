@@ -47,7 +47,7 @@ export interface Settings {
   inspectorPosition: "left" | "right";
   interfaceTheme: InterfaceThemeId;
   activeIconColor: string;
-  sidebarStyle: "classic" | "navigation";
+  sidebarStyle: "navigation";
   darkTheme: string;
   lightTheme: string;
   customThemes: Theme[];
@@ -214,7 +214,10 @@ export function readSettings(raw: string | null): Settings {
       parsed.interfaceTheme === undefined ? defaults.interfaceTheme : parsed.interfaceTheme,
     activeIconColor:
       parsed.activeIconColor === undefined ? defaults.activeIconColor : parsed.activeIconColor,
-    sidebarStyle: parsed.sidebarStyle === undefined ? defaults.sidebarStyle : parsed.sidebarStyle,
+    sidebarStyle:
+      parsed.sidebarStyle === undefined || parsed.sidebarStyle === "classic"
+        ? defaults.sidebarStyle
+        : parsed.sidebarStyle,
     usageRefreshInterval:
       parsed.usageRefreshInterval === undefined
         ? defaults.usageRefreshInterval
@@ -271,7 +274,7 @@ export function readSettings(raw: string | null): Settings {
   if (
     !Array.isArray(v.customThemes) ||
     typeof v.activeIconColor !== "string" ||
-    !["classic", "navigation"].includes(v.sidebarStyle) ||
+    v.sidebarStyle !== "navigation" ||
     (v.activeIconColor !== "" && !/^#[0-9a-f]{6}$/i.test(v.activeIconColor)) ||
     v.customThemes.length > 30 ||
     !v.customThemes.every(validTheme) ||

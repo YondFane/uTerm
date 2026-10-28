@@ -158,11 +158,10 @@ test("App keeps navigation and footer controls visible when only the sidebar lis
         new dom.window.KeyboardEvent("keydown", { code: "KeyB", ctrlKey: true, bubbles: true }),
       ),
     );
-    assert.equal(sidebar().hidden, true);
-    assert.equal(document.querySelector('[aria-label="Add menu"]'), null);
-    assert.equal(width(), 0);
-    assert.equal(shell().classList.contains("sidebar-hidden"), true);
-    await save({ sidebarStyle: "navigation" });
+    assert.ok(document.querySelector('[aria-label="Add menu"]'));
+    await act(async () =>
+      window.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape" })),
+    );
     collapsed();
     await click('.sidebar-rail [aria-label="Projects and sessions"]');
     assert.equal(content().hidden, false);
@@ -219,16 +218,9 @@ test("App keeps navigation and footer controls visible when only the sidebar lis
     await click('.sidebar-rail [aria-label="Projects and sessions"]');
     assert.equal(width(), 180);
     await key("Home");
-    await save({ sidebarStyle: "classic" });
-    assert.equal(sidebar().hidden, true);
-    assert.equal(width(), 0);
+    collapsed();
     await click("main .sidebar-reopen");
-    await pointer("pointerdown", 180);
-    await pointer("pointermove", 31);
-    await pointer("pointerup", 31);
-    assert.equal(width(), 31);
-    await save({ sidebarStyle: "navigation" });
-    assert.equal(width(), 248);
+    assert.equal(width(), 180);
     assert.equal(content().hidden, false);
     assert.equal(localStorage.getItem(workspaceKey), savedWorkspace);
     assert.equal(

@@ -168,7 +168,7 @@ test("App isolates Database views from inspectors, restores the selected tool an
         assert.ok(document.querySelector(".database-component-workspace"));
         assert.equal(shell().classList.contains("with-inspector"), false);
         assert.ok(!inspector(), `${tool} must hide with its grid column (${position})`);
-        assert.ok(document.querySelector(".sidebar-footer"));
+        assert.ok(document.querySelector(".sidebar-rail-footer"));
         assert.equal(
           calls
             .slice(beforeComponents)
