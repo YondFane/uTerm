@@ -1062,42 +1062,44 @@ export interface SessionRoster {
   sessions: SessionConfig[];
   splitGroups?: SplitNode[];
 }
+function projectRoster(project: Project): SessionRoster {
+  return {
+    id: project.id,
+    workspaceId: project.workspaceId ?? "local",
+    projectId: project.id,
+    kind: "project",
+    sessions: project.sessions,
+    splitGroups: project.splitGroups,
+  };
+}
+function sshRoster(workspaceId: string, connection: SshConnection): SessionRoster {
+  return {
+    id: `ssh:${connection.id}`,
+    workspaceId,
+    projectId: null,
+    kind: "ssh",
+    sessions: connection.sessions,
+    splitGroups: connection.splitGroups,
+    connection,
+  };
+}
+function looseRoster(group: WorkspaceGroup, kind: "terminals" | "chats"): SessionRoster {
+  return {
+    id: `loose:${group.id}:${kind}`,
+    workspaceId: group.id,
+    projectId: null,
+    kind,
+    sessions: group[kind] ?? [],
+    splitGroups: kind === "terminals" ? group.terminalSplits : group.chatSplits,
+  };
+}
 export function sessionRosters(workspace: Workspace): SessionRoster[] {
   return [
-    ...workspace.projects.map((project) => ({
-      id: project.id,
-      workspaceId: project.workspaceId ?? "local",
-      projectId: project.id,
-      kind: "project" as const,
-      sessions: project.sessions,
-      splitGroups: project.splitGroups,
-    })),
+    ...workspace.projects.map(projectRoster),
     ...(workspace.groups ?? []).flatMap((group) => [
-      ...(group.sshConnections ?? []).map((connection) => ({
-        id: `ssh:${connection.id}`,
-        workspaceId: group.id,
-        projectId: null,
-        kind: "ssh" as const,
-        sessions: connection.sessions,
-        splitGroups: connection.splitGroups,
-        connection,
-      })),
-      {
-        id: `loose:${group.id}:terminals`,
-        workspaceId: group.id,
-        projectId: null,
-        kind: "terminals" as const,
-        sessions: group.terminals ?? [],
-        splitGroups: group.terminalSplits,
-      },
-      {
-        id: `loose:${group.id}:chats`,
-        workspaceId: group.id,
-        projectId: null,
-        kind: "chats" as const,
-        sessions: group.chats ?? [],
-        splitGroups: group.chatSplits,
-      },
+      ...(group.sshConnections ?? []).map((connection) => sshRoster(group.id, connection)),
+      looseRoster(group, "terminals"),
+      looseRoster(group, "chats"),
     ]),
   ];
 }
@@ -1138,14 +1140,43 @@ export function updateRoster(
     ),
   };
 }
+/**
+ * Resolve the selected session's roster, or the selected project when no session is selected.
+ * 查找当前工作区中所选会话的分组，无所选会话时采用所选项目。
+ */
 export function selectedRoster(workspace: Workspace): SessionRoster | undefined {
-  return sessionRosters(workspace).find(
-    (roster) =>
-      roster.workspaceId === workspace.selectedWorkspace &&
-      (workspace.selectedSession
-        ? roster.sessions.some((session) => session.id === workspace.selectedSession)
-        : roster.projectId !== null && roster.projectId === workspace.selectedProject),
+  // Use the selected project as a hint, but recover from stale selection without building all rosters.
+  // 优先检查所选项目，选择信息过期时仍回退查找，且不构造所有会话分组。
+  const preferred = workspace.projects.find(
+    (project) =>
+      (project.workspaceId ?? "local") === workspace.selectedWorkspace &&
+      project.id === workspace.selectedProject,
   );
+  if (
+    preferred &&
+    (!workspace.selectedSession ||
+      preferred.sessions.some((session) => session.id === workspace.selectedSession))
+  )
+    return projectRoster(preferred);
+  if (!workspace.selectedSession) return undefined;
+  const project = workspace.projects.find(
+    (project) =>
+      (project.workspaceId ?? "local") === workspace.selectedWorkspace &&
+      project.sessions.some((session) => session.id === workspace.selectedSession),
+  );
+  if (project) return projectRoster(project);
+  for (const group of workspace.groups ?? []) {
+    if (group.id !== workspace.selectedWorkspace) continue;
+    const connection = group.sshConnections?.find((connection) =>
+      connection.sessions.some((session) => session.id === workspace.selectedSession),
+    );
+    if (connection) return sshRoster(group.id, connection);
+    for (const kind of ["terminals", "chats"] as const) {
+      if (group[kind]?.some((session) => session.id === workspace.selectedSession))
+        return looseRoster(group, kind);
+    }
+  }
+  return undefined;
 }
 export function nextSessionToClose(workspace: Workspace): string | undefined {
   const project = workspace.projects.find((item) => item.id === workspace.selectedProject);
@@ -1212,20 +1243,34 @@ export function groupableSessions(workspace: Workspace, id: string): SessionConf
       (!root || !leaves(root).includes(other.id)),
   );
 }
+/**
+ * List sessions in roster order, resolving explicit, worktree and project directories in that order.
+ * 按会话分组顺序列出会话，目录依次采用会话指定目录、Worktree 目录和项目目录。
+ */
 export function sessionEntries(
   workspace: Workspace,
 ): { session: SessionConfig; directory: string }[] {
-  return sessionRosters(workspace).flatMap((roster) =>
-    roster.sessions.map((session) => {
-      const project = workspace.projects.find((project) => project.id === roster.projectId);
+  const entries: { session: SessionConfig; directory: string }[] = [];
+  for (const project of workspace.projects) {
+    if (!project.sessions.length) continue;
+    const worktrees = new Map(project.worktrees?.map((worktree) => [worktree.id, worktree.path]));
+    for (const session of project.sessions) {
       const directory =
         session.directory ??
-        project?.worktrees?.find((worktree) => worktree.id === session.worktreeId)?.path ??
-        project?.directory ??
-        "";
-      return { session, directory };
-    }),
-  );
+        (session.worktreeId === undefined ? undefined : worktrees.get(session.worktreeId)) ??
+        project.directory;
+      entries.push({ session, directory });
+    }
+  }
+  const append = (sessions: SessionConfig[]) => {
+    for (const session of sessions) entries.push({ session, directory: session.directory ?? "" });
+  };
+  for (const group of workspace.groups ?? []) {
+    for (const connection of group.sshConnections ?? []) append(connection.sessions);
+    append(group.terminals ?? []);
+    append(group.chats ?? []);
+  }
+  return entries;
 }
 function normalizeSelection(workspace: Workspace): Workspace {
   const rosters = sessionRosters(workspace).filter(

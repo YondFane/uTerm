@@ -7,7 +7,7 @@ import { tx } from "../lib/i18n";
 import { matchesSsh } from "../lib/ssh";
 import { useSettings } from "../lib/SettingsContext";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from "react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ordered,
@@ -512,19 +512,28 @@ export function Sidebar({
     else if (removal.kind === "redis") removeRedis?.(removal.connection);
     else removeDatabase?.(removal.connection);
   }
-  const projects = ordered(
-    workspace?.projects.filter((project) => project.workspaceId === workspace.selectedWorkspace) ??
-      [],
-  );
-  if (settings.projectOrder === "name")
-    projects.sort(
-      (a, b) => Number(!!b.pinned) - Number(!!a.pinned) || a.name.localeCompare(b.name),
+  const projects = useMemo(() => {
+    const projects = ordered(
+      workspace?.projects.filter(
+        (project) => project.workspaceId === workspace.selectedWorkspace,
+      ) ?? [],
     );
+    if (settings.projectOrder === "name")
+      projects.sort(
+        (a, b) => Number(!!b.pinned) - Number(!!a.pinned) || a.name.localeCompare(b.name),
+      );
+    return projects;
+  }, [workspace?.projects, workspace?.selectedWorkspace, settings.projectOrder]);
+  const projectById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project])),
+    [projects],
+  );
   const rosters = workspace
     ? sessionRosters(workspace).filter(
         (roster) => roster.workspaceId === workspace.selectedWorkspace,
       )
     : [];
+  const rosterById = new Map(rosters.map((roster) => [roster.id, roster]));
   const openMenu = (event: MouseEvent, kind: SidebarMenu["kind"], id: string, project: string) => {
     event.preventDefault();
     setPopover(null);
@@ -670,10 +679,10 @@ export function Sidebar({
     }));
   }
   function projectTarget(sourceId: string, x: number, y: number) {
-    const source = projects.find((item) => item.id === sourceId);
+    const source = projectById.get(sourceId);
     if (!source) return null;
     for (const row of document.querySelectorAll<HTMLElement>(".folder-row[data-project-id]")) {
-      const target = projects.find((item) => item.id === row.dataset.projectId);
+      const target = projectById.get(row.dataset.projectId ?? "");
       const box = row.getBoundingClientRect();
       if (
         target &&
@@ -869,7 +878,7 @@ export function Sidebar({
     );
   }
   function worktreeBlock(project: Project, worktree: Worktree, pinnedParent = false, depth = 0) {
-    const roster = rosters.find((roster) => roster.id === project.id);
+    const roster = rosterById.get(project.id);
     if (!roster) return null;
     return (
       <div key={worktree.id}>
@@ -894,7 +903,7 @@ export function Sidebar({
     );
   }
   function projectBlock(project: Project) {
-    const roster = rosters.find((roster) => roster.id === project.id);
+    const roster = rosterById.get(project.id);
     if (!roster) return null;
     return (
       <div key={project.id}>
@@ -927,7 +936,7 @@ export function Sidebar({
     );
   }
   for (const roster of rosters) {
-    const project = projects.find((project) => project.id === roster.projectId);
+    const project = roster.projectId === null ? undefined : projectById.get(roster.projectId);
     if (roster.kind === "ssh" || project?.pinned || project?.sessions.length) continue;
     for (const session of roster.sessions.filter(
       (session) =>
@@ -1227,7 +1236,7 @@ export function Sidebar({
                 (group?.sshConnections ?? [])
                   .filter((connection) => matchesSsh(connection, sshQuery))
                   .map((connection) => {
-                    const roster = rosters.find((item) => item.id === `ssh:${connection.id}`)!;
+                    const roster = rosterById.get(`ssh:${connection.id}`)!;
                     return (
                       <div key={connection.id} className="ssh-connection">
                         <div
