@@ -1243,6 +1243,34 @@ Connected, busy or dirty profiles cannot be edited or removed.
 
 ## Files and source control
 
+### Opening changed files
+
+In Git → Changes, right-click a file under Staged or Working directory and choose Open file to open
+its current working-directory content in the file editor. Clicking a file still opens its staged or
+working diff. Open file also returns from an expanded diff to an already open file tab.
+
+The menu supports Shift+F10, arrow keys, Home/End and Escape. Opening uses the existing editor tabs,
+save-conflict protection and file-size limits. Missing or unreadable files show an error and retain
+the current editor. Files outside the selected project directory have Open file disabled, including
+when the selected directory is a repository subdirectory.
+
+#### Validation and limits
+
+- Focused Windows regressions cover editor reads versus click diffs, staged/working and untracked
+  files, bilingual menu labels, keyboard navigation, menu dismissal, read failures, draft conflicts
+  and selected-root path conversion, including Windows extended and UNC paths. App regression also
+  verifies returning from an expanded diff to the same cached file while retaining its draft.
+
+- An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.gitopenfile`) uses a disposable local
+  Git repository and real file reads. Native inspection verifies the two-item Chinese menu, clicking
+  for a staged diff, opening full current content including unstaged lines, and returning from an
+  expanded diff to an existing editor tab. macOS/Linux runtime acceptance remains pending.
+
+- Frozen dependency installation, repository formatting, localization, documentation,
+  TypeScript/production and isolated desktop builds pass. The full frontend/build-helper suite
+  reports 292 passed and 11 optional/platform checks skipped. The production build retains its
+  existing large-chunk warning.
+
 ### Rolling back one file
 
 In Git → Changes, right-click a file in Staged or Working directory (or focus it and press

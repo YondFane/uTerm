@@ -14,6 +14,26 @@ export interface GitSnapshot {
   truncated: boolean;
 }
 
+export function gitFilePath(directory: string, root: string, path: string): string | null {
+  const normalize = (value: string) =>
+    value
+      .replace(/^\\\\\?\\UNC\\/i, "//")
+      .replace(/^\\\\\?\\/, "")
+      .replace(/\\/g, "/")
+      .replace(/\/+$/, "");
+  const prefix = `${normalize(directory)}/`;
+  const target = `${normalize(root)}/${path}`;
+  const windows = /^[a-z]:\//i.test(target) || target.startsWith("//");
+  if (
+    !(windows ? target.toLowerCase().startsWith(prefix.toLowerCase()) : target.startsWith(prefix))
+  )
+    return null;
+  const relative = target.slice(prefix.length);
+  return relative && relative.split("/").every((part) => part && part !== "." && part !== "..")
+    ? relative
+    : null;
+}
+
 export function sameGitSnapshot(previous: GitSnapshot | null, next: GitSnapshot): boolean {
   if (
     !previous ||

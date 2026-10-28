@@ -3316,6 +3316,10 @@ export function App() {
           expanded={gitExpanded}
           onExpandedChange={changeGitExpanded}
           onDiffPathChange={setGitDiffPath}
+          onOpenFile={(path) => {
+            setGitDiffActive(false);
+            void editor.open(fileDirectory, path);
+          }}
           headerActions={inspectorActions}
           key={fileDirectory}
           directory={fileDirectory}

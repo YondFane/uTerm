@@ -37,6 +37,7 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
   en: {
     ...messages,
     ...backendMessages,
+    打开文件: "Open file",
     回滚文件: "Roll back file",
     确认回滚: "Confirm rollback",
     "Git 文件操作": "Git file actions",

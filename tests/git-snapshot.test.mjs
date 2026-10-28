@@ -1,6 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { sameGitSnapshot } from "../src/lib/git-snapshot.ts";
+import { gitFilePath, sameGitSnapshot } from "../src/lib/git-snapshot.ts";
+
+test("Git file paths stay relative to the selected root, including Windows subdirectories", () => {
+  assert.equal(gitFilePath("/repo", "/repo", "中文 file.txt"), "中文 file.txt");
+  assert.equal(gitFilePath("/repo/src", "/repo", "src/file.txt"), "file.txt");
+  assert.equal(gitFilePath("/repo/src", "/repo", "src-other/file.txt"), null);
+  assert.equal(gitFilePath("/repo/src", "/repo", "README.md"), null);
+  assert.equal(gitFilePath("/repo", "/repo", "../outside.txt"), null);
+  assert.equal(gitFilePath("/repo", "/repo", "src/../../outside.txt"), null);
+  assert.equal(gitFilePath("/repo", "/Repo", "file.txt"), null);
+  assert.equal(
+    gitFilePath("\\\\?\\C:\\Repo\\src\\", "c:/repo", "src/中文 file.txt"),
+    "中文 file.txt",
+  );
+  assert.equal(
+    gitFilePath("\\\\?\\UNC\\server\\share\\repo\\src", "//server/share/repo", "src/file.txt"),
+    "file.txt",
+  );
+});
 
 const snapshot = {
   root: "/project",

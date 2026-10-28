@@ -318,6 +318,27 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     assert.equal(document.querySelector(".git-main-diff").hidden, false);
     assert.equal(diffTab().getAttribute("aria-selected"), "true");
     assert.ok(document.querySelector(".git-panel .git-list-area"));
+    const openGitFile = async () => {
+      await act(async () =>
+        document.querySelector(".git-files button").dispatchEvent(
+          new dom.window.MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+          }),
+        ),
+      );
+      await click(document.querySelector(".git-file-menu button"));
+    };
+    await openGitFile();
+    assert.equal(document.querySelector(".editor-test").value, "unsaved draft");
+    assert.equal(document.querySelector(".git-main-diff").hidden, true);
+    const fileId = globalThis.paneEditor.document.id;
+    await click(diffTab());
+    await openGitFile();
+    assert.equal(globalThis.paneEditor.document.id, fileId);
+    assert.equal(document.querySelector(".git-main-diff").hidden, true);
+    assert.equal(document.querySelector(".editor-test").parentElement.hidden, false);
+    await click(diffTab());
     assert.equal(document.querySelector(".git-panel").hasAttribute("data-diff-focused"), false);
     assert.ok(document.querySelector("main > .toolbar"));
     assert.equal(swap(), null);
