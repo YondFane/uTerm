@@ -365,8 +365,8 @@ export function SettingsPanel({
                 <div className="sidebar-style-options">
                   {(
                     [
-                      ["classic", t("经典侧栏"), t("分区列表与底部操作。")],
                       ["navigation", t("图标导航侧栏"), t("左侧图标导航与右侧列表。")],
+                      ["classic", t("经典侧栏"), t("分区列表与底部操作。")],
                     ] as const
                   ).map(([style, name, description]) => (
                     <button

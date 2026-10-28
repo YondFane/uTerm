@@ -805,6 +805,7 @@ export const messages: Record<string, string> = {
   "删除工作区“{p0}”？不会删除磁盘文件。":
     "Delete workspace “{p0}”? Files on disk will not be deleted.",
   确认删除: "Confirm deletion",
+  删除目录: "Delete directory",
   项目排序: "Project order",
   手动: "Manual",
   名称: "Name",

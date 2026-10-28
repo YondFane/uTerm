@@ -103,7 +103,10 @@ test("App isolates Database views from inspectors, restores the selected tool an
   ];
   const original = JSON.stringify(state);
   localStorage.setItem(workspaceKey, original);
-  localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
+  localStorage.setItem(
+    settingsKey,
+    JSON.stringify({ ...defaults, sidebarStyle: "classic", language: "en" }),
+  );
   const calls = [];
   mockIPC((command, args) => {
     calls.push({ command, args });

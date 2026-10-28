@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-27
+updated: 2026-10-28
 ---
 
 # uTerm feature guide
@@ -1585,32 +1585,38 @@ bar, resizing or leaving the window closes it. Copy and opening failures appear 
 
 ### Deleting files and directories
 
-In the local or remote file tree, right-click a file or directory and choose Delete. Review its path
-and confirm deletion, or choose Cancel to retain it. Directory confirmation explicitly includes all
-subdirectories and files, including hidden entries and entries beyond the list's display limit.
+In the local or remote file tree, right-click a file or directory and choose Delete. Directory
+deletion opens a centered modal with the full path and a warning that all subdirectories and files
+will be removed, including hidden entries and entries beyond the list's display limit. Cancel is
+focused initially; Cancel or Escape closes the dialog and returns focus to the directory row.
 
 - Deletion is permanent and cannot be undone. The selected project or remote root cannot be deleted.
   The existing editor save guard runs before deletion; save conflicts block the operation until
   resolved or explicitly discarded.
 - Selecting a symbolic link or a path through a link remains read-only. Deleting a containing
   directory removes its nested links without following their targets.
-- Completion refreshes the list. Failure also refreshes it and leaves the confirmation available;
-  some contents may already be deleted. Permission errors, connection loss or unsupported remote
+- The confirmation closes before editor save protection runs, allowing its own conflict dialog to
+  remain usable. Replacing the target, switching roots or unmounting cancels a deferred mutation.
+- Completion refreshes the list. Failure also refreshes it and reopens directory confirmation; some
+  contents may already be deleted. Permission errors, connection loss or unsupported remote
   filenames stop the operation without automatically retrying or restoring deleted contents.
 
 #### Deletion checks on macOS
 
-- Component regression checks cover Simplified Chinese and English confirmation, cancellation,
-  root/link restrictions, deferred editor protection, duplicate requests, visible failures and list
-  refresh for local and remote commands. All 285 frontend/build-helper tests pass, with ten optional
-  checks skipped. TypeScript, localization, formatting, documentation checks, the production build
-  and the debug desktop build pass.
+- Component regression checks cover Simplified Chinese and English confirmation, cancellation, modal
+  placement and initial Cancel focus, root/link restrictions, deferred editor protection, unmount
+  cancellation, duplicate requests, visible failures and list refresh for local and remote commands.
+  All 287 frontend/build-helper tests pass, with ten optional checks skipped. TypeScript,
+  localization, formatting, documentation checks, the production build and the debug desktop build
+  pass.
 - All 117 regular backend tests pass, with nine optional checks ignored. Temporary filesystem and
   real system SFTP-server fixtures cover nested/empty directories, hidden files, root/traversal
   rejection, missing targets, preserved siblings and external, cyclic and broken links. The SFTP
   fixture includes 2,100 files to verify deletion beyond the display limit.
-- Native deletion confirmation, credentialed remote servers and Windows/Linux runtime acceptance
-  remain unverified. The production build retains its existing large-chunk warning.
+- An isolated macOS app (`sh.uterm.desktop.qa.dialogsidebar`) verifies the centered directory modal,
+  full path, initially focused Cancel button and Escape returning focus to the directory without
+  deleting it. Credentialed remote servers and Windows/Linux runtime acceptance remain unverified.
+  The production build retains its existing large-chunk warning.
 
 ### Automatic file-tree refresh
 
@@ -3096,11 +3102,12 @@ shortcuts.
 
 ### Sidebar styles
 
-Settings → Appearance → Sidebar style provides two preview cards. Classic sidebar is the default,
-including for existing saved settings. Icon navigation sidebar places a vertical icon rail beside
-the content list. Choosing a card applies and saves it immediately across workspaces and restarts; a
-failed save displays an error and keeps the saved style. Restoring interface and terminal defaults
-selects Classic sidebar.
+Settings → Appearance → Sidebar style provides two preview cards. Icon navigation sidebar is on the
+left and is the default for new settings and saved settings without a sidebar style. Existing
+explicit Classic or Icon navigation choices are retained. The navigation style places a vertical
+icon rail beside the content list. Choosing a card applies and saves it immediately across
+workspaces and restarts; a failed save displays an error and keeps the saved style. Restoring
+interface and terminal defaults selects Icon navigation sidebar.
 
 - The navigation rail offers All, Projects and sessions, SSH connections, Redis connections and
   Database connections. All three connection categories, their lists and Add actions remain
@@ -3119,6 +3126,17 @@ selects Classic sidebar.
   use this order. The navigation style has no connection switches or footer below the content list;
   the Classic sidebar retains its footer controls. Selected navigation icons use the configured Icon
   highlight color; both styles adapt to narrow sidebar widths.
+
+#### Sidebar-style checks on macOS
+
+- The full frontend suite passes with 287 tests and ten optional skips. Focused checks cover new and
+  missing-field defaults, preserved explicit style choices, the first navigation card, switching,
+  failed saves and resetting to navigation. Existing Classic-layout tests select that style
+  explicitly. Formatting, localization, documentation, TypeScript/production and isolated desktop
+  builds pass.
+- The isolated app (`sh.uterm.desktop.qa.dialogsidebar`) verifies that a fresh configuration opens
+  with the navigation rail and that Appearance places the selected navigation card on the left.
+  Windows/Linux runtime acceptance of the new default remains pending.
 
 #### Sidebar-style checks on Windows
 

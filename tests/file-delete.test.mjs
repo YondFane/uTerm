@@ -10,6 +10,12 @@ test("file deletion requires explicit confirmation, preserves save guards and re
   for (const key of ["window", "document", "navigator", "HTMLElement", "Node"])
     Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  dom.window.HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  dom.window.HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
   const server = await createServer({
     configFile: false,
     server: { middlewareMode: true, hmr: false },
@@ -108,7 +114,18 @@ test("file deletion requires explicit confirmation, preserves save guards and re
         assert.equal((await menuFor("")).disabled, true);
         assert.equal((await menuFor("link")).disabled, true);
         await click(await menuFor("folder"));
-        const message = document.querySelector(".file-management p").textContent;
+        const dialog = document.querySelector(".file-delete-dialog");
+        assert.equal(dialog.open, true);
+        assert.equal(dialog.parentElement, document.body);
+        assert.equal(document.activeElement.textContent, language === "en" ? "Cancel" : "取消");
+        assert.equal(document.querySelector(".file-panel .file-management"), null);
+        assert.match(
+          dialog.querySelector(".file-delete-path").textContent,
+          /(?:\/fixture|ssh:\/\/fixture\/srv)\/folder/,
+        );
+        const message = document.querySelector(
+          ".file-management p:not(.file-delete-path)",
+        ).textContent;
         assert.match(message, /folder/);
         assert.match(
           message,
@@ -118,6 +135,15 @@ test("file deletion requires explicit confirmation, preserves save guards and re
         assert.equal(writes.length, 0);
         await click(document.querySelector('.file-management button[type="button"]'));
         assert.equal(document.querySelector(".file-management"), null);
+        assert.equal(writes.length, 0);
+        assert.equal(document.activeElement.title, "folder");
+        await click(await menuFor("folder"));
+        await act(async () =>
+          document
+            .querySelector("dialog")
+            .dispatchEvent(new window.Event("cancel", { cancelable: true })),
+        );
+        assert.equal(document.querySelector(".file-delete-dialog"), null);
         assert.equal(writes.length, 0);
         await click(await menuFor("file.txt"));
         assert.match(document.querySelector(".file-management p").textContent, /file\.txt/);
@@ -129,6 +155,7 @@ test("file deletion requires explicit confirmation, preserves save guards and re
         await click(await menuFor("folder"));
         await submit();
         assert.equal(writes.length, 0);
+        assert.equal(document.querySelector(".file-delete-dialog").open, false);
         fail = true;
         const previousReads = reads;
         await act(async () => guardedAction());
@@ -136,6 +163,7 @@ test("file deletion requires explicit confirmation, preserves save guards and re
         assert.ok(reads > previousReads);
         assert.match(document.querySelector('[role="alert"]').textContent, /Permission denied/);
         assert.ok(document.querySelector(".file-management"));
+        assert.equal(document.querySelector(".file-delete-dialog").open, true);
         fail = false;
         await submit();
         await act(async () => guardedAction());
@@ -156,10 +184,37 @@ test("file deletion requires explicit confirmation, preserves save guards and re
         await act(async () => finish());
         assert.equal(document.querySelector(".file-management"), null);
         assert.equal(document.querySelector('.file-row[title="folder"]'), null);
+        await act(async () => guardedAction());
+        assert.equal(writes.length, 2);
       }
     }
-  } finally {
+    deleted = false;
+    await act(async () =>
+      root.render(
+        React.createElement(FilePanel, {
+          key: "stale",
+          directory: "/old",
+          mode: "tree",
+          request: 0,
+          resizeHandle: null,
+          headerActions: null,
+          setMode() {},
+          open() {},
+          beforeMutation(action) {
+            guardedAction = action;
+          },
+        }),
+      ),
+    );
+    await click(await menuFor("folder"));
+    await submit();
+    const stale = guardedAction;
+    const count = writes.length;
     await act(async () => root.unmount());
+    await act(async () => stale());
+    assert.equal(writes.length, count);
+  } finally {
+    if (document.getElementById("root").hasChildNodes()) await act(async () => root.unmount());
     clearMocks();
     await server.close();
     dom.window.close();

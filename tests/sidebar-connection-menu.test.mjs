@@ -29,7 +29,10 @@ test("connection context menus target their row, retain edit guards and dismiss 
     );
     const { defaults, settingsKey } = await server.ssrLoadModule("/src/lib/settings.ts");
     const { emptyWorkspace } = await server.ssrLoadModule("/src/lib/workspace.ts");
-    localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
+    localStorage.setItem(
+      settingsKey,
+      JSON.stringify({ ...defaults, sidebarStyle: "classic", language: "en" }),
+    );
     const workspace = emptyWorkspace();
     const group = workspace.groups[0];
     group.sshConnections = ["first", "second"].map((id) => ({

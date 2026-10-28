@@ -114,6 +114,8 @@ test("sidebar navigation filters existing lists without changing sessions, profi
       document.querySelector(`#sidebar-sections section[aria-label="${translate("en", name)}"]`);
     localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
     await render();
+    assert.ok(document.querySelector(".sidebar-rail"));
+    await save({ sidebarStyle: "classic" });
     assert.equal(document.querySelector(".sidebar-rail"), null);
     assert.ok(document.querySelector('.sidebar-footer [aria-label="Settings"]'));
     assert.equal(document.querySelectorAll(".sidebar-connection-toggles button").length, 3);

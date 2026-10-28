@@ -32,7 +32,10 @@ test("sidebar folding, add actions and visibility retain active data and report 
     const { emptyWorkspace } = await server.ssrLoadModule("/src/lib/workspace.ts");
     const { showSshConnections, showRedisConnections, showDatabaseConnections, ...oldSettings } =
       defaults;
-    localStorage.setItem(settingsKey, JSON.stringify({ ...oldSettings, language: "en" }));
+    localStorage.setItem(
+      settingsKey,
+      JSON.stringify({ ...oldSettings, sidebarStyle: "classic", language: "en" }),
+    );
     const workspace = emptyWorkspace();
     workspace.groups[0].sshConnections = [
       {
