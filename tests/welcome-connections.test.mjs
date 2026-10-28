@@ -71,7 +71,10 @@ test("welcome connection actions follow visibility and open the existing dialogs
     const { emptyWorkspace, workspaceKey } = await server.ssrLoadModule("/src/lib/workspace.ts");
     const workspace = emptyWorkspace();
     localStorage.setItem(workspaceKey, JSON.stringify(workspace));
-    localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
+    localStorage.setItem(
+      settingsKey,
+      JSON.stringify({ ...defaults, sidebarStyle: "classic", language: "en" }),
+    );
     const calls = [];
     let resolveRuntime;
     let controlReady;

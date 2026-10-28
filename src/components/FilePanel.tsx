@@ -3,7 +3,8 @@ import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
 import type { ReactNode } from "react";
 import { ToolbarIcon } from "./SidebarIcon";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { fileInvoke, isRemoteDirectory, displayDirectory } from "../lib/file-target";
 import { invoke } from "@tauri-apps/api/core";
 import { clipboardPath } from "../lib/file-document";
@@ -202,6 +203,12 @@ export function FilePanel({
   const [action, setAction] = useState("file");
   const [name, setName] = useState("");
   const [mutating, setMutating] = useState(false);
+  const deleteDialog = useRef<HTMLDialogElement>(null);
+  const cancelDelete = useRef<HTMLButtonElement>(null);
+  const deleteTitle = useId();
+  const mutationAttempt = useRef(0);
+  const mutationInFlight = useRef(false);
+  const directoryDelete = action === "delete" && !!target?.directory;
   const [menu, setMenu] = useState<{ entry: Entry; x: number; y: number; quick?: boolean } | null>(
     null,
   );
@@ -216,11 +223,33 @@ export function FilePanel({
     // A draft belongs to its selected root and must not follow a project switch.
     // 输入草稿属于所选根目录，不能随项目切换应用到另一个目录。
     setTarget(null);
+    mutationAttempt.current++;
     setMenu(null);
     setName("");
     setFocusedEntry(null);
     setError("");
   }, [directory]);
+  useEffect(() => {
+    return () => {
+      mutationAttempt.current++;
+    };
+  }, []);
+  useEffect(() => {
+    if (!directoryDelete || mutating) return;
+    const dialog = deleteDialog.current;
+    dialog?.showModal();
+    cancelDelete.current?.focus();
+    return () => dialog?.close();
+  }, [directoryDelete, target, mutating]);
+  function dismissMutation() {
+    mutationAttempt.current++;
+    deleteDialog.current?.close();
+    setTarget(null);
+    const row = [...(results.current?.querySelectorAll<HTMLButtonElement>(".file-row") ?? [])].find(
+      (entry) => entry.title === target?.path,
+    );
+    (row ?? results.current)?.focus();
+  }
   const rootEntry: Entry = { path: "", name: tx("项目根目录"), directory: true, symlink: false };
   function resultMenu(path: string, index: number, x: number, y: number) {
     if (mode !== "quick" || mutating) return;
@@ -275,6 +304,7 @@ export function FilePanel({
   const manage = (entry: Entry, operation: string) => {
     setMenu(null);
     if (mutating) return;
+    mutationAttempt.current++;
     if ((operation === "file" || operation === "directory") && !entry.directory) {
       const parent = entry.path.split("/").slice(0, -1).join("/");
       entry = { path: parent, name: parent || tx("项目根目录"), directory: true, symlink: false };
@@ -394,22 +424,42 @@ export function FilePanel({
         event.stopPropagation();
         if (event.key === "Escape" && !mutating) {
           event.preventDefault();
-          setTarget(null);
+          dismissMutation();
         }
         if (event.key === "Enter" && event.nativeEvent.isComposing) event.preventDefault();
       }}
       onSubmit={(event) => {
         event.preventDefault();
-        if (mutating || target.symlink || (action !== "delete" && !name.trim())) return;
+        if (
+          mutating ||
+          mutationInFlight.current ||
+          target.symlink ||
+          (action !== "delete" && !name.trim())
+        )
+          return;
+        const attempt = ++mutationAttempt.current;
+        // Release the modal before editor save protection opens its own dialog.
+        // 在编辑器保存保护打开自身窗口前，先关闭当前模态窗口。
+        if (directoryDelete) deleteDialog.current?.close();
         beforeMutation(() => {
+          if (
+            attempt !== mutationAttempt.current ||
+            currentDirectory.current !== directory ||
+            mutationInFlight.current
+          )
+            return;
+          mutationAttempt.current++;
+          mutationInFlight.current = true;
           setMutating(true);
           setError("");
           void fileInvoke("file_mutate", { directory, path: target.path, action, name })
             .then(() => {
+              if (currentDirectory.current !== directory) return;
               setTarget(null);
               setRevision((value) => value + 1);
             })
             .catch((reason) => {
+              if (currentDirectory.current !== directory) return;
               setError(
                 action === "delete" && remote
                   ? tx("删除失败，部分内容可能已删除：{error}", {
@@ -420,10 +470,21 @@ export function FilePanel({
               );
               if (action === "delete") setRevision((value) => value + 1);
             })
-            .finally(() => setMutating(false));
+            .finally(() => {
+              mutationInFlight.current = false;
+              setMutating(false);
+            });
         });
       }}
     >
+      {directoryDelete && (
+        <>
+          <h2 id={deleteTitle}>{tx("删除目录")}</h2>
+          <p className="file-delete-path">
+            {clipboardPath(`${displayDirectory(directory).replace(/[\\/]+$/, "")}/${target.path}`)}
+          </p>
+        </>
+      )}
       {action === "delete" ? (
         <p>
           {tx(
@@ -449,12 +510,23 @@ export function FilePanel({
           }}
         />
       )}
-      <button disabled={mutating || target.symlink || (action !== "delete" && !name.trim())}>
+      {directoryDelete && (
+        <button ref={cancelDelete} type="button" disabled={mutating} onClick={dismissMutation}>
+          {tx("取消")}
+        </button>
+      )}
+      <button
+        className={directoryDelete ? "danger" : undefined}
+        disabled={mutating || target.symlink || (action !== "delete" && !name.trim())}
+      >
         {action === "delete" ? tx("确认删除") : tx("确定")}
       </button>
-      <button type="button" disabled={mutating} onClick={() => setTarget(null)}>
-        {tx("取消")}
-      </button>
+      {!directoryDelete && (
+        <button type="button" disabled={mutating} onClick={dismissMutation}>
+          {tx("取消")}
+        </button>
+      )}
+      {directoryDelete && error && <p role="alert">{localizeMessage(error)}</p>}
       {target.symlink && <p>{tx("链接不能在此修改。")}</p>}
     </form>
   );
@@ -535,8 +607,24 @@ export function FilePanel({
           </label>
         )}
       </div>
-      {action === "delete" && mutationForm}
-      {error && mode === "tree" && <p role="alert">{localizeMessage(error)}</p>}
+      {action === "delete" &&
+        (directoryDelete
+          ? createPortal(
+              <dialog
+                ref={deleteDialog}
+                className="name-dialog file-delete-dialog"
+                aria-labelledby={deleteTitle}
+                onCancel={(event) => {
+                  event.preventDefault();
+                  if (!mutating) dismissMutation();
+                }}
+              >
+                {mutationForm}
+              </dialog>,
+              document.body,
+            )
+          : mutationForm)}
+      {error && mode === "tree" && !directoryDelete && <p role="alert">{localizeMessage(error)}</p>}
       {mode !== "tree" && (
         <input
           ref={input}

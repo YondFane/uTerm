@@ -1438,6 +1438,21 @@ select:focus-visible {
   padding: 12px;
   border-bottom: 1px solid var(--ui-border);
 }
+.file-delete-dialog {
+  width: min(460px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+.file-delete-dialog .file-management {
+  padding: 0;
+  border: none;
+}
+.file-delete-dialog h2 {
+  width: 100%;
+}
+.file-delete-path {
+  overflow-wrap: anywhere;
+}
 .pdf-reader {
   display: flex;
   flex-direction: column;

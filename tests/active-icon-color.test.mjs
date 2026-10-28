@@ -84,7 +84,13 @@ test("highlight settings follow palettes, persist custom colors and retain them 
       [...document.querySelectorAll(".sidebar-style-option")].find(
         (button) => button.querySelector("strong").textContent === name,
       );
-    assert.equal(styleCard("Classic sidebar").getAttribute("aria-pressed"), "true");
+    assert.equal(styleCard("Icon navigation sidebar").getAttribute("aria-pressed"), "true");
+    assert.equal(
+      document.querySelector(".sidebar-style-option strong").textContent,
+      "Icon navigation sidebar",
+    );
+    await act(async () => styleCard("Classic sidebar").click());
+    assert.equal(context.settings.sidebarStyle, "classic");
     await act(async () => styleCard("Icon navigation sidebar").click());
     assert.equal(context.settings.sidebarStyle, "navigation");
     assert.equal(JSON.parse(localStorage.getItem(settingsKey)).sidebarStyle, "navigation");
@@ -140,7 +146,7 @@ test("highlight settings follow palettes, persist custom colors and retain them 
     assert.equal(color(), interfacePalette("ocean", false).accent);
     assert.equal(JSON.parse(localStorage.getItem(settingsKey)).activeIconColor, "");
     await act(async () => context.reset());
-    assert.equal(context.settings.sidebarStyle, "classic");
+    assert.equal(context.settings.sidebarStyle, "navigation");
     assert.equal(color(), interfacePalette(defaults.interfaceTheme, false).accent);
   } finally {
     dom.window.Storage.prototype.setItem = setItem;

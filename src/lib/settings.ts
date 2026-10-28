@@ -89,7 +89,7 @@ export const defaults: Settings = {
   inspectorPosition: "right",
   interfaceTheme: "black",
   activeIconColor: "",
-  sidebarStyle: "classic",
+  sidebarStyle: "navigation",
   darkTheme: "default-dark",
   lightTheme: "default-light",
   customThemes: [],

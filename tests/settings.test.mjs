@@ -104,10 +104,10 @@ test("active icon colors default to the theme and reject invalid saved colors", 
   ])
     assert.throws(() => readSettings(JSON.stringify({ ...defaults, activeIconColor: color })));
 });
-test("sidebar styles default to classic for old settings and persist valid choices", () => {
+test("sidebar styles default to navigation for old settings and persist valid choices", () => {
   const { sidebarStyle, ...old } = defaults;
-  assert.equal(readSettings(null).sidebarStyle, "classic");
-  assert.equal(readSettings(JSON.stringify(old)).sidebarStyle, "classic");
+  assert.equal(readSettings(null).sidebarStyle, "navigation");
+  assert.equal(readSettings(JSON.stringify(old)).sidebarStyle, "navigation");
   for (const style of ["classic", "navigation"]) {
     const saved = readSettings(JSON.stringify({ ...defaults, sidebarStyle: style }));
     assert.equal(readSettings(JSON.stringify(saved)).sidebarStyle, style);

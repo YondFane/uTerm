@@ -83,7 +83,10 @@ test("App keeps navigation and footer controls visible when only the sidebar lis
     ];
     state.selectedProject = state.groups[0].selectedProject = "project";
     localStorage.setItem(workspaceKey, JSON.stringify(state));
-    localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
+    localStorage.setItem(
+      settingsKey,
+      JSON.stringify({ ...defaults, sidebarStyle: "classic", language: "en" }),
+    );
     const calls = [];
     mockIPC((command, args) => {
       calls.push(command);
