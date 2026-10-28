@@ -3132,8 +3132,8 @@ interface and terminal defaults selects Icon navigation sidebar.
 - The full frontend suite passes with 287 tests and ten optional skips. Focused checks cover new and
   missing-field defaults, preserved explicit style choices, the first navigation card, switching,
   failed saves and resetting to navigation. Existing Classic-layout tests select that style
-  explicitly. Formatting, localization, documentation, TypeScript/production and isolated desktop
-  builds pass.
+  explicitly. Formatting, localization, documentation, local-session and backend suites,
+  TypeScript/production and isolated desktop builds pass.
 - The isolated app (`sh.uterm.desktop.qa.dialogsidebar`) verifies that a fresh configuration opens
   with the navigation rail and that Appearance places the selected navigation card on the left.
   Windows/Linux runtime acceptance of the new default remains pending.
