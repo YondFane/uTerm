@@ -5,7 +5,7 @@ import { createServer } from "vite";
 import React, { act } from "react";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 
-test("Git file rollback confirms, protects editor drafts and retains errors across refreshes", async () => {
+test("Git file actions open the editor, preserve click diffs and protect rollback drafts", async () => {
   const dom = new JSDOM('<div id="root"></div>', {
     url: "http://localhost/",
     pretendToBeVisual: true,
@@ -34,6 +34,7 @@ test("Git file rollback confirms, protects editor drafts and retains errors acro
   let changes = [tracked, added];
   let editor,
     finish,
+    readFails = false,
     savedFails = false,
     rollbackFails = false,
     changed = 0;
@@ -50,7 +51,8 @@ test("Git file rollback confirms, protects editor drafts and retains errors acro
         truncated: false,
       };
     if (command === "git_diff") return { text: "file diff", truncated: false };
-    if (command === "file_read")
+    if (command === "file_read") {
+      if (readFails) throw new Error("file is missing");
       return {
         kind: "text",
         text: "original",
@@ -60,6 +62,7 @@ test("Git file rollback confirms, protects editor drafts and retains errors acro
         readonly: false,
         notice: null,
       };
+    }
     if (command === "file_save") {
       if (savedFails) throw new Error("CONFLICT:File changed externally");
       return "b".repeat(64);
@@ -87,6 +90,7 @@ test("Git file rollback confirms, protects editor drafts and retains errors acro
       disabled: editor.pending || editor.transitioning,
       beforeMutation: (action) => void editor.closeDirectory(directory, action),
       onChanged: () => changed++,
+      onOpenFile: (path) => void editor.open(directory, path),
       onExpandedChange() {},
     });
   }
@@ -122,12 +126,68 @@ test("Git file rollback confirms, protects editor drafts and retains errors acro
     const menu = document.querySelector('[role="menu"]');
     assert.equal(menu.getAttribute("aria-label"), "Git file actions");
     assert(Number.parseFloat(menu.style.left) <= window.innerWidth - 220);
-    assert.equal(document.activeElement, button("Roll back file"));
+    assert.equal(document.activeElement, button("Open file"));
+    assert.equal(menu.querySelectorAll('[role="menuitem"]').length, 2);
+    assert(Number.parseFloat(menu.style.top) <= window.innerHeight - 96);
+    for (const [key, label] of [
+      ["ArrowDown", "Roll back file"],
+      ["ArrowDown", "Open file"],
+      ["ArrowUp", "Roll back file"],
+      ["Home", "Open file"],
+      ["End", "Roll back file"],
+    ]) {
+      await act(async () =>
+        menu.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key, bubbles: true })),
+      );
+      assert.equal(document.activeElement, button(label));
+    }
     await act(async () =>
       menu.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
     );
     assert.equal(document.querySelector('[role="menu"]'), null);
     assert.equal(document.activeElement, row);
+
+    await act(async () => row.click());
+    assert.equal(editor.document, null);
+    assert.equal(calls.filter((call) => call.command === "file_read").length, 0);
+    assert.equal(calls.filter((call) => call.command === "git_diff").at(-1).args.mode, "staged");
+    const diffCount = calls.filter((call) => call.command === "git_diff").length;
+    await openMenu();
+    await act(async () => button("Open file").click());
+    assert.equal(document.querySelector('[role="menu"]'), null);
+    assert.equal(editor.document.path, tracked.path);
+    assert.deepEqual(calls.find((call) => call.command === "file_read").args, {
+      directory: "/repo",
+      path: tracked.path,
+    });
+    assert.equal(calls.filter((call) => call.command === "git_diff").length, diffCount);
+    assert.equal(rollbacks().length, 0);
+    const workingRow = [...document.querySelectorAll(".git-file")][1];
+    await act(async () => workingRow.click());
+    assert.equal(calls.filter((call) => call.command === "git_diff").at(-1).args.mode, "working");
+
+    readFails = true;
+    await openMenu(added.path);
+    await act(async () => button("Open file").click());
+    assert.equal(editor.document.path, tracked.path);
+    assert.match(editor.error, /file is missing/);
+    readFails = false;
+    await openMenu(added.path, true);
+    await act(async () => button("Open file").click());
+    assert.equal(editor.document.path, added.path);
+    await act(async () => editor.open("/repo", tracked.path));
+    await act(async () => editor.change("unsaved"));
+    savedFails = true;
+    await openMenu(added.path);
+    await act(async () => button("Open file").click());
+    assert.equal(editor.document.path, tracked.path);
+    assert.equal(editor.document.text, "unsaved");
+    assert.equal(editor.pending, true);
+    await openMenu(added.path);
+    assert.equal(document.querySelector('[role="menu"]'), null);
+    await act(async () => editor.cancel());
+    savedFails = false;
+
     await openMenu(added.path, true);
     await act(async () => button("Roll back file").click());
     assert.match(document.querySelector("dialog").textContent, /deletes the added file/);
@@ -189,7 +249,10 @@ test("Git file rollback confirms, protects editor drafts and retains errors acro
     assert.equal(changed, 2);
     await act(async () => setUiLanguage("zh-Hans"));
     await openMenu(added.path);
-    assert.equal(document.querySelector('[role="menuitem"]').textContent, "回滚文件");
+    assert.deepEqual(
+      [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent),
+      ["打开文件", "回滚文件"],
+    );
     await act(async () => button("回滚文件").click());
     assert.match(document.querySelector("dialog").textContent, /将删除此新增文件/);
     await act(async () =>

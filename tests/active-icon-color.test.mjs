@@ -80,20 +80,9 @@ test("highlight settings follow palettes, persist custom colors and retain them 
       });
     await render();
     await click("Appearance");
-    const styleCard = (name) =>
-      [...document.querySelectorAll(".sidebar-style-option")].find(
-        (button) => button.querySelector("strong").textContent === name,
-      );
-    assert.equal(styleCard("Icon navigation sidebar").getAttribute("aria-pressed"), "true");
-    assert.equal(
-      document.querySelector(".sidebar-style-option strong").textContent,
-      "Icon navigation sidebar",
-    );
-    await act(async () => styleCard("Classic sidebar").click());
-    assert.equal(context.settings.sidebarStyle, "classic");
-    await act(async () => styleCard("Icon navigation sidebar").click());
+    assert.equal(document.querySelector(".sidebar-style-picker"), null);
+    assert.equal(document.querySelector(".sidebar-style-option"), null);
     assert.equal(context.settings.sidebarStyle, "navigation");
-    assert.equal(JSON.parse(localStorage.getItem(settingsKey)).sidebarStyle, "navigation");
     assert.equal(mode().value, "theme");
     assert.equal(document.querySelector('input[type="color"]'), null);
     for (const theme of interfaceThemes)
@@ -119,7 +108,6 @@ test("highlight settings follow palettes, persist custom colors and retain them 
     key++;
     await render();
     await click("Appearance");
-    assert.equal(styleCard("Icon navigation sidebar").getAttribute("aria-pressed"), "true");
     assert.equal(mode().value, "custom");
     assert.equal(field().value, "#6633cc");
     await act(async () => {
@@ -134,9 +122,6 @@ test("highlight settings follow palettes, persist custom colors and retain them 
     dom.window.Storage.prototype.setItem = () => {
       throw new Error("Storage denied");
     };
-    await act(async () => styleCard("Classic sidebar").click());
-    assert.equal(context.settings.sidebarStyle, "navigation");
-    assert.equal(styleCard("Icon navigation sidebar").getAttribute("aria-pressed"), "true");
     await select("theme");
     assert.equal(mode().value, "custom");
     assert.equal(color(), "#6633cc");

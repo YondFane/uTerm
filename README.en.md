@@ -82,15 +82,12 @@ Command instead of Ctrl. Session and file headers also offer font buttons. Sessi
 starting directory, with Windows paths displayed from the drive letter. Right-click a Files → Quick
 open result to copy the file, its name or path, or reveal it in the file manager.
 
-Settings → Appearance → Sidebar style offers the default Classic sidebar and an Icon navigation
-sidebar with a vertical icon rail beside the content list. Its Add button joins Commands, Settings
-and Agent at the bottom of the rail. The choice saves immediately. Drag the sidebar edge to resize
-it; narrow widths use compact actions and icons, with footer controls wrapping to stay accessible.
-In navigation style, hiding or collapsing the sidebar keeps the icon rail visible; click a category
-to reopen the content list. The Add menu starts with New terminal, then project and Agent actions,
-before SSH, Redis and database connection actions. All three connection categories stay available in
-navigation style, regardless of Classic sidebar visibility switches; switching back restores those
-saved choices.
+The sidebar uses a vertical icon rail beside the content list. Add, Commands, Settings and Agent
+share the controls at the bottom of the rail. Drag the sidebar edge to resize it; narrow widths use
+compact actions and icons. Hiding or collapsing the sidebar keeps the icon rail visible; click a
+category to reopen the content list. The Add menu starts with New terminal, then project and Agent
+actions, followed by SSH, Redis and database connection actions. All three connection categories
+remain available. Settings → Appearance opens directly to interface themes.
 
 On macOS, the native red, yellow and green window buttons share the top bar with workspace controls.
 The green button retains the system window arrangement and full-screen menu.

@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ToolbarIcon } from "./SidebarIcon";
 import { hasCurrentWorkingDiff, isStaleWorkingDiffError, sideBySideDiff } from "../lib/git-diff";
-import { sameGitSnapshot } from "../lib/git-snapshot";
+import { gitFilePath, sameGitSnapshot } from "../lib/git-snapshot";
 import type { GitChange, GitSnapshot } from "../lib/git-snapshot";
 type Change = GitChange;
 type Snapshot = GitSnapshot;
@@ -27,6 +27,7 @@ export function GitPanel({
   expanded,
   diffTarget,
   onDiffPathChange,
+  onOpenFile,
   onExpandedChange,
   disabled = false,
   beforeMutation = (action) => void action(),
@@ -39,6 +40,7 @@ export function GitPanel({
   expanded: boolean;
   diffTarget?: HTMLElement | null;
   onDiffPathChange?: (path: string | null) => void;
+  onOpenFile?: (path: string) => void;
   onExpandedChange: (expanded: boolean) => void;
   disabled?: boolean;
   beforeMutation?: (action: () => Promise<void>) => void;
@@ -75,6 +77,7 @@ export function GitPanel({
   const [menu, setMenu] = useState<{
     change: Change;
     head: string | null;
+    path: string | null;
     x: number;
     y: number;
   } | null>(null);
@@ -108,7 +111,7 @@ export function GitPanel({
   }
   useEffect(() => {
     if (!menu) return;
-    popup.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    popup.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     const outside = (event: PointerEvent) => {
       if (!popup.current?.contains(event.target as Node)) closeMenu();
     };
@@ -141,8 +144,9 @@ export function GitPanel({
     setMenu({
       change,
       head: snapshot?.head ?? null,
+      path: snapshot ? gitFilePath(directory, snapshot.root, change.path) : null,
       x: Math.max(4, Math.min(x, window.innerWidth - 224)),
-      y: Math.max(4, Math.min(y, window.innerHeight - 64)),
+      y: Math.max(4, Math.min(y, window.innerHeight - 96)),
     });
   }
   function closeConfirmation() {
@@ -760,10 +764,32 @@ export function GitPanel({
                 closeMenu(event.key === "Escape");
               } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
                 event.preventDefault();
-                popup.current?.querySelector<HTMLButtonElement>("button")?.focus();
+                const buttons = Array.from(
+                  event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)"),
+                );
+                const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+                buttons[
+                  event.key === "Home"
+                    ? 0
+                    : event.key === "End"
+                      ? buttons.length - 1
+                      : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+                        buttons.length
+                ]?.focus();
               }
             }}
           >
+            <button
+              role="menuitem"
+              disabled={disabled || mutating || !onOpenFile || menu.path === null}
+              onClick={() => {
+                const path = menu.path;
+                closeMenu();
+                if (path !== null) onOpenFile?.(path);
+              }}
+            >
+              {tx("打开文件")}
+            </button>
             <button
               role="menuitem"
               className="danger"

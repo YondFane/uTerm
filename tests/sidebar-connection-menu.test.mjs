@@ -198,7 +198,12 @@ test("connection context menus target their row, retain edit guards and dismiss 
     await act(async () =>
       settings.save({ ...settings.settings, showRedisConnections: false }, false),
     );
+    assert.ok(popup(), "Legacy visibility settings keep the connection menu available");
+    await act(async () =>
+      document.querySelector('.sidebar-rail [aria-label="项目与会话"]').click(),
+    );
     assert.equal(popup(), null);
+    await act(async () => document.querySelector('.sidebar-rail [aria-label="全部"]').click());
     await open("Database QA");
     await act(async () =>
       document.querySelector('section[aria-label="数据库"] .section-toggle').click(),
