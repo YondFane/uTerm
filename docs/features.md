@@ -3571,8 +3571,8 @@ use separate Cargo manifests and lockfiles.
   rustfmt installation; Prettier configuration resolution verifies LF source files and CRLF batch
   files.
 
-- Automated validation on Windows passes the complete frontend/build-helper suite (273 passed, 11
-  optional/platform checks skipped), 108 backend tests (nine optional checks ignored) and 38
+- Automated validation on Windows passes the complete frontend/build-helper suite (292 passed, 11
+  optional/platform checks skipped), 112 backend tests (nine optional checks ignored) and 38
   local-session service tests (two optional installed-CLI checks ignored). Frozen dependency
   installation, repository-wide formatting, localization, documentation and TypeScript/production
   build pass.
