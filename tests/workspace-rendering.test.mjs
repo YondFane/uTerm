@@ -177,7 +177,7 @@ test("sidebar lookup work is linear and activity updates reuse ordering without 
   const { Sidebar } = await load("components/Sidebar.tsx");
   const { SettingsProvider, useSettings } = await load("lib/SettingsContext.tsx");
   const { defaults, settingsKey } = await load("lib/settings.ts");
-  const { emptyWorkspace } = await load("lib/workspace.ts");
+  const { emptyWorkspace, groupSessions, readWorkspace } = await load("lib/workspace.ts");
   const { setUiLanguage } = await load("lib/i18n.ts");
   localStorage.setItem(
     settingsKey,
@@ -276,4 +276,35 @@ test("sidebar lookup work is linear and activity updates reuse ordering without 
   workspace = { ...workspace, selectedWorkspace: "other" };
   await render();
   assert.deepEqual(names(), []);
+
+  const source = emptyWorkspace();
+  const projectId = `loose:${source.selectedWorkspace}:terminals`;
+  workspace = readWorkspace(
+    JSON.stringify(
+      groupSessions(
+        {
+          ...source,
+          selectedProject: projectId,
+          selectedSession: "collision-a",
+          projects: [
+            {
+              id: projectId,
+              name: "Collision project",
+              directory: "/collision",
+              workspaceId: source.selectedWorkspace,
+              sessions: ["collision-a", "collision-b"].map((id) => ({
+                id,
+                name: id,
+                shell: "default",
+              })),
+            },
+          ],
+        },
+        "collision-b",
+        "collision-a",
+      ),
+    ),
+  );
+  await render();
+  assert.equal(document.querySelectorAll(".group-mark").length, 2);
 });

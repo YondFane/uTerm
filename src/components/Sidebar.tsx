@@ -533,7 +533,12 @@ export function Sidebar({
         (roster) => roster.workspaceId === workspace.selectedWorkspace,
       )
     : [];
-  const rosterById = new Map(rosters.map((roster) => [roster.id, roster]));
+  const rosterById = new Map<string, SessionRoster>();
+  // Project IDs may share names with generated rosters; retain the original first-match precedence.
+  // 项目标识可能与自动生成的会话分组重名，保留原来首项优先的查找顺序。
+  for (const roster of rosters) {
+    if (!rosterById.has(roster.id)) rosterById.set(roster.id, roster);
+  }
   const openMenu = (event: MouseEvent, kind: SidebarMenu["kind"], id: string, project: string) => {
     event.preventDefault();
     setPopover(null);

@@ -3447,10 +3447,10 @@ workspaces.
 #### Workspace lookup checks
 
 - On macOS, six focused regressions cover linear lookup work, directory precedence and identity,
-  stale selection fallback, ordering reuse, immutable source updates, split previews, zoom and
-  mounted-session retention. The full frontend/build-helper suite passes 293 tests with ten skips.
-  Frozen installation, repository formatting, localization, TypeScript/production build and an
-  isolated desktop build pass; the existing large-chunk warning remains.
+  stale selection fallback, roster ID collisions, ordering reuse, source updates, split previews,
+  zoom and mounted-session retention. The full frontend/build-helper suite passes 293 tests with ten
+  skips. Frozen installation, repository formatting, localization, TypeScript/production build and
+  an isolated desktop build pass; the existing large-chunk warning remains.
 
 - A synthetic macOS ARM64/Node 26.3.0 benchmark compares the stable baseline with the current
   implementation in five independent processes. Each operation uses five warmups and five
