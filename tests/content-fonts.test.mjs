@@ -55,10 +55,12 @@ test("content font changes retain editor state and all Git diff modes, including
   let context;
   let changes = 0;
   let saves = 0;
-  let expanded = false;
   const commands = [];
   const change = { path: "font.txt", index: "M", working: "M" };
   mockIPC((command, args) => {
+    if (command === "git_references")
+      return { repository: args.directory, current: "release", remotes: [], references: [] };
+    if (command === "git_remote_branches") return { branches: [], errors: [] };
     commands.push({ command, args });
     if (command === "git_snapshot")
       return { changes: [change], references: ["release", "other"], branch: "release" };
@@ -94,13 +96,8 @@ test("content font changes retain editor state and all Git diff modes, including
     readonly: false,
     jump: 0,
   };
-  const expand = (value) => {
-    if (expanded !== value) {
-      expanded = value;
-      render();
-    }
-  };
   function Harness() {
+    const [expanded, expand] = React.useState(false);
     context = useSettings();
     return React.createElement(
       React.Fragment,
@@ -207,12 +204,16 @@ test("content font changes retain editor state and all Git diff modes, including
     await act(async () => assert.ok(undo(view)));
     assert.equal(view.state.doc.toString(), "before");
     await click("M font.txt");
-    assert.ok(host.querySelector(".git-diff pre"));
+    assert.ok(target.querySelector(".git-diff pre"));
+    assert.equal(host.querySelector(".git-diff"), null);
     const diffReads = commands.filter((entry) => entry.command === "git_diff").length;
     await resize(32, 20);
     assert.equal(commands.filter((entry) => entry.command === "git_diff").length, diffReads);
     await click("Switch to side-by-side diff");
+    assert.ok(target.querySelector(".git-side-diff"));
+    await click("Expand diff in the inspector and keep the main workspace");
     assert.ok(host.querySelector(".git-side-diff"));
+    assert.equal(target.querySelector(".git-diff"), null);
     await click("Show diff in the main workspace and keep the inspector");
     assert.ok(target.querySelector(".git-side-diff"));
     await resize(14, 32);
@@ -220,6 +221,7 @@ test("content font changes retain editor state and all Git diff modes, including
     await click("Changes");
     const working = [...host.querySelectorAll(".git-file")].at(-1);
     await act(async () => working.click());
+    assert.ok(target.querySelector(".git-side-diff"));
     assert.equal(
       commands.filter((entry) => entry.command === "git_diff").at(-1).args.mode,
       "working",
@@ -231,6 +233,7 @@ test("content font changes retain editor state and all Git diff modes, including
       branch.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     });
     await click("M font.txt");
+    assert.ok(target.querySelector(".git-side-diff"));
     assert.equal(
       commands.filter((entry) => entry.command === "git_diff").at(-1).args.mode,
       "compare",
@@ -238,6 +241,7 @@ test("content font changes retain editor state and all Git diff modes, including
     await click("History");
     await act(async () => host.querySelector(".git-commit").click());
     await click("M font.txt");
+    assert.ok(target.querySelector(".git-side-diff"));
     assert.equal(
       commands.filter((entry) => entry.command === "git_diff").at(-1).args.mode,
       "commit",

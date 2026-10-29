@@ -40,7 +40,7 @@ export function WorkspaceTabs({
   selectFile: (file: OpenFile) => void;
   closeFile: (id: number) => void;
 }) {
-  useUiLanguage();
+  const language = useUiLanguage();
   const list = useRef<HTMLDivElement>(null);
   const menuElement = useRef<HTMLDivElement>(null);
   const [menu, setMenu] = useState<{ file: OpenFile; x: number; y: number } | null>(null);
@@ -108,14 +108,30 @@ export function WorkspaceTabs({
       setError(tx("复制失败：{p0}", { p0: String(reason) }));
     }
   }
-  useEffect(() => {
-    list.current
-      ?.querySelector<HTMLElement>('[aria-selected="true"]')
-      ?.parentElement?.scrollIntoView({
-        block: "nearest",
-        inline: "nearest",
-      });
-  }, [activeFile, activeSession, diff?.active]);
+  useLayoutEffect(() => {
+    const element = list.current;
+    if (!element) return;
+    const reveal = () =>
+      element
+        .querySelector<HTMLElement>('[aria-selected="true"]')
+        ?.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    reveal();
+    let width = element.clientWidth;
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            if (width === element.clientWidth) return;
+            width = element.clientWidth;
+            reveal();
+          });
+    observer?.observe(element);
+    if (!observer) window.addEventListener("resize", reveal);
+    return () => {
+      observer?.disconnect();
+      if (!observer) window.removeEventListener("resize", reveal);
+    };
+  }, [activeFile, activeSession, diff?.active, diff?.path, documents.length, language]);
   const visibleSessions = sessions.filter((session) => session.id === activeSession);
   if (!documents.length && !diff) return null;
   const hasActiveTab =

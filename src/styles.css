@@ -825,12 +825,168 @@ select:focus-visible {
   grid-template-columns: 248px minmax(200px, 1fr) minmax(300px, 36vw);
 }
 .git-panel {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
   border-left: 1px solid var(--ui-border);
   background: var(--ui-canvas);
+}
+.git-reference-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.git-reference-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.git-branch-tree {
+  flex: 0 0 35%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-bottom: 1px solid var(--ui-border);
+  font-size: 12px;
+}
+.git-branch-tree[data-folded] {
+  flex: 0 0 auto;
+}
+.git-tree-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+}
+.git-tree-tools button {
+  border: 0;
+  background: transparent;
+  padding: 3px 5px;
+  font-size: 12px;
+}
+.git-branch-tree > input {
+  margin: 0 8px 5px;
+  width: calc(100% - 16px);
+  min-width: 0;
+  font-size: 12px;
+  padding: 5px 7px;
+}
+.git-tree-rows {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.git-tree-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  height: 27px;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.git-tree-row:hover {
+  background: var(--ui-border);
+}
+.git-tree-row[aria-selected="true"] {
+  background: var(--ui-selected);
+}
+.git-tree-row[aria-current="true"] > span:first-child {
+  color: var(--ui-accent);
+}
+.git-tree-row:focus-visible {
+  outline: 1px solid var(--ui-accent);
+  outline-offset: -2px;
+}
+.git-tree-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.git-tree-row small {
+  color: var(--ui-muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.git-branch-tree .inspector-message {
+  margin: 4px 8px;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.git-tree-error {
+  max-height: 70px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+.git-reference-menu {
+  width: 260px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+}
+.git-reference-menu .branch-menu-heading {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.git-reference-dialog {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+}
+.git-reference-dialog form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.git-reference-dialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.git-reference-dialog :is(input, select) {
+  min-width: 0;
+  width: 100%;
+}
+.git-reference-target {
+  overflow-wrap: anywhere;
+  margin: 0;
+}
+.git-reference-content .inspector-tabs {
+  flex-wrap: wrap;
+  padding-inline: 5px;
+}
+.git-history-target {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The panel's one-pixel border is outside its query width. / 面板的一像素边框不计入查询宽度。 */
+@container (min-width: 639px) {
+  .git-reference-layout {
+    flex-direction: row;
+  }
+  .git-branch-tree {
+    flex: 0 0 220px;
+    border-bottom: 0;
+    border-right: 1px solid var(--ui-border);
+  }
+  .git-branch-tree[data-folded] {
+    flex: 0 0 72px;
+  }
 }
 .inspector-header {
   display: flex;
@@ -2564,7 +2720,8 @@ select:focus-visible {
 .git-diff header .icon-button {
   flex-shrink: 0;
 }
-.git-panel[data-diff-focused] > .git-navigation,
+.git-panel[data-diff-focused] .git-navigation,
+.git-panel[data-diff-focused] .git-branch-tree,
 .git-panel[data-diff-focused] .git-list-area {
   display: none;
 }
@@ -3637,10 +3794,15 @@ textarea:focus-visible {
 }
 
 .workspace-tabs {
+  --workspace-tab-height: 28px;
   display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
   flex: 0 0 auto;
   min-width: 0;
-  overflow-x: auto;
+  max-height: calc(2 * var(--workspace-tab-height) + 1px);
+  overflow-x: hidden;
+  overflow-y: auto;
   border-bottom: 1px solid var(--ui-border);
   background: var(--ui-sidebar);
   scrollbar-width: thin;
@@ -3649,7 +3811,8 @@ textarea:focus-visible {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  max-width: 220px;
+  max-width: min(220px, 100%);
+  height: var(--workspace-tab-height);
   border-right: 1px solid var(--ui-border);
   border-bottom: 2px solid transparent;
   color: var(--ui-muted);
@@ -3670,8 +3833,8 @@ textarea:focus-visible {
   align-items: center;
   gap: 7px;
   min-width: 0;
-  height: 36px;
-  padding: 0 12px;
+  height: calc(var(--workspace-tab-height) - 2px);
+  padding: 0 9px;
   font-size: 12px;
 }
 .workspace-tab > [role="tab"] > span:not(.workspace-tab-dirty) {
@@ -3684,14 +3847,17 @@ textarea:focus-visible {
 }
 .workspace-tab > .workspace-tab-close {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
-  margin-right: 5px;
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
   padding: 0;
   border-radius: 4px;
 }
 .workspace-tab > button:hover {
   background: var(--ui-hover);
+}
+.workspace-tab > button:focus-visible {
+  outline-offset: -2px;
 }
 .workspace-tab-dirty {
   font-size: 8px;

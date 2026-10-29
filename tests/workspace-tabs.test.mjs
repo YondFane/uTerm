@@ -10,6 +10,25 @@ test("workspace tabs retain files, guard switching and only offer file close but
   for (const key of ["window", "document", "navigator", "HTMLElement", "localStorage"])
     Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const originalResizeObserver = globalThis.ResizeObserver;
+  const observers = [];
+  globalThis.ResizeObserver = class {
+    constructor(callback) {
+      this.callback = callback;
+      this.targets = [];
+      this.disconnected = false;
+      observers.push(this);
+    }
+    observe(target) {
+      this.targets.push(target);
+    }
+    disconnect() {
+      this.disconnected = true;
+    }
+    resize(width) {
+      this.callback(this.targets.map((target) => ({ target, contentRect: { width } })));
+    }
+  };
   const scrolledTabs = [];
   dom.window.HTMLElement.prototype.scrollIntoView = function () {
     scrolledTabs.push(this);
@@ -74,7 +93,35 @@ test("workspace tabs retain files, guard switching and only offer file close but
     assert.equal(document.querySelector(".workspace-tabs"), null);
     await act(async () => editor.open("/repo", "first.txt"));
     const firstId = editor.document.id;
+    const tabList = document.querySelector(".workspace-tabs");
+    let listWidth = 0;
+    Object.defineProperty(tabList, "clientWidth", { configurable: true, get: () => listWidth });
+    assert.ok(observers.some((observer) => observer.targets.includes(tabList)));
     await act(async () => editor.change("edited first"));
+    const activeTab = document.getElementById(`workspace-file-${firstId}`);
+    const beforeResize = {
+      scrolls: scrolledTabs.length,
+      calls: calls.length,
+      saved: editor.document.saved,
+    };
+    const observer = observers.findLast(
+      (item) => !item.disconnected && item.targets.includes(tabList),
+    );
+    assert.ok(observer);
+    listWidth = 480;
+    await act(async () => observer.resize(480));
+    assert.ok(scrolledTabs.length > beforeResize.scrolls);
+    assert.equal(scrolledTabs.at(-1), activeTab.parentElement);
+    const beforeWiderLayout = scrolledTabs.length;
+    listWidth = 760;
+    await act(async () => observer.resize(760));
+    assert.ok(scrolledTabs.length > beforeWiderLayout);
+    assert.equal(scrolledTabs.at(-1), activeTab.parentElement);
+    assert.equal(editor.document.id, firstId);
+    assert.equal(editor.document.text, "edited first");
+    assert.equal(editor.document.saved, beforeResize.saved);
+    assert.equal(selected, "terminal");
+    assert.equal(calls.length, beforeResize.calls);
     await act(async () => editor.open("/repo", "second.txt"));
     assert.equal(editor.documents.length, 2);
     assert.equal(editor.documents[0].text, "edited first");
@@ -121,9 +168,15 @@ test("workspace tabs retain files, guard switching and only offer file close but
     failSave = false;
     await act(async () => editor.open("/repo", "first.txt"));
     const secondId = editor.documents.find((item) => item.path === "second.txt").id;
+    const beforeBackgroundClose = scrolledTabs.length;
     await act(async () => editor.close(undefined, secondId));
     assert.equal(editor.document.id, firstId);
     assert.equal(editor.documents.length, 1);
+    assert.ok(scrolledTabs.length > beforeBackgroundClose);
+    assert.equal(
+      scrolledTabs.at(-1),
+      document.getElementById(`workspace-file-${firstId}`).parentElement,
+    );
     await act(async () => editor.open("/other", "first.txt"));
     assert.equal(editor.documents.length, 2);
     assert.notEqual(editor.document.id, firstId);
@@ -228,8 +281,42 @@ test("workspace tabs retain files, guard switching and only offer file close but
     assert.equal(diffClosed, 0);
     await middleClick(document.querySelector("#workspace-git-diff"));
     assert.equal(diffClosed, 1);
+    delete globalThis.ResizeObserver;
+    await act(async () =>
+      root.render(
+        React.createElement(WorkspaceTabs, {
+          sessions: [],
+          documents: editor.documents,
+          activeFile: editor.documents[0].id,
+          activeSession: null,
+          detectedAgents: {},
+          disabled: false,
+          selectSession() {},
+          selectFile() {},
+          closeFile() {},
+        }),
+      ),
+    );
+    const beforeFallbackResize = scrolledTabs.length;
+    await act(async () => window.dispatchEvent(new dom.window.Event("resize")));
+    assert.ok(scrolledTabs.length > beforeFallbackResize);
+    assert.equal(
+      scrolledTabs.at(-1),
+      document.getElementById(`workspace-file-${editor.documents[0].id}`).parentElement,
+    );
+    await act(async () => root.unmount());
+    assert.ok(
+      observers
+        .filter((observer) => observer.targets.length)
+        .every((observer) => observer.disconnected),
+    );
+    const afterUnmount = scrolledTabs.length;
+    await act(async () => window.dispatchEvent(new dom.window.Event("resize")));
+    assert.equal(scrolledTabs.length, afterUnmount);
   } finally {
     await act(async () => root.unmount());
+    if (originalResizeObserver === undefined) delete globalThis.ResizeObserver;
+    else globalThis.ResizeObserver = originalResizeObserver;
     clearMocks();
     await server.close();
     dom.window.close();

@@ -82,20 +82,120 @@ pub async fn project_worktrees(directory: String) -> Result<Vec<Worktree>, Strin
         .map_err(|error| error.to_string())?
 }
 #[tauri::command]
-pub async fn create_worktree(directory: String) -> Result<Vec<Worktree>, String> {
-    tauri::async_runtime::spawn_blocking(move || create_worktree_in(&directory, &worktree_root()))
-        .await
-        .map_err(|error| error.to_string())?
+pub async fn create_worktree(
+    directory: String,
+    reference: Option<String>,
+    branch: Option<String>,
+    path: Option<String>,
+    oid: Option<String>,
+) -> Result<Vec<Worktree>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = crate::git::BRANCH_OPERATION
+            .lock()
+            .map_err(|error| error.to_string())?;
+        match (reference, branch, path) {
+            (None, None, None) => create_worktree_in(&directory, &worktree_root()),
+            (Some(reference), Some(branch), Some(path)) => {
+                create_worktree_at(&directory, &reference, &branch, &path, oid.as_deref())
+            }
+            _ => Err("请填写 Worktree 基点、分支和绝对路径。".into()),
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 #[tauri::command]
 pub async fn delete_worktree(directory: String, path: String) -> Result<Vec<Worktree>, String> {
-    tauri::async_runtime::spawn_blocking(move || delete_worktree_at(&directory, &path))
-        .await
-        .map_err(|error| error.to_string())?
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = crate::git::BRANCH_OPERATION
+            .lock()
+            .map_err(|error| error.to_string())?;
+        delete_worktree_at(&directory, &path)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 fn worktree_root() -> std::path::PathBuf {
     std::env::temp_dir().join("uterm-worktrees")
+}
+#[derive(Serialize)]
+pub struct WorktreeSuggestion {
+    branch: String,
+    path: String,
+}
+#[tauri::command]
+pub async fn worktree_suggestion(
+    directory: String,
+    reference: String,
+) -> Result<WorktreeSuggestion, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::git::revision(&directory, &reference)?;
+        let source = reference
+            .strip_prefix("refs/heads/")
+            .or_else(|| reference.strip_prefix("refs/tags/"))
+            .or_else(|| reference.strip_prefix("refs/remotes/"))
+            .unwrap_or("HEAD");
+        let root = worktree_root();
+        for number in 1.. {
+            let branch = format!("{source}-worktree-{number}");
+            let path = root.join(format!("{}-worktree-{number}", directory_name(source)));
+            if !path.exists()
+                && git(
+                    &directory,
+                    &[
+                        "show-ref",
+                        "--verify",
+                        "--quiet",
+                        &format!("refs/heads/{branch}"),
+                    ],
+                )
+                .is_err()
+            {
+                return Ok(WorktreeSuggestion {
+                    branch,
+                    path: path.to_string_lossy().into(),
+                });
+            }
+        }
+        unreachable!()
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+fn create_worktree_at(
+    directory: &str,
+    reference: &str,
+    branch: &str,
+    path: &str,
+    expected: Option<&str>,
+) -> Result<Vec<Worktree>, String> {
+    let oid = crate::git::validate_reference(directory, reference, expected)?;
+    if branch.is_empty() || branch.starts_with('-') || branch == "HEAD" {
+        return Err("分支名无效。".into());
+    }
+    git(
+        directory,
+        &["check-ref-format", &format!("refs/heads/{branch}")],
+    )?;
+    let target = Path::new(path);
+    if !target.is_absolute() || target.exists() {
+        return Err("Worktree 路径必须是尚不存在的绝对路径。".into());
+    }
+    crate::git::run(
+        directory,
+        &[
+            "worktree",
+            "add",
+            "--no-track",
+            "-b",
+            branch,
+            "--",
+            path,
+            &oid,
+        ],
+    )?;
+    discover(directory)
 }
 
 fn current_branch(directory: &str) -> Result<String, String> {
@@ -191,6 +291,64 @@ fn delete_worktree_at(directory: &str, path: &str) -> Result<Vec<Worktree>, Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn selected_reference_worktree_uses_new_branch_and_checks_base_and_destination() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().to_str().unwrap();
+        git(directory, &["init", "-b", "main"]).unwrap();
+        git(
+            directory,
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "--no-gpg-sign",
+                "--allow-empty",
+                "-m",
+                "base",
+            ],
+        )
+        .unwrap();
+        git(directory, &["tag", "base/tag"]).unwrap();
+        let oid = crate::git::revision(directory, "HEAD").unwrap();
+        let path = root.path().join("new tree 中文");
+        let items = create_worktree_at(
+            directory,
+            "refs/tags/base/tag",
+            "feature/tree",
+            path.to_str().unwrap(),
+            Some(&oid),
+        )
+        .unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].branch, "feature/tree");
+        assert_eq!(current_branch(directory).unwrap(), "main");
+        assert_eq!(
+            crate::git::revision(path.to_str().unwrap(), "HEAD").unwrap(),
+            oid
+        );
+        assert!(create_worktree_at(
+            directory,
+            "refs/tags/base/tag",
+            "other",
+            path.to_str().unwrap(),
+            Some(&oid)
+        )
+        .is_err());
+        assert!(create_worktree_at(directory, "HEAD", "other", "relative", Some(&oid)).is_err());
+        let other = root.path().join("stale");
+        assert!(create_worktree_at(
+            directory,
+            "HEAD",
+            "other",
+            other.to_str().unwrap(),
+            Some("stale")
+        )
+        .is_err());
+        assert!(!other.exists());
+    }
 
     #[test]
     fn gitlab_remotes_support_web_ssh_and_nested_groups() {
