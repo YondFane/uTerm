@@ -95,9 +95,12 @@ test("branch tree previews without switching, isolates late history and applies 
       return {
         root: "/repo",
         branch: "main",
-        head: oid,
+        head: catalog.references.find((item) => item.full_name === "HEAD").oid,
         references: ["main"],
-        changes: [],
+        changes: [
+          { path: "tracked.txt", original: null, index: "M", working: "M" },
+          { path: "untracked.txt", original: null, index: "?", working: "?" },
+        ],
         truncated: false,
       };
     if (command === "git_history") {
@@ -186,33 +189,64 @@ test("branch tree previews without switching, isolates late history and applies 
       element.dispatchEvent(new window.Event("input", { bubbles: true }));
     });
   }
+  const tab = (label) =>
+    [...document.querySelectorAll('[role="tab"]')].find((item) => item.textContent === label);
+  async function refreshReferences(names, nextOid) {
+    catalog = {
+      ...catalog,
+      references: catalog.references.map((item) =>
+        names.includes(item.full_name) ? { ...item, oid: nextOid } : item,
+      ),
+    };
+    await act(async () => window.dispatchEvent(new window.Event("focus")));
+  }
+  function Harness() {
+    const [expanded, setExpanded] = React.useState(false);
+    return React.createElement(GitPanel, {
+      directory: "/repo",
+      resizeHandle: null,
+      headerActions: null,
+      expanded,
+      diffTarget: document.getElementById("diff-target"),
+      onExpandedChange: setExpanded,
+      onChanged: () => changed++,
+      onWorktreeCreated: async (root) => {
+        registeredWorktrees.push(root);
+        if (worktreeRefreshFails) throw new Error("Worktree registration failed");
+      },
+      beforeMutation: async (run) => {
+        guarded++;
+        if (!saveConflict) await run();
+      },
+    });
+  }
   try {
     await act(async () => {
       setUiLanguage("en");
-      root.render(
-        React.createElement(GitPanel, {
-          directory: "/repo",
-          resizeHandle: null,
-          headerActions: null,
-          expanded: false,
-          onExpandedChange() {},
-          onChanged: () => changed++,
-          onWorktreeCreated: async (root) => {
-            registeredWorktrees.push(root);
-            if (worktreeRefreshFails) throw new Error("Worktree registration failed");
-          },
-          beforeMutation: async (run) => {
-            guarded++;
-            if (!saveConflict) await run();
-          },
-        }),
-      );
+      root.render(React.createElement(Harness));
     });
     assert.ok(row("refs/remotes/origin/unfetched"));
     assert.equal(row("refs/heads/main").getAttribute("aria-current"), "true");
     assert.match(row("refs/heads/main").textContent, /↑2.*↓1/);
     assert.match(row("refs/heads/occupied").title, /C:\/other tree/);
+    await click(document.querySelector(".git-file"));
+    const changesDiff = document.querySelector("#diff-target .git-diff");
+    assert.ok(changesDiff);
+    const historyReadsBeforeChangesRefresh = calls.filter(
+      (call) => call.command === "git_history",
+    ).length;
+    await refreshReferences(["HEAD", "refs/heads/main"], "b".repeat(40));
+    assert.equal(tab("Changes").getAttribute("aria-selected"), "true");
+    assert.equal(document.querySelector("#diff-target .git-diff"), changesDiff);
+    assert.match(changesDiff.textContent, /diff staged/);
+    assert.equal(document.querySelector(".git-file.selected").title, "tracked.txt");
+    assert.equal(
+      calls.filter((call) => call.command === "git_history").length,
+      historyReadsBeforeChangesRefresh,
+    );
     await click(row("refs/heads/feature/中文/deep"));
+    assert.equal(tab("History").getAttribute("aria-selected"), "true");
+    assert.equal(document.querySelector("#diff-target .git-diff"), null);
     await act(async () =>
       row("refs/heads/feature/中文/deep").dispatchEvent(
         new window.MouseEvent("dblclick", { bubbles: true }),
@@ -225,6 +259,12 @@ test("branch tree previews without switching, isolates late history and applies 
     assert.doesNotMatch(document.body.textContent, /stale commit/);
     assert.match(document.querySelector(".git-commit").textContent, /refs\/tags\/versions\/v1/);
     assert.ok(document.querySelector(".commit-graph"));
+    await click(document.querySelector(".git-commit"));
+    const commitDetails = document.querySelector(".git-commit-details");
+    await refreshReferences(["refs/tags/versions/v1"], "d".repeat(40));
+    assert.equal(document.querySelector(".git-commit-details"), commitDetails);
+    assert.equal(tab("History").getAttribute("aria-selected"), "true");
+    await click(document.querySelector(".history-back"));
     await click(
       [...document.querySelectorAll("button")].find(
         (button) => button.textContent === "Load earlier commits",
@@ -286,6 +326,19 @@ test("branch tree previews without switching, isolates late history and applies 
     assert.equal(
       calls.filter((call) => call.command === "git_diff").at(-1).args.mode,
       "reference-working",
+    );
+    const workingDiff = document.querySelector("#diff-target .git-diff");
+    const historyReadsBeforeWorkingRefresh = calls.filter(
+      (call) => call.command === "git_history",
+    ).length;
+    await refreshReferences(["HEAD", "refs/heads/main"], "c".repeat(40));
+    assert.equal(tab("Working directory comparison").getAttribute("aria-selected"), "true");
+    assert.equal(document.querySelector("#diff-target .git-diff"), workingDiff);
+    assert.match(workingDiff.textContent, /diff reference-working/);
+    assert.equal(document.querySelector(".git-file.selected").title, "tracked.txt");
+    assert.equal(
+      calls.filter((call) => call.command === "git_history").length,
+      historyReadsBeforeWorkingRefresh,
     );
     await click(
       [...document.querySelectorAll(".git-file")].find((button) =>

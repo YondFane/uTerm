@@ -113,11 +113,12 @@ export function GitPanel({
   // 工作目录差异在快照成功后再刷新，避免重复读取。
   const diffRefresh = tab === "changes" ? diffRevision : revision;
   const refresh = () => setRevision((value) => value + 1);
-  function previewReference(reference: GitReference) {
+  function previewReference(reference: GitReference, navigate = true) {
+    setPreview(reference);
+    if (!navigate) return;
     setCommit(null);
     setSelection(null);
     setDiff(null);
-    setPreview(reference);
     setShowGraph(true);
     setTab("history");
   }

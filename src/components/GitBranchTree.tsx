@@ -32,7 +32,7 @@ export function GitBranchTree({
   refreshRevision: number;
   beforeMutation: (action: () => Promise<void>) => void;
   onChanged?: () => void;
-  onPreview: (reference: GitReference) => void;
+  onPreview: (reference: GitReference, navigate?: boolean) => void;
   onCompare: (reference: GitReference) => void;
   onBusyChange?: (busy: boolean) => void;
   onWorktreeCreated?: (root: string) => Promise<void>;
@@ -173,7 +173,7 @@ export function GitBranchTree({
       previousPreview.current?.full_name === selected.full_name &&
       previousPreview.current.oid !== selected.oid
     )
-      callbacks.current.onPreview(selected);
+      callbacks.current.onPreview(selected, false);
     previousPreview.current = selected ?? null;
   }, [selected]);
   function preview(reference: GitReference) {

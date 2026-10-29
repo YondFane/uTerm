@@ -1355,6 +1355,9 @@ fetching or switching and tracking. History, comparison and creation from that b
 after fetching. Remote reads require the existing Git credentials and show failures without hiding
 local references. Tags support browsing and creation bases.
 
+Background reference refreshes retain the current Git view and diff selection. Selecting a reference
+opens its history.
+
 Tree navigation supports arrows and Home/End. Right-click or Shift+F10 opens a menu headed by the
 full target name. Menu actions use that target, including when another reference is previewed.
 Escape returns focus to its tree row; menus stay within the window and close on outside clicks, tree
@@ -1422,11 +1425,12 @@ targets.
   verify creation from a tag, first push and upstream establishment, rename preserving upstream and
   Worktree creation with an edited branch/path while retaining the original checkout. A native first
   push with a single-branch fetch configuration also verifies that upstream counts are immediately
-  available.
-- Frontend regressions cover late first pages and pagination, targets captured before external
-  checkout changes, retained project/Worktree/session selection without starting a terminal, and
-  visible Worktree-registration/storage failures. Credentialed network remotes and macOS/Linux
-  runtime acceptance remain pending.
+  available. A real background HEAD update retains the Changes view and its central diff.
+- Frontend regressions cover late first pages and pagination, background reference updates without
+  forced navigation, targets captured before external checkout changes, retained
+  project/Worktree/session selection without starting a terminal, and visible
+  Worktree-registration/storage failures. Credentialed network remotes and macOS/Linux runtime
+  acceptance remain pending.
 
 ### Switching branches
 
