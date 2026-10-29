@@ -1412,7 +1412,8 @@ targets.
   additional App Worktree integration regression passes. Backend checks pass with 118 tests and nine
   optional tests ignored; host checks pass with 38 tests and two optional tests ignored. Frozen
   dependency installation, TypeScript, localization, formatting, documentation, production and
-  desktop builds pass. The production build retains the existing large-chunk warning.
+  desktop builds pass. Versioned bilingual release-note headers and stable-release/feed guards also
+  pass validation. The production build retains the existing large-chunk warning.
 - An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.gitbranches`) runs the real Git
   panel, toolbar selector and Git commands against temporary repositories and a local bare remote.
   Native checks and screenshot inspection cover Chinese/dark and English/light, 320/640/760 px panel
