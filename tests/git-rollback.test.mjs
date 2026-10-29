@@ -40,6 +40,9 @@ test("Git file actions open the editor, preserve click diffs and protect rollbac
     changed = 0;
   const calls = [];
   mockIPC((command, args) => {
+    if (command === "git_references")
+      return { repository: args.directory, current: "release", remotes: [], references: [] };
+    if (command === "git_remote_branches") return { branches: [], errors: [] };
     calls.push({ command, args });
     if (command === "git_snapshot")
       return {

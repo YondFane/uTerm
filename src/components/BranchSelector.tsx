@@ -15,12 +15,16 @@ export function BranchSelector({
   beforeSwitch,
   onChanged,
   onError,
+  refreshRevision = 0,
+  onBusyChange,
 }: {
   directory: string;
   disabled: boolean;
   beforeSwitch: (action: () => Promise<void>) => void;
   onChanged: () => void;
   onError: (error: string) => void;
+  refreshRevision?: number;
+  onBusyChange?: (busy: boolean) => void;
 }) {
   useUiLanguage();
   const [branches, setBranches] = useState<Branches | null>(null);
@@ -65,6 +69,7 @@ export function BranchSelector({
   }
   useEffect(() => {
     alive.current = true;
+    setLoadingRemote(false);
     let loading = false;
     let disposed = false;
     async function refresh() {
@@ -92,7 +97,7 @@ export function BranchSelector({
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [directory]);
+  }, [directory, refreshRevision]);
 
   function closeMenu(focus = false) {
     setMenu(null);
@@ -146,6 +151,7 @@ export function BranchSelector({
       remoteRequest.current += 1;
       setLoadingRemote(false);
       setBusy(label);
+      onBusyChange?.(true);
       setResult("");
       let succeeded = false;
       try {
@@ -169,6 +175,7 @@ export function BranchSelector({
           }
         }
         changing.current = false;
+        onBusyChange?.(false);
         if (alive.current) setBusy("");
       }
     });

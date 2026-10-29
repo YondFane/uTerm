@@ -42,6 +42,9 @@ test("Git history shows full messages, metadata and files without stale commit r
   const calls = [];
   let pending;
   mockIPC((command, args) => {
+    if (command === "git_references")
+      return { repository: args.directory, current: "release", remotes: [], references: [] };
+    if (command === "git_remote_branches") return { branches: [], errors: [] };
     calls.push({ command, args });
     if (command === "git_snapshot")
       return {

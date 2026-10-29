@@ -440,6 +440,9 @@ fn main() {
             github::github_create_pr,
             git::git_branch,
             git::git_branches,
+            git::git_references,
+            git::git_reference_action,
+            git::git_working_comparison,
             git::git_remote_branches,
             git::git_switch_remote_branch,
             git::git_branch_action,
@@ -458,6 +461,7 @@ fn main() {
             sessions::project_directory,
             projects::project_worktrees,
             projects::create_worktree,
+            projects::worktree_suggestion,
             projects::delete_worktree
         ])
         .build(context);

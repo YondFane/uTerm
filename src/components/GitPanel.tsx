@@ -10,6 +10,8 @@ import { ToolbarIcon } from "./SidebarIcon";
 import { hasCurrentWorkingDiff, isStaleWorkingDiffError, sideBySideDiff } from "../lib/git-diff";
 import { gitFilePath, sameGitSnapshot } from "../lib/git-snapshot";
 import type { GitChange, GitSnapshot } from "../lib/git-snapshot";
+import { GitBranchTree } from "./GitBranchTree";
+import { referenceView, type GitReference } from "../lib/git-references";
 type Change = GitChange;
 type Snapshot = GitSnapshot;
 interface Commit {
@@ -33,6 +35,8 @@ export function GitPanel({
   beforeMutation = (action) => void action(),
   onChanged,
   refreshRevision = 0,
+  onBusyChange,
+  onWorktreeCreated,
 }: {
   resizeHandle: ReactNode;
   headerActions: ReactNode;
@@ -46,16 +50,26 @@ export function GitPanel({
   beforeMutation?: (action: () => Promise<void>) => void;
   onChanged?: () => void;
   refreshRevision?: number;
+  onBusyChange?: (busy: boolean) => void;
+  onWorktreeCreated?: (root: string) => Promise<void>;
 }) {
   useUiLanguage();
 
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
-  const [tab, setTab] = useState<"changes" | "compare" | "history">("changes");
+  const [tab, setTab] = useState<"changes" | "compare" | "history" | "working">("changes");
+  const [preview, setPreview] = useState<{ full_name: string; name: string; oid?: string | null }>(
+    () => ({
+      full_name: referenceView(directory).selected,
+      name: referenceView(directory).selected,
+    }),
+  );
+  const [workingReference, setWorkingReference] = useState<GitReference | null>(null);
+  const [branchBusy, setBranchBusy] = useState(false);
   const [base, setBase] = useState("");
   const historyPager = useRef(new HistoryPager<Commit>());
   const [history, setHistory] = useState(historyPager.current.state);
   const commits = history.items;
-  const [showGraph, setShowGraph] = useState(false);
+  const [showGraph, setShowGraph] = useState(true);
   const graph = useMemo(() => (showGraph ? commitGraph(commits) : []), [commits, showGraph]);
   const graphWidth = Math.max(1, ...graph.map((row) => row.width)) * 16 + 8;
   const graphColors = ["#78b85b", "#d6a04a", "#728ee5", "#b778cf", "#54b7af", "#d87878"];
@@ -99,6 +113,15 @@ export function GitPanel({
   // 工作目录差异在快照成功后再刷新，避免重复读取。
   const diffRefresh = tab === "changes" ? diffRevision : revision;
   const refresh = () => setRevision((value) => value + 1);
+  function previewReference(reference: GitReference, navigate = true) {
+    setPreview(reference);
+    if (!navigate) return;
+    setCommit(null);
+    setSelection(null);
+    setDiff(null);
+    setShowGraph(true);
+    setTab("history");
+  }
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -206,7 +229,7 @@ export function GitPanel({
     let disposed = false,
       busy = false;
     async function load() {
-      if (busy || changing.current || document.hidden) return;
+      if (busy || changing.current || branchBusy || document.hidden) return;
       busy = true;
       try {
         const next = await invoke<Snapshot>("git_snapshot", { directory });
@@ -238,24 +261,32 @@ export function GitPanel({
       window.removeEventListener("focus", visible);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [directory, revision, tab, refreshRevision]);
+  }, [directory, revision, tab, refreshRevision, branchBusy]);
   useEffect(() => {
     setSelection(null);
     setDiff(null);
     setError("");
-  }, [tab, base, commit]);
+  }, [tab, base, commit, preview.full_name, workingReference]);
   useEffect(() => {
     if (tab !== "history") return;
     const pager = historyPager.current;
+    if (preview.oid === null) {
+      pager.invalidate();
+      setHistory({ items: [], loading: false, more: false, error: "" });
+      return;
+    }
     void pager.load(
-      (skip) => invoke<Commit[]>("git_history", { directory, skip }),
+      (skip) => invoke<Commit[]>("git_history", { directory, skip, reference: preview.full_name }),
       setHistory,
       true,
     );
     return () => pager.invalidate();
-  }, [directory, tab, revision, refreshRevision]);
+  }, [directory, tab, revision, refreshRevision, preview.full_name, preview.oid]);
   useEffect(() => {
-    if (tab === "changes" || (tab === "compare" ? !base : !commit)) {
+    if (
+      tab === "changes" ||
+      (tab === "compare" ? !base : tab === "working" ? !workingReference : !commit)
+    ) {
       setFiles([]);
       setLoading(false);
       return;
@@ -263,11 +294,17 @@ export function GitPanel({
     let disposed = false;
     setFiles([]);
     setLoading(true);
-    invoke<Change[]>("git_files", {
-      directory,
-      reference: tab === "compare" ? base : commit?.id,
-      compare: tab === "compare",
-    })
+    (tab === "working"
+      ? invoke<Change[]>("git_working_comparison", {
+          directory,
+          reference: workingReference?.full_name,
+        })
+      : invoke<Change[]>("git_files", {
+          directory,
+          reference: tab === "compare" ? base : commit?.id,
+          compare: tab === "compare",
+        })
+    )
       .then((result) => {
         if (!disposed) {
           setFiles(result);
@@ -283,7 +320,7 @@ export function GitPanel({
     return () => {
       disposed = true;
     };
-  }, [directory, tab, base, commit, snapshot, revision, refreshRevision]);
+  }, [directory, tab, base, commit, snapshot, revision, refreshRevision, workingReference]);
   useEffect(() => {
     const current = ++request.current;
     if (!selection) setDiff(null);
@@ -299,7 +336,14 @@ export function GitPanel({
     invoke<{ text: string; truncated: boolean }>("git_diff", {
       directory,
       ...selection,
-      reference: tab === "compare" ? base : tab === "history" ? commit?.id : null,
+      reference:
+        tab === "compare"
+          ? base
+          : tab === "history"
+            ? commit?.id
+            : tab === "working"
+              ? workingReference?.full_name
+              : null,
     })
       .then((result) => {
         if (current === request.current) {
@@ -321,7 +365,7 @@ export function GitPanel({
     return () => {
       request.current++;
     };
-  }, [directory, selection, base, commit, tab, snapshot, diffRefresh]);
+  }, [directory, selection, base, commit, tab, snapshot, diffRefresh, workingReference]);
   const navigableFiles =
     tab === "changes"
       ? [
@@ -334,7 +378,14 @@ export function GitPanel({
         ]
       : files.map((change) => ({
           path: change.path,
-          mode: tab === "compare" ? "compare" : "commit",
+          mode:
+            tab === "compare"
+              ? "compare"
+              : tab === "working"
+                ? change.index === "?"
+                  ? "working"
+                  : "reference-working"
+                : "commit",
         }));
   const selectedFileIndex = navigableFiles.findIndex(
     (file) => file.path === selection?.path && file.mode === selection.mode,
@@ -355,7 +406,7 @@ export function GitPanel({
             className={`git-file${selection?.path === change.path && selection.mode === mode ? " selected" : ""}`}
             title={change.original ? `${change.original} → ${change.path}` : change.path}
             aria-haspopup={tab === "changes" ? "menu" : undefined}
-            disabled={mutating}
+            disabled={mutating || branchBusy}
             onContextMenu={(event) => {
               if (tab !== "changes") return;
               event.preventDefault();
@@ -371,6 +422,7 @@ export function GitPanel({
             onClick={() => {
               setDiff(null);
               setSelection({ path: change.path, mode });
+              onExpandedChange(true);
             }}
           >
             <span
@@ -550,203 +602,279 @@ export function GitPanel({
     >
       {resizeHandle}
       <header className="inspector-header">{headerActions}</header>
-      <div className="git-navigation">
-        <div className="inspector-tabs" role="tablist" aria-label={tx("Git 视图")}>
-          {(
-            [
-              ["changes", tx("变更")],
-              ["compare", tx("对比")],
-              ["history", tx("历史")],
-            ] as const
-          ).map(([id, label]) => (
-            <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>
-              {label}
-            </button>
-          ))}
-        </div>
-        {tab === "history" && !commit && (
-          <button
-            className="icon-button"
-            title={showGraph ? tx("隐藏历史提交图") : tx("显示历史提交图")}
-            aria-label={showGraph ? tx("隐藏历史提交图") : tx("显示历史提交图")}
-            aria-pressed={showGraph}
-            onClick={() => setShowGraph((value) => !value)}
-          >
-            <ToolbarIcon name="git" />
-          </button>
-        )}
-      </div>
-      {(mutationError || error || (tab === "history" && history.error)) && (
-        <p role="alert" className="inspector-message">
-          {localizeMessage(mutationError || error || history.error)}
-        </p>
-      )}
-      {mutating && (
-        <p role="status" className="inspector-message">
-          {tx("正在回滚文件…")}
-        </p>
-      )}
-      <div className="git-content">
-        <div className="git-list-area">
-          {tab === "changes" && snapshot && (
-            <>
-              {snapshot.truncated && (
-                <p className="inspector-message">{tx("仅显示前 2,000 个文件。")}</p>
-              )}
-              {!snapshot.changes.length && (
-                <p className="inspector-message">{tx("没有未提交的变更。")}</p>
-              )}
-              {snapshot.changes.some((change) => change.index !== " " && change.index !== "?") && (
-                <>
-                  <h3>{tx("已暂存")}</h3>
-                  {fileList(
-                    snapshot.changes.filter(
-                      (change) => change.index !== " " && change.index !== "?",
-                    ),
-                    "staged",
-                  )}
-                </>
-              )}
-              {snapshot.changes.some((change) => change.working !== " ") && (
-                <>
-                  <h3>{tx("工作目录")}</h3>
-                  {fileList(
-                    snapshot.changes.filter((change) => change.working !== " "),
-                    "working",
-                  )}
-                </>
-              )}
-            </>
-          )}
-          {tab === "compare" && (
-            <>
-              <label className="compare-picker">
-                {tx("对比分支")}
-                <select
-                  aria-label={tx("对比分支")}
-                  value={base}
-                  onChange={(event) => setBase(event.target.value)}
+      <div className="git-reference-layout">
+        <GitBranchTree
+          key={directory}
+          directory={directory}
+          disabled={disabled || mutating}
+          refreshRevision={refreshRevision + revision}
+          beforeMutation={beforeMutation}
+          onChanged={onChanged}
+          onWorktreeCreated={onWorktreeCreated}
+          onPreview={previewReference}
+          onCompare={(reference) => {
+            setWorkingReference(reference);
+            setCommit(null);
+            setTab("working");
+          }}
+          onBusyChange={(value) => {
+            setBranchBusy(value);
+            onBusyChange?.(value);
+          }}
+        />
+        <div className="git-reference-content">
+          <div className="git-navigation">
+            <div className="inspector-tabs" role="tablist" aria-label={tx("Git 视图")}>
+              {(
+                [
+                  ["changes", tx("变更")],
+                  ["compare", tx("对比")],
+                  ["history", tx("历史")],
+                ] as const
+              ).map(([id, label]) => (
+                <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}>
+                  {label}
+                </button>
+              ))}
+              {workingReference && (
+                <button
+                  role="tab"
+                  aria-selected={tab === "working"}
+                  onClick={() => setTab("working")}
                 >
-                  <option value="">{tx("选择分支")}</option>
-                  {snapshot?.references
-                    .filter((reference) => reference !== snapshot.branch)
-                    .map((reference) => (
-                      <option key={reference}>{reference}</option>
-                    ))}
-                </select>
-              </label>
-              {base && !loading && !files.length && !error && (
-                <p className="inspector-message">{tx("与所选分支没有差异。")}</p>
+                  {tx("工作目录比较")}
+                </button>
               )}
-              {fileList(files, "compare")}
-            </>
+            </div>
+            {tab === "history" && !commit && (
+              <button
+                className="icon-button"
+                title={showGraph ? tx("隐藏历史提交图") : tx("显示历史提交图")}
+                aria-label={showGraph ? tx("隐藏历史提交图") : tx("显示历史提交图")}
+                aria-pressed={showGraph}
+                onClick={() => setShowGraph((value) => !value)}
+              >
+                <ToolbarIcon name="git" />
+              </button>
+            )}
+          </div>
+          {(mutationError || error || (tab === "history" && history.error)) && (
+            <p role="alert" className="inspector-message">
+              {localizeMessage(mutationError || error || history.error)}
+            </p>
+          )}
+          {mutating && (
+            <p role="status" className="inspector-message">
+              {tx("正在回滚文件…")}
+            </p>
           )}
           {tab === "history" && (
-            <>
-              {commit ? (
+            <h3 className="git-history-target" title={preview.name}>
+              {preview.name}
+            </h3>
+          )}
+          <div className="git-content">
+            <div className="git-list-area">
+              {tab === "changes" && snapshot && (
                 <>
-                  <button className="history-back" onClick={() => setCommit(null)}>
-                    {tx("‹ 返回历史 · {p0}", { p0: commit.id.slice(0, 8) })}
-                  </button>
-                  <section className="git-commit-details" aria-label={tx("提交详情")}>
-                    <h3>{tx("提交信息")}</h3>
-                    <dl className="git-commit-meta">
-                      <dt>{tx("作者")}</dt>
-                      <dd>{commit.author}</dd>
-                      <dt>{tx("提交时间")}</dt>
-                      <dd>{formatCommitTimestamp(commit.timestamp, getUiLanguage())}</dd>
-                      <dt>{tx("提交哈希")}</dt>
-                      <dd>
-                        <code>{commit.id}</code>
-                      </dd>
-                    </dl>
-                    <pre className="git-commit-message">{commit.message || commit.subject}</pre>
-                  </section>
-                  {!loading && !error && <h3>{tx("变动文件（{p0}）", { p0: files.length })}</h3>}
-                </>
-              ) : (
-                <>
-                  {commits.map((item, index) => (
-                    <button
-                      key={item.id}
-                      className="git-commit"
-                      title={`${item.message || item.subject}\n\n${item.id}\n${item.author} · ${formatCommitTimestamp(item.timestamp, getUiLanguage())}`}
-                      onClick={() => setCommit({ ...item, directory })}
-                    >
-                      {showGraph && (
-                        <svg
-                          className="commit-graph"
-                          width={graphWidth}
-                          height={48}
-                          aria-hidden="true"
-                        >
-                          {graph[index].continuations.map((edge) => (
-                            <path
-                              key={`lane-${edge.from}`}
-                              d={`M ${edge.from * 16 + 12} 0 L ${edge.from * 16 + 12} 24 L ${edge.to * 16 + 12} 48`}
-                              fill="none"
-                              stroke={graphColors[edge.color % graphColors.length]}
-                            />
-                          ))}
-                          {graph[index].incoming && (
-                            <path
-                              d={`M ${graph[index].lane * 16 + 12} 0 V 24`}
-                              stroke={graphColors[graph[index].color % graphColors.length]}
-                            />
-                          )}
-                          {graph[index].parents.map((edge) => (
-                            <path
-                              key={`parent-${edge.lane}`}
-                              d={`M ${graph[index].lane * 16 + 12} 24 L ${edge.lane * 16 + 12} 48`}
-                              stroke={graphColors[edge.color % graphColors.length]}
-                            />
-                          ))}
-                          <circle
-                            cx={graph[index].lane * 16 + 12}
-                            cy={24}
-                            r={item.parents.length > 1 ? 4 : 3}
-                            fill={graphColors[graph[index].color % graphColors.length]}
-                          />
-                        </svg>
+                  {snapshot.truncated && (
+                    <p className="inspector-message">{tx("仅显示前 2,000 个文件。")}</p>
+                  )}
+                  {!snapshot.changes.length && (
+                    <p className="inspector-message">{tx("没有未提交的变更。")}</p>
+                  )}
+                  {snapshot.changes.some(
+                    (change) => change.index !== " " && change.index !== "?",
+                  ) && (
+                    <>
+                      <h3>{tx("已暂存")}</h3>
+                      {fileList(
+                        snapshot.changes.filter(
+                          (change) => change.index !== " " && change.index !== "?",
+                        ),
+                        "staged",
                       )}
-                      <div className="commit-summary">
-                        <span>{item.subject}</span>
-                        <small>
-                          {item.id.slice(0, 8)} · {item.author} ·{" "}
-                          {formatCommitTimestamp(item.timestamp, getUiLanguage())}
-                        </small>
-                      </div>
-                    </button>
-                  ))}
-                  {!commits.length && !error && !history.error && !history.loading && (
-                    <p className="inspector-message">{tx("还没有提交。")}</p>
+                    </>
                   )}
-                  {history.more && commits.length > 0 && (
-                    <button
-                      disabled={history.loading}
-                      onClick={() =>
-                        void historyPager.current.load(
-                          (skip) => invoke<Commit[]>("git_history", { directory, skip }),
-                          setHistory,
-                        )
-                      }
-                    >
-                      {tx("加载更早的提交")}
-                    </button>
+                  {snapshot.changes.some((change) => change.working !== " ") && (
+                    <>
+                      <h3>{tx("工作目录")}</h3>
+                      {fileList(
+                        snapshot.changes.filter((change) => change.working !== " "),
+                        "working",
+                      )}
+                    </>
                   )}
                 </>
               )}
-              {commit && fileList(files, "commit")}
-              {commit && !loading && !files.length && !error && (
-                <p className="inspector-message">{tx("此提交没有变动文件。")}</p>
+              {tab === "compare" && (
+                <>
+                  <label className="compare-picker">
+                    {tx("对比分支")}
+                    <select
+                      aria-label={tx("对比分支")}
+                      value={base}
+                      onChange={(event) => setBase(event.target.value)}
+                    >
+                      <option value="">{tx("选择分支")}</option>
+                      {snapshot?.references
+                        .filter((reference) => reference !== snapshot.branch)
+                        .map((reference) => (
+                          <option key={reference}>{reference}</option>
+                        ))}
+                    </select>
+                  </label>
+                  {base && !loading && !files.length && !error && (
+                    <p className="inspector-message">{tx("与所选分支没有差异。")}</p>
+                  )}
+                  {fileList(files, "compare")}
+                </>
               )}
-            </>
-          )}
-          {(loading || (tab === "history" && history.loading)) && (
-            <p className="inspector-message">{tx("正在读取…")}</p>
-          )}
+              {tab === "working" && workingReference && (
+                <>
+                  <h3 title={workingReference.name}>
+                    {tx("与工作目录比较：{p0}", { p0: workingReference.name })}
+                  </h3>
+                  {!loading && !files.length && !error && (
+                    <p className="inspector-message">{tx("没有差异。")}</p>
+                  )}
+                  {fileList(
+                    files.filter((change) => change.index !== "?"),
+                    "reference-working",
+                  )}
+                  {files.some((change) => change.index === "?") && (
+                    <>
+                      <h3>{tx("未跟踪文件")}</h3>
+                      {fileList(
+                        files.filter((change) => change.index === "?"),
+                        "working",
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+              {tab === "history" && (
+                <>
+                  {preview.oid === null && preview.full_name !== "HEAD" && (
+                    <p className="inspector-message">{tx("获取后预览")}</p>
+                  )}
+                  {commit ? (
+                    <>
+                      <button className="history-back" onClick={() => setCommit(null)}>
+                        {tx("‹ 返回历史 · {p0}", { p0: commit.id.slice(0, 8) })}
+                      </button>
+                      <section className="git-commit-details" aria-label={tx("提交详情")}>
+                        <h3>{tx("提交信息")}</h3>
+                        <dl className="git-commit-meta">
+                          <dt>{tx("作者")}</dt>
+                          <dd>{commit.author}</dd>
+                          <dt>{tx("提交时间")}</dt>
+                          <dd>{formatCommitTimestamp(commit.timestamp, getUiLanguage())}</dd>
+                          <dt>{tx("提交哈希")}</dt>
+                          <dd>
+                            <code>{commit.id}</code>
+                          </dd>
+                        </dl>
+                        <pre className="git-commit-message">{commit.message || commit.subject}</pre>
+                      </section>
+                      {!loading && !error && (
+                        <h3>{tx("变动文件（{p0}）", { p0: files.length })}</h3>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {commits.map((item, index) => (
+                        <button
+                          key={item.id}
+                          className="git-commit"
+                          title={`${item.message || item.subject}\n\n${item.id}\n${item.author} · ${formatCommitTimestamp(item.timestamp, getUiLanguage())}`}
+                          onClick={() => setCommit({ ...item, directory })}
+                        >
+                          {showGraph && (
+                            <svg
+                              className="commit-graph"
+                              width={graphWidth}
+                              height={48}
+                              aria-hidden="true"
+                            >
+                              {graph[index].continuations.map((edge) => (
+                                <path
+                                  key={`lane-${edge.from}`}
+                                  d={`M ${edge.from * 16 + 12} 0 L ${edge.from * 16 + 12} 24 L ${edge.to * 16 + 12} 48`}
+                                  fill="none"
+                                  stroke={graphColors[edge.color % graphColors.length]}
+                                />
+                              ))}
+                              {graph[index].incoming && (
+                                <path
+                                  d={`M ${graph[index].lane * 16 + 12} 0 V 24`}
+                                  stroke={graphColors[graph[index].color % graphColors.length]}
+                                />
+                              )}
+                              {graph[index].parents.map((edge) => (
+                                <path
+                                  key={`parent-${edge.lane}`}
+                                  d={`M ${graph[index].lane * 16 + 12} 24 L ${edge.lane * 16 + 12} 48`}
+                                  stroke={graphColors[edge.color % graphColors.length]}
+                                />
+                              ))}
+                              <circle
+                                cx={graph[index].lane * 16 + 12}
+                                cy={24}
+                                r={item.parents.length > 1 ? 4 : 3}
+                                fill={graphColors[graph[index].color % graphColors.length]}
+                              />
+                            </svg>
+                          )}
+                          <div className="commit-summary">
+                            <span>{item.subject}</span>
+                            <small>
+                              {item.id.slice(0, 8)} · {item.author} ·{" "}
+                              {formatCommitTimestamp(item.timestamp, getUiLanguage())}
+                            </small>
+                          </div>
+                        </button>
+                      ))}
+                      {(preview.oid !== null || preview.full_name === "HEAD") &&
+                        !commits.length &&
+                        !error &&
+                        !history.error &&
+                        !history.loading && (
+                          <p className="inspector-message">{tx("还没有提交。")}</p>
+                        )}
+                      {history.more && commits.length > 0 && (
+                        <button
+                          disabled={history.loading}
+                          onClick={() =>
+                            void historyPager.current.load(
+                              (skip) =>
+                                invoke<Commit[]>("git_history", {
+                                  directory,
+                                  skip,
+                                  reference: preview.full_name,
+                                }),
+                              setHistory,
+                            )
+                          }
+                        >
+                          {tx("加载更早的提交")}
+                        </button>
+                      )}
+                    </>
+                  )}
+                  {commit && fileList(files, "commit")}
+                  {commit && !loading && !files.length && !error && (
+                    <p className="inspector-message">{tx("此提交没有变动文件。")}</p>
+                  )}
+                </>
+              )}
+              {(loading || (tab === "history" && history.loading)) && (
+                <p className="inspector-message">{tx("正在读取…")}</p>
+              )}
+            </div>
+            {expanded && diffTarget ? createPortal(diffView, diffTarget) : diffView}
+          </div>
         </div>
-        {expanded && diffTarget ? createPortal(diffView, diffTarget) : diffView}
       </div>
       {menu &&
         createPortal(
