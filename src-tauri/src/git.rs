@@ -20,6 +20,7 @@ pub(crate) fn run(directory: &str, arguments: &[&str]) -> Result<Vec<u8>, String
         .args(arguments)
         .env("GIT_LITERAL_PATHSPECS", "1")
         .env("GIT_TERMINAL_PROMPT", "0")
+        .env("LC_ALL", "C")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -94,7 +95,7 @@ fn text(bytes: Vec<u8>) -> String {
 fn root(directory: &str) -> Result<String, String> {
     Ok(text(run(directory, &["rev-parse", "--show-toplevel"])?))
 }
-fn revision(directory: &str, value: &str) -> Result<String, String> {
+pub(crate) fn revision(directory: &str, value: &str) -> Result<String, String> {
     let commit = text(run(
         directory,
         &[
@@ -268,6 +269,22 @@ fn diff(directory: &str, path: &str, mode: &str, reference: Option<&str>) -> Res
                 run(&root, &args)?
             }
         }
+        "reference-working" => {
+            let reference = revision(&root, reference.ok_or("请选择现有引用。")?)?;
+            run(
+                &root,
+                &[
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--no-color",
+                    "--no-renames",
+                    &reference,
+                    "--",
+                    path,
+                ],
+            )?
+        }
         "compare" => {
             let reference = revision(&root, reference.ok_or("请选择对比分支。")?)?;
             run(
@@ -425,7 +442,7 @@ pub async fn git_switch_branch(
     .map_err(|error| error.to_string())?
 }
 
-static BRANCH_OPERATION: std::sync::Mutex<()> = std::sync::Mutex::new(());
+pub(crate) static BRANCH_OPERATION: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn rollback_path(directory: &Path, root: &Path, path: &str) -> Result<(), String> {
     let relative = Path::new(path);
@@ -851,19 +868,30 @@ pub async fn git_diff(
     .map_err(|error| error.to_string())?
 }
 #[tauri::command]
-pub async fn git_history(directory: String, skip: u32) -> Result<Vec<Commit>, String> {
-    tauri::async_runtime::spawn_blocking(move || history(&directory, skip))
+pub async fn git_history(
+    directory: String,
+    skip: u32,
+    reference: Option<String>,
+) -> Result<Vec<Commit>, String> {
+    tauri::async_runtime::spawn_blocking(move || history_at(&directory, skip, reference.as_deref()))
         .await
         .map_err(|error| error.to_string())?
 }
+#[cfg(test)]
 fn history(directory: &str, skip: u32) -> Result<Vec<Commit>, String> {
+    history_at(directory, skip, None)
+}
+fn history_at(directory: &str, skip: u32, reference: Option<&str>) -> Result<Vec<Commit>, String> {
     if skip > 100_000 {
         return Err("请在终端中查看更早的提交。".into());
     }
-    if run(&directory, &["rev-parse", "--verify", "HEAD"]).is_err() {
+    if reference.unwrap_or("HEAD") == "HEAD"
+        && run(&directory, &["rev-parse", "--verify", "HEAD"]).is_err()
+    {
         snapshot(&directory)?;
         return Ok(vec![]);
     }
+    let reference = revision(directory, reference.unwrap_or("HEAD"))?;
     let output = run(
         &directory,
         &[
@@ -874,6 +902,8 @@ fn history(directory: &str, skip: u32) -> Result<Vec<Commit>, String> {
             "--no-show-signature",
             "--no-notes",
             "--format=%H%x00%s%x00%an%x00%aI%x00%P%x00%B%x00",
+            &reference,
+            "--",
         ],
     )?;
     if output.len() > LIMIT {
@@ -948,9 +978,698 @@ pub async fn git_files(
     .await
     .map_err(|error| error.to_string())?
 }
+#[derive(Clone, Debug, Serialize)]
+pub struct Reference {
+    kind: String,
+    name: String,
+    full_name: String,
+    oid: Option<String>,
+    current: bool,
+    upstream: Option<String>,
+    ahead: Option<u32>,
+    behind: Option<u32>,
+    worktree: Option<String>,
+    remote: Option<String>,
+    branch: Option<String>,
+}
+#[derive(Serialize)]
+pub struct References {
+    root: String,
+    repository: String,
+    current: Option<String>,
+    remotes: Vec<String>,
+    references: Vec<Reference>,
+}
+fn references(directory: &str) -> Result<References, String> {
+    let directory = root(directory)?;
+    let repository = text(run(
+        &directory,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )?);
+    let remote_names = remotes(&directory)?;
+    let current = current_branch(&directory)?;
+    let current_ref = run(&directory, &["symbolic-ref", "--quiet", "HEAD"])
+        .ok()
+        .map(text);
+    let output = run(&directory, &[
+        "for-each-ref", "--sort=refname",
+        "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(upstream)%00%(upstream:track,nobracket)%00%(worktreepath)%00%(symref)%00",
+        "refs/heads/", "refs/remotes/", "refs/tags/",
+    ])?;
+    if output.len() > LIMIT {
+        return Err("引用列表过大，请在终端中查看。".into());
+    }
+    let raw = std::str::from_utf8(&output).map_err(|_| "分支名包含无法显示的字符。")?;
+    let mut items = vec![Reference {
+        kind: "head".into(),
+        name: "HEAD".into(),
+        full_name: "HEAD".into(),
+        oid: revision(&directory, "HEAD").ok(),
+        current: false,
+        upstream: None,
+        ahead: None,
+        behind: None,
+        worktree: None,
+        remote: None,
+        branch: None,
+    }];
+    for parts in raw.split('\0').collect::<Vec<_>>().chunks_exact(7) {
+        let full_name = parts[0].trim_start_matches('\n');
+        if !parts[6].is_empty() {
+            continue;
+        }
+        let (kind, name) = if let Some(name) = full_name.strip_prefix("refs/heads/") {
+            ("local", name)
+        } else if let Some(name) = full_name.strip_prefix("refs/remotes/") {
+            ("remote", name)
+        } else if let Some(name) = full_name.strip_prefix("refs/tags/") {
+            ("tag", name)
+        } else {
+            continue;
+        };
+        let remote = if kind == "remote" {
+            remote_names
+                .iter()
+                .filter(|remote| name.starts_with(&format!("{remote}/")))
+                .max_by_key(|remote| remote.len())
+                .cloned()
+        } else {
+            None
+        };
+        let branch = remote
+            .as_ref()
+            .and_then(|remote| name.strip_prefix(&format!("{remote}/")))
+            .map(String::from);
+        let count = |prefix: &str| {
+            parts[4]
+                .split(", ")
+                .find_map(|value| value.strip_prefix(prefix)?.parse::<u32>().ok())
+        };
+        let tracked = !parts[3].is_empty() && parts[4] != "gone";
+        let occupied = !parts[5].is_empty()
+            && Path::new(parts[5]).canonicalize().ok() != Path::new(&directory).canonicalize().ok();
+        items.push(Reference {
+            kind: kind.into(),
+            name: name.into(),
+            full_name: full_name.into(),
+            oid: if parts[2] == "tag" {
+                revision(&directory, full_name).ok()
+            } else {
+                Some(parts[1].into())
+            },
+            current: current_ref.as_deref() == Some(full_name),
+            upstream: (!parts[3].is_empty()).then(|| parts[3].into()),
+            ahead: (kind == "local" && tracked).then(|| count("ahead ").unwrap_or(0)),
+            behind: (kind == "local" && tracked).then(|| count("behind ").unwrap_or(0)),
+            worktree: occupied.then(|| parts[5].into()),
+            remote,
+            branch,
+        });
+    }
+    Ok(References {
+        root: directory,
+        repository,
+        current,
+        remotes: remote_names,
+        references: items,
+    })
+}
+#[tauri::command]
+pub async fn git_references(directory: String) -> Result<References, String> {
+    tauri::async_runtime::spawn_blocking(move || references(&directory))
+        .await
+        .map_err(|error| error.to_string())?
+}
+pub(crate) fn validate_reference(
+    directory: &str,
+    reference: &str,
+    expected: Option<&str>,
+) -> Result<String, String> {
+    if reference != "HEAD" {
+        if !["refs/heads/", "refs/remotes/", "refs/tags/"]
+            .iter()
+            .any(|prefix| reference.starts_with(prefix))
+        {
+            return Err("请选择现有引用。".into());
+        }
+        run(directory, &["check-ref-format", reference])?;
+    }
+    let oid = revision(directory, reference)?;
+    if expected != Some(oid.as_str()) {
+        return Err("目标引用已改变，请刷新后重试。".into());
+    }
+    Ok(oid)
+}
+fn validate_branch_name(directory: &str, name: &str) -> Result<(), String> {
+    if name.is_empty() || name.starts_with('-') || name == "HEAD" {
+        return Err("分支名无效。".into());
+    }
+    run(
+        directory,
+        &["check-ref-format", &format!("refs/heads/{name}")],
+    )?;
+    Ok(())
+}
+fn fetch_reference(directory: &str, remote: &str, branch: Option<&str>) -> Result<(), String> {
+    validate_remote(directory, remote)?;
+    let spec = if let Some(branch) = branch {
+        validate_branch_name(directory, branch)?;
+        format!("+refs/heads/{branch}:refs/remotes/{remote}/{branch}")
+    } else {
+        format!("+refs/heads/*:refs/remotes/{remote}/*")
+    };
+    run(
+        directory,
+        &[
+            "fetch",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "--prune",
+            "--",
+            remote,
+            &spec,
+        ],
+    )?;
+    Ok(())
+}
+fn set_upstream(directory: &str, name: &str, remote: &str, branch: &str) -> Result<(), String> {
+    validate_remote(directory, remote)?;
+    validate_branch_name(directory, branch)?;
+    let tracking = format!("refs/remotes/{remote}/{branch}");
+    // Single-branch clones need an explicit fetch mapping before Git can resolve the upstream.
+    // 单分支克隆需要显式获取映射，Git 才能解析上游关系。
+    if text(run(
+        directory,
+        &[
+            "for-each-ref",
+            "--format=%(upstream)",
+            &format!("refs/heads/{name}"),
+        ],
+    )?) != tracking
+    {
+        let mappings = run(
+            directory,
+            &["config", "--get-all", &format!("remote.{remote}.fetch")],
+        )
+        .map(text)
+        .unwrap_or_default();
+        let wildcard = format!("+refs/heads/*:refs/remotes/{remote}/*");
+        let exact = format!("+refs/heads/{branch}:{tracking}");
+        if !mappings.lines().any(|line| {
+            line == wildcard || line == exact || line == &wildcard[1..] || line == &exact[1..]
+        }) {
+            run(
+                directory,
+                &["config", "--add", &format!("remote.{remote}.fetch"), &exact],
+            )?;
+        }
+    }
+    run(
+        directory,
+        &["config", &format!("branch.{name}.remote"), remote],
+    )?;
+    run(
+        directory,
+        &[
+            "config",
+            &format!("branch.{name}.merge"),
+            &format!("refs/heads/{branch}"),
+        ],
+    )?;
+    Ok(())
+}
+#[derive(Deserialize)]
+pub struct ReferenceAction {
+    action: String,
+    reference: String,
+    oid: Option<String>,
+    current: Option<String>,
+    name: Option<String>,
+    remote: Option<String>,
+    branch: Option<String>,
+}
+fn reference_action(directory: &str, target: &ReferenceAction) -> Result<(), String> {
+    let directory = root(directory)?;
+    if target.action == "fetch" {
+        let remote = target.remote.as_deref().ok_or("请选择已配置的远程仓库。")?;
+        if let Some(branch) = target.branch.as_deref() {
+            if target.reference != format!("refs/remotes/{remote}/{branch}") {
+                return Err("请选择现有引用。".into());
+            }
+        }
+        return fetch_reference(&directory, remote, target.branch.as_deref());
+    }
+    if target.action == "switch" && target.reference.starts_with("refs/remotes/") {
+        let remote = target.remote.as_deref().ok_or("请选择已配置的远程仓库。")?;
+        let branch = target.branch.as_deref().ok_or("远程分支名无效。")?;
+        if target.reference != format!("refs/remotes/{remote}/{branch}") {
+            return Err("请选择现有引用。".into());
+        }
+        return switch_remote_branch(
+            &directory,
+            remote,
+            branch,
+            target
+                .current
+                .as_deref()
+                .ok_or("当前分支已改变，请刷新后重试。")?,
+        );
+    }
+    let oid = validate_reference(&directory, &target.reference, target.oid.as_deref())?;
+    if target.action == "create" {
+        let name = target.name.as_deref().ok_or("分支名无效。")?;
+        validate_branch_name(&directory, name)?;
+        run(&directory, &["branch", "--no-track", "--", name, &oid])?;
+        return Ok(());
+    }
+    let name = target
+        .reference
+        .strip_prefix("refs/heads/")
+        .ok_or("请选择现有的本地分支。")?;
+    validate_branch_name(&directory, name)?;
+    match target.action.as_str() {
+        "switch" => switch_branch(
+            &directory,
+            name,
+            target
+                .current
+                .as_deref()
+                .ok_or("当前分支已改变，请刷新后重试。")?,
+        ),
+        "update" => {
+            let expected = target
+                .current
+                .as_deref()
+                .ok_or("当前分支已改变，请刷新后重试。")?;
+            expect_branch(&directory, expected)?;
+            if name != expected {
+                switch_branch(&directory, name, expected)?;
+            }
+            branch_action(&directory, "pull", name).map_err(|error| {
+                if name != expected {
+                    format!("已切换到 {name}，但更新失败：{error}")
+                } else {
+                    error
+                }
+            })
+        }
+        "rename" => {
+            let catalog = references(&directory)?;
+            if catalog
+                .references
+                .iter()
+                .any(|item| item.full_name == target.reference && item.worktree.is_some())
+            {
+                return Err("其他 Worktree 正在使用此分支，无法重命名。".into());
+            }
+            let new_name = target.name.as_deref().ok_or("分支名无效。")?;
+            validate_branch_name(&directory, new_name)?;
+            run(&directory, &["branch", "-m", "--", name, new_name])?;
+            Ok(())
+        }
+        "upstream" => {
+            if let Some(remote) = target.remote.as_deref() {
+                let branch = target.branch.as_deref().ok_or("远程分支名无效。")?;
+                fetch_reference(&directory, remote, Some(branch))?;
+                validate_reference(&directory, &target.reference, target.oid.as_deref())?;
+                set_upstream(&directory, name, remote, branch)
+            } else {
+                run(&directory, &["branch", "--unset-upstream", "--", name])?;
+                Ok(())
+            }
+        }
+        "push" => {
+            let configured = target.remote.is_none();
+            let remote = match target.remote.as_ref() {
+                Some(remote) => remote.clone(),
+                None => text(
+                    run(
+                        &directory,
+                        &["config", "--get", &format!("branch.{name}.remote")],
+                    )
+                    .map_err(|_| "请先设置上游分支。")?,
+                ),
+            };
+            let merge = if configured {
+                text(run(
+                    &directory,
+                    &["config", "--get", &format!("branch.{name}.merge")],
+                )?)
+            } else {
+                format!(
+                    "refs/heads/{}",
+                    target.branch.as_deref().ok_or("远程分支名无效。")?
+                )
+            };
+            validate_remote(&directory, &remote)?;
+            validate_branch_name(
+                &directory,
+                merge
+                    .strip_prefix("refs/heads/")
+                    .ok_or("上游分支配置无效。")?,
+            )?;
+            let tracking = format!("refs/remotes/{remote}/{}", &merge[11..]);
+            let previous_tracking =
+                revision(&directory, &tracking).unwrap_or_else(|_| "0".repeat(oid.len()));
+            run(
+                &directory,
+                &[
+                    "-c",
+                    &format!("remote.{remote}.mirror=false"),
+                    "push",
+                    "--no-force",
+                    "--no-follow-tags",
+                    "--recurse-submodules=no",
+                    "--",
+                    &remote,
+                    &format!("{oid}:{merge}"),
+                ],
+            )?;
+            if !configured {
+                set_upstream(&directory, name, &remote, &merge[11..])?;
+                // A narrow clone may lack this mapping during push; never overwrite a concurrent fetch.
+                // 单分支克隆在推送时可能尚无此映射，不能覆盖并发获取的引用。
+                if let Err(error) = run(
+                    &directory,
+                    &["update-ref", &tracking, &oid, &previous_tracking],
+                ) {
+                    if revision(&directory, &tracking).as_deref() != Ok(oid.as_str()) {
+                        return Err(error);
+                    }
+                }
+            }
+            Ok(())
+        }
+        _ => Err("未知的 Git 操作。".into()),
+    }
+}
+#[tauri::command]
+pub async fn git_reference_action(
+    directory: String,
+    target: ReferenceAction,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = BRANCH_OPERATION.lock().map_err(|error| error.to_string())?;
+        reference_action(&directory, &target)
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+fn working_comparison(directory: &str, reference: &str) -> Result<Vec<Change>, String> {
+    let reference = revision(directory, reference)?;
+    let output = run(
+        directory,
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--name-status",
+            "--no-renames",
+            "-z",
+            &reference,
+            "--",
+        ],
+    )?;
+    if output.len() > LIMIT {
+        return Err("文件列表过大，请在终端中查看。".into());
+    }
+    let raw = std::str::from_utf8(&output).map_err(|_| "Git 路径包含无法显示的字符。")?;
+    let parts: Vec<_> = raw.split('\0').filter(|part| !part.is_empty()).collect();
+    let mut changes: Vec<_> = parts
+        .chunks_exact(2)
+        .map(|parts| Change {
+            path: parts[1].into(),
+            original: None,
+            index: parts[0].into(),
+            working: " ".into(),
+        })
+        .collect();
+    changes.extend(
+        snapshot(directory)?
+            .changes
+            .into_iter()
+            .filter(|change| change.index == "?"),
+    );
+    Ok(changes)
+}
+#[tauri::command]
+pub async fn git_working_comparison(
+    directory: String,
+    reference: String,
+) -> Result<Vec<Change>, String> {
+    tauri::async_runtime::spawn_blocking(move || working_comparison(&directory, &reference))
+        .await
+        .map_err(|error| error.to_string())?
+}
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn target(directory: &str, action: &str, reference: &str) -> ReferenceAction {
+        ReferenceAction {
+            action: action.into(),
+            reference: reference.into(),
+            oid: revision(directory, reference).ok(),
+            current: current_branch(directory).unwrap(),
+            name: None,
+            remote: None,
+            branch: None,
+        }
+    }
+    #[test]
+    fn reference_catalog_and_history_separate_heads_tags_and_occupied_branches() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let _remote = remote_fixture(directory);
+        run(directory, &["tag", "版本/一"]).unwrap();
+        let worktree = temp.path().join("other tree");
+        run(
+            directory,
+            &[
+                "worktree",
+                "add",
+                "--",
+                worktree.to_str().unwrap(),
+                "feature/中文",
+            ],
+        )
+        .unwrap();
+        std::fs::write(temp.path().join("file.txt"), "new main\n").unwrap();
+        fixture_commit(directory);
+        let catalog = references(directory).unwrap();
+        assert_eq!(catalog.current.as_deref(), Some("main"));
+        let main = catalog
+            .references
+            .iter()
+            .find(|item| item.full_name == "refs/heads/main")
+            .unwrap();
+        assert!(main.current);
+        assert_eq!(main.ahead, Some(1));
+        assert_eq!(main.behind, Some(0));
+        let occupied = catalog
+            .references
+            .iter()
+            .find(|item| item.full_name == "refs/heads/feature/中文")
+            .unwrap();
+        assert!(occupied.worktree.is_some());
+        assert_eq!(
+            history_at(directory, 0, Some("refs/tags/版本/一"))
+                .unwrap()
+                .len(),
+            1
+        );
+        assert_eq!(
+            history_at(directory, 0, Some("refs/heads/main"))
+                .unwrap()
+                .len(),
+            2
+        );
+        assert!(history_at(directory, 0, Some("--all")).is_err());
+        let mut rename = target(directory, "rename", "refs/heads/feature/中文");
+        rename.name = Some("renamed".into());
+        assert!(reference_action(directory, &rename)
+            .unwrap_err()
+            .contains("Worktree"));
+        assert_eq!(
+            references(worktree.to_str().unwrap()).unwrap().repository,
+            catalog.repository
+        );
+    }
+    #[test]
+    fn reference_creation_rename_and_tracking_preserve_checkout_and_reject_stale_targets() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let _remote = remote_fixture(directory);
+        let mut create = target(directory, "create", "HEAD");
+        create.name = Some("feature/new/中文".into());
+        reference_action(directory, &create).unwrap();
+        assert_eq!(current_branch(directory).unwrap().as_deref(), Some("main"));
+        assert!(reference_action(directory, &create).is_err());
+        create.name = Some("--force".into());
+        assert!(reference_action(directory, &create).is_err());
+        let mut upstream = target(directory, "upstream", "refs/heads/feature/new/中文");
+        upstream.remote = Some("origin".into());
+        upstream.branch = Some("main".into());
+        reference_action(directory, &upstream).unwrap();
+        let mut rename = target(directory, "rename", &upstream.reference);
+        rename.name = Some("renamed/中文".into());
+        reference_action(directory, &rename).unwrap();
+        assert_eq!(
+            text(run(directory, &["config", "branch.renamed/中文.merge"]).unwrap()),
+            "refs/heads/main"
+        );
+        let unset = target(directory, "upstream", "refs/heads/renamed/中文");
+        reference_action(directory, &unset).unwrap();
+        assert!(run(
+            directory,
+            &["config", "--get", "branch.renamed/中文.remote"]
+        )
+        .is_err());
+        let mut stale = target(directory, "create", "HEAD");
+        stale.name = Some("stale".into());
+        std::fs::write(temp.path().join("file.txt"), "advance\n").unwrap();
+        fixture_commit(directory);
+        assert!(reference_action(directory, &stale)
+            .unwrap_err()
+            .contains("目标引用已改变"));
+    }
+    #[test]
+    fn selected_branch_push_establishes_upstream_without_switching_or_forcing() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let remote = remote_fixture(directory);
+        run(
+            directory,
+            &[
+                "config",
+                "remote.origin.fetch",
+                "+refs/heads/main:refs/remotes/origin/main",
+            ],
+        )
+        .unwrap();
+        let mut push = target(directory, "push", "refs/heads/feature/中文");
+        push.remote = Some("origin".into());
+        push.branch = Some("published/中文".into());
+        reference_action(directory, &push).unwrap();
+        let catalog = references(directory).unwrap();
+        let published = catalog
+            .references
+            .iter()
+            .find(|item| item.full_name == "refs/heads/feature/中文")
+            .unwrap();
+        assert_eq!(published.ahead, Some(0));
+        assert_eq!(published.behind, Some(0));
+        assert_eq!(current_branch(directory).unwrap().as_deref(), Some("main"));
+        assert_eq!(
+            revision(remote.path().to_str().unwrap(), "refs/heads/published/中文").unwrap(),
+            push.oid.clone().unwrap()
+        );
+        assert_eq!(
+            text(run(directory, &["config", "branch.feature/中文.merge"]).unwrap()),
+            "refs/heads/published/中文"
+        );
+        std::fs::write(temp.path().join("file.txt"), "advance main\n").unwrap();
+        fixture_commit(directory);
+        run(
+            directory,
+            &["push", "origin", "HEAD:refs/heads/published/中文"],
+        )
+        .unwrap();
+        let push = target(directory, "push", "refs/heads/feature/中文");
+        assert!(reference_action(directory, &push).is_err());
+        assert_eq!(
+            revision(remote.path().to_str().unwrap(), "refs/heads/published/中文").unwrap(),
+            revision(directory, "HEAD").unwrap()
+        );
+    }
+    #[test]
+    fn selected_update_fast_forwards_and_reports_switch_after_divergence() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let remote = remote_fixture(directory);
+        let other = tempfile::tempdir().unwrap();
+        let other_dir = other.path().to_str().unwrap();
+        run(other_dir, &["clone", remote.path().to_str().unwrap(), "."]).unwrap();
+        set_upstream(directory, "feature/中文", "origin", "main").unwrap();
+        std::fs::write(other.path().join("file.txt"), "remote\n").unwrap();
+        fixture_commit(other_dir);
+        branch_action(other_dir, "push", "main").unwrap();
+        reference_action(
+            directory,
+            &target(directory, "update", "refs/heads/feature/中文"),
+        )
+        .unwrap();
+        assert_eq!(
+            current_branch(directory).unwrap().as_deref(),
+            Some("feature/中文")
+        );
+        assert_eq!(
+            revision(directory, "HEAD").unwrap(),
+            revision(other_dir, "HEAD").unwrap()
+        );
+        std::fs::write(temp.path().join("file.txt"), "local fork\n").unwrap();
+        fixture_commit(directory);
+        std::fs::write(other.path().join("file.txt"), "remote fork\n").unwrap();
+        fixture_commit(other_dir);
+        branch_action(other_dir, "push", "main").unwrap();
+        switch_branch(directory, "main", "feature/中文").unwrap();
+        let update = target(directory, "update", "refs/heads/feature/中文");
+        assert!(reference_action(directory, &update)
+            .unwrap_err()
+            .starts_with("已切换到 feature/中文，但更新失败："));
+        assert_eq!(
+            current_branch(directory).unwrap().as_deref(),
+            Some("feature/中文")
+        );
+        assert_eq!(revision(directory, "HEAD").unwrap(), update.oid.unwrap());
+    }
+    #[test]
+    fn direct_comparison_combines_index_working_deletions_untracked_and_binary_files() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        std::fs::write(temp.path().join("deleted.txt"), "remove me\n").unwrap();
+        std::fs::write(temp.path().join("binary.dat"), b"old\0bytes").unwrap();
+        run(directory, &["add", "."]).unwrap();
+        fixture_commit(directory);
+        run(directory, &["tag", "comparison/base"]).unwrap();
+        std::fs::write(temp.path().join("file.txt"), "staged\n").unwrap();
+        run(directory, &["add", "file.txt"]).unwrap();
+        std::fs::write(temp.path().join("file.txt"), "working\n").unwrap();
+        std::fs::remove_file(temp.path().join("deleted.txt")).unwrap();
+        std::fs::write(temp.path().join("binary.dat"), b"new\0bytes").unwrap();
+        std::fs::write(temp.path().join("untracked 中文.txt"), "new text\n").unwrap();
+        let before = run(directory, &["diff", "--cached"]).unwrap();
+        let changes = working_comparison(directory, "refs/tags/comparison/base").unwrap();
+        assert_eq!(changes.len(), 4);
+        assert!(changes
+            .iter()
+            .any(|item| item.path == "deleted.txt" && item.index == "D"));
+        assert!(changes.iter().any(|item| item.index == "?"));
+        let patch = diff(
+            directory,
+            "file.txt",
+            "reference-working",
+            Some("refs/tags/comparison/base"),
+        )
+        .unwrap()
+        .text;
+        assert!(
+            patch.contains("-main") && patch.contains("+working") && !patch.contains("+staged")
+        );
+        assert!(diff(
+            directory,
+            "binary.dat",
+            "reference-working",
+            Some("refs/tags/comparison/base")
+        )
+        .unwrap()
+        .text
+        .contains("Binary files"));
+        assert!(diff(directory, "untracked 中文.txt", "working", None)
+            .unwrap()
+            .text
+            .contains("+new text"));
+        assert_eq!(run(directory, &["diff", "--cached"]).unwrap(), before);
+    }
     #[test]
     fn history_retains_multiline_messages_metadata_and_page_offsets() {
         let temp = branch_fixture();

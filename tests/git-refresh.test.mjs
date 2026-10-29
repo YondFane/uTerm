@@ -39,6 +39,9 @@ test("Git refresh reads one snapshot per focus event and keeps unchanged-status 
   let text = "first diff";
   let failure = false;
   mockIPC((command) => {
+    if (command === "git_references")
+      return { repository: "/fixture", current: "release", remotes: [], references: [] };
+    if (command === "git_remote_branches") return { branches: [], errors: [] };
     if (command === "git_snapshot") {
       snapshots++;
       if (failure) throw new Error("snapshot failure");
@@ -86,7 +89,9 @@ test("Git refresh reads one snapshot per focus event and keeps unchanged-status 
     await act(async () => document.dispatchEvent(new window.Event("visibilitychange")));
     assert.equal(snapshots, 3);
     const beforePoll = { snapshots, diffs };
-    await act(async () => [...timers.values()][0]());
+    await act(async () => {
+      for (const poll of timers.values()) await poll();
+    });
     assert.equal(snapshots, beforePoll.snapshots + 1);
     assert.equal(diffs, beforePoll.diffs + 1);
 

@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-28
+updated: 2026-10-29
 ---
 
 # uTerm feature guide
@@ -1246,8 +1246,9 @@ Connected, busy or dirty profiles cannot be edited or removed.
 ### Opening changed files
 
 In Git → Changes, right-click a file under Staged or Working directory and choose Open file to open
-its current working-directory content in the file editor. Clicking a file still opens its staged or
-working diff. Open file also returns from an expanded diff to an already open file tab.
+its current working-directory content in the file editor. Clicking a file opens its staged or
+working diff in the central workspace by default. Open file also returns from a diff to an already
+open file tab.
 
 The menu supports Shift+F10, arrow keys, Home/End and Escape. Opening uses the existing editor tabs,
 save-conflict protection and file-size limits. Missing or unreadable files show an error and retain
@@ -1328,6 +1329,104 @@ configuration; tags and symbolic remote HEAD entries are excluded.
 
 - Detached HEAD and repositories without a first commit can select an available branch.
 
+### Branch tree and reference previews
+
+The Git panel keeps a branch tree beside Changes, Compare and History. At panel widths of 640 px or
+more, the tree uses a 220 px column; narrower panels stack it above the content at 35% of the
+content height. Use the tree heading to collapse or reopen it. Existing panel placement, resizing
+and central diff tabs remain available.
+
+- HEAD follows the current checkout. Local branches, remote branches and tags are grouped
+  separately; names containing `/` form folders, and remote branches are grouped by remote first.
+- Click a branch or tag to preview its history with the commit graph. Double-click also only
+  previews. Use **Switch to this branch** or **Switch and track** in the context menu to change the
+  checkout.
+- Search matches the full name and expands matching paths. Clearing search restores the saved folder
+  folds. Long names have full-name tooltips. Selection, search and folds are retained during this
+  run.
+- The current-branch dot is separate from the selection background. Local branches show upstream
+  ahead/behind counts; branches in another Worktree show an occupancy marker and directory tooltip.
+- Favorite local or remote branches from their context menu. Favorites sort first among siblings and
+  are saved per repository, shared with its Worktrees. Storage errors remain visible.
+
+Local references load before server discovery. Periodic and window-focus refreshes read local state;
+Refresh branches also queries servers. Unfetched branches show **Fetch to preview** and support
+fetching or switching and tracking. History, comparison and creation from that base become available
+after fetching. Remote reads require the existing Git credentials and show failures without hiding
+local references. Tags support browsing and creation bases.
+
+Tree navigation supports arrows and Home/End. Right-click or Shift+F10 opens a menu headed by the
+full target name. Menu actions use that target, including when another reference is previewed.
+Escape returns focus to its tree row; menus stay within the window and close on outside clicks, tree
+scroll, window resize or loss of focus.
+
+### Branch and Worktree actions
+
+Use a reference's context menu for these operations:
+
+- **New branch** creates from the selected reference, selects the new branch and previews its
+  history without switching the checkout. **Rename branch** changes only its local name and retains
+  its upstream; another Worktree's occupied branch cannot be renamed.
+- **Set upstream**, **Change upstream** and **Unset upstream** manage a local branch's tracking
+  relationship. Choose the remote and target branch name to set or replace it.
+- **Update branch** fast-forwards the current branch. For another local branch, **Switch and
+  update…** confirms the target before switching and updating. An update failure retains the
+  completed switch and reports that result. Divergent history is rejected.
+- **Push branch** sends the selected local branch's committed content to its upstream, including a
+  branch that is not checked out. For the first push, choose a remote and target name; tracking is
+  established after success. Push never forces an update.
+- **New worktree** creates a new branch from the selected reference. Enter the branch name and
+  accept or edit the generated absolute directory. The Worktree joins the project tree while
+  retaining the current project/session selection; no terminal starts automatically.
+- Remote-branch menus provide **Fetch this branch**; remote-group menus fetch all that remote's
+  branches. Folder menus also expand/collapse and refresh. Branch and tag menus can copy the full
+  name.
+
+Operations run in the background and are serialized with existing Git writes. Targets are checked
+again before mutation. Switching and updating use the editor's save/conflict and draft protection.
+After success or partial failure, the toolbar branch name, Git content and Worktree discovery
+refresh together. Failures remain visible. Branch deletion, general merge/rebase and tag
+creation/deletion are not available in the tree.
+
+### Comparing a reference with the working directory
+
+Choose **Compare with working directory** on a local branch, fetched remote branch or tag. The
+**Working directory comparison** view shows the direct difference from that reference to disk,
+including staged and unstaged content, additions, deletions and binary-file indicators. Untracked
+files are listed separately and can be previewed. Save editor drafts first to include them.
+
+The existing **Compare** tab continues to compare the selected base's common ancestor with HEAD.
+Both comparison views retain file navigation, unified/side-by-side diffs and central expansion.
+
+#### Branch tree validation and limits
+
+Windows Git regressions use real temporary repositories and local bare remotes. Coverage includes
+reference-specific history, creation without checkout, stale-target rejection, rename/tracking,
+selected-branch first push and non-force rejection, fast-forward/divergent updates, Worktree
+ownership and creation from a tag, and direct comparisons containing staged, unstaged, deleted,
+untracked and binary files. Frontend coverage checks hierarchy, full-name search, favorites,
+keyboard menus, preview without switching, stale history, save-conflict guards and operation
+targets.
+
+- On Windows the full frontend suite passes with 297 tests and 11 optional checks skipped, and the
+  additional App Worktree integration regression passes. Backend checks pass with 118 tests and nine
+  optional tests ignored; host checks pass with 38 tests and two optional tests ignored. Frozen
+  dependency installation, TypeScript, localization, formatting, documentation, production and
+  desktop builds pass. The production build retains the existing large-chunk warning.
+- An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.gitbranches`) runs the real Git
+  panel, toolbar selector and Git commands against temporary repositories and a local bare remote.
+  Native checks and screenshot inspection cover Chinese/dark and English/light, 320/640/760 px panel
+  widths, the 220 px tree, the 35% stacked layout, collapse, edge menus, keyboard focus,
+  preview-only single and double clicks, working/untracked diffs and central expansion. Native forms
+  verify creation from a tag, first push and upstream establishment, rename preserving upstream and
+  Worktree creation with an edited branch/path while retaining the original checkout. A native first
+  push with a single-branch fetch configuration also verifies that upstream counts are immediately
+  available.
+- Frontend regressions cover late first pages and pagination, targets captured before external
+  checkout changes, retained project/Worktree/session selection without starting a terminal, and
+  visible Worktree-registration/storage failures. Credentialed network remotes and macOS/Linux
+  runtime acceptance remain pending.
+
 ### Switching branches
 
 Selecting a remote branch fetches it and creates a same-named local tracking branch, extending a
@@ -1351,8 +1450,8 @@ force or automatic tag pushing.
   staged, unstaged and untracked files are retained; Git rejects updates that would overwrite local
   changes. No automatic stash, merge commit or rebase is used, and divergent history is rejected.
 
-- Push/Pull are disabled for detached/unborn branches or missing upstreams; configure the upstream
-  in a terminal first.
+- Toolbar Push/Pull are disabled for detached/unborn branches or missing upstreams. Use the branch
+  tree to configure an upstream or perform a local branch's first push.
 
 - Fetch updates all branch references from each configured remote and prunes deleted remote
   references without switching or merging. Refresh branches re-reads the Local/Remote lists.
@@ -1415,7 +1514,7 @@ details area, and text remains selectable.
 
 ### Git comparison tabs
 
-Expanded comparisons also appear as a closable Git/file-name tab in the central tab bar. Selecting a
+File comparisons open by default as a closable Git/file-name tab in the central tab bar. Selecting a
 terminal or file hides the comparison while retaining its tab; selecting the comparison tab restores
 it.
 
@@ -1424,18 +1523,23 @@ available.
 
 #### Validation and limits
 
-- All 156 frontend/build-helper tests, localization checks, frontend build and isolated macOS
-  desktop build pass. Component regression checks cover selection and retained diff content.
+- Windows App regression checks cover automatic activation of the central diff tab on a file click,
+  returning through terminal/file tabs, retained diff content and closing back to a cached editor
+  draft. TypeScript, production/desktop builds, formatting, localization and documentation checks
+  pass.
 
-- The isolated QA app launched, but the native automation connection closed before comparison-tab
-  inspection; native acceptance of the new tab and Windows runtime validation remain pending.
+- Native terminal/file/diff tab switching remains pending on Windows, macOS and Linux. Native diff
+  placement is covered under [Expanded Git diffs](#expanded-git-diffs).
 
 ### Expanded Git diffs
 
-Git file comparisons offer Expand diff to show the selected diff in the central content area while
-retaining the main toolbar, workspace tabs, inspector toolbar and Git file list. The diff toolbar
-moves with the diff and retains Copy Diff, unified/side-by-side comparison, previous/next file,
-inspector-only display and Close diff.
+Click a file in Changes, Compare, History or Working directory comparison to open its diff in the
+central content area by default. The inspector retains the branch tree and Git file list, and the
+main toolbar and workspace tabs remain available.
+
+The diff toolbar retains Copy Diff, unified/side-by-side comparison, previous/next file,
+inspector-only display and Close diff. Expand diff returns a comparison from the inspector to the
+central workspace.
 
 Inspector-only display returns the diff to the inspector; closing the diff restores the previous
 central terminal/editor without terminating sessions or discarding file buffers. The inspector
@@ -1443,13 +1547,16 @@ remains resizable in central display mode.
 
 #### Validation and limits
 
-- Component regression tests verify the portal placement, retained main toolbar and inspector file
-  list, and returning to inspector display. All 152 frontend/build-helper tests, formatting,
-  localization, documentation checks and frontend/isolated desktop builds pass on macOS.
+- Six focused Windows Git/content/App regressions pass. Coverage includes automatic central display
+  for staged, working, branch-comparison and commit files, retained font/diff modes, manual
+  inspector display, tab activation, closing and cached editor drafts. TypeScript,
+  production/desktop builds, formatting, localization and documentation checks pass.
 
-- The isolated native QA app (`sh.uterm.desktop.qa.gitcenter`) verifies central diff display with
-  both toolbars and the Git file list visible, and returning to inspector-only display. Windows
-  runtime acceptance remains pending.
+- The isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.gitbranches`) uses a real temporary
+  Git repository. Native clicks and screenshot inspection verify default central staged/untracked
+  diffs, the retained file list, manual inspector display and reopening centrally after closing, in
+  Chinese/dark and English/light with a 320 px inspector. macOS/Linux runtime acceptance remains
+  pending. Production builds retain the existing large-chunk warning.
 
 ### File tab limit
 
@@ -1504,9 +1611,14 @@ Middle clicks never close terminal or Agent sessions, and disabled transitions i
 
 ### Central tab bar
 
-The main workspace has a horizontally scrollable tab bar showing only the currently selected
-terminal or Agent session, plus files opened in the current directory. The tab bar is hidden when
-there are no file or Git diff tabs, even if terminal or Agent sessions are running.
+The main workspace has a compact tab bar showing the selected terminal or Agent session, files
+opened in the current directory and any Git diff tab. Tabs are 28 px high and stay on one row when
+they fit. They wrap to at most two visible rows; additional rows can be reached by vertical
+scrolling.
+
+Selecting a tab, resizing the workspace or closing a background tab keeps the active tab visible.
+The bar is hidden when there are no file or Git diff tabs, even if terminal or Agent sessions are
+running.
 
 - Opening a file or diff shows it again. Component checks cover session-only hiding and hiding after
   the last file closes; native layout acceptance remains pending.
@@ -1531,20 +1643,23 @@ there are no file or Git diff tabs, even if terminal or Agent sessions are runni
   directory; they are not restored after restart.
 
 - File text is retained between switches, while editor view history and cursor position are
-  recreated. Keyboard arrows/Home/End navigate the tab bar, long names are truncated with full paths
-  in tooltips, and language switching updates tab labels.
+  recreated. Left/Right and Home/End navigate tabs in display order across rows, long names are
+  truncated with full paths in tooltips, and language switching updates tab labels.
 
 #### Validation and limits
 
-- All 152 frontend/build-helper tests, formatting, localization, documentation checks and
-  frontend/isolated desktop builds pass on macOS. An isolated QA app (`sh.uterm.desktop.qa.tabs`)
-  verifies two-file switching, saved edit retention, terminal output retention, active/background
-  file closing, sidebar-only session close controls in the visible workspace, and long-label
-  truncation with a fully visible close button in a 720×520 window.
+- Three focused Windows tab/menu/App regressions pass. Coverage includes saved/conflicting drafts,
+  active/background closing, retained sessions, active-tab reveal after width or tab-count changes,
+  resize fallback and observer cleanup. TypeScript, production/desktop builds, formatting,
+  localization and documentation checks pass. Production builds retain the existing large-chunk
+  warning.
 
-- The isolated macOS QA app (`sh.uterm.desktop.qa.focusedtab`) verifies that two running terminals
-  produce only one central session tab, sidebar selection replaces that tab, and an open file tab is
-  retained. Native Agent, conflict-dialog and Windows runtime acceptance remain pending.
+- An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.compacttabs`) runs the real tab bar
+  with file/session/diff fixtures. Native clicks, keyboard input and screenshot inspection verify 28
+  px tabs, 22 px close buttons, one/two-row layouts, a 57 px bar limit, overflow scrolling,
+  active-tab visibility after resizing/background close, long labels, retained drafts, context menus
+  and focus, in Chinese/dark and English/light at workspace widths of 900, 480 and 260 px. Native
+  Agent/save-conflict dialogs and macOS/Linux runtime acceptance remain pending.
 
 ### File-tab context menu
 

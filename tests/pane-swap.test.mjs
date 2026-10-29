@@ -302,13 +302,9 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     assert.ok(swap());
     await click(document.querySelector('button[aria-label="Git"]'));
     await click(document.querySelector(".git-files button"));
-    await click(
-      document.querySelector(
-        'button[aria-label="Show diff in the main workspace and keep the inspector"]',
-      ),
-    );
     assert.equal(shell().dataset.expandedInspector, "true");
     assert.ok(document.querySelector(".git-main-diff .git-diff"));
+    assert.equal(document.querySelector(".git-panel .git-diff"), null);
     const diffTab = () => document.querySelector("#workspace-git-diff");
     assert.equal(diffTab().getAttribute("aria-selected"), "true");
     await click(document.querySelector('[role="tab"][id^="workspace-session-"]'));
@@ -352,6 +348,16 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     assert.ok(swap());
     assert.equal(shell().dataset.expandedInspector, undefined);
     assert.equal(shell().dataset.inspectorPosition, "left");
+    await click(document.querySelector('button[aria-label="Close diff"]'));
+    await openGitFile();
+    await click(document.querySelector(".git-files button"));
+    assert.ok(document.querySelector(".git-main-diff .git-diff"));
+    assert.equal(diffTab().getAttribute("aria-selected"), "true");
+    await click(document.querySelector('button[aria-label="Close diff"]'));
+    assert.equal(diffTab(), null);
+    assert.equal(globalThis.paneEditor.document.id, fileId);
+    assert.equal(document.querySelector(".editor-test").value, "unsaved draft");
+    assert.equal(document.querySelector(".editor-test").parentElement.hidden, false);
     await act(async () => prefs.save({ ...prefs.settings, language: "zh-Hans" }, true));
     assert.equal(swap().title, "交换左右窗格");
     await act(async () => root.unmount());

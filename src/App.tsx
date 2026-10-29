@@ -560,6 +560,7 @@ export function App() {
     return () => pending.clear();
   }, []);
   const [repositoryRevision, setRepositoryRevision] = useState(0);
+  const [gitBusy, setGitBusy] = useState(false);
   const lastInspector = useRef<"files" | "git" | "github" | "directory">("files");
   const [directoryOpen, setDirectoryOpen] = useState(false);
   const [githubOpen, setGithubOpen] = useState(false);
@@ -855,7 +856,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [runtime, projectDirectories]);
+  }, [runtime, projectDirectories, repositoryRevision]);
 
   function openProjectDialog() {
     if (showProjectDialog) return;
@@ -2614,7 +2615,9 @@ export function App() {
               <BranchSelector
                 key={fileDirectory}
                 directory={fileDirectory}
-                disabled={editor.transitioning || editor.pending}
+                disabled={editor.transitioning || editor.pending || gitBusy}
+                refreshRevision={repositoryRevision}
+                onBusyChange={setGitBusy}
                 beforeSwitch={(action) => void editor.closeDirectory(fileDirectory, action)}
                 onChanged={() => setRepositoryRevision((value) => value + 1)}
                 onError={setError}
@@ -3324,7 +3327,49 @@ export function App() {
           key={fileDirectory}
           directory={fileDirectory}
           refreshRevision={repositoryRevision}
-          disabled={editor.transitioning || editor.pending}
+          disabled={editor.transitioning || editor.pending || gitBusy}
+          onBusyChange={setGitBusy}
+          onWorktreeCreated={async (root) => {
+            const owner =
+              selected ??
+              currentWorkspace.current?.projects.find(
+                (project) =>
+                  project.directory === root ||
+                  project.worktrees?.some((item) => item.path === root),
+              );
+            const workspaceId = workspace.selectedWorkspace;
+            const discovered = await invoke<{ path: string; branch: string; missing: boolean }[]>(
+              "project_worktrees",
+              { directory: owner?.directory ?? root },
+            );
+            if (
+              !update((previous) => {
+                if (owner) return reconcileWorktrees(previous, owner.id, discovered);
+                const existing = previous.projects.find(
+                  (project) =>
+                    project.directory === root && (project.workspaceId ?? "local") === workspaceId,
+                );
+                const id = existing?.id ?? crypto.randomUUID();
+                const next = existing
+                  ? previous
+                  : {
+                      ...previous,
+                      projects: [
+                        ...previous.projects,
+                        {
+                          id,
+                          name: root.split(/[\\/]/).filter(Boolean).at(-1) ?? root,
+                          directory: root,
+                          workspaceId,
+                          sessions: [],
+                        },
+                      ],
+                    };
+                return reconcileWorktrees(next, id, discovered);
+              })
+            )
+              throw new Error(tx("Worktree 已创建，但项目树保存失败。请刷新项目。"));
+          }}
           beforeMutation={(action) => void editor.closeDirectory(fileDirectory, action)}
           onChanged={() => setRepositoryRevision((value) => value + 1)}
         />

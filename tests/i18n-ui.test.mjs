@@ -119,6 +119,9 @@ test("real settings tabs, commands and panels render in both languages without u
   const usageReads = [];
   mockIPC(
     (cmd, args) => {
+      if (cmd === "git_references")
+        return { repository: args.directory, current: "release", remotes: [], references: [] };
+      if (cmd === "git_remote_branches") return { branches: [], errors: [] };
       calls.push(cmd);
       if (cmd === "agent_hooks") {
         hookCalls.push(args);

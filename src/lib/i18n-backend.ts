@@ -1,4 +1,15 @@
 export const backendMessages: Record<string, string> = {
+  "请选择现有引用。": "Select an existing reference.",
+  "引用列表过大，请在终端中查看。": "Too many references. View them in the terminal.",
+  "目标引用已改变，请刷新后重试。": "The target reference has changed. Refresh and try again.",
+  "分支名无效。": "Invalid branch name.",
+  "已切换到 {name}，但更新失败：{error}": "Switched to {name}, but the update failed: {error}",
+  "其他 Worktree 正在使用此分支，无法重命名。":
+    "This branch is in use by another Worktree and cannot be renamed.",
+  "请先设置上游分支。": "Set an upstream branch first.",
+  "请填写 Worktree 基点、分支和绝对路径。": "Enter the Worktree base, branch and absolute path.",
+  "Worktree 路径必须是尚不存在的绝对路径。":
+    "The Worktree path must be an absolute path that does not exist yet.",
   "Agent 事件服务停止失败。": "Could not stop the Agent event service.",
   "Codex 事件服务已退出。": "The Codex event server exited.",
   "Agent 事件连接失败：{p0}": "Agent event connection failed: {p0}",
