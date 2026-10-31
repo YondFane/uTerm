@@ -55,10 +55,12 @@ test("website language switching translates copy, metadata and labels with stora
   document.querySelector("#language-toggle").click();
   assert.equal(document.documentElement.lang, "en");
   assert.match(document.title, /terminal workspace for coding agents/);
-  for (const element of document.querySelectorAll("[data-i18n], [data-i18n-aria]")) {
+  for (const element of document.querySelectorAll(
+    "[data-i18n], [data-i18n-aria], [data-i18n-alt]",
+  )) {
     const value = element.hasAttribute("data-i18n")
       ? element.textContent
-      : element.getAttribute("aria-label");
+      : element.getAttribute(element.hasAttribute("data-i18n-alt") ? "alt" : "aria-label");
     assert.ok(value && value !== "undefined", element.outerHTML);
     assert.doesNotMatch(value, /[\u4e00-\u9fff]/, element.outerHTML);
   }
@@ -66,7 +68,7 @@ test("website language switching translates copy, metadata and labels with stora
   assert.match(document.querySelector('meta[property="og:title"]').content, /terminal workspace/);
   assert.equal(new URL(window.location.href).searchParams.get("lang"), "en");
   document.querySelector("#language-toggle").click();
-  assert.match(document.querySelector("h1").textContent, /按项目展开/);
+  assert.match(document.querySelector("h1").textContent, /回到项目里/);
   assert.match(document.querySelector("[data-guide-link]").href, /features\.zh-CN\.md$/);
 });
 
@@ -82,11 +84,22 @@ test("preview and install tabs support arrow navigation without changing the oth
     new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
   );
   assert.equal(document.activeElement.id, "tab-terminal");
+  for (const expected of ["tab-git", "tab-run", "tab-ssh"]) {
+    document.activeElement.dispatchEvent(
+      new window.KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }),
+    );
+    assert.equal(document.activeElement.id, expected);
+    assert.equal(
+      document.getElementById(document.activeElement.getAttribute("aria-controls")).hidden,
+      false,
+    );
+  }
+  document.querySelector("#tab-run").click();
   document.querySelector("#install-tab-win").click();
   assert.equal(document.querySelector("#install-win").hidden, false);
   assert.equal(document.querySelector("#install-npm").hidden, true);
   assert.match(document.querySelector("#install-note").textContent, /PowerShell/);
-  assert.equal(document.querySelector("#demo-terminal").hidden, false);
+  assert.equal(document.querySelector("#demo-run").hidden, false);
   for (const group of document.querySelectorAll("[data-tabs]")) {
     assert.equal(group.querySelectorAll('[aria-selected="true"]').length, 1);
     assert.equal(group.querySelectorAll('[role="tab"][tabindex="0"]').length, 1);
@@ -95,12 +108,17 @@ test("preview and install tabs support arrow navigation without changing the oth
 
 test("all six themes retain the current preview and one pressed choice", (t) => {
   const { document } = setup(t);
-  document.querySelector("#tab-git").click();
-  for (const button of document.querySelectorAll("[data-theme-choice]")) {
-    button.click();
-    assert.equal(document.querySelector("#app-preview").dataset.theme, button.dataset.themeChoice);
-    assert.equal(document.querySelectorAll('[data-theme-choice][aria-pressed="true"]').length, 1);
-    assert.equal(document.querySelector("#demo-git").hidden, false);
+  for (const preview of ["git", "run"]) {
+    document.querySelector(`#tab-${preview}`).click();
+    for (const button of document.querySelectorAll("[data-theme-choice]")) {
+      button.click();
+      assert.equal(
+        document.querySelector("#app-preview").dataset.theme,
+        button.dataset.themeChoice,
+      );
+      assert.equal(document.querySelectorAll('[data-theme-choice][aria-pressed="true"]').length, 1);
+      assert.equal(document.querySelector(`#demo-${preview}`).hidden, false);
+    }
   }
 });
 
