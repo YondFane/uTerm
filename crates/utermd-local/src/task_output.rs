@@ -45,6 +45,9 @@ impl Capture {
                     }
                     Err(error) => return Err(error.into()),
                 };
+                // macOS inherits nonblocking mode; authentication must wait for the token bytes.
+                // macOS 会继承非阻塞模式；认证时必须等待令牌字节到达。
+                stream.set_nonblocking(false)?;
                 stream.set_read_timeout(Some(POLL))?;
                 let mut supplied = [0; 32];
                 if stream.read_exact(&mut supplied).is_err() || supplied != secret.as_bytes() {
@@ -152,6 +155,25 @@ mod tests {
         drop(valid);
         capture.finish().unwrap();
         assert_eq!(*data.lock().unwrap(), expected);
+    }
+    #[test]
+    fn capture_waits_for_delayed_authentication_bytes() {
+        let data = Arc::new(Mutex::new(Vec::new()));
+        let sink = data.clone();
+        let capture = Capture::start(move |bytes| {
+            sink.lock().unwrap().extend(bytes);
+            Ok(())
+        })
+        .unwrap();
+        let mut stream = TcpStream::connect(capture.address).unwrap();
+        std::thread::sleep(Duration::from_millis(80));
+        stream.write_all(capture.token.as_bytes()).unwrap();
+        stream.write_all(b"delayed-auth-log\n").unwrap();
+        drop(stream);
+        let connected = capture.connected.clone();
+        capture.finish().unwrap();
+        assert!(connected.load(Ordering::Acquire));
+        assert_eq!(*data.lock().unwrap(), b"delayed-auth-log\n");
     }
     #[test]
     fn failed_start_does_not_leave_an_accept_thread() {

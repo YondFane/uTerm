@@ -2202,7 +2202,7 @@ support is reported without stopping existing sessions.
   cleanup, retains final stdout/stderr and prevents later task steps from starting. It also verifies
   Force stop during pending cleanup. Real Java and Python processes complete two-second shutdown
   handlers before exit. The Agent enablement, notification and database App regressions pass with
-  valid run-summary IPC fixtures. The host suite passes 50 checks with three optional checks
+  valid run-summary IPC fixtures. The host suite passes 51 checks with three optional checks
   ignored; backend checks pass 144 with ten ignored. These checks do not establish macOS/Linux
   runtime acceptance.
 - Windows JDK registration checks cover invalid paths, native-picker cancellation, concurrent
@@ -2232,7 +2232,9 @@ support is reported without stopping existing sessions.
   resizing with a live Spring Boot task remain unverified.
 - Windows task-log capture checks cover long stdout/stderr lines through narrow/wide reattachment,
   UTF-8 chunk boundaries, ANSI/newline retention, authenticated loopback capture, final-output drain
-  before exit and force-stop disconnects without false read errors. The isolated native app
+  before exit and force-stop disconnects without false read errors. Authentication also covers
+  delayed token arrival after connecting; archive extraction covers link chains whose parent
+  directories are absent and rejects targets outside the installation root. The isolated native app
   (`sh.uterm.desktop.qa.tasklogs`) runs Spring Boot 3.5.7 on JDK 21 through both an existing JAR and
   Maven 3.10.0 development startup. Both modes preserve 300-character messages and Chinese endings;
   JAR checks also cover pane-width changes, closing/reopening and HTTP readiness. The user's running

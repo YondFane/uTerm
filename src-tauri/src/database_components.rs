@@ -427,11 +427,14 @@ pub(crate) fn extract_bounded(
                 bail!("DB_COMPONENT_HASH");
             }
             let link = destination.join(path);
-            let base = if hard {
-                destination
-            } else {
-                link.parent().context("DB_COMPONENT_HASH")?
-            };
+            // Relative targets containing .. require an existing parent directory on Unix.
+            // Unix 解析含 .. 的相对目标时，要求链接的父目录已存在。
+            let parent = link.parent().context("DB_COMPONENT_HASH")?;
+            fs::create_dir_all(parent)?;
+            if !parent.canonicalize()?.starts_with(&canonical_destination) {
+                bail!("DB_COMPONENT_HASH");
+            }
+            let base = if hard { destination } else { parent };
             let resolved = match base.join(&target).canonicalize() {
                 Ok(path) => path,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -446,11 +449,6 @@ pub(crate) fn extract_bounded(
             };
             unresolved = 0;
             if !resolved.starts_with(&canonical_destination) {
-                bail!("DB_COMPONENT_HASH");
-            }
-            let parent = link.parent().context("DB_COMPONENT_HASH")?;
-            fs::create_dir_all(parent)?;
-            if !parent.canonicalize()?.starts_with(&canonical_destination) {
                 bail!("DB_COMPONENT_HASH");
             }
             if resolved.is_file() {
