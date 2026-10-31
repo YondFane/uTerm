@@ -2038,11 +2038,30 @@ alive, including preparation steps in that run. Standalone builds, tests and ins
 it up. The Python icon turns blue/yellow while any Python run task is alive. Otherwise the icons are
 gray; light appearance uses darker colors for contrast.
 
+The sidebar replaces a project's or Worktree's folder icon with the matching colored Java or Python
+icon while a managed run task is alive. Each row reflects its own root, including pinned projects.
+The folder icon returns after the host confirms exit. Switching projects or closing the run panel
+keeps a running task's icon visible; standalone builds and completed history use folder icons. A
+failed status query retains the last confirmed icon and marks its tooltip unavailable.
+
 Switching projects or closing a run panel keeps these indicators active. Tooltips and accessible
 labels give each language's running project count. Panel selection keeps its separate background
 highlight, and clicking an icon opens the current project's panel. Status refreshes every 1.5
 seconds after the previous request finishes, and immediately on returning to the window. A stop
 request leaves the icon colored until the host confirms exit; other running projects keep it lit.
+
+An open Java or Python panel follows the selected local project or Worktree, keeping the same
+language's panel open with that root's configuration, tasks and logs. The previous configuration is
+saved before replacing its panel. An unfinished operation or failed save restores the previous
+project selection and keeps its draft and error available; background tasks continue running.
+
+Right-click either toolbar icon to open its running-project list. Each entry shows the task name and
+project root; choose one to switch to its project or Worktree, including in another workspace, and
+open the matching run panel. Only live run tasks appear, excluding standalone builds and completed
+history. The list refreshes every 1.5 seconds while open, reports empty or failed reads, and retries
+failed reads automatically. Arrow keys navigate, Enter selects and Escape returns focus to the icon;
+Shift+F10 also opens the list. Re-add a removed project before selecting its running task from this
+list.
 
 The indicators describe running tasks, not web-service readiness. Commands started manually in an
 ordinary terminal are excluded. Reopening the app reads the host's current state without opening a
@@ -2186,6 +2205,10 @@ encoding remains configurable through JVM arguments. Output already discarded by
 cannot be reconstructed. Starting tasks requires a host with pipe-output support; an older host
 reports the existing upgrade instruction while its running tasks remain accessible and stoppable.
 
+Java and Python log areas use the selected terminal palette's foreground and opaque background.
+Change terminal palettes independently of the interface theme under **Settings → Appearance**; the
+colors update existing logs while tasks keep running.
+
 Task log replay shows the most recent retained text when the host snapshot ends in a blank screen
 after a terminal resize. Reopening the panel or switching task history does not require new output
 to reveal existing logs. Later text follows the log tail without jumping through padded blank rows;
@@ -2214,15 +2237,34 @@ support is reported without stopping existing sessions.
   and 136 backend tests pass, with nine optional backend checks ignored; TypeScript, localization,
   formatting, documentation and production/isolated desktop builds pass. macOS/Linux runtime
   acceptance and registering JDK 8/11/17 remain unverified.
-- Run-indicator validation on Windows passes 28 focused frontend checks and two backend summary
-  checks, covering global counts, build/history exclusion, slow requests, project changes, stale
-  queries and recovery. The isolated native app (`sh.uterm.desktop.qa.runicons`) runs a real JDK 21
-  JAR and Python script, verifies both icons at 17 px in dark/light appearance, switches projects
-  with panels closed, restores both indicators after an app restart, and checks independent stops
-  back to gray. TypeScript, localization, formatting, documentation and production/desktop/isolated
-  builds pass. The full frontend suite passes 341 checks with 11 optional/platform checks skipped;
-  the backend suite passes 144 checks with ten ignored. macOS/Linux visual acceptance remains
-  pending.
+- Windows log-theme validation reproduces transparent Java/Python log backgrounds in Clear Sky
+  before the fix. The isolated native app (`sh.uterm.desktop.qa.runnavigation`) passes 28 live
+  palette-switch checks using real JDK 21 JARs and Python 3.13.5 scripts: all six interface themes
+  in both appearance modes, all eight built-in terminal palettes and two custom palettes are covered
+  across the cases. Foreground and opaque background match the selected terminal palette; the log
+  view, task IDs and generations remain attached. Screenshots verify readable Java and Python logs
+  with light interfaces and dark terminal palettes, and with custom light palettes. Production and
+  isolated desktop builds, formatting and documentation checks pass. Native macOS/Linux visual
+  acceptance remains pending.
+- Shared Java/Python project-navigation validation on Windows passes 22 focused frontend checks and
+  144 backend checks with ten ignored. Coverage includes project and Worktree selection, save
+  failure recovery, cancelled transitions, Windows path matching, language filtering, empty/error
+  lists, keyboard focus and cross-workspace navigation. The isolated native app
+  (`sh.uterm.desktop.qa.runnavigation`) runs two real JDK 21 JARs and two Python 3.13.5 scripts;
+  configuration roots and task logs follow project changes, and list selection opens a project in
+  another workspace. Screenshots verify Chinese dark and English light lists and a 680 px viewport;
+  Escape restores icon focus. Formatting, localization, documentation, TypeScript, production build
+  and isolated desktop compilation pass. Native macOS/Linux navigation acceptance remains pending.
+- Windows run-indicator validation passes six focused frontend checks and 144 backend checks with
+  ten ignored. Coverage includes global counts, per-root sidebar icons, build/history exclusion,
+  root changes without count changes, retained failed snapshots and recovery. The isolated native
+  app (`sh.uterm.desktop.qa.runnavigation`) runs three JDK 21 JAR tasks, including an actual Git
+  Worktree, and two Python 3.13.5 scripts. It verifies colored 16 px sidebar icons in dark/light
+  appearance, pinned projects, cross-workspace navigation, retained icons with panels closed and
+  independent stops that restore only the matching folders. The native toolbar checks
+  (`sh.uterm.desktop.qa.runicons`) also verify 17 px icons, app-restart recovery and independent
+  stops back to gray. TypeScript, localization, formatting, documentation and production/isolated
+  desktop builds pass. Native macOS/Linux sidebar-icon acceptance remains pending.
 - Windows panel-height checks cover pointer previews, size limits, cancellation, keyboard bounds,
   double-click reset and Expand/Restore. The React task-terminal probe remains mounted during a
   committed drag and is not rerendered for pointer previews. An isolated native Windows app
@@ -2304,6 +2346,10 @@ script, module, FastAPI, Flask or Django task. It stays colored across project a
 and returns to gray after the last Python task exits. Its tooltip gives the global running project
 count; this indicates process lifetime rather than web-service readiness.
 
+The open Python panel follows project and Worktree selection, with the same save protection as the
+Java panel. Right-click the Python icon and choose a live entry to open that project's configuration
+and logs; see [Build and run a project](#build-and-run-a-project) for the shared list behavior.
+
 1. Select an existing Python 3 executable. Detection lists project `.venv` and `venv` environments
    before executables on PATH; a saved selection is retained. Enter a path or use the file picker
    for another environment. Virtual environments run directly without an activation script.
@@ -2337,11 +2383,11 @@ Atomic saves check revisions. A failed or conflicting save retains the draft and
 **Reload saved configuration** explicitly after a conflict. Saves and task preparation block panel
 switching and repeated actions. SSH, Redis and database views retain the hidden local draft.
 
-The log view is read-only and supports search, copying retained plain text and Auto follow.
-Scrolling up pauses following; checking Auto follow resumes it. Task history remains available after
-exit, with the most recent 1 MiB per task and up to 32 completed tasks across the host. History is
-bounded and lives only for the host's lifetime; it is not a permanent log archive or a file-log
-viewer.
+The log view is read-only, uses the terminal palette's foreground and background, and supports
+search, copying retained plain text and Auto follow. Scrolling up pauses following; checking Auto
+follow resumes it. Task history remains available after exit, with the most recent 1 MiB per task
+and up to 32 completed tasks across the host. History is bounded and lives only for the host's
+lifetime; it is not a permanent log archive or a file-log viewer.
 
 Use an ordinary terminal for programs requiring interactive input or a Python REPL; the log panel
 does not accept process input.

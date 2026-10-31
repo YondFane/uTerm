@@ -1,4 +1,12 @@
 export const javaMessages: Record<string, string> = {
+  "Java 启动列表": "Java running projects",
+  "Python 启动列表": "Python running projects",
+  "无法读取启动列表，请稍后重试。": "Could not read running projects. Retrying shortly.",
+  "无法切换运行项目，请先完成当前操作或处理配置保存错误。":
+    "Cannot switch run projects. Finish the current operation or resolve the configuration save error first.",
+  "此运行项目已从工作区移除，请先重新添加项目。":
+    "This running project was removed from the workspace. Add the project again first.",
+  "正在切换运行项目…": "Switching run projects…",
   运行状态暂不可用: "Run status is temporarily unavailable",
   "上次确认：{count} 个项目运行中": "Last confirmed running projects: {count}",
   "正在读取运行状态…": "Reading run status…",

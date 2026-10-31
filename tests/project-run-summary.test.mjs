@@ -127,6 +127,19 @@ test("global run indicators survive project changes, serialize slow reads and re
     await act(async () => requests[newest].resolve({ java: 2, python: 0 }));
     await act(async () => requests[newest - 1].resolve({ java: 0, python: 9 }));
     assert.deepEqual(status.summary, { java: 2, python: 0 });
+    const rootSnapshot = { java: 2, python: 0, java_roots: ["/one", "/two"], python_roots: [] };
+    await focus();
+    await act(async () => requests.at(-1).resolve(rootSnapshot));
+    const withRoots = status;
+    await focus();
+    await act(async () =>
+      requests.at(-1).resolve({ ...rootSnapshot, java_roots: [...rootSnapshot.java_roots] }),
+    );
+    assert.equal(status, withRoots);
+    await focus();
+    await act(async () => requests.at(-1).reject(new Error("host unavailable")));
+    assert.equal(status.summary, rootSnapshot);
+    assert.equal(status.stale, true);
     await focus();
     const finalRequest = requests.at(-1);
     await act(async () => root.unmount());

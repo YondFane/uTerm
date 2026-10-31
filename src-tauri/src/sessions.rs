@@ -146,6 +146,8 @@ pub struct StartRequest {
 pub struct ProjectRunSummary {
     java: usize,
     python: usize,
+    java_roots: Vec<std::path::PathBuf>,
+    python_roots: Vec<std::path::PathBuf>,
 }
 
 fn summarize_project_runs(tasks: Vec<TaskSession>) -> ProjectRunSummary {
@@ -158,17 +160,27 @@ fn summarize_project_runs(tasks: Vec<TaskSession>) -> ProjectRunSummary {
             python.insert(task.task.root);
         }
     }
+    let mut java_roots: Vec<_> = java.into_iter().collect();
+    let mut python_roots: Vec<_> = python.into_iter().collect();
+    java_roots.sort();
+    python_roots.sort();
     ProjectRunSummary {
-        java: java.len(),
-        python: python.len(),
+        java: java_roots.len(),
+        python: python_roots.len(),
+        java_roots,
+        python_roots,
     }
 }
 
 fn read_project_run_summary(root: &std::path::Path) -> Result<ProjectRunSummary, String> {
+    read_project_run_tasks(root).map(summarize_project_runs)
+}
+
+fn read_project_run_tasks(root: &std::path::Path) -> Result<Vec<TaskSession>, String> {
     // Status reads must neither launch a host nor depend on a still-existing project directory.
     // 状态读取既不能启动宿主，也不能依赖项目目录仍然存在。
     if !root.join("endpoint.json").exists() {
-        return Ok(ProjectRunSummary::default());
+        return Ok(vec![]);
     }
     let client = Client::connect(root).map_err(|error| error.to_string())?;
     client
@@ -178,9 +190,30 @@ fn read_project_run_summary(root: &std::path::Path) -> Result<ProjectRunSummary,
         .request(Operation::TaskSnapshot)
         .map_err(|error| error.to_string())?
     {
-        Reply::Tasks(tasks) => Ok(summarize_project_runs(tasks)),
+        Reply::Tasks(tasks) => Ok(tasks),
         _ => Err("Invalid project run summary".into()),
     }
+}
+
+fn running_project_tasks(tasks: Vec<TaskSession>) -> Vec<TaskSession> {
+    tasks
+        .into_iter()
+        .filter(|task| {
+            task.running
+                && (task.task.action == "run"
+                    || task.task.action == "python:run"
+                    || task.task.action.starts_with("python:run|"))
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub async fn project_run_list(app: tauri::AppHandle) -> Result<Vec<TaskSession>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        read_project_run_tasks(&local_root(&app)?).map(running_project_tasks)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -717,9 +750,25 @@ mod update_tests {
                 task("/old-java", "run", false),
                 task("/old-python", "python:run", false),
             ]),
-            ProjectRunSummary { java: 2, python: 2 }
+            ProjectRunSummary {
+                java: 2,
+                python: 2,
+                java_roots: vec!["/java".into(), "/java-worktree".into()],
+                python_roots: vec!["/python".into(), "/python-web".into()],
+            }
         );
         assert_eq!(summarize_project_runs(vec![]), ProjectRunSummary::default());
+        let live = running_project_tasks(vec![
+            task("/java", "run", true),
+            task("/python", "python:run", true),
+            task("/web", "python:run|http://127.0.0.1:8000", true),
+            task("/build", "build", true),
+            task("/unknown", "python:other", true),
+            task("/old", "run", false),
+        ]);
+        assert_eq!(live.len(), 3);
+        assert_eq!(live[0].task.root, std::path::PathBuf::from("/java"));
+        assert_eq!(live[2].task.action, "python:run|http://127.0.0.1:8000");
     }
 
     #[test]

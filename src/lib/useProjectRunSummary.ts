@@ -1,15 +1,47 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { tx } from "./i18n";
+import { displayLocalPath } from "./file-target";
+import type { Workspace } from "./workspace";
 
-interface ProjectRunSummary {
-  java: number;
-  python: number;
+export function projectRunRootKey(path: string) {
+  const display = displayLocalPath(path);
+  const value = display.replace(/[\\/]+$/, "");
+  return /^[a-z]:[\\/]|^\\\\/i.test(display) ? value.toLowerCase() : value;
 }
 
-interface ProjectRunStatus {
+export function findRunProject(workspace: Workspace, directory: string) {
+  const target = projectRunRootKey(directory);
+  for (const project of workspace.projects) {
+    if (projectRunRootKey(project.directory) === target) return { project, worktree: null };
+    const worktree = project.worktrees?.find((item) => projectRunRootKey(item.path) === target);
+    if (worktree) return { project, worktree };
+  }
+  return null;
+}
+
+export interface ProjectRunSummary {
+  java: number;
+  python: number;
+  java_roots?: string[];
+  python_roots?: string[];
+}
+
+export interface ProjectRunStatus {
   summary: ProjectRunSummary | null;
   stale: boolean;
+}
+
+export function runningProjectRoots(summary: ProjectRunSummary | null | undefined) {
+  const roots = new Map<string, "java" | "python">();
+  for (const language of ["java", "python"] as const)
+    for (const directory of summary?.[`${language}_roots`] ?? [])
+      roots.set(projectRunRootKey(directory), language);
+  return roots;
+}
+
+function sameRoots(previous: string[] = [], next: string[] = []) {
+  return previous.length === next.length && previous.every((root, index) => root === next[index]);
 }
 
 export function projectRunTitle(language: "java" | "python", status: ProjectRunStatus) {
@@ -43,7 +75,9 @@ export function useProjectRunSummary(enabled: boolean) {
           setStatus((previous) =>
             !previous.stale &&
             previous.summary?.java === summary.java &&
-            previous.summary?.python === summary.python
+            previous.summary?.python === summary.python &&
+            sameRoots(previous.summary?.java_roots, summary.java_roots) &&
+            sameRoots(previous.summary?.python_roots, summary.python_roots)
               ? previous
               : { summary, stale: false },
           );

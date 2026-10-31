@@ -392,6 +392,7 @@ fn main() {
         .manage(java_components::Components::default())
         .invoke_handler(tauri::generate_handler![
             sessions::project_run_summary,
+            sessions::project_run_list,
             python::python_configuration,
             python::python_save_configuration,
             python::python_detect_interpreters,

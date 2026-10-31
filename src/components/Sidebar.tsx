@@ -6,6 +6,8 @@ import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
 import { matchesSsh } from "../lib/ssh";
 import { displayLocalPath } from "../lib/file-target";
+import { projectRunRootKey, runningProjectRoots } from "../lib/useProjectRunSummary";
+import type { ProjectRunStatus } from "../lib/useProjectRunSummary";
 import { useSettings } from "../lib/SettingsContext";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -92,7 +94,9 @@ export function Sidebar({
   manageDatabase,
   databaseStatuses = {},
   selectedDatabaseId,
+  projectRuns,
 }: {
+  projectRuns?: ProjectRunStatus;
   addDatabase?: () => void;
   editDatabase?: (connection: DatabaseConfig) => void;
   selectDatabase?: (connection: DatabaseConfig) => void;
@@ -138,6 +142,7 @@ export function Sidebar({
 }) {
   const [sshQuery, setSshQuery] = useState("");
   useUiLanguage();
+  const runRoots = useMemo(() => runningProjectRoots(projectRuns?.summary), [projectRuns?.summary]);
 
   const { settings, save } = useSettings();
   const [sidebarView, setSidebarView] = useState<SidebarView>("all");
@@ -688,6 +693,10 @@ export function Sidebar({
   }
   function folderRow(project: Project, depth: number, worktree?: Worktree) {
     const item = worktree ?? project;
+    const runLanguage = runRoots.get(projectRunRootKey(worktree?.path ?? project.directory));
+    const runLabel = runLanguage
+      ? `${runLanguage === "java" ? "Java" : "Python"} · ${tx("运行中")}${projectRuns?.stale ? ` · ${tx("运行状态暂不可用")}` : ""}`
+      : undefined;
     const active = project.sessions.length > 0;
     const hasOpenSessions = worktree
       ? project.sessions.some((session) => session.worktreeId === worktree.id)
@@ -805,6 +814,7 @@ export function Sidebar({
               ? `${worktree.name} — ${displayLocalPath(worktree.path)}${worktree.missing ? tx(" — 目录不可用") : ""}`
               : `${project.name} — ${displayLocalPath(project.directory)}`
           }
+          aria-label={runLabel ? `${item.name} · ${runLabel}` : undefined}
           onClick={() => {
             if (!worktree && suppressProjectClick.current) {
               suppressProjectClick.current = false;
@@ -844,10 +854,15 @@ export function Sidebar({
         >
           <span
             className="sidebar-resource-icon"
+            title={runLabel}
             data-resource-active={hasOpenSessions || undefined}
             aria-hidden="true"
           >
-            <SidebarIcon name={folded ? "folderClosed" : "folder"} />
+            {runLanguage ? (
+              <ToolbarIcon name={runLanguage} running />
+            ) : (
+              <SidebarIcon name={folded ? "folderClosed" : "folder"} />
+            )}
           </span>
           <span className="sidebar-row-name">{item.name}</span>
           {worktree && (
