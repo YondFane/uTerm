@@ -1,136 +1,123 @@
+<p align="center">
+  <img src="site/icon.svg" width="64" height="64" alt="uTerm" />
+</p>
+
 # uTerm
 
-[English](README.md) · [官网](https://yondfane.github.io/uTerm/?lang=zh-CN) ·
-[功能指南](docs/features.zh-CN.md) · [版本下载](https://github.com/YondFane/uTerm/releases)
+**终端、Agent，回到项目里。**
 
-**面向 Windows 和 macOS 的终端工作台，按项目组织编程 Agent、Git Worktree 与远程开发。**
+面向 Windows 与 macOS 的项目式终端工作台，集中管理编程 Agent、Git
+Worktree 与远程开发。让终端、代码、运行任务和数据连接，留在所属项目身边。
 
-把终端、Agent 和项目工具放在一起，按项目组织任务，在会话旁查看 Git 修改，重新打开应用后继续连接本地进程。
+**[下载 uTerm](https://yondfane.github.io/uTerm/?lang=zh-CN#download)** ·
+[探索官网](https://yondfane.github.io/uTerm/?lang=zh-CN) · [English](README.md) ·
+[功能指南](docs/features.zh-CN.md)
 
-[下载](#下载) · [快速开始](#快速开始) · [导览](#看看工作流程) · [功能](#可以做什么) ·
-[命令安装](#一行命令安装) · [许可](#许可与反馈) · [开发](#开发)
+![Windows 上的 uTerm：示例项目、并排终端、Git 更改和 Worktree](site/media/workspace.png)
 
-![Windows 上的 uTerm：演示项目、分屏终端、Git 变更与 Worktree](site/media/workspace.png)
+_真实 Windows 工作区，使用临时示例项目和真实本地 Shell 会话。_
 
-_Windows 应用中的临时演示项目与真实本地 Shell 会话。截图界面为英文。_
+[下载](#下载) · [快速开始](#快速开始) · [工作流](#可以做什么) · [命令安装](#一行命令安装) ·
+[开发](#开发) · [许可与反馈](#许可与反馈)
 
 ## 下载
 
-| 平台                | 稳定版安装包                                                                   |
-| ------------------- | ------------------------------------------------------------------------------ |
-| Windows x64         | [下载 Windows 版](https://yondfane.github.io/uTerm/?lang=zh-CN#download)       |
-| macOS Apple Silicon | [下载 Apple Silicon 版](https://yondfane.github.io/uTerm/?lang=zh-CN#download) |
-| macOS Intel         | [下载 Intel 版](https://yondfane.github.io/uTerm/?lang=zh-CN#download)         |
+| 你的设备            | 安装包                                                                        |
+| ------------------- | ----------------------------------------------------------------------------- |
+| Windows x64         | [Windows · .exe](https://yondfane.github.io/uTerm/?lang=zh-CN#download)       |
+| macOS Apple Silicon | [Apple Silicon · .dmg](https://yondfane.github.io/uTerm/?lang=zh-CN#download) |
+| macOS Intel         | [Intel · .dmg](https://yondfane.github.io/uTerm/?lang=zh-CN#download)         |
 
-官网从最新稳定版解析对应安装包。无法加载发布信息时，可从
+官网会查找最新稳定版中匹配的安装包，也可以在
 [GitHub Releases](https://github.com/YondFane/uTerm/releases/latest)
-选择平台。下载桌面安装包无需 Node.js 或 Rust。
+手动选择。桌面安装包无需 Node.js 或 Rust；下载需要访问 GitHub。
 
-macOS 安装包未经 Apple 公证，首次打开可能需要在**系统设置 → 隐私与安全**中批准。Windows 按安装向导完成安装。下载需要访问 GitHub。
+macOS 安装包未经 Apple 公证，首次启动可能需要在**系统设置 → 隐私与安全**中批准。Windows 按安装向导提示操作。
 
 ## 快速开始
 
-1. 安装并打开 uTerm，点击**添加项目**，选择项目文件夹。
-2. 新建终端；或在**设置 → Agent**
-   中启用已安装的 Agent，再从项目行新建聊天。各 CLI 使用自身的登录与认证方式。
-3. 右键会话，选择**与…分组**，并排显示会话。打开 **Git** 查看修改；已有 Git
+1. **添加项目**。打开 uTerm，选择**添加项目**并选取本地文件夹。已有 Git
    Worktree 会显示在所属项目下。
+2. **打开会话**。启动终端，或在**设置 → Agent**中启用已安装的 Agent
+   CLI。右击会话，选择**与……分组**，即可分屏工作。各 Agent CLI 使用自己的登录认证。
+3. **运行与检查**。从项目菜单或工具栏打开 **Java 构建与运行**或
+   **Python 运行**。在底部面板查看输出，在 **Git** 中检查代码变更。
 
-在**设置 → Agent**
-中搜索或筛选紧凑列表，再选择 Agent 安装、配置程序或管理 Hooks。窄面板将详情放在列表下方。
+退出应用会分离窗口，本地会话仍继续运行。再次打开即可重新连接；**关闭会话**才会终止所选进程。
 
-使用 TRAE CLI 时，打开**设置 → Agent → TRAE CLI**，安装并启用
-`traecli`，再在 CLI 内登录。配置与限制见[TRAE CLI 功能说明](docs/features.zh-CN.md#trae-cli)。
-
-退出应用只分离窗口，本地会话继续运行；重新打开后可连接原会话。**关闭会话**才会终止所选进程。
-
-在**设置 → Agent**
-中开启任务通知。Codex 和 OpenCode 可无需 Hooks 上报精确事件；所有 Agent 均可将自身的原生终端通知或响铃转为通用提醒。通知来源与限制见[功能指南](docs/features.zh-CN.md#无需-hooks-的通知)。
-
-## 看看工作流程
-
-[观看 30 秒截图导览](site/media/workflow.mp4)
-
-![使用临时演示项目展示 uTerm 工作区](site/media/workflow.gif)
-
-标注导览使用真实 Windows 应用截图、本地临时项目及真实 Shell 输出；它是截图导览，并非连续录屏，不展示模型请求或远程服务器连接。[素材说明](site/media/README.md)。
+Agent 的安装、配置、Hooks 和通知都在**设置 → Agent**中。参见
+[Agent 配置](docs/features.zh-CN.md#agent-与设置)、 [TRAE CLI](docs/features.zh-CN.md#trae-cli) 和
+[无需 Hooks 的通知](docs/features.zh-CN.md#无需-hooks-的通知)。
 
 ## 可以做什么
 
-| 工作流程           | uTerm 提供的功能                                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
-| 同时处理多个任务   | 按工作区、项目和 Git Worktree 组织终端与 Agent，使用分屏，并通过受支持的 Hooks 查看 Agent 活动。                               |
-| 保留项目上下文     | 查看 Git 状态、差异与提交，文件树中的变更文件及文件夹会着色；编辑文件时保留冲突检查和草稿恢复；预览 Markdown 与 PDF。          |
-| 使用远程系统和数据 | 复用系统 OpenSSH 连接 SSH/SFTP；浏览 Redis，查询 MySQL、PostgreSQL、Oracle、Elasticsearch 与 MongoDB，默认只读，按需受控编辑。 |
+| 把工作放在一起   | 在 uTerm 中                                                                           |
+| ---------------- | ------------------------------------------------------------------------------------- |
+| **项目与 Agent** | 按工作区、项目和 Git Worktree 组织终端与 Agent，分屏处理并行任务。                    |
+| **构建与运行**   | 用 Maven 构建 Java，运行 Java/Python 项目，查看可搜索日志，停止或重新启动任务。       |
+| **文件与 Git**   | 查看差异与提交，编辑文件时保留冲突检查和草稿恢复，预览 Markdown 与 PDF。              |
+| **远程与数据**   | 打开 SSH/SFTP，浏览 Redis，查询 MySQL、PostgreSQL、Oracle、Elasticsearch 和 MongoDB。 |
 
-界面支持简体中文和英文、六套配色、可配置字体和快捷键。Agent 程序为可选组件，可安装或配置需要的 CLI。SQL 与 MongoDB 连接需要 Java
-17+ 和所选驱动，在应用内按需管理；Elasticsearch 无需额外运行时。支持范围、限制和平台验收情况见[功能指南](docs/features.zh-CN.md)。
+**Java 和 Python 保留各自的项目上下文**。切换项目时，对应配置和日志会一同切换。右击工具栏图标可选择已启动任务；侧栏彩色 Java/Python 图标标识正在运行的项目。
 
-Java 项目可从项目菜单或工具栏打开 **Java 构建与运行**。底部面板提供 Maven 构建、Spring
-Boot 开发／JAR 启动及有序任务输出，并支持系统全局或项目独立 Maven 配置。完整 JDK
-8／11／17／21 与 Maven 工具按需安装，详见
-[Java 与 Maven 构建](docs/features.zh-CN.md#java-与-maven-构建)。
+- **Java**：Maven 构建、Spring Boot 开发运行和 JAR 启动，按需安装完整 JDK 8/11/17/21 与 Maven。
+  [Java 与 Maven 指南](docs/features.zh-CN.md#java-与-maven-构建)。
+- **Python**：使用自己的 Python
+  3 或虚拟环境，运行脚本、模块、FastAPI、Flask 和 Django。Python 与项目依赖需单独准备。[Python 与日志指南](docs/features.zh-CN.md#python-项目与日志)。
 
-Python 项目可从项目菜单或工具栏打开 **Python 运行**。选择已有 Python
-3 或虚拟环境后，可启动脚本、模块、FastAPI、Flask 或 Django，查看实时日志、搜索及复制输出，并停止或重新运行。Python 和项目依赖需提前准备，不进入安装包；详见
-[Python 项目与日志](docs/features.zh-CN.md#python-项目与日志)。
+界面支持简体中文与英文、六种配色、可配置字体和快捷键。数据工具默认只读，按需开启受保护的编辑。SQL 与 MongoDB 需要 Java
+17+ 和所选驱动，可在应用内按需管理；Elasticsearch 无需额外运行时。
 
-Ctrl+- 和 Ctrl++ 调整当前显示的终端、Agent 会话或文件内容字号，macOS 使用 Command 替代 Ctrl。会话与文件标题也提供字号按钮。会话标题显示起始目录，Windows 路径从盘符开始。右键文件 → 快速打开的结果，可复制文件、文件名或路径，或在文件管理器中定位文件。
+使用方法、限制与平台验证详见[完整功能指南](docs/features.zh-CN.md)。
 
-侧栏统一采用图标导航，内容列表旁显示纵向图标栏，添加按钮与命令、设置及 Agent 共用图标栏底部按钮组。拖动侧栏边缘可调整宽度，窄栏使用紧凑操作与图标布局。
+### 看看工作流程
 
-隐藏或收起侧栏仍保留图标栏，点击分类图标可重新展开内容列表。添加菜单第一项为“新建终端”，随后是项目及 Agent 操作，SSH、Redis 和数据库连接操作位于末尾。三个连接分类始终可用，设置 → 外观直接显示界面主题。
+[打开五步工作区导览](https://yondfane.github.io/uTerm/media/tour.html?lang=zh-CN) ·
+[观看 30 秒导览](site/media/workflow.mp4)
 
-macOS 下，原生红黄绿窗口按钮与工作区控件共用顶部栏，绿色按钮保留系统窗口排列与全屏菜单。
+导览为上方真实 Windows 截图添加标注，属于截图导览，并非连续录屏，不展示模型请求或远程服务器连接。
+[素材说明](site/media/README.md)。
 
 ## 一行命令安装
 
-macOS，在终端运行：
+macOS · 终端：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/install.sh | bash
 ```
 
-Windows x64，在 PowerShell 中运行：
+Windows x64 · PowerShell：
 
 ```powershell
 irm https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/install.ps1 | iex
 ```
 
-已安装 Node.js 22.13 或以上时，也可使用以下任一命令启动同一个桌面安装器：
+已安装 Node.js 22.13 或以上：
 
 ```sh
 npx @yondfane/uterm-install
-# or / 或
-pnpm dlx @yondfane/uterm-install
 ```
 
-也可先运行 `npm install -g @yondfane/uterm-install` 全局安装命令，再执行
-`uterm-install`。安装或移除 npm 包只管理命令，不安装或卸载桌面应用。使用 `uterm-install --help`
-查看选项。
+也可以使用 `pnpm dlx @yondfane/uterm-install` 启动桌面安装器。全局安装 npm 包只管理 `uterm-install`
+命令，不会安装或卸载桌面应用。使用 `uterm-install --help` 查看选项。
 
-macOS 脚本安装到
-`~/Applications/uTerm.app`，不使用 sudo，也不启动应用。已有安装会保留，请使用应用内更新。安装包支持有限重试；稳定清单提供大小与 SHA-256 时，可校验并复用缓存。[安装器详情](docs/features.zh-CN.md#一行命令安装)。
-
-## 许可与反馈
-
-uTerm 是采用 [PolyForm Noncommercial License 1.0.0](LICENSE)
-的源码可用软件，协议允许的用途可免费使用。超出协议已允许范围的商业使用需要单独书面授权；条款和授权联系入口见
-[NOTICE](NOTICE)。第三方组件保留各自许可。
-
-[报告问题或提出建议](https://github.com/YondFane/uTerm/issues/new)时，请附上操作系统、uTerm 版本及复现步骤。如果 uTerm 对你有帮助，欢迎点一个 Star，让更多开发者发现它。
+macOS 脚本安装至
+`~/Applications/uTerm.app`，无需 sudo，也不会自动启动应用。已有安装会被保留，请使用应用内更新。下载支持有限重试；稳定版源提供大小和 SHA-256 时可校验并复用缓存。
+[安装器说明](docs/features.zh-CN.md#一行命令安装)。
 
 ## 开发
 
-使用 Tauri、React、TypeScript、Rust 和 xterm.js 构建，并使用其 WebGL 插件渲染终端。环境配置、开发命令、数据库组件开发、验证与发布说明见[开发指南](docs/development.zh-CN.md)。参与贡献时请遵循
-[AGENTS.md](AGENTS.md) 和[文档编写规范](docs/writing-rules.md)。
+基于 **Tauri · React · TypeScript · Rust · xterm.js**，使用 WebGL 渲染终端。
 
-视图位于 `src/components/`，工作台切换由 `src/App.tsx` 协调。可复用 Hook 和纯逻辑位于
-`src/lib/`，包括 Git 文件状态轮询。桌面命令位于 `src-tauri/src/`；会话身份、PTY 和任务执行由
-`crates/utermd-local/` 负责。
+环境配置、命令、仓库布局、验证和发布步骤见[开发指南](docs/development.zh-CN.md)。贡献时请遵循
+[AGENTS.md](AGENTS.md)
+和[文档编写规范](docs/writing-rules.md)，使用项目的Prettier/rustfmt，提交前运行 `pnpm format` 与
+`pnpm format:check`。
 
-使用支持 EditorConfig 的编辑器及项目的 Prettier／rustfmt。提交前运行 `pnpm format` 和
-`pnpm format:check`；macOS、Windows CI 会检查全仓格式。
+## 许可与反馈
 
-CI 缓存 pnpm 和 Cargo 依赖；推送 `main` 后从 `release`
-为后续版本标签预热缓存。手动运行方式及限制见[CI 依赖缓存](docs/development.zh-CN.md#ci-依赖缓存)。
+uTerm 按 [PolyForm Noncommercial License 1.0.0](LICENSE)
+提供源码，在其允许范围内免费使用。超出许可已允许范围的商业用途需另行获得书面授权；条款和授权联系方式见
+[NOTICE](NOTICE)。第三方组件保留各自许可。
+
+[报告问题或提出功能建议](https://github.com/YondFane/uTerm/issues/new)，请附上操作系统、uTerm 版本及复现步骤。

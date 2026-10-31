@@ -1,138 +1,129 @@
+<p align="center">
+  <img src="site/icon.svg" width="64" height="64" alt="uTerm" />
+</p>
+
 # uTerm
 
-[简体中文](README.zh-CN.md) · [Website](https://yondfane.github.io/uTerm/?lang=en) ·
-[Feature guide](docs/features.md) · [Releases](https://github.com/YondFane/uTerm/releases)
+**Your project. All together.**
 
-**A terminal workspace for coding agents, Git Worktrees and remote development on Windows and
-macOS.**
+A terminal workspace for coding agents, Git Worktrees and remote development on Windows and macOS.
+Keep terminals, code, run tasks and data connections beside the project they belong to.
 
-Keep your terminals, agents and project tools together. Organize work by project, review Git changes
-alongside your sessions, and reconnect to local processes after reopening the app.
-
-[Download](#download) · [Quick start](#quick-start) · [Tour](#see-the-workflow) ·
-[Features](#what-you-can-do) · [Command install](#one-line-installation) ·
-[License](#license-and-feedback) · [Development](#development)
+**[Download uTerm](https://yondfane.github.io/uTerm/?lang=en#download)** ·
+[Explore the website](https://yondfane.github.io/uTerm/?lang=en) · [简体中文](README.zh-CN.md) ·
+[Feature guide](docs/features.md)
 
 ![uTerm on Windows with a sample project, split terminals, Git changes and a Worktree](site/media/workspace.png)
 
-_The Windows app running a disposable sample project and real local shell sessions._
+_An actual Windows workspace with a disposable sample project and real local shell sessions._
+
+[Download](#download) · [Quick start](#quick-start) · [Workflows](#what-you-can-do) ·
+[Install commands](#one-line-installation) · [Development](#development) ·
+[License & feedback](#license-and-feedback)
 
 ## Download
 
-| Platform            | Stable installer                                                                 |
-| ------------------- | -------------------------------------------------------------------------------- |
-| Windows x64         | [Download for Windows](https://yondfane.github.io/uTerm/?lang=en#download)       |
-| macOS Apple Silicon | [Download for Apple Silicon](https://yondfane.github.io/uTerm/?lang=en#download) |
-| macOS Intel         | [Download for Intel](https://yondfane.github.io/uTerm/?lang=en#download)         |
+| Your device         | Installer                                                                  |
+| ------------------- | -------------------------------------------------------------------------- |
+| Windows x64         | [Windows · .exe](https://yondfane.github.io/uTerm/?lang=en#download)       |
+| macOS Apple Silicon | [Apple Silicon · .dmg](https://yondfane.github.io/uTerm/?lang=en#download) |
+| macOS Intel         | [Intel · .dmg](https://yondfane.github.io/uTerm/?lang=en#download)         |
 
-The website resolves the matching installers from the latest stable release. If it cannot load
-release metadata, use [GitHub Releases](https://github.com/YondFane/uTerm/releases/latest) and
-choose your platform. Downloading a desktop installer needs no Node.js or Rust.
+The website finds the matching installers from the latest stable release. You can also choose an
+installer on [GitHub Releases](https://github.com/YondFane/uTerm/releases/latest). Desktop
+installers need no Node.js or Rust; downloads require GitHub access.
 
-macOS builds are not Apple-notarized; first launch may require approval in **System Settings →
-Privacy & Security**. Windows uses its installation wizard. Downloads require GitHub access.
+macOS builds are not Apple-notarized. First launch may require approval in **System Settings →
+Privacy & Security**. On Windows, follow the installation wizard.
 
 ## Quick start
 
-1. Install and open uTerm, then choose **Add project** and select your project folder.
-2. Open a terminal, or enable an installed Agent under **Settings → Agent** and start a chat from
-   the project row. Each CLI uses its own authentication.
-3. Right-click a session and choose **Group with …** to place sessions side by side. Open **Git** to
-   review changes; existing Git Worktrees appear under their project.
-
-In **Settings → Agent**, search or filter the compact list, then select an Agent to install or
-configure it and manage Hooks. Narrow panels place the details below the list.
-
-For TRAE CLI, open **Settings → Agent → TRAE CLI** to install and enable `traecli`, then sign in
-inside the CLI. See [TRAE CLI setup and limits](docs/features.md#trae-cli).
+1. **Add your project.** Open uTerm, choose **Add project** and select a local folder. Existing Git
+   Worktrees appear under their project.
+2. **Open a session.** Start a terminal, or enable an installed Agent CLI in **Settings → Agent**.
+   Right-click a session and choose **Group with …** to work in split panes. Each Agent CLI uses its
+   own authentication.
+3. **Run and review.** Open **Java build and run** or **Python run** from the project menu or
+   toolbar. Review output in the bottom panel and inspect your changes in **Git**.
 
 Quitting detaches the window while local sessions keep running. Reopen to reconnect; **Close
 Session** terminates the selected process.
 
-Enable task notifications in **Settings → Agent**. Codex and OpenCode can report precise events
-without Hooks; all Agents can forward their native terminal notifications or bells as general
-reminders. See [notification sources and limits](docs/features.md#notifications-without-hooks).
-
-## See the workflow
-
-[Watch the 30-second screenshot tour](site/media/workflow.mp4)
-
-![An annotated screenshot tour of the uTerm workspace](site/media/workflow.gif)
-
-The annotated tour uses an actual Windows app screenshot with a disposable sample project and real
-local shell output. It is a screenshot tour, not a continuous screen recording; no model requests or
-remote-server connections are shown. [Media details](site/media/README.md).
+Agent installation, configuration, Hooks and notifications are in **Settings → Agent**. See
+[Agent setup](docs/features.md#agents-and-settings), [TRAE CLI](docs/features.md#trae-cli) and
+[notifications without Hooks](docs/features.md#notifications-without-hooks).
 
 ## What you can do
 
-| Workflow                          | In uTerm                                                                                                                                                            |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Work on several tasks             | Organize terminals and Agents by workspace, project and Git Worktree; split panes and see Agent activity through supported Hooks.                                   |
-| Keep project context nearby       | Review Git status, diffs and commits; see changed files and folders in the file tree; edit files with conflict checks and draft recovery; preview Markdown and PDF. |
-| Work with remote systems and data | Use system OpenSSH for SSH/SFTP; browse Redis and query MySQL, PostgreSQL, Oracle, Elasticsearch or MongoDB with read-only defaults and guarded editing.            |
+| Keep the work together | In uTerm                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------- |
+| **Projects & Agents**  | Organize terminals and Agents by workspace, project and Git Worktree. Split panes for parallel tasks.   |
+| **Build & run**        | Build Java with Maven; run Java and Python projects with searchable logs and stop/restart controls.     |
+| **Files & Git**        | Review diffs and commits, edit files with conflict checks and draft recovery, preview Markdown and PDF. |
+| **Remote & data**      | Open SSH/SFTP, browse Redis, and query MySQL, PostgreSQL, Oracle, Elasticsearch and MongoDB.            |
+
+**Java and Python keep their project context.** Switching projects brings the matching configuration
+and logs. Right-click either toolbar icon to select a started task. Colored Java/Python icons in the
+sidebar identify running projects.
+
+- **Java:** Maven builds, Spring Boot development runs and JAR launches. Full JDK 8/11/17/21 and
+  Maven tools install on demand. [Java and Maven guide](docs/features.md#java-and-maven-builds).
+- **Python:** Scripts, modules, FastAPI, Flask and Django using your Python 3 or virtual
+  environment. Prepare Python and project dependencies separately.
+  [Python and logs guide](docs/features.md#python-projects-and-logs).
 
 The interface supports English and Simplified Chinese, six palettes, configurable fonts and keyboard
-shortcuts. Agent programs are optional; install or configure the CLI you want to use. SQL and
-MongoDB connections require Java 17+ and the selected drivers, managed on demand in the app.
-Elasticsearch requires no additional runtime. See the [feature guide](docs/features.md) for
-supported behavior, limits and platform acceptance.
+shortcuts. Data tools default to read-only with guarded editing. SQL and MongoDB require Java 17+
+and the selected drivers, managed on demand; Elasticsearch needs no additional runtime.
 
-Java projects can open **Java build and run** from the project menu or toolbar. The bottom panel
-provides Maven builds, Spring Boot development/JAR launches and ordered task output, with
-system-wide or project Maven configuration. Full JDK 8/11/17/21 and Maven tools install on demand;
-see [Java and Maven builds](docs/features.md#java-and-maven-builds).
+[Read the full feature guide](docs/features.md) for usage, limits and platform validation.
 
-Python projects can open **Python run** from the project menu or toolbar. Select an existing Python
-3 or virtual environment, then run a script, module, FastAPI, Flask or Django project with live
-logs, search, copying and stop/restart controls. Python and project dependencies are prepared
-separately and are not included in the installer; see
-[Python projects and logs](docs/features.md#python-projects-and-logs).
+### See the workflow
 
-Ctrl+- and Ctrl++ adjust the font of the visible terminal, Agent session or file content; macOS uses
-Command instead of Ctrl. Session and file headers also offer font buttons. Session headers show the
-starting directory, with Windows paths displayed from the drive letter. Right-click a Files → Quick
-open result to copy the file, its name or path, or reveal it in the file manager.
+[Open the five-step workspace tour](https://yondfane.github.io/uTerm/media/tour.html?lang=en) ·
+[Watch the 30-second tour](site/media/workflow.mp4)
 
-The sidebar uses a vertical icon rail beside the content list. Add, Commands, Settings and Agent
-share the controls at the bottom of the rail. Drag the sidebar edge to resize it; narrow widths use
-compact actions and icons. Hiding or collapsing the sidebar keeps the icon rail visible; click a
-category to reopen the content list. The Add menu starts with New terminal, then project and Agent
-actions, followed by SSH, Redis and database connection actions. All three connection categories
-remain available. Settings → Appearance opens directly to interface themes.
-
-On macOS, the native red, yellow and green window buttons share the top bar with workspace controls.
-The green button retains the system window arrangement and full-screen menu.
+The tour annotates the actual Windows screenshot above. It is a screenshot tour rather than a
+continuous recording, with no model requests or remote-server connections.
+[Media details](site/media/README.md).
 
 ## One-line installation
 
-macOS, in Terminal:
+macOS · Terminal:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/install.sh | bash
 ```
 
-Windows x64, in PowerShell:
+Windows x64 · PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/YondFane/uTerm/release/scripts/install/install.ps1 | iex
 ```
 
-With Node.js 22.13 or newer, either package runner starts the same desktop installer:
+With Node.js 22.13 or newer:
 
 ```sh
 npx @yondfane/uterm-install
-# or / 或
-pnpm dlx @yondfane/uterm-install
 ```
 
-You can also install the command with `npm install -g @yondfane/uterm-install`, then run
-`uterm-install`. Installing or removing the npm package manages the command only; it does not
-install or uninstall the desktop app. Use `uterm-install --help` for options.
+`pnpm dlx @yondfane/uterm-install` also starts the desktop installer. A global npm installation
+manages the `uterm-install` command only, not the desktop app. Run `uterm-install --help` for
+options.
 
 The macOS script installs to `~/Applications/uTerm.app` without sudo or launching the app. Existing
-installations are preserved; use in-app updates. Installer downloads support bounded retries and
-verified cache reuse when the stable feed provides size and SHA-256.
+installations are preserved; use in-app updates. Downloads support bounded retries and verified
+cache reuse when the stable feed supplies size and SHA-256.
 [Installer details](docs/features.md#one-line-installation).
+
+## Development
+
+Built with **Tauri · React · TypeScript · Rust · xterm.js**, with WebGL terminal rendering.
+
+Start with the [development guide](docs/development.md) for setup, commands, repository layout,
+validation and releases. Follow [AGENTS.md](AGENTS.md) and the
+[documentation writing rules](docs/writing-rules.md) when contributing. Use the project's
+Prettier/rustfmt and run `pnpm format` and `pnpm format:check` before committing.
 
 ## License and feedback
 
@@ -142,23 +133,4 @@ authorization; see [NOTICE](NOTICE) for terms and the authorization contact. Thi
 retain their licenses.
 
 [Report a bug or request a feature](https://github.com/YondFane/uTerm/issues/new). Include your OS,
-uTerm version and the steps needed to reproduce the issue. If uTerm is useful to you, a star helps
-other developers discover it.
-
-## Development
-
-Built with Tauri, React, TypeScript, Rust and xterm.js, with its WebGL addon for terminal rendering.
-Setup, commands, database component development, validation and release instructions live in the
-[development guide](docs/development.md). Follow [AGENTS.md](AGENTS.md) and the
-[documentation writing rules](docs/writing-rules.md) when contributing.
-
-Views live in `src/components/`, with workbench transitions coordinated in `src/App.tsx`. Reusable
-hooks and pure logic live in `src/lib/`, including Git file-status polling. Desktop commands live in
-`src-tauri/src/`; session identity, PTYs and task execution belong to `crates/utermd-local/`.
-
-Use an editor with EditorConfig support and the project's Prettier/rustfmt. Run `pnpm format` and
-`pnpm format:check` before committing; macOS and Windows CI check repository formatting.
-
-CI caches pnpm and Cargo dependencies; pushes to `main` prewarm caches from `release` for later
-version tags. See [CI dependency caches](docs/development.md#ci-dependency-caches) for manual runs
-and limits.
+uTerm version and steps to reproduce the issue.

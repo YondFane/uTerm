@@ -39,9 +39,14 @@ The interface supports Simplified Chinese and English.
 
 ### Website preview
 
-The independent GitHub Pages website in `site/` introduces terminals and agents, projects and Git,
-SSH/SFTP, and Redis/databases. Its four tabs are labeled illustrations with sample content, not live
-desktop sessions or server connections.
+The independent GitHub Pages website in `site/` uses a light introduction and an actual dark
+workspace screenshot. A three-step start leads into five preview tabs: terminals and agents,
+projects and Git, Java/Python build and run, SSH/SFTP, and Redis/databases. The tabs are labeled
+illustrations with sample content, not live desktop sessions or server connections.
+
+The build and run illustration shows Java and Python output side by side. The feature overview
+explains project-specific configuration and logs, the toolbar's started-task lists and colored
+running-project icons. Download cards and command installation follow the workflow overview.
 
 Six interface palettes change only the preview. English/Simplified Chinese switching updates
 content, accessible labels, metadata and documentation links; a blocked browser storage setting does
@@ -52,8 +57,10 @@ Keyboard users can navigate tabs with arrow keys, Home and End.
 ### Repository guides and presentation media
 
 The repository opens with an English README; its language link opens `README.zh-CN.md`.
-`README.en.md` remains an identical English compatibility copy. Downloads and a three-step quick
-start precede the detailed feature and development guides.
+`README.en.md` remains an identical English compatibility copy. Both languages use the same product
+introduction, actual screenshot, platform download table, three-step quick start and four-workflow
+overview. Java/Python setup, installation commands, development and licensing link to the detailed
+guides. A link opens the screenshot tour.
 
 The README and website show an actual isolated Windows app screenshot with a disposable project, two
 real local shells and a Git Worktree. The website's video and interactive five-step tour explain
@@ -87,17 +94,23 @@ establish hosted Pages deployment or desktop runtime acceptance.
 
 #### Website checks on Windows
 
-- Website validation on Windows: all seven focused checks pass, together with changed-file
-  formatting, script syntax, local documentation links and documentation metadata/index checks. The
-  updated release skill passes its skill validator.
+- Website interaction checks on Windows cover language switching (including image descriptions), all
+  five preview tabs, keyboard navigation, six palettes, independent installation tabs, clipboard
+  failure/races and stable-installer URL validation. The seven focused checks pass.
 
-- Browser inspection covers Chinese/English, 1280×720, 768×1024 and 390×844 layouts without page
-  overflow, the screenshot tour and actual MP4 playback. Public release metadata resolves to the
-  three matching stable installers; focused checks also cover download fallbacks, preview tabs,
-  palettes, keyboard navigation and installation-command copying.
+- The local `/uTerm/` page returns HTTP 200. Changed-file formatting, script syntax, local
+  documentation links and documentation metadata/index checks pass. The preview serves the explicit
+  website/media allowlist and rejects repository-file paths.
 
-- The preview serves the explicit website/media allowlist and rejects repository-file paths.
-  Bilingual README/development pages are inspected at wide and narrow reading widths.
+- Visual inspection uses the installed Windows Chrome with isolated profiles and bounded
+  screenshots. Chinese/English desktop views and 320/390 CSS-pixel iframe viewports show no page
+  overflow. The Java/Python preview is inspected with Paper and Clear Sky palettes, alongside the
+  mobile download area. The English/Chinese READMEs are rendered locally at wide and narrow widths.
+
+- These checks cover website layout, not mobile-device or desktop-app runtime acceptance. README
+  rendering uses a local Markdown renderer rather than GitHub's hosted renderer. Current screenshots
+  use the release-page fallback; focused tests cover exact installer resolution. Media playback and
+  assistive-technology acceptance are not revalidated by these screenshots.
 
 - An isolated Windows native QA app provides the screenshot using actual product components and
   disposable sessions. Its frontend and desktop builds pass, with the existing large-chunk warning.
