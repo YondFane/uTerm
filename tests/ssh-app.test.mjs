@@ -90,6 +90,7 @@ test("App restores SSH sessions without authorizing new logins or running local 
   localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
   const calls = [];
   mockIPC((command, args) => {
+    if (command === "project_run_summary") return { java: 0, python: 0 };
     calls.push({ command, args });
     if (command === "runtime_info")
       return {

@@ -31,6 +31,7 @@ test("file-manager actions stay within the window and retain their target and vi
   const calls = [];
   let fail = false;
   mockIPC((command, args) => {
+    if (command === "git_file_status") return null;
     if (command === "files_list")
       return {
         entries: [

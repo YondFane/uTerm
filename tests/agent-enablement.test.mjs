@@ -61,6 +61,7 @@ test("Agent switches gate creation, persist, preserve sessions and report storag
     appType: "custom",
   });
   mockIPC((command) => {
+    if (command === "project_run_summary") return { java: 0, python: 0 };
     if (command === "runtime_info")
       return {
         platform: "macos",

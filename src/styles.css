@@ -1,4 +1,5 @@
 :root {
+  --java-panel-height: 380px;
   --ui-canvas: #101010;
   --ui-sidebar: #090909;
   --ui-surface: #191919;
@@ -11,6 +12,470 @@
   --ui-selected: #d4d4d416;
   --ui-shadow: 0 18px 60px #0006;
   --titlebar-height: 44px;
+}
+
+.app-shell > main {
+  position: relative;
+}
+.java-build-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 var(--java-panel-height);
+  height: var(--java-panel-height);
+  min-height: min(240px, calc(100% - 88px));
+  max-height: calc(100% - 88px);
+  min-width: 0;
+  border-top: 1px solid var(--ui-border);
+  background: var(--ui-canvas);
+}
+.python-configuration fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.python-fields {
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1.3fr);
+}
+.python-web-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.python-web-options > label:first-child {
+  flex: 1;
+  min-width: 60px;
+}
+.python-web-options .java-checkbox {
+  padding-top: 16px;
+  white-space: nowrap;
+}
+.python-task-toolbar .python-service-url {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--ui-text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.python-task-toolbar .python-run-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #287744;
+  border-color: #4a9b64;
+  color: #fff;
+}
+.python-run-panel .java-task-output > .java-help {
+  margin: 0;
+}
+.python-log-follow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.python-run-panel .terminal-font-controls {
+  display: none;
+}
+@media (max-width: 850px) {
+  .python-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .python-fields > label:first-child {
+    grid-column: 1 / -1;
+  }
+  .python-task-toolbar .python-service-url {
+    max-width: 100%;
+    order: 1;
+  }
+}
+.java-panel-resizer {
+  position: absolute;
+  z-index: 2;
+  top: -4px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: row-resize;
+  touch-action: none;
+  outline: none;
+}
+.java-panel-resizer::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 0;
+  right: 0;
+  height: 2px;
+}
+.java-panel-resizer:hover::after,
+.java-panel-resizer:focus-visible::after,
+.java-build-panel[data-resizing] .java-panel-resizer::after {
+  background: var(--ui-accent);
+}
+.java-build-panel[data-resizing] {
+  user-select: none;
+}
+.java-build-panel.java-panel-expanded {
+  position: absolute;
+  inset: 80px 0 0;
+  height: auto;
+  max-height: none;
+  z-index: 8;
+}
+.java-panel-header {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 10px;
+  min-height: 36px;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.java-panel-header strong {
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.java-project-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--ui-muted);
+}
+.java-panel-header button {
+  flex-shrink: 0;
+}
+.java-run-configuration {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 48%;
+  overflow: auto;
+  padding: 6px 12px;
+}
+.java-run-configuration summary,
+.java-advanced summary {
+  font-size: 11px;
+  color: var(--ui-muted);
+  cursor: pointer;
+}
+.java-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 12px;
+  padding-top: 7px;
+}
+.java-fields label,
+.maven-setting-fields label {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ui-muted);
+}
+.java-fields :is(input, select, textarea),
+.maven-setting-fields :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 4px 7px;
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  font: inherit;
+  font-size: 12px;
+}
+.java-fields textarea {
+  height: auto;
+  resize: vertical;
+}
+.java-main-class-field {
+  position: relative;
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.java-main-class-refresh {
+  position: absolute;
+  top: -2px;
+  right: 0;
+  padding: 0 4px;
+  font-size: 11px;
+}
+.java-main-class-field > label + label {
+  margin-top: 6px;
+}
+.java-maven-field {
+  min-width: 0;
+}
+.java-maven-field > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--ui-muted);
+}
+.java-maven-field button {
+  padding: 0 4px;
+  font-size: 11px;
+}
+.java-advanced {
+  margin-top: 8px;
+}
+.java-options,
+.java-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.java-checkbox {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  gap: 7px;
+}
+.java-checkbox input {
+  width: auto;
+  height: auto;
+}
+.java-add-jdk {
+  margin-top: 12px;
+}
+.java-add-jdk label {
+  display: block;
+}
+.java-add-jdk input {
+  flex: 1;
+  min-width: 0;
+}
+.java-path-input {
+  display: flex;
+  gap: 5px;
+}
+.java-path-input button {
+  flex: 0 0 auto;
+}
+.java-local-path {
+  display: block;
+  min-width: 0;
+  color: var(--ui-muted);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.java-task-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-block: 1px solid var(--ui-border);
+}
+.java-task-toolbar select {
+  min-width: 70px;
+  max-width: 130px;
+  background: var(--ui-surface);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: 5px;
+  padding: 4px;
+  font-size: 11px;
+}
+.java-task-state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+.java-task-state::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ui-muted);
+}
+.java-task-state.running::before {
+  background: #7dbd94;
+}
+.java-toolbar-spacer {
+  flex: 1;
+}
+.java-task-output {
+  position: relative;
+  flex: 1;
+  min-height: 80px;
+}
+.java-task-output > .java-help {
+  padding: 12px;
+}
+.java-task-history {
+  padding: 4px 12px;
+  font-size: 11px;
+}
+.java-task-history label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.java-task-history select {
+  min-width: 0;
+  flex: 1;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  border-radius: 4px;
+}
+.java-panel-notice {
+  margin: 0;
+  padding: 5px 12px;
+  font-size: 11px;
+  color: var(--ui-muted);
+}
+.java-help {
+  color: var(--ui-muted);
+  font-size: 12px;
+  line-height: 1.65;
+}
+.java-error {
+  color: #dc8c8c;
+  padding: 6px 12px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+:root[data-appearance="light"] .java-error {
+  color: #a12c32;
+}
+.java-settings-dialog {
+  width: 640px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 40px);
+  padding: 20px;
+  color: var(--ui-text);
+  background: var(--ui-canvas);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  overflow: auto;
+}
+.java-settings-dialog > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.java-settings-dialog h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+}
+.java-settings-dialog > header button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.java-settings-dialog::backdrop {
+  background: #0008;
+}
+.java-scope-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-surface);
+  border-radius: 6px;
+}
+.java-scope-tabs button {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  font-size: 12px;
+}
+.java-scope-tabs button[aria-pressed="true"] {
+  background: var(--ui-selected);
+  color: var(--ui-text);
+}
+.maven-setting-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+.maven-setting-fields input {
+  height: 32px;
+}
+.settings-content .maven-setting-fields label:not(.java-checkbox) {
+  align-items: stretch;
+  margin: 0;
+}
+.settings-content .maven-setting-fields input:not([type="checkbox"]),
+.settings-content .maven-setting-fields select {
+  width: 100%;
+}
+.java-component-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+.java-component-row > div:first-child {
+  flex: 1;
+  min-width: 170px;
+}
+.java-component-row strong,
+.java-component-row small {
+  display: block;
+}
+.java-component-row strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+.java-component-row small {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ui-muted);
+}
+.java-component-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.java-progress {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 11px;
+}
+.java-progress progress {
+  width: 100%;
+}
+@media (max-width: 900px) {
+  .java-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-height: 550px) {
+  .java-build-panel {
+    min-height: min(200px, calc(100% - 88px));
+  }
+  .java-build-panel.java-panel-expanded {
+    inset: 44px 0 0;
+  }
 }
 :root[data-appearance="light"] {
   color-scheme: light;
@@ -1745,10 +2210,48 @@ select:focus-visible {
   width: 9px;
   color: var(--ui-muted);
 }
-.file-row > span:last-child {
+.file-row-name {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.file-row[data-git-status="modified"] {
+  color: #deb573;
+}
+.file-row[data-git-status="added"],
+.file-row[data-git-status="untracked"] {
+  color: #72c78b;
+}
+.file-row[data-git-status="deleted"],
+.file-row[data-git-status="conflict"] {
+  color: #e18a8a;
+}
+.file-row[data-git-status="renamed"] {
+  color: #83b8e5;
+}
+:root[data-appearance="light"] .file-row[data-git-status="modified"] {
+  color: #8c5e0a;
+}
+:root[data-appearance="light"] .file-row[data-git-status="added"],
+:root[data-appearance="light"] .file-row[data-git-status="untracked"] {
+  color: #237a3b;
+}
+:root[data-appearance="light"] .file-row[data-git-status="deleted"],
+:root[data-appearance="light"] .file-row[data-git-status="conflict"] {
+  color: #b23a3a;
+}
+:root[data-appearance="light"] .file-row[data-git-status="renamed"] {
+  color: #245f99;
+}
+.file-git-status {
+  flex: 0 0 auto;
+  min-width: 12px;
+  margin-left: auto;
+  font-family: monospace;
+  font-size: 11px;
+  text-align: center;
 }
 .file-hit {
   display: block;
@@ -2382,6 +2885,30 @@ select:focus-visible {
   height: 17px;
   flex-shrink: 0;
 }
+.toolbar-actions :is(.toolbar-icon-java, .toolbar-icon-python) {
+  color: #959595;
+}
+.toolbar-actions .toolbar-icon-java.toolbar-icon-running {
+  color: #6db33f;
+}
+.toolbar-icon-python.toolbar-icon-running .python-blue {
+  stroke: #549ed3;
+}
+.toolbar-icon-python.toolbar-icon-running .python-yellow {
+  stroke: #ffd343;
+}
+:root[data-appearance="light"] .toolbar-actions :is(.toolbar-icon-java, .toolbar-icon-python) {
+  color: #82796e;
+}
+:root[data-appearance="light"] .toolbar-actions .toolbar-icon-java.toolbar-icon-running {
+  color: #4f8b25;
+}
+:root[data-appearance="light"] .toolbar-icon-python.toolbar-icon-running .python-blue {
+  stroke: #3776ab;
+}
+:root[data-appearance="light"] .toolbar-icon-python.toolbar-icon-running .python-yellow {
+  stroke: #a87900;
+}
 :is(
     .toolbar-actions,
     .workspace-actions,
@@ -2468,9 +2995,8 @@ select:focus-visible {
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  gap: 2px;
+  gap: 4px;
 }
-.inspector-switcher,
 .sidebar-footer-actions,
 .sidebar .row-actions {
   padding: 3px;
@@ -2497,20 +3023,30 @@ select:focus-visible {
   background: transparent;
 }
 .inspector-switcher .toolbar-icon-button {
-  width: 28px;
-  height: 28px;
-  padding: 5px;
+  width: 30px;
+  height: 30px;
+  padding: 7px;
   border-radius: 50%;
+  background: transparent;
   color: var(--ui-muted);
 }
+.inspector-switcher :is(.toolbar-icon, .sidebar-icon) {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
 .inspector-switcher .toolbar-icon-button:hover:not(:disabled),
-.inspector-switcher .toolbar-icon-button[aria-pressed="true"],
-.sidebar .row-actions .icon-button:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--ui-text) 18%, transparent);
+.inspector-switcher .toolbar-icon-button:focus-visible:not(:disabled) {
+  background: var(--ui-hover);
   color: var(--ui-text);
 }
 .inspector-switcher .toolbar-icon-button[aria-pressed="true"]:not(:disabled) {
+  background: var(--ui-selected);
   color: var(--ui-active-icon);
+}
+.sidebar .row-actions .icon-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ui-text) 18%, transparent);
+  color: var(--ui-text);
 }
 .inspector-switcher .toolbar-icon-button:focus-visible {
   outline-offset: 0;
@@ -3852,6 +4388,12 @@ textarea:focus-visible {
   margin-right: 4px;
   padding: 0;
   border-radius: 4px;
+}
+@media (hover: hover) {
+  .workspace-tab:not(:hover):not(:has(> :focus-visible)) > .workspace-tab-close {
+    opacity: 0;
+    pointer-events: none;
+  }
 }
 .workspace-tab > button:hover {
   background: var(--ui-hover);

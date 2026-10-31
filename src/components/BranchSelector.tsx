@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { localizeMessage, tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
+import { gitReadError } from "../lib/git-snapshot";
 import { SidebarIcon } from "./SidebarIcon";
 
 type Branches = { current: string | null; local: string[]; upstream?: string | null };
@@ -61,8 +62,10 @@ export function BranchSelector({
       const next = await invoke<RemoteBranches>("git_remote_branches", { directory });
       if (alive.current && request === remoteRequest.current) setRemote(next);
     } catch (reason) {
-      if (alive.current && request === remoteRequest.current)
-        setRemote({ branches: [], errors: [String(reason)] });
+      if (alive.current && request === remoteRequest.current) {
+        const message = gitReadError(reason);
+        setRemote({ branches: [], errors: message ? [message] : [] });
+      }
     } finally {
       if (alive.current && request === remoteRequest.current) setLoadingRemote(false);
     }
@@ -79,7 +82,17 @@ export function BranchSelector({
       try {
         await readBranches();
       } catch (reason) {
-        if (!disposed && request === revision.current) setError(String(reason));
+        if (!disposed && request === revision.current) {
+          const message = gitReadError(reason);
+          setError(message);
+          if (!message) {
+            setBranches(null);
+            setRemote({ branches: [], errors: [] });
+            remoteRequest.current++;
+            setLoadingRemote(false);
+            setMenu(null);
+          }
+        }
       } finally {
         loading = false;
       }

@@ -7,6 +7,650 @@ struct RunningHost {
     client: Client,
     sessions: Vec<(String, String)>,
 }
+
+#[test]
+fn normal_stop_waits_for_child_cleanup_and_force_stop_remains_available() {
+    use utermd_local::tasks::{Launch, Step, TaskInfo};
+    let mut host = RunningHost::new();
+    let root = host.directory.canonicalize().unwrap();
+    for force in [false, true] {
+        let id = if force {
+            "force-cleanup"
+        } else {
+            "normal-cleanup"
+        };
+        let started = host.directory.join(format!("{id}.started"));
+        let release = host.directory.join(format!("{id}.release"));
+        let step = Step {
+            program: std::env::current_exe().unwrap(),
+            arguments: vec![
+                "--exact".into(),
+                "task_cleanup_child".into(),
+                "--nocapture".into(),
+            ],
+            directory: root.clone(),
+            environment: std::collections::HashMap::from([
+                (
+                    "TASK_CLEANUP_STARTED".into(),
+                    started.to_string_lossy().into_owned(),
+                ),
+                (
+                    "TASK_CLEANUP_RELEASE".into(),
+                    release.to_string_lossy().into_owned(),
+                ),
+            ]),
+            label: "Task cleanup".into(),
+            jar_directory: None,
+        };
+        let next_step = Step {
+            label: "UNEXPECTED_NEXT_STEP".into(),
+            ..step.clone()
+        };
+        let Reply::Opened { generation } = host
+            .client
+            .request(Operation::OpenTask {
+                spec: SessionSpec {
+                    id: id.into(),
+                    directory: root.clone(),
+                    shell: "default".into(),
+                    agent: None,
+                    ssh: None,
+                },
+                task: TaskInfo {
+                    root: root.clone(),
+                    name: id.into(),
+                    action: "python:run".into(),
+                    created: u64::from(force),
+                },
+                launch: Launch {
+                    root: root.clone(),
+                    steps: vec![step, next_step],
+                },
+                rows: 24,
+                cols: 80,
+            })
+            .unwrap()
+        else {
+            panic!("open cleanup task");
+        };
+        host.sessions.push((id.into(), generation.clone()));
+        let deadline = Instant::now() + Duration::from_secs(20);
+        loop {
+            let frame = host.read(id, &generation, None);
+            let text = String::from_utf8_lossy(&frame.data);
+            if text.contains("CLEANUP_READY") {
+                break;
+            }
+            assert!(!frame.exited, "cleanup task exited before startup: {text}");
+            assert!(
+                Instant::now() < deadline,
+                "cleanup task did not start: {text}"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        host.client
+            .request(Operation::StopTask {
+                id: id.into(),
+                generation: generation.clone(),
+                force: false,
+            })
+            .unwrap();
+        while !started.exists() {
+            let frame = host.read(id, &generation, None);
+            let text = String::from_utf8_lossy(&frame.data);
+            assert!(!frame.exited, "cleanup was terminated: {text}");
+            assert!(
+                Instant::now() < deadline,
+                "cleanup did not receive interruption: {text}"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        std::thread::sleep(Duration::from_millis(300));
+        assert!(
+            !host.read(id, &generation, None).exited,
+            "cleanup was cut short"
+        );
+        let Reply::Tasks(tasks) = host.client.request(Operation::TaskSnapshot).unwrap() else {
+            panic!("task snapshot");
+        };
+        assert!(tasks.iter().any(|task| task.spec.id == id && task.running));
+        if force {
+            host.client
+                .request(Operation::StopTask {
+                    id: id.into(),
+                    generation: generation.clone(),
+                    force: true,
+                })
+                .unwrap();
+        } else {
+            std::fs::write(&release, "finish").unwrap();
+        }
+        loop {
+            let frame = host.read(id, &generation, None);
+            let text = String::from_utf8_lossy(&frame.data);
+            assert!(!text.contains("UNEXPECTED_NEXT_STEP"));
+            if frame.exited {
+                if force {
+                    assert!(!text.contains("CLEANUP_FINISHED"));
+                } else {
+                    assert_eq!(frame.code, Some(0));
+                    assert!(text.contains("CLEANUP_FINISHED"));
+                    assert!(text.contains("CLEANUP_STDERR_FINISHED"));
+                }
+                break;
+            }
+            assert!(Instant::now() < deadline, "cleanup task did not exit");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+}
+
+#[test]
+fn task_cleanup_child() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let Some(started) = std::env::var_os("TASK_CLEANUP_STARTED") else {
+        return;
+    };
+    let release = PathBuf::from(std::env::var_os("TASK_CLEANUP_RELEASE").unwrap());
+    static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+    #[cfg(windows)]
+    unsafe extern "system" fn interrupt(event: u32) -> i32 {
+        if event != 0 && event != 1 {
+            return 0;
+        }
+        INTERRUPTED.store(true, Ordering::Release);
+        1
+    }
+    #[cfg(windows)]
+    assert_ne!(
+        unsafe { windows_sys::Win32::System::Console::SetConsoleCtrlHandler(None, 0) },
+        0
+    );
+    #[cfg(windows)]
+    assert_ne!(
+        unsafe { windows_sys::Win32::System::Console::SetConsoleCtrlHandler(Some(interrupt), 1) },
+        0
+    );
+    #[cfg(unix)]
+    unsafe {
+        extern "C" fn interrupt(_: libc::c_int) {
+            INTERRUPTED.store(true, Ordering::Release);
+        }
+        let mut action: libc::sigaction = std::mem::zeroed();
+        action.sa_sigaction = interrupt as *const () as usize;
+        libc::sigemptyset(&mut action.sa_mask);
+        assert_eq!(
+            libc::sigaction(libc::SIGINT, &action, std::ptr::null_mut()),
+            0
+        );
+    }
+    println!("CLEANUP_READY");
+    while !INTERRUPTED.load(Ordering::Acquire) {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    std::fs::write(started, "started").unwrap();
+    while !release.exists() {
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    println!("CLEANUP_FINISHED");
+    eprintln!("CLEANUP_STDERR_FINISHED");
+}
+
+#[test]
+#[ignore = "Requires UTERM_PYTHON_TEST_INTERPRETER with FastAPI, Uvicorn, Flask and Django"]
+fn python_tasks_stream_reconnect_and_terminate_web_reload_children() {
+    use std::collections::HashMap;
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use utermd_local::tasks::{Launch, Step, TaskInfo};
+    let interpreter = PathBuf::from(std::env::var_os("UTERM_PYTHON_TEST_INTERPRETER").unwrap());
+    let mut host = RunningHost::new();
+    let root = host.directory.canonicalize().unwrap();
+    std::fs::write(root.join("script 中文 & %.py"), "import sys\nprint('stdout 中文 & %PATH%')\nprint('stderr 中文',file=sys.stderr)\nraise RuntimeError('fixture-exception')\n").unwrap();
+    std::fs::write(root.join("module_probe.py"), "print('MODULE_OK 中文')\n").unwrap();
+    std::fs::write(root.join("fastapi_probe.py"), "from fastapi import FastAPI\napp=FastAPI()\n@app.get('/health')\ndef health(): return {'status':'PYTHON_QA_OK'}\n").unwrap();
+    std::fs::write(root.join("flask_probe.py"), "from flask import Flask\napp=Flask(__name__)\n@app.get('/health')\ndef health(): return {'status':'PYTHON_QA_OK'}\n").unwrap();
+    std::fs::write(root.join("manage.py"), "import sys\nfrom django.conf import settings\nsettings.configure(DEBUG=False,SECRET_KEY='isolated-fixture',ROOT_URLCONF=__name__,ALLOWED_HOSTS=['127.0.0.1'])\nfrom django.http import JsonResponse\nfrom django.urls import path\nurlpatterns=[path('health',lambda request:JsonResponse({'status':'PYTHON_QA_OK'}))]\nif __name__=='__main__':\n from django.core.management import execute_from_command_line\n execute_from_command_line(sys.argv)\n").unwrap();
+    for (index, mode) in ["script", "module", "fastapi", "flask", "django"]
+        .iter()
+        .enumerate()
+    {
+        let listener = TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let mut arguments: Vec<String> = vec!["-u".into()];
+        arguments.extend(match *mode {
+            "script" => vec![root
+                .join("script 中文 & %.py")
+                .to_string_lossy()
+                .to_string()],
+            "module" => vec!["-m".into(), "module_probe".into()],
+            "fastapi" => vec![
+                "-m".into(),
+                "uvicorn".into(),
+                "fastapi_probe:app".into(),
+                "--host".into(),
+                "127.0.0.1".into(),
+                "--port".into(),
+                port.to_string(),
+                "--reload".into(),
+            ],
+            "flask" => vec![
+                "-m".into(),
+                "flask".into(),
+                "--app".into(),
+                "flask_probe:app".into(),
+                "run".into(),
+                "--host".into(),
+                "127.0.0.1".into(),
+                "--port".into(),
+                port.to_string(),
+                "--no-debugger".into(),
+                "--reload".into(),
+            ],
+            _ => vec![
+                root.join("manage.py").to_string_lossy().to_string(),
+                "runserver".into(),
+                format!("127.0.0.1:{port}"),
+            ],
+        });
+        let spec = SessionSpec {
+            id: format!("python-{mode}"),
+            directory: root.clone(),
+            shell: "default".into(),
+            agent: None,
+            ssh: None,
+        };
+        let Reply::Opened { generation } = host
+            .client
+            .request(Operation::OpenTask {
+                spec: spec.clone(),
+                task: TaskInfo {
+                    root: root.clone(),
+                    name: mode.to_string(),
+                    action: "python:run".into(),
+                    created: index as u64,
+                },
+                launch: Launch {
+                    root: root.clone(),
+                    steps: vec![Step {
+                        program: interpreter.clone(),
+                        arguments,
+                        directory: root.clone(),
+                        environment: HashMap::from([
+                            ("PYTHONIOENCODING".into(), "utf-8".into()),
+                            ("PYTHONUNBUFFERED".into(), "1".into()),
+                        ]),
+                        label: format!("Python {mode}"),
+                        jar_directory: None,
+                    }],
+                },
+                rows: 20,
+                cols: 80,
+            })
+            .unwrap()
+        else {
+            panic!("open Python task");
+        };
+        host.sessions.push((spec.id.clone(), generation.clone()));
+        let deadline = Instant::now() + Duration::from_secs(30);
+        if index < 2 {
+            loop {
+                let frame = host.read(&spec.id, &generation, None);
+                if frame.exited {
+                    let text = String::from_utf8(frame.data).unwrap();
+                    if index == 0 {
+                        assert_eq!(frame.code, Some(1));
+                        assert!(text.contains("stdout 中文 & %PATH%"), "{text}");
+                        assert!(text.contains("stderr 中文"), "{text}");
+                        assert!(text.contains("fixture-exception"), "{text}");
+                    } else {
+                        assert!(text.contains("MODULE_OK 中文"), "{text}");
+                        assert_eq!(frame.code, Some(0));
+                    }
+                    break;
+                }
+                assert!(Instant::now() < deadline, "Python {mode} did not exit");
+                std::thread::sleep(Duration::from_millis(30));
+            }
+        } else {
+            loop {
+                let response = (|| -> std::io::Result<String> {
+                    let mut stream = TcpStream::connect_timeout(
+                        &([127, 0, 0, 1], port).into(),
+                        Duration::from_millis(200),
+                    )?;
+                    stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+                    stream.write_all(
+                        b"GET /health HTTP/1.0\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
+                    )?;
+                    let mut response = String::new();
+                    stream.read_to_string(&mut response)?;
+                    Ok(response)
+                })();
+                if response.is_ok_and(|text| text.contains("PYTHON_QA_OK")) {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "Python {mode}: {}",
+                    String::from_utf8_lossy(&host.read(&spec.id, &generation, None).data)
+                );
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            let reconnected = Client::connect(&host.directory).unwrap();
+            assert!(
+                matches!(reconnected.request(Operation::Attach { id: spec.id.clone(), rows: 25, cols: 90 }).unwrap(), Reply::Opened { generation: ref current } if current == &generation)
+            );
+            let text = String::from_utf8(host.read(&spec.id, &generation, None).data).unwrap();
+            assert!(text.contains("health"), "{text}");
+            assert!(host
+                .client
+                .request(Operation::StopTask {
+                    id: spec.id.clone(),
+                    generation: "stale".into(),
+                    force: true
+                })
+                .is_err());
+            host.client
+                .request(Operation::StopTask {
+                    id: spec.id.clone(),
+                    generation: generation.clone(),
+                    force: true,
+                })
+                .unwrap();
+            loop {
+                let frame = host.read(&spec.id, &generation, None);
+                if frame.exited && TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)).is_ok()
+                {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "{mode} process tree or port remained alive"
+                );
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+        let Reply::SessionSnapshot(snapshot) =
+            host.client.request(Operation::SessionSnapshot).unwrap()
+        else {
+            panic!("snapshot");
+        };
+        assert!(snapshot.sessions.is_empty());
+    }
+}
+
+#[test]
+fn completed_task_drains_both_streams_before_publishing_exit() {
+    use utermd_local::tasks::{Launch, Step, TaskInfo};
+    let mut host = RunningHost::new();
+    let root = host.directory.canonicalize().unwrap();
+    #[cfg(windows)]
+    let (program, arguments) = {
+        let file = host.directory.join("final-output.ps1");
+        std::fs::write(&file, "\u{feff}for ($i=0;$i -lt 2000;$i++) { [Console]::WriteLine('output-' + $i); [Console]::Error.WriteLine('error-' + $i) }; [Console]::WriteLine('FINAL_STDOUT_中文'); [Console]::Error.WriteLine('FINAL_STDERR_中文'); exit 7").unwrap();
+        (
+            PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+                .join("System32/WindowsPowerShell/v1.0/powershell.exe"),
+            vec![
+                "-NoLogo".into(),
+                "-NoProfile".into(),
+                "-File".into(),
+                file.to_string_lossy().into_owned(),
+            ],
+        )
+    };
+    #[cfg(unix)]
+    let (program, arguments) = (PathBuf::from("/bin/sh"), vec!["-c".into(), "i=0; while [ $i -lt 2000 ]; do printf 'output-%s\\n' \"$i\"; printf 'error-%s\\n' \"$i\" >&2; i=$((i+1)); done; printf 'FINAL_STDOUT_中文\\n'; printf 'FINAL_STDERR_中文\\n' >&2; exit 7".into()]);
+    let spec = SessionSpec {
+        id: "completed-log".into(),
+        directory: root.clone(),
+        shell: "default".into(),
+        agent: None,
+        ssh: None,
+    };
+    let Reply::Opened { generation } = host
+        .client
+        .request(Operation::OpenTask {
+            spec: spec.clone(),
+            task: TaskInfo {
+                root: root.clone(),
+                name: "final-output".into(),
+                action: "build".into(),
+                created: 1,
+            },
+            launch: Launch {
+                root: root.clone(),
+                steps: vec![Step {
+                    program,
+                    arguments,
+                    directory: root,
+                    environment: Default::default(),
+                    label: "Final output".into(),
+                    jar_directory: None,
+                }],
+            },
+            rows: 12,
+            cols: 40,
+        })
+        .unwrap()
+    else {
+        panic!("open task")
+    };
+    host.sessions.push((spec.id.clone(), generation.clone()));
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let frame = host.read(&spec.id, &generation, None);
+        if frame.exited {
+            let text = String::from_utf8(frame.data).unwrap();
+            assert_eq!(frame.code, Some(7), "{text}");
+            assert!(text.contains("FINAL_STDOUT_中文"), "{text}");
+            assert!(text.contains("FINAL_STDERR_中文"), "{text}");
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+#[test]
+fn structured_tasks_reconnect_keep_output_and_stay_out_of_shell_discovery() {
+    use utermd_local::tasks::{Launch, Step, TaskInfo};
+    let mut host = RunningHost::new();
+    host.client.require_task_support().unwrap();
+    let root = host.directory.canonicalize().unwrap();
+    let argument = "literal & 100%PATH% 中文";
+    let long_line = format!("LONG_LOG:{}:TAIL_中文", "x".repeat(2200));
+    #[cfg(windows)]
+    let (program, arguments) = {
+        let file = host.directory.join("任务 & probe.ps1");
+        std::fs::write(&file,format!("\u{feff}param([string]$Value)\n[Console]::WriteLine('TASK_READY:' + $Value)\n[Console]::WriteLine('{long_line}')\n[Console]::Error.WriteLine('STDERR_COMPLETE')\nwhile ($true) {{ Start-Sleep -Milliseconds 100 }}\n")).unwrap();
+        (
+            PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+                .join("System32/WindowsPowerShell/v1.0/powershell.exe"),
+            vec![
+                "-NoLogo".into(),
+                "-NoProfile".into(),
+                "-NonInteractive".into(),
+                "-File".into(),
+                file.to_string_lossy().into_owned(),
+                argument.into(),
+            ],
+        )
+    };
+    #[cfg(unix)]
+    let (program, arguments) = {
+        let file = host.directory.join("task & probe.sh");
+        std::fs::write(&file, format!("printf 'TASK_READY:%s\\n' \"$1\"\nprintf '%s\\n' '{long_line}'\nprintf 'STDERR_COMPLETE\\n' >&2\nexec /bin/cat\n")).unwrap();
+        (
+            PathBuf::from("/bin/sh"),
+            vec![file.to_string_lossy().into_owned(), argument.into()],
+        )
+    };
+    let spec = SessionSpec {
+        id: "java-task".into(),
+        directory: root.clone(),
+        shell: "default".into(),
+        agent: None,
+        ssh: None,
+    };
+    let task = TaskInfo {
+        root: root.clone(),
+        name: "fixture".into(),
+        action: "run".into(),
+        created: 1,
+    };
+    let launch = Launch {
+        root: root.clone(),
+        steps: vec![Step {
+            program,
+            arguments,
+            directory: root,
+            environment: Default::default(),
+            label: "Task fixture".into(),
+            jar_directory: None,
+        }],
+    };
+    let Reply::Opened { generation } = host
+        .client
+        .request(Operation::OpenTask {
+            spec: spec.clone(),
+            task: task.clone(),
+            launch: launch.clone(),
+            rows: 24,
+            cols: 100,
+        })
+        .unwrap()
+    else {
+        panic!("task open")
+    };
+    host.sessions.push((spec.id.clone(), generation.clone()));
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let frame = host.read(&spec.id, &generation, None);
+        if String::from_utf8_lossy(&frame.data).contains(argument) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "{}",
+            String::from_utf8_lossy(&frame.data)
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    for cols in [40, 220] {
+        host.client
+            .request(Operation::Resize {
+                id: spec.id.clone(),
+                generation: generation.clone(),
+                rows: 12,
+                cols,
+            })
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        loop {
+            let frame = host.read(&spec.id, &generation, None);
+            let text = String::from_utf8_lossy(&frame.data);
+            if text.contains(&long_line) && text.contains("STDERR_COMPLETE") {
+                break;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "long stdout/stderr log missing after resize"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+    let Reply::SessionSnapshot(snapshot) = host.client.request(Operation::SessionSnapshot).unwrap()
+    else {
+        panic!("snapshot")
+    };
+    assert!(snapshot.sessions.is_empty());
+    assert!(host
+        .client
+        .request(Operation::OpenTask {
+            spec: SessionSpec {
+                id: "duplicate-java-task".into(),
+                ..spec.clone()
+            },
+            task,
+            launch,
+            rows: 24,
+            cols: 100,
+        })
+        .unwrap_err()
+        .to_string()
+        .contains("JAVA_TASK_RUNNING"));
+    assert!(host
+        .client
+        .request(Operation::StopTask {
+            id: spec.id.clone(),
+            generation: "stale-generation".into(),
+            force: true,
+        })
+        .is_err());
+    assert!(host.client.request(Operation::ShutdownIfIdle).is_err());
+    let Reply::HostStatus(status) = host.client.request(Operation::HostStatus).unwrap() else {
+        panic!("host status")
+    };
+    assert!(status.sessions.iter().any(|entry| {
+        entry.spec.id == spec.id && entry.generation == generation && entry.running
+    }));
+    let Reply::Opened {
+        generation: reattached,
+    } = host
+        .client
+        .request(Operation::Attach {
+            id: spec.id.clone(),
+            rows: 30,
+            cols: 110,
+        })
+        .unwrap()
+    else {
+        panic!("attach")
+    };
+    assert_eq!(generation, reattached);
+    assert!(host
+        .client
+        .request(Operation::Open {
+            spec: spec.clone(),
+            rows: 24,
+            cols: 100
+        })
+        .is_err());
+    host.client
+        .request(Operation::StopTask {
+            id: spec.id.clone(),
+            generation: generation.clone(),
+            force: true,
+        })
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let Reply::Tasks(tasks) = host.client.request(Operation::TaskSnapshot).unwrap() else {
+            panic!("tasks")
+        };
+        if !tasks[0].running {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert!(
+        String::from_utf8_lossy(&host.read(&spec.id, &generation, None).data)
+            .contains("TASK_READY")
+    );
+    assert!(host.read(&spec.id, &generation, None).error.is_none());
+    assert!(host
+        .client
+        .request(Operation::Attach {
+            id: "missing-task".into(),
+            rows: 24,
+            cols: 80
+        })
+        .is_err());
+}
 impl RunningHost {
     fn new() -> Self {
         let directory =

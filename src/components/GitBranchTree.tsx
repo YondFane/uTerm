@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { localizeMessage, tx } from "../lib/i18n";
+import { gitReadError } from "../lib/git-snapshot";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import {
   mergeRemoteReferences,
@@ -93,7 +94,17 @@ export function GitBranchTree({
         setReadError("");
       }
     } catch (reason) {
-      if (alive.current && request === generation.current) setReadError(String(reason));
+      if (alive.current && request === generation.current) {
+        const message = gitReadError(reason);
+        setReadError(message);
+        if (!message) {
+          setCatalog(null);
+          setAdvertised([]);
+          setRemoteError("");
+          remoteGeneration.current++;
+          setReadingRemote(false);
+        }
+      }
     }
   }
   async function readRemote() {
@@ -109,7 +120,8 @@ export function GitBranchTree({
         setRemoteError(next.errors.join("\n"));
       }
     } catch (reason) {
-      if (alive.current && request === remoteGeneration.current) setRemoteError(String(reason));
+      if (alive.current && request === remoteGeneration.current)
+        setRemoteError(gitReadError(reason));
     } finally {
       if (alive.current && request === remoteGeneration.current) setReadingRemote(false);
     }

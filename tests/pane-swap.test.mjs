@@ -87,6 +87,7 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
   });
   const calls = [];
   mockIPC((command, args) => {
+    if (command === "project_run_summary") return { java: 0, python: 0 };
     calls.push(command);
     if (command === "runtime_info")
       return {

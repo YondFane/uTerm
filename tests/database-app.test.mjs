@@ -109,6 +109,7 @@ test("App isolates Database views from inspectors, restores the selected tool an
   );
   const calls = [];
   mockIPC((command, args) => {
+    if (command === "project_run_summary") return { java: 0, python: 0 };
     calls.push({ command, args });
     if (command === "runtime_info")
       return {

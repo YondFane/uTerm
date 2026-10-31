@@ -35,7 +35,7 @@ test("directory GitLab action follows GitHub and handles pending requests and lo
       setUiLanguage("zh-Hans");
       root.render(
         React.createElement(DirectoryPanel, {
-          directory: "/项目/a b",
+          directory: String.raw`\\?\D:\项目\a b`,
           platform: "macos",
           resizeHandle: null,
           headerActions: null,
@@ -48,7 +48,9 @@ test("directory GitLab action follows GitHub and handles pending requests and lo
     assert.equal(labels[labels.indexOf("在 GitHub 上查看") + 1], "在 GitLab 上查看");
     assert.ok(labels.indexOf("在 GitLab 上查看") < labels.indexOf("在 IntelliJ IDEA 中打开"));
     await act(async () => gitlab().click());
-    assert.deepEqual(calls, [{ directory: "/项目/a b", target: "gitlab" }]);
+    assert.deepEqual(calls, [{ directory: String.raw`\\?\D:\项目\a b`, target: "gitlab" }]);
+    assert.equal(document.querySelector("footer").textContent, String.raw`D:\项目\a b`);
+    assert.equal(document.querySelector("footer").title, String.raw`D:\项目\a b`);
     assert.ok(gitlab().disabled);
     assert.ok(buttons().find((button) => button.textContent.includes("GitHub")).disabled);
     await act(async () => resolveOpen());

@@ -46,6 +46,7 @@ export function attachTerminalFit(
   fit: () => void,
   canFit: () => boolean,
   onError: (reason: unknown) => void,
+  afterFit?: () => void,
 ) {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let revision = 0;
@@ -74,6 +75,7 @@ export function attachTerminalFit(
           return;
         try {
           fit();
+          afterFit?.();
         } catch (reason) {
           onError(reason);
         }

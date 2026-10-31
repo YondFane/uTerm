@@ -1,6 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { gitFilePath, sameGitSnapshot } from "../src/lib/git-snapshot.ts";
+import { gitFilePath, gitReadError, sameGitSnapshot } from "../src/lib/git-snapshot.ts";
+
+test("Git reads treat plain directories as empty and retain unrelated failures", () => {
+  assert.equal(
+    gitReadError("fatal: not a git repository (or any of the parent directories): .git"),
+    "",
+  );
+  assert.equal(gitReadError(new Error("fatal: not a git repository: '/plain'")), "");
+  for (const message of [
+    "fatal: detected dubious ownership",
+    "fatal: bad object HEAD",
+    "Permission denied",
+    "git executable not found",
+    "fatal: repository unavailable",
+  ])
+    assert.equal(gitReadError(message), message);
+});
 
 test("Git file paths stay relative to the selected root, including Windows subdirectories", () => {
   assert.equal(gitFilePath("/repo", "/repo", "中文 file.txt"), "中文 file.txt");

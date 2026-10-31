@@ -18,6 +18,7 @@ async function setup(t) {
   dom.window.HTMLElement.prototype.hasPointerCapture = () => false;
   globalThis.workspaceTerminalProps = new Map();
   globalThis.workspaceTerminalMounts = new Map();
+  globalThis.workspaceTerminalRenders = new Map();
   const server = await createServer({
     configFile: false,
     plugins: [
@@ -32,6 +33,7 @@ async function setup(t) {
           return `
           import React, { useEffect } from 'react';
           export function TerminalView(props) {
+            globalThis.workspaceTerminalRenders.set(props.session.id, (globalThis.workspaceTerminalRenders.get(props.session.id) ?? 0) + 1);
             globalThis.workspaceTerminalProps.set(props.session.id, props);
             useEffect(() => {
               const mounts = globalThis.workspaceTerminalMounts;
@@ -54,6 +56,7 @@ async function setup(t) {
     dom.window.close();
     delete globalThis.workspaceTerminalProps;
     delete globalThis.workspaceTerminalMounts;
+    delete globalThis.workspaceTerminalRenders;
   });
   return { dom, root, load: (path) => server.ssrLoadModule("/src/" + path) };
 }
@@ -123,7 +126,8 @@ test("terminal derivations survive activity and split previews while immutable e
   assert.equal(worktreeReads, reads);
   assert.equal(terminal("b").agentState, "busy");
   assert.equal(terminal("a").frame, frame);
-  assert.match(terminal("a").focusRequest, /^1\//);
+  assert.match(terminal(workspace.selectedSession).focusRequest, /^1\//);
+  assert.equal(terminal(workspace.selectedSession === "a" ? "b" : "a").focusRequest, "");
 
   const container = document.querySelector(".terminal-workspace");
   container.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1000, height: 600 });
@@ -170,6 +174,68 @@ test("terminal derivations survive activity and split previews while immutable e
   await render();
   assert.equal(terminal("loose").directory, "/loose");
   assert.deepEqual([...globalThis.workspaceTerminalMounts.values()], [1, 1, 1]);
+});
+
+test("switching sessions skips untouched panes and uses the newest callbacks", async (t) => {
+  const { root, load } = await setup(t);
+  const { TerminalWorkspace } = await load("components/TerminalWorkspace.tsx");
+  const { emptyWorkspace, selectSession, groupSessions } = await load("lib/workspace.ts");
+  let workspace = emptyWorkspace();
+  workspace = {
+    ...workspace,
+    selectedProject: "p",
+    selectedSession: "a",
+    projects: [
+      {
+        id: "p",
+        name: "p",
+        directory: "/p",
+        workspaceId: workspace.selectedWorkspace,
+        sessions: ["a", "b", "c", "d"].map((id) => ({ id, name: id, shell: "default" })),
+      },
+    ],
+  };
+  let called = [];
+  let props = {
+    workspace,
+    zoomed: false,
+    focusRequest: 0,
+    closeRequest: null,
+    agentStates: {},
+    update() {},
+    onClosed() {},
+    onSessionViewed() {},
+    onDetectedAgent() {},
+    onAgentState() {},
+  };
+  const render = () =>
+    act(async () => root.render(React.createElement(TerminalWorkspace, { ...props, workspace })));
+  await render();
+  const c = globalThis.workspaceTerminalProps.get("c");
+  workspace = selectSession(workspace, "b");
+  props = {
+    ...props,
+    focusRequest: 1,
+    onClosed: (id) => called.push(id),
+    onAgentState: (id, state) => called.push([id, state]),
+  };
+  await render();
+  assert.equal(globalThis.workspaceTerminalRenders.get("c"), 1);
+  assert.equal(globalThis.workspaceTerminalRenders.get("d"), 1);
+  c.onClosed();
+  c.onAgentState("working", false);
+  assert.deepEqual(called, ["c", ["c", "working"]]);
+  props = { ...props, agentStates: { c: "working" } };
+  await render();
+  assert.equal(globalThis.workspaceTerminalRenders.get("c"), 2);
+  assert.equal(globalThis.workspaceTerminalRenders.get("d"), 1);
+  workspace = groupSessions(workspace, "b", "a");
+  await render();
+  const firstFrame = globalThis.workspaceTerminalProps.get("a").frame;
+  workspace = selectSession(workspace, "a");
+  await render();
+  assert.equal(globalThis.workspaceTerminalProps.get("a").frame, firstFrame);
+  assert.deepEqual([...globalThis.workspaceTerminalMounts.values()], [1, 1, 1, 1]);
 });
 
 test("sidebar lookup work is linear and activity updates reuse ordering without hiding edits", async (t) => {

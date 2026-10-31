@@ -1,6 +1,5 @@
-import { localizeMessage } from "../lib/i18n";
+import { localizeMessage, tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
-import { tx } from "../lib/i18n";
 import type { ReactNode } from "react";
 import { ToolbarIcon } from "./SidebarIcon";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
@@ -9,6 +8,29 @@ import { fileInvoke, isRemoteDirectory, displayDirectory } from "../lib/file-tar
 import { invoke } from "@tauri-apps/api/core";
 import { clipboardPath } from "../lib/file-document";
 import { setFileClipboard, useFileClipboard } from "../lib/file-clipboard";
+import { gitFileKey, type GitFileState } from "../lib/git-file-status";
+import { useGitFileStatus } from "../lib/useGitFileStatus";
+const gitSymbols: Record<GitFileState, string> = {
+  modified: "M",
+  added: "A",
+  untracked: "?",
+  deleted: "D",
+  renamed: "R",
+  conflict: "U",
+};
+function gitLabel(state: GitFileState, directory: boolean) {
+  const labels: Record<GitFileState, string> = {
+    modified: tx("已修改"),
+    added: tx("已新增"),
+    untracked: tx("未跟踪"),
+    deleted: tx("已删除"),
+    renamed: tx("已重命名"),
+    conflict: tx("存在冲突"),
+  };
+  return directory
+    ? tx("包含 Git 变更：{status}", { status: labels[state] })
+    : tx("Git 状态：{status}", { status: labels[state] });
+}
 interface Entry {
   path: string;
   name: string;
@@ -36,6 +58,7 @@ function Folder({
   select,
   edit,
   revision,
+  gitStates,
 }: {
   directory: string;
   path: string;
@@ -46,6 +69,7 @@ function Folder({
   select: (entry: Entry) => void;
   edit: { path: string; rename: boolean; node: ReactNode } | null;
   revision: number;
+  gitStates: ReadonlyMap<string, GitFileState>;
 }) {
   useUiLanguage();
 
@@ -93,80 +117,90 @@ function Folder({
       {edit && !edit.rename && edit.path === path && (
         <li style={{ paddingLeft: 12 + depth * 15 }}>{edit.node}</li>
       )}
-      {listing?.entries.map((entry) => (
-        <li key={entry.path}>
-          {edit?.rename && edit.path === entry.path ? (
-            <div style={{ paddingLeft: 12 + depth * 15 }}>{edit.node}</div>
-          ) : (
-            <button
-              className="file-row"
-              style={{ paddingLeft: 12 + depth * 15 }}
-              title={entry.path}
-              onFocus={() => select(entry)}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                select(entry);
-                manage(entry, event.clientX, event.clientY);
-              }}
-              aria-expanded={entry.directory ? expanded.has(entry.path) : undefined}
-              onClick={() => {
-                if (entry.directory)
-                  setExpanded((previous) => {
-                    const next = new Set(previous);
-                    if (next.has(entry.path)) next.delete(entry.path);
-                    else next.add(entry.path);
-                    return next;
-                  });
-                else open(entry.path);
-              }}
-            >
-              <span className="file-chevron">
-                {entry.directory ? (expanded.has(entry.path) ? "⌄" : "›") : ""}
-              </span>
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                aria-hidden="true"
-              >
-                {entry.directory ? (
-                  <path d="M3 7V5h6l2 2h10v13H3z" />
-                ) : (
-                  <path d="M6 3h8l4 4v14H6zM14 3v5h4" />
-                )}
-              </svg>
-              <span>
-                {entry.name}
-                {entry.symlink ? " ↗" : ""}
-              </span>
-            </button>
-          )}
-          {entry.directory &&
-            expanded.has(entry.path) &&
-            (depth < 30 ? (
-              <Folder
-                directory={directory}
-                path={entry.path}
-                depth={depth + 1}
-                hidden={hidden}
-                open={open}
-                manage={manage}
-                select={select}
-                edit={edit}
-                revision={revision}
-              />
+      {listing?.entries.map((entry) => {
+        const gitState = gitStates.get(gitFileKey(directory, entry.path));
+        const description = gitState ? gitLabel(gitState, entry.directory) : "";
+        return (
+          <li key={entry.path}>
+            {edit?.rename && edit.path === entry.path ? (
+              <div style={{ paddingLeft: 12 + depth * 15 }}>{edit.node}</div>
             ) : (
-              <p className="inspector-message">{tx("目录层级过深。")}</p>
-            ))}
-        </li>
-      ))}
-      {listing && !listing.entries.length && (
-        <li className="inspector-message">{tx("此目录没有可显示的文件。")}</li>
-      )}
+              <button
+                className="file-row"
+                data-path={entry.path}
+                data-git-status={gitState}
+                style={{ paddingLeft: 12 + depth * 15 }}
+                title={description ? `${entry.path}\n${description}` : entry.path}
+                aria-label={description ? `${entry.name} · ${description}` : undefined}
+                onFocus={() => select(entry)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  select(entry);
+                  manage(entry, event.clientX, event.clientY);
+                }}
+                aria-expanded={entry.directory ? expanded.has(entry.path) : undefined}
+                onClick={() => {
+                  if (entry.directory)
+                    setExpanded((previous) => {
+                      const next = new Set(previous);
+                      if (next.has(entry.path)) next.delete(entry.path);
+                      else next.add(entry.path);
+                      return next;
+                    });
+                  else open(entry.path);
+                }}
+              >
+                <span className="file-chevron">
+                  {entry.directory ? (expanded.has(entry.path) ? "⌄" : "›") : ""}
+                </span>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  aria-hidden="true"
+                >
+                  {entry.directory ? (
+                    <path d="M3 7V5h6l2 2h10v13H3z" />
+                  ) : (
+                    <path d="M6 3h8l4 4v14H6zM14 3v5h4" />
+                  )}
+                </svg>
+                <span className="file-row-name">
+                  {entry.name}
+                  {entry.symlink ? " ↗" : ""}
+                </span>
+                {gitState && (
+                  <span className="file-git-status" aria-hidden="true">
+                    {gitSymbols[gitState]}
+                  </span>
+                )}
+              </button>
+            )}
+            {entry.directory &&
+              expanded.has(entry.path) &&
+              (depth < 30 ? (
+                <Folder
+                  directory={directory}
+                  path={entry.path}
+                  depth={depth + 1}
+                  hidden={hidden}
+                  open={open}
+                  manage={manage}
+                  select={select}
+                  edit={edit}
+                  revision={revision}
+                  gitStates={gitStates}
+                />
+              ) : (
+                <p className="inspector-message">{tx("目录层级过深。")}</p>
+              ))}
+          </li>
+        );
+      })}
       {listing?.partial && <li className="inspector-message">{tx("仅显示前 2,000 项。")}</li>}
       {!!listing?.skipped && (
         <li className="inspector-message">{tx("{p0} 项无法读取。", { p0: listing.skipped })}</li>
@@ -217,6 +251,7 @@ export function FilePanel({
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const copying = useRef(false);
   const remote = isRemoteDirectory(directory);
+  const gitStatus = useGitFileStatus(directory, mode === "tree" && !remote, revision);
   const currentDirectory = useRef(directory);
   currentDirectory.current = directory;
   useEffect(() => {
@@ -246,7 +281,7 @@ export function FilePanel({
     deleteDialog.current?.close();
     setTarget(null);
     const row = [...(results.current?.querySelectorAll<HTMLButtonElement>(".file-row") ?? [])].find(
-      (entry) => entry.title === target?.path,
+      (entry) => entry.dataset.path === target?.path,
     );
     (row ?? results.current)?.focus();
   }
@@ -625,6 +660,16 @@ export function FilePanel({
             )
           : mutationForm)}
       {error && mode === "tree" && !directoryDelete && <p role="alert">{localizeMessage(error)}</p>}
+      {gitStatus.error && (
+        <p className="inspector-message" role="alert">
+          {tx("无法读取 Git 文件状态：{p0}", { p0: localizeMessage(gitStatus.error) })}
+        </p>
+      )}
+      {gitStatus.truncated && (
+        <p className="inspector-message" role="status">
+          {tx("仅标记前 2,000 项 Git 变更，更多变更请在终端中查看。")}
+        </p>
+      )}
       {mode !== "tree" && (
         <input
           ref={input}
@@ -698,6 +743,7 @@ export function FilePanel({
             depth={0}
             hidden={hidden}
             revision={revision}
+            gitStates={gitStatus.states}
             edit={
               target && action !== "delete"
                 ? { path: target.path, rename: action === "rename", node: mutationForm }

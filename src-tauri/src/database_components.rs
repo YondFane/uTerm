@@ -82,7 +82,7 @@ fn artifacts() -> Result<Vec<(String, Artifact)>> {
     result.sort_by_key(|(id, _)| id.clone());
     Ok(result)
 }
-fn valid_file(file: &mut fs::File, artifact: &Artifact) -> Result<bool> {
+pub(crate) fn valid_file(file: &mut fs::File, artifact: &Artifact) -> Result<bool> {
     if file.metadata()?.len() != artifact.size {
         return Ok(false);
     }
@@ -346,6 +346,15 @@ fn safe_entry(path: &Path) -> bool {
         && !path.to_string_lossy().contains(['\\', ':'])
 }
 fn extract(source: impl Read + Seek, name: &str, destination: &Path) -> Result<()> {
+    extract_bounded(source, name, destination, 400 * 1024 * 1024, false)
+}
+pub(crate) fn extract_bounded(
+    source: impl Read + Seek,
+    name: &str,
+    destination: &Path,
+    limit: u64,
+    links: bool,
+) -> Result<()> {
     let mut total = 0u64;
     if name.ends_with(".zip") {
         let mut archive = zip::ZipArchive::new(source)?;
@@ -361,7 +370,7 @@ fn extract(source: impl Read + Seek, name: &str, destination: &Path) -> Result<(
             total = total
                 .checked_add(file.size())
                 .context("DB_COMPONENT_HASH")?;
-            if total > 400 * 1024 * 1024 {
+            if total > limit {
                 bail!("DB_COMPONENT_HASH");
             }
             let path = destination.join(path);
@@ -375,6 +384,7 @@ fn extract(source: impl Read + Seek, name: &str, destination: &Path) -> Result<(
     } else {
         let decoder = flate2::read::GzDecoder::new(source);
         let mut archive = tar::Archive::new(decoder);
+        let mut pending_links = Vec::new();
         for (index, entry) in archive.entries()?.enumerate() {
             if index >= 20000 {
                 bail!("DB_COMPONENT_HASH");
@@ -384,8 +394,19 @@ fn extract(source: impl Read + Seek, name: &str, destination: &Path) -> Result<(
                 bail!("DB_COMPONENT_HASH");
             }
             let kind = entry.header().entry_type();
-            // Runtime links are unnecessary; refusing them prevents extraction escapes. 运行时无需归档链接，拒绝链接可避免解压越界。
+            // Java archives may contain links; resolve allowed targets only after unpacking files.
+            // Java 归档可能包含链接，仅在解压普通文件后解析允许的目标。
             if kind.is_symlink() || kind.is_hard_link() {
+                if links {
+                    pending_links.push((
+                        entry.path()?.into_owned(),
+                        entry
+                            .link_name()?
+                            .context("DB_COMPONENT_HASH")?
+                            .into_owned(),
+                        kind.is_hard_link(),
+                    ));
+                }
                 continue;
             }
             if !kind.is_file() && !kind.is_dir() {
@@ -394,7 +415,54 @@ fn extract(source: impl Read + Seek, name: &str, destination: &Path) -> Result<(
             total = total
                 .checked_add(entry.size())
                 .context("DB_COMPONENT_HASH")?;
-            if total > 400 * 1024 * 1024 || !entry.unpack_in(destination)? {
+            if total > limit || !entry.unpack_in(destination)? {
+                bail!("DB_COMPONENT_HASH");
+            }
+        }
+        let mut pending_links: std::collections::VecDeque<_> = pending_links.into();
+        let mut unresolved = 0;
+        let canonical_destination = destination.canonicalize()?;
+        while let Some((path, target, hard)) = pending_links.pop_front() {
+            if target.is_absolute() {
+                bail!("DB_COMPONENT_HASH");
+            }
+            let link = destination.join(path);
+            // Relative targets containing .. require an existing parent directory on Unix.
+            // Unix 解析含 .. 的相对目标时，要求链接的父目录已存在。
+            let parent = link.parent().context("DB_COMPONENT_HASH")?;
+            fs::create_dir_all(parent)?;
+            if !parent.canonicalize()?.starts_with(&canonical_destination) {
+                bail!("DB_COMPONENT_HASH");
+            }
+            let base = if hard { destination } else { parent };
+            let resolved = match base.join(&target).canonicalize() {
+                Ok(path) => path,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    pending_links.push_back((link.strip_prefix(destination)?.into(), target, hard));
+                    unresolved += 1;
+                    if unresolved >= pending_links.len() {
+                        bail!("DB_COMPONENT_HASH");
+                    }
+                    continue;
+                }
+                Err(error) => return Err(error).context("DB_COMPONENT_HASH"),
+            };
+            unresolved = 0;
+            if !resolved.starts_with(&canonical_destination) {
+                bail!("DB_COMPONENT_HASH");
+            }
+            if resolved.is_file() {
+                total = total
+                    .checked_add(resolved.metadata()?.len())
+                    .context("DB_COMPONENT_HASH")?;
+                if total > limit {
+                    bail!("DB_COMPONENT_HASH");
+                }
+                fs::copy(resolved, link)?;
+            } else {
+                #[cfg(unix)]
+                std::os::unix::fs::symlink(target, link)?;
+                #[cfg(not(unix))]
                 bail!("DB_COMPONENT_HASH");
             }
         }
@@ -436,7 +504,7 @@ fn response_range(response: &reqwest::Response, offset: u64, size: u64) -> Optio
     );
     (start == offset && end >= start && end < size && total == size).then(|| (start, end + 1))
 }
-async fn download_file(
+pub(crate) async fn download_file(
     directory: &Path,
     artifact: &Artifact,
     flag: &AtomicBool,
@@ -617,12 +685,12 @@ async fn download(app: &tauri::AppHandle, id: &str, artifact: &Artifact) -> Resu
     bail!("DB_COMPONENT_DOWNLOAD")
 }
 
-enum InstallPackage {
+pub(crate) enum InstallPackage {
     Cached(fs::File),
     Staged(tempfile::NamedTempFile),
 }
 impl InstallPackage {
-    fn open(
+    pub(crate) fn open(
         directory: &Path,
         artifact: &Artifact,
         source: Option<PathBuf>,
@@ -641,7 +709,7 @@ impl InstallPackage {
             )?))
         }
     }
-    fn file(&mut self) -> &mut fs::File {
+    pub(crate) fn file(&mut self) -> &mut fs::File {
         match self {
             Self::Cached(file) => file,
             Self::Staged(file) => file.as_file_mut(),
@@ -844,6 +912,42 @@ mod resume_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn java_archives_resolve_internal_link_chains_and_reject_external_targets() {
+        use std::io::Cursor;
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("jdk");
+        fs::create_dir(&destination).unwrap();
+        let archive = |target: &str| {
+            let encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+            let mut archive = tar::Builder::new(encoder);
+            for (path, link) in [("bin/javac", "../lib/compiler"), ("lib/compiler", target)] {
+                let mut header = tar::Header::new_gnu();
+                header.set_mode(0o755);
+                header.set_entry_type(tar::EntryType::Symlink);
+                header.set_size(0);
+                archive.append_link(&mut header, path, link).unwrap();
+            }
+            let mut header = tar::Header::new_gnu();
+            header.set_mode(0o755);
+            header.set_size(4);
+            header.set_cksum();
+            archive
+                .append_data(&mut header, "lib/runtime", Cursor::new(b"test"))
+                .unwrap();
+            archive.into_inner().unwrap().finish().unwrap()
+        };
+        let bytes = archive("runtime");
+        extract_bounded(Cursor::new(bytes), "jdk.tar.gz", &destination, 12, true).unwrap();
+        assert_eq!(fs::read(destination.join("bin/javac")).unwrap(), b"test");
+        let external = directory.path().join("outside");
+        fs::write(&external, b"keep").unwrap();
+        let bytes = archive("../../outside");
+        assert!(
+            extract_bounded(Cursor::new(bytes), "jdk.tar.gz", &destination, 100, true).is_err()
+        );
+        assert_eq!(fs::read(external).unwrap(), b"keep");
+    }
     #[test]
     fn catalog_and_extraction_are_bounded() {
         let catalog = catalog().unwrap();

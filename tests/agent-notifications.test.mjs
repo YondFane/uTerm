@@ -71,6 +71,7 @@ test("Agent reports update indicators, unread completion and guarded native noti
   const notices = [];
   const acknowledgements = [];
   mockIPC((command, args) => {
+    if (command === "project_run_summary") return { java: 0, python: 0 };
     if (command === "runtime_info")
       return {
         platform: "windows",

@@ -1,4 +1,5 @@
 import { localizeMessage } from "../lib/i18n";
+import { gitReadError } from "../lib/git-snapshot";
 import { githubStatus } from "../lib/github-i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
@@ -83,12 +84,18 @@ export function GitHubPanel({
     void invoke<string[]>("github_repositories", { directory })
       .then((value) => {
         if (!disposed) {
+          setError("");
           setRepositories(value);
           setRepository((current) => (value.includes(current) ? current : (value[0] ?? "")));
         }
       })
       .catch((reason) => {
-        if (!disposed) setError(String(reason));
+        if (!disposed) {
+          setRepositories([]);
+          setRepository("");
+          setLoading(false);
+          setError(gitReadError(reason));
+        }
       });
     return () => {
       disposed = true;

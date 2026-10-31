@@ -11,6 +11,8 @@ export function ProjectMenuActions({
   move,
   close,
   onError,
+  javaBuild,
+  pythonRun,
 }: {
   directory: string;
   workspaces: { id: string; name: string }[];
@@ -19,6 +21,8 @@ export function ProjectMenuActions({
   move: (target: string) => void;
   close: () => void;
   onError: (error: string) => void;
+  javaBuild?: () => void;
+  pythonRun?: () => void;
 }) {
   useUiLanguage();
   const trigger = useRef<HTMLButtonElement>(null);
@@ -49,6 +53,28 @@ export function ProjectMenuActions({
   }, [position]);
   return (
     <>
+      {javaBuild && (
+        <button
+          role="menuitem"
+          onClick={() => {
+            close();
+            javaBuild();
+          }}
+        >
+          {tx("Java 构建与运行")}
+        </button>
+      )}
+      {pythonRun && (
+        <button
+          role="menuitem"
+          onClick={() => {
+            close();
+            pythonRun();
+          }}
+        >
+          {tx("Python 运行")}
+        </button>
+      )}
       <button
         role="menuitem"
         onClick={() => {

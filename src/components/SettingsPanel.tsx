@@ -1,4 +1,6 @@
 import { DatabaseComponents } from "./DatabaseComponents";
+import { MavenSettings } from "./MavenSettings";
+import { JavaComponents } from "./JavaComponents";
 import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
 import { localizeMessage } from "../lib/i18n";
@@ -91,6 +93,8 @@ const tabs = [
   "用量",
   "本地控制",
   "数据库组件",
+  "Maven 设置",
+  "Java 开发环境",
   "软件更新",
 ] as const;
 export function SettingsPanel({
@@ -128,8 +132,14 @@ export function SettingsPanel({
       : undefined;
   const dialog = useRef<HTMLDialogElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
+  const mavenWorking = useRef(false);
+  const [mavenBusy, setMavenBusy] = useState(false);
+  function mavenBusyChanged(value: boolean) {
+    mavenWorking.current = value;
+    setMavenBusy(value);
+  }
   const backdrop = useDialogBackdrop(() => {
-    if (updates.phase !== "installing") close();
+    if (updates.phase !== "installing" && !mavenWorking.current) close();
   });
   const themeFile = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState("");
@@ -213,7 +223,7 @@ export function SettingsPanel({
       className="name-dialog settings-dialog"
       aria-labelledby="settings-title"
       onCancel={(event) => {
-        if (updates.phase === "installing") event.preventDefault();
+        if (updates.phase === "installing" || mavenWorking.current) event.preventDefault();
         else close();
       }}
     >
@@ -223,7 +233,7 @@ export function SettingsPanel({
         </h2>
         <button
           className="settings-close"
-          disabled={updates.phase === "installing"}
+          disabled={updates.phase === "installing" || mavenBusy}
           onClick={close}
           aria-label={t("关闭设置")}
         >
@@ -236,6 +246,7 @@ export function SettingsPanel({
             <button
               key={name}
               aria-pressed={tab === name}
+              disabled={mavenBusy}
               onClick={() => {
                 setTab(name);
                 setRecording(null);
@@ -946,6 +957,8 @@ export function SettingsPanel({
             </>
           )}
           {tab === "数据库组件" && <DatabaseComponents />}
+          {tab === "Maven 设置" && <MavenSettings busyChanged={mavenBusyChanged} />}
+          {tab === "Java 开发环境" && <JavaComponents />}
           {tab === "软件更新" && (
             <>
               <p>uTerm {runtime.version}</p>

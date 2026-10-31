@@ -5,6 +5,7 @@ import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
 import { matchesSsh } from "../lib/ssh";
+import { displayLocalPath } from "../lib/file-target";
 import { useSettings } from "../lib/SettingsContext";
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent, ReactNode } from "react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -801,8 +802,8 @@ export function Sidebar({
           }}
           title={
             worktree
-              ? `${worktree.name} — ${worktree.path}${worktree.missing ? tx(" — 目录不可用") : ""}`
-              : `${project.name} — ${project.directory}`
+              ? `${worktree.name} — ${displayLocalPath(worktree.path)}${worktree.missing ? tx(" — 目录不可用") : ""}`
+              : `${project.name} — ${displayLocalPath(project.directory)}`
           }
           onClick={() => {
             if (!worktree && suppressProjectClick.current) {

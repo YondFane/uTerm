@@ -15,10 +15,15 @@ import {
 } from "../lib/terminal-input";
 import { autoCloseAgent, closeAttachedSession } from "../lib/session-lifecycle";
 import { decodeTerminalFrame } from "../lib/terminal-frame";
+import {
+  followTaskReplayViewport,
+  restoreTaskReplayViewport,
+  taskLogText,
+} from "../lib/terminal-replay";
 import type { AgentActivityEvent } from "../lib/terminal-frame";
 import { attachTerminalScrollInput } from "../lib/terminal-scroll";
 import { attachTerminalFit, createTerminalResizeQueue } from "../lib/terminal-resize";
-import { attachTerminalRenderer } from "../lib/terminal-renderer";
+import { terminalRendererPool } from "../lib/terminal-renderer";
 import { attachTerminalAccessibilityLimit } from "../lib/terminal-accessibility";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
@@ -37,6 +42,7 @@ type Connection = {
   closed: boolean;
   exited: boolean;
   replaying: boolean;
+  replayViewport: number | null;
   queue: Promise<void>;
   bytes: number;
   resize: ReturnType<typeof createTerminalResizeQueue>;
@@ -45,6 +51,8 @@ const action = (id: string, action: string, values = {}) =>
   invoke<void>("session_action", { id, action, ...values });
 
 export function TerminalView({
+  existingOnly = false,
+  logView = false,
   directory,
   allowSshCreate = false,
   onSshRestart,
@@ -67,6 +75,8 @@ export function TerminalView({
   onDrop,
   onPaneDragStart,
 }: {
+  existingOnly?: boolean;
+  logView?: boolean;
   allowSshCreate?: boolean;
   onSshRestart?: () => void;
   onStatus?: (status: TerminalStatus | null) => void;
@@ -90,6 +100,27 @@ export function TerminalView({
   onClosed: () => void;
 }) {
   const uiLanguage = useUiLanguage();
+  const [autoFollow, setAutoFollow] = useState(true);
+  const followOutput = useRef(true);
+  function followLogs(value: boolean) {
+    followOutput.current = value;
+    setAutoFollow(value);
+    const term = terminal.current;
+    if (value && term) {
+      term.scrollToBottom();
+      const viewport = restoreTaskReplayViewport(term);
+      if (connection.current) connection.current.replayViewport = viewport;
+    }
+  }
+  async function copyLogs() {
+    const buffer = terminal.current?.buffer.active;
+    if (!buffer) return;
+    try {
+      await navigator.clipboard.writeText(taskLogText(buffer));
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }
 
   const { settings, light, resizeFont } = useSettings();
   const [fontError, setFontError] = useState("");
@@ -120,7 +151,7 @@ export function TerminalView({
   activeRef.current = active;
   const container = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
-  const disposeRenderer = useRef<(() => void) | null>(null);
+  const renderer = useRef<ReturnType<typeof terminalRendererPool.register> | null>(null);
   const fitLayout = useRef<ReturnType<typeof attachTerminalFit> | null>(null);
   const connection = useRef<Connection | null>(null);
   const closeRef = useRef(close);
@@ -265,6 +296,7 @@ export function TerminalView({
         )
       : () => {};
     const send = (data: Uint8Array) => {
+      if (logView) return;
       const current = connection.current;
       if (!current || current.closed || current.replaying) return;
       if (current.bytes + data.length > 1024 * 1024) {
@@ -320,6 +352,11 @@ export function TerminalView({
       () => fit.fit(),
       () => !connection.current?.replaying,
       (reason) => setError(String(reason)),
+      () => {
+        const current = connection.current;
+        if (existingOnly && current && !current.replaying && (!logView || followOutput.current))
+          current.replayViewport = followTaskReplayViewport(term, current.replayViewport);
+      },
     );
     fitLayout.current = layout;
     return () => {
@@ -341,8 +378,8 @@ export function TerminalView({
       resize.dispose();
       disposePunctuation();
       disposeAccessibility();
-      disposeRenderer.current?.();
-      disposeRenderer.current = null;
+      renderer.current?.dispose();
+      renderer.current = null;
       term.dispose();
       terminal.current = null;
     };
@@ -376,19 +413,15 @@ export function TerminalView({
     // Hidden sessions still consume output, but must not measure accessibility rows.
     // 隐藏会话仍消费输出，但不应测量无障碍文本行的布局。
     term.options.screenReaderMode = visible;
-    if (!visible) return;
-    // Reserve GPU contexts for visible panes, including every pane in a split group.
-    // 仅为可见窗格保留 GPU 上下文，分组中的各个可见窗格均包含在内。
-    const dispose = attachTerminalRenderer(term, () => new WebglAddon());
-    disposeRenderer.current = dispose;
-    return () => {
-      dispose();
-      if (disposeRenderer.current === dispose) disposeRenderer.current = null;
-    };
+    // A small idle cache avoids rebuilding WebGL on every tab switch.
+    // 小型空闲缓存避免每次切换标签都重建 WebGL。
+    renderer.current ??= terminalRendererPool.register(term, () => new WebglAddon());
+    renderer.current.setVisible(visible);
   }, [visible]);
   useEffect(() => {
-    const find = () => {
-      if (activeRef.current) {
+    const find = (event: Event) => {
+      const requested = (event as CustomEvent<{ sessionId?: string }>).detail?.sessionId;
+      if (requested ? requested === session.id : activeRef.current && !existingOnly) {
         setSearchOpen(true);
         searchInput.current?.focus();
       }
@@ -416,6 +449,7 @@ export function TerminalView({
       closed: false,
       exited: false,
       replaying: false,
+      replayViewport: null,
       ready: Promise.resolve(),
       queue: Promise.resolve(),
       bytes: 0,
@@ -424,6 +458,7 @@ export function TerminalView({
           await current.ready;
           if (
             !current.closed &&
+            (!logView || !current.exited) &&
             !current.replaying &&
             connection.current === current &&
             term.rows === rows &&
@@ -468,16 +503,26 @@ export function TerminalView({
       // Replay at the saved dimensions before fitting, so wrapped output stays intact.
       if (event.reset) {
         current.replaying = true;
+        current.replayViewport = null;
         fitLayout.current?.cancel();
         term.reset();
         term.resize(event.cols, event.rows);
       }
+      const retainedViewport =
+        logView && !followOutput.current ? term.buffer.active.viewportY : null;
       term.write(data, () => {
         if (current.closed) return;
         if (event.reset) {
           current.replaying = false;
+          // A resized host buffer can replay logs into scrollback and leave the screen blank.
+          // 宿主缓冲区调整尺寸后，回放可能把日志放入滚动历史并留下空白屏幕。
+          if (existingOnly && (!logView || followOutput.current))
+            current.replayViewport = restoreTaskReplayViewport(term);
           fitLayout.current?.schedule();
+        } else if (existingOnly && data.length && (!logView || followOutput.current)) {
+          current.replayViewport = followTaskReplayViewport(term, current.replayViewport);
         }
+        if (retainedViewport !== null) term.scrollToLine(retainedViewport);
         if (event.exited) {
           current.exited = true;
           term.options.disableStdin = true;
@@ -516,6 +561,7 @@ export function TerminalView({
         agent: session.agent ?? null,
         ssh: session.ssh ?? null,
         create: allowSshCreate,
+        existing_only: existingOnly,
         rows: term.rows,
         cols: term.cols,
       },
@@ -524,7 +570,7 @@ export function TerminalView({
     try {
       await current.ready;
       if (!current.closed) {
-        term.options.disableStdin = current.exited;
+        term.options.disableStdin = logView || current.exited;
         setStatus((value) => (value === "starting" ? "running" : value));
         if (activeRef.current) term.focus();
       }
@@ -614,6 +660,17 @@ export function TerminalView({
       }}
       onFocusCapture={onFocus}
       onPointerDown={onFocus}
+      onWheelCapture={(event) => {
+        if (logView && event.deltaY < 0) followLogs(false);
+      }}
+      onPointerDownCapture={(event) => {
+        if (logView && (event.target as HTMLElement).classList.contains("xterm-viewport"))
+          followLogs(false);
+      }}
+      onKeyDownCapture={(event) => {
+        if (logView && (event.key === "PageUp" || (event.ctrlKey && event.key === "Home")))
+          followLogs(false);
+      }}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
@@ -627,6 +684,7 @@ export function TerminalView({
             if (event.button === 1) event.preventDefault();
           }}
           onAuxClick={(event) => {
+            if (existingOnly) return;
             if (event.button !== 1) return;
             event.preventDefault();
             event.stopPropagation();
@@ -634,11 +692,32 @@ export function TerminalView({
           }}
           title={`${session.name} — ${sessionDirectory}`}
         >
-          {session.name}
+          {logView ? tx("运行日志") : session.name}
         </span>
         <span className="session-working-directory" title={sessionDirectory}>
-          {sessionDirectory}
+          {logView ? session.name : sessionDirectory}
         </span>
+        {logView && (
+          <>
+            <label className="python-log-follow">
+              <input
+                type="checkbox"
+                checked={autoFollow}
+                onChange={(event) => followLogs(event.target.checked)}
+              />
+              {tx("自动跟随")}
+            </label>
+            <button
+              type="button"
+              className="toolbar-icon-button"
+              aria-label={tx("复制日志")}
+              title={tx("复制日志")}
+              onClick={() => void copyLogs()}
+            >
+              <ToolbarIcon name="copy" />
+            </button>
+          </>
+        )}
         <div
           className="terminal-font-controls editor-font-controls"
           role="group"
@@ -734,7 +813,7 @@ export function TerminalView({
             <ToolbarIcon name="restart" />
           </button>
         )}
-        {(status === "idle" || status === "exited") && (
+        {!existingOnly && (status === "idle" || status === "exited") && (
           <button
             className="toolbar-icon-button"
             aria-label={tx("重新启动")}

@@ -65,17 +65,28 @@ remote-server connections are shown. [Media details](site/media/README.md).
 
 ## What you can do
 
-| Workflow                          | In uTerm                                                                                                                                                 |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Work on several tasks             | Organize terminals and Agents by workspace, project and Git Worktree; split panes and see Agent activity through supported Hooks.                        |
-| Keep project context nearby       | Review Git status, diffs and commits; edit files with conflict checks and draft recovery; preview Markdown and PDF.                                      |
-| Work with remote systems and data | Use system OpenSSH for SSH/SFTP; browse Redis and query MySQL, PostgreSQL, Oracle, Elasticsearch or MongoDB with read-only defaults and guarded editing. |
+| Workflow                          | In uTerm                                                                                                                                                            |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Work on several tasks             | Organize terminals and Agents by workspace, project and Git Worktree; split panes and see Agent activity through supported Hooks.                                   |
+| Keep project context nearby       | Review Git status, diffs and commits; see changed files and folders in the file tree; edit files with conflict checks and draft recovery; preview Markdown and PDF. |
+| Work with remote systems and data | Use system OpenSSH for SSH/SFTP; browse Redis and query MySQL, PostgreSQL, Oracle, Elasticsearch or MongoDB with read-only defaults and guarded editing.            |
 
 The interface supports English and Simplified Chinese, six palettes, configurable fonts and keyboard
 shortcuts. Agent programs are optional; install or configure the CLI you want to use. SQL and
 MongoDB connections require Java 17+ and the selected drivers, managed on demand in the app.
 Elasticsearch requires no additional runtime. See the [feature guide](docs/features.md) for
 supported behavior, limits and platform acceptance.
+
+Java projects can open **Java build and run** from the project menu or toolbar. The bottom panel
+provides Maven builds, Spring Boot development/JAR launches and ordered task output, with
+system-wide or project Maven configuration. Full JDK 8/11/17/21 and Maven tools install on demand;
+see [Java and Maven builds](docs/features.md#java-and-maven-builds).
+
+Python projects can open **Python run** from the project menu or toolbar. Select an existing Python
+3 or virtual environment, then run a script, module, FastAPI, Flask or Django project with live
+logs, search, copying and stop/restart controls. Python and project dependencies are prepared
+separately and are not included in the installer; see
+[Python projects and logs](docs/features.md#python-projects-and-logs).
 
 Ctrl+- and Ctrl++ adjust the font of the visible terminal, Agent session or file content; macOS uses
 Command instead of Ctrl. Session and file headers also offer font buttons. Session headers show the
@@ -140,6 +151,10 @@ Built with Tauri, React, TypeScript, Rust and xterm.js, with its WebGL addon for
 Setup, commands, database component development, validation and release instructions live in the
 [development guide](docs/development.md). Follow [AGENTS.md](AGENTS.md) and the
 [documentation writing rules](docs/writing-rules.md) when contributing.
+
+Views live in `src/components/`, with workbench transitions coordinated in `src/App.tsx`. Reusable
+hooks and pure logic live in `src/lib/`, including Git file-status polling. Desktop commands live in
+`src-tauri/src/`; session identity, PTYs and task execution belong to `crates/utermd-local/`.
 
 Use an editor with EditorConfig support and the project's Prettier/rustfmt. Run `pnpm format` and
 `pnpm format:check` before committing; macOS and Windows CI check repository formatting.

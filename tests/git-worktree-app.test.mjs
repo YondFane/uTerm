@@ -105,6 +105,7 @@ test("Git Worktree registration refreshes the owning project, preserves its sele
   let created = false;
   const calls = [];
   mockIPC((command, args) => {
+    if (command === "project_run_summary") return { java: 0, python: 0 };
     calls.push({ command, args });
     if (command === "runtime_info")
       return {

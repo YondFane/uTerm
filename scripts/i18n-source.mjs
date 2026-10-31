@@ -44,7 +44,7 @@ export function backendKeys() {
     let testPending = false,
       testDepth = 0;
     for (const match of code.matchAll(
-      /\/\/[^\n]*|\/\*[\s\S]*?\*\/|#\[cfg\(test\)\]|"(?:\\.|[^"\\])*"|[{}]/g,
+      /\/\/[^\n]*|\/\*[\s\S]*?\*\/|#\[cfg\(test\)\]|'(?:\\(?:[nrt0\\'"]|x[\da-fA-F]{2}|u\{[\da-fA-F_]+\})|[^'\\\r\n])'|"(?:\\.|[^"\\])*"|[{}]/g,
     )) {
       const value = match[0];
       if (value.startsWith("//") || value.startsWith("/*")) continue;

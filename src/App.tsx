@@ -24,12 +24,12 @@ import type { SshFileStatus, TerminalStatus, SshTunnelStatus } from "./lib/ssh";
 import { RemoteFiles, RemoteTransferShelf } from "./components/RemoteFiles";
 import { fileTarget, sshError } from "./lib/file-target";
 import { subscribeTransfers, transferSnapshot } from "./lib/remote-transfers";
-import { reconcileSshSessions, type SshConnection, type SshTarget } from "./lib/workspace";
 import { UpdateInstallDialog } from "./components/UpdateInstallDialog";
-import { getUiLanguage, localizeMessage } from "./lib/i18n";
+import { activeLanguage, getUiLanguage, localizeMessage, translate, tx } from "./lib/i18n";
 import { useUiLanguage } from "./lib/useUiLanguage";
-import { tx } from "./lib/i18n";
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -50,7 +50,6 @@ import { useUpdates } from "./lib/useUpdates";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { BreakReminder } from "./components/BreakReminder";
 import { useSettings } from "./lib/SettingsContext";
-import { activeLanguage, translate } from "./lib/i18n";
 import { quotaAgent, remainingUsage, scheduleUsageRefresh, type UsageWindow } from "./lib/usage";
 import {
   availableAgents,
@@ -84,6 +83,7 @@ import { getRuntimeInfo, isDesktop } from "./lib/desktop";
 import type { RuntimeInfo } from "./lib/desktop";
 import { buildTaskbarSnapshot, taskbarSnapshotSignature } from "./lib/taskbar";
 import { useMacosMenu } from "./lib/useMacosMenu";
+import { projectRunTitle, useProjectRunSummary } from "./lib/useProjectRunSummary";
 import {
   emptyWorkspace,
   sshTargetFor,
@@ -108,6 +108,7 @@ import {
   groupableSessions,
   reconcileWorktrees,
   reconcileLocalSessionSnapshot,
+  reconcileSshSessions,
   groupSessions,
   ungroupSession,
   neighborPane,
@@ -120,9 +121,34 @@ import type {
   Worktree,
   Workspace,
   LocalSessionSnapshot,
+  SshConnection,
+  SshTarget,
 } from "./lib/workspace";
 
 import { sidebarLayout, sidebarRailWidth } from "./lib/sidebar-layout";
+const JavaBuildPanel = lazy(() =>
+  import("./components/JavaBuildPanel").then((module) => ({ default: module.JavaBuildPanel })),
+);
+const PythonRunPanel = lazy(() =>
+  import("./components/PythonRunPanel").then((module) => ({ default: module.PythonRunPanel })),
+);
+const javaPanelNavigationCommands = new Set<CommandId>([
+  "splitRight",
+  "splitDown",
+  "zoom",
+  "ungroup",
+  "left",
+  "right",
+  "up",
+  "down",
+  "link",
+  "next",
+  "previous",
+]);
+
+function javaPanelHasFocus() {
+  return !!document.activeElement?.closest(".java-build-panel");
+}
 
 export function App() {
   useUiLanguage();
@@ -131,6 +157,16 @@ export function App() {
   const inspectorOnLeft = settings.inspectorPosition === "left";
   const t = (key: string) => translate(activeLanguage(settings.language), key);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [javaDirectory, setJavaDirectory] = useState<string | null>(null);
+  const [pythonDirectory, setPythonDirectory] = useState<string | null>(null);
+  const preparePythonClose = useRef<(() => Promise<boolean>) | null>(null);
+  const registerPythonClose = useCallback((prepare: (() => Promise<boolean>) | null) => {
+    preparePythonClose.current = prepare;
+  }, []);
+  const prepareJavaClose = useRef<(() => Promise<boolean>) | null>(null);
+  const registerJavaClose = useCallback((prepare: (() => Promise<boolean>) | null) => {
+    prepareJavaClose.current = prepare;
+  }, []);
   const [requestedSidebarWidth, setRequestedSidebarWidth] = useState(248);
   const sidebarDrag = useRef<{
     x: number;
@@ -505,6 +541,9 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [runtime, setRuntime] = useState<RuntimeInfo | null>(null);
+  const projectRuns = useProjectRunSummary(!!runtime);
+  const javaRunTitle = projectRunTitle("java", projectRuns);
+  const pythonRunTitle = projectRunTitle("python", projectRuns);
   const enabledAgents = availableAgents(settings, runtime?.agents ?? []);
   const chatAgent = enabledAgents.includes(settings.defaultAgent)
     ? settings.defaultAgent
@@ -1431,6 +1470,7 @@ export function App() {
     setZoomedGroup(null);
   }, [workspace?.selectedProject, workspace?.selectedWorkspace, activeGroupId]);
   function contentFontKey(): "fontSize" | "fileFontSize" | "gitDiffFontSize" | null {
+    if (javaPanelHasFocus()) return "fontSize";
     if (gitOpen && gitExpanded && gitDiffActive) return "gitDiffFontSize";
     if (editor.document)
       return editor.document.kind === "text" && !document.querySelector(".html-preview")
@@ -1440,6 +1480,12 @@ export function App() {
   }
   function commandAvailable(id: CommandId): boolean {
     if (!runtime || !workspace || editor.transitioning || editor.pending) return false;
+    if (javaPanelHasFocus()) {
+      if (id === "close" || id === "terminalSearch") return true;
+      // The Java output owns its focus; navigation must not change an ordinary terminal behind it.
+      // Java 输出拥有当前焦点，导航命令不能改变其后方的普通终端。
+      if (javaPanelNavigationCommands.has(id)) return false;
+    }
     if (id === "nextWorkspace" || id === "previousWorkspace")
       return (workspace.groups?.length ?? 0) > 1;
     if (id === "fontDecrease" || id === "fontIncrease") return contentFontKey() !== null;
@@ -1476,6 +1522,23 @@ export function App() {
   }
   function runCommand(id: CommandId) {
     if (!commandAvailable(id)) return;
+    if (javaPanelHasFocus()) {
+      if (id === "close") {
+        if (pythonDirectory) void changePythonDirectory(null);
+        else void changeJavaDirectory(null);
+        return;
+      }
+      if (id === "terminalSearch") {
+        const output = document.querySelector(".java-task-output [data-session-id]");
+        if (output)
+          window.dispatchEvent(
+            new CustomEvent("uterm-search", {
+              detail: { sessionId: output.getAttribute("data-session-id") },
+            }),
+          );
+        return;
+      }
+    }
     if (id === "nextWorkspace" || id === "previousWorkspace") {
       const change = () => {
         if (update((previous) => cycleWorkspace(previous, id === "nextWorkspace" ? 1 : -1)))
@@ -1976,6 +2039,127 @@ export function App() {
       setDirectoryOpen(panel === "directory");
     }
   }
+  function revealWithEditorGuard(reveal: () => void) {
+    // Resolve the editor's save/discard/cancel choice before changing the visible workbench.
+    // 先处理编辑器的保存／放弃／取消选择，再切换可见工作台。
+    if (editor.document) void editor.hide(reveal);
+    else reveal();
+  }
+  async function changeJavaDirectory(directory: string | null, project?: Project) {
+    // Finish the Java draft save before the editor guard can switch the selected project.
+    // 先保存 Java 草稿，再通过编辑器保护切换所选项目。
+    if (javaDirectory && prepareJavaClose.current && !(await prepareJavaClose.current())) return;
+    if (pythonDirectory && preparePythonClose.current && !(await preparePythonClose.current()))
+      return;
+    const reveal = () => {
+      if (project) {
+        if (!update((previous) => selectProject(previous, project.id))) return;
+        setSelectedRedisId(null);
+        setSelectedDatabaseId(null);
+        setSelectedSshId(null);
+      }
+      setJavaDirectory(directory);
+      setPythonDirectory(null);
+    };
+    if (project && editor.document && editor.document.directory !== directory)
+      await editor.hide(reveal);
+    else reveal();
+  }
+  async function changePythonDirectory(directory: string | null, project?: Project) {
+    if (pythonDirectory && preparePythonClose.current && !(await preparePythonClose.current()))
+      return;
+    if (javaDirectory && prepareJavaClose.current && !(await prepareJavaClose.current())) return;
+    const reveal = () => {
+      if (project) {
+        if (!update((previous) => selectProject(previous, project.id))) return;
+        setSelectedRedisId(null);
+        setSelectedDatabaseId(null);
+        setSelectedSshId(null);
+      }
+      setJavaDirectory(null);
+      setPythonDirectory(directory);
+    };
+    if (project && editor.document && editor.document.directory !== directory)
+      await editor.hide(reveal);
+    else reveal();
+  }
+  function focusWorkspaceContent() {
+    setSelectedRedisId(null);
+    setSelectedDatabaseId(null);
+    if (editor.document) void editor.hide();
+    else setFocusRequest((value) => value + 1);
+  }
+  function showDatabaseComponents() {
+    revealWithEditorGuard(() => {
+      setSelectedRedisId(null);
+      setSelectedDatabaseId("components");
+    });
+  }
+  function selectDatabaseConnection(connection: DatabaseConfig) {
+    revealWithEditorGuard(() => {
+      update((previous) => ({
+        ...previous,
+        selectedProject: null,
+        selectedSession: null,
+        selectedWorktree: null,
+      }));
+      setSelectedRedisId(null);
+      setSelectedSshId(null);
+      setSelectedDatabaseId(connection.id);
+      setDatabaseViews((previous) =>
+        previous.some((item) => item.id === connection.id) ? previous : [...previous, connection],
+      );
+    });
+  }
+  function selectRedisConnection(connection: RedisConfig) {
+    const owner = currentWorkspace.current?.groups?.find((group) =>
+      group.redisConnections?.some((item) => item.id === connection.id),
+    );
+    if (owner) connection = resolveRedisSsh(connection, owner.sshConnections ?? [], owner.id);
+    revealWithEditorGuard(() => {
+      update((previous) => ({
+        ...previous,
+        selectedProject: null,
+        selectedSession: null,
+        selectedWorktree: null,
+      }));
+      setSelectedSshId(null);
+      setGitOpen(false);
+      setGithubOpen(false);
+      setDirectoryOpen(false);
+      setSelectedDatabaseId(null);
+      setSelectedRedisId(connection.id);
+      setRedisViews((previous) =>
+        previous.some((item) => item.id === connection.id) ? previous : [...previous, connection],
+      );
+    });
+  }
+  function selectSshConnection(connection: SshConnection) {
+    revealWithEditorGuard(() => {
+      setSelectedRedisId(null);
+      setSelectedDatabaseId(null);
+      setSelectedSshId(connection.id);
+      setGitOpen(false);
+      setGithubOpen(false);
+      setDirectoryOpen(false);
+      setFilesOpen(false);
+      update((previous) =>
+        connection.sessions.length
+          ? selectSession(
+              previous,
+              connection.sessions.find(
+                (session) => session.id === lastSshSessions.current[connection.id],
+              )?.id ?? connection.sessions[0].id,
+            )
+          : {
+              ...previous,
+              selectedProject: null,
+              selectedSession: null,
+              selectedWorktree: null,
+            },
+      );
+    });
+  }
   const inspectorToggle = (
     <button
       className="toolbar-icon-button inspector-toggle"
@@ -2049,7 +2233,7 @@ export function App() {
           setDirectoryOpen(true);
         }}
       >
-        <ToolbarIcon name="info" />
+        <ToolbarIcon name="folder" />
       </button>
     </div>
   );
@@ -2087,45 +2271,14 @@ export function App() {
         workspace={workspace}
         runtime={runtime}
         update={update}
-        focus={() => {
-          setSelectedRedisId(null);
-          setSelectedDatabaseId(null);
-          if (editor.document) void editor.hide();
-          else setFocusRequest((value) => value + 1);
-        }}
+        focus={focusWorkspaceContent}
         menu={setMenu}
         addDatabase={() => setDatabaseDialog({})}
         editDatabase={(connection) => setDatabaseDialog({ connection })}
         databaseStatuses={databaseStatuses}
         selectedDatabaseId={activeDatabaseConfig?.id ?? null}
-        manageDatabase={() => {
-          const reveal = () => {
-            setSelectedRedisId(null);
-            setSelectedDatabaseId("components");
-          };
-          if (editor.document) void editor.hide(reveal);
-          else reveal();
-        }}
-        selectDatabase={(connection) => {
-          const reveal = () => {
-            update((previous) => ({
-              ...previous,
-              selectedProject: null,
-              selectedSession: null,
-              selectedWorktree: null,
-            }));
-            setSelectedRedisId(null);
-            setSelectedSshId(null);
-            setSelectedDatabaseId(connection.id);
-            setDatabaseViews((previous) =>
-              previous.some((item) => item.id === connection.id)
-                ? previous
-                : [...previous, connection],
-            );
-          };
-          if (editor.document) void editor.hide(reveal);
-          else reveal();
-        }}
+        manageDatabase={showDatabaseComponents}
+        selectDatabase={selectDatabaseConnection}
         removeDatabase={(connection) => {
           const remove = async () => {
             const owner = currentWorkspace.current?.groups?.find((group) =>
@@ -2177,33 +2330,7 @@ export function App() {
         editRedis={(connection) => setRedisDialog({ connection })}
         redisStatuses={redisStatuses}
         selectedRedisId={activeRedis?.id ?? null}
-        selectRedis={(connection) => {
-          const owner = currentWorkspace.current?.groups?.find((group) =>
-            group.redisConnections?.some((item) => item.id === connection.id),
-          );
-          if (owner) connection = resolveRedisSsh(connection, owner.sshConnections ?? [], owner.id);
-          const reveal = () => {
-            update((previous) => ({
-              ...previous,
-              selectedProject: null,
-              selectedSession: null,
-              selectedWorktree: null,
-            }));
-            setSelectedSshId(null);
-            setGitOpen(false);
-            setGithubOpen(false);
-            setDirectoryOpen(false);
-            setSelectedDatabaseId(null);
-            setSelectedRedisId(connection.id);
-            setRedisViews((previous) =>
-              previous.some((item) => item.id === connection.id)
-                ? previous
-                : [...previous, connection],
-            );
-          };
-          if (editor.document) void editor.hide(reveal);
-          else reveal();
-        }}
+        selectRedis={selectRedisConnection}
         removeRedis={(connection) => {
           const remove = async () => {
             const owner = currentWorkspace.current?.groups?.find((group) =>
@@ -2247,39 +2374,9 @@ export function App() {
           void remove().catch((error) => setError(redisError(error)));
         }}
         addSsh={() => setSshDialog({})}
-        quickSsh={() => {
-          if (editor.document) void editor.hide(() => setQuickSshOpen(true));
-          else setQuickSshOpen(true);
-        }}
+        quickSsh={() => revealWithEditorGuard(() => setQuickSshOpen(true))}
         editSsh={(connection) => setSshDialog({ connection })}
-        selectSsh={(connection) => {
-          const select = () => {
-            setSelectedRedisId(null);
-            setSelectedDatabaseId(null);
-            setSelectedSshId(connection.id);
-            setGitOpen(false);
-            setGithubOpen(false);
-            setDirectoryOpen(false);
-            setFilesOpen(false);
-            update((previous) =>
-              connection.sessions.length
-                ? selectSession(
-                    previous,
-                    connection.sessions.find(
-                      (session) => session.id === lastSshSessions.current[connection.id],
-                    )?.id ?? connection.sessions[0].id,
-                  )
-                : {
-                    ...previous,
-                    selectedProject: null,
-                    selectedSession: null,
-                    selectedWorktree: null,
-                  },
-            );
-          };
-          if (editor.document) void editor.hide(select);
-          else select();
-        }}
+        selectSsh={selectSshConnection}
         newSshTerminal={newSshTerminal}
         canEditSsh={canEditSsh}
         canRemoveSsh={(connection) =>
@@ -2625,6 +2722,43 @@ export function App() {
             )}
           </div>
           <div className="toolbar-actions">
+            {runtime &&
+              selected &&
+              fileDirectory &&
+              !activeSsh &&
+              !activeRedis &&
+              !activeDatabase && (
+                <>
+                  <button
+                    type="button"
+                    className="toolbar-icon-button"
+                    aria-label={javaRunTitle}
+                    title={javaRunTitle}
+                    aria-pressed={javaDirectory === fileDirectory}
+                    onClick={() =>
+                      void changeJavaDirectory(
+                        javaDirectory === fileDirectory ? null : fileDirectory,
+                      )
+                    }
+                  >
+                    <ToolbarIcon name="java" running={!!projectRuns.summary?.java} />
+                  </button>
+                  <button
+                    type="button"
+                    className="toolbar-icon-button"
+                    aria-label={pythonRunTitle}
+                    title={pythonRunTitle}
+                    aria-pressed={pythonDirectory === fileDirectory}
+                    onClick={() =>
+                      void changePythonDirectory(
+                        pythonDirectory === fileDirectory ? null : fileDirectory,
+                      )
+                    }
+                  >
+                    <ToolbarIcon name="python" running={!!projectRuns.summary?.python} />
+                  </button>
+                </>
+              )}
             {roster && !activeRedis && !activeDatabase && (
               <div className="workspace-actions">
                 {chatUsage && (
@@ -3185,6 +3319,48 @@ export function App() {
             </p>
           )}
         </div>
+        {javaDirectory && (
+          <Suspense
+            fallback={
+              <p
+                className="java-help"
+                role="status"
+                hidden={!!activeRedis || !!activeDatabase || !!activeSsh}
+              >
+                {tx("正在读取…")}
+              </p>
+            }
+          >
+            <JavaBuildPanel
+              key={javaDirectory}
+              directory={javaDirectory}
+              visible={!activeRedis && !activeDatabase && !activeSsh}
+              close={() => setJavaDirectory(null)}
+              registerClose={registerJavaClose}
+            />
+          </Suspense>
+        )}
+        {pythonDirectory && (
+          <Suspense
+            fallback={
+              <p
+                className="java-help"
+                role="status"
+                hidden={!!activeRedis || !!activeDatabase || !!activeSsh}
+              >
+                {tx("正在读取…")}
+              </p>
+            }
+          >
+            <PythonRunPanel
+              key={pythonDirectory}
+              directory={pythonDirectory}
+              visible={!activeRedis && !activeDatabase && !activeSsh}
+              close={() => setPythonDirectory(null)}
+              registerClose={registerPythonClose}
+            />
+          </Suspense>
+        )}
       </main>
       {inspectorVisible && directoryOpen && fileDirectory && !activeSsh && (
         <DirectoryPanel
@@ -3567,6 +3743,8 @@ export function App() {
               move={(target) => update((previous) => moveProject(previous, menu.id, target))}
               close={() => setMenu(null)}
               onError={setError}
+              javaBuild={() => void changeJavaDirectory(menuProject.directory, menuProject)}
+              pythonRun={() => void changePythonDirectory(menuProject.directory, menuProject)}
             />
           )}
         </div>

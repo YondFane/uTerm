@@ -15,6 +15,7 @@ const VERSION: u32 = 1;
 const MAX_MESSAGE: usize = 16 * 1024 * 1024;
 const HISTORY_BYTES: usize = 1024 * 1024;
 const MAX_CLOSED_HISTORY: usize = 16_384;
+const MAX_COMPLETED_TASKS: usize = 32;
 
 #[cfg(windows)]
 const DETACHED_BACKGROUND_PROCESS_FLAGS: u32 = 0x0000_0008 | 0x0000_0200;
@@ -60,6 +61,27 @@ pub enum Operation {
     SessionSnapshot,
     SshSessionSnapshot,
     HostStatus,
+    TaskSnapshot,
+    OpenTask {
+        spec: SessionSpec,
+        task: crate::tasks::TaskInfo,
+        launch: crate::tasks::Launch,
+        rows: u16,
+        cols: u16,
+    },
+    Attach {
+        id: String,
+        rows: u16,
+        cols: u16,
+    },
+    StopTask {
+        id: String,
+        generation: String,
+        force: bool,
+    },
+    ClaimTask {
+        id: String,
+    },
     ShutdownIfIdle,
     Open {
         spec: SessionSpec,
@@ -128,8 +150,19 @@ pub struct HostStatus {
     pub executable: PathBuf,
     pub sessions: Vec<HostedSession>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct TaskSession {
+    pub spec: SessionSpec,
+    pub generation: String,
+    pub task: crate::tasks::TaskInfo,
+    pub running: bool,
+    pub code: Option<u32>,
+}
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Reply {
+    Tasks(Vec<TaskSession>),
+    TaskLaunch(crate::tasks::Launch),
     Sessions(Vec<SessionSpec>),
     SessionSnapshot(SessionSnapshot),
     SshSessionSnapshot(SessionSnapshot),
@@ -165,6 +198,20 @@ pub struct Client {
     endpoint: Endpoint,
 }
 impl Client {
+    pub fn require_task_support(&self) -> Result<()> {
+        if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "java-tasks-v1"))
+        {
+            return Ok(());
+        }
+        bail!("JAVA_HOST_UPGRADE_REQUIRED");
+    }
+    pub fn require_task_output_support(&self) -> Result<()> {
+        if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "task-pipe-output-v1"))
+        {
+            return Ok(());
+        }
+        bail!("JAVA_HOST_UPGRADE_REQUIRED");
+    }
     pub fn connect(directory: &Path) -> Result<Self> {
         let endpoint: Endpoint =
             serde_json::from_slice(&std::fs::read(directory.join("endpoint.json"))?)?;
@@ -451,6 +498,8 @@ struct Output {
     parser: vt100::Parser<TerminalReplies>,
     sequence: u64,
     chunks: VecDeque<(u64, Vec<u8>)>,
+    task_log: bool,
+    task_carriage_return: bool,
     bytes: usize,
     exited: bool,
     code: Option<u32>,
@@ -471,6 +520,8 @@ impl Output {
             parser: vt100::Parser::new_with_callbacks(rows, cols, 3000, TerminalReplies::default()),
             sequence: 0,
             chunks: VecDeque::new(),
+            task_log: false,
+            task_carriage_return: false,
             bytes: 0,
             exited: false,
             code: None,
@@ -488,13 +539,26 @@ impl Output {
     fn record(&mut self, event: Event) {
         self.sequence += 1;
         match event {
-            Event::Output { data, .. } => {
+            Event::Output { mut data, .. } => {
+                if self.task_log {
+                    let mut normalized = Vec::with_capacity(data.len());
+                    for byte in data {
+                        if byte == b'\n' && !self.task_carriage_return {
+                            normalized.push(b'\r');
+                        }
+                        self.task_carriage_return = byte == b'\r';
+                        normalized.push(byte);
+                    }
+                    data = normalized;
+                }
                 if self.notifications.feed(&data) {
                     self.pending_notice.get_or_insert_with(Instant::now);
                 }
                 let (rows, cols) = self.parser.screen().size();
                 let parsed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    self.parser.process(&data);
+                    if !self.task_log {
+                        self.parser.process(&data);
+                    }
                 }));
                 if parsed.is_err() {
                     // A malformed or resize-interleaved escape sequence must not take the PTY
@@ -641,6 +705,15 @@ impl Output {
         }
     }
     fn snapshot(&self) -> Vec<u8> {
+        if self.task_log {
+            // Task pipes retain the source bytes; replay them at the current width without grid cropping.
+            // 任务管道保留原始字节，按当前宽度回放，避免网格裁剪。
+            let mut data = b"\x1bc".to_vec();
+            for (_, chunk) in &self.chunks {
+                data.extend_from_slice(chunk);
+            }
+            return data;
+        }
         let screen = self.parser.screen();
         let (rows, cols) = screen.size();
         let mut data = b"\x1bc".to_vec();
@@ -668,6 +741,7 @@ impl Output {
     }
 }
 struct Entry {
+    task: Option<crate::tasks::TaskInfo>,
     spec: SessionSpec,
     generation: String,
     session: Arc<Session>,
@@ -676,6 +750,18 @@ struct Entry {
     activity: Mutex<Option<std::thread::JoinHandle<()>>>,
 }
 impl Entry {
+    fn task_snapshot(&self) -> Option<TaskSession> {
+        let task = self.task.clone()?;
+        let output = lock(&self.output.0);
+        Some(TaskSession {
+            spec: self.spec.clone(),
+            generation: self.generation.clone(),
+            task,
+            running: !output.exited,
+            code: output.code,
+        })
+    }
+
     fn stop_activity(&self) -> Result<()> {
         self.activity_stopped.store(true, Ordering::Release);
         let task = lock(&self.activity).take();
@@ -702,6 +788,29 @@ struct ProcessCache {
 }
 
 impl Host {
+    fn prune_task_history(&self) {
+        // Retain finished tasks for replay, without pruning ordinary terminal sessions.
+        // 保留已完成任务以供回放，且不裁剪普通终端会话。
+        let mut completed: Vec<_> = lock(&self.sessions)
+            .values()
+            .filter_map(|entry| {
+                let task = entry.task.as_ref()?;
+                lock(&entry.output.0)
+                    .exited
+                    .then(|| (task.created, entry.spec.id.clone()))
+            })
+            .collect();
+        if completed.len() <= MAX_COMPLETED_TASKS {
+            return;
+        }
+        completed.sort();
+        let remove = completed.len() - MAX_COMPLETED_TASKS;
+        let mut sessions = lock(&self.sessions);
+        for (_, id) in completed.into_iter().take(remove) {
+            sessions.remove(&id);
+        }
+    }
+
     fn foreground_agent(&self, shell: Option<u32>) -> Result<Option<String>> {
         let Some(shell) = shell else { return Ok(None) };
         let mut cache = lock(&self.processes);
@@ -736,6 +845,7 @@ impl Host {
             crate::ssh::ResolvedTarget,
             Option<crate::ssh_askpass::Endpoint>,
         )>,
+        task: Option<(crate::tasks::TaskInfo, crate::tasks::Launch)>,
     ) -> Result<Arc<Entry>> {
         crate::size(rows, cols)?;
         if spec.id.is_empty() || spec.id.len() > 200 {
@@ -749,6 +859,9 @@ impl Host {
             bail!("Session host is restarting; reconnect before opening a session");
         }
         if let Some(entry) = sessions.get(&spec.id) {
+            if entry.task.is_some() || task.is_some() {
+                bail!("JAVA_TASK_ATTACH_ONLY");
+            }
             if entry.spec != spec {
                 bail!("Session configuration differs from its running process");
             }
@@ -756,6 +869,25 @@ impl Host {
         }
         if !create {
             bail!("SSH_SESSION_MISSING");
+        }
+        if let Some((info, launch)) = &task {
+            launch.validate()?;
+            if spec.ssh.is_some()
+                || spec.agent.is_some()
+                || info.root != launch.root
+                || spec.directory != info.root
+            {
+                bail!("JAVA_TASK_INVALID");
+            }
+            if sessions.values().any(|entry| {
+                entry
+                    .task
+                    .as_ref()
+                    .is_some_and(|value| value.root == info.root)
+                    && !lock(&entry.output.0).exited
+            }) {
+                bail!("JAVA_TASK_RUNNING");
+            }
         }
         if let Some(target) = &spec.ssh {
             target.validate()?;
@@ -785,7 +917,25 @@ impl Host {
         let mut observer = None;
         let mut environment = vec![];
         let mut activity_error = None;
-        let mut command = if let Some(target) = &spec.ssh {
+        let task_info = task.as_ref().map(|(info, _)| info.clone());
+        let capture = if task_info.is_some() {
+            let sink = output.clone();
+            Some(crate::task_output::Capture::start(move |data| {
+                let mut output = lock(&sink.0);
+                output.task_log = true;
+                output.record(Event::Output { sequence: 0, data });
+                output.parser.callbacks_mut().bytes.clear();
+                drop(output);
+                sink.1.notify_all();
+                Ok(())
+            })?)
+        } else {
+            None
+        };
+        let captured = capture.as_ref().map(|capture| capture.connected.clone());
+        let mut command = if let Some((_, launch)) = task {
+            crate::tasks::command(&self.directory, launch)?
+        } else if let Some(target) = &spec.ssh {
             crate::ssh::configured_command(
                 target,
                 configured.as_ref().map(|v| &v.0),
@@ -827,6 +977,10 @@ impl Host {
         for (key, value) in environment {
             command.env(key, value);
         }
+        if let Some(capture) = &capture {
+            capture.configure(&mut command);
+        }
+        let capture = Mutex::new(capture);
         lock(&output.0).activity_error = activity_error;
         if spec.ssh.is_none() {
             command.env("UTERM_DESKTOP_HOST", &self.directory);
@@ -836,6 +990,24 @@ impl Host {
         }
         let session =
             Session::spawn_background(command, &spec.directory, rows, cols, move |event| {
+                if matches!(&event, Event::Output { .. })
+                    && captured
+                        .as_ref()
+                        .is_some_and(|connected| connected.load(Ordering::Acquire))
+                {
+                    return Ok(());
+                }
+                if matches!(&event, Event::Exit { .. }) {
+                    if let Some(capture) = lock(&capture).take() {
+                        if let Err(error) = capture.finish() {
+                            lock(&sink.0).record(Event::Error {
+                                message: format!(
+                                    "任务日志读取失败，请停止任务后重新运行。 {error}"
+                                ),
+                            });
+                        }
+                    }
+                }
                 let mut output = lock(&sink.0);
                 output.record(event);
                 let replies = std::mem::take(&mut output.parser.callbacks_mut().bytes);
@@ -864,6 +1036,7 @@ impl Host {
             }
         });
         let entry = Arc::new(Entry {
+            task: task_info,
             activity_stopped: AtomicBool::new(false),
             activity: Mutex::new(None),
             spec,
@@ -922,6 +1095,58 @@ impl Host {
 
     fn dispatch(&self, operation: Operation) -> Result<Reply> {
         match operation {
+            Operation::ClaimTask { id } => Ok(Reply::TaskLaunch(crate::tasks::take(&id)?)),
+            Operation::TaskSnapshot => Ok(Reply::Tasks(
+                lock(&self.sessions)
+                    .values()
+                    .filter_map(|entry| entry.task_snapshot())
+                    .collect(),
+            )),
+            Operation::OpenTask {
+                spec,
+                task,
+                launch,
+                rows,
+                cols,
+            } => {
+                self.prune_task_history();
+                let entry =
+                    self.open_session(spec, rows, cols, true, None, Some((task, launch)))?;
+                Ok(Reply::Opened {
+                    generation: entry.generation.clone(),
+                })
+            }
+            Operation::Attach { id, rows, cols } => {
+                crate::size(rows, cols)?;
+                let entry = lock(&self.sessions)
+                    .get(&id)
+                    .cloned()
+                    .context("JAVA_TASK_MISSING")?;
+                if entry.task.is_none() {
+                    bail!("JAVA_TASK_INVALID");
+                }
+                Ok(Reply::Opened {
+                    generation: entry.generation.clone(),
+                })
+            }
+            Operation::StopTask {
+                id,
+                generation,
+                force,
+            } => {
+                let entry = self.entry(&id, &generation)?;
+                if entry.task.is_none() {
+                    bail!("JAVA_TASK_INVALID");
+                }
+                if !lock(&entry.output.0).exited {
+                    if force {
+                        entry.session.close()?;
+                    } else {
+                        entry.session.write(vec![3])?;
+                    }
+                }
+                Ok(Reply::Done)
+            }
             Operation::AcknowledgeAgentEvent {
                 id,
                 generation,
@@ -967,6 +1192,8 @@ impl Host {
                         "local-session-list-v1".into(),
                         "local-session-snapshot-v1".into(),
                         "local-host-management-v1".into(),
+                        "java-tasks-v1".into(),
+                        "task-pipe-output-v1".into(),
                     ];
                     if std::env::current_exe()?
                         .file_stem()
@@ -1009,6 +1236,7 @@ impl Host {
                         .values()
                         .filter(|entry| {
                             entry.spec.ssh.is_none()
+                                && entry.task.is_none()
                                 && !lock(&entry.output.0).exited
                                 && !closed.contains(&entry.spec.id)
                         })
@@ -1020,7 +1248,11 @@ impl Host {
             Operation::ListSessions => Ok(Reply::Sessions(
                 lock(&self.sessions)
                     .values()
-                    .filter(|entry| entry.spec.ssh.is_none() && !lock(&entry.output.0).exited)
+                    .filter(|entry| {
+                        entry.spec.ssh.is_none()
+                            && entry.task.is_none()
+                            && !lock(&entry.output.0).exited
+                    })
                     .map(|entry| entry.spec.clone())
                     .collect(),
             )),
@@ -1028,7 +1260,7 @@ impl Host {
                 if spec.ssh.is_some() {
                     bail!("Use OpenSsh for SSH sessions");
                 }
-                let entry = self.open_session(spec, rows, cols, true, None)?;
+                let entry = self.open_session(spec, rows, cols, true, None, None)?;
                 Ok(Reply::Opened {
                     generation: entry.generation.clone(),
                 })
@@ -1043,7 +1275,8 @@ impl Host {
                 if spec.ssh.is_none() {
                     bail!("SSH_INVALID_CONNECTION");
                 }
-                let entry = self.open_session(spec, rows, cols, true, Some((resolved, askpass)))?;
+                let entry =
+                    self.open_session(spec, rows, cols, true, Some((resolved, askpass)), None)?;
                 Ok(Reply::Opened {
                     generation: entry.generation.clone(),
                 })
@@ -1065,7 +1298,7 @@ impl Host {
                 if spec.ssh.is_none() {
                     bail!("SSH_INVALID_CONNECTION");
                 }
-                let entry = self.open_session(spec, rows, cols, create, None)?;
+                let entry = self.open_session(spec, rows, cols, create, None, None)?;
                 Ok(Reply::Opened {
                     generation: entry.generation.clone(),
                 })
@@ -1315,6 +1548,7 @@ mod tests {
                 80,
                 true,
                 None,
+                None,
             )
         });
         let deadline = Instant::now() + Duration::from_secs(10);
@@ -1486,6 +1720,39 @@ mod tests {
         assert_eq!(frame.data, b"after");
         assert!(!frame.exited);
         assert!(frame.error.is_none());
+    }
+
+    #[test]
+    fn long_log_lines_survive_narrowing_and_reopening() {
+        let mut output = Output::new(24, 200, None);
+        output.task_log = true;
+        let line = format!("Starting {} tail-marker 中文\r\n", "x".repeat(140));
+        output.record(Event::Output {
+            sequence: 0,
+            data: line.as_bytes().to_vec(),
+        });
+        output.parser.screen_mut().set_size(24, 100);
+        output.parser.screen_mut().set_size(24, 200);
+        let frame = output.frame(None);
+        assert!(String::from_utf8_lossy(&frame.data).contains("tail-marker"));
+    }
+
+    #[test]
+    fn task_log_replay_preserves_unicode_ansi_and_newlines_across_chunks() {
+        let mut output = Output::new(4, 20, None);
+        output.task_log = true;
+        let source = "\x1b[32m完整日志\x1b[0m\r\nsecond\nthird\r\n";
+        for byte in source.as_bytes() {
+            output.record(Event::Output {
+                sequence: 0,
+                data: vec![*byte],
+            });
+        }
+        let expected = "\x1bc\x1b[32m完整日志\x1b[0m\r\nsecond\r\nthird\r\n";
+        assert_eq!(output.frame(None).data, expected.as_bytes());
+        output.parser.screen_mut().set_size(2, 5);
+        assert_eq!(output.frame(None).data, expected.as_bytes());
+        assert!(output.frame(Some(output.sequence)).data.is_empty());
     }
 
     #[cfg(windows)]

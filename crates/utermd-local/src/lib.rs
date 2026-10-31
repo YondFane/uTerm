@@ -6,6 +6,8 @@ pub mod agents;
 pub mod daemon;
 pub mod ssh;
 pub mod ssh_askpass;
+mod task_output;
+pub mod tasks;
 
 mod process;
 pub use process::{agent_program, resolve_program, shell_command, BackgroundChild};

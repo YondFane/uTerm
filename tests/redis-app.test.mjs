@@ -48,7 +48,11 @@ test("App migrates Redis profiles, isolates the workbench and never closes a loc
         name: "ssh-test-renderers",
         enforce: "pre",
         resolveId(id) {
-          if (id.endsWith("/TerminalWorkspace") || id.endsWith("/DeferredFileEditor"))
+          if (
+            id.endsWith("/TerminalWorkspace") ||
+            id.endsWith("/DeferredFileEditor") ||
+            id.endsWith("/JavaBuildPanel")
+          )
             return "\0ssh-test:" + id.split("/").at(-1);
         },
         load(id) {
@@ -56,6 +60,8 @@ test("App migrates Redis profiles, isolates the workbench and never closes a loc
             return `import React from 'react'; export function TerminalWorkspace(props) { globalThis.redisAppTerminalProps = props; return React.createElement('div', null); }`;
           if (id === "\0ssh-test:DeferredFileEditor")
             return `export function DeferredFileEditor() { return null; }`;
+          if (id === "\0ssh-test:JavaBuildPanel")
+            return `import React from 'react'; export function JavaBuildPanel(props) { globalThis.redisAppJavaProps = props; React.useEffect(() => { globalThis.redisAppJavaMounts = (globalThis.redisAppJavaMounts ?? 0) + 1; }, []); return React.createElement('section', {'data-java-panel':true, hidden:!props.visible}); }`;
         },
       },
     ],
@@ -83,11 +89,22 @@ test("App migrates Redis profiles, isolates the workbench and never closes a loc
   state.groups[0].terminals = [
     { id: "local-session", name: "Local", shell: "default", directory: "/local" },
   ];
+  state.projects = [
+    {
+      id: "java-project",
+      name: "Java App QA",
+      directory: "/project",
+      workspaceId: state.selectedWorkspace,
+      sessions: [],
+      worktrees: [],
+    },
+  ];
   const original = JSON.stringify(state);
   localStorage.setItem(workspaceKey, original);
   localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language: "en" }));
   const calls = [];
   mockIPC((command, args) => {
+    if (command === "project_run_summary") return { java: 0, python: 0 };
     calls.push({ command, args });
     if (command === "runtime_info")
       return {
@@ -101,6 +118,8 @@ test("App migrates Redis profiles, isolates the workbench and never closes a loc
       };
     if (["local_session_list", "ssh_session_list"].includes(command))
       return { sessions: [], closed: [] };
+    if (command === "project_worktrees") return [];
+    if (command === "git_branches") return { current: "main", local: ["main"] };
 
     if (["ssh_files_list", "files_list"].includes(command))
       return { entries: [], partial: false, skipped: 0 };
@@ -153,6 +172,32 @@ test("App migrates Redis profiles, isolates the workbench and never closes a loc
     assert.equal(globalThis.redisAppTerminalProps.closeRequest, null);
     assert.equal(JSON.parse(localStorage.getItem(workspaceKey)).groups[0].terminals.length, 1);
     assert.equal(document.querySelector('section[aria-label="Redis workbench"]').hidden, true);
+    await act(async () => profile.click());
+    const project = [...document.querySelectorAll("button")].find(
+      (button) => button.className === "row-label" && button.textContent.endsWith("Java App QA"),
+    );
+    assert.ok(project);
+    await act(async () =>
+      project.dispatchEvent(
+        new dom.window.MouseEvent("contextmenu", { bubbles: true, clientX: 20, clientY: 20 }),
+      ),
+    );
+    const javaAction = [...document.querySelectorAll('[role="menuitem"]')].find(
+      (button) => button.textContent === "Java build and run",
+    );
+    assert.ok(javaAction);
+    await act(async () => javaAction.click());
+    for (let attempt = 0; attempt < 20 && !globalThis.redisAppJavaProps; attempt++)
+      await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
+    assert.equal(JSON.parse(localStorage.getItem(workspaceKey)).selectedProject, "java-project");
+    assert.equal(globalThis.redisAppJavaProps.visible, true);
+    assert.equal(document.querySelector('section[aria-label="Redis workbench"]').hidden, true);
+    await act(async () => profile.click());
+    assert.equal(globalThis.redisAppJavaProps.visible, false);
+    assert.equal(globalThis.redisAppJavaMounts, 1);
+    await act(async () => project.click());
+    assert.equal(globalThis.redisAppJavaProps.visible, true);
+    assert.equal(globalThis.redisAppJavaMounts, 1);
   } finally {
     await act(async () => root.unmount());
     clearMocks();
@@ -160,5 +205,7 @@ test("App migrates Redis profiles, isolates the workbench and never closes a loc
     dom.window.close();
     delete globalThis.isTauri;
     delete globalThis.redisAppTerminalProps;
+    delete globalThis.redisAppJavaProps;
+    delete globalThis.redisAppJavaMounts;
   }
 });

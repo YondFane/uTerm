@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ToolbarIcon } from "./SidebarIcon";
 import { hasCurrentWorkingDiff, isStaleWorkingDiffError, sideBySideDiff } from "../lib/git-diff";
-import { gitFilePath, sameGitSnapshot } from "../lib/git-snapshot";
+import { gitFilePath, gitReadError, sameGitSnapshot } from "../lib/git-snapshot";
 import type { GitChange, GitSnapshot } from "../lib/git-snapshot";
 import { GitBranchTree } from "./GitBranchTree";
 import { referenceView, type GitReference } from "../lib/git-references";
@@ -239,7 +239,22 @@ export function GitPanel({
           if (selectedChange.current) setDiffRevision((value) => value + 1);
         }
       } catch (reason) {
-        if (!disposed) setError(String(reason));
+        if (!disposed) {
+          const message = gitReadError(reason);
+          setError(message);
+          if (!message) {
+            setSnapshot(null);
+            setSelection(null);
+            setDiff(null);
+            setFiles([]);
+            setCommit(null);
+            setWorkingReference(null);
+            setBase("");
+            setPreview({ full_name: "HEAD", name: "HEAD" });
+            historyPager.current.invalidate();
+            setHistory({ items: [], loading: false, more: false, error: "" });
+          }
+        }
       } finally {
         busy = false;
       }
@@ -312,7 +327,7 @@ export function GitPanel({
         }
       })
       .catch((reason) => {
-        if (!disposed) setError(String(reason));
+        if (!disposed) setError(gitReadError(reason));
       })
       .finally(() => {
         if (!disposed) setLoading(false);
@@ -360,7 +375,7 @@ export function GitPanel({
           setRevision((value) => value + 1);
           return;
         }
-        setError(String(reason));
+        setError(gitReadError(reason));
       });
     return () => {
       request.current++;
@@ -453,7 +468,7 @@ export function GitPanel({
               if (diff)
                 void navigator.clipboard
                   .writeText(diff.text)
-                  .catch((reason) => setError(String(reason)));
+                  .catch((reason) => setError(gitReadError(reason)));
             }}
           >
             {tx("复制 Diff")}
@@ -658,9 +673,9 @@ export function GitPanel({
               </button>
             )}
           </div>
-          {(mutationError || error || (tab === "history" && history.error)) && (
+          {(mutationError || error || (tab === "history" && gitReadError(history.error))) && (
             <p role="alert" className="inspector-message">
-              {localizeMessage(mutationError || error || history.error)}
+              {localizeMessage(mutationError || error || gitReadError(history.error))}
             </p>
           )}
           {mutating && (
@@ -838,7 +853,7 @@ export function GitPanel({
                       {(preview.oid !== null || preview.full_name === "HEAD") &&
                         !commits.length &&
                         !error &&
-                        !history.error &&
+                        !gitReadError(history.error) &&
                         !history.loading && (
                           <p className="inspector-message">{tx("还没有提交。")}</p>
                         )}
