@@ -83,7 +83,9 @@ import { getRuntimeInfo, isDesktop } from "./lib/desktop";
 import type { RuntimeInfo } from "./lib/desktop";
 import { buildTaskbarSnapshot, taskbarSnapshotSignature } from "./lib/taskbar";
 import { useMacosMenu } from "./lib/useMacosMenu";
-import { projectRunTitle, useProjectRunSummary } from "./lib/useProjectRunSummary";
+import { findRunProject, projectRunTitle, useProjectRunSummary } from "./lib/useProjectRunSummary";
+import { ProjectRunButton } from "./components/ProjectRunButton";
+import type { JavaTask } from "./lib/java-build";
 import {
   emptyWorkspace,
   sshTargetFor,
@@ -159,6 +161,10 @@ export function App() {
   const [sidebarVisible, setSidebarVisible] = useState(true);
   const [javaDirectory, setJavaDirectory] = useState<string | null>(null);
   const [pythonDirectory, setPythonDirectory] = useState<string | null>(null);
+  const runPanelSelection = useRef<Pick<
+    Workspace,
+    "selectedWorkspace" | "selectedProject" | "selectedWorktree" | "selectedSession"
+  > | null>(null);
   const preparePythonClose = useRef<(() => Promise<boolean>) | null>(null);
   const registerPythonClose = useCallback((prepare: (() => Promise<boolean>) | null) => {
     preparePythonClose.current = prepare;
@@ -1172,6 +1178,68 @@ export function App() {
   const selectedWorktree = selected?.worktrees?.find(
     (item) => item.id === workspace?.selectedWorktree,
   );
+  const selectedRunDirectory = selectedWorktree?.path ?? selected?.directory ?? null;
+  useEffect(() => {
+    const directory = javaDirectory ?? pythonDirectory;
+    if (!directory) {
+      runPanelSelection.current = null;
+      return;
+    }
+    if (!selectedRunDirectory) return;
+    if (directory === selectedRunDirectory) {
+      runPanelSelection.current = {
+        selectedWorkspace: workspace?.selectedWorkspace,
+        selectedProject: workspace?.selectedProject ?? null,
+        selectedWorktree: workspace?.selectedWorktree,
+        selectedSession: workspace?.selectedSession ?? null,
+      };
+      return;
+    }
+    const previousSelection = runPanelSelection.current;
+    let cancelled = false;
+    // Keep the old draft mounted until saving succeeds; failed transitions restore its project.
+    // 保存成功前保留原草稿组件，切换失败时恢复其所属项目。
+    void (async () => {
+      let ready = false;
+      try {
+        const prepare = javaDirectory ? prepareJavaClose.current : preparePythonClose.current;
+        ready = prepare ? await prepare() : true;
+      } catch {
+        ready = false;
+      }
+      if (cancelled) return;
+      if (ready) {
+        if (javaDirectory) setJavaDirectory(selectedRunDirectory);
+        else setPythonDirectory(selectedRunDirectory);
+      } else {
+        if (
+          previousSelection &&
+          currentWorkspace.current?.projects.some(
+            (project) => project.id === previousSelection.selectedProject,
+          )
+        )
+          if (
+            !update((previous) => ({
+              ...switchWorkspace(previous, previousSelection.selectedWorkspace ?? "local"),
+              ...previousSelection,
+            }))
+          )
+            return;
+        setError(tx("无法切换运行项目，请先完成当前操作或处理配置保存错误。"));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    selectedRunDirectory,
+    javaDirectory,
+    pythonDirectory,
+    workspace?.selectedWorkspace,
+    workspace?.selectedProject,
+    workspace?.selectedWorktree,
+    workspace?.selectedSession,
+  ]);
   const selectedSession = roster?.sessions.find(
     (session) => session.id === workspace?.selectedSession,
   );
@@ -2045,7 +2113,11 @@ export function App() {
     if (editor.document) void editor.hide(reveal);
     else reveal();
   }
-  async function changeJavaDirectory(directory: string | null, project?: Project) {
+  async function changeJavaDirectory(
+    directory: string | null,
+    project?: Project,
+    worktree?: string,
+  ) {
     // Finish the Java draft save before the editor guard can switch the selected project.
     // 先保存 Java 草稿，再通过编辑器保护切换所选项目。
     if (javaDirectory && prepareJavaClose.current && !(await prepareJavaClose.current())) return;
@@ -2053,7 +2125,16 @@ export function App() {
       return;
     const reveal = () => {
       if (project) {
-        if (!update((previous) => selectProject(previous, project.id))) return;
+        if (
+          !update((previous) =>
+            selectProject(
+              switchWorkspace(previous, project.workspaceId ?? "local"),
+              project.id,
+              worktree,
+            ),
+          )
+        )
+          return;
         setSelectedRedisId(null);
         setSelectedDatabaseId(null);
         setSelectedSshId(null);
@@ -2065,13 +2146,26 @@ export function App() {
       await editor.hide(reveal);
     else reveal();
   }
-  async function changePythonDirectory(directory: string | null, project?: Project) {
+  async function changePythonDirectory(
+    directory: string | null,
+    project?: Project,
+    worktree?: string,
+  ) {
     if (pythonDirectory && preparePythonClose.current && !(await preparePythonClose.current()))
       return;
     if (javaDirectory && prepareJavaClose.current && !(await prepareJavaClose.current())) return;
     const reveal = () => {
       if (project) {
-        if (!update((previous) => selectProject(previous, project.id))) return;
+        if (
+          !update((previous) =>
+            selectProject(
+              switchWorkspace(previous, project.workspaceId ?? "local"),
+              project.id,
+              worktree,
+            ),
+          )
+        )
+          return;
         setSelectedRedisId(null);
         setSelectedDatabaseId(null);
         setSelectedSshId(null);
@@ -2082,6 +2176,18 @@ export function App() {
     if (project && editor.document && editor.document.directory !== directory)
       await editor.hide(reveal);
     else reveal();
+  }
+  function revealProjectRun(language: "java" | "python", task: JavaTask) {
+    const state = currentWorkspace.current;
+    const target = state && findRunProject(state, task.task.root);
+    if (!target) {
+      setError(tx("此运行项目已从工作区移除，请先重新添加项目。"));
+      return;
+    }
+    const directory = target.worktree?.path ?? target.project.directory;
+    if (language === "java")
+      void changeJavaDirectory(directory, target.project, target.worktree?.id);
+    else void changePythonDirectory(directory, target.project, target.worktree?.id);
   }
   function focusWorkspaceContent() {
     setSelectedRedisId(null);
@@ -2270,6 +2376,7 @@ export function App() {
         }}
         workspace={workspace}
         runtime={runtime}
+        projectRuns={projectRuns}
         update={update}
         focus={focusWorkspaceContent}
         menu={setMenu}
@@ -2729,34 +2836,30 @@ export function App() {
               !activeRedis &&
               !activeDatabase && (
                 <>
-                  <button
-                    type="button"
-                    className="toolbar-icon-button"
-                    aria-label={javaRunTitle}
+                  <ProjectRunButton
+                    language="java"
                     title={javaRunTitle}
-                    aria-pressed={javaDirectory === fileDirectory}
+                    running={!!projectRuns.summary?.java}
+                    pressed={javaDirectory === fileDirectory}
                     onClick={() =>
                       void changeJavaDirectory(
                         javaDirectory === fileDirectory ? null : fileDirectory,
                       )
                     }
-                  >
-                    <ToolbarIcon name="java" running={!!projectRuns.summary?.java} />
-                  </button>
-                  <button
-                    type="button"
-                    className="toolbar-icon-button"
-                    aria-label={pythonRunTitle}
+                    onSelect={(task) => revealProjectRun("java", task)}
+                  />
+                  <ProjectRunButton
+                    language="python"
                     title={pythonRunTitle}
-                    aria-pressed={pythonDirectory === fileDirectory}
+                    running={!!projectRuns.summary?.python}
+                    pressed={pythonDirectory === fileDirectory}
                     onClick={() =>
                       void changePythonDirectory(
                         pythonDirectory === fileDirectory ? null : fileDirectory,
                       )
                     }
-                  >
-                    <ToolbarIcon name="python" running={!!projectRuns.summary?.python} />
-                  </button>
+                    onSelect={(task) => revealProjectRun("python", task)}
+                  />
                 </>
               )}
             {roster && !activeRedis && !activeDatabase && (
@@ -3319,13 +3422,28 @@ export function App() {
             </p>
           )}
         </div>
+        {(javaDirectory || pythonDirectory) &&
+          selectedRunDirectory &&
+          (javaDirectory ?? pythonDirectory) !== selectedRunDirectory &&
+          !activeRedis &&
+          !activeDatabase &&
+          !activeSsh && (
+            <p className="java-help" role="status">
+              {tx("正在切换运行项目…")}
+            </p>
+          )}
         {javaDirectory && (
           <Suspense
             fallback={
               <p
                 className="java-help"
                 role="status"
-                hidden={!!activeRedis || !!activeDatabase || !!activeSsh}
+                hidden={
+                  !!activeRedis ||
+                  !!activeDatabase ||
+                  !!activeSsh ||
+                  javaDirectory !== selectedRunDirectory
+                }
               >
                 {tx("正在读取…")}
               </p>
@@ -3334,7 +3452,12 @@ export function App() {
             <JavaBuildPanel
               key={javaDirectory}
               directory={javaDirectory}
-              visible={!activeRedis && !activeDatabase && !activeSsh}
+              visible={
+                !activeRedis &&
+                !activeDatabase &&
+                !activeSsh &&
+                javaDirectory === selectedRunDirectory
+              }
               close={() => setJavaDirectory(null)}
               registerClose={registerJavaClose}
             />
@@ -3346,7 +3469,12 @@ export function App() {
               <p
                 className="java-help"
                 role="status"
-                hidden={!!activeRedis || !!activeDatabase || !!activeSsh}
+                hidden={
+                  !!activeRedis ||
+                  !!activeDatabase ||
+                  !!activeSsh ||
+                  pythonDirectory !== selectedRunDirectory
+                }
               >
                 {tx("正在读取…")}
               </p>
@@ -3355,7 +3483,12 @@ export function App() {
             <PythonRunPanel
               key={pythonDirectory}
               directory={pythonDirectory}
-              visible={!activeRedis && !activeDatabase && !activeSsh}
+              visible={
+                !activeRedis &&
+                !activeDatabase &&
+                !activeSsh &&
+                pythonDirectory === selectedRunDirectory
+              }
               close={() => setPythonDirectory(null)}
               registerClose={registerPythonClose}
             />

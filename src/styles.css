@@ -320,6 +320,10 @@
   flex: 1;
   min-height: 80px;
 }
+.java-task-output .terminal {
+  background: var(--theme-background);
+  color: var(--theme-foreground);
+}
 .java-task-output > .java-help {
   padding: 12px;
 }
@@ -740,6 +744,40 @@ select:focus-visible {
   text-align: left;
   border: none;
   background: transparent;
+}
+
+.project-run-menu {
+  width: min(360px, calc(100vw - 16px));
+  max-height: min(300px, calc(100vh - 16px));
+}
+.project-run-menu p {
+  margin: 6px 8px;
+  color: var(--ui-muted);
+}
+.project-run-menu .project-run-menu-heading {
+  color: var(--ui-text);
+  font-weight: 600;
+}
+.project-run-menu button {
+  padding: 8px;
+}
+.project-run-menu-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.project-run-menu-name .status-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: #7dbd94;
+}
+.project-run-menu small {
+  display: block;
+  margin-top: 3px;
+  color: var(--ui-muted);
+  overflow-wrap: anywhere;
 }
 
 .git-rollback-dialog {
@@ -1172,6 +1210,10 @@ select:focus-visible {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.sidebar-resource-icon .toolbar-icon {
+  width: 16px;
+  height: 16px;
 }
 .sidebar [data-resource-active] {
   --resource-ring-color: #62d98a;
@@ -2888,7 +2930,7 @@ select:focus-visible {
 .toolbar-actions :is(.toolbar-icon-java, .toolbar-icon-python) {
   color: #959595;
 }
-.toolbar-actions .toolbar-icon-java.toolbar-icon-running {
+:is(.toolbar-actions, .sidebar-resource-icon) .toolbar-icon-java.toolbar-icon-running {
   color: #6db33f;
 }
 .toolbar-icon-python.toolbar-icon-running .python-blue {
@@ -2900,7 +2942,9 @@ select:focus-visible {
 :root[data-appearance="light"] .toolbar-actions :is(.toolbar-icon-java, .toolbar-icon-python) {
   color: #82796e;
 }
-:root[data-appearance="light"] .toolbar-actions .toolbar-icon-java.toolbar-icon-running {
+:root[data-appearance="light"]
+  :is(.toolbar-actions, .sidebar-resource-icon)
+  .toolbar-icon-java.toolbar-icon-running {
   color: #4f8b25;
 }
 :root[data-appearance="light"] .toolbar-icon-python.toolbar-icon-running .python-blue {
