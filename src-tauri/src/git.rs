@@ -151,19 +151,46 @@ pub struct Snapshot {
     changes: Vec<Change>,
     truncated: bool,
 }
-fn snapshot(directory: &str) -> Result<Snapshot, String> {
-    let root = root(directory)?;
-    let branch = text(run(&root, &["branch", "--show-current"])?);
-    let raw = run(
-        &root,
-        &["status", "--porcelain=v1", "-z", "--untracked-files=all"],
-    )?;
+fn working_changes(directory: &str, selected_only: bool) -> Result<(Vec<Change>, bool), String> {
+    let mut arguments = vec!["status", "--porcelain=v1", "-z", "--untracked-files=all"];
+    if selected_only {
+        arguments.extend(["--", "."]);
+    }
+    let raw = run(directory, &arguments)?;
     if raw.len() > LIMIT {
         return Err("变更列表过大，请在终端中查看 git status。".into());
     }
     let mut changes = status(&raw)?;
     let truncated = changes.len() > 2000;
     changes.truncate(2000);
+    Ok((changes, truncated))
+}
+#[derive(Serialize)]
+pub struct FileStatus {
+    root: String,
+    changes: Vec<Change>,
+    truncated: bool,
+}
+fn file_status(directory: &str) -> Result<Option<FileStatus>, String> {
+    let path = Path::new(directory);
+    if !path.is_dir() {
+        return Err("项目目录不存在。".into());
+    }
+    if !path.ancestors().any(|parent| parent.join(".git").exists()) {
+        return Ok(None);
+    }
+    let root = root(directory)?;
+    let (changes, truncated) = working_changes(directory, true)?;
+    Ok(Some(FileStatus {
+        root,
+        changes,
+        truncated,
+    }))
+}
+fn snapshot(directory: &str) -> Result<Snapshot, String> {
+    let root = root(directory)?;
+    let branch = text(run(&root, &["branch", "--show-current"])?);
+    let (changes, truncated) = working_changes(&root, false)?;
     let references = text(run(
         &root,
         &[
@@ -849,6 +876,12 @@ pub async fn git_branch_action(
 }
 
 #[tauri::command]
+pub async fn git_file_status(directory: String) -> Result<Option<FileStatus>, String> {
+    tauri::async_runtime::spawn_blocking(move || file_status(&directory))
+        .await
+        .map_err(|error| error.to_string())?
+}
+#[tauri::command]
 pub async fn git_snapshot(directory: String) -> Result<Snapshot, String> {
     tauri::async_runtime::spawn_blocking(move || snapshot(&directory))
         .await
@@ -1424,6 +1457,82 @@ pub async fn git_working_comparison(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn file_status_scopes_changes_to_the_selected_subdirectory_without_writing_index() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        std::fs::create_dir_all(temp.path().join("src/nested")).unwrap();
+        std::fs::write(temp.path().join("src/modified.txt"), "before\n").unwrap();
+        std::fs::write(temp.path().join("src/removed.txt"), "remove\n").unwrap();
+        std::fs::write(temp.path().join(".gitignore"), "*.tmp\n").unwrap();
+        run(directory, &["add", "."]).unwrap();
+        fixture_commit(directory);
+        std::fs::write(temp.path().join("file.txt"), "outside selected root\n").unwrap();
+        std::fs::write(temp.path().join("src/modified.txt"), "staged\n").unwrap();
+        run(directory, &["add", "src/modified.txt"]).unwrap();
+        std::fs::write(temp.path().join("src/modified.txt"), "working\n").unwrap();
+        std::fs::remove_file(temp.path().join("src/removed.txt")).unwrap();
+        std::fs::write(temp.path().join("src/nested/中文 & %.txt"), "new\n").unwrap();
+        std::fs::write(temp.path().join("src/ignored.tmp"), "ignored\n").unwrap();
+        let before = std::fs::read(temp.path().join(".git/index")).unwrap();
+        let selected = temp.path().join("src");
+        let result = file_status(selected.to_str().unwrap()).unwrap().unwrap();
+        assert!(!result.truncated);
+        assert_eq!(result.changes.len(), 3);
+        assert!(result
+            .changes
+            .iter()
+            .all(|change| change.path.starts_with("src/")));
+        let modified = result
+            .changes
+            .iter()
+            .find(|change| change.path == "src/modified.txt")
+            .unwrap();
+        assert_eq!((&*modified.index, &*modified.working), ("M", "M"));
+        assert!(result
+            .changes
+            .iter()
+            .any(|change| change.path == "src/removed.txt" && change.working == "D"));
+        assert!(result
+            .changes
+            .iter()
+            .any(|change| change.path == "src/nested/中文 & %.txt" && change.index == "?"));
+        assert_eq!(
+            std::fs::read(temp.path().join(".git/index")).unwrap(),
+            before
+        );
+    }
+    #[test]
+    fn file_status_handles_non_repositories_and_repositories_without_commits() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().to_str().unwrap();
+        assert!(file_status(directory).unwrap().is_none());
+        assert!(file_status(temp.path().join("missing").to_str().unwrap()).is_err());
+        run(directory, &["init", "--initial-branch=main"]).unwrap();
+        std::fs::write(temp.path().join("new.txt"), "new\n").unwrap();
+        let result = file_status(directory).unwrap().unwrap();
+        assert_eq!(result.changes.len(), 1);
+        assert_eq!(result.changes[0].path, "new.txt");
+        assert_eq!(result.changes[0].index, "?");
+    }
+    #[test]
+    fn file_status_reports_embedded_untracked_repositories_as_directory_entries() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let nested = temp.path().join("vendor/nested");
+        std::fs::create_dir_all(&nested).unwrap();
+        run(nested.to_str().unwrap(), &["init", "--initial-branch=main"]).unwrap();
+        std::fs::write(nested.join("new.txt"), "nested fixture\n").unwrap();
+        for selected in [temp.path().to_path_buf(), temp.path().join("vendor")] {
+            let result = file_status(selected.to_str().unwrap()).unwrap().unwrap();
+            let entry = result
+                .changes
+                .iter()
+                .find(|change| change.path == "vendor/nested/")
+                .unwrap();
+            assert_eq!((&*entry.index, &*entry.working), ("?", "?"));
+        }
+    }
     fn target(directory: &str, action: &str, reference: &str) -> ReferenceAction {
         ReferenceAction {
             action: action.into(),

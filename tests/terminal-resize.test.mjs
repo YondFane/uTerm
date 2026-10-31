@@ -25,6 +25,7 @@ function fitFixture(t) {
   const terminal = { write: (_, callback) => writes.push(callback) };
   const container = { clientWidth: 800, clientHeight: 500 };
   const errors = [];
+  const order = [];
   let replaying = false;
   let fits = 0;
   let failure;
@@ -34,9 +35,11 @@ function fitFixture(t) {
     () => {
       if (failure) throw failure;
       fits++;
+      order.push("fit");
     },
     () => !replaying,
     (reason) => errors.push(reason),
+    () => order.push("afterFit"),
   );
   t.after(() => layout.dispose());
   return {
@@ -44,6 +47,7 @@ function fitFixture(t) {
     container,
     writes,
     errors,
+    order,
     observe: () => observe(),
     replay: (value) => (replaying = value),
     fail: (value) => (failure = value),
@@ -63,8 +67,10 @@ test("continuous layout drags keep one grid until sizes settle and old output is
   t.mock.timers.tick(104);
   assert.equal(value.writes.length, 1);
   assert.equal(value.fits(), 0);
+  assert.deepEqual(value.order, []);
   value.consume();
   assert.equal(value.fits(), 1);
+  assert.deepEqual(value.order, ["fit", "afterFit"]);
 });
 
 test("a later layout invalidates a fit waiting behind terminal output", (t) => {

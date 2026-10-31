@@ -11,7 +11,10 @@ mod downloads;
 mod files;
 mod git;
 mod github;
+mod java;
+mod java_components;
 mod projects;
+mod python;
 mod redis;
 mod redis_credentials;
 mod sessions;
@@ -191,6 +194,26 @@ fn main() {
     }
     let mut arguments = std::env::args_os().skip(1);
     let mode = arguments.next();
+    if mode.as_deref() == Some(std::ffi::OsStr::new("--local-task")) {
+        let result = (|| {
+            let directory = arguments
+                .next()
+                .or_else(|| std::env::var_os("UTERM_TASK_ROOT"))
+                .ok_or_else(|| anyhow::anyhow!("JAVA_TASK_INVALID"))?;
+            let id = arguments
+                .next()
+                .or_else(|| std::env::var_os("UTERM_TASK_ID"))
+                .ok_or_else(|| anyhow::anyhow!("JAVA_TASK_INVALID"))?;
+            utermd_local::tasks::run(std::path::Path::new(&directory), &id.to_string_lossy())
+        })();
+        std::process::exit(match result {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("{error:#}");
+                1
+            }
+        });
+    }
     if mode.as_deref() == Some(std::ffi::OsStr::new("--control")) {
         #[cfg(windows)]
         {
@@ -366,7 +389,27 @@ fn main() {
         .manage(redis::RedisState::default())
         .manage(database::DatabaseState::default())
         .manage(database_components::Components::default())
+        .manage(java_components::Components::default())
         .invoke_handler(tauri::generate_handler![
+            sessions::project_run_summary,
+            python::python_configuration,
+            python::python_save_configuration,
+            python::python_detect_interpreters,
+            python::python_project,
+            python::python_select_path,
+            python::python_start,
+            python::python_tasks,
+            python::python_stop,
+            java::java_configuration,
+            java::java_detect_jdks,
+            java::java_register_jdk,
+            java::java_select_path,
+            java::java_save_configuration,
+            java::java_project,
+            java::java_tasks,
+            java::java_start,
+            java::java_stop,
+            java_components::java_components,
             database_components::database_components,
             database::database_connect,
             database::database_request,
@@ -448,6 +491,7 @@ fn main() {
             git::git_branch_action,
             git::git_switch_branch,
             git::git_snapshot,
+            git::git_file_status,
             git::git_rollback_file,
             git::git_diff,
             git::git_history,

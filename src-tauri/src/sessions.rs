@@ -1,5 +1,5 @@
-use serde::Deserialize;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Condvar, Mutex, OnceLock,
@@ -10,7 +10,7 @@ use tauri::{
     Manager,
 };
 use utermd_local::daemon::{
-    Client, Frame, HostStatus, Operation, Reply, SessionSnapshot, SessionSpec,
+    Client, Frame, HostStatus, Operation, Reply, SessionSnapshot, SessionSpec, TaskSession,
 };
 
 pub struct Link {
@@ -34,14 +34,14 @@ pub struct Sessions {
     links: Mutex<HashMap<String, Arc<Link>>>,
 }
 
-fn local_root(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
+pub(crate) fn local_root(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     app.path()
         .app_data_dir()
         .map(|path| path.join("local-daemon-v1"))
         .map_err(|error| error.to_string())
 }
 
-fn local_client(app: &tauri::AppHandle, state: &Sessions) -> Result<Client, String> {
+pub(crate) fn local_client(app: &tauri::AppHandle, state: &Sessions) -> Result<Client, String> {
     let _guard = state.lifecycle.lock().map_err(|error| error.to_string())?;
     let root = local_root(app)?;
     let executable = state.host_executable(&root)?;
@@ -128,6 +128,8 @@ impl Sessions {
 
 #[derive(Deserialize)]
 pub struct StartRequest {
+    #[serde(default)]
+    existing_only: bool,
     id: String,
     attachment: String,
     directory: String,
@@ -138,6 +140,54 @@ pub struct StartRequest {
     create: bool,
     rows: u16,
     cols: u16,
+}
+
+#[derive(Debug, Default, PartialEq, Serialize)]
+pub struct ProjectRunSummary {
+    java: usize,
+    python: usize,
+}
+
+fn summarize_project_runs(tasks: Vec<TaskSession>) -> ProjectRunSummary {
+    let mut java = HashSet::new();
+    let mut python = HashSet::new();
+    for task in tasks.into_iter().filter(|task| task.running) {
+        if task.task.action == "run" {
+            java.insert(task.task.root);
+        } else if task.task.action == "python:run" || task.task.action.starts_with("python:run|") {
+            python.insert(task.task.root);
+        }
+    }
+    ProjectRunSummary {
+        java: java.len(),
+        python: python.len(),
+    }
+}
+
+fn read_project_run_summary(root: &std::path::Path) -> Result<ProjectRunSummary, String> {
+    // Status reads must neither launch a host nor depend on a still-existing project directory.
+    // 状态读取既不能启动宿主，也不能依赖项目目录仍然存在。
+    if !root.join("endpoint.json").exists() {
+        return Ok(ProjectRunSummary::default());
+    }
+    let client = Client::connect(root).map_err(|error| error.to_string())?;
+    client
+        .require_task_support()
+        .map_err(|error| error.to_string())?;
+    match client
+        .request(Operation::TaskSnapshot)
+        .map_err(|error| error.to_string())?
+    {
+        Reply::Tasks(tasks) => Ok(summarize_project_runs(tasks)),
+        _ => Err("Invalid project run summary".into()),
+    }
+}
+
+#[tauri::command]
+pub async fn project_run_summary(app: tauri::AppHandle) -> Result<ProjectRunSummary, String> {
+    tauri::async_runtime::spawn_blocking(move || read_project_run_summary(&local_root(&app)?))
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -196,6 +246,7 @@ pub async fn start_session(
     events: Channel<Response>,
 ) -> Result<(), String> {
     let StartRequest {
+        existing_only,
         id,
         attachment,
         directory,
@@ -253,7 +304,16 @@ pub async fn start_session(
             agent,
             ssh,
         };
-        let operation = if let Some(prepared) = prepared {
+        let operation = if existing_only {
+            client
+                .require_task_support()
+                .map_err(|error| error.to_string())?;
+            Operation::Attach {
+                id: id.clone(),
+                rows,
+                cols,
+            }
+        } else if let Some(prepared) = prepared {
             client
                 .require_ssh_config_support()
                 .map_err(|error| error.to_string())?;
@@ -622,6 +682,58 @@ fn stage_host(
 #[cfg(test)]
 mod update_tests {
     use super::*;
+    #[test]
+    fn project_runs_count_live_language_roots_and_exclude_builds_and_history() {
+        let task = |root: &str, action: &str, running: bool| TaskSession {
+            spec: SessionSpec {
+                id: uuid::Uuid::new_v4().to_string(),
+                directory: root.into(),
+                shell: "default".into(),
+                agent: None,
+                ssh: None,
+            },
+            generation: "generation".into(),
+            task: utermd_local::tasks::TaskInfo {
+                root: root.into(),
+                name: "project".into(),
+                action: action.into(),
+                created: 0,
+            },
+            running,
+            code: None,
+        };
+        assert_eq!(
+            summarize_project_runs(vec![
+                task("/java", "run", true),
+                task("/java", "run", true),
+                task("/java-worktree", "run", true),
+                task("/python", "python:run", true),
+                task("/python-web", "python:run|http://127.0.0.1:8000", true),
+                task("/python-web", "python:run|http://127.0.0.1:8000", true),
+                task("/build", "build", true),
+                task("/test", "test", true),
+                task("/install", "install", true),
+                task("/unknown", "python:other", true),
+                task("/old-java", "run", false),
+                task("/old-python", "python:run", false),
+            ]),
+            ProjectRunSummary { java: 2, python: 2 }
+        );
+        assert_eq!(summarize_project_runs(vec![]), ProjectRunSummary::default());
+    }
+
+    #[test]
+    fn project_run_discovery_without_a_host_does_not_create_one() {
+        let root = tempfile::tempdir().unwrap();
+        assert_eq!(
+            read_project_run_summary(root.path()).unwrap(),
+            ProjectRunSummary::default()
+        );
+        assert_eq!(std::fs::read_dir(root.path()).unwrap().count(), 0);
+        std::fs::write(root.path().join("endpoint.json"), "broken").unwrap();
+        assert!(read_project_run_summary(root.path()).is_err());
+    }
+
     #[test]
     fn binary_frame_preserves_metadata_and_raw_output() {
         let frame = Frame {

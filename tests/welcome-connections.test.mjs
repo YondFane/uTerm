@@ -79,6 +79,7 @@ test("welcome connection actions follow visibility and open the existing dialogs
     let resolveRuntime;
     let controlReady;
     mockIPC((command) => {
+      if (command === "project_run_summary") return { java: 0, python: 0 };
       calls.push(command);
       if (command === "control_wait")
         return new Promise((resolve) => {

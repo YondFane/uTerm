@@ -1,0 +1,27 @@
+Optional Java development components / 可选 Java 开发组件
+
+The main installer contains the pinned catalog only. JDK and Maven archives are
+downloaded or imported on request; their LICENSE and NOTICE files remain in the
+installed component directories.
+主安装包仅包含固定版本清单。JDK 与 Maven 归档按需下载或导入，其 LICENSE 和
+NOTICE 文件保留在所安装的组件目录内。
+
+Eclipse Temurin OpenJDK: https://adoptium.net/
+Source: https://github.com/adoptium/temurin-build
+License: GPL-2.0 with the Classpath Exception and bundled third-party notices.
+
+Azul Zulu OpenJDK 8 for macOS Apple Silicon: https://www.azul.com/downloads/
+Source: https://github.com/zulu-openjdk/zulu-openjdk
+License: GPL-2.0 with the Classpath Exception and bundled third-party notices.
+
+Apache Maven: https://maven.apache.org/
+Source: https://github.com/apache/maven
+License: Apache-2.0 and bundled third-party notices.
+
+scripts/java-components.mjs refreshes the catalog from official package metadata.
+Maven's archive is verified against the publisher's SHA-512 before its SHA-256
+and exact size enter the catalog. Runtime installation requires the pinned size
+and SHA-256 and does not resolve mutable latest-version endpoints.
+scripts/java-components.mjs 从官方包元数据刷新清单。Maven 归档先通过发布方 SHA-512
+校验，再将 SHA-256 与准确大小写入清单。安装时验证固定大小及 SHA-256，不查询可变的
+最新版本接口。

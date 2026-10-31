@@ -147,6 +147,11 @@ export function SessionIcon({ agent }: { agent?: SessionConfig["agent"] }) {
 }
 
 const toolbarPaths = {
+  folder: "M3 6h6l2 2h10v12H3ZM3 6V4h6l2 2h10v2",
+  copy: "M8 8h13v13H8ZM16 8V3H3v13h5",
+  python:
+    "M12 3H8a3 3 0 0 0-3 3v3h8v2H5a3 3 0 0 0-3 3v1a3 3 0 0 0 3 3h3v-4h8V6a3 3 0 0 0-3-3Zm0 18h4a3 3 0 0 0 3-3v-3h-8v-2h8a3 3 0 0 0 3-3V9a3 3 0 0 0-3-3h-1v8h-8v4a3 3 0 0 0 3 3M8 6h.01M16 18h.01",
+  java: "M12 2 3.34 7v10L12 22l8.66-5V7ZM12 6v6M8.6 8.8a5 5 0 1 0 6.8 0",
   swap: "M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4",
   compare: "M12 3v18M3 7h6L6 4m3 3-3 3m15 7h-6l3-3m-3 3 3 3",
   previous: "m14 6-6 6 6 6",
@@ -175,7 +180,13 @@ const toolbarPaths = {
   link: "M9 15l6-6m-5-3 2-2a5 5 0 0 1 7 7l-2 2m-3 5-2 2a5 5 0 0 1-7-7l2-2",
   restart: "M20 7v5h-5m5 0a8 8 0 1 0-2 6",
 } as const;
-export function ToolbarIcon({ name }: { name: keyof typeof toolbarPaths | "git" }) {
+export function ToolbarIcon({
+  name,
+  running = false,
+}: {
+  name: keyof typeof toolbarPaths | "git";
+  running?: boolean;
+}) {
   useUiLanguage();
 
   if (name === "git") return <SidebarIcon name="branch" />;
@@ -194,7 +205,7 @@ export function ToolbarIcon({ name }: { name: keyof typeof toolbarPaths | "git" 
     );
   return (
     <svg
-      className="toolbar-icon"
+      className={`toolbar-icon toolbar-icon-${name}${running ? " toolbar-icon-running" : ""}`}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -204,7 +215,20 @@ export function ToolbarIcon({ name }: { name: keyof typeof toolbarPaths | "git" 
       aria-hidden="true"
       focusable="false"
     >
-      <path d={toolbarPaths[name]} />
+      {name === "python" ? (
+        <>
+          <path
+            className="python-blue"
+            d="M12 3H8a3 3 0 0 0-3 3v3h8v2H5a3 3 0 0 0-3 3v1a3 3 0 0 0 3 3h3v-4h8V6a3 3 0 0 0-3-3ZM8 6h.01"
+          />
+          <path
+            className="python-yellow"
+            d="M12 21h4a3 3 0 0 0 3-3v-3h-8v-2h8a3 3 0 0 0 3-3V9a3 3 0 0 0-3-3h-1v8H8v4a3 3 0 0 0 3 3M16 18h.01"
+          />
+        </>
+      ) : (
+        <path d={toolbarPaths[name]} />
+      )}
     </svg>
   );
 }

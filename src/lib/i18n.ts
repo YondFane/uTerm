@@ -1,6 +1,8 @@
 // uTerm ships Simplified Chinese and English only. / uTerm 仅提供简体中文与英文。
 import { messages } from "./i18n-messages.ts";
 import { backendMessages } from "./i18n-backend.ts";
+import { javaMessages } from "./i18n-java.ts";
+import { pythonMessages } from "./i18n-python.ts";
 export const supportedLanguages = ["zh-Hans", "en"] as const;
 
 export type SupportedLanguage = (typeof supportedLanguages)[number];
@@ -37,6 +39,8 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
   en: {
     ...messages,
     ...backendMessages,
+    ...javaMessages,
+    ...pythonMessages,
     打开文件: "Open file",
     回滚文件: "Roll back file",
     确认回滚: "Confirm rollback",

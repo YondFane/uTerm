@@ -8,6 +8,7 @@ type AcceleratedRenderer = ITerminalAddon & {
 export function attachTerminalRenderer(
   terminal: Terminal,
   createRenderer: () => AcceleratedRenderer,
+  onDisposed?: () => void,
 ): () => void {
   let renderer: AcceleratedRenderer | undefined;
   let contextLoss: IDisposable | undefined;
@@ -17,6 +18,7 @@ export function attachTerminalRenderer(
     disposed = true;
     contextLoss?.dispose();
     renderer?.dispose();
+    onDisposed?.();
   }
   try {
     renderer = createRenderer();
@@ -31,3 +33,57 @@ export function attachTerminalRenderer(
   }
   return dispose;
 }
+
+/** Retain recent hidden renderers without evicting visible split panes. / 保留最近隐藏的渲染器，不回收可见分屏。 */
+export function createTerminalRendererPool(maxIdle = 3, idleMs = 15000) {
+  const idle = new Map<object, () => void>();
+  return {
+    register(terminal: Terminal, createRenderer: () => AcceleratedRenderer) {
+      const key = {};
+      let visible = false;
+      let disposed = false;
+      let release: (() => void) | undefined;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      function removeIdle() {
+        clearTimeout(timer);
+        timer = undefined;
+        idle.delete(key);
+      }
+      function evict() {
+        removeIdle();
+        const previous = release;
+        release = undefined;
+        previous?.();
+      }
+      return {
+        setVisible(next: boolean) {
+          if (disposed || next === visible) return;
+          visible = next;
+          removeIdle();
+          if (visible) {
+            if (!release) {
+              let failed = false;
+              const attached = attachTerminalRenderer(terminal, createRenderer, () => {
+                failed = true;
+                release = undefined;
+                removeIdle();
+              });
+              if (!failed) release = attached;
+            }
+          } else if (release) {
+            idle.set(key, evict);
+            timer = setTimeout(evict, idleMs);
+            while (idle.size > maxIdle) idle.values().next().value?.();
+          }
+        },
+        dispose() {
+          if (disposed) return;
+          disposed = true;
+          evict();
+        },
+      };
+    },
+  };
+}
+
+export const terminalRendererPool = createTerminalRendererPool();

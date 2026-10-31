@@ -1,0 +1,113 @@
+{
+  "windows-x64": {
+    "maven": {
+      "version": "3.10.0",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.zip",
+      "sha256": "1f6d9909266510f039f59aa0e13dcd2c66da85f043e56276e41f2918f8bddaff",
+      "size": 10102082,
+      "filename": "apache-maven-3.10.0-bin.zip"
+    },
+    "jdk-8": {
+      "version": "jdk8u504-b01",
+      "url": "https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u504-b01/OpenJDK8U-jdk_x64_windows_hotspot_8u504b01.zip",
+      "sha256": "ea43d46ede95b51e44a12c66711706cddc762e0a766c54bccea18954e902b2aa",
+      "size": 106457258,
+      "filename": "OpenJDK8U-jdk_x64_windows_hotspot_8u504b01.zip"
+    },
+    "jdk-11": {
+      "version": "jdk-11.0.32.1+1",
+      "url": "https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.32.1%2B1/OpenJDK11U-jdk_x64_windows_hotspot_11.0.32.1_1.zip",
+      "sha256": "d5008f02174c1ad21c10407cbf104815cb390ec4c263d53946e8d0507d7a77f9",
+      "size": 199461714,
+      "filename": "OpenJDK11U-jdk_x64_windows_hotspot_11.0.32.1_1.zip"
+    },
+    "jdk-17": {
+      "version": "jdk-17.0.20.1+1",
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.20.1%2B1/OpenJDK17U-jdk_x64_windows_hotspot_17.0.20.1_1.zip",
+      "sha256": "e53a79c3c3d86865bd7e787903884331068e71321714ffd44f145785affc7cb0",
+      "size": 190817615,
+      "filename": "OpenJDK17U-jdk_x64_windows_hotspot_17.0.20.1_1.zip"
+    },
+    "jdk-21": {
+      "version": "jdk-21.0.13+9",
+      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip",
+      "sha256": "a4dbaa05fca4bd89d84584e58c459bd732efebb1722af80ab13c6516832004f9",
+      "size": 205421281,
+      "filename": "OpenJDK21U-jdk_x64_windows_hotspot_21.0.13_9.zip"
+    }
+  },
+  "mac-x64": {
+    "maven": {
+      "version": "3.10.0",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.zip",
+      "sha256": "1f6d9909266510f039f59aa0e13dcd2c66da85f043e56276e41f2918f8bddaff",
+      "size": 10102082,
+      "filename": "apache-maven-3.10.0-bin.zip"
+    },
+    "jdk-8": {
+      "version": "jdk8u504-b01",
+      "url": "https://github.com/adoptium/temurin8-binaries/releases/download/jdk8u504-b01/OpenJDK8U-jdk_x64_mac_hotspot_8u504b01.tar.gz",
+      "sha256": "4b4518a2060c98c0ed195947fa29c8f5aa7f1c608817e8ad1850719517f11ac0",
+      "size": 108027045,
+      "filename": "OpenJDK8U-jdk_x64_mac_hotspot_8u504b01.tar.gz"
+    },
+    "jdk-11": {
+      "version": "jdk-11.0.32.1+1",
+      "url": "https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.32.1%2B1/OpenJDK11U-jdk_x64_mac_hotspot_11.0.32.1_1.tar.gz",
+      "sha256": "03de26f0d11ec3e6365e0352d9fcfaff447be35a2b2f36ee1ffb6063980343f5",
+      "size": 187338099,
+      "filename": "OpenJDK11U-jdk_x64_mac_hotspot_11.0.32.1_1.tar.gz"
+    },
+    "jdk-17": {
+      "version": "jdk-17.0.21+9",
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21%2B9/OpenJDK17U-jdk_x64_mac_hotspot_17.0.21_9.tar.gz",
+      "sha256": "868f5c672b3389fdbe48e44f94ae170f01668b1401360944fc7159d7cc9772cc",
+      "size": 180879475,
+      "filename": "OpenJDK17U-jdk_x64_mac_hotspot_17.0.21_9.tar.gz"
+    },
+    "jdk-21": {
+      "version": "jdk-21.0.13+9",
+      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_x64_mac_hotspot_21.0.13_9.tar.gz",
+      "sha256": "9aa1d1c17ae5467a022679e7e0af5c00797d94ac462ed1a46f4db07a8a34a6dd",
+      "size": 193957782,
+      "filename": "OpenJDK21U-jdk_x64_mac_hotspot_21.0.13_9.tar.gz"
+    }
+  },
+  "mac-aarch64": {
+    "maven": {
+      "version": "3.10.0",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/3.10.0/apache-maven-3.10.0-bin.zip",
+      "sha256": "1f6d9909266510f039f59aa0e13dcd2c66da85f043e56276e41f2918f8bddaff",
+      "size": 10102082,
+      "filename": "apache-maven-3.10.0-bin.zip"
+    },
+    "jdk-8": {
+      "version": "Zulu 8.0.512",
+      "url": "https://cdn.azul.com/zulu/bin/zulu8.98.0.107-ca-jdk8.0.512-macosx_aarch64.tar.gz",
+      "sha256": "f26e2a91062542cf22ef2171b2556e1c3f42cf87cf174258b3df7840365892aa",
+      "size": 103745000,
+      "filename": "zulu8.98.0.107-ca-jdk8.0.512-macosx_aarch64.tar.gz"
+    },
+    "jdk-11": {
+      "version": "jdk-11.0.32.1+1",
+      "url": "https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.32.1%2B1/OpenJDK11U-jdk_aarch64_mac_hotspot_11.0.32.1_1.tar.gz",
+      "sha256": "c487a1c3a56588b3a32d0d07cdd526bf3d401c4b8422be772ca178bfcd647f3f",
+      "size": 184651486,
+      "filename": "OpenJDK11U-jdk_aarch64_mac_hotspot_11.0.32.1_1.tar.gz"
+    },
+    "jdk-17": {
+      "version": "jdk-17.0.21+9",
+      "url": "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21%2B9/OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.21_9.tar.gz",
+      "sha256": "78b08c7f5a0598242d5719c022e19479cb4a3aa45c37c19726a757a469ed1c15",
+      "size": 186192554,
+      "filename": "OpenJDK17U-jdk_aarch64_mac_hotspot_17.0.21_9.tar.gz"
+    },
+    "jdk-21": {
+      "version": "jdk-21.0.13+9",
+      "url": "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.13%2B9/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.13_9.tar.gz",
+      "sha256": "bf036b35b071bfb2f54f2c0af8ee8d88afa95ee6eb3dce02c0f94cfc2524d04a",
+      "size": 199754598,
+      "filename": "OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.13_9.tar.gz"
+    }
+  }
+}

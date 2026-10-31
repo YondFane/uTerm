@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-29
+updated: 2026-10-31
 ---
 
 # uTerm feature guide
@@ -20,6 +20,8 @@ updated: 2026-10-29
 - [SSH and remote files](#ssh-and-remote-files)
 - [Redis connections and workbench](#redis-connections-and-workbench)
 - [Files and source control](#files-and-source-control)
+- [Java and Maven builds](#java-and-maven-builds)
+- [Python projects and logs](#python-projects-and-logs)
 - [Agents and settings](#agents-and-settings)
 - [Interface](#interface)
 - [Architecture](#architecture)
@@ -1243,6 +1245,53 @@ Connected, busy or dirty profiles cannot be edited or removed.
 
 ## Files and source control
 
+### Git change colors in the file tree
+
+**Files → File tree** colors changed files and their parent folders in local Git projects, including
+changes in the index and working directory. Collapsed folders also show changes inside them. The
+letter on the right and the hover description identify the status alongside its color.
+
+| Marker | Status                           | Color |
+| ------ | -------------------------------- | ----- |
+| M      | Modified, including type changes | Amber |
+| A      | Added or copied                  | Green |
+| ?      | Untracked                        | Green |
+| R      | Renamed                          | Blue  |
+| D      | Deleted item                     | Red   |
+| U      | Merge conflict                   | Red   |
+
+Mixed folders use this priority: conflict, modified, renamed, deleted, added, untracked. A renamed
+file marks its new location and the old location's parent folders. Deleted files do not create
+placeholder rows; their remaining parent folders carry the status. Untracked embedded repositories
+mark their directory and ancestors. Clean files use the normal color.
+
+Status refreshes about every four seconds after the previous read finishes, on window focus, with
+Refresh files and after file operations. Updating colors retains expanded folders. Selecting a
+repository subdirectory marks only paths inside that selection; Worktree roots are supported.
+Repeated manual refreshes wait for an unfinished status read of the same root before querying again.
+
+Only the first 2,000 selected-root Git changes are marked. A notice identifies truncated results.
+Read failures clear stale colors and show an error while leaving the file list usable. Non-Git
+directories, SSH files, Quick open and Project search keep their existing presentation.
+
+#### Validation and limits
+
+- Windows path/state checks cover both Git columns, conflict combinations, rename/copy handling,
+  parent priority, selected-root boundaries, drive/UNC paths and case-sensitive POSIX names. Nine
+  component checks cover shared reads, retained expansion, clearing/recovery, errors, truncation,
+  stale-root responses, serialized manual refresh, view-switch isolation, focus/timer cleanup and
+  canceling operations on colored rows.
+- The regular backend suite passes 131 checks with nine optional checks ignored. Real temporary Git
+  repositories verify non-Git/unborn repositories, staged/working/untracked/deleted files, selected
+  subdirectories, untracked embedded repositories and unchanged index bytes. File operations, menus
+  and bilingual UI regressions, TypeScript/production build, isolated desktop build, localization,
+  formatting and docs checks pass.
+- The isolated Windows app (`sh.uterm.desktop.qa.gittree`) reads real files and Git status. Native
+  checks cover all six markers, collapsed/expanded ancestors, Chinese filenames, dark/light themes,
+  English status descriptions, Windows extended-path subdirectories and automatic clearing after
+  restoring files while keeping folders expanded. macOS/Linux runtime and real UNC shares remain
+  unverified.
+
 ### Opening changed files
 
 In Git → Changes, right-click a file under Staged or Working directory and choose Open file to open
@@ -1357,6 +1406,19 @@ local references. Tags support browsing and creation bases.
 
 Background reference refreshes retain the current Git view and diff selection. Selecting a reference
 opens its history.
+
+For a directory outside a Git repository, branch, change and history reads leave an empty view
+without displaying Git's fatal diagnostic. Previously loaded repository data is cleared; the file
+tree drops Git decorations and the top branch selector is hidden. Permission, repository corruption
+and other read or action failures remain visible.
+
+Windows regression checks cover plain-directory diagnostics, clearing stale Git/GitHub data,
+repository recovery and preservation of permission errors, alongside branch operations, refreshes
+and file-status lifecycle checks. An isolated native app (`sh.uterm.desktop.qa.java`) uses a bounded
+Git-discovery fixture to verify the file view, hidden top branch selector, branch/Changes/History
+views and GitHub empty list without fatal diagnostics. TypeScript/production and isolated desktop
+builds, localization, formatting and documentation checks pass. This checks local reads and UI;
+credential-dependent GitHub operations and macOS/Linux runtime acceptance remain outside this check.
 
 Tree navigation supports arrows and Home/End. Right-click or Shift+F10 opens a menu headed by the
 full target name. Menu actions use that target, including when another reference is previewed.
@@ -1633,7 +1695,9 @@ running.
   tab remains available to return from a file to that session.
 
 - Opening another file adds a tab; reopening the same directory/path selects its existing tab. File
-  tabs show an unsaved marker and a close button on the right.
+  tabs show an unsaved marker. File and Git diff close buttons appear when hovering over their tab
+  or navigating its controls with the keyboard. Their space stays reserved to keep tab widths
+  stable. Devices without hover keep the close buttons visible.
 
 - Closing a background file leaves the active view unchanged; closing the active file returns to the
   selected terminal or welcome page. Terminal and Agent tabs, and terminal pane headers, have no
@@ -1658,6 +1722,12 @@ running.
   resize fallback and observer cleanup. TypeScript, production/desktop builds, formatting,
   localization and documentation checks pass. Production builds retain the existing large-chunk
   warning.
+
+- Close-button visibility is verified in the isolated Windows app (`sh.uterm.desktop.qa.tabhover`)
+  with the real tab bar and file/diff fixtures: hidden away from the pointer, visible on hover or
+  keyboard focus, stable tab widths, retained unsaved markers and Enter to close. Both tab/menu
+  component checks, production/isolated desktop builds, formatting and documentation checks pass.
+  Hover behavior on macOS/Linux and non-hover devices remains unverified.
 
 - An isolated Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.compacttabs`) runs the real tab bar
   with file/session/diff fixtures. Native clicks, keyboard input and screenshot inspection verify 28
@@ -1738,6 +1808,9 @@ focused initially; Cancel or Escape closes the dialog and returns focus to the d
 The visible file tree automatically refreshes its root and expanded folders five seconds after each
 directory read completes. Manual Refresh files remains available.
 
+Empty folders remain visible and expandable; their contents stay blank without an empty-directory
+message. Directory read errors and partial-list warnings remain visible.
+
 Refresh retains expanded folders, scroll position and inline name inputs; it does not reload editor
 contents. Slow reads do not overlap within a folder’s refresh cycle, and collapsing a folder,
 changing projects or closing the panel cancels its timer and ignores late results.
@@ -1749,6 +1822,8 @@ Quick-open and content-search results are not periodically queried.
 - Component tests cover updated listings, scheduling after completion and timer cleanup; frontend
   tests, TypeScript/production build, formatting, localization and documentation checks pass on
   macOS. Native timing and Windows runtime acceptance remain pending.
+- The Windows file-tree refresh regression, scoped formatting and documentation checks pass. Native
+  empty-folder visual acceptance remains pending.
 
 ### File-operation errors
 
@@ -1920,7 +1995,9 @@ unsaved drafts for recovery.
 Markdown is sanitized before rendering; PDF canvas dimensions are bounded. Git views include status,
 diffs and commits, with worktree management.
 
-GitHub integration requires the user's credentials and access.
+GitHub integration requires the user's credentials and access. A non-Git directory leaves the list
+empty without displaying Git's fatal diagnostic or retaining a previous repository selection. Other
+discovery and GitHub operation failures remain visible.
 
 ### View on GitLab
 
@@ -1945,6 +2022,375 @@ visible.
   and visible error when the directory is not a Git repository.
 
 - Authenticated GitLab access and Windows runtime acceptance remain unverified.
+
+## Java and Maven builds
+
+### Build and run a project
+
+Open a local project and choose **Java build and run** from its project menu or the toolbar (Spring
+Boot hexagon/power icon). The bottom panel keeps the current file or terminal above its
+configuration and task output. Expand the panel when more room is needed; hiding it saves its
+configuration and leaves running tasks attached to the background host.
+
+The toolbar summarizes running projects across all local projects and Worktrees managed by this
+app's background host. The Java icon turns Spring green while any Development run or JAR run task is
+alive, including preparation steps in that run. Standalone builds, tests and installs do not light
+it up. The Python icon turns blue/yellow while any Python run task is alive. Otherwise the icons are
+gray; light appearance uses darker colors for contrast.
+
+Switching projects or closing a run panel keeps these indicators active. Tooltips and accessible
+labels give each language's running project count. Panel selection keeps its separate background
+highlight, and clicking an icon opens the current project's panel. Status refreshes every 1.5
+seconds after the previous request finishes, and immediately on returning to the window. A stop
+request leaves the icon colored until the host confirms exit; other running projects keep it lit.
+
+The indicators describe running tasks, not web-service readiness. Commands started manually in an
+ordinary terminal are excluded. Reopening the app reads the host's current state without opening a
+run panel. A failed status query keeps the last confirmed colors and marks the tooltip unavailable,
+with the last confirmed count; a later successful query updates both.
+
+Drag the panel's top divider up or down to adjust its height within the available workspace, leaving
+room for the content above. Double-click the divider to restore the default height. With the divider
+focused, Up/Down changes height and Home/End selects its minimum/maximum. Expand and Restore keep
+the adjusted height while the panel stays open; reopening a closed panel starts at the default
+height. Drag previews run once per animation frame without reconnecting the task terminal, and
+terminal fitting waits for the drag to settle.
+
+1. Select a module declared by the root `pom.xml`. Project discovery reads at most 200 modules
+   inside the selected root; aggregator POMs can build but cannot run.
+2. Select Java 8, 11, 17 or 21 and the Maven configuration source. Maven profiles and Spring
+   profiles are separate fields. Advanced settings provide a full JDK path, JVM/application
+   arguments, environment variables, Skip tests and Maven offline mode.
+3. Choose Package, Test or Install, then Build; or choose Development run / JAR run, then Run.
+
+In Development run, **Main class** detects public static `void main(String[])` entry points in Java
+classes under each module's `src/main/java`. A unique class annotated with `@SpringBootApplication`
+takes priority over ordinary main classes. Multiple preferred candidates require a selection;
+**Enter manually** accepts a fully qualified class name. Manual and selected values are saved with
+the project's run configuration. Changing the target module resets the entry selection. Detect again
+refreshes candidates without replacing the current draft.
+
+Automatic mode shows the unique candidate and passes it to Maven with `spring-boot.run.main-class`.
+With no candidates, Maven retains its own entry-point discovery. Scanning skips comments, literals,
+nested classes and symbolic links, and is limited to 5,000 entries, 64 directory levels, 1 MiB per
+Java file and 32 MiB per module. Custom source directories, generated sources, Kotlin and composed
+annotations require manual entry. JAR run uses the packaged manifest; this field does not override
+an existing JAR's entry point.
+
+Development run uses `spring-boot:run`. A selected submodule in a multi-module project first
+installs its reactor dependencies with tests skipped. JAR run packages the selected reactor and runs
+the only ordinary JAR in the module's `target`; when several artifacts exist, select one explicitly.
+Selecting an existing JAR runs it with the selected JDK without rebuilding, resolving Maven or
+downloading a Wrapper distribution. Sources, Javadoc and test JARs are excluded from automatic
+selection.
+
+Run configuration saves before starting a task and when hiding or switching the run panel. Failed
+saves remain visible and keep the draft. Environment variables apply to this run only and never
+enter the saved configuration. Arguments are split with literal quote handling, without shell
+expansion; Windows paths, spaces and shell metacharacters remain argument data.
+
+Saving or preparing a task locks configuration edits and prevents closing or switching the run
+panel. Switching to SSH, Redis or database views retains the local Java draft until returning. Check
+again refreshes project/tool detection without discarding an existing draft. To adopt saved values
+after a conflict, explicitly choose Reload saved configuration.
+
+### System-wide and project Maven configuration
+
+**Settings → Maven settings** edits system-wide defaults. The run panel's **Maven configuration →
+Settings** also offers Project configuration. Both configure local/managed Maven, Maven home,
+`settings.xml`, the local repository and preference for the project's Wrapper.
+
+Choose opens a native folder picker for Maven home and the local repository, or an XML file picker
+for `settings.xml`. The selected path updates the active global/project draft; canceling retains the
+previous value. Save applies the draft to subsequent builds.
+
+- Projects inherit the system-wide configuration by default. First choosing Project configuration
+  copies the current defaults; saved project overrides remain independent from later global edits.
+- Inherit system-wide configuration retains the saved override for later reuse. Worktree roots have
+  separate configuration. No POM, system environment variable or existing `settings.xml` is
+  rewritten.
+- A blank settings path uses Maven's defaults; a blank repository uses the chosen settings file or
+  Maven's default. An explicit repository is passed as `maven.repo.local`. Configuration writes use
+  revision checks and atomic replacement; Reload recovers from another window's update. The combined
+  configuration is limited to 2 MiB; a rejected save retains the previous readable file.
+- Changes apply to the next build/run. Existing processes continue with their original environment.
+- Saving one scope retains unsaved edits in the other scope. Maven saves prevent closing the
+  settings panel or changing its category until the write finishes.
+
+The runner supports Maven 3 and launches its Classworlds entry point directly with the selected JDK.
+It reads `.mvn/jvm.config`, Maven's `.mvn/maven.config` and `MAVEN_OPTS`; it does not execute custom
+`mvnw` or `mavenrc` scripts. Wrapper mode follows `distributionUrl` in
+`.mvn/wrapper/maven-wrapper.properties`, accepts HTTPS ZIP distributions and verifies
+`distributionSha256Sum` when provided. Initial Wrapper use requires network access; downloaded
+distributions are cached separately. Wrapper configuration and discovery never trigger a download
+before the user starts a build/run.
+
+### Optional JDK and Maven tools
+
+**Settings → Java development tools**, also available through Manage tools in the run panel,
+downloads or imports only selected components. A full JDK needs both `java` and `javac`; the
+database JRE cannot compile projects. Choose a local JDK home or use detection through `JAVA_HOME`,
+`PATH` and platform installation directories. Selecting a macOS `.jdk` bundle resolves its
+`Contents/Home` directory before JDK validation.
+
+Detected JDKs lists full local installation paths separately from optional managed downloads. The
+run panel also shows the selected or detected JDK home. Detect local JDKs updates detection without
+installing tools. Repeated detection sources for the same JDK home appear only once.
+
+Choose **Add local JDK**, enter its home or use **Choose JDK home**, then choose **Add**.
+Registration validates a complete JDK 8/11/17/21 and saves its canonical path across restarts.
+Invalid paths keep the form open with an error. The run panel's JDK selector lists manually added
+installations by version and path, including multiple installations of the same version.
+
+**Remove record** removes only the saved reference; it preserves JDK files and project overrides. An
+installation still found automatically remains listed. Missing or invalid registered homes stay
+visible as unavailable and can be removed; they cannot be selected as a detected runtime. Up to 64
+manual records are stored separately from Maven/project configuration, preserving existing draft
+revision checks. Invalid saved records are reported without overwriting the file.
+
+Local paths in the run header, working-directory footer, project/Worktree tooltips and Java/Maven
+fields display without the Windows `\\?\` prefix. UNC paths retain their `\\server\share` form;
+filesystem operations and project identity retain their original path values.
+
+Windows x64 and macOS Intel/Apple Silicon have pinned JDK 8/11/17/21 and Maven components. Temurin
+is used except for native Apple Silicon Java 8, which uses Zulu. Archive versions, exact byte sizes
+and SHA-256 live in `components/java/catalog.json`; installed archives retain their licenses and
+notices. The main installer contains none of these tool archives or project dependencies.
+
+Downloads show progress, retain interrupted prefixes and allow bounded retries, cancellation, manual
+download and verified offline installation. Verified downloads remain cached after installation
+failure or cancellation. Large-file copying and verification run on background workers. Extraction
+bounds paths, file count and expanded size; only internal archive links may be materialized for
+development tools. Installation uses versioned directories and does not change system Java or Maven.
+Main application builds still need no JDK. Maintainers refresh the catalog with
+`node scripts/java-components.mjs` using curl and vendor metadata; the helper checks Maven against
+Apache's SHA-512 before recording SHA-256.
+
+### Task lifetime and validation
+
+Each project root runs one task at a time. Stop requests interruption; Force stop terminates its
+process tree. Rerun first stops the previous task and waits for exit. Process state and exit code
+are shown independently of whether a web service is ready.
+
+Stop lets the process finish its interruption cleanup and preserves its final logs. Later steps in
+the same task do not start after interruption. Force stop remains available while cleanup is
+pending.
+
+Some Windows Java processes do not exit after the interruption request. Use Force stop before
+rerunning when the process remains active; the action remains available after a failed Stop request.
+
+Build and run logs retain the most recent 1 MiB of process output. Long lines wrap to the current
+pane width without losing their endings when the panel is narrowed, expanded or reopened. Java
+standard streams use UTF-8, including Spring Boot processes launched by Maven; application file
+encoding remains configurable through JVM arguments. Output already discarded by an older host
+cannot be reconstructed. Starting tasks requires a host with pipe-output support; an older host
+reports the existing upgrade instruction while its running tasks remain accessible and stoppable.
+
+Task log replay shows the most recent retained text when the host snapshot ends in a blank screen
+after a terminal resize. Reopening the panel or switching task history does not require new output
+to reveal existing logs. Later text follows the log tail without jumping through padded blank rows;
+manual scrolling cancels this automatic following. This adjusts the viewport only, preserving the
+received bytes, acknowledgement order, session identity and running process. Ordinary interactive
+terminals and alternate-screen applications retain their existing viewport behavior.
+
+Quitting detaches from the host. Reopen the same project's Java panel to restore its task and
+ordered terminal replay. Tasks stay separate from ordinary terminal discovery; the host retains a
+bounded history of completed task output for its current lifetime. An older host without task
+support is reported without stopping existing sessions.
+
+- Windows native-host regression verifies that ordinary Stop keeps a task running throughout child
+  cleanup, retains final stdout/stderr and prevents later task steps from starting. It also verifies
+  Force stop during pending cleanup. Real Java and Python processes complete two-second shutdown
+  handlers before exit. The Agent enablement, notification and database App regressions pass with
+  valid run-summary IPC fixtures. The host suite passes 50 checks with three optional checks
+  ignored; backend checks pass 144 with ten ignored. These checks do not establish macOS/Linux
+  runtime acceptance.
+- Windows JDK registration checks cover invalid paths, native-picker cancellation, concurrent
+  detection, add/remove and saving a specific registered JDK in a run configuration. Backend checks
+  cover persistent deduplication, removal without deleting JDK files, Maven-file preservation and
+  rejection of damaged records. The isolated native Windows app (`sh.uterm.desktop.qa.java`)
+  verifies the folder picker, visible invalid-directory errors, adding JDK 21, restoration after
+  restart, selection by path and removal back to automatic detection. Four focused frontend tests
+  and 136 backend tests pass, with nine optional backend checks ignored; TypeScript, localization,
+  formatting, documentation and production/isolated desktop builds pass. macOS/Linux runtime
+  acceptance and registering JDK 8/11/17 remain unverified.
+- Run-indicator validation on Windows passes 28 focused frontend checks and two backend summary
+  checks, covering global counts, build/history exclusion, slow requests, project changes, stale
+  queries and recovery. The isolated native app (`sh.uterm.desktop.qa.runicons`) runs a real JDK 21
+  JAR and Python script, verifies both icons at 17 px in dark/light appearance, switches projects
+  with panels closed, restores both indicators after an app restart, and checks independent stops
+  back to gray. TypeScript, localization, formatting, documentation and production/desktop/isolated
+  builds pass. The full frontend suite passes 341 checks with 11 optional/platform checks skipped;
+  the backend suite passes 144 checks with ten ignored. macOS/Linux visual acceptance remains
+  pending.
+- Windows panel-height checks cover pointer previews, size limits, cancellation, keyboard bounds,
+  double-click reset and Expand/Restore. The React task-terminal probe remains mounted during a
+  committed drag and is not rerendered for pointer previews. An isolated native Windows app
+  (`sh.uterm.desktop.qa.java`) verifies dragging from 380 to 550 px, restoring the same height after
+  expansion, double-click reset and keyboard minimum/maximum heights. TypeScript, localization,
+  formatting and production/isolated desktop builds pass. macOS/Linux pointer acceptance and
+  resizing with a live Spring Boot task remain unverified.
+- Windows task-log capture checks cover long stdout/stderr lines through narrow/wide reattachment,
+  UTF-8 chunk boundaries, ANSI/newline retention, authenticated loopback capture, final-output drain
+  before exit and force-stop disconnects without false read errors. The isolated native app
+  (`sh.uterm.desktop.qa.tasklogs`) runs Spring Boot 3.5.7 on JDK 21 through both an existing JAR and
+  Maven 3.10.0 development startup. Both modes preserve 300-character messages and Chinese endings;
+  JAR checks also cover pane-width changes, closing/reopening and HTTP readiness. The user's running
+  service is left untouched. The host suite passes 48 checks with two optional checks ignored;
+  backend checks pass 137 with nine optional checks ignored; 16 focused frontend checks pass.
+  Production/isolated desktop builds, formatting, localization and documentation checks pass.
+  macOS/Linux runtime and JDK 8/11/17 redirected-stream encoding remain unverified.
+- Windows task-log viewport regressions cover blank-padded replay, short and one-row panes, fitting
+  after replay, subsequent output, manual scrolling and alternate-screen preservation. An isolated
+  native Tauri/WebView2 app (`sh.uterm.desktop.qa.taskreplay`) feeds 80 synthetic startup log lines
+  followed by a cleared screen to the real TerminalView. The unadjusted buffer reproduces the blank
+  viewport; the repaired view shows the latest retained lines after panel reopening and task
+  switching, retains earlier context as new text arrives, and respects manual scrolling. Replay
+  acknowledgements continue without fixture errors. This checks simulated frames, not a new live
+  Spring Boot service; the user's running service was not stopped. macOS/Linux runtime acceptance
+  for this viewport adjustment remains pending.
+- Focused Windows checks cover literal arguments/environment variables, Maven scope isolation,
+  retained overrides, save-conflict drafts, bounded POM parsing and root escapes. Native host
+  integration covers task attachment identity, output retention, force stopping and separation from
+  shell discovery, including Unicode, spaces, ampersands and percent signs.
+- Windows automated validation passes: 32 focused frontend checks, 131 backend checks with nine
+  optional checks ignored, and 42 host checks with two platform/optional checks ignored. Frontend
+  coverage includes Java drafts, pending saves, stale task/tool responses, installation
+  cancellation, file-tree lifecycle and guarded database/Redis/SSH/project transitions. Backend
+  regressions cover configuration size rejection, verified-cache retention, native Maven arguments,
+  JDK bundle paths, environment key casing and archive link bounds. Host checks cover generated-JAR
+  selection after packaging, GUI-subsystem console attachment, duplicate-task rejection, stale Stop
+  generations and live-task restart protection. Formatting, localization, production frontend build
+  and isolated desktop build pass. The existing large-chunk warning remains.
+- Main-class checks on Windows cover annotated and ordinary entry points, comments/literals, nested
+  classes, source bounds, legacy configuration defaults, invalid names and Maven arguments. React
+  checks cover unique/multiple candidates, manual drafts, module changes and saving. Isolated native
+  QA (`sh.uterm.desktop.qa.java`) verifies automatic identification, candidate selection, manual
+  input and restoration after reopening. Selecting a second Spring Boot entry starts that class and
+  its HTTP endpoint returns the expected response. macOS/Linux runtime acceptance and nonstandard
+  source layouts remain outside this native check.
+- Windows path-selection regressions cover global/project scope, picker cancellation and failures,
+  pending-operation protection, local JDK paths and clean drive/UNC display while preserving
+  original IPC paths. The isolated native Java QA app verifies XML filtering, Chinese/space filename
+  selection, folder-picker cancellation and detected JDK 21 at its actual local path.
+- The isolated Windows native app (`sh.uterm.desktop.qa.java`) verifies the bottom/expanded panel,
+  Maven global/project saves, narrow-window scrolling and task reattachment. A real Spring Boot
+  3.5.7 fixture with Maven 3.10.0 and local JDK 21 packages successfully and serves HTTP through
+  development and JAR launches. HTTP checks confirm Spring profiles and literal Chinese, ampersand
+  and percent-sign arguments/environment values; JAR checks also confirm JVM properties and that
+  temporary environment values are absent after reopening the panel. Managed Maven download,
+  checksum verification, installation and development launch also pass in the isolated app. The
+  service survives application exit; authenticated host reattachment preserves its task generation,
+  and force stopping releases the service port. An existing JAR also serves HTTP with nonexistent
+  Maven home and settings paths, preserving its Spring profile, literal arguments and JVM property.
+- The unsigned Windows x64 Java QA NSIS installer measurement is 9,419,233 bytes (9.42 MB, 8.98
+  MiB), excluding optional tools and Maven dependencies. macOS runtime acceptance, Java 8/11/17
+  execution, Wrapper downloads and full multi-module Spring Boot service acceptance remain pending.
+  Gradle, Java language services, breakpoint debugging and remote deployment are outside this panel.
+
+## Python projects and logs
+
+### Configure and run a project
+
+Open a local project or Worktree, then choose **Python run** from its project menu or the workspace
+toolbar. The bottom panel keeps the editor available above the configuration and live logs. Drag its
+top separator to resize it, or expand it. Switching between the Java and Python panels saves the
+current configuration; hiding a panel leaves its task running.
+
+The toolbar's Python icon is blue/yellow while any managed Python project or Worktree has a live
+script, module, FastAPI, Flask or Django task. It stays colored across project and panel changes,
+and returns to gray after the last Python task exits. Its tooltip gives the global running project
+count; this indicates process lifetime rather than web-service readiness.
+
+1. Select an existing Python 3 executable. Detection lists project `.venv` and `venv` environments
+   before executables on PATH; a saved selection is retained. Enter a path or use the file picker
+   for another environment. Virtual environments run directly without an activation script.
+2. Select Python script, Python module, FastAPI, Flask or Django. Choose a project-relative script,
+   a module such as `package.main`, or an application entry such as `app.main:app`. Flask also
+   accepts a factory such as `app:create_app()`.
+3. Set the working directory. Web presets expose an IP address, port and Auto reload. Defaults are
+   `127.0.0.1:8000`, or port `5000` for Flask; reload and Flask's interactive debugger start
+   disabled.
+4. Choose **Run**. The panel shows the process state, exit code and live stdout/stderr, including
+   exception tracebacks. A web task offers its configured service URL; it is not a readiness check.
+
+Detection reads Python sources without importing the project. It suggests simple top-level
+`FastAPI(...)` / `Flask(...)` assignments and `manage.py`, and leaves ambiguous entries for explicit
+selection. It skips virtual environments, generated directories and symlinks. Scanning is bounded to
+2,000 entries, six directory levels, 128 KiB per source file, 2 MiB total source and approximately
+100 candidates. Aliases, multiline declarations and nonstandard layouts may need a manual entry.
+
+**Advanced settings** provides literal application arguments and temporary environment variables.
+Arguments respect quoting without shell expansion. Environment variables are not saved; UTF-8 and
+unbuffered Python output are enforced for readable live logs. Missing interpreters or framework
+packages produce visible errors. Prepare Python and dependencies outside the panel: uTerm does not
+download Python, create environments or install packages, and includes none of them in its
+installer.
+
+### Configuration, logs and task lifetime
+
+Each project root, including each Worktree, saves one run configuration in uTerm's application data.
+Atomic saves check revisions. A failed or conflicting save retains the draft and existing file;
+**Check again** refreshes detection without replacing edits or accepting a newer revision. Use
+**Reload saved configuration** explicitly after a conflict. Saves and task preparation block panel
+switching and repeated actions. SSH, Redis and database views retain the hidden local draft.
+
+The log view is read-only and supports search, copying retained plain text and Auto follow.
+Scrolling up pauses following; checking Auto follow resumes it. Task history remains available after
+exit, with the most recent 1 MiB per task and up to 32 completed tasks across the host. History is
+bounded and lives only for the host's lifetime; it is not a permanent log archive or a file-log
+viewer.
+
+Use an ordinary terminal for programs requiring interactive input or a Python REPL; the log panel
+does not accept process input.
+
+Each root allows one task at a time, shared with Java; different roots run independently. **Stop**
+requests interruption, and **Force stop** terminates the process tree, including reload workers.
+Some Windows processes remain alive after interruption; use Force stop before running again.
+
+Ordinary Stop allows interruption cleanup to finish and retains the process's final logs. The task
+stays running during cleanup, and Force stop remains available.
+
+**Run again** waits for the old task to exit before starting another. Quitting uTerm detaches;
+reopen the project's Python panel to reattach to the same task and replay its output. Ordinary
+terminal discovery excludes these tasks.
+
+Older hosts without task/pipe support report an upgrade error while existing sessions remain
+running. Script and working-directory selection cannot escape the selected root; the interpreter may
+be installed elsewhere.
+
+#### Python validation on Windows
+
+- Shared toolbar-indicator validation uses a real Java JAR and Python script in
+  `sh.uterm.desktop.qa.runicons`. Dark/light 17 px rendering, global counts across project changes
+  and closed panels, restoration after app restart and independent stopping back to gray pass.
+  Focused frontend and backend summary checks also cover query failures without clearing the last
+  confirmed state. This checks the toolbar; narrow-window and light-mode run-panel acceptance remain
+  pending.
+- Focused frontend checks cover literal arguments/environment values, unique and ambiguous entry
+  defaults, immutable running-task URLs, failed saves, hidden drafts, pending actions and force-stop
+  recovery. Backend checks cover all five command forms, source detection bounds, root containment,
+  configuration conflicts and corrupt-file preservation.
+- A real isolated Python 3.13.5 environment validates UTF-8 stdout/stderr, literal
+  Chinese/space/shell characters, missing dependencies and nonzero exits. Host integration runs
+  scripts, modules, FastAPI 0.162.0 with Uvicorn 0.54.0, Flask 3.1.3 and Django 6.1.2, checks HTTP
+  responses, reconnects with the same generation, rejects stale stops and verifies that stopping
+  reload trees releases ports.
+- The isolated native Windows application (`sh.uterm.desktop.qa.python`) validates Chinese dark-mode
+  configuration, FastAPI entry selection, an actual HTTP response, live logs, search, expanded
+  layout, panel reopening and retained output after exit. After the QA application process ends,
+  HTTP remains available and authenticated IPC reattaches the same generation and replays startup
+  logs. Force stop releases the port; the isolated host is then shut down. No existing application
+  or service is stopped.
+- Python and Java panel regressions pass separately, alongside 29 argument, replay, log-copy,
+  resize, lifecycle and internationalization checks. Python backend checks, the backend suite with
+  four test threads, host tests, formatting, documentation, production build and desktop compilation
+  pass. Desktop compilation uses an isolated Cargo target because the existing executable is in use.
+- The full frontend suite passes 341 checks with 11 optional/platform checks skipped, including
+  content-font, database-app and Git-worktree coverage. The build retains the existing large-chunk
+  warning. Narrow-window and light-mode native acceptance remain pending.
+- macOS/Linux runtime acceptance and final installer size remain unmeasured. Framework fixtures are
+  local and do not connect to existing databases or external services.
 
 ## Agents and settings
 
@@ -2516,10 +2962,17 @@ Visible terminal and Agent panes use GPU rendering when WebGL2 is available. Dra
 updates the highlight without rebuilding the visible text nodes at every mouse movement. Copy
 shortcuts and the optional Copy on selection setting retain their existing behavior.
 
-Only visible panes keep GPU contexts; grouped panes can each use one. Hiding a pane releases its
-context while preserving the session, scrollback and selection. Hidden panes leave the page layout,
-pausing DOM rendering and screen-reader row measurements. They continue consuming and acknowledging
-output; showing them resumes rendering and the screen-reader text layer without restarting sessions.
+Visible panes, including grouped panes, keep their GPU contexts. Up to three recently hidden panes
+also retain their renderers for 15 seconds, allowing quick switches to reuse them. The oldest hidden
+renderer is released when the idle cache is full; visible panes are never evicted by this cache.
+Closing a view releases its renderer immediately. Session identity, scrollback and selection remain
+intact when a renderer is released.
+
+Hidden panes leave the page layout and disable their screen-reader text layer, pausing DOM rendering
+and screen-reader row measurements. They continue consuming and acknowledging output. Showing them
+restores rendering and the screen-reader layer without restarting sessions. Unchanged panes skip
+React rendering when another session receives focus; callbacks still use current workspace state.
+Workspace persistence and the resize/replay ordering remain unchanged.
 
 Unsupported GPUs, initialization failures and context loss that cannot be restored fall back to DOM
 rendering automatically. This fallback can still slow down when selecting dense output.
@@ -2529,6 +2982,24 @@ message. Older announcement text is discarded when applications redraw without l
 readable terminal rows, scrollback, selection and input remain intact.
 
 #### Selection-rendering checks
+
+- Windows renderer, accessibility, input, scrolling, replay/resize and workspace regressions pass
+  (55 focused checks plus three React rendering checks). They cover idle limits/expiry, visible
+  split-pane protection, GPU failure/context loss, no remounting, skipped unrelated panes and fresh
+  callbacks after memoization. TypeScript, localization and production builds pass.
+
+- An isolated native Windows Tauri/WebView2 app (`sh.uterm.desktop.qa.switchperf`) uses the real
+  TerminalWorkspace and TerminalView with four simulated session channels and ongoing output.
+  Eighteen switches retain four initial attachments and create GPU renderers only for the three
+  visited panes. Two visible split panes continue showing output; hidden panes have no accessibility
+  layer, output acknowledgements continue and no fixture errors are reported. These checks use
+  simulated frames and do not establish live Codex/OpenCode process performance.
+
+- An isolated Windows Chrome comparison uses two real xterm instances, 800 simulated output lines
+  each and 18 switches per strategy. Synchronous main-thread switch time has a median of 24.2 ms
+  with immediate renderer disposal and 4.6 ms with the idle pool; GPU activations fall from 20 to
+  two. This is a component comparison, not desktop end-to-end latency. Background-tab frame
+  scheduling is excluded from the reported synchronous timing.
 
 - On macOS, all 28 focused accessibility, renderer, input, scrolling and resize regressions pass.
   The full frontend suite passes (280 passed, ten optional/platform checks skipped), alongside
@@ -2980,10 +3451,14 @@ changes. File switching and Quit retain the existing draft, conflict and exit sa
 
 ### Inspector tools and panel toggles
 
-The inspector's Files, Git, GitHub and Working directory icons share a rounded capsule with a fine
-border. Each icon has a circular hover/selected background. The selected tool's icon uses the
-highlight color and retains it on hover; the other icons retain their normal colors. Connection
-visibility switches and the selected sidebar navigation icon use the same highlight color.
+The inspector's Files, Git, GitHub and Working directory controls use the same transparent
+background as the adjacent toolbar. Each has a 30 px circular click target, a 16 px outline icon and
+4 px spacing; Working directory uses a folder icon. Hover and keyboard focus add a subtle
+theme-colored background, while the selected tool keeps its own subdued background and highlight
+color, including on hover.
+
+Other icons retain their normal colors. Connection visibility switches and the selected sidebar
+navigation icon use the same highlight color.
 
 Settings → Appearance → Icon highlight defaults to Follow theme, using the current interface theme's
 accent color as the theme or color mode changes. Older saved settings also use this default.
@@ -3001,6 +3476,15 @@ accent color as the theme or color mode changes. Older saved settings also use t
 
 - Both retain a 36 px click target. These controls follow the selected interface palette in both
   dark and light modes and retain visible keyboard focus.
+
+#### Inspector button checks on Windows
+
+- Source formatting, TypeScript/production build and 30 theme, settings, sidebar-layout and
+  localization checks pass. Native inspection in the isolated Windows application
+  (`sh.uterm.desktop.qa.python`) verifies the transparent group background, consistent outline
+  icons, the Working directory folder icon and the subdued selected state in dark mode.
+- Native light-mode, keyboard-focus and macOS/Linux acceptance of this button styling remain
+  pending. The production build retains the existing large-chunk warning.
 
 #### Panel-toggle alignment checks
 
@@ -3671,6 +4155,15 @@ byte-verification fallback.
 React components live in `src/components/`; state and pure logic in `src/lib/`; Tauri commands in
 `src-tauri/src/`; PTYs, replay and hooks in `crates/utermd-local/`. The backend and session service
 use separate Cargo manifests and lockfiles.
+
+- `src/App.tsx` coordinates workbench selection through named view-transition handlers and the
+  editor's save/discard/cancel guard. Components retain their own domain forms and drafts.
+- `src/lib/useGitFileStatus.ts` owns Git file-tree reads, polling and stale-response protection;
+  `FilePanel` owns the file rows and file operations.
+- `src-tauri/src/java.rs` separates configuration, environment detection and native launch planning.
+  `java_components.rs` coordinates verified downloads, cached archives and installation.
+- `crates/utermd-local/src/tasks.rs` validates launch steps and resolves generated JARs before
+  execution. `daemon.rs` owns task identity, snapshots and bounded replay history.
 
 ## Validation and limits
 

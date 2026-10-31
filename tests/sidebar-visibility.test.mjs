@@ -89,6 +89,7 @@ test("App keeps navigation and footer controls visible when only the sidebar lis
     );
     const calls = [];
     mockIPC((command, args) => {
+      if (command === "project_run_summary") return { java: 0, python: 0 };
       calls.push(command);
       if (command === "runtime_info")
         return {

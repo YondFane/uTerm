@@ -45,6 +45,7 @@ test("file deletion requires explicit confirmation, preserves save guards and re
   let reads = 0;
   const writes = [];
   mockIPC((command, args) => {
+    if (command === "git_file_status") return null;
     if (command === "files_list" || command === "ssh_files_list") {
       reads++;
       return {

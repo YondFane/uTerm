@@ -18,6 +18,7 @@ test("native App actions retain session identity, guard dialogs and synchronize 
     "HTMLElement",
     "HTMLDialogElement",
     "Node",
+    "CustomEvent",
     "localStorage",
   ])
     Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
@@ -73,6 +74,7 @@ test("native App actions retain session identity, guard dialogs and synchronize 
   let failNext = false;
   mockIPC(
     (command, args) => {
+      if (command === "project_run_summary") return { java: 0, python: 0 };
       if (command === "plugin:menu|new") {
         if (failNext) {
           failNext = false;
@@ -228,6 +230,23 @@ test("native App actions retain session identity, guard dialogs and synchronize 
     assert.equal(item("app-menu:session:local-session").checked, true);
     await action("command:next");
     assert.equal(state().selectedSession, "other-session");
+    const javaPanel = document.createElement("section");
+    javaPanel.className = "java-build-panel";
+    javaPanel.innerHTML =
+      '<div class="java-task-output"><section data-session-id="java-task"><input /></section></div>';
+    document.body.append(javaPanel);
+    javaPanel.querySelector("input").focus();
+    let searched;
+    const search = (event) => {
+      searched = event.detail?.sessionId;
+    };
+    window.addEventListener("uterm-search", search);
+    await action("command:terminalSearch");
+    assert.equal(searched, "java-task");
+    await action("command:close");
+    assert.notEqual(globalThis.nativeMenuTerminal.closeRequest?.id, "other-session");
+    window.removeEventListener("uterm-search", search);
+    javaPanel.remove();
     await action("command:close");
     assert.equal(globalThis.nativeMenuTerminal.closeRequest.id, "other-session");
     assert.equal(state().groups[0].terminals[0].id, "local-session");

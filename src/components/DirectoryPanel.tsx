@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { clipboardPath } from "../lib/file-document";
 import { SidebarIcon, ToolbarIcon } from "./SidebarIcon";
+import { displayDirectory } from "../lib/file-target";
 
 export function DirectoryPanel({
   directory,
@@ -96,8 +97,8 @@ export function DirectoryPanel({
           </p>
         )}
       </div>
-      <footer className="file-panel-footer" title={directory}>
-        {directory}
+      <footer className="file-panel-footer" title={displayDirectory(directory)}>
+        {displayDirectory(directory)}
       </footer>
     </aside>
   );

@@ -1,7 +1,7 @@
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
-import { useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
+import { memo, useMemo, useRef, useState } from "react";
+import type { ComponentProps, CSSProperties, DragEvent, RefObject, PointerEvent } from "react";
 import { TerminalView } from "./TerminalView";
 import {
   clampRatio,
@@ -25,6 +25,84 @@ const frameStyle = (frame: PaneFrame): CSSProperties => ({
   height: `${frame.height * 100}%`,
 });
 
+type WorkspaceProps = {
+  sshLaunches?: ReadonlySet<string>;
+  onSshRestart?: (id: string) => void;
+  onTerminalStatus?: (id: string, status: TerminalStatus | null) => void;
+  agentStates: Record<string, string>;
+  onAgentState: (id: string, state: string, initial: boolean, eventDriven?: boolean) => void;
+  onAgentEvent?: (id: string, event: AgentActivityEvent) => void;
+  onDetectedAgent: (id: string, agent: string | null) => void;
+  onSessionViewed: (id: string) => void;
+  workspace: Workspace;
+  zoomed: boolean;
+  focusRequest: number;
+  closeRequest: { id: string; sequence: number } | null;
+  update: (change: (value: Workspace) => Workspace) => void;
+  onClosed: (id: string) => void;
+};
+
+type PaneActions = Pick<
+  WorkspaceProps,
+  | "workspace"
+  | "update"
+  | "onSshRestart"
+  | "onTerminalStatus"
+  | "onDetectedAgent"
+  | "onSessionViewed"
+  | "onAgentState"
+  | "onAgentEvent"
+  | "onClosed"
+> & {
+  startDrag: (id: string, event: PointerEvent<HTMLElement>) => void;
+  dragOver: (id: string, event: DragEvent<HTMLElement>) => void;
+  dragLeave: (event: DragEvent<HTMLElement>) => void;
+  dropPane: (id: string, event: DragEvent<HTMLElement>) => void;
+};
+type SessionPaneProps = Omit<
+  ComponentProps<typeof TerminalView>,
+  | "onSshRestart"
+  | "onStatus"
+  | "onPaneDragStart"
+  | "onDetectedAgent"
+  | "onDragOver"
+  | "onDragLeave"
+  | "onDrop"
+  | "onFocus"
+  | "onAgentState"
+  | "onAgentEvent"
+  | "onClosed"
+> & {
+  actions: RefObject<PaneActions>;
+};
+const SessionPane = memo(function SessionPane({ actions, ...props }: SessionPaneProps) {
+  const id = props.session.id;
+  return (
+    <TerminalView
+      {...props}
+      onSshRestart={() => actions.current.onSshRestart?.(id)}
+      onStatus={
+        props.session.ssh ? (status) => actions.current.onTerminalStatus?.(id, status) : undefined
+      }
+      onPaneDragStart={(event) => actions.current.startDrag(id, event)}
+      onDetectedAgent={(agent) => actions.current.onDetectedAgent(id, agent)}
+      onDragOver={(event) => actions.current.dragOver(id, event)}
+      onDragLeave={(event) => actions.current.dragLeave(event)}
+      onDrop={(event) => actions.current.dropPane(id, event)}
+      onFocus={() => {
+        if (actions.current.workspace.selectedSession !== id)
+          actions.current.update((previous) => selectSession(previous, id));
+        actions.current.onSessionViewed(id);
+      }}
+      onAgentState={(state, initial, eventDriven) =>
+        actions.current.onAgentState(id, state, initial, eventDriven)
+      }
+      onAgentEvent={(event) => actions.current.onAgentEvent?.(id, event)}
+      onClosed={() => actions.current.onClosed(id)}
+    />
+  );
+});
+
 export function TerminalWorkspace({
   workspace,
   sshLaunches,
@@ -40,22 +118,7 @@ export function TerminalWorkspace({
   onDetectedAgent,
   onSessionViewed,
   agentStates,
-}: {
-  sshLaunches?: ReadonlySet<string>;
-  onSshRestart?: (id: string) => void;
-  onTerminalStatus?: (id: string, status: TerminalStatus | null) => void;
-  agentStates: Record<string, string>;
-  onAgentState: (id: string, state: string, initial: boolean, eventDriven?: boolean) => void;
-  onAgentEvent?: (id: string, event: AgentActivityEvent) => void;
-  onDetectedAgent: (id: string, agent: string | null) => void;
-  onSessionViewed: (id: string) => void;
-  workspace: Workspace;
-  zoomed: boolean;
-  focusRequest: number;
-  closeRequest: { id: string; sequence: number } | null;
-  update: (change: (value: Workspace) => Workspace) => void;
-  onClosed: (id: string) => void;
-}) {
+}: WorkspaceProps) {
   useUiLanguage();
 
   const container = useRef<HTMLDivElement>(null);
@@ -86,15 +149,16 @@ export function TerminalWorkspace({
     project && workspace.selectedSession
       ? splitGroup(project, workspace.selectedSession)
       : undefined;
+  const singleSession = root && !zoomed ? null : workspace.selectedSession;
   const layout = useMemo(
     () =>
       root && !zoomed
         ? paneLayout(root)
         : {
-            panes: workspace.selectedSession ? { [workspace.selectedSession]: fullFrame } : {},
+            panes: singleSession ? { [singleSession]: fullFrame } : {},
             dividers: [],
           },
-    [root, zoomed, workspace.selectedSession],
+    [root, zoomed, singleSession],
   );
 
   function pointerRatio(event: React.PointerEvent, divider: Divider) {
@@ -136,6 +200,55 @@ export function TerminalWorkspace({
     return null;
   }
 
+  const paneActions = useRef<PaneActions>(null!);
+  // Read current actions from stable refs; memoized panes must never retain stale callbacks.
+  // 通过稳定引用读取最新操作，避免已记忆的窗格使用过期回调。
+  paneActions.current = {
+    workspace,
+    update,
+    onSshRestart,
+    onTerminalStatus,
+    onDetectedAgent,
+    onSessionViewed,
+    onAgentState,
+    onAgentEvent,
+    onClosed,
+    startDrag(id, event) {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      moving.current = { id, x: event.clientX, y: event.clientY };
+      container.current?.setPointerCapture(event.pointerId);
+    },
+    dragOver(id, event) {
+      if (!event.dataTransfer.types.includes("application/x-uterm-session")) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const box = event.currentTarget.getBoundingClientRect();
+      const x = (event.clientX - box.left) / box.width;
+      const y = (event.clientY - box.top) / box.height;
+      const edge =
+        Math.min(x, 1 - x) < Math.min(y, 1 - y)
+          ? x < 0.5
+            ? "left"
+            : "right"
+          : y < 0.5
+            ? "top"
+            : "bottom";
+      setDrop({ id, edge });
+    },
+    dragLeave(event) {
+      if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop(null);
+    },
+    dropPane(id, event) {
+      event.preventDefault();
+      if (drop) {
+        const moved = event.dataTransfer.getData("application/x-uterm-session");
+        update((previous) => moveSessionPane(previous, moved, id, drop.edge));
+      }
+      setDrop(null);
+    },
+  };
+
   return (
     <div
       ref={container}
@@ -167,67 +280,26 @@ export function TerminalWorkspace({
         setDrop(null);
       }}
     >
-      {/* Keep sessions in one flat keyed list: moving a leaf must never remount its PTY. */}
+      {/* Keep session IDs stable so switching and regrouping preserve the PTY and terminal buffer.
+          保持会话 ID 稳定，让切换和重新分组保留 PTY 与终端缓冲区。 */}
       {entries.map(({ session, directory }) => (
-        <TerminalView
+        <SessionPane
           key={session.id}
+          actions={paneActions}
           directory={directory}
           session={session}
           allowSshCreate={sshLaunches?.has(session.id)}
-          onSshRestart={() => onSshRestart?.(session.id)}
-          onStatus={session.ssh ? (status) => onTerminalStatus?.(session.id, status) : undefined}
           agentState={agentStates[session.id]}
           closeRequest={closeRequest?.id === session.id ? closeRequest.sequence : 0}
           active={session.id === workspace.selectedSession}
-          focusRequest={`${focusRequest}/${root?.kind === "split" ? root.id : "single"}/${zoomed}`}
+          focusRequest={
+            session.id === workspace.selectedSession
+              ? `${focusRequest}/${root?.kind === "split" ? root.id : "single"}/${zoomed}`
+              : ""
+          }
           visible={!!layout.panes[session.id]}
           frame={layout.panes[session.id]}
-          onPaneDragStart={(event) => {
-            if (event.button !== 0) return;
-            event.preventDefault();
-            moving.current = { id: session.id, x: event.clientX, y: event.clientY };
-            container.current?.setPointerCapture(event.pointerId);
-          }}
-          onDetectedAgent={(agent) => onDetectedAgent(session.id, agent)}
           dropEdge={drop?.id === session.id ? drop.edge : undefined}
-          onDragOver={(event) => {
-            if (!event.dataTransfer.types.includes("application/x-uterm-session")) return;
-            event.preventDefault();
-            event.dataTransfer.dropEffect = "move";
-            const box = event.currentTarget.getBoundingClientRect();
-            const x = (event.clientX - box.left) / box.width,
-              y = (event.clientY - box.top) / box.height;
-            const edge =
-              Math.min(x, 1 - x) < Math.min(y, 1 - y)
-                ? x < 0.5
-                  ? "left"
-                  : "right"
-                : y < 0.5
-                  ? "top"
-                  : "bottom";
-            setDrop({ id: session.id, edge });
-          }}
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node)) setDrop(null);
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            if (drop) {
-              const moved = event.dataTransfer.getData("application/x-uterm-session");
-              update((previous) => moveSessionPane(previous, moved, session.id, drop.edge));
-            }
-            setDrop(null);
-          }}
-          onFocus={() => {
-            if (workspace.selectedSession !== session.id)
-              update((previous) => selectSession(previous, session.id));
-            onSessionViewed(session.id);
-          }}
-          onAgentState={(state, initial, eventDriven) =>
-            onAgentState(session.id, state, initial, eventDriven)
-          }
-          onAgentEvent={(event) => onAgentEvent?.(session.id, event)}
-          onClosed={() => onClosed(session.id)}
         />
       ))}
       {layout.dividers.map((divider) => {

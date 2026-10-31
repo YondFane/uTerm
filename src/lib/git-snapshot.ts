@@ -15,12 +15,11 @@ export interface GitSnapshot {
 }
 
 export function gitFilePath(directory: string, root: string, path: string): string | null {
-  const normalize = (value: string) =>
-    value
-      .replace(/^\\\\\?\\UNC\\/i, "//")
-      .replace(/^\\\\\?\\/, "")
-      .replace(/\\/g, "/")
-      .replace(/\/+$/, "");
+  const normalize = (value: string) => {
+    const windows = /^[a-z]:[\\/]|^\\\\|^\/\//i.test(value);
+    const normalized = value.replace(/^\\\\\?\\UNC\\/i, "//").replace(/^\\\\\?\\/, "");
+    return (windows ? normalized.replace(/\\/g, "/") : normalized).replace(/\/+$/, "");
+  };
   const prefix = `${normalize(directory)}/`;
   const target = `${normalize(root)}/${path}`;
   const windows = /^[a-z]:\//i.test(target) || target.startsWith("//");
@@ -62,4 +61,13 @@ export function sameGitSnapshot(previous: GitSnapshot | null, next: GitSnapshot)
     }
   }
   return true;
+}
+
+export function gitReadError(reason: unknown): string {
+  const message = String(reason);
+  // A plain directory is an expected empty state, while other read failures remain visible.
+  // 普通目录属于预期的空状态，其他读取失败仍需显示。
+  return /(?:^|\n)(?:Error: )?fatal:\s*not a git repository(?:\s|\(|:|$)/i.test(message)
+    ? ""
+    : message;
 }

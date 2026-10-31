@@ -33,6 +33,7 @@ test("file tree refreshes without overlapping reads and cancels its timer on unm
   let resolveRead;
   let calls = 0;
   mockIPC((command) => {
+    if (command === "git_file_status") return null;
     assert.equal(command, "files_list");
     calls++;
     return new Promise((resolve) => {

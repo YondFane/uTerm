@@ -60,11 +60,20 @@ macOS 安装包未经 Apple 公证，首次打开可能需要在**系统设置 �
 | 工作流程           | uTerm 提供的功能                                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
 | 同时处理多个任务   | 按工作区、项目和 Git Worktree 组织终端与 Agent，使用分屏，并通过受支持的 Hooks 查看 Agent 活动。                               |
-| 保留项目上下文     | 查看 Git 状态、差异与提交；编辑文件时保留冲突检查和草稿恢复；预览 Markdown 与 PDF。                                            |
+| 保留项目上下文     | 查看 Git 状态、差异与提交，文件树中的变更文件及文件夹会着色；编辑文件时保留冲突检查和草稿恢复；预览 Markdown 与 PDF。          |
 | 使用远程系统和数据 | 复用系统 OpenSSH 连接 SSH/SFTP；浏览 Redis，查询 MySQL、PostgreSQL、Oracle、Elasticsearch 与 MongoDB，默认只读，按需受控编辑。 |
 
 界面支持简体中文和英文、六套配色、可配置字体和快捷键。Agent 程序为可选组件，可安装或配置需要的 CLI。SQL 与 MongoDB 连接需要 Java
 17+ 和所选驱动，在应用内按需管理；Elasticsearch 无需额外运行时。支持范围、限制和平台验收情况见[功能指南](docs/features.zh-CN.md)。
+
+Java 项目可从项目菜单或工具栏打开 **Java 构建与运行**。底部面板提供 Maven 构建、Spring
+Boot 开发／JAR 启动及有序任务输出，并支持系统全局或项目独立 Maven 配置。完整 JDK
+8／11／17／21 与 Maven 工具按需安装，详见
+[Java 与 Maven 构建](docs/features.zh-CN.md#java-与-maven-构建)。
+
+Python 项目可从项目菜单或工具栏打开 **Python 运行**。选择已有 Python
+3 或虚拟环境后，可启动脚本、模块、FastAPI、Flask 或 Django，查看实时日志、搜索及复制输出，并停止或重新运行。Python 和项目依赖需提前准备，不进入安装包；详见
+[Python 项目与日志](docs/features.zh-CN.md#python-项目与日志)。
 
 Ctrl+- 和 Ctrl++ 调整当前显示的终端、Agent 会话或文件内容字号，macOS 使用 Command 替代 Ctrl。会话与文件标题也提供字号按钮。会话标题显示起始目录，Windows 路径从盘符开始。右键文件 → 快速打开的结果，可复制文件、文件名或路径，或在文件管理器中定位文件。
 
@@ -115,6 +124,10 @@ uTerm 是采用 [PolyForm Noncommercial License 1.0.0](LICENSE)
 
 使用 Tauri、React、TypeScript、Rust 和 xterm.js 构建，并使用其 WebGL 插件渲染终端。环境配置、开发命令、数据库组件开发、验证与发布说明见[开发指南](docs/development.zh-CN.md)。参与贡献时请遵循
 [AGENTS.md](AGENTS.md) 和[文档编写规范](docs/writing-rules.md)。
+
+视图位于 `src/components/`，工作台切换由 `src/App.tsx` 协调。可复用 Hook 和纯逻辑位于
+`src/lib/`，包括 Git 文件状态轮询。桌面命令位于 `src-tauri/src/`；会话身份、PTY 和任务执行由
+`crates/utermd-local/` 负责。
 
 使用支持 EditorConfig 的编辑器及项目的 Prettier／rustfmt。提交前运行 `pnpm format` 和
 `pnpm format:check`；macOS、Windows CI 会检查全仓格式。
