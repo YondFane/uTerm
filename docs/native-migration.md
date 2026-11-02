@@ -680,3 +680,23 @@ also hides PDF annotation actions because its WebView store is ephemeral.
 
 原生内容改动的 Linux
 x86_64 检查通过：七项协议、完整前端 359 项通过／10 项跳过、类型、生产构建、翻译、格式与文档。本地未运行 Swift 或真实原生窗口，仍待原生 CI；临时 WebView 预览同时隐藏 PDF 标注操作。
+
+### Native content first-run corrections / 原生内容首次运行修正
+
+At head `2a4940127be364587c8fe2b3f2c90761270c3cb6`, tested merge
+`55d05d206648258f43370f669e115d3c813bf0e7`, ARM passed eight Swift checks, readonly text/HTML, font
+persistence and sandbox checks. The three rejection assertions failed because the smoke called a
+callback API without awaiting its result; `56e573ec2107f25e73b2716596d7bd24954eb391` adds a
+continuation and records actual codes without weakening assertions. Visual inspection found a PDF
+error despite its canvas-allocation flag: the standard pdf.js build requires a Map API absent in
+this WebKit. Renderer and worker now use the same pinned package's compatibility build, and the
+smoke requires a completed render and no error alert. Fresh macOS CI is required for both fixes.
+
+The failed
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/41430582363/artifacts/13133384997)
+retains `content-live.json`, logs and three real WindowServer images. The PDF image is explicitly
+failed evidence, not a successful native PDF acceptance. No Issue is closed from these results.
+
+上述源码／测试合并 SHA 的 ARM 八项 Swift、只读文本／HTML、字号及沙箱检查通过；三个拒绝断言因回调结果等待错误失败，已以 continuation 修正并记录实际错误码。目视检查发现 PDF 图片有缺少 Map
+API 的错误，不能以画布已创建宣称渲染成功；现改用同版本兼容构建并要求完成渲染且无错误，等待新 macOS
+CI。失败 artifact 保留原报告、日志及三张系统图，PDF 图不计为通过，不据此关闭 Issue。

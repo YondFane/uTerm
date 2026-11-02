@@ -8,6 +8,10 @@ enum ContentSmoke {
         let deadline = Date().addingTimeInterval(20)
         while Date() < deadline {
             if !content.navigationError.isEmpty { throw BridgeFailure(code: "CONTENT_NAVIGATION", message: content.navigationError) }
+            if let error = try? await content.webView.evaluateJavaScript("document.querySelector('[role=alert]')?.textContent || ''"),
+               let message = error as? String, !message.isEmpty {
+                throw BridgeFailure(code: "CONTENT_RENDER", message: message)
+            }
             if let value = try? await content.webView.evaluateJavaScript(script), value as? Bool == true { return }
             try await Task.sleep(for: .milliseconds(50))
         }
@@ -48,7 +52,7 @@ enum ContentSmoke {
         for (path, name, script) in [
             ("中文.txt", "native-content-text.png", "document.querySelector('.cm-content[contenteditable=false]')?.textContent.includes('UTERM_CONTENT_中文') === true"),
             ("preview.html", "native-content-html.png", "document.querySelector('.html-preview')?.getAttribute('srcdoc')?.includes('STATIC_QA') === true"),
-            ("preview.pdf", "native-content-pdf.png", "document.querySelector('option[value=marks]') === null && Array.from(document.querySelectorAll('.pdf-page canvas')).some(canvas => canvas.width > 0 && canvas.height > 0)")
+            ("preview.pdf", "native-content-pdf.png", "document.querySelector('option[value=marks]') === null && Array.from(document.querySelectorAll('.pdf-page canvas')).some(canvas => canvas.width > 0 && canvas.height > 0 && canvas.dataset.rendered === 'true' )")
         ] {
             let content = try ContentWindow(bridge: bridge, directory: root, path: path)
             defer { content.forceClose() }
@@ -77,6 +81,7 @@ enum ContentSmoke {
                 report["sandboxPreviewIsolated"] = sandbox as? Bool == true
             } else { report["pdfRendered"] = true }
             guard let window = content.window else { throw BridgeFailure(code: "CONTENT_WINDOW", message: "Content window is missing") }
+            try await Task.sleep(for: .milliseconds(150))
             try await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(name))
             captures.append(name)
             content.forceClose()

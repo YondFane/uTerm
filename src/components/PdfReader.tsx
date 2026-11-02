@@ -2,9 +2,9 @@ import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
 import { useEffect, useRef, useState } from "react";
-import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions } from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import worker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import worker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import type { OpenFile } from "../lib/file-document";
 import { boundedPdfScale } from "../lib/pdf-limits";
 
@@ -67,6 +67,7 @@ function PageCanvas({
         cancel = () => task.cancel();
         try {
           await task.promise;
+          if (!disposed) target.dataset.rendered = "true";
         } finally {
           rendering = false;
           value.cleanup();

@@ -43,6 +43,7 @@ test("real settings tabs, commands and panels render in both languages without u
         name: "test-rendering-adapters",
         enforce: "pre",
         resolveId(id) {
+          if (id === "pdfjs-dist/legacy/build/pdf.mjs") return "\0test:pdfjs-dist";
           if (
             [
               "@xterm/xterm",

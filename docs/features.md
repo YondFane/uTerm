@@ -1365,25 +1365,31 @@ File components use a content transport with an explicit method/event allowlist,
 an operation ID. Requests own their arguments and are limited to 32 MiB. Timeouts, cancellation,
 editor unmount and page unload suppress late delivery and remove subscriptions. Cancelling a call
 does not undo a write already running in Rust. Replies for another document or operation are
-rejected.
+rejected. Request IDs also work in custom-scheme contexts without `crypto.randomUUID`.
 
 The Tauri adapter retains existing command names. Native QA **File → Open file…** opens a read-only
-shared CodeMirror/HTML/PDF view for the selected local project. Its WKWebView has an ephemeral data
-store, loads only manifest-listed bundle resources, rejects navigation to other origins and accepts
-messages only from its main document. Document changes invalidate pending operations; the host also
-rejects stale document IDs, another project root and file writes. A font adjustment uses shared
-revision-checked settings. HTML previews retain their script-free sandbox and resource policy.
+shared CodeMirror/HTML/PDF view for the selected local project. Its WKWebView uses an ephemeral data
+store, manifest-listed bundle resources and main-document messages. Navigation invalidates pending
+operations; the host rejects stale document IDs, another project root and file writes. Fonts use
+shared revision-checked settings. HTML previews retain their script-free sandbox. Native editing,
+draft recovery and human focus acceptance remain open. PDF annotation controls are unavailable in
+this ephemeral preview so they cannot create marks lost when the window closes.
 
-The native build bundles the frontend and license notices. `bash scripts/macos-content-smoke.sh`
-checks real readonly rendering, font persistence, stale identity/root/write denial, sandbox
-isolation and PDF rendering, capturing three WindowServer scenes. Swift resource tests reject
-unapproved origins, traversal, symlinks, nonregular/oversized files and invalid manifests. This
-integration has not run on macOS yet; its first CI result is pending. Native editing, draft recovery
-and human focus acceptance remain open. Six Linux protocol tests cover reordered/mismatched replies,
-timeout/abort/unload, late subscriptions, bounds, IDs without secure-context-only APIs and the
-JavaScript WebKit message adapter. These are protocol tests, not native UI acceptance. Full Linux
-frontend checks passed (358 passed, ten skipped), as did types, production build, formatting and
-documentation; new platform CI is pending.
+The build bundles the frontend and license notices. `bash scripts/macos-content-smoke.sh` checks
+real readonly rendering, font persistence, stale identity/root/write denial, sandbox isolation and
+PDF rendering, capturing three WindowServer scenes. Swift resource tests reject unapproved origins,
+traversal, symlinks, nonregular/oversized files and invalid manifests.
+
+The first ARM run built and passed eight Swift checks, real text/HTML, font and sandbox checks.
+Three rejection assertions failed because the smoke read `Void` from a callback API; a continuation
+now waits for actual error codes. Visual inspection also found a PDF error despite the old
+canvas-allocation check. The renderer and worker now use the pinned library's compatibility build;
+the smoke requires completed rendering and no visible error. Fresh native CI is required; the failed
+run is not accepted for PDF or rejection behavior.
+
+Seven Linux protocol tests cover reordered/mismatched replies, timeout/abort/unload, late
+subscriptions, bounds and the JavaScript WebKit adapter. The frontend suite, types, production
+build, formatting and documentation are checked locally; native platform acceptance is separate.
 
 ### Shared local file service
 
