@@ -20,6 +20,9 @@ import {
   selectProject,
 } from "../src/lib/workspace.ts";
 import { draftKey, readDraft } from "../src/lib/file-document.ts";
+import { EditorDraftQueue } from "../src/lib/editor-drafts.ts";
+import { ContentFailure, ContentScope, editorDraftMethods } from "../src/lib/content-transport.ts";
+import { tauriContentPort } from "../src/lib/tauri-content.ts";
 
 execFileSync(
   "cargo",
@@ -34,8 +37,8 @@ execFileSync(
   ],
   { stdio: "inherit" },
 );
-async function client(t) {
-  const root = mkdtempSync(join(tmpdir(), "uterm-contract-"));
+async function client(t, existingRoot) {
+  const root = existingRoot ?? mkdtempSync(join(tmpdir(), "uterm-contract-"));
   const target = resolve(process.env.CARGO_TARGET_DIR ?? "crates/uterm-core/target");
   const child = spawn(
     join(target, "debug", `uterm-core-contract${process.platform === "win32" ? ".exe" : ""}`),
@@ -45,7 +48,7 @@ async function client(t) {
   const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   t.after(() => {
     child.kill();
-    rmSync(root, { recursive: true, force: true });
+    if (!existingRoot) rmSync(root, { recursive: true, force: true });
   });
   return async (method, params = null, id = crypto.randomUUID()) => {
     child.stdin.write(JSON.stringify({ version: 1, id, method, params }) + "\n");
@@ -56,6 +59,252 @@ async function client(t) {
     return reply;
   };
 }
+
+function queueDraft(path, text) {
+  return {
+    directory: "/qa/editor",
+    path,
+    kind: "text",
+    text,
+    saved: "disk",
+    version: "a".repeat(64),
+    line_ending: "\n",
+    bom: false,
+  };
+}
+function signal() {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+function draftCall(call) {
+  return async (method, params) => {
+    const reply = await call(editorDraftMethods[method], params);
+    if (reply.error) throw Object.assign(Error(reply.error.message), { code: reply.error.code });
+    return reply.result ?? null;
+  };
+}
+
+test("shared draft queues use Rust document revisions without replacing another writer", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "uterm-draft-clients-"));
+  const callA = await client(t, root),
+    callB = await client(t, root);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const a = new EditorDraftQueue(draftCall(callA)),
+    b = new EditorDraftQueue(draftCall(callB));
+  t.after(() => {
+    a.close();
+    b.close();
+  });
+  await a.initialize(null);
+  await b.initialize(null);
+  await a.put(queueDraft("a.txt", "A"));
+  await b.put(queueDraft("b.txt", "B"));
+  await b.load("/qa/editor", "a.txt");
+  await a.put(queueDraft("a.txt", "A new"));
+  await assert.rejects(b.put(queueDraft("a.txt", "stale B")), { code: "CONFLICT" });
+  await assert.rejects(b.flush(), { code: "CONFLICT" });
+  await assert.rejects(b.retry(), { code: "CONFLICT" });
+  const current = (
+    await callA("editor.drafts.document", { directory: "/qa/editor", path: "a.txt" })
+  ).result;
+  assert.equal(current.draft.text, "A new");
+  await b.remove("/qa/editor", "b.txt");
+  assert.equal((await callA("editor.drafts.list")).result.drafts.length, 1);
+});
+
+test("draft text coalesces and flush drains writes added during an earlier real Rust write", async (t) => {
+  const call = await client(t);
+  const invoke = draftCall(call),
+    started = signal(),
+    release = signal(),
+    writes = [],
+    completed = [];
+  const queue = new EditorDraftQueue(async (method, params) => {
+    if (method === "editor_drafts_put") {
+      writes.push(params.draft.text);
+      if (writes.length === 1) {
+        started.resolve();
+        await release.promise;
+      }
+    }
+    const result = await invoke(method, params);
+    if (method === "editor_drafts_put") completed.push(params.draft.text);
+    return result;
+  });
+  t.after(() => queue.close());
+  await queue.initialize(null);
+  const first = queue.put(queueDraft("coalesce.txt", "first"));
+  await started.promise;
+  const second = queue.put(queueDraft("coalesce.txt", "second"));
+  const third = queue.put(queueDraft("coalesce.txt", "latest 中文"));
+  const late = first.then(() => queue.put(queueDraft("coalesce.txt", "typed during flush 中文")));
+  const flushing = queue.flush();
+  release.resolve();
+  await flushing;
+  assert.deepEqual(completed, ["first", "latest 中文", "typed during flush 中文"]);
+  await Promise.all([first, second, third, late]);
+  assert.deepEqual(writes, completed);
+  assert.equal(
+    (await call("editor.drafts.document", { directory: "/qa/editor", path: "coalesce.txt" })).result
+      .draft.text,
+    "typed during flush 中文",
+  );
+});
+
+test("lost draft delivery is reconciled from actual Rust data without rewriting newer text", async (t) => {
+  const call = await client(t),
+    invoke = draftCall(call);
+  let writes = 0;
+  const queue = new EditorDraftQueue(async (method, params) => {
+    const result = await invoke(method, params);
+    if (method === "editor_drafts_put" && ++writes === 1)
+      throw new ContentFailure("TIMEOUT", "Reply delivery was interrupted after commit");
+    return result;
+  });
+  t.after(() => queue.close());
+  await queue.initialize(null);
+  await assert.rejects(queue.put(queueDraft("reply.txt", "retained after commit")), {
+    code: "TIMEOUT",
+  });
+  await queue.retry();
+  assert.equal(writes, 1);
+  const other = new EditorDraftQueue(invoke);
+  t.after(() => other.close());
+  await other.initialize();
+  await other.put(queueDraft("reply.txt", "newer external draft"));
+  await assert.rejects(queue.put(queueDraft("reply.txt", "stale local text")), {
+    code: "CONFLICT",
+  });
+  await assert.rejects(queue.retry(), { code: "CONFLICT" });
+  assert.equal(
+    (await call("editor.drafts.document", { directory: "/qa/editor", path: "reply.txt" })).result
+      .draft.text,
+    "newer external draft",
+  );
+});
+
+test(
+  "closing a draft queue rejects active and waiting delivery but never claims host rollback",
+  { timeout: 10000 },
+  async (t) => {
+    const unopened = await client(t),
+      initialCall = draftCall(unopened),
+      initialRead = signal(),
+      initialRelease = signal();
+    let imports = 0;
+    const initial = new EditorDraftQueue(async (method, params) => {
+      if (method === "editor_drafts_import") imports++;
+      try {
+        return await initialCall(method, params);
+      } catch (reason) {
+        initialRead.resolve();
+        await initialRelease.promise;
+        throw reason;
+      }
+    });
+    const initialization = assert.rejects(initial.initialize(null), { code: "CLOSED" });
+    await initialRead.promise;
+    initial.close();
+    await initialization;
+    initialRelease.resolve();
+    assert.equal((await unopened("editor.drafts.read")).error.code, "DRAFTS_NOT_IMPORTED");
+    assert.equal(imports, 0);
+    const call = await client(t),
+      invoke = draftCall(call),
+      committed = signal(),
+      release = signal();
+    let writes = 0;
+    const queue = new EditorDraftQueue(async (method, params) => {
+      const result = await invoke(method, params);
+      if (method === "editor_drafts_put") {
+        writes++;
+        committed.resolve();
+        await release.promise;
+      }
+      return result;
+    });
+    await queue.initialize(null);
+    const first = queue.put(queueDraft("close.txt", "already committed"));
+    const rejectedFirst = assert.rejects(first, { code: "CLOSED" });
+    await committed.promise;
+    const waiting = queue.put(queueDraft("close.txt", "never dispatched"));
+    const rejectedWaiting = assert.rejects(waiting, { code: "CLOSED" });
+    const flushed = assert.rejects(queue.flush(), { code: "CLOSED" });
+    queue.close();
+    await Promise.all([rejectedFirst, rejectedWaiting, flushed]);
+    release.resolve();
+    assert.equal(
+      (await call("editor.drafts.document", { directory: "/qa/editor", path: "close.txt" })).result
+        .draft.text,
+      "already committed",
+    );
+    assert.equal(writes, 1);
+    await assert.rejects(queue.put(queueDraft("close.txt", "late")), { code: "CLOSED" });
+  },
+);
+
+test("draft queue initialization retry preserves the actual legacy source", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "uterm-draft-import-")),
+    call = await client(t, root),
+    invoke = draftCall(call);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  let fail = true;
+  const queue = new EditorDraftQueue(async (method, params) => {
+    if (fail && method === "editor_drafts_list") {
+      fail = false;
+      throw new ContentFailure("IO", "Temporary read failure");
+    }
+    return invoke(method, params);
+  });
+  t.after(() => queue.close());
+  const raw = ` \n${JSON.stringify(queueDraft("legacy.txt", "old 中文"))}\n`;
+  await assert.rejects(queue.initialize(raw), { code: "IO" });
+  await assert.rejects(queue.put(queueDraft("legacy.txt", "newer text")), { code: "IO" });
+  await queue.retry();
+  const stored = (await call("editor.drafts.read")).result;
+  assert.equal(stored.document.drafts[0].text, "newer text");
+  assert.equal(
+    readFileSync(
+      join(root, `editor-draft-source-${stored.document.sourceDigest}.original`),
+      "utf8",
+    ),
+    raw,
+  );
+});
+
+test("draft content scope routes through Tauri to Rust and rejects a misidentified core reply", async (t) => {
+  const call = await client(t),
+    previous = global.window;
+  global.window = {};
+  mockIPC(async (command, args) => {
+    assert.equal(command, "shared_core_request");
+    const request = JSON.parse(args.request);
+    return JSON.stringify(await call(request.method, request.params, request.id));
+  });
+  const scope = new ContentScope(tauriContentPort, "draft-content");
+  const queue = new EditorDraftQueue((method, params) => scope.call(method, params));
+  t.after(() => {
+    queue.close();
+    scope.close();
+    clearMocks();
+    if (previous === undefined) delete global.window;
+    else global.window = previous;
+  });
+  await queue.initialize(null);
+  await queue.put(queueDraft("transport.txt", "actual transport 中文"));
+  assert.equal(
+    (await queue.load("/qa/editor", "transport.txt")).draft.text,
+    "actual transport 中文",
+  );
+  await queue.remove("/qa/editor", "transport.txt");
+  await queue.flush();
+  assert.equal((await call("editor.drafts.list")).result.drafts.length, 0);
+  mockIPC(() => JSON.stringify({ version: 1, id: "another-operation", result: null }));
+  await assert.rejects(scope.call("editor_drafts_list"), { code: "INVALID_REPLY" });
+});
 
 test("real Rust draft storage preserves legacy text and rejects stale multi-document writes", async (t) => {
   const call = await client(t);

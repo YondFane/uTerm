@@ -1,6 +1,14 @@
 import type { JSONValue } from "./core-contract.generated.ts";
 
+export const editorDraftMethods: Record<string, string> = {
+  editor_drafts_list: "editor.drafts.list",
+  editor_drafts_document: "editor.drafts.document",
+  editor_drafts_import: "editor.drafts.import",
+  editor_drafts_put: "editor.drafts.putDocument",
+  editor_drafts_remove: "editor.drafts.removeDocument",
+};
 const contentMethods = new Set([
+  ...Object.keys(editorDraftMethods),
   "files_list",
   "file_read",
   "file_save",

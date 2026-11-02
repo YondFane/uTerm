@@ -150,6 +150,9 @@ CI 截取原生窗口，并将报告及图片上传到
 增加核对 revision 的多文档草稿存储、旧来源原始副本及明确恢复。这是经生成 DTO 暴露的开发 API，两端编辑界面接入与原生编辑验收仍待完成；`pnpm test:core`
 明确执行工作区及草稿快照的文件系统失败／重试检查。
 
+有界草稿客户端队列位于
+`src/lib/editor-drafts.ts`，内容适配使用按项目读取与文档revision；编辑生命周期接入完成前，原生预览继续禁用修改。
+
 共享回环控制服务位于
 `crates/utermd-local/src/control/server.rs`，Tauri 与核心操作复用同一队列及生命周期；宿主为该服务直接声明 Tokio 和 tempfile。`pnpm test:host`
 包含真实独立 CLI／socket 回归，`pnpm test:core`

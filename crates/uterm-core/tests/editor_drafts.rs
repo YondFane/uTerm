@@ -101,6 +101,91 @@ fn separate_clients_keep_multiple_documents_and_reject_stale_updates_and_removal
 }
 
 #[test]
+fn document_revisions_allow_independent_writers_and_never_delete_a_replacement() {
+    let root = tempfile::tempdir().unwrap();
+    let first = Store::open(root.path().to_owned()).unwrap();
+    let second = Store::open(root.path().to_owned()).unwrap();
+    first.editor_import(None).unwrap();
+    let a = first
+        .editor_put_document(None, draft("a.txt", "A"))
+        .unwrap();
+    let b = second
+        .editor_put_document(None, draft("b.txt", "B"))
+        .unwrap();
+    let changed = second
+        .editor_put_document(Some(&a.revision), draft("a.txt", "new A"))
+        .unwrap();
+    assert_ne!(changed.revision, a.revision);
+    assert_eq!(
+        first
+            .editor_put_document(Some(&a.revision), draft("a.txt", "stale A"))
+            .unwrap_err()
+            .code,
+        "CONFLICT"
+    );
+    assert_eq!(
+        first
+            .editor_remove_document(Some(&a.revision), "/qa/project", "a.txt")
+            .unwrap_err()
+            .code,
+        "CONFLICT"
+    );
+    first
+        .editor_remove_document(Some(&b.revision), "/qa/project", "b.txt")
+        .unwrap();
+    assert_eq!(
+        second
+            .editor_document("/qa/project", "a.txt")
+            .unwrap()
+            .unwrap()
+            .draft
+            .text,
+        "new A"
+    );
+    assert!(second
+        .editor_document("/qa/project", "b.txt")
+        .unwrap()
+        .is_none());
+    let before = second.editor_read().unwrap().revision;
+    assert_eq!(
+        second
+            .editor_put_document(Some(&changed.revision), draft("a.txt", "new A"))
+            .unwrap()
+            .revision,
+        changed.revision
+    );
+    assert_eq!(second.editor_read().unwrap().revision, before);
+    assert_eq!(
+        first
+            .editor_remove_document(Some("invalid"), "/qa/project", "a.txt")
+            .unwrap_err()
+            .code,
+        "INVALID_ARGUMENT"
+    );
+}
+
+#[test]
+fn scoped_draft_listing_returns_only_the_requested_project() {
+    let root = tempfile::tempdir().unwrap();
+    let store = Store::open(root.path().to_owned()).unwrap();
+    store.editor_import(None).unwrap();
+    store
+        .editor_put_document(None, draft("a.txt", "visible"))
+        .unwrap();
+    let mut other = draft("a.txt", "other project secret");
+    other.directory = "/qa/other".into();
+    store.editor_put_document(None, other).unwrap();
+    let scoped = store.editor_list(Some("/qa/project")).unwrap();
+    assert_eq!(scoped.drafts.len(), 1);
+    assert_eq!(scoped.drafts[0].draft.text, "visible");
+    assert_eq!(store.editor_list(None).unwrap().drafts.len(), 2);
+    assert_eq!(
+        store.editor_list(Some("/qa/missing")).unwrap().drafts.len(),
+        0
+    );
+}
+
+#[test]
 fn corrupt_storage_and_wrong_backups_preserve_bytes_until_explicit_checked_recovery() {
     let root = tempfile::tempdir().unwrap();
     let store = Store::open(root.path().to_owned()).unwrap();

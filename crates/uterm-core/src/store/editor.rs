@@ -57,6 +57,44 @@ pub struct EditorDraftSnapshot {
     pub revision: String,
     pub document: EditorDraftDocument,
 }
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct EditorDraftEntry {
+    pub revision: String,
+    pub draft: EditorDraft,
+}
+impl EditorDraftEntry {
+    fn new(draft: EditorDraft) -> Result<Self> {
+        Ok(Self {
+            revision: hash(&serde_json::to_vec(&draft)?),
+            draft,
+        })
+    }
+}
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct EditorDraftCollection {
+    pub revision: String,
+    pub drafts: Vec<EditorDraftEntry>,
+}
+fn put(document: &mut EditorDraftDocument, draft: EditorDraft) -> Result<()> {
+    let existing = document
+        .drafts
+        .iter()
+        .any(|entry| entry.directory == draft.directory && entry.path == draft.path);
+    if !existing && document.drafts.len() >= 100 {
+        return Err(CoreError::new(
+            "DRAFT_LIMIT",
+            "Draft collection is full; retain local text before closing a document",
+        ));
+    }
+    document
+        .drafts
+        .retain(|entry| entry.directory != draft.directory || entry.path != draft.path);
+    document.drafts.push(draft);
+    document
+        .drafts
+        .sort_by(|a, b| (&a.directory, &a.path).cmp(&(&b.directory, &b.path)));
+    Ok(())
+}
 fn decode(bytes: &[u8]) -> Result<EditorDraftDocument> {
     let document: EditorDraftDocument = serde_json::from_slice(bytes).map_err(|e| {
         CoreError::new(
@@ -111,6 +149,88 @@ impl Store {
     pub fn editor_read(&self) -> Result<EditorDraftSnapshot> {
         let _guard = self.lock()?;
         self.editor_load()
+    }
+    pub fn editor_list(&self, directory: Option<&str>) -> Result<EditorDraftCollection> {
+        let snapshot = self.editor_read()?;
+        let drafts = snapshot
+            .document
+            .drafts
+            .into_iter()
+            .filter(|draft| directory.is_none_or(|root| draft.directory == root))
+            .map(EditorDraftEntry::new)
+            .collect::<Result<_>>()?;
+        Ok(EditorDraftCollection {
+            revision: snapshot.revision,
+            drafts,
+        })
+    }
+    pub fn editor_document(&self, directory: &str, path: &str) -> Result<Option<EditorDraftEntry>> {
+        self.editor_read()?
+            .document
+            .drafts
+            .into_iter()
+            .find(|draft| draft.directory == directory && draft.path == path)
+            .map(EditorDraftEntry::new)
+            .transpose()
+    }
+    fn editor_check_document(
+        current: &EditorDraftSnapshot,
+        directory: &str,
+        path: &str,
+        expected: Option<&str>,
+    ) -> Result<()> {
+        if expected.is_some_and(|revision| !valid_revision(revision)) {
+            return Err(CoreError::new(
+                "INVALID_ARGUMENT",
+                "Invalid document draft revision",
+            ));
+        }
+        let actual = current
+            .document
+            .drafts
+            .iter()
+            .find(|draft| draft.directory == directory && draft.path == path)
+            .cloned()
+            .map(EditorDraftEntry::new)
+            .transpose()?
+            .map(|entry| entry.revision);
+        if actual.as_deref() != expected {
+            return Err(CoreError::new(
+                "CONFLICT",
+                "This document draft changed; retain local text and reload before retrying",
+            ));
+        }
+        Ok(())
+    }
+    pub fn editor_put_document(
+        &self,
+        expected: Option<&str>,
+        draft: EditorDraft,
+    ) -> Result<EditorDraftEntry> {
+        draft.validate()?;
+        let _guard = self.lock()?;
+        let current = self.editor_load()?;
+        Self::editor_check_document(&current, &draft.directory, &draft.path, expected)?;
+        let entry = EditorDraftEntry::new(draft.clone())?;
+        self.editor_commit(current, |document| put(document, draft))?;
+        Ok(entry)
+    }
+    pub fn editor_remove_document(
+        &self,
+        expected: Option<&str>,
+        directory: &str,
+        path: &str,
+    ) -> Result<()> {
+        let _guard = self.lock()?;
+        let current = self.editor_load()?;
+        Self::editor_check_document(&current, directory, path, expected)?;
+        self.editor_commit(current, |document| {
+            document
+                .drafts
+                .retain(|draft| draft.directory != directory || draft.path != path);
+            Ok(())
+        })?;
+        Ok(())
     }
     pub fn editor_import(&self, legacy: Option<&str>) -> Result<EditorDraftSnapshot> {
         let _guard = self.lock()?;
@@ -179,26 +299,7 @@ impl Store {
     }
     pub fn editor_put(&self, expected: &str, draft: EditorDraft) -> Result<EditorDraftSnapshot> {
         draft.validate()?;
-        self.editor_update(expected, |document| {
-            let existing = document
-                .drafts
-                .iter()
-                .any(|entry| entry.directory == draft.directory && entry.path == draft.path);
-            if !existing && document.drafts.len() >= 100 {
-                return Err(CoreError::new(
-                    "DRAFT_LIMIT",
-                    "Draft collection is full; retain local text before closing a document",
-                ));
-            }
-            document
-                .drafts
-                .retain(|entry| entry.directory != draft.directory || entry.path != draft.path);
-            document.drafts.push(draft);
-            document
-                .drafts
-                .sort_by(|a, b| (&a.directory, &a.path).cmp(&(&b.directory, &b.path)));
-            Ok(())
-        })
+        self.editor_update(expected, |document| put(document, draft))
     }
     pub fn editor_remove(
         &self,
@@ -219,13 +320,21 @@ impl Store {
         change: impl FnOnce(&mut EditorDraftDocument) -> Result<()>,
     ) -> Result<EditorDraftSnapshot> {
         let _guard = self.lock()?;
-        let mut current = self.editor_load()?;
+        let current = self.editor_load()?;
         if current.revision != expected {
             return Err(CoreError::new(
                 "CONFLICT",
                 "Drafts changed; retain local text and reload before retrying",
             ));
         }
+        self.editor_commit(current, change)
+    }
+    fn editor_commit(
+        &self,
+        mut current: EditorDraftSnapshot,
+        change: impl FnOnce(&mut EditorDraftDocument) -> Result<()>,
+    ) -> Result<EditorDraftSnapshot> {
+        let expected = current.revision.clone();
         let previous = current.document.clone();
         change(&mut current.document)?;
         if current.document == previous {
@@ -251,7 +360,7 @@ impl Store {
             &self.root.join(format!("editor-drafts-{expected}.backup")),
             &previous,
         )?;
-        self.editor_prune_backups(expected)?;
+        self.editor_prune_backups(&expected)?;
         self.editor_persist(&current.document)?;
         self.editor_load()
     }

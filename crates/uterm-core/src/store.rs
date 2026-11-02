@@ -9,7 +9,9 @@ use std::{
     path::{Path, PathBuf},
 };
 mod editor;
-pub use editor::{EditorDraft, EditorDraftDocument, EditorDraftSnapshot};
+pub use editor::{
+    EditorDraft, EditorDraftCollection, EditorDraftDocument, EditorDraftEntry, EditorDraftSnapshot,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

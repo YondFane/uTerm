@@ -128,8 +128,8 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 | ------------ | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | M0           | Accepted, unmerged / 已验收，未合并 | Both native architectures and legacy Tauri jobs passed                                                                                                    |
 | M1           | Accepted / 已验收                   | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。 |
-| M2           | In progress / 开发中                | Real host, shared session operations and native terminal in development / 真实宿主、共享会话操作及原生终端开发中                                          |
-| M3           | In progress / 开发中                | Shared files and readonly Tauri/WK content integrated; editing/drafts and other workflows remain / 共用文件及只读内容已接入，编辑草稿和后续流程未完成。   |
+| M2           | In progress / 开发中                | #29/#30 accepted at 4c502ab, unmerged; #31/#32 retain Agent/manual/arbitration gaps / 两任务已验收，阶段仍有缺口。                                        |
+| M3           | In progress / 开发中                | Readonly content and draft storage foundation pass 80746d3; editor UI and other workflows remain / 只读与草稿存储基础通过，编辑界面及后续能力未完成。     |
 | M4           | Pending / 待实现                    | Remaining capabilities, native interaction and measurements                                                                                               |
 | M5           | Pending / 待实现                    | Candidate packaging, signed update and rollback exercises                                                                                                 |
 
@@ -236,14 +236,14 @@ claimed. No project/status labels are invented.
 沿用当前分支和 Draft
 PR；总跟踪与原验收标准不变。本轮只认领实际处理的基线归档、旧格式验证与 M2 任务，不合并、不发版、不直接修改受保护目标分支。
 
-| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                                                                                                    |
-| ------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                                                                                                  |
-| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                                                                                                        |
-| M2 #16       | #29–#32       | Active: shared host/helper, native shell, cached SwiftTerm views, binary sequence/ack and split/reconnect. Automatic native/legacy checks and system screenshots verified at 6c78229; full capability and manual acceptance remain. / 6c78229 的自动检查和系统截图已验证，完整功能与人工验收未闭合。 |
-| M3 #17       | #33–#37       | Shared local files and scoped Tauri/WK content transport have real readonly text/HTML/PDF QA. Editing/drafts, Git, SSH and task services remain. / 共用文件与只读内容已自动验证，编辑草稿及后续服务未完成。                                                                                          |
-| M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                                                                                                           |
-| M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。                                                                               |
+| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                      |
+| ------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                    |
+| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                          |
+| M2 #16       | #29–#32       | #29/#30 closed at 4c502ab with four CI jobs; #31/#32 and stage remain open for Agent/manual/ownership gates. / 两任务已验收，阶段仍开放。                                                                              |
+| M3 #17       | #33–#37       | Shared files/readonly content and draft storage are tested; scoped queue integration is in development; editor UI, Git, SSH and tasks remain. / 共用文件、只读及草稿存储已测，队列接入开发中，编辑界面与后续服务仍缺。 |
+| M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                             |
+| M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。 |
 
 ### M2 implementation and verification / M2 实现与验证
 
@@ -566,53 +566,22 @@ incomplete rasterization if permissions fail. The new image method awaits actual
 
 ## Current accepted baseline / 当前已验收基线
 
-M0 tasks #20–#23 and stage #14 are completed, explicitly unmerged. Head
-`6c782299f038fb2168b8d11123b3e3e7027123e6`, tested merge `8af10958a10d2924696272b9c8e1ed533127311e`,
-passed native [41412826068](https://github.com/YondFane/uTerm/actions/runs/41412826068) and legacy
-[41412826038](https://github.com/YondFane/uTerm/actions/runs/41412826038). This entry supersedes
-pending statements for those earlier M0 checks; historical failed runs above remain tied to their
-own SHAs. No older result is relabeled as this source's pass.
+Verified head `80746d3d2e62a6b3d595cb242daf0755d4e75e7a`, tested merge
+`4c19ceac043e9222ab7485af727d956eebfc9f22`, passed all four jobs in native run 41474453573 and
+legacy run 41474453611. The stored draft foundation, actual TS/Rust and Swift C ABI
+byte/stale-write/ reopen checks and platform filesystem failure/retry passed. The native editor is
+still readonly. Source-specific evidence and artifact links are recorded on #34. New scoped draft
+queue/bridge work must provide its own committed-head CI and does not inherit this result.
 
-M0 任务与阶段均已验收关闭，明确未合并。上述同一 head／merge 的四个平台 job 全部通过，较早等待描述按其源码理解，失败记录保留，不把旧结果换名为新通过。
+M0 #14 and M1 #15 are accepted. #29 and #30 were accepted and closed at head
+`4c502ab0c5f39b1d4f43ec4e72f0c7f35b285cca`, tested merge `df2690d89433974653ff5426bab07be371f455c7`;
+their completion comments list actual screenshots, commands and all platform artifacts. M2 #16 and
+#31/#32 remain open for real Agent/manual and concurrent input/resize ownership/lifecycle gaps.
+M3–M5 retain their complete unexecuted gates; #13 remains open. No merge, release/main push, tag,
+Release or production feed change occurred.
 
-| Evidence / 证据             | Actual artifact / 实际产物                                                                                                                                               |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Native ARM / 原生 ARM       | [13126042625](https://github.com/YondFane/uTerm/actions/runs/41412826068/artifacts/13126042625), `native-qa-macos-15-6c782299f038fb2168b8d11123b3e3e7027123e6`           |
-| Native Intel / 原生 Intel   | [13125949025](https://github.com/YondFane/uTerm/actions/runs/41412826068/artifacts/13125949025), `native-qa-macos-15-intel-6c782299f038fb2168b8d11123b3e3e7027123e6`     |
-| Legacy Windows / 旧 Windows | [13126372381](https://github.com/YondFane/uTerm/actions/runs/41412826038/artifacts/13126372381), `legacy-checks-windows-latest-6c782299f038fb2168b8d11123b3e3e7027123e6` |
-| Legacy macOS / 旧 macOS     | [13126103232](https://github.com/YondFane/uTerm/actions/runs/41412826038/artifacts/13126103232), `legacy-checks-macos-latest-6c782299f038fb2168b8d11123b3e3e7027123e6`   |
-
-Native ARM macOS 15.8.2 / Intel 15.7.9 used Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Both passed 16
-core, four FFI and six Swift tests, zero-session visible window/normal exit, two real PTYs,
-Unicode/ANSI/alternate-screen return, split/hide/reopen, language/theme/width/sidebars/full-screen,
-detach/relaunch/replay retaining IDs/generations, explicit close and isolated idle-host shutdown.
-All 11 ARM PNGs and Intel empty/narrow/wide/full-screen samples were visually inspected.
-WindowServer captures include system buttons and complete light/dark compositing; older incomplete
-NSView images are excluded. `terminal-live.json.sessionCount` records the initial zero-session
-state; `splitSessionCount=2` records the result after creation, and the reconnect report proves
-teardown.
-
-两架构核心／桥接与实际窗口／终端自动场景通过，截图经上述范围目视核对；旧残缺图片排除。终端报告 sessionCount 为场景开始的 0，创建后的 splitSessionCount 为 2，重连报告验证最终关闭，不混淆生命周期阶段。
-
-Legacy Windows Server 2025 x64 (10.0.26100) passed 347 frontend tests with 11 skipped and 142
-backend checks with ten ignored. Legacy macOS ARM64 (Darwin 25.6.0) passed 348 frontend tests with
-ten skipped and 148 backend checks with ten ignored. Both used Node 24.22.1, pnpm 11.22.0 and Rust
-1.99.1; core/FFI/drift, real host/control, old-reader export, format/docs and desktop builds passed.
-Skipped/ignored service fixtures and native interaction are not reported as passed. Earlier Linux QA
-was exited normally and its dedicated display was stopped; no production host was touched.
-
-旧客户端上述结果来自实际 CI 报告，跳过／忽略项不计通过；Linux 隔离 QA 已正常退出，仅停止自身显示进程，没有操作生产宿主。
-
-M1 #24–#28 remain open for complete shared-boundary/failure-mode and native recovery acceptance. M2
-#29–#32 remain open for complete native control integration, helper-version transition coverage,
-keyboard/settings/real Agent TUI acceptance, full-range TypeScript sequence support, stress and
-multi-client input/resize arbitration. Sleep, multi-display and macOS 14 runtime acceptance remain
-unexecuted. M3–M5 capabilities, same-load performance, formal signing/notarization and actual
-installation upgrade/rollback remain incomplete. PR #12 stays Draft and targets release; no merge,
-direct release/main push, tag, Release or production feed change occurred.
-
-M1／M2 的完整边界、失败模式、恢复交互、控制服务／宿主过渡、键盘设置／真实 Agent、TypeScript 完整范围、压力及多客户端仲裁仍开放；休眠、多屏与 macOS
-14 运行未执行。M3–M5 接入、性能、签名公证及实际升级回退未完成。PR 保持 Draft，未合并、未直推 release/main、未打标签、未发布或改生产 feed。
+上述源码四 job 已通过草稿存储基础、真实 TS／Rust／Swift C
+ABI 字节及过期写入／重开、平台文件写失败／重试；原生编辑器仍只读，#34 评论有逐源码产物。新作用域队列／桥接仍须自己的提交 CI，不沿用该结果。M0／M1 及 #29／#30 已验收且未合入，#31／#32、M2、M3–M5 与总跟踪 #13 继续开放，完整原验收要求保留。未合并／直推 release/main／打标签／发版／改生产源。
 
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 

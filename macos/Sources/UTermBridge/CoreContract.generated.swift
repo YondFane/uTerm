@@ -34,10 +34,20 @@ public struct CoreEditorDraft: Codable, Sendable {
     public var version: String
 }
 
+public struct CoreEditorDraftCollection: Codable, Sendable {
+    public var drafts: [CoreEditorDraftEntry]
+    public var revision: String
+}
+
 public struct CoreEditorDraftDocument: Codable, Sendable {
     public var drafts: [CoreEditorDraft]
     public var schemaVersion: UInt32
     public var sourceDigest: String?
+}
+
+public struct CoreEditorDraftEntry: Codable, Sendable {
+    public var draft: CoreEditorDraft
+    public var revision: String
 }
 
 public struct CoreEditorDraftSnapshot: Codable, Sendable {

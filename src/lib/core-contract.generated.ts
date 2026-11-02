@@ -35,10 +35,20 @@ export interface CoreEditorDraft {
   version: string;
 }
 
+export interface CoreEditorDraftCollection {
+  drafts: CoreEditorDraftEntry[];
+  revision: string;
+}
+
 export interface CoreEditorDraftDocument {
   drafts: CoreEditorDraft[];
   schemaVersion: number;
   sourceDigest?: string | null;
+}
+
+export interface CoreEditorDraftEntry {
+  draft: CoreEditorDraft;
+  revision: string;
 }
 
 export interface CoreEditorDraftSnapshot {

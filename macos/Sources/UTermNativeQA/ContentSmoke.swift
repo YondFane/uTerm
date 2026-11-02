@@ -48,6 +48,17 @@ enum ContentSmoke {
         page.frame = NSRect(x: 0, y: 0, width: 420, height: 240)
         try page.dataWithPDF(inside: page.bounds).write(to: root.appendingPathComponent("preview.pdf"))
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
+        _ = try await bridge.call("editor.drafts.import", params: .object(["legacy": .null]))
+        let otherRoot = root.deletingLastPathComponent().appendingPathComponent("unselected-project")
+        for (directory, text) in [(root, "VISIBLE_DRAFT 中文"), (otherRoot, "HIDDEN_DRAFT_SECRET")] {
+            _ = try await bridge.call("editor.drafts.putDocument", params: .object([
+                "expectedDraftRevision": .null, "draft": .object([
+                    "directory": .string(directory.path), "path": .string("中文.txt"), "kind": .string("text"),
+                    "text": .string(text), "saved": .string("saved"), "version": .string(String(repeating: "a", count: 64)),
+                    "line_ending": .string("\n"), "bom": .bool(false)
+                ])
+            ]))
+        }
         var captures: [String] = []
         let before = try await bridge.snapshot()
         let font = before.document.settings["fileFontSize"].number ?? 14
@@ -75,6 +86,22 @@ enum ContentSmoke {
                 report["wrongDocumentRejected"] = wrongDocument == "DOCUMENT_DENIED"
                 report["rootEscapeRejected"] = rootEscape == "ROOT_DENIED"
                 report["writeRejected"] = write == "READ_ONLY"
+                let scoped = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
+                    content.webView.callAsyncJavaScript("""
+                        const reply = await window.webkit.messageHandlers.utermContent.postMessage({kind:'request',version:1,id:operationID,document:window.utermContentDocument,method:'editor_drafts_list',params:{directory}});
+                        return !reply.error && reply.result.drafts.length===1 && typeof reply.result.drafts[0].revision==='string' && /^[a-f0-9]{64}$/.test(reply.result.drafts[0].revision) && reply.result.drafts[0].draft.text==='VISIBLE_DRAFT 中文' && !JSON.stringify(reply.result).includes('HIDDEN_DRAFT_SECRET');
+                        """, arguments: ["directory": root.path, "operationID": UUID().uuidString], in: nil, in: .page) { result in
+                            switch result {
+                            case .success(let value): continuation.resume(returning: value as? Bool == true)
+                            case .failure(let error): continuation.resume(throwing: error)
+                            }
+                        }
+                }
+                report["scopedDraftsOnlySelectedRoot"] = scoped
+                report["draftRootRejected"] = try await request(content, method: "editor_drafts_list", params: ["directory": otherRoot.path]) == "ROOT_DENIED"
+                report["draftWriteRejected"] = try await request(content, method: "editor_drafts_remove", params: ["directory": root.path, "path": "中文.txt", "expectedDraftRevision": NSNull()]) == "READ_ONLY"
+                let retained = try await bridge.call("editor.drafts.document", params: .object(["directory": .string(root.path), "path": .string("中文.txt")]))
+                report["draftStoreUnaffectedByPreview"] = retained["draft"]["text"].string == "VISIBLE_DRAFT 中文"
                 guard let oldDocument = try await content.webView.evaluateJavaScript("window.utermContentDocument") as? String, !oldDocument.isEmpty else { throw BridgeFailure(code: "CONTENT_DOCUMENT", message: "Content document identity is missing") }
                 content.webView.reload()
                 let quoted = String(data: try JSONEncoder().encode(oldDocument), encoding: .utf8)!

@@ -478,6 +478,40 @@ impl Core {
             "editor.drafts.read" => {
                 serde_json::to_value(self.store.editor_read()?).map_err(Into::into)
             }
+            "editor.drafts.list" => {
+                let directory = match params.get("directory") {
+                    None | Some(Value::Null) => None,
+                    Some(Value::String(value)) => Some(value.as_str()),
+                    _ => {
+                        return Err(CoreError::new(
+                            "INVALID_PARAMS",
+                            "Draft directory must be text or null",
+                        ))
+                    }
+                };
+                serde_json::to_value(self.store.editor_list(directory)?).map_err(Into::into)
+            }
+            "editor.drafts.document" => serde_json::to_value(
+                self.store
+                    .editor_document(&string(&params, "directory")?, &string(&params, "path")?)?,
+            )
+            .map_err(Into::into),
+            "editor.drafts.putDocument" => {
+                let revision = draft_revision(&params)?;
+                serde_json::to_value(self.store.editor_put_document(
+                    revision,
+                    serde_json::from_value(params["draft"].clone())?,
+                )?)
+                .map_err(Into::into)
+            }
+            "editor.drafts.removeDocument" => {
+                self.store.editor_remove_document(
+                    draft_revision(&params)?,
+                    &string(&params, "directory")?,
+                    &string(&params, "path")?,
+                )?;
+                Ok(Value::Null)
+            }
             "editor.drafts.import" => {
                 let source = match params.get("legacy") {
                     Some(Value::Null) => None,
@@ -722,6 +756,20 @@ impl Core {
                 format!("Unknown operation: {method}"),
             )),
         }
+    }
+}
+fn draft_revision(params: &Value) -> Result<Option<&str>> {
+    match params.get("expectedDraftRevision") {
+        Some(Value::Null) => Ok(None),
+        Some(Value::String(value))
+            if value.len() == 64 && value.bytes().all(|c| c.is_ascii_hexdigit()) =>
+        {
+            Ok(Some(value))
+        }
+        _ => Err(CoreError::new(
+            "INVALID_PARAMS",
+            "An explicit document draft revision or null is required",
+        )),
     }
 }
 pub(crate) fn string(value: &Value, key: &str) -> Result<String> {

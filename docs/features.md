@@ -187,12 +187,24 @@ rather than deleting an original. Corruption needs explicit revision-checked res
 damaged bytes; relative draft paths reject absolute paths and parent traversal.
 
 This foundation is not yet connected to either editor UI. Tauri keeps its existing draft ownership
-and the native window remains readonly; native editing/crash recovery is not accepted. Linux tests
-cover multiple clients/documents, stale put/remove, exact sources, corruption, UTF-16 limits,
-symlinks and real filesystem write failure/retry. Eleven real TypeScript-to-Rust process tests pass,
-including reading a recovered draft with the unchanged legacy reader. A Swift C ABI test checks
-actual UTF-8/UTF-16 units, NUL, BOM and CRLF through generated DTOs; it awaits Mac CI. Fresh
-platform CI and native editing/close/reopen/crash scenarios remain pending in #34.
+and the native window remains readonly; native editing/crash recovery is not accepted. The storage
+foundation passed all four jobs at head `80746d3d2e62a6b3d595cb242daf0755d4e75e7a`, tested merge
+`4c19ceac043e9222ab7485af727d956eebfc9f22`
+([native CI](https://github.com/YondFane/uTerm/actions/runs/41474453573),
+[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41474453611)). Platform filesystem
+failure/ retry and nine Swift tests passed, including actual UTF-8/UTF-16 units, NUL, BOM, CRLF,
+stale removal and reopen through the C ABI. Eleven TypeScript/Rust process contracts passed at that
+source.
+
+Development transport now adds project-scoped draft reads and opaque document revision tokens. Rust
+allows different documents to advance independently and refuses a stale writer/remover for the same
+document. Both content adapters use the common contract. The client keeps only the latest waiting
+text per document, bounds pending text, retains failures for flush/retry and checks actual stored
+data after a lost reply. Close cancels delivery without claiming that a dispatched write was rolled
+back. Seventeen real Rust-process contract tests and two queue fixture checks pass on Linux; new
+native smoke checks selected-root-only results and readonly mutation rejection. Those additions need
+their own platform CI. Editor UI, tabs, close/reopen/crash recovery and editing/focus acceptance
+remain pending in #34.
 
 ## Project website
 

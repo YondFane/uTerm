@@ -172,6 +172,10 @@ copies and explicit recovery. It is a development API behind generated DTOs; bot
 need adoption and native editing acceptance. `pnpm test:core` explicitly runs filesystem failure/
 retry checks for workspace and draft snapshots.
 
+The bounded draft client queue lives in `src/lib/editor-drafts.ts`; content adapters use
+project-scoped reads and document revisions. Native preview keeps mutation disabled until editor
+lifecycle adoption is complete.
+
 The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
 operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this
 service. `pnpm test:host` includes the real standalone CLI/socket regression; `pnpm test:core`

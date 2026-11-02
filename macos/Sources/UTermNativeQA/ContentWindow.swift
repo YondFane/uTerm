@@ -144,6 +144,12 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Content cannot select a different project root") }
             let methods = ["file_read": "files.read", "files_list": "files.list", "files_search": "files.search"]
             return try await bridge.call(methods[request.method!]!, params: .object(params))
+        case "editor_drafts_list", "editor_drafts_document":
+            guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Draft cannot select another project root") }
+            let method = request.method == "editor_drafts_list" ? "editor.drafts.list" : "editor.drafts.document"
+            return try await bridge.call(method, params: .object(params))
+        case "editor_drafts_import", "editor_drafts_put", "editor_drafts_remove":
+            throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。"))
         case "file_save", "file_copy", "file_mutate":
             throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。"))
         case "editor_guard":
