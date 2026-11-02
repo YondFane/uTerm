@@ -218,17 +218,19 @@ WebView does not establish manual keyboard/IME/focus acceptance.
 
 Native quit freezes and confirms all content documents before closing them. Refusal, timeout, reload
 and stale replies retain the app; cancelled quit resumes prepared documents. Quit errors reveal the
-main window. Initialization failure also rejects draft flush when no writes are queued. A real
+main window. Initialization failure also rejects draft flush when no writes are queued; a real
 Rust-process regression first reproduced the incorrect success and now passes.
 
-Quit prepare/resume/timeout/stale-result window checks passed on both native architectures at head
+Quit prepare/resume/timeout/stale-result windows passed on both native architectures at head
 `7c283dc9dd520aa2f6b89375e179498c7777f7e1`, tested merge `88f906a7b3866ba1ff4a4ec0662e52ec33f5e9ee`
-([native CI](https://github.com/YondFane/uTerm/actions/runs/41490353869)). Editable head `c07af63`
-built and passed 12 Swift checks on ARM, but its editor QA driver treated WebKit's completion API as
-an async return, losing its result. The explicit continuation fix awaits its own native run. Linux's
-real isolated Tauri run at that head passed 12 scenarios with no cleanup errors; it does not
-establish native editor acceptance. #33/#34 remain open for successful editor platform evidence,
-tabs, two-client migration/recovery and manual editing/focus.
+([native CI](https://github.com/YondFane/uTerm/actions/runs/41490353869)). Editable `fdbe29a` built
+and passed bridge checks on ARM, but actual editor QA failed its exact-byte durable-checkpoint
+assertion. The driver now activates the native window/first responder and records expected/stored
+UTF-8 bytes, DOM text, alert/save state and a real failure screenshot. Byte and original-file
+assertions remain unchanged; the new native run must establish the cause and result. Linux's real
+isolated Tauri run at `c07af63` passed 12 scenarios without cleanup errors; it does not establish
+native editor acceptance. #33/#34 remain open for successful editor platform evidence, tabs,
+two-client migration/recovery and manual editing/focus.
 
 ## Project website
 

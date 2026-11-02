@@ -22,6 +22,11 @@ enum EditorSmoke {
     }
 
     private static func replace(_ content: ContentWindow, text: String) async throws {
+        guard let window = content.window else { throw BridgeFailure(code: "EDITOR_WINDOW", message: "Editor window missing") }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        guard window.makeFirstResponder(content.webView) else { throw BridgeFailure(code: "EDITOR_FOCUS", message: "Native WK editor cannot become first responder") }
+        try await Task.sleep(for: .milliseconds(100))
         let ready = try await evaluate(content, script: """
             const editor=document.querySelector('.cm-content[contenteditable=true]');
             if(!editor) return false;
@@ -75,12 +80,27 @@ enum EditorSmoke {
             try await replace(content, text: edited)
             let deadline = Date().addingTimeInterval(15)
             var durable = false
+            var storedText = ""
             while Date() < deadline {
                 let stored = try await draft(bridge, root: root)
-                if let text = stored["draft"]["text"].string, Data(text.utf8) == Data(edited.utf8) { durable = true; break }
+                storedText = stored["draft"]["text"].string ?? ""
+                if Data(storedText.utf8) == Data(edited.utf8) { durable = true; break }
                 try await Task.sleep(for: .milliseconds(30))
             }
-            guard durable, try Data(contentsOf: file) == original else { throw BridgeFailure(code: "EDITOR_CHECKPOINT", message: "Edited draft was not durable while original file remained unchanged") }
+            let unchanged = try Data(contentsOf: file) == original
+            report["checkpointExpectedUTF8"] = Array(edited.utf8)
+            report["checkpointActualUTF8"] = Array(storedText.utf8)
+            report["checkpointStoredText"] = storedText
+            report["checkpointDOMText"] = (try? await content.webView.evaluateJavaScript("document.querySelector('.cm-content')?.innerText || ''")) as? String ?? ""
+            report["checkpointAlert"] = (try? await content.webView.evaluateJavaScript("document.querySelector('[role=alert]')?.textContent || ''")) as? String ?? ""
+            report["checkpointSaveState"] = (try? await content.webView.evaluateJavaScript("document.querySelector('.editor-save-state')?.textContent || ''")) as? String ?? ""
+            report["checkpointOriginalUnchanged"] = unchanged
+            guard durable, unchanged else {
+                let image = "native-editor-checkpoint-failure.png"
+                do { try await capture(content, reportPath: reportPath, name: image); report["failureCapture"] = image }
+                catch { report["failureCaptureError"] = error.localizedDescription }
+                throw BridgeFailure(code: "EDITOR_CHECKPOINT", message: "Edited draft was not durable while original file remained unchanged")
+            }
             report["editedDraftDurableBeforeKill"] = true
             report["originalBytesBeforeKill"] = true
             report["wrongFileWriteRejected"] = try await ContentSmoke.request(content, method: "file_save", params: ["directory": root.path, "path": "other.txt", "text": "denied", "expected": String(repeating: "a", count: 64), "force": true]) == "ROOT_DENIED"
