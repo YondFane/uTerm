@@ -47,6 +47,8 @@ function type(schema, swift) {
     ? { string: "String", integer: "UInt32", number: "Double", boolean: "Bool" }
     : { string: "string", integer: "number", number: "number", boolean: "boolean" };
   if (!scalar[schema.type]) throw Error(`Unsupported contract schema: ${JSON.stringify(schema)}`);
+  if (!swift && schema.type === "integer" && ["uint64", "int64"].includes(schema.format))
+    return "bigint";
   if (swift && schema.type === "integer")
     return (
       {

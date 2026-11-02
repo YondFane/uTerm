@@ -1,7 +1,7 @@
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
-import { decodeTerminalFrame } from "../src/lib/terminal-frame.ts";
+import { decodeTerminalFrame, terminalAcknowledgement } from "../src/lib/terminal-frame.ts";
 
 const metadata = {
   agent_state: "idle",
@@ -27,7 +27,7 @@ test("binary terminal frames preserve all bytes and replay/exit metadata without
   for (const data of [new Uint8Array(), Uint8Array.from({ length: 256 }, (_, i) => i)]) {
     const payload = encode(metadata, data);
     const { data: decoded, ...header } = decodeTerminalFrame(payload);
-    assert.deepEqual(header, metadata);
+    assert.deepEqual(header, { ...metadata, sequence: 42n });
     assert.deepEqual(decoded, data);
     assert.equal(decoded.buffer, payload);
   }
@@ -56,7 +56,7 @@ test("terminal frames validate independent activity events while accepting older
   const event = { id: "event-a", sequence: 41, kind: "notice", source: "terminal" };
   assert.deepEqual(
     decodeTerminalFrame(encode({ ...metadata, agent_events: [event] })).agent_events,
-    [event],
+    [{ ...event, sequence: 41n }],
   );
   assert.equal(decodeTerminalFrame(encode(metadata)).agent_events, undefined);
   for (const agent_events of [
@@ -72,7 +72,7 @@ test("terminal frames validate independent activity events while accepting older
   }
 });
 
-test("Rust terminal fixtures preserve safe sequence values and reject all unsafe u64 values", () => {
+test("Rust terminal fixtures and acknowledgements retain every u64 digit", () => {
   const fixtures = JSON.parse(
     readFileSync(new URL("../shared/fixtures/terminal-precision.json", import.meta.url), "utf8"),
   );
@@ -81,12 +81,33 @@ test("Rust terminal fixtures preserve safe sequence values and reject all unsafe
     const frame = new ArrayBuffer(4 + bytes.length);
     new DataView(frame).setUint32(0, bytes.length, true);
     new Uint8Array(frame, 4).set(bytes);
-    if (BigInt(sequence) <= BigInt(Number.MAX_SAFE_INTEGER)) {
-      const decoded = decodeTerminalFrame(frame);
-      assert.equal(BigInt(decoded.sequence).toString(), sequence);
-      assert.equal(BigInt(decoded.agent_events[0].sequence).toString(), sequence);
-    } else {
-      assert.throws(() => decodeTerminalFrame(frame), /Invalid terminal frame metadata/);
-    }
+    const decoded = decodeTerminalFrame(frame);
+    assert.equal(decoded.sequence.toString(), sequence);
+    assert.equal(decoded.agent_events[0].sequence.toString(), sequence);
+    const wire = terminalAcknowledgement(decoded.sequence);
+    assert.equal(BigInt(wire).toString(), sequence);
+    assert.equal(JSON.parse(JSON.stringify({ sequence: wire })).sequence, wire);
+    if (BigInt(sequence) > BigInt(Number.MAX_SAFE_INTEGER)) assert.equal(typeof wire, "string");
+    else assert.equal(typeof wire, "number");
+  }
+});
+
+test("exact sequence scanning respects strings, escaped keys and unsigned integer syntax", () => {
+  const text = 'literal "sequence":9007199254740993 and slash \\';
+  const frame = encode({ ...metadata, error: text, sequence: "18446744073709551615" });
+  assert.equal(decodeTerminalFrame(frame).error, text);
+  assert.equal(decodeTerminalFrame(frame).sequence, 18446744073709551615n);
+  for (const value of ["-1", "01", "+1", "1e3", "18446744073709551616", 1.5, true, null]) {
+    assert.throws(() => decodeTerminalFrame(encode({ ...metadata, sequence: value })));
+  }
+  for (const value of [-1n, 1n << 64n]) assert.throws(() => terminalAcknowledgement(value));
+  assert.equal(terminalAcknowledgement(0n), 0);
+  for (const literal of ["1.0", "1e3", "-1", "18446744073709551616"]) {
+    const raw = JSON.stringify(metadata).replace('"sequence":42', '"seq\\u0075ence":' + literal);
+    const bytes = Buffer.from(raw);
+    const data = new ArrayBuffer(4 + bytes.length);
+    new DataView(data).setUint32(0, bytes.length, true);
+    new Uint8Array(data, 4).set(bytes);
+    assert.throws(() => decodeTerminalFrame(data));
   }
 });

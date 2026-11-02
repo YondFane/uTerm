@@ -581,3 +581,17 @@ NSTableView reentrancy diagnostic. Actual macOS build/run and image verification
 this correction; the previous warning is not relabeled as fixed before execution.
 
 #30／#32 新增明确的 AppKit 更新与用户操作边界，并在原生重连脚本中拒绝已知重入告警。待新 macOS 实际运行及截图检查后确认，不提前把旧警告标为已解决。
+
+### Full-range terminal sequence / 完整范围终端序列
+
+For #24/#31 Rust uint64 schema fields now generate TypeScript `bigint`. The terminal metadata
+scanner preserves sequence integer tokens before JSON number conversion, respecting quoted strings
+and escaped keys; Swift continues exact UInt64 decoding. Safe acknowledgements retain their old
+numeric form, while larger values use decimal text validated by the same Rust parser in core and
+Tauri. The host protocol and binary output bytes do not change. Shared fixtures cover the full u64
+range; real-host tests acknowledge via decimal text. Missing/null/error contract tests preserve
+snapshot and operation identity. Focused local tests and compilation passed; new platform CI is
+pending.
+
+#24／#31 由 Rust
+schema 生成 bigint，并在 JSON 数值转换前保留精确 token；确认经兼容边界进入共用 Rust 校验，宿主协议不变。共用样例、真实宿主及契约失败模式验证已补齐，新平台结果仍待 CI。

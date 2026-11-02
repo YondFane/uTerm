@@ -42,8 +42,8 @@ helper 管理真实 PTY；退出只断开连接，**关闭会话**核对 generat
 
 SwiftTerm 固定为兼容 Xcode 16.4 的 1.20.0。输出以二进制帧跨越 C
 ABI，每条链路最多一帧未确认，Swift 队列有界。Swift 将 sequence 及活动 sequence 解码为
-`UInt64`，发送确认时不经过 `Double`。旧 TypeScript 解码器拒绝超过 `Number.MAX_SAFE_INTEGER`
-的数值，避免舍入后确认；TypeScript 的完整 64 位范围支持仍是协议限制。
+`UInt64`，发送确认时不经过 `Double`。TypeScript 使用生成的 `bigint`
+sequence 字段，在 JSON 舍入前保留整数字面量。确认使用兼容旧版的安全整数或精确十进制字符串，Rust 校验至 u64::MAX。宿主二进制帧格式不变，边界测试验证实际数值而非仅类型名称；此精度改动仍待新平台 CI。
 
 #### 原生 QA 验证
 

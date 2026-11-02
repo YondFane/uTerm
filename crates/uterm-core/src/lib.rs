@@ -391,7 +391,17 @@ impl Core {
                     .get("cols")
                     .map(|_| dimension(&params, "cols"))
                     .transpose()?;
-                let sequence = params.get("sequence").and_then(Value::as_u64);
+                let sequence = params
+                    .get("sequence")
+                    .map(terminal::parse_sequence)
+                    .transpose()
+                    .map_err(host_error)?;
+                if action == "ack" && sequence.is_none() {
+                    return Err(CoreError::new(
+                        "INVALID_ARGUMENT",
+                        "Acknowledgement requires a sequence",
+                    ));
+                }
                 self.links
                     .action(&attachment, &action, None, rows, cols, sequence)
                     .map_err(host_error)?;

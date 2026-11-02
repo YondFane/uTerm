@@ -6,7 +6,7 @@ export type JSONValue =
 export interface CoreActivityEvent {
   id: string;
   kind: string;
-  sequence: number;
+  sequence: bigint;
   source: string;
 }
 
@@ -77,7 +77,7 @@ export interface CoreTerminalHeader {
   generation?: string | null;
   reset: boolean;
   rows: number;
-  sequence: number;
+  sequence: bigint;
 }
 
 export interface CoreViewSnapshot {

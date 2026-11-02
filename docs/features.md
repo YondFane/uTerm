@@ -48,9 +48,11 @@ Reconnecting replays retained output with the existing process generation.
 
 SwiftTerm 1.20.0 is pinned for Xcode 16.4 compatibility. Output crosses the C ABI as binary frames,
 with one unacknowledged frame per attachment and a bounded Swift queue. Swift decodes sequence and
-activity sequence as `UInt64` and encodes acknowledgements without passing through `Double`. The
-legacy TypeScript decoder rejects values above `Number.MAX_SAFE_INTEGER` rather than rounding an
-acknowledgement; full-range TypeScript sequence support remains a protocol limitation.
+activity sequence as `UInt64` and encodes acknowledgements without passing through `Double`.
+TypeScript uses generated `bigint` sequence fields and preserves integer tokens before JSON can
+round them. Acknowledgements use legacy safe numbers or exact decimal strings, both validated by
+Rust up to u64::MAX. The host binary frame format is unchanged. Boundary tests cover actual values,
+not only type names; fresh platform CI for this precision change is pending.
 
 #### Native QA validation
 

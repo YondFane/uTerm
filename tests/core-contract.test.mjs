@@ -259,3 +259,44 @@ test("legacy export is readable by unchanged release readers and retains opaque 
   assert.equal(repeated.result.revision, snapshot.revision);
   assert.deepEqual((await call("legacy.export")).result, exported);
 });
+
+test("Rust request failures retain operation identity and missing/null values do not reset state", async (t) => {
+  const call = await client(t);
+  const baseline = (await call("state.defaults")).result;
+  const imported = (
+    await call("migration.import", {
+      workspace: baseline.workspace,
+      settings: baseline.settings,
+      legacy: {},
+    })
+  ).result;
+  for (const params of [
+    { settings: baseline.settings },
+    { workspace: null, settings: baseline.settings },
+    { workspace: baseline.workspace, settings: null },
+    { workspace: baseline.workspace },
+    { workspace: {}, settings: baseline.settings },
+  ]) {
+    const response = await call(
+      "snapshot.replace",
+      { ...params, expectedRevision: imported.revision },
+      "boundary-failure",
+    );
+    assert.equal(response.id, "boundary-failure");
+    assert.equal(response.version, 1);
+    assert.equal(typeof response.error.code, "string");
+    assert.equal(typeof response.error.recoverable, "boolean");
+    assert.equal(response.result, undefined);
+    assert.deepEqual((await call("snapshot.read")).result, imported);
+  }
+  assert.deepEqual((await call("snapshot.read", null)).result, imported);
+  const unknown = await call("unknown.operation", null, "unknown-id");
+  assert.equal(unknown.id, "unknown-id");
+  assert.equal(unknown.error.code, "UNKNOWN_METHOD");
+  const empty = await call("settings.patch", {
+    expectedRevision: imported.revision,
+    patch: { enabledAgents: [] },
+  });
+  assert.equal(empty.error, undefined);
+  assert.deepEqual(empty.result.document.settings.enabledAgents, []);
+});

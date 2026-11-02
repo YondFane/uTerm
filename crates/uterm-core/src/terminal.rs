@@ -34,6 +34,22 @@ pub struct TerminalHeader {
     pub error: Option<String>,
 }
 
+pub fn parse_sequence(value: &serde_json::Value) -> Result<u64, String> {
+    if let Some(number) = value.as_u64() {
+        return Ok(number);
+    }
+    if let Some(text) = value.as_str() {
+        if !text.is_empty()
+            && text.len() <= 20
+            && (text == "0" || !text.starts_with('0'))
+            && text.bytes().all(|b| b.is_ascii_digit())
+        {
+            return text.parse().map_err(|_| "Invalid terminal sequence".into());
+        }
+    }
+    Err("Invalid terminal sequence".into())
+}
+
 pub type Sink = Arc<dyn Fn(&str, &str, Frame) -> Result<(), String> + Send + Sync>;
 pub struct Link {
     pub session: String,
@@ -361,6 +377,28 @@ fn stream(link: &Link, attachment: &str, sink: &Sink) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn acknowledgements_accept_exact_legacy_numbers_and_decimal_u64() {
+        for n in [0, (1u64 << 53) - 1, 1u64 << 53, (1u64 << 53) + 1, u64::MAX] {
+            assert_eq!(parse_sequence(&serde_json::json!(n)).unwrap(), n);
+            assert_eq!(
+                parse_sequence(&serde_json::json!(n.to_string())).unwrap(),
+                n
+            );
+        }
+        for value in [
+            serde_json::json!("18446744073709551616"),
+            serde_json::json!("01"),
+            serde_json::json!("+1"),
+            serde_json::json!("1e2"),
+            serde_json::json!(-1),
+            serde_json::json!(1.5),
+            serde_json::Value::Null,
+        ] {
+            assert!(parse_sequence(&value).is_err(), "{value}");
+        }
+    }
+
     #[test]
     fn binary_frame_preserves_metadata_and_raw_output() {
         let frame = Frame {

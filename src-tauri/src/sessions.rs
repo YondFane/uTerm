@@ -311,8 +311,15 @@ pub async fn session_action(
     data: Option<Vec<u8>>,
     rows: Option<u16>,
     cols: Option<u16>,
-    sequence: Option<u64>,
+    sequence: Option<serde_json::Value>,
 ) -> Result<(), String> {
+    let sequence = sequence
+        .as_ref()
+        .map(uterm_core::terminal::parse_sequence)
+        .transpose()?;
+    if action == "ack" && sequence.is_none() {
+        return Err("Acknowledgement requires a sequence".into());
+    }
     let state = state.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
         state.links.action(&id, &action, data, rows, cols, sequence)

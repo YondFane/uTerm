@@ -94,7 +94,7 @@ fn real_shared_terminal_preserves_backpressure_generation_replay_and_detached_pr
     call(
         &core,
         "terminal.action",
-        json!({"attachment":"first","action":"ack","sequence":first.sequence}),
+        json!({"attachment":"first","action":"ack","sequence":first.sequence.to_string()}),
     );
     let mut output = first.data;
     let deadline = Instant::now() + Duration::from_secs(10);

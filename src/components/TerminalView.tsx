@@ -14,7 +14,7 @@ import {
   terminalPunctuationKey,
 } from "../lib/terminal-input";
 import { autoCloseAgent, closeAttachedSession } from "../lib/session-lifecycle";
-import { decodeTerminalFrame } from "../lib/terminal-frame";
+import { decodeTerminalFrame, terminalAcknowledgement } from "../lib/terminal-frame";
 import {
   followTaskReplayViewport,
   restoreTaskReplayViewport,
@@ -494,7 +494,7 @@ export function TerminalView({
       if (event.foreground_agent !== undefined) detectedAgentRef.current(event.foreground_agent);
       if (event.error) {
         setError(event.error);
-        if (!data.length && event.sequence === 0) {
+        if (!data.length && event.sequence === 0n) {
           setStatus("disconnected");
           term.options.disableStdin = true;
           return;
@@ -533,7 +533,10 @@ export function TerminalView({
         // Acknowledge after xterm consumes the bytes to keep output backpressure bounded.
         current.ready
           .then(() => {
-            if (!current.closed) return action(current.id, "ack", { sequence: event.sequence });
+            if (!current.closed)
+              return action(current.id, "ack", {
+                sequence: terminalAcknowledgement(event.sequence),
+              });
           })
           .then(() => {
             // Close agent chats only after consuming and acknowledging their final output.
