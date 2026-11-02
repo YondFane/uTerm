@@ -74,12 +74,30 @@
 .python-run-panel .java-task-output > .java-help {
   margin: 0;
 }
-.python-log-follow {
+.session-controls .python-log-follow {
   display: inline-flex;
+  flex: 0 0 auto;
+  align-self: center;
   align-items: center;
   gap: 4px;
   font-size: 11px;
   white-space: nowrap;
+}
+.session-controls .python-log-follow > input {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  padding: 0;
+}
+.python-form-actions {
+  justify-content: flex-end;
+}
+.python-form-actions > button {
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 4px 10px;
+  font-size: 12px;
 }
 .python-run-panel .terminal-font-controls {
   display: none;
