@@ -121,13 +121,16 @@ expired and repeated requests are rejected. The control loop stops before bridge
 
 Linux real-socket, real-PTY and C ABI tests cover lease exclusion, literal input, draining on close,
 stale revisions/generations, Worktree isolation and committed revision events. A new macOS smoke
-uses the bundled CLI, native accessibility press, two PTYs and WindowServer captures. Its native
+uses the bundled CLI, native AppKit checkbox action, two PTYs and WindowServer captures. Its native
 integration acceptance is pending CI; manual input and IME acceptance remain separate. Mac
 diagnostics identified a CLI request ending with `EAGAIN` before dispatch. Accepted sockets now
 explicitly use blocking mode with the existing timeouts. Regression tests first reproduced this
 failure and a writer lock retained by a copied file descriptor, then passed after the connection
 correction and explicit transaction unlock. OS lock interruptions retry; other I/O errors remain
-distinguishable. Fresh Mac core and native control results are required.
+distinguishable. Fresh Mac core and native control results are required. The native control
+preference uses an AppKit checkbox with normal target/action and keyboard access. QA dismisses open
+sheets before termination, so a failed control scenario reports its actual failure instead of timing
+out.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain

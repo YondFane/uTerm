@@ -232,7 +232,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private func finishReport(_ report: [String: Any], path: String) {
         do {
             try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: URL(fileURLWithPath: path), options: .atomic)
-            NSApp.terminate(nil)
+            // Dismiss QA sheets before asking AppKit to terminate after a failed scenario.
+            // 失败场景先关闭 QA sheet，避免 AppKit 延后退出而掩盖原始报告。
+            model.settingsPresented = false
+            model.nameDraft = nil
+            Task { @MainActor in
+                for _ in 0..<40 {
+                    guard self.window?.attachedSheet != nil else { break }
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                if let sheet = self.window?.attachedSheet { self.window?.endSheet(sheet) }
+                NSApp.terminate(nil)
+            }
         } catch { fputs("Native smoke report failed: \(error)\n", stderr); exit(1) }
     }
 

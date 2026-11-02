@@ -929,7 +929,7 @@ removing configuration or stopping the process, then closes the matching generat
 checks committed revision events and service cleanup. Swift/UI execution requires fresh Mac CI.
 `scripts/macos-control-smoke.sh` uses the bundled CLI for
 status/projects/sessions/new/open/send/close, rejects modal writes, presses the native Settings
-toggle through in-process accessibility and captures Settings plus terminal output. Dedicated
+checkbox through `NSButton.performClick` and captures Settings plus terminal output. Dedicated
 temporary projects/hosts are cleaned on success and failure. These are automated native actions, not
 manual IME/clipboard/sleep acceptance.
 
@@ -941,7 +941,7 @@ new native action code requires its own committed head evidence. #29/#30 and M2 
 
 Linux 真实 socket 测试覆盖认领／过期／重复、过期写入不创建会话、路径别名及 Worktree 隔离；真实 PTY 拒绝旧 generation 关闭且保留配置／进程，再关闭匹配代际；C
 ABI 检查提交事件和服务清理。Swift／界面需新 Mac
-CI。新脚本通过包内 CLI 检查上述命令、对话框保护、进程内原生辅助功能按下开关及设置／终端截图，成功失败均清理临时项目和宿主。不冒充人工输入法／剪贴板／休眠验收。
+CI。新脚本通过包内 CLI 检查上述命令、对话框保护、进程内原生 AppKit 复选框操作开关及设置／终端截图，成功失败均清理临时项目和宿主。不冒充人工输入法／剪贴板／休眠验收。
 
 上述 acb79d6 的四 job 验证共享服务及 Tauri 集成，不能当作新原生命令代码的验收；#29／#30 及 M2 仍开放。
 
@@ -953,3 +953,14 @@ include the method and an early client result. Assertions and five-second queue 
 The cause is not declared resolved until fresh Mac execution passes.
 
 上述 head 双原生构建通过，但核心测试先失败，不能算控制窗口验收。锁调用现重试 Interrupted，区分其他 I/O 与真实竞争；测试输出方法名及提前结束的客户端结果，保留原断言和五秒入队期限。需新 Mac 实际结果，尚不宣称原因已解决。
+
+The diagnostic Intel run 41462738149 reached the real control window but could not find SwiftUI's
+virtual accessibility node; its open sheet delayed termination. The preference now uses a native
+AppKit checkbox, driven by `NSButton.performClick` in QA. Report completion dismisses QA sheets
+before normal shutdown. Native screenshots and CLI acceptance for this correction remain pending;
+the failed run's report and thread sample are retained in its uploaded artifact.
+
+诊断运行 41462738149 的 Intel
+job 已进入真实控制窗口，但找不到 SwiftUI 虚拟辅助功能节点；打开的 sheet 延后退出。本地控制偏好改用原生 AppKit 复选框，QA 通过
+`NSButton.performClick` 执行正常操作；报告完成后先关闭 QA
+sheet，再正常清理。此修正的原生截图与 CLI 验收仍待执行；失败运行已上传报告与线程采样。

@@ -135,11 +135,7 @@ struct BasicSettingsView: View {
                 } onIncrement: { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(1)]) } }
                   onDecrement: { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(-1)]) } }
                 Section(localized("Local control", "本地控制")) {
-                    Toggle(localized("Allow local CLI control", "允许本地 CLI 控制"), isOn: Binding(
-                        get: { model.controlStatus["enabled"].bool ?? false },
-                        set: { enabled in Task { await model.configureControl(enabled) } }
-                    )).accessibilityIdentifier("native-local-control-toggle")
-                        .disabled(model.controlStatus["enabled"].bool == nil || model.controlBusy)
+                    LocalControlCheckbox(model: model)
                     if let directory = model.controlStatus["directory"].string {
                         Text(localized("CLI data directory: ", "CLI 数据目录：") + directory)
                             .font(.caption).textSelection(.enabled)
@@ -160,6 +156,32 @@ struct BasicSettingsView: View {
             if !model.error.isEmpty { Text(model.error).font(.caption).textSelection(.enabled) }
             HStack { Spacer(); Button(localized("Done", "完成")) { model.settingsPresented = false }.keyboardShortcut(.defaultAction) }.padding()
         }.frame(width: 440, height: 420)
+    }
+}
+
+@MainActor
+private struct LocalControlCheckbox: NSViewRepresentable {
+    @ObservedObject var model: WorkspaceModel
+    func makeCoordinator() -> Coordinator { Coordinator(model) }
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(checkboxWithTitle: "", target: context.coordinator, action: #selector(Coordinator.changed(_:)))
+        button.identifier = NSUserInterfaceItemIdentifier("native-local-control-toggle")
+        button.setAccessibilityIdentifier("native-local-control-toggle")
+        return button
+    }
+    func updateNSView(_ button: NSButton, context: Context) {
+        context.coordinator.model = model
+        button.title = localized("Allow local CLI control", "允许本地 CLI 控制")
+        button.state = model.controlStatus["enabled"].bool == true ? .on : .off
+        button.isEnabled = context.environment.isEnabled && model.controlStatus["enabled"].bool != nil && !model.controlBusy
+    }
+    @MainActor final class Coordinator: NSObject {
+        var model: WorkspaceModel
+        init(_ model: WorkspaceModel) { self.model = model }
+        @objc func changed(_ sender: NSButton) {
+            let enabled = sender.state == .on
+            Task { await model.configureControl(enabled) }
+        }
     }
 }
 

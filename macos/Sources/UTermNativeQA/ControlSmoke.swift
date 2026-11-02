@@ -5,27 +5,16 @@ import UTermBridge
 @MainActor
 enum ControlSmoke {
     private static func pressControlToggle(in window: NSWindow) throws -> Bool {
-        let children = NSSelectorFromString("accessibilityChildren")
-        let identifier = NSSelectorFromString("accessibilityIdentifier")
-        let press = NSSelectorFromString("accessibilityPerformPress")
-        var queue: [NSObject] = [window]
-        if let content = window.contentView { queue.append(content) }
-        var visited = Set<ObjectIdentifier>()
-        while !queue.isEmpty && visited.count < 2000 {
-            let object = queue.removeFirst()
-            guard visited.insert(ObjectIdentifier(object)).inserted else { continue }
-            if object.responds(to: identifier),
-               let value = object.perform(identifier)?.takeUnretainedValue() as? String,
-               value == "native-local-control-toggle", object.responds(to: press) {
-                // SwiftUI exposes virtual accessibility nodes rather than stable NSControl classes.
-                // SwiftUI 暴露虚拟辅助功能节点，而非固定的 NSControl 子类。
-                typealias Action = @convention(c) (AnyObject, Selector) -> Bool
-                let action = unsafeBitCast(object.method(for: press), to: Action.self)
-                guard action(object, press) else { throw BridgeFailure(code: "CONTROL_SMOKE", message: "Native control toggle rejected accessibility press") }
+        var queue = window.contentView.map { [$0] } ?? []
+        while !queue.isEmpty {
+            let view = queue.removeFirst()
+            if let button = view as? NSButton,
+               button.identifier?.rawValue == "native-local-control-toggle" {
+                guard button.isEnabled else { return false }
+                button.performClick(nil)
                 return true
             }
-            if object.responds(to: children), let values = object.perform(children)?.takeUnretainedValue() as? [NSObject] { queue.append(contentsOf: values) }
-            if let view = object as? NSView { queue.append(contentsOf: view.subviews) }
+            queue.append(contentsOf: view.subviews)
         }
         return false
     }
@@ -77,8 +66,8 @@ enum ControlSmoke {
             if try pressControlToggle(in: window.attachedSheet!) { pressed = true; break }
             try await Task.sleep(for: .milliseconds(50))
         }
-        guard pressed else { throw BridgeFailure(code: "CONTROL_SMOKE", message: "Native control toggle accessibility node is unavailable") }
-        try await TerminalSmoke.wait("Enable control through the native Toggle") { model.controlStatus["enabled"].bool == true && !model.controlBusy }
+        guard pressed else { throw BridgeFailure(code: "CONTROL_SMOKE", message: "Native control checkbox is unavailable") }
+        try await TerminalSmoke.wait("Enable control through the native checkbox") { model.controlStatus["enabled"].bool == true && !model.controlBusy }
         let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
         try await TerminalSmoke.capture(window: window.attachedSheet!, path: directory.appendingPathComponent("native-control-settings.png"))
         let status = try await cli(root: root, args: ["status"])
@@ -86,7 +75,7 @@ enum ControlSmoke {
         let guarded = try await cli(root: root, args: ["sessions", "new", project.path], failure: true)
         guard guarded["error"].string?.contains("dialog") == true else { throw BridgeFailure(code: "CONTROL_SMOKE", message: "Modal guard did not reject the command") }
         report["settingsGuardRejectedWrite"] = true
-        report["controlSettingsDriver"] = "In-process native accessibility press; not manual pointer input"
+        report["controlSettingsDriver"] = "Native NSButton.performClick target/action; not manual pointer input"
         model.settingsPresented = false
         try await TerminalSmoke.wait("Dismiss control settings") { window.attachedSheet == nil }
         let projects = try await cli(root: root, args: ["projects", "list"])
