@@ -700,3 +700,21 @@ failed evidence, not a successful native PDF acceptance. No Issue is closed from
 上述源码／测试合并 SHA 的 ARM 八项 Swift、只读文本／HTML、字号及沙箱检查通过；三个拒绝断言因回调结果等待错误失败，已以 continuation 修正并记录实际错误码。目视检查发现 PDF 图片有缺少 Map
 API 的错误，不能以画布已创建宣称渲染成功；现改用同版本兼容构建并要求完成渲染且无错误，等待新 macOS
 CI。失败 artifact 保留原报告、日志及三张系统图，PDF 图不计为通过，不据此关闭 Issue。
+
+### M2 helper transition matrix / M2 helper 过渡矩阵
+
+For #29 two additional real-process tests start the actual helper at its original path. An active
+PTY retains PID/executable/generation and executes a liveness command; after explicit close the
+broker safely replaces the idle host with its digest-staged executable, without changing source
+bytes. Another test injects an incompatible endpoint version while retaining the real process and
+checks that no endpoint overwrite or session termination occurs. The endpoint is restored before
+cleanup, including failure paths; authentication bytes are not printed. This tests incompatible
+advertised metadata, not a separately compiled historical protocol implementation.
+
+Linux x86_64 / Rust 1.99.1 passed all three host tests and `pnpm test:core`, including FFI and the
+explicit filesystem-failure case. New platform CI remains pending. Native control-service adoption,
+full settings entry and the remaining compatibility matrix keep #29 open.
+
+#29 新增两个真实进程检查：原路径活跃 helper 保持 PID／路径／generation 并执行存活命令；明确关闭后才将空闲宿主替换为摘要暂存副本，源字节不变。另注入不兼容端点版本，验证不覆盖端点或终止真实会话；清理前恢复端点，失败路径也不打印认证字节。该案例是不兼容元数据，非单独编译的历史协议实现。Linux
+x86_64／Rust
+1.99.1 三项宿主及完整 test:core 通过，新平台 CI 待执行；原生 control／完整设置入口和剩余矩阵继续保持 #29 开放。

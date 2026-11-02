@@ -74,6 +74,9 @@ QA 应用使用临时项目和数据，不读取生产数据。`native-qa-*`
 的[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41424253962)
 通过，不代表人工键盘或输入法验收。
 
+helper 回归还运行真实临时进程：原路径的活跃宿主保留 PID 和会话 generation，明确关闭后空闲宿主才迁到摘要暂存目录；注入不兼容端点版本时保留端点字节、进程和 PTY。Linux 三项宿主测试通过，新增案例的 Windows／macOS
+CI 待执行；不兼容版本来自端点测试数据，不是单独编译的历史二进制。
+
 原生 SSH、完整设置、文件／数据工作台、真实 Agent
 CLI 交互、输入法、休眠、多屏及性能验收尚未完成。Windows 与旧 macOS 仍为现有完整功能客户端。Issue 对应关系、源码证据和剩余工作见[原生迁移状态](native-migration.md)。其中可复用验收清单定义同机负载、TUI／交互步骤及签名／升级条件，未执行项继续明确待验收。
 

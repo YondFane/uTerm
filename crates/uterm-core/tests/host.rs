@@ -164,3 +164,157 @@ fn real_shared_terminal_preserves_backpressure_generation_replay_and_detached_pr
     };
     assert!(!status.sessions.iter().any(|s| s.spec.id == id && s.running));
 }
+
+fn status(client: &Client) -> utermd_local::daemon::HostStatus {
+    match client.request(Operation::HostStatus).unwrap() {
+        Reply::HostStatus(status) => status,
+        _ => panic!("Expected a real host status"),
+    }
+}
+fn open_upgrade_session(client: &Client, directory: &std::path::Path) -> String {
+    match client
+        .request(Operation::Open {
+            spec: utermd_local::daemon::SessionSpec {
+                id: "helper-upgrade-session".into(),
+                directory: directory.into(),
+                shell: if cfg!(windows) { "cmd" } else { "default" }.into(),
+                agent: None,
+                ssh: None,
+            },
+            rows: 24,
+            cols: 80,
+        })
+        .unwrap()
+    {
+        Reply::Opened { generation } => generation,
+        _ => panic!("Expected a real PTY generation"),
+    }
+}
+fn upgrade_session_alive(client: &Client, generation: &str) {
+    let id = "helper-upgrade-session".to_string();
+    let command = if cfg!(windows) {
+        b"set UTERM_UPGRADE_SUFFIX=ALIVE\recho UTERM_UPGRADE_%UTERM_UPGRADE_SUFFIX%\r".as_slice()
+    } else {
+        b"printf 'UTERM_UPGRADE_%s\\n' ALIVE\r".as_slice()
+    };
+    client
+        .request(Operation::Write {
+            id: id.clone(),
+            generation: generation.into(),
+            data: command.into(),
+        })
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut sequence = None;
+    let mut bytes = Vec::new();
+    while Instant::now() < deadline {
+        let Reply::Frame(frame) = client
+            .request(Operation::Read {
+                id: id.clone(),
+                generation: generation.into(),
+                after: sequence,
+            })
+            .unwrap()
+        else {
+            panic!("Expected a PTY frame")
+        };
+        assert!(!frame.exited, "The old session must remain alive");
+        sequence = Some(frame.sequence);
+        bytes.extend(frame.data);
+        if bytes
+            .windows(19)
+            .any(|window| window == b"UTERM_UPGRADE_ALIVE")
+        {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    panic!("The retained PTY did not execute the liveness command");
+}
+#[test]
+fn broker_preserves_active_unstaged_host_then_replaces_it_only_when_idle() {
+    let root = tempfile::tempdir().unwrap();
+    let host_root = root.path().canonicalize().unwrap().join("local-daemon-v1");
+    let _cleanup = HostCleanup(host_root.clone());
+    let helper = helper();
+    let original_bytes = std::fs::read(&helper).unwrap();
+    let old = utermd_local::daemon::ensure_running(&host_root, &helper).unwrap();
+    let generation = open_upgrade_session(&old, root.path());
+    let before = status(&old);
+    assert_eq!(before.executable, helper);
+    let broker = uterm_core::host::HostBroker::new(host_root.clone(), helper.clone());
+    let retained = broker.client().unwrap();
+    let active = status(&retained);
+    assert_eq!(active.pid, before.pid);
+    assert_eq!(active.executable, before.executable);
+    assert!(active
+        .sessions
+        .iter()
+        .any(|session| session.running && session.generation == generation));
+    upgrade_session_alive(&retained, &generation);
+    retained
+        .request(Operation::Close {
+            id: "helper-upgrade-session".into(),
+            generation,
+        })
+        .unwrap();
+    let upgraded = broker.client().unwrap();
+    let after = status(&upgraded);
+    assert_ne!(after.pid, before.pid);
+    assert!(after.executable.starts_with(host_root.join("executables")));
+    assert!(!after.sessions.iter().any(|session| session.running));
+    assert!(
+        std::fs::read(helper).unwrap() == original_bytes,
+        "Staging must not alter the bundled source"
+    );
+}
+struct RestoreEndpoint {
+    path: PathBuf,
+    bytes: Vec<u8>,
+}
+impl Drop for RestoreEndpoint {
+    fn drop(&mut self) {
+        if self.path.exists() {
+            let _ = std::fs::write(&self.path, &self.bytes);
+        }
+    }
+}
+#[test]
+fn incompatible_endpoint_does_not_replace_a_live_host_or_its_sessions() {
+    let root = tempfile::tempdir().unwrap();
+    let host_root = root.path().canonicalize().unwrap().join("local-daemon-v1");
+    let _cleanup = HostCleanup(host_root.clone());
+    let helper = helper();
+    let old = utermd_local::daemon::ensure_running(&host_root, &helper).unwrap();
+    let generation = open_upgrade_session(&old, root.path());
+    let before = status(&old);
+    let path = host_root.join("endpoint.json");
+    let saved = RestoreEndpoint {
+        bytes: std::fs::read(&path).unwrap(),
+        path: path.clone(),
+    };
+    let mut endpoint: Value = serde_json::from_slice(&saved.bytes).unwrap();
+    endpoint["version"] = json!(999);
+    let incompatible = serde_json::to_vec(&endpoint).unwrap();
+    std::fs::write(&path, &incompatible).unwrap();
+    let broker = uterm_core::host::HostBroker::new(host_root.clone(), helper);
+    let error = broker
+        .client()
+        .err()
+        .expect("An incompatible endpoint must fail");
+    assert!(error.contains("running but unavailable") && error.contains("left intact"));
+    assert!(
+        std::fs::read(path).unwrap() == incompatible,
+        "A live endpoint must not be overwritten"
+    );
+    let retained = status(&old);
+    assert_eq!(retained.pid, before.pid);
+    assert!(retained
+        .sessions
+        .iter()
+        .any(|session| session.running && session.generation == generation));
+    upgrade_session_alive(&old, &generation);
+    // Restore before cleanup so the isolated daemon can be closed even after an assertion fails.
+    // 先恢复端点再清理，确保断言失败时也能关闭隔离宿主。
+    drop(saved);
+}
