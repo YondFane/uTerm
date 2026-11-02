@@ -82,6 +82,15 @@ public actor CoreBridge {
     public func viewSnapshot() throws -> CoreViewSnapshot {
         try JSONDecoder().decode(CoreViewSnapshot.self, from: JSONEncoder().encode(call("snapshot.view")))
     }
+    public func editorDrafts() throws -> CoreEditorDraftCollection {
+        try JSONDecoder().decode(CoreEditorDraftCollection.self, from: JSONEncoder().encode(call("editor.drafts.list")))
+    }
+    public func editorRecoveryCatalog() throws -> CoreEditorRecoveryCatalog {
+        try JSONDecoder().decode(CoreEditorRecoveryCatalog.self, from: JSONEncoder().encode(call("editor.drafts.recovery.list")))
+    }
+    public func editorRecoveryPreview(revision: String) throws -> CoreEditorDraftSnapshot {
+        try JSONDecoder().decode(CoreEditorDraftSnapshot.self, from: JSONEncoder().encode(call("editor.drafts.recovery.preview", params: .object(["revision": .string(revision)]))))
+    }
 
     private static func decode(_ buffer: UTermBuffer) throws -> CoreResponse {
         defer { uterm_buffer_release(buffer.allocation) }

@@ -204,39 +204,46 @@ A missing draft snapshot with existing backup/damaged files now blocks automatic
 development APIs `editor.drafts.recovery.preview` and `editor.drafts.recovery.restoreMissing` expose
 verified backups and explicit absent-file restoration. The latter requires `expectedMissing: true`
 and installs without overwriting a newly created snapshot. Existing restore/null behavior is
-preserved; damaged bytes, originals and invalid copies remain. Native recovery-choice UI,
-tabs/window order, Tauri's draft-owner migration and full manual editing/focus acceptance remain
-pending in #33/#34. Tauri currently retains its existing editor owner.
+preserved; damaged bytes, originals and invalid copies remain.
+
+**File → Recover editor drafts…** previews retained text, copies the full text without writing files
+or opens its latest draft. Reopening an existing file focuses its current window. Drafts with
+unavailable or differently spelled project locations can still be copied.
+
+**File → Restore editor recovery copy…** previews verified backups and explicitly restores the
+selected copy, retaining damaged bytes. A changed snapshot rejects the restore; an absent snapshot
+uses non-overwriting installation. Cancel does not change recovery data. Open editors retain their
+current text; reopen files to load restored drafts.
+
+Tabs/window order, Tauri's draft-owner migration and full manual editing/focus acceptance remain
+pending in #33/#34. Tauri retains its existing editor owner.
 
 #### Shared draft validation
 
-The storage/scoped transport foundation passed all four jobs at head
-`4bea29a75178efe0f93a31d49d2490accee3d9dd`, tested merge `1ae83343a15c9c422dd989234a5a5558f829b10c`
-([native CI](https://github.com/YondFane/uTerm/actions/runs/41487145173),
-[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41487145188)).
+Head `bc2b98080e008ee271c63308de78ef23f26b9386`, tested merge
+`55937720830d3d99c59895aa2f031f3cd75a1480`, passed all four jobs in
+[native ARM/Intel CI](https://github.com/YondFane/uTerm/actions/runs/41505481559) and
+[legacy Windows/macOS CI](https://github.com/YondFane/uTerm/actions/runs/41505480458). The native
+reports verify exact NFD/Chinese/CRLF/BOM bytes, durable drafts, SIGKILL/relaunch, external
+conflict, close protection, discard, save, 640px controls, guarded Escape window close and
+missing-source readonly retention. Seven `native-editor-*.png` images show these scenes; 640px and
+missing-source images were inspected. Reports record source/merge/platform/toolchains. Artifacts:
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41505481559/artifacts/13170648651),
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41505481559/artifacts/13171246307),
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41505480458/artifacts/13172595738),
+[old macOS](https://github.com/YondFane/uTerm/actions/runs/41505480458/artifacts/13170278782).
 
-Native Intel and both old clients passed editable head `a80eb7441b4153d83d6548f8297d6241ab76d577`,
-tested merge `610786c91693ad9b69dfca39bd0a92c9b0b180c2`
-([native run](https://github.com/YondFane/uTerm/actions/runs/41496444870),
-[legacy run](https://github.com/YondFane/uTerm/actions/runs/41496445392)). The ARM job was cancelled
-before steps ran, so this is three successful jobs. Actual Intel WK checks covered exact draft
-bytes, SIGKILL/relaunch, external conflict, close protection, discard and save. The driver supplies
-internal LF text and verifies actual CRLF/BOM in core/files. Artifacts are
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41496444870/artifacts/13167012154),
-[Windows](https://github.com/YondFane/uTerm/actions/runs/41496445392/artifacts/13167546733) and
-[legacy Mac](https://github.com/YondFane/uTerm/actions/runs/41496445392/artifacts/13168465930). They
-include source/merge/toolchains and actual reports. Five `native-editor-*.png` images show the
-checkpoint, recovery, conflict, close guard and saved file; recovery/close/saved images were
-inspected. Both Tauri QA reports passed with no cleanup errors.
+Both native jobs passed 13 Swift checks, including backup preview/missing restore through the C ABI.
+Both Tauri state QA reports passed without cleanup errors; those checks do not establish Windows
+editor draft UI parity. Linux checks pass 375 frontend tests (ten skipped), 129 backend (ten
+ignored), core/FFI and filesystem failure/retry, contract drift, types and desktop compilation.
+Twenty-one real Rust-process contracts cover missing sources, non-overwriting missing-store restore,
+preview and unchanged null semantics. DOM input in the real native app is separate from manual
+keyboard/IME/focus acceptance.
 
-Current Linux checks pass 375 frontend tests (ten skipped), 129 backend tests (ten ignored),
-core/FFI and explicit filesystem failure/retry, contract drift, type and desktop checks. Twenty-one
-real Rust-process contracts, two queue fixture checks and seven content checks pass, including
-missing source files, non-overwriting missing-store restore, backup preview and unchanged null
-semantics. The new thirteenth Swift check, 640px native controls and missing-source readonly
-scenario await their own committed-head CI. These add two images to the native editor run. DOM input
-in a real native app does not establish manual keyboard/IME/focus acceptance; three passing jobs do
-not substitute for the cancelled ARM check or later source changes.
+The native recovery-picker/restore UI and its added English/dark and Chinese/light real
+NSMenu/NSAlert/NSButton scenarios await their own committed-head macOS CI. Earlier passing results
+do not validate these new controls.
 
 ## Project website
 

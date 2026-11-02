@@ -56,6 +56,12 @@ export interface CoreEditorDraftSnapshot {
   revision: string;
 }
 
+export interface CoreEditorRecoveryCatalog {
+  backups: string[];
+  currentRevision?: string | null;
+  sources: string[];
+}
+
 export interface CoreEvent {
   kind: string;
   operationId: string;

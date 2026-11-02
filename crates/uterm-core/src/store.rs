@@ -11,6 +11,7 @@ use std::{
 mod editor;
 pub use editor::{
     EditorDraft, EditorDraftCollection, EditorDraftDocument, EditorDraftEntry, EditorDraftSnapshot,
+    EditorRecoveryCatalog,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, schemars::JsonSchema)]

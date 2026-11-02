@@ -75,6 +75,13 @@ pub struct EditorDraftCollection {
     pub revision: String,
     pub drafts: Vec<EditorDraftEntry>,
 }
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EditorRecoveryCatalog {
+    pub current_revision: Option<String>,
+    pub backups: Vec<String>,
+    pub sources: Vec<String>,
+}
 fn put(document: &mut EditorDraftDocument, draft: EditorDraft) -> Result<()> {
     let existing = document
         .drafts
@@ -475,7 +482,11 @@ impl Store {
         let current = bounded_read(&self.root.join("editor-drafts-v1.json"))
             .map(|bytes| hash(&bytes))
             .ok();
-        Ok(serde_json::json!({"currentRevision":current,"backups":backups,"sources":sources}))
+        Ok(serde_json::to_value(EditorRecoveryCatalog {
+            current_revision: current,
+            backups,
+            sources,
+        })?)
     }
     pub fn editor_recover(&self, expected: &str, revision: &str) -> Result<EditorDraftSnapshot> {
         self.editor_restore(Some(expected), revision)

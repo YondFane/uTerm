@@ -55,12 +55,15 @@ final class CoreBridgeTests: XCTestCase {
             "expectedRevision": first["revision"], "directory": .string("/qa/editor"), "path": .string("recovery.txt")
         ]))
         try FileManager.default.removeItem(at: root.appendingPathComponent("editor-drafts-v1.json"))
+        let catalog = try await core.editorRecoveryCatalog()
+        XCTAssertNil(catalog.currentRevision)
+        XCTAssertTrue(catalog.backups.contains(first["revision"].string!))
+        XCTAssertTrue(catalog.sources.contains(first["document"]["sourceDigest"].string!))
         do {
             _ = try await core.call("editor.drafts.import", params: .object(["legacy": .null]))
             XCTFail("Missing storage with recovery copies cannot be automatically reimported")
         } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "MISSING_DRAFTS") }
-        let preview = try await core.call("editor.drafts.recovery.preview", params: .object(["revision": first["revision"]]))
-        let typed = try JSONDecoder().decode(CoreEditorDraftSnapshot.self, from: JSONEncoder().encode(preview))
+        let typed = try await core.editorRecoveryPreview(revision: first["revision"].string!)
         XCTAssertEqual(Array(typed.document.drafts[0].text.utf8), Array(text.utf8))
         XCTAssertEqual(Array(typed.document.drafts[0].text.utf16), Array(text.utf16))
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("editor-drafts-v1.json").path))
@@ -70,6 +73,8 @@ final class CoreBridgeTests: XCTestCase {
         } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "INVALID_ARGUMENT") }
         let restored = try await core.call("editor.drafts.recovery.restoreMissing", params: .object(["revision": first["revision"], "expectedMissing": .bool(true)]))
         XCTAssertEqual(restored, first)
+        let listed = try await core.editorDrafts()
+        XCTAssertEqual(Array(listed.drafts[0].draft.text.utf8), Array(text.utf8))
         do {
             _ = try await core.call("editor.drafts.recovery.restoreMissing", params: .object(["revision": first["revision"], "expectedMissing": .bool(true)]))
             XCTFail("A replacement store cannot be overwritten")

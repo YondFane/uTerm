@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             await model.start()
             if let path = WorkspaceModel.argument("--editor-smoke-report") {
                 var report = baseReport()
-                do { try await EditorSmoke.run(model: model, open: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report) }
+                do { try await EditorSmoke.run(model: model, parent: window, open: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, lookup: { directory, path in self.existingContent(directory: directory, path: path, editable: true) }, report: &report) }
                 catch { report["failure"] = error.localizedDescription }
                 finishReport(report, path: path, keepRunning: WorkspaceModel.argument("--editor-smoke-phase") == "checkpoint" && report["failure"] == nil)
                 return
@@ -93,6 +93,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let file = menu(localized("File", "文件"))
         add(file, localized("Open project…", "打开项目…"), #selector(openProject), "o")
         add(file, localized("Open file…", "打开文件…"), #selector(openFile), "o", [.command, .shift])
+        add(file, localized("Recover editor drafts…", "恢复编辑器草稿…"), #selector(recoverEditorDrafts))
+        add(file, localized("Restore editor recovery copy…", "恢复编辑器备份副本…"), #selector(restoreEditorRecovery))
         add(file, localized("New workspace…", "新建工作区…"), #selector(newWorkspace), "n", [.command, .shift])
         add(file, localized("New terminal", "新建终端"), #selector(newTerminal), "t")
         add(file, localized("New Agent session", "新建 Agent 会话"), #selector(newAgent), "n")
@@ -118,7 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if preparingQuit { return false }
+        if preparingQuit || model.editorRecoveryPresented { return false }
         if menuItem.action == #selector(closeSession) {
             let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow }
             menuItem.title = fileFocused ? localized("Close file", "关闭文件") : localized("Close session", "关闭会话")
@@ -166,6 +168,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func makeEditableContentWindow(directory: URL, path: String) async throws -> ContentWindow {
+        if let content = existingContent(directory: directory, path: path, editable: true) {
+            content.showWindow(nil)
+            return content
+        }
         guard let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
         do { _ = try await bridge.call("editor.drafts.list", params: .object(["directory": .string(directory.path)])) }
         catch let error as BridgeFailure where error.code == "DRAFTS_NOT_IMPORTED" {
@@ -176,12 +182,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private func makeContentWindow(directory: URL, path: String, editable: Bool = false) throws -> ContentWindow {
         guard !preparingQuit else { throw BridgeFailure(code: "QUIT_BUSY", message: localized("The client is preparing to quit.", "客户端正在准备退出。")) }
         guard let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
+        if let content = existingContent(directory: directory, path: path, editable: editable) {
+            content.showWindow(nil)
+            return content
+        }
         let content = try ContentWindow(bridge: bridge, directory: directory, path: path, editable: editable)
         let id = UUID()
         contentWindows[id] = content
         content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
         content.showWindow(nil)
         return content
+    }
+
+    private func existingContent(directory: URL, path: String, editable: Bool) -> ContentWindow? {
+        let root = directory.standardizedFileURL.resolvingSymlinksInPath()
+        return contentWindows.values.first { $0.directory == root && $0.path == path && $0.editable == editable }
+    }
+    @objc private func recoverEditorDrafts() { showEditorRecovery(restoring: false) }
+    @objc private func restoreEditorRecovery() { showEditorRecovery(restoring: true) }
+    private func showEditorRecovery(restoring: Bool) {
+        guard !preparingQuit, !model.busy, !model.editorRecoveryPresented, !model.settingsPresented, model.nameDraft == nil,
+              let window, window.attachedSheet == nil, let bridge = model.bridge else { return }
+        model.editorRecoveryPresented = true
+        window.makeKeyAndOrderFront(nil)
+        Task { @MainActor in
+            defer { model.editorRecoveryPresented = false }
+            do {
+                if restoring { try await EditorRecovery.restoreCopy(bridge: bridge, window: window) }
+                else if let draft = try await EditorRecovery.chooseDraft(bridge: bridge, window: window) {
+                    _ = try await self.makeEditableContentWindow(directory: URL(fileURLWithPath: draft.directory), path: draft.path)
+                }
+                model.error = ""
+            } catch { model.error = error.localizedDescription }
+        }
     }
 
     @objc private func newWorkspace() { model.newWorkspace() }
@@ -200,7 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard let responder = window?.firstResponder else { return }
         DispatchQueue.main.async { [weak self, weak responder] in
             guard let self, let responder, self.window?.firstResponder === responder,
-                  self.model.ready, !self.model.busy, !self.model.settingsPresented, self.model.nameDraft == nil,
+                  self.model.ready, !self.model.busy, !self.model.settingsPresented, !self.model.editorRecoveryPresented, self.model.nameDraft == nil,
                   let session = self.model.terminals.values.first(where: { $0.view === responder }),
                   session.id != self.model.selectedID else { return }
             Task { await self.model.selectSession(session.id, focus: false) }
@@ -212,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminating { return .terminateNow }
-        if preparingQuit { return .terminateCancel }
+        if preparingQuit || model.editorRecoveryPresented { return .terminateCancel }
         preparingQuit = true
         Task { @MainActor in
             guard await model.confirmQuit() else { self.preparingQuit = false; return }

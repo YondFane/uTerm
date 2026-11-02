@@ -55,6 +55,12 @@ public struct CoreEditorDraftSnapshot: Codable, Sendable {
     public var revision: String
 }
 
+public struct CoreEditorRecoveryCatalog: Codable, Sendable {
+    public var backups: [String]
+    public var currentRevision: String?
+    public var sources: [String]
+}
+
 public struct CoreEvent: Codable, Sendable {
     public var kind: String
     public var operationId: String

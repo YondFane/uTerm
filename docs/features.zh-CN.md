@@ -122,26 +122,34 @@ UTF-16 码元一致，保留 BOM／换行。保留最多八份有效前序快照
 
 队列合并等待文本、限制积压，保留 flush／重试错误，包括没有等待写入时的初始化失败。不同文档独立推进，同文档旧写入／删除拒绝；丢失回复须核对持久化数据。关闭停止交付，不承诺宿主写入回滚。Escape 经共用文档关闭保护后关闭原生文件窗口。原生退出冻结并确认全部内容文档，拒绝／超时／重载／过期回复时保留应用，取消退出则恢复已准备的文档；退出错误显示主窗口。
 
-主草稿快照缺失、仍有备份或损坏副本时，现阻止自动导入。开发 API `editor.drafts.recovery.preview` 和
-`editor.drafts.recovery.restoreMissing` 提供已验证备份预览及明确的缺失文件恢复；后者要求
-`expectedMissing: true`，不会覆盖新出现的快照。保留原恢复／null 语义、损坏字节、原始来源及无效副本。原生恢复选择界面、标签／窗口顺序、Tauri 草稿迁移及完整人工编辑／焦点仍由 #33／#34 完成；Tauri 当前保持原编辑器归属。
+主草稿快照缺失但已有备份／损坏文件时阻止自动导入。开发 API `editor.drafts.recovery.preview` 与
+`editor.drafts.recovery.restoreMissing` 提供校验备份预览及明确的缺失恢复。后者要求
+`expectedMissing: true` 并无覆盖安装，保留旧恢复／null 语义，以及损坏字节、原始来源和无效副本。
+
+**文件 → 恢复编辑器草稿…**预览保留文本，可复制完整文本而不写文件，或打开最新草稿；文件已打开时聚焦现有窗口。项目位置无法访问或路径拼写不同的草稿仍可复制。
+
+**文件 → 恢复编辑器备份副本…**预览校验过的备份，明确恢复所选副本并保留损坏字节。快照已变化时拒绝恢复，缺失快照使用无覆盖安装，取消不修改恢复数据。已打开编辑器保留当前文本，重新打开文件后读取恢复草稿。
+
+标签／窗口顺序、Tauri 草稿所有权迁移及完整人工编辑／焦点验收仍在 #33/#34 待完成，Tauri 保留现有编辑器所有者。
 
 #### 共享草稿验证
 
-存储／作用域 transport 基础在 head `4bea29a75178efe0f93a31d49d2490accee3d9dd`、tested merge
-`1ae83343a15c9c422dd989234a5a5558f829b10c`
-的[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41487145173)和[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41487145188)四 job 通过。
-
-可编辑 head `a80eb7441b4153d83d6548f8297d6241ab76d577`、tested merge
-`610786c91693ad9b69dfca39bd0a92c9b0b180c2`
-的原生 Intel 及两个旧客户端通过（[原生 run](https://github.com/YondFane/uTerm/actions/runs/41496444870)、[旧客户端 run](https://github.com/YondFane/uTerm/actions/runs/41496445392)）；ARM
-job 在运行步骤前取消，因此是三个成功 job。真实 Intel
-WK 覆盖准确草稿字节、SIGKILL／重启、外部冲突、关闭保护、放弃及保存；驱动输入内部 LF，仍核对核心／文件的实际 CRLF／BOM。产物：[Intel](https://github.com/YondFane/uTerm/actions/runs/41496444870/artifacts/13167012154)、[Windows](https://github.com/YondFane/uTerm/actions/runs/41496445392/artifacts/13167546733)、[旧 Mac](https://github.com/YondFane/uTerm/actions/runs/41496445392/artifacts/13168465930)，均有源码／merge／工具链及真实报告。五张
+head `bc2b98080e008ee271c63308de78ef23f26b9386`、tested merge
+`55937720830d3d99c59895aa2f031f3cd75a1480` 的
+[原生 ARM／Intel CI](https://github.com/YondFane/uTerm/actions/runs/41505481559) 与
+[旧 Windows／macOS CI](https://github.com/YondFane/uTerm/actions/runs/41505480458)
+四 job 全通过。原生报告验证 NFD／中文／CRLF／BOM 准确字节、持久草稿、SIGKILL／重启、外部冲突、关闭保护、放弃、保存、640px 控件、经保护的 Escape 窗口关闭及源文件缺失只读保留。七张
 `native-editor-*.png`
-展示检查点、恢复、冲突、关闭保护及保存，已目视检查恢复／关闭／保存图。两端 Tauri
-QA 报告通过且清理无错误。
+展示这些场景，已目视检查窄窗及源文件缺失图片；报告记录源码／merge／平台／工具链。产物：[ARM](https://github.com/YondFane/uTerm/actions/runs/41505481559/artifacts/13170648651)、
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41505481559/artifacts/13171246307)、
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41505480458/artifacts/13172595738)、
+[旧 macOS](https://github.com/YondFane/uTerm/actions/runs/41505480458/artifacts/13170278782)。
 
-当前 Linux 前端 375 项通过、十项跳过，后端 129 项通过、十项忽略；核心／FFI、明确文件失败／重试、契约漂移、类型及桌面检查通过。二十一项真实 Rust 进程契约、两项队列测试数据及七项内容检查通过，包含源文件缺失、无覆盖缺失快照恢复、备份预览和不变的 null 语义。新增第十三项 Swift、640px 原生控件和源文件缺失只读场景仍待自身提交的 CI，编辑器运行会新增两图。真实原生应用的 DOM 输入不能代替人工键盘／输入法／焦点验收；三个通过 job 不能替代被取消的 ARM 或后续源码验证。
+两原生 job 的十三项 Swift 检查通过，包含经 C
+ABI 的备份预览及缺失恢复。两个 Tauri 状态 QA 报告通过且清理无错误；这些检查不代表 Windows 编辑器草稿 UI 接入已验收。Linux 前端 375 项通过、十项跳过，后端 129 项通过、十项忽略，核心／FFI、文件失败／重试、契约漂移、类型及桌面编译通过。二十一项真实 Rust 进程契约覆盖源文件缺失、无覆盖缺失快照恢复、预览及不变的 null 语义。真实原生应用的 DOM 输入与人工键盘／输入法／焦点验收分开记录。
+
+原生恢复选择／恢复 UI 及新增英文／深色与中文／浅色的真实 NSMenu／NSAlert／NSButton 场景仍待自身提交的 macOS
+CI，旧通过结果不验证这些新控件。
 
 ## 项目官网
 

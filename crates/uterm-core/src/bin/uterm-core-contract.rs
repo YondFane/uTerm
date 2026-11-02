@@ -13,6 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "EditorDraftCollection":schemars::schema_for!(uterm_core::store::EditorDraftCollection),
             "EditorDraftDocument":schemars::schema_for!(uterm_core::store::EditorDraftDocument),
             "EditorDraftSnapshot":schemars::schema_for!(uterm_core::store::EditorDraftSnapshot),
+            "EditorRecoveryCatalog":schemars::schema_for!(uterm_core::store::EditorRecoveryCatalog),
             "FileDocument":schemars::schema_for!(uterm_core::files::FileDocument),
             "FileEntry":schemars::schema_for!(uterm_core::files::FileEntry),
             "FileListing":schemars::schema_for!(uterm_core::files::FileListing),

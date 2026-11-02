@@ -56,7 +56,8 @@ enum EditorSmoke {
     private static func draft(_ bridge: CoreBridge, root: URL) async throws -> JSONValue {
         try await bridge.call("editor.drafts.document", params: .object(["directory": .string(root.path), "path": .string(name)]))
     }
-    static func run(model: WorkspaceModel, open: (URL, String) async throws -> ContentWindow, report: inout [String: Any]) async throws {
+    static func run(model: WorkspaceModel, parent: NSWindow, open: (URL, String) async throws -> ContentWindow,
+                    lookup: @escaping (URL, String) -> ContentWindow?, report: inout [String: Any]) async throws {
         guard let bridge = model.bridge, model.ready, let reportPath = WorkspaceModel.argument("--editor-smoke-report"),
               let phase = WorkspaceModel.argument("--editor-smoke-phase"), ["checkpoint", "reopen"].contains(phase) else {
             throw BridgeFailure(code: "EDITOR_START", message: "Missing isolated editor QA context")
@@ -186,6 +187,8 @@ enum EditorSmoke {
         missing.window?.performClose(nil)
         try await TerminalSmoke.wait("Close missing-source readonly recovery without deleting its draft") { missing.window?.isVisible == false }
         report["missingSourceRetainedReadonlyAfterClose"] = (try await draft(bridge, root: root))["draft"]["text"].string.map { Data($0.utf8) == Data(missingText.utf8) } == true
+        try await EditorRecoverySmoke.run(model: model, parent: parent, root: root, path: name, text: missingText,
+                                          lookup: lookup, reportPath: reportPath, captures: &captures, report: &report)
         report["editorCaptures"] = captures
     }
 }

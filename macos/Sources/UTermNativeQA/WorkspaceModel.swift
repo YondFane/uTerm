@@ -18,6 +18,7 @@ final class WorkspaceModel: ObservableObject {
     @Published var error = ""
     @Published private(set) var terminalError = ""
     @Published var settingsPresented = false
+    @Published var editorRecoveryPresented = false
     @Published var nameDraft: NameDraft?
     @Published var fullScreen = false
     @Published var sidebarVisible = true
@@ -183,7 +184,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func performControlAction(_ request: JSONValue) async throws -> JSONValue {
-        guard !busy, !shuttingDown, !settingsPresented, nameDraft == nil,
+        guard !busy, !shuttingDown, !settingsPresented, !editorRecoveryPresented, nameDraft == nil,
               let bridge, let state else {
             throw BridgeFailure(code: "CONTROL_BUSY", message: localized("Finish the current dialog or operation first.", "请先完成当前对话框或操作。"))
         }
