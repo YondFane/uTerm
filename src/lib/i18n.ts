@@ -42,6 +42,8 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     ...javaMessages,
     ...pythonMessages,
     打开文件: "Open file",
+    "无法读取文件，显示保留的恢复草稿：{p0}":
+      "Could not read the file; showing retained recovery text: {p0}",
     "文件操作尚未完成，请稍后重试退出。":
       "A file operation is still running. Try quitting again shortly.",
     回滚文件: "Roll back file",

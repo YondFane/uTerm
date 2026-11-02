@@ -218,9 +218,21 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false, recoveryDir
         setConflict(false);
         return;
       }
-      const data = await fileInvoke<FileData>("file_read", { directory, path }, invoke);
-      if (readOnly) data.readonly = true;
       const draft = await currentRecovery()?.load(directory, path);
+      let data: FileData;
+      try {
+        data = await fileInvoke<FileData>("file_read", { directory, path }, invoke);
+      } catch (reason) {
+        if (!draft) throw reason;
+        data = {
+          ...draft.draft,
+          kind: "text",
+          readonly: true,
+          notice: tx("无法读取文件，显示保留的恢复草稿：{p0}", { p0: String(reason) }),
+        };
+      }
+      if (readOnly) data.readonly = true;
+      const restored = draft ? readDraft(JSON.stringify(draft.draft)) : null;
       await invoke("editor_guard", { active: data.kind === "text" && !data.readonly });
       setDocument({
         ...data,
@@ -230,12 +242,13 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false, recoveryDir
         saved: data.text,
         line,
         jump: 0,
-        ...(draft
+        ...(restored
           ? {
-              ...readDraft(JSON.stringify(draft.draft)),
+              ...restored,
               id: sequence.current,
               line,
               readonly: data.readonly,
+              notice: data.notice ?? restored.notice,
             }
           : {}),
       });

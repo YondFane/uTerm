@@ -979,6 +979,21 @@ test("shared editor recovery restores durable text after unload and retains file
   await React.act(async () => assert.equal(await editor.save(), true));
   assert.equal(readFileSync(join(directory, path), "utf8"), "explicitly saved");
   assert.equal((await call("editor.drafts.document", { directory, path })).result, null);
+  await React.act(async () => editor.change("retain text when the disk file disappears 中文"));
+  await React.act(async () => assert.rejects(editor.prepareUpdate()));
+  rmSync(join(directory, path));
+  await React.act(async () => root.unmount());
+  root = createRoot(document.getElementById("root"));
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => editor.open(directory, path));
+  assert.equal(editor.document?.text, "retain text when the disk file disappears 中文");
+  assert.equal(editor.document.readonly, true);
+  assert.ok(editor.document.notice);
+  await React.act(async () => editor.close());
+  assert.equal(
+    (await call("editor.drafts.document", { directory, path })).result.draft.text,
+    "retain text when the disk file disappears 中文",
+  );
 });
 
 test("settings saves from a stale view change only its requested fields", async (t) => {

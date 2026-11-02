@@ -193,8 +193,9 @@ retain root/link, expected-version, BOM and line-ending checks. Saving and quitt
 delivery; editable windows have no readonly force-close timer. Explicit discard waits for dispatched
 writes and cannot erase another writer's newer draft. Native Web content may save only its selected
 file; it cannot import legacy sources or write another project/file. Tauri retains its existing
-editor ownership until its migration/recovery UI is adopted. Native tabs and window order are not
-yet persisted.
+editor ownership until its migration/recovery UI is adopted. If the referenced file disappears or
+cannot be read, retained recovery text opens readonly with a notice and remains in core storage
+after closing. Native tabs and window order are not yet persisted.
 
 The storage and scoped transport foundation passed all four jobs at head
 `4bea29a75178efe0f93a31d49d2490accee3d9dd`, tested merge `1ae83343a15c9c422dd989234a5a5558f829b10c`
