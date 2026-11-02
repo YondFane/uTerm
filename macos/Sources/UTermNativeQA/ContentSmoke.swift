@@ -115,14 +115,14 @@ enum ContentSmoke {
                 report["quitPreparedWithoutClosing"] = true
                 content.resumeAfterQuit()
                 report["quitResumedWithoutClosing"] = !content.isPreparedForQuit && content.window?.isVisible == true
-                _ = try await content.webView.evaluateJavaScript("window.utermQADispatch=window.dispatchEvent;window.dispatchEvent=function(event){window.utermQASuppressed=event.detail;return true}")
+                _ = try await content.webView.evaluateJavaScript("window.utermQADispatch=window.dispatchEvent;window.dispatchEvent=function(event){window.utermQASuppressed=event.detail;return true};true")
                 do {
                     _ = try await content.prepareForQuit(timeout: .milliseconds(100))
                     throw BridgeFailure(code: "CONTENT_QUIT", message: "Unresponsive content was allowed to quit")
                 } catch let error as BridgeFailure where error.code == "QUIT_TIMEOUT" {
                     report["quitTimeoutRetainedWindow"] = !content.isPreparedForQuit && content.window?.isVisible == true
                 }
-                _ = try await content.webView.evaluateJavaScript("window.dispatchEvent=window.utermQADispatch")
+                _ = try await content.webView.evaluateJavaScript("window.dispatchEvent=window.utermQADispatch;true")
                 report["lateQuitResultRejected"] = try await request(content, method: "editor_prepare_result", params: ["token": "expired-quit-request", "ready": true]) == "STALE_QUIT"
                 guard try Data(contentsOf: root.appendingPathComponent(path)) == original else { throw BridgeFailure(code: "CONTENT_WRITE", message: "Read-only preview changed its source") }
             } else if path == "preview.html" {

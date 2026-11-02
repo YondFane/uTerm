@@ -209,8 +209,10 @@ CI. The native quit path now asks each content document to finish saving and rem
 closes any file windows. Refusal, timeout, reload or stale replies keep the app open; cancellation
 resumes prepared documents. A Linux WebKit-contract check uses real Rust file writes to verify
 delayed completion and external-change refusal. Three new Swift gate tests and real-window
-prepare/resume/timeout checks await their own macOS CI. Editing remains disabled; editor UI, tabs,
-close/reopen/crash recovery and editing/focus acceptance remain pending in #34.
+prepare/resume/timeout checks need their own successful macOS CI. At `a0758cc`, the ARM build and 12
+Swift checks passed, but real-window smoke stopped because a QA script returned an unsupported
+JavaScript function value; its primitive-result fix awaits rerun. Editing remains disabled; editor
+UI, tabs, close/reopen/crash recovery and editing/focus acceptance remain pending in #34.
 
 ## Project website
 
