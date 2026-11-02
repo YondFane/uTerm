@@ -42,6 +42,7 @@ export class EditorDraftQueue {
   private pump?: Promise<void>;
   private active = new Set<Waiter>();
   private rejected = new Map<string, unknown>();
+  private discarding = new Set<string>();
   private initialized = false;
   private legacy?: string | null;
   private signalClose!: () => void;
@@ -100,7 +101,7 @@ export class EditorDraftQueue {
     await this.initialize();
     if (this.closed) throw new ContentFailure("CLOSED", "Draft queue is closed");
     const identity = key(directory, path);
-    if (this.pending.has(identity))
+    if (this.pending.has(identity) || this.discarding.has(identity))
       throw new ContentFailure("DRAFT_PENDING", "Wait for the pending draft before reloading it");
     const result = await this.call<CoreEditorDraftEntry | null>("editor_drafts_document", {
       directory,
@@ -117,6 +118,43 @@ export class EditorDraftQueue {
   remove(directory: string, path: string): Promise<void> {
     return this.enqueue(directory, path, null);
   }
+  async discard(directory: string, path: string): Promise<void> {
+    this.checkRoot(directory);
+    const identity = key(directory, path);
+    if (this.discarding.has(identity))
+      throw new ContentFailure("DRAFT_BUSY", "This draft is already being discarded");
+    this.discarding.add(identity);
+    try {
+      await this.initialize();
+      while (this.pump && !this.closed) await Promise.race([this.pump, this.closedSignal]);
+      if (this.closed) throw new ContentFailure("CLOSED", "Draft queue is closed");
+      const item = this.pending.get(identity);
+      const actual = await this.call<CoreEditorDraftEntry | null>("editor_drafts_document", {
+        directory,
+        path,
+      });
+      if (this.closed) throw new ContentFailure("CLOSED", "Draft queue is closed");
+      // Explicit discard can remove our acknowledged/uncertain data, never another writer's draft.
+      // 明确放弃只可删除本端已确认或未确认交付的数据，不能删除其他写入者的草稿。
+      if (
+        actual &&
+        (actual.revision === this.known.get(identity)?.revision ||
+          (item?.value && same(actual.draft, item.value)) ||
+          (item?.attempted && same(actual.draft, item.attempted)))
+      )
+        await this.call("editor_drafts_remove", {
+          directory,
+          path,
+          expectedDraftRevision: actual.revision,
+        });
+      if (this.closed) throw new ContentFailure("CLOSED", "Draft queue is closed");
+      this.pending.delete(identity);
+      this.rejected.delete(identity);
+      this.known.delete(identity);
+    } finally {
+      this.discarding.delete(identity);
+    }
+  }
   private checkRoot(directory: string) {
     if (this.directory !== undefined && directory !== this.directory)
       throw new ContentFailure("ROOT_DENIED", "Draft cannot select another project root");
@@ -127,6 +165,8 @@ export class EditorDraftQueue {
       this.checkRoot(directory);
       let units = value ? value.text.length + value.saved.length : 0;
       const identity = key(directory, path);
+      if (this.discarding.has(identity))
+        throw new ContentFailure("DRAFT_BUSY", "This draft is being discarded");
       for (const [other, pending] of this.pending)
         if (other !== identity && pending.value)
           units += pending.value.text.length + pending.value.saved.length;

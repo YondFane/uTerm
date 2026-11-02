@@ -43,6 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--editor-smoke-report") {
+                var report = baseReport()
+                do { try await EditorSmoke.run(model: model, open: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report) }
+                catch { report["failure"] = error.localizedDescription }
+                finishReport(report, path: path, keepRunning: WorkspaceModel.argument("--editor-smoke-phase") == "checkpoint" && report["failure"] == nil)
+                return
+            }
             if let path = WorkspaceModel.argument("--control-smoke-report") {
                 var report = baseReport()
                 do { try await ControlSmoke.run(model: model, window: window, report: &report) }
@@ -151,15 +158,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             guard response == .OK, let self, let file = panel.url else { return }
             let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
             guard file.standardizedFileURL.path.hasPrefix(prefix) else { self.model.error = localized("Choose a file inside the selected project.", "请选择所选项目中的文件。") ; return }
-            do {
-                _ = try self.makeContentWindow(directory: root, path: String(file.standardizedFileURL.path.dropFirst(prefix.count)))
-            } catch { self.model.error = error.localizedDescription }
+            let path = String(file.standardizedFileURL.path.dropFirst(prefix.count))
+            Task { @MainActor in
+                do { _ = try await self.makeEditableContentWindow(directory: root, path: path) }
+                catch { self.model.error = error.localizedDescription }
+            }
         }
     }
-    private func makeContentWindow(directory: URL, path: String) throws -> ContentWindow {
+    private func makeEditableContentWindow(directory: URL, path: String) async throws -> ContentWindow {
+        guard let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
+        do { _ = try await bridge.call("editor.drafts.list", params: .object(["directory": .string(directory.path)])) }
+        catch let error as BridgeFailure where error.code == "DRAFTS_NOT_IMPORTED" {
+            _ = try await bridge.call("editor.drafts.import", params: .object([:]))
+        }
+        return try makeContentWindow(directory: directory, path: path, editable: true)
+    }
+    private func makeContentWindow(directory: URL, path: String, editable: Bool = false) throws -> ContentWindow {
         guard !preparingQuit else { throw BridgeFailure(code: "QUIT_BUSY", message: localized("The client is preparing to quit.", "客户端正在准备退出。")) }
         guard let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
-        let content = try ContentWindow(bridge: bridge, directory: directory, path: path)
+        let content = try ContentWindow(bridge: bridge, directory: directory, path: path, editable: editable)
         let id = UUID()
         contentWindows[id] = content
         content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
@@ -247,9 +264,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         } catch { report["failure"] = error.localizedDescription }
         finishReport(report, path: path)
     }
-    private func finishReport(_ report: [String: Any], path: String) {
+    private func finishReport(_ report: [String: Any], path: String, keepRunning: Bool = false) {
         do {
             try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: URL(fileURLWithPath: path), options: .atomic)
+            if keepRunning { return }
             // Dismiss QA sheets before asking AppKit to terminate after a failed scenario.
             // 失败场景先关闭 QA sheet，避免 AppKit 延后退出而掩盖原始报告。
             model.settingsPresented = false

@@ -4,6 +4,7 @@ import { fileInvoke } from "./file-target";
 import { createContentScope, isContentHost } from "./content-host";
 import type { ContentScope } from "./content-transport";
 import type { JSONValue } from "./core-contract.generated";
+import { EditorDraftQueue } from "./editor-drafts";
 import {
   fileBytes,
   isDirty,
@@ -13,18 +14,26 @@ import {
   DocumentSaveQueue,
 } from "./file-document";
 import type { FileData, OpenFile } from "./file-document";
-export function useFileDocument(fileTabLimit = 10, readOnly = false) {
+export function useFileDocument(fileTabLimit = 10, readOnly = false, recoveryDirectory?: string) {
   const transport = useRef<ContentScope | null>(null);
+  const recovery = useRef<EditorDraftQueue | null>(null);
   function currentTransport() {
     return (transport.current ??= createContentScope());
   }
   function invoke<T>(method: string, params?: Record<string, unknown>): Promise<T> {
     return currentTransport().call(method, params);
   }
+  function currentRecovery() {
+    return recoveryDirectory === undefined
+      ? null
+      : (recovery.current ??= new EditorDraftQueue(invoke, recoveryDirectory));
+  }
   useEffect(() => {
     const scope = currentTransport();
     return () => {
       if (transport.current === scope) transport.current = null;
+      recovery.current?.close();
+      recovery.current = null;
       scope.close();
     };
   }, []);
@@ -47,7 +56,9 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
   const quitToken = useRef<string | null>(null);
   const writing = useRef(new DocumentSaveQueue());
   const sequence = useRef(0);
+  const discarding = useRef(false);
   function setDocument(value: OpenFile | null) {
+    const previous = current.current;
     current.current = value;
     render(value);
     if (value) {
@@ -60,6 +71,31 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
           : retained.current.map((item, position) => (position === index ? value : item)),
       );
     }
+    const queue = currentRecovery();
+    if (queue) {
+      let saved: Promise<void> | undefined;
+      if (!discarding.current && value?.kind === "text" && !value.readonly) {
+        if (isDirty(value)) {
+          const { directory, path, kind, text, saved: original, version, line_ending, bom } = value;
+          saved = queue.put({
+            directory,
+            path,
+            kind,
+            text,
+            saved: original,
+            version,
+            line_ending,
+            bom,
+          });
+        } else if (previous?.id === value.id && isDirty(previous))
+          saved = queue.remove(value.directory, value.path);
+      }
+      void saved?.catch((reason) => {
+        if (recovery.current === queue)
+          setError(tx("无法保存恢复草稿，请手动保存文件：{p0}", { p0: String(reason) }));
+      });
+      return;
+    }
     try {
       if (isDirty(value)) localStorage.setItem(draftKey, JSON.stringify(value));
       else localStorage.removeItem(draftKey);
@@ -70,9 +106,18 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
   async function save(force = false): Promise<boolean> {
     return writing.current.run(async () => {
       const snapshot = current.current;
-      if (!snapshot || !isDirty(snapshot) || snapshot.readonly) return true;
+      let writingFile = false;
       setSaving(true);
       try {
+        await currentRecovery()?.retry();
+        if (!snapshot || !isDirty(snapshot) || snapshot.readonly) {
+          if (currentRecovery()) {
+            setError("");
+            setConflict(false);
+          }
+          return true;
+        }
+        writingFile = true;
         const version = await fileInvoke<string>(
           "file_save",
           {
@@ -84,9 +129,11 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
           },
           invoke,
         );
+        writingFile = false;
         if (current.current?.id === snapshot.id) {
           setDocument({ ...savedVersion(current.current, snapshot, version), notice: null });
           setRecovered(false);
+          await currentRecovery()?.flush();
           setError("");
           setConflict(false);
         }
@@ -94,7 +141,7 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
       } catch (reason) {
         const message = reason instanceof Error ? reason.message : String(reason);
         setError(message.replace(/^CONFLICT:/, ""));
-        setConflict(message.startsWith("CONFLICT:"));
+        setConflict(writingFile && message.startsWith("CONFLICT:"));
         return false;
       } finally {
         setSaving(false);
@@ -105,7 +152,7 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
   async function flush(): Promise<boolean> {
     if (!(await save())) return false;
     if (isDirty(current.current) && !(await save())) return false;
-    return !isDirty(current.current);
+    return !isDirty(current.current) || !!(currentRecovery() && current.current?.readonly);
   }
   async function request(action: () => Promise<void>) {
     if (transition.current || pendingAction.current) return;
@@ -173,6 +220,7 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
       }
       const data = await fileInvoke<FileData>("file_read", { directory, path }, invoke);
       if (readOnly) data.readonly = true;
+      const draft = await currentRecovery()?.load(directory, path);
       await invoke("editor_guard", { active: data.kind === "text" && !data.readonly });
       setDocument({
         ...data,
@@ -182,9 +230,17 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
         saved: data.text,
         line,
         jump: 0,
+        ...(draft
+          ? {
+              ...readDraft(JSON.stringify(draft.draft)),
+              id: sequence.current,
+              line,
+              readonly: data.readonly,
+            }
+          : {}),
       });
       await trimTabs();
-      setRecovered(false);
+      setRecovered(!!draft);
       setError("");
       setConflict(false);
     });
@@ -253,6 +309,10 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
     setTransitioning(true);
     try {
       const value = current.current;
+      if (value && currentRecovery()) {
+        await currentRecovery()!.discard(value.directory, value.path);
+        discarding.current = true;
+      }
       await action();
       if (value && isDirty(value)) {
         setDocuments(
@@ -264,6 +324,7 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
     } catch (reason) {
       setError(String(reason));
     } finally {
+      discarding.current = false;
       transition.current = false;
       setTransitioning(false);
     }
@@ -276,6 +337,11 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
     if (current.current && !transition.current) setDocument({ ...current.current, text });
   }
   async function exit() {
+    if (currentRecovery()) {
+      await currentRecovery()!.flush();
+      await invoke("editor_exit");
+      return;
+    }
     const draft = localStorage.getItem(draftKey);
     localStorage.removeItem(draftKey);
     try {
@@ -333,7 +399,7 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
     };
   }, []);
   useEffect(() => {
-    if (!isContentHost() || readOnly) return;
+    if (!isContentHost() || readOnly || recoveryDirectory !== undefined) return;
     let disposed = false;
     transition.current = true;
     setTransitioning(true);
@@ -375,6 +441,7 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
     return () => clearTimeout(timer);
   }, [document?.text, document?.saved, error, recovered, pending, transitioning]);
   async function prepareUpdate() {
+    await currentRecovery()?.flush();
     if (isDirty(current.current)) throw new Error(tx("请先保存或放弃文件修改，再安装更新。"));
     await invoke("editor_guard", { active: false });
   }

@@ -137,21 +137,21 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 `uterm-core::files`
 管理本地文件规则及回归测试，Tauri 命令委托该服务；核心锁定依赖包含现有 base64 解码器及遵循忽略规则的文件遍历器。原生文件／内容界面验收单独记录于迁移指南。
 
-原生 QA 构建还会执行
-`pnpm build`，打包共用 Web 内容及其许可声明；请先安装锁定的 pnpm 依赖。`bash scripts/macos-content-smoke.sh`
-检查隔离的只读 CodeMirror／HTML／PDF 窗口，记录原生截图及边界检查；当前入口为选择本地项目后使用**文件 → 打开文件…**。编辑与共享草稿恢复仍待完成。
+原生 QA 构建还执行
+`pnpm build`，打包共用 Web 内容及许可声明；请先安装锁定的 pnpm 依赖。`bash scripts/macos-content-smoke.sh`
+检查只读 CodeMirror／HTML／PDF 及资源边界。选择本地项目后，**文件 → 打开文件…**现通过共用编辑器及 Rust 草稿队列编辑文本。`bash scripts/macos-editor-smoke.sh`
+检查真实原生编辑、草稿持久化后的 SIGKILL／重启、冲突／关闭／放弃／保存，生成报告和系统截图。此脚本需要 macOS 图形会话及隔离 QA
+App，使用临时文件，不代表人工键盘／输入法验收；新编辑器场景仍待自身原生 CI 成功。
 
 `pnpm qa:shared-state`
 构建仅 QA 特性启用的隔离 Tauri 应用（`sh.uterm.desktop.qa.sharedstate`），在真实 WebView 中执行保存／冲突／重载／退出／重开／恢复场景。Windows／macOS
 CI 截取原生窗口，并将报告及图片上传到
 `legacy-checks-*/tauri-state-qa/`。此命令需要桌面会话，拒绝覆盖已有 QA 配置。专用配置路径链接将 QA 数据导向临时目录，不覆盖主目录变量，也不使用生产配置。自动化不代表人工键盘／输入法验收。
 
-核心 `store/editor.rs`
-增加核对 revision 的多文档草稿存储、旧来源原始副本及明确恢复。这是经生成 DTO 暴露的开发 API，两端编辑界面接入与原生编辑验收仍待完成；`pnpm test:core`
+核心 `store/editor.rs` 管理核对 revision 的多文档草稿、旧来源原始副本及明确恢复。原生编辑经
+`src/lib/editor-drafts.ts`
+有界队列采用该 API；Tauri 在迁移界面就绪前保留原草稿归属。原生标签／窗口顺序及完整编辑验收仍待完成，内容写入仅限所选文件。`pnpm test:core`
 明确执行工作区及草稿快照的文件系统失败／重试检查。
-
-有界草稿客户端队列位于
-`src/lib/editor-drafts.ts`，内容适配使用按项目读取与文档revision；编辑生命周期接入完成前，原生预览继续禁用修改。
 
 共享回环控制服务位于
 `crates/utermd-local/src/control/server.rs`，Tauri 与核心操作复用同一队列及生命周期；宿主为该服务直接声明 Tokio 和 tempfile。`pnpm test:host`

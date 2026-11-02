@@ -47,6 +47,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     let webView: WKWebView
     let directory: URL
     let path: String
+    let editable: Bool
     private let bridge: CoreBridge
     private var documentID = UUID().uuidString
     private var tasks: [String: Task<Void, Never>] = [:]
@@ -59,7 +60,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     var closed: (() -> Void)?
     private let entry = URL(string: "uterm-content://bundle/native-content.html")!
 
-    init(bridge: CoreBridge, directory: URL, path: String) throws {
+    init(bridge: CoreBridge, directory: URL, path: String, editable: Bool = false) throws {
         guard let root = Bundle.main.resourceURL?.appendingPathComponent("content") else {
             throw BridgeFailure(code: "RESOURCE_MANIFEST", message: "Bundled content is missing")
         }
@@ -71,6 +72,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         self.bridge = bridge
         self.directory = directory.standardizedFileURL.resolvingSymlinksInPath()
         self.path = path
+        self.editable = editable
         let window = NSWindow(contentRect: webView.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = path
         window.minSize = NSSize(width: 540, height: 360)
@@ -146,7 +148,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         switch request.method {
         case "content_context":
             let state = try await bridge.snapshot()
-            return .object(["directory": .string(directory.path), "path": .string(path), "settings": state.document.settings])
+            return .object(["directory": .string(directory.path), "path": .string(path), "settings": state.document.settings, "editable": .bool(editable)])
         case "file_read", "files_list", "files_search":
             guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Content cannot select a different project root") }
             let methods = ["file_read": "files.read", "files_list": "files.list", "files_search": "files.search"]
@@ -155,12 +157,26 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Draft cannot select another project root") }
             let method = request.method == "editor_drafts_list" ? "editor.drafts.list" : "editor.drafts.document"
             return try await bridge.call(method, params: .object(params))
-        case "editor_drafts_import", "editor_drafts_put", "editor_drafts_remove":
+        case "editor_drafts_put", "editor_drafts_remove":
+            guard editable else { throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。")) }
+            let draft: JSONValue = request.method == "editor_drafts_put" ? (params["draft"] ?? .null) : .object(params)
+            guard draft["directory"] == .string(directory.path), draft["path"] == .string(path) else {
+                throw BridgeFailure(code: "ROOT_DENIED", message: "Draft cannot select another file or project root")
+            }
+            let method = request.method == "editor_drafts_put" ? "editor.drafts.putDocument" : "editor.drafts.removeDocument"
+            return try await bridge.call(method, params: .object(params))
+        case "editor_drafts_import":
             throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。"))
-        case "file_save", "file_copy", "file_mutate":
+        case "file_save":
+            guard editable else { throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。")) }
+            guard params["directory"] == .string(directory.path), params["path"] == .string(path) else {
+                throw BridgeFailure(code: "ROOT_DENIED", message: "Editor cannot save another file or project root")
+            }
+            return try await bridge.call("files.save", params: .object(params))
+        case "file_copy", "file_mutate":
             throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。"))
         case "editor_guard":
-            guard params["active"] == .bool(false) else { throw BridgeFailure(code: "READ_ONLY", message: "Native preview cannot enable editing") }
+            guard params["active"] == .bool(false) || (editable && params["active"] == .bool(true)) else { throw BridgeFailure(code: "READ_ONLY", message: "Native preview cannot enable editing") }
             return .null
         case "editor_prepare_result":
             guard let token = params["token"]?.string, let value = params["ready"], case .bool(let ready) = value else {
@@ -191,11 +207,12 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         if let bytes = try? JSONSerialization.data(withJSONObject: event), let json = String(data: bytes, encoding: .utf8) {
             webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('uterm-content-event',{detail:\(json)}));")
         }
+        if editable { return false }
         // This window only previews files; it must also close when its Web content fails.
         // 此窗口只预览文件；Web 内容失效时也必须能关闭。
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(600))
-            guard let self, !self.permitsClose, self.window?.isVisible == true else { return }
+            guard let self, !self.permitsClose, self.quitToken == nil, self.window?.isVisible == true else { return }
             self.forceClose()
         }
         return false

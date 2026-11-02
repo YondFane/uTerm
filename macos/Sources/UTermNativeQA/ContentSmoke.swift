@@ -4,11 +4,11 @@ import UTermBridge
 
 @MainActor
 enum ContentSmoke {
-    private static func wait(_ content: ContentWindow, _ script: String) async throws {
+    static func wait(_ content: ContentWindow, _ script: String, allowAlert: Bool = false) async throws {
         let deadline = Date().addingTimeInterval(20)
         while Date() < deadline {
             if !content.navigationError.isEmpty { throw BridgeFailure(code: "CONTENT_NAVIGATION", message: content.navigationError) }
-            if let error = try? await content.webView.evaluateJavaScript("document.querySelector('[role=alert]')?.textContent || ''"),
+            if !allowAlert, let error = try? await content.webView.evaluateJavaScript("document.querySelector('[role=alert]')?.textContent || ''"),
                let message = error as? String, !message.isEmpty {
                 throw BridgeFailure(code: "CONTENT_RENDER", message: message)
             }
@@ -18,7 +18,7 @@ enum ContentSmoke {
         let state = (try? await content.webView.evaluateJavaScript("document.documentElement.outerHTML")) as? String ?? "No DOM"
         throw BridgeFailure(code: "CONTENT_TIMEOUT", message: String(state.prefix(6000)))
     }
-    private static func request(_ content: ContentWindow, method: String, params: [String: Any], wrongDocument: Bool = false, document: String? = nil) async throws -> String {
+    static func request(_ content: ContentWindow, method: String, params: [String: Any], wrongDocument: Bool = false, document: String? = nil) async throws -> String {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
             content.webView.callAsyncJavaScript("""
                 const reply = await window.webkit.messageHandlers.utermContent.postMessage({kind:'request',version:1,id:operationID,document:documentOverride||(wrongDocument?'old-document':window.utermContentDocument),method,params});

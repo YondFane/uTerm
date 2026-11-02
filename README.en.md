@@ -154,11 +154,14 @@ unprivileged user so directory permissions enforce the failure; Windows uses a h
 The core's locked dependencies include the existing base64 decoder and ignore-aware file walker.
 Native file/content UI acceptance is tracked separately in the migration guide.
 
-The native QA build also runs `pnpm build` and bundles the shared Web content and its license
-notices. Install the frozen pnpm dependencies first. `bash scripts/macos-content-smoke.sh` exercises
-the isolated read-only CodeMirror/HTML/PDF windows and records native screenshots and boundary
-checks; the current native file entry is **File → Open file…** with a local project selected.
-Editing and shared draft recovery remain pending.
+The native QA build also runs `pnpm build` and bundles shared Web content and license notices;
+install frozen pnpm dependencies first. `bash scripts/macos-content-smoke.sh` checks readonly
+CodeMirror/HTML/PDF and resource boundaries. With a local project selected, **File → Open file…**
+now uses the shared editor and Rust draft queue for editable text.
+`bash scripts/macos-editor-smoke.sh` checks actual native editing, a durable draft followed by
+SIGKILL/relaunch, conflict/close/discard/save, reports and system screenshots. It requires a macOS
+GUI session and an isolated QA App; it uses temporary files and does not establish manual
+keyboard/IME acceptance. The new editor scenario awaits its own successful native CI.
 
 `pnpm qa:shared-state` builds a compile-gated, isolated Tauri QA app
 (`sh.uterm.desktop.qa.sharedstate`) and runs save/conflict/reload/quit/reopen/recovery scenarios in
@@ -167,14 +170,12 @@ its real WebView. Windows/macOS CI captures native windows and uploads reports a
 Dedicated profile links redirect QA data into a temporary directory; no home-directory override or
 production profile is used. This automation does not establish manual keyboard/IME acceptance.
 
-The core's `store/editor.rs` adds revision-checked multi-document draft storage, exact legacy-source
-copies and explicit recovery. It is a development API behind generated DTOs; both editor UIs still
-need adoption and native editing acceptance. `pnpm test:core` explicitly runs filesystem failure/
-retry checks for workspace and draft snapshots.
-
-The bounded draft client queue lives in `src/lib/editor-drafts.ts`; content adapters use
-project-scoped reads and document revisions. Native preview keeps mutation disabled until editor
-lifecycle adoption is complete.
+The core's `store/editor.rs` owns revision-checked multi-document drafts, exact legacy-source copies
+and explicit recovery. Native editing adopts this API through the bounded queue in
+`src/lib/editor-drafts.ts`; Tauri retains its old editor draft owner until its migration UI is
+ready. Native tabs/window order and complete editing acceptance remain pending. Content writes are
+restricted to the selected file. `pnpm test:core` explicitly runs filesystem failure/retry checks
+for workspace and draft snapshots.
 
 The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
 operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this

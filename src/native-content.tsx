@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { FileEditor } from "./components/FileEditor";
+import { FileEditor, UnsavedDialog } from "./components/FileEditor";
 import { SettingsProvider } from "./lib/SettingsContext";
 import { contentInvoke } from "./lib/content-host";
 import { activeLanguage, localizeMessage, setUiLanguage, tx } from "./lib/i18n";
@@ -13,9 +13,14 @@ interface Context {
   directory: string;
   path: string;
   settings: Settings;
+  editable: boolean;
 }
 function Content({ context }: { context: Context }) {
-  const editor = useFileDocument(10, true);
+  const editor = useFileDocument(
+    10,
+    !context.editable,
+    context.editable ? context.directory : undefined,
+  );
   useEffect(() => {
     void editor.open(context.directory, context.path);
   }, [context.directory, context.path]);
@@ -28,6 +33,7 @@ function Content({ context }: { context: Context }) {
           {editor.error ? localizeMessage(editor.error) : tx("文件")}
         </p>
       )}
+      {context.editable && <UnsavedDialog editor={editor} />}
     </main>
   );
 }

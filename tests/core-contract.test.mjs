@@ -107,12 +107,68 @@ test("shared draft queues use Rust document revisions without replacing another 
   await assert.rejects(b.put(queueDraft("a.txt", "stale B")), { code: "CONFLICT" });
   await assert.rejects(b.flush(), { code: "CONFLICT" });
   await assert.rejects(b.retry(), { code: "CONFLICT" });
+  await b.discard("/qa/editor", "a.txt");
+  await b.flush();
   const current = (
     await callA("editor.drafts.document", { directory: "/qa/editor", path: "a.txt" })
   ).result;
   assert.equal(current.draft.text, "A new");
   await b.remove("/qa/editor", "b.txt");
   assert.equal((await callA("editor.drafts.list")).result.drafts.length, 1);
+  await a.discard("/qa/editor", "a.txt");
+  assert.equal((await callA("editor.drafts.list")).result.drafts.length, 0);
+});
+
+test("explicit draft discard waits for dispatched commits and rejects a racing external replacement", async (t) => {
+  const call = await client(t),
+    invoke = draftCall(call),
+    started = signal(),
+    release = signal();
+  let hold = true,
+    replace = false;
+  const queue = new EditorDraftQueue(async (method, params) => {
+    if (hold && method === "editor_drafts_put") {
+      started.resolve();
+      await release.promise;
+    }
+    if (replace && method === "editor_drafts_remove") {
+      replace = false;
+      assert.ok(
+        (
+          await call("editor.drafts.putDocument", {
+            expectedDraftRevision: params.expectedDraftRevision,
+            draft: queueDraft("racing.txt", "external replacement"),
+          })
+        ).result,
+      );
+    }
+    return invoke(method, params);
+  });
+  t.after(() => queue.close());
+  await queue.initialize(null);
+  const write = queue.put(queueDraft("pending.txt", "dispatched before discard"));
+  await started.promise;
+  const discarded = queue.discard("/qa/editor", "pending.txt");
+  await assert.rejects(queue.put(queueDraft("pending.txt", "blocked while discarding")), {
+    code: "DRAFT_BUSY",
+  });
+  release.resolve();
+  await write;
+  await discarded;
+  assert.equal(
+    (await call("editor.drafts.document", { directory: "/qa/editor", path: "pending.txt" })).result,
+    null,
+  );
+  hold = false;
+  await queue.put(queueDraft("racing.txt", "my original"));
+  replace = true;
+  await assert.rejects(queue.discard("/qa/editor", "racing.txt"), { code: "CONFLICT" });
+  await queue.discard("/qa/editor", "racing.txt");
+  assert.equal(
+    (await call("editor.drafts.document", { directory: "/qa/editor", path: "racing.txt" })).result
+      .draft.text,
+    "external replacement",
+  );
 });
 
 test("draft text coalesces and flush drains writes added during an earlier real Rust write", async (t) => {
@@ -823,6 +879,105 @@ test("WebKit editor quit waits for a real Rust file save and refuses external co
   assert.equal(editor.transitioning, false);
   assert.equal(editor.document.text, "retain my unsaved text");
   assert.equal(readFileSync(join(directory, path), "utf8"), "external writer");
+});
+
+test("shared editor recovery restores durable text after unload and retains file conflict guards", async (t) => {
+  const call = await client(t),
+    directory = mkdtempSync(join(tmpdir(), "uterm-editor-reopen-")),
+    path = "reopen.txt";
+  writeFileSync(join(directory, path), "\ufeffdisk 中文\r\n");
+  const file = (await call("files.read", { directory, path })).result;
+  const legacy = JSON.stringify({
+    ...queueDraft(path, "recovered 中文\r\n"),
+    directory,
+    saved: file.text,
+    version: file.version,
+    bom: file.bom,
+    line_ending: file.line_ending,
+  });
+  assert.ok((await call("editor.drafts.import", { legacy })).result);
+  const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
+  for (const key of ["window", "document", "localStorage"])
+    Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  localStorage.setItem(draftKey, "old WebView bytes must stay unchanged");
+  const server = await createServer({
+    configFile: false,
+    server: { middlewareMode: true, hmr: false, watch: null },
+    appType: "custom",
+  });
+  const React = await import("react"),
+    { createRoot } = await import("react-dom/client"),
+    { useFileDocument } = await server.ssrLoadModule("/src/lib/useFileDocument.ts");
+  let root = createRoot(document.getElementById("root")),
+    editor;
+  window.utermContentDocument = "shared-editor-recovery";
+  window.webkit = {
+    messageHandlers: {
+      utermContent: {
+        async postMessage(request) {
+          if (request.kind === "cancel") return {};
+          let result = null,
+            error;
+          if (request.method !== "editor_guard") {
+            const method =
+              editorDraftMethods[request.method] ??
+              { file_read: "files.read", file_save: "files.save" }[request.method];
+            assert.ok(method, request.method);
+            const reply = await call(method, request.params);
+            result = reply.result;
+            if (reply.error)
+              error = {
+                code: reply.error.code,
+                message: `${reply.error.code}: ${reply.error.message}`,
+              };
+          }
+          return { version: 1, id: request.id, document: request.document, result, error };
+        },
+      },
+    },
+  };
+  function Harness() {
+    editor = useFileDocument(10, false, directory);
+    return null;
+  }
+  t.after(async () => {
+    await React.act(async () => root.unmount());
+    await server.close();
+    dom.window.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => editor.open(directory, path));
+  assert.equal(editor.document.text, "recovered 中文\r\n");
+  assert.ok(editor.document.notice);
+  assert.equal(readFileSync(join(directory, path), "utf8"), "\ufeffdisk 中文\r\n");
+  await React.act(async () => editor.change("durable before unload 中文\r\n"));
+  await React.act(async () => assert.rejects(editor.prepareUpdate()));
+  assert.equal(
+    (await call("editor.drafts.document", { directory, path })).result.draft.text,
+    "durable before unload 中文\r\n",
+  );
+  await React.act(async () => root.unmount());
+  root = createRoot(document.getElementById("root"));
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => editor.open(directory, path));
+  assert.equal(editor.document.text, "durable before unload 中文\r\n");
+  assert.equal(localStorage.getItem(draftKey), "old WebView bytes must stay unchanged");
+  writeFileSync(join(directory, path), "external change");
+  await React.act(async () => assert.equal(await editor.save(), false));
+  assert.equal(editor.conflict, true);
+  assert.equal(editor.document.text, "durable before unload 中文\r\n");
+  assert.equal(readFileSync(join(directory, path), "utf8"), "external change");
+  await React.act(async () => editor.reload());
+  assert.equal(editor.pending, true);
+  await React.act(async () => editor.discard());
+  assert.equal(editor.document.text, "external change");
+  assert.equal((await call("editor.drafts.document", { directory, path })).result, null);
+  await React.act(async () => editor.change("explicitly saved"));
+  await React.act(async () => assert.equal(await editor.save(), true));
+  assert.equal(readFileSync(join(directory, path), "utf8"), "explicitly saved");
+  assert.equal((await call("editor.drafts.document", { directory, path })).result, null);
 });
 
 test("settings saves from a stale view change only its requested fields", async (t) => {

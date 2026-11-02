@@ -186,33 +186,41 @@ bytes remain available instead of being pruned. A full source collection rejects
 rather than deleting an original. Corruption needs explicit revision-checked restore, retaining
 damaged bytes; relative draft paths reject absolute paths and parent traversal.
 
-This foundation is not yet connected to either editor UI. Tauri keeps its existing draft ownership
-and the native window remains readonly; native editing/crash recovery is not accepted. The storage
-foundation passed all four jobs at head `80746d3d2e62a6b3d595cb242daf0755d4e75e7a`, tested merge
-`4c19ceac043e9222ab7485af727d956eebfc9f22`
-([native CI](https://github.com/YondFane/uTerm/actions/runs/41474453573),
-[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41474453611)). Platform filesystem
-failure/ retry and nine Swift tests passed, including actual UTF-8/UTF-16 units, NUL, BOM, CRLF,
-stale removal and reopen through the C ABI. Eleven TypeScript/Rust process contracts passed at that
-source.
+The native QA client's **File → Open file…** now opens text with the reused CodeMirror editor and
+project-scoped shared recovery. Unsaved text is queued to Rust; an acknowledged draft is restored
+when reopening its file. Recovered text needs explicit Save before autosave resumes. File writes
+retain root/link, expected-version, BOM and line-ending checks. Saving and quitting wait for draft
+delivery; editable windows have no readonly force-close timer. Explicit discard waits for dispatched
+writes and cannot erase another writer's newer draft. Native Web content may save only its selected
+file; it cannot import legacy sources or write another project/file. Tauri retains its existing
+editor ownership until its migration/recovery UI is adopted. Native tabs and window order are not
+yet persisted.
 
-Development transport now adds project-scoped draft reads and opaque document revision tokens. Rust
-allows different documents to advance independently and refuses a stale writer/remover for the same
-document. Both content adapters use the common contract. The client keeps only the latest waiting
-text per document, bounds pending text, retains failures for flush/retry and checks actual stored
-data after a lost reply. Initialization checks a supplied legacy source even when the shared store
-already exists: a different source is archived and reported as a migration conflict, including on
-retry. Close cancels delivery without claiming that a dispatched write was rolled back. Eighteen
-real Rust-process contract tests and two queue fixture checks pass on Linux; new native smoke checks
-selected-root-only results and readonly mutation rejection. Those additions need their own platform
-CI. The native quit path now asks each content document to finish saving and remain frozen before it
-closes any file windows. Refusal, timeout, reload or stale replies keep the app open; cancellation
-resumes prepared documents. A Linux WebKit-contract check uses real Rust file writes to verify
-delayed completion and external-change refusal. Three new Swift gate tests and real-window
-prepare/resume/timeout checks need their own successful macOS CI. At `a0758cc`, the ARM build and 12
-Swift checks passed, but real-window smoke stopped because a QA script returned an unsupported
-JavaScript function value; its primitive-result fix awaits rerun. Editing remains disabled; editor
-UI, tabs, close/reopen/crash recovery and editing/focus acceptance remain pending in #34.
+The storage and scoped transport foundation passed all four jobs at head
+`4bea29a75178efe0f93a31d49d2490accee3d9dd`, tested merge `1ae83343a15c9c422dd989234a5a5558f829b10c`
+([native CI](https://github.com/YondFane/uTerm/actions/runs/41487145173),
+[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41487145188)). Platform filesystem
+failure/retry, nine Swift tests, 17 TypeScript/Rust process contracts and real readonly native
+scope/resource boundaries passed. Actual ARM text and Intel PDF screenshots were visually inspected.
+That evidence does not accept subsequent editable-window changes.
+
+Linux full frontend validation passed 374 tests (ten skipped), with type/build, contract, format and
+documentation checks. Twenty real Rust-process contracts and two queue fixture checks passed. The
+client coalesces waiting text, bounds pending data, rejects stale writes/removals for the same
+document and allows independent documents to advance. Lost replies require checking actual durable
+data. Different legacy sources are archived and rejected as a migration conflict, including on
+retry. Close stops delivery without promising host rollback. Linux focused tests now cover safe
+discard racing a dispatched write/external replacement, real editor unload/reopen, exact BOM/CRLF,
+file conflicts and explicit save. New native CI runs actual editable WK windows, draft checkpoints,
+SIGKILL/relaunch, conflict/close/discard/save and uploads source-specific reports and screenshots.
+These editable-window checks await their own successful macOS runs; DOM input in a real native
+WebView does not establish manual keyboard/IME/focus acceptance.
+
+Native quit freezes and confirms all content documents before closing them. Refusal, timeout, reload
+and stale replies retain the app; cancelled quit resumes prepared documents. The `a0758cc` ARM build
+and 12 Swift checks passed, but window smoke stopped at an unsupported JavaScript function return in
+QA. Its primitive-result fix and new editor work need their own successful CI. #33/#34 remain open
+for complete editor/tabs, two-client migration, recovery, native focus and remaining acceptance.
 
 ## Project website
 
