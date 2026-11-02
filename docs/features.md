@@ -60,7 +60,9 @@ rejection. macOS ARM/Intel core/FFI/Swift bridge tests and visible empty-window 
 at [b579543](https://github.com/YondFane/uTerm/actions/runs/41409128290). The real PTY Unicode
 inspection failed at that head; the corrected cell reader and new parser checks still require CI.
 Windows host responsiveness failed with a shell-based test probe; its replacement native fixture
-also requires Windows CI. These unresolved checks keep terminal acceptance open.
+also requires Windows CI. These unresolved checks keep terminal acceptance open. Native startup now
+loads its first coherent snapshot before consuming buffered invalidations; late reload failures
+cannot replace newer state. This startup race correction also awaits native CI.
 
 The QA harness uses a temporary project and data, never production data. Empty-window smoke captures
 `native-empty-window.png`; terminal smoke captures language/theme/width, hidden-sidebar and

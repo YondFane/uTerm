@@ -87,6 +87,8 @@ final class WorkspaceModel: ObservableObject {
             helperReady = true
             for session in terminals.values { session.rebind(bridge) }
             environment = try await bridge.call("host.environment")
+            await reload()
+            guard state != nil else { throw BridgeFailure(code: "BOOTSTRAP", message: error) }
             events = Task { @MainActor [weak self, bridge] in
                 for await event in bridge.events {
                     guard let self, !Task.isCancelled else { return }
@@ -113,7 +115,6 @@ final class WorkspaceModel: ObservableObject {
                     else if failure.attachment == nil { self.terminalError = failure.message }
                 }
             }
-            await reload()
             if ready { terminalError = "" }
         } catch { self.error = error.localizedDescription }
     }
@@ -146,7 +147,7 @@ final class WorkspaceModel: ObservableObject {
                 if let session = terminals[id] { Task { await session.connect() } }
             }
             error = ""
-        } catch { self.error = error.localizedDescription }
+        } catch { if epoch == loadEpoch { self.error = error.localizedDescription } }
     }
 
     @discardableResult

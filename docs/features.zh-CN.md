@@ -52,7 +52,7 @@ Linux 真实 helper 测试覆盖确认背压、断开／重开／回放和明确
 ARM／Intel 核心／FFI／Swift 桥接测试及真实可见空窗口正常退出已在
 [b579543](https://github.com/YondFane/uTerm/actions/runs/41409128290) 通过。该提交的真实 PTY
 Unicode 文本检查失败；修正后的单元读取与新增解析器检查仍需 CI。Windows 宿主响应性测试的 Shell 样例启动失败，替换后的原生样例也仍需 Windows
-CI。这些检查未闭合前，终端验收保持开放。
+CI。这些检查未闭合前，终端验收保持开放。原生启动改为先读取首个一致快照，再消费缓存失效事件；迟到的读取错误不能覆盖新状态。此启动竞态修正也仍待原生 CI。
 
 QA 脚本使用临时项目和数据，不读取生产数据。空窗口 smoke 采集
 `native-empty-window.png`；终端 smoke 采集双语／主题／宽度、隐藏侧栏和全屏场景。报告记录平台、架构、系统、源码 head 及实际测试 merge

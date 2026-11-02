@@ -376,3 +376,13 @@ asserts a ready, visible, zero-session QA window with no host or production data
 exit. This capture must execute successfully on both native runners before screenshot acceptance.
 
 #21 复用原空窗口 smoke 补充真实 PNG，与平台及两种 SHA 元数据共同归档；保留无宿主、无生产数据、零会话及正常退出断言，需双架构实际执行后验收。
+
+At head `9e130a833cc0f773e6ac65d1846e57aa330eec03`, all six ARM Swift tests passed, including the
+new renderer parser test. Window smoke then reported `coreReady: false` without an error: buffered
+import invalidations could supersede the initial reload before it published any state. Startup now
+loads the initial coherent snapshot before starting invalidation consumption, and stale reload
+failures are ignored by epoch. Readiness is not established by an arbitrary delay. The correction
+requires a fresh native run; the failed readiness report is retained.
+
+该提交六项 ARM
+Swift 测试通过，窗口报告暴露首个快照与缓存事件的初始化竞态；先加载一致快照再消费事件，并按 epoch 丢弃迟到错误，不以延时作为就绪条件，等待新原生运行。
