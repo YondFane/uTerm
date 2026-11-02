@@ -202,10 +202,15 @@ document. Both content adapters use the common contract. The client keeps only t
 text per document, bounds pending text, retains failures for flush/retry and checks actual stored
 data after a lost reply. Initialization checks a supplied legacy source even when the shared store
 already exists: a different source is archived and reported as a migration conflict, including on
-retry. Close cancels delivery without claiming that a dispatched write was rolled back. Seventeen
+retry. Close cancels delivery without claiming that a dispatched write was rolled back. Eighteen
 real Rust-process contract tests and two queue fixture checks pass on Linux; new native smoke checks
 selected-root-only results and readonly mutation rejection. Those additions need their own platform
-CI. Editor UI, tabs, close/reopen/crash recovery and editing/focus acceptance remain pending in #34.
+CI. The native quit path now asks each content document to finish saving and remain frozen before it
+closes any file windows. Refusal, timeout, reload or stale replies keep the app open; cancellation
+resumes prepared documents. A Linux WebKit-contract check uses real Rust file writes to verify
+delayed completion and external-change refusal. Three new Swift gate tests and real-window
+prepare/resume/timeout checks await their own macOS CI. Editing remains disabled; editor UI, tabs,
+close/reopen/crash recovery and editing/focus acceptance remain pending in #34.
 
 ## Project website
 

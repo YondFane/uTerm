@@ -111,6 +111,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if preparingQuit { return false }
         if menuItem.action == #selector(closeSession) {
             let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow }
             menuItem.title = fileFocused ? localized("Close file", "关闭文件") : localized("Close session", "关闭会话")
@@ -156,6 +157,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func makeContentWindow(directory: URL, path: String) throws -> ContentWindow {
+        guard !preparingQuit else { throw BridgeFailure(code: "QUIT_BUSY", message: localized("The client is preparing to quit.", "客户端正在准备退出。")) }
         guard let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
         let content = try ContentWindow(bridge: bridge, directory: directory, path: path)
         let id = UUID()
@@ -197,7 +199,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         preparingQuit = true
         Task { @MainActor in
             guard await model.confirmQuit() else { self.preparingQuit = false; return }
-            for content in Array(self.contentWindows.values) { content.forceClose() }
+            let contents = Array(self.contentWindows.values)
+            do {
+                for content in contents {
+                    guard try await content.prepareForQuit() else {
+                        throw BridgeFailure(code: "QUIT_REFUSED", message: localized("Save or resolve file changes before quitting.", "退出前请保存或处理文件修改。"))
+                    }
+                }
+                guard contents.allSatisfy({ $0.isPreparedForQuit }) else {
+                    throw BridgeFailure(code: "CONTENT_CHANGED", message: localized("A file window changed while preparing to quit. Try again.", "准备退出时文件窗口已变化，请重试。"))
+                }
+            } catch {
+                for content in contents { content.resumeAfterQuit() }
+                self.model.error = error.localizedDescription
+                self.preparingQuit = false
+                return
+            }
+            for content in contents { content.forceClose() }
             await model.shutdown()
             self.terminating = true
             sender.terminate(nil)

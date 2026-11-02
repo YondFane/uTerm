@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { fileInvoke } from "./file-target";
 import { createContentScope, isContentHost } from "./content-host";
 import type { ContentScope } from "./content-transport";
+import type { JSONValue } from "./core-contract.generated";
 import {
   fileBytes,
   isDirty,
@@ -43,6 +44,7 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
   const [pending, setPending] = useState(false);
   const pendingAction = useRef<(() => Promise<void>) | null>(null);
   const transition = useRef(false);
+  const quitToken = useRef<string | null>(null);
   const writing = useRef(new DocumentSaveQueue());
   const sequence = useRef(0);
   function setDocument(value: OpenFile | null) {
@@ -283,22 +285,51 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false) {
       throw reason;
     }
   }
-  const latest = useRef({ request, exit });
-  latest.current = { request, exit };
+  function resumeQuit(payload: JSONValue) {
+    if (typeof payload !== "string" || quitToken.current !== payload) return;
+    quitToken.current = null;
+    transition.current = false;
+    setTransitioning(false);
+  }
+  async function prepareQuit(payload: JSONValue) {
+    if (typeof payload !== "string" || !payload || payload.length > 128) return;
+    let ready = false;
+    try {
+      if (!transition.current && !pendingAction.current) {
+        quitToken.current = payload;
+        transition.current = true;
+        setTransitioning(true);
+        ready = (await flush()) && quitToken.current === payload;
+      } else setError(tx("文件操作尚未完成，请稍后重试退出。"));
+      await invoke("editor_prepare_result", { token: payload, ready });
+    } catch (reason) {
+      ready = false;
+      setError(String(reason));
+    } finally {
+      if (!ready) resumeQuit(payload);
+    }
+  }
+  const latest = useRef({ request, exit, prepareQuit, resumeQuit });
+  latest.current = { request, exit, prepareQuit, resumeQuit };
   useEffect(() => {
     if (!isContentHost()) return;
     let disposed = false;
-    let unlisten: (() => void) | undefined;
-    void currentTransport()
-      .subscribe("editor-close-request", () => void latest.current.request(latest.current.exit))
-      .then((stop) => {
-        if (disposed) stop();
-        else unlisten = stop;
-      })
-      .catch((reason) => setError(String(reason)));
+    const unlisten: (() => void)[] = [];
+    for (const [event, receive] of [
+      ["editor-close-request", () => void latest.current.request(latest.current.exit)],
+      ["editor-prepare-quit", (payload: JSONValue) => void latest.current.prepareQuit(payload)],
+      ["editor-resume", (payload: JSONValue) => latest.current.resumeQuit(payload)],
+    ] as const)
+      void currentTransport()
+        .subscribe(event, receive)
+        .then((stop) => {
+          if (disposed) stop();
+          else unlisten.push(stop);
+        })
+        .catch((reason) => setError(String(reason)));
     return () => {
       disposed = true;
-      unlisten?.();
+      for (const stop of unlisten) stop();
     };
   }, []);
   useEffect(() => {

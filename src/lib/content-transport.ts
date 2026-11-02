@@ -22,6 +22,7 @@ const contentMethods = new Set([
   "ssh_file_mutate",
   "editor_guard",
   "editor_exit",
+  "editor_prepare_result",
   "open_external",
   "content_context",
   "content_font_adjust",
@@ -154,7 +155,7 @@ export class ContentScope {
   }
   async subscribe(kind: string, receive: (payload: JSONValue) => void): Promise<() => void> {
     if (this.closed) throw new ContentFailure("CLOSED", "Content document is closed");
-    if (kind !== "editor-close-request")
+    if (!["editor-close-request", "editor-prepare-quit", "editor-resume"].includes(kind))
       throw new ContentFailure("EVENT_DENIED", "Content event is not allowed");
     let listening = true;
     const stop = await this.port.subscribe(kind, this.document, (event) => {

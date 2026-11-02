@@ -42,6 +42,8 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     ...javaMessages,
     ...pythonMessages,
     打开文件: "Open file",
+    "文件操作尚未完成，请稍后重试退出。":
+      "A file operation is still running. Try quitting again shortly.",
     回滚文件: "Roll back file",
     确认回滚: "Confirm rollback",
     "Git 文件操作": "Git file actions",

@@ -51,6 +51,10 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     private var documentID = UUID().uuidString
     private var tasks: [String: Task<Void, Never>] = [:]
     private var permitsClose = false
+    private let quitGate = ContentQuitGate()
+    private var quitToken: String?
+    private var preparedDocument: String?
+    var isPreparedForQuit: Bool { permitsClose || (quitToken != nil && preparedDocument == documentID) }
     private(set) var navigationError = ""
     var closed: (() -> Void)?
     private let entry = URL(string: "uterm-content://bundle/native-content.html")!
@@ -82,6 +86,9 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     required init?(coder: NSCoder) { return nil }
 
     private func prepareDocument() {
+        quitGate.invalidate()
+        quitToken = nil
+        preparedDocument = nil
         for task in tasks.values { task.cancel() }
         tasks.removeAll()
         documentID = UUID().uuidString
@@ -155,6 +162,12 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         case "editor_guard":
             guard params["active"] == .bool(false) else { throw BridgeFailure(code: "READ_ONLY", message: "Native preview cannot enable editing") }
             return .null
+        case "editor_prepare_result":
+            guard let token = params["token"]?.string, let value = params["ready"], case .bool(let ready) = value else {
+                throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing content quit result")
+            }
+            try quitGate.respond(token: token, ready: ready)
+            return .null
         case "editor_exit": forceClose(); return .null
         case "open_external":
             guard let text = params["url"]?.string, let url = URL(string: text), ["https", "http"].contains(url.scheme?.lowercased() ?? ""), url.host != nil, NSWorkspace.shared.open(url) else {
@@ -173,6 +186,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if permitsClose { return true }
+        if quitToken != nil { return false }
         let event: [String: Any] = ["version": 1, "document": documentID, "kind": "editor-close-request", "payload": NSNull()]
         if let bytes = try? JSONSerialization.data(withJSONObject: event), let json = String(data: bytes, encoding: .utf8) {
             webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('uterm-content-event',{detail:\(json)}));")
@@ -187,11 +201,45 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         return false
     }
     func forceClose() {
+        quitGate.invalidate()
+        quitToken = nil
+        preparedDocument = nil
         permitsClose = true
         for task in tasks.values { task.cancel() }
         tasks.removeAll()
         webView.configuration.userContentController.removeScriptMessageHandler(forName: "utermContent", contentWorld: .page)
         window?.close()
     }
-    func windowWillClose(_ notification: Notification) { closed?() }
+    private func event(_ kind: String, token: String) throws {
+        let value: [String: Any] = ["version": 1, "document": documentID, "kind": kind, "payload": token]
+        let json = String(data: try JSONSerialization.data(withJSONObject: value), encoding: .utf8)!
+        webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('uterm-content-event',{detail:\(json)}));") { [weak self] _, error in
+            if let self, error != nil, self.quitToken == token { self.quitGate.invalidate() }
+        }
+    }
+    func prepareForQuit(timeout: Duration = .seconds(20)) async throws -> Bool {
+        if permitsClose { return true }
+        guard quitToken == nil else { throw BridgeFailure(code: "QUIT_BUSY", message: "Content is already preparing to quit") }
+        let sourceDocument = documentID
+        do {
+            let ready = try await quitGate.prepare(timeout: timeout) { token in
+                quitToken = token
+                try event("editor-prepare-quit", token: token)
+            }
+            guard sourceDocument == documentID, quitToken != nil else {
+                throw BridgeFailure(code: "CONTENT_CHANGED", message: "Content changed before quit preparation completed")
+            }
+            if ready { preparedDocument = sourceDocument }
+            else { resumeAfterQuit() }
+            return ready
+        } catch { resumeAfterQuit(); throw error }
+    }
+    func resumeAfterQuit() {
+        guard let token = quitToken else { return }
+        quitToken = nil
+        preparedDocument = nil
+        quitGate.invalidate()
+        try? event("editor-resume", token: token)
+    }
+    func windowWillClose(_ notification: Notification) { quitGate.invalidate(); closed?() }
 }

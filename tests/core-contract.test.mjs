@@ -713,6 +713,118 @@ test("shared file requests reject root escape, linked writes and malformed param
   assert.equal((await call("files.exec", { directory, path: "" })).error.code, "INVALID_PARAMS");
 });
 
+test("WebKit editor quit waits for a real Rust file save and refuses external conflicts", async (t) => {
+  const call = await client(t),
+    directory = mkdtempSync(join(tmpdir(), "uterm-quit-file-")),
+    path = "quit.txt";
+  writeFileSync(join(directory, path), "\ufefforiginal 中文\r\n");
+  const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
+  for (const key of ["window", "document", "localStorage"])
+    Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const server = await createServer({
+    configFile: false,
+    server: { middlewareMode: true, hmr: false, watch: null },
+    appType: "custom",
+  });
+  const React = await import("react"),
+    { createRoot } = await import("react-dom/client"),
+    { useFileDocument } = await server.ssrLoadModule("/src/lib/useFileDocument.ts");
+  const root = createRoot(document.getElementById("root"));
+  let editor, heldWrite, writeStarted, replied;
+  const replies = [];
+  window.utermContentDocument = "real-file-quit";
+  window.webkit = {
+    messageHandlers: {
+      utermContent: {
+        async postMessage(request) {
+          if (request.kind === "cancel") return {};
+          let result = null,
+            error;
+          if (request.method === "editor_prepare_result") {
+            replies.push(request.params);
+            replied?.resolve();
+          } else if (request.method !== "editor_guard") {
+            assert.ok(["file_read", "file_save"].includes(request.method), request.method);
+            if (request.method === "file_save" && heldWrite) {
+              writeStarted.resolve();
+              await heldWrite.promise;
+            }
+            const reply = await call(
+              request.method === "file_read" ? "files.read" : "files.save",
+              request.params,
+            );
+            result = reply.result;
+            if (reply.error)
+              error = {
+                code: reply.error.code,
+                message: `${reply.error.code}: ${reply.error.message}`,
+              };
+          }
+          return { version: 1, id: request.id, document: request.document, result, error };
+        },
+      },
+    },
+  };
+  function Harness() {
+    editor = useFileDocument();
+    return null;
+  }
+  function event(kind, payload) {
+    window.dispatchEvent(
+      new dom.window.CustomEvent("uterm-content-event", {
+        detail: { version: 1, document: window.utermContentDocument, kind, payload },
+      }),
+    );
+  }
+  t.after(async () => {
+    heldWrite?.resolve();
+    await React.act(async () => root.unmount());
+    await server.close();
+    dom.window.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+  await React.act(async () => root.render(React.createElement(Harness)));
+  await React.act(async () => editor.open(directory, path));
+  await React.act(async () => editor.change("saved during quit 中文\r\n"));
+  heldWrite = signal();
+  writeStarted = signal();
+  replied = signal();
+  await React.act(async () => {
+    event("editor-prepare-quit", "prepare-one");
+    await writeStarted.promise;
+  });
+  assert.equal(editor.transitioning, true);
+  await React.act(async () => editor.change("must not replace the frozen snapshot"));
+  assert.equal(editor.document.text, "saved during quit 中文\r\n");
+  assert.equal(replies.length, 0);
+  await React.act(async () => {
+    heldWrite.resolve();
+    await replied.promise;
+  });
+  assert.deepEqual(replies, [{ token: "prepare-one", ready: true }]);
+  assert.equal(readFileSync(join(directory, path), "utf8"), "\ufeffsaved during quit 中文\r\n");
+  assert.equal(editor.transitioning, true);
+  await React.act(async () => event("editor-resume", "old-token"));
+  assert.equal(editor.transitioning, true);
+  await React.act(async () => event("editor-resume", "prepare-one"));
+  assert.equal(editor.transitioning, false);
+  await React.act(async () => editor.change("retain my unsaved text"));
+  writeFileSync(join(directory, path), "external writer");
+  heldWrite = null;
+  replied = signal();
+  await React.act(async () => {
+    event("editor-prepare-quit", "conflict-two");
+    await replied.promise;
+  });
+  assert.deepEqual(replies.at(-1), { token: "conflict-two", ready: false });
+  assert.equal(editor.conflict, true);
+  assert.ok(editor.error);
+  assert.equal(editor.transitioning, false);
+  assert.equal(editor.document.text, "retain my unsaved text");
+  assert.equal(readFileSync(join(directory, path), "utf8"), "external writer");
+});
+
 test("settings saves from a stale view change only its requested fields", async (t) => {
   const call = await client(t);
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });

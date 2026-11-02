@@ -108,6 +108,22 @@ enum ContentSmoke {
                 try await wait(content, "window.utermContentDocument !== " + quoted + " && document.querySelector('.cm-content[contenteditable=false]')?.textContent.includes('UTERM_CONTENT_中文') === true")
                 report["documentRotatedOnReload"] = true
                 report["oldDocumentRejectedAfterReload"] = try await request(content, method: "file_read", params: ["directory": root.path, "path": path], document: oldDocument) == "DOCUMENT_DENIED"
+                let quitReady = try await content.prepareForQuit()
+                guard quitReady, content.isPreparedForQuit, content.window?.isVisible == true else {
+                    throw BridgeFailure(code: "CONTENT_QUIT", message: "Content did not confirm prepare without closing")
+                }
+                report["quitPreparedWithoutClosing"] = true
+                content.resumeAfterQuit()
+                report["quitResumedWithoutClosing"] = !content.isPreparedForQuit && content.window?.isVisible == true
+                _ = try await content.webView.evaluateJavaScript("window.utermQADispatch=window.dispatchEvent;window.dispatchEvent=function(event){window.utermQASuppressed=event.detail;return true}")
+                do {
+                    _ = try await content.prepareForQuit(timeout: .milliseconds(100))
+                    throw BridgeFailure(code: "CONTENT_QUIT", message: "Unresponsive content was allowed to quit")
+                } catch let error as BridgeFailure where error.code == "QUIT_TIMEOUT" {
+                    report["quitTimeoutRetainedWindow"] = !content.isPreparedForQuit && content.window?.isVisible == true
+                }
+                _ = try await content.webView.evaluateJavaScript("window.dispatchEvent=window.utermQADispatch")
+                report["lateQuitResultRejected"] = try await request(content, method: "editor_prepare_result", params: ["token": "expired-quit-request", "ready": true]) == "STALE_QUIT"
                 guard try Data(contentsOf: root.appendingPathComponent(path)) == original else { throw BridgeFailure(code: "CONTENT_WRITE", message: "Read-only preview changed its source") }
             } else if path == "preview.html" {
                 let sandbox = try await content.webView.evaluateJavaScript("""
