@@ -61,7 +61,7 @@ jobs:
         run: bash scripts/macos-native-build.sh 2>&1 | tee macos/.build/evidence/native-build.log
       - name: Shared core, FFI and Swift bridge tests
         env:
-          UTERM_TERMINAL_LOAD_REPORT: macos/.build/evidence/terminal-load-core.json
+          UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/macos/.build/evidence/terminal-load-core.json
         run: |
           cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local
           cargo test --locked --manifest-path crates/uterm-core/Cargo.toml 2>&1 | tee macos/.build/evidence/core-tests.log

@@ -51,7 +51,7 @@ Unix 慢消费回归使用真实 PTY：保持一帧未确认、拒绝错误 ack�
 MiB 原始历史后，明确 reset 到有界保留屏幕，不承诺无限原始历史。Linux
 x86_64 已通过，包括未确认时关闭客户端仍保留进程。原生 QA 另在 SwiftTerm 消费前注入 150
 ms 等待，期间执行真实侧栏菜单，检查超过 100 KB 的实际渲染／确认，并捕获
-`native-terminal-slow-consumer.png`。新增 Mac 场景仍待 CI；注入等待用于正确性验证，不是性能对比。Windows 保留现有回归，此 Unix 负载场景不在 Windows 执行。
+`native-terminal-slow-consumer.png`。新增 Mac 场景仍待 CI；首轮 Mac 负载测试执行至报告写出时，因 Cargo 从 crate 目录运行而找不到相对产物路径失败，现改传绝对路径，需重新执行。注入等待用于正确性验证，不是性能对比。Windows 保留现有回归，此 Unix 负载场景不在 Windows 执行。
 
 #### 原生 QA 验证
 

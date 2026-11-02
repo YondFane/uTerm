@@ -64,9 +64,10 @@ resets to the bounded retained screen; it does not promise unlimited raw history
 passed, including close while unacknowledged without killing the process. Native QA additionally
 injects 150 ms before SwiftTerm consumption, executes the actual sidebar menu while output waits,
 checks over 100 KB rendered and acknowledged, and captures `native-terminal-slow-consumer.png`.
-Those new Mac scenarios await CI; the injected delay is a correctness test, not a performance
-comparison. Windows retains its existing regression suite; this Unix load scenario does not run
-there.
+Those new Mac scenarios await CI. The first Mac load tests reached report writing but failed because
+Cargo runs the test from its crate directory; CI now supplies an absolute artifact path and must
+rerun. The injected delay is a correctness test, not a performance comparison. Windows retains its
+existing regression suite; this Unix load scenario does not run there.
 
 #### Native QA validation
 
