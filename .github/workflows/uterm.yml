@@ -83,6 +83,9 @@ jobs:
         run: pnpm format:check 2>&1 | tee ci-evidence/format.log
       - name: Shared core and generated contracts
         shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          UTERM_TERMINAL_LOAD_REPORT: ci-evidence/terminal-load-core.json
         run: |
           pnpm test:core 2>&1 | tee ci-evidence/core-ffi-tests.log
           pnpm contracts:check 2>&1 | tee ci-evidence/contracts.log

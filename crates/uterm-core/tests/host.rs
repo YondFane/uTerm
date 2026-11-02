@@ -252,6 +252,169 @@ fn real_shared_terminal_preserves_backpressure_generation_replay_and_detached_pr
     assert!(!status.sessions.iter().any(|s| s.spec.id == id && s.running));
 }
 
+#[cfg(unix)]
+#[test]
+fn slow_consumer_preserves_order_and_resets_expired_history_without_stalling_the_pty() {
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().canonicalize().unwrap();
+    let host_root = directory.join("local-daemon-v1");
+    let _cleanup = HostCleanup(host_root.clone());
+    let core = Core::open(directory.join("shared-state-v1")).unwrap();
+    call(&core, "host.configure", json!({"helper":helper()}));
+    let (sender, receiver) = mpsc::channel();
+    core.set_terminal_sink(Arc::new(move |_, _, frame| {
+        sender.send(frame).map_err(|e| e.to_string())
+    }))
+    .unwrap();
+    let id = "slow-consumer";
+    let params = json!({"id":id,"attachment":"before","directory":directory,"shell":"default","rows":24,"cols":200});
+    let generation = call(&core, "terminal.open", params.clone())["generation"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let first = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+    let payload = "x".repeat(120);
+    let command = format!("i=0; while test \"$i\" -lt 1000; do printf 'LOAD_%04d_{payload} 中文 é\\n' \"$i\"; i=$((i+1)); done; printf 'LOAD_%s\\n' END; : > load-ready\r");
+    core.terminal_write("before", command.as_bytes()).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while !directory.join("load-ready").exists() {
+        assert!(
+            Instant::now() < deadline,
+            "A paused consumer stalled the producer"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(receiver.recv_timeout(Duration::from_millis(75)).is_err());
+    call(
+        &core,
+        "terminal.action",
+        json!({"attachment":"before","action":"ack","sequence":first.sequence + 1}),
+    );
+    assert!(
+        receiver.recv_timeout(Duration::from_millis(75)).is_err(),
+        "An incorrect ack released the pending frame"
+    );
+    call(
+        &core,
+        "terminal.action",
+        json!({"attachment":"before","action":"ack","sequence":first.sequence}),
+    );
+    let mut bytes = Vec::new();
+    let mut previous = first.sequence;
+    let mut frames = 0;
+    loop {
+        let frame = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(
+            frame.sequence > previous && !frame.reset,
+            "Unexpired output must remain ordered deltas"
+        );
+        previous = frame.sequence;
+        frames += 1;
+        bytes.extend(frame.data);
+        if bytes.windows(8).any(|part| part == b"LOAD_END") {
+            break;
+        }
+        call(
+            &core,
+            "terminal.action",
+            json!({"attachment":"before","action":"ack","sequence":previous}),
+        );
+    }
+    let mut cursor = 0;
+    for index in 0..1000 {
+        let expected = format!("LOAD_{index:04}_{payload} 中文 é");
+        let position = bytes[cursor..]
+            .windows(expected.len())
+            .position(|part| part == expected.as_bytes())
+            .expect("An ordered record was lost");
+        cursor += position + expected.len();
+    }
+    call(
+        &core,
+        "terminal.action",
+        json!({"attachment":"before","action":"detach"}),
+    );
+    let mut reconnect = params;
+    reconnect["attachment"] = json!("after");
+    reconnect["reconnectOnly"] = json!(true);
+    assert_eq!(
+        call(&core, "terminal.open", reconnect)["generation"],
+        generation
+    );
+    let replay = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(replay.reset && replay.data.windows(8).any(|part| part == b"LOAD_END"));
+    let late = core.execute(br#"{"version":1,"id":"late","method":"terminal.action","params":{"attachment":"before","action":"ack","sequence":"0"}}"#);
+    assert!(
+        late.error.is_some(),
+        "A detached attachment must not acknowledge the new connection"
+    );
+    core.terminal_write("after", "yes 'OVERFLOW output 中文' | head -n 90000; printf 'OVERFLOW_%s\\n' READY; : > overflow-ready\r".as_bytes()).unwrap();
+    let observer = Client::connect(&host_root).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        assert!(Instant::now() < deadline, "The overflow producer stalled");
+        let Reply::Frame(frame) = observer
+            .request(Operation::Read {
+                id: id.into(),
+                generation: generation.clone(),
+                after: Some(replay.sequence),
+            })
+            .unwrap()
+        else {
+            panic!("Expected a real overflow frame")
+        };
+        if directory.join("overflow-ready").exists()
+            && frame.data.windows(14).any(|part| part == b"OVERFLOW_READY")
+        {
+            assert!(
+                frame.reset,
+                "Expired raw history requires an explicit screen reset"
+            );
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    assert!(receiver.recv_timeout(Duration::from_millis(75)).is_err());
+    call(
+        &core,
+        "terminal.action",
+        json!({"attachment":"after","action":"ack","sequence":replay.sequence}),
+    );
+    let recovered = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+    assert!(recovered.reset && recovered.sequence > replay.sequence);
+    assert!(recovered.data.len() < 1024 * 1024);
+    assert!(recovered
+        .data
+        .windows(14)
+        .any(|part| part == b"OVERFLOW_READY"));
+    let reset_size = recovered.data.len();
+    core.close();
+    assert!(status(&observer)
+        .sessions
+        .iter()
+        .any(|s| s.running && s.generation == generation));
+    if let Some(path) = std::env::var_os("UTERM_TERMINAL_LOAD_REPORT") {
+        let git = |args: &[&str]| {
+            let result = std::process::Command::new("git")
+                .args(args)
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .output()
+                .unwrap();
+            assert!(result.status.success());
+            String::from_utf8(result.stdout).unwrap().trim().to_string()
+        };
+        let tested_merge = git(&["rev-parse", "HEAD"]);
+        let source_head = std::env::var("PR_HEAD_SHA").unwrap_or_else(|_| tested_merge.clone());
+        std::fs::write(path, serde_json::to_vec_pretty(&json!({"passed":true,"platform":std::env::consts::OS,
+            "sourceHeadSHA":source_head,"testedMergeSHA":tested_merge,
+            "sourceTreeDirty":!git(&["status","--porcelain","--untracked-files=no"]).is_empty(),
+            "architecture":std::env::consts::ARCH,"orderedRecords":1000,"rawDeltaBytes":bytes.len(),"deltaFrames":frames,
+            "incorrectAckBlocked":true,"producerCompletedWithoutAck":true,"lateAttachmentRejected":true,
+            "reconnectRetainedGeneration":true,"overflowRows":90000,"overflowResetBytes":reset_size,
+            "overflowUsedExplicitReset":true,"closeWhileUnacknowledgedPreservedProcess":true})).unwrap()).unwrap();
+    }
+}
+
 fn status(client: &Client) -> utermd_local::daemon::HostStatus {
     match client.request(Operation::HostStatus).unwrap() {
         Reply::HostStatus(status) => status,

@@ -57,6 +57,17 @@ not only type names. Native and legacy platform CI passed this precision change 
 ([native](https://github.com/YondFane/uTerm/actions/runs/41422419793),
 [legacy](https://github.com/YondFane/uTerm/actions/runs/41422419819)).
 
+The Unix slow-consumer regression uses a real PTY: it holds one unacknowledged frame, rejects an
+incorrect ack, then checks all 1,000 Unicode records in order. A detached attachment cannot ack the
+replacement. After 90,000 additional rows exceed the host's 1 MiB raw history, recovery explicitly
+resets to the bounded retained screen; it does not promise unlimited raw history. Linux x86_64
+passed, including close while unacknowledged without killing the process. Native QA additionally
+injects 150 ms before SwiftTerm consumption, executes the actual sidebar menu while output waits,
+checks over 100 KB rendered and acknowledged, and captures `native-terminal-slow-consumer.png`.
+Those new Mac scenarios await CI; the injected delay is a correctness test, not a performance
+comparison. Windows retains its existing regression suite; this Unix load scenario does not run
+there.
+
 #### Native QA validation
 
 At head `6c782299f038fb2168b8d11123b3e3e7027123e6` (tested merge

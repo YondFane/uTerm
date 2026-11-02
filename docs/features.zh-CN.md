@@ -47,6 +47,12 @@ sequence 字段，在 JSON 舍入前保留整数字面量。确认使用兼容�
 `d3dcd09a69bcdd66798e2f4aaa4b67b99187cf77`、tested merge `3a012173e7f27639c7dbe40188354b8348c1affa`
 通过（[原生](https://github.com/YondFane/uTerm/actions/runs/41422419793)、[旧客户端](https://github.com/YondFane/uTerm/actions/runs/41422419819)）。
 
+Unix 慢消费回归使用真实 PTY：保持一帧未确认、拒绝错误 ack，再逐条核对 1,000 条中文组合字符记录的顺序。已断开的 attachment 不能确认新连接；再输出 90,000 行、超过宿主 1
+MiB 原始历史后，明确 reset 到有界保留屏幕，不承诺无限原始历史。Linux
+x86_64 已通过，包括未确认时关闭客户端仍保留进程。原生 QA 另在 SwiftTerm 消费前注入 150
+ms 等待，期间执行真实侧栏菜单，检查超过 100 KB 的实际渲染／确认，并捕获
+`native-terminal-slow-consumer.png`。新增 Mac 场景仍待 CI；注入等待用于正确性验证，不是性能对比。Windows 保留现有回归，此 Unix 负载场景不在 Windows 执行。
+
 #### 原生 QA 验证
 
 源码 head `6c782299f038fb2168b8d11123b3e3e7027123e6`、实际测试 merge

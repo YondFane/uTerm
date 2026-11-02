@@ -45,6 +45,7 @@ enum TerminalSmoke {
         try await wait("Return from alternate screen") { first.text.contains("TUI_READY") }
         report["unicodeAndAnsiParsed"] = true
         report["alternateScreenReturned"] = true
+        let loadCapture = try await verifySlowConsumer(model: model, window: window, terminal: first, report: &report)
 
         await model.split("horizontal")
         try await wait("Create a real split peer") { model.state?.sessions.count == 2 && model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true }
@@ -68,7 +69,7 @@ enum TerminalSmoke {
         window.makeKeyAndOrderFront(nil)
         report["hideAndReopenRetainedOutput"] = window.isVisible
 
-        var captures: [String] = []
+        var captures: [String] = [loadCapture]
         guard let settingsMenu = NSApp.mainMenu?.items.first?.submenu,
               let item = settingsMenu.items.first(where: { $0.action.map(NSStringFromSelector) == "settings" }),
               let action = item.action, NSApp.sendAction(action, to: item.target, from: item) else {
@@ -134,6 +135,44 @@ enum TerminalSmoke {
         report["hostExecutable"] = status["executable"].string ?? ""
         report["hostStarted"] = true
         report["runningProcessesBeforeQuit"] = 2
+    }
+
+    private static func verifySlowConsumer(model: WorkspaceModel, window: NSWindow, terminal: TerminalSession, report: inout [String: Any]) async throws -> String {
+        let beforeBytes = terminal.qaRenderedBytes
+        let beforeFrames = terminal.qaRenderedFrames
+        let generation = terminal.generation
+        terminal.qaRenderDelay = .milliseconds(150)
+        defer { terminal.qaRenderDelay = nil }
+        let payload = String(repeating: "x", count: 80)
+        terminal.enqueue(Data("i=0; while test \"$i\" -lt 1024; do printf 'NATIVE_LOAD_%04d_\(payload) 中文 é\\n' \"$i\"; i=$((i+1)); done; printf 'NATIVE_END_%s\\nUTERM_%s é\\n' READY 中文\r".utf8))
+        try await wait("Observe the deliberately delayed native consumer") { terminal.qaWaitingToRender }
+        guard let menu = NSApp.mainMenu?.items.compactMap(\.submenu).first(where: { $0.items.contains { $0.action.map(NSStringFromSelector) == "toggleSidebar" } }),
+              let item = menu.items.first(where: { $0.action.map(NSStringFromSelector) == "toggleSidebar" }), let action = item.action else {
+            throw BridgeFailure(code: "SMOKE_LOAD", message: "Native sidebar menu missing during delayed consumption")
+        }
+        let sidebar = model.sidebarVisible
+        guard NSApp.sendAction(action, to: item.target, from: item), model.sidebarVisible != sidebar else {
+            throw BridgeFailure(code: "SMOKE_LOAD", message: "Native menu did not respond during delayed consumption")
+        }
+        guard NSApp.sendAction(action, to: item.target, from: item), model.sidebarVisible == sidebar else {
+            throw BridgeFailure(code: "SMOKE_LOAD", message: "Native menu did not restore the sidebar")
+        }
+        try await wait("Render and acknowledge the actual native bulk output") {
+            terminal.qaRenderedBytes - beforeBytes >= 100_000 && terminal.text.contains("NATIVE_LOAD_1023") && terminal.text.contains("NATIVE_END_READY") && terminal.qaAcknowledgedFrames == terminal.qaRenderedFrames
+        }
+        guard terminal.error.isEmpty, terminal.generation == generation else {
+            throw BridgeFailure(code: "SMOKE_LOAD", message: "Bulk rendering changed generation or failed: \(terminal.error)")
+        }
+        report["slowConsumer"] = ["injectedDelayMilliseconds": 150, "records": 1024,
+            "renderedBytes": terminal.qaRenderedBytes - beforeBytes,
+            "renderedFrames": terminal.qaRenderedFrames - beforeFrames,
+            "largestFrameBytes": terminal.qaLargestFrame,
+            "acknowledgedAfterRendering": true, "nativeMenuResponsive": true,
+            "generationRetained": true, "performanceComparison": false] as [String: Any]
+        guard let path = WorkspaceModel.argument("--terminal-smoke-report") else { throw BridgeFailure(code: "SMOKE_LOAD", message: "Load screenshot report path missing") }
+        let name = "native-terminal-slow-consumer.png"
+        try await capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
+        return name
     }
 
     private static func descendants(_ view: NSView) -> [NSView] {

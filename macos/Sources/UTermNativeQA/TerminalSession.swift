@@ -19,6 +19,12 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private var reconnecting = false
     private var applyingReplay = false
     private var entry: CoreSessionEntry
+    var qaRenderDelay: Duration?
+    private(set) var qaWaitingToRender = false
+    private(set) var qaRenderedBytes = 0
+    private(set) var qaRenderedFrames = 0
+    private(set) var qaAcknowledgedFrames = 0
+    private(set) var qaLargestFrame = 0
 
     init(entry: CoreSessionEntry, bridge: CoreBridge) {
         self.entry = entry
@@ -90,6 +96,12 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         if let generation, generation != packet.header.generation { return }
         generation = packet.header.generation
         if let message = packet.header.error { error = message; changed?(); return }
+        if let delay = qaRenderDelay {
+            qaWaitingToRender = true
+            try? await Task.sleep(for: delay)
+            qaWaitingToRender = false
+            guard packet.header.attachment == attachment, packet.header.generation == generation else { return }
+        }
         let terminal = view.getTerminal()
         if packet.header.reset {
             let intended = desiredSize ?? (terminal.cols, terminal.rows)
@@ -103,6 +115,9 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         } else {
             view.feed(byteArray: Array(packet.bytes)[...])
         }
+        qaRenderedBytes += packet.bytes.count
+        qaRenderedFrames += 1
+        qaLargestFrame = max(qaLargestFrame, packet.bytes.count)
         let wasExited = exited
         exited = packet.header.exited
         if wasExited != exited { changed?() }
@@ -111,6 +126,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
                 "attachment": .string(attachment), "action": .string("ack"),
                 "sequence": .unsigned(packet.header.sequence)
             ]))
+            qaAcknowledgedFrames += 1
         } catch { self.error = error.localizedDescription; changed?() }
         await resizeIfNeeded()
     }

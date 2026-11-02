@@ -56,7 +56,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
         assert first[key],(key,first)
     assert first['splitSessionCount']==2 and first['runningProcessesBeforeQuit']==2,first
     assert abs(first['nativeToolbarHeight']-40)<1,first
-    assert len(first['captures'])==11,first
+    assert len(first['captures'])==12 and 'native-terminal-slow-consumer.png' in first['captures'],first
+    load=first['slowConsumer']
+    assert load['renderedBytes']>=100000 and load['records']==1024 and load['injectedDelayMilliseconds']==150,load
+    assert load['acknowledgedAfterRendering'] and load['nativeMenuResponsive'] and load['generationRetained'],load
+    assert not load['performanceComparison'],load
     assert second['replayed'] and second['explicitCloseStoppedProcesses'] and second['idleHostShutdown'],second
     assert sorted(first['sessions'],key=lambda s:s['id'])==sorted(second['sessions'],key=lambda s:s['id']),reports
     print(json.dumps({'sourceSHA':first['sourceSHA'],'sessionCount':2,'generationRetained':True,'normalExitCodes':[0,0],'captures':first['captures']},ensure_ascii=False))
