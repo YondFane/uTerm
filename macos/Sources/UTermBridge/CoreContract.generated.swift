@@ -30,6 +30,41 @@ public struct CoreEvent: Codable, Sendable {
     public var version: UInt32
 }
 
+public struct CoreFileDocument: Codable, Sendable {
+    public var bom: Bool
+    public var kind: String
+    public var line_ending: String
+    public var notice: String?
+    public var readonly: Bool
+    public var text: String
+    public var version: String
+}
+
+public struct CoreFileEntry: Codable, Sendable {
+    public var directory: Bool
+    public var name: String
+    public var path: String
+    public var symlink: Bool
+}
+
+public struct CoreFileListing: Codable, Sendable {
+    public var entries: [CoreFileEntry]
+    public var partial: Bool
+    public var skipped: Int
+}
+
+public struct CoreFileMatch: Codable, Sendable {
+    public var line: Int
+    public var path: String
+    public var text: String
+}
+
+public struct CoreFileSearch: Codable, Sendable {
+    public var matches: [CoreFileMatch]
+    public var partial: Bool
+    public var skipped: Int
+}
+
 public struct CoreImport: Codable, Sendable {
     public var legacy: [String: String]
     public var settings: JSONValue

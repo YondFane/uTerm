@@ -15,3 +15,5 @@ tempfile = "3"
 schemars = "=1.2.2"
 regex = "1"
 utermd-local = { path = "../utermd-local" }
+base64 = "0.22"
+ignore = "0.4"

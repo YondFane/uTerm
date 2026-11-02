@@ -1356,6 +1356,20 @@ Connected, busy or dirty profiles cannot be edited or removed.
 
 ## Files and source control
 
+### Shared local file service
+
+Local listing, reading, saving, copying, mutations and search use the same Rust service in
+`uterm-core`. Tauri keeps its existing command names and platform reveal/quit adapters. Root checks,
+UTF-8/BOM/line endings, digest conflicts, atomic saves and bounded previews are retained. A force
+save overrides a version conflict only; it cannot make a read-only mixed-line-ending file or PDF
+editable.
+
+Thirteen existing file-service tests now run in the core. Seven real-process contract tests passed
+on Linux x86_64, including file CAS, original-byte preservation, invalid parameters and root/link
+escape. These checks do not establish native file-editor interaction. Native content transport, file
+entry and shared draft recovery are still being implemented; existing WebView drafts retain their
+owner and path. Fresh Windows/macOS CI for the extraction is pending.
+
 ### Git change colors in the file tree
 
 **Files → File tree** colors changed files and their parent folders in local Git projects, including

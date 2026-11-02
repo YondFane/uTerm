@@ -1,4 +1,5 @@
 mod connections;
+pub mod files;
 pub mod host;
 pub mod session_state;
 pub mod state;
@@ -178,6 +179,7 @@ impl Core {
     }
     fn dispatch(&self, method: &str, params: Value) -> Result<Value> {
         match method {
+            method if method.starts_with("files.") => files::request(method, params),
             "directory.resolve" => Ok(json!(host::project_directory(string(
                 &params,
                 "directory"

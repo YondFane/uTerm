@@ -124,14 +124,14 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态                                                            | Evidence and next work / 证据与下一步                                                                            |
-| ------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| M0           | Accepted, unmerged / 已验收，未合并                                                 | Both native architectures and legacy Tauri jobs passed                                                           |
-| M1           | Implemented; platform CI passed, acceptance gaps / 已实现，平台 CI 通过，验收未闭合 | Shared validation, canonical storage, FFI, generated contracts and legacy client adoption                        |
-| M2           | In progress / 开发中                                                                | Real host, shared session operations and native terminal in development / 真实宿主、共享会话操作及原生终端开发中 |
-| M3           | Pending / 待实现                                                                    | Files, Git, SSH and task workflows, one at a time                                                                |
-| M4           | Pending / 待实现                                                                    | Remaining capabilities, native interaction and measurements                                                      |
-| M5           | Pending / 待实现                                                                    | Candidate packaging, signed update and rollback exercises                                                        |
+| Stage / 阶段 | Current state / 当前状态                                                            | Evidence and next work / 证据与下一步                                                                                     |
+| ------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| M0           | Accepted, unmerged / 已验收，未合并                                                 | Both native architectures and legacy Tauri jobs passed                                                                    |
+| M1           | Implemented; platform CI passed, acceptance gaps / 已实现，平台 CI 通过，验收未闭合 | Shared validation, canonical storage, FFI, generated contracts and legacy client adoption                                 |
+| M2           | In progress / 开发中                                                                | Real host, shared session operations and native terminal in development / 真实宿主、共享会话操作及原生终端开发中          |
+| M3           | In progress / 开发中                                                                | Shared file service adopted; content/native entry and other workflows remain / 文件共用服务已接入，内容及其他工作流未完成 |
+| M4           | Pending / 待实现                                                                    | Remaining capabilities, native interaction and measurements                                                               |
+| M5           | Pending / 待实现                                                                    | Candidate packaging, signed update and rollback exercises                                                                 |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
@@ -241,7 +241,7 @@ PR；总跟踪与原验收标准不变。本轮只认领实际处理的基线归
 | M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                                                                                                  |
 | M1 #15       | #24–#28       | Shared state, import/recovery, C ABI and Swift/Tauri adapters exist. Old-reader export compatibility verified; complete failure-mode and native recovery acceptance remain. / 已验证旧读取器导出兼容，完整失败模式及原生恢复交互仍待验收。                                                           |
 | M2 #16       | #29–#32       | Active: shared host/helper, native shell, cached SwiftTerm views, binary sequence/ack and split/reconnect. Automatic native/legacy checks and system screenshots verified at 6c78229; full capability and manual acceptance remain. / 6c78229 的自动检查和系统截图已验证，完整功能与人工验收未闭合。 |
-| M3 #17       | #33–#37       | Existing Tauri services remain; native/shared adoption not yet complete. / 保留既有 Tauri 服务，原生与共享迁移未完成。                                                                                                                                                                               |
+| M3 #17       | #33–#37       | Local file service now shared with Tauri; #33/#34 transport, native entry and drafts remain. Other services retain their existing owners. / 本地文件服务已共用，transport／原生入口／草稿未完成；其他服务保留原所有者。                                                                              |
 | M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                                                                                                           |
 | M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。                                                                               |
 
@@ -623,3 +623,20 @@ build and WindowServer interaction await macOS CI. Manual IME/TUI/clipboard case
 
 #30／#32 的真实应用 smoke 新增 AppKit 按下／抬起事件，在两个分屏会话间切换并要求侧栏始终保留焦点；经实际 NSMenu 动作打开设置，截取真实设置 sheet，再用 Return 关闭。报告记录三个断言及十一张截图，另有独立空窗口图。本地仅通过 shell 语法和差异检查，实际 Swift 构建及 WindowServer 交互等待 macOS
 CI；人工输入法／TUI／剪贴板仍未验收。
+
+### M3 file-service adoption / M3 文件服务接入
+
+For #34 the existing local file rules and thirteen regression tests move from the Tauri command
+module into `uterm-core::files`; Tauri retains its public commands and OS-only menu/reveal/quit
+adapters and calls this same implementation. Core `files.*` requests expose the service to #33, with
+Rust-generated file DTOs for both languages. No editor reducer or draft is removed. Real process
+tests cover BOM/CRLF, version conflicts and explicit overrides, read-only previews, path escape and
+Windows junction/Unix symlink escape, plus malformed parameters. A newly exposed force-save path now
+enforces the existing preview read-only rule in the core, preserving bytes. Linux checks passed;
+fresh platform and native editor acceptance remain open.
+
+#34 将原有本地文件规则和十三项回归迁至
+`uterm-core::files`，Tauri 保留公开命令和系统菜单／显示文件／退出适配并调用同一实现。核心提供
+`files.*`
+请求和 Rust 生成的双端文件 DTO，供 #33 接入；未删除编辑器 reducer 或草稿。真实进程覆盖 BOM／CRLF、冲突与明确覆盖、只读预览、路径及 Windows
+junction／Unix 符号链接越界、无效参数；核心同时阻止强制保存绕过既有只读预览规则。Linux 的完整前端 352 项通过／10 项跳过，核心／FFI、宿主、后端 135 项通过／10 项忽略、契约漂移、格式／文档、生产及桌面构建通过；新平台及原生编辑器验收仍开放。

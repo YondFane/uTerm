@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -299,4 +299,99 @@ test("Rust request failures retain operation identity and missing/null values do
   });
   assert.equal(empty.error, undefined);
   assert.deepEqual(empty.result.document.settings.enabledAgents, []);
+});
+
+test("shared files preserve BOM, line endings, CAS conflicts and readonly previews through a real Rust process", async (t) => {
+  const call = await client(t);
+  const directory = mkdtempSync(join(tmpdir(), "uterm-files-"));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = "中文.txt";
+  writeFileSync(join(directory, path), "\ufeff第一行\r\nsecond\r\n");
+  const initial = (await call("files.read", { directory, path })).result;
+  assert.equal(initial.bom, true);
+  assert.equal(initial.line_ending, "\r\n");
+  assert.equal(initial.text, "第一行\r\nsecond\r\n");
+  const listing = await call("files.list", { directory, path: "", hidden: false });
+  assert.equal(listing.result.entries[0].path, path);
+  const text = "\ufeff已保存\r\n";
+  const saved = await call("files.save", {
+    directory,
+    path,
+    text,
+    expected: initial.version,
+    force: false,
+  });
+  assert.equal(saved.error, undefined);
+  assert.equal(readFileSync(join(directory, path), "utf8"), text);
+  writeFileSync(join(directory, path), "external");
+  const conflict = await call("files.save", {
+    directory,
+    path,
+    text: "draft",
+    expected: saved.result,
+    force: false,
+  });
+  assert.equal(conflict.error.code, "CONFLICT");
+  assert.equal(readFileSync(join(directory, path), "utf8"), "external");
+  const forced = await call("files.save", {
+    directory,
+    path,
+    text: "explicit override",
+    expected: saved.result,
+    force: true,
+  });
+  assert.equal(forced.error, undefined);
+  assert.equal(readFileSync(join(directory, path), "utf8"), "explicit override");
+  writeFileSync(join(directory, "mixed.txt"), "LF\nCR\r");
+  assert.equal((await call("files.read", { directory, path: "mixed.txt" })).result.readonly, true);
+  assert.equal(
+    (
+      await call("files.save", {
+        directory,
+        path: "mixed.txt",
+        text: "loss",
+        expected: "",
+        force: true,
+      })
+    ).error.code,
+    "FILE_ERROR",
+  );
+  assert.equal(readFileSync(join(directory, "mixed.txt"), "utf8"), "LF\nCR\r");
+  writeFileSync(join(directory, "preview.pdf"), "%PDF-1.7\nfixture");
+  const pdf = (await call("files.read", { directory, path: "preview.pdf" })).result;
+  assert.equal(pdf.kind, "pdf");
+  assert.equal(pdf.readonly, true);
+});
+
+test("shared file requests reject root escape, linked writes and malformed parameters", async (t) => {
+  const call = await client(t);
+  const root = mkdtempSync(join(tmpdir(), "uterm-files-boundary-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const directory = join(root, "project");
+  const outside = join(root, "outside");
+  mkdirSync(directory);
+  mkdirSync(outside);
+  writeFileSync(join(outside, "keep.txt"), "untouched");
+  symlinkSync(
+    outside,
+    join(directory, "linked"),
+    process.platform === "win32" ? "junction" : "dir",
+  );
+  for (const path of ["../outside/keep.txt", "linked/keep.txt"]) {
+    assert.equal((await call("files.read", { directory, path })).error.code, "FILE_ERROR");
+    assert.equal(
+      (await call("files.save", { directory, path, text: "escape", expected: "", force: true }))
+        .error.code,
+      "FILE_ERROR",
+    );
+  }
+  assert.equal(readFileSync(join(outside, "keep.txt"), "utf8"), "untouched");
+  for (const params of [
+    null,
+    { directory, path: null },
+    { directory, path: "", capability: "exec" },
+  ]) {
+    assert.equal((await call("files.read", params)).error.code, "INVALID_PARAMS");
+  }
+  assert.equal((await call("files.exec", { directory, path: "" })).error.code, "INVALID_PARAMS");
 });

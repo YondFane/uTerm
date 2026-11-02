@@ -31,6 +31,41 @@ export interface CoreEvent {
   version: number;
 }
 
+export interface CoreFileDocument {
+  bom: boolean;
+  kind: string;
+  line_ending: string;
+  notice?: string | null;
+  readonly: boolean;
+  text: string;
+  version: string;
+}
+
+export interface CoreFileEntry {
+  directory: boolean;
+  name: string;
+  path: string;
+  symlink: boolean;
+}
+
+export interface CoreFileListing {
+  entries: CoreFileEntry[];
+  partial: boolean;
+  skipped: number;
+}
+
+export interface CoreFileMatch {
+  line: number;
+  path: string;
+  text: string;
+}
+
+export interface CoreFileSearch {
+  matches: CoreFileMatch[];
+  partial: boolean;
+  skipped: number;
+}
+
 export interface CoreImport {
   legacy: Record<string, string>;
   settings: JSONValue;

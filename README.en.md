@@ -149,3 +149,7 @@ resolves the pinned SwiftTerm 1.20.0 dependency; it does not change the legacy t
 
 The shared-core command explicitly runs the filesystem-failure case. Unix tests require an
 unprivileged user so directory permissions enforce the failure; Windows uses a held file lease.
+
+`uterm-core::files` owns local file rules and their regression tests; Tauri commands delegate to it.
+The core's locked dependencies include the existing base64 decoder and ignore-aware file walker.
+Native file/content UI acceptance is tracked separately in the migration guide.
