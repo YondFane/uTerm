@@ -172,6 +172,12 @@ operations use the same queue and lifecycle. The host directly declares Tokio an
 service. `pnpm test:host` includes the real standalone CLI/socket regression; `pnpm test:core`
 checks bridge ownership and close. Native UI dispatch remains under development.
 
+`pnpm test:legacy-host` builds an unchanged helper from the recorded release SHA in an isolated
+source/target directory, then checks real PTY replay, active-process preservation and idle upgrade.
+Reports, source/binary hashes and logs go to `ci-evidence/legacy-host/`; Windows/macOS CI uploads
+them. It fetches that commit if absent and uses locked dependencies. This checks a source-built
+historical helper, not a published installer upgrade.
+
 On macOS, `bash scripts/macos-control-smoke.sh` checks native control with the actual bundled Rust
 CLI, two PTYs, modal guards and native screenshots. Enable **Allow local CLI control** in native
 Settings and pass its displayed data directory explicitly with `--control --data-dir PATH`; the

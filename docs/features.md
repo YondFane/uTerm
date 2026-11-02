@@ -100,18 +100,20 @@ head `1f7b15d889bb46ae8945125a59dfab0628120876`, tested merge
 ([native CI](https://github.com/YondFane/uTerm/actions/runs/41424253962)). They do not establish
 manual keyboard or input-method acceptance.
 
-Helper regressions also exercise real temporary processes: a running helper at its original path
-keeps its PID and session generation; after explicit close, an idle helper moves to the digest
-staging directory. Injecting an incompatible endpoint version leaves its bytes, process and PTY
-intact. Three host tests passed on Linux; fresh Windows/macOS CI for these added cases is pending.
-The incompatible version is an endpoint fixture, not a separately built historical binary. The
-Windows matrix exposed ordinary versus verbatim drive-path aliases. Host identity now compares
-canonical files, preserving an unchanged idle process as well as active ones; fresh Windows CI is
-required for this correction. The corrected helper matrix then passed Windows, legacy macOS and both
-native Mac architectures at head `ac682f21d955b137c277cda26bf2a90385f4cf54`, tested merge
-`5037c127ad3fd7fd3bdeaa3937d048ac11acd47c`
+Helper regressions run real temporary processes. The existing same-binary and incompatible-endpoint
+matrix passed Windows, legacy macOS and both native Mac architectures at head
+`ac682f21d955b137c277cda26bf2a90385f4cf54`, tested merge `5037c127ad3fd7fd3bdeaa3937d048ac11acd47c`
 ([legacy CI](https://github.com/YondFane/uTerm/actions/runs/41443585247),
-[native CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)).
+[native CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)). An incompatible endpoint
+is metadata, not a historical binary.
+
+`pnpm test:legacy-host` additionally compiles the unchanged recorded release helper with its
+lockfile in a separate target directory. The new core attaches to its active PTY, receives and
+acknowledges binary output, writes literal input, detaches without terminating it and upgrades only
+after an explicit generation-matched close. Source and executable hashes must stay unchanged. Linux
+x86_64 passed this actual historical-source process test; Windows/macOS CI is pending. Reports and
+logs are uploaded as `legacy-host/` inside CI artifacts. This does not establish installer upgrade
+or rollback acceptance.
 
 The loopback control server and bounded authenticated queue live in the shared Rust host module.
 Tauri delegates its existing control commands to it. Native Settings now includes **Allow local CLI

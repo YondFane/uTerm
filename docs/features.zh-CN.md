@@ -75,11 +75,14 @@ QA 应用使用临时项目和数据，不读取生产数据。`native-qa-*`
 的[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41424253962)
 通过，不代表人工键盘或输入法验收。
 
-helper 回归还运行真实临时进程：原路径的活跃宿主保留 PID 和会话 generation，明确关闭后空闲宿主才迁到摘要暂存目录；注入不兼容端点版本时保留端点字节、进程和 PTY。Linux 三项宿主测试通过，新增案例的 Windows／macOS
-CI 待执行；不兼容版本来自端点测试数据，不是单独编译的历史二进制。Windows 矩阵发现普通盘符路径与扩展前缀路径的别名差异；宿主身份改为比较规范文件路径，避免未变化的空闲宿主也反复重启。此修正仍待新 Windows
-CI。修正后的宿主矩阵随后在 head `ac682f21d955b137c277cda26bf2a90385f4cf54`、tested merge
-`5037c127ad3fd7fd3bdeaa3937d048ac11acd47c`
-的 Windows、旧 macOS 及双原生架构通过（[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41443585247)、[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)）。
+helper 回归运行真实临时进程。既有同版本二进制及不兼容端点矩阵已在 head
+`ac682f21d955b137c277cda26bf2a90385f4cf54`、tested merge `5037c127ad3fd7fd3bdeaa3937d048ac11acd47c`
+的 Windows、旧 macOS 及双原生架构通过（[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41443585247)、[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)）。不兼容端点是元数据，不是历史二进制。
+
+`pnpm test:legacy-host`
+另用独立目标目录及历史锁文件，编译未修改的 release 基线 helper。新核心接入其活跃 PTY，接收及确认二进制输出、发送字面输入、退出保留进程，仅在明确匹配 generation 关闭后升级；源码及二进制摘要必须保持不变。Linux
+x86_64 已通过此真实历史源码进程检查，Windows／macOS CI 待执行。报告及日志由 CI artifacts 的
+`legacy-host/` 上传，不代表安装器升级或回退验收。
 
 回环控制服务及有界认证队列位于共享 Rust 宿主模块，Tauri 继续委托原命令。原生设置现有**允许本地 CLI 控制**及明确的数据目录；Rust 分发认证后的创建／聚焦／输入／关闭请求，检查 revision 与宿主 generation。执行须有有效认领，过期和重复请求会拒绝；桥接清理前先停止控制循环。
 

@@ -150,6 +150,11 @@ CI 截取原生窗口，并将报告及图片上传到
 `crates/utermd-local/src/control/server.rs`，Tauri 与核心操作复用同一队列及生命周期；宿主为该服务直接声明 Tokio 和 tempfile。`pnpm test:host`
 包含真实独立 CLI／socket 回归，`pnpm test:core` 检查桥接所有权及关闭；原生 UI 命令分发仍在开发中。
 
+`pnpm test:legacy-host` 在隔离源码／目标目录中，从记录的 release
+SHA 编译未修改的历史 helper，验证真实 PTY 回放、活跃进程保留及空闲升级。报告、源码／二进制摘要和日志写入
+`ci-evidence/legacy-host/`，由 Windows／macOS
+CI 上传；缺少基线时获取该提交，构建使用锁定依赖。这验证从历史源码编译的 helper，不代表已发布安装包升级验收。
+
 macOS 可运行 `bash scripts/macos-control-smoke.sh`，使用真实包内 Rust
 CLI、双 PTY、对话框保护及原生截图检查控制服务。在原生设置启用**允许本地 CLI 控制**，通过
 `--control --data-dir PATH`

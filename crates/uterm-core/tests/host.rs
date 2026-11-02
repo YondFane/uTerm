@@ -365,10 +365,111 @@ fn broker_preserves_active_unstaged_host_then_replaces_it_only_when_idle() {
         "Staging must not alter the bundled source"
     );
 }
+#[test]
+#[ignore = "Build the immutable release helper with pnpm test:legacy-host"]
+fn immutable_release_host_preserves_real_binary_replay_and_upgrades_only_after_close() {
+    let old_helper = PathBuf::from(std::env::var_os("UTERM_RELEASE_HOST_BINARY").unwrap())
+        .canonicalize()
+        .unwrap();
+    let new_helper = helper();
+    assert_ne!(old_helper, new_helper);
+    let old_bytes = std::fs::read(&old_helper).unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let directory = root.path().canonicalize().unwrap();
+    let host_root = directory.join("local-daemon-v1");
+    let _cleanup = HostCleanup(host_root.clone());
+    let old = utermd_local::daemon::ensure_running(&host_root, &old_helper).unwrap();
+    let capabilities = serde_json::to_value(old.request(Operation::Ping).unwrap()).unwrap();
+    let generation = open_upgrade_session(&old, &directory);
+    let before = status(&old);
+    assert_eq!(before.executable.canonicalize().unwrap(), old_helper);
+
+    let core = Core::open(directory.join("shared-state-v1")).unwrap();
+    call(&core, "host.configure", json!({"helper":new_helper}));
+    let (sender, receiver) = mpsc::channel();
+    core.set_terminal_sink(Arc::new(move |_, generation, frame| {
+        sender
+            .send((generation.to_string(), frame))
+            .map_err(|e| e.to_string())
+    }))
+    .unwrap();
+    let attached = call(
+        &core,
+        "terminal.open",
+        json!({
+            "id":"helper-upgrade-session", "attachment":"release-reference", "directory":directory,
+            "shell":if cfg!(windows){"cmd"}else{"default"},"rows":24,"cols":80
+        }),
+    );
+    assert_eq!(attached["generation"], generation);
+    assert_eq!(status(&old).pid, before.pid);
+    let command = if cfg!(windows) {
+        b"set UTERM_REFERENCE_SUFFIX=READY\recho UTERM_REFERENCE_%UTERM_REFERENCE_SUFFIX%\r"
+            .as_slice()
+    } else {
+        b"printf 'UTERM_REFERENCE_%s\\n' READY\r".as_slice()
+    };
+    core.terminal_write("release-reference", command).unwrap();
+    let mut output = Vec::new();
+    let mut frames = 0;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !output
+        .windows(b"UTERM_REFERENCE_READY".len())
+        .any(|part| part == b"UTERM_REFERENCE_READY")
+    {
+        assert!(
+            Instant::now() < deadline,
+            "The release PTY did not execute the command"
+        );
+        let (received_generation, frame) = receiver.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert_eq!(received_generation, generation);
+        assert!(!frame.exited);
+        frames += 1;
+        output.extend(frame.data);
+        call(
+            &core,
+            "terminal.action",
+            json!({"attachment":"release-reference","action":"ack","sequence":frame.sequence.to_string()}),
+        );
+    }
+    core.close();
+    let detached = status(&old);
+    assert_eq!(detached.pid, before.pid);
+    assert!(detached
+        .sessions
+        .iter()
+        .any(|s| s.running && s.generation == generation));
+    upgrade_session_alive(&old, &generation);
+    old.request(Operation::Close {
+        id: "helper-upgrade-session".into(),
+        generation: generation.clone(),
+    })
+    .unwrap();
+    let broker = uterm_core::host::HostBroker::new(host_root.clone(), new_helper);
+    let upgraded = status(&broker.client().unwrap());
+    assert_ne!(upgraded.pid, before.pid);
+    assert!(upgraded
+        .executable
+        .canonicalize()
+        .unwrap()
+        .starts_with(host_root.join("executables")));
+    assert!(!upgraded.sessions.iter().any(|s| s.running));
+    assert_eq!(status(&broker.client().unwrap()).pid, upgraded.pid);
+    assert!(std::fs::read(&old_helper).unwrap() == old_bytes);
+    if let Some(path) = std::env::var_os("UTERM_COMPAT_REPORT_FILE") {
+        std::fs::write(path, serde_json::to_vec_pretty(&json!({
+            "passed":true,"oldPID":before.pid,"newPID":upgraded.pid,"generation":generation,
+            "oldExecutable":old_helper,"newExecutable":upgraded.executable,"ping":capabilities,
+            "binaryFramesAcknowledged":frames,"retainedWhileActive":true,"detachPreservedProcess":true,
+            "literalInputExecuted":true,"upgradedOnlyAfterExplicitClose":true,"sourceBinaryUnchanged":true
+        })).unwrap()).unwrap();
+    }
+}
 struct RestoreEndpoint {
     path: PathBuf,
     bytes: Vec<u8>,
 }
+
 impl Drop for RestoreEndpoint {
     fn drop(&mut self) {
         if self.path.exists() {
