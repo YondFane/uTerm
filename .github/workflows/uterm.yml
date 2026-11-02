@@ -18,11 +18,27 @@ jobs:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
+    env:
+      RUST_TEST_THREADS: 4
     defaults:
       run:
         working-directory: .
     steps:
       - uses: actions/checkout@v7
+      - name: Record source and platform
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir -p ci-evidence
+          {
+            echo "pr_head=$PR_HEAD_SHA"
+            echo "tested_commit=$(git rev-parse HEAD)"
+            echo "runner_os=${{ runner.os }}"
+            echo "runner_arch=${{ runner.arch }}"
+          } | tee ci-evidence/source.txt
+          cp docs/native-migration.md ci-evidence/
+          cp shared/contracts/tauri-baseline.json ci-evidence/
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -52,14 +68,42 @@ jobs:
             crates/uterm-ffi -> target
           cache-bin: false
       - run: pnpm install --frozen-lockfile
-      - name: Check formatting
-        run: pnpm format:check
-      - name: Shared core and generated contracts
+      - name: Record toolchain
+        shell: bash
         run: |
-          pnpm test:core
-          pnpm contracts:check
-      - run: cargo test --manifest-path crates/utermd-local/Cargo.toml --locked
-      - run: pnpm docs:check
-      - run: pnpm test
-      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
-      - run: node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle -- --locked
+          {
+            node --version
+            pnpm --version
+            rustc --version
+            cargo --version
+            node -e 'const os=require("node:os"); console.log(JSON.stringify({platform:os.platform(),arch:os.arch(),release:os.release(),version:os.version()}))'
+          } | tee ci-evidence/toolchain.txt
+      - name: Check formatting
+        shell: bash
+        run: pnpm format:check 2>&1 | tee ci-evidence/format.log
+      - name: Shared core and generated contracts
+        shell: bash
+        run: |
+          pnpm test:core 2>&1 | tee ci-evidence/core-ffi-tests.log
+          pnpm contracts:check 2>&1 | tee ci-evidence/contracts.log
+      - name: Host tests
+        shell: bash
+        run: cargo test --manifest-path crates/utermd-local/Cargo.toml --locked 2>&1 | tee ci-evidence/host-tests.log
+      - name: Documentation check
+        shell: bash
+        run: pnpm docs:check 2>&1 | tee ci-evidence/docs.log
+      - name: Frontend tests
+        shell: bash
+        run: pnpm test 2>&1 | tee ci-evidence/frontend-tests.log
+      - name: Backend tests
+        shell: bash
+        run: cargo test --manifest-path src-tauri/Cargo.toml --locked 2>&1 | tee ci-evidence/backend-tests.log
+      - name: Desktop build
+        shell: bash
+        run: node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle -- --locked 2>&1 | tee ci-evidence/desktop-build.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: legacy-checks-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ci-evidence/
+          if-no-files-found: error

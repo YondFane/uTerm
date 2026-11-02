@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var window: NSWindow?
     private let model = WorkspaceModel()
     private var terminating = false
+    private var preparingQuit = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
@@ -121,13 +122,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminating { return .terminateNow }
+        if preparingQuit { return .terminateCancel }
+        preparingQuit = true
         Task { @MainActor in
-            guard await model.confirmQuit() else { sender.reply(toApplicationShouldTerminate: false); return }
+            guard await model.confirmQuit() else { self.preparingQuit = false; return }
             await model.shutdown()
-            terminating = true
-            sender.reply(toApplicationShouldTerminate: true)
+            self.terminating = true
+            sender.terminate(nil)
         }
-        return .terminateLater
+        return .terminateCancel
     }
 
     private func baseReport() -> [String: Any] {

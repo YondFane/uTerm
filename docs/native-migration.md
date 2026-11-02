@@ -292,3 +292,24 @@ delegate contract and observes window focus without overriding a non-open third-
 `Package.resolved` is taken from this real CI resolution and subsequent builds enforce it.
 
 上述 M2 提交的旧客户端 CI 通过，原生编译失败，未执行原生运行。修复桥接访问权限、委托契约及焦点接入；依赖锁来自真实 CI，后续构建强制使用锁定版本。
+
+Legacy CI retains its original `release` PR/push and manual triggers, commands and independent Cargo
+workspaces. Its `legacy-checks-<runner>-<head>` artifact now collects source/toolchain records,
+core/FFI/contract, host, frontend, backend, docs, formatting and desktop-build logs even on failure.
+Explicit Bash steps retain pipe failure handling on both Windows and macOS. These artifacts prove
+commands and compilation; they contain no native interaction screenshots or installer acceptance.
+
+旧客户端 CI 保留原分支触发、命令及 Cargo 隔离；新增 artifacts 保存两种 SHA、工具链及各检查日志，失败也上传。Windows 与 macOS 使用显式 Bash 管道失败检查，报告不冒充原生交互或安装验收。
+
+At head `1d54ee1d62892c29ac4392c76752960e9548b74e`, native ARM
+[41408360042](https://github.com/YondFane/uTerm/actions/runs/41408360042) built successfully and
+passed 16 core, four FFI and five Swift tests. The real window report records ready state and one
+screen but the process timed out on termination: not a passed smoke. Termination is changed to
+cancel the initial synchronous request, drain work asynchronously, then request final termination. A
+timeout now captures a process sample before cleanup. Legacy Windows
+[41408360035](https://github.com/YondFane/uTerm/actions/runs/41408360035) failed because the
+existing slow-start fixture did not reach its ready marker; the next run bounds Rust test
+parallelism to four without removing the responsiveness assertion. These failed runs remain part of
+the evidence.
+
+上述提交的 ARM 构建及核心／桥接测试通过，真实窗口可见但退出超时，不能标为 smoke 通过；修正退出流程并增加超时进程采样。Windows 既有慢启动样例未达到 ready，下一轮限定并发且保留响应性断言，保留失败证据。

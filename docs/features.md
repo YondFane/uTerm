@@ -58,9 +58,12 @@ shared-state tests cover session splits, stale writes, layout removal and reopen
 fixtures exercise the Rust encoder and TypeScript safe-integer boundary. Swift tests and real native
 PTY/split/screenshot harnesses are implemented but await CI verification for this source tree. The
 first M2 native CI failed during Swift compilation; bridge visibility, delegate requirements and
-focus integration were corrected for a new run. The earlier M1 native ARM/Intel bridge and legacy
-macOS/Windows CI passed; that result does not validate these new terminal changes. The QA harness
-uses temporary data and never production data.
+focus integration were corrected. The next ARM run passed five Swift tests (including full-range
+UInt64 decoding/acknowledgement and queue rejection) and opened the real window, but timed out on
+quit. The quit path now drains work before requesting final termination; runtime verification
+remains pending. The earlier M1 native ARM/Intel bridge and legacy macOS/Windows CI passed; that
+result does not validate these new terminal changes. The QA harness uses temporary data and never
+production data.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain
@@ -84,7 +87,9 @@ artifact; automatic downgrade into an unmodified old client's WebView storage is
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
 conflicts, corruption, recovery, ownership and callback draining on Linux. Swift bridge tests run in
 macOS CI; native data migration and interactive recovery acceptance remain pending. Both legacy
-platform jobs also run shared-core tests and generated-contract drift checks.
+platform jobs also run shared-core tests and generated-contract drift checks, uploading command
+logs, source head, tested merge SHA and platform/toolchain metadata as `legacy-checks-*` CI
+artifacts.
 
 ## Project website
 
