@@ -5,7 +5,7 @@ import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSettings } from "../lib/SettingsContext";
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke } from "../lib/content-host";
 import { basicSetup } from "codemirror";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";

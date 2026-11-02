@@ -94,8 +94,11 @@ until AppKit returns. Focus observation also checks the current responder after 
 reconnect smoke rejects NSTableView reentrancy warnings; both native architectures passed this
 correction at the precision-change head above. The smoke now also posts real AppKit arrow keys to
 check that sidebar selection retains focus, opens Settings using its native menu and dismisses it
-with Return. It captures `native-settings.png` using WindowServer. These additional interaction
-checks await fresh macOS CI and do not establish manual keyboard or input-method acceptance.
+with Return. It captures `native-settings.png` using WindowServer. These additional checks passed at
+head `1f7b15d889bb46ae8945125a59dfab0628120876`, tested merge
+`210ccdaa953b8722013b00e4654d38896e473c59`
+([native CI](https://github.com/YondFane/uTerm/actions/runs/41424253962)). They do not establish
+manual keyboard or input-method acceptance.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain
@@ -127,11 +130,11 @@ Rust storage/FFI tests and real-process TypeScript compatibility tests cover rep
 conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI. A
 real-helper C ABI test also blocks a binary callback while another thread unsubscribes or closes,
 verifying that its borrowed context remains valid until delivery drains and that callback reentry is
-rejected. This added check passed on Linux; its fresh platform CI is pending. Swift bridge tests run
-in macOS CI; native data migration and interactive recovery acceptance remain pending. Both legacy
-platform jobs also run shared-core tests and generated-contract drift checks, uploading command
-logs, source head, tested merge SHA and platform/toolchain metadata as `legacy-checks-*` CI
-artifacts.
+rejected. This added check passed on Linux and both native macOS architectures at the interaction
+head above. Swift bridge tests run in macOS CI; native data migration and interactive recovery
+acceptance remain pending. Both legacy platform jobs also run shared-core tests and
+generated-contract drift checks, uploading command logs, source head, tested merge SHA and
+platform/toolchain metadata as `legacy-checks-*` CI artifacts.
 
 ## Project website
 
@@ -1356,6 +1359,22 @@ Connected, busy or dirty profiles cannot be edited or removed.
 
 ## Files and source control
 
+### Shared content calls
+
+File components use a content transport with an explicit method/event allowlist, a document ID and
+an operation ID. Requests own their arguments and are limited to 32 MiB. Timeouts, cancellation,
+editor unmount and page unload suppress late delivery and remove subscriptions. Cancelling a call
+does not undo a write already running in Rust. Replies for another document or operation are
+rejected.
+
+The Tauri adapter retains existing command names. A JavaScript WKWebView adapter uses the same
+envelope; native resource loading and bridge integration are not connected yet, so it does not
+provide a native file editor. Legacy HTML previews retain their script-free sandbox and resource
+policy. Six Linux protocol tests cover reordered/mismatched replies, timeout/abort/unload, late
+subscriptions, bounds and the JavaScript WebKit message adapter. These are protocol tests, not
+native UI acceptance. Full Linux frontend checks passed (358 passed, ten skipped), as did types,
+production build, formatting and documentation; new platform CI is pending.
+
 ### Shared local file service
 
 Local listing, reading, saving, copying, mutations and search use the same Rust service in
@@ -1368,7 +1387,10 @@ Thirteen existing file-service tests now run in the core. Seven real-process con
 on Linux x86_64, including file CAS, original-byte preservation, invalid parameters and root/link
 escape. These checks do not establish native file-editor interaction. Native content transport, file
 entry and shared draft recovery are still being implemented; existing WebView drafts retain their
-owner and path. Fresh Windows/macOS CI for the extraction is pending.
+owner and path. [Native](https://github.com/YondFane/uTerm/actions/runs/41425620871) and
+[legacy](https://github.com/YondFane/uTerm/actions/runs/41425620777) platform CI passed the
+extraction at head `2f777f1824f203cba9d4654b3ec3f70c43c9fb74`; this pass does not validate later
+content changes.
 
 ### Git change colors in the file tree
 

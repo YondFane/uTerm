@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke, type ContentInvoker } from "./content-host.ts";
 import { tx } from "./i18n.ts";
 import { validSshTarget, type SshTarget } from "./workspace.ts";
 
@@ -101,7 +101,11 @@ export function sshError(value: unknown): string {
   const code = Object.keys(codes).find((code) => message.includes(code));
   return code ? codes[code] : message;
 }
-export function fileInvoke<T>(command: string, args: Record<string, unknown>): Promise<T> {
+export function fileInvoke<T>(
+  command: string,
+  args: Record<string, unknown>,
+  invoke: ContentInvoker = contentInvoke,
+): Promise<T> {
   const { directory, ...rest } = args;
   if (typeof directory !== "string") return invoke<T>(command, args);
   const target = fileTarget(directory);

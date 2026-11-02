@@ -1,8 +1,8 @@
 import { tx } from "./i18n.ts";
 import { useEffect, useRef, useState } from "react";
 import { fileInvoke } from "./file-target";
-import { invoke, isTauri } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { createContentScope, isContentHost } from "./content-host";
+import type { ContentScope } from "./content-transport";
 import {
   fileBytes,
   isDirty,
@@ -13,6 +13,20 @@ import {
 } from "./file-document";
 import type { FileData, OpenFile } from "./file-document";
 export function useFileDocument(fileTabLimit = 10) {
+  const transport = useRef<ContentScope | null>(null);
+  function currentTransport() {
+    return (transport.current ??= createContentScope());
+  }
+  function invoke<T>(method: string, params?: Record<string, unknown>): Promise<T> {
+    return currentTransport().call(method, params);
+  }
+  useEffect(() => {
+    const scope = currentTransport();
+    return () => {
+      if (transport.current === scope) transport.current = null;
+      scope.close();
+    };
+  }, []);
   const [document, render] = useState<OpenFile | null>(null);
   const current = useRef<OpenFile | null>(null);
   const [documents, renderDocuments] = useState<OpenFile[]>([]);
@@ -57,13 +71,17 @@ export function useFileDocument(fileTabLimit = 10) {
       if (!snapshot || !isDirty(snapshot) || snapshot.readonly) return true;
       setSaving(true);
       try {
-        const version = await fileInvoke<string>("file_save", {
-          directory: snapshot.directory,
-          path: snapshot.path,
-          text: fileBytes(snapshot),
-          expected: snapshot.version,
-          force,
-        });
+        const version = await fileInvoke<string>(
+          "file_save",
+          {
+            directory: snapshot.directory,
+            path: snapshot.path,
+            text: fileBytes(snapshot),
+            expected: snapshot.version,
+            force,
+          },
+          invoke,
+        );
         if (current.current?.id === snapshot.id) {
           setDocument({ ...savedVersion(current.current, snapshot, version), notice: null });
           setRecovered(false);
@@ -151,7 +169,7 @@ export function useFileDocument(fileTabLimit = 10) {
         setConflict(false);
         return;
       }
-      const data = await fileInvoke<FileData>("file_read", { directory, path });
+      const data = await fileInvoke<FileData>("file_read", { directory, path }, invoke);
       await invoke("editor_guard", { active: data.kind === "text" && !data.readonly });
       setDocument({
         ...data,
@@ -203,10 +221,14 @@ export function useFileDocument(fileTabLimit = 10) {
     const snapshot = current.current;
     if (!snapshot) return;
     const action = async () => {
-      const data = await fileInvoke<FileData>("file_read", {
-        directory: snapshot.directory,
-        path: snapshot.path,
-      });
+      const data = await fileInvoke<FileData>(
+        "file_read",
+        {
+          directory: snapshot.directory,
+          path: snapshot.path,
+        },
+        invoke,
+      );
       await invoke("editor_guard", { active: data.kind === "text" && !data.readonly });
       setDocument({ ...snapshot, ...data, id: ++sequence.current, saved: data.text });
       setRecovered(false);
@@ -262,10 +284,11 @@ export function useFileDocument(fileTabLimit = 10) {
   const latest = useRef({ request, exit });
   latest.current = { request, exit };
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isContentHost()) return;
     let disposed = false;
     let unlisten: (() => void) | undefined;
-    void listen("editor-close-request", () => void latest.current.request(latest.current.exit))
+    void currentTransport()
+      .subscribe("editor-close-request", () => void latest.current.request(latest.current.exit))
       .then((stop) => {
         if (disposed) stop();
         else unlisten = stop;
@@ -277,7 +300,7 @@ export function useFileDocument(fileTabLimit = 10) {
     };
   }, []);
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isContentHost()) return;
     let disposed = false;
     transition.current = true;
     setTransitioning(true);

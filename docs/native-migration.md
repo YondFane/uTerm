@@ -640,3 +640,16 @@ fresh platform and native editor acceptance remain open.
 `files.*`
 请求和 Rust 生成的双端文件 DTO，供 #33 接入；未删除编辑器 reducer 或草稿。真实进程覆盖 BOM／CRLF、冲突与明确覆盖、只读预览、路径及 Windows
 junction／Unix 符号链接越界、无效参数；核心同时阻止强制保存绕过既有只读预览规则。Linux 的完整前端 352 项通过／10 项跳过，核心／FFI、宿主、后端 135 项通过／10 项忽略、契约漂移、格式／文档、生产及桌面构建通过；新平台及原生编辑器验收仍开放。
+
+### M3 scoped content protocol / M3 内容作用域协议
+
+For #33 reusable file components and their document hook now call an allowlisted ContentScope. Tauri
+adapts the existing commands; the JavaScript WKWebView adapter shares version/document/ operation
+identity, errors and cancellation. Editor unmount closes its scope, and page unload closes the page
+scope. Late responses and registrations cannot publish into a closed scope. Cancellation is delivery
+cancellation, never a promise to roll back a committed file write. Six Linux protocol tests passed,
+including bounds and malformed identity. The native WKWebView resource handler, navigation policy
+and real integration are still pending, so #33 remains open.
+
+#33 的复用文件组件和文档 hook 改由白名单 ContentScope 调用；Tauri 适配旧命令，JavaScript
+WKWebView 适配共用版本／文档／操作身份、错误及取消格式。编辑器卸载与页面离开分别清理作用域，迟到响应／订阅不能更新已关闭的作用域。取消只抑制交付，不承诺撤销已提交写入。Linux 六项协议检查通过；原生资源 handler、导航策略和真实集成仍待实现，#33 保持开放。
