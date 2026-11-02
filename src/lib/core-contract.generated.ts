@@ -3,6 +3,13 @@
 export type JSONValue =
   null | boolean | number | string | JSONValue[] | { [key: string]: JSONValue };
 
+export interface CoreActivityEvent {
+  id: string;
+  kind: string;
+  sequence: number;
+  source: string;
+}
+
 export interface CoreCoreError {
   code: string;
   message: string;
@@ -44,7 +51,37 @@ export interface CoreResponse {
   version: number;
 }
 
+export interface CoreSessionEntry {
+  directory: string;
+  projectId?: string | null;
+  rosterId: string;
+  session: JSONValue;
+  workspaceId: string;
+}
+
 export interface CoreSnapshot {
   document: CoreDocument;
   revision: string;
+}
+
+export interface CoreTerminalHeader {
+  agent_activity_error: string | null;
+  agent_events: CoreActivityEvent[] | null;
+  agent_state: string | null;
+  attachment?: string | null;
+  code: number | null;
+  cols: number;
+  error: string | null;
+  exited: boolean;
+  foreground_agent: string | null;
+  generation?: string | null;
+  reset: boolean;
+  rows: number;
+  sequence: number;
+}
+
+export interface CoreViewSnapshot {
+  layout: JSONValue;
+  sessions: CoreSessionEntry[];
+  snapshot: CoreSnapshot;
 }

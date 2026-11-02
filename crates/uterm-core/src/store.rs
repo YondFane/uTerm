@@ -40,6 +40,9 @@ fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 impl Store {
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
     pub fn open(root: PathBuf) -> Result<Self> {
         fs::create_dir_all(&root)?;
         #[cfg(unix)]

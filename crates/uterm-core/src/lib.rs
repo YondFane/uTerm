@@ -1,10 +1,14 @@
 mod connections;
+pub mod host;
+pub mod session_state;
 pub mod state;
 pub mod store;
+pub mod terminal;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::path::PathBuf;
+use std::sync::{Arc, Mutex, OnceLock};
 
 pub const CONTRACT_VERSION: u32 = 1;
 pub const MAX_REQUEST_BYTES: usize = 32 * 1024 * 1024;
@@ -70,15 +74,70 @@ pub struct Event {
     pub kind: String,
     pub revision: String,
 }
+#[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct ViewSnapshot {
+    pub snapshot: store::Snapshot,
+    pub sessions: Vec<session_state::Entry>,
+    pub layout: Value,
+}
 
 pub struct Core {
     store: store::Store,
+    host: OnceLock<host::HostBroker>,
+    links: Arc<terminal::Links>,
+    terminal_sink: Mutex<Option<terminal::Sink>>,
 }
 impl Core {
     pub fn open(root: PathBuf) -> Result<Self> {
         Ok(Self {
             store: store::Store::open(root)?,
+            host: OnceLock::new(),
+            links: Arc::new(terminal::Links::default()),
+            terminal_sink: Mutex::new(None),
         })
+    }
+    pub fn set_terminal_sink(&self, sink: terminal::Sink) -> Result<()> {
+        *self
+            .terminal_sink
+            .lock()
+            .map_err(|_| CoreError::new("STATE", "Terminal subscription is unavailable"))? =
+            Some(sink);
+        Ok(())
+    }
+    pub fn close(&self) {
+        self.links.shutdown();
+    }
+    fn data_root(&self) -> Result<&std::path::Path> {
+        if self.store.root().file_name().and_then(|v| v.to_str()) != Some("shared-state-v1") {
+            return Err(CoreError::new(
+                "APP_DATA_CONFIG",
+                "Platform services require a named canonical app-data directory",
+            ));
+        }
+        self.store
+            .root()
+            .parent()
+            .ok_or_else(|| CoreError::new("APP_DATA_CONFIG", "App data directory is unavailable"))
+    }
+    pub fn terminal_write(&self, attachment: &str, bytes: &[u8]) -> Result<()> {
+        for chunk in bytes.chunks(16 * 1024) {
+            self.links
+                .action(attachment, "write", Some(chunk.to_vec()), None, None, None)
+                .map_err(host_error)?;
+        }
+        Ok(())
+    }
+    fn host_client(&self) -> Result<utermd_local::daemon::Client> {
+        self.host
+            .get()
+            .ok_or_else(|| {
+                CoreError::new(
+                    "HOST_CONFIG",
+                    "Configure the bundled Rust helper before opening a host",
+                )
+            })?
+            .client()
+            .map_err(host_error)
     }
     pub fn execute(&self, bytes: &[u8]) -> Response {
         let mut id = String::new();
@@ -119,11 +178,341 @@ impl Core {
     }
     fn dispatch(&self, method: &str, params: Value) -> Result<Value> {
         match method {
+            "directory.resolve" => Ok(json!(host::project_directory(string(
+                &params,
+                "directory"
+            )?)
+            .map_err(host_error)?)),
+            "host.environment" => {
+                let data = self.data_root()?;
+                let chats = data.join("chats");
+                std::fs::create_dir_all(&chats)?;
+                let definitions =
+                    utermd_local::agents::read(data).map_err(|e| host_error(e.to_string()))?;
+                let mut agents: Vec<String> = utermd_local::agents::BUILTIN_AGENTS
+                    .iter()
+                    .map(|s| s.to_string())
+                    .chain(definitions.iter().map(|a| a.id.clone()))
+                    .collect();
+                agents.sort();
+                agents.dedup();
+                agents.retain(|id| utermd_local::agents::resolve(data, id).is_ok());
+                Ok(
+                    json!({"agents":agents,"home":std::env::var(if cfg!(windows){"USERPROFILE"}else{"HOME"}).unwrap_or_default(),"chatDirectory":chats,"platform":std::env::consts::OS,"architecture":std::env::consts::ARCH}),
+                )
+            }
+            "host.configure" => {
+                if self.store.root().file_name().and_then(|v| v.to_str()) != Some("shared-state-v1")
+                {
+                    return Err(CoreError::new(
+                        "HOST_CONFIG",
+                        "Host access requires a named canonical app-data directory",
+                    ));
+                }
+                let helper = PathBuf::from(string(&params, "helper")?);
+                if !helper.is_absolute() || !helper.is_file() {
+                    return Err(CoreError::new(
+                        "HOST_CONFIG",
+                        "Bundled helper must be an existing absolute executable path",
+                    ));
+                }
+                let broker = host::HostBroker::new(
+                    self.store.root().parent().unwrap().join("local-daemon-v1"),
+                    helper,
+                );
+                self.host
+                    .set(broker)
+                    .map_err(|_| CoreError::new("HOST_CONFIG", "Host is already configured"))?;
+                Ok(json!({"configured":true}))
+            }
+            "host.status" => {
+                match self
+                    .host_client()?
+                    .request(utermd_local::daemon::Operation::HostStatus)
+                    .map_err(|e| host_error(e.to_string()))?
+                {
+                    utermd_local::daemon::Reply::HostStatus(status) => {
+                        serde_json::to_value(status).map_err(Into::into)
+                    }
+                    _ => Err(CoreError::new("HOST_REPLY", "Invalid host status")),
+                }
+            }
+            "host.shutdownIdle" => {
+                match self
+                    .host_client()?
+                    .request(utermd_local::daemon::Operation::ShutdownIfIdle)
+                    .map_err(|e| host_error(e.to_string()))?
+                {
+                    utermd_local::daemon::Reply::Done => Ok(Value::Null),
+                    _ => Err(CoreError::new(
+                        "HOST_REPLY",
+                        "Host did not confirm idle shutdown",
+                    )),
+                }
+            }
+            "host.close" => {
+                use utermd_local::daemon::{Operation, Reply};
+                let id = string(&params, "id")?;
+                if !self
+                    .data_root()?
+                    .join("local-daemon-v1/endpoint.json")
+                    .exists()
+                {
+                    return Ok(Value::Null);
+                }
+                let client = self.host_client()?;
+                let Reply::HostStatus(status) = client
+                    .request(Operation::HostStatus)
+                    .map_err(|e| host_error(e.to_string()))?
+                else {
+                    return Err(CoreError::new("HOST_REPLY", "Invalid host status"));
+                };
+                if let Some(session) = status.sessions.into_iter().find(|s| s.spec.id == id) {
+                    match client
+                        .request(Operation::Close {
+                            id: id.clone(),
+                            generation: session.generation,
+                        })
+                        .map_err(|e| host_error(e.to_string()))?
+                    {
+                        Reply::Done => {}
+                        _ => {
+                            return Err(CoreError::new(
+                                "HOST_REPLY",
+                                "Host did not confirm session close",
+                            ))
+                        }
+                    }
+                }
+                self.links.stop_session(&id);
+                Ok(Value::Null)
+            }
+            "terminal.open" => {
+                if params.get("ssh").is_some() {
+                    return Err(CoreError::new(
+                        "UNSUPPORTED",
+                        "Remote terminals require SSH service adoption",
+                    ));
+                }
+                use utermd_local::daemon::{Operation, SessionSpec};
+                let attachment = string(&params, "attachment")?;
+                let id = string(&params, "id")?;
+                if [attachment.as_str(), id.as_str()]
+                    .iter()
+                    .any(|id| id.is_empty() || id.len() > 128)
+                {
+                    return Err(CoreError::new(
+                        "INVALID_ARGUMENT",
+                        "Invalid session or attachment ID",
+                    ));
+                }
+                let directory = PathBuf::from(string(&params, "directory")?);
+                let shell = string(&params, "shell")?;
+                let rows = dimension(&params, "rows")?;
+                let cols = dimension(&params, "cols")?;
+                let client = self.host_client()?;
+                let agent = params
+                    .get("agent")
+                    .and_then(Value::as_str)
+                    .map(String::from);
+                if agent.is_some() {
+                    client
+                        .require_agent_support()
+                        .map_err(|e| host_error(e.to_string()))?;
+                }
+                let spec = SessionSpec {
+                    id: id.clone(),
+                    directory,
+                    shell,
+                    agent,
+                    ssh: None,
+                };
+                if params["reconnectOnly"] == true {
+                    match client
+                        .request(Operation::HostStatus)
+                        .map_err(|e| host_error(e.to_string()))?
+                    {
+                        utermd_local::daemon::Reply::HostStatus(status)
+                            if status.sessions.iter().any(|s| s.spec.id == id) => {}
+                        _ => {
+                            return Err(CoreError::new(
+                                "SESSION_MISSING",
+                                "Session is no longer hosted",
+                            ))
+                        }
+                    }
+                }
+                let operation = if params["taskOnly"] == true {
+                    Operation::Attach {
+                        id: id.clone(),
+                        rows,
+                        cols,
+                    }
+                } else {
+                    Operation::Open { spec, rows, cols }
+                };
+                let sink = self
+                    .terminal_sink
+                    .lock()
+                    .map_err(|_| CoreError::new("STATE", "Terminal subscription is unavailable"))?
+                    .clone()
+                    .ok_or_else(|| {
+                        CoreError::new(
+                            "NO_SUBSCRIBER",
+                            "Subscribe to binary frames before opening a terminal",
+                        )
+                    })?;
+                let generation = self
+                    .links
+                    .open(client, operation, id, attachment, rows, cols, sink)
+                    .map_err(host_error)?;
+                Ok(json!({"generation":generation}))
+            }
+            "terminal.action" => {
+                let attachment = string(&params, "attachment")?;
+                let action = string(&params, "action")?;
+                if action == "write" {
+                    return Err(CoreError::new(
+                        "BINARY_REQUIRED",
+                        "Terminal input must use the byte channel",
+                    ));
+                }
+                let rows = params
+                    .get("rows")
+                    .map(|_| dimension(&params, "rows"))
+                    .transpose()?;
+                let cols = params
+                    .get("cols")
+                    .map(|_| dimension(&params, "cols"))
+                    .transpose()?;
+                let sequence = params.get("sequence").and_then(Value::as_u64);
+                self.links
+                    .action(&attachment, &action, None, rows, cols, sequence)
+                    .map_err(host_error)?;
+                Ok(Value::Null)
+            }
             "contract.info" => Ok(
                 json!({"version":CONTRACT_VERSION,"storageSchema":1,"terminalEncoding":"binary","maximumRequestBytes":MAX_REQUEST_BYTES}),
             ),
             "state.defaults" => Ok(state::defaults()),
             "snapshot.read" => serde_json::to_value(self.store.read()?).map_err(Into::into),
+            "snapshot.view" => {
+                let snapshot = self.store.read()?;
+                let sessions = session_state::entries(&snapshot.document.workspace);
+                let layout = session_state::layout(&snapshot.document.workspace);
+                serde_json::to_value(ViewSnapshot {
+                    snapshot,
+                    sessions,
+                    layout,
+                })
+                .map_err(Into::into)
+            }
+            "session.entries" => serde_json::to_value(session_state::entries(
+                &self.store.read()?.document.workspace,
+            ))
+            .map_err(Into::into),
+            method if method.starts_with("session.") => {
+                let revision = string(&params, "expectedRevision")?;
+                let mut params = params;
+                let method = if method == "session.createChat" {
+                    let settings = self.store.read()?.document.settings;
+                    let data = self.data_root()?;
+                    let enabled = settings["enabledAgents"].as_array().unwrap();
+                    let agent = std::iter::once(&settings["defaultAgent"])
+                        .chain(enabled.iter())
+                        .find(|id| {
+                            enabled.contains(id)
+                                && id.as_str().is_some_and(|id| {
+                                    utermd_local::agents::resolve(data, id).is_ok()
+                                })
+                        })
+                        .and_then(Value::as_str)
+                        .ok_or_else(|| {
+                            CoreError::new(
+                                "AGENT_UNAVAILABLE",
+                                "Enable an installed Agent before creating a chat",
+                            )
+                        })?
+                        .to_string();
+                    params["agent"] = json!(agent);
+                    params["projectId"] = Value::Null;
+                    if params.get("name").is_none() {
+                        params["name"] = json!(agent);
+                    }
+                    "session.create"
+                } else {
+                    method
+                };
+                let project = params
+                    .get("projectId")
+                    .unwrap_or(&self.store.read()?.document.workspace["selectedProject"])
+                    .clone();
+                if method == "session.create"
+                    && params.get("directory").is_none()
+                    && project.is_null()
+                {
+                    let directory = if params.get("agent").is_some_and(|v| !v.is_null()) {
+                        let chats = self.data_root()?.join("chats");
+                        std::fs::create_dir_all(&chats)?;
+                        chats.into_os_string().into_string().map_err(|_| {
+                            CoreError::new("INVALID_PATH", "Chat directory is not UTF-8")
+                        })?
+                    } else {
+                        std::env::var(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map_err(
+                            |_| CoreError::new("INVALID_PATH", "Home directory is unavailable"),
+                        )?
+                    };
+                    params["directory"] = json!(directory);
+                }
+                self.store
+                    .update(&revision, |d| {
+                        session_state::transition(&mut d.workspace, &d.settings, method, &params)
+                    })
+                    .and_then(|s| serde_json::to_value(s).map_err(Into::into))
+            }
+            "settings.agent.toggle" => {
+                let revision = string(&params, "expectedRevision")?;
+                let agent = string(&params, "agent")?;
+                let enabled = params["enabled"].as_bool().ok_or_else(|| {
+                    CoreError::new("INVALID_ARGUMENT", "Agent enablement must be boolean")
+                })?;
+                self.store
+                    .update(&revision, |d| {
+                        let agents = d.settings["enabledAgents"].as_array_mut().unwrap();
+                        if enabled {
+                            if !agents.contains(&json!(agent)) {
+                                agents.push(json!(agent));
+                            }
+                        } else {
+                            agents.retain(|v| v != &agent);
+                        }
+                        state::validate_settings(&d.settings)
+                    })
+                    .and_then(|s| serde_json::to_value(s).map_err(Into::into))
+            }
+            "settings.font.adjust" => {
+                let revision = string(&params, "expectedRevision")?;
+                let key = string(&params, "key")?;
+                if !["fontSize", "fileFontSize", "gitDiffFontSize"].contains(&key.as_str()) {
+                    return Err(CoreError::new("INVALID_ARGUMENT", "Unknown font setting"));
+                }
+                let delta = params["delta"]
+                    .as_f64()
+                    .filter(|d| d.is_finite() && d.abs() <= 1.0)
+                    .ok_or_else(|| {
+                        CoreError::new(
+                            "INVALID_ARGUMENT",
+                            "Font adjustment must be at most one point",
+                        )
+                    })?;
+                self.store
+                    .update(&revision, |d| {
+                        d.settings[&key] =
+                            json!((d.settings[&key].as_f64().unwrap() + delta).clamp(10.0, 32.0));
+                        state::validate_settings(&d.settings)
+                    })
+                    .and_then(|s| serde_json::to_value(s).map_err(Into::into))
+            }
             "recovery.list" => self.store.recovery_list(),
             "recovery.restore" => serde_json::to_value(self.store.recover(
                 &string(&params, "expectedRevision")?,
@@ -220,4 +609,24 @@ pub(crate) fn string(value: &Value, key: &str) -> Result<String> {
         .and_then(Value::as_str)
         .map(String::from)
         .ok_or_else(|| CoreError::new("INVALID_ARGUMENT", format!("Missing string: {key}")))
+}
+fn host_error(message: String) -> CoreError {
+    CoreError::new("HOST", message)
+}
+fn dimension(value: &Value, key: &str) -> Result<u16> {
+    value[key]
+        .as_u64()
+        .filter(|n| *n > 0 && *n <= 1000)
+        .map(|n| n as u16)
+        .ok_or_else(|| {
+            CoreError::new(
+                "INVALID_ARGUMENT",
+                "Terminal dimensions must be between 1 and 1000",
+            )
+        })
+}
+impl Drop for Core {
+    fn drop(&mut self) {
+        self.close();
+    }
 }

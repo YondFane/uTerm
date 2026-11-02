@@ -1,4 +1,5 @@
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { decodeTerminalFrame } from "../src/lib/terminal-frame.ts";
 
@@ -68,5 +69,24 @@ test("terminal frames validate independent activity events while accepting older
     [{ ...event, id: "" }],
   ]) {
     assert.throws(() => decodeTerminalFrame(encode({ ...metadata, agent_events })));
+  }
+});
+
+test("Rust terminal fixtures preserve safe sequence values and reject all unsafe u64 values", () => {
+  const fixtures = JSON.parse(
+    readFileSync(new URL("../shared/fixtures/terminal-precision.json", import.meta.url), "utf8"),
+  );
+  for (const { sequence, header } of fixtures) {
+    const bytes = Buffer.from(header);
+    const frame = new ArrayBuffer(4 + bytes.length);
+    new DataView(frame).setUint32(0, bytes.length, true);
+    new Uint8Array(frame, 4).set(bytes);
+    if (BigInt(sequence) <= BigInt(Number.MAX_SAFE_INTEGER)) {
+      const decoded = decodeTerminalFrame(frame);
+      assert.equal(BigInt(decoded.sequence).toString(), sequence);
+      assert.equal(BigInt(decoded.agent_events[0].sequence).toString(), sequence);
+    } else {
+      assert.throws(() => decodeTerminalFrame(frame), /Invalid terminal frame metadata/);
+    }
   }
 });

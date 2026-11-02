@@ -8,6 +8,17 @@ fn main() -> anyhow::Result<()> {
     }
     let mut arguments = std::env::args_os().skip(1);
     let mode = arguments.next();
+    if mode.as_deref() == Some(std::ffi::OsStr::new("--control")) {
+        let args = arguments
+            .map(|v| {
+                v.into_string()
+                    .map_err(|_| anyhow::anyhow!("Invalid UTF-8 control argument"))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let reply = utermd_local::control::cli(args).map_err(anyhow::Error::msg)?;
+        println!("{}", serde_json::to_string(&reply)?);
+        return Ok(());
+    }
     if mode.as_deref() == Some(std::ffi::OsStr::new("--local-task")) {
         let directory = arguments
             .next()

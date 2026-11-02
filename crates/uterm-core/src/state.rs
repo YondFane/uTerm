@@ -503,6 +503,9 @@ pub fn transition(workspace: &mut Value, method: &str, params: &Value) -> Result
             let id = string(params, "id")?;
             let name = string(params, "name")?;
             workspace["groups"].as_array_mut().unwrap().push(json!({"id":id,"name":name,"selectedProject":null,"selectedSession":null,"selectedWorktree":null,"redisConnections":[],"databaseConnections":[],"sshConnections":[],"terminals":[],"chats":[],"terminalSplits":[],"chatSplits":[],"terminalsCollapsed":false,"chatsCollapsed":false}));
+            if params["select"] == true {
+                switch_workspace(workspace, &id);
+            }
         }
         "workspace.rename" => {
             let id = string(params, "id")?;
@@ -582,6 +585,26 @@ pub fn transition(workspace: &mut Value, method: &str, params: &Value) -> Result
                 .unwrap()
                 .retain(|g| g["id"] != id);
         }
+        "project.open" => {
+            let directory = string(params, "directory")?;
+            let group = string(params, "workspaceId")?;
+            let existing = workspace["projects"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|p| p["directory"] == directory && p["workspaceId"] == group)
+                .map(|p| p["id"].clone());
+            let id = if let Some(id) = existing {
+                id
+            } else {
+                transition(workspace, "project.add", params)?;
+                json!(string(params, "id")?)
+            };
+            switch_workspace(workspace, &group);
+            workspace["selectedProject"] = id;
+            workspace["selectedSession"] = Value::Null;
+            workspace["selectedWorktree"] = Value::Null;
+        }
         "project.add" => {
             let id = string(params, "id")?;
             let name = string(params, "name")?;
@@ -591,7 +614,7 @@ pub fn transition(workspace: &mut Value, method: &str, params: &Value) -> Result
                 .as_array()
                 .unwrap()
                 .iter()
-                .any(|p| p["directory"] == directory)
+                .any(|p| p["directory"] == directory && p["workspaceId"] == group)
             {
                 return Err(invalid(
                     "PROJECT_EXISTS",
@@ -655,7 +678,7 @@ pub fn transition(workspace: &mut Value, method: &str, params: &Value) -> Result
     validate_workspace(workspace)
 }
 
-fn switch_workspace(workspace: &mut Value, id: &str) {
+pub(crate) fn switch_workspace(workspace: &mut Value, id: &str) {
     let Some(target) = workspace["groups"]
         .as_array()
         .unwrap()

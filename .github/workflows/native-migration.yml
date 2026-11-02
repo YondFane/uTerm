@@ -23,6 +23,7 @@ jobs:
         with:
           shared-key: native-${{ matrix.os }}-${{ runner.arch }}
           workspaces: |
+            crates/utermd-local -> target
             crates/uterm-core -> target
             crates/uterm-ffi -> target
           cache-bin: false
@@ -33,6 +34,8 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           mkdir -p macos/.build/evidence
+          cp docs/native-migration.md macos/.build/evidence/
+          cp shared/contracts/tauri-baseline.json macos/.build/evidence/
           {
             echo "pr_head=$PR_HEAD_SHA"
             echo "tested_commit=$(git rev-parse HEAD)"
@@ -46,11 +49,17 @@ jobs:
         run: bash scripts/macos-native-build.sh
       - name: Shared core, FFI and Swift bridge tests
         run: |
+          cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local
           cargo test --locked --manifest-path crates/uterm-core/Cargo.toml 2>&1 | tee macos/.build/evidence/core-tests.log
           cargo test --locked --manifest-path crates/uterm-ffi/Cargo.toml 2>&1 | tee macos/.build/evidence/ffi-tests.log
           bash scripts/macos-native-test.sh 2>&1 | tee macos/.build/evidence/swift-tests.log
       - name: Real window and graceful exit smoke
         run: bash scripts/macos-native-smoke.sh
+      - name: Real native PTY, split, detach and replay smoke
+        run: bash scripts/macos-terminal-smoke.sh
+      - name: Record resolved native dependencies
+        if: always()
+        run: if [ -f macos/Package.resolved ]; then cp macos/Package.resolved macos/.build/evidence/Package.resolved; fi
       - name: Archive QA application
         run: ditto -c -k --sequesterRsrc --keepParent macos/.build/qa/UTermNativeQA.app macos/.build/evidence/UTermNativeQA.zip
       - uses: actions/upload-artifact@v4

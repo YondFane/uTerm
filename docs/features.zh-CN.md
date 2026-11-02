@@ -36,7 +36,22 @@ uTerm 是 Windows 和 macOS 桌面终端。本地终端和 Agent 进程在本机
 ### macOS 原生 QA 客户端
 
 实验性 SwiftUI／AppKit 原生 QA 应用与现有 Tauri 客户端分别构建，最低要求仍为 macOS
-14.0。它使用独立身份，提供真实空窗口和正常退出冒烟，不读取生产数据或启动宿主。Windows 与旧 macOS 客户端继续提供现有完整功能。阶段证据和剩余工作见[原生迁移状态](native-migration.md)。
+14.0，使用隔离身份
+`sh.uterm.desktop.qa.native`。开发实现将共享工作区／会话操作连接到原生列表、可隐藏侧栏、40pt 工具栏、基础语言／外观／字号设置及缓存的 SwiftTerm 终端视图。包内独立 Rust
+helper 管理真实 PTY；退出只断开连接，**关闭会话**终止所选进程。分屏和选择会话保留各自终端视图，重连以原进程 generation 回放保留输出。
+
+SwiftTerm 固定为兼容 Xcode 16.4 的 1.20.0。输出以二进制帧跨越 C
+ABI，每条链路最多一帧未确认，Swift 队列有界。Swift 将 sequence 及活动 sequence 解码为
+`UInt64`，发送确认时不经过 `Double`。旧 TypeScript 解码器拒绝超过 `Number.MAX_SAFE_INTEGER`
+的数值，避免舍入后确认；TypeScript 的完整 64 位范围支持仍是协议限制。
+
+#### 原生 QA 验证
+
+Linux 真实 helper 测试覆盖确认背压、断开／重开／回放及明确关闭；共享状态测试覆盖会话分屏、过期写入、布局删除和重开。共用数值样例验证 Rust 编码器及 TypeScript 安全整数边界。Swift 测试与真实原生 PTY／分屏／截图脚本已实现，本次源码仍待 CI 验证。先前 M1 的原生 ARM／Intel 桥接及旧 macOS／Windows
+CI 已通过，不能据此认定新终端改动通过。QA 脚本使用临时数据，不读取生产数据。
+
+原生 SSH、完整设置、文件／数据工作台、真实 Agent
+CLI 交互、输入法、休眠、多屏及性能验收尚未完成。Windows 与旧 macOS 仍为现有完整功能客户端。Issue 对应关系、源码证据和剩余工作见[原生迁移状态](native-migration.md)。
 
 ### 共享保存状态
 

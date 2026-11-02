@@ -3,6 +3,7 @@
 pub mod activity;
 mod activity_bridge;
 pub mod agents;
+pub mod control;
 pub mod daemon;
 pub mod ssh;
 pub mod ssh_askpass;

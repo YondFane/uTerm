@@ -1,23 +1,12 @@
-export type AgentActivityEvent = {
-  id: string;
-  sequence: number;
+import type { CoreActivityEvent, CoreTerminalHeader } from "./core-contract.generated";
+export type AgentActivityEvent = Omit<CoreActivityEvent, "kind" | "source"> & {
   kind: "idle" | "working" | "waiting" | "done" | "error" | "notice";
   source: "terminal" | "events" | "hook" | "process";
 };
 
-export type TerminalFrame = {
+export type TerminalFrame = Omit<CoreTerminalHeader, "agent_events"> & {
   agent_events?: AgentActivityEvent[] | null;
-  agent_activity_error?: string | null;
-  agent_state?: string | null;
-  foreground_agent?: string | null;
-  sequence: number;
-  reset: boolean;
-  rows: number;
-  cols: number;
   data: Uint8Array;
-  exited: boolean;
-  code: number | null;
-  error: string | null;
 };
 
 const decoder = new TextDecoder("utf-8", { fatal: true });

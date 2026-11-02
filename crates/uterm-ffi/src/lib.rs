@@ -18,12 +18,14 @@ pub struct UTermBuffer {
     pub allocation: u64,
 }
 pub type Callback = unsafe extern "C" fn(*mut c_void, u64, *const u8, usize);
+pub type TerminalCallback = unsafe extern "C" fn(*mut c_void, *const u8, usize) -> u32;
 struct Client {
     core: Core,
     closing: AtomicBool,
     operations: Mutex<HashMap<u64, Arc<AtomicBool>>>,
     idle: Condvar,
     subscriber: Mutex<Option<(Callback, usize)>>,
+    terminal_subscriber: Mutex<Option<(TerminalCallback, usize)>>,
 }
 static NEXT: AtomicU64 = AtomicU64::new(1);
 static CLIENTS: OnceLock<Mutex<HashMap<u64, Arc<Client>>>> = OnceLock::new();
@@ -111,62 +113,138 @@ pub unsafe extern "C" fn uterm_open(
         }
         let core = Core::open(path)?;
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        let client = Arc::new(Client {
+            core,
+            closing: AtomicBool::new(false),
+            operations: Mutex::new(HashMap::new()),
+            idle: Condvar::new(),
+            subscriber: Mutex::new(None),
+            terminal_subscriber: Mutex::new(None),
+        });
+        let weak = Arc::downgrade(&client);
+        client
+            .core
+            .set_terminal_sink(Arc::new(move |attachment, generation, frame| {
+                let client = weak.upgrade().ok_or("Client is closed")?;
+                if client.closing.load(Ordering::Acquire) {
+                    return Err("Client is closed".into());
+                }
+                let bytes =
+                    uterm_core::terminal::encode_frame(&frame, Some((attachment, generation)));
+                let subscriber = client
+                    .terminal_subscriber
+                    .lock()
+                    .map_err(|_| "Terminal subscription is unavailable")?;
+                let Some((callback, context)) = *subscriber else {
+                    return Err("Terminal consumer is unavailable".into());
+                };
+                CALLBACK_CLIENT.with(|handle| handle.set(id));
+                let accepted =
+                    unsafe { callback(context as *mut c_void, bytes.as_ptr(), bytes.len()) };
+                CALLBACK_CLIENT.with(|handle| handle.set(0));
+                if accepted == 1 {
+                    Ok(())
+                } else {
+                    Err("Terminal consumer rejected the bounded frame".into())
+                }
+            }))?;
         clients()
             .lock()
             .map_err(|_| CoreError::new("STATE", "Client registry is unavailable"))?
-            .insert(
-                id,
-                Arc::new(Client {
-                    core,
-                    closing: AtomicBool::new(false),
-                    operations: Mutex::new(HashMap::new()),
-                    idle: Condvar::new(),
-                    subscriber: Mutex::new(None),
-                }),
-            );
+            .insert(id, client);
         unsafe { handle.write(id) };
         Ok(serde_json::to_vec(
             &serde_json::json!({"version":1,"id":"","result":{"handle":id}}),
         )?)
     })
 }
+fn operate(
+    client: &Client,
+    handle: u64,
+    action: impl FnOnce(u64) -> Result<Vec<u8>, CoreError>,
+) -> Result<Vec<u8>, CoreError> {
+    if CALLBACK_CLIENT.with(|id| id.get() == handle) {
+        return Err(CoreError::new(
+            "REENTRANT",
+            "Schedule calls after the callback returns",
+        ));
+    }
+    let mut operation = NEXT.fetch_add(1, Ordering::Relaxed);
+    {
+        let mut operations = client
+            .operations
+            .lock()
+            .map_err(|_| CoreError::new("STATE", "Operation state is unavailable"))?;
+        if client.closing.load(Ordering::Acquire) {
+            return Err(CoreError::new("CLOSED", "Client is closed"));
+        }
+        while operations.contains_key(&operation) {
+            operation = NEXT.fetch_add(1, Ordering::Relaxed);
+        }
+        operations.insert(operation, Arc::new(AtomicBool::new(false)));
+    }
+    let outcome = catch_unwind(AssertUnwindSafe(|| action(operation)));
+    client
+        .operations
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(&operation);
+    client.idle.notify_all();
+    outcome.unwrap_or_else(|_| Err(CoreError::new("PANIC", "Core operation failed")))
+}
 #[no_mangle]
 pub unsafe extern "C" fn uterm_call(handle: u64, request: *const u8, length: usize) -> UTermBuffer {
     guarded(|| {
-        if CALLBACK_CLIENT.with(|id| id.get() == handle) {
-            return Err(CoreError::new(
-                "REENTRANT",
-                "Schedule calls after the callback returns",
-            ));
-        }
         let client = client(handle)?;
         let bytes = unsafe { input(request, length) }?;
-        let mut operation = NEXT.fetch_add(1, Ordering::Relaxed);
-        {
-            let mut operations = client
-                .operations
-                .lock()
-                .map_err(|_| CoreError::new("STATE", "Operation state is unavailable"))?;
-            if client.closing.load(Ordering::Acquire) {
-                return Err(CoreError::new("CLOSED", "Client is closed"));
-            }
-            while operations.contains_key(&operation) {
-                operation = NEXT.fetch_add(1, Ordering::Relaxed);
-            }
-            operations.insert(operation, Arc::new(AtomicBool::new(false)));
-        }
-        let outcome = catch_unwind(AssertUnwindSafe(|| {
+        operate(&client, handle, |operation| {
             let response = serde_json::to_vec(&client.core.execute(&bytes))?;
             publish(&client, handle, operation, &bytes, &response);
-            Ok::<_, CoreError>(response)
-        }));
-        client
-            .operations
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&operation);
-        client.idle.notify_all();
-        outcome.unwrap_or_else(|_| Err(CoreError::new("PANIC", "Core operation failed")))
+            Ok(response)
+        })
+    })
+}
+#[no_mangle]
+pub extern "C" fn uterm_terminal_subscribe(
+    handle: u64,
+    callback: Option<TerminalCallback>,
+    context: *mut c_void,
+) -> u32 {
+    catch_unwind(|| {
+        if CALLBACK_CLIENT.with(|id| id.get() == handle) {
+            return 0;
+        }
+        let Ok(client) = client(handle) else {
+            return 0;
+        };
+        let Ok(mut subscriber) = client.terminal_subscriber.lock() else {
+            return 0;
+        };
+        *subscriber = callback.map(|cb| (cb, context as usize));
+        1
+    })
+    .unwrap_or(0)
+}
+#[no_mangle]
+pub unsafe extern "C" fn uterm_terminal_write(
+    handle: u64,
+    attachment: *const u8,
+    attachment_length: usize,
+    data: *const u8,
+    length: usize,
+) -> UTermBuffer {
+    guarded(|| {
+        let client = client(handle)?;
+        let name = unsafe { input(attachment, attachment_length) }?;
+        let bytes = unsafe { input(data, length) }?;
+        let name = std::str::from_utf8(&name)
+            .map_err(|_| CoreError::new("INVALID_UTF8", "Attachment ID is not UTF-8"))?;
+        operate(&client, handle, |_| {
+            client.core.terminal_write(name, &bytes)?;
+            Ok(serde_json::to_vec(
+                &serde_json::json!({"version":1,"id":"","result":null}),
+            )?)
+        })
     })
 }
 fn publish(client: &Client, handle: u64, operation: u64, request: &[u8], response: &[u8]) {
@@ -182,6 +260,8 @@ fn publish(client: &Client, handle: u64, operation: u64, request: &[u8], respons
             | "recovery.restore"
     ) && !request.method.starts_with("workspace.")
         && !request.method.starts_with("project.")
+        && !request.method.starts_with("session.")
+        && !request.method.starts_with("settings.")
     {
         return;
     }
@@ -349,6 +429,7 @@ pub extern "C" fn uterm_close(handle: u64) -> u32 {
             client
         };
         client.closing.store(true, Ordering::Release);
+        client.core.close();
         let mut operations = client.operations.lock().unwrap_or_else(|e| e.into_inner());
         for cancelled in operations.values() {
             cancelled.store(true, Ordering::Release);

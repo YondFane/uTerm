@@ -9,6 +9,7 @@ extern "C" {
 #define UTERM_ABI_VERSION 1
 typedef struct { const uint8_t *data; size_t length; uint64_t allocation; } UTermBuffer;
 typedef void (*UTermCallback)(void *context, uint64_t operation, const uint8_t *data, size_t length);
+typedef uint32_t (*UTermTerminalCallback)(void *context, const uint8_t *data, size_t length);
 
 /* Inputs and callback bytes are borrowed only for the call. Returned buffers require release by allocation ID.
  * 输入和回调字节仅在调用期间借用；返回缓冲区必须按 allocation ID 释放。 */
@@ -22,6 +23,14 @@ uint32_t uterm_cancel(uint64_t handle, uint64_t operation);
 /* A NULL callback unsubscribes and waits for an active event callback to finish.
  * NULL 回调用于退订，并等待正在执行的事件回调完成。 */
 uint32_t uterm_subscribe(uint64_t handle, UTermCallback callback, void *context);
+/* Binary frames contain a little-endian header length, UTF-8 metadata, then unmodified PTY bytes.
+ * Return 1 after copying into a bounded consumer queue; return 0 to detach the stream. Ack after rendering.
+ * Callbacks run on Rust stream workers; unsubscribing and closing drain active callbacks.
+ * 二进制帧由小端头长度、UTF-8 元数据和未转换的 PTY 字节组成。
+ * 复制到有界消费队列后返回 1，返回 0 分离流；渲染后再确认。
+ * 回调运行于 Rust 流线程；退订和关闭会等待活动回调完成。 */
+uint32_t uterm_terminal_subscribe(uint64_t handle, UTermTerminalCallback callback, void *context);
+UTermBuffer uterm_terminal_write(uint64_t handle, const uint8_t *attachment, size_t attachment_length, const uint8_t *data, size_t length);
 /* Async callbacks run on a Rust worker; synchronous call events run on the caller. Close drains both.
  * Do not call synchronous operations, subscribe or close from callbacks; enqueue them after return.
  * 异步回调运行在 Rust 工作线程；同步调用事件运行在调用线程。close 等待两者结束。

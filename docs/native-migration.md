@@ -78,13 +78,30 @@ owned. Persisted drafts and sessions cannot be replaced by an empty native view.
 
 生产、旧开发和原生 QA 身份完全分离；QA 不接管生产存储、宿主或链接协议。临时焦点和输入法状态属于客户端，已有草稿与会话不能被原生空视图覆盖。
 
-`Sessions::host_executable` currently stages the desktop executable and retains active versions. The
-independent helper already supports `--local-daemon`, `--local-task`, `--agent-report` and SSH
-askpass. Native adoption must also supply local control, preserve hook executable paths, stage and
-sign helpers before launch, and leave a running host intact. A Swift executable cannot serve those
-Rust command modes.
+At the baseline, `Sessions::host_executable` staged the Tauri executable. The current implementation
+uses `crates/uterm-core/src/host.rs` for staging and retains compatible active versions.
+`crates/utermd-local/src/bin/utermd-local.rs` dispatches `--local-daemon`, `--local-task`,
+`--agent-report`, SSH askpass and `--control`; the native package bundles this Rust executable, not
+the Swift UI binary, as its helper. `daemon.rs`, `tasks.rs` and `activity_bridge.rs` retain PTY/task
+lifetime, replay and hook ownership. Clients detach on quit; explicit session close terminates only
+the specified generation.
 
-当前会话适配层暂存桌面可执行文件作为宿主，并保留活跃版本。独立 helper 已有上述入口；原生接入仍需补齐 control、保持 hooks 路径、正确暂存签名 helper，且不能替换正在承载会话的宿主。
+基线使用 Tauri 程序作为宿主，当前由共享 Rust 模块暂存并保留兼容活跃版本。独立 helper 承担上述命令入口，Swift
+UI 程序不作为 Rust 宿主。PTY、任务、回放及 hooks 保持既有归属，退出仅断连，明确关闭只终止指定 generation。
+
+Concrete source boundaries are
+`src-tauri/src/{files,git,ssh,ssh_auth,ssh_tunnels,java,python,database,redis}.rs`,
+`src/lib/{workspace,settings,file-document,useFileDocument}.ts` and the corresponding React views.
+`src/lib/shared-state.ts` exports the WebView-owned keys and freezes workspace/settings writes only
+after successful import. `crates/uterm-core/src/store.rs` retains `legacy-original.json`,
+`snapshot-v1.json` and up to eight `backups`; legacy `.backup`/`.invalid` and schema-version backups
+remain in the original WebView storage. Editor draft recovery stays in `file-document.ts` until M3;
+database edit drafts remain transient UI state.
+`src-tauri/src/{ssh_auth,redis_credentials,database}.rs` handle credential adapters; credentials
+must not be added to migrated JSON. The baseline inventory records exact IPC/storage source paths
+and declaration lines without containing user data.
+
+上述源码路径明确文件、Git、远程连接、任务与数据服务边界；WebView 导出后由共享存储保存原始数据、快照及备份。原 WebView 恢复键保留，编辑器草稿在 M3 前保持原路径，数据库编辑草稿仍为临时界面状态。凭据通过平台适配，不进入迁移 JSON；基线清单只记录源码声明，不含用户数据。
 
 ## Contract draft / 契约草案
 
@@ -107,14 +124,14 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态                                                          | Evidence and next work / 证据与下一步                                                     |
-| ------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| M0           | CI verified / CI 已验证                                                           | Both native architectures and legacy Tauri jobs passed                                    |
-| M1           | Implemented data path; platform verification pending / 数据通路已实现，待平台验证 | Shared validation, canonical storage, FFI, generated contracts and legacy client adoption |
-| M2           | Pending / 待实现                                                                  | Real host/terminal/native shell; SwiftTerm compatibility gate                             |
-| M3           | Pending / 待实现                                                                  | Files, Git, SSH and task workflows, one at a time                                         |
-| M4           | Pending / 待实现                                                                  | Remaining capabilities, native interaction and measurements                               |
-| M5           | Pending / 待实现                                                                  | Candidate packaging, signed update and rollback exercises                                 |
+| Stage / 阶段 | Current state / 当前状态                                                            | Evidence and next work / 证据与下一步                                                                            |
+| ------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| M0           | CI verified / CI 已验证                                                             | Both native architectures and legacy Tauri jobs passed                                                           |
+| M1           | Implemented; platform CI passed, acceptance gaps / 已实现，平台 CI 通过，验收未闭合 | Shared validation, canonical storage, FFI, generated contracts and legacy client adoption                        |
+| M2           | In progress / 开发中                                                                | Real host, shared session operations and native terminal in development / 真实宿主、共享会话操作及原生终端开发中 |
+| M3           | Pending / 待实现                                                                    | Files, Git, SSH and task workflows, one at a time                                                                |
+| M4           | Pending / 待实现                                                                    | Remaining capabilities, native interaction and measurements                                                      |
+| M5           | Pending / 待实现                                                                    | Candidate packaging, signed update and rollback exercises                                                        |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
@@ -168,13 +185,22 @@ Rust DTOs generate checked-in TS/Swift types with `pnpm contracts:generate`; CI 
 `pnpm contracts:check`. `pnpm test:core` exercises storage and C ABI. `tests/core-contract.test.mjs`
 executes a real Rust process and compares legacy defaults, settings boundaries and selection/project
 transitions. `scripts/macos-native-test.sh` links the Rust static library and exercises Swift calls,
-events, stale writes and reopening. Linux has no Swift compiler; macOS results remain pending for
-this stage. Many existing session/layout reducers still live in TS; removal requires corresponding
-shared operations and dual-client acceptance. Auxiliary drafts remain on their original path until
-M3.
+events, stale writes and reopening. M1 native ARM/Intel CI passed for head
+`4ffa97c08809a3761880b6374ccc5b8a58c1ccce`, tested merge `7a4fa0f0e87bea35f549e79a3ab21801c9807c78`:
+[run 41393862162](https://github.com/YondFane/uTerm/actions/runs/41393862162). Artifacts:
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41393862162/artifacts/13118805408) and
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41393862162/artifacts/13118363170), named
+`native-qa-macos-15-4ffa97c08809a3761880b6374ccc5b8a58c1ccce` and
+`native-qa-macos-15-intel-4ffa97c08809a3761880b6374ccc5b8a58c1ccce`. Each contains toolchain,
+core/FFI/Swift logs, window report and QA App. These M1 artifacts contain no terminal screenshots.
+Legacy [run 41393862160](https://github.com/YondFane/uTerm/actions/runs/41393862160) passed both
+platform jobs. Many existing session/layout reducers still live in TS; removal requires
+corresponding shared operations and dual-client acceptance. Auxiliary drafts remain on their
+original path until M3.
 
 类型由 Rust
-DTO 生成并检查漂移；兼容测试运行真实 Rust 进程。Swift 测试覆盖调用、事件、过期写入及重开，但本阶段 macOS 结果尚待 CI。会话／布局的既有 TS
+DTO 生成并检查漂移；兼容测试运行真实 Rust 进程。Swift 测试覆盖调用、事件、过期写入及重开，M1 双架构及旧客户端 CI 已通过上述对应 SHA；产物含报告和 QA
+App，不含终端截图。会话／布局的既有 TS
 reducer 尚未全部替代，必须补齐共享操作和双端验收后删除；辅助草稿在 M3 前继续使用原路径。
 
 ## Development commands / 开发命令
@@ -183,10 +209,11 @@ Linux M1 checks passed: ten storage tests, four C ABI tests, three real-process
 compatibility/adapter tests, 345 existing frontend checks (ten skipped), 150 backend tests (ten
 ignored), host tests, TypeScript, production and Linux desktop builds, formatting, translation
 coverage and documentation checks. The full frontend run predates the third adapter test; that test
-ran separately against the same application code. macOS bridge/UI validation and Windows runtime
-evidence remain pending.
+ran separately against the same application code. M1 macOS bridge and Windows automated checks
+subsequently passed as linked above; native recovery interaction remains pending.
 
-Linux 的上述检查使用临时目录和测试数据，没有接管真实会话。完整前端检查之后新增的第三项适配测试单独通过，应用代码一致。本阶段 macOS 桥接／界面与 Windows 运行证据仍待 CI／验收。
+Linux 的上述检查使用临时目录和测试数据，没有接管真实会话。完整前端检查之后新增的第三项适配测试单独通过，应用代码一致。M1
+macOS 桥接及 Windows 自动检查随后通过，原生恢复交互仍待验收。
 
 On a Mac with Xcode 16.4 selected, run `bash scripts/macos-native-build.sh`, then
 `bash scripts/macos-native-smoke.sh` from the repository. The latter requires an actual logged-in
@@ -196,3 +223,62 @@ verifies its exit code. It starts no host, loads no production data and has no s
 
 在选定 Xcode
 16.4 的 Mac 上运行上述脚本。启动冒烟要求真实图形会话，缺失时失败；程序创建实际窗口并正常退出，由脚本检查退出码。M0 不启动宿主、不读取生产数据、不构造虚假会话。
+
+## Issue alignment / Issue 对齐
+
+Continue branch `feat/native-macos-shared-core` and Draft PR
+[#12](https://github.com/YondFane/uTerm/pull/12). Tracking
+[#13](https://github.com/YondFane/uTerm/issues/13) and all acceptance criteria remain authoritative.
+Do not merge, tag, publish or modify `release`/`main` directly. YondFane is the authenticated
+executor; only active M2 tasks #29–#32 are assigned and claimed. No project/status labels are
+invented.
+
+沿用当前分支和 Draft
+PR；总跟踪与原验收标准不变。本轮只认领正在处理的 M2 任务，不合并、不发版、不直接修改受保护目标分支。
+
+| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                                                                                                                                       |
+| ------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0 #14       | #20–#23       | Baseline inventory, QA App and both CI paths exist. Archive earlier evidence; screenshot and repeatable workload/interaction checklist still need completion. / 基线清单、QA App 和两条 CI 已存在，优先归档；截图与可重复负载／交互清单待补。                                                                                           |
+| M1 #15       | #24–#28       | Shared state, import/recovery, C ABI and Swift/Tauri adapters exist. Old-reader export, additional failure modes and native recovery interaction remain. / 共享状态、迁移恢复、FFI 及双端适配已存在，旧读取器导出、补充失败模式及原生恢复交互待补。                                                                                     |
+| M2 #16       | #29–#32       | Active: shared host/helper, native shell, cached SwiftTerm views, binary sequence/ack and split/reconnect. New source requires native/Windows CI and screenshots. Manual IME/Agent TUI/sleep acceptance remains unavailable. / 正在实现共享宿主、原生外壳、缓存终端、二进制确认及分屏重连；本次源码待平台 CI 与截图，人工验收尚无条件。 |
+| M3 #17       | #33–#37       | Existing Tauri services remain; native/shared adoption not yet complete. / 保留既有 Tauri 服务，原生与共享迁移未完成。                                                                                                                                                                                                                  |
+| M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                                                                                                                                              |
+| M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。                                                                                                                  |
+
+### M2 implementation and verification / M2 实现与验证
+
+The same Rust host broker and link registry now serve Tauri and the native bridge. The helper is
+staged outside the read-only bundle by digest; active compatible hosts retain their executable. The
+standalone executable also owns the existing control CLI entry. Shared session operations use the
+canonical revision, including split layout, selection and removal. SwiftTerm 1.20.0 fits the
+selected Xcode 16.4 toolchain; the current latest SwiftTerm requires a newer Swift tools version. No
+renderer performance improvement is claimed.
+
+Tauri 与原生桥接复用宿主管理和连接注册表。helper 按摘要暂存到包外，兼容的活动宿主保留原执行文件；独立程序复用 control
+CLI。会话／分屏使用规范 revision。SwiftTerm 版本按工具链兼容选择，不宣称性能改善。
+
+The native harness opens two real PTYs, verifies Unicode/ANSI and alternate-screen return, checks
+cached view identity, hides/reopens the window, records language/theme/width screenshots, then
+quits. A second process reconnects to the same generations, replays output and explicitly closes the
+test sessions. All data lives under a private temporary QA root. Screenshots and reports are
+uploaded by the native workflow, with source head and tested merge SHA in `toolchain.txt`. Until
+that run passes, this is an implemented harness, not completed acceptance.
+
+原生脚本实现真实双 PTY、视图保留、隐藏重开、双语／主题／宽度截图及第二进程重连关闭。数据隔离在临时 QA 目录，工作流上传截图、报告及两种 SHA；CI 实际通过前，不将脚本存在视为验收完成。
+
+Rust and TypeScript share numeric fixtures covering 0, 2^53−1, 2^53, 2^53+1 and u64::MAX. Swift
+checks exact `UInt64` decoding and decimal acknowledgement encoding. TypeScript currently rejects
+unsafe values; full-range support is still open. Multi-client input/resize arbitration, manual input
+methods, real Agent TUI, copy/paste, sleep and multiple displays remain acceptance gaps.
+
+三种语言共用数值边界样例。Swift 需验证逐位精确解码／确认；TypeScript 超范围明确拒绝，完整范围支持仍开放。多客户端输入／尺寸仲裁及人工交互仍有缺口。
+
+Local M2 validation on Linux x86_64 (Node 26.13.0, Rust 1.99.1) passed 347 frontend tests with ten
+skipped, 148 backend tests with ten ignored (two terminal tests moved into the shared core), 16 core
+tests and four FFI tests. Production build, generated-contract drift, formatting, i18n and
+documentation checks passed. Host tests and Linux desktop compilation run separately; their logs
+must be checked before recording success. Native Swift compilation and screenshots still await this
+branch's new macOS CI.
+
+本地上述结果只覆盖 Linux；迁移到共享核心的测试保留，未将数量减少解释为删减验收。宿主测试、新 control
+CLI 测试及桌面编译也已通过，Swift 编译及截图待新 CI。

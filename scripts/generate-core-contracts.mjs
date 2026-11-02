@@ -20,6 +20,14 @@ const schemas = JSON.parse(
   ),
 );
 function type(schema, swift) {
+  if (Array.isArray(schema.type)) {
+    const nonNull = schema.type.filter((t) => t !== "null");
+    if (nonNull.length !== 1) throw Error("Unsupported schema union");
+    return (
+      type({ ...schema, type: nonNull[0] }, swift) +
+      (schema.type.includes("null") ? (swift ? "?" : " | null") : "")
+    );
+  }
   if (schema === true || (!schema.type && !schema.$ref && !schema.anyOf)) return "JSONValue";
   if (schema.$ref) return `Core${schema.$ref.split("/").at(-1)}`;
   if (schema.anyOf)
@@ -39,6 +47,19 @@ function type(schema, swift) {
     ? { string: "String", integer: "UInt32", number: "Double", boolean: "Bool" }
     : { string: "string", integer: "number", number: "number", boolean: "boolean" };
   if (!scalar[schema.type]) throw Error(`Unsupported contract schema: ${JSON.stringify(schema)}`);
+  if (swift && schema.type === "integer")
+    return (
+      {
+        uint8: "UInt8",
+        uint16: "UInt16",
+        uint32: "UInt32",
+        uint64: "UInt64",
+        int8: "Int8",
+        int16: "Int16",
+        int32: "Int32",
+        int64: "Int64",
+      }[schema.format] ?? "Int"
+    );
   return scalar[schema.type];
 }
 const banner =

@@ -1,10 +1,14 @@
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, OnceLock,
+};
 use tauri::Manager;
 
 #[derive(Default)]
 pub struct Lifecycle {
     pub active: AtomicBool,
     pub permit_exit: AtomicBool,
+    core: OnceLock<Arc<uterm_core::Core>>,
 }
 
 #[tauri::command]
@@ -26,7 +30,12 @@ pub async fn shared_core_request(app: tauri::AppHandle, request: String) -> Resu
         .map_err(|e| e.to_string())?
         .join("shared-state-v1");
     tauri::async_runtime::spawn_blocking(move || {
-        let core = uterm_core::Core::open(root).map_err(|e| e.to_string())?;
+        let state = app.state::<Lifecycle>();
+        if state.core.get().is_none() {
+            let core = Arc::new(uterm_core::Core::open(root).map_err(|e| e.to_string())?);
+            let _ = state.core.set(core);
+        }
+        let core = state.core.get().ok_or("Shared core is not initialized")?;
         serde_json::to_string(&core.execute(request.as_bytes())).map_err(|e| e.to_string())
     })
     .await

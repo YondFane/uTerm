@@ -38,10 +38,32 @@ The interface supports Simplified Chinese and English.
 ### Native macOS QA client
 
 An experimental native SwiftUI/AppKit QA application is built separately from the shipping Tauri
-client. It requires macOS 14.0 and has an isolated bundle identifier, a real empty window and a
-normal-exit smoke harness. It does not load production data or start a host. The Windows and legacy
-macOS clients remain the supported feature-complete clients. See
-[native migration status](native-migration.md) for stage evidence and remaining work.
+client. It requires macOS 14.0 and uses the isolated identity `sh.uterm.desktop.qa.native`. The
+development implementation connects the shared workspace/session operations to native lists, a
+hideable sidebar, a 40pt toolbar, basic language/appearance/font settings and cached SwiftTerm
+terminal views. A bundled standalone Rust helper owns real PTYs; quitting detaches, whereas **Close
+session** terminates the selected process. Splitting and selecting sessions preserve each terminal
+view. Reconnecting replays retained output with the existing process generation.
+
+SwiftTerm 1.20.0 is pinned for Xcode 16.4 compatibility. Output crosses the C ABI as binary frames,
+with one unacknowledged frame per attachment and a bounded Swift queue. Swift decodes sequence and
+activity sequence as `UInt64` and encodes acknowledgements without passing through `Double`. The
+legacy TypeScript decoder rejects values above `Number.MAX_SAFE_INTEGER` rather than rounding an
+acknowledgement; full-range TypeScript sequence support remains a protocol limitation.
+
+#### Native QA validation
+
+Linux real-helper tests cover acknowledgement backpressure, detach/reopen/replay and explicit close;
+shared-state tests cover session splits, stale writes, layout removal and reopening. Shared numeric
+fixtures exercise the Rust encoder and TypeScript safe-integer boundary. Swift tests and real native
+PTY/split/screenshot harnesses are implemented but await CI verification for this source tree. The
+earlier M1 native ARM/Intel bridge and legacy macOS/Windows CI passed; that result does not validate
+these new terminal changes. The QA harness uses temporary data and never production data.
+
+Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
+multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain
+the supported feature-complete clients. See [native migration status](native-migration.md) for Issue
+mapping, source-specific evidence and remaining work.
 
 ### Shared saved state
 

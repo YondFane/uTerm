@@ -15,7 +15,10 @@ private final class EventSink: @unchecked Sendable {
 public actor CoreBridge {
     private var handle: UInt64
     private let sink: EventSink
+    private nonisolated let terminalSink: TerminalSink
     public nonisolated let events: AsyncStream<CoreEvent>
+    public nonisolated let terminalFrames: AsyncThrowingStream<TerminalPacket, Error>
+    public nonisolated let terminalFailures: AsyncStream<TerminalFailure>
 
     private init(root: URL) throws {
         guard uterm_abi_version() == 1 else { throw BridgeFailure(code: "ABI_VERSION", message: "Unsupported ABI") }
@@ -27,6 +30,11 @@ public actor CoreBridge {
         handle = h
         sink = EventSink(continuation)
         events = stream
+        let (terminalStream, terminalContinuation) = AsyncThrowingStream<TerminalPacket, Error>.makeStream(bufferingPolicy: .bufferingOldest(256))
+        let (failures, failureContinuation) = AsyncStream<TerminalFailure>.makeStream(bufferingPolicy: .bufferingNewest(256))
+        terminalFailures = failures
+        terminalSink = TerminalSink(terminalContinuation, failures: failureContinuation)
+        terminalFrames = terminalStream
         let context = Unmanaged.passUnretained(sink).toOpaque()
         guard uterm_subscribe(h, { context, _, bytes, count in
             guard let context, let bytes else { return }
@@ -37,6 +45,13 @@ public actor CoreBridge {
             uterm_close(h)
             throw BridgeFailure(code: "SUBSCRIBE", message: "Event subscription failed")
         }
+        guard uterm_terminal_subscribe(h, { context, bytes, count in
+            guard let context, let bytes else { return 0 }
+            return Unmanaged<TerminalSink>.fromOpaque(context).takeUnretainedValue().receive(bytes, count)
+        }, Unmanaged.passUnretained(terminalSink).toOpaque()) == 1 else {
+            uterm_close(h)
+            throw BridgeFailure(code: "SUBSCRIBE", message: "Terminal subscription failed")
+        }
     }
 
     public static func open(root: URL) async throws -> CoreBridge {
@@ -44,6 +59,7 @@ public actor CoreBridge {
     }
 
     public func call(_ method: String, params: JSONValue = .null) throws -> JSONValue {
+        try Task.checkCancellation()
         guard handle != 0 else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
         let id = UUID().uuidString
         let request = CoreRequest(id: id, method: method, params: params, version: 1)
@@ -53,6 +69,17 @@ public actor CoreBridge {
         }
         guard response.id == id else { throw BridgeFailure(code: "OPERATION_ID", message: "Mismatched response") }
         return response.result ?? .null
+    }
+
+    public func snapshot() throws -> CoreSnapshot {
+        try JSONDecoder().decode(CoreSnapshot.self, from: JSONEncoder().encode(call("snapshot.read")))
+    }
+
+    public func sessionEntries() throws -> [CoreSessionEntry] {
+        try JSONDecoder().decode([CoreSessionEntry].self, from: JSONEncoder().encode(call("session.entries")))
+    }
+    public func viewSnapshot() throws -> CoreViewSnapshot {
+        try JSONDecoder().decode(CoreViewSnapshot.self, from: JSONEncoder().encode(call("snapshot.view")))
     }
 
     private static func decode(_ buffer: UTermBuffer) throws -> CoreResponse {
@@ -69,14 +96,30 @@ public actor CoreBridge {
         uterm_close(handle)
         handle = 0
         sink.continuation.finish()
+        terminalSink.continuation.finish()
+        terminalSink.failures.finish()
     }
+
+    public func write(attachment: String, bytes: Data) throws {
+        let name = Array(attachment.utf8)
+        _ = try name.withUnsafeBufferPointer { name in
+            try bytes.withUnsafeBytes { bytes in
+                try Self.decode(uterm_terminal_write(handle, name.baseAddress, name.count, bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count))
+            }
+        }
+    }
+
+    public nonisolated func consumed(_ packet: TerminalPacket) { terminalSink.release(packet.allocationSize) }
 
     deinit {
         let closingHandle = handle
         let retainedSink = sink
+        let retainedTerminalSink = terminalSink
         Task.detached {
             if closingHandle != 0 { uterm_close(closingHandle) }
             retainedSink.continuation.finish()
+            retainedTerminalSink.continuation.finish()
+            retainedTerminalSink.failures.finish()
         }
     }
 }

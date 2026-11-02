@@ -15,6 +15,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "Document":schemars::schema_for!(Document),
             "Import":schemars::schema_for!(Import),
             "Snapshot":schemars::schema_for!(Snapshot)
+            ,"TerminalHeader":schemars::generate::SchemaSettings::default().for_serialize().into_generator().into_root_schema_for::<uterm_core::terminal::TerminalHeader>()
+            ,"ActivityEvent":schemars::schema_for!(uterm_core::terminal::ActivityEvent)
+            ,"SessionEntry":schemars::schema_for!(uterm_core::session_state::Entry)
+            ,"ViewSnapshot":schemars::schema_for!(uterm_core::ViewSnapshot)
         });
         println!("{}", serde_json::to_string(&schemas)?);
         return Ok(());
