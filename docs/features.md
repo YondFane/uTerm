@@ -54,25 +54,35 @@ acknowledgement; full-range TypeScript sequence support remains a protocol limit
 
 #### Native QA validation
 
-Linux real-helper tests cover acknowledgement backpressure, detach/reopen/replay and explicit close;
-shared-state tests cover splits, stale writes, layout removal and reopening. Shared numeric fixtures
-exercise the Rust encoder, full-range Swift `UInt64` acknowledgement and TypeScript safe-integer
-rejection. macOS ARM/Intel core/FFI/Swift bridge tests and visible empty-window normal exit passed
-at [b579543](https://github.com/YondFane/uTerm/actions/runs/41409128290). The real PTY Unicode
-inspection failed at that head; the corrected cell reader and new parser checks still require CI.
-Windows host responsiveness failed with a shell-based test probe; its replacement native fixture
-also requires Windows CI. These unresolved checks keep terminal acceptance open. Native startup now
-loads its first coherent snapshot before consuming buffered invalidations; late reload failures
-cannot replace newer state. This startup race correction also awaits native CI.
+At head `6c782299f038fb2168b8d11123b3e3e7027123e6` (tested merge
+`8af10958a10d2924696272b9c8e1ed533127311e`),
+[native CI](https://github.com/YondFane/uTerm/actions/runs/41412826068) passed on macOS 15.8.2 ARM64
+and 15.7.9 Intel with Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Sixteen core, four FFI and six Swift
+tests passed, including full-range UInt64 acknowledgement, TypeScript safe-integer rejection
+fixtures, bounded queue rejection and renderer parsing. Real application checks cover two PTYs,
+Unicode/ANSI, split view identity, hide/reopen, normal quit, retained generations/replay and
+explicit close. A stale generation cannot close the current process.
 
-The QA harness uses a temporary project and data, never production data. Empty-window smoke captures
-`native-empty-window.png`; terminal smoke captures language/theme/width, hidden-sidebar and
-full-screen scenarios. Reports record platform, architecture, OS, source head and tested merge SHA.
-QA images captured from NSView at `cead130` omitted compositor layers and did not establish visual
-acceptance. The harness now uses the macOS WindowServer capture tool for the specific QA window;
-permission or capture failures fail the scene. New images require CI execution and visual inspection
-before acceptance; the existence of the harness is not screenshot evidence. Native artifacts are
-`native-qa-*`; legacy command logs and source/platform records are `legacy-checks-*`.
+Both architectures uploaded 11 WindowServer screenshots: an actual empty window and ten
+language/theme/width/sidebar/full-screen scenes, with platform, architecture, OS and head/merge
+metadata. ARM's full set and Intel empty/narrow/wide/full-screen examples were visually inspected.
+The earlier NSView cache images omitted compositor layers and are excluded from visual acceptance.
+Artifacts are
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41412826068/artifacts/13126042625) and
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41412826068/artifacts/13125949025). These
+automatic native checks do not establish human interaction or performance acceptance.
+
+[Legacy CI](https://github.com/YondFane/uTerm/actions/runs/41412826038) passed at the same
+head/merge: Windows Server 2025 x64 ran 347 frontend tests with 11 skipped; macOS ARM64 ran 348 with
+ten skipped. Core/FFI/contracts, host responsiveness, backend, formatting, documentation and desktop
+compilation also passed. Real Rust exports were read by unchanged release readers. Windows/native
+recovery interaction and macOS 14 runtime acceptance remain pending; compilation is not their
+substitute.
+
+The QA app uses a temporary project and data, never production data. Native `native-qa-*` artifacts
+contain screenshots, reports, test logs and the ad-hoc-signed QA App. Legacy `legacy-checks-*`
+artifacts contain command logs and source/platform records, not native Windows interaction images.
+M0 baseline/toolchain tasks #20–#23 and stage #14 are accepted; M1–M5 remain open.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain
@@ -98,11 +108,11 @@ readers, preserving split/session IDs and opaque draft/backup bytes after repeat
 downgrade into an unmodified old client's WebView storage is not verified.
 
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
-conflicts, corruption, recovery, ownership and callback draining on Linux. Swift bridge tests run in
-macOS CI; native data migration and interactive recovery acceptance remain pending. Both legacy
-platform jobs also run shared-core tests and generated-contract drift checks, uploading command
-logs, source head, tested merge SHA and platform/toolchain metadata as `legacy-checks-*` CI
-artifacts.
+conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI.
+Swift bridge tests run in macOS CI; native data migration and interactive recovery acceptance remain
+pending. Both legacy platform jobs also run shared-core tests and generated-contract drift checks,
+uploading command logs, source head, tested merge SHA and platform/toolchain metadata as
+`legacy-checks-*` CI artifacts.
 
 ## Project website
 

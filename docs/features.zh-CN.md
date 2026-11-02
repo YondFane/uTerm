@@ -47,18 +47,24 @@ ABI，每条链路最多一帧未确认，Swift 队列有界。Swift 将 sequenc
 
 #### 原生 QA 验证
 
-Linux 真实 helper 测试覆盖确认背压、断开／重开／回放和明确关闭；共享状态测试覆盖分屏、过期写入、布局删除与重开。共用数值样例验证 Rust 编码器、Swift 完整
-`UInt64` 确认及 TypeScript 安全整数拒绝。macOS
-ARM／Intel 核心／FFI／Swift 桥接测试及真实可见空窗口正常退出已在
-[b579543](https://github.com/YondFane/uTerm/actions/runs/41409128290) 通过。该提交的真实 PTY
-Unicode 文本检查失败；修正后的单元读取与新增解析器检查仍需 CI。Windows 宿主响应性测试的 Shell 样例启动失败，替换后的原生样例也仍需 Windows
-CI。这些检查未闭合前，终端验收保持开放。原生启动改为先读取首个一致快照，再消费缓存失效事件；迟到的读取错误不能覆盖新状态。此启动竞态修正也仍待原生 CI。
+源码 head `6c782299f038fb2168b8d11123b3e3e7027123e6`、实际测试 merge
+`8af10958a10d2924696272b9c8e1ed533127311e`
+的[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41412826068) 已在 macOS 15.8.2
+ARM64 和 15.7.9 Intel 通过，使用 Xcode 16.4、Swift 6.1.2 和 Rust
+1.99.1。16 项核心、4 项 FFI、6 项 Swift 测试通过，覆盖完整 UInt64 确认、TypeScript 安全整数拒绝样例、有界队列拒绝及渲染器解析。真实应用检查覆盖双 PTY、Unicode／ANSI、分屏视图保留、隐藏重开、正常退出、原 generation 回放及明确关闭；过期 generation 不能关闭当前进程。
 
-QA 脚本使用临时项目和数据，不读取生产数据。空窗口 smoke 采集
-`native-empty-window.png`；终端 smoke 采集双语／主题／宽度、隐藏侧栏和全屏场景。报告记录平台、架构、系统、源码 head 及实际测试 merge
-SHA。`cead130` 的 NSView 图片遗漏合成图层，不能据此确认界面验收。脚本改用 macOS
-WindowServer 工具截取指定 QA 窗口，权限或采集失败时该场景失败。新图片需经 CI 实际执行和目视检查后验收；脚本存在不等于已有截图证据。原生产物名称为
-`native-qa-*`，旧客户端命令日志及源码／平台记录为 `legacy-checks-*`。
+两架构各上传 11 张 WindowServer 截图：真实空窗口及十种语言／主题／宽度／侧栏／全屏场景，并记录平台、架构、系统和 head／merge 元数据。已目视检查 ARM 全集及 Intel 空窗口／窄窗／宽窗／全屏样例。早先 NSView 缓存图片遗漏合成图层，不计入界面验收。产物见
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41412826068/artifacts/13126042625) 和
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41412826068/artifacts/13125949025)。这些自动原生检查不等于人工交互或性能验收。
+
+相同 head／merge 的[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41412826038)
+已通过：Windows Server 2025 x64 前端 347 项通过、11 项跳过；macOS
+ARM64 前端 348 项通过、10 项跳过。核心／FFI／契约、宿主响应性、后端、格式、文档和桌面编译也通过。真实 Rust 导出已由未修改的 release 读取器读取。Windows／原生恢复交互及 macOS
+14 实际运行仍待验收，不能以编译替代。
+
+QA 应用使用临时项目和数据，不读取生产数据。`native-qa-*`
+产物包含截图、报告、测试日志及 ad-hoc 签名 QA App；`legacy-checks-*`
+包含命令日志和源码／平台记录，不是 Windows 原生交互图片。M0 基线／工具链任务 #20–#23 及阶段 #14 已验收，M1–M5 仍开放。
 
 原生 SSH、完整设置、文件／数据工作台、真实 Agent
 CLI 交互、输入法、休眠、多屏及性能验收尚未完成。Windows 与旧 macOS 仍为现有完整功能客户端。Issue 对应关系、源码证据和剩余工作见[原生迁移状态](native-migration.md)。其中可复用验收清单定义同机负载、TUI／交互步骤及签名／升级条件，未执行项继续明确待验收。
@@ -71,7 +77,8 @@ CLI 交互、输入法、休眠、多屏及性能验收尚未完成。Windows �
 
 快照无法读取时进入恢复界面，不重置数据。**查看恢复副本**列出有效快照；明确选择恢复后，损坏字节仍保留。存储保留最多八份先前快照和原始导出。**设置 → 通用 → 导出旧版兼容数据**将当前工作区／设置和原始辅助数据保存为 JSON。此导出用于恢复。真实 Rust 进程测试使用与 release 一致、未修改的旧读取器读取工作区／设置，验证分屏／会话 ID 以及重复导入后的草稿／备份原始字节。尚未验证自动导入未修改旧客户端 WebView 存储的回退过程。
 
-Linux 上的 Rust 存储／FFI 测试和真实进程 TypeScript 兼容测试覆盖重复导入、冲突、损坏恢复、所有权和回调排空。Swift 桥接测试交由 macOS
+Linux 及 Windows／macOS
+CI 中的 Rust 存储／FFI 测试和真实进程 TypeScript 兼容测试覆盖重复导入、冲突、损坏恢复、所有权和回调排空。Swift 桥接测试交由 macOS
 CI；原生数据迁移及恢复交互验收仍待完成。
 
 两个旧客户端平台的 CI 也执行共享核心测试和生成契约的漂移检查，并将命令日志、源码 head、实际测试 merge
