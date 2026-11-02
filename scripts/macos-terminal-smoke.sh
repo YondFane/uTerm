@@ -39,7 +39,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 try:
                     call('host.configure',{'helper':str(app/'Contents/Resources/bin/utermd-local')})
                     status=call('host.status')
-                    for session in status.get('sessions',[]): call('host.close',{'id':session['spec']['id']})
+                    for session in status.get('sessions',[]): call('host.close',{'id':session['spec']['id'],'generation':session['generation']})
                     call('host.shutdownIdle')
                     deadline=time.monotonic()+5
                     while (Path(root)/'local-daemon-v1/endpoint.json').exists() and time.monotonic()<deadline: time.sleep(0.05)

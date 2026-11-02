@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UTermBridge
 
 @MainActor
 enum NativeLocale { static var preference = "system" }

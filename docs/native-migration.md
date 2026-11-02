@@ -386,3 +386,19 @@ requires a fresh native run; the failed readiness report is retained.
 
 该提交六项 ARM
 Swift 测试通过，窗口报告暴露首个快照与缓存事件的初始化竞态；先加载一致快照再消费事件，并按 epoch 丢弃迟到错误，不以延时作为就绪条件，等待新原生运行。
+
+Shared `host.close` now requires the caller's expected generation when a hosted entry exists;
+missing or stale generations fail before terminating anything. Native close and isolated QA cleanup
+send that identity. The real-host regression checks stale/null close preserves the live process,
+then closes only the matched generation. Multi-client input/resize arbitration remains open.
+
+共享关闭接口增加调用方 generation 校验；过期或缺失不终止任何进程。原生关闭和 QA 清理携带该身份，真实宿主测试先验证拒绝，再明确关闭匹配进程。多客户端输入／尺寸仲裁仍未完成。
+
+Head `74e21811bb88e2491da1bbdea02b6c636b2952c0` failed Swift compilation because the new
+empty-window capture referenced the bridge error without importing its module. The build pipeline
+also lacked explicit outer pipe-failure propagation and therefore reached a later step after that
+failure. The import is corrected and native job steps now explicitly use Bash with pipefail; a
+failed build/test piped to a log must fail its own step. This run produced no valid new runtime
+screenshots.
+
+新增空窗口采集遗漏桥接模块导入，导致上述提交编译失败；外层日志管道未显式启用失败传播，错误延后才被发现。已补导入并为原生 job 使用显式 Bash/pipefail，失败必须在所属步骤报错；该轮没有有效新截图。

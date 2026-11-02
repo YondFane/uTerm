@@ -142,10 +142,21 @@ fn real_shared_terminal_preserves_backpressure_generation_replay_and_detached_pr
         "terminal.action",
         json!({"attachment":"reopened","action":"ack","sequence":frame.sequence}),
     );
+    for expected in [Value::Null, json!("stale")] {
+        let reply = reopened.execute(&serde_json::to_vec(&json!({"version":1,"id":"stale-close","method":"host.close","params":{"id":id,"generation":expected}})).unwrap());
+        assert_eq!(reply.error.unwrap().code, "STALE_GENERATION");
+        let Reply::HostStatus(status) = client.request(Operation::HostStatus).unwrap() else {
+            panic!("Invalid host status")
+        };
+        assert!(status
+            .sessions
+            .iter()
+            .any(|s| s.spec.id == id && s.generation == generation && s.running));
+    }
     call(
         &reopened,
-        "terminal.action",
-        json!({"attachment":"reopened","action":"close"}),
+        "host.close",
+        json!({"id":id,"generation":generation}),
     );
     reopened.close();
     let Reply::HostStatus(status) = client.request(Operation::HostStatus).unwrap() else {

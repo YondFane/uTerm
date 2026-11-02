@@ -268,6 +268,12 @@ impl Core {
                     return Err(CoreError::new("HOST_REPLY", "Invalid host status"));
                 };
                 if let Some(session) = status.sessions.into_iter().find(|s| s.spec.id == id) {
+                    if params["generation"].as_str() != Some(session.generation.as_str()) {
+                        return Err(CoreError::new(
+                            "STALE_GENERATION",
+                            "Reconnect before closing a different hosted generation",
+                        ));
+                    }
                     match client
                         .request(Operation::Close {
                             id: id.clone(),

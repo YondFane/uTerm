@@ -205,7 +205,7 @@ final class WorkspaceModel: ObservableObject {
         do {
             await terminal.drainInput()
             await terminal.finishConnection()
-            _ = try await bridge.call("host.close", params: .object(["id": .string(id)]))
+            _ = try await bridge.call("host.close", params: .object(["id": .string(id), "generation": terminal.generation.map(JSONValue.string) ?? .null]))
             if await mutate("session.remove", ["id": .string(id)]) { focusRevision += 1 }
         } catch { self.error = error.localizedDescription }
     }

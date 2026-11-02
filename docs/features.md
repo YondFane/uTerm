@@ -42,8 +42,9 @@ client. It requires macOS 14.0 and uses the isolated identity `sh.uterm.desktop.
 development implementation connects the shared workspace/session operations to native lists, a
 hideable sidebar, a 40pt toolbar, basic language/appearance/font settings and cached SwiftTerm
 terminal views. A bundled standalone Rust helper owns real PTYs; quitting detaches, whereas **Close
-session** terminates the selected process. Splitting and selecting sessions preserve each terminal
-view. Reconnecting replays retained output with the existing process generation.
+session** matches the selected generation before terminating it; a missing or stale generation
+requires reconnecting before close. Splitting and selecting sessions preserve each terminal view.
+Reconnecting replays retained output with the existing process generation.
 
 SwiftTerm 1.20.0 is pinned for Xcode 16.4 compatibility. Output crosses the C ABI as binary frames,
 with one unacknowledged frame per attachment and a bounded Swift queue. Swift decodes sequence and

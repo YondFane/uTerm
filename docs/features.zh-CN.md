@@ -38,7 +38,7 @@ uTerm 是 Windows 和 macOS 桌面终端。本地终端和 Agent 进程在本机
 实验性 SwiftUI／AppKit 原生 QA 应用与现有 Tauri 客户端分别构建，最低要求仍为 macOS
 14.0，使用隔离身份
 `sh.uterm.desktop.qa.native`。开发实现将共享工作区／会话操作连接到原生列表、可隐藏侧栏、40pt 工具栏、基础语言／外观／字号设置及缓存的 SwiftTerm 终端视图。包内独立 Rust
-helper 管理真实 PTY；退出只断开连接，**关闭会话**终止所选进程。分屏和选择会话保留各自终端视图，重连以原进程 generation 回放保留输出。
+helper 管理真实 PTY；退出只断开连接，**关闭会话**核对 generation 后终止所选进程；generation 过期或缺失时，需重连再关闭。分屏和选择会话保留各自终端视图，重连以原进程 generation 回放保留输出。
 
 SwiftTerm 固定为兼容 Xcode 16.4 的 1.20.0。输出以二进制帧跨越 C
 ABI，每条链路最多一帧未确认，Swift 队列有界。Swift 将 sequence 及活动 sequence 解码为
