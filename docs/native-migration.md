@@ -570,3 +570,14 @@ read-only directory failure ran under UID 1000 and preserved snapshot/original i
 Windows uses a held file handle to exercise atomic replacement failure; new platform CI is pending.
 
 #25 校验已有副本的字节／文件类型及恢复列表摘要。本地普通用户已实际执行权限失败，验证快照／原始导出保留和重试；标准命令及原生 CI 明确执行该案例，Windows 占用文件替换失败仍待本次 CI，不把实现当作平台通过。
+
+### Native sidebar callback boundary / 原生侧栏回调边界
+
+For #30/#32 the sidebar now uses an AppKit table coordinator with an explicit update guard.
+Programmatic row/selection synchronization cannot trigger core actions; user selections and focus
+observation are deferred past delegate callbacks and rechecked. Pending user selection is preserved
+until its revisioned operation finishes. The real two-process native smoke now fails on the known
+NSTableView reentrancy diagnostic. Actual macOS build/run and image verification are pending for
+this correction; the previous warning is not relabeled as fixed before execution.
+
+#30／#32 新增明确的 AppKit 更新与用户操作边界，并在原生重连脚本中拒绝已知重入告警。待新 macOS 实际运行及截图检查后确认，不提前把旧警告标为已解决。

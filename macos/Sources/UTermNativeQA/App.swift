@@ -115,10 +115,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func decreaseFont() { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(-1)]) } }
 
     func windowDidUpdate(_ notification: Notification) {
-        guard let responder = window?.firstResponder,
-              let session = model.terminals.values.first(where: { $0.view === responder }),
-              session.id != model.selectedID else { return }
-        Task { await model.selectSession(session.id, focus: false) }
+        guard let responder = window?.firstResponder else { return }
+        DispatchQueue.main.async { [weak self, weak responder] in
+            guard let self, let responder, self.window?.firstResponder === responder,
+                  self.model.ready, !self.model.busy, !self.model.settingsPresented, self.model.nameDraft == nil,
+                  let session = self.model.terminals.values.first(where: { $0.view === responder }),
+                  session.id != self.model.selectedID else { return }
+            Task { await self.model.selectSession(session.id, focus: false) }
+        }
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool { sender.orderOut(nil); return false }
     func windowDidEnterFullScreen(_ notification: Notification) { model.fullScreen = true }

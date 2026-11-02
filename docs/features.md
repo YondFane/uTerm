@@ -84,6 +84,10 @@ contain screenshots, reports, test logs and the ad-hoc-signed QA App. Legacy `le
 artifacts contain command logs and source/platform records, not native Windows interaction images.
 M0 baseline/toolchain tasks #20–#23 and stage #14 are accepted; M1–M5 remain open.
 
+The native sidebar now separates programmatic table selection from user actions, which are deferred
+until AppKit returns. Focus observation also checks the current responder after deferral. The
+reconnect smoke rejects NSTableView reentrancy warnings; this correction awaits fresh macOS CI.
+
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain
 the supported feature-complete clients. See [native migration status](native-migration.md) for Issue

@@ -22,6 +22,8 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                     process.kill();process.wait()
                     raise
             assert exit_code==0, (name,exit_code)
+            diagnostics=(evidence/(name+'-stdout.log')).read_text(errors='replace')+(evidence/(name+'-stderr.log')).read_text(errors='replace')
+            assert 'reentrant operation in its nstableview delegate' not in diagnostics.lower(), (name,'Native table reentrancy',diagnostics)
             report=json.loads(path.read_text());assert 'failure' not in report,report
             assert report['coreReady'] and report['windowVisible'] and not report['productionDataAccess'],report
             reports.append(report)

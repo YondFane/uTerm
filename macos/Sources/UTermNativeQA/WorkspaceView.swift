@@ -5,20 +5,6 @@ import UTermBridge
 @MainActor
 struct WorkspaceView: View {
     @ObservedObject var model: WorkspaceModel
-    private var selection: Binding<String?> {
-        Binding(get: {
-            if let id = model.selectedID { return "s:" + id }
-            return model.workspace["selectedProject"].string.map { "p:" + $0 }
-        }, set: { value in
-            guard let value else { return }
-            let id = String(value.dropFirst(2))
-            let focus = NSApp.currentEvent?.type != .keyDown
-            Task {
-                if value.hasPrefix("s:") { await model.selectSession(id, focus: focus) }
-                else { await model.selectProject(id, focus: focus) }
-            }
-        })
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -57,21 +43,7 @@ struct WorkspaceView: View {
                         ForEach(model.groupItems) { group in Text(group.name).tag(group.id) }
                     }
                     .labelsHidden().padding(10).disabled(model.busy)
-                    List(selection: selection) {
-                        Section(localized("Projects", "项目")) {
-                            ForEach(model.projectItems) { project in
-                                Label(project.name, systemImage: "folder")
-                                    .tag("p:" + project.id)
-                            }
-                        }
-                        Section(localized("Sessions", "会话")) {
-                            ForEach(model.sessionEntries, id: \.sessionID) { entry in
-                                Label(entry.session["name"].string ?? "", systemImage: entry.session["agent"].string == nil ? "terminal" : "sparkle")
-                                    .tag("s:" + entry.sessionID)
-                            }
-                        }
-                    }
-                    .listStyle(.sidebar)
+                    NativeSidebar(model: model).frame(maxHeight: .infinity)
                     HStack {
                         Button { model.newWorkspace() } label: { Label(localized("New workspace", "新建工作区"), systemImage: "plus") }
                         Button { model.renameWorkspace() } label: { Label(localized("Rename workspace", "重命名工作区"), systemImage: "pencil") }
