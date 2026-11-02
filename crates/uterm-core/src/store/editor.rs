@@ -132,9 +132,25 @@ fn decode(bytes: &[u8]) -> Result<EditorDraftDocument> {
     Ok(document)
 }
 impl Store {
+    fn editor_check_initial_import(&self) -> Result<()> {
+        for entry in fs::read_dir(&self.root)? {
+            let name = entry?.file_name();
+            let name = name.to_string_lossy();
+            if name.starts_with("editor-drafts-")
+                && (name.ends_with(".backup") || name.ends_with(".damaged"))
+            {
+                return Err(CoreError::new(
+                    "MISSING_DRAFTS",
+                    "Draft snapshot is missing; existing recovery copies require explicit restore",
+                ));
+            }
+        }
+        Ok(())
+    }
     fn editor_load(&self) -> Result<EditorDraftSnapshot> {
         let path = self.root.join("editor-drafts-v1.json");
         if fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
+            self.editor_check_initial_import()?;
             return Err(CoreError::new(
                 "DRAFTS_NOT_IMPORTED",
                 "Import editor recovery data before editing",
@@ -274,7 +290,9 @@ impl Store {
                     "Editor recovery already exists; both sources were retained",
                 ));
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                self.editor_check_initial_import()?;
+            }
             Err(error) => return Err(error.into()),
         }
         let drafts = match legacy {
@@ -365,6 +383,9 @@ impl Store {
         self.editor_load()
     }
     fn editor_persist(&self, document: &EditorDraftDocument) -> Result<()> {
+        self.editor_write(document, true)
+    }
+    fn editor_write(&self, document: &EditorDraftDocument, replace: bool) -> Result<()> {
         let bytes = serde_json::to_vec_pretty(document)?;
         if bytes.len() > MAX_REQUEST_BYTES {
             return Err(CoreError::new(
@@ -375,8 +396,19 @@ impl Store {
         let mut file = tempfile::NamedTempFile::new_in(&self.root)?;
         file.write_all(&bytes)?;
         file.as_file().sync_all()?;
-        file.persist(self.root.join("editor-drafts-v1.json"))
-            .map_err(|e| CoreError::from(e.error))?;
+        let path = self.root.join("editor-drafts-v1.json");
+        let installed = if replace {
+            file.persist(path)
+        } else {
+            file.persist_noclobber(path)
+        };
+        installed.map_err(|e| {
+            if !replace && e.error.kind() == std::io::ErrorKind::AlreadyExists {
+                CoreError::new("CONFLICT", "Draft snapshot appeared during recovery")
+            } else {
+                CoreError::from(e.error)
+            }
+        })?;
         #[cfg(unix)]
         fs::File::open(&self.root)?.sync_all()?;
         Ok(())
@@ -446,18 +478,20 @@ impl Store {
         Ok(serde_json::json!({"currentRevision":current,"backups":backups,"sources":sources}))
     }
     pub fn editor_recover(&self, expected: &str, revision: &str) -> Result<EditorDraftSnapshot> {
+        self.editor_restore(Some(expected), revision)
+    }
+    pub fn editor_recover_missing(&self, revision: &str) -> Result<EditorDraftSnapshot> {
+        self.editor_restore(None, revision)
+    }
+    pub fn editor_preview(&self, revision: &str) -> Result<EditorDraftSnapshot> {
         let _guard = self.lock()?;
+        self.editor_backup(revision)
+    }
+    fn editor_backup(&self, revision: &str) -> Result<EditorDraftSnapshot> {
         if !valid_revision(revision) {
             return Err(CoreError::new(
                 "INVALID_ARGUMENT",
                 "Unknown editor recovery copy",
-            ));
-        }
-        let current = bounded_read(&self.root.join("editor-drafts-v1.json"))?;
-        if hash(&current) != expected {
-            return Err(CoreError::new(
-                "CONFLICT",
-                "Draft storage changed during recovery",
             ));
         }
         let saved = bounded_read(&self.root.join(format!("editor-drafts-{revision}.backup")))?;
@@ -467,14 +501,52 @@ impl Store {
                 "Editor recovery checksum differs",
             ));
         }
-        let document = decode(&saved)?;
-        retain_bytes(
-            &self
-                .root
-                .join(format!("editor-drafts-{}.damaged", hash(&current))),
-            &current,
-        )?;
-        self.editor_persist(&document)?;
+        Ok(EditorDraftSnapshot {
+            revision: revision.to_string(),
+            document: decode(&saved)?,
+        })
+    }
+    fn editor_restore(
+        &self,
+        expected: Option<&str>,
+        revision: &str,
+    ) -> Result<EditorDraftSnapshot> {
+        let _guard = self.lock()?;
+        if !valid_revision(revision) {
+            return Err(CoreError::new(
+                "INVALID_ARGUMENT",
+                "Unknown editor recovery copy",
+            ));
+        }
+        let path = self.root.join("editor-drafts-v1.json");
+        let current = if let Some(expected) = expected {
+            let bytes = bounded_read(&path)?;
+            if hash(&bytes) != expected {
+                return Err(CoreError::new(
+                    "CONFLICT",
+                    "Draft storage changed during recovery",
+                ));
+            }
+            Some(bytes)
+        } else {
+            match fs::symlink_metadata(&path) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Ok(_) => return Err(CoreError::new("CONFLICT", "Draft snapshot already exists")),
+                Err(error) => return Err(error.into()),
+            }
+        };
+        let backup = self.editor_backup(revision)?;
+        if let Some(bytes) = &current {
+            retain_bytes(
+                &self
+                    .root
+                    .join(format!("editor-drafts-{}.damaged", hash(bytes))),
+                bytes,
+            )?;
+        }
+        // A late-created snapshot must survive an explicit missing-file restore.
+        // 明确恢复缺失文件时，必须保留稍后创建的快照。
+        self.editor_write(&backup.document, current.is_some())?;
         self.editor_load()
     }
 }

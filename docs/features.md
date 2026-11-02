@@ -176,63 +176,66 @@ tested merge SHA and platform/toolchain metadata as `legacy-checks-*` CI artifac
 
 #### Shared editor draft storage
 
-The development core adds `editor.drafts.*` and generated Swift/TypeScript DTOs.
-`editor-drafts-v1.json` keeps up to 100 documents with revision-checked put/remove, separately from
-the workspace/settings snapshot. Legacy import retains exact source bytes before parsing, is
-idempotent for the same source and refuses to replace newer drafts with a different source. Text and
-saved-text limits match JavaScript's 2 Mi UTF-16 code units; BOM and line endings survive. Up to
-eight valid previous draft snapshots and 16 original source copies are retained. Invalid recovery
-bytes remain available instead of being pruned. A full source collection rejects another import
-rather than deleting an original. Corruption needs explicit revision-checked restore, retaining
-damaged bytes; relative draft paths reject absolute paths and parent traversal.
+The development core owns `editor-drafts-v1.json`, separately from workspace/settings, with up to
+100 revision-checked documents. Legacy import retains exact source bytes before parsing, accepts
+repeat imports of the same source and refuses to replace newer drafts from a different source. Text
+and saved-text limits match JavaScript's 2 Mi UTF-16 code units; BOM/line endings survive. Up to
+eight valid prior snapshots and 16 original sources remain. Invalid recovery bytes are retained; a
+full source collection rejects another import. Relative paths reject absolute paths and parent
+traversal.
 
-The native QA client's **File → Open file…** now opens text with the reused CodeMirror editor and
-project-scoped shared recovery. Unsaved text is queued to Rust; an acknowledged draft is restored
-when reopening its file. Recovered text needs explicit Save before autosave resumes. File writes
-retain root/link, expected-version, BOM and line-ending checks. Saving and quitting wait for draft
-delivery; editable windows have no readonly force-close timer. Explicit discard waits for dispatched
-writes and cannot erase another writer's newer draft. Native Web content may save only its selected
-file; it cannot import legacy sources or write another project/file. Tauri retains its existing
-editor ownership until its migration/recovery UI is adopted. If the referenced file disappears or
-cannot be read, retained recovery text opens readonly with a notice and remains in core storage
-after closing. Native tabs and window order are not yet persisted.
+The native QA client's **File → Open file…** uses the shared CodeMirror editor and project-scoped
+recovery. Acknowledged unsaved text restores when reopening its file; recovered text needs explicit
+Save before autosave resumes. Saves retain root/link, expected-version, BOM and line-ending checks
+and wait for draft delivery. Editable windows have no readonly force-close timer. Explicit discard
+waits for dispatched writes and preserves another writer's newer draft. Content may save only its
+selected file and cannot import old sources. If its source disappears or becomes unreadable,
+retained text opens readonly with a notice and survives close.
 
-The storage and scoped transport foundation passed all four jobs at head
+The queue coalesces waiting text, bounds pending data and keeps flush/retry failures visible,
+including initialization with no waiting writes. Different documents advance independently; stale
+writes/removals for the same document fail. Lost replies require checking durable data. Close stops
+delivery without promising host rollback. Native quit freezes and confirms all content documents,
+retains the app on refusal/timeout/reload/stale replies and resumes prepared documents after
+cancellation. Quit errors reveal the main window.
+
+A missing draft snapshot with existing backup/damaged files now blocks automatic import. The
+development APIs `editor.drafts.recovery.preview` and `editor.drafts.recovery.restoreMissing` expose
+verified backups and explicit absent-file restoration. The latter requires `expectedMissing: true`
+and installs without overwriting a newly created snapshot. Existing restore/null behavior is
+preserved; damaged bytes, originals and invalid copies remain. Native recovery-choice UI,
+tabs/window order, Tauri's draft-owner migration and full manual editing/focus acceptance remain
+pending in #33/#34. Tauri currently retains its existing editor owner.
+
+#### Shared draft validation
+
+The storage/scoped transport foundation passed all four jobs at head
 `4bea29a75178efe0f93a31d49d2490accee3d9dd`, tested merge `1ae83343a15c9c422dd989234a5a5558f829b10c`
 ([native CI](https://github.com/YondFane/uTerm/actions/runs/41487145173),
-[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41487145188)). Platform filesystem
-failure/retry, nine Swift tests, 17 TypeScript/Rust process contracts and real readonly native
-scope/resource boundaries passed. Actual ARM text and Intel PDF screenshots were visually inspected.
-That evidence does not accept subsequent editable-window changes.
+[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41487145188)).
 
-Linux full frontend validation passed 374 tests (ten skipped), with type/build, contract, format and
-documentation checks. Twenty real Rust-process contracts and two queue fixture checks passed. The
-client coalesces waiting text, bounds pending data, rejects stale writes/removals for the same
-document and allows independent documents to advance. Lost replies require checking actual durable
-data. Different legacy sources are archived and rejected as a migration conflict, including on
-retry. Close stops delivery without promising host rollback. Linux focused tests now cover safe
-discard racing a dispatched write/external replacement, real editor unload/reopen, exact BOM/CRLF,
-file conflicts and explicit save. New native CI runs actual editable WK windows, draft checkpoints,
-SIGKILL/relaunch, conflict/close/discard/save and uploads source-specific reports and screenshots.
-These editable-window checks await their own successful macOS runs; DOM input in a real native
-WebView does not establish manual keyboard/IME/focus acceptance.
+Native Intel and both old clients passed editable head `a80eb7441b4153d83d6548f8297d6241ab76d577`,
+tested merge `610786c91693ad9b69dfca39bd0a92c9b0b180c2`
+([native run](https://github.com/YondFane/uTerm/actions/runs/41496444870),
+[legacy run](https://github.com/YondFane/uTerm/actions/runs/41496445392)). The ARM job was cancelled
+before steps ran, so this is three successful jobs. Actual Intel WK checks covered exact draft
+bytes, SIGKILL/relaunch, external conflict, close protection, discard and save. The driver supplies
+internal LF text and verifies actual CRLF/BOM in core/files. Artifacts are
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41496444870/artifacts/13167012154),
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41496445392/artifacts/13167546733) and
+[legacy Mac](https://github.com/YondFane/uTerm/actions/runs/41496445392/artifacts/13168465930). They
+include source/merge/toolchains and actual reports. Five `native-editor-*.png` images show the
+checkpoint, recovery, conflict, close guard and saved file; recovery/close/saved images were
+inspected. Both Tauri QA reports passed with no cleanup errors.
 
-Native quit freezes and confirms all content documents before closing them. Refusal, timeout, reload
-and stale replies retain the app; cancelled quit resumes prepared documents. Quit errors reveal the
-main window. Initialization failure also rejects draft flush when no writes are queued; a real
-Rust-process regression first reproduced the incorrect success and now passes.
-
-Quit prepare/resume/timeout/stale-result windows passed on both native architectures at head
-`7c283dc9dd520aa2f6b89375e179498c7777f7e1`, tested merge `88f906a7b3866ba1ff4a4ec0662e52ec33f5e9ee`
-([native CI](https://github.com/YondFane/uTerm/actions/runs/41490353869)). At `b6b0784`, the real
-Intel editor and core retained identical text, but the QA driver passed CRLF directly to DOM
-insertText, producing two line breaks. The actual failure image and UTF-8/DOM report are in
-[artifact 13166481536](https://github.com/YondFane/uTerm/actions/runs/41494672830/artifacts/13166481536).
-The driver now sends the editor's internal LF representation while exact expected CRLF/BOM and
-original-file assertions stay unchanged. Native input/recovery/save acceptance awaits the corrected
-run; no failed result is counted as passed. Linux's real isolated Tauri run at `c07af63` passed 12
-scenarios without cleanup errors. #33/#34 stay open for editor platform evidence, tabs, two-client
-migration/recovery and manual editing/focus.
+Current Linux checks pass 375 frontend tests (ten skipped), 129 backend tests (ten ignored),
+core/FFI and explicit filesystem failure/retry, contract drift, type and desktop checks. Twenty-one
+real Rust-process contracts, two queue fixture checks and seven content checks pass, including
+missing source files, non-overwriting missing-store restore, backup preview and unchanged null
+semantics. The new thirteenth Swift check, 640px native controls and missing-source readonly
+scenario await their own committed-head CI. These add two images to the native editor run. DOM input
+in a real native app does not establish manual keyboard/IME/focus acceptance; three passing jobs do
+not substitute for the cancelled ARM check or later source changes.
 
 ## Project website
 

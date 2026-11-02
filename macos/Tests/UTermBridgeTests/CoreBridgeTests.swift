@@ -39,6 +39,44 @@ final class CoreBridgeTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(value)), value)
     }
 
+    func testDraftBackupPreviewAndExplicitMissingRestoreThroughCABI() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let core = try await CoreBridge.open(root: root)
+        let text = "recovery 中文 e\u{301} 𝄞\u{0}\r\n"
+        let draft: JSONValue = .object([
+            "directory": .string("/qa/editor"), "path": .string("recovery.txt"), "kind": .string("text"),
+            "text": .string(text), "saved": .string("disk\r\n"), "version": .string(String(repeating: "a", count: 64)),
+            "line_ending": .string("\r\n"), "bom": .bool(true)
+        ])
+        let raw = String(decoding: try JSONEncoder().encode(draft), as: UTF8.self)
+        let first = try await core.call("editor.drafts.import", params: .object(["legacy": .string(raw)]))
+        _ = try await core.call("editor.drafts.remove", params: .object([
+            "expectedRevision": first["revision"], "directory": .string("/qa/editor"), "path": .string("recovery.txt")
+        ]))
+        try FileManager.default.removeItem(at: root.appendingPathComponent("editor-drafts-v1.json"))
+        do {
+            _ = try await core.call("editor.drafts.import", params: .object(["legacy": .null]))
+            XCTFail("Missing storage with recovery copies cannot be automatically reimported")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "MISSING_DRAFTS") }
+        let preview = try await core.call("editor.drafts.recovery.preview", params: .object(["revision": first["revision"]]))
+        let typed = try JSONDecoder().decode(CoreEditorDraftSnapshot.self, from: JSONEncoder().encode(preview))
+        XCTAssertEqual(Array(typed.document.drafts[0].text.utf8), Array(text.utf8))
+        XCTAssertEqual(Array(typed.document.drafts[0].text.utf16), Array(text.utf16))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("editor-drafts-v1.json").path))
+        do {
+            _ = try await core.call("editor.drafts.recovery.restoreMissing", params: .object(["revision": first["revision"], "expectedMissing": .bool(false)]))
+            XCTFail("Missing restore requires acknowledgement")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "INVALID_ARGUMENT") }
+        let restored = try await core.call("editor.drafts.recovery.restoreMissing", params: .object(["revision": first["revision"], "expectedMissing": .bool(true)]))
+        XCTAssertEqual(restored, first)
+        do {
+            _ = try await core.call("editor.drafts.recovery.restoreMissing", params: .object(["revision": first["revision"], "expectedMissing": .bool(true)]))
+            XCTFail("A replacement store cannot be overwritten")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "CONFLICT") }
+        await core.close()
+    }
+
     func testEditorDraftBytesMetadataStaleWritesAndReopenThroughCABI() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

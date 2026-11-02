@@ -545,6 +545,23 @@ impl Core {
             )?)
             .map_err(Into::into),
             "editor.drafts.recovery.list" => self.store.editor_recovery_list(),
+            "editor.drafts.recovery.preview" => {
+                serde_json::to_value(self.store.editor_preview(&string(&params, "revision")?)?)
+                    .map_err(Into::into)
+            }
+            "editor.drafts.recovery.restoreMissing" => {
+                if params.get("expectedMissing").and_then(Value::as_bool) != Some(true) {
+                    return Err(CoreError::new(
+                        "INVALID_ARGUMENT",
+                        "Explicit expectedMissing acknowledgement is required",
+                    ));
+                }
+                serde_json::to_value(
+                    self.store
+                        .editor_recover_missing(&string(&params, "revision")?)?,
+                )
+                .map_err(Into::into)
+            }
             "editor.drafts.recovery.restore" => serde_json::to_value(self.store.editor_recover(
                 &string(&params, "expectedRevision")?,
                 &string(&params, "revision")?,

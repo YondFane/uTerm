@@ -575,25 +575,37 @@ retry and real readonly WK boundaries passed. Evidence and four artifact links a
 [#34](https://github.com/YondFane/uTerm/issues/34#issuecomment-6583532837). ARM text and Intel PDF
 screenshots were inspected.
 
-New native editor adoption calls the same file/draft contract from CodeMirror, waits for draft
-writes before file save/quit and supports explicit discard without deleting another writer's newer
-draft. `scripts/macos-editor-smoke.sh` runs a real isolated WK editor, durable checkpoint,
-SIGKILL/relaunch, conflict/guard/discard/save and records five system screenshots with source
-metadata. This new editable path awaits its own CI; native tabs/window restoration, Tauri
-draft-owner migration and manual editing/focus acceptance remain incomplete. `a0758cc` built and
-passed 12 Swift checks on ARM, but its window smoke failed on a QA function return unsupported by
-WebKit; 7c283dc fixes that result type and still needs successful native CI.
+Native editor adoption uses the same file/draft contract, waits for draft delivery before save/quit,
+preserves another writer's newer draft on explicit discard and displays missing/unreadable source
+recovery readonly. At head `a80eb7441b4153d83d6548f8297d6241ab76d577`, tested merge
+`610786c91693ad9b69dfca39bd0a92c9b0b180c2`, actual Intel editor checks and both old clients passed.
+Native ARM was cancelled before steps, so this head has three successful jobs.
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/41496444870/artifacts/13167012154)
+contains exact bytes, SIGKILL/relaunch, conflict/close/discard/save reports and five real
+screenshots; recovery/close/saved images were inspected. A new run additionally checks 640px
+controls and missing-source readonly close, recording seven editor images; those additions require
+their own CI. DOM input does not establish manual keyboard/IME/focus acceptance.
+
+The new core development recovery API previews checksum-verified backups without changing a
+missing/damaged store. Existing recovery evidence blocks initial import when its snapshot
+disappears. Explicit `editor.drafts.recovery.restoreMissing` requires `expectedMissing: true` and
+uses non-overwriting installation; existing restore/null behavior stays unchanged. Linux
+core/FFI/permission checks, 21 real Rust-process contracts, frontend 375 passed/10 skipped, backend
+129 passed/10 ignored and desktop check pass. A new Swift C ABI preview/missing-restore test awaits
+native CI. Native recovery-choice UI and Tauri draft adoption, tabs/window restoration, manual
+editing/focus and other workflows remain incomplete.
 
 M0 #14 and M1 #15 are accepted. #29/#30 closed at head `4c502ab0c5f39b1d4f43ec4e72f0c7f35b285cca`,
-tested merge `df2690d89433974653ff5426bab07be371f455c7`, unmerged. M2 #16/#31/#32 remain open for
-Agent/manual and concurrent input/resize ownership/lifecycle gates. M3–M5 retain their complete
-remaining criteria; #13 stays open. No merge, release/main push, tag, Release or production feed
+tested merge `df2690d89433974653ff5426bab07be371f455c7`, unmerged. M2 #16/#31/#32 retain
+Agent/manual and concurrent input/resize ownership/lifecycle gaps. M3–M5 keep their complete
+remaining criteria and #13 stays open. No merge, release/main push, tag, Release or production feed
 change occurred.
 
-上述 4bea29a／测试合并 SHA 的四 job 通过作用域草稿事务、队列／来源失败、真实 TS／Rust／Swift C
-ABI、平台文件重试及只读 WK 边界，#34 评论有四平台产物链接；已目视检查 ARM 文本及 Intel
-PDF。新增原生编辑采用共用文件／草稿契约，保存／退出等待草稿、明确放弃不删除其他窗口新草稿；真实 WK 编辑、检查点、SIGKILL／重启、冲突／保护／放弃／保存脚本生成五张系统截图，仍待自身 CI。原生标签／窗口恢复、Tauri 草稿迁移、人工编辑／焦点仍未完成。a0758cc
-ARM 构建及 12 项 Swift 通过，窗口 QA 返回函数值失败，7c283dc 已修正基础类型并待重跑。M0／M1 及 #29／#30 已验收，剩余阶段与总跟踪继续开放，未合并／直推受保护分支／标签／发布／修改生产源。
+原生编辑采用共用文件／草稿契约，保存／退出等待交付，明确放弃保留其他窗口新草稿，源文件缺失／不可读时只读显示恢复文本。a80eb74／上述 merge 的真实 Intel 编辑及两旧客户端通过，ARM 在步骤前取消，不能记为四 job 通过；链接产物有准确字节、SIGKILL／重启、冲突／关闭／放弃／保存报告及五图，已目视检查恢复／关闭／保存。新增 640px 和源文件缺失关闭场景将记录七图，待自身 CI；DOM 输入不算人工键盘／输入法／焦点验收。
+
+新核心开发恢复 API 只读预览校验过的备份；主快照缺失但有恢复证据时阻止首次导入。明确 restoreMissing 要求 expectedMissing 为 true，使用无覆盖安装，保留旧恢复／null 语义。Linux 核心／FFI／权限检查、21 项真实 Rust 进程契约、前端 375／10 跳过、后端 129／10 忽略及桌面检查通过；新增 Swift
+C
+ABI 预览／缺失恢复仍待原生 CI。原生恢复选择、Tauri 草稿迁移、标签／窗口、人工编辑／焦点与后续工作流仍未完成。M0／M1 和 #29／#30 已验收，M2–M5 及总跟踪继续开放，未合并／直推受保护分支／标签／发布／改生产源。
 
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 

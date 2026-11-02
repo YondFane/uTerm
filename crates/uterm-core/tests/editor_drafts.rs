@@ -186,6 +186,81 @@ fn scoped_draft_listing_returns_only_the_requested_project() {
 }
 
 #[test]
+fn missing_store_with_recovery_evidence_cannot_be_imported_as_a_new_empty_store() {
+    let root = tempfile::tempdir().unwrap();
+    let store = Store::open(root.path().to_owned()).unwrap();
+    let raw = serde_json::to_string(&draft("a.txt", "first original")).unwrap();
+    let first = store.editor_import(Some(&raw)).unwrap();
+    store
+        .editor_put(&first.revision, draft("a.txt", "newer text"))
+        .unwrap();
+    let path = root.path().join("editor-drafts-v1.json");
+    fs::remove_file(&path).unwrap();
+    let read_code = store.editor_read().unwrap_err().code;
+    let imported = store.editor_import(Some(&raw));
+    assert!(
+        imported.is_err(),
+        "Missing draft store was silently recreated from an older source"
+    );
+    assert_eq!(read_code, "MISSING_DRAFTS");
+    assert_eq!(imported.unwrap_err().code, "MISSING_DRAFTS");
+    assert!(!path.exists());
+    assert_eq!(
+        store.editor_recovery_list().unwrap()["backups"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        store.editor_recovery_list().unwrap()["sources"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let preview = store.editor_preview(&first.revision).unwrap();
+    assert_eq!(preview.revision, first.revision);
+    assert_eq!(preview.document.drafts[0].text, "first original");
+    assert!(!path.exists());
+    let restored = store.editor_recover_missing(&first.revision).unwrap();
+    assert_eq!(restored.revision, first.revision);
+    let before = fs::read(&path).unwrap();
+    assert_eq!(
+        store
+            .editor_recover_missing(&first.revision)
+            .unwrap_err()
+            .code,
+        "CONFLICT"
+    );
+    assert_eq!(fs::read(&path).unwrap(), before);
+    for invalid in ["", "../editor-drafts-v1.json", &"g".repeat(64)] {
+        assert_eq!(
+            store.editor_preview(invalid).unwrap_err().code,
+            "INVALID_ARGUMENT"
+        );
+    }
+    fs::remove_file(&path).unwrap();
+    let backup = root
+        .path()
+        .join(format!("editor-drafts-{}.backup", first.revision));
+    fs::write(&backup, b"wrong bytes retained").unwrap();
+    assert_eq!(
+        store.editor_preview(&first.revision).unwrap_err().code,
+        "CORRUPT_DRAFTS"
+    );
+    assert_eq!(
+        store
+            .editor_recover_missing(&first.revision)
+            .unwrap_err()
+            .code,
+        "CORRUPT_DRAFTS"
+    );
+    assert!(!path.exists());
+    assert_eq!(fs::read(backup).unwrap(), b"wrong bytes retained");
+}
+
+#[test]
 fn corrupt_storage_and_wrong_backups_preserve_bytes_until_explicit_checked_recovery() {
     let root = tempfile::tempdir().unwrap();
     let store = Store::open(root.path().to_owned()).unwrap();
@@ -203,6 +278,16 @@ fn corrupt_storage_and_wrong_backups_preserve_bytes_until_explicit_checked_recov
         "CORRUPT_DRAFTS"
     );
     let list = store.editor_recovery_list().unwrap();
+    assert_eq!(
+        store
+            .editor_preview(&first.revision)
+            .unwrap()
+            .document
+            .drafts[0]
+            .text,
+        "original"
+    );
+    assert_eq!(fs::read(&path).unwrap(), damaged);
     let current = list["currentRevision"].as_str().unwrap();
     assert_eq!(
         store

@@ -155,10 +155,33 @@ enum EditorSmoke {
         report["savedExactBytesAndClearedDraft"] = true
         captures.append("native-editor-saved.png")
         try await capture(saved, reportPath: reportPath, name: captures.last!)
+        saved.window?.setContentSize(NSSize(width: 640, height: 600))
+        try await ContentSmoke.wait(saved, "[...document.querySelectorAll('.editor-header button')].every(b=>{const r=b.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1}) && document.documentElement.scrollWidth<=innerWidth")
+        report["narrowEditorControlsWithinViewport"] = true
+        captures.append("native-editor-saved-640.png")
+        try await capture(saved, reportPath: reportPath, name: captures.last!)
         report["cleanEditorQuitPrepared"] = try await saved.prepareForQuit()
         saved.resumeAfterQuit()
         saved.window?.performClose(nil)
         try await TerminalSmoke.wait("Close clean editor through document transport") { saved.window?.isVisible == false }
+        let metadata = try await bridge.call("files.read", params: .object(["directory": .string(root.path), "path": .string(name)]))
+        let missingText = "MISSING_SOURCE_RECOVERY 中文 é\r\n"
+        _ = try await bridge.call("editor.drafts.putDocument", params: .object([
+            "expectedDraftRevision": .null, "draft": .object([
+                "directory": .string(root.path), "path": .string(name), "kind": .string("text"),
+                "text": .string(missingText), "saved": metadata["text"], "version": metadata["version"],
+                "line_ending": metadata["line_ending"], "bom": metadata["bom"]
+            ])
+        ]))
+        try FileManager.default.removeItem(at: file)
+        let missing = try await open(root, name)
+        defer { missing.forceClose() }
+        try await ContentSmoke.wait(missing, "document.querySelector('.cm-content[contenteditable=false]')?.textContent.includes('MISSING_SOURCE_RECOVERY') === true", allowAlert: true)
+        captures.append("native-editor-missing-source.png")
+        try await capture(missing, reportPath: reportPath, name: captures.last!)
+        missing.window?.performClose(nil)
+        try await TerminalSmoke.wait("Close missing-source readonly recovery without deleting its draft") { missing.window?.isVisible == false }
+        report["missingSourceRetainedReadonlyAfterClose"] = (try await draft(bridge, root: root))["draft"]["text"].string.map { Data($0.utf8) == Data(missingText.utf8) } == true
         report["editorCaptures"] = captures
     }
 }

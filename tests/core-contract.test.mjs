@@ -430,6 +430,77 @@ test("real Rust draft storage preserves legacy text and rejects stale multi-docu
   assert.equal(retained.result.values[draftKey], raw);
 });
 
+test("draft recovery previews never reset a missing store and absent restore requires an explicit acknowledgement", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "uterm-missing-drafts-")),
+    call = await client(t, root);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const raw = JSON.stringify(queueDraft("recover.txt", "original bytes 中文 é\r\n"));
+  const first = (await call("editor.drafts.import", { legacy: raw })).result;
+  assert.ok(
+    (
+      await call("editor.drafts.put", {
+        expectedRevision: first.revision,
+        draft: queueDraft("recover.txt", "newer data"),
+      })
+    ).result,
+  );
+  const file = join(root, "editor-drafts-v1.json");
+  rmSync(file);
+  assert.equal((await call("editor.drafts.read")).error.code, "MISSING_DRAFTS");
+  assert.equal((await call("editor.drafts.import", { legacy: null })).error.code, "MISSING_DRAFTS");
+  assert.deepEqual(
+    (await call("editor.drafts.recovery.preview", { revision: first.revision })).result,
+    first,
+  );
+  for (const acknowledgement of [{}, { expectedMissing: false }, { expectedMissing: null }])
+    assert.equal(
+      (
+        await call("editor.drafts.recovery.restoreMissing", {
+          ...acknowledgement,
+          revision: first.revision,
+        })
+      ).error.code,
+      "INVALID_ARGUMENT",
+    );
+  assert.equal(
+    (await call("editor.drafts.recovery.preview", { revision: "../snapshot-v1.json" })).error.code,
+    "INVALID_ARGUMENT",
+  );
+  assert.equal(
+    (
+      await call("editor.drafts.recovery.restore", {
+        expectedRevision: null,
+        revision: first.revision,
+      })
+    ).error.code,
+    "INVALID_ARGUMENT",
+  );
+  assert.deepEqual(
+    (
+      await call("editor.drafts.recovery.restoreMissing", {
+        expectedMissing: true,
+        revision: first.revision,
+      })
+    ).result,
+    first,
+  );
+  const before = readFileSync(file);
+  assert.equal(
+    (
+      await call("editor.drafts.recovery.restoreMissing", {
+        expectedMissing: true,
+        revision: first.revision,
+      })
+    ).error.code,
+    "CONFLICT",
+  );
+  assert.deepEqual(readFileSync(file), before);
+  assert.equal(
+    readFileSync(join(root, `editor-draft-source-${first.document.sourceDigest}.original`), "utf8"),
+    raw,
+  );
+});
+
 test("real Rust core preserves legacy defaults and normalized workspace/project transitions", async (t) => {
   const call = await client(t);
   const baseline = (await call("state.defaults")).result;

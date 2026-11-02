@@ -39,7 +39,8 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                     report['forcedExitSignal'] = signal.SIGKILL
                 else:
                     for key in ['forcedExitDraftRestored', 'externalConflictRetainedFileAndDraft', 'closeRefusedWithoutReadonlyFallback',
-                                'discardRemovedOnlyOwnDraft', 'savedExactBytesAndClearedDraft', 'cleanEditorQuitPrepared']:
+                                'discardRemovedOnlyOwnDraft', 'savedExactBytesAndClearedDraft', 'cleanEditorQuitPrepared',
+                                'narrowEditorControlsWithinViewport', 'missingSourceRetainedReadonlyAfterClose']:
                         assert report[key], (key, report)
                     code = process.wait(timeout=20)
                     assert code == 0, code
