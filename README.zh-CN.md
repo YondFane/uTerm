@@ -123,3 +123,7 @@ uTerm 按 [PolyForm Noncommercial License 1.0.0](LICENSE)
 [报告问题或提出功能建议](https://github.com/YondFane/uTerm/issues/new)，请附上操作系统、uTerm 版本及复现步骤。
 
 macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和分阶段功能状态见[原生迁移说明](docs/native-migration.md)。
+
+共享核心检查使用 `pnpm test:core` 和 `pnpm contracts:check`；执行 `pnpm contracts:generate`
+重新生成 TS／Swift 边界类型。macOS 上使用 `bash scripts/macos-native-build.sh` 和
+`bash scripts/macos-native-test.sh` 构建隔离 QA 应用并运行 Rust／Swift 桥接测试。

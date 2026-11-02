@@ -138,3 +138,7 @@ uTerm version and steps to reproduce the issue.
 Native macOS development is isolated from stable releases. See
 [native migration](docs/native-migration.md) for the QA app, platform checks and staged feature
 status.
+
+Shared core checks: `pnpm test:core` and `pnpm contracts:check`. Regenerate TS/Swift boundary types
+with `pnpm contracts:generate`. On macOS, run `bash scripts/macos-native-build.sh` and
+`bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift bridge tests.

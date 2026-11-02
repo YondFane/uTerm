@@ -1,0 +1,82 @@
+import Foundation
+import UTermFFI
+
+public struct BridgeFailure: Error, LocalizedError, Sendable {
+    public let code: String
+    public let message: String
+    public var errorDescription: String? { "\(code): \(message)" }
+}
+
+private final class EventSink: @unchecked Sendable {
+    let continuation: AsyncStream<CoreEvent>.Continuation
+    init(_ continuation: AsyncStream<CoreEvent>.Continuation) { self.continuation = continuation }
+}
+
+public actor CoreBridge {
+    private var handle: UInt64
+    private let sink: EventSink
+    public nonisolated let events: AsyncStream<CoreEvent>
+
+    private init(root: URL) throws {
+        guard uterm_abi_version() == 1 else { throw BridgeFailure(code: "ABI_VERSION", message: "Unsupported ABI") }
+        var h: UInt64 = 0
+        let bytes = Array(root.path.utf8)
+        let result = bytes.withUnsafeBufferPointer { uterm_open($0.baseAddress, $0.count, &h) }
+        _ = try Self.decode(result)
+        let (stream, continuation) = AsyncStream<CoreEvent>.makeStream(bufferingPolicy: .bufferingNewest(64))
+        handle = h
+        sink = EventSink(continuation)
+        events = stream
+        let context = Unmanaged.passUnretained(sink).toOpaque()
+        guard uterm_subscribe(h, { context, _, bytes, count in
+            guard let context, let bytes else { return }
+            let data = Data(bytes: bytes, count: count)
+            let sink = Unmanaged<EventSink>.fromOpaque(context).takeUnretainedValue()
+            if let event = try? JSONDecoder().decode(CoreEvent.self, from: data) { sink.continuation.yield(event) }
+        }, context) == 1 else {
+            uterm_close(h)
+            throw BridgeFailure(code: "SUBSCRIBE", message: "Event subscription failed")
+        }
+    }
+
+    public static func open(root: URL) async throws -> CoreBridge {
+        try await Task.detached { try CoreBridge(root: root) }.value
+    }
+
+    public func call(_ method: String, params: JSONValue = .null) throws -> JSONValue {
+        guard handle != 0 else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
+        let id = UUID().uuidString
+        let request = CoreRequest(id: id, method: method, params: params, version: 1)
+        let data = try JSONEncoder().encode(request)
+        let response = try data.withUnsafeBytes { bytes in
+            try Self.decode(uterm_call(handle, bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count))
+        }
+        guard response.id == id else { throw BridgeFailure(code: "OPERATION_ID", message: "Mismatched response") }
+        return response.result ?? .null
+    }
+
+    private static func decode(_ buffer: UTermBuffer) throws -> CoreResponse {
+        defer { uterm_buffer_release(buffer.allocation) }
+        guard let bytes = buffer.data else { throw BridgeFailure(code: "EMPTY_BUFFER", message: "Missing response") }
+        let response = try JSONDecoder().decode(CoreResponse.self, from: Data(bytes: bytes, count: buffer.length))
+        guard response.version == 1 else { throw BridgeFailure(code: "CONTRACT_VERSION", message: "Unsupported response") }
+        if let e = response.error { throw BridgeFailure(code: e.code, message: e.message) }
+        return response
+    }
+
+    public func close() {
+        guard handle != 0 else { return }
+        uterm_close(handle)
+        handle = 0
+        sink.continuation.finish()
+    }
+
+    deinit {
+        let closingHandle = handle
+        let retainedSink = sink
+        Task.detached {
+            if closingHandle != 0 { uterm_close(closingHandle) }
+            retainedSink.continuation.finish()
+        }
+    }
+}

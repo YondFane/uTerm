@@ -25,6 +25,7 @@ anyhow = "1"
 tauri = { version = "2", features = ["macos-private-api", "tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 utermd-local = { path = "../crates/utermd-local" }
+uterm-core = { path = "../crates/uterm-core" }
 serde_json = { version = "1.0.151", features = ["arbitrary_precision"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"

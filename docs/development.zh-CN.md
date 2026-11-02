@@ -3,7 +3,7 @@ title: uTerm 开发指南
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-10-21
+updated: 2026-11-02
 ---
 
 # uTerm 开发指南
@@ -23,6 +23,19 @@ updated: 2026-10-21
 - [目录](#目录)
 
 ## 开发
+
+### 共享核心与原生 QA
+
+`crates/uterm-core` 提供不依赖 UI 的状态校验与规范存储，`crates/uterm-ffi` 暴露 C ABI
+1；manifest 和 lockfile 继续与桌面及宿主隔离。修改 DTO 后执行 `pnpm test:core`、
+`pnpm contracts:generate` 和 `pnpm contracts:check`。生成的边界类型需要提交，中间 JSON
+schema 不提交。
+
+在 macOS 14 或更新系统上，使用 `bash scripts/macos-native-build.sh` 构建 ad-hoc 签名 QA 应用，使用
+`bash scripts/macos-native-test.sh` 运行连接 Rust 静态库的 Swift 桥接测试。
+`bash scripts/macos-native-smoke.sh`
+需要图形登录及 WindowServer，记录真实窗口与退出证据。CI 保留原生 ARM／Intel 产物及旧 Tauri 检查。QA 身份为
+`sh.uterm.desktop.qa.native`，不得替换为生产身份或接管生产宿主。验收缺口及对应源码证据见[迁移状态](native-migration.md)。
 
 Agent 设置可在确认后使用本机 Node.js/npm 安装 OpenCode、Claude、Codex、Gemini、Pi、MiniMax、Qwen
 Code、Copilot CLI 和 iFlow CLI，需要网络及 npm 全局目录写入权限。Hermes 使用官方平台安装脚本。

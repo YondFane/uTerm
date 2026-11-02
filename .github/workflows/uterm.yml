@@ -48,10 +48,16 @@ jobs:
           workspaces: |
             src-tauri -> target
             crates/utermd-local -> target
+            crates/uterm-core -> target
+            crates/uterm-ffi -> target
           cache-bin: false
       - run: pnpm install --frozen-lockfile
       - name: Check formatting
         run: pnpm format:check
+      - name: Shared core and generated contracts
+        run: |
+          pnpm test:core
+          pnpm contracts:check
       - run: cargo test --manifest-path crates/utermd-local/Cargo.toml --locked
       - run: pnpm docs:check
       - run: pnpm test

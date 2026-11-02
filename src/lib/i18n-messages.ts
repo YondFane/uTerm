@@ -1,4 +1,10 @@
 export const messages: Record<string, string> = {
+  导出旧版兼容数据: "Export legacy-compatible data",
+  "旧版兼容数据已导出。": "Legacy-compatible data exported.",
+  查看恢复副本: "View recovery copies",
+  从副本恢复: "Restore from copy",
+  重试: "Retry",
+  "原始数据已保留。": "Original data was retained.",
   "Worktree 已创建，但项目树保存失败。请刷新项目。":
     "The Worktree was created, but the project tree could not be saved. Refresh the project.",
   "操作已完成：{p0}": "Completed: {p0}",

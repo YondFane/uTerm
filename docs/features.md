@@ -43,6 +43,24 @@ normal-exit smoke harness. It does not load production data or start a host. The
 macOS clients remain the supported feature-complete clients. See
 [native migration status](native-migration.md) for stage evidence and remaining work.
 
+### Shared saved state
+
+The development client imports workspace and settings data through its existing WebView on first
+launch. Rust validates and retains the original export, then owns `shared-state-v1` in the app-data
+directory. Subsequent saves use an atomic snapshot and revision checks; workspace and settings
+changes share a serialized queue. The old workspace/settings keys are retained for recovery and are
+no longer written. Editor drafts and other WebView preferences retain their existing owners.
+
+An unreadable snapshot opens a recovery view without resetting data. **View recovery copies** lists
+valid saved snapshots; an explicit restore retains the damaged bytes. Up to eight previous snapshots
+and the original import are retained. **Settings → General → Export legacy-compatible data** saves
+the current workspace/settings and original auxiliary values as JSON. This export is a recovery
+artifact; automatic downgrade into an unmodified old client's WebView storage is not verified.
+
+Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
+conflicts, corruption, recovery, ownership and callback draining on Linux. Swift bridge tests run in
+macOS CI; native data migration and interactive recovery acceptance remain pending.
+
 ## Project website
 
 ### Website preview

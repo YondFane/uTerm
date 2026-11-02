@@ -3,7 +3,7 @@ title: uTerm development guide
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-10-21
+updated: 2026-11-02
 ---
 
 # uTerm development guide
@@ -24,6 +24,20 @@ see the [feature guide](features.md).
 - [Repository](#repository)
 
 ## Development
+
+### Shared core and native QA
+
+`crates/uterm-core` contains UI-independent state validation and canonical storage.
+`crates/uterm-ffi` exposes C ABI 1; manifests and lockfiles remain independent from the desktop and
+host. Run `pnpm test:core`, `pnpm contracts:generate` and `pnpm contracts:check` after DTO changes.
+Generated boundary types are committed; intermediate JSON schemas are not.
+
+On macOS 14 or newer, `bash scripts/macos-native-build.sh` builds the ad-hoc-signed QA app and
+`bash scripts/macos-native-test.sh` runs Swift bridge tests against the Rust static library.
+`bash scripts/macos-native-smoke.sh` requires a graphical login and WindowServer and records actual
+window/exit evidence. CI retains native ARM/Intel artifacts and old Tauri checks. The QA identity is
+`sh.uterm.desktop.qa.native`; never substitute the production identifier or attach its host. See
+[migration status](native-migration.md) for acceptance gaps and source-bound evidence.
 
 Agent settings can install OpenCode, Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot CLI and
 iFlow CLI after confirmation using the local Node.js/npm installation. This requires internet access

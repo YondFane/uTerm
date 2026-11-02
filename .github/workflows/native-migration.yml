@@ -18,6 +18,14 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: native-${{ matrix.os }}-${{ runner.arch }}
+          workspaces: |
+            crates/uterm-core -> target
+            crates/uterm-ffi -> target
+          cache-bin: false
       - name: Select Xcode 16.4
         run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
       - name: Record source and toolchain
@@ -31,9 +39,16 @@ jobs:
             sw_vers
             xcodebuild -version
             swift --version
+            rustc --version
+            cargo --version
           } | tee macos/.build/evidence/toolchain.txt
       - name: Build isolated native application
         run: bash scripts/macos-native-build.sh
+      - name: Shared core, FFI and Swift bridge tests
+        run: |
+          cargo test --locked --manifest-path crates/uterm-core/Cargo.toml 2>&1 | tee macos/.build/evidence/core-tests.log
+          cargo test --locked --manifest-path crates/uterm-ffi/Cargo.toml 2>&1 | tee macos/.build/evidence/ffi-tests.log
+          bash scripts/macos-native-test.sh 2>&1 | tee macos/.build/evidence/swift-tests.log
       - name: Real window and graceful exit smoke
         run: bash scripts/macos-native-smoke.sh
       - name: Archive QA application

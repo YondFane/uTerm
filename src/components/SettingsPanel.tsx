@@ -6,6 +6,7 @@ import DOMPurify from "dompurify";
 import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
+import { flushSharedState } from "../lib/shared-state";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { interfacePalette, interfaceThemes } from "../lib/interface-themes";
@@ -196,9 +197,9 @@ export function SettingsPanel({
       .then(setControl)
       .catch((reason) => setMessage(String(reason)));
   }, []);
-  function change(patch: Partial<Settings>, report = setMessage) {
+  async function change(patch: Partial<Settings>, report = setMessage) {
     try {
-      save({ ...settings, ...patch }, mac);
+      await save({ ...settings, ...patch }, mac);
       report("");
     } catch (reason) {
       report(String(reason));
@@ -355,9 +356,26 @@ export function SettingsPanel({
               </div>
               <footer>
                 <button
-                  onClick={() => {
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
                     try {
-                      reset();
+                      await flushSharedState();
+                      if (await invoke<boolean>("shared_core_export"))
+                        setMessage(tx("旧版兼容数据已导出。"));
+                    } catch (reason) {
+                      setMessage(String(reason));
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  {tx("导出旧版兼容数据")}
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await reset();
                       setMessage(tx("已恢复默认设置。原设置已备份。"));
                     } catch (reason) {
                       setMessage(String(reason));

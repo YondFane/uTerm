@@ -16,7 +16,7 @@ export function RedisConnectionDialog({
   connection?: RedisConfig;
   ssh: SshConnection[];
   workspaceId: string;
-  save: (connection: RedisConfig, password: string) => boolean;
+  save: (connection: RedisConfig, password: string) => boolean | Promise<boolean>;
   close: () => void;
 }) {
   useUiLanguage();
@@ -119,7 +119,7 @@ export function RedisConnectionDialog({
         });
         value.credential_id = created;
       }
-      if (!save(value, remember ? "" : password)) {
+      if (!(await save(value, remember ? "" : password))) {
         if (created)
           await invoke("redis_credential", {
             config: { ...value, credential_id: created },

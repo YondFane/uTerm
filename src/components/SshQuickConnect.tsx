@@ -9,7 +9,7 @@ export function SshQuickConnect({
   connect,
   close,
 }: {
-  connect: (connection: SshConnection) => boolean;
+  connect: (connection: SshConnection) => boolean | Promise<boolean>;
   close: () => void;
 }) {
   useUiLanguage();
@@ -32,7 +32,7 @@ export function SshQuickConnect({
       }}
     >
       <form
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
           const parsed = parseQuickSsh(address);
           if (!parsed) {
@@ -41,7 +41,7 @@ export function SshQuickConnect({
             );
             return;
           }
-          if (connect({ ...parsed, id: crypto.randomUUID(), sessions: [] })) close();
+          if (await connect({ ...parsed, id: crypto.randomUUID(), sessions: [] })) close();
           else setError(tx("无法保存连接，未启动 SSH 登录。"));
         }}
       >

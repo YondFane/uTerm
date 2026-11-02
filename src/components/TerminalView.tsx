@@ -127,9 +127,9 @@ export function TerminalView({
   const sessionDirectory = session.ssh
     ? `${session.ssh.host}${session.ssh.root ? `:${displayLocalPath(session.ssh.root)}` : ""}`
     : displayDirectory(directory);
-  function adjustFontSize(delta: number) {
+  async function adjustFontSize(delta: number) {
     try {
-      resizeFont("fontSize", delta, navigator.platform.startsWith("Mac"));
+      await resizeFont("fontSize", delta, navigator.platform.startsWith("Mac"));
       setFontError("");
     } catch (reason) {
       setFontError(tx("无法保存字号：{p0}", { p0: String(reason) }));

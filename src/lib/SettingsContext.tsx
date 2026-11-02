@@ -7,22 +7,26 @@ import { defaults, readSettings, settingsKey, validateShortcuts } from "./settin
 import type { Settings } from "./settings";
 import { activeLanguage, setUiLanguage } from "./i18n";
 import { interfacePalette, isLightInterfaceTheme } from "./interface-themes";
+import { canonicalStateActive, persistSettings, sharedSettings } from "./shared-state";
 const Context = createContext<{
   settings: Settings;
   light: boolean;
   error: string;
-  save: (value: Settings, mac: boolean) => void;
+  save: (value: Settings, mac: boolean) => Promise<void>;
   resizeFont: (
     key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
     delta: number,
     mac: boolean,
-  ) => void;
-  reset: () => void;
+  ) => Promise<void>;
+  reset: () => Promise<void>;
 } | null>(null);
 export function SettingsProvider({ children }: { children: ReactNode }) {
   const [initial] = useState(() => {
     try {
-      return { settings: readSettings(localStorage.getItem(settingsKey)), error: "" };
+      return {
+        settings: sharedSettings() ?? readSettings(localStorage.getItem(settingsKey)),
+        error: "",
+      };
     } catch (reason) {
       return { settings: defaults, error: String(reason) };
     }
@@ -80,30 +84,54 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         .then(() => setAppearanceError(""))
         .catch((reason) => setAppearanceError(tx("背景效果未应用：{p0}", { p0: String(reason) })));
   }, [settings.blur]);
-  function save(value: Settings, mac: boolean) {
+  async function save(value: Settings, mac: boolean) {
     if (error) throw new Error(error);
     const checked = readSettings(JSON.stringify(value));
     validateShortcuts(checked, mac);
-    localStorage.setItem(settingsKey, JSON.stringify(checked));
-    currentSettings.current = checked;
-    setSettings(checked);
+    const previous = currentSettings.current;
+    const patch = Object.fromEntries(
+      Object.entries(checked).filter(
+        ([key, value]) => JSON.stringify(value) !== JSON.stringify(previous[key as keyof Settings]),
+      ),
+    );
+    const saved = canonicalStateActive()
+      ? await persistSettings((current) => {
+          const next = readSettings(JSON.stringify({ ...current, ...patch }));
+          validateShortcuts(next, mac);
+          return next;
+        })
+      : checked;
+    if (!canonicalStateActive()) localStorage.setItem(settingsKey, JSON.stringify(saved));
+    currentSettings.current = saved;
+    setSettings(saved);
   }
-  function reset() {
-    const old = localStorage.getItem(settingsKey);
+  async function reset() {
+    const old = canonicalStateActive() ? null : localStorage.getItem(settingsKey);
     if (old) localStorage.setItem(`${settingsKey}.backup`, old);
-    localStorage.setItem(settingsKey, JSON.stringify(defaults));
+    if (canonicalStateActive()) await persistSettings(() => ({ ...defaults, shortcuts: {} }));
+    else localStorage.setItem(settingsKey, JSON.stringify(defaults));
     const checked = { ...defaults, shortcuts: {} };
     currentSettings.current = checked;
     setSettings(checked);
     setError("");
   }
-  function resizeFont(
+  async function resizeFont(
     key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
     delta: number,
     mac: boolean,
   ) {
+    if (canonicalStateActive()) {
+      const saved = await persistSettings((current) => {
+        const next = { ...current, [key]: Math.max(10, Math.min(32, current[key] + delta)) };
+        validateShortcuts(next, mac);
+        return next;
+      });
+      currentSettings.current = saved;
+      setSettings(saved);
+      return;
+    }
     const current = currentSettings.current;
-    save({ ...current, [key]: Math.max(10, Math.min(32, current[key] + delta)) }, mac);
+    await save({ ...current, [key]: Math.max(10, Math.min(32, current[key] + delta)) }, mac);
   }
   return (
     <Context.Provider

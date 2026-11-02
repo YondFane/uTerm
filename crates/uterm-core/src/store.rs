@@ -1,0 +1,319 @@
+use crate::{state, CoreError, Result, MAX_REQUEST_BYTES};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::{
+    collections::BTreeMap,
+    fs::{self, File, OpenOptions},
+    io::Write,
+    path::{Path, PathBuf},
+};
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Document {
+    pub schema_version: u32,
+    pub migration_id: String,
+    pub workspace: Value,
+    pub settings: Value,
+    pub legacy: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Snapshot {
+    pub revision: String,
+    pub document: Document,
+}
+
+#[derive(Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Import {
+    pub workspace: Value,
+    pub settings: Value,
+    pub legacy: BTreeMap<String, String>,
+}
+
+pub struct Store {
+    root: PathBuf,
+}
+fn hash(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+impl Store {
+    pub fn open(root: PathBuf) -> Result<Self> {
+        fs::create_dir_all(&root)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&root, fs::Permissions::from_mode(0o700))?;
+        }
+        Ok(Self {
+            root: root.canonicalize()?,
+        })
+    }
+    fn lock(&self) -> Result<File> {
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(self.root.join("writer.lock"))?;
+        file.try_lock().map_err(|_| {
+            CoreError::new("WRITER_BUSY", "Another writer owns the canonical store")
+        })?;
+        Ok(file)
+    }
+    fn path(&self) -> PathBuf {
+        self.root.join("snapshot-v1.json")
+    }
+    fn load(&self) -> Result<Snapshot> {
+        let path = self.path();
+        let metadata = fs::symlink_metadata(&path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                CoreError::new("NOT_IMPORTED", "No canonical snapshot has been imported")
+            } else {
+                e.into()
+            }
+        })?;
+        if metadata.file_type().is_symlink()
+            || !metadata.is_file()
+            || metadata.len() > MAX_REQUEST_BYTES as u64
+        {
+            return Err(CoreError::new(
+                "CORRUPT_STORE",
+                "Canonical snapshot has an invalid file type or size; the original was retained",
+            ));
+        }
+        let bytes = fs::read(path)?;
+        let document: Document = serde_json::from_slice(&bytes).map_err(|e| {
+            CoreError::new(
+                "CORRUPT_STORE",
+                format!("Snapshot retained for recovery: {e}"),
+            )
+        })?;
+        if document.schema_version != 1 {
+            return Err(CoreError::new(
+                "UNSUPPORTED_SCHEMA",
+                "Canonical schema is not supported",
+            ));
+        }
+        state::validate_workspace(&document.workspace)?;
+        state::validate_settings(&document.settings)?;
+        Ok(Snapshot {
+            revision: hash(&bytes),
+            document,
+        })
+    }
+    pub fn read(&self) -> Result<Snapshot> {
+        let _lock = self.lock()?;
+        self.load()
+    }
+    pub fn recovery_list(&self) -> Result<Value> {
+        let _lock = self.lock()?;
+        let current = bounded_read(&self.path()).map(|bytes| hash(&bytes)).ok();
+        let mut backups = Vec::new();
+        for entry in fs::read_dir(&self.root)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            let Some(revision) = name
+                .strip_prefix("snapshot-")
+                .and_then(|n| n.strip_suffix(".backup"))
+            else {
+                continue;
+            };
+            if valid_revision(revision)
+                && bounded_read(&entry.path())
+                    .and_then(|bytes| decode(&bytes))
+                    .is_ok()
+            {
+                backups.push(revision.to_string());
+            }
+        }
+        backups.sort();
+        Ok(serde_json::json!({"currentRevision":current,"backups":backups}))
+    }
+    pub fn recover(&self, expected: &str, revision: &str) -> Result<Snapshot> {
+        let _lock = self.lock()?;
+        if !valid_revision(revision) {
+            return Err(CoreError::new(
+                "INVALID_ARGUMENT",
+                "Unknown recovery snapshot",
+            ));
+        }
+        let current = bounded_read(&self.path())?;
+        if hash(&current) != expected {
+            return Err(CoreError::new(
+                "CONFLICT",
+                "Snapshot changed during recovery",
+            ));
+        }
+        let bytes = bounded_read(&self.root.join(format!("snapshot-{revision}.backup")))?;
+        if hash(&bytes) != revision {
+            return Err(CoreError::new("CORRUPT_STORE", "Backup checksum differs"));
+        }
+        let document = decode(&bytes)?;
+        let damaged = self
+            .root
+            .join(format!("snapshot-{}.damaged", hash(&current)));
+        if !damaged.exists() {
+            write_new(&damaged, &current)?;
+        }
+        self.persist(&document)?;
+        self.load()
+    }
+    pub fn import(&self, input: Import) -> Result<Snapshot> {
+        let _lock = self.lock()?;
+        let source = serde_json::to_vec(&input.legacy)?;
+        if source.len() > MAX_REQUEST_BYTES {
+            return Err(CoreError::new(
+                "REQUEST_TOO_LARGE",
+                "Legacy export exceeds the bounded import limit; source is unchanged",
+            ));
+        }
+        let migration_id = hash(&source);
+        if self.path().exists() {
+            let current = self.load()?;
+            if current.document.migration_id == migration_id {
+                return Ok(current);
+            }
+            return Err(CoreError::new(
+                "MIGRATION_CONFLICT",
+                "Canonical state already exists; a new legacy export cannot overwrite it",
+            ));
+        }
+        state::validate_workspace(&input.workspace)?;
+        state::validate_settings(&input.settings)?;
+        let document = Document {
+            schema_version: 1,
+            migration_id,
+            workspace: input.workspace,
+            settings: input.settings,
+            legacy: input.legacy,
+        };
+        let backup = self.root.join("legacy-original.json");
+        if backup.exists() {
+            if fs::read(&backup)? != source {
+                return Err(CoreError::new(
+                    "MIGRATION_CONFLICT",
+                    "A different interrupted migration backup exists",
+                ));
+            }
+        } else {
+            write_new(&backup, &source)?;
+        }
+        self.persist(&document)?;
+        self.load()
+    }
+    pub fn update(
+        &self,
+        expected: &str,
+        change: impl FnOnce(&mut Document) -> Result<()>,
+    ) -> Result<Snapshot> {
+        let _lock = self.lock()?;
+        let mut snapshot = self.load()?;
+        if snapshot.revision != expected {
+            return Err(CoreError::new(
+                "CONFLICT",
+                "Snapshot changed; retain the draft and reload explicitly",
+            ));
+        }
+        change(&mut snapshot.document)?;
+        state::validate_workspace(&snapshot.document.workspace)?;
+        state::validate_settings(&snapshot.document.settings)?;
+        if snapshot.document == self.load()?.document {
+            return Ok(snapshot);
+        }
+        let recovery = self
+            .root
+            .join(format!("snapshot-{}.backup", snapshot.revision));
+        if !recovery.exists() {
+            write_new(&recovery, &fs::read(self.path())?)?;
+        }
+        let mut backups = Vec::new();
+        for entry in fs::read_dir(&self.root)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else {
+                continue;
+            };
+            if name
+                .strip_prefix("snapshot-")
+                .and_then(|n| n.strip_suffix(".backup"))
+                .is_some_and(valid_revision)
+                && entry.file_type()?.is_file()
+                && entry.path() != recovery
+            {
+                backups.push((entry.metadata()?.modified()?, entry.path()));
+            }
+        }
+        backups.sort_by(|a, b| b.0.cmp(&a.0));
+        for (_, path) in backups.into_iter().skip(7) {
+            fs::remove_file(path)?;
+        }
+        self.persist(&snapshot.document)?;
+        self.load()
+    }
+    fn persist(&self, document: &Document) -> Result<()> {
+        let bytes = serde_json::to_vec_pretty(document)?;
+        if bytes.len() > MAX_REQUEST_BYTES {
+            return Err(CoreError::new(
+                "REQUEST_TOO_LARGE",
+                "Canonical snapshot exceeds the bounded storage limit",
+            ));
+        }
+        let mut temporary = tempfile::NamedTempFile::new_in(&self.root)?;
+        temporary.write_all(&bytes)?;
+        temporary.as_file().sync_all()?;
+        temporary
+            .persist(self.path())
+            .map_err(|e| CoreError::from(e.error))?;
+        #[cfg(unix)]
+        File::open(&self.root)?.sync_all()?;
+        Ok(())
+    }
+}
+fn valid_revision(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|c| c.is_ascii_hexdigit())
+}
+fn bounded_read(path: &Path) -> Result<Vec<u8>> {
+    let metadata = fs::symlink_metadata(path)?;
+    if !metadata.is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() > MAX_REQUEST_BYTES as u64
+    {
+        return Err(CoreError::new(
+            "CORRUPT_STORE",
+            "Invalid recovery file; retained unchanged",
+        ));
+    }
+    Ok(fs::read(path)?)
+}
+fn decode(bytes: &[u8]) -> Result<Document> {
+    let document: Document = serde_json::from_slice(bytes)
+        .map_err(|e| CoreError::new("CORRUPT_STORE", e.to_string()))?;
+    if document.schema_version != 1 {
+        return Err(CoreError::new(
+            "UNSUPPORTED_SCHEMA",
+            "Canonical schema is not supported",
+        ));
+    }
+    state::validate_workspace(&document.workspace)?;
+    state::validate_settings(&document.settings)?;
+    Ok(document)
+}
+fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    Ok(())
+}

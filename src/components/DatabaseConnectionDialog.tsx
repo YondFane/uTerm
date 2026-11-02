@@ -27,7 +27,7 @@ export function DatabaseConnectionDialog({
   connection?: DatabaseConfig;
   ssh: SshConnection[];
   workspaceId: string;
-  save: (config: DatabaseConfig, password: string) => boolean;
+  save: (config: DatabaseConfig, password: string) => boolean | Promise<boolean>;
   close: () => void;
   report: (message: string) => void;
 }) {
@@ -140,7 +140,7 @@ export function DatabaseConnectionDialog({
         if (reference !== connection?.credential_id) created = reference;
         next = { ...next, credential_id: reference };
       } else next = { ...next, credential_id: null };
-      saved = save(next, remember ? "" : password);
+      saved = await save(next, remember ? "" : password);
       if (!saved) throw new Error("DB_STORAGE");
       if (connection?.credential_id && connection.credential_id !== next.credential_id)
         await invoke("database_credential", { config: connection, password: null, remove: true });

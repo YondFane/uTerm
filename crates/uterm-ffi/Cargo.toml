@@ -1,0 +1,18 @@
+[package]
+name = "uterm-ffi"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "PolyForm-Noncommercial-1.0.0"
+
+[workspace]
+
+[lib]
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[dependencies]
+uterm-core = { path = "../uterm-core" }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"

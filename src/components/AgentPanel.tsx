@@ -223,7 +223,7 @@ export function AgentSettings({
                   onChange={(event) => {
                     const enabled = event.target.checked;
                     void perform(async () => {
-                      saveSettings(
+                      await saveSettings(
                         {
                           ...settings,
                           enabledAgents: enabled

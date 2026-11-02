@@ -206,9 +206,9 @@ export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocume
   const { settings, resizeFont: adjustFontSize } = useSettings();
   const [fontError, setFontError] = useState("");
 
-  function resizeFont(delta: number) {
+  async function resizeFont(delta: number) {
     try {
-      adjustFontSize("fileFontSize", delta, navigator.platform.startsWith("Mac"));
+      await adjustFontSize("fileFontSize", delta, navigator.platform.startsWith("Mac"));
       setFontError("");
     } catch (reason) {
       setFontError(tx("无法保存字号：{p0}", { p0: String(reason) }));

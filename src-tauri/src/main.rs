@@ -18,6 +18,7 @@ mod python;
 mod redis;
 mod redis_credentials;
 mod sessions;
+mod shared_core;
 mod ssh;
 mod ssh_auth;
 mod ssh_tunnels;
@@ -295,6 +296,7 @@ fn main() {
         }))
         .plugin(tauri_plugin_deep_link::init())
         .manage(updates::Updates::default())
+        .manage(shared_core::Lifecycle::default())
         .manage(taskbar::Taskbar::default())
         .setup(|app| {
             use tauri_plugin_deep_link::DeepLinkExt;
@@ -391,6 +393,10 @@ fn main() {
         .manage(database_components::Components::default())
         .manage(java_components::Components::default())
         .invoke_handler(tauri::generate_handler![
+            shared_core::shared_core_request,
+            shared_core::shared_core_ready,
+            shared_core::shared_core_exit,
+            shared_core::shared_core_export,
             sessions::project_run_summary,
             sessions::project_run_list,
             python::python_configuration,
@@ -523,6 +529,19 @@ fn main() {
                             eprintln!("Hide window: {error}");
                         }
                     }
+                }
+                tauri::RunEvent::ExitRequested { api, .. }
+                    if handle
+                        .state::<shared_core::Lifecycle>()
+                        .active
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                        && !handle
+                            .state::<shared_core::Lifecycle>()
+                            .permit_exit
+                            .swap(false, std::sync::atomic::Ordering::SeqCst) =>
+                {
+                    api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-request", ());
                 }
                 tauri::RunEvent::ExitRequested { api, .. }
                     if handle.state::<ssh::SshFiles>().busy() =>

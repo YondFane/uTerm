@@ -2,7 +2,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 test "$(uname -s)" = Darwin
-swift build --package-path macos --configuration debug
+cargo build --locked --manifest-path crates/uterm-ffi/Cargo.toml
+native_rust_target="${CARGO_TARGET_DIR:-$PWD/crates/uterm-ffi/target}"
+swift build --package-path macos --configuration debug -Xlinker "$native_rust_target/debug/libuterm_ffi.a" -Xlinker -framework -Xlinker Security -Xlinker -framework -Xlinker SystemConfiguration
 native_bin=$(swift build --package-path macos --configuration debug --show-bin-path)
 native_app="$PWD/macos/.build/qa/UTermNativeQA.app"
 mkdir -p "$native_app/Contents/MacOS"

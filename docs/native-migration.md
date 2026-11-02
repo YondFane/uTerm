@@ -107,14 +107,14 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态                      | Evidence and next work / 证据与下一步                              |
-| ------------ | --------------------------------------------- | ------------------------------------------------------------------ |
-| M0           | Implemented; macOS CI pending / 已实现，待 CI | Inventory, real QA window and smoke scripts; retain old Tauri jobs |
-| M1           | Pending / 待实现                              | Shared rules, canonical storage, FFI and generated contracts       |
-| M2           | Pending / 待实现                              | Real host/terminal/native shell; SwiftTerm compatibility gate      |
-| M3           | Pending / 待实现                              | Files, Git, SSH and task workflows, one at a time                  |
-| M4           | Pending / 待实现                              | Remaining capabilities, native interaction and measurements        |
-| M5           | Pending / 待实现                              | Candidate packaging, signed update and rollback exercises          |
+| Stage / 阶段 | Current state / 当前状态                                                          | Evidence and next work / 证据与下一步                                                     |
+| ------------ | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| M0           | CI verified / CI 已验证                                                           | Both native architectures and legacy Tauri jobs passed                                    |
+| M1           | Implemented data path; platform verification pending / 数据通路已实现，待平台验证 | Shared validation, canonical storage, FFI, generated contracts and legacy client adoption |
+| M2           | Pending / 待实现                                                                  | Real host/terminal/native shell; SwiftTerm compatibility gate                             |
+| M3           | Pending / 待实现                                                                  | Files, Git, SSH and task workflows, one at a time                                         |
+| M4           | Pending / 待实现                                                                  | Remaining capabilities, native interaction and measurements                               |
+| M5           | Pending / 待实现                                                                  | Candidate packaging, signed update and rollback exercises                                 |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
@@ -128,7 +128,65 @@ acceptance.
 head 与实际测试合并 SHA，并保存工具链、启动结果和 QA
 App。原生交互及性能仍未测量，图形启动冒烟不等同人工验收。
 
+### M0 evidence / M0 证据
+
+Commit `3b362bd163d9bb5cec4336523f204b304b7df967` passed native workflow
+[41389663733](https://github.com/YondFane/uTerm/actions/runs/41389663733) on ARM and Intel. Both
+opened a visible window with one screen and exited with code 0. The tested merge SHA was
+`7249babf2eb79bfca7bea7ed6a85190b1b3e2938`. Xcode 16.4/Swift 6.1.2 ran on macOS 15.8.2 ARM and
+15.7.9 Intel. Legacy Tauri workflow
+[41389663452](https://github.com/YondFane/uTerm/actions/runs/41389663452) passed macOS and Windows.
+
+上述提交的两种原生架构均完成真实窗口启动并正常退出；旧 Tauri 的 macOS／Windows 检查也通过。源码 SHA、测试合并 SHA 与工具链分别记录；不代表人工交互或性能验收。
+
+### M1 data and ABI / M1 数据与 ABI
+
+The Tauri bootstrap imports normalized legacy workspace/settings and opaque raw auxiliary keys. Rust
+owns schema 1, SHA-256 revisions, an exclusive writer lease, atomic replacement, the immutable
+original export and eight prior snapshots. Re-import returns existing newer data for the same source
+token; a different source fails. Corrupt data is never silently replaced. Recovery verifies the
+current digest and backup digest and preserves damaged bytes. Writes complete before UI publication;
+quit waits for the save queue. A stale writer must explicitly reload, retaining its draft.
+
+Tauri 启动时导出规范化旧数据和原始辅助键，Rust 管理 schema、revision、单写者、原子写入及备份。重复迁移不会覆盖后续修改，损坏数据不会自动重置。恢复前核对当前及备份摘要并保留损坏字节；保存完成后才发布界面状态，退出等待队列。冲突需明确重载，草稿保留。
+
+C ABI 1 uses borrowed input spans, owned async copies and allocation IDs for idempotent buffer
+release. Worker replies and local snapshot invalidations retain operation IDs. Subscription
+callbacks borrow bytes only for their invocation; synchronous events run on the calling thread.
+Close drains operations and callbacks. Do not synchronously call, subscribe or close from a
+callback; enqueue after return. Cancellation skips work not started and suppresses pending delivery;
+it does not roll back a committed write or interrupt a callback already executing. Events are local
+to the handle; external writers are detected by revision checks. Consumers reload the current
+snapshot on invalidation instead of ordering hash strings. Terminal transport is not routed through
+JSON FFI.
+
+C
+ABI 明确输入、异步副本、分配 ID 和回调生命周期，关闭等待操作与回调结束。回调内不能同步重入，应排队执行。取消不撤销已提交写入，也不打断正在执行的回调。事件仅作用于当前句柄，其他写者通过 revision 检测；收到失效事件后读取当前快照，不按哈希字符串排序。终端字节不通过 JSON
+FFI。
+
+Rust DTOs generate checked-in TS/Swift types with `pnpm contracts:generate`; CI runs
+`pnpm contracts:check`. `pnpm test:core` exercises storage and C ABI. `tests/core-contract.test.mjs`
+executes a real Rust process and compares legacy defaults, settings boundaries and selection/project
+transitions. `scripts/macos-native-test.sh` links the Rust static library and exercises Swift calls,
+events, stale writes and reopening. Linux has no Swift compiler; macOS results remain pending for
+this stage. Many existing session/layout reducers still live in TS; removal requires corresponding
+shared operations and dual-client acceptance. Auxiliary drafts remain on their original path until
+M3.
+
+类型由 Rust
+DTO 生成并检查漂移；兼容测试运行真实 Rust 进程。Swift 测试覆盖调用、事件、过期写入及重开，但本阶段 macOS 结果尚待 CI。会话／布局的既有 TS
+reducer 尚未全部替代，必须补齐共享操作和双端验收后删除；辅助草稿在 M3 前继续使用原路径。
+
 ## Development commands / 开发命令
+
+Linux M1 checks passed: ten storage tests, four C ABI tests, three real-process
+compatibility/adapter tests, 345 existing frontend checks (ten skipped), 150 backend tests (ten
+ignored), host tests, TypeScript, production and Linux desktop builds, formatting, translation
+coverage and documentation checks. The full frontend run predates the third adapter test; that test
+ran separately against the same application code. macOS bridge/UI validation and Windows runtime
+evidence remain pending.
+
+Linux 的上述检查使用临时目录和测试数据，没有接管真实会话。完整前端检查之后新增的第三项适配测试单独通过，应用代码一致。本阶段 macOS 桥接／界面与 Windows 运行证据仍待 CI／验收。
 
 On a Mac with Xcode 16.4 selected, run `bash scripts/macos-native-build.sh`, then
 `bash scripts/macos-native-smoke.sh` from the repository. The latter requires an actual logged-in

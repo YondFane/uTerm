@@ -1,4 +1,11 @@
 import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
+import {
+  canonicalStateActive,
+  flushSharedState,
+  initializeSharedState,
+  persistWorkspace,
+  sharedWorkspace,
+} from "./lib/shared-state";
 import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
 import { DatabaseComponents } from "./components/DatabaseComponents";
 import {
@@ -487,7 +494,7 @@ export function App() {
   useEffect(() => {
     let disposed = false;
     let stop: (() => void) | undefined;
-    void listen("database-close-request", () => {
+    void listen("database-close-request", async () => {
       const id = Object.entries(databaseSnapshot()).find(
         ([, status]) => status.dirty || status.busy,
       )?.[0];
@@ -495,7 +502,7 @@ export function App() {
         group.databaseConnections?.some((connection) => connection.id === id),
       );
       if (owner && id) {
-        update((previous) => ({
+        await update((previous) => ({
           ...switchWorkspace(previous, owner.id),
           selectedProject: null,
           selectedSession: null,
@@ -683,8 +690,9 @@ export function App() {
   async function load(cancelled: () => boolean = () => false) {
     setError("");
     try {
-      const serialized = localStorage.getItem(workspaceKey);
-      const saved = readWorkspace(serialized);
+      if (canonicalStateActive()) await initializeSharedState();
+      const serialized = canonicalStateActive() ? null : localStorage.getItem(workspaceKey);
+      const saved = sharedWorkspace() ?? readWorkspace(serialized);
       const savedVersion = serialized ? JSON.parse(serialized).version : 7;
       if (
         serialized &&
@@ -724,11 +732,11 @@ export function App() {
     };
   }, []);
 
-  function update(change: (workspace: Workspace) => Workspace) {
+  async function update(change: (workspace: Workspace) => Workspace, committed?: () => void) {
     const previous = currentWorkspace.current;
     if (!previous) return false;
     try {
-      const next = change(previous);
+      const next = canonicalStateActive() ? await persistWorkspace(change) : change(previous);
       if (
         next.selectedWorkspace !== previous.selectedWorkspace ||
         next.selectedProject !== previous.selectedProject ||
@@ -737,10 +745,12 @@ export function App() {
         setSelectedRedisId(null);
         setSelectedDatabaseId(null);
       }
-      // Synchronous persistence prevents an older asynchronous save from winning.
-      localStorage.setItem(workspaceKey, JSON.stringify(next));
+      // Canonical writes are serialized before publishing; browser fixtures keep their local store.
+      // 规范存储串行写入后再发布；浏览器样例继续使用本地存储。
+      if (!canonicalStateActive()) localStorage.setItem(workspaceKey, JSON.stringify(next));
       currentWorkspace.current = next;
       setWorkspace(next);
+      committed?.();
       setError("");
       return true;
     } catch (reason) {
@@ -748,6 +758,30 @@ export function App() {
       return false;
     }
   }
+
+  useEffect(() => {
+    if (!canonicalStateActive()) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen("shared-state-exit-request", () => {
+      void flushSharedState()
+        .then(() => invoke("shared_core_exit"))
+        .catch((reason) => setError(String(reason)));
+    })
+      .then(async (stop) => {
+        if (disposed) {
+          stop();
+          return;
+        }
+        unlisten = stop;
+        await invoke("shared_core_ready");
+      })
+      .catch((reason) => setError(String(reason)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!runtime || !workspace) return;
@@ -767,7 +801,7 @@ export function App() {
             reconcileLocalSessionSnapshot(current, snapshot),
             sshSnapshot,
           );
-          if (next !== current) update(() => next);
+          if (next !== current) await update(() => next);
         }
       } catch (reason) {
         if (!cancelled) setSessionSyncError(sessionSyncErrorMessage(reason));
@@ -806,7 +840,7 @@ export function App() {
   }
 
   function revealTaskbarSession(id: string) {
-    const reveal = () => {
+    const reveal = async () => {
       setGitDiffActive(false);
       const state = currentWorkspace.current;
       const target = state
@@ -818,7 +852,7 @@ export function App() {
         setError(tx("找不到此会话；它可能已被关闭。"));
         return;
       }
-      update((previous) => selectSession(switchWorkspace(previous, target.workspaceId), id));
+      await update((previous) => selectSession(switchWorkspace(previous, target.workspaceId), id));
       setFocusRequest((value) => value + 1);
       acknowledgeCompletedSession(id);
     };
@@ -890,9 +924,9 @@ export function App() {
       invoke<{ path: string; branch: string; missing: boolean }[]>("project_worktrees", {
         directory: project.directory,
       })
-        .then((discovered) => {
+        .then(async (discovered) => {
           if (!cancelled)
-            update((previous) => reconcileWorktrees(previous, project.id, discovered));
+            await update((previous) => reconcileWorktrees(previous, project.id, discovered));
         })
         .catch((reason) => {
           console.warn(`Worktree discovery for ${project.directory}:`, reason);
@@ -941,7 +975,7 @@ export function App() {
       const resolvedDirectories: string[] = [];
       for (const path of projectDirectoriesToAdd.length ? projectDirectoriesToAdd : [directory])
         resolvedDirectories.push(await invoke<string>("project_directory", { directory: path }));
-      update((previous) => {
+      await update((previous) => {
         if (!previous.groups?.some((group) => group.id === targetWorkspace)) return previous;
         const projects = [...previous.projects];
         let selectedProject = previous.selectedProject;
@@ -989,7 +1023,7 @@ export function App() {
         "create_worktree",
         { directory: project.directory },
       );
-      update((previous) => reconcileWorktrees(previous, project.id, discovered));
+      await update((previous) => reconcileWorktrees(previous, project.id, discovered));
     } catch (reason) {
       setError(tx("无法创建 Worktree：{p0}", { p0: String(reason) }));
     } finally {
@@ -1011,16 +1045,16 @@ export function App() {
         "delete_worktree",
         { directory: project.directory, path: worktree.path },
       );
-      update((previous) => reconcileWorktrees(previous, project.id, discovered));
+      await update((previous) => reconcileWorktrees(previous, project.id, discovered));
     } catch (reason) {
       setError(tx("无法删除 Worktree：{p0}", { p0: String(reason) }));
     }
   }
   function addLoose(kind: "terminals" | "chats", agent?: SessionConfig["agent"]) {
     if (!runtime || (kind === "chats" && (!agent || !enabledAgents.includes(agent)))) return;
-    const start = () => {
+    const start = async () => {
       setZoomedGroup(null);
-      update((previous) => {
+      await update((previous) => {
         const roster = sessionRosters(previous).find(
           (item) => item.workspaceId === previous.selectedWorkspace && item.kind === kind,
         );
@@ -1055,9 +1089,9 @@ export function App() {
     axis?: SplitAxis,
     target?: { project: string; worktree?: string; agent?: SessionConfig["agent"] },
   ) {
-    const start = () => {
+    const start = async () => {
       setZoomedGroup(null);
-      update((state) => {
+      await update((state) => {
         const previous = target ? selectProject(state, target.project, target.worktree) : state;
         const roster = selectedRoster(previous);
         if (!roster) return previous;
@@ -1119,10 +1153,10 @@ export function App() {
     else start();
   }
 
-  function saveName() {
+  async function saveName() {
     if (!editing || !editing.name.trim()) return;
     const name = editing.name.trim();
-    update((previous) => {
+    await update((previous) => {
       if (editing.kind === "new") {
         const id = crypto.randomUUID();
         return switchWorkspace(
@@ -1219,10 +1253,10 @@ export function App() {
           )
         )
           if (
-            !update((previous) => ({
+            !(await update((previous) => ({
               ...switchWorkspace(previous, previousSelection.selectedWorkspace ?? "local"),
               ...previousSelection,
-            }))
+            })))
           )
             return;
         setError(tx("无法切换运行项目，请先完成当前操作或处理配置保存错误。"));
@@ -1357,30 +1391,32 @@ export function App() {
     };
   }, [!!runtime]);
   useEffect(() => {
-    const removable =
-      workspace?.groups?.flatMap((group) =>
-        (group.sshConnections ?? []).filter(
-          (connection) =>
-            connection.temporary &&
-            !sshInUse(connection) &&
-            !group.redisConnections?.some(
-              (item) => item.ssh_target?.connection_id === connection.id,
-            ) &&
-            !group.databaseConnections?.some(
-              (item) => item.ssh_target?.connection_id === connection.id,
-            ),
-        ),
-      ) ?? [];
-    if (!removable.length) return;
-    const ids = new Set(removable.map((item) => item.id));
-    const removed = update((previous) => ({
-      ...previous,
-      groups: previous.groups?.map((group) => ({
-        ...group,
-        sshConnections: group.sshConnections?.filter((connection) => !ids.has(connection.id)),
-      })),
-    }));
-    if (removed && selectedSshId && ids.has(selectedSshId)) setSelectedSshId(null);
+    void (async () => {
+      const removable =
+        workspace?.groups?.flatMap((group) =>
+          (group.sshConnections ?? []).filter(
+            (connection) =>
+              connection.temporary &&
+              !sshInUse(connection) &&
+              !group.redisConnections?.some(
+                (item) => item.ssh_target?.connection_id === connection.id,
+              ) &&
+              !group.databaseConnections?.some(
+                (item) => item.ssh_target?.connection_id === connection.id,
+              ),
+          ),
+        ) ?? [];
+      if (!removable.length) return;
+      const ids = new Set(removable.map((item) => item.id));
+      const removed = await update((previous) => ({
+        ...previous,
+        groups: previous.groups?.map((group) => ({
+          ...group,
+          sshConnections: group.sshConnections?.filter((connection) => !ids.has(connection.id)),
+        })),
+      }));
+      if (removed && selectedSshId && ids.has(selectedSshId)) setSelectedSshId(null);
+    })();
   }, [
     workspace,
     remoteFileStates,
@@ -1391,11 +1427,11 @@ export function App() {
     redisStatuses,
   ]);
   function newSshTerminal(connection: SshConnection) {
-    const start = () => {
+    const start = async () => {
       const id = crypto.randomUUID();
       setSshLaunches((previous) => new Set(previous).add(id));
       setSelectedSshId(connection.id);
-      update((previous) =>
+      await update((previous) =>
         selectSession(
           updateRoster(previous, `ssh:${connection.id}`, (roster) => ({
             ...roster,
@@ -1440,8 +1476,8 @@ export function App() {
         group.redisConnections?.some((connection) => connection.id === event.payload),
       );
       if (view && group) {
-        const reveal = () => {
-          update((previous) => ({
+        const reveal = async () => {
+          await update((previous) => ({
             ...switchWorkspace(previous, group.id),
             selectedProject: null,
             selectedSession: null,
@@ -1588,7 +1624,7 @@ export function App() {
     if (id === "chat") return !!chatAgent;
     return true;
   }
-  function runCommand(id: CommandId) {
+  async function runCommand(id: CommandId) {
     if (!commandAvailable(id)) return;
     if (javaPanelHasFocus()) {
       if (id === "close") {
@@ -1608,8 +1644,8 @@ export function App() {
       }
     }
     if (id === "nextWorkspace" || id === "previousWorkspace") {
-      const change = () => {
-        if (update((previous) => cycleWorkspace(previous, id === "nextWorkspace" ? 1 : -1)))
+      const change = async () => {
+        if (await update((previous) => cycleWorkspace(previous, id === "nextWorkspace" ? 1 : -1)))
           setFocusRequest((value) => value + 1);
       };
       if (editor.document) void editor.hide(change);
@@ -1630,7 +1666,7 @@ export function App() {
       const key = contentFontKey();
       if (key) {
         try {
-          resizeFont(key, id === "fontIncrease" ? 1 : -1, runtime?.platform === "macos");
+          await resizeFont(key, id === "fontIncrease" ? 1 : -1, runtime?.platform === "macos");
         } catch (reason) {
           setError(tx("无法保存字号：{p0}", { p0: String(reason) }));
         }
@@ -1682,16 +1718,16 @@ export function App() {
       addSession(id === "splitRight" ? "horizontal" : "vertical");
     else if (id === "zoom") toggleZoom();
     else if (id === "ungroup" && workspace?.selectedSession)
-      update((previous) => ungroupSession(previous, previous.selectedSession ?? ""));
+      await update((previous) => ungroupSession(previous, previous.selectedSession ?? ""));
     else if (["left", "right", "up", "down"].includes(id) && activeGroup) {
       const neighbor = neighborPane(
         activeGroup,
         workspace?.selectedSession ?? "",
         id as PaneDirection,
       );
-      if (neighbor) update((previous) => selectSession(previous, neighbor));
+      if (neighbor) await update((previous) => selectSession(previous, neighbor));
     } else if ((id === "next" || id === "previous") && workspace) {
-      update((previous) => cycleSession(previous, id === "next" ? 1 : -1));
+      await update((previous) => cycleSession(previous, id === "next" ? 1 : -1));
     } else if (id === "terminalSearch") window.dispatchEvent(new Event("uterm-search"));
     else if (id === "close" && editor.document) void editor.close();
     else if (id === "close" && workspace) {
@@ -1701,7 +1737,7 @@ export function App() {
           item.sessions.some((session) => session.id === target),
         );
         if (targetRoster)
-          update((previous) =>
+          await update((previous) =>
             selectSession(switchWorkspace(previous, targetRoster.workspaceId), target),
           );
         setCloseRequest((previous) => ({
@@ -1794,7 +1830,7 @@ export function App() {
               item.kind === (params.agent ? "chats" : "terminals"),
           );
       if (!target) throw new Error(tx("找不到目标工作区。"));
-      update((previous) =>
+      await update((previous) =>
         selectSession(
           updateRoster(switchWorkspace(previous, target.workspaceId), target.id, (item) => ({
             ...item,
@@ -1817,7 +1853,7 @@ export function App() {
         item.sessions.some((session) => session.id === id),
       );
       if (!roster) throw new Error(tx("会话所属工作区不存在。"));
-      update((previous) => selectSession(switchWorkspace(previous, roster.workspaceId), id));
+      await update((previous) => selectSession(switchWorkspace(previous, roster.workspaceId), id));
       setFocusRequest((value) => value + 1);
       await invoke("control_focus");
     } else if (method === "sessions.send" || method === "sessions.close") {
@@ -1831,7 +1867,7 @@ export function App() {
         action: method === "sessions.send" ? "send" : "close",
         text: params.text ?? null,
       });
-      if (method === "sessions.close") update((previous) => removeSession(previous, id));
+      if (method === "sessions.close") await update((previous) => removeSession(previous, id));
     } else throw new Error(tx("未知控制操作。"));
     return { id };
   }
@@ -1893,11 +1929,11 @@ export function App() {
   const menuWorktreeHasSessions =
     !!menuWorktree &&
     menuProject?.sessions.some((session) => session.worktreeId === menuWorktree.id);
-  function editMenuItem(
+  async function editMenuItem(
     change: (item: { name: string; pinned?: boolean }) => { name: string; pinned?: boolean },
   ) {
     if (!menu) return;
-    update((previous) => {
+    await update((previous) => {
       if (menu.kind === "session")
         return updateRoster(previous, menu.project, (roster) => ({
           ...roster,
@@ -1923,9 +1959,9 @@ export function App() {
     });
     setMenu(null);
   }
-  function moveMenuItem(direction: -1 | 1) {
+  async function moveMenuItem(direction: -1 | 1) {
     if (!menu) return;
-    update((previous) => {
+    await update((previous) => {
       if (menu.kind === "session")
         return updateRoster(previous, menu.project, (roster) => {
           const worktree = roster.sessions.find((session) => session.id === menu.id)?.worktreeId;
@@ -2042,9 +2078,9 @@ export function App() {
         revealTaskbarSession(action.slice("session:".length));
       else if (action.startsWith("workspace:")) {
         const id = action.slice("workspace:".length);
-        const change = () => {
+        const change = async () => {
           if (!currentWorkspace.current?.groups?.some((group) => group.id === id)) return;
-          update((previous) => switchWorkspace(previous, id));
+          await update((previous) => switchWorkspace(previous, id));
           setFocusRequest((value) => value + 1);
         };
         if (editor.document) void editor.hide(change);
@@ -2071,10 +2107,10 @@ export function App() {
     const timer = window.setTimeout(() => setInspectorCollapseHint(false), 3000);
     return () => window.clearTimeout(timer);
   }, [inspectorCollapseHint, inspectorVisible]);
-  function swapPanes() {
+  async function swapPanes() {
     if (!commandAvailable("swapPanes")) return;
     try {
-      saveSettings(
+      await saveSettings(
         { ...settings, inspectorPosition: inspectorOnLeft ? "right" : "left" },
         runtime?.platform === "macos",
       );
@@ -2123,16 +2159,16 @@ export function App() {
     if (javaDirectory && prepareJavaClose.current && !(await prepareJavaClose.current())) return;
     if (pythonDirectory && preparePythonClose.current && !(await preparePythonClose.current()))
       return;
-    const reveal = () => {
+    const reveal = async () => {
       if (project) {
         if (
-          !update((previous) =>
+          !(await update((previous) =>
             selectProject(
               switchWorkspace(previous, project.workspaceId ?? "local"),
               project.id,
               worktree,
             ),
-          )
+          ))
         )
           return;
         setSelectedRedisId(null);
@@ -2154,16 +2190,16 @@ export function App() {
     if (pythonDirectory && preparePythonClose.current && !(await preparePythonClose.current()))
       return;
     if (javaDirectory && prepareJavaClose.current && !(await prepareJavaClose.current())) return;
-    const reveal = () => {
+    const reveal = async () => {
       if (project) {
         if (
-          !update((previous) =>
+          !(await update((previous) =>
             selectProject(
               switchWorkspace(previous, project.workspaceId ?? "local"),
               project.id,
               worktree,
             ),
-          )
+          ))
         )
           return;
         setSelectedRedisId(null);
@@ -2202,18 +2238,24 @@ export function App() {
     });
   }
   function selectDatabaseConnection(connection: DatabaseConfig) {
-    revealWithEditorGuard(() => {
-      update((previous) => ({
-        ...previous,
-        selectedProject: null,
-        selectedSession: null,
-        selectedWorktree: null,
-      }));
-      setSelectedRedisId(null);
-      setSelectedSshId(null);
-      setSelectedDatabaseId(connection.id);
-      setDatabaseViews((previous) =>
-        previous.some((item) => item.id === connection.id) ? previous : [...previous, connection],
+    revealWithEditorGuard(async () => {
+      await update(
+        (previous) => ({
+          ...previous,
+          selectedProject: null,
+          selectedSession: null,
+          selectedWorktree: null,
+        }),
+        () => {
+          setSelectedRedisId(null);
+          setSelectedSshId(null);
+          setSelectedDatabaseId(connection.id);
+          setDatabaseViews((previous) =>
+            previous.some((item) => item.id === connection.id)
+              ? previous
+              : [...previous, connection],
+          );
+        },
       );
     });
   }
@@ -2222,26 +2264,32 @@ export function App() {
       group.redisConnections?.some((item) => item.id === connection.id),
     );
     if (owner) connection = resolveRedisSsh(connection, owner.sshConnections ?? [], owner.id);
-    revealWithEditorGuard(() => {
-      update((previous) => ({
-        ...previous,
-        selectedProject: null,
-        selectedSession: null,
-        selectedWorktree: null,
-      }));
-      setSelectedSshId(null);
-      setGitOpen(false);
-      setGithubOpen(false);
-      setDirectoryOpen(false);
-      setSelectedDatabaseId(null);
-      setSelectedRedisId(connection.id);
-      setRedisViews((previous) =>
-        previous.some((item) => item.id === connection.id) ? previous : [...previous, connection],
+    revealWithEditorGuard(async () => {
+      await update(
+        (previous) => ({
+          ...previous,
+          selectedProject: null,
+          selectedSession: null,
+          selectedWorktree: null,
+        }),
+        () => {
+          setSelectedSshId(null);
+          setGitOpen(false);
+          setGithubOpen(false);
+          setDirectoryOpen(false);
+          setSelectedDatabaseId(null);
+          setSelectedRedisId(connection.id);
+          setRedisViews((previous) =>
+            previous.some((item) => item.id === connection.id)
+              ? previous
+              : [...previous, connection],
+          );
+        },
       );
     });
   }
   function selectSshConnection(connection: SshConnection) {
-    revealWithEditorGuard(() => {
+    revealWithEditorGuard(async () => {
       setSelectedRedisId(null);
       setSelectedDatabaseId(null);
       setSelectedSshId(connection.id);
@@ -2249,7 +2297,7 @@ export function App() {
       setGithubOpen(false);
       setDirectoryOpen(false);
       setFilesOpen(false);
-      update((previous) =>
+      await update((previous) =>
         connection.sessions.length
           ? selectSession(
               previous,
@@ -2392,7 +2440,7 @@ export function App() {
               group.databaseConnections?.some((item) => item.id === connection.id),
             );
             if (!owner) return;
-            const saved = update((previous) => ({
+            const saved = await update((previous) => ({
               ...previous,
               groups: previous.groups?.map((group) => ({
                 ...group,
@@ -2410,7 +2458,7 @@ export function App() {
                   remove: true,
                 });
             } catch (reason) {
-              update((previous) => ({
+              await update((previous) => ({
                 ...previous,
                 groups: previous.groups?.map((group) =>
                   group.id === owner.id
@@ -2444,7 +2492,7 @@ export function App() {
               group.redisConnections?.some((item) => item.id === connection.id),
             );
             if (!owner) return;
-            const removed = update((previous) => ({
+            const removed = await update((previous) => ({
               ...previous,
               groups: previous.groups?.map((group) => ({
                 ...group,
@@ -2462,7 +2510,7 @@ export function App() {
                   remove: true,
                 });
             } catch (error) {
-              update((previous) => ({
+              await update((previous) => ({
                 ...previous,
                 groups: previous.groups?.map((group) =>
                   group.id === owner.id
@@ -2501,8 +2549,8 @@ export function App() {
         }
         removeSsh={(connection) => {
           void invoke("ssh_files_disconnect", { connectionId: connection.id })
-            .then(() => {
-              const removed = update((previous) => ({
+            .then(async () => {
+              const removed = await update((previous) => ({
                 ...previous,
                 groups: previous.groups?.map((group) => ({
                   ...group,
@@ -2600,8 +2648,8 @@ export function App() {
               ?.sshConnections ?? []
           }
           close={() => setDatabaseDialog(null)}
-          save={(connection, password) => {
-            const saved = update((previous) => ({
+          save={async (connection, password) => {
+            const saved = await update((previous) => ({
               ...previous,
               groups: previous.groups?.map((group) =>
                 group.id !== previous.selectedWorkspace
@@ -2659,8 +2707,8 @@ export function App() {
               ?.sshConnections ?? []
           }
           close={() => setRedisDialog(null)}
-          save={(connection, password) => {
-            const saved = update((previous) => ({
+          save={async (connection, password) => {
+            const saved = await update((previous) => ({
               ...previous,
               groups: previous.groups?.map((group) =>
                 group.id === previous.selectedWorkspace
@@ -2690,7 +2738,7 @@ export function App() {
       {quickSshOpen && (
         <SshQuickConnect
           close={() => setQuickSshOpen(false)}
-          connect={(connection) => {
+          connect={async (connection) => {
             const current = currentWorkspace.current;
             const group = current?.groups?.find((item) => item.id === current.selectedWorkspace);
             if (!group || !runtime) return false;
@@ -2707,7 +2755,7 @@ export function App() {
                 },
               ],
             };
-            const saved = update((previous) =>
+            const saved = await update((previous) =>
               selectSession(
                 {
                   ...previous,
@@ -2736,7 +2784,7 @@ export function App() {
           connection={sshDialog.connection}
           close={() => setSshDialog(null)}
           connect={newSshTerminal}
-          save={(connection) => {
+          save={async (connection) => {
             const updateRedis = (value: RedisConfig): RedisConfig =>
               value.ssh_target?.connection_id === connection.id
                 ? {
@@ -2745,7 +2793,7 @@ export function App() {
                     ssh_target: sshTarget(connection, value.ssh_target.workspace_id),
                   }
                 : value;
-            const saved = update((previous) => ({
+            const saved = await update((previous) => ({
               ...previous,
               groups: previous.groups?.map((group) => ({
                 ...group,
@@ -2775,7 +2823,7 @@ export function App() {
               setSelectedDatabaseId(null);
               setSelectedSshId(connection.id);
               setFilesOpen(false);
-              update((previous) => ({
+              await update((previous) => ({
                 ...previous,
                 selectedProject: null,
                 selectedSession: null,
@@ -2976,8 +3024,8 @@ export function App() {
             }}
             edit={() => setSshDialog({ connection: activeSshConnection })}
             temporary={activeSshConnection.temporary}
-            promote={() =>
-              update((previous) => ({
+            promote={async () =>
+              await update((previous) => ({
                 ...previous,
                 groups: previous.groups?.map((group) => ({
                   ...group,
@@ -3004,8 +3052,8 @@ export function App() {
               (item) => item.connection_id === activeSshConnection.id,
             )}
             error={tunnelError}
-            save={(forwards) =>
-              update((previous) => ({
+            save={async (forwards) =>
+              await update((previous) => ({
                 ...previous,
                 groups: previous.groups?.map((group) => ({
                   ...group,
@@ -3377,7 +3425,7 @@ export function App() {
                             : tx("任务已完成");
                   notifyAgentActivity(id, body);
                 }}
-                onClosed={(id) => {
+                onClosed={async (id) => {
                   seenAgentEvents.current.delete(id);
                   lastAgentEvent.current.delete(id);
                   pendingAgentNotifications.current.delete(id);
@@ -3394,7 +3442,7 @@ export function App() {
                     delete next[id];
                     return next;
                   });
-                  update((previous) => removeSession(previous, id));
+                  await update((previous) => removeSession(previous, id));
                 }}
               />
             )}
@@ -3552,9 +3600,9 @@ export function App() {
           canInsert={
             !!roster?.sessions.find((item) => item.id === workspace?.selectedSession)?.agent
           }
-          associate={(item) => {
+          associate={async (item) => {
             if (workspace?.selectedSession)
-              update((previous) =>
+              await update((previous) =>
                 updateRoster(previous, roster?.id ?? "", (value) => ({
                   ...value,
                   sessions: value.sessions.map((session) =>
@@ -3571,9 +3619,9 @@ export function App() {
             await invoke("control_session", { id, action: "send", text: url });
           }}
           createSession={(item) => {
-            const start = () => {
+            const start = async () => {
               const id = crypto.randomUUID();
-              update((previous) => {
+              await update((previous) => {
                 const target = selectedRoster(previous);
                 if (!target) return previous;
                 return selectSession(
@@ -3652,7 +3700,7 @@ export function App() {
               { directory: owner?.directory ?? root },
             );
             if (
-              !update((previous) => {
+              !(await update((previous) => {
                 if (owner) return reconcileWorktrees(previous, owner.id, discovered);
                 const existing = previous.projects.find(
                   (project) =>
@@ -3675,7 +3723,7 @@ export function App() {
                       ],
                     };
                 return reconcileWorktrees(next, id, discovered);
-              })
+              }))
             )
               throw new Error(tx("Worktree 已创建，但项目树保存失败。请刷新项目。"));
           }}
@@ -3770,8 +3818,8 @@ export function App() {
               onClick={() => {
                 const id = menu.id;
                 setMenu(null);
-                const remove = () => {
-                  update((previous) => removeProject(previous, id));
+                const remove = async () => {
+                  await update((previous) => removeProject(previous, id));
                 };
                 void editor.closeDirectory(menuProject.directory, remove);
               }}
@@ -3784,9 +3832,9 @@ export function App() {
               {splitGroup(menuRoster, menu.id) && (
                 <button
                   role="menuitem"
-                  onClick={() => {
+                  onClick={async () => {
                     setZoomedGroup(null);
-                    update((previous) => ungroupSession(previous, menu.id));
+                    await update((previous) => ungroupSession(previous, menu.id));
                     setMenu(null);
                   }}
                 >
@@ -3797,9 +3845,9 @@ export function App() {
                 <button
                   key={session.id}
                   role="menuitem"
-                  onClick={() => {
+                  onClick={async () => {
                     setZoomedGroup(null);
-                    update((previous) => groupSessions(previous, menu.id, session.id));
+                    await update((previous) => groupSessions(previous, menu.id, session.id));
                     setMenu(null);
                   }}
                 >
@@ -3840,8 +3888,8 @@ export function App() {
               <button
                 role="menuitem"
                 disabled={menuWorktree?.missing}
-                onClick={() => {
-                  update((previous) => selectProject(previous, menu.project, menu.id));
+                onClick={async () => {
+                  await update((previous) => selectProject(previous, menu.project, menu.id));
                   addSession();
                   setMenu(null);
                 }}
@@ -3873,7 +3921,9 @@ export function App() {
               )}
               creatingWorktree={creatingWorktree}
               createWorktree={() => void createWorktree(menuProject)}
-              move={(target) => update((previous) => moveProject(previous, menu.id, target))}
+              move={async (target) =>
+                await update((previous) => moveProject(previous, menu.id, target))
+              }
               close={() => setMenu(null)}
               onError={setError}
               javaBuild={() => void changeJavaDirectory(menuProject.directory, menuProject)}
