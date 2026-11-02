@@ -37,7 +37,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
-            if let report = WorkspaceModel.argument("--smoke-report") { writeSmokeReport(report) }
+            if let report = WorkspaceModel.argument("--smoke-report") {
+                try? await Task.sleep(for: .milliseconds(150))
+                writeSmokeReport(report)
+            }
             if let report = WorkspaceModel.argument("--terminal-smoke-report") { await runTerminalSmoke(report, reconnect: false) }
             if let report = WorkspaceModel.argument("--terminal-reconnect-report") { await runTerminalSmoke(report, reconnect: true) }
         }
@@ -147,7 +150,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
          "hostStarted": !model.terminals.isEmpty, "coreReady": model.ready, "sessionCount": model.state?.sessions.count ?? 0,
          "error": model.error]
     }
-    private func writeSmokeReport(_ path: String) { finishReport(baseReport(), path: path) }
+    private func writeSmokeReport(_ path: String) {
+        var report = baseReport()
+        do {
+            guard let window else { throw BridgeFailure(code: "SMOKE_WINDOW", message: "Native window is missing") }
+            let name = "native-empty-window.png"
+            try TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
+            report["captures"] = [name]
+        } catch { report["failure"] = error.localizedDescription }
+        finishReport(report, path: path)
+    }
     private func finishReport(_ report: [String: Any], path: String) {
         do {
             try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: URL(fileURLWithPath: path), options: .atomic)

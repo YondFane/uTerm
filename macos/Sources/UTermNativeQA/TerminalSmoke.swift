@@ -115,7 +115,7 @@ enum TerminalSmoke {
         report["runningProcessesBeforeQuit"] = 2
     }
 
-    private static func capture(window: NSWindow, path: URL) throws {
+    static func capture(window: NSWindow, path: URL) throws {
         guard let view = window.contentView,
               let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { throw BridgeFailure(code: "SMOKE_CAPTURE", message: "Window rendering is unavailable") }
         view.cacheDisplay(in: view.bounds, to: bitmap)

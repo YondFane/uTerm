@@ -47,9 +47,17 @@ ABI，每条链路最多一帧未确认，Swift 队列有界。Swift 将 sequenc
 
 #### 原生 QA 验证
 
-Linux 真实 helper 测试覆盖确认背压、断开／重开／回放及明确关闭；共享状态测试覆盖会话分屏、过期写入、布局删除和重开。共用数值样例验证 Rust 编码器及 TypeScript 安全整数边界。Swift 测试与真实原生 PTY／分屏／截图脚本已实现，本次源码仍待 CI 验证。首轮 M2 原生 CI 在 Swift 编译阶段失败；已修正桥接访问权限、委托要求及焦点接入。下一轮 ARM 已通过五项 Swift 测试（包括完整 UInt64 精度和队列拒绝）并打开真实窗口，但退出超时。退出路径改为先排空任务再最终终止，运行验证仍待完成。随后真实 PTY 的 Unicode 文本检查超时；QA 读取器改为跳过宽字符占位并使用 SwiftTerm 组合字符映射，新增解析器测试，修正仍待原生 CI。Windows 慢启动回归改用临时原生探测程序，避免 PowerShell 启动干扰同步；真实宿主响应性断言保留，仍需 Windows
-CI。先前 M1 的原生 ARM／Intel 桥接及旧 macOS／Windows
-CI 已通过，不能据此认定新终端改动通过。QA 脚本使用临时数据，不读取生产数据。
+Linux 真实 helper 测试覆盖确认背压、断开／重开／回放和明确关闭；共享状态测试覆盖分屏、过期写入、布局删除与重开。共用数值样例验证 Rust 编码器、Swift 完整
+`UInt64` 确认及 TypeScript 安全整数拒绝。macOS
+ARM／Intel 核心／FFI／Swift 桥接测试及真实可见空窗口正常退出已在
+[b579543](https://github.com/YondFane/uTerm/actions/runs/41409128290) 通过。该提交的真实 PTY
+Unicode 文本检查失败；修正后的单元读取与新增解析器检查仍需 CI。Windows 宿主响应性测试的 Shell 样例启动失败，替换后的原生样例也仍需 Windows
+CI。这些检查未闭合前，终端验收保持开放。
+
+QA 脚本使用临时项目和数据，不读取生产数据。空窗口 smoke 采集
+`native-empty-window.png`；终端 smoke 采集双语／主题／宽度、隐藏侧栏和全屏场景。报告记录平台、架构、系统、源码 head 及实际测试 merge
+SHA。新增截图步骤需经 CI 实际执行和目视检查后验收；脚本存在不等于已有截图证据。原生产物名称为
+`native-qa-*`，旧客户端命令日志及源码／平台记录为 `legacy-checks-*`。
 
 原生 SSH、完整设置、文件／数据工作台、真实 Agent
 CLI 交互、输入法、休眠、多屏及性能验收尚未完成。Windows 与旧 macOS 仍为现有完整功能客户端。Issue 对应关系、源码证据和剩余工作见[原生迁移状态](native-migration.md)。

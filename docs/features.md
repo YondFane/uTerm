@@ -54,20 +54,20 @@ acknowledgement; full-range TypeScript sequence support remains a protocol limit
 #### Native QA validation
 
 Linux real-helper tests cover acknowledgement backpressure, detach/reopen/replay and explicit close;
-shared-state tests cover session splits, stale writes, layout removal and reopening. Shared numeric
-fixtures exercise the Rust encoder and TypeScript safe-integer boundary. Swift tests and real native
-PTY/split/screenshot harnesses are implemented but await CI verification for this source tree. The
-first M2 native CI failed during Swift compilation; bridge visibility, delegate requirements and
-focus integration were corrected. The next ARM run passed five Swift tests (including full-range
-UInt64 decoding/acknowledgement and queue rejection) and opened the real window, but timed out on
-quit. The quit path now drains work before requesting final termination; runtime verification
-remains pending. A subsequent real PTY check exposed a Unicode text-inspection timeout; the QA
-reader now skips wide-cell padding and uses SwiftTerm's combining-character mapping, with a focused
-parser test. This correction still needs native CI. The Windows slow-start regression now uses a
-native disposable probe fixture to remove PowerShell startup from its synchronization; its real host
-responsiveness assertion remains and needs Windows CI. The earlier M1 native ARM/Intel bridge and
-legacy macOS/Windows CI passed; that result does not validate these new terminal changes. The QA
-harness uses temporary data and never production data.
+shared-state tests cover splits, stale writes, layout removal and reopening. Shared numeric fixtures
+exercise the Rust encoder, full-range Swift `UInt64` acknowledgement and TypeScript safe-integer
+rejection. macOS ARM/Intel core/FFI/Swift bridge tests and visible empty-window normal exit passed
+at [b579543](https://github.com/YondFane/uTerm/actions/runs/41409128290). The real PTY Unicode
+inspection failed at that head; the corrected cell reader and new parser checks still require CI.
+Windows host responsiveness failed with a shell-based test probe; its replacement native fixture
+also requires Windows CI. These unresolved checks keep terminal acceptance open.
+
+The QA harness uses a temporary project and data, never production data. Empty-window smoke captures
+`native-empty-window.png`; terminal smoke captures language/theme/width, hidden-sidebar and
+full-screen scenarios. Reports record platform, architecture, OS, source head and tested merge SHA.
+New screenshot steps require actual CI execution and visual inspection before acceptance; the
+existence of the harness is not screenshot evidence. Native artifacts are `native-qa-*`; legacy
+command logs and source/platform records are `legacy-checks-*`.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain

@@ -369,3 +369,10 @@ one second, then explicitly closes that generation. This fixture change needs Wi
 no production probe timeout or responsiveness assertion was relaxed.
 
 Windows 在限定并发后仍复现同步失败；测试先编译小型原生探测样例，保留真实进程、慢探测、1 秒状态响应及明确关闭，不放宽生产超时或验收断言，等待 Windows 结果。
+
+For #21 the existing empty-window smoke now also captures `native-empty-window.png`, stored next to
+`native-smoke.json` with platform, architecture, OS and source head/tested merge metadata. It still
+asserts a ready, visible, zero-session QA window with no host or production data access and a normal
+exit. This capture must execute successfully on both native runners before screenshot acceptance.
+
+#21 复用原空窗口 smoke 补充真实 PNG，与平台及两种 SHA 元数据共同归档；保留无宿主、无生产数据、零会话及正常退出断言，需双架构实际执行后验收。

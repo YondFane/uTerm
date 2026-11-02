@@ -22,6 +22,8 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
             raise
 assert exit_code==0, f'Native app exit: {exit_code}'
 data=json.loads(report.read_text())
+assert 'failure' not in data,data
+assert data['captures']==['native-empty-window.png'] and (evidence/'native-empty-window.png').is_file(),data
 assert data['windowVisible'] and data['screenCount']>0, data
 assert data['bundleIdentifier']=='sh.uterm.desktop.qa.native', data
 assert data['minimumOS']=='14.0', data
