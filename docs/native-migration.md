@@ -738,3 +738,11 @@ focus and the M2 dependency still keep #33/#34 open.
 
 上述 head／merge 的原生与旧客户端四 job 通过，双架构报告记录三个真实拒绝码及完成的 PDF 渲染；ARM 内容图及 Intel
 PDF 图已目视确认无原错误。后续 smoke 与文件选择器共用窗口工厂，新增重载／旧身份拒绝、原生菜单关闭及加载中关闭，只读关闭在 Web 内容不能回复时有有界后备；共用设置的外观效果也进入平台适配。这些新增检查待新 CI，编辑／草稿、人工焦点及 M2 依赖仍使 #33／#34 保持开放。
+
+The first #29 Windows matrix at head `3f34a3c611c118aa0df8c18e286af344c21f9abf` failed because
+`current_exe` reports an ordinary drive path and `canonicalize` returns a verbatim path. The broker
+now compares physical canonical paths, and the test additionally requires repeated idle access to
+retain PID. Path checks normalize the actual file; active-host and endpoint assertions are retained.
+Linux host checks pass; the Windows correction awaits a new run.
+
+#29 首次 Windows 矩阵因普通／扩展盘符路径比较失败；现按规范文件路径核对，并新增重复访问空闲宿主保持 PID 的断言，不删除活跃保护或端点保留检查。Linux 宿主检查通过，Windows 修正待重跑。

@@ -241,7 +241,7 @@ fn broker_preserves_active_unstaged_host_then_replaces_it_only_when_idle() {
     let old = utermd_local::daemon::ensure_running(&host_root, &helper).unwrap();
     let generation = open_upgrade_session(&old, root.path());
     let before = status(&old);
-    assert_eq!(before.executable, helper);
+    assert_eq!(before.executable.canonicalize().unwrap(), helper);
     let broker = uterm_core::host::HostBroker::new(host_root.clone(), helper.clone());
     let retained = broker.client().unwrap();
     let active = status(&retained);
@@ -261,8 +261,18 @@ fn broker_preserves_active_unstaged_host_then_replaces_it_only_when_idle() {
     let upgraded = broker.client().unwrap();
     let after = status(&upgraded);
     assert_ne!(after.pid, before.pid);
-    assert!(after.executable.starts_with(host_root.join("executables")));
+    assert!(after
+        .executable
+        .canonicalize()
+        .unwrap()
+        .starts_with(host_root.join("executables")));
     assert!(!after.sessions.iter().any(|session| session.running));
+    let repeated = status(&broker.client().unwrap());
+    assert_eq!(
+        repeated.pid, after.pid,
+        "An unchanged idle helper must not restart"
+    );
+
     assert!(
         std::fs::read(helper).unwrap() == original_bytes,
         "Staging must not alter the bundled source"

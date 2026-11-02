@@ -104,7 +104,10 @@ Helper regressions also exercise real temporary processes: a running helper at i
 keeps its PID and session generation; after explicit close, an idle helper moves to the digest
 staging directory. Injecting an incompatible endpoint version leaves its bytes, process and PTY
 intact. Three host tests passed on Linux; fresh Windows/macOS CI for these added cases is pending.
-The incompatible version is an endpoint fixture, not a separately built historical binary.
+The incompatible version is an endpoint fixture, not a separately built historical binary. The
+Windows matrix exposed ordinary versus verbatim drive-path aliases. Host identity now compares
+canonical files, preserving an unchanged idle process as well as active ones; fresh Windows CI is
+required for this correction.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain

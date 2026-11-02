@@ -51,7 +51,9 @@ impl HostBroker {
             else {
                 return Err("后台会话响应无效。".into());
             };
-            if running_executable == executable || sessions.iter().any(|session| session.running) {
+            if sessions.iter().any(|session| session.running)
+                || same_executable(&running_executable, &executable)
+            {
                 return Ok(client);
             }
             match client.request(Operation::ShutdownIfIdle) {
@@ -73,6 +75,16 @@ impl HostBroker {
         utermd_local::daemon::ensure_running(&root, &executable)
             .map_err(|error| format!("{error:#}"))
     }
+}
+
+fn same_executable(left: &std::path::Path, right: &std::path::Path) -> bool {
+    // Windows reports normal drive paths while canonical app-data paths use a verbatim prefix.
+    // Windows 报告普通盘符路径，而规范应用数据路径带扩展前缀；按实际文件身份比较。
+    left == right
+        || match (left.canonicalize(), right.canonicalize()) {
+            (Ok(left), Ok(right)) => left == right,
+            _ => false,
+        }
 }
 
 // Installers may replace or terminate the app executable. Keep the host and its
