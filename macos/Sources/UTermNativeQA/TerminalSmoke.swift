@@ -58,6 +58,9 @@ enum TerminalSmoke {
         report["splitSessionCount"] = model.state?.sessions.count ?? 0
         report["visibleTerminalViews"] = model.terminals.values.filter { $0.view.window === window && $0.view.bounds.width > 0 }.count
 
+        try await verifySidebarKeyboard(model: model, window: window, first: firstID, second: second.id)
+        report["sidebarKeyboardSelectionRetainedFocus"] = true
+
         window.performClose(nil)
         guard !window.isVisible else { throw BridgeFailure(code: "SMOKE_HIDE", message: "Close did not hide the native window") }
         first.enqueue(Data("printf 'HIDDEN_%s\\n' READY\r".utf8))
@@ -66,6 +69,24 @@ enum TerminalSmoke {
         report["hideAndReopenRetainedOutput"] = window.isVisible
 
         var captures: [String] = []
+        guard let settingsMenu = NSApp.mainMenu?.items.first?.submenu,
+              let item = settingsMenu.items.first(where: { $0.action.map(NSStringFromSelector) == "settings" }),
+              let action = item.action, NSApp.sendAction(action, to: item.target, from: item) else {
+            throw BridgeFailure(code: "SMOKE_SETTINGS", message: "Native Settings menu action is missing")
+        }
+        try await wait("Present Settings from its native menu") { model.settingsPresented && window.attachedSheet?.isVisible == true }
+        guard let sheet = window.attachedSheet else { throw BridgeFailure(code: "SMOKE_SETTINGS", message: "Settings sheet is missing") }
+        try await Task.sleep(for: .milliseconds(150))
+        if let reportPath = WorkspaceModel.argument("--terminal-smoke-report") {
+            let name = "native-settings.png"
+            try await capture(window: sheet, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(name))
+            captures.append(name)
+        }
+        report["settingsOpenedFromNativeMenu"] = true
+        report["settingsScene"] = ["language": model.settings["language"].string ?? "system", "appearance": model.settings["appearance"].string ?? "system", "windowWidth": sheet.frame.width] as [String: Any]
+        try postKey(window: sheet, code: 36, characters: "\r")
+        try await wait("Dismiss Settings with Return") { !model.settingsPresented && window.attachedSheet == nil }
+        report["settingsDismissedWithReturn"] = true
         for language in ["en", "zh-Hans"] {
             for appearance in ["dark", "light"] {
                 await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
@@ -113,6 +134,38 @@ enum TerminalSmoke {
         report["hostExecutable"] = status["executable"].string ?? ""
         report["hostStarted"] = true
         report["runningProcessesBeforeQuit"] = 2
+    }
+
+    private static func descendants(_ view: NSView) -> [NSView] {
+        [view] + view.subviews.flatMap(descendants)
+    }
+
+    private static func postKey(window: NSWindow, code: UInt16, characters: String) throws {
+        for type in [NSEvent.EventType.keyDown, .keyUp] {
+            guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                isARepeat: false, keyCode: code) else {
+                throw BridgeFailure(code: "SMOKE_KEY", message: "Could not construct native keyboard event")
+            }
+            NSApp.postEvent(event, atStart: false)
+        }
+    }
+
+    private static func verifySidebarKeyboard(model: WorkspaceModel, window: NSWindow, first: String, second: String) async throws {
+        guard let content = window.contentView,
+              let table = descendants(content).first(where: { $0.identifier?.rawValue == "native-sidebar" }) as? NSTableView else {
+            throw BridgeFailure(code: "SMOKE_SIDEBAR", message: "Native sidebar table is missing")
+        }
+        try await wait("Finish terminal selection and focus") { model.selectedID == first && !model.busy && window.firstResponder === model.terminals[first]?.view }
+        guard window.makeFirstResponder(table) else { throw BridgeFailure(code: "SMOKE_FOCUS", message: "Sidebar cannot accept keyboard focus") }
+        let down = table.selectedRow < table.numberOfRows - 1
+        try postKey(window: window, code: down ? 125 : 126, characters: down ? "\u{F701}" : "\u{F700}")
+        try await wait("Select the split peer using a native arrow key") { model.selectedID == second && !model.busy }
+        guard window.firstResponder === table else { throw BridgeFailure(code: "SMOKE_FOCUS", message: "Session selection stole sidebar keyboard focus") }
+        try postKey(window: window, code: down ? 126 : 125, characters: down ? "\u{F700}" : "\u{F701}")
+        try await wait("Return to the first session using a native arrow key") { model.selectedID == first && !model.busy }
+        guard window.firstResponder === table else { throw BridgeFailure(code: "SMOKE_FOCUS", message: "Repeated selection stole sidebar keyboard focus") }
     }
 
     static func capture(window: NSWindow, path: URL) async throws {

@@ -611,3 +611,15 @@ test.
 helper 的二进制回调检查：回调执行时并发取消订阅或关闭，两者均等待回调结束后才允许释放借用上下文；同时验证回调内重入被拒绝和重复关闭，隔离宿主由测试清理。Linux
 x86_64／Rust 1.99.1 的五项 C
 ABI 测试通过；Windows 及 macOS 双架构的新结果仍待 CI，既有通过结果不替代本次新增测试。
+
+### M2 native keyboard and Settings smoke / M2 原生键盘与设置 smoke
+
+For #30/#32 the real application smoke now posts AppKit key-down/up events to the native sidebar,
+switches to the split peer and back, and requires the table to retain first-responder status. It
+opens Settings through the actual NSMenu action, captures the real sheet as `native-settings.png`,
+and dismisses it with Return. The live report records these three assertions and eleven captures
+(plus the separate empty-window image). Shell syntax and diff checks passed locally; actual Swift
+build and WindowServer interaction await macOS CI. Manual IME/TUI/clipboard cases remain open.
+
+#30／#32 的真实应用 smoke 新增 AppKit 按下／抬起事件，在两个分屏会话间切换并要求侧栏始终保留焦点；经实际 NSMenu 动作打开设置，截取真实设置 sheet，再用 Return 关闭。报告记录三个断言及十一张截图，另有独立空窗口图。本地仅通过 shell 语法和差异检查，实际 Swift 构建及 WindowServer 交互等待 macOS
+CI；人工输入法／TUI／剪贴板仍未验收。

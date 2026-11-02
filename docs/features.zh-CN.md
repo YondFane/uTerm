@@ -43,7 +43,9 @@ helper 管理真实 PTY；退出只断开连接，**关闭会话**核对 generat
 SwiftTerm 固定为兼容 Xcode 16.4 的 1.20.0。输出以二进制帧跨越 C
 ABI，每条链路最多一帧未确认，Swift 队列有界。Swift 将 sequence 及活动 sequence 解码为
 `UInt64`，发送确认时不经过 `Double`。TypeScript 使用生成的 `bigint`
-sequence 字段，在 JSON 舍入前保留整数字面量。确认使用兼容旧版的安全整数或精确十进制字符串，Rust 校验至 u64::MAX。宿主二进制帧格式不变，边界测试验证实际数值而非仅类型名称；此精度改动仍待新平台 CI。
+sequence 字段，在 JSON 舍入前保留整数字面量。确认使用兼容旧版的安全整数或精确十进制字符串，Rust 校验至 u64::MAX。宿主二进制帧格式不变，边界测试验证实际数值而非仅类型名称。此精度改动的原生及旧客户端平台 CI 已在 head
+`d3dcd09a69bcdd66798e2f4aaa4b67b99187cf77`、tested merge `3a012173e7f27639c7dbe40188354b8348c1affa`
+通过（[原生](https://github.com/YondFane/uTerm/actions/runs/41422419793)、[旧客户端](https://github.com/YondFane/uTerm/actions/runs/41422419819)）。
 
 #### 原生 QA 验证
 
@@ -66,8 +68,8 @@ QA 应用使用临时项目和数据，不读取生产数据。`native-qa-*`
 产物包含截图、报告、测试日志及 ad-hoc 签名 QA App；`legacy-checks-*`
 包含命令日志和源码／平台记录，不是 Windows 原生交互图片。M0 基线／工具链任务 #20–#23 及阶段 #14 已验收，M1–M5 仍开放。
 
-原生侧栏将程序更新选中项与用户操作分开，用户操作在 AppKit 回调返回后执行；焦点观察也在延后执行时重新核对当前响应者。重连 smoke 会将 NSTableView 重入告警判为失败，此修正仍待新一轮 macOS
-CI。
+原生侧栏将程序更新选中项与用户操作分开，用户操作在 AppKit 回调返回后执行；焦点观察也在延后执行时重新核对当前响应者。重连 smoke 会将 NSTableView 重入告警判为失败；此修正已在上述精度改动 head 的两个原生架构通过。smoke 还新增真实 AppKit 方向键切换并保留侧栏焦点、原生菜单打开设置、Return 关闭设置及 WindowServer 截图
+`native-settings.png`。这些新增交互检查仍待新 macOS CI，不代表人工键盘或输入法验收。
 
 原生 SSH、完整设置、文件／数据工作台、真实 Agent
 CLI 交互、输入法、休眠、多屏及性能验收尚未完成。Windows 与旧 macOS 仍为现有完整功能客户端。Issue 对应关系、源码证据和剩余工作见[原生迁移状态](native-migration.md)。其中可复用验收清单定义同机负载、TUI／交互步骤及签名／升级条件，未执行项继续明确待验收。

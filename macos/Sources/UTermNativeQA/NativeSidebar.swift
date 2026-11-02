@@ -17,6 +17,7 @@ struct NativeSidebar: NSViewRepresentable {
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
         let table = NSTableView()
+        table.identifier = NSUserInterfaceItemIdentifier("native-sidebar")
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
         table.addTableColumn(column)
         table.headerView = nil

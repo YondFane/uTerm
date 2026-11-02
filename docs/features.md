@@ -52,7 +52,10 @@ activity sequence as `UInt64` and encodes acknowledgements without passing throu
 TypeScript uses generated `bigint` sequence fields and preserves integer tokens before JSON can
 round them. Acknowledgements use legacy safe numbers or exact decimal strings, both validated by
 Rust up to u64::MAX. The host binary frame format is unchanged. Boundary tests cover actual values,
-not only type names; fresh platform CI for this precision change is pending.
+not only type names. Native and legacy platform CI passed this precision change at head
+`d3dcd09a69bcdd66798e2f4aaa4b67b99187cf77`, tested merge `3a012173e7f27639c7dbe40188354b8348c1affa`
+([native](https://github.com/YondFane/uTerm/actions/runs/41422419793),
+[legacy](https://github.com/YondFane/uTerm/actions/runs/41422419819)).
 
 #### Native QA validation
 
@@ -88,7 +91,11 @@ M0 baseline/toolchain tasks #20–#23 and stage #14 are accepted; M1–M5 remain
 
 The native sidebar now separates programmatic table selection from user actions, which are deferred
 until AppKit returns. Focus observation also checks the current responder after deferral. The
-reconnect smoke rejects NSTableView reentrancy warnings; this correction awaits fresh macOS CI.
+reconnect smoke rejects NSTableView reentrancy warnings; both native architectures passed this
+correction at the precision-change head above. The smoke now also posts real AppKit arrow keys to
+check that sidebar selection retains focus, opens Settings using its native menu and dismisses it
+with Return. It captures `native-settings.png` using WindowServer. These additional interaction
+checks await fresh macOS CI and do not establish manual keyboard or input-method acceptance.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain

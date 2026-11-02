@@ -52,11 +52,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                     try: helper.wait(timeout=10)
                     except subprocess.TimeoutExpired: helper.kill();helper.wait();raise
     first,second=reports
-    for key in ['unicodeAndAnsiParsed','alternateScreenReturned','hideAndReopenRetainedOutput','viewIdentityRetained']:
+    for key in ['unicodeAndAnsiParsed','alternateScreenReturned','hideAndReopenRetainedOutput','viewIdentityRetained','sidebarKeyboardSelectionRetainedFocus','settingsOpenedFromNativeMenu','settingsDismissedWithReturn']:
         assert first[key],(key,first)
     assert first['splitSessionCount']==2 and first['runningProcessesBeforeQuit']==2,first
     assert abs(first['nativeToolbarHeight']-40)<1,first
-    assert len(first['captures'])==10,first
+    assert len(first['captures'])==11,first
     assert second['replayed'] and second['explicitCloseStoppedProcesses'] and second['idleHostShutdown'],second
     assert sorted(first['sessions'],key=lambda s:s['id'])==sorted(second['sessions'],key=lambda s:s['id']),reports
     print(json.dumps({'sourceSHA':first['sourceSHA'],'sessionCount':2,'generationRetained':True,'normalExitCodes':[0,0],'captures':first['captures']},ensure_ascii=False))
