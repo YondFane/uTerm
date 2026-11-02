@@ -242,8 +242,9 @@ preview and unchanged null semantics. DOM input in the real native app is separa
 keyboard/IME/focus acceptance.
 
 The native recovery-picker/restore UI and its added English/dark and Chinese/light real
-NSMenu/NSAlert/NSButton scenarios await their own committed-head macOS CI. Earlier passing results
-do not validate these new controls.
+NSMenu/NSAlert/NSButton scenarios await their own committed-head macOS CI. The first run failed
+Swift compilation on an ambiguous numeric size constant; the fix explicitly selects CGFloat and
+requires a fresh run. Earlier passing results do not validate these new controls.
 
 ## Project website
 

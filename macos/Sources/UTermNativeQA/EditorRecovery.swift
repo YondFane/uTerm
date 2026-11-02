@@ -25,7 +25,7 @@ private final class EditorRecoveryPanel: NSObject {
         preview.isSelectable = true
         preview.isRichText = false
         preview.isVerticallyResizable = true
-        preview.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        preview.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         preview.textContainer?.widthTracksTextView = true
         preview.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         preview.autoresizingMask = [.width]
