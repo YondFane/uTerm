@@ -343,18 +343,72 @@ data. The process test constructs both old source values and an updated split/se
 `{revision, values}`，values 保留键名和字符串值，主状态反映当前快照，辅助值保持原样。默认值及更新后分屏样例可由测试重复构造，不含用户数据。
 
 For recovery, keep the original WebView data and the canonical directory (including
-`legacy-original.json`, `snapshot-v1.json` and `backups`) before attempting a client replacement.
-Stop client writes and export the latest canonical state first; quitting detaches rather than kills
-the host. Verify an exported JSON file with the old readers before using it in any isolated old QA
-client. Restoring only an old executable does not restore post-migration settings or drafts. An
-automatic WebView import or tested install-level downgrade is not supplied by this format test; keep
-the prior data copy and use the current recovery UI if the snapshot is corrupt. Do not overwrite the
-canonical copy or resume two authoritative clients during recovery. Credential stores remain
-platform-owned and are not part of the JSON export. Actual installation replacement, host retention
-and full data rollback remain #46; native recovery interaction and dependency acceptance keep #28
-open.
+`legacy-original.json`, `snapshot-v1.json` and `snapshot-*.backup`) before attempting a client
+replacement. Stop client writes and export the latest canonical state first; quitting detaches
+rather than kills the host. Verify an exported JSON file with the old readers before using it in any
+isolated old QA client. Restoring only an old executable does not restore post-migration settings or
+drafts. An automatic WebView import or tested install-level downgrade is not supplied by this format
+test; keep the prior data copy and use the current recovery UI if the snapshot is corrupt. Do not
+overwrite the canonical copy or resume two authoritative clients during recovery. Credential stores
+remain platform-owned and are not part of the JSON export. Actual installation replacement, host
+retention and full data rollback remain #46; native recovery interaction and dependency acceptance
+keep #28 open.
 
 恢复前保留旧 WebView 数据及整个规范目录，停止客户端写入并导出最新状态；退出只断连宿主。导出先经旧读取器校验，再用于隔离旧 QA。仅替换旧程序不能恢复迁移后的设置或草稿。格式测试未提供自动 WebView 导入或安装级降级验收；保留先前副本，损坏快照使用当前恢复界面，不覆盖规范副本或同时运行两个权威写者。凭据仍由系统管理。实际安装替换、宿主保留和完整回退属于 #46；原生恢复及依赖未验收前 #28 保持开放。
+
+### Auxiliary data ownership / 辅助数据归属
+
+The first import archives all `uterm.*` source strings. Subsequent export refreshes workspace and
+settings only. Auxiliary values in that export are the original imported bytes, not a live copy of
+later WebView edits. Retain a fresh copy of the old WebView profile as well as the canonical store
+before replacement. Native readonly content does not initialize, clear or migrate these keys.
+
+首次导入归档全部 `uterm.*`
+原始字符串；后续导出只刷新工作区和设置。辅助值仍为首次导入字节，不是后续 WebView 修改的实时副本。替换前需另存最新旧 WebView 配置及整个规范存储；原生只读内容不初始化、清空或迁移这些键。
+
+| Data / 数据                                                   | Current writer / 当前写入方                                                                                                 | Remaining owner / 后续任务                                                                                              |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `uterm.desktop.editorDraft.v1`, `.invalid`, `.backup`         | `useFileDocument.ts` owns drafts/invalid; original backups stay opaque / 草稿和 invalid 由原模块管理，备份保留原样          | #34: versioned shared drafts, abnormal exit and restore / 版本化共享草稿、异常退出及恢复                                |
+| `uterm.pdf.marks:<path>:<version>`                            | `PdfReader.tsx`, original WebView; native annotations disabled / 原 WebView，原生批注禁用                                   | #34: file identity and annotation preservation / 文件身份及批注保留                                                     |
+| `uterm.git.favorites:<repository>`                            | `GitBranchTree.tsx`, original WebView / 原 WebView                                                                          | #35: Git preference migration / Git 偏好迁移                                                                            |
+| `uterm.desktop.agentNotifications`                            | `AgentPanel.tsx`, original WebView / 原 WebView                                                                             | #40: native notification permission and preference / 原生通知权限及偏好                                                 |
+| Workspace/settings version, `.backup` and `.invalid` suffixes | Original source archive plus existing readers; primary values use Rust snapshots / 原始归档及既有读取器，主值使用 Rust 快照 | #28 inventories and preserves bytes; #46 validates installation rollback / 本任务盘点保留字节，安装级回退由 #46 验证    |
+| Session/layout reducers in `workspace.ts` and `App.tsx`       | Tauri adapters retain reducers; Rust serializes writes / Tauri 保留 reducer，Rust 串行保存                                  | #32 session/layout parity, #41 full settings, #46 shared installed-data adoption / 会话布局对齐、完整设置及安装数据接入 |
+| Redis/database edit buffers, SQL and failed settings drafts   | Client memory, not WebView migration JSON / 客户端内存，不属于迁移 JSON                                                     | #38/#39 preserve connection/edit guards; #41 settings; #46 documents restart limits / 保留连接编辑保护、设置及重启边界  |
+| Passwords, keys and credential references                     | Platform credential storage and validated connection references / 系统凭据存储及已校验连接引用                              | #36/#40 adapters, #46 verifies references without exporting secret values / 平台适配及不导出秘密的引用验收              |
+
+### Recovering an unchanged old client / 恢复未修改的旧客户端
+
+This is a recovery preparation procedure; installation/data write-back acceptance remains #46.
+
+这是恢复准备步骤；安装及数据回写的实际验收仍属于 #46。
+
+1. In isolated QA, finish or preserve unsaved work, then use **Settings → General → Export
+   legacy-compatible data** for current canonical workspace/settings. Validate the exported strings
+   with unchanged release readers, as the real-process contract test does.
+
+   在隔离 QA 中完成或保留未保存工作，再从**设置 → 通用 → 导出旧版兼容数据**取得当前规范工作区／设置，像真实进程契约测试一样，交给未修改的 release 读取器校验。
+
+2. Stop client writes and normally quit. Keep a fresh whole old WebView profile and canonical
+   directory, including `legacy-original.json`, `snapshot-v1.json`, `snapshot-*.backup` and
+   `.damaged` files. Export does not refresh later auxiliary edits. Do not terminate a live host
+   merely to copy UI data.
+
+   停止客户端写入并正常退出，备份整个最新旧 WebView 配置和规范目录，包括原始导出、当前快照、`snapshot-*.backup`
+   和 `.damaged` 文件。导出不会刷新后续辅助修改；不要仅为复制界面数据终止活跃宿主。
+
+3. With both clients stopped, restore the saved **pre-migration profile** only into a separate old
+   QA installation. This restores the saved old state, not subsequent canonical changes. Keep the
+   newer store untouched for returning to the new client.
+
+   两客户端停止时，只把备份的**迁移前配置**恢复到独立旧 QA 安装。这恢复备份时的旧状态，不导入后续规范修改；保留新存储用于返回新客户端。
+
+4. No automatic path writes the latest export into an unmodified old WebView. Actual installation
+   replacement, complete data write-back, live host and credential reference retention must run in
+   #46 before downgrade acceptance. Without an old QA installer/profile, retain backups and leave
+   that gate pending.
+
+   未提供将最新导出自动写回未修改旧 WebView 的入口。安装替换、完整数据回写、活跃宿主及凭据引用保留须在 #46 实际演练后才能宣称降级验收；缺少旧 QA 安装包／配置时保留备份，该门槛继续待验收。
 
 Head `b57954302207490e0125d1e95023fa5edbe3318f` native ARM passed normal window termination, but
 real PTY smoke failed while inspecting Unicode text. The QA text reader used raw cells, including
@@ -800,3 +854,14 @@ checks pass 362 tests with ten skipped; backend passes 135 with ten ignored, and
 production/types and formatting pass. Fresh platform QA is still pending.
 
 上述 head／merge 的旧客户端及双架构原生 CI 已通过 helper 修正，Windows 产物记录三项真实宿主测试。#29 的 control／能力工作未完成。当前 #27 前端 362 项通过／10 跳过，后端 135 通过／10 忽略，普通桌面、生产／类型及格式通过；新平台 QA 仍待执行。
+
+At head `b122b12b862a6730f16a9e8111be27a08b7b0de0`, legacy macOS QA job 125281707810
+(run 41446766644) executed all storage scenarios, then failed removing a Saved State link already
+removed by macOS (`ENOENT`). It is a failed job, not acceptance. Teardown now tolerates absent
+links, refuses replaced non-links, records cleanup failures before writing the final report and
+exits nonzero on failure. The corrected runner passes ten real cloud Linux X11 scenes with no
+cleanup errors; fresh macOS/Windows results remain required.
+
+上述 head 的旧 macOS QA 已执行全部存储场景，但系统先删除 Saved
+State 链接，脚本清理时报 ENOENT，job 失败，不计验收。修正允许链接已不存在，拒绝删除被替换的普通路径，先记录清理错误再生成最终报告，清理失败也返回非零。新脚本在真实云端 Linux
+X11 十个场景通过且无清理错误，仍需新 macOS／Windows 结果。

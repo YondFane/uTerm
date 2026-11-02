@@ -291,7 +291,11 @@ try {
   );
   successful = true;
 } finally {
-  if (child?.exitCode === null) child.kill();
+  const cleanupErrors = [];
+  if (child?.exitCode === null) {
+    child.kill();
+    await Promise.race([new Promise((done) => child.once("close", done)), delay(3000)]);
+  }
   const endpoint = join(root, "data/local-daemon-v1/endpoint.json");
   if (binary && existsSync(endpoint)) {
     const cleanup = spawnSync(binary, ["--qa-cleanup", "--qa-data-root", root], {
@@ -299,14 +303,30 @@ try {
       encoding: "utf8",
     });
     writeFileSync(join(output, "cleanup.log"), `${cleanup.stdout ?? ""}\n${cleanup.stderr ?? ""}`);
-    if (cleanup.status !== 0) successful = false;
+    if (cleanup.status !== 0)
+      cleanupErrors.push("Private idle host cleanup failed; see cleanup.log");
   }
-  for (const link of profileLinks.reverse()) unlinkSync(link);
-  writeFileSync(
-    join(output, "report.json"),
-    JSON.stringify({ passed: successful, ...metadata, scenes }, null, 2),
-  );
+  for (const link of profileLinks.reverse()) {
+    try {
+      assert(lstatSync(link).isSymbolicLink(), "QA refuses to remove a replaced profile link");
+      unlinkSync(link);
+    } catch (error) {
+      if (error.code !== "ENOENT") cleanupErrors.push(String(error));
+    }
+  }
   // Keep failure fixtures only in the isolated temporary profile for diagnosis.
   // 失败测试数据仅保留在隔离临时配置中供诊断。
-  if (successful) rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+  if (successful && !cleanupErrors.length) {
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 });
+    } catch (error) {
+      cleanupErrors.push(String(error));
+    }
+  }
+  successful &&= cleanupErrors.length === 0;
+  writeFileSync(
+    join(output, "report.json"),
+    JSON.stringify({ passed: successful, ...metadata, scenes, cleanupErrors }, null, 2),
+  );
+  if (!successful) process.exitCode = 1;
 }

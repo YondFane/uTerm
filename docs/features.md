@@ -140,7 +140,8 @@ Ten real Rust-process contract tests passed on Linux x86_64, including retained 
 drafts, publication after commit and quit protection after reload. A real isolated Tauri/X11 run
 checked save/conflict/reload/retry, normal quit and reopen, corrupt snapshot recovery and retained
 original/damaged bytes. Windows/macOS jobs now run this QA app with platform window screenshots and
-head/merge records; fresh platform results are pending.
+head/merge records; fresh platform results are pending. QA cleanup errors fail the run and remain in
+its report without hiding earlier scenario images.
 
 An unreadable snapshot opens a recovery view without resetting data. **View recovery copies** lists
 valid saved snapshots; an explicit restore retains the damaged bytes. Up to eight previous snapshots
@@ -151,7 +152,10 @@ Export legacy-compatible data** saves the current workspace/settings and origina
 as JSON. This export is a recovery artifact. A real Rust-process test reads the exported
 workspace/settings with unchanged release readers, preserving split/session IDs and opaque
 draft/backup bytes after repeated import. Automatic downgrade into an unmodified old client's
-WebView storage is not verified.
+WebView storage is not verified. Export refreshes the primary workspace/settings only; auxiliary
+values retain their first-import bytes. Before replacement, retain a fresh old WebView profile and
+the complete canonical store as well. Editor/PDF, Git favorites and Agent notification migration
+belong to #34, #35 and #40; full installation rollback remains #46.
 
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
 conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI. A
