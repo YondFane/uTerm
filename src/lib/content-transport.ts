@@ -17,6 +17,7 @@ const contentMethods = new Set([
   "open_external",
   "content_context",
   "content_font_adjust",
+  "content_settings_patch",
 ]);
 export interface ContentRequest {
   version: 1;
@@ -75,7 +76,9 @@ export class ContentScope {
       return Promise.reject(new ContentFailure("METHOD_DENIED", "Content method is not allowed"));
     if (signal?.aborted)
       return Promise.reject(new ContentFailure("CANCELLED", "Content request cancelled"));
-    const id = crypto.randomUUID();
+    const id = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+      byte.toString(16).padStart(2, "0"),
+    ).join("");
     let message: ContentRequest;
     try {
       const serialized = JSON.stringify({

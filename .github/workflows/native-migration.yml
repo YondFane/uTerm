@@ -23,6 +23,13 @@ jobs:
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install pinned frontend toolchain
+        run: |
+          npm install --global pnpm@11.22.0
+          pnpm install --frozen-lockfile
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -63,6 +70,8 @@ jobs:
         run: bash scripts/macos-native-smoke.sh
       - name: Real native PTY, split, detach and replay smoke
         run: bash scripts/macos-terminal-smoke.sh
+      - name: Real native content and resource boundary smoke
+        run: bash scripts/macos-content-smoke.sh
       - name: Record resolved native dependencies
         if: always()
         run: if [ -f macos/Package.resolved ]; then cp macos/Package.resolved macos/.build/evidence/Package.resolved; fi

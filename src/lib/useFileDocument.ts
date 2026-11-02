@@ -12,7 +12,7 @@ import {
   DocumentSaveQueue,
 } from "./file-document";
 import type { FileData, OpenFile } from "./file-document";
-export function useFileDocument(fileTabLimit = 10) {
+export function useFileDocument(fileTabLimit = 10, readOnly = false) {
   const transport = useRef<ContentScope | null>(null);
   function currentTransport() {
     return (transport.current ??= createContentScope());
@@ -170,6 +170,7 @@ export function useFileDocument(fileTabLimit = 10) {
         return;
       }
       const data = await fileInvoke<FileData>("file_read", { directory, path }, invoke);
+      if (readOnly) data.readonly = true;
       await invoke("editor_guard", { active: data.kind === "text" && !data.readonly });
       setDocument({
         ...data,
@@ -229,6 +230,7 @@ export function useFileDocument(fileTabLimit = 10) {
         },
         invoke,
       );
+      if (readOnly) data.readonly = true;
       await invoke("editor_guard", { active: data.kind === "text" && !data.readonly });
       setDocument({ ...snapshot, ...data, id: ++sequence.current, saved: data.text });
       setRecovered(false);
@@ -300,7 +302,7 @@ export function useFileDocument(fileTabLimit = 10) {
     };
   }, []);
   useEffect(() => {
-    if (!isContentHost()) return;
+    if (!isContentHost() || readOnly) return;
     let disposed = false;
     transition.current = true;
     setTransitioning(true);

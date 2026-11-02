@@ -20,11 +20,26 @@ const Context = createContext<{
   ) => Promise<void>;
   reset: () => Promise<void>;
 } | null>(null);
-export function SettingsProvider({ children }: { children: ReactNode }) {
+export interface ContentSettingsAdapter {
+  settings: Settings;
+  update: (patch: Partial<Settings>) => Promise<Settings>;
+  adjust: (
+    key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
+    delta: number,
+  ) => Promise<Settings>;
+}
+export function SettingsProvider({
+  children,
+  content,
+}: {
+  children: ReactNode;
+  content?: ContentSettingsAdapter;
+}) {
   const [initial] = useState(() => {
     try {
       return {
-        settings: sharedSettings() ?? readSettings(localStorage.getItem(settingsKey)),
+        settings:
+          content?.settings ?? sharedSettings() ?? readSettings(localStorage.getItem(settingsKey)),
         error: "",
       };
     } catch (reason) {
@@ -94,18 +109,28 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         ([key, value]) => JSON.stringify(value) !== JSON.stringify(previous[key as keyof Settings]),
       ),
     );
-    const saved = canonicalStateActive()
-      ? await persistSettings((current) => {
-          const next = readSettings(JSON.stringify({ ...current, ...patch }));
-          validateShortcuts(next, mac);
-          return next;
-        })
-      : checked;
-    if (!canonicalStateActive()) localStorage.setItem(settingsKey, JSON.stringify(saved));
+    const saved = content
+      ? await content.update(patch)
+      : canonicalStateActive()
+        ? await persistSettings((current) => {
+            const next = readSettings(JSON.stringify({ ...current, ...patch }));
+            validateShortcuts(next, mac);
+            return next;
+          })
+        : checked;
+    if (!content && !canonicalStateActive())
+      localStorage.setItem(settingsKey, JSON.stringify(saved));
     currentSettings.current = saved;
     setSettings(saved);
   }
   async function reset() {
+    if (content) {
+      const saved = await content.update({ ...defaults, shortcuts: {} });
+      currentSettings.current = saved;
+      setSettings(saved);
+      setError("");
+      return;
+    }
     const old = canonicalStateActive() ? null : localStorage.getItem(settingsKey);
     if (old) localStorage.setItem(`${settingsKey}.backup`, old);
     if (canonicalStateActive()) await persistSettings(() => ({ ...defaults, shortcuts: {} }));
@@ -120,6 +145,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     delta: number,
     mac: boolean,
   ) {
+    if (content) {
+      const saved = await content.adjust(key, delta);
+      currentSettings.current = saved;
+      setSettings(saved);
+      return;
+    }
     if (canonicalStateActive()) {
       const saved = await persistSettings((current) => {
         const next = { ...current, [key]: Math.max(10, Math.min(32, current[key] + delta)) };

@@ -204,3 +204,21 @@ test("WebKit uses the same request envelope, cancellation and document-filtered 
   );
   assert.deepEqual(received, ["close"]);
 });
+
+test("content operation IDs work when custom-scheme contexts lack randomUUID", async (t) => {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+  const crypto = globalThis.crypto;
+  Object.defineProperty(globalThis, "crypto", {
+    configurable: true,
+    value: { getRandomValues: crypto.getRandomValues.bind(crypto) },
+  });
+  t.after(() => Object.defineProperty(globalThis, "crypto", original));
+  const h = harness();
+  const scope = new ContentScope(h.port, "native-custom-scheme");
+  const value = scope.call("file_read");
+  await tick();
+  assert.match(h.messages[0].message.id, /^[a-f0-9]{32}$/);
+  h.messages[0].reply.resolve(reply(h.messages[0].message, "exact"));
+  assert.equal(await value, "exact");
+  scope.close();
+});

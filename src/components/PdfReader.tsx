@@ -92,7 +92,13 @@ function PageCanvas({
   return <div ref={canvas} style={scale < 0.5 ? { minHeight: 160 } : undefined} />;
 }
 
-export function PdfReader({ document }: { document: OpenFile }) {
+export function PdfReader({
+  document,
+  annotationsEnabled = true,
+}: {
+  document: OpenFile;
+  annotationsEnabled?: boolean;
+}) {
   useUiLanguage();
 
   const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
@@ -115,7 +121,9 @@ export function PdfReader({ document }: { document: OpenFile }) {
     setError("");
     setMarksReadable(false);
     try {
-      const saved: unknown = JSON.parse(localStorage.getItem(key) ?? "[]");
+      const saved: unknown = annotationsEnabled
+        ? JSON.parse(localStorage.getItem(key) ?? "[]")
+        : [];
       if (
         !Array.isArray(saved) ||
         saved.length > 2000 ||
@@ -132,7 +140,7 @@ export function PdfReader({ document }: { document: OpenFile }) {
       )
         throw new Error(tx("PDF 高亮记录无效，原记录已保留。"));
       setMarks(saved);
-      setMarksReadable(true);
+      setMarksReadable(annotationsEnabled);
     } catch (reason) {
       setError(String(reason));
     }
@@ -169,8 +177,9 @@ export function PdfReader({ document }: { document: OpenFile }) {
       disposed = true;
       void task.destroy().catch((reason) => console.error("PDF cleanup", reason));
     };
-  }, [document.id, key, document.text]);
+  }, [document.id, key, document.text, annotationsEnabled]);
   function saveMarks(next: Mark[]) {
+    if (!annotationsEnabled) return;
     if (next.length > 2000) {
       setError(tx("当前文件最多保存 2,000 个高亮，请先删除部分高亮。"));
       return;
@@ -245,9 +254,11 @@ export function PdfReader({ document }: { document: OpenFile }) {
         <button disabled={scale >= 3} onClick={() => setScale(Math.min(3, scale + 0.25))}>
           {tx("放大")}
         </button>
-        <button aria-pressed={marking} onClick={() => setMarking(!marking)}>
-          {tx("框选高亮")}
-        </button>
+        {annotationsEnabled && (
+          <button aria-pressed={marking} onClick={() => setMarking(!marking)}>
+            {tx("框选高亮")}
+          </button>
+        )}
       </div>
       {error && <p role="alert">{localizeMessage(error)}</p>}
       {!pdf ? (
@@ -262,7 +273,7 @@ export function PdfReader({ document }: { document: OpenFile }) {
             >
               <option value="contents">{tx("目录")}</option>
               <option value="pages">{tx("缩略图")}</option>
-              <option value="marks">{tx("高亮")}</option>
+              {annotationsEnabled && <option value="marks">{tx("高亮")}</option>}
             </select>
             {tab === "contents" &&
               (outline.length ? contents(outline) : <p>{tx("此文件没有目录。")}</p>)}
@@ -287,7 +298,9 @@ export function PdfReader({ document }: { document: OpenFile }) {
                   </button>
                 </div>
               ))}
-            <small>{tx("高亮仅保存在本机，不修改 PDF。文件内容变化后单独记录。")}</small>
+            {annotationsEnabled && (
+              <small>{tx("高亮仅保存在本机，不修改 PDF。文件内容变化后单独记录。")}</small>
+            )}
           </nav>
           <div className="pdf-page-scroll">
             <div
@@ -297,7 +310,7 @@ export function PdfReader({ document }: { document: OpenFile }) {
                 touchAction: marking ? "none" : "auto",
               }}
               onPointerDown={(event) => {
-                if (!marking || event.button !== 0) return;
+                if (!annotationsEnabled || !marking || event.button !== 0) return;
                 const rect = event.currentTarget.getBoundingClientRect();
                 start.current = {
                   x: (event.clientX - rect.left) / rect.width,

@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 test "$(uname -s)" = Darwin
+pnpm build
 cargo build --locked --manifest-path crates/uterm-ffi/Cargo.toml
 cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local
 native_rust_target="${CARGO_TARGET_DIR:-$PWD/crates/uterm-ffi/target}"
@@ -14,6 +15,31 @@ cp "$native_bin/UTermNativeQA" "$native_app/Contents/MacOS/UTermNativeQA"
 native_host_target="${CARGO_TARGET_DIR:-$PWD/crates/utermd-local/target}"
 cp "$native_host_target/debug/utermd-local" "$native_app/Contents/Resources/bin/utermd-local"
 codesign --force --sign - "$native_app/Contents/Resources/bin/utermd-local"
+python3 - "$native_app/Contents/Resources/content" <<'PYCONTENT'
+import json, shutil, sys
+from pathlib import Path
+source=Path('dist'); target=Path(sys.argv[1]); target.mkdir(parents=True,exist_ok=True)
+paths=['native-content.html']+[p.relative_to(source).as_posix() for base in ['assets','pdf-assets'] for p in (source/base).rglob('*') if p.is_file()]
+for name in paths:
+    destination=target/name;destination.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(source/name,destination)
+(target/'content-manifest.json').write_text(json.dumps(sorted(paths)))
+PYCONTENT
+python3 - "$native_app/Contents/Resources/Licenses/frontend" <<'PYLICENSE'
+import json, shutil, sys
+from pathlib import Path
+root=Path('node_modules/.pnpm'); target=Path(sys.argv[1]); target.mkdir(parents=True,exist_ok=True)
+packages=list(root.glob('*/node_modules/*/package.json'))+list(root.glob('*/node_modules/@*/*/package.json'))
+index={}
+for metadata in packages:
+    data=json.loads(metadata.read_text()); identity=data['name']+'@'+data['version']
+    if identity in index: continue
+    folder=target/identity.replace('/','_'); files=[]
+    for source in metadata.parent.iterdir():
+        if source.is_file() and source.name.upper().startswith(('LICENSE','NOTICE','COPYING')):
+            folder.mkdir(parents=True,exist_ok=True);shutil.copyfile(source,folder/source.name);files.append(source.name)
+    if files: index[identity]=sorted(files)
+(target/'index.json').write_text(json.dumps(index,indent=2,sort_keys=True))
+PYLICENSE
 cp LICENSE "$native_app/Contents/Resources/Licenses/uTerm.txt"
 cp NOTICE "$native_app/Contents/Resources/Licenses/NOTICE.txt"
 find macos/.build/checkouts -maxdepth 2 -iname 'LICENSE*' -ipath '*swiftterm*' -exec cp '{}' "$native_app/Contents/Resources/Licenses/SwiftTerm.txt" \;

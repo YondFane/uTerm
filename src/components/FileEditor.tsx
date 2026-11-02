@@ -201,7 +201,13 @@ export function CodeEditor({
     </>
   );
 }
-export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocument> }) {
+export function FileEditor({
+  editor,
+  allowPdfAnnotations = true,
+}: {
+  editor: ReturnType<typeof useFileDocument>;
+  allowPdfAnnotations?: boolean;
+}) {
   const uiLanguage = useUiLanguage();
   const { settings, resizeFont: adjustFontSize } = useSettings();
   const [fontError, setFontError] = useState("");
@@ -356,7 +362,11 @@ export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocume
         </div>
       ) : document.kind === "pdf" ? (
         <Suspense fallback={<p>{tx("正在加载 PDF 阅读器…")}</p>}>
-          <PdfReader key={document.id} document={document} />
+          <PdfReader
+            key={document.id}
+            document={document}
+            annotationsEnabled={allowPdfAnnotations}
+          />
         </Suspense>
       ) : (
         <>

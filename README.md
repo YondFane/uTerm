@@ -153,3 +153,9 @@ unprivileged user so directory permissions enforce the failure; Windows uses a h
 `uterm-core::files` owns local file rules and their regression tests; Tauri commands delegate to it.
 The core's locked dependencies include the existing base64 decoder and ignore-aware file walker.
 Native file/content UI acceptance is tracked separately in the migration guide.
+
+The native QA build also runs `pnpm build` and bundles the shared Web content and its license
+notices. Install the frozen pnpm dependencies first. `bash scripts/macos-content-smoke.sh` exercises
+the isolated read-only CodeMirror/HTML/PDF windows and records native screenshots and boundary
+checks; the current native file entry is **File → Open file…** with a local project selected.
+Editing and shared draft recovery remain pending.

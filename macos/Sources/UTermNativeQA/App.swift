@@ -14,6 +14,7 @@ func localized(_ english: String, _ chinese: String) -> String {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     private var window: NSWindow?
+    private var contentWindows: [UUID: ContentWindow] = [:]
     private let model = WorkspaceModel()
     private var terminating = false
     private var preparingQuit = false
@@ -38,6 +39,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let report = WorkspaceModel.argument("--content-smoke-report") {
+                var result = baseReport()
+                do { try await ContentSmoke.run(model: model, report: &result) }
+                catch { result["failure"] = error.localizedDescription }
+                finishReport(result, path: report)
+            }
             if let report = WorkspaceModel.argument("--smoke-report") {
                 try? await Task.sleep(for: .milliseconds(150))
                 await writeSmokeReport(report)
@@ -68,6 +75,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(app, localized("Quit uTerm Native QA", "退出 uTerm 原生 QA"), #selector(quit), "q")
         let file = menu(localized("File", "文件"))
         add(file, localized("Open project…", "打开项目…"), #selector(openProject), "o")
+        add(file, localized("Open file…", "打开文件…"), #selector(openFile), "o", [.command, .shift])
         add(file, localized("New workspace…", "新建工作区…"), #selector(newWorkspace), "n", [.command, .shift])
         add(file, localized("New terminal", "新建终端"), #selector(newTerminal), "t")
         add(file, localized("New Agent session", "新建 Agent 会话"), #selector(newAgent), "n")
@@ -93,6 +101,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(closeSession) {
+            let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow }
+            menuItem.title = fileFocused ? localized("Close file", "关闭文件") : localized("Close session", "关闭会话")
+            if fileFocused { return true }
+        }
+        if contentWindows.values.contains(where: { $0.window === NSApp.keyWindow }), let action = menuItem.action,
+           [#selector(splitRight), #selector(splitDown), #selector(increaseFont), #selector(decreaseFont)].contains(action) { return false }
         if menuItem.action == #selector(quit) || menuItem.action == #selector(hideWindow) { return true }
         if model.nameDraft != nil || model.settingsPresented { return false }
         if menuItem.action == #selector(settings) { return model.state != nil }
@@ -103,12 +118,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func toggleSidebar() { model.sidebarVisible.toggle() }
     @objc private func settings() { model.settingsPresented = true }
     @objc private func quit() { NSApp.terminate(nil) }
-    @objc private func hideWindow() { window?.performClose(nil) }
+    @objc private func hideWindow() {
+        if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
+        else { window?.performClose(nil) }
+    }
     @objc private func openProject() { model.openProject() }
+    @objc private func openFile() {
+        guard let bridge = model.bridge, let selected = model.workspace["selectedProject"].string,
+              let project = model.workspace["projects"].array.first(where: { $0["id"].string == selected }),
+              let path = project["directory"].string else {
+            model.error = localized("Select a local project before opening a file.", "打开文件前请先选择本地项目。")
+            return
+        }
+        let root = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = root
+        guard let window else { return }
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let self, let file = panel.url else { return }
+            let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
+            guard file.standardizedFileURL.path.hasPrefix(prefix) else { self.model.error = localized("Choose a file inside the selected project.", "请选择所选项目中的文件。") ; return }
+            do {
+                let content = try ContentWindow(bridge: bridge, directory: root, path: String(file.standardizedFileURL.path.dropFirst(prefix.count)))
+                let id = UUID()
+                self.contentWindows[id] = content
+                content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
+                content.showWindow(nil)
+            } catch { self.model.error = error.localizedDescription }
+        }
+    }
     @objc private func newWorkspace() { model.newWorkspace() }
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }
-    @objc private func closeSession() { Task { await model.closeSession() } }
+    @objc private func closeSession() {
+        if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
+        else { Task { await model.closeSession() } }
+    }
     @objc private func splitRight() { Task { await model.split("horizontal") } }
     @objc private func splitDown() { Task { await model.split("vertical") } }
     @objc private func increaseFont() { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(1)]) } }
@@ -134,6 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         preparingQuit = true
         Task { @MainActor in
             guard await model.confirmQuit() else { self.preparingQuit = false; return }
+            for content in Array(self.contentWindows.values) { content.forceClose() }
             await model.shutdown()
             self.terminating = true
             sender.terminate(nil)

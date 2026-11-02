@@ -1367,13 +1367,23 @@ editor unmount and page unload suppress late delivery and remove subscriptions. 
 does not undo a write already running in Rust. Replies for another document or operation are
 rejected.
 
-The Tauri adapter retains existing command names. A JavaScript WKWebView adapter uses the same
-envelope; native resource loading and bridge integration are not connected yet, so it does not
-provide a native file editor. Legacy HTML previews retain their script-free sandbox and resource
-policy. Six Linux protocol tests cover reordered/mismatched replies, timeout/abort/unload, late
-subscriptions, bounds and the JavaScript WebKit message adapter. These are protocol tests, not
-native UI acceptance. Full Linux frontend checks passed (358 passed, ten skipped), as did types,
-production build, formatting and documentation; new platform CI is pending.
+The Tauri adapter retains existing command names. Native QA **File → Open file…** opens a read-only
+shared CodeMirror/HTML/PDF view for the selected local project. Its WKWebView has an ephemeral data
+store, loads only manifest-listed bundle resources, rejects navigation to other origins and accepts
+messages only from its main document. Document changes invalidate pending operations; the host also
+rejects stale document IDs, another project root and file writes. A font adjustment uses shared
+revision-checked settings. HTML previews retain their script-free sandbox and resource policy.
+
+The native build bundles the frontend and license notices. `bash scripts/macos-content-smoke.sh`
+checks real readonly rendering, font persistence, stale identity/root/write denial, sandbox
+isolation and PDF rendering, capturing three WindowServer scenes. Swift resource tests reject
+unapproved origins, traversal, symlinks, nonregular/oversized files and invalid manifests. This
+integration has not run on macOS yet; its first CI result is pending. Native editing, draft recovery
+and human focus acceptance remain open. Six Linux protocol tests cover reordered/mismatched replies,
+timeout/abort/unload, late subscriptions, bounds, IDs without secure-context-only APIs and the
+JavaScript WebKit message adapter. These are protocol tests, not native UI acceptance. Full Linux
+frontend checks passed (358 passed, ten skipped), as did types, production build, formatting and
+documentation; new platform CI is pending.
 
 ### Shared local file service
 
@@ -1385,9 +1395,9 @@ editable.
 
 Thirteen existing file-service tests now run in the core. Seven real-process contract tests passed
 on Linux x86_64, including file CAS, original-byte preservation, invalid parameters and root/link
-escape. These checks do not establish native file-editor interaction. Native content transport, file
-entry and shared draft recovery are still being implemented; existing WebView drafts retain their
-owner and path. [Native](https://github.com/YondFane/uTerm/actions/runs/41425620871) and
+escape. These checks do not establish native file-editor interaction. Native file previews are
+read-only while shared draft recovery and editing remain incomplete; existing WebView drafts retain
+their owner and path. [Native](https://github.com/YondFane/uTerm/actions/runs/41425620871) and
 [legacy](https://github.com/YondFane/uTerm/actions/runs/41425620777) platform CI passed the
 extraction at head `2f777f1824f203cba9d4654b3ec3f70c43c9fb74`; this pass does not validate later
 content changes.

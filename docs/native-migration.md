@@ -653,3 +653,30 @@ and real integration are still pending, so #33 remains open.
 
 #33 的复用文件组件和文档 hook 改由白名单 ContentScope 调用；Tauri 适配旧命令，JavaScript
 WKWebView 适配共用版本／文档／操作身份、错误及取消格式。编辑器卸载与页面离开分别清理作用域，迟到响应／订阅不能更新已关闭的作用域。取消只抑制交付，不承诺撤销已提交写入。Linux 六项协议检查通过；原生资源 handler、导航策略和真实集成仍待实现，#33 保持开放。
+
+### M3 native readonly content entry / M3 原生只读内容入口
+
+For #33/#34 the QA native client now embeds the shared frontend in an ephemeral WKWebView. A bundle
+manifest and resource handler restrict assets to approved immutable paths with file/size checks.
+Only the main document can use the reply bridge, with a fresh nonce after navigation, bounded active
+requests, cancellation and close cleanup. The selected project root is sealed; file rules still
+execute in Rust. The native shell routes file-close actions to the focused content window and
+disables terminal split/font actions while it is focused. Editing is not exposed before shared draft
+recovery; backend file writes are denied for this preview.
+
+The build includes shared assets and dependency license notices. The real app smoke checks UTF-8
+CodeMirror, static HTML sandbox and generated PDF rendering, font persistence and rejected stale/
+wrong-root/write requests, with three native captures and head/merge/platform metadata. This new
+Swift/resource integration is pending its first macOS CI, not accepted from local web compilation.
+Manual focus, editing/draft recovery and M2 stage dependency remain open.
+
+#33／#34 原生 QA 以临时 WKWebView 嵌入共用前端；清单和资源 handler 限定包内路径、文件类型和大小，主文档桥接以导航后更新的 nonce 校验身份，限制并发并清理取消／关闭。项目根目录固定，文件规则仍由 Rust 执行；文件窗口关闭操作指向当前内容窗口，聚焦时禁用终端分屏／字号命令。共享草稿恢复未完成前不开放编辑，宿主明确拒绝预览中的文件写入。构建包含资源及依赖许可，真实应用 smoke 检查 UTF-8／HTML 沙箱／生成 PDF、字号保存及越界拒绝，保存三张原生截图和准确源码元数据。首次 macOS
+CI 待执行，未以本地 Web 编译冒充原生验收；人工焦点、编辑／草稿及 M2 依赖仍开放。
+
+Local verification for the native-content change passed on Linux x86_64: seven protocol checks, full
+frontend 359 passed/10 skipped, types, production build, i18n, formatting and docs. Swift tests and
+real native windows have not run locally; the native CI result remains pending. The readonly preview
+also hides PDF annotation actions because its WebView store is ephemeral.
+
+原生内容改动的 Linux
+x86_64 检查通过：七项协议、完整前端 359 项通过／10 项跳过、类型、生产构建、翻译、格式与文档。本地未运行 Swift 或真实原生窗口，仍待原生 CI；临时 WebView 预览同时隐藏 PDF 标注操作。
