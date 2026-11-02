@@ -33,7 +33,7 @@ enum EditorSmoke {
             editor.focus();
             document.execCommand('selectAll',false);
             return document.execCommand('insertText',false,text);
-            """, arguments: ["text": text])
+            """, arguments: ["text": text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")])
         guard ready else { throw BridgeFailure(code: "EDITOR_INPUT", message: "Native WK editor did not accept DOM insertText") }
     }
     private static func click(_ content: ContentWindow, title: String) async throws {
@@ -94,6 +94,7 @@ enum EditorSmoke {
             report["checkpointDOMText"] = (try? await content.webView.evaluateJavaScript("document.querySelector('.cm-content')?.innerText || ''")) as? String ?? ""
             report["checkpointAlert"] = (try? await content.webView.evaluateJavaScript("document.querySelector('[role=alert]')?.textContent || ''")) as? String ?? ""
             report["checkpointSaveState"] = (try? await content.webView.evaluateJavaScript("document.querySelector('.editor-save-state')?.textContent || ''")) as? String ?? ""
+            report["checkpointGeometry"] = (try? await content.webView.evaluateJavaScript("JSON.stringify({viewport:innerWidth,documentWidth:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth,headerWidth:document.querySelector('.editor-header').getBoundingClientRect().width,buttons:[...document.querySelectorAll('.editor-header button')].map(b=>({text:b.textContent.trim(),left:b.getBoundingClientRect().left,right:b.getBoundingClientRect().right}))})")) as? String ?? ""
             report["checkpointOriginalUnchanged"] = unchanged
             guard durable, unchanged else {
                 let image = "native-editor-checkpoint-failure.png"
