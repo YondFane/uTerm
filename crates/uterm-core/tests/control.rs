@@ -9,7 +9,7 @@ fn call(core: &Core, method: &str, params: Value) -> Value {
         )
         .unwrap(),
     );
-    assert!(reply.error.is_none(), "{:?}", reply.error);
+    assert!(reply.error.is_none(), "{method}: {:?}", reply.error);
     reply.result.unwrap()
 }
 
@@ -32,6 +32,9 @@ fn queued(
         let request = call(core, "control.poll", Value::Null);
         if !request.is_null() {
             return (request, client);
+        }
+        if client.is_finished() {
+            panic!("CLI finished before queueing: {:?}", client.join().unwrap());
         }
         assert!(Instant::now() < deadline, "Control request was not queued");
         std::thread::sleep(Duration::from_millis(10));
@@ -211,6 +214,9 @@ fn core_control_owns_its_service_and_close_releases_pending_clients_and_lease() 
         let request = call(&core, "control.poll", Value::Null);
         if !request.is_null() {
             break request;
+        }
+        if client.is_finished() {
+            panic!("CLI finished before queueing: {:?}", client.join().unwrap());
         }
         assert!(
             Instant::now() < deadline,

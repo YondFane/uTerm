@@ -61,9 +61,23 @@ impl Store {
             .read(true)
             .write(true)
             .open(self.root.join("writer.lock"))?;
-        file.try_lock().map_err(|_| {
-            CoreError::new("WRITER_BUSY", "Another writer owns the canonical store")
-        })?;
+        loop {
+            match file.try_lock() {
+                Ok(()) => break,
+                Err(std::fs::TryLockError::Error(error))
+                    if error.kind() == std::io::ErrorKind::Interrupted =>
+                {
+                    continue
+                }
+                Err(std::fs::TryLockError::WouldBlock) => {
+                    return Err(CoreError::new(
+                        "WRITER_BUSY",
+                        "Another writer owns the canonical store",
+                    ))
+                }
+                Err(std::fs::TryLockError::Error(error)) => return Err(error.into()),
+            }
+        }
         Ok(file)
     }
     fn path(&self) -> PathBuf {

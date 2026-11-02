@@ -72,9 +72,22 @@ impl Inner {
                 .map_err(|e| e.to_string())?;
         }
         let ownership = private_file(&root.join("owner.lock"))?;
-        ownership
-            .try_lock()
-            .map_err(|_| "本地控制服务已被另一个实例占用。")?;
+        loop {
+            match ownership.try_lock() {
+                Ok(()) => break,
+                Err(std::fs::TryLockError::Error(error))
+                    if error.kind() == std::io::ErrorKind::Interrupted =>
+                {
+                    continue
+                }
+                Err(std::fs::TryLockError::WouldBlock) => {
+                    return Err("本地控制服务已被另一个实例占用。".into())
+                }
+                Err(std::fs::TryLockError::Error(error)) => {
+                    return Err(format!("Control ownership lock: {error}"))
+                }
+            }
+        }
         let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|e| e.to_string())?;
         listener.set_nonblocking(true).map_err(|e| e.to_string())?;
         let endpoint = Endpoint {

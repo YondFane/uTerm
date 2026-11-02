@@ -12,7 +12,7 @@ fn call(core: &Core, method: &str, params: Value) -> Value {
         &serde_json::to_vec(&json!({"version":1,"id":"host-test","method":method,"params":params}))
             .unwrap(),
     );
-    assert!(response.error.is_none(), "{:?}", response.error);
+    assert!(response.error.is_none(), "{method}: {:?}", response.error);
     response.result.unwrap()
 }
 fn helper() -> PathBuf {
