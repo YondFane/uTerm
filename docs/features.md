@@ -59,7 +59,8 @@ artifact; automatic downgrade into an unmodified old client's WebView storage is
 
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
 conflicts, corruption, recovery, ownership and callback draining on Linux. Swift bridge tests run in
-macOS CI; native data migration and interactive recovery acceptance remain pending.
+macOS CI; native data migration and interactive recovery acceptance remain pending. Both legacy
+platform jobs also run shared-core tests and generated-contract drift checks.
 
 ## Project website
 

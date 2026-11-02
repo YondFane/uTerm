@@ -11,6 +11,9 @@
   "scripts": {
     "dev": "vite",
     "check": "tsc --noEmit",
+    "contracts:generate": "node scripts/generate-core-contracts.mjs",
+    "contracts:check": "node scripts/generate-core-contracts.mjs --check",
+    "test:core": "cargo test --locked --manifest-path crates/uterm-core/Cargo.toml && cargo test --locked --manifest-path crates/uterm-ffi/Cargo.toml",
     "i18n:check": "node --experimental-strip-types scripts/i18n-check.mjs",
     "build": "pnpm check && vite build",
     "preview": "vite preview",
@@ -22,7 +25,7 @@
     "desktop:check": "node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle -- --locked",
     "test": "node --experimental-strip-types --test --test-concurrency=4 tests/*.test.mjs",
     "format": "prettier --write src tests scripts site \"*.{json,ts,html}\" \"src-tauri/{tauri.conf.json,capabilities/*.json}\" && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path crates/utermd-local/Cargo.toml",
-    "format:check": "prettier --check src tests scripts site \"*.{json,ts,html}\" \"src-tauri/{tauri.conf.json,capabilities/*.json}\" && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo fmt --manifest-path crates/utermd-local/Cargo.toml -- --check",
+    "format:check": "prettier --check src tests scripts site \"*.{json,ts,html}\" \"src-tauri/{tauri.conf.json,capabilities/*.json}\" && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo fmt --manifest-path crates/utermd-local/Cargo.toml -- --check && cargo fmt --manifest-path crates/uterm-core/Cargo.toml -- --check && cargo fmt --manifest-path crates/uterm-ffi/Cargo.toml -- --check",
     "test:host": "cargo test --manifest-path crates/utermd-local/Cargo.toml --locked",
     "database:build": "node scripts/database-component.mjs",
     "test:database": "pnpm database:build && node --experimental-strip-types --test tests/database-bridge.test.mjs",
