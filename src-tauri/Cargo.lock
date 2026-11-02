@@ -5339,6 +5339,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "utermd-local",
+ "uuid",
 ]
 
 [[package]]

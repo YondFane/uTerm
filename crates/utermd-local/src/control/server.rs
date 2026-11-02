@@ -18,7 +18,7 @@ use super::{cli, parse_arguments, LIMIT};
 use super::{read_message, write_message, Endpoint};
 #[cfg(test)]
 use std::io::Write;
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Request {
     pub id: String,
     pub method: String,
@@ -30,6 +30,7 @@ struct Pending {
     expires: Instant,
     reply: mpsc::SyncSender<Value>,
     claimed: bool,
+    executing: bool,
 }
 struct Inner {
     root: PathBuf,
@@ -175,6 +176,7 @@ impl Inner {
                 expires: Instant::now() + Duration::from_secs(15),
                 reply: send,
                 claimed: false,
+                executing: false,
             });
         }
         self.ready.notify_waiters();
@@ -204,6 +206,7 @@ impl Inner {
             expires: Instant::now() + Duration::from_secs(60),
             reply,
             claimed: false,
+            executing: false,
         });
         drop(queue);
         self.ready.notify_waiters();
@@ -325,6 +328,21 @@ impl Control {
             }
         }
         Ok(())
+    }
+    pub fn execution_request(&self, id: &str) -> Result<Request, String> {
+        let mut queue = self.inner.queue.lock().map_err(|e| e.to_string())?;
+        queue.retain(|pending| pending.expires > Instant::now());
+        let pending = queue
+            .iter_mut()
+            .find(|pending| pending.request.id == id && pending.claimed)
+            .ok_or("Control request expired or was not claimed")?;
+        if pending.executing {
+            return Err(
+                "Control request was already dispatched; check the app before retrying".into(),
+            );
+        }
+        pending.executing = true;
+        Ok(pending.request.clone())
     }
     pub fn open_link(&self, value: &str) -> Result<(), String> {
         self.inner.open_link(value)
@@ -492,6 +510,29 @@ mod tests {
         let worker = std::thread::spawn(move || read_message(&mut listener.accept().unwrap().0));
         client.write_all(&vec![b'x'; LIMIT as usize + 1]).unwrap();
         assert!(worker.join().unwrap().unwrap_err().contains("oversized"));
+    }
+    #[test]
+    fn execution_requires_a_live_claim_and_cannot_be_repeated() {
+        let directory = tempfile::tempdir().unwrap();
+        let state = service(directory.path());
+        state
+            .open_link("uterm://session/12345678-1234-1234-1234-123456789abc")
+            .unwrap();
+        let id = state.inner.queue.lock().unwrap()[0].request.id.clone();
+        assert!(state.execution_request(&id).is_err());
+        assert_eq!(state.poll().unwrap().unwrap().id, id);
+        assert_eq!(state.execution_request(&id).unwrap().method, "open");
+        assert!(state
+            .execution_request(&id)
+            .unwrap_err()
+            .contains("already dispatched"));
+        state.inner.queue.lock().unwrap()[0].expires = Instant::now() - Duration::from_secs(1);
+        assert!(state
+            .execution_request(&id)
+            .unwrap_err()
+            .contains("expired"));
+        state.reply(&id, json!({"result":"late"})).unwrap();
+        assert!(state.poll().unwrap().is_none());
     }
     #[test]
     fn links_only_select_sessions() {

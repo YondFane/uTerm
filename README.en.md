@@ -171,3 +171,9 @@ The shared loopback control server is in `crates/utermd-local/src/control/server
 operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this
 service. `pnpm test:host` includes the real standalone CLI/socket regression; `pnpm test:core`
 checks bridge ownership and close. Native UI dispatch remains under development.
+
+On macOS, `bash scripts/macos-control-smoke.sh` checks native control with the actual bundled Rust
+CLI, two PTYs, modal guards and native screenshots. Enable **Allow local CLI control** in native
+Settings and pass its displayed data directory explicitly with `--control --data-dir PATH`; the
+helper's default profile remains the legacy client profile. Rust allocates CLI session UUIDs with
+its locked UUID dependency. This QA requires WindowServer and does not change URI registration.

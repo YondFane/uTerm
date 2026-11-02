@@ -912,3 +912,35 @@ platform acceptance of that extension remains pending.
 `/tmp`、`/workspace` 受保护祖先 `.git` 条目触发三项原 Git 发现问题；保持断言，用 `TMPDIR=/var/tmp`
 重跑后 129 通过／10 忽略，六项协议测试移到共享宿主使计数变化。扩展真实 Tauri
 QA 从设置启停控制并通过实际 CLI 调用应用 socket；该扩展的新平台验收仍待完成。
+
+### Native CLI integration / 原生 CLI 接入
+
+#29 exposes the control preference/data directory in native Settings and handles authenticated
+requests through the existing bridge. Read-only status/list projections use the shared snapshot.
+Rust owns new/focus/send/close rules, requires a live claimed request, rejects repeated execution,
+checks revision, allocates a separate session UUID and pins input/close to the hosted generation.
+CLI project-root creation clears a selected Worktree, matching legacy behavior. FFI emits the
+committed revision. Closing cancels and awaits the control task before bridge shutdown; ownership
+errors remain visible without disabling terminals.
+
+Linux real-socket tests cover claimed/expired/repeated requests, stale revisions without creation,
+project-path aliases and Worktree isolation. A real PTY test rejects stale-generation close without
+removing configuration or stopping the process, then closes the matching generation. A C ABI test
+checks committed revision events and service cleanup. Swift/UI execution requires fresh Mac CI.
+`scripts/macos-control-smoke.sh` uses the bundled CLI for
+status/projects/sessions/new/open/send/close, rejects modal writes, presses the native Settings
+toggle through in-process accessibility and captures Settings plus terminal output. Dedicated
+temporary projects/hosts are cleaned on success and failure. These are automated native actions, not
+manual IME/clipboard/sleep acceptance.
+
+Service extraction head `acb79d6a9329251250dc91599f80ba1b4dd48bfb` passed all four jobs in legacy
+run 41452044182 and native run 41452044214. This validates the shared service and Tauri integration;
+new native action code requires its own committed head evidence. #29/#30 and M2 stay open.
+
+#29 在原生设置提供控制偏好／数据目录，经桥接处理认证请求；只读状态／列表由共享快照投影。Rust 负责创建／聚焦／输入／关闭，核对有效认领、单次执行、revision 和 generation，并分配独立会话 UUID。CLI 指向项目根目录时不继承 Worktree；FFI 发出已提交 revision。关闭前取消并等待控制任务结束，服务被占用时可见报错，终端仍可用。
+
+Linux 真实 socket 测试覆盖认领／过期／重复、过期写入不创建会话、路径别名及 Worktree 隔离；真实 PTY 拒绝旧 generation 关闭且保留配置／进程，再关闭匹配代际；C
+ABI 检查提交事件和服务清理。Swift／界面需新 Mac
+CI。新脚本通过包内 CLI 检查上述命令、对话框保护、进程内原生辅助功能按下开关及设置／终端截图，成功失败均清理临时项目和宿主。不冒充人工输入法／剪贴板／休眠验收。
+
+上述 acb79d6 的四 job 验证共享服务及 Tauri 集成，不能当作新原生命令代码的验收；#29／#30 及 M2 仍开放。

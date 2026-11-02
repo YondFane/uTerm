@@ -31,6 +31,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.center()
         self.window = window
         model.languageChanged = { [weak self] in self?.configureMenu() }
+        model.requestActivation = { [weak window] in
+            window?.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+        }
         model.appearanceChanged = { [weak window] appearance in
             window?.appearance = appearance == "dark" ? NSAppearance(named: .darkAqua) : appearance == "light" ? NSAppearance(named: .aqua) : nil
         }
@@ -39,6 +43,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--control-smoke-report") {
+                var report = baseReport()
+                do { try await ControlSmoke.run(model: model, window: window, report: &report) }
+                catch { report["failure"] = error.localizedDescription }
+                finishReport(report, path: path)
+            }
             if let report = WorkspaceModel.argument("--content-smoke-report") {
                 var result = baseReport()
                 do { try await ContentSmoke.run(model: model, open: { directory, path in try self.makeContentWindow(directory: directory, path: path) }, report: &result) }

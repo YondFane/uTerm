@@ -81,9 +81,10 @@ CI。修正后的宿主矩阵随后在 head `ac682f21d955b137c277cda26bf2a90385f
 `5037c127ad3fd7fd3bdeaa3937d048ac11acd47c`
 的 Windows、旧 macOS 及双原生架构通过（[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41443585247)、[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)）。
 
-回环控制服务及有界认证队列现位于共享 Rust 宿主模块；Tauri 原控制命令委托该模块，核心 `control.*`
-操作向原生桥接提供同一服务。Linux 真实 helper
-CLI 和核心关闭测试通过，覆盖请求认领、Unicode 字面输入、占用锁互斥及重开前排空客户端。原生命令分发和设置入口仍待接入；抽离服务不等于原生 CLI 功能验收。
+回环控制服务及有界认证队列位于共享 Rust 宿主模块，Tauri 继续委托原命令。原生设置现有**允许本地 CLI 控制**及明确的数据目录；Rust 分发认证后的创建／聚焦／输入／关闭请求，检查 revision 与宿主 generation。执行须有有效认领，过期和重复请求会拒绝；桥接清理前先停止控制循环。
+
+Linux 真实 socket／PTY／C
+ABI 测试覆盖占用锁互斥、字面输入、关闭排空、过期 revision／generation、Worktree 隔离及提交事件。新增 macOS 冒烟使用包内 CLI、原生辅助功能按下、双 PTY 和 WindowServer 截图；原生集成仍待 CI 验收，人工输入／输入法另行验收。
 
 原生 SSH、完整设置、文件／数据工作台、真实 Agent
 CLI 交互、输入法、休眠、多屏及性能验收尚未完成。Windows 与旧 macOS 仍为现有完整功能客户端。Issue 对应关系、源码证据和剩余工作见[原生迁移状态](native-migration.md)。其中可复用验收清单定义同机负载、TUI／交互步骤及签名／升级条件，未执行项继续明确待验收。

@@ -113,12 +113,16 @@ native Mac architectures at head `ac682f21d955b137c277cda26bf2a90385f4cf54`, tes
 ([legacy CI](https://github.com/YondFane/uTerm/actions/runs/41443585247),
 [native CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)).
 
-The loopback control server and bounded authenticated queue now live in the shared Rust host module.
-Tauri delegates its existing control commands to it, while core `control.*` operations expose the
-same service to the native bridge. Real helper CLI and core-close tests pass on Linux, including
-claimed requests, literal Unicode input, lease exclusion and draining clients before reopen. Native
-command dispatch and its Settings entry are still pending; this service extraction does not
-establish native CLI feature acceptance.
+The loopback control server and bounded authenticated queue live in the shared Rust host module.
+Tauri delegates its existing control commands to it. Native Settings now includes **Allow local CLI
+control** and the explicit CLI data directory. Rust dispatches authenticated new/focus/send/close
+requests, checking revisions and hosted generations. Execution requires a live claimed request;
+expired and repeated requests are rejected. The control loop stops before bridge teardown.
+
+Linux real-socket, real-PTY and C ABI tests cover lease exclusion, literal input, draining on close,
+stale revisions/generations, Worktree isolation and committed revision events. A new macOS smoke
+uses the bundled CLI, native accessibility press, two PTYs and WindowServer captures. Its native
+integration acceptance is pending CI; manual input and IME acceptance remain separate.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain

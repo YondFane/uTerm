@@ -134,6 +134,21 @@ struct BasicSettingsView: View {
                     Text(localized("Terminal font size", "终端字号") + ": \(Int(model.settings["fontSize"].number ?? 14)) pt")
                 } onIncrement: { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(1)]) } }
                   onDecrement: { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(-1)]) } }
+                Section(localized("Local control", "本地控制")) {
+                    Toggle(localized("Allow local CLI control", "允许本地 CLI 控制"), isOn: Binding(
+                        get: { model.controlStatus["enabled"].bool ?? false },
+                        set: { enabled in Task { await model.configureControl(enabled) } }
+                    )).accessibilityIdentifier("native-local-control-toggle")
+                        .disabled(model.controlStatus["enabled"].bool == nil || model.controlBusy)
+                    if let directory = model.controlStatus["directory"].string {
+                        Text(localized("CLI data directory: ", "CLI 数据目录：") + directory)
+                            .font(.caption).textSelection(.enabled)
+                    }
+                    if !model.controlError.isEmpty {
+                        Text(model.controlError).font(.caption).textSelection(.enabled)
+                        Button(localized("Retry control service", "重试控制服务")) { Task { await model.startControl() } }.disabled(model.controlBusy)
+                    }
+                }
                 Section(localized("Agents", "Agent")) {
                     ForEach(model.environment["agents"].array.compactMap(\.string), id: \.self) { agent in
                         Toggle(agent, isOn: Binding(get: { model.settings["enabledAgents"].array.contains(.string(agent)) }, set: { enabled in Task { await model.mutate("settings.agent.toggle", ["agent": .string(agent), "enabled": .bool(enabled)]) } }))

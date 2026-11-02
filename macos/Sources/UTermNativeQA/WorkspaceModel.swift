@@ -23,6 +23,11 @@ final class WorkspaceModel: ObservableObject {
     @Published var sidebarVisible = true
     @Published private(set) var focusRevision = 0
     @Published private(set) var toolbarHeight: CGFloat = 0
+    @Published var controlStatus: JSONValue = .null
+    @Published var controlError = ""
+    @Published var controlBusy = false
+    var controlTask: Task<Void, Never>?
+    var requestActivation: (() -> Void)?
     private(set) var bridge: CoreBridge?
     private(set) var terminals: [String: TerminalSession] = [:]
     var languageChanged: (() -> Void)?
@@ -116,6 +121,7 @@ final class WorkspaceModel: ObservableObject {
                 }
             }
             if ready { terminalError = "" }
+            await startControl()
         } catch { self.error = error.localizedDescription }
     }
 
@@ -174,6 +180,36 @@ final class WorkspaceModel: ObservableObject {
         if selectedID == id { return }
         if let operation { _ = await operation.value }
         if await mutate("session.select", ["id": .string(id)]), focus { focusRevision += 1 }
+    }
+
+    func performControlAction(_ request: JSONValue) async throws -> JSONValue {
+        guard !busy, !shuttingDown, !settingsPresented, nameDraft == nil,
+              let bridge, let state else {
+            throw BridgeFailure(code: "CONTROL_BUSY", message: localized("Finish the current dialog or operation first.", "请先完成当前对话框或操作。"))
+        }
+        busy = true
+        defer { busy = false }
+        let method = request["method"].string ?? ""
+        let target = request["params"]["id"].string
+        let generation = target.flatMap { terminals[$0]?.generation }
+        do {
+            let result = try await bridge.call("control.execute", params: .object([
+                "requestId": request["id"], "expectedRevision": .string(state.snapshot.revision),
+                "generation": generation.map(JSONValue.string) ?? .null
+            ]))
+            await reload()
+            if needsReload { needsReload = false; await reload() }
+            if ["sessions.new", "sessions.focus", "open"].contains(method) {
+                focusRevision += 1
+                requestActivation?()
+            }
+            return result["result"]
+        } catch {
+            let message = error.localizedDescription
+            await reload()
+            self.error = message
+            throw error
+        }
     }
 
     func selectProject(_ id: String, focus: Bool = true) async {
@@ -283,6 +319,7 @@ final class WorkspaceModel: ObservableObject {
     func shutdown() async {
         if let operation { _ = await operation.value }
         shuttingDown = true
+        await stopControl()
         for terminal in terminals.values { terminal.cancelConnection() }
         for terminal in terminals.values { await terminal.drainInput() }
         events?.cancel()
@@ -297,6 +334,7 @@ final class WorkspaceModel: ObservableObject {
         guard !shuttingDown else { return }
         busy = true
         defer { busy = false }
+        await stopControl()
         for terminal in terminals.values { terminal.pauseForRebind() }
         for terminal in terminals.values { await terminal.finishConnection(); await terminal.drainInput() }
         events?.cancel(); frames?.cancel(); failures?.cancel()

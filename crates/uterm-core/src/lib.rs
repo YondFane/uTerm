@@ -1,4 +1,5 @@
 mod connections;
+mod control;
 pub mod files;
 pub mod host;
 pub mod session_state;
@@ -221,6 +222,13 @@ impl Core {
                     .map_err(|e| CoreError::new("CONTROL", e))?,
             )
             .map_err(Into::into),
+            "control.execute" => {
+                let request = self
+                    .control()?
+                    .execution_request(&string(&params, "requestId")?)
+                    .map_err(|e| CoreError::new("CONTROL", e))?;
+                control::execute(self, request, &params)
+            }
             "control.reply" => {
                 self.control()?
                     .reply(&string(&params, "id")?, params["result"].clone())

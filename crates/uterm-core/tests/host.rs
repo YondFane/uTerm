@@ -55,6 +55,93 @@ impl Drop for HostCleanup {
     }
 }
 #[test]
+fn cli_close_rejects_a_stale_generation_and_preserves_the_saved_session() {
+    let temporary = tempfile::tempdir().unwrap();
+    let core = Core::open(temporary.path().join("shared-state-v1")).unwrap();
+    let _cleanup = HostCleanup(temporary.path().join("local-daemon-v1"));
+    let defaults = call(&core, "state.defaults", Value::Null);
+    let imported = call(
+        &core,
+        "migration.import",
+        json!({"workspace":defaults["workspace"],"settings":defaults["settings"],"legacy":{}}),
+    );
+    let id = "00000000-0000-4000-8000-000000000029";
+    let snapshot = call(
+        &core,
+        "session.create",
+        json!({"expectedRevision":imported["revision"],"id":id,"name":"Control","directory":temporary.path(),"projectId":null}),
+    );
+    call(&core, "host.configure", json!({"helper":helper()}));
+    core.set_terminal_sink(Arc::new(|_, _, _| Ok(()))).unwrap();
+    let hosted = call(
+        &core,
+        "terminal.open",
+        json!({"id":id,"attachment":"control","directory":temporary.path(),"shell":if cfg!(windows){"cmd"}else{"default"},"rows":24,"cols":80}),
+    );
+    call(&core, "control.start", Value::Null);
+    call(&core, "control.configure", json!({"enabled":true}));
+    for (generation, accepted) in [
+        ("stale", false),
+        (hosted["generation"].as_str().unwrap(), true),
+    ] {
+        let root = temporary.path().to_owned();
+        let client = std::thread::spawn(move || {
+            utermd_local::control::cli(vec![
+                "--data-dir".into(),
+                root.to_string_lossy().into(),
+                "sessions".into(),
+                "close".into(),
+                id.into(),
+            ])
+        });
+        let deadline = Instant::now() + Duration::from_secs(5);
+        let request = loop {
+            let request = call(&core, "control.poll", Value::Null);
+            if !request.is_null() {
+                break request;
+            }
+            assert!(Instant::now() < deadline, "CLI close did not queue");
+            std::thread::sleep(Duration::from_millis(10));
+        };
+        let response=core.execute(&serde_json::to_vec(&json!({"version":1,"id":"close-cli","method":"control.execute","params":{"requestId":request["id"],"expectedRevision":snapshot["revision"],"generation":generation}})).unwrap());
+        if accepted {
+            assert!(response.error.is_none(), "{:?}", response.error);
+            call(
+                &core,
+                "control.reply",
+                json!({"id":request["id"],"result":{"result":response.result.unwrap()["result"]}}),
+            );
+            assert_eq!(client.join().unwrap().unwrap()["id"], id);
+            assert!(call(&core, "session.entries", Value::Null)
+                .as_array()
+                .unwrap()
+                .is_empty());
+        } else {
+            assert_eq!(response.error.unwrap().code, "STALE_GENERATION");
+            call(
+                &core,
+                "control.reply",
+                json!({"id":request["id"],"result":{"error":"Stale generation"}}),
+            );
+            assert!(client.join().unwrap().is_err());
+            assert_eq!(
+                call(&core, "session.entries", Value::Null)
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                1
+            );
+            assert!(call(&core, "host.status", Value::Null)["sessions"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|s| s["running"] == true));
+        }
+    }
+    core.close();
+}
+
+#[test]
 fn real_shared_terminal_preserves_backpressure_generation_replay_and_detached_processes() {
     let root = tempfile::tempdir().unwrap();
     let state = root.path().join("shared-state-v1");

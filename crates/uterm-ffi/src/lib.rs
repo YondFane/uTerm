@@ -254,6 +254,7 @@ fn publish(client: &Client, handle: u64, operation: u64, request: &[u8], respons
     if !matches!(
         request.method.as_str(),
         "migration.import"
+            | "control.execute"
             | "snapshot.replace"
             | "settings.patch"
             | "selection.set"
@@ -448,6 +449,7 @@ pub extern "C" fn uterm_close(handle: u64) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    mod control;
     fn consume(buffer: UTermBuffer) -> serde_json::Value {
         let result =
             serde_json::from_slice(unsafe { slice::from_raw_parts(buffer.data, buffer.length) })

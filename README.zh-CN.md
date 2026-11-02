@@ -149,3 +149,8 @@ CI 截取原生窗口，并将报告及图片上传到
 共享回环控制服务位于
 `crates/utermd-local/src/control/server.rs`，Tauri 与核心操作复用同一队列及生命周期；宿主为该服务直接声明 Tokio 和 tempfile。`pnpm test:host`
 包含真实独立 CLI／socket 回归，`pnpm test:core` 检查桥接所有权及关闭；原生 UI 命令分发仍在开发中。
+
+macOS 可运行 `bash scripts/macos-control-smoke.sh`，使用真实包内 Rust
+CLI、双 PTY、对话框保护及原生截图检查控制服务。在原生设置启用**允许本地 CLI 控制**，通过
+`--control --data-dir PATH`
+明确传入界面显示的数据目录；helper 默认配置仍指向旧客户端。Rust 使用锁定的 UUID 依赖分配 CLI 会话身份。QA 要求 WindowServer，不修改 URI 注册。
