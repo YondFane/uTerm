@@ -15,6 +15,8 @@ mod java;
 mod java_components;
 mod projects;
 mod python;
+#[cfg(feature = "qa")]
+mod qa;
 mod redis;
 mod redis_credentials;
 mod sessions;
@@ -267,7 +269,17 @@ fn main() {
         }
         return;
     }
+    #[cfg(feature = "qa")]
+    if mode.as_deref() == Some(std::ffi::OsStr::new("--qa-cleanup")) {
+        qa::cleanup().expect("Isolated QA host cleanup failed");
+        return;
+    }
     let mut context = tauri::generate_context!();
+    #[cfg(feature = "qa")]
+    {
+        qa::root().expect("QA requires a private temporary data root");
+        assert_eq!(context.config().identifier, qa::IDENTIFIER);
+    }
     if starts_in_background(std::env::args_os().skip(1)) {
         for window in &mut context.config_mut().app.windows {
             if window.label == "main" {
@@ -393,6 +405,14 @@ fn main() {
         .manage(database_components::Components::default())
         .manage(java_components::Components::default())
         .invoke_handler(tauri::generate_handler![
+            #[cfg(feature = "qa")]
+            qa::qa_context,
+            #[cfg(feature = "qa")]
+            qa::qa_external_settings,
+            #[cfg(feature = "qa")]
+            qa::qa_scene,
+            #[cfg(feature = "qa")]
+            qa::qa_request_exit,
             shared_core::shared_core_request,
             shared_core::shared_core_ready,
             shared_core::shared_core_exit,

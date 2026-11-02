@@ -159,3 +159,10 @@ notices. Install the frozen pnpm dependencies first. `bash scripts/macos-content
 the isolated read-only CodeMirror/HTML/PDF windows and records native screenshots and boundary
 checks; the current native file entry is **File → Open file…** with a local project selected.
 Editing and shared draft recovery remain pending.
+
+`pnpm qa:shared-state` builds a compile-gated, isolated Tauri QA app
+(`sh.uterm.desktop.qa.sharedstate`) and runs save/conflict/reload/quit/reopen/recovery scenarios in
+its real WebView. Windows/macOS CI captures native windows and uploads reports and images under
+`legacy-checks-*/tauri-state-qa/`. It requires a desktop session and refuses existing QA profiles.
+Dedicated profile links redirect QA data into a temporary directory; no home-directory override or
+production profile is used. This automation does not establish manual keyboard/IME acceptance.

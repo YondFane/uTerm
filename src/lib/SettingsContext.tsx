@@ -7,7 +7,12 @@ import { defaults, readSettings, settingsKey, validateShortcuts } from "./settin
 import type { Settings } from "./settings";
 import { activeLanguage, setUiLanguage } from "./i18n";
 import { interfacePalette, isLightInterfaceTheme } from "./interface-themes";
-import { canonicalStateActive, persistSettings, sharedSettings } from "./shared-state";
+import {
+  canonicalStateActive,
+  initializeSharedState,
+  persistSettings,
+  sharedSettings,
+} from "./shared-state";
 const Context = createContext<{
   settings: Settings;
   light: boolean;
@@ -19,9 +24,14 @@ const Context = createContext<{
     mac: boolean,
   ) => Promise<void>;
   reset: () => Promise<void>;
+  failedSettings: Partial<Settings>;
+  reload: () => Promise<void>;
+  discardFailed: () => void;
+  assertSaved: () => void;
 } | null>(null);
 export interface ContentSettingsAdapter {
   settings: Settings;
+  read: () => Promise<Settings>;
   update: (patch: Partial<Settings>) => Promise<Settings>;
   adjust: (
     key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
@@ -48,6 +58,25 @@ export function SettingsProvider({
   });
   const [settings, setSettings] = useState(initial.settings);
   const currentSettings = useRef(settings);
+  const failed = useRef<Partial<Settings>>({});
+  const latest = useRef(new Map<string, symbol>());
+  const [failedSettings, setFailedSettings] = useState<Partial<Settings>>({});
+  function discardFailed() {
+    failed.current = {};
+    setFailedSettings({});
+  }
+  function assertSaved() {
+    if (Object.keys(failed.current).length) throw Error(tx("请重试或放弃未保存的设置。"));
+  }
+  async function reload() {
+    if (!content && canonicalStateActive()) await initializeSharedState();
+    const saved = content
+      ? await content.read()
+      : (sharedSettings() ?? readSettings(localStorage.getItem(settingsKey)));
+    currentSettings.current = saved;
+    setSettings(saved);
+    setError("");
+  }
   useEffect(() => {
     setUiLanguage(activeLanguage(settings.language));
   }, [settings.language]);
@@ -108,19 +137,31 @@ export function SettingsProvider({
         ([key, value]) => JSON.stringify(value) !== JSON.stringify(previous[key as keyof Settings]),
       ),
     );
-    const saved = content
-      ? await content.update(patch)
-      : canonicalStateActive()
-        ? await persistSettings((current) => {
-            const next = readSettings(JSON.stringify({ ...current, ...patch }));
-            validateShortcuts(next, mac);
-            return next;
-          })
-        : checked;
-    if (!content && !canonicalStateActive())
-      localStorage.setItem(settingsKey, JSON.stringify(saved));
-    currentSettings.current = saved;
-    setSettings(saved);
+    const token = Symbol();
+    for (const key of Object.keys(patch)) latest.current.set(key, token);
+    try {
+      const saved = content
+        ? await content.update(patch)
+        : canonicalStateActive()
+          ? await persistSettings((current) => {
+              const next = readSettings(JSON.stringify({ ...current, ...patch }));
+              validateShortcuts(next, mac);
+              return next;
+            })
+          : checked;
+      if (!content && !canonicalStateActive())
+        localStorage.setItem(settingsKey, JSON.stringify(saved));
+      currentSettings.current = saved;
+      setSettings(saved);
+      for (const key of Object.keys(patch))
+        if (latest.current.get(key) === token) delete failed.current[key as keyof Settings];
+      setFailedSettings({ ...failed.current });
+    } catch (reason) {
+      for (const [key, value] of Object.entries(patch))
+        if (latest.current.get(key) === token) Object.assign(failed.current, { [key]: value });
+      setFailedSettings({ ...failed.current });
+      throw reason;
+    }
   }
   async function reset() {
     if (content) {
@@ -128,6 +169,7 @@ export function SettingsProvider({
       currentSettings.current = saved;
       setSettings(saved);
       setError("");
+      discardFailed();
       return;
     }
     const old = canonicalStateActive() ? null : localStorage.getItem(settingsKey);
@@ -138,6 +180,7 @@ export function SettingsProvider({
     currentSettings.current = checked;
     setSettings(checked);
     setError("");
+    discardFailed();
   }
   async function resizeFont(
     key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
@@ -165,7 +208,18 @@ export function SettingsProvider({
   }
   return (
     <Context.Provider
-      value={{ settings, light, error: error || appearanceError, save, resizeFont, reset }}
+      value={{
+        settings,
+        light,
+        error: error || appearanceError,
+        save,
+        resizeFont,
+        reset,
+        failedSettings,
+        reload,
+        discardFailed,
+        assertSaved,
+      }}
     >
       {children}
     </Context.Provider>

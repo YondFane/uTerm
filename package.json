@@ -23,6 +23,7 @@
     "uterm:dev": "tauri dev",
     "desktop:build": "node scripts/package.mjs",
     "desktop:check": "node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle -- --locked",
+    "qa:shared-state": "node scripts/tauri-state-qa.mjs",
     "test": "node --experimental-strip-types --test --test-concurrency=4 tests/*.test.mjs",
     "format": "prettier --write src tests scripts site \"*.{json,ts,html}\" \"src-tauri/{tauri.conf.json,capabilities/*.json}\" && cargo fmt --manifest-path src-tauri/Cargo.toml && cargo fmt --manifest-path crates/utermd-local/Cargo.toml",
     "format:check": "prettier --check src tests scripts site \"*.{json,ts,html}\" \"src-tauri/{tauri.conf.json,capabilities/*.json}\" && cargo fmt --manifest-path src-tauri/Cargo.toml -- --check && cargo fmt --manifest-path crates/utermd-local/Cargo.toml -- --check && cargo fmt --manifest-path crates/uterm-core/Cargo.toml -- --check && cargo fmt --manifest-path crates/uterm-ffi/Cargo.toml -- --check",

@@ -107,7 +107,11 @@ intact. Three host tests passed on Linux; fresh Windows/macOS CI for these added
 The incompatible version is an endpoint fixture, not a separately built historical binary. The
 Windows matrix exposed ordinary versus verbatim drive-path aliases. Host identity now compares
 canonical files, preserving an unchanged idle process as well as active ones; fresh Windows CI is
-required for this correction.
+required for this correction. The corrected helper matrix then passed Windows, legacy macOS and both
+native Mac architectures at head `ac682f21d955b137c277cda26bf2a90385f4cf54`, tested merge
+`5037c127ad3fd7fd3bdeaa3937d048ac11acd47c`
+([legacy CI](https://github.com/YondFane/uTerm/actions/runs/41443585247),
+[native CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)).
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain
@@ -124,10 +128,19 @@ directory. Subsequent saves use an atomic snapshot and revision checks; workspac
 changes share a serialized queue. The old workspace/settings keys are retained for recovery and are
 no longer written. Editor drafts and other WebView preferences retain their existing owners.
 
-Settings changes are calculated against the view that initiated them, so an older view cannot revert
-unrelated committed fields. Quit drains writes added while an earlier save is still running. Two
-real Rust-process regressions verify these races on Linux; the full frontend suite passed 361 tests
-with ten skipped. Native conflict/reload and recovery interaction remain pending.
+Settings changes use the initiating view's baseline, so an older view cannot revert unrelated
+committed fields. Quit drains writes added during an earlier save. Explicit reloads use the same
+queue. Failed settings remain as drafts when Settings is closed and reopened. **Reload saved
+settings** reads external changes while retaining the draft, including a conflict on the same field;
+**Retry saving settings** explicitly writes it, and **Discard unsaved settings** reloads before
+discarding. Quit remains blocked while a failed draft needs handling. These drafts are held in
+memory; they are not crash-recovery storage.
+
+Ten real Rust-process contract tests passed on Linux x86_64, including retained same-field conflict
+drafts, publication after commit and quit protection after reload. A real isolated Tauri/X11 run
+checked save/conflict/reload/retry, normal quit and reopen, corrupt snapshot recovery and retained
+original/damaged bytes. Windows/macOS jobs now run this QA app with platform window screenshots and
+head/merge records; fresh platform results are pending.
 
 An unreadable snapshot opens a recovery view without resetting data. **View recovery copies** lists
 valid saved snapshots; an explicit restore retains the damaged bytes. Up to eight previous snapshots

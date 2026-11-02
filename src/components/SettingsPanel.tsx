@@ -115,7 +115,20 @@ export function SettingsPanel({
 }) {
   useUiLanguage();
 
-  const { settings, light, error, save, reset } = useSettings();
+  const {
+    settings: committedSettings,
+    light,
+    error,
+    save,
+    reset,
+    failedSettings,
+    reload,
+    discardFailed,
+  } = useSettings();
+  const settings = committedSettings;
+  function draft<K extends keyof Settings>(key: K): Settings[K] {
+    return failedSettings[key] ?? settings[key];
+  }
   const enabledAgents = availableAgents(settings, runtime.agents);
   const [workspaceEdit, setWorkspaceEdit] = useState<{ id: string | null; name: string } | null>(
     null,
@@ -199,7 +212,7 @@ export function SettingsPanel({
   }, []);
   async function change(patch: Partial<Settings>, report = setMessage) {
     try {
-      await save({ ...settings, ...patch }, mac, settings);
+      await save({ ...committedSettings, ...patch }, mac, committedSettings);
       report("");
     } catch (reason) {
       report(String(reason));
@@ -264,6 +277,33 @@ export function SettingsPanel({
               {localizeMessage(error || message)}
             </p>
           ) : null}
+          {Object.keys(failedSettings).length > 0 && (
+            <div role="group" aria-label={tx("未保存的设置")}>
+              <p>{tx("请重试或放弃未保存的设置。")}</p>
+              <button
+                onClick={() =>
+                  void reload()
+                    .then(() => setMessage(""))
+                    .catch((e) => setMessage(String(e)))
+                }
+              >
+                {tx("重新读取设置")}
+              </button>
+              <button onClick={() => void change(failedSettings)}>{tx("重试保存设置")}</button>
+              <button
+                onClick={() =>
+                  void reload()
+                    .then(() => {
+                      discardFailed();
+                      setMessage("");
+                    })
+                    .catch((e) => setMessage(String(e)))
+                }
+              >
+                {tx("放弃未保存的设置")}
+              </button>
+            </div>
+          )}
           {tab === "通用" && (
             <>
               <label>
@@ -308,7 +348,7 @@ export function SettingsPanel({
                   min={1}
                   step={1}
                   key={settings.fileTabLimit}
-                  defaultValue={settings.fileTabLimit}
+                  defaultValue={draft("fileTabLimit")}
                   onBlur={(event) => {
                     const value = event.target.valueAsNumber;
                     if (Number.isSafeInteger(value) && value >= 1) change({ fileTabLimit: value });
@@ -340,7 +380,7 @@ export function SettingsPanel({
                     max={1440}
                     step={1}
                     disabled={!settings.breakReminder}
-                    defaultValue={settings.breakInterval}
+                    defaultValue={draft("breakInterval")}
                     key={settings.breakInterval}
                     onBlur={(event) => {
                       const value = event.target.valueAsNumber;
@@ -461,7 +501,7 @@ export function SettingsPanel({
                     <input
                       aria-label={t("高亮颜色值")}
                       key={settings.activeIconColor}
-                      defaultValue={settings.activeIconColor}
+                      defaultValue={draft("activeIconColor")}
                       maxLength={7}
                       spellCheck={false}
                       onKeyDown={(event) => {
@@ -555,7 +595,7 @@ export function SettingsPanel({
                     min={min}
                     max={max}
                     key={settings[key]}
-                    defaultValue={settings[key]}
+                    defaultValue={draft(key)}
                     onBlur={(event) => change({ [key]: Number(event.target.value) })}
                   />
                 </label>
@@ -605,7 +645,7 @@ export function SettingsPanel({
                   min="10"
                   max="32"
                   key={settings.fontSize}
-                  defaultValue={settings.fontSize}
+                  defaultValue={draft("fontSize")}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
@@ -620,7 +660,7 @@ export function SettingsPanel({
                   max="2"
                   step="0.1"
                   key={settings.lineHeight}
-                  defaultValue={settings.lineHeight}
+                  defaultValue={draft("lineHeight")}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
@@ -642,7 +682,7 @@ export function SettingsPanel({
                     max="32"
                     step="1"
                     key={settings[key]}
-                    defaultValue={settings[key]}
+                    defaultValue={draft(key)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") event.currentTarget.blur();
                     }}
@@ -688,7 +728,7 @@ export function SettingsPanel({
                   max="100000"
                   step="100"
                   key={settings.scrollback}
-                  defaultValue={settings.scrollback}
+                  defaultValue={draft("scrollback")}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
@@ -909,7 +949,7 @@ export function SettingsPanel({
                   min={10}
                   max={3600}
                   step={1}
-                  defaultValue={settings.usageRefreshInterval}
+                  defaultValue={draft("usageRefreshInterval")}
                   key={settings.usageRefreshInterval}
                   onBlur={(event) => {
                     const value = event.target.valueAsNumber;

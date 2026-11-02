@@ -1,4 +1,9 @@
 export const messages: Record<string, string> = {
+  未保存的设置: "Unsaved settings",
+  "请重试或放弃未保存的设置。": "Retry or discard unsaved settings.",
+  重新读取设置: "Reload saved settings",
+  重试保存设置: "Retry saving settings",
+  放弃未保存的设置: "Discard unsaved settings",
   导出旧版兼容数据: "Export legacy-compatible data",
   "旧版兼容数据已导出。": "Legacy-compatible data exported.",
   查看恢复副本: "View recovery copies",

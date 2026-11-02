@@ -140,3 +140,8 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 原生 QA 构建还会执行
 `pnpm build`，打包共用 Web 内容及其许可声明；请先安装锁定的 pnpm 依赖。`bash scripts/macos-content-smoke.sh`
 检查隔离的只读 CodeMirror／HTML／PDF 窗口，记录原生截图及边界检查；当前入口为选择本地项目后使用**文件 → 打开文件…**。编辑与共享草稿恢复仍待完成。
+
+`pnpm qa:shared-state`
+构建仅 QA 特性启用的隔离 Tauri 应用（`sh.uterm.desktop.qa.sharedstate`），在真实 WebView 中执行保存／冲突／重载／退出／重开／恢复场景。Windows／macOS
+CI 截取原生窗口，并将报告及图片上传到
+`legacy-checks-*/tauri-state-qa/`。此命令需要桌面会话，拒绝覆盖已有 QA 配置。专用配置路径链接将 QA 数据导向临时目录，不覆盖主目录变量，也不使用生产配置。自动化不代表人工键盘／输入法验收。

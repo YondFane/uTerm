@@ -449,6 +449,96 @@ test("settings saves from a stale view change only its requested fields", async 
   assert.equal(stored.fontSize, 18, "A stale view must not revert another committed setting");
   assert.equal(stored.opacity, 0.8);
   assert.equal(context.settings.fontSize, 18);
+  const external = (await call("snapshot.read")).result;
+  await call("settings.patch", {
+    expectedRevision: external.revision,
+    patch: { fileFontSize: 17, fontSize: 21 },
+  });
+  const previous = context.settings;
+  await React.act(async () => {
+    await assert.rejects(context.save({ ...previous, fileFontSize: 19 }, false, previous), {
+      code: "CONFLICT",
+    });
+  });
+  assert.equal(
+    context.settings.fileFontSize,
+    previous.fileFontSize,
+    "Uncommitted draft must not be published",
+  );
+  assert.equal(context.failedSettings.fileFontSize, 19);
+  assert.throws(context.assertSaved);
+  await React.act(async () => context.reload());
+  assert.equal(context.settings.fileFontSize, 17, "Explicit reload sees external writes");
+  assert.equal(context.settings.fontSize, 21);
+  assert.equal(
+    context.failedSettings.fileFontSize,
+    19,
+    "Reload keeps a draft even for the same changed field",
+  );
+  assert.throws(context.assertSaved, "Reload alone must not allow quitting with an unsaved draft");
+  await React.act(async () =>
+    context.save({ ...context.settings, ...context.failedSettings }, false, context.settings),
+  );
+  assert.deepEqual(context.failedSettings, {});
+  assert.doesNotThrow(context.assertSaved);
+  assert.equal((await call("snapshot.read")).result.document.settings.fileFontSize, 19);
+});
+
+test("explicit reload is serialized with saves and cannot publish an old snapshot afterwards", async (t) => {
+  const call = await client(t);
+  const dom = new JSDOM("", { url: "http://localhost/" });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: dom.window.localStorage,
+  });
+  const server = await createServer({
+    configFile: false,
+    server: { middlewareMode: true, hmr: false, watch: null },
+    appType: "custom",
+  });
+  t.after(async () => {
+    clearMocks();
+    await server.close();
+    dom.window.close();
+  });
+  let hold = false;
+  let arrived;
+  let release;
+  const started = new Promise((done) => {
+    arrived = done;
+  });
+  const gate = new Promise((done) => {
+    release = done;
+  });
+  let written = false;
+  mockIPC(async (command, args) => {
+    assert.equal(command, "shared_core_request");
+    const request = JSON.parse(args.request);
+    const response = await call(request.method, request.params, request.id);
+    if (hold && request.method === "snapshot.read") {
+      arrived();
+      await gate;
+    }
+    if (request.method === "snapshot.replace") written = true;
+    return JSON.stringify(response);
+  });
+  const state = await server.ssrLoadModule("/src/lib/shared-state.ts");
+  await state.initializeSharedState();
+  hold = true;
+  const reload = state.initializeSharedState();
+  await started;
+  const saving = state.persistSettings((s) => ({ ...s, fileFontSize: 20 }));
+  try {
+    await new Promise((done) => setTimeout(done, 20));
+    assert.equal(written, false, "A save cannot overtake a captured reload response");
+  } finally {
+    release();
+    await Promise.allSettled([reload, saving]);
+  }
+  assert.equal(state.sharedSettings().fileFontSize, 20);
+  await state.persistSettings((s) => ({ ...s, opacity: 0.7 }));
+  assert.equal((await call("snapshot.read")).result.document.settings.fileFontSize, 20);
 });
 
 test("quit flushing waits for saves enqueued while the first save is still running", async (t) => {

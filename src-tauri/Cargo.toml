@@ -6,6 +6,9 @@ publish = false
 description = "uTerm cross-platform desktop client"
 license = "PolyForm-Noncommercial-1.0.0"
 
+[features]
+qa = []
+
 [[bin]]
 name = "uterm"
 path = "src/main.rs"

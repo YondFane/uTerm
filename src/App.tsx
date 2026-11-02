@@ -162,7 +162,7 @@ function javaPanelHasFocus() {
 export function App() {
   useUiLanguage();
 
-  const { settings, save: saveSettings, resizeFont } = useSettings();
+  const { settings, save: saveSettings, resizeFont, assertSaved } = useSettings();
   const inspectorOnLeft = settings.inspectorPosition === "left";
   const t = (key: string) => translate(activeLanguage(settings.language), key);
   const [sidebarVisible, setSidebarVisible] = useState(true);
@@ -765,6 +765,7 @@ export function App() {
     let unlisten: (() => void) | undefined;
     void listen("shared-state-exit-request", () => {
       void flushSharedState()
+        .then(() => assertSaved())
         .then(() => invoke("shared_core_exit"))
         .catch((reason) => setError(String(reason)));
     })

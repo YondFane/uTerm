@@ -758,3 +758,45 @@ recovery evidence remain pending, so #27 stays open.
 
 #27 的两项真实 Rust 进程回归先复现了旧 React 设置视图还原已提交字号、退出早于等待期间新增写入结束的问题。现按发起视图基线计算补丁，退出持续等待队列稳定。Linux
 x86_64 的九项契约测试、完整前端（361 通过／10 跳过）、类型／生产构建和格式通过。原生冲突重载、失败草稿及恢复证据仍待完成，#27 保持开放。
+
+### M1 native Tauri QA / M1 原生 Tauri QA
+
+#27 adds explicit reload/retry/discard. Failed setting patches remain in the provider, separate from
+committed values, survive closing Settings and block quit even after reload. Per-field operation
+tokens keep older failures from replacing newer results. Ten real Rust-process cases pass on Linux,
+including same-field conflicts and delayed reloads serialized with writes.
+
+`pnpm qa:shared-state` compiles the `qa` feature and QA-only frontend controller. It requires
+`sh.uterm.desktop.qa.sharedstate` and a private temporary root, uses a real Tauri window and the
+normal exit guard, and checks temporary project/default import, durable UI publication, external
+conflict, retained same-field drafts, blocked quit, explicit reload/retry, reopen, corrupt-store
+recovery and original/damaged-byte retention. Linux X11 ran these paths with dirty-source metadata;
+committed Windows/macOS head/merge and native screenshots await fresh CI. DOM events drive the real
+WebView; human input, IME and signing remain unexecuted. Existing TS reducers remain.
+
+Pinned Tauri 2.11.6 has no newer directory-override API. QA links only its dedicated identifier
+profiles into the private root, refuses existing profiles and unlinks only its own paths, without
+changing HOME. Ordinary builds omit QA commands. Reports/screenshots go into
+`ci-evidence/tauri-state-qa`, uploaded even on failure. The original Linux observer collided with
+the writer lease; QA now waits for committed UI publication before reading, preserving production
+locking and recording failures accurately.
+
+#27 新增明确重载／重试／放弃；失败字段草稿与已提交设置分开，关闭设置后保留，重载后仍阻止未处理草稿退出。每字段操作标识防止旧失败覆盖较新结果。Linux 十项真实 Rust 进程案例通过，包含同字段冲突和延迟重载与写入串行。
+
+上述 QA 命令以 `qa`
+特性和仅 QA 前端控制器构建真实 Tauri 窗口，要求专用身份和临时根目录，使用正常退出保护，检查临时项目／默认导入、提交后界面、外部冲突、同字段草稿、阻止退出、明确重载重试、重开、损坏恢复及原始／损坏字节保留。Linux
+X11 已跑通并标注工作区未提交状态；提交后 Windows／macOS
+head／merge 和截图待新 CI。真实 WebView 由 DOM 事件驱动，人工输入、输入法和签名未执行，保留原 TS
+reducer。
+
+锁定的 Tauri
+2.11.6 不支持新目录覆盖 API；QA 仅链接专用身份配置到临时根目录，拒绝已有配置，仅移除自己创建的链接，不覆盖 HOME。普通构建不编译 QA 命令；上述目录中的报告／截图失败也上传。早期 Linux 观察器与写入租约竞争；QA 改为先等待提交后的界面再读取，保留生产锁定规则并如实记录失败。
+
+The helper correction passed head `ac682f21d955b137c277cda26bf2a90385f4cf54`, tested merge
+`5037c127ad3fd7fd3bdeaa3937d048ac11acd47c`, in legacy run 41443585247 and native run 41443585262.
+Windows artifact 13141981235 records all three actual host tests passing. #29 remains open for
+control/capability work; a passing helper matrix does not complete that Issue. Current #27 frontend
+checks pass 362 tests with ten skipped; backend passes 135 with ten ignored, and ordinary desktop,
+production/types and formatting pass. Fresh platform QA is still pending.
+
+上述 head／merge 的旧客户端及双架构原生 CI 已通过 helper 修正，Windows 产物记录三项真实宿主测试。#29 的 control／能力工作未完成。当前 #27 前端 362 项通过／10 跳过，后端 135 通过／10 忽略，普通桌面、生产／类型及格式通过；新平台 QA 仍待执行。

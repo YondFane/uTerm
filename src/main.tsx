@@ -22,12 +22,15 @@ const root = document.getElementById("root");
 if (!root) throw new Error("Missing application root");
 
 async function start() {
+  const qa = import.meta.env.VITE_UTERM_STATE_QA === "1" ? await import("./qa/shared-state") : null;
+  await qa?.prepare();
   if (isTauri()) {
     try {
       await initializeSharedState();
       setUiLanguage(activeLanguage(sharedSettings()?.language ?? defaults.language));
     } catch (reason) {
       createRoot(root!).render(<StateRecovery reason={reason} />);
+      void qa?.run(true);
       return;
     }
   }
@@ -38,5 +41,6 @@ async function start() {
       </SettingsProvider>
     </StrictMode>,
   );
+  void qa?.run(false);
 }
 void start();

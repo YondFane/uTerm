@@ -7,3 +7,4 @@ src-tauri/gen/
 releases/
 macos/.build/
 macos/.swiftpm/
+ci-evidence/

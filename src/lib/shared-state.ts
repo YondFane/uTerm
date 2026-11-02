@@ -19,8 +19,7 @@ export async function coreRequest(method: string, params: unknown = null): Promi
   return response.result ?? null;
 }
 
-export async function initializeSharedState(): Promise<void> {
-  await tail;
+async function readSharedState(): Promise<void> {
   try {
     snapshot = (await coreRequest("snapshot.read")) as unknown as CoreSnapshot;
   } catch (reason) {
@@ -39,6 +38,12 @@ export async function initializeSharedState(): Promise<void> {
     })) as unknown as CoreSnapshot;
   }
   failure = undefined;
+}
+
+export function initializeSharedState(): Promise<void> {
+  const run = tail.then(readSharedState);
+  tail = run.catch(() => {});
+  return run;
 }
 
 export function sharedWorkspace(): Workspace | undefined {

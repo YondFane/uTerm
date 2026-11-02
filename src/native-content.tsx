@@ -41,6 +41,10 @@ async function start() {
     setUiLanguage(activeLanguage(context.settings.language));
     const content = {
       settings: context.settings,
+      read: async () => {
+        const current = await contentInvoke<Context>("content_context");
+        return readSettings(JSON.stringify(current.settings));
+      },
       update: async (patch: Partial<Settings>) =>
         readSettings(JSON.stringify(await contentInvoke("content_settings_patch", { patch }))),
       adjust: async (key: "fontSize" | "fileFontSize" | "gitDiffFontSize", delta: number) =>
