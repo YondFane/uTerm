@@ -199,7 +199,7 @@ export function SettingsPanel({
   }, []);
   async function change(patch: Partial<Settings>, report = setMessage) {
     try {
-      await save({ ...settings, ...patch }, mac);
+      await save({ ...settings, ...patch }, mac, settings);
       report("");
     } catch (reason) {
       report(String(reason));

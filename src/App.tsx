@@ -2113,6 +2113,7 @@ export function App() {
       await saveSettings(
         { ...settings, inspectorPosition: inspectorOnLeft ? "right" : "left" },
         runtime?.platform === "macos",
+        settings,
       );
     } catch (reason) {
       setError(tx("无法保存窗格位置：{p0}", { p0: String(reason) }));

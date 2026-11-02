@@ -231,6 +231,7 @@ export function AgentSettings({
                             : settings.enabledAgents.filter((agent) => agent !== id),
                         },
                         runtime.platform === "macos",
+                        settings,
                       );
                     });
                   }}

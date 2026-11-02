@@ -124,6 +124,11 @@ directory. Subsequent saves use an atomic snapshot and revision checks; workspac
 changes share a serialized queue. The old workspace/settings keys are retained for recovery and are
 no longer written. Editor drafts and other WebView preferences retain their existing owners.
 
+Settings changes are calculated against the view that initiated them, so an older view cannot revert
+unrelated committed fields. Quit drains writes added while an earlier save is still running. Two
+real Rust-process regressions verify these races on Linux; the full frontend suite passed 361 tests
+with ten skipped. Native conflict/reload and recovery interaction remain pending.
+
 An unreadable snapshot opens a recovery view without resetting data. **View recovery copies** lists
 valid saved snapshots; an explicit restore retains the damaged bytes. Up to eight previous snapshots
 and the original import are retained. Existing recovery copies must match their expected bytes;

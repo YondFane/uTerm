@@ -395,3 +395,119 @@ test("shared file requests reject root escape, linked writes and malformed param
   }
   assert.equal((await call("files.exec", { directory, path: "" })).error.code, "INVALID_PARAMS");
 });
+
+test("settings saves from a stale view change only its requested fields", async (t) => {
+  const call = await client(t);
+  const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
+  for (const key of ["window", "document", "localStorage"])
+    Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  globalThis.matchMedia = () => ({
+    matches: false,
+    addEventListener() {},
+    removeEventListener() {},
+  });
+  const server = await createServer({
+    configFile: false,
+    server: { middlewareMode: true, hmr: false, watch: null },
+    appType: "custom",
+  });
+  const React = await import("react");
+  const { createRoot } = await import("react-dom/client");
+  const root = createRoot(document.getElementById("root"));
+  t.after(async () => {
+    await React.act(async () => root.unmount());
+    clearMocks();
+    await server.close();
+    dom.window.close();
+  });
+  mockIPC(async (command, args) => {
+    if (command === "window_appearance") return null;
+    assert.equal(command, "shared_core_request");
+    const request = JSON.parse(args.request);
+    return JSON.stringify(await call(request.method, request.params, request.id));
+  });
+  const state = await server.ssrLoadModule("/src/lib/shared-state.ts");
+  await state.initializeSharedState();
+  const { SettingsProvider, useSettings } = await server.ssrLoadModule(
+    "/src/lib/SettingsContext.tsx",
+  );
+  let context;
+  function Harness() {
+    context = useSettings();
+    return null;
+  }
+  await React.act(async () =>
+    root.render(React.createElement(SettingsProvider, null, React.createElement(Harness))),
+  );
+  const stale = context.settings;
+  await React.act(async () => {
+    await context.save({ ...stale, fontSize: 18 }, false, stale);
+    await context.save({ ...stale, opacity: 0.8 }, false, stale);
+  });
+  const stored = (await call("snapshot.read")).result.document.settings;
+  assert.equal(stored.fontSize, 18, "A stale view must not revert another committed setting");
+  assert.equal(stored.opacity, 0.8);
+  assert.equal(context.settings.fontSize, 18);
+});
+
+test("quit flushing waits for saves enqueued while the first save is still running", async (t) => {
+  const call = await client(t);
+  const dom = new JSDOM("", { url: "http://localhost/" });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: dom.window.localStorage,
+  });
+  const server = await createServer({
+    configFile: false,
+    server: { middlewareMode: true, hmr: false, watch: null },
+    appType: "custom",
+  });
+  t.after(async () => {
+    clearMocks();
+    await server.close();
+    dom.window.close();
+  });
+  const deferred = () => {
+    let resolve;
+    const promise = new Promise((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  };
+  const gates = [deferred(), deferred()],
+    started = [deferred(), deferred()];
+  let writes = 0;
+  mockIPC(async (command, args) => {
+    assert.equal(command, "shared_core_request");
+    const request = JSON.parse(args.request);
+    if (request.method === "snapshot.replace") {
+      const index = writes++;
+      started[index].resolve();
+      await gates[index].promise;
+    }
+    return JSON.stringify(await call(request.method, request.params, request.id));
+  });
+  const state = await server.ssrLoadModule("/src/lib/shared-state.ts");
+  await state.initializeSharedState();
+  const first = state.persistSettings((settings) => ({ ...settings, fontSize: 18 }));
+  await started[0].promise;
+  let flushed = false;
+  const flushing = state.flushSharedState().then(() => {
+    flushed = true;
+  });
+  const second = state.persistSettings((settings) => ({ ...settings, opacity: 0.8 }));
+  try {
+    gates[0].resolve();
+    await started[1].promise;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.equal(flushed, false, "Quit must wait for the later queued durable write");
+  } finally {
+    gates.forEach((gate) => gate.resolve());
+    await Promise.allSettled([first, second, flushing]);
+  }
+  const stored = (await call("snapshot.read")).result.document.settings;
+  assert.equal(stored.fontSize, 18);
+  assert.equal(stored.opacity, 0.8);
+});

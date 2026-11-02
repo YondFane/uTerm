@@ -12,7 +12,7 @@ const Context = createContext<{
   settings: Settings;
   light: boolean;
   error: string;
-  save: (value: Settings, mac: boolean) => Promise<void>;
+  save: (value: Settings, mac: boolean, baseline?: Settings) => Promise<void>;
   resizeFont: (
     key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
     delta: number,
@@ -98,11 +98,11 @@ export function SettingsProvider({
       .then(() => setAppearanceError(""))
       .catch((reason) => setAppearanceError(tx("背景效果未应用：{p0}", { p0: String(reason) })));
   }, [settings.blur]);
-  async function save(value: Settings, mac: boolean) {
+  async function save(value: Settings, mac: boolean, baseline = currentSettings.current) {
     if (error) throw new Error(error);
     const checked = readSettings(JSON.stringify(value));
     validateShortcuts(checked, mac);
-    const previous = currentSettings.current;
+    const previous = baseline;
     const patch = Object.fromEntries(
       Object.entries(checked).filter(
         ([key, value]) => JSON.stringify(value) !== JSON.stringify(previous[key as keyof Settings]),

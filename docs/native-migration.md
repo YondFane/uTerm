@@ -746,3 +746,15 @@ retain PID. Path checks normalize the actual file; active-host and endpoint asse
 Linux host checks pass; the Windows correction awaits a new run.
 
 #29 首次 Windows 矩阵因普通／扩展盘符路径比较失败；现按规范文件路径核对，并新增重复访问空闲宿主保持 PID 的断言，不删除活跃保护或端点保留检查。Linux 宿主检查通过，Windows 修正待重跑。
+
+### M1 save ordering / M1 保存顺序
+
+#27 now has two real Rust-process regressions that first reproduced failures: a stale React settings
+view reverted a committed font value, and quit resolved before a write enqueued during its wait.
+Settings patches now use the initiating view's baseline; quit observes the queue until it stops
+changing. Nine contract tests and the full frontend suite (361 passed, ten skipped),
+types/production build and formatting pass on Linux x86_64. Native conflict/reload, failed draft and
+recovery evidence remain pending, so #27 stays open.
+
+#27 的两项真实 Rust 进程回归先复现了旧 React 设置视图还原已提交字号、退出早于等待期间新增写入结束的问题。现按发起视图基线计算补丁，退出持续等待队列稳定。Linux
+x86_64 的九项契约测试、完整前端（361 通过／10 跳过）、类型／生产构建和格式通过。原生冲突重载、失败草稿及恢复证据仍待完成，#27 保持开放。

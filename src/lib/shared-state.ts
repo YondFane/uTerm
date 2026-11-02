@@ -94,6 +94,10 @@ export function persistSettings(change: (settings: Settings) => Settings): Promi
 }
 
 export async function flushSharedState(): Promise<void> {
-  await tail;
+  for (;;) {
+    const observed = tail;
+    await observed;
+    if (observed === tail) break;
+  }
   if (failure) throw failure;
 }
