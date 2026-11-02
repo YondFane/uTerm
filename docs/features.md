@@ -68,14 +68,18 @@ cannot replace newer state. This startup race correction also awaits native CI.
 The QA harness uses a temporary project and data, never production data. Empty-window smoke captures
 `native-empty-window.png`; terminal smoke captures language/theme/width, hidden-sidebar and
 full-screen scenarios. Reports record platform, architecture, OS, source head and tested merge SHA.
-New screenshot steps require actual CI execution and visual inspection before acceptance; the
-existence of the harness is not screenshot evidence. Native artifacts are `native-qa-*`; legacy
-command logs and source/platform records are `legacy-checks-*`.
+QA images captured from NSView at `cead130` omitted compositor layers and did not establish visual
+acceptance. The harness now uses the macOS WindowServer capture tool for the specific QA window;
+permission or capture failures fail the scene. New images require CI execution and visual inspection
+before acceptance; the existence of the harness is not screenshot evidence. Native artifacts are
+`native-qa-*`; legacy command logs and source/platform records are `legacy-checks-*`.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain
 the supported feature-complete clients. See [native migration status](native-migration.md) for Issue
-mapping, source-specific evidence and remaining work.
+mapping, source-specific evidence and remaining work. Its reusable acceptance checklist defines
+same-machine workloads, TUI/interaction steps and signing/upgrade conditions; unexecuted cases
+remain explicitly pending.
 
 ### Shared saved state
 

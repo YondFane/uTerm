@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             await model.start()
             if let report = WorkspaceModel.argument("--smoke-report") {
                 try? await Task.sleep(for: .milliseconds(150))
-                writeSmokeReport(report)
+                await writeSmokeReport(report)
             }
             if let report = WorkspaceModel.argument("--terminal-smoke-report") { await runTerminalSmoke(report, reconnect: false) }
             if let report = WorkspaceModel.argument("--terminal-reconnect-report") { await runTerminalSmoke(report, reconnect: true) }
@@ -143,7 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         #else
         let architecture = "x86_64"
         #endif
-        return ["platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
+        return ["captureMethod": "WindowServer screencapture -l", "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
          "sourceHeadSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceHeadSHA") ?? "",
          "windowVisible": window?.isVisible == true, "screenCount": NSScreen.screens.count,
          "bundleIdentifier": Bundle.main.bundleIdentifier ?? "", "minimumOS": Bundle.main.object(forInfoDictionaryKey: "LSMinimumSystemVersion") ?? "",
@@ -151,12 +151,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
          "hostStarted": !model.terminals.isEmpty, "coreReady": model.ready, "sessionCount": model.state?.sessions.count ?? 0,
          "error": model.error]
     }
-    private func writeSmokeReport(_ path: String) {
+    private func writeSmokeReport(_ path: String) async {
         var report = baseReport()
         do {
             guard let window else { throw BridgeFailure(code: "SMOKE_WINDOW", message: "Native window is missing") }
             let name = "native-empty-window.png"
-            try TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
+            try await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
             report["captures"] = [name]
         } catch { report["failure"] = error.localizedDescription }
         finishReport(report, path: path)

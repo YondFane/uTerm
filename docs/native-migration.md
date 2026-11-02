@@ -402,3 +402,104 @@ failed build/test piped to a log must fail its own step. This run produced no va
 screenshots.
 
 新增空窗口采集遗漏桥接模块导入，导致上述提交编译失败；外层日志管道未显式启用失败传播，错误延后才被发现。已补导入并为原生 job 使用显式 Bash/pipefail，失败必须在所属步骤报错；该轮没有有效新截图。
+
+## Reusable acceptance checklist / 可复用验收清单
+
+This is the M0 exit checklist for #23, not a claim that M3–M5 acceptance ran. Each result must
+distinguish implemented, built, automatically tested and natively accepted. A missing condition is
+recorded as not executed; a failed check remains failed. Only the documented M0 baseline is being
+archived.
+
+此节用于 #23 的 M0 退出清单，不表示 M3–M5 已执行验收。结果分别记录已实现、已构建、已自动测试和已原生验收；缺少条件写未执行，失败保留失败，仅归档已具证据的 M0 基线。
+
+### Evidence record / 证据记录
+
+Every report includes Issue, branch/PR, source head, tested merge SHA, platform/architecture/OS,
+hardware, toolchain, dependency/CLI versions, command, scenario, test data/fixture hash, result and
+remaining limitations. Link the actual workflow run and artifact name/ID; list screenshot filenames
+and the action each proves. A screenshot's sidecar metadata must identify the same tested binary.
+Never copy a prior head's success into a new head's result. Logs must omit credentials and endpoint
+tokens. Record cleanup of only the temporary sessions, processes and data owned by the test.
+
+每份报告记录 Issue、分支／PR、head／实际 merge
+SHA、平台／架构／系统、硬件、工具链及依赖版本、命令、场景、样例摘要、结果和限制；链接真实 run 和 artifact，列出截图文件及对应操作。截图元数据必须对应相同程序，不沿用旧 SHA 结果。日志不含凭据或端点 token，记录自身临时会话／进程／数据的清理。
+
+### Same-load comparison / 同负载对比
+
+Compare legacy Tauri and native macOS on the same physical or CI machine, architecture, OS,
+toolchain, selected shell, font (14pt), grid (120 columns × 36 rows), scrollback (3000) and
+temporary project. Use separate QA identities/data roots. Run one client at a time, repeat each case
+three times and retain individual results. A Windows run is its own regression record, not a direct
+cross-OS performance comparison. Record shared-runner contention; do not infer a percentage gain
+from build time or a single throughput sample.
+
+在相同机器、架构、系统、工具链、Shell、14pt 字体、120×36 网格、3000 行回滚及临时项目下比较旧 Tauri 与原生 macOS，身份和数据隔离。每次只运行一个客户端，每例重复三次并保留单次结果。Windows 单独回归，不作跨系统性能结论；记录共享 runner 争用，不从构建时间或单次吞吐推断改善比例。
+
+| Case / 场景                 | Reproducible workload and assertions / 可重复负载与断言                                                                                                                                                                                                     | Current acceptance / 当前验收                                                              |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Idle / 空闲                 | 1, 4 and 16 real shell sessions; settle 30s, measure 60s. Record CPU, RSS and thread/FD or handle counts. / 真实会话静置 30 秒，测量 60 秒，记录 CPU、RSS、线程及资源句柄。                                                                                 | Not measured / 未测量                                                                      |
+| Sustained output / 持续输出 | Same stored fixture of 10,000 numbered lines with ANSI color, CJK and combining characters; record exact bytes/hash, throughput and final screen. / 同一份一万行编号、颜色、中文及组合字符样例，记录字节、摘要、吞吐及最终屏幕。                            | Full client comparison not executed / 完整双端对比未执行                                   |
+| Slow consumer / 慢消费      | Repeat with 200ms consumption delay, then a 5MiB burst; check sequence order, acknowledgement, bounded queues and explicit replay reset after history truncation. / 消费延迟 200 毫秒并追加 5MiB 突发，检查顺序、确认、有界队列及历史截断后的明确回放重置。 | Core one-frame backpressure tested; full stress remains / 核心逐帧背压已测，完整压力待执行 |
+| Input / 输入                | After warm-up, 100 identical numbered echo operations; report p50/p95 input-to-render latency and the timestamp method. / 预热后发送 100 次相同编号回显，报告输入至渲染 p50／p95 及计时方法。                                                               | Not measured / 未测量                                                                      |
+| Long run / 长时间运行       | 30min output and select/split/reconnect cycles; compare resource counts before/after closing test sessions and draining callbacks. / 30 分钟输出及选择／分屏／重连，关闭并排空后对比资源。                                                                  | Not executed / 未执行                                                                      |
+| Content/data / 内容与数据   | Same temporary Git repository, 1MiB UTF-8 editor file, PDF, disposable DB result set and binary Redis keys; preserve read-only/conflict semantics. / 同一临时仓库、1MiB 文本、PDF、可丢弃数据库结果及二进制 Redis 键，保留只读／冲突语义。                  | Native adoption/credentials still incomplete / 原生接入及服务条件未齐                      |
+
+For TUI compatibility, record exact `vim`, `less`, `tmux` and upstream Agent CLI versions. Use a
+read-only copy of a UTF-8 test file in vim/less, two tmux panes and the same disposable Agent task.
+Check cursor movement, color, alternate screen, resize, bracketed paste and mouse tracking against
+the same expected output. Parser mode toggles are only parser evidence; they do not prove actual
+clipboard, mouse, IME or authenticated Agent behavior. These TUI interactions are not executed yet.
+
+TUI 记录 vim／less／tmux／上游 Agent
+CLI 精确版本，使用同一只读 UTF-8 文件、两个 tmux 窗格和可丢弃 Agent 任务。检查光标、颜色、替代屏、尺寸、括号粘贴及鼠标。模式解析仅证明解析，不等同真实剪贴板、鼠标、输入法或认证 Agent；上述交互尚未执行。
+
+### Native interaction steps / 原生交互步骤
+
+| Area / 范围                      | Required actions and evidence / 操作与证据                                                                                                                                                                                                                     | Remaining condition / 剩余条件                                                                   |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| Text input / 文本输入            | Enter/commit/cancel Chinese composition, combining text, selection, copy and multiline bracketed paste; retain screenshot and recording where timing matters. / 中文组合输入提交／取消、组合字符、选中、复制及多行粘贴，保存截图，必要时录屏。                 | Operable Mac/tester; not executed / 可操作 Mac 或测试人员，未执行                                |
+| Focus/layout / 焦点与布局        | Keyboard list navigation, focus return from settings/dialogs, split/drag/ungroup, narrow sidebar, full-screen transitions and traffic-light clearance. / 键盘列表、设置／弹窗返回、分屏拖动／解组、窄侧栏及全屏按钮避让。                                      | Automated scenes are partial; human acceptance pending / 自动场景部分覆盖，人工待验收            |
+| Lifetime / 生命周期              | Hide/reopen, quit/relaunch with live processes, exact-generation close, disconnect/replay, sleep/wake and moving between two displays. / 隐藏重开、退出保活重连、精确 generation 关闭、断线回放、休眠唤醒及双屏移动。                                          | CI covers feasible cases only; sleep/multi-display pending / CI 仅覆盖可行部分，休眠／多屏待验收 |
+| Save/recovery / 保存恢复         | Concurrent stale write, retained typed draft, explicit reload, IO failure, corrupt snapshot recovery and old-reader export. / 过期写入、保留草稿、明确重载、IO 失败、损坏恢复及旧格式读取。                                                                    | Core tests are not full native recovery interaction / 核心测试不代替完整原生恢复交互             |
+| Files/remote/data / 文件远程数据 | Root escape/symlink rejection, external file conflict, SSH authentication/transfer cancel, binary Redis identity, DB read-only/confirmed write and quit protection. / 越界／符号链接、外部冲突、SSH 认证／取消、Redis 二进制及数据库只读／受控写入和退出保护。 | M3/M4 adoption and services required / 需要 M3／M4 接入及服务                                    |
+| Windows / Windows                | Corresponding real isolated Tauri/WebView2 app scenarios with Windows shortcuts, paths, shell and process ownership; native screenshots separate from compilation logs. / 隔离真实应用验证 Windows 快捷键、路径、Shell 和进程所有权，原生截图与构建日志分开。  | Native interaction/screenshots still missing / 原生交互与截图仍缺失                              |
+
+### External conditions and release boundary / 外部条件与发布边界
+
+Only macOS CI is currently provided; no operable remote Mac or human tester is confirmed. GUI
+automation must actually run with WindowServer and the necessary permissions; lack of permission is
+not a passed test. CI log/artifact access is available to the authenticated YondFane account.
+Artifacts have retention limits; save their actual names, links and checksums in Issue evidence.
+
+当前仅提供 macOS
+CI，未落实可操作远程 Mac 或测试人员。图形自动化需实际 WindowServer 和相应权限，缺权限不算通过。当前认证 YondFane 可读取 CI 日志和产物；产物有保留期限，Issue 记录真实名称、链接及摘要。
+
+Current QA signing is ad-hoc (`codesign --sign -`). Formal Developer ID signing, hardened runtime,
+notarization/stapling and an installable candidate require their actual certificates/authorization
+and separate verification; their availability is not assumed from QA signing. Update verification
+also needs isolated Tauri/Sparkle test feeds and test signing keys, wrong-architecture/signature,
+interruption/retry and cancellation cases. Production feeds must remain untouched.
+
+当前 QA 为 ad-hoc 签名；正式 Developer
+ID、强化运行时、公证／装订及可安装候选需实际证书授权和独立验证，不能从临时签名推断条件齐备。更新还需隔离测试 feed／签名密钥及错误架构／签名、中断重试／取消场景，生产源保持不动。
+
+Actual upgrade/rollback needs an old QA installer, the new isolated candidate, backed-up temporary
+WebView/canonical/draft data and a live test host. Verify download, signature, replacement, first
+start, repeated/interrupted import, preserved IDs/processes, credential references and data
+rollback. The old-reader format test alone is insufficient. These are #44–#47 gates; no release, tag
+or merge is implied. No manual owner, target date, credential or performance result is invented
+here.
+
+实际升级回退需旧 QA 安装包、新隔离候选、临时数据备份及活跃测试宿主，验证下载、签名、替换、首启、重复／中断迁移、进程／引用、凭据引用与数据回退。旧读取器格式测试不足以代替；这些属于 #44–#47，不授权合并、标签或发布，也不虚构人工负责人、日期、凭据或性能结果。
+
+ARM native run [41411610700](https://github.com/YondFane/uTerm/actions/runs/41411610700) passed its
+checks at head `cead13001c14010f242874566ca416c42c6c1691`, tested merge
+`dd533886fb0f622094c74a1d1fd8c85037fb1eeb`. Its
+[artifact 13125184346](https://github.com/YondFane/uTerm/actions/runs/41411610700/artifacts/13125184346)
+contains all reports and 11 PNGs. Visual inspection found that the NSView cache method omitted
+composited layers, especially the light terminal background/text. These are real view captures but
+incomplete visual evidence, not accepted screenshots. Capture now uses `/usr/sbin/screencapture`
+with the specific QA window ID, off the UI thread; it does not capture other windows or fall back to
+incomplete rasterization if permissions fail. The new image method awaits actual CI and inspection.
+
+上述 ARM 自动化通过并上传报告／11 张 PNG，但目视发现 NSView 缓存漏掉合成图层，浅色背景和文字不完整，不能作为通过截图。改用系统工具按 QA 窗口 ID 采集，失败不回退残缺图片，仍待新 CI 和检查。

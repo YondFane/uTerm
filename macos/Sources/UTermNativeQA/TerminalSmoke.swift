@@ -76,7 +76,7 @@ enum TerminalSmoke {
                     let name = "native-\(language)-\(appearance)-\(width).png"
                     if let reportPath = WorkspaceModel.argument("--terminal-smoke-report") {
                         let path = URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(name)
-                        try capture(window: window, path: path)
+                        try await capture(window: window, path: path)
                         captures.append(name)
                     }
                 }
@@ -86,7 +86,7 @@ enum TerminalSmoke {
         try await Task.sleep(for: .milliseconds(150))
         if let reportPath = WorkspaceModel.argument("--terminal-smoke-report") {
             let name = "native-sidebar-hidden.png"
-            try capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(name))
+            try await capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(name))
             captures.append(name)
         }
         model.sidebarVisible = true
@@ -95,7 +95,7 @@ enum TerminalSmoke {
         try await Task.sleep(for: .milliseconds(300))
         if let reportPath = WorkspaceModel.argument("--terminal-smoke-report") {
             let name = "native-fullscreen.png"
-            try capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(name))
+            try await capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(name))
             captures.append(name)
         }
         window.toggleFullScreen(nil)
@@ -115,11 +115,21 @@ enum TerminalSmoke {
         report["runningProcessesBeforeQuit"] = 2
     }
 
-    static func capture(window: NSWindow, path: URL) throws {
-        guard let view = window.contentView,
-              let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { throw BridgeFailure(code: "SMOKE_CAPTURE", message: "Window rendering is unavailable") }
-        view.cacheDisplay(in: view.bounds, to: bitmap)
-        guard let data = bitmap.representation(using: .png, properties: [:]) else { throw BridgeFailure(code: "SMOKE_CAPTURE", message: "Cannot encode window rendering") }
-        try data.write(to: path, options: .atomic)
+    static func capture(window: NSWindow, path: URL) async throws {
+        window.displayIfNeeded()
+        let identifier = window.windowNumber
+        try await Task.detached {
+            let capture = Process()
+            capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+            capture.arguments = ["-x", "-o", "-l", String(identifier), path.path]
+            let diagnostics = Pipe()
+            capture.standardError = diagnostics
+            try capture.run()
+            capture.waitUntilExit()
+            let message = String(decoding: diagnostics.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            guard capture.terminationStatus == 0, FileManager.default.fileExists(atPath: path.path) else {
+                throw BridgeFailure(code: "SMOKE_CAPTURE", message: "WindowServer capture failed: " + message)
+            }
+        }.value
     }
 }
