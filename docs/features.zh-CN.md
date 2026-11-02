@@ -47,60 +47,43 @@ sequence 字段，在 JSON 舍入前保留整数字面量。确认使用兼容�
 `d3dcd09a69bcdd66798e2f4aaa4b67b99187cf77`、tested merge `3a012173e7f27639c7dbe40188354b8348c1affa`
 通过（[原生](https://github.com/YondFane/uTerm/actions/runs/41422419793)、[旧客户端](https://github.com/YondFane/uTerm/actions/runs/41422419819)）。
 
-Unix 慢消费回归使用真实 PTY：保持一帧未确认、拒绝错误 ack，再逐条核对 1,000 条中文组合字符记录的顺序。已断开的 attachment 不能确认新连接；再输出 90,000 行、超过宿主 1
-MiB 原始历史后，明确 reset 到有界保留屏幕，不承诺无限原始历史。Linux
-x86_64 已通过，包括未确认时关闭客户端仍保留进程。原生 QA 另在 SwiftTerm 消费前注入 150
-ms 等待，期间执行真实侧栏菜单，检查超过 100 KB 的实际渲染／确认，并捕获
-`native-terminal-slow-consumer.png`。新增 Mac 场景仍待 CI；首轮 Mac 负载测试执行至报告写出时，因 Cargo 从 crate 目录运行而找不到相对产物路径失败，现改传绝对路径，需重新执行。注入等待用于正确性验证，不是性能对比。Windows 保留现有回归，此 Unix 负载场景不在 Windows 执行。
+Unix 慢消费回归保持一帧真实 PTY 输出未确认，拒绝错误 ack，再逐条核对 1,000 条中文组合字符记录；旧 attachment 不能确认新连接。90,000 行超过宿主 1
+MiB 原始历史后，明确 reset 到有界保留屏幕，不承诺无限原始历史。原生 QA 在 SwiftTerm 消费前注入 150
+ms 等待，期间执行真实侧栏菜单，实际渲染／确认超过 113
+KB。两 Mac 架构已在下述源码通过；受控等待验证正确性，不代表性能收益。Windows 保留现有回归，此 Unix 负载场景不在 Windows 执行。
 
 #### 原生 QA 验证
 
-源码 head `6c782299f038fb2168b8d11123b3e3e7027123e6`、实际测试 merge
-`8af10958a10d2924696272b9c8e1ed533127311e`
-的[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41412826068) 已在 macOS 15.8.2
-ARM64 和 15.7.9 Intel 通过，使用 Xcode 16.4、Swift 6.1.2 和 Rust
-1.99.1。16 项核心、4 项 FFI、6 项 Swift 测试通过，覆盖完整 UInt64 确认、TypeScript 安全整数拒绝样例、有界队列拒绝及渲染器解析。真实应用检查覆盖双 PTY、Unicode／ANSI、分屏视图保留、隐藏重开、正常退出、原 generation 回放及明确关闭；过期 generation 不能关闭当前进程。
+head `4c502ab0c5f39b1d4f43ec4e72f0c7f35b285cca`、tested merge
+`df2690d89433974653ff5426bab07be371f455c7`
+的[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41468220264)与[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41468220189)四 job 全通过。原生实际运行于 macOS
+15.8.2 ARM64／15.7.9 Intel，Xcode 16.4、Swift 6.1.2、Rust 1.99.1；Windows Server 2025 x64 与旧 macOS
+ARM64 的前端、核心／FFI／契约、宿主、后端、格式／文档及桌面检查也通过。原生 QA 使用
+`sh.uterm.desktop.qa.native` 及临时项目／数据／宿主，Tauri QA 使用
+`sh.uterm.desktop.qa.sharedstate`。
 
-两架构各上传 11 张 WindowServer 截图：真实空窗口及十种语言／主题／宽度／侧栏／全屏场景，并记录平台、架构、系统和 head／merge 元数据。已目视检查 ARM 全集及 Intel 空窗口／窄窗／宽窗／全屏样例。早先 NSView 缓存图片遗漏合成图层，不计入界面验收。产物见
-[ARM](https://github.com/YondFane/uTerm/actions/runs/41412826068/artifacts/13126042625) 和
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41412826068/artifacts/13125949025)。这些自动原生检查不等于人工交互或性能验收。
+真实原生检查覆盖中文组合字符／ANSI／alternate
+screen、分屏视图保留、侧栏方向键焦点、原生设置菜单／Return、宽窄窗口、中英文／深浅主题、隐藏侧栏、全屏、正常退出重开后同 generation 回放及明确匹配 generation 关闭。顶栏实测 40pt。早先 NSView 缓存图遗漏合成图层，不计入验收；当前使用 WindowServer 截图。
 
-相同 head／merge 的[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41412826038)
-已通过：Windows Server 2025 x64 前端 347 项通过、11 项跳过；macOS
-ARM64 前端 348 项通过、10 项跳过。核心／FFI／契约、宿主响应性、后端、格式、文档和桌面编译也通过。真实 Rust 导出已由未修改的 release 读取器读取。Swift 原生迁移／恢复交互及 macOS
-14 实际运行仍待验收，不能以编译替代；当前 Tauri 恢复证据见下文。
+原生设置的**允许本地 CLI 控制**使用正常 AppKit 复选框并显示明确数据目录。共享认证回环服务通过包内真实 CLI 状态／列表／创建／聚焦／输入／关闭、对话框写入拒绝及队列排空。接入连接明确切回带超时的阻塞模式；事务结束明确解锁，不让 PTY 创建时复制的描述符保留占用；Windows 规范文件身份比较避免未变化的空闲宿主重复重启。表格选择／焦点延后执行避免 NSTableView
+delegate 重入，当前 smoke 会拒绝该告警。
 
-QA 应用使用临时项目和数据，不读取生产数据。`native-qa-*`
-产物包含截图、报告、测试日志及 ad-hoc 签名 QA App；`legacy-checks-*`
-包含命令日志、源码／平台记录和隔离 Tauri 恢复窗口图片。M0 #14 和 M1
-#15（#20–#28）已验收，M2–M5 仍开放。
+`pnpm test:legacy-host` 用记录 release `4f10848868ac09a3667e140938c345b265f9dd58`
+的未修改源码、原锁文件和独立目标目录编译历史 helper；四 job 验证二进制回放／确认、字面输入、活跃 PID／generation 保留、断开保活及明确关闭后才空闲升级，源码与二进制摘要不变。另用明确标注的不兼容端点测试数据验证拒绝且保留宿主／端点，不冒充历史不兼容二进制。原生 helper 与 QA
+App 使用 ad-hoc 签名，并执行
+`codesign --verify --deep --strict`；正式签名／公证及安装器升级／回退仍未验收。
 
-原生侧栏将程序更新选中项与用户操作分开，用户操作在 AppKit 回调返回后执行；焦点观察也在延后执行时重新核对当前响应者。重连 smoke 会将 NSTableView 重入告警判为失败；此修正已在上述精度改动 head 的两个原生架构通过。smoke 还新增真实 AppKit 方向键切换并保留侧栏焦点、原生菜单打开设置、Return 关闭设置及 WindowServer 截图
-`native-settings.png`。新增检查已在 head `1f7b15d889bb46ae8945125a59dfab0628120876`、tested merge
-`210ccdaa953b8722013b00e4654d38896e473c59`
-的[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41424253962)
-通过，不代表人工键盘或输入法验收。
+产物见
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41468220264/artifacts/13154462292)、[Intel](https://github.com/YondFane/uTerm/actions/runs/41468220264/artifacts/13153229460)、[Windows](https://github.com/YondFane/uTerm/actions/runs/41468220189/artifacts/13154148989)和[旧 Mac](https://github.com/YondFane/uTerm/actions/runs/41468220189/artifacts/13154152640)，包含 head／tested
+merge、平台／系统／架构／工具链、报告、日志、真实系统窗口截图及原生 QA
+App。图片包括空窗口、八个语言／主题／宽度场景、隐藏侧栏／全屏／设置、
+`native-terminal-slow-consumer.png` 和两张
+`native-control-*.png`。已目视检查 ARM 负载／窄窗／全屏／控制、Intel 窄窗／控制及 Windows
+Tauri 控制图；Tauri 的 12 场景保存／恢复／控制报告通过，清理无错误。
 
-helper 回归运行真实临时进程。既有同版本二进制及不兼容端点矩阵已在 head
-`ac682f21d955b137c277cda26bf2a90385f4cf54`、tested merge `5037c127ad3fd7fd3bdeaa3937d048ac11acd47c`
-的 Windows、旧 macOS 及双原生架构通过（[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41443585247)、[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)）。不兼容端点是元数据，不是历史二进制。
-
-`pnpm test:legacy-host`
-另用独立目标目录及历史锁文件，编译未修改的 release 基线 helper。新核心接入其活跃 PTY，接收及确认二进制输出、发送字面输入、退出保留进程，仅在明确匹配 generation 关闭后升级；源码及二进制摘要必须保持不变。Linux
-x86_64 已通过此真实历史源码进程检查，Windows／macOS CI 待执行。报告及日志由 CI artifacts 的
-`legacy-host/` 上传，不代表安装器升级或回退验收。首轮 Windows 在解压阶段停止：GNU
-tar 将盘符误作远程主机；现改用相对归档路径。该步骤也明确传入 PR head，与 tested merge
-SHA 分开记录；修正仍需新 Windows 运行。
-
-回环控制服务及有界认证队列位于共享 Rust 宿主模块，Tauri 继续委托原命令。原生设置现有**允许本地 CLI 控制**及明确的数据目录；Rust 分发认证后的创建／聚焦／输入／关闭请求，检查 revision 与宿主 generation。执行须有有效认领，过期和重复请求会拒绝；桥接清理前先停止控制循环。
-
-Linux 真实 socket／PTY／C
-ABI 测试覆盖占用锁互斥、字面输入、关闭排空、过期 revision／generation、Worktree 隔离及提交事件。新增 macOS 冒烟使用包内 CLI、原生 AppKit 复选框操作、双 PTY 和 WindowServer 截图；原生集成仍待 CI 验收，人工输入／输入法另行验收。Mac 诊断捕获请求在分发前以
-`EAGAIN`
-结束；接入连接现明确切回阻塞模式，保留原超时。回归测试先复现该故障及复制描述符保留写锁，再验证连接修正和事务明确解锁后通过。系统锁中断会重试，其他 I/O 错误仍可区分；核心与原生控制仍需新 Mac 结果。本地控制偏好使用带正常 target/action 及键盘支持的 AppKit 复选框；QA 退出前先关闭 sheet，使失败场景保留原始报告，不再被退出超时掩盖。
-
-原生 SSH、完整设置、文件／数据工作台、真实 Agent
-CLI 交互、输入法、休眠、多屏及性能验收尚未完成。Windows 与旧 macOS 仍为现有完整功能客户端。Issue 对应关系、源码证据和剩余工作见[原生迁移状态](native-migration.md)。其中可复用验收清单定义同机负载、TUI／交互步骤及签名／升级条件，未执行项继续明确待验收。
+M0 #14、M1 #15 及任务 #20–#30 已验收，尚未合入 release。M2 #16 因 #31／#32 继续开放：真实 Agent
+CLI／TUI、人工输入法／剪贴板／鼠标、并存输入／resize 仲裁、休眠／多屏及剩余生命周期未完整验收。原生 SSH／完整设置／编辑／数据工作台、同机性能、macOS
+14 实际运行及 M3–M5 仍未完成。自动原生操作不代表人工验收；Windows 与旧 macOS 保持现有完整功能。证据和未执行步骤见[原生迁移状态](native-migration.md)及 Issue 评论。
 
 ### 共享保存状态
 
@@ -122,11 +105,22 @@ ARM64 各上传十张真实窗口场景图及成功报告，清理无错误。[W
 
 Linux 及 Windows／macOS
 CI 中的 Rust 存储／FFI 测试和真实进程 TypeScript 兼容测试覆盖重复导入、冲突、损坏恢复、所有权和回调排空。新增真实 helper 的 C
-ABI 测试：阻塞二进制回调，同时从另一线程取消订阅或关闭，验证回调排空前借用上下文仍有效，且回调内重入被拒绝。此检查已在 Linux 及上述交互 head 的 macOS 双架构通过。Swift 桥接测试交由 macOS
+ABI 测试：阻塞二进制回调，同时从另一线程取消订阅或关闭，验证回调排空前借用上下文仍有效，且回调内重入被拒绝。此检查已在 Linux 及上述统一 head 的 macOS 双架构通过。Swift 桥接测试交由 macOS
 CI；Swift 原生迁移及恢复交互仍待验收，与上述 Tauri 验收区分。
 
 两个旧客户端平台的 CI 也执行共享核心测试和生成契约的漂移检查，并将命令日志、源码 head、实际测试 merge
 SHA 和平台／工具链元数据上传为 `legacy-checks-*` CI artifacts。
+
+#### 共享编辑器草稿存储
+
+开发核心增加 `editor.drafts.*` 及生成的 Swift／TypeScript DTO。 `editor-drafts-v1.json`
+独立于工作区／设置快照，保存最多 100 个文档，写入／删除核对 revision。旧草稿导入先保留原始字节再解析，同来源重复导入幂等，不同来源不会覆盖较新草稿。文本与已保存文本各按 JavaScript 的 2
+Mi
+UTF-16 码元限制，保留 BOM 及换行。保存最多八份有效前序草稿快照及 16 份原始来源副本，损坏的恢复字节保留、不自动裁剪；来源到上限时拒绝新导入，不删除原件。损坏数据须明确核对 revision 后恢复，保留损坏字节；相对草稿路径拒绝绝对路径及父目录跳转。
+
+此基础尚未接入两端编辑界面：Tauri 继续原草稿归属，原生窗口仍为只读，不宣称原生编辑／崩溃恢复已验收。Linux 测试覆盖多客户端／多文档、过期写入／删除、原始来源、损坏、UTF-16 边界、符号链接及真实文件系统写入失败／重试；11 项真实 TypeScript→Rust 进程测试通过，包含使用未修改的旧读取器读取恢复草稿。Swift
+C ABI 测试还通过生成 DTO 核对实际 UTF-8／UTF-16 码元、NUL、BOM 及 CRLF，等待 Mac
+CI；新平台及原生编辑／关闭／重开／崩溃场景仍由 #34 完成。
 
 ## 项目官网
 

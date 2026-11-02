@@ -57,104 +57,67 @@ not only type names. Native and legacy platform CI passed this precision change 
 ([native](https://github.com/YondFane/uTerm/actions/runs/41422419793),
 [legacy](https://github.com/YondFane/uTerm/actions/runs/41422419819)).
 
-The Unix slow-consumer regression uses a real PTY: it holds one unacknowledged frame, rejects an
-incorrect ack, then checks all 1,000 Unicode records in order. A detached attachment cannot ack the
-replacement. After 90,000 additional rows exceed the host's 1 MiB raw history, recovery explicitly
-resets to the bounded retained screen; it does not promise unlimited raw history. Linux x86_64
-passed, including close while unacknowledged without killing the process. Native QA additionally
-injects 150 ms before SwiftTerm consumption, executes the actual sidebar menu while output waits,
-checks over 100 KB rendered and acknowledged, and captures `native-terminal-slow-consumer.png`.
-Those new Mac scenarios await CI. The first Mac load tests reached report writing but failed because
-Cargo runs the test from its crate directory; CI now supplies an absolute artifact path and must
-rerun. The injected delay is a correctness test, not a performance comparison. Windows retains its
-existing regression suite; this Unix load scenario does not run there.
+The Unix slow-consumer regression holds one unacknowledged real PTY frame, rejects an incorrect ack,
+then checks 1,000 Unicode records in order. A detached attachment cannot ack its replacement. After
+90,000 rows exceed the host's 1 MiB raw history, recovery explicitly resets to the bounded retained
+screen; it does not promise unlimited raw history. Native QA additionally injects 150 ms before
+SwiftTerm consumption, executes the native sidebar menu while output waits and renders and
+acknowledges over 113 KB. These cases passed on both Mac architectures at the source below. The
+controlled delay tests correctness, not performance gains. Windows retains its existing regression
+suite; this Unix load scenario does not run there.
 
 #### Native QA validation
 
-At head `6c782299f038fb2168b8d11123b3e3e7027123e6` (tested merge
-`8af10958a10d2924696272b9c8e1ed533127311e`),
-[native CI](https://github.com/YondFane/uTerm/actions/runs/41412826068) passed on macOS 15.8.2 ARM64
-and 15.7.9 Intel with Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Sixteen core, four FFI and six Swift
-tests passed, including full-range UInt64 acknowledgement, TypeScript safe-integer rejection
-fixtures, bounded queue rejection and renderer parsing. Real application checks cover two PTYs,
-Unicode/ANSI, split view identity, hide/reopen, normal quit, retained generations/replay and
-explicit close. A stale generation cannot close the current process.
+Head `4c502ab0c5f39b1d4f43ec4e72f0c7f35b285cca`, tested merge
+`df2690d89433974653ff5426bab07be371f455c7`, passed all four jobs in
+[native CI](https://github.com/YondFane/uTerm/actions/runs/41468220264) and
+[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41468220189). Native execution used macOS
+15.8.2 ARM64 / 15.7.9 Intel, Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Windows Server 2025 x64 and
+legacy macOS ARM64 passed frontend, core/FFI/contracts, host, backend, format/docs and desktop
+checks. Native QA uses temporary projects/data/hosts and `sh.uterm.desktop.qa.native`; Tauri QA uses
+`sh.uterm.desktop.qa.sharedstate`.
 
-Both architectures uploaded 11 WindowServer screenshots: an actual empty window and ten
-language/theme/width/sidebar/full-screen scenes, with platform, architecture, OS and head/merge
-metadata. ARM's full set and Intel empty/narrow/wide/full-screen examples were visually inspected.
-The earlier NSView cache images omitted compositor layers and are excluded from visual acceptance.
+Real native checks cover Unicode/ANSI/alternate screen, retained split views, sidebar arrow-key
+focus, native Settings menu/Return, wide/narrow windows, language/theme changes, sidebar hide, full
+screen, ordinary quit/relaunch with retained generation/replay and generation-matched close. The
+toolbar measures 40pt. Original NSView cache images omitted compositor layers and are excluded;
+current screenshots use WindowServer.
+
+Native Settings offers **Allow local CLI control** through a normal AppKit checkbox and displays the
+explicit data directory. The shared authenticated loopback service passes bundled CLI status/list/
+new/focus/send/close, modal-write rejection and queue draining. Accepted connections explicitly use
+blocking mode with bounded timeouts; completed storage transactions unlock even if a copied
+descriptor survives PTY creation. Canonical Windows file identity avoids restarting an unchanged
+idle host. Table selection/focus deferral avoids NSTableView delegate reentrancy; current smoke
+rejects that warning.
+
+`pnpm test:legacy-host` compiles the unchanged recorded release
+`4f10848868ac09a3667e140938c345b265f9dd58` helper with its lockfile and a separate target. All four
+jobs verify binary replay/ack, literal input, active PID/generation preservation, detach and idle
+upgrade only after explicit close. Source and binary digests stay unchanged. A separately labelled
+incompatible endpoint fixture verifies refusal without replacing the host or endpoint; it is not a
+historical incompatible binary. The native helper and QA App are ad-hoc signed and checked with
+`codesign --verify --deep --strict`. Formal signing/notarization and installer upgrade/rollback are
+separate, unaccepted gates.
+
 Artifacts are
-[ARM](https://github.com/YondFane/uTerm/actions/runs/41412826068/artifacts/13126042625) and
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41412826068/artifacts/13125949025). These
-automatic native checks do not establish human interaction or performance acceptance.
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41468220264/artifacts/13154462292),
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41468220264/artifacts/13153229460),
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41468220189/artifacts/13154148989) and
+[legacy Mac](https://github.com/YondFane/uTerm/actions/runs/41468220189/artifacts/13154152640). They
+contain head/tested merge, platform/OS/architecture/toolchain, reports, logs, actual system window
+screenshots and the native QA App. Images include the empty window, eight language/theme/ width
+scenes, sidebar hidden/full-screen/settings, `native-terminal-slow-consumer.png` and two
+`native-control-*.png` files. ARM load/narrow/full-screen/control, Intel narrow/control and Windows
+Tauri control images were visually inspected. Tauri's 12-scene save/recovery/control report passed
+without cleanup errors.
 
-[Legacy CI](https://github.com/YondFane/uTerm/actions/runs/41412826038) passed at the same
-head/merge: Windows Server 2025 x64 ran 347 frontend tests with 11 skipped; macOS ARM64 ran 348 with
-ten skipped. Core/FFI/contracts, host responsiveness, backend, formatting, documentation and desktop
-compilation also passed. Real Rust exports were read by unchanged release readers. Native Swift
-migration/recovery interaction and macOS 14 runtime acceptance remain pending; compilation is not
-their substitute. Current Tauri recovery evidence appears below.
-
-The QA app uses a temporary project and data, never production data. Native `native-qa-*` artifacts
-contain screenshots, reports, test logs and the ad-hoc-signed QA App. Legacy `legacy-checks-*`
-artifacts contain command logs, source/platform records and isolated Tauri recovery window images.
-M0 #14 and M1 #15, including #20–#28, are accepted; M2–M5 remain open.
-
-The native sidebar now separates programmatic table selection from user actions, which are deferred
-until AppKit returns. Focus observation also checks the current responder after deferral. The
-reconnect smoke rejects NSTableView reentrancy warnings; both native architectures passed this
-correction at the precision-change head above. The smoke now also posts real AppKit arrow keys to
-check that sidebar selection retains focus, opens Settings using its native menu and dismisses it
-with Return. It captures `native-settings.png` using WindowServer. These additional checks passed at
-head `1f7b15d889bb46ae8945125a59dfab0628120876`, tested merge
-`210ccdaa953b8722013b00e4654d38896e473c59`
-([native CI](https://github.com/YondFane/uTerm/actions/runs/41424253962)). They do not establish
-manual keyboard or input-method acceptance.
-
-Helper regressions run real temporary processes. The existing same-binary and incompatible-endpoint
-matrix passed Windows, legacy macOS and both native Mac architectures at head
-`ac682f21d955b137c277cda26bf2a90385f4cf54`, tested merge `5037c127ad3fd7fd3bdeaa3937d048ac11acd47c`
-([legacy CI](https://github.com/YondFane/uTerm/actions/runs/41443585247),
-[native CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)). An incompatible endpoint
-is metadata, not a historical binary.
-
-`pnpm test:legacy-host` additionally compiles the unchanged recorded release helper with its
-lockfile in a separate target directory. The new core attaches to its active PTY, receives and
-acknowledges binary output, writes literal input, detaches without terminating it and upgrades only
-after an explicit generation-matched close. Source and executable hashes must stay unchanged. Linux
-x86_64 passed this actual historical-source process test; Windows/macOS CI is pending. Reports and
-logs are uploaded as `legacy-host/` inside CI artifacts. This does not establish installer upgrade
-or rollback acceptance. The first Windows job stopped during archive extraction because GNU tar
-interpreted a drive letter as a remote host; extraction now uses a relative archive path. Its
-compatibility step also receives the actual PR head separately from the tested merge SHA. This
-correction requires a fresh Windows run.
-
-The loopback control server and bounded authenticated queue live in the shared Rust host module.
-Tauri delegates its existing control commands to it. Native Settings now includes **Allow local CLI
-control** and the explicit CLI data directory. Rust dispatches authenticated new/focus/send/close
-requests, checking revisions and hosted generations. Execution requires a live claimed request;
-expired and repeated requests are rejected. The control loop stops before bridge teardown.
-
-Linux real-socket, real-PTY and C ABI tests cover lease exclusion, literal input, draining on close,
-stale revisions/generations, Worktree isolation and committed revision events. A new macOS smoke
-uses the bundled CLI, native AppKit checkbox action, two PTYs and WindowServer captures. Its native
-integration acceptance is pending CI; manual input and IME acceptance remain separate. Mac
-diagnostics identified a CLI request ending with `EAGAIN` before dispatch. Accepted sockets now
-explicitly use blocking mode with the existing timeouts. Regression tests first reproduced this
-failure and a writer lock retained by a copied file descriptor, then passed after the connection
-correction and explicit transaction unlock. OS lock interruptions retry; other I/O errors remain
-distinguishable. Fresh Mac core and native control results are required. The native control
-preference uses an AppKit checkbox with normal target/action and keyboard access. QA dismisses open
-sheets before termination, so a failed control scenario reports its actual failure instead of timing
-out.
-
-Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
-multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain
-the supported feature-complete clients. See [native migration status](native-migration.md) for Issue
-mapping, source-specific evidence and remaining work. Its reusable acceptance checklist defines
-same-machine workloads, TUI/interaction steps and signing/upgrade conditions; unexecuted cases
-remain explicitly pending.
+M0 #14, M1 #15 and tasks #20–#30 are accepted, unmerged. M2 #16 stays open for #31/#32: real Agent
+CLI/TUI, manual IME/clipboard/mouse, concurrent input/resize ownership, sleep/multiple displays and
+remaining lifecycle acceptance. Native SSH/full settings/editing/data workspaces, same-machine
+performance, macOS 14 runtime and M3–M5 gates are incomplete. Automatic native actions are not human
+acceptance; Windows and legacy macOS retain the existing full feature set. See
+[native migration status](native-migration.md) and Issue comments for evidence and unexecuted steps.
 
 ### Shared saved state
 
@@ -205,11 +168,31 @@ Rust storage/FFI tests and real-process TypeScript compatibility tests cover rep
 conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI. A
 real-helper C ABI test also blocks a binary callback while another thread unsubscribes or closes,
 verifying that its borrowed context remains valid until delivery drains and that callback reentry is
-rejected. This added check passed on Linux and both native macOS architectures at the interaction
-head above. Swift bridge tests run in macOS CI; native Swift migration and interactive recovery
+rejected. This added check passed on Linux and both native macOS architectures at the validated head
+above. Swift bridge tests run in macOS CI; native Swift migration and interactive recovery
 acceptance remain pending. The Tauri acceptance above is separate. Both legacy platform jobs also
 run shared-core tests and generated-contract drift checks, uploading command logs, source head,
 tested merge SHA and platform/toolchain metadata as `legacy-checks-*` CI artifacts.
+
+#### Shared editor draft storage
+
+The development core adds `editor.drafts.*` and generated Swift/TypeScript DTOs.
+`editor-drafts-v1.json` keeps up to 100 documents with revision-checked put/remove, separately from
+the workspace/settings snapshot. Legacy import retains exact source bytes before parsing, is
+idempotent for the same source and refuses to replace newer drafts with a different source. Text and
+saved-text limits match JavaScript's 2 Mi UTF-16 code units; BOM and line endings survive. Up to
+eight valid previous draft snapshots and 16 original source copies are retained. Invalid recovery
+bytes remain available instead of being pruned. A full source collection rejects another import
+rather than deleting an original. Corruption needs explicit revision-checked restore, retaining
+damaged bytes; relative draft paths reject absolute paths and parent traversal.
+
+This foundation is not yet connected to either editor UI. Tauri keeps its existing draft ownership
+and the native window remains readonly; native editing/crash recovery is not accepted. Linux tests
+cover multiple clients/documents, stale put/remove, exact sources, corruption, UTF-16 limits,
+symlinks and real filesystem write failure/retry. Eleven real TypeScript-to-Rust process tests pass,
+including reading a recovered draft with the unchanged legacy reader. A Swift C ABI test checks
+actual UTF-8/UTF-16 units, NUL, BOM and CRLF through generated DTOs; it awaits Mac CI. Fresh
+platform CI and native editing/close/reopen/crash scenarios remain pending in #34.
 
 ## Project website
 

@@ -23,6 +23,28 @@ public struct CoreDocument: Codable, Sendable {
     public var workspace: JSONValue
 }
 
+public struct CoreEditorDraft: Codable, Sendable {
+    public var bom: Bool
+    public var directory: String
+    public var kind: String
+    public var line_ending: String
+    public var path: String
+    public var saved: String
+    public var text: String
+    public var version: String
+}
+
+public struct CoreEditorDraftDocument: Codable, Sendable {
+    public var drafts: [CoreEditorDraft]
+    public var schemaVersion: UInt32
+    public var sourceDigest: String?
+}
+
+public struct CoreEditorDraftSnapshot: Codable, Sendable {
+    public var document: CoreEditorDraftDocument
+    public var revision: String
+}
+
 public struct CoreEvent: Codable, Sendable {
     public var kind: String
     public var operationId: String

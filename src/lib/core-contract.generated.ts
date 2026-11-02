@@ -24,6 +24,28 @@ export interface CoreDocument {
   workspace: JSONValue;
 }
 
+export interface CoreEditorDraft {
+  bom: boolean;
+  directory: string;
+  kind: string;
+  line_ending: string;
+  path: string;
+  saved: string;
+  text: string;
+  version: string;
+}
+
+export interface CoreEditorDraftDocument {
+  drafts: CoreEditorDraft[];
+  schemaVersion: number;
+  sourceDigest?: string | null;
+}
+
+export interface CoreEditorDraftSnapshot {
+  document: CoreEditorDraftDocument;
+  revision: string;
+}
+
 export interface CoreEvent {
   kind: string;
   operationId: string;

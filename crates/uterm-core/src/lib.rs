@@ -475,6 +475,47 @@ impl Core {
                 json!({"version":CONTRACT_VERSION,"storageSchema":1,"terminalEncoding":"binary","maximumRequestBytes":MAX_REQUEST_BYTES}),
             ),
             "state.defaults" => Ok(state::defaults()),
+            "editor.drafts.read" => {
+                serde_json::to_value(self.store.editor_read()?).map_err(Into::into)
+            }
+            "editor.drafts.import" => {
+                let source = match params.get("legacy") {
+                    Some(Value::Null) => None,
+                    Some(Value::String(value)) => Some(value.clone()),
+                    Some(_) => {
+                        return Err(CoreError::new(
+                            "INVALID_PARAMS",
+                            "Legacy draft must be text or null",
+                        ))
+                    }
+                    None => self
+                        .store
+                        .read()?
+                        .document
+                        .legacy
+                        .get("uterm.desktop.editorDraft.v1")
+                        .cloned(),
+                };
+                serde_json::to_value(self.store.editor_import(source.as_deref())?)
+                    .map_err(Into::into)
+            }
+            "editor.drafts.put" => serde_json::to_value(self.store.editor_put(
+                &string(&params, "expectedRevision")?,
+                serde_json::from_value(params["draft"].clone())?,
+            )?)
+            .map_err(Into::into),
+            "editor.drafts.remove" => serde_json::to_value(self.store.editor_remove(
+                &string(&params, "expectedRevision")?,
+                &string(&params, "directory")?,
+                &string(&params, "path")?,
+            )?)
+            .map_err(Into::into),
+            "editor.drafts.recovery.list" => self.store.editor_recovery_list(),
+            "editor.drafts.recovery.restore" => serde_json::to_value(self.store.editor_recover(
+                &string(&params, "expectedRevision")?,
+                &string(&params, "revision")?,
+            )?)
+            .map_err(Into::into),
             "snapshot.read" => serde_json::to_value(self.store.read()?).map_err(Into::into),
             "snapshot.view" => {
                 let snapshot = self.store.read()?;

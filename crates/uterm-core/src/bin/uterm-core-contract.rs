@@ -8,6 +8,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
     if args.next().as_deref() == Some("--schema") {
         let schemas = serde_json::json!({
+            "EditorDraft":schemars::schema_for!(uterm_core::store::EditorDraft),
+            "EditorDraftDocument":schemars::schema_for!(uterm_core::store::EditorDraftDocument),
+            "EditorDraftSnapshot":schemars::schema_for!(uterm_core::store::EditorDraftSnapshot),
             "FileDocument":schemars::schema_for!(uterm_core::files::FileDocument),
             "FileEntry":schemars::schema_for!(uterm_core::files::FileEntry),
             "FileListing":schemars::schema_for!(uterm_core::files::FileListing),

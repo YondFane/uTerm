@@ -66,6 +66,7 @@ jobs:
           cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local
           cargo test --locked --manifest-path crates/uterm-core/Cargo.toml 2>&1 | tee macos/.build/evidence/core-tests.log
           cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test persistence filesystem_failure_preserves_snapshot_and_allows_retry -- --include-ignored 2>&1 | tee macos/.build/evidence/core-io-test.log
+          cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test editor_drafts filesystem_failure_preserves_editor_drafts_and_allows_retry -- --include-ignored 2>&1 | tee macos/.build/evidence/editor-io-test.log
           cargo test --locked --manifest-path crates/uterm-ffi/Cargo.toml 2>&1 | tee macos/.build/evidence/ffi-tests.log
           bash scripts/macos-native-test.sh 2>&1 | tee macos/.build/evidence/swift-tests.log
       - name: Immutable release helper compatibility

@@ -146,9 +146,14 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 CI 截取原生窗口，并将报告及图片上传到
 `legacy-checks-*/tauri-state-qa/`。此命令需要桌面会话，拒绝覆盖已有 QA 配置。专用配置路径链接将 QA 数据导向临时目录，不覆盖主目录变量，也不使用生产配置。自动化不代表人工键盘／输入法验收。
 
+核心 `store/editor.rs`
+增加核对 revision 的多文档草稿存储、旧来源原始副本及明确恢复。这是经生成 DTO 暴露的开发 API，两端编辑界面接入与原生编辑验收仍待完成；`pnpm test:core`
+明确执行工作区及草稿快照的文件系统失败／重试检查。
+
 共享回环控制服务位于
 `crates/utermd-local/src/control/server.rs`，Tauri 与核心操作复用同一队列及生命周期；宿主为该服务直接声明 Tokio 和 tempfile。`pnpm test:host`
-包含真实独立 CLI／socket 回归，`pnpm test:core` 检查桥接所有权及关闭；原生 UI 命令分发仍在开发中。
+包含真实独立 CLI／socket 回归，`pnpm test:core`
+检查桥接所有权及关闭；原生控制命令经共享 Rust 分发，其余原生能力继续开发中。
 
 `pnpm test:legacy-host` 在隔离源码／目标目录中，从记录的 release
 SHA 编译未修改的历史 helper，验证真实 PTY 回放、活跃进程保留及空闲升级。报告、源码／二进制摘要和日志写入

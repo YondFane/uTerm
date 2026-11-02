@@ -8,6 +8,8 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+mod editor;
+pub use editor::{EditorDraft, EditorDraftDocument, EditorDraftSnapshot};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

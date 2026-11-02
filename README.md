@@ -167,10 +167,16 @@ its real WebView. Windows/macOS CI captures native windows and uploads reports a
 Dedicated profile links redirect QA data into a temporary directory; no home-directory override or
 production profile is used. This automation does not establish manual keyboard/IME acceptance.
 
+The core's `store/editor.rs` adds revision-checked multi-document draft storage, exact legacy-source
+copies and explicit recovery. It is a development API behind generated DTOs; both editor UIs still
+need adoption and native editing acceptance. `pnpm test:core` explicitly runs filesystem failure/
+retry checks for workspace and draft snapshots.
+
 The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
 operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this
 service. `pnpm test:host` includes the real standalone CLI/socket regression; `pnpm test:core`
-checks bridge ownership and close. Native UI dispatch remains under development.
+checks bridge ownership and close. Native control dispatch uses the shared Rust rules; further
+native features remain under development.
 
 `pnpm test:legacy-host` builds an unchanged helper from the recorded release SHA in an isolated
 source/target directory, then checks real PTY replay, active-process preservation and idle upgrade.

@@ -19,6 +19,7 @@ import {
   moveProject,
   selectProject,
 } from "../src/lib/workspace.ts";
+import { draftKey, readDraft } from "../src/lib/file-document.ts";
 
 execFileSync(
   "cargo",
@@ -55,6 +56,55 @@ async function client(t) {
     return reply;
   };
 }
+
+test("real Rust draft storage preserves legacy text and rejects stale multi-document writes", async (t) => {
+  const call = await client(t);
+  const original = {
+    id: 19,
+    directory: "/qa/editor",
+    path: "中文.md",
+    kind: "text",
+    text: "未保存 é\r\n",
+    saved: "saved\r\n",
+    version: "a".repeat(64),
+    line_ending: "\r\n",
+    bom: true,
+  };
+  const raw = ` \n${JSON.stringify(original)}\n`;
+  const legacy = readDraft(raw);
+  const baseline = await call("state.defaults");
+  const imported = await call("migration.import", {
+    workspace: baseline.result.workspace,
+    settings: baseline.result.settings,
+    legacy: { [draftKey]: raw },
+  });
+  assert.ok(imported.result);
+  const drafts = await call("editor.drafts.import");
+  assert.equal(drafts.error, undefined);
+  const recovered = readDraft(JSON.stringify(drafts.result.document.drafts[0]));
+  assert.equal(recovered.text, legacy.text);
+  assert.equal(recovered.saved, legacy.saved);
+  assert.equal(recovered.bom, true);
+  assert.equal(recovered.line_ending, "\r\n");
+  const next = await call("editor.drafts.put", {
+    expectedRevision: drafts.result.revision,
+    draft: { ...original, path: "second.txt", text: "second draft" },
+  });
+  assert.equal(next.result.document.drafts.length, 2);
+  const stale = await call("editor.drafts.remove", {
+    expectedRevision: drafts.result.revision,
+    directory: original.directory,
+    path: original.path,
+  });
+  assert.equal(stale.error.code, "CONFLICT");
+  const current = await call("editor.drafts.read");
+  assert.equal(current.result.revision, next.result.revision);
+  assert.equal(current.result.document.drafts.length, 2);
+  const sources = await call("editor.drafts.recovery.list");
+  assert.equal(sources.result.sources.length, 1);
+  const retained = await call("legacy.export");
+  assert.equal(retained.result.values[draftKey], raw);
+});
 
 test("real Rust core preserves legacy defaults and normalized workspace/project transitions", async (t) => {
   const call = await client(t);
