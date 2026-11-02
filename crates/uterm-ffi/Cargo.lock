@@ -1177,6 +1177,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "uterm-core",
+ "utermd-local",
 ]
 
 [[package]]

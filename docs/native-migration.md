@@ -595,3 +595,19 @@ pending.
 
 #24／#31 由 Rust
 schema 生成 bigint，并在 JSON 数值转换前保留精确 token；确认经兼容边界进入共用 Rust 校验，宿主协议不变。共用样例、真实宿主及契约失败模式验证已补齐，新平台结果仍待 CI。
+
+### M1 binary callback lifetime / M1 二进制回调生命周期
+
+For #26 the C ABI suite now attaches to a real temporary PTY helper, holds a binary callback active,
+and concurrently unsubscribes or closes the handle. Both operations wait for callback completion
+before its borrowed context is released. The callback verifies reentrant call, close and unsubscribe
+rejection; the test also checks idempotent close and owns cleanup for the isolated host. Five C ABI
+tests passed on Linux x86_64 with Rust 1.99.1 using
+`cargo test --locked --manifest-path crates/uterm-ffi/Cargo.toml`. Fresh Windows and
+dual-architecture macOS results are pending; existing platform passes do not validate this added
+test.
+
+#26 新增真实临时 PTY
+helper 的二进制回调检查：回调执行时并发取消订阅或关闭，两者均等待回调结束后才允许释放借用上下文；同时验证回调内重入被拒绝和重复关闭，隔离宿主由测试清理。Linux
+x86_64／Rust 1.99.1 的五项 C
+ABI 测试通过；Windows 及 macOS 双架构的新结果仍待 CI，既有通过结果不替代本次新增测试。

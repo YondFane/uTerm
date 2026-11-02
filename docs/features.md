@@ -117,11 +117,14 @@ draft/backup bytes after repeated import. Automatic downgrade into an unmodified
 WebView storage is not verified.
 
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
-conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI.
-Swift bridge tests run in macOS CI; native data migration and interactive recovery acceptance remain
-pending. Both legacy platform jobs also run shared-core tests and generated-contract drift checks,
-uploading command logs, source head, tested merge SHA and platform/toolchain metadata as
-`legacy-checks-*` CI artifacts.
+conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI. A
+real-helper C ABI test also blocks a binary callback while another thread unsubscribes or closes,
+verifying that its borrowed context remains valid until delivery drains and that callback reentry is
+rejected. This added check passed on Linux; its fresh platform CI is pending. Swift bridge tests run
+in macOS CI; native data migration and interactive recovery acceptance remain pending. Both legacy
+platform jobs also run shared-core tests and generated-contract drift checks, uploading command
+logs, source head, tested merge SHA and platform/toolchain metadata as `legacy-checks-*` CI
+artifacts.
 
 ## Project website
 

@@ -15,4 +15,5 @@ uterm-core = { path = "../uterm-core" }
 serde_json = "1"
 
 [dev-dependencies]
+utermd-local = { path = "../utermd-local" }
 tempfile = "3"

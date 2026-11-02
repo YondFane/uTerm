@@ -625,3 +625,7 @@ mod tests {
         assert_eq!(uterm_close(handle), 1);
     }
 }
+
+#[cfg(test)]
+#[path = "tests/terminal.rs"]
+mod terminal_tests;
