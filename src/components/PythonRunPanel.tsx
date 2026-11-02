@@ -553,6 +553,8 @@ export function PythonRunPanel({
                   />
                   <span>{tx("仅用于本次运行，不保存环境变量。")}</span>
                 </label>
+              </div>
+              <div className="java-form-actions python-form-actions">
                 <button
                   type="button"
                   onClick={() =>

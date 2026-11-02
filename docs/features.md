@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-10-31
+updated: 2026-11-02
 ---
 
 # uTerm feature guide
@@ -2388,6 +2388,8 @@ packages produce visible errors. Prepare Python and dependencies outside the pan
 download Python, create environments or install packages, and includes none of them in its
 installer.
 
+**Save configuration** appears as a compact button below the advanced fields, aligned to the right.
+
 ### Configuration, logs and task lifetime
 
 Each project root, including each Worktree, saves one run configuration in uTerm's application data.
@@ -2398,9 +2400,10 @@ switching and repeated actions. SSH, Redis and database views retain the hidden 
 
 The log view is read-only, uses the terminal palette's foreground and background, and supports
 search, copying retained plain text and Auto follow. Scrolling up pauses following; checking Auto
-follow resumes it. Task history remains available after exit, with the most recent 1 MiB per task
-and up to 32 completed tasks across the host. History is bounded and lives only for the host's
-lifetime; it is not a permanent log archive or a file-log viewer.
+follow resumes it. Its checkbox stays beside the label in both Java and Python logs; clicking the
+label also toggles following. Task history remains available after exit, with the most recent 1 MiB
+per task and up to 32 completed tasks across the host. History is bounded and lives only for the
+host's lifetime; it is not a permanent log archive or a file-log viewer.
 
 Use an ordinary terminal for programs requiring interactive input or a Python REPL; the log panel
 does not accept process input.
@@ -2419,6 +2422,22 @@ terminal discovery excludes these tasks.
 Older hosts without task/pipe support report an upgrade error while existing sessions remain
 running. Script and working-directory selection cannot escape the selected root; the interpreter may
 be installed elsewhere.
+
+#### Python control layout validation on Linux
+
+- The isolated native app (`sh.uterm.desktop.qa.pythonlayout`) passes 16 layout combinations: script
+  and FastAPI configuration forms, 1380 px and 800 px windows, English and Simplified Chinese, and
+  dark and light appearance. Save configuration stays below the advanced fields, right-aligned and
+  28 px high; its size remains compact when advanced settings are reopened. The log checkbox stays
+  beside its label and vertically centered. Clicking the label, toggling with Space and scrolling up
+  to pause following pass; saving still shows confirmation.
+- A real Python script fixture supplies the logs; FastAPI is a configuration-form layout check. All
+  25 focused Python-panel, argument, replay, renderer and resize tests pass, along with type
+  checking, production and Linux desktop builds, formatting, localization and documentation checks.
+  These checks cover the controls; macOS/Windows acceptance of this layout remains pending.
+- Release preflight on Linux passes 343 frontend tests with ten skipped, 59 host tests with three
+  ignored, and 150 backend tests with ten ignored. Production build, version consistency and the
+  bilingual release-note checks pass.
 
 #### Python validation on Windows
 
