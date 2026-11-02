@@ -195,9 +195,10 @@ retained text opens readonly with a notice and survives close.
 The queue coalesces waiting text, bounds pending data and keeps flush/retry failures visible,
 including initialization with no waiting writes. Different documents advance independently; stale
 writes/removals for the same document fail. Lost replies require checking durable data. Close stops
-delivery without promising host rollback. Native quit freezes and confirms all content documents,
-retains the app on refusal/timeout/reload/stale replies and resumes prepared documents after
-cancellation. Quit errors reveal the main window.
+delivery without promising host rollback. Escape closes the native file window after the shared
+document-close guard. Native quit freezes and confirms all content documents, retains the app on
+refusal/timeout/reload/stale replies and resumes prepared documents after cancellation. Quit errors
+reveal the main window.
 
 A missing draft snapshot with existing backup/damaged files now blocks automatic import. The
 development APIs `editor.drafts.recovery.preview` and `editor.drafts.recovery.restoreMissing` expose

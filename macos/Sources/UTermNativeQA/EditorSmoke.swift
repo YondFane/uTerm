@@ -156,14 +156,18 @@ enum EditorSmoke {
         captures.append("native-editor-saved.png")
         try await capture(saved, reportPath: reportPath, name: captures.last!)
         saved.window?.setContentSize(NSSize(width: 640, height: 600))
-        try await ContentSmoke.wait(saved, "[...document.querySelectorAll('.editor-header button')].every(b=>{const r=b.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1}) && document.documentElement.scrollWidth<=innerWidth")
+        try await ContentSmoke.wait(saved, "innerWidth===640 && [...document.querySelectorAll('.editor-header button')].every(b=>{const r=b.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1}) && document.documentElement.scrollWidth<=innerWidth")
         report["narrowEditorControlsWithinViewport"] = true
+        report["narrowEditorScene"] = ["width": 640, "height": 600, "language": "en", "appearance": "dark", "capture": "native-editor-saved-640.png"] as [String: Any]
         captures.append("native-editor-saved-640.png")
         try await capture(saved, reportPath: reportPath, name: captures.last!)
         report["cleanEditorQuitPrepared"] = try await saved.prepareForQuit()
         saved.resumeAfterQuit()
-        saved.window?.performClose(nil)
-        try await TerminalSmoke.wait("Close clean editor through document transport") { saved.window?.isVisible == false }
+        try await ContentSmoke.wait(saved, "document.querySelector('.cm-content[contenteditable=true]') !== null")
+        _ = try await saved.webView.evaluateJavaScript("(()=>{const editor=document.querySelector('.cm-content');editor.focus();return editor.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',code:'Escape',keyCode:27,bubbles:true,cancelable:true}))})()")
+        try await TerminalSmoke.wait("Close clean editor through its Escape handler and document transport") { saved.window?.isVisible == false }
+        report["escapeClosedNativeFileWindow"] = true
+        report["escapeInputMethod"] = "Synthetic DOM KeyboardEvent inside the real native WKWebView"
         let metadata = try await bridge.call("files.read", params: .object(["directory": .string(root.path), "path": .string(name)]))
         let missingText = "MISSING_SOURCE_RECOVERY 中文 é\r\n"
         _ = try await bridge.call("editor.drafts.putDocument", params: .object([

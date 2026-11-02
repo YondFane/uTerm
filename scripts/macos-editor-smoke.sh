@@ -40,7 +40,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 else:
                     for key in ['forcedExitDraftRestored', 'externalConflictRetainedFileAndDraft', 'closeRefusedWithoutReadonlyFallback',
                                 'discardRemovedOnlyOwnDraft', 'savedExactBytesAndClearedDraft', 'cleanEditorQuitPrepared',
-                                'narrowEditorControlsWithinViewport', 'missingSourceRetainedReadonlyAfterClose']:
+                                'narrowEditorControlsWithinViewport', 'missingSourceRetainedReadonlyAfterClose', 'escapeClosedNativeFileWindow']:
                         assert report[key], (key, report)
                     code = process.wait(timeout=20)
                     assert code == 0, code

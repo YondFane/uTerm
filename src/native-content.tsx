@@ -16,11 +16,19 @@ interface Context {
   editable: boolean;
 }
 function Content({ context }: { context: Context }) {
-  const editor = useFileDocument(
+  const state = useFileDocument(
     10,
     !context.editable,
     context.editable ? context.directory : undefined,
   );
+  const editor: ReturnType<typeof useFileDocument> = {
+    ...state,
+    close: (after, id) =>
+      state.close(async () => {
+        await after?.();
+        await contentInvoke<void>("editor_exit");
+      }, id),
+  };
   useEffect(() => {
     void editor.open(context.directory, context.path);
   }, [context.directory, context.path]);
