@@ -349,3 +349,23 @@ and full data rollback remain #46; native recovery interaction and dependency ac
 open.
 
 恢复前保留旧 WebView 数据及整个规范目录，停止客户端写入并导出最新状态；退出只断连宿主。导出先经旧读取器校验，再用于隔离旧 QA。仅替换旧程序不能恢复迁移后的设置或草稿。格式测试未提供自动 WebView 导入或安装级降级验收；保留先前副本，损坏快照使用当前恢复界面，不覆盖规范副本或同时运行两个权威写者。凭据仍由系统管理。实际安装替换、宿主保留和完整回退属于 #46；原生恢复及依赖未验收前 #28 保持开放。
+
+Head `b57954302207490e0125d1e95023fa5edbe3318f` native ARM passed normal window termination, but
+real PTY smoke failed while inspecting Unicode text. The QA text reader used raw cells, including
+wide-character padding, and omitted SwiftTerm's combining-character provider. It now uses both
+renderer APIs and a focused parser test covering color, Unicode, alternate screen and input-mode
+toggles. This test does not establish actual IME, clipboard or mouse interaction. The smoke creates
+a real temporary project, captures terminal diagnostics on failure and closes only its isolated host
+sessions in cleanup. New native verification remains pending.
+
+该提交的 ARM 退出冒烟已通过，真实 PTY
+Unicode 检查失败；修正文本采集并增加解析器检查，不将模式解析当输入法／剪贴板／鼠标交互。脚本使用临时项目，失败记录终端诊断，结束清理自身隔离宿主，仍待新原生验证。
+
+The Windows slow-start fixture failed again with bounded parallelism. The test now compiles a tiny
+native disposable probe with the active Rust toolchain before measuring startup, avoiding a
+PowerShell cold start inside the two-second capability-probe budget. It still opens an actual Agent
+process, waits for the marker inside the five-second probe and checks concurrent HostStatus within
+one second, then explicitly closes that generation. This fixture change needs Windows verification;
+no production probe timeout or responsiveness assertion was relaxed.
+
+Windows 在限定并发后仍复现同步失败；测试先编译小型原生探测样例，保留真实进程、慢探测、1 秒状态响应及明确关闭，不放宽生产超时或验收断言，等待 Windows 结果。

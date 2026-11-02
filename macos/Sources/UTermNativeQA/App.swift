@@ -162,6 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             finishReport(report, path: path)
         } catch {
             report["failure"] = error.localizedDescription
+            report["terminalDiagnostics"] = model.terminals.values.map { ["id": $0.id, "generation": $0.generation ?? "", "error": $0.error, "exited": $0.exited, "text": String($0.text.suffix(4096))] as [String: Any] }
             finishReport(report, path: path)
         }
     }

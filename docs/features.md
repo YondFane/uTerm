@@ -61,9 +61,13 @@ first M2 native CI failed during Swift compilation; bridge visibility, delegate 
 focus integration were corrected. The next ARM run passed five Swift tests (including full-range
 UInt64 decoding/acknowledgement and queue rejection) and opened the real window, but timed out on
 quit. The quit path now drains work before requesting final termination; runtime verification
-remains pending. The earlier M1 native ARM/Intel bridge and legacy macOS/Windows CI passed; that
-result does not validate these new terminal changes. The QA harness uses temporary data and never
-production data.
+remains pending. A subsequent real PTY check exposed a Unicode text-inspection timeout; the QA
+reader now skips wide-cell padding and uses SwiftTerm's combining-character mapping, with a focused
+parser test. This correction still needs native CI. The Windows slow-start regression now uses a
+native disposable probe fixture to remove PowerShell startup from its synchronization; its real host
+responsiveness assertion remains and needs Windows CI. The earlier M1 native ARM/Intel bridge and
+legacy macOS/Windows CI passed; that result does not validate these new terminal changes. The QA
+harness uses temporary data and never production data.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain

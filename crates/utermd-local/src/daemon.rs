@@ -1498,8 +1498,29 @@ mod tests {
         let ready = root.join("ready");
         #[cfg(windows)]
         let program = {
-            let path = root.join("codex.cmd");
-            std::fs::write(&path, "@echo off\r\nif \"%1\"==\"--help\" (\r\n echo ready>\"%~dp0ready\"\r\n ping -n 6 127.0.0.1 >nul\r\n)\r\nexit /b 0\r\n").unwrap();
+            // A native fixture reaches the slow section before the probe deadline, without PowerShell startup variance.
+            // 原生样例在探测期限前进入慢操作，避免 PowerShell 启动时间干扰测试同步。
+            let source = root.join("probe.rs");
+            let path = root.join("codex.exe");
+            std::fs::write(&source, r#"fn main() {
+                if std::env::args().any(|arg| arg == "--help") {
+                    let directory = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+                    std::fs::write(directory.join("ready"), b"ready").unwrap();
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                }
+            }"#).unwrap();
+            let built = std::process::Command::new("rustc")
+                .arg("--edition=2021")
+                .arg(&source)
+                .arg("-o")
+                .arg(&path)
+                .output()
+                .unwrap();
+            assert!(
+                built.status.success(),
+                "{}",
+                String::from_utf8_lossy(&built.stderr)
+            );
             path
         };
         #[cfg(unix)]

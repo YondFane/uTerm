@@ -30,6 +30,10 @@ enum TerminalSmoke {
             return
         }
 
+        let project = try WorkspaceModel.dataRoot().deletingLastPathComponent()
+        guard await model.mutate("project.open", ["id": .string(UUID().uuidString), "name": .string("Terminal QA"), "directory": .string(project.path), "workspaceId": .string(model.groupID)]) else {
+            throw BridgeFailure(code: "SMOKE_PROJECT", message: model.error)
+        }
         await model.newTerminal()
         try await wait("Create the first real PTY") { model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true }
         guard let first = model.selectedTerminal else { throw BridgeFailure(code: "SMOKE_SESSION", message: "No first terminal") }

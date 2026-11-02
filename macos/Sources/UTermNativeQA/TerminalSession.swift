@@ -173,9 +173,10 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     var text: String {
         let terminal = view.getTerminal()
         var lines: [String] = []
-        for row in 0..<(terminal.options.scrollback + terminal.rows) {
+        let start = terminal.buffer.totalLinesTrimmed
+        for row in start..<(start + terminal.options.scrollback + terminal.rows) {
             guard let line = terminal.getScrollInvariantLine(row: row) else { break }
-            lines.append(line.translateToString(trimRight: true))
+            lines.append(line.translateToString(trimRight: true, skipNullCellsFollowingWide: true, characterProvider: { terminal.getCharacter(for: $0) }))
         }
         return lines.joined(separator: "\n")
     }
