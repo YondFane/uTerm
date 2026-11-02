@@ -146,3 +146,6 @@ with `pnpm contracts:generate`. On macOS, run `bash scripts/macos-native-build.s
 Native terminal QA: `bash scripts/macos-terminal-smoke.sh` runs two real app processes with
 temporary data, a bundled standalone helper and language/theme/width screenshot artifacts. SwiftPM
 resolves the pinned SwiftTerm 1.20.0 dependency; it does not change the legacy terminal renderer.
+
+The shared-core command explicitly runs the filesystem-failure case. Unix tests require an
+unprivileged user so directory permissions enforce the failure; Windows uses a held file lease.

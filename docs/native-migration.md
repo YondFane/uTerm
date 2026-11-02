@@ -559,3 +559,14 @@ direct release/main push, tag, Release or production feed change occurred.
 
 M1／M2 的完整边界、失败模式、恢复交互、控制服务／宿主过渡、键盘设置／真实 Agent、TypeScript 完整范围、压力及多客户端仲裁仍开放；休眠、多屏与 macOS
 14 运行未执行。M3–M5 接入、性能、签名公证及实际升级回退未完成。PR 保持 Draft，未合并、未直推 release/main、未打标签、未发布或改生产 feed。
+
+### M1 recovery-copy integrity / M1 恢复副本完整性
+
+Task #25 now rejects existing recovery/damaged paths whose bytes or file type differ. Recovery
+listing verifies filename digests as well as document validation. Focused Linux tests passed for
+occupied backup paths, valid-but-wrong backup content, preserved canonical bytes and retry. A real
+read-only directory failure ran under UID 1000 and preserved snapshot/original import before retry.
+`pnpm test:core` now explicitly includes this permission test; native CI records `core-io-test.log`.
+Windows uses a held file handle to exercise atomic replacement failure; new platform CI is pending.
+
+#25 校验已有副本的字节／文件类型及恢复列表摘要。本地普通用户已实际执行权限失败，验证快照／原始导出保留和重试；标准命令及原生 CI 明确执行该案例，Windows 占用文件替换失败仍待本次 CI，不把实现当作平台通过。

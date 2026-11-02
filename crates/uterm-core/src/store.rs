@@ -129,7 +129,12 @@ impl Store {
             };
             if valid_revision(revision)
                 && bounded_read(&entry.path())
-                    .and_then(|bytes| decode(&bytes))
+                    .and_then(|bytes| {
+                        if hash(&bytes) != revision {
+                            return Err(CoreError::new("CORRUPT_STORE", "Backup checksum differs"));
+                        }
+                        decode(&bytes)
+                    })
                     .is_ok()
             {
                 backups.push(revision.to_string());
@@ -161,9 +166,7 @@ impl Store {
         let damaged = self
             .root
             .join(format!("snapshot-{}.damaged", hash(&current)));
-        if !damaged.exists() {
-            write_new(&damaged, &current)?;
-        }
+        retain_bytes(&damaged, &current)?;
         self.persist(&document)?;
         self.load()
     }
@@ -198,7 +201,7 @@ impl Store {
         };
         let backup = self.root.join("legacy-original.json");
         if backup.exists() {
-            if fs::read(&backup)? != source {
+            if bounded_read(&backup)? != source {
                 return Err(CoreError::new(
                     "MIGRATION_CONFLICT",
                     "A different interrupted migration backup exists",
@@ -232,9 +235,11 @@ impl Store {
         let recovery = self
             .root
             .join(format!("snapshot-{}.backup", snapshot.revision));
-        if !recovery.exists() {
-            write_new(&recovery, &fs::read(self.path())?)?;
+        let previous = bounded_read(&self.path())?;
+        if hash(&previous) != snapshot.revision {
+            return Err(CoreError::new("CONFLICT", "Snapshot changed before backup"));
         }
+        retain_bytes(&recovery, &previous)?;
         let mut backups = Vec::new();
         for entry in fs::read_dir(&self.root)? {
             let entry = entry?;
@@ -319,4 +324,20 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<()> {
     file.write_all(bytes)?;
     file.sync_all()?;
     Ok(())
+}
+
+fn retain_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => {
+            if bounded_read(path)? != bytes {
+                return Err(CoreError::new(
+                    "CORRUPT_STORE",
+                    "Existing recovery copy differs; retained unchanged",
+                ));
+            }
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => write_new(path, bytes),
+        Err(error) => Err(error.into()),
+    }
 }

@@ -101,11 +101,14 @@ no longer written. Editor drafts and other WebView preferences retain their exis
 
 An unreadable snapshot opens a recovery view without resetting data. **View recovery copies** lists
 valid saved snapshots; an explicit restore retains the damaged bytes. Up to eight previous snapshots
-and the original import are retained. **Settings → General → Export legacy-compatible data** saves
-the current workspace/settings and original auxiliary values as JSON. This export is a recovery
-artifact. A real Rust-process test reads the exported workspace/settings with unchanged release
-readers, preserving split/session IDs and opaque draft/backup bytes after repeated import. Automatic
-downgrade into an unmodified old client's WebView storage is not verified.
+and the original import are retained. Existing recovery copies must match their expected bytes;
+wrong checksums or occupied backup paths stop a save without replacing the snapshot. The recovery
+list includes only copies whose filename digest matches their actual content. **Settings → General →
+Export legacy-compatible data** saves the current workspace/settings and original auxiliary values
+as JSON. This export is a recovery artifact. A real Rust-process test reads the exported
+workspace/settings with unchanged release readers, preserving split/session IDs and opaque
+draft/backup bytes after repeated import. Automatic downgrade into an unmodified old client's
+WebView storage is not verified.
 
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
 conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI.

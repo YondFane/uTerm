@@ -131,3 +131,5 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 原生终端 QA：`bash scripts/macos-terminal-smoke.sh`
 使用临时数据及包内独立 helper，运行两个真实应用进程并保存双语／主题／宽度截图产物。SwiftPM 解析固定的 SwiftTerm
 1.20.0 依赖，不改变旧终端渲染器。
+
+共享核心检查会明确执行文件系统失败案例。Unix 需以普通用户运行以便目录权限生效；Windows 使用文件占用租约验证替换失败。

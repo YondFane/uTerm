@@ -228,3 +228,139 @@ fn legacy_export_contains_current_state_and_retains_opaque_drafts() {
         import().legacy["uterm.desktop.editorDraft.v1"]
     );
 }
+
+#[test]
+fn occupied_backup_path_cannot_silently_skip_recovery_before_a_write() {
+    let root = tempfile::tempdir().unwrap();
+    let store = Store::open(root.path().into()).unwrap();
+    let before = store.import(import()).unwrap();
+    let original = fs::read(root.path().join("snapshot-v1.json")).unwrap();
+    let backup = root
+        .path()
+        .join(format!("snapshot-{}.backup", before.revision));
+    fs::create_dir(&backup).unwrap();
+    let failed = store.update(&before.revision, |doc| {
+        doc.settings["fontSize"] = json!(20);
+        Ok(())
+    });
+    assert_eq!(failed.unwrap_err().code, "CORRUPT_STORE");
+    assert_eq!(
+        fs::read(root.path().join("snapshot-v1.json")).unwrap(),
+        original
+    );
+    assert!(backup.is_dir());
+    fs::remove_dir(&backup).unwrap();
+    assert!(store
+        .update(&before.revision, |doc| {
+            doc.settings["fontSize"] = json!(20);
+            Ok(())
+        })
+        .is_ok());
+    assert_eq!(fs::read(backup).unwrap(), original);
+}
+
+#[test]
+fn valid_json_with_wrong_checksum_is_not_a_recovery_copy() {
+    let root = tempfile::tempdir().unwrap();
+    let store = Store::open(root.path().into()).unwrap();
+    let before = store.import(import()).unwrap();
+    let mut other = before.document.clone();
+    other.settings["fontSize"] = json!(23);
+    let bytes = serde_json::to_vec(&other).unwrap();
+    let backup = root
+        .path()
+        .join(format!("snapshot-{}.backup", before.revision));
+    fs::write(&backup, &bytes).unwrap();
+    assert!(store.recovery_list().unwrap()["backups"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert_eq!(
+        store
+            .update(&before.revision, |doc| {
+                doc.settings["fontSize"] = json!(20);
+                Ok(())
+            })
+            .unwrap_err()
+            .code,
+        "CORRUPT_STORE"
+    );
+    assert_eq!(store.read().unwrap().revision, before.revision);
+    assert_eq!(fs::read(backup).unwrap(), bytes);
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "Run explicitly with an unprivileged user to enforce filesystem permissions"]
+fn filesystem_failure_preserves_snapshot_and_allows_retry() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let store = Store::open(root.path().into()).unwrap();
+    let before = store.import(import()).unwrap();
+    let bytes = fs::read(root.path().join("snapshot-v1.json")).unwrap();
+    let original = fs::read(root.path().join("legacy-original.json")).unwrap();
+    fs::set_permissions(root.path(), fs::Permissions::from_mode(0o500)).unwrap();
+    let failed = store.update(&before.revision, |doc| {
+        doc.settings["fontSize"] = json!(20);
+        Ok(())
+    });
+    fs::set_permissions(root.path(), fs::Permissions::from_mode(0o700)).unwrap();
+    assert_eq!(
+        failed.unwrap_err().code,
+        "IO",
+        "This case requires an unprivileged user"
+    );
+    assert_eq!(
+        fs::read(root.path().join("snapshot-v1.json")).unwrap(),
+        bytes
+    );
+    assert_eq!(
+        fs::read(root.path().join("legacy-original.json")).unwrap(),
+        original
+    );
+    assert_eq!(store.read().unwrap().revision, before.revision);
+    assert!(store
+        .update(&before.revision, |doc| {
+            doc.settings["fontSize"] = json!(20);
+            Ok(())
+        })
+        .is_ok());
+}
+
+#[cfg(windows)]
+#[test]
+fn filesystem_failure_preserves_snapshot_and_allows_retry() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let store = Store::open(root.path().into()).unwrap();
+    let before = store.import(import()).unwrap();
+    let path = root.path().join("snapshot-v1.json");
+    let bytes = fs::read(&path).unwrap();
+    let lease = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(1)
+        .open(&path)
+        .unwrap();
+    let failed = store.update(&before.revision, |doc| {
+        doc.settings["fontSize"] = json!(20);
+        Ok(())
+    });
+    assert_eq!(failed.unwrap_err().code, "IO");
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert_eq!(
+        fs::read(
+            root.path()
+                .join(format!("snapshot-{}.backup", before.revision))
+        )
+        .unwrap(),
+        bytes
+    );
+    drop(lease);
+    assert_eq!(store.read().unwrap().revision, before.revision);
+    assert!(store
+        .update(&before.revision, |doc| {
+            doc.settings["fontSize"] = json!(20);
+            Ok(())
+        })
+        .is_ok());
+}
