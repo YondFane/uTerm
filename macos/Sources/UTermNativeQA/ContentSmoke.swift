@@ -15,12 +15,21 @@ enum ContentSmoke {
         throw BridgeFailure(code: "CONTENT_TIMEOUT", message: String(state.prefix(6000)))
     }
     private static func request(_ content: ContentWindow, method: String, params: [String: Any], wrongDocument: Bool = false) async throws -> String {
-        let value = try await content.webView.callAsyncJavaScript("""
-            const reply = await window.webkit.messageHandlers.utermContent.postMessage({kind:'request',version:1,id:operationID,document:wrongDocument?'old-document':window.utermContentDocument,method,params});
-            return reply.error ? reply.error.code : 'SUCCESS';
-            """, arguments: ["method": method, "params": params, "wrongDocument": wrongDocument, "operationID": UUID().uuidString], in: nil, in: .page)
-        return value as? String ?? "INVALID_REPLY"
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+            content.webView.callAsyncJavaScript("""
+                const reply = await window.webkit.messageHandlers.utermContent.postMessage({kind:'request',version:1,id:operationID,document:wrongDocument?'old-document':window.utermContentDocument,method,params});
+                return reply.error ? reply.error.code : 'SUCCESS';
+                """, arguments: ["method": method, "params": params, "wrongDocument": wrongDocument, "operationID": UUID().uuidString], in: nil, in: .page) { result in
+                    switch result {
+                    case .success(let value):
+                        guard let code = value as? String else { continuation.resume(throwing: BridgeFailure(code: "CONTENT_REPLY", message: "JavaScript did not return an error code")); return }
+                        continuation.resume(returning: code)
+                    case .failure(let error): continuation.resume(throwing: error)
+                    }
+                }
+        }
     }
+
     static func run(model: WorkspaceModel, report: inout [String: Any]) async throws {
         guard let bridge = model.bridge, model.ready,
               let reportPath = WorkspaceModel.argument("--content-smoke-report") else { throw BridgeFailure(code: "CONTENT_STARTUP", message: model.error) }
@@ -53,9 +62,13 @@ enum ContentSmoke {
                 let saved = try await bridge.snapshot()
                 guard saved.document.settings["fileFontSize"].number == font + 1 else { throw BridgeFailure(code: "CONTENT_SETTINGS", message: "File font did not reach canonical storage") }
                 report["fontSavedByCore"] = true
-                report["wrongDocumentRejected"] = try await request(content, method: "file_read", params: ["directory": root.path, "path": path], wrongDocument: true) == "DOCUMENT_DENIED"
-                report["rootEscapeRejected"] = try await request(content, method: "file_read", params: ["directory": "/", "path": "etc/passwd"]) == "ROOT_DENIED"
-                report["writeRejected"] = try await request(content, method: "file_save", params: ["directory": root.path, "path": path, "text": "bad", "expected": "", "force": true]) == "READ_ONLY"
+                let wrongDocument = try await request(content, method: "file_read", params: ["directory": root.path, "path": path], wrongDocument: true)
+                let rootEscape = try await request(content, method: "file_read", params: ["directory": "/", "path": "etc/passwd"])
+                let write = try await request(content, method: "file_save", params: ["directory": root.path, "path": path, "text": "bad", "expected": "", "force": true])
+                report["rejectionCodes"] = ["wrongDocument": wrongDocument, "rootEscape": rootEscape, "write": write]
+                report["wrongDocumentRejected"] = wrongDocument == "DOCUMENT_DENIED"
+                report["rootEscapeRejected"] = rootEscape == "ROOT_DENIED"
+                report["writeRejected"] = write == "READ_ONLY"
                 guard try Data(contentsOf: root.appendingPathComponent(path)) == original else { throw BridgeFailure(code: "CONTENT_WRITE", message: "Read-only preview changed its source") }
             } else if path == "preview.html" {
                 let sandbox = try await content.webView.evaluateJavaScript("""
