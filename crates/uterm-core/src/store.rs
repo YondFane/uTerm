@@ -36,6 +36,23 @@ pub struct Import {
 pub struct Store {
     root: PathBuf,
 }
+struct WriterGuard(File);
+impl Drop for WriterGuard {
+    fn drop(&mut self) {
+        // Closing one descriptor does not release a flock inherited during PTY spawning.
+        // 只关闭一个描述符不会释放 PTY 创建期间继承的 flock。
+        loop {
+            match self.0.unlock() {
+                Ok(()) => break,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(error) => {
+                    eprintln!("Canonical writer unlock: {error}");
+                    break;
+                }
+            }
+        }
+    }
+}
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
@@ -54,7 +71,7 @@ impl Store {
             root: root.canonicalize()?,
         })
     }
-    fn lock(&self) -> Result<File> {
+    fn lock(&self) -> Result<WriterGuard> {
         let file = OpenOptions::new()
             .create(true)
             .truncate(false)
@@ -78,7 +95,7 @@ impl Store {
                 Err(std::fs::TryLockError::Error(error)) => return Err(error.into()),
             }
         }
-        Ok(file)
+        Ok(WriterGuard(file))
     }
     fn path(&self) -> PathBuf {
         self.root.join("snapshot-v1.json")
@@ -353,5 +370,25 @@ fn retain_bytes(path: &Path, bytes: &[u8]) -> Result<()> {
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => write_new(path, bytes),
         Err(error) => Err(error.into()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn writer_guard_releases_ownership_even_while_a_descriptor_copy_survives() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = Store::open(directory.path().to_owned()).unwrap();
+        let guard = store.lock().unwrap();
+        let inherited = guard.0.try_clone().unwrap();
+        assert!(matches!(store.lock(), Err(error) if error.code == "WRITER_BUSY"));
+        drop(guard);
+        assert!(
+            store.lock().is_ok(),
+            "A descriptor copy retained the completed transaction lock"
+        );
+        drop(inherited);
     }
 }

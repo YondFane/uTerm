@@ -137,6 +137,9 @@ impl Inner {
         }
     }
     fn handle(&self, stream: &mut TcpStream) -> Result<Value, String> {
+        // Accepted sockets can inherit the nonblocking listener mode on macOS.
+        // macOS 接入连接可能继承监听器的非阻塞模式。
+        stream.set_nonblocking(false).map_err(|e| e.to_string())?;
         stream
             .set_read_timeout(Some(Duration::from_secs(2)))
             .map_err(|e| e.to_string())?;
@@ -410,6 +413,39 @@ mod tests {
             accept: Mutex::new(None),
             configuration: Mutex::new(()),
         })
+    }
+    #[test]
+    fn accepted_nonblocking_socket_waits_for_a_delayed_request() {
+        let directory = tempfile::tempdir().unwrap();
+        let state = service(directory.path());
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let mut accepted = listener.accept().unwrap().0;
+        accepted.set_nonblocking(true).unwrap();
+        let worker = state.clone();
+        let handle = std::thread::spawn(move || worker.inner.handle(&mut accepted));
+        std::thread::sleep(Duration::from_millis(50));
+        write_message(
+            &mut client,
+            &json!({"version":1,"token":"test-token","method":"status"}),
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            if let Some(request) = state.poll().unwrap() {
+                state.reply(&request.id, json!({"result":"ready"})).unwrap();
+                break;
+            }
+            if handle.is_finished() {
+                panic!(
+                    "Request handler ended before dispatch: {:?}",
+                    handle.join().unwrap()
+                );
+            }
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(handle.join().unwrap().unwrap()["result"], "ready");
     }
     #[test]
     fn control_authentication_and_queued_reply_use_real_sockets() {
