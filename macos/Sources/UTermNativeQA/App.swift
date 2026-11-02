@@ -109,6 +109,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func increaseFont() { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(1)]) } }
     @objc private func decreaseFont() { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(-1)]) } }
 
+    func windowDidUpdate(_ notification: Notification) {
+        guard let responder = window?.firstResponder,
+              let session = model.terminals.values.first(where: { $0.view === responder }),
+              session.id != model.selectedID else { return }
+        Task { await model.selectSession(session.id, focus: false) }
+    }
     func windowShouldClose(_ sender: NSWindow) -> Bool { sender.orderOut(nil); return false }
     func windowDidEnterFullScreen(_ notification: Notification) { model.fullScreen = true }
     func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false }
@@ -125,7 +131,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     private func baseReport() -> [String: Any] {
-        ["windowVisible": window?.isVisible == true, "screenCount": NSScreen.screens.count,
+        #if arch(arm64)
+        let architecture = "arm64"
+        #else
+        let architecture = "x86_64"
+        #endif
+        return ["platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
+         "sourceHeadSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceHeadSHA") ?? "",
+         "windowVisible": window?.isVisible == true, "screenCount": NSScreen.screens.count,
          "bundleIdentifier": Bundle.main.bundleIdentifier ?? "", "minimumOS": Bundle.main.object(forInfoDictionaryKey: "LSMinimumSystemVersion") ?? "",
          "sourceSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceSHA") ?? "", "productionDataAccess": false,
          "hostStarted": !model.terminals.isEmpty, "coreReady": model.ready, "sessionCount": model.state?.sessions.count ?? 0,

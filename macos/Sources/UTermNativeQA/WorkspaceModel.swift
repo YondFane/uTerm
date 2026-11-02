@@ -139,7 +139,6 @@ final class WorkspaceModel: ObservableObject {
                 if terminals[id] == nil {
                     let session = TerminalSession(entry: entry, bridge: bridge)
                     session.changed = { [weak self] in self?.objectWillChange.send() }
-                    session.view.onFocus = { [weak self] in Task { await self?.selectSession(id) } }
                     terminals[id] = session
                 }
                 terminals[id]?.update(entry: entry)

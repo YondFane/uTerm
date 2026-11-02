@@ -282,3 +282,13 @@ branch's new macOS CI.
 
 本地上述结果只覆盖 Linux；迁移到共享核心的测试保留，未将数量减少解释为删减验收。宿主测试、新 control
 CLI 测试及桌面编译也已通过，Swift 编译及截图待新 CI。
+
+M2 head `9449c3e1881f28b5172ee8ebfef90fca26da447d`: legacy Windows/macOS
+[41407004301](https://github.com/YondFane/uTerm/actions/runs/41407004301) passed. Native
+[41407004364](https://github.com/YondFane/uTerm/actions/runs/41407004364) failed at Swift
+compilation; its archived baseline/toolchain/dependency files are evidence of that failure, not
+runtime screenshots. The next correction exposes the bridge error initializer, uses the SwiftTerm
+delegate contract and observes window focus without overriding a non-open third-party method.
+`Package.resolved` is taken from this real CI resolution and subsequent builds enforce it.
+
+上述 M2 提交的旧客户端 CI 通过，原生编译失败，未执行原生运行。修复桥接访问权限、委托契约及焦点接入；依赖锁来自真实 CI，后续构建强制使用锁定版本。

@@ -57,8 +57,10 @@ Linux real-helper tests cover acknowledgement backpressure, detach/reopen/replay
 shared-state tests cover session splits, stale writes, layout removal and reopening. Shared numeric
 fixtures exercise the Rust encoder and TypeScript safe-integer boundary. Swift tests and real native
 PTY/split/screenshot harnesses are implemented but await CI verification for this source tree. The
-earlier M1 native ARM/Intel bridge and legacy macOS/Windows CI passed; that result does not validate
-these new terminal changes. The QA harness uses temporary data and never production data.
+first M2 native CI failed during Swift compilation; bridge visibility, delegate requirements and
+focus integration were corrected for a new run. The earlier M1 native ARM/Intel bridge and legacy
+macOS/Windows CI passed; that result does not validate these new terminal changes. The QA harness
+uses temporary data and never production data.
 
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain

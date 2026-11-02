@@ -16,6 +16,8 @@ jobs:
         os: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -46,7 +48,7 @@ jobs:
             cargo --version
           } | tee macos/.build/evidence/toolchain.txt
       - name: Build isolated native application
-        run: bash scripts/macos-native-build.sh
+        run: bash scripts/macos-native-build.sh 2>&1 | tee macos/.build/evidence/native-build.log
       - name: Shared core, FFI and Swift bridge tests
         run: |
           cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local

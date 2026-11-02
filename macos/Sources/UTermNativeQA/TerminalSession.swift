@@ -3,19 +3,9 @@ import SwiftTerm
 import UTermBridge
 
 @MainActor
-final class SessionTerminalView: TerminalView {
-    var onFocus: (() -> Void)?
-    override func becomeFirstResponder() -> Bool {
-        let accepted = super.becomeFirstResponder()
-        if accepted { onFocus?() }
-        return accepted
-    }
-}
-
-@MainActor
-final class TerminalSession: NSObject, TerminalViewDelegate {
+final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     let id: String
-    let view: SessionTerminalView
+    let view: TerminalView
     private(set) var bridge: CoreBridge
     private(set) var attachment = UUID().uuidString
     private(set) var generation: String?
@@ -34,7 +24,7 @@ final class TerminalSession: NSObject, TerminalViewDelegate {
         self.entry = entry
         self.bridge = bridge
         id = entry.session["id"].string ?? ""
-        view = SessionTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
+        view = TerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
         super.init()
         view.terminalDelegate = self
     }
@@ -133,7 +123,7 @@ final class TerminalSession: NSObject, TerminalViewDelegate {
         await drainInput()
         let previous = attachment
         do { _ = try await bridge.call("terminal.action", params: .object(["attachment": .string(previous), "action": .string("detach")])) }
-        catch { error = error.localizedDescription }
+        catch { self.error = error.localizedDescription }
         attachment = UUID().uuidString
         generation = nil
         exited = false
@@ -196,6 +186,7 @@ final class TerminalSession: NSObject, TerminalViewDelegate {
         desiredSize = (newCols, newRows)
         Task { await resizeIfNeeded() }
     }
+    func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
     func send(source: TerminalView, data: ArraySlice<UInt8>) { enqueue(Data(data)) }
     func setTerminalTitle(source: TerminalView, title: String) {}
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
