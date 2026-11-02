@@ -72,7 +72,7 @@ try {
   const archive = join(work, "source.tar");
   run("git", ["archive", "--format=tar", `--output=${archive}`, baseline, "crates/utermd-local"]);
   report.sourceArchiveSHA256 = hash(readFileSync(archive));
-  run("tar", ["-xf", archive, "-C", source]);
+  run("tar", ["-xf", "../source.tar"], { cwd: source });
   const before = sourceHashes(source);
   writeFileSync(
     join(evidence, "release-source-hashes.json"),

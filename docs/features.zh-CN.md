@@ -82,7 +82,9 @@ helper 回归运行真实临时进程。既有同版本二进制及不兼容端�
 `pnpm test:legacy-host`
 另用独立目标目录及历史锁文件，编译未修改的 release 基线 helper。新核心接入其活跃 PTY，接收及确认二进制输出、发送字面输入、退出保留进程，仅在明确匹配 generation 关闭后升级；源码及二进制摘要必须保持不变。Linux
 x86_64 已通过此真实历史源码进程检查，Windows／macOS CI 待执行。报告及日志由 CI artifacts 的
-`legacy-host/` 上传，不代表安装器升级或回退验收。
+`legacy-host/` 上传，不代表安装器升级或回退验收。首轮 Windows 在解压阶段停止：GNU
+tar 将盘符误作远程主机；现改用相对归档路径。该步骤也明确传入 PR head，与 tested merge
+SHA 分开记录；修正仍需新 Windows 运行。
 
 回环控制服务及有界认证队列位于共享 Rust 宿主模块，Tauri 继续委托原命令。原生设置现有**允许本地 CLI 控制**及明确的数据目录；Rust 分发认证后的创建／聚焦／输入／关闭请求，检查 revision 与宿主 generation。执行须有有效认领，过期和重复请求会拒绝；桥接清理前先停止控制循环。
 

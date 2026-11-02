@@ -113,7 +113,10 @@ acknowledges binary output, writes literal input, detaches without terminating i
 after an explicit generation-matched close. Source and executable hashes must stay unchanged. Linux
 x86_64 passed this actual historical-source process test; Windows/macOS CI is pending. Reports and
 logs are uploaded as `legacy-host/` inside CI artifacts. This does not establish installer upgrade
-or rollback acceptance.
+or rollback acceptance. The first Windows job stopped during archive extraction because GNU tar
+interpreted a drive letter as a remote host; extraction now uses a relative archive path. Its
+compatibility step also receives the actual PR head separately from the tested merge SHA. This
+correction requires a fresh Windows run.
 
 The loopback control server and bounded authenticated queue live in the shared Rust host module.
 Tauri delegates its existing control commands to it. Native Settings now includes **Allow local CLI

@@ -88,6 +88,8 @@ jobs:
           pnpm contracts:check 2>&1 | tee ci-evidence/contracts.log
       - name: Immutable release helper compatibility
         shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: pnpm test:legacy-host 2>&1 | tee ci-evidence/legacy-host-command.log
       - name: Host tests
         shell: bash
