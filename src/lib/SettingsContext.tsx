@@ -1,5 +1,5 @@
 import { tx } from "./i18n.ts";
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { applyContentWindowAppearance } from "./content-host";
 import { themes } from "./themes";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -94,10 +94,9 @@ export function SettingsProvider({
     root.style.setProperty("--window-padding", `${settings.windowPadding}px`);
   }, [settings, light]);
   useEffect(() => {
-    if (isTauri())
-      void invoke("window_appearance", { blur: settings.blur })
-        .then(() => setAppearanceError(""))
-        .catch((reason) => setAppearanceError(tx("背景效果未应用：{p0}", { p0: String(reason) })));
+    void applyContentWindowAppearance(settings.blur)
+      .then(() => setAppearanceError(""))
+      .catch((reason) => setAppearanceError(tx("背景效果未应用：{p0}", { p0: String(reason) })));
   }, [settings.blur]);
   async function save(value: Settings, mac: boolean) {
     if (error) throw new Error(error);

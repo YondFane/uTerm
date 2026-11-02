@@ -18,12 +18,12 @@ enum ContentSmoke {
         let state = (try? await content.webView.evaluateJavaScript("document.documentElement.outerHTML")) as? String ?? "No DOM"
         throw BridgeFailure(code: "CONTENT_TIMEOUT", message: String(state.prefix(6000)))
     }
-    private static func request(_ content: ContentWindow, method: String, params: [String: Any], wrongDocument: Bool = false) async throws -> String {
+    private static func request(_ content: ContentWindow, method: String, params: [String: Any], wrongDocument: Bool = false, document: String? = nil) async throws -> String {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
             content.webView.callAsyncJavaScript("""
-                const reply = await window.webkit.messageHandlers.utermContent.postMessage({kind:'request',version:1,id:operationID,document:wrongDocument?'old-document':window.utermContentDocument,method,params});
+                const reply = await window.webkit.messageHandlers.utermContent.postMessage({kind:'request',version:1,id:operationID,document:documentOverride||(wrongDocument?'old-document':window.utermContentDocument),method,params});
                 return reply.error ? reply.error.code : 'SUCCESS';
-                """, arguments: ["method": method, "params": params, "wrongDocument": wrongDocument, "operationID": UUID().uuidString], in: nil, in: .page) { result in
+                """, arguments: ["method": method, "params": params, "wrongDocument": wrongDocument, "operationID": UUID().uuidString, "documentOverride": document ?? ""], in: nil, in: .page) { result in
                     switch result {
                     case .success(let value):
                         guard let code = value as? String else { continuation.resume(throwing: BridgeFailure(code: "CONTENT_REPLY", message: "JavaScript did not return an error code")); return }
@@ -34,7 +34,7 @@ enum ContentSmoke {
         }
     }
 
-    static func run(model: WorkspaceModel, report: inout [String: Any]) async throws {
+    static func run(model: WorkspaceModel, open: (URL, String) throws -> ContentWindow, report: inout [String: Any]) async throws {
         guard let bridge = model.bridge, model.ready,
               let reportPath = WorkspaceModel.argument("--content-smoke-report") else { throw BridgeFailure(code: "CONTENT_STARTUP", message: model.error) }
         let root = try WorkspaceModel.dataRoot().deletingLastPathComponent().appendingPathComponent("content-project")
@@ -43,6 +43,8 @@ enum ContentSmoke {
         try original.write(to: root.appendingPathComponent("中文.txt"))
         try Data("<html><head><style>body{font:24px system-ui;padding:30px}</style></head><body><h1>STATIC_QA 中文</h1><script>window.parent.document.body.textContent='UNSAFE'</script></body></html>".utf8).write(to: root.appendingPathComponent("preview.html"))
         let page = NSTextField(labelWithString: "UTERM_PDF_QA 中文")
+        page.textColor = .black
+        page.font = NSFont.systemFont(ofSize: 24)
         page.frame = NSRect(x: 0, y: 0, width: 420, height: 240)
         try page.dataWithPDF(inside: page.bounds).write(to: root.appendingPathComponent("preview.pdf"))
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
@@ -54,7 +56,7 @@ enum ContentSmoke {
             ("preview.html", "native-content-html.png", "document.querySelector('.html-preview')?.getAttribute('srcdoc')?.includes('STATIC_QA') === true"),
             ("preview.pdf", "native-content-pdf.png", "document.querySelector('option[value=marks]') === null && Array.from(document.querySelectorAll('.pdf-page canvas')).some(canvas => canvas.width > 0 && canvas.height > 0 && canvas.dataset.rendered === 'true' )")
         ] {
-            let content = try ContentWindow(bridge: bridge, directory: root, path: path)
+            let content = try open(root, path)
             defer { content.forceClose() }
             content.showWindow(nil)
             content.window?.makeKeyAndOrderFront(nil)
@@ -73,6 +75,12 @@ enum ContentSmoke {
                 report["wrongDocumentRejected"] = wrongDocument == "DOCUMENT_DENIED"
                 report["rootEscapeRejected"] = rootEscape == "ROOT_DENIED"
                 report["writeRejected"] = write == "READ_ONLY"
+                guard let oldDocument = try await content.webView.evaluateJavaScript("window.utermContentDocument") as? String, !oldDocument.isEmpty else { throw BridgeFailure(code: "CONTENT_DOCUMENT", message: "Content document identity is missing") }
+                content.webView.reload()
+                let quoted = String(data: try JSONEncoder().encode(oldDocument), encoding: .utf8)!
+                try await wait(content, "window.utermContentDocument !== " + quoted + " && document.querySelector('.cm-content[contenteditable=false]')?.textContent.includes('UTERM_CONTENT_中文') === true")
+                report["documentRotatedOnReload"] = true
+                report["oldDocumentRejectedAfterReload"] = try await request(content, method: "file_read", params: ["directory": root.path, "path": path], document: oldDocument) == "DOCUMENT_DENIED"
                 guard try Data(contentsOf: root.appendingPathComponent(path)) == original else { throw BridgeFailure(code: "CONTENT_WRITE", message: "Read-only preview changed its source") }
             } else if path == "preview.html" {
                 let sandbox = try await content.webView.evaluateJavaScript("""
@@ -84,8 +92,20 @@ enum ContentSmoke {
             try await Task.sleep(for: .milliseconds(150))
             try await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(name))
             captures.append(name)
-            content.forceClose()
+            guard let menu = NSApp.mainMenu?.items.dropFirst().first?.submenu,
+                  let index = menu.items.firstIndex(where: { $0.action.map(NSStringFromSelector) == "closeSession" }) else { throw BridgeFailure(code: "CONTENT_MENU", message: "Native close menu is missing") }
+            menu.update()
+            guard menu.items[index].title == "Close file" else { throw BridgeFailure(code: "CONTENT_MENU", message: "Close menu did not target the focused content window") }
+            menu.performActionForItem(at: index)
+            try await TerminalSmoke.wait("Close file through its native menu and document transport") { !window.isVisible }
         }
+        report["closedThroughNativeMenu"] = true
+        let loading = try open(root, "中文.txt")
+        defer { loading.forceClose() }
+        report["loadingAtCloseRequest"] = loading.webView.isLoading
+        loading.window?.performClose(nil)
+        try await TerminalSmoke.wait("Close readonly preview before Web content is ready") { loading.window?.isVisible == false }
+        report["earlyCloseSucceeded"] = true
         report["contentCaptures"] = captures
         report["contentScenario"] = ["language": "en", "appearance": "dark", "windowWidth": 1000, "readonly": true, "data": "temporary UTF-8, static HTML and generated PDF"] as [String: Any]
     }

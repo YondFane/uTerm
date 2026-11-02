@@ -1386,12 +1386,22 @@ real readonly rendering, font persistence, stale identity/root/write denial, san
 PDF rendering, capturing three WindowServer scenes. Swift resource tests reject unapproved origins,
 traversal, symlinks, nonregular/oversized files and invalid manifests.
 
-The first ARM run built and passed eight Swift checks, real text/HTML, font and sandbox checks.
-Three rejection assertions failed because the smoke read `Void` from a callback API; a continuation
-now waits for actual error codes. Visual inspection also found a PDF error despite the old
-canvas-allocation check. The renderer and worker now use the pinned library's compatibility build;
-the smoke requires completed rendering and no visible error. Fresh native CI is required; the failed
-run is not accepted for PDF or rejection behavior.
+At head `b8c2459b2aa10354ab47e2a5f85f1715f790f483`, tested merge
+`e4ca9a8371d01bf12ec4cb9cb5a7e0846e81b8d6`,
+[native ARM/Intel CI](https://github.com/YondFane/uTerm/actions/runs/41432663064) and
+[legacy Windows/macOS CI](https://github.com/YondFane/uTerm/actions/runs/41432663047) passed. The
+content report records actual `DOCUMENT_DENIED`, `ROOT_DENIED` and `READ_ONLY` responses, completed
+PDF rendering, font persistence and sandbox isolation. ARM's three content images and Intel's PDF
+image were inspected; the PDF now displays its expected text without an error. Reports and images:
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13135332912) and
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13136295927). The
+earlier failed PDF image and canvas-allocation check are excluded from acceptance.
+
+The smoke also reloads a real document, rejects its previous identity and closes files through the
+native menu using the same window registration as the file picker. A read-only window can close when
+its Web content is still loading or fails. Those added lifecycle checks await fresh native CI; they
+do not establish human focus or writable-draft acceptance. Window appearance effects also remain
+behind the platform adapter rather than Tauri-specific calls in the shared settings view.
 
 Seven Linux protocol tests cover reordered/mismatched replies, timeout/abort/unload, late
 subscriptions, bounds and the JavaScript WebKit adapter. The frontend suite, types, production

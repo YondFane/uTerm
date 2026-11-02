@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             await model.start()
             if let report = WorkspaceModel.argument("--content-smoke-report") {
                 var result = baseReport()
-                do { try await ContentSmoke.run(model: model, report: &result) }
+                do { try await ContentSmoke.run(model: model, open: { directory, path in try self.makeContentWindow(directory: directory, path: path) }, report: &result) }
                 catch { result["failure"] = error.localizedDescription }
                 finishReport(result, path: report)
             }
@@ -124,7 +124,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc private func openProject() { model.openProject() }
     @objc private func openFile() {
-        guard let bridge = model.bridge, let selected = model.workspace["selectedProject"].string,
+        guard model.bridge != nil, let selected = model.workspace["selectedProject"].string,
               let project = model.workspace["projects"].array.first(where: { $0["id"].string == selected }),
               let path = project["directory"].string else {
             model.error = localized("Select a local project before opening a file.", "打开文件前请先选择本地项目。")
@@ -141,14 +141,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
             guard file.standardizedFileURL.path.hasPrefix(prefix) else { self.model.error = localized("Choose a file inside the selected project.", "请选择所选项目中的文件。") ; return }
             do {
-                let content = try ContentWindow(bridge: bridge, directory: root, path: String(file.standardizedFileURL.path.dropFirst(prefix.count)))
-                let id = UUID()
-                self.contentWindows[id] = content
-                content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
-                content.showWindow(nil)
+                _ = try self.makeContentWindow(directory: root, path: String(file.standardizedFileURL.path.dropFirst(prefix.count)))
             } catch { self.model.error = error.localizedDescription }
         }
     }
+    private func makeContentWindow(directory: URL, path: String) throws -> ContentWindow {
+        guard let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
+        let content = try ContentWindow(bridge: bridge, directory: directory, path: path)
+        let id = UUID()
+        contentWindows[id] = content
+        content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
+        content.showWindow(nil)
+        return content
+    }
+
     @objc private func newWorkspace() { model.newWorkspace() }
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }

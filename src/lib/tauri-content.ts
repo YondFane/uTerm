@@ -33,3 +33,7 @@ export const tauriContentPort: ContentPort = {
     );
   },
 };
+
+export function applyTauriWindowAppearance(blur: boolean): Promise<void> {
+  return isTauri() ? invoke("window_appearance", { blur }) : Promise.resolve();
+}

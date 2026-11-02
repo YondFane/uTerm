@@ -857,7 +857,17 @@ Tauri 适配保留现有命令名。原生 QA 选择本地项目后，通过**�
 构建打包前端及许可声明。`bash scripts/macos-content-smoke.sh`
 检查真实只读渲染、字号持久化、过期身份／越界／写入拒绝、沙箱隔离及 PDF 渲染，记录三种 WindowServer 场景。Swift 资源测试拒绝未许可来源、路径越界、符号链接、特殊／过大文件及错误清单。
 
-首次 ARM 运行完成构建及八项 Swift 检查，真实文本／HTML、字号及沙箱检查通过；三个拒绝断言因 smoke 把回调 API 的 Void 当作结果而失败，现以 continuation 等待实际错误码。目视检查还发现 PDF 有错误，旧检查只确认画布创建。现使用同一锁定库的兼容渲染器和 worker，并要求渲染完成且没有错误提示；仍待新原生 CI，失败运行不计为 PDF 或拒绝行为已验收。
+head `b8c2459b2aa10354ab47e2a5f85f1715f790f483`、tested merge
+`e4ca9a8371d01bf12ec4cb9cb5a7e0846e81b8d6`
+的[原生 ARM／Intel CI](https://github.com/YondFane/uTerm/actions/runs/41432663064)及[旧客户端 Windows／macOS CI](https://github.com/YondFane/uTerm/actions/runs/41432663047)已通过。报告记录实际
+`DOCUMENT_DENIED`、`ROOT_DENIED`、`READ_ONLY`
+响应、完成的 PDF 渲染、字号持久化及沙箱隔离。已目视检查 ARM 三种内容图片及 Intel
+PDF 图，页面正常显示预期文字且无错误。报告及图片见
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13135332912) 和
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13136295927)；早先失败 PDF 图及仅创建画布的检查不计为验收通过。
+
+smoke 还新增真实文档重载、拒绝旧文档身份、通过原生菜单关闭文件，使用与文件选择器相同的窗口登记；只读窗口在 Web 内容加载中或失效时也能关闭。这些新增生命周期检查仍待新原生 CI，不代表人工焦点或可写草稿验收。窗口外观效果也通过平台适配调用，共用设置视图不直接调用 Tauri
+API。
 
 Linux 七项协议检查覆盖乱序／错配响应、超时／取消／卸载、迟到订阅、上限及 JavaScript
 WebKit 适配；前端回归、类型、生产构建、格式及文档在本地执行，原生平台验收另行记录。

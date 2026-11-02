@@ -171,6 +171,13 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         if let bytes = try? JSONSerialization.data(withJSONObject: event), let json = String(data: bytes, encoding: .utf8) {
             webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('uterm-content-event',{detail:\(json)}));")
         }
+        // This window only previews files; it must also close when its Web content fails.
+        // 此窗口只预览文件；Web 内容失效时也必须能关闭。
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard let self, !self.permitsClose, self.window?.isVisible == true else { return }
+            self.forceClose()
+        }
         return false
     }
     func forceClose() {

@@ -1,5 +1,5 @@
 import { ContentScope } from "./content-transport.ts";
-import { isTauri, tauriContentPort } from "./tauri-content.ts";
+import { applyTauriWindowAppearance, isTauri, tauriContentPort } from "./tauri-content.ts";
 import { webKitContentPort, type WebKitHandler } from "./webkit-content.ts";
 
 declare global {
@@ -32,4 +32,10 @@ export function contentInvoke<T>(method: string, params?: Record<string, unknown
 }
 export function listenContent(kind: string, receive: () => void): Promise<() => void> {
   return current().subscribe(kind, receive);
+}
+
+export function applyContentWindowAppearance(blur: boolean): Promise<void> {
+  return window.webkit?.messageHandlers?.utermContent
+    ? Promise.resolve()
+    : applyTauriWindowAppearance(blur);
 }

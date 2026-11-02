@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert code==0,code
     report=json.loads(path.read_text());assert 'failure' not in report,report
     assert report['coreReady'] and not report['productionDataAccess'],report
-    for key in ['realCodeMirrorReadonly','fontSavedByCore','wrongDocumentRejected','rootEscapeRejected','writeRejected','sandboxPreviewIsolated','pdfRendered']:
+    for key in ['realCodeMirrorReadonly','fontSavedByCore','wrongDocumentRejected','rootEscapeRejected','writeRejected','sandboxPreviewIsolated','pdfRendered','documentRotatedOnReload','oldDocumentRejectedAfterReload','closedThroughNativeMenu','earlyCloseSucceeded']:
         assert report[key],(key,report)
     assert len(report['contentCaptures'])==3,report
     print(json.dumps(report,ensure_ascii=False))

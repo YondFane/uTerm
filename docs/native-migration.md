@@ -718,3 +718,23 @@ full settings entry and the remaining compatibility matrix keep #29 open.
 #29 新增两个真实进程检查：原路径活跃 helper 保持 PID／路径／generation 并执行存活命令；明确关闭后才将空闲宿主替换为摘要暂存副本，源字节不变。另注入不兼容端点版本，验证不覆盖端点或终止真实会话；清理前恢复端点，失败路径也不打印认证字节。该案例是不兼容元数据，非单独编译的历史协议实现。Linux
 x86_64／Rust
 1.99.1 三项宿主及完整 test:core 通过，新平台 CI 待执行；原生 control／完整设置入口和剩余矩阵继续保持 #29 开放。
+
+### Native content accepted rendering and lifecycle follow-up / 原生内容渲染验收及生命周期补充
+
+Head `b8c2459b2aa10354ab47e2a5f85f1715f790f483`, tested merge
+`e4ca9a8371d01bf12ec4cb9cb5a7e0846e81b8d6`, passed native
+[41432663064](https://github.com/YondFane/uTerm/actions/runs/41432663064) and legacy
+[41432663047](https://github.com/YondFane/uTerm/actions/runs/41432663047). Both native reports
+record all three actual rejection codes and completed PDF rendering. ARM content and Intel PDF
+images were visually inspected and display expected text without the earlier error. Artifacts:
+[ARM 13135332912](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13135332912),
+[Intel 13136295927](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13136295927).
+
+The next smoke uses the same content-window factory as the real file picker, reloads and rejects the
+previous document identity, closes through the actual native menu and checks early close while
+loading. Readonly close has a bounded fallback if Web content cannot reply. Shared settings window
+effects now cross the host adapter boundary. These additions await fresh CI; editing/drafts, manual
+focus and the M2 dependency still keep #33/#34 open.
+
+上述 head／merge 的原生与旧客户端四 job 通过，双架构报告记录三个真实拒绝码及完成的 PDF 渲染；ARM 内容图及 Intel
+PDF 图已目视确认无原错误。后续 smoke 与文件选择器共用窗口工厂，新增重载／旧身份拒绝、原生菜单关闭及加载中关闭，只读关闭在 Web 内容不能回复时有有界后备；共用设置的外观效果也进入平台适配。这些新增检查待新 CI，编辑／草稿、人工焦点及 M2 依赖仍使 #33／#34 保持开放。
