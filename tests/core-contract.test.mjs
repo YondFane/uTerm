@@ -273,6 +273,24 @@ test("draft queue initialization retry preserves the actual legacy source", asyn
     ),
     raw,
   );
+  const second = new EditorDraftQueue(invoke);
+  t.after(() => second.close());
+  const repeated = new EditorDraftQueue(invoke);
+  t.after(() => repeated.close());
+  assert.equal((await repeated.initialize(raw)).drafts[0].draft.text, "newer text");
+  const changedSource = JSON.stringify(queueDraft("legacy.txt", "newer legacy source"));
+  await assert.rejects(second.initialize(changedSource), { code: "MIGRATION_CONFLICT" });
+  await assert.rejects(second.retry(), { code: "MIGRATION_CONFLICT" });
+  assert.equal((await call("editor.drafts.read")).result.document.drafts[0].text, "newer text");
+  const sources = (await call("editor.drafts.recovery.list")).result.sources;
+  assert.equal(sources.length, 2);
+  assert.ok(
+    sources.some(
+      (digest) =>
+        readFileSync(join(root, `editor-draft-source-${digest}.original`), "utf8") ===
+        changedSource,
+    ),
+  );
 });
 
 test("draft content scope routes through Tauri to Rust and rejects a misidentified core reply", async (t) => {

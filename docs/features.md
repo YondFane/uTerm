@@ -200,11 +200,12 @@ Development transport now adds project-scoped draft reads and opaque document re
 allows different documents to advance independently and refuses a stale writer/remover for the same
 document. Both content adapters use the common contract. The client keeps only the latest waiting
 text per document, bounds pending text, retains failures for flush/retry and checks actual stored
-data after a lost reply. Close cancels delivery without claiming that a dispatched write was rolled
-back. Seventeen real Rust-process contract tests and two queue fixture checks pass on Linux; new
-native smoke checks selected-root-only results and readonly mutation rejection. Those additions need
-their own platform CI. Editor UI, tabs, close/reopen/crash recovery and editing/focus acceptance
-remain pending in #34.
+data after a lost reply. Initialization checks a supplied legacy source even when the shared store
+already exists: a different source is archived and reported as a migration conflict, including on
+retry. Close cancels delivery without claiming that a dispatched write was rolled back. Seventeen
+real Rust-process contract tests and two queue fixture checks pass on Linux; new native smoke checks
+selected-root-only results and readonly mutation rejection. Those additions need their own platform
+CI. Editor UI, tabs, close/reopen/crash recovery and editing/focus acceptance remain pending in #34.
 
 ## Project website
 

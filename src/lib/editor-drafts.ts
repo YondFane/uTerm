@@ -62,6 +62,7 @@ export class EditorDraftQueue {
     return (this.ready ??= Promise.race([
       (async () => {
         let result: CoreEditorDraftCollection;
+        let imported = false;
         const params = { directory: this.directory ?? null };
         try {
           result = await this.call("editor_drafts_list", params);
@@ -72,10 +73,17 @@ export class EditorDraftQueue {
             "editor_drafts_import",
             this.legacy === undefined ? {} : { legacy: this.legacy },
           );
+          imported = true;
           if (this.closed) throw new ContentFailure("CLOSED", "Draft queue is closed");
           result = await this.call("editor_drafts_list", params);
         }
         if (this.closed) throw new ContentFailure("CLOSED", "Draft queue is closed");
+        if (!imported && typeof this.legacy === "string") {
+          // An existing store must still archive and validate a fresh legacy source.
+          // 已有共享库仍须备份并验证旧端的新来源。
+          await this.call("editor_drafts_import", { legacy: this.legacy });
+          if (this.closed) throw new ContentFailure("CLOSED", "Draft queue is closed");
+        }
         for (const entry of result.drafts)
           this.known.set(key(entry.draft.directory, entry.draft.path), entry);
         this.initialized = true;
@@ -242,11 +250,14 @@ export class EditorDraftQueue {
     const failed = [...this.pending.values()].find((item) => item.error !== undefined);
     if (failed) throw failed.error;
   }
-  retry(): Promise<void> {
-    if (!this.initialized) this.ready = undefined;
+  async retry(): Promise<void> {
+    if (!this.initialized) {
+      this.ready = undefined;
+      await this.initialize();
+    }
     for (const item of this.pending.values()) item.failed = undefined;
     this.start();
-    return this.flush();
+    await this.flush();
   }
   close() {
     // A dispatched host write can commit after its delivery has been cancelled.
