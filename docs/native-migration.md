@@ -313,3 +313,39 @@ parallelism to four without removing the responsiveness assertion. These failed 
 the evidence.
 
 上述提交的 ARM 构建及核心／桥接测试通过，真实窗口可见但退出超时，不能标为 smoke 通过；修正退出流程并增加超时进程采样。Windows 既有慢启动样例未达到 ready，下一轮限定并发且保留响应性断言，保留失败证据。
+
+### Export compatibility and recovery boundary / 导出兼容与恢复边界
+
+`tests/core-contract.test.mjs` now sends legacy keys through a real Rust process, creates a split,
+changes settings, exports current values and passes them into `readWorkspace`/`readSettings`. Both
+reader source files are unchanged from `origin/release`;
+`git diff --quiet origin/release -- src/lib/workspace.ts src/lib/settings.ts` confirms the target.
+Four focused tests passed on Linux with
+`node --experimental-strip-types --test tests/core-contract.test.mjs`. The new export case checks
+IDs, layout, selection, settings, original draft/invalid/backup bytes and repeat import. Platform CI
+for this added test is pending; its frontend log will be archived by the legacy workflow.
+
+真实 Rust 导出已交给未修改的 release 读取器，本地四项专项检查通过；新增测试覆盖 ID、布局、选中项、设置、辅助恢复字节及重复导入。新增测试的平台结果待 CI，不沿用旧提交。
+
+The data formats are canonical document schema 1 containing workspace schema 7 and settings schema
+1; legacy export is `{revision, values}`, where each `values` entry is the original WebView key and
+its string value. Workspace/settings strings reflect the current snapshot; auxiliary strings remain
+unchanged. `shared/fixtures/legacy-state.json` provides repeatable normalized defaults without user
+data. The process test constructs both old source values and an updated split/session example.
+
+规范文档 schema 1 包含工作区 schema 7 与设置 schema 1；导出为
+`{revision, values}`，values 保留键名和字符串值，主状态反映当前快照，辅助值保持原样。默认值及更新后分屏样例可由测试重复构造，不含用户数据。
+
+For recovery, keep the original WebView data and the canonical directory (including
+`legacy-original.json`, `snapshot-v1.json` and `backups`) before attempting a client replacement.
+Stop client writes and export the latest canonical state first; quitting detaches rather than kills
+the host. Verify an exported JSON file with the old readers before using it in any isolated old QA
+client. Restoring only an old executable does not restore post-migration settings or drafts. An
+automatic WebView import or tested install-level downgrade is not supplied by this format test; keep
+the prior data copy and use the current recovery UI if the snapshot is corrupt. Do not overwrite the
+canonical copy or resume two authoritative clients during recovery. Credential stores remain
+platform-owned and are not part of the JSON export. Actual installation replacement, host retention
+and full data rollback remain #46; native recovery interaction and dependency acceptance keep #28
+open.
+
+恢复前保留旧 WebView 数据及整个规范目录，停止客户端写入并导出最新状态；退出只断连宿主。导出先经旧读取器校验，再用于隔离旧 QA。仅替换旧程序不能恢复迁移后的设置或草稿。格式测试未提供自动 WebView 导入或安装级降级验收；保留先前副本，损坏快照使用当前恢复界面，不覆盖规范副本或同时运行两个权威写者。凭据仍由系统管理。实际安装替换、宿主保留和完整回退属于 #46；原生恢复及依赖未验收前 #28 保持开放。

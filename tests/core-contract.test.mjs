@@ -211,3 +211,51 @@ test("real Rust validation rejects malformed snapshots and agrees with settings 
   const fixture = JSON.parse(readFileSync("shared/fixtures/legacy-state.json", "utf8"));
   assert.deepEqual(fixture.settings, defaults);
 });
+
+test("legacy export is readable by unchanged release readers and retains opaque recovery keys", async (t) => {
+  const call = await client(t);
+  const legacy = {
+    "uterm.desktop.workspace.v1": ' {"version":3} ',
+    "uterm.desktop.settings.v1": "{}",
+    "uterm.desktop.editorDraft.v1": '{"text":"未保存\\n中文","future":null}',
+    "uterm.desktop.editorDraft.v1.invalid": "{broken draft",
+    "uterm.desktop.workspace.v1.backup": "  original backup bytes  ",
+    "uterm.git.favorites:/temporary/repository": '["main"]',
+  };
+  let snapshot = (
+    await call("migration.import", { workspace: emptyWorkspace(), settings: defaults, legacy })
+  ).result;
+  for (const [method, params] of [
+    ["session.create", { id: "first", name: "中文终端", directory: "/temporary/项目" }],
+    [
+      "session.split",
+      { anchor: "first", id: "peer", name: "Peer", splitId: "split", axis: "horizontal" },
+    ],
+    ["settings.patch", { patch: { fontSize: 21, language: "zh-Hans", appearance: "light" } }],
+  ]) {
+    const response = await call(method, { ...params, expectedRevision: snapshot.revision });
+    assert.equal(response.error, undefined, JSON.stringify(response.error));
+    snapshot = response.result;
+  }
+  const exported = (await call("legacy.export")).result;
+  assert.equal(exported.revision, snapshot.revision);
+  assert.deepEqual(
+    readWorkspace(exported.values["uterm.desktop.workspace.v1"]),
+    snapshot.document.workspace,
+  );
+  assert.deepEqual(
+    readSettings(exported.values["uterm.desktop.settings.v1"]),
+    snapshot.document.settings,
+  );
+  for (const [key, value] of Object.entries(legacy)) {
+    if (key === "uterm.desktop.workspace.v1" || key === "uterm.desktop.settings.v1") continue;
+    assert.equal(exported.values[key], value, key);
+  }
+  const repeated = await call("migration.import", {
+    workspace: emptyWorkspace(),
+    settings: defaults,
+    legacy,
+  });
+  assert.equal(repeated.result.revision, snapshot.revision);
+  assert.deepEqual((await call("legacy.export")).result, exported);
+});

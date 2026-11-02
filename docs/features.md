@@ -82,7 +82,9 @@ An unreadable snapshot opens a recovery view without resetting data. **View reco
 valid saved snapshots; an explicit restore retains the damaged bytes. Up to eight previous snapshots
 and the original import are retained. **Settings → General → Export legacy-compatible data** saves
 the current workspace/settings and original auxiliary values as JSON. This export is a recovery
-artifact; automatic downgrade into an unmodified old client's WebView storage is not verified.
+artifact. A real Rust-process test reads the exported workspace/settings with unchanged release
+readers, preserving split/session IDs and opaque draft/backup bytes after repeated import. Automatic
+downgrade into an unmodified old client's WebView storage is not verified.
 
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
 conflicts, corruption, recovery, ownership and callback draining on Linux. Swift bridge tests run in
