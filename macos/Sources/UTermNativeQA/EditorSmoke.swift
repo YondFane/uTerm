@@ -8,25 +8,38 @@ enum EditorSmoke {
     private static let original = Data("\u{feff}ORIGINAL_DISK 中文\r\n".utf8)
     private static let edited = "NATIVE_EDIT_中文 é\r\ndurable recovery text\r\n"
 
+    private static func evaluate(_ content: ContentWindow, script: String, arguments: [String: Any]) async throws -> Bool {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
+            content.webView.callAsyncJavaScript(script, arguments: arguments, in: nil, in: .page) { result in
+                switch result {
+                case .success(let value):
+                    guard let value = value as? Bool else { continuation.resume(throwing: BridgeFailure(code: "EDITOR_REPLY", message: "Editor script did not return a boolean")); return }
+                    continuation.resume(returning: value)
+                case .failure(let error): continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     private static func replace(_ content: ContentWindow, text: String) async throws {
-        let ready = try await content.webView.callAsyncJavaScript("""
+        let ready = try await evaluate(content, script: """
             const editor=document.querySelector('.cm-content[contenteditable=true]');
             if(!editor) return false;
             editor.focus();
             document.execCommand('selectAll',false);
             return document.execCommand('insertText',false,text);
-            """, arguments: ["text": text], in: nil, in: .page)
-        guard ready as? Bool == true else { throw BridgeFailure(code: "EDITOR_INPUT", message: "Native WK editor did not accept DOM insertText") }
+            """, arguments: ["text": text])
+        guard ready else { throw BridgeFailure(code: "EDITOR_INPUT", message: "Native WK editor did not accept DOM insertText") }
     }
     private static func click(_ content: ContentWindow, title: String) async throws {
         let deadline = Date().addingTimeInterval(5)
         while Date() < deadline {
-            let found = try await content.webView.callAsyncJavaScript("""
+            let found = try await evaluate(content, script: """
             const button=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===title);
             if(!button || button.disabled) return false;
             button.click();return true;
-            """, arguments: ["title": title], in: nil, in: .page)
-            if found as? Bool == true { return }
+            """, arguments: ["title": title])
+            if found { return }
             try await Task.sleep(for: .milliseconds(30))
         }
         throw BridgeFailure(code: "EDITOR_ACTION", message: "Editor button unavailable: " + title)

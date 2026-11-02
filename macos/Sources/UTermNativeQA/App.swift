@@ -229,6 +229,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             } catch {
                 for content in contents { content.resumeAfterQuit() }
                 self.model.error = error.localizedDescription
+                self.window?.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
                 self.preparingQuit = false
                 return
             }

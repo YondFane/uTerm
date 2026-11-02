@@ -336,6 +336,7 @@ test("draft queue initialization retry preserves the actual legacy source", asyn
   assert.equal((await repeated.initialize(raw)).drafts[0].draft.text, "newer text");
   const changedSource = JSON.stringify(queueDraft("legacy.txt", "newer legacy source"));
   await assert.rejects(second.initialize(changedSource), { code: "MIGRATION_CONFLICT" });
+  await assert.rejects(second.flush(), { code: "MIGRATION_CONFLICT" });
   await assert.rejects(second.retry(), { code: "MIGRATION_CONFLICT" });
   assert.equal((await call("editor.drafts.read")).result.document.drafts[0].text, "newer text");
   const sources = (await call("editor.drafts.recovery.list")).result.sources;

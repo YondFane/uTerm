@@ -284,6 +284,7 @@ export class EditorDraftQueue {
     }
   }
   async flush(): Promise<void> {
+    if (this.ready && !this.initialized) await this.ready;
     while (this.pump && !this.closed) await Promise.race([this.pump, this.closedSignal]);
     if (this.closed) throw new ContentFailure("CLOSED", "Draft queue is closed");
     if (this.rejected.size) throw this.rejected.values().next().value;

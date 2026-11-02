@@ -217,10 +217,18 @@ These editable-window checks await their own successful macOS runs; DOM input in
 WebView does not establish manual keyboard/IME/focus acceptance.
 
 Native quit freezes and confirms all content documents before closing them. Refusal, timeout, reload
-and stale replies retain the app; cancelled quit resumes prepared documents. The `a0758cc` ARM build
-and 12 Swift checks passed, but window smoke stopped at an unsupported JavaScript function return in
-QA. Its primitive-result fix and new editor work need their own successful CI. #33/#34 remain open
-for complete editor/tabs, two-client migration, recovery, native focus and remaining acceptance.
+and stale replies retain the app; cancelled quit resumes prepared documents. Quit errors reveal the
+main window. Initialization failure also rejects draft flush when no writes are queued. A real
+Rust-process regression first reproduced the incorrect success and now passes.
+
+Quit prepare/resume/timeout/stale-result window checks passed on both native architectures at head
+`7c283dc9dd520aa2f6b89375e179498c7777f7e1`, tested merge `88f906a7b3866ba1ff4a4ec0662e52ec33f5e9ee`
+([native CI](https://github.com/YondFane/uTerm/actions/runs/41490353869)). Editable head `c07af63`
+built and passed 12 Swift checks on ARM, but its editor QA driver treated WebKit's completion API as
+an async return, losing its result. The explicit continuation fix awaits its own native run. Linux's
+real isolated Tauri run at that head passed 12 scenarios with no cleanup errors; it does not
+establish native editor acceptance. #33/#34 remain open for successful editor platform evidence,
+tabs, two-client migration/recovery and manual editing/focus.
 
 ## Project website
 
