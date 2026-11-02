@@ -134,3 +134,7 @@ retain their licenses.
 
 [Report a bug or request a feature](https://github.com/YondFane/uTerm/issues/new). Include your OS,
 uTerm version and steps to reproduce the issue.
+
+Native macOS development is isolated from stable releases. See
+[native migration](docs/native-migration.md) for the QA app, platform checks and staged feature
+status.

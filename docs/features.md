@@ -35,6 +35,14 @@ remote shells run on their servers.
 
 The interface supports Simplified Chinese and English.
 
+### Native macOS QA client
+
+An experimental native SwiftUI/AppKit QA application is built separately from the shipping Tauri
+client. It requires macOS 14.0 and has an isolated bundle identifier, a real empty window and a
+normal-exit smoke harness. It does not load production data or start a host. The Windows and legacy
+macOS clients remain the supported feature-complete clients. See
+[native migration status](native-migration.md) for stage evidence and remaining work.
+
 ## Project website
 
 ### Website preview

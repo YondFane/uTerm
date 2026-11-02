@@ -33,6 +33,11 @@ uTerm 是 Windows 和 macOS 桌面终端。本地终端和 Agent 进程在本机
 
 界面支持简体中文和英文。
 
+### macOS 原生 QA 客户端
+
+实验性 SwiftUI／AppKit 原生 QA 应用与现有 Tauri 客户端分别构建，最低要求仍为 macOS
+14.0。它使用独立身份，提供真实空窗口和正常退出冒烟，不读取生产数据或启动宿主。Windows 与旧 macOS 客户端继续提供现有完整功能。阶段证据和剩余工作见[原生迁移状态](native-migration.md)。
+
 ## 项目官网
 
 ### 官网预览

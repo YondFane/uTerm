@@ -121,3 +121,5 @@ uTerm 按 [PolyForm Noncommercial License 1.0.0](LICENSE)
 [NOTICE](NOTICE)。第三方组件保留各自许可。
 
 [报告问题或提出功能建议](https://github.com/YondFane/uTerm/issues/new)，请附上操作系统、uTerm 版本及复现步骤。
+
+macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和分阶段功能状态见[原生迁移说明](docs/native-migration.md)。
