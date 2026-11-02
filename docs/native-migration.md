@@ -124,14 +124,14 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态                                                            | Evidence and next work / 证据与下一步                                                                                     |
-| ------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| M0           | Accepted, unmerged / 已验收，未合并                                                 | Both native architectures and legacy Tauri jobs passed                                                                    |
-| M1           | Implemented; platform CI passed, acceptance gaps / 已实现，平台 CI 通过，验收未闭合 | Shared validation, canonical storage, FFI, generated contracts and legacy client adoption                                 |
-| M2           | In progress / 开发中                                                                | Real host, shared session operations and native terminal in development / 真实宿主、共享会话操作及原生终端开发中          |
-| M3           | In progress / 开发中                                                                | Shared file service adopted; content/native entry and other workflows remain / 文件共用服务已接入，内容及其他工作流未完成 |
-| M4           | Pending / 待实现                                                                    | Remaining capabilities, native interaction and measurements                                                               |
-| M5           | Pending / 待实现                                                                    | Candidate packaging, signed update and rollback exercises                                                                 |
+| Stage / 阶段 | Current state / 当前状态            | Evidence and next work / 证据与下一步                                                                                                                     |
+| ------------ | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0           | Accepted, unmerged / 已验收，未合并 | Both native architectures and legacy Tauri jobs passed                                                                                                    |
+| M1           | Accepted / 已验收                   | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。 |
+| M2           | In progress / 开发中                | Real host, shared session operations and native terminal in development / 真实宿主、共享会话操作及原生终端开发中                                          |
+| M3           | In progress / 开发中                | Shared files and readonly Tauri/WK content integrated; editing/drafts and other workflows remain / 共用文件及只读内容已接入，编辑草稿和后续流程未完成。   |
+| M4           | Pending / 待实现                    | Remaining capabilities, native interaction and measurements                                                                                               |
+| M5           | Pending / 待实现                    | Candidate packaging, signed update and rollback exercises                                                                                                 |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
@@ -239,9 +239,9 @@ PR；总跟踪与原验收标准不变。本轮只认领实际处理的基线归
 | Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                                                                                                    |
 | ------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                                                                                                  |
-| M1 #15       | #24–#28       | Shared state, import/recovery, C ABI and Swift/Tauri adapters exist. Old-reader export compatibility verified; complete failure-mode and native recovery acceptance remain. / 已验证旧读取器导出兼容，完整失败模式及原生恢复交互仍待验收。                                                           |
+| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                                                                                                        |
 | M2 #16       | #29–#32       | Active: shared host/helper, native shell, cached SwiftTerm views, binary sequence/ack and split/reconnect. Automatic native/legacy checks and system screenshots verified at 6c78229; full capability and manual acceptance remain. / 6c78229 的自动检查和系统截图已验证，完整功能与人工验收未闭合。 |
-| M3 #17       | #33–#37       | Local file service now shared with Tauri; #33/#34 transport, native entry and drafts remain. Other services retain their existing owners. / 本地文件服务已共用，transport／原生入口／草稿未完成；其他服务保留原所有者。                                                                              |
+| M3 #17       | #33–#37       | Shared local files and scoped Tauri/WK content transport have real readonly text/HTML/PDF QA. Editing/drafts, Git, SSH and task services remain. / 共用文件与只读内容已自动验证，编辑草稿及后续服务未完成。                                                                                          |
 | M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                                                                                                           |
 | M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。                                                                               |
 
@@ -865,3 +865,50 @@ cleanup errors; fresh macOS/Windows results remain required.
 上述 head 的旧 macOS QA 已执行全部存储场景，但系统先删除 Saved
 State 链接，脚本清理时报 ENOENT，job 失败，不计验收。修正允许链接已不存在，拒绝删除被替换的普通路径，先记录清理错误再生成最终报告，清理失败也返回非零。新脚本在真实云端 Linux
 X11 十个场景通过且无清理错误，仍需新 macOS／Windows 结果。
+
+### Shared control service / 共享控制服务
+
+#29 moves the existing Tauri listener/queue and its six protocol tests into
+`utermd-local::control::Control`. Existing Tauri IPC names, disabled-by-default preference, private
+endpoint, token authentication, loopback binding, request/connection limits, wake-before-check and
+explicit reply semantics remain. The ownership wrapper stops and joins listener/client workers,
+drains pending replies and releases its file lease without an Arc cycle. New `control.start`,
+`status`, `configure`, `poll`, `reply` and `openLink` core operations expose the same service;
+`Core::close` stops it. The native UI pump and toggle are not connected yet.
+
+Linux tests execute the actual standalone helper CLI over its authenticated socket, preserve literal
+Unicode/text and explicit Enter, dispatch a claimed request once, close with a pending client,
+release the lease and reopen with the saved preference. A core integration test checks competing
+handles, shutdown and ignored late replies. Native dispatch, complete capability negotiation and
+fresh platform evidence remain #29 gates; no Issue is closed by this extraction. Host Cargo now
+directly declares Tokio synchronization/time/runtime and tempfile already used by the Tauri server;
+separate lockfiles retain their registry versions.
+
+#29 将现有 Tauri 监听／队列及六项协议测试移入共享宿主，保留 IPC 名称、默认禁用、私有端点、认证 token、回环、有界请求／连接、登记后检查及明确回复语义。外层所有权对象停止并等待监听／客户端线程、排空请求并释放文件锁，无 Arc 循环。上述核心操作暴露同一服务，核心关闭时停止；原生 UI 轮询与开关尚未接入。
+
+Linux 测试通过真实独立 helper
+CLI 和认证 socket 验证 Unicode 字面输入、明确回车、认领只分发一次、等待客户端的关闭排空、占用锁释放及偏好重开；核心集成还检查竞争句柄和迟到回复。原生分发、完整能力协商及新平台证据仍是 #29 门槛，不因抽离关闭。宿主直接声明原 Tauri 服务已用的 Tokio 和 tempfile，独立锁文件保留既有版本。
+
+M1 #27/#28 and stage #15 are now accepted at head `56ce724043d0ea4ebdf8a929aef76ecbc9c9e313`, tested
+merge `e98be01cd195e6427c9824727a0221e596ea1132`. All four jobs in legacy run 41448284276 and native
+run 41448284447 passed. Both legacy platforms supplied ten real window scenes and `passed=true`,
+`sourceTreeDirty=false`, `cleanupErrors=[]` reports. Completed comments:
+[#27](https://github.com/YondFane/uTerm/issues/27#issuecomment-6578004384),
+[#28](https://github.com/YondFane/uTerm/issues/28#issuecomment-6578006321),
+[M1](https://github.com/YondFane/uTerm/issues/15#issuecomment-6578009077). They are implemented and
+accepted on the task branch, not merged into release; M2–M5 and #13 remain open.
+
+M1 的上述源码／merge 在四 job 通过，两旧客户端各提供十张真实窗口图及成功、干净源码、无清理错误的报告。#27／#28 和阶段 #15 已按上述完成评论关闭，已实现并验收但未合入 release；M2–M5 及 #13 仍开放。
+
+For the shared-control change, Linux passed core/FFI and host suites, 362 frontend tests with ten
+skipped and the regular desktop build. Backend tests first hit three existing Git-discovery cases
+because protected ancestor `.git` entries exist in `/tmp` and `/workspace`; rerunning unchanged
+assertions with `TMPDIR=/var/tmp` passed 129 tests with ten ignored. Six protocol tests moved from
+the backend into the shared host, accounting for its count change. The extended real Tauri QA now
+enables/disables control through Settings and executes the actual CLI over the app's socket;
+platform acceptance of that extension remains pending.
+
+共享控制改动的 Linux 核心／FFI／宿主、前端 362 通过／10 跳过及普通桌面构建通过。后端先因
+`/tmp`、`/workspace` 受保护祖先 `.git` 条目触发三项原 Git 发现问题；保持断言，用 `TMPDIR=/var/tmp`
+重跑后 129 通过／10 忽略，六项协议测试移到共享宿主使计数变化。扩展真实 Tauri
+QA 从设置启停控制并通过实际 CLI 调用应用 socket；该扩展的新平台验收仍待完成。

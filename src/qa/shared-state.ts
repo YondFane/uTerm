@@ -56,6 +56,12 @@ function fontField() {
     .find((l) => l.textContent?.includes("File font size"))
     ?.querySelector<HTMLInputElement>("input");
 }
+function showFont() {
+  const input = fontField();
+  assert(input, "Missing file font field");
+  input.scrollIntoView({ block: "center" });
+  input.focus({ preventScroll: true });
+}
 async function editFont(value: number) {
   const input = await until(fontField, "file font field");
   input.scrollIntoView({ block: "center" });
@@ -110,6 +116,21 @@ export async function run(recovery: boolean) {
         "Old defaults were not imported",
       );
       await openSettings();
+      await click("Local control");
+      const control = await until(
+        () =>
+          document.querySelector<HTMLInputElement>(
+            '.settings-content input[type="checkbox"]:not(:disabled)',
+          ),
+        "control checkbox",
+      );
+      control.click();
+      await until(() => control.checked, "control enabled by the actual settings UI");
+      await scene("control-ready", { enabled: true });
+      control.click();
+      await until(() => !control.checked, "control disabled by the actual settings UI");
+      await scene("control-disabled", { enabled: false });
+      await click("Appearance");
       await editFont(18);
       await until(
         () =>
@@ -118,6 +139,7 @@ export async function run(recovery: boolean) {
         "first durable save publication",
       );
       assert((await settings()).fileFontSize === 18, "Published value was not stored");
+      showFont();
       await scene("saved", {
         fileFontSize: 18,
         published: getComputedStyle(document.documentElement)
@@ -138,13 +160,14 @@ export async function run(recovery: boolean) {
       );
       alert.scrollIntoView({ block: "center" });
       await scene("conflict-error", { revisionConflictVisible: true });
-      fontField()?.scrollIntoView({ block: "center" });
+      showFont();
       assert(fontField()?.value === "19", "Conflict discarded the user's draft");
       assert((await settings()).fileFontSize === 17, "Stale UI overwrote the external change");
       await scene("conflict-draft", { draft: 19, stored: 17, errorVisible: true });
       document.querySelector<HTMLButtonElement>('button[aria-label="Close settings"]')?.click();
       await openSettings();
       assert(fontField()?.value === "19", "Closing and reopening Settings lost the failed draft");
+      showFont();
       await invoke("qa_request_exit");
       await pause(600);
       await scene("quit-blocked", {
@@ -153,6 +176,7 @@ export async function run(recovery: boolean) {
       });
       await click("Reload saved settings");
       assert(fontField()?.value === "19", "Reload discarded a conflicting field draft");
+      showFont();
       await invoke("qa_request_exit");
       await pause(600);
       await scene("reload-draft", {
@@ -166,6 +190,7 @@ export async function run(recovery: boolean) {
         "draft cleared after successful save",
       );
       assert((await settings()).fileFontSize === 19, "Explicit retry did not persist the draft");
+      showFont();
       await scene("retried", { fileFontSize: 19, fontSize: (await settings()).fontSize });
     } else {
       const saved = await settings();
@@ -176,7 +201,7 @@ export async function run(recovery: boolean) {
       assert(saved.fontSize === 21, "Unrelated external change was lost");
       await openSettings();
       const input = await until(fontField, "reopened font field");
-      input.scrollIntoView({ block: "center" });
+      showFont();
       assert(input.value === String(saved.fileFontSize), "Reopened view diverges from core");
       await scene(context.phase === "recover" ? "restored" : "reopened", {
         fileFontSize: saved.fileFontSize,

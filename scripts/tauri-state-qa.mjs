@@ -52,6 +52,10 @@ const metadata = {
         : "isolated X11 desktop",
   productionDataAccess: false,
   sourceTreeDirty,
+  productVersion:
+    process.platform === "darwin"
+      ? execute("/usr/bin/sw_vers", ["-productVersion"]).trim()
+      : release(),
 };
 writeFileSync(join(output, "source.json"), JSON.stringify(metadata, null, 2));
 function execute(file, args, options = {}) {
@@ -122,8 +126,8 @@ try {
         {
           label: "main",
           title: "uTerm Shared State QA",
-          width: 1100,
-          height: 800,
+          width: 960,
+          height: 620,
           minWidth: 640,
           minHeight: 420,
           visible: true,
@@ -236,6 +240,28 @@ try {
           const screenshot = file.replace(/\.json$/, ".png");
           capture(join(output, screenshot));
           copyFileSync(join(evidence, file), join(output, file));
+          const argumentsForCLI = ["--control", "--data-dir", join(root, "data")];
+          if (value.scene === "control-ready") {
+            const status = JSON.parse(execute(binary, [...argumentsForCLI, "status"]));
+            const projects = JSON.parse(execute(binary, [...argumentsForCLI, "projects", "list"]));
+            assert.equal(status.sessions, 0);
+            assert(projects.some((project) => project.id === "shared-state-qa"));
+            writeFileSync(
+              join(output, "control-cli.json"),
+              JSON.stringify({ ...metadata, status, projects }, null, 2),
+            );
+          } else if (value.scene === "control-disabled") {
+            const disabled = spawnSync(binary, [...argumentsForCLI, "status"], {
+              env,
+              encoding: "utf8",
+            });
+            assert.notEqual(disabled.status, 0);
+            assert.match(disabled.stderr, /endpoint not found/i);
+            writeFileSync(
+              join(output, "control-disabled.json"),
+              JSON.stringify({ ...metadata, endpointUnavailable: true }, null, 2),
+            );
+          }
           scenes.push({
             file,
             screenshot,
@@ -253,7 +279,7 @@ try {
         await delay(100);
       }
       assert(closed, `${phase} did not quit through the ordinary exit guard`);
-      const expected = phase === "initial" ? 6 : phase === "reopen" ? 1 : 3;
+      const expected = phase === "initial" ? 8 : phase === "reopen" ? 1 : 3;
       assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       writeFileSync(join(output, `${phase}.log`), log);

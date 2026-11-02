@@ -87,6 +87,7 @@ pub struct Core {
     host: OnceLock<host::HostBroker>,
     links: Arc<terminal::Links>,
     terminal_sink: Mutex<Option<terminal::Sink>>,
+    control: Mutex<Option<Arc<utermd_local::control::Control>>>,
 }
 impl Core {
     pub fn open(root: PathBuf) -> Result<Self> {
@@ -95,6 +96,7 @@ impl Core {
             host: OnceLock::new(),
             links: Arc::new(terminal::Links::default()),
             terminal_sink: Mutex::new(None),
+            control: Mutex::new(None),
         })
     }
     pub fn set_terminal_sink(&self, sink: terminal::Sink) -> Result<()> {
@@ -107,6 +109,16 @@ impl Core {
     }
     pub fn close(&self) {
         self.links.shutdown();
+        if let Ok(mut control) = self.control.lock() {
+            control.take();
+        }
+    }
+    fn control(&self) -> Result<Arc<utermd_local::control::Control>> {
+        self.control
+            .lock()
+            .map_err(|_| CoreError::new("CONTROL", "Control state is unavailable"))?
+            .clone()
+            .ok_or_else(|| CoreError::new("CONTROL", "Start local control before using it"))
     }
     fn data_root(&self) -> Result<&std::path::Path> {
         if self.store.root().file_name().and_then(|v| v.to_str()) != Some("shared-state-v1") {
@@ -179,6 +191,48 @@ impl Core {
     }
     fn dispatch(&self, method: &str, params: Value) -> Result<Value> {
         match method {
+            "control.start" => {
+                let mut state = self
+                    .control
+                    .lock()
+                    .map_err(|_| CoreError::new("CONTROL", "Control state is unavailable"))?;
+                if state.is_none() {
+                    *state = Some(
+                        utermd_local::control::Control::start(self.data_root()?)
+                            .map_err(|e| CoreError::new("CONTROL", e))?,
+                    );
+                }
+                Ok(state.as_ref().unwrap().status())
+            }
+            "control.status" => Ok(self.control()?.status()),
+            "control.configure" => {
+                let enabled = params["enabled"]
+                    .as_bool()
+                    .ok_or_else(|| CoreError::new("INVALID_PARAMS", "enabled must be boolean"))?;
+                let control = self.control()?;
+                control
+                    .configure(enabled)
+                    .map_err(|e| CoreError::new("CONTROL", e))?;
+                Ok(control.status())
+            }
+            "control.poll" => serde_json::to_value(
+                self.control()?
+                    .poll()
+                    .map_err(|e| CoreError::new("CONTROL", e))?,
+            )
+            .map_err(Into::into),
+            "control.reply" => {
+                self.control()?
+                    .reply(&string(&params, "id")?, params["result"].clone())
+                    .map_err(|e| CoreError::new("CONTROL", e))?;
+                Ok(Value::Null)
+            }
+            "control.openLink" => {
+                self.control()?
+                    .open_link(&string(&params, "url")?)
+                    .map_err(|e| CoreError::new("CONTROL", e))?;
+                Ok(Value::Null)
+            }
             method if method.starts_with("files.") => files::request(method, params),
             "directory.resolve" => Ok(json!(host::project_directory(string(
                 &params,

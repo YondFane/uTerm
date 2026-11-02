@@ -61,12 +61,13 @@ ARM64 和 15.7.9 Intel 通过，使用 Xcode 16.4、Swift 6.1.2 和 Rust
 
 相同 head／merge 的[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41412826038)
 已通过：Windows Server 2025 x64 前端 347 项通过、11 项跳过；macOS
-ARM64 前端 348 项通过、10 项跳过。核心／FFI／契约、宿主响应性、后端、格式、文档和桌面编译也通过。真实 Rust 导出已由未修改的 release 读取器读取。Windows／原生恢复交互及 macOS
-14 实际运行仍待验收，不能以编译替代。
+ARM64 前端 348 项通过、10 项跳过。核心／FFI／契约、宿主响应性、后端、格式、文档和桌面编译也通过。真实 Rust 导出已由未修改的 release 读取器读取。Swift 原生迁移／恢复交互及 macOS
+14 实际运行仍待验收，不能以编译替代；当前 Tauri 恢复证据见下文。
 
 QA 应用使用临时项目和数据，不读取生产数据。`native-qa-*`
 产物包含截图、报告、测试日志及 ad-hoc 签名 QA App；`legacy-checks-*`
-包含命令日志和源码／平台记录，不是 Windows 原生交互图片。M0 基线／工具链任务 #20–#23 及阶段 #14 已验收，M1–M5 仍开放。
+包含命令日志、源码／平台记录和隔离 Tauri 恢复窗口图片。M0 #14 和 M1
+#15（#20–#28）已验收，M2–M5 仍开放。
 
 原生侧栏将程序更新选中项与用户操作分开，用户操作在 AppKit 回调返回后执行；焦点观察也在延后执行时重新核对当前响应者。重连 smoke 会将 NSTableView 重入告警判为失败；此修正已在上述精度改动 head 的两个原生架构通过。smoke 还新增真实 AppKit 方向键切换并保留侧栏焦点、原生菜单打开设置、Return 关闭设置及 WindowServer 截图
 `native-settings.png`。新增检查已在 head `1f7b15d889bb46ae8945125a59dfab0628120876`、tested merge
@@ -79,6 +80,10 @@ CI 待执行；不兼容版本来自端点测试数据，不是单独编译的�
 CI。修正后的宿主矩阵随后在 head `ac682f21d955b137c277cda26bf2a90385f4cf54`、tested merge
 `5037c127ad3fd7fd3bdeaa3937d048ac11acd47c`
 的 Windows、旧 macOS 及双原生架构通过（[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41443585247)、[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)）。
+
+回环控制服务及有界认证队列现位于共享 Rust 宿主模块；Tauri 原控制命令委托该模块，核心 `control.*`
+操作向原生桥接提供同一服务。Linux 真实 helper
+CLI 和核心关闭测试通过，覆盖请求认领、Unicode 字面输入、占用锁互斥及重开前排空客户端。原生命令分发和设置入口仍待接入；抽离服务不等于原生 CLI 功能验收。
 
 原生 SSH、完整设置、文件／数据工作台、真实 Agent
 CLI 交互、输入法、休眠、多屏及性能验收尚未完成。Windows 与旧 macOS 仍为现有完整功能客户端。Issue 对应关系、源码证据和剩余工作见[原生迁移状态](native-migration.md)。其中可复用验收清单定义同机负载、TUI／交互步骤及签名／升级条件，未执行项继续明确待验收。
@@ -93,14 +98,18 @@ CLI 交互、输入法、休眠、多屏及性能验收尚未完成。Windows �
 
 Linux
 x86_64 的十项真实 Rust 进程契约测试通过，覆盖同字段冲突草稿保留、提交后发布及重载后退出保护。真实隔离 Tauri／X11 运行验证了保存／冲突／重载／重试、正常退出重开、快照损坏恢复及原始／损坏字节保留。Windows／macOS
-job 新增运行该 QA 应用，保存平台窗口截图和 head／merge 记录；新平台结果仍待执行。QA 清理失败会使运行失败，并在保留已有场景图片的报告中记录。
+job 新增运行该 QA 应用，保存平台窗口截图和 head／merge 记录；保存／恢复已在 head
+`56ce724043d0ea4ebdf8a929aef76ecbc9c9e313`、tested merge `e98be01cd195e6427c9824727a0221e596ea1132`
+验收通过（[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41448284276)、[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41448284447)）。Windows
+Server 2025 x64 与 macOS
+ARM64 各上传十张真实窗口场景图及成功报告，清理无错误。[Windows 产物](https://github.com/YondFane/uTerm/actions/runs/41448284276/artifacts/13142824964)与[macOS 产物](https://github.com/YondFane/uTerm/actions/runs/41448284276/artifacts/13143776890)包含原始／损坏字节保留结果及源码元数据。QA 清理失败会使运行失败，并在保留已有场景图片的报告中记录。
 
 快照无法读取时进入恢复界面，不重置数据。**查看恢复副本**列出有效快照；明确选择恢复后，损坏字节仍保留。存储保留最多八份先前快照和原始导出。已有恢复副本必须与预期字节一致；摘要错误或备份路径被占用时，保存失败且不替换快照。恢复列表只列出文件名摘要与实际内容相符的副本。**设置 → 通用 → 导出旧版兼容数据**将当前工作区／设置和原始辅助数据保存为 JSON。此导出用于恢复。真实 Rust 进程测试使用与 release 一致、未修改的旧读取器读取工作区／设置，验证分屏／会话 ID 以及重复导入后的草稿／备份原始字节。尚未验证自动导入未修改旧客户端 WebView 存储的回退过程。导出只刷新主工作区／设置，辅助值仍为首次导入字节；替换前还需备份最新旧 WebView 配置及整个规范存储。编辑器／PDF、Git 收藏及 Agent 通知分别由 #34、#35、#40 迁移，完整安装回退仍由 #46 验证。
 
 Linux 及 Windows／macOS
 CI 中的 Rust 存储／FFI 测试和真实进程 TypeScript 兼容测试覆盖重复导入、冲突、损坏恢复、所有权和回调排空。新增真实 helper 的 C
 ABI 测试：阻塞二进制回调，同时从另一线程取消订阅或关闭，验证回调排空前借用上下文仍有效，且回调内重入被拒绝。此检查已在 Linux 及上述交互 head 的 macOS 双架构通过。Swift 桥接测试交由 macOS
-CI；原生数据迁移及恢复交互验收仍待完成。
+CI；Swift 原生迁移及恢复交互仍待验收，与上述 Tauri 验收区分。
 
 两个旧客户端平台的 CI 也执行共享核心测试和生成契约的漂移检查，并将命令日志、源码 head、实际测试 merge
 SHA 和平台／工具链元数据上传为 `legacy-checks-*` CI artifacts。

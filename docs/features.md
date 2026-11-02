@@ -80,14 +80,14 @@ automatic native checks do not establish human interaction or performance accept
 [Legacy CI](https://github.com/YondFane/uTerm/actions/runs/41412826038) passed at the same
 head/merge: Windows Server 2025 x64 ran 347 frontend tests with 11 skipped; macOS ARM64 ran 348 with
 ten skipped. Core/FFI/contracts, host responsiveness, backend, formatting, documentation and desktop
-compilation also passed. Real Rust exports were read by unchanged release readers. Windows/native
-recovery interaction and macOS 14 runtime acceptance remain pending; compilation is not their
-substitute.
+compilation also passed. Real Rust exports were read by unchanged release readers. Native Swift
+migration/recovery interaction and macOS 14 runtime acceptance remain pending; compilation is not
+their substitute. Current Tauri recovery evidence appears below.
 
 The QA app uses a temporary project and data, never production data. Native `native-qa-*` artifacts
 contain screenshots, reports, test logs and the ad-hoc-signed QA App. Legacy `legacy-checks-*`
-artifacts contain command logs and source/platform records, not native Windows interaction images.
-M0 baseline/toolchain tasks #20–#23 and stage #14 are accepted; M1–M5 remain open.
+artifacts contain command logs, source/platform records and isolated Tauri recovery window images.
+M0 #14 and M1 #15, including #20–#28, are accepted; M2–M5 remain open.
 
 The native sidebar now separates programmatic table selection from user actions, which are deferred
 until AppKit returns. Focus observation also checks the current responder after deferral. The
@@ -113,6 +113,13 @@ native Mac architectures at head `ac682f21d955b137c277cda26bf2a90385f4cf54`, tes
 ([legacy CI](https://github.com/YondFane/uTerm/actions/runs/41443585247),
 [native CI](https://github.com/YondFane/uTerm/actions/runs/41443585262)).
 
+The loopback control server and bounded authenticated queue now live in the shared Rust host module.
+Tauri delegates its existing control commands to it, while core `control.*` operations expose the
+same service to the native bridge. Real helper CLI and core-close tests pass on Linux, including
+claimed requests, literal Unicode input, lease exclusion and draining clients before reopen. Native
+command dispatch and its Settings entry are still pending; this service extraction does not
+establish native CLI feature acceptance.
+
 Native SSH, full settings, file/data workspaces, real Agent CLI interaction, input methods, sleep,
 multi-display behavior and performance acceptance remain incomplete. Windows and legacy macOS remain
 the supported feature-complete clients. See [native migration status](native-migration.md) for Issue
@@ -137,11 +144,19 @@ discarding. Quit remains blocked while a failed draft needs handling. These draf
 memory; they are not crash-recovery storage.
 
 Ten real Rust-process contract tests passed on Linux x86_64, including retained same-field conflict
-drafts, publication after commit and quit protection after reload. A real isolated Tauri/X11 run
-checked save/conflict/reload/retry, normal quit and reopen, corrupt snapshot recovery and retained
-original/damaged bytes. Windows/macOS jobs now run this QA app with platform window screenshots and
-head/merge records; fresh platform results are pending. QA cleanup errors fail the run and remain in
-its report without hiding earlier scenario images.
+drafts, publication after commit and quit protection after reload. Real isolated Tauri runs checked
+save/conflict/reload/retry, normal quit and reopen, corrupt snapshot recovery and retained
+original/damaged bytes. Save/recovery acceptance passed at head
+`56ce724043d0ea4ebdf8a929aef76ecbc9c9e313`, tested merge `e98be01cd195e6427c9824727a0221e596ea1132`
+([legacy CI](https://github.com/YondFane/uTerm/actions/runs/41448284276),
+[native CI](https://github.com/YondFane/uTerm/actions/runs/41448284447)). Windows Server 2025 x64
+and macOS ARM64 each uploaded ten actual window scenes and a successful report without cleanup
+errors. The
+[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/41448284276/artifacts/13142824964)
+and
+[macOS artifact](https://github.com/YondFane/uTerm/actions/runs/41448284276/artifacts/13143776890)
+include original/damaged-byte retention results and source metadata. QA cleanup errors fail the run
+and remain in its report without hiding earlier scenario images.
 
 An unreadable snapshot opens a recovery view without resetting data. **View recovery copies** lists
 valid saved snapshots; an explicit restore retains the damaged bytes. Up to eight previous snapshots
@@ -162,10 +177,10 @@ conflicts, corruption, recovery, ownership and callback draining on Linux and in
 real-helper C ABI test also blocks a binary callback while another thread unsubscribes or closes,
 verifying that its borrowed context remains valid until delivery drains and that callback reentry is
 rejected. This added check passed on Linux and both native macOS architectures at the interaction
-head above. Swift bridge tests run in macOS CI; native data migration and interactive recovery
-acceptance remain pending. Both legacy platform jobs also run shared-core tests and
-generated-contract drift checks, uploading command logs, source head, tested merge SHA and
-platform/toolchain metadata as `legacy-checks-*` CI artifacts.
+head above. Swift bridge tests run in macOS CI; native Swift migration and interactive recovery
+acceptance remain pending. The Tauri acceptance above is separate. Both legacy platform jobs also
+run shared-core tests and generated-contract drift checks, uploading command logs, source head,
+tested merge SHA and platform/toolchain metadata as `legacy-checks-*` CI artifacts.
 
 ## Project website
 

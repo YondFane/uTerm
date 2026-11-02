@@ -166,3 +166,8 @@ its real WebView. Windows/macOS CI captures native windows and uploads reports a
 `legacy-checks-*/tauri-state-qa/`. It requires a desktop session and refuses existing QA profiles.
 Dedicated profile links redirect QA data into a temporary directory; no home-directory override or
 production profile is used. This automation does not establish manual keyboard/IME acceptance.
+
+The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
+operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this
+service. `pnpm test:host` includes the real standalone CLI/socket regression; `pnpm test:core`
+checks bridge ownership and close. Native UI dispatch remains under development.

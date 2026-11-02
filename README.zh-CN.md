@@ -145,3 +145,7 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 构建仅 QA 特性启用的隔离 Tauri 应用（`sh.uterm.desktop.qa.sharedstate`），在真实 WebView 中执行保存／冲突／重载／退出／重开／恢复场景。Windows／macOS
 CI 截取原生窗口，并将报告及图片上传到
 `legacy-checks-*/tauri-state-qa/`。此命令需要桌面会话，拒绝覆盖已有 QA 配置。专用配置路径链接将 QA 数据导向临时目录，不覆盖主目录变量，也不使用生产配置。自动化不代表人工键盘／输入法验收。
+
+共享回环控制服务位于
+`crates/utermd-local/src/control/server.rs`，Tauri 与核心操作复用同一队列及生命周期；宿主为该服务直接声明 Tokio 和 tempfile。`pnpm test:host`
+包含真实独立 CLI／socket 回归，`pnpm test:core` 检查桥接所有权及关闭；原生 UI 命令分发仍在开发中。
