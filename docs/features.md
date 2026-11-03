@@ -403,8 +403,12 @@ tests are not native UI acceptance. The preceding head `07b31b7`, tested merge
 [old macOS run](https://github.com/YondFane/uTerm/actions/runs/41595809802) exposed a real draft
 WRITER_BUSY failure. The new real-app scenario deliberately holds the OS writer lock, requires a
 visible rejection and explicit **Retry recovery draft**, then verifies durability and forced-exit
-recovery. Its platform result is pending; no new recovery screenshots are claimed yet. Full Windows
-deletion/cancellation matrix, manual input/IME/focus and #16 dependencies keep #35 open.
+recovery. The clean-source Linux app at `9e748f3` passes actual writer rejection, explicit retry,
+durable CRLF/NFD text, SIGKILL/relaunch and explicit BOM/CRLF save. Its favorite recovery scene
+exposed missing Cancel focus; explicit dialog focus now passes the React check and needs a real-app
+rerun. The native nested preview type has an explicit main-actor annotation; its corrected platform
+build and new recovery screenshots remain pending. Full Windows deletion/cancellation matrix, manual
+input/IME/focus and #16 dependencies keep #35 open.
 
 ## Project website
 

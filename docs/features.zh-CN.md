@@ -222,7 +222,9 @@ macOS 15.8.2 的 `native-git-cancel-frozen-editor.png` 与 `native-git-editor-co
 ABI 断言仍需本次改动自己的平台 CI。恢复界面新增两项真实 Core／React 检查通过，覆盖完整 CRLF／NFD 来源复制、取消、迟到预览、缺失安装、过期冲突、明确重新读取及已分发恢复确认不能取消。Linux 针对性批次四十项通过，完整前端 392 项通过、十项跳过，类型、生产构建、格式、本地化和双语文档检查通过。本次界面的真实原生 ARM／Intel 和 Tauri
 Windows／macOS 场景与截图仍需自己的 CI；本地 DOM 测试不代表原生界面验收。前序 head
 `07b31b7`、实际 merge `249df048676050aea0a0ff9eeff74b6bce8356f8`
-的原生双架构和 Windows 通过，但[旧 macOS 运行](https://github.com/YondFane/uTerm/actions/runs/41595809802)暴露真实草稿 WRITER_BUSY 失败。新增真实应用场景主动持有 OS 写入锁，要求可见拒绝和明确**重试恢复草稿**，随后验证持久化和异常退出恢复；平台结果待执行，暂不声称新增恢复截图。完整 Windows 删除／取消矩阵、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
+的原生双架构和 Windows 通过，但[旧 macOS 运行](https://github.com/YondFane/uTerm/actions/runs/41595809802)暴露真实草稿 WRITER_BUSY 失败。新增真实应用场景主动持有 OS 写入锁，要求可见拒绝和明确**重试恢复草稿**，随后验证持久化和异常退出恢复；干净源码
+`9e748f3`
+的真实 Linux 应用通过实际写入拒绝、明确重试、CRLF／NFD 文本持久化、SIGKILL／重启及明确 BOM／CRLF 保存；收藏恢复场景发现取消焦点缺失，明确设置对话框焦点后的 React 检查通过，真实应用待重跑。原生嵌套预览类型已明确标注主线程隔离，修正后的平台构建和新增恢复截图仍待验证。完整 Windows 删除／取消矩阵、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
 
 ## 项目官网
 

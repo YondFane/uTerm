@@ -111,6 +111,9 @@ async function render(t, f, { intercept = async () => {} } = {}) {
   dom.window.HTMLDialogElement.prototype.showModal = function () {
     this.open = true;
   };
+  dom.window.HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
   let clipboard = "",
     closed = 0,
     restored = 0;
@@ -241,6 +244,7 @@ test("real Core recovery dialog retains corrupt bytes on cancel/copy and protect
     },
   });
   await ui.mount();
+  assert.equal(ui.dom.window.document.activeElement?.textContent, "Cancel");
   await ui.wait(
     () => ui.button("Restore all repository favorites")?.disabled === false,
     "verified snapshot preview",

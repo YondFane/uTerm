@@ -3,7 +3,7 @@ import UTermBridge
 
 @MainActor
 enum GitFavoritesRecovery {
-    private struct Choice {
+    @MainActor private struct Choice {
         let revision: String
         let source: Bool
         var title: String { localized(source ? "Original source · " : "Favorite snapshot · ", source ? "原始来源 · " : "收藏副本 · ") + String(revision.prefix(12)) }

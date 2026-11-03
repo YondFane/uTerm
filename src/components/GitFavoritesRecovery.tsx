@@ -18,6 +18,7 @@ export function GitFavoritesRecovery({
 }) {
   useUiLanguage();
   const dialog = useRef<HTMLDialogElement>(null);
+  const cancelButton = useRef<HTMLButtonElement>(null);
   const alive = useRef(false);
   const catalogEpoch = useRef(0);
   const previewEpoch = useRef(0);
@@ -68,13 +69,18 @@ export function GitFavoritesRecovery({
   }
   useEffect(() => {
     alive.current = true;
+    const previousFocus = document.activeElement;
+    const element = dialog.current;
     if (dialog.current && !dialog.current.open) dialog.current.showModal();
+    cancelButton.current?.focus();
     void load();
     return () => {
       alive.current = false;
       catalogEpoch.current++;
       previewEpoch.current++;
       callbacks.current.onBusyChange(false);
+      if (element?.open) element.close();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
     };
   }, []);
   useEffect(() => {
@@ -205,6 +211,7 @@ export function GitFavoritesRecovery({
       {copied && <p role="status">{tx("已复制完整预览。")}</p>}
       <div className="git-favorite-recovery-actions">
         <button
+          ref={cancelButton}
           autoFocus
           disabled={busy}
           onClick={() => {
