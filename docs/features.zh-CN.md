@@ -142,22 +142,33 @@ UTF-16 码元一致，保留 BOM／换行。保留最多八份有效前序快照
 
 #### 共享草稿验证
 
-head `b09d9ff99ea5ec9d32836060f4db24e35b2c3d53`、tested merge
-`33a45fe42ac942cfe6d3cb4a180eede5fc95ef82` 的
-[原生 ARM／Intel CI](https://github.com/YondFane/uTerm/actions/runs/41512376203) 与
-[旧 Windows／macOS CI](https://github.com/YondFane/uTerm/actions/runs/41512376159)
+head `c475567da41e6840dc76f1197f8b5ea183bb0865`、tested merge
+`c5c63cb41a2843cb70e0bc95fbb19511c535ff65` 的
+[原生 ARM／Intel CI](https://github.com/YondFane/uTerm/actions/runs/41566088010) 与
+[旧 Windows／macOS CI](https://github.com/YondFane/uTerm/actions/runs/41566088020)
 四 job 全通过。原生报告验证 NFD／中文／CRLF／BOM 准确字节、持久草稿、SIGKILL／重启、外部冲突、关闭保护、放弃、保存、640px 控件、经保护的 Escape 窗口关闭及源文件缺失只读保留。十二张
 `native-editor-*.png`
-还展示恢复选择、准确复制、取消、窗口复用、过期恢复拒绝、损坏字节保留和缺失快照恢复，已目视检查英文／深色、中文／浅色及备份预览图片；报告记录源码／merge／平台／工具链。产物：[ARM](https://github.com/YondFane/uTerm/actions/runs/41512376203/artifacts/13174450801)、
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41512376203/artifacts/13175041217)、
-[Windows](https://github.com/YondFane/uTerm/actions/runs/41512376159/artifacts/13175570017)、
-[旧 macOS](https://github.com/YondFane/uTerm/actions/runs/41512376159/artifacts/13173494283)。
+还展示恢复选择、准确复制、取消、窗口复用、过期恢复拒绝、损坏字节保留和缺失快照恢复，已目视检查英文／深色、中文／浅色及备份预览图片；报告记录源码／merge／平台／工具链。产物：[ARM](https://github.com/YondFane/uTerm/actions/runs/41566088010/artifacts/13198977763)、
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41566088010/artifacts/13199306983)、
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41566088020/artifacts/13199842022)、
+[旧 macOS](https://github.com/YondFane/uTerm/actions/runs/41566088020/artifacts/13199777170)。
 
 两原生 job 的十三项 Swift 检查通过，包含经 C
 ABI 的备份预览及缺失恢复。两个 Tauri 状态 QA 报告通过且清理无错误；这些检查不代表 Windows 编辑器草稿 UI 接入已验收。Linux 前端 378 项通过、十项跳过，后端 129 项通过、十项忽略，核心／FFI、文件失败／重试、契约漂移、类型及桌面编译通过。二十一项真实 Rust 进程契约覆盖源文件缺失、无覆盖缺失快照恢复、预览及不变的 null 语义。真实原生应用的 DOM 输入与人工键盘／输入法／焦点验收分开记录。
 
-两架构的上述真实恢复控件均通过。新增 Tauri 草稿所有权迁移、启动恢复界面及强制退出／重开编辑器 QA 仍待自身提交的 Windows／macOS
-CI。Linux 的二十四项真实 Rust 进程／React 契约通过，覆盖来源冲突、冻结旧键、保留更新共享草稿、配额／备份／确认失败和 UI 过期恢复，不替代新 Tauri 编辑器的平台验收。
+两原生架构的上述恢复控件均通过。两个 Tauri 客户端的十六个真实应用场景通过，包括旧来源导入、冻结旧键／版本备份、持久未保存文本、SIGKILL、重开准确较新草稿及明确 BOM／CRLF 保存。进程报告记录强制信号和重开正常退出，原始／草稿字节检查与四张编辑器截图在各旧端产物；已检查 Windows 恢复与 macOS 保存图片。Tauri 启动冲突／损坏恢复界面有真实 Rust／React 契约，仍需对应平台截图；标签／窗口、PDF 标注及完整人工编辑／焦点仍开放。
+
+### 共享 Git 与 Worktree 服务
+
+开发核心的 `git` 与 `worktrees`
+模块管理既有状态、差异、提交历史、分支／引用及 Worktree 规则。相同的十五个 Git 和四个 Worktree 操作可通过
+`git.*` 请求使用，TypeScript／Swift
+DTO 由 Rust 生成。Tauri 保留原命令名并委派共用函数，原 Git 界面仍可使用；原生 Git 入口尚未接入。
+
+共用写入协调保留分支／Worktree 所有权及预期引用检查，继续保护字面路径、选定目录状态、拒绝删除脏 Worktree 和既有冲突规则。Worktree 命令改用共用 Git 运行器的流大小限制及子进程期限；RPC 超时不代表回滚，重试写入前应检查仓库状态。
+
+Linux 的二十六项既有 Git、三项 Worktree 回归及二十七项真实 Rust 进程契约通过，覆盖选定根目录、准确 Unicode、过期分支、脏／其他仓库 Worktree 及跨语言无效参数。完整核心／FFI 及明确文件失败检查通过，前端 381 项通过、十项跳过，后端 100 项通过、十项忽略，类型和生成契约检查通过。后端减少二十九项是因为测试移入核心，没有删除测试；新增第十四项 Swift
+C ABI 及平台 CI 待执行。原生 Git 界面、完整取消及焦点证据仍由 #35 验收，服务测试不关闭该任务。
 
 ## 项目官网
 

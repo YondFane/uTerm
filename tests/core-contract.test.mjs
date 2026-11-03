@@ -1452,3 +1452,155 @@ test("editor boot recovery previews real backups and rejects a selection after e
   assert.equal(localStorage.getItem(draftKey), raw);
   assert.equal(activated, false);
 });
+
+function gitFixture(t) {
+  const root = mkdtempSync(join(tmpdir(), "uterm-shared-git-")),
+    directory = join(root, "repository");
+  mkdirSync(directory);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const git = (...args) =>
+    execFileSync(
+      "git",
+      ["-c", "core.hooksPath=" + join(root, "no-hooks"), "-C", directory, ...args],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+    );
+  git("init", "--initial-branch=main");
+  mkdirSync(join(directory, "src"));
+  writeFileSync(join(directory, "src", "中文 [literal].txt"), "before 中文\n");
+  writeFileSync(join(directory, "outside.txt"), "outside\n");
+  git("add", "--all");
+  git(
+    "-c",
+    "user.name=Fixture",
+    "-c",
+    "user.email=fixture@example.invalid",
+    "commit",
+    "--no-gpg-sign",
+    "-m",
+    "isolated shared Git fixture",
+  );
+  return { root, directory, git, head: git("rev-parse", "HEAD").trim() };
+}
+
+test("shared Git contracts preserve selected-directory status, literal paths, history and stale branch protection", async (t) => {
+  const call = await client(t),
+    fixture = gitFixture(t),
+    { directory, head, git } = fixture;
+  const relative = "src/中文 [literal].txt";
+  writeFileSync(join(directory, relative), "modified 中文 é\n");
+  writeFileSync(join(directory, "outside.txt"), "unrelated change retained\n");
+  const index = readFileSync(join(directory, ".git", "index"));
+  const selected = await call("git.fileStatus", { directory: join(directory, "src") });
+  assert.equal(selected.error, undefined);
+  assert.equal(selected.result.changes.length, 1);
+  assert.equal(selected.result.changes[0].path, relative);
+  assert.deepEqual(readFileSync(join(directory, ".git", "index")), index);
+  const snapshot = (await call("git.snapshot", { directory })).result;
+  assert.equal(snapshot.head, head);
+  assert.equal(snapshot.branch, "main");
+  const diff = await call("git.diff", {
+    directory,
+    path: relative,
+    mode: "working",
+    reference: null,
+  });
+  assert.match(diff.result.text, /modified 中文 é/);
+  assert.equal(diff.result.truncated, false);
+  const history = await call("git.history", { directory, skip: 0, reference: null });
+  assert.equal(history.result[0].id, head);
+  assert.equal(typeof history.result[0].timestamp, "string");
+  const files = await call("git.files", { directory, reference: head, compare: false });
+  assert.ok(files.result.some((entry) => entry.path === relative));
+  assert.equal(
+    (
+      await call("git.referenceAction", {
+        directory,
+        target: { action: "create", reference: "HEAD", oid: head, name: "qa/branch" },
+      })
+    ).error,
+    undefined,
+  );
+  assert.equal(
+    (await call("git.switchBranch", { directory, branch: "qa/branch", expected: "stale" })).error
+      .code,
+    "GIT_ERROR",
+  );
+  assert.equal(git("branch", "--show-current").trim(), "main");
+  assert.equal(
+    (await call("git.switchBranch", { directory, branch: "qa/branch", expected: "main" })).error,
+    undefined,
+  );
+  assert.equal((await call("git.branch", { directory })).result, "qa/branch");
+  assert.equal(readFileSync(join(directory, relative), "utf8"), "modified 中文 é\n");
+  assert.equal(readFileSync(join(directory, "outside.txt"), "utf8"), "unrelated change retained\n");
+});
+
+test("shared Worktree contracts protect dirty work, repository identity, stale bases and occupied branches", async (t) => {
+  const call = await client(t),
+    fixture = gitFixture(t),
+    other = gitFixture(t);
+  const { directory, head, git } = fixture,
+    path = join(fixture.root, "worktree-中文");
+  assert.deepEqual((await call("git.worktrees.list", { directory })).result, []);
+  const invalid = await call("git.worktrees.create", {
+    directory,
+    reference: "HEAD",
+    branch: "stale",
+    path,
+    oid: "stale",
+  });
+  assert.equal(invalid.error.code, "GIT_ERROR");
+  assert.equal((await call("git.worktrees.list", { directory })).result.length, 0);
+  const created = await call("git.worktrees.create", {
+    directory,
+    reference: "HEAD",
+    branch: "qa/worktree",
+    path,
+    oid: head,
+  });
+  assert.equal(created.error, undefined);
+  assert.equal(created.result.length, 1);
+  assert.equal(created.result[0].branch, "qa/worktree");
+  assert.equal(
+    (await call("git.switchBranch", { directory, branch: "qa/worktree", expected: "main" })).error
+      .code,
+    "GIT_ERROR",
+  );
+  assert.equal(git("branch", "--show-current").trim(), "main");
+  writeFileSync(join(path, "retained.txt"), "unsaved work must survive\n");
+  assert.equal((await call("git.worktrees.delete", { directory, path })).error.code, "GIT_ERROR");
+  assert.equal(
+    (await call("git.worktrees.delete", { directory: other.directory, path })).error.code,
+    "GIT_ERROR",
+  );
+  assert.equal(readFileSync(join(path, "retained.txt"), "utf8"), "unsaved work must survive\n");
+  rmSync(join(path, "retained.txt"));
+  assert.deepEqual((await call("git.worktrees.delete", { directory, path })).result, []);
+  assert.equal(git("branch", "--show-current").trim(), "main");
+});
+
+test("shared Git requests reject malformed cross-language fields before invoking Git", async (t) => {
+  const call = await client(t);
+  for (const params of [null, {}, { directory: null }, { directory: "/unused", ignored: true }])
+    assert.equal((await call("git.snapshot", params)).error.code, "INVALID_ARGUMENT");
+  for (const skip of [-1, 1.5, "0", null, 4294967296])
+    assert.equal(
+      (await call("git.history", { directory: "/unused", skip })).error.code,
+      "INVALID_ARGUMENT",
+    );
+  assert.equal(
+    (await call("git.files", { directory: "/unused", reference: "HEAD", compare: "false" })).error
+      .code,
+    "INVALID_ARGUMENT",
+  );
+  assert.equal(
+    (
+      await call("git.referenceAction", {
+        directory: "/unused",
+        target: { action: false, reference: "HEAD" },
+      })
+    ).error.code,
+    "INVALID_ARGUMENT",
+  );
+  assert.equal((await call("git.notPermitted", {})).error.code, "UNKNOWN_METHOD");
+});

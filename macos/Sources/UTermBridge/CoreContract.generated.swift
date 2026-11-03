@@ -103,6 +103,101 @@ public struct CoreFileSearch: Codable, Sendable {
     public var skipped: Int
 }
 
+public struct CoreGitBranches: Codable, Sendable {
+    public var current: String?
+    public var local: [String]
+    public var upstream: String?
+}
+
+public struct CoreGitChange: Codable, Sendable {
+    public var index: String
+    public var original: String?
+    public var path: String
+    public var working: String
+}
+
+public struct CoreGitCommit: Codable, Sendable {
+    public var author: String
+    public var id: String
+    public var message: String
+    public var parents: [String]
+    public var subject: String
+    public var timestamp: String
+}
+
+public struct CoreGitDiff: Codable, Sendable {
+    public var text: String
+    public var truncated: Bool
+}
+
+public struct CoreGitFileStatus: Codable, Sendable {
+    public var changes: [CoreGitChange]
+    public var root: String
+    public var truncated: Bool
+}
+
+public struct CoreGitReference: Codable, Sendable {
+    public var ahead: UInt32?
+    public var behind: UInt32?
+    public var branch: String?
+    public var current: Bool
+    public var full_name: String
+    public var kind: String
+    public var name: String
+    public var oid: String?
+    public var remote: String?
+    public var upstream: String?
+    public var worktree: String?
+}
+
+public struct CoreGitReferenceAction: Codable, Sendable {
+    public var action: String
+    public var branch: String?
+    public var current: String?
+    public var name: String?
+    public var oid: String?
+    public var reference: String
+    public var remote: String?
+}
+
+public struct CoreGitReferences: Codable, Sendable {
+    public var current: String?
+    public var references: [CoreGitReference]
+    public var remotes: [String]
+    public var repository: String
+    public var root: String
+}
+
+public struct CoreGitRemoteBranch: Codable, Sendable {
+    public var branch: String
+    public var remote: String
+}
+
+public struct CoreGitRemoteBranches: Codable, Sendable {
+    public var branches: [CoreGitRemoteBranch]
+    public var errors: [String]
+}
+
+public struct CoreGitSnapshot: Codable, Sendable {
+    public var branch: String
+    public var changes: [CoreGitChange]
+    public var head: String?
+    public var references: [String]
+    public var root: String
+    public var truncated: Bool
+}
+
+public struct CoreGitWorktree: Codable, Sendable {
+    public var branch: String
+    public var missing: Bool
+    public var path: String
+}
+
+public struct CoreGitWorktreeSuggestion: Codable, Sendable {
+    public var branch: String
+    public var path: String
+}
+
 public struct CoreImport: Codable, Sendable {
     public var legacy: [String: String]
     public var settings: JSONValue

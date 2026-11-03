@@ -240,20 +240,20 @@ Full installed-version downgrade still requires #46 acceptance.
 
 #### Shared draft validation
 
-Head `b09d9ff99ea5ec9d32836060f4db24e35b2c3d53`, tested merge
-`33a45fe42ac942cfe6d3cb4a180eede5fc95ef82`, passed all four jobs in
-[native ARM/Intel CI](https://github.com/YondFane/uTerm/actions/runs/41512376203) and
-[legacy Windows/macOS CI](https://github.com/YondFane/uTerm/actions/runs/41512376159). The native
+Head `c475567da41e6840dc76f1197f8b5ea183bb0865`, tested merge
+`c5c63cb41a2843cb70e0bc95fbb19511c535ff65`, passed all four jobs in
+[native ARM/Intel CI](https://github.com/YondFane/uTerm/actions/runs/41566088010) and
+[legacy Windows/macOS CI](https://github.com/YondFane/uTerm/actions/runs/41566088020). The native
 reports verify exact NFD/Chinese/CRLF/BOM bytes, durable drafts, SIGKILL/relaunch, external
 conflict, close protection, discard, save, 640px controls, guarded Escape window close and
 missing-source readonly retention. Twelve `native-editor-*.png` images include these scenes plus
 recovery selection, accurate copy, cancel, window reuse, stale restore refusal, damaged-byte
 retention and absent-store restore. English/dark, Chinese/light and backup preview images were
 inspected. Reports record source/merge/platform/toolchains. Artifacts:
-[ARM](https://github.com/YondFane/uTerm/actions/runs/41512376203/artifacts/13174450801),
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41512376203/artifacts/13175041217),
-[Windows](https://github.com/YondFane/uTerm/actions/runs/41512376159/artifacts/13175570017),
-[old macOS](https://github.com/YondFane/uTerm/actions/runs/41512376159/artifacts/13173494283).
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41566088010/artifacts/13198977763),
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41566088010/artifacts/13199306983),
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41566088020/artifacts/13199842022),
+[old macOS](https://github.com/YondFane/uTerm/actions/runs/41566088020/artifacts/13199777170).
 
 Both native jobs passed 13 Swift checks, including backup preview/missing restore through the C ABI.
 Both Tauri state QA reports passed without cleanup errors; those checks do not establish Windows
@@ -263,11 +263,35 @@ Twenty-one real Rust-process contracts cover missing sources, non-overwriting mi
 preview and unchanged null semantics. DOM input in the real native app is separate from manual
 keyboard/IME/focus acceptance.
 
-Both architectures passed the real recovery controls above. The new Tauri draft-owner handoff, boot
-recovery UI and forced-exit/reopen editor QA await their own committed-head Windows/macOS CI.
-Linux's 24 real Rust-process/React contracts pass, covering source conflicts, frozen old keys, newer
-shared drafts, quota/backup/acknowledgement failures and stale UI restore. These results do not
-establish the new Tauri editor's platform acceptance.
+Both native architectures passed the real recovery controls above. Both Tauri clients passed 16
+actual application scenes, including old-source import, frozen keys/versioned backups, durable
+unsaved text, forced SIGKILL, reopen with the exact newer draft and explicit BOM/CRLF save. Process
+reports record the forced signal and normal reopen exit; original/draft-byte checks and four editor
+screenshots are in each legacy artifact. Windows recovery and macOS saved images were inspected.
+Tauri's boot conflict/damaged recovery UI has real Rust/React contracts but still needs
+corresponding platform screenshots. Tabs/window order, PDF marks and full manual editing/focus
+remain open.
+
+### Shared Git and Worktree service
+
+The development core's `git` and `worktrees` modules now own the existing status, diff, commit
+history, branches/references and Worktree rules. The same 15 Git and four Worktree operations are
+available through `git.*` requests with Rust-generated TypeScript/Swift DTOs. Tauri keeps its
+existing command names and delegates to the shared functions. Its current Git UI remains available;
+the native Git entry is not connected yet.
+
+The shared mutation coordinator preserves branch/Worktree ownership and expected-reference checks.
+Literal paths, selected-directory status, dirty Worktree removal refusal and existing conflict rules
+remain. Worktree commands now use the common Git runner's stream bounds and subprocess deadline. An
+RPC timeout does not establish rollback; check repository state before retrying a write.
+
+Twenty-six existing Git and three Worktree regressions passed on Linux, as did 27 real Rust-process
+contracts covering selected roots, exact Unicode text, stale branches, dirty/foreign Worktrees and
+malformed cross-language parameters. Core/FFI and explicit filesystem failures passed, with 381
+frontend tests (ten skipped), 100 backend tests (ten ignored), types and generated-contract checks.
+The backend count dropped by 29 because those tests now run in Core; none were deleted. The new
+fourteenth Swift C ABI test and platform CI are pending. Native Git UI, complete cancellation and
+focus evidence remain in #35; these service tests do not close it.
 
 ## Project website
 

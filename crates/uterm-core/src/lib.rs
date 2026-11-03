@@ -1,11 +1,13 @@
 mod connections;
 mod control;
 pub mod files;
+pub mod git;
 pub mod host;
 pub mod session_state;
 pub mod state;
 pub mod store;
 pub mod terminal;
+pub mod worktrees;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -242,6 +244,7 @@ impl Core {
                 Ok(Value::Null)
             }
             method if method.starts_with("files.") => files::request(method, params),
+            method if method.starts_with("git.") => git::request(method, params),
             "directory.resolve" => Ok(json!(host::project_directory(string(
                 &params,
                 "directory"

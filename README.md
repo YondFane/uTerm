@@ -150,7 +150,10 @@ resolves the pinned SwiftTerm 1.20.0 dependency; it does not change the legacy t
 The shared-core command explicitly runs the filesystem-failure case. Unix tests require an
 unprivileged user so directory permissions enforce the failure; Windows uses a held file lease.
 
-`uterm-core::files` owns local file rules and their regression tests; Tauri commands delegate to it.
+`uterm-core::{files,git,worktrees}` owns local file and Git/Worktree rules and their regression
+tests; Tauri commands delegate to the same functions. The new `git.*` contract and generated DTOs
+are available to the native bridge; the native Git UI remains pending.
+
 The core's locked dependencies include the existing base64 decoder and ignore-aware file walker.
 Native file/content UI acceptance is tracked separately in the migration guide.
 
@@ -161,19 +164,21 @@ now uses the shared editor and Rust draft queue for editable text.
 `bash scripts/macos-editor-smoke.sh` checks actual native editing, a durable draft followed by
 SIGKILL/relaunch, conflict/close/discard/save, reports and system screenshots. It requires a macOS
 GUI session and an isolated QA App; it uses temporary files and does not establish manual
-keyboard/IME acceptance. The new editor scenario awaits its own successful native CI.
+keyboard/IME acceptance. Recovery selection and copy/restore checks also run in this script.
 
 `pnpm qa:shared-state` builds a compile-gated, isolated Tauri QA app
-(`sh.uterm.desktop.qa.sharedstate`) and runs save/conflict/reload/quit/reopen/recovery scenarios in
-its real WebView. Windows/macOS CI captures native windows and uploads reports and images under
-`legacy-checks-*/tauri-state-qa/`. It requires a desktop session and refuses existing QA profiles.
-Dedicated profile links redirect QA data into a temporary directory; no home-directory override or
-production profile is used. This automation does not establish manual keyboard/IME acceptance.
+(`sh.uterm.desktop.qa.sharedstate`) and runs editor import/durable draft/SIGKILL/reopen/exact-save
+plus state save/conflict/reload/quit/recovery scenarios in its real WebView. Windows/macOS CI
+captures native windows and uploads reports and images under `legacy-checks-*/tauri-state-qa/`. It
+requires a desktop session and refuses existing QA profiles. Dedicated profile links redirect QA
+data into a temporary directory; no home-directory override or production profile is used. This
+automation does not establish manual keyboard/IME acceptance.
 
 The core's `store/editor.rs` owns revision-checked multi-document drafts, exact legacy-source copies
-and explicit recovery. Native editing adopts this API through the bounded queue in
-`src/lib/editor-drafts.ts`; Tauri retains its old editor draft owner until its migration UI is
-ready. Native tabs/window order and complete editing acceptance remain pending. Content writes are
+and explicit recovery. Native and Tauri editing adopt this API through the bounded queue in
+`src/lib/editor-drafts.ts`. Tauri initializes exact versioned old-source backups and an explicit
+handoff before App, freezes the old draft key and offers conflict/corrupt-copy recovery choices.
+Native tabs/window order and complete editing acceptance remain pending. Content writes are
 restricted to the selected file. `pnpm test:core` explicitly runs filesystem failure/retry checks
 for workspace and draft snapshots.
 

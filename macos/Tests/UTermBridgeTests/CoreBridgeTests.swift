@@ -39,6 +39,59 @@ final class CoreBridgeTests: XCTestCase {
         XCTAssertEqual(try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(value)), value)
     }
 
+    func testSharedGitAndWorktreeContractsThroughCABI() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let repository = root.appendingPathComponent("repository")
+        try FileManager.default.createDirectory(at: repository, withIntermediateDirectories: true)
+        func git(_ arguments: [String]) throws {
+            let process = Process(), output = Pipe()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+            process.arguments = ["-c", "core.hooksPath=" + root.appendingPathComponent("no-hooks").path, "-C", repository.path] + arguments
+            process.standardOutput = output
+            process.standardError = output
+            try process.run()
+            let bytes = output.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { throw BridgeFailure(code: "GIT_FIXTURE", message: String(decoding: bytes, as: UTF8.self)) }
+        }
+        try git(["init", "--initial-branch=main"])
+        let file = repository.appendingPathComponent("中文.txt")
+        try Data("before\n".utf8).write(to: file)
+        try git(["add", "--all"])
+        try git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--no-gpg-sign", "-m", "isolated C ABI Git fixture"])
+        let core = try await CoreBridge.open(root: root.appendingPathComponent("store"))
+        let snapshot = try await core.call("git.snapshot", params: .object(["directory": .string(repository.path)]))
+        let typed = try JSONDecoder().decode(CoreGitSnapshot.self, from: JSONEncoder().encode(snapshot))
+        let head = try XCTUnwrap(typed.head)
+        XCTAssertEqual(typed.branch, "main")
+        let changed = "after 中文 e\u{301}\n"
+        try Data(changed.utf8).write(to: file)
+        let reply = try await core.call("git.diff", params: .object([
+            "directory": .string(repository.path), "path": .string("中文.txt"), "mode": .string("working"), "reference": .null
+        ]))
+        let diff = try JSONDecoder().decode(CoreGitDiff.self, from: JSONEncoder().encode(reply))
+        XCTAssertNotNil(Data(diff.text.utf8).range(of: Data(changed.utf8)))
+        let worktree = root.appendingPathComponent("worktree-中文")
+        let created = try await core.call("git.worktrees.create", params: .object([
+            "directory": .string(repository.path), "reference": .string("HEAD"), "branch": .string("qa/worktree"),
+            "path": .string(worktree.path), "oid": .string(head)
+        ]))
+        let entries = try JSONDecoder().decode([CoreGitWorktree].self, from: JSONEncoder().encode(created))
+        XCTAssertEqual(entries.first?.branch, "qa/worktree")
+        let retained = worktree.appendingPathComponent("retained.txt")
+        try Data(changed.utf8).write(to: retained)
+        do {
+            _ = try await core.call("git.worktrees.delete", params: .object(["directory": .string(repository.path), "path": .string(worktree.path)]))
+            XCTFail("Dirty worktrees cannot be removed")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "GIT_ERROR") }
+        XCTAssertEqual(try Data(contentsOf: retained), Data(changed.utf8))
+        try FileManager.default.removeItem(at: retained)
+        _ = try await core.call("git.worktrees.delete", params: .object(["directory": .string(repository.path), "path": .string(worktree.path)]))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: worktree.path))
+        await core.close()
+    }
+
     func testDraftBackupPreviewAndExplicitMissingRestoreThroughCABI() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

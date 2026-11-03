@@ -104,6 +104,101 @@ export interface CoreFileSearch {
   skipped: number;
 }
 
+export interface CoreGitBranches {
+  current?: string | null;
+  local: string[];
+  upstream?: string | null;
+}
+
+export interface CoreGitChange {
+  index: string;
+  original?: string | null;
+  path: string;
+  working: string;
+}
+
+export interface CoreGitCommit {
+  author: string;
+  id: string;
+  message: string;
+  parents: string[];
+  subject: string;
+  timestamp: string;
+}
+
+export interface CoreGitDiff {
+  text: string;
+  truncated: boolean;
+}
+
+export interface CoreGitFileStatus {
+  changes: CoreGitChange[];
+  root: string;
+  truncated: boolean;
+}
+
+export interface CoreGitReference {
+  ahead?: number | null;
+  behind?: number | null;
+  branch?: string | null;
+  current: boolean;
+  full_name: string;
+  kind: string;
+  name: string;
+  oid?: string | null;
+  remote?: string | null;
+  upstream?: string | null;
+  worktree?: string | null;
+}
+
+export interface CoreGitReferenceAction {
+  action: string;
+  branch?: string | null;
+  current?: string | null;
+  name?: string | null;
+  oid?: string | null;
+  reference: string;
+  remote?: string | null;
+}
+
+export interface CoreGitReferences {
+  current?: string | null;
+  references: CoreGitReference[];
+  remotes: string[];
+  repository: string;
+  root: string;
+}
+
+export interface CoreGitRemoteBranch {
+  branch: string;
+  remote: string;
+}
+
+export interface CoreGitRemoteBranches {
+  branches: CoreGitRemoteBranch[];
+  errors: string[];
+}
+
+export interface CoreGitSnapshot {
+  branch: string;
+  changes: CoreGitChange[];
+  head?: string | null;
+  references: string[];
+  root: string;
+  truncated: boolean;
+}
+
+export interface CoreGitWorktree {
+  branch: string;
+  missing: boolean;
+  path: string;
+}
+
+export interface CoreGitWorktreeSuggestion {
+  branch: string;
+  path: string;
+}
+
 export interface CoreImport {
   legacy: Record<string, string>;
   settings: JSONValue;
