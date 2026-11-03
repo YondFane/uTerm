@@ -182,6 +182,10 @@ Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revisio
 
 #### Git 与编辑器并发验证
 
+同一 0f98369
+head 的旧 macOS 真实 Tauri 二十场景通过。Windows 在新增扩展路径夹具中漏传必需的预期提交 OID，引用检查在创建 Worktree 前正确拒绝；夹具现读取并传入固定 HEAD
+OID，生产过期引用保护保持有效，修正 head 的 Windows 执行仍待完成。
+
 head `0f983699f9db69659a148a8ca955498cd5ae1e0e`、tested merge
 `1112d6dac5a706567d74e9e7617f361faa23c370` 的干净源码 Linux
 Tauri 二十场景通过。[ARM 原生 job](https://github.com/YondFane/uTerm/actions/runs/41580396300)

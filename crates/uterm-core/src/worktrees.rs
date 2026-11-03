@@ -296,12 +296,13 @@ mod tests {
         )
         .unwrap();
         let path = root.join("tree-中文");
+        let oid = crate::git::revision(directory, "HEAD").unwrap();
         let entries = create_worktree_at(
             directory,
             "HEAD",
             "qa/extended",
             path.to_str().unwrap(),
-            None,
+            Some(&oid),
         )
         .unwrap();
         assert_eq!(entries.len(), 1);

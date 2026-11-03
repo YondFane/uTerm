@@ -318,6 +318,12 @@ deadline and record `observerBusyReads`; they never retry writes.
 
 #### Git and editor concurrency validation
 
+The same 0f98369 head passed old macOS's actual 20-scene Tauri QA. Windows stopped in the new
+extended-path fixture because it omitted the mandatory expected commit OID; the reference check
+correctly refused it before any Worktree creation. The fixture now captures/passes the immutable
+HEAD OID, retaining the production stale-reference guard. Its Windows execution is still pending on
+the corrected head.
+
 Head `0f983699f9db69659a148a8ca955498cd5ae1e0e`, tested merge
 `1112d6dac5a706567d74e9e7617f361faa23c370`, passed the 20-scene clean Linux Tauri run. Its
 [ARM native job](https://github.com/YondFane/uTerm/actions/runs/41580396300) failed at the new

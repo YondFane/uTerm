@@ -645,6 +645,15 @@ validation is pending.
 上述 0f98369／merge 的干净源码 Linux
 Tauri 二十场景通过。原生 ARM 在登记／AppKit 选择后的目录断言失败，后续 Git 检查未执行，真实失败产物保留。修正后记录实际／存储／夹具路径，分别验证 ID、准确存储 UTF-8 与规范目录身份，路径别名不放宽物理目标检查；新增工作区失败图片补充 Git 窗口图，仍待新 head 平台验证。
 
+At the same 0f98369 head, legacy macOS's real 20-scene Tauri QA passed. Windows's new extended-path
+fixture omitted the required expected OID and was correctly refused before creation. The fixture now
+passes its captured immutable HEAD OID; stale-reference protection is retained. Corrected-head
+Windows execution is pending.
+
+同一 0f98369
+head 的旧 macOS 真实 Tauri 二十场景通过。Windows 扩展路径夹具漏传必需的预期 OID，在创建前被正确拒绝。夹具现传入读取的固定 HEAD
+OID，保留过期引用保护，修正 head 的 Windows 执行仍待完成。
+
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 
 Task #25 now rejects existing recovery/damaged paths whose bytes or file type differ. Recovery
