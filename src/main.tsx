@@ -8,7 +8,9 @@ import { StateRecovery } from "./components/StateRecovery";
 import { defaults, readSettings, settingsKey } from "./lib/settings";
 import { suppressBrowserContextMenu } from "./lib/context-menu";
 import { isTauri } from "@tauri-apps/api/core";
-import { initializeSharedState, sharedSettings } from "./lib/shared-state";
+import { coreRequest, initializeSharedState, sharedSettings } from "./lib/shared-state";
+import { EditorDraftHandoff, enableSharedEditorRecovery } from "./lib/editor-draft-handoff";
+import { EditorDraftRecovery } from "./components/EditorDraftRecovery";
 
 suppressBrowserContextMenu(window);
 
@@ -20,6 +22,7 @@ try {
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing application root");
+const application = createRoot(root);
 
 async function start() {
   const qa = import.meta.env.VITE_UTERM_STATE_QA === "1" ? await import("./qa/shared-state") : null;
@@ -29,18 +32,39 @@ async function start() {
       await initializeSharedState();
       setUiLanguage(activeLanguage(sharedSettings()?.language ?? defaults.language));
     } catch (reason) {
-      createRoot(root!).render(<StateRecovery reason={reason} />);
+      application.render(<StateRecovery reason={reason} />);
       void qa?.run(true);
       return;
     }
+    let handoff: EditorDraftHandoff | undefined;
+    try {
+      handoff = new EditorDraftHandoff(coreRequest, localStorage);
+      enableSharedEditorRecovery(await handoff.initialize(), handoff.legacy);
+    } catch (reason) {
+      application.render(
+        <EditorDraftRecovery
+          reason={reason}
+          handoff={handoff}
+          ready={(snapshot) => {
+            enableSharedEditorRecovery(snapshot, handoff?.legacy ?? null);
+            renderApplication();
+          }}
+        />,
+      );
+      void qa?.reportEditorRecoveryFailure(reason);
+      return;
+    }
   }
-  createRoot(root!).render(
-    <StrictMode>
-      <SettingsProvider>
-        <App />
-      </SettingsProvider>
-    </StrictMode>,
-  );
-  void qa?.run(false);
+  renderApplication();
+  function renderApplication() {
+    application.render(
+      <StrictMode>
+        <SettingsProvider>
+          <App />
+        </SettingsProvider>
+      </StrictMode>,
+    );
+    void qa?.run(false);
+  }
 }
 void start();

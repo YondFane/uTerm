@@ -21,6 +21,7 @@ import {
 } from "../src/lib/workspace.ts";
 import { draftKey, readDraft } from "../src/lib/file-document.ts";
 import { EditorDraftQueue } from "../src/lib/editor-drafts.ts";
+import { EditorDraftHandoff, editorDraftReceiptKey } from "../src/lib/editor-draft-handoff.ts";
 import { ContentFailure, ContentScope, editorDraftMethods } from "../src/lib/content-transport.ts";
 import { tauriContentPort } from "../src/lib/tauri-content.ts";
 
@@ -1271,4 +1272,183 @@ test("quit flushing waits for saves enqueued while the first save is still runni
   const stored = (await call("snapshot.read")).result.document.settings;
   assert.equal(stored.fontSize, 18);
   assert.equal(stored.opacity, 0.8);
+});
+
+test("old editor draft handoff freezes old keys and keeps newer shared data across restarts and explicit source conflicts", async (t) => {
+  const storeRoot = mkdtempSync(join(tmpdir(), "uterm-draft-handoff-")),
+    call = await client(t, storeRoot),
+    values = new Map();
+  t.after(() => rmSync(storeRoot, { recursive: true, force: true }));
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, value),
+  };
+  const request = async (method, params) => {
+    const reply = await call(method, params);
+    if (reply.error) throw Object.assign(Error(reply.error.message), { code: reply.error.code });
+    return reply.result;
+  };
+  const raw = " \n" + JSON.stringify(queueDraft("handoff.txt", "source A 中文 é\r\n")) + "\n";
+  storage.setItem(draftKey, raw);
+  const first = await new EditorDraftHandoff(request, storage).initialize();
+  assert.equal(storage.getItem(draftKey), raw);
+  assert.equal(storage.getItem(`${draftKey}.shared-v1-backup.${first.document.sourceDigest}`), raw);
+  await request("editor.drafts.put", {
+    expectedRevision: first.revision,
+    draft: queueDraft("handoff.txt", "new native text"),
+  });
+  const newer = await new EditorDraftHandoff(request, storage).initialize();
+  assert.equal(newer.document.drafts[0].text, "new native text");
+  const other = JSON.stringify(queueDraft("different.txt", "source B must stay recoverable"));
+  storage.setItem(draftKey, other);
+  const conflict = new EditorDraftHandoff(request, storage);
+  await assert.rejects(conflict.acceptShared(), { code: "MIGRATION_CHOICE" });
+  await assert.rejects(conflict.initialize(), { code: "MIGRATION_CONFLICT" });
+  const sources = await request("editor.drafts.recovery.list");
+  assert.equal(sources.sources.length, 2);
+  const accepted = await conflict.acceptShared();
+  assert.deepEqual(accepted, newer);
+  assert.equal(storage.getItem(draftKey), other);
+  assert.deepEqual(await new EditorDraftHandoff(request, storage).initialize(), newer);
+  assert.equal(
+    JSON.parse(storage.getItem(editorDraftReceiptKey)).sharedSourceDigest,
+    first.document.sourceDigest,
+  );
+  const archivedSource = join(
+    storeRoot,
+    `editor-draft-source-${JSON.parse(storage.getItem(editorDraftReceiptKey)).legacyDigest}.original`,
+  );
+  rmSync(archivedSource);
+  const missingSource = new EditorDraftHandoff(request, storage);
+  await assert.rejects(missingSource.initialize(), { code: "MIGRATION_CONFLICT" });
+  assert.equal(readFileSync(archivedSource, "utf8"), other);
+  assert.deepEqual(await missingSource.acceptShared(), newer);
+  const changed = new EditorDraftHandoff(request, storage);
+  storage.setItem(draftKey, "changed while recovery is open");
+  await assert.rejects(changed.initialize(), { code: "MIGRATION_CHANGED" });
+  assert.deepEqual(await request("editor.drafts.read"), newer);
+});
+
+test("old draft backup and receipt failures retain source bytes and never reset shared drafts", async (t) => {
+  const call = await client(t),
+    values = new Map([[draftKey, JSON.stringify(queueDraft("quota.txt", "unsaved exact text"))]]);
+  let fail = true;
+  const storage = {
+    getItem: (key) => values.get(key) ?? null,
+    setItem: (key, value) => {
+      if (fail) throw Error("simulated WebView quota");
+      values.set(key, value);
+    },
+  };
+  const request = async (method, params) => {
+    const reply = await call(method, params);
+    if (reply.error) throw Object.assign(Error(reply.error.message), { code: reply.error.code });
+    return reply.result;
+  };
+  const source = storage.getItem(draftKey);
+  await assert.rejects(new EditorDraftHandoff(request, storage).initialize(), /WebView quota/);
+  assert.equal((await call("editor.drafts.read")).error.code, "DRAFTS_NOT_IMPORTED");
+  assert.equal(storage.getItem(draftKey), source);
+  fail = false;
+  const original = await new EditorDraftHandoff(request, storage).initialize();
+  values.delete(editorDraftReceiptKey);
+  fail = true;
+  await assert.rejects(new EditorDraftHandoff(request, storage).initialize(), /WebView quota/);
+  assert.deepEqual(await request("editor.drafts.read"), original);
+  assert.equal(storage.getItem(draftKey), source);
+  fail = false;
+  const backup = [...values.keys()].find((key) => key.includes(".shared-v1-backup."));
+  values.set(backup, "occupied backup with unrelated bytes");
+  await assert.rejects(new EditorDraftHandoff(request, storage).initialize(), {
+    code: "DRAFT_BACKUP_CONFLICT",
+  });
+  assert.equal(storage.getItem(backup), "occupied backup with unrelated bytes");
+  assert.deepEqual(await request("editor.drafts.read"), original);
+});
+
+test("editor boot recovery previews real backups and rejects a selection after external bytes change", async (t) => {
+  const directory = mkdtempSync(join(tmpdir(), "uterm-editor-boot-")),
+    call = await client(t, directory);
+  const raw = JSON.stringify(queueDraft("recover.txt", "retained backup 中文 é\r\n"));
+  const first = (await call("editor.drafts.import", { legacy: raw })).result;
+  await call("editor.drafts.put", {
+    expectedRevision: first.revision,
+    draft: queueDraft("recover.txt", "newer draft"),
+  });
+  const store = join(directory, "editor-drafts-v1.json");
+  writeFileSync(store, "{damaged first bytes");
+  const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });
+  for (const key of ["window", "document", "localStorage"])
+    Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  localStorage.setItem(draftKey, raw);
+  const request = async (method, params) => {
+    const reply = await call(method, params);
+    if (reply.error) throw Object.assign(Error(reply.error.message), { code: reply.error.code });
+    return reply.result;
+  };
+  const handoff = new EditorDraftHandoff(request, localStorage);
+  await assert.rejects(handoff.initialize(), { code: "CORRUPT_DRAFTS" });
+  const server = await createServer({
+    configFile: false,
+    server: { middlewareMode: true, hmr: false, watch: null },
+    appType: "custom",
+  });
+  const React = await import("react"),
+    { createRoot } = await import("react-dom/client");
+  const root = createRoot(document.getElementById("root"));
+  t.after(async () => {
+    await React.act(async () => root.unmount());
+    clearMocks();
+    await server.close();
+    dom.window.close();
+    rmSync(directory, { recursive: true, force: true });
+  });
+  mockIPC(async (command, args) => {
+    assert.equal(command, "shared_core_request");
+    const value = JSON.parse(args.request);
+    return JSON.stringify(await call(value.method, value.params, value.id));
+  });
+  const { setUiLanguage } = await server.ssrLoadModule("/src/lib/i18n.ts");
+  setUiLanguage("en");
+  const { EditorDraftRecovery } = await server.ssrLoadModule(
+    "/src/components/EditorDraftRecovery.tsx",
+  );
+  let activated = false;
+  await React.act(async () =>
+    root.render(
+      React.createElement(EditorDraftRecovery, {
+        reason: Error("corrupt drafts"),
+        handoff,
+        ready: () => {
+          activated = true;
+        },
+      }),
+    ),
+  );
+  const button = (label) =>
+    [...document.querySelectorAll("button")].find((item) => item.textContent.trim() === label);
+  async function waitFor(read) {
+    const deadline = Date.now() + 5000;
+    while (!read()) {
+      assert.ok(Date.now() < deadline, "Boot recovery UI did not settle");
+      await React.act(async () => new Promise((done) => setTimeout(done, 25)));
+    }
+  }
+  assert.equal(button("Continue with shared drafts"), undefined);
+  await React.act(async () => button("View recovery copies").click());
+  await waitFor(() => button(`Preview copy ${first.revision.slice(0, 12)}`));
+  await React.act(async () => button(`Preview copy ${first.revision.slice(0, 12)}`).click());
+  await waitFor(
+    () => document.querySelector("article pre")?.textContent === "retained backup 中文 é\r\n",
+  );
+  const external = "{newer external data must survive stale recovery";
+  writeFileSync(store, external);
+  await React.act(async () => button("Restore selected draft copy").click());
+  await waitFor(() =>
+    document.querySelector('[role="alert"]').textContent.includes("changed during recovery"),
+  );
+  assert.equal(readFileSync(store, "utf8"), external);
+  assert.equal(localStorage.getItem(draftKey), raw);
+  assert.equal(activated, false);
 });

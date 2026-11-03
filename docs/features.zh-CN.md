@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-02
+updated: 2026-11-03
 ---
 
 # uTerm 功能说明
@@ -89,7 +89,7 @@ CLI／TUI、人工输入法／剪贴板／鼠标、并存输入／resize 仲裁�
 
 开发客户端首次启动时，通过原有 WebView 导出工作区和设置。Rust 校验并保留原始导出后，在应用数据目录的
 `shared-state-v1`
-中管理规范存储。后续保存使用原子快照和 revision 检查；工作区与设置共用串行队列。原工作区／设置键保留供恢复，不再写入。编辑器草稿及其他 WebView 偏好继续由原有模块管理。
+中管理规范存储。后续保存使用原子快照和 revision 检查；工作区与设置共用串行队列。原工作区／设置键保留供恢复，不再写入。编辑器草稿随后初始化独立共享存储，其他 WebView 偏好继续由原有模块管理。
 
 设置修改以发起视图为基线，旧视图不会还原其他已提交字段。退出会等待先前保存期间新增的写入，明确重载也使用同一队列。保存失败的设置作为草稿保留，关闭再打开设置也不丢失。**重新读取设置**读取外部修改并保留草稿，包括同字段冲突；**重试保存设置**明确写入草稿；**放弃未保存的设置**先重载再放弃。失败草稿未处理时仍阻止退出。这些草稿保存在内存中，不提供崩溃恢复存储。
 
@@ -130,26 +130,34 @@ UTF-16 码元一致，保留 BOM／换行。保留最多八份有效前序快照
 
 **文件 → 恢复编辑器备份副本…**预览校验过的备份，明确恢复所选副本并保留损坏字节。快照已变化时拒绝恢复，缺失快照使用无覆盖安装，取消不修改恢复数据。已打开编辑器保留当前文本，重新打开文件后读取恢复草稿。
 
-标签／窗口顺序、Tauri 草稿所有权迁移及完整人工编辑／焦点验收仍在 #33/#34 待完成，Tauri 保留现有编辑器所有者。
+标签／窗口顺序及完整人工编辑／焦点验收仍在 #33/#34 待完成。
+
+#### Tauri 编辑器草稿迁移
+
+开发 Tauri 客户端在打开工作区前初始化共享草稿。旧草稿键保留不变，先校验带版本的 WebView 备份，Core 保留准确原始来源。带版本的确认记录将冻结字节与共享来源绑定，重启不会用旧草稿覆盖更新的共享文本；后续编辑、保存和放弃使用与原生编辑器相同的 revision 队列。
+
+旧来源不同时显示**恢复编辑器草稿**。**复制旧草稿原文**复制完整原始 JSON；**继续使用共享草稿**要求旧来源已归档，并保留共享文档。旧来源已变化时要求重新加载；存储／配额、备份或确认写入失败时保留旧字节并阻止迁移。共享快照损坏／缺失时可预览校验过的副本并明确恢复，过期选择不能替换较新的字节，不使用空数据回退。
+
+旧草稿文件仍有保留文档时，重新打开会加载最新共享草稿；恢复文本必须明确保存后才自动保存，其他保留文件在打开时恢复。旧键及带版本副本是恢复数据，不实时镜像后续共享编辑，完整安装版本回退仍由 #46 验收。
 
 #### 共享草稿验证
 
-head `bc2b98080e008ee271c63308de78ef23f26b9386`、tested merge
-`55937720830d3d99c59895aa2f031f3cd75a1480` 的
-[原生 ARM／Intel CI](https://github.com/YondFane/uTerm/actions/runs/41505481559) 与
-[旧 Windows／macOS CI](https://github.com/YondFane/uTerm/actions/runs/41505480458)
-四 job 全通过。原生报告验证 NFD／中文／CRLF／BOM 准确字节、持久草稿、SIGKILL／重启、外部冲突、关闭保护、放弃、保存、640px 控件、经保护的 Escape 窗口关闭及源文件缺失只读保留。七张
+head `b09d9ff99ea5ec9d32836060f4db24e35b2c3d53`、tested merge
+`33a45fe42ac942cfe6d3cb4a180eede5fc95ef82` 的
+[原生 ARM／Intel CI](https://github.com/YondFane/uTerm/actions/runs/41512376203) 与
+[旧 Windows／macOS CI](https://github.com/YondFane/uTerm/actions/runs/41512376159)
+四 job 全通过。原生报告验证 NFD／中文／CRLF／BOM 准确字节、持久草稿、SIGKILL／重启、外部冲突、关闭保护、放弃、保存、640px 控件、经保护的 Escape 窗口关闭及源文件缺失只读保留。十二张
 `native-editor-*.png`
-展示这些场景，已目视检查窄窗及源文件缺失图片；报告记录源码／merge／平台／工具链。产物：[ARM](https://github.com/YondFane/uTerm/actions/runs/41505481559/artifacts/13170648651)、
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41505481559/artifacts/13171246307)、
-[Windows](https://github.com/YondFane/uTerm/actions/runs/41505480458/artifacts/13172595738)、
-[旧 macOS](https://github.com/YondFane/uTerm/actions/runs/41505480458/artifacts/13170278782)。
+还展示恢复选择、准确复制、取消、窗口复用、过期恢复拒绝、损坏字节保留和缺失快照恢复，已目视检查英文／深色、中文／浅色及备份预览图片；报告记录源码／merge／平台／工具链。产物：[ARM](https://github.com/YondFane/uTerm/actions/runs/41512376203/artifacts/13174450801)、
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41512376203/artifacts/13175041217)、
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41512376159/artifacts/13175570017)、
+[旧 macOS](https://github.com/YondFane/uTerm/actions/runs/41512376159/artifacts/13173494283)。
 
 两原生 job 的十三项 Swift 检查通过，包含经 C
-ABI 的备份预览及缺失恢复。两个 Tauri 状态 QA 报告通过且清理无错误；这些检查不代表 Windows 编辑器草稿 UI 接入已验收。Linux 前端 375 项通过、十项跳过，后端 129 项通过、十项忽略，核心／FFI、文件失败／重试、契约漂移、类型及桌面编译通过。二十一项真实 Rust 进程契约覆盖源文件缺失、无覆盖缺失快照恢复、预览及不变的 null 语义。真实原生应用的 DOM 输入与人工键盘／输入法／焦点验收分开记录。
+ABI 的备份预览及缺失恢复。两个 Tauri 状态 QA 报告通过且清理无错误；这些检查不代表 Windows 编辑器草稿 UI 接入已验收。Linux 前端 378 项通过、十项跳过，后端 129 项通过、十项忽略，核心／FFI、文件失败／重试、契约漂移、类型及桌面编译通过。二十一项真实 Rust 进程契约覆盖源文件缺失、无覆盖缺失快照恢复、预览及不变的 null 语义。真实原生应用的 DOM 输入与人工键盘／输入法／焦点验收分开记录。
 
-原生恢复选择／恢复 UI 及新增英文／深色与中文／浅色的真实 NSMenu／NSAlert／NSButton 场景仍待自身提交的 macOS
-CI。首次运行因尺寸数值常量类型歧义而 Swift 编译失败，现明确指定 CGFloat，仍需重新执行；旧通过结果不验证这些新控件。
+两架构的上述真实恢复控件均通过。新增 Tauri 草稿所有权迁移、启动恢复界面及强制退出／重开编辑器 QA 仍待自身提交的 Windows／macOS
+CI。Linux 的二十四项真实 Rust 进程／React 契约通过，覆盖来源冲突、冻结旧键、保留更新共享草稿、配额／备份／确认失败和 UI 过期恢复，不替代新 Tauri 编辑器的平台验收。
 
 ## 项目官网
 

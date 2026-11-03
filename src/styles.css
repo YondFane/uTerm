@@ -6319,3 +6319,21 @@ button:hover:not(:disabled) > .close-icon > circle {
     justify-content: center;
   }
 }
+
+.editor-draft-recovery {
+  max-width: 880px;
+  margin: 32px auto;
+  padding: 20px;
+  overflow-wrap: anywhere;
+}
+.editor-draft-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.editor-draft-recovery pre {
+  white-space: pre-wrap;
+  max-height: 280px;
+  overflow: auto;
+}

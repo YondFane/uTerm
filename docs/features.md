@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-02
+updated: 2026-11-03
 ---
 
 # uTerm feature guide
@@ -125,7 +125,8 @@ The development client imports workspace and settings data through its existing 
 launch. Rust validates and retains the original export, then owns `shared-state-v1` in the app-data
 directory. Subsequent saves use an atomic snapshot and revision checks; workspace and settings
 changes share a serialized queue. The old workspace/settings keys are retained for recovery and are
-no longer written. Editor drafts and other WebView preferences retain their existing owners.
+no longer written. Editor drafts then initialize a separate shared store; other WebView preferences
+retain their existing owners.
 
 Settings changes use the initiating view's baseline, so an older view cannot revert unrelated
 committed fields. Quit drains writes added during an earlier save. Explicit reloads use the same
@@ -215,36 +216,58 @@ selected copy, retaining damaged bytes. A changed snapshot rejects the restore; 
 uses non-overwriting installation. Cancel does not change recovery data. Open editors retain their
 current text; reopen files to load restored drafts.
 
-Tabs/window order, Tauri's draft-owner migration and full manual editing/focus acceptance remain
-pending in #33/#34. Tauri retains its existing editor owner.
+Tabs/window order and full manual editing/focus acceptance remain pending in #33/#34.
+
+#### Tauri editor draft handoff
+
+The development Tauri client initializes shared drafts before opening its workspace. It keeps the
+old draft key unchanged, verifies a versioned WebView backup and retains exact source bytes in Core.
+A versioned acknowledgement binds those frozen bytes to the shared source, so restarting does not
+reimport an old draft over newer shared text. Subsequent editing, save and discard use the same
+revision-checked queue as the native editor.
+
+A different old source opens **Recover editor drafts**. **Copy old draft source** retains its full
+original JSON; **Continue with shared drafts** requires the old source to have been archived and
+keeps the shared documents. A changed old source requires a reload. Storage/quota, backup and
+acknowledgement failures keep the old bytes and block handoff. Corrupt/missing shared snapshots can
+be previewed and explicitly restored from verified recovery copies; a stale selection cannot replace
+newer bytes. There is no empty-data fallback.
+
+The old draft's file reopens with the latest shared draft when that document is still retained.
+Recovered text requires explicit Save before autosave. Other retained files restore when opened. The
+old key and versioned copies remain recovery data; they are not live mirrors of later shared edits.
+Full installed-version downgrade still requires #46 acceptance.
 
 #### Shared draft validation
 
-Head `bc2b98080e008ee271c63308de78ef23f26b9386`, tested merge
-`55937720830d3d99c59895aa2f031f3cd75a1480`, passed all four jobs in
-[native ARM/Intel CI](https://github.com/YondFane/uTerm/actions/runs/41505481559) and
-[legacy Windows/macOS CI](https://github.com/YondFane/uTerm/actions/runs/41505480458). The native
+Head `b09d9ff99ea5ec9d32836060f4db24e35b2c3d53`, tested merge
+`33a45fe42ac942cfe6d3cb4a180eede5fc95ef82`, passed all four jobs in
+[native ARM/Intel CI](https://github.com/YondFane/uTerm/actions/runs/41512376203) and
+[legacy Windows/macOS CI](https://github.com/YondFane/uTerm/actions/runs/41512376159). The native
 reports verify exact NFD/Chinese/CRLF/BOM bytes, durable drafts, SIGKILL/relaunch, external
 conflict, close protection, discard, save, 640px controls, guarded Escape window close and
-missing-source readonly retention. Seven `native-editor-*.png` images show these scenes; 640px and
-missing-source images were inspected. Reports record source/merge/platform/toolchains. Artifacts:
-[ARM](https://github.com/YondFane/uTerm/actions/runs/41505481559/artifacts/13170648651),
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41505481559/artifacts/13171246307),
-[Windows](https://github.com/YondFane/uTerm/actions/runs/41505480458/artifacts/13172595738),
-[old macOS](https://github.com/YondFane/uTerm/actions/runs/41505480458/artifacts/13170278782).
+missing-source readonly retention. Twelve `native-editor-*.png` images include these scenes plus
+recovery selection, accurate copy, cancel, window reuse, stale restore refusal, damaged-byte
+retention and absent-store restore. English/dark, Chinese/light and backup preview images were
+inspected. Reports record source/merge/platform/toolchains. Artifacts:
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41512376203/artifacts/13174450801),
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41512376203/artifacts/13175041217),
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41512376159/artifacts/13175570017),
+[old macOS](https://github.com/YondFane/uTerm/actions/runs/41512376159/artifacts/13173494283).
 
 Both native jobs passed 13 Swift checks, including backup preview/missing restore through the C ABI.
 Both Tauri state QA reports passed without cleanup errors; those checks do not establish Windows
-editor draft UI parity. Linux checks pass 375 frontend tests (ten skipped), 129 backend (ten
+editor draft UI parity. Linux checks pass 378 frontend tests (ten skipped), 129 backend (ten
 ignored), core/FFI and filesystem failure/retry, contract drift, types and desktop compilation.
 Twenty-one real Rust-process contracts cover missing sources, non-overwriting missing-store restore,
 preview and unchanged null semantics. DOM input in the real native app is separate from manual
 keyboard/IME/focus acceptance.
 
-The native recovery-picker/restore UI and its added English/dark and Chinese/light real
-NSMenu/NSAlert/NSButton scenarios await their own committed-head macOS CI. The first run failed
-Swift compilation on an ambiguous numeric size constant; the fix explicitly selects CGFloat and
-requires a fresh run. Earlier passing results do not validate these new controls.
+Both architectures passed the real recovery controls above. The new Tauri draft-owner handoff, boot
+recovery UI and forced-exit/reopen editor QA await their own committed-head Windows/macOS CI.
+Linux's 24 real Rust-process/React contracts pass, covering source conflicts, frozen old keys, newer
+shared drafts, quota/backup/acknowledgement failures and stale UI restore. These results do not
+establish the new Tauri editor's platform acceptance.
 
 ## Project website
 

@@ -1,16 +1,31 @@
+import editorFixtureJSON from "../../shared/fixtures/editor-draft-qa.json?raw";
 import { invoke } from "@tauri-apps/api/core";
 import { coreRequest } from "../lib/shared-state";
 import { defaults, settingsKey } from "../lib/settings";
 import { emptyWorkspace, workspaceKey } from "../lib/workspace";
+import { draftKey } from "../lib/file-document";
+import { editorDraftReceiptKey } from "../lib/editor-draft-handoff";
+import type { CoreEditorDraftEntry, CoreFileDocument } from "../lib/core-contract.generated";
 
 interface Context {
   project: string;
-  phase: "initial" | "reopen" | "recover";
+  phase: "initial" | "reopen" | "recover" | "editor-checkpoint" | "editor-reopen";
   backup?: string;
   ready: boolean;
 }
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
 const sentinel = "opaque QA draft backup retained byte-for-byte";
+const editorFixture = JSON.parse(editorFixtureJSON) as {
+  fileName: string;
+  originalText: string;
+  oldText: string;
+  durableText: string;
+  savedText: string;
+};
+const editorFile = editorFixture.fileName;
+const oldEditorText = editorFixture.oldText;
+const durableEditorText = editorFixture.durableText;
+const savedEditorText = editorFixture.savedText;
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 async function until<T>(read: () => T | Promise<T>, description: string): Promise<NonNullable<T>> {
   const end = Date.now() + 30000;
@@ -36,6 +51,13 @@ async function click(label: string) {
 async function scene(name: string, checks: unknown) {
   await pause(500);
   await invoke("qa_scene", { name, value: checks });
+}
+export async function reportEditorRecoveryFailure(reason: unknown) {
+  await scene("failure", {
+    stage: "editor-handoff",
+    error: String(reason),
+    body: document.body.innerText.slice(0, 4000),
+  });
 }
 async function settings() {
   const snapshot = (await coreRequest("snapshot.read")) as unknown as {
@@ -76,7 +98,10 @@ async function editFont(value: number) {
 
 export async function prepare() {
   const context = await invoke<Context>("qa_context");
-  if (context.phase === "initial" && localStorage.getItem(settingsKey) === null) {
+  if (
+    ["initial", "editor-checkpoint"].includes(context.phase) &&
+    localStorage.getItem(settingsKey) === null
+  ) {
     localStorage.setItem(
       settingsKey,
       JSON.stringify({ ...defaults, language: "en", appearance: "dark" }),
@@ -92,6 +117,114 @@ export async function prepare() {
     localStorage.setItem(workspaceKey, JSON.stringify(workspace));
     localStorage.setItem(backupKey, sentinel);
   }
+  if (context.phase === "editor-checkpoint" && localStorage.getItem(draftKey) === null) {
+    const file = (await coreRequest("files.read", {
+      directory: context.project,
+      path: editorFile,
+    })) as unknown as CoreFileDocument;
+    localStorage.setItem(
+      draftKey,
+      " \n" +
+        JSON.stringify({
+          directory: context.project,
+          path: editorFile,
+          kind: "text",
+          text: oldEditorText,
+          saved: file.text,
+          version: file.version,
+          bom: file.bom,
+          line_ending: file.line_ending,
+        }) +
+        "\n",
+    );
+  }
+}
+
+async function runEditor(context: Context) {
+  const expected = context.phase === "editor-checkpoint" ? oldEditorText : durableEditorText;
+  const original = localStorage.getItem(draftKey);
+  const receipt = JSON.parse(localStorage.getItem(editorDraftReceiptKey) ?? "null");
+  assert(original && receipt?.version === 1, "Old draft handoff was not recorded");
+  assert(
+    localStorage.getItem(`${draftKey}.shared-v1-backup.${receipt.legacyDigest}`) === original,
+    "Versioned old draft backup changed",
+  );
+  const field = await until(
+    () => document.querySelector<HTMLElement>(".cm-content[contenteditable=true]"),
+    "real editable CodeMirror",
+  );
+  await until(
+    () => field.innerText.includes(expected.split("\r")[0]),
+    "exact retained text loaded",
+  );
+  const documentDraft = async () =>
+    coreRequest("editor.drafts.document", {
+      directory: context.project,
+      path: editorFile,
+    }) as unknown as Promise<CoreEditorDraftEntry | null>;
+  assert((await documentDraft())?.draft.text === expected, "Old/reopened shared text differs");
+  await scene(context.phase === "editor-checkpoint" ? "editor-imported" : "editor-recovered", {
+    expectedText: expected,
+    oldSourceRetained: true,
+    versionedBackupRetained: true,
+  });
+  const next = context.phase === "editor-checkpoint" ? durableEditorText : savedEditorText;
+  field.focus();
+  assert(document.execCommand("selectAll", false), "CodeMirror selectAll failed");
+  assert(
+    document.execCommand("insertText", false, next.replace(/\r\n/g, "\n")),
+    "CodeMirror insertText failed",
+  );
+  await until(
+    async () => (await documentDraft())?.draft.text === next,
+    "durable shared editor text",
+  );
+  assert(
+    localStorage.getItem(draftKey) === original,
+    "Shared editing wrote the frozen old draft key",
+  );
+  const file = (await coreRequest("files.read", {
+    directory: context.project,
+    path: editorFile,
+  })) as unknown as CoreFileDocument;
+  assert(
+    file.text === editorFixture.originalText,
+    "Recovered draft autosaved before explicit Save",
+  );
+  if (context.phase === "editor-checkpoint") {
+    await scene("editor-durable", {
+      exactText: next,
+      frozenOldSource: true,
+      originalFileUnchanged: true,
+    });
+    return;
+  }
+  await click("Save");
+  await until(
+    () => document.querySelector(".editor-save-state")?.textContent?.trim() === "Saved",
+    "explicit native editor Save",
+  );
+  const saved = (await coreRequest("files.read", {
+    directory: context.project,
+    path: editorFile,
+  })) as unknown as CoreFileDocument;
+  assert(
+    saved.text === savedEditorText && saved.bom && saved.line_ending === "\r\n",
+    "Explicit save lost file bytes or metadata",
+  );
+  assert((await documentDraft()) === null, "Acknowledged saved draft was not removed");
+  assert(
+    localStorage.getItem(draftKey) === original,
+    "Explicit shared save changed frozen old source",
+  );
+  await scene("editor-saved", {
+    exactText: saved.text,
+    bom: saved.bom,
+    lineEnding: saved.line_ending,
+    draftCleared: true,
+    frozenOldSource: true,
+  });
+  await invoke("qa_request_exit");
 }
 
 export async function run(recovery: boolean) {
@@ -110,6 +243,10 @@ export async function run(recovery: boolean) {
     }
     await until(async () => (await invoke<Context>("qa_context")).ready, "normal quit listener");
     assert(localStorage.getItem(backupKey) === sentinel, "Auxiliary backup was changed");
+    if (context.phase === "editor-checkpoint" || context.phase === "editor-reopen") {
+      await runEditor(context);
+      return;
+    }
     if (context.phase === "initial") {
       assert(
         (await settings()).fileFontSize === defaults.fileFontSize,

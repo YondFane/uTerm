@@ -17,12 +17,16 @@ import { resolve, join, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import assert from "node:assert/strict";
 
+const editorFixture = JSON.parse(
+  readFileSync(resolve("shared/fixtures/editor-draft-qa.json"), "utf8"),
+);
 const identifier = "sh.uterm.desktop.qa.sharedstate";
 const output = resolve("ci-evidence/tauri-state-qa");
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 const root = mkdtempSync(join(tmpdir(), "uterm-tauri-qa-"));
 mkdirSync(join(root, "project"));
+writeFileSync(join(root, "project", editorFixture.fileName), "\ufeff" + editorFixture.originalText);
 const evidence = join(root, "evidence");
 mkdirSync(evidence);
 const tested = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
@@ -211,6 +215,7 @@ try {
     let log = "";
     let closed = false;
     let code;
+    let exitSignal;
     child.stdout.on("data", (s) => {
       log += s;
     });
@@ -221,8 +226,9 @@ try {
       log += String(error);
       closed = true;
     });
-    child.on("close", (status) => {
+    child.on("close", (status, signal) => {
       code = status;
+      exitSignal = signal;
       closed = true;
     });
     const observed = new Set();
@@ -271,20 +277,51 @@ try {
           });
           writeFileSync(join(evidence, file.replace(/\.json$/, ".ack")), "captured");
           assert.notEqual(value.scene, "failure", JSON.stringify(value.checks));
+          if (value.scene === "editor-durable") {
+            assert(child.kill("SIGKILL"), "Checkpoint process could not be forcibly terminated");
+          }
         }
         if (closed) {
-          assert.equal(code, 0, `${phase} exit: ${log}`);
+          writeFileSync(
+            join(output, `${phase}-process.json`),
+            JSON.stringify(
+              {
+                ...metadata,
+                phase,
+                exitCode: code,
+                signal: exitSignal ?? null,
+                forcedExitRequested: phase === "editor-checkpoint",
+              },
+              null,
+              2,
+            ),
+          );
+          if (phase === "editor-checkpoint")
+            assert.equal(exitSignal, "SIGKILL", `${phase} exit: ${log}`);
+          else assert.equal(code, 0, `${phase} exit: ${log}`);
           break;
         }
         await delay(100);
       }
       assert(closed, `${phase} did not quit through the ordinary exit guard`);
-      const expected = phase === "initial" ? 8 : phase === "reopen" ? 1 : 3;
+      const expected = phase.startsWith("editor-")
+        ? 2
+        : phase === "initial"
+          ? 8
+          : phase === "reopen"
+            ? 1
+            : 3;
       assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       writeFileSync(join(output, `${phase}.log`), log);
     }
   }
+  await run("editor-checkpoint");
+  await run("editor-reopen");
+  assert.equal(
+    readFileSync(join(root, "project", editorFixture.fileName), "utf8"),
+    "\ufeff" + editorFixture.savedText,
+  );
   await run("initial");
   const store = join(root, "data/shared-state-v1");
   const original = readFileSync(join(store, "legacy-original.json"));

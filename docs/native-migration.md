@@ -3,7 +3,7 @@ title: Native clients and shared core / 原生客户端与共享核心
 status: active
 type: reference
 created: 2026-11-02
-updated: 2026-11-02
+updated: 2026-11-03
 ---
 
 # Native clients and shared core / 原生客户端与共享核心
@@ -95,13 +95,13 @@ Concrete source boundaries are
 `src/lib/shared-state.ts` exports the WebView-owned keys and freezes workspace/settings writes only
 after successful import. `crates/uterm-core/src/store.rs` retains `legacy-original.json`,
 `snapshot-v1.json` and up to eight `backups`; legacy `.backup`/`.invalid` and schema-version backups
-remain in the original WebView storage. Editor draft recovery stays in `file-document.ts` until M3;
-database edit drafts remain transient UI state.
+remain in the original WebView storage. Editor draft handoff now uses `editor-draft-handoff.ts` and
+`editor-drafts.ts`; its platform acceptance remains pending. Database edit drafts stay transient.
 `src-tauri/src/{ssh_auth,redis_credentials,database}.rs` handle credential adapters; credentials
 must not be added to migrated JSON. The baseline inventory records exact IPC/storage source paths
 and declaration lines without containing user data.
 
-上述源码路径明确文件、Git、远程连接、任务与数据服务边界；WebView 导出后由共享存储保存原始数据、快照及备份。原 WebView 恢复键保留，编辑器草稿在 M3 前保持原路径，数据库编辑草稿仍为临时界面状态。凭据通过平台适配，不进入迁移 JSON；基线清单只记录源码声明，不含用户数据。
+上述源码路径明确文件、Git、远程连接、任务与数据服务边界；WebView 导出后由共享存储保存原始数据、快照及备份。原 WebView 恢复键保留，编辑器草稿新增带版本共享迁移并待平台验收，数据库编辑草稿仍为临时界面状态。凭据通过平台适配，不进入迁移 JSON；基线清单只记录源码声明，不含用户数据。
 
 ## Contract draft / 契约草案
 
@@ -124,14 +124,14 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态            | Evidence and next work / 证据与下一步                                                                                                                                        |
-| ------------ | ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0           | Accepted, unmerged / 已验收，未合并 | Both native architectures and legacy Tauri jobs passed                                                                                                                       |
-| M1           | Accepted / 已验收                   | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                    |
-| M2           | In progress / 开发中                | #29/#30 accepted at 4c502ab, unmerged; #31/#32 retain Agent/manual/arbitration gaps / 两任务已验收，阶段仍有缺口。                                                           |
-| M3           | In progress / 开发中                | Native editor checks passed bc2b980; recovery UI awaits CI, Tauri drafts/tabs and other workflows remain / 原生编辑检查已通过，恢复 UI 待 CI，旧端草稿／标签及其他流程仍缺。 |
-| M4           | Pending / 待实现                    | Remaining capabilities, native interaction and measurements                                                                                                                  |
-| M5           | Pending / 待实现                    | Candidate packaging, signed update and rollback exercises                                                                                                                    |
+| Stage / 阶段 | Current state / 当前状态            | Evidence and next work / 证据与下一步                                                                                                                     |
+| ------------ | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0           | Accepted, unmerged / 已验收，未合并 | Both native architectures and legacy Tauri jobs passed                                                                                                    |
+| M1           | Accepted / 已验收                   | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。 |
+| M2           | In progress / 开发中                | #29/#30 accepted at 4c502ab, unmerged; #31/#32 retain Agent/manual/arbitration gaps / 两任务已验收，阶段仍有缺口。                                        |
+| M3           | In progress / 开发中                | Native recovery UI passed b09d9ff; Tauri handoff awaits CI, tabs/other workflows remain / 原生恢复界面已测，Tauri 迁移待 CI，标签与其他流程仍缺。         |
+| M4           | Pending / 待实现                    | Remaining capabilities, native interaction and measurements                                                                                               |
+| M5           | Pending / 待实现                    | Candidate packaging, signed update and rollback exercises                                                                                                 |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
@@ -236,14 +236,14 @@ claimed. No project/status labels are invented.
 沿用当前分支和 Draft
 PR；总跟踪与原验收标准不变。本轮只认领实际处理的基线归档、旧格式验证与 M2 任务，不合并、不发版、不直接修改受保护目标分支。
 
-| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                       |
-| ------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                     |
-| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                           |
-| M2 #16       | #29–#32       | #29/#30 closed at 4c502ab with four CI jobs; #31/#32 and stage remain open for Agent/manual/ownership gates. / 两任务已验收，阶段仍开放。                                                                               |
-| M3 #17       | #33–#37       | Native editor and forced-exit recovery passed bc2b980. Recovery UI awaits CI; Tauri draft migration, tabs, Git, SSH and tasks remain. / 原生编辑及异常退出恢复已测，恢复 UI 待 CI，旧端草稿迁移、标签与后续流程未完成。 |
-| M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                              |
-| M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。  |
+| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                      |
+| ------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                    |
+| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                          |
+| M2 #16       | #29–#32       | #29/#30 closed at 4c502ab with four CI jobs; #31/#32 and stage remain open for Agent/manual/ownership gates. / 两任务已验收，阶段仍开放。                                                                              |
+| M3 #17       | #33–#37       | Native recovery UI passed b09d9ff. Tauri handoff awaits CI; tabs, Git, SSH and tasks remain. / 原生恢复界面已测，Tauri 迁移待 CI，标签及后续流程未完成。                                                               |
+| M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                             |
+| M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。 |
 
 ### M2 implementation and verification / M2 实现与验证
 
@@ -368,7 +368,7 @@ before replacement. Native readonly content does not initialize, clear or migrat
 
 | Data / 数据                                                   | Current writer / 当前写入方                                                                                                 | Remaining owner / 后续任务                                                                                              |
 | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `uterm.desktop.editorDraft.v1`, `.invalid`, `.backup`         | `useFileDocument.ts` owns drafts/invalid; original backups stay opaque / 草稿和 invalid 由原模块管理，备份保留原样          | #34: versioned shared drafts, abnormal exit and restore / 版本化共享草稿、异常退出及恢复                                |
+| `uterm.desktop.editorDraft.v1`, `.invalid`, `.backup`         | Shared queue after verified handoff; old draft/invalid/backup keys frozen / 校验迁移后使用共享队列，旧草稿及副本冻结        | #34: versioned shared drafts, abnormal exit and restore / 版本化共享草稿、异常退出及恢复                                |
 | `uterm.pdf.marks:<path>:<version>`                            | `PdfReader.tsx`, original WebView; native annotations disabled / 原 WebView，原生批注禁用                                   | #34: file identity and annotation preservation / 文件身份及批注保留                                                     |
 | `uterm.git.favorites:<repository>`                            | `GitBranchTree.tsx`, original WebView / 原 WebView                                                                          | #35: Git preference migration / Git 偏好迁移                                                                            |
 | `uterm.desktop.agentNotifications`                            | `AgentPanel.tsx`, original WebView / 原 WebView                                                                             | #40: native notification permission and preference / 原生通知权限及偏好                                                 |
@@ -566,30 +566,31 @@ incomplete rasterization if permissions fail. The new image method awaits actual
 
 ## Current accepted baseline / 当前已验收基线
 
-Verified head `bc2b98080e008ee271c63308de78ef23f26b9386`, tested merge
-`55937720830d3d99c59895aa2f031f3cd75a1480`, passed all four jobs in
-[native run 41505481559](https://github.com/YondFane/uTerm/actions/runs/41505481559) and
-[legacy run 41505480458](https://github.com/YondFane/uTerm/actions/runs/41505480458). Artifacts:
-[ARM](https://github.com/YondFane/uTerm/actions/runs/41505481559/artifacts/13170648651),
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41505481559/artifacts/13171246307),
-[Windows](https://github.com/YondFane/uTerm/actions/runs/41505480458/artifacts/13172595738),
-[old Mac](https://github.com/YondFane/uTerm/actions/runs/41505480458/artifacts/13170278782).
+Verified head `b09d9ff99ea5ec9d32836060f4db24e35b2c3d53`, tested merge
+`33a45fe42ac942cfe6d3cb4a180eede5fc95ef82`, passed all four jobs in
+[native run 41512376203](https://github.com/YondFane/uTerm/actions/runs/41512376203) and
+[legacy run 41512376159](https://github.com/YondFane/uTerm/actions/runs/41512376159). Artifacts:
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41512376203/artifacts/13174450801),
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41512376203/artifacts/13175041217),
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41512376159/artifacts/13175570017),
+[old Mac](https://github.com/YondFane/uTerm/actions/runs/41512376159/artifacts/13173494283).
 
-Both native architectures ran 13 Swift tests and the actual WK editor's durable draft,
-SIGKILL/relaunch, conflict/close/discard/save, 640px, Escape and missing-source checks. Seven editor
-PNGs and exact-byte reports record head/merge/platform/scene; narrow and missing-source images were
-inspected. Both Tauri state QA reports passed with no cleanup errors; those scenes do not establish
-Windows editor draft UI parity. Manual keyboard/IME/focus remains unaccepted.
+Both native architectures passed 13 Swift tests and actual WK editor checks including durable
+SIGKILL recovery, accurate copy, cancel, window reuse, stale selection refusal, damaged-byte
+retention and explicit absent-store restore. Twelve editor screenshots record the real scenes;
+English/dark, Chinese/light and backup preview images were inspected. Native input/IME/manual focus
+remains unaccepted. Both old state QA reports passed without cleanup errors; their baseline does not
+accept the new Tauri editor changes.
 
-The core exposes checksum-verified backup previews and explicit non-overwriting missing restore,
-with existing null semantics preserved. The new native File-menu recovery chooser, full-text copy,
-window reuse and version-checked restore controls plus actual sheet scenarios await their own CI.
-Tauri draft migration, tabs/window order and full manual editing/focus remain incomplete. M0 #14 and
-M1 #15 are accepted; #29/#30 are accepted and unmerged, #31/#32 retain Agent/manual and input/resize
-arbitration gaps. M3–M5 and #13 remain open. No merge, protected-branch push, tag, Release or
-production update-feed change occurred.
+Tauri now initializes a versioned draft handoff before App: exact WebView backup and Core source
+archive, an acknowledgement bound to frozen bytes/shared source, explicit conflict choice and
+preview/restore. Subsequent edits use the shared queue and leave old keys unchanged. Linux's 24 real
+Rust-process/React contracts pass; new forced-exit/reopen editor QA awaits committed-head
+Windows/macOS runs. Tabs/window order, PDF marks and full manual acceptance remain in #33/#34. M0/M1
+and #29/#30 are accepted and unmerged; #31/#32 and M3–M5 remain open. No merge, protected-branch
+push, tag, Release or production update-feed change occurred.
 
-上述 head／merge 四 job 全通过；两原生架构执行十三项 Swift 与真实 WK 编辑持久化、异常退出恢复、冲突／关闭／放弃／保存、640px、Escape 及源文件缺失检查。七图和准确字节报告记录平台／源码，已检查窄窗和缺失图片；两个 Tauri 状态 QA 清理无错误，不代表 Windows 编辑器草稿 UI 接入验收。人工键盘／输入法／焦点仍缺。核心支持校验预览、明确无覆盖缺失恢复，保留 null 语义；新增文件菜单恢复选择、全文复制、窗口复用、版本恢复控件及真实 sheet 场景待自身 CI。Tauri 草稿迁移、标签／窗口与人工验收未完成。M0／M1、#29／#30 已验收但未合入，#31／#32 及 M3–M5／总跟踪继续开放；未合并／直推受保护分支／标签／发布／改生产源。
+上述 head／merge 四 job 全通过；两原生架构十三项 Swift 及真实编辑器异常退出恢复、准确复制、取消、窗口复用、过期拒绝、损坏字节保留和明确缺失恢复均通过。十二张真实图中已检查英文／深色、中文／浅色及备份预览，人工输入／输入法／焦点仍缺。旧状态 QA 清理无错误，不代表新增 Tauri 编辑器验收。Tauri 新增启动前带版本草稿迁移、准确双重来源保留、绑定确认、明确冲突选择及预览恢复，后续使用共享队列而不写旧键。Linux 二十四项真实 Rust 进程／React 契约通过；新增强制退出／重开编辑器 QA 待自身提交的 Windows／macOS 运行。标签／窗口、PDF 标注及完整人工验收仍在 #33/#34；M0／M1 与 #29／#30 已验收但未合入，其余阶段继续开放。未合并／直推受保护分支／标签／发布／改生产源。
 
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 

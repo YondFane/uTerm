@@ -5,6 +5,7 @@ import { createContentScope, isContentHost } from "./content-host";
 import type { ContentScope } from "./content-transport";
 import type { JSONValue } from "./core-contract.generated";
 import { EditorDraftQueue } from "./editor-drafts";
+import type { EditorRecoveryOptions } from "./editor-drafts";
 import {
   fileBytes,
   isDirty,
@@ -14,7 +15,13 @@ import {
   DocumentSaveQueue,
 } from "./file-document";
 import type { FileData, OpenFile } from "./file-document";
-export function useFileDocument(fileTabLimit = 10, readOnly = false, recoveryDirectory?: string) {
+export function useFileDocument(
+  fileTabLimit = 10,
+  readOnly = false,
+  sharedRecovery?: string | EditorRecoveryOptions,
+) {
+  const recoveryDirectory =
+    typeof sharedRecovery === "string" ? sharedRecovery : sharedRecovery?.directory;
   const transport = useRef<ContentScope | null>(null);
   const recovery = useRef<EditorDraftQueue | null>(null);
   function currentTransport() {
@@ -24,7 +31,7 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false, recoveryDir
     return currentTransport().call(method, params);
   }
   function currentRecovery() {
-    return recoveryDirectory === undefined
+    return sharedRecovery === undefined
       ? null
       : (recovery.current ??= new EditorDraftQueue(invoke, recoveryDirectory));
   }
@@ -412,7 +419,7 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false, recoveryDir
     };
   }, []);
   useEffect(() => {
-    if (!isContentHost() || readOnly || recoveryDirectory !== undefined) return;
+    if (!isContentHost() || readOnly || sharedRecovery !== undefined) return;
     let disposed = false;
     transition.current = true;
     setTransitioning(true);
@@ -442,6 +449,23 @@ export function useFileDocument(fileTabLimit = 10, readOnly = false, recoveryDir
         }
       }
     })();
+    return () => {
+      disposed = true;
+    };
+  }, []);
+  useEffect(() => {
+    const initial = typeof sharedRecovery === "object" ? sharedRecovery.initialFile : undefined;
+    if (!isContentHost() || readOnly || !initial) return;
+    let disposed = false;
+    const queue = currentRecovery()!;
+    void queue.initialize().then(
+      () => {
+        if (!disposed) void open(initial.directory, initial.path);
+      },
+      (reason) => {
+        if (!disposed) setError(String(reason));
+      },
+    );
     return () => {
       disposed = true;
     };

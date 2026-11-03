@@ -69,7 +69,15 @@ fn check(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
     let root = check(&app)?;
     let phase = argument("--qa-phase")?;
-    if !["initial", "reopen", "recover"].contains(&phase.as_str()) {
+    if ![
+        "initial",
+        "reopen",
+        "recover",
+        "editor-checkpoint",
+        "editor-reopen",
+    ]
+    .contains(&phase.as_str())
+    {
         return Err("Invalid QA phase".into());
     }
     Ok(json!({

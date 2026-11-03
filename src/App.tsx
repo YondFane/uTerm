@@ -83,6 +83,7 @@ import type { FileMode } from "./components/FilePanel";
 import { WorkspaceTabs } from "./components/WorkspaceTabs";
 import { DeferredFileEditor } from "./components/DeferredFileEditor";
 import { useFileDocument } from "./lib/useFileDocument";
+import { sharedEditorRecovery } from "./lib/editor-draft-handoff";
 import { Sidebar } from "./components/Sidebar";
 import type { SidebarMenu } from "./components/Sidebar";
 import { TerminalWorkspace } from "./components/TerminalWorkspace";
@@ -620,7 +621,7 @@ export function App() {
   const [filesOpen, setFilesOpen] = useState(true);
   const [fileMode, setFileMode] = useState<FileMode>("tree");
   const [fileRequest, setFileRequest] = useState(0);
-  const editor = useFileDocument(settings.fileTabLimit);
+  const editor = useFileDocument(settings.fileTabLimit, false, sharedEditorRecovery());
   useEffect(() => {
     if (editor.document) setGitDiffActive(false);
   }, [editor.document?.id]);

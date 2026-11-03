@@ -6,6 +6,10 @@ import type {
 import { ContentFailure } from "./content-transport.ts";
 
 type Call = <T>(method: string, params?: Record<string, unknown>) => Promise<T>;
+export interface EditorRecoveryOptions {
+  directory?: string;
+  initialFile?: { directory: string; path: string };
+}
 type Waiter = { resolve: () => void; reject: (reason: unknown) => void };
 interface Pending {
   directory: string;
