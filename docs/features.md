@@ -350,6 +350,12 @@ Windows Worktree output was inspected. Windows's real extended-path create/dirty
 regression passed with the required captured OID. Earlier failed runs and their corrective evidence
 remain linked in #35; they are not counted as passes.
 
+The deletion head `f5955a6e8e914ea0762c1b8980c6298bb4a05af7` passed a clean-source Linux real-app
+run (20 scenes, no cleanup errors). Its Windows Core test correctly rejected an unavailable host,
+but the retained-file assertion assumed LF after Git checked out CRLF. The fixture now compares
+exact before/after bytes without line-ending normalization; the corrected head still requires
+Windows CI.
+
 The current deletion changes passed Linux x86_64 / Rust 1.99.1 / Node 26.13 checks: Core 50 units,
 integration and six FFI tests, three real Worktree deletion tests plus the explicitly invoked
 post-Git filesystem-failure case; 33 real Rust/React contracts; 386 frontend tests (ten skipped),

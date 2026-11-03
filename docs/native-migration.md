@@ -623,6 +623,12 @@ Windows Worktree output was inspected. Windows's real extended-path create/dirty
 regression passed with the required captured OID. Earlier failed runs and their corrective evidence
 remain linked in #35; they are not counted as passes.
 
+The Windows unavailable-host fixture now compares actual pre/post bytes, preserving CRLF/NFD instead
+of assuming checkout line endings. Windows CI rejected that assertion at f5955a6; the host rejection
+itself worked. Corrected-head platform validation is pending.
+
+Windows 不可用宿主夹具现比较操作前后实际字节，保留 CRLF/NFD，不假定检出换行。f5955a6 的 CI 在该断言失败，宿主拒绝已生效；修正 head 平台验证待完成。
+
 The current deletion changes passed Linux x86_64 / Rust 1.99.1 / Node 26.13 checks: Core 50 units,
 integration and six FFI tests, three real Worktree deletion tests plus the explicitly invoked
 post-Git filesystem-failure case; 33 real Rust/React contracts; 386 frontend tests (ten skipped),

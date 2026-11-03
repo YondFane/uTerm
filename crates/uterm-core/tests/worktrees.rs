@@ -284,6 +284,7 @@ fn deletion_checks_live_host_sessions_without_restarting_or_closing_them() {
 fn an_unavailable_host_never_allows_unverified_worktree_deletion() {
     let fixture = Fixture::new();
     let before = fixture.snapshot();
+    let original = fs::read(fixture.tree.join("tracked.txt")).unwrap();
     let host_root = fixture.app.join("local-daemon-v1");
     fs::create_dir(&host_root).unwrap();
     fs::write(host_root.join("endpoint.json"), "{invalid endpoint fixture").unwrap();
@@ -302,7 +303,7 @@ fn an_unavailable_host_never_allows_unverified_worktree_deletion() {
     assert_eq!(fixture.snapshot(), before);
     assert_eq!(
         fs::read(fixture.tree.join("tracked.txt")).unwrap(),
-        "committed 中文 e\u{301}\n".as_bytes()
+        original
     );
 }
 
