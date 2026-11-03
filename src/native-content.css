@@ -65,3 +65,15 @@ body,
   margin: 0;
   border: 0;
 }
+.native-git :is(.diff-added, .diff-removed, .diff-hunk) {
+  color: var(--ui-text);
+}
+.native-git .diff-added {
+  background: color-mix(in srgb, #3fb950 18%, var(--ui-canvas));
+}
+.native-git .diff-removed {
+  background: color-mix(in srgb, #f85149 18%, var(--ui-canvas));
+}
+.native-git .diff-hunk {
+  background: color-mix(in srgb, #6cb6ff 18%, var(--ui-canvas));
+}

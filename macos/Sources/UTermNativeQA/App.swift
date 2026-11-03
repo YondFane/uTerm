@@ -233,16 +233,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             guard let path = snapshot["root"].string else { throw BridgeFailure(code: "GIT_ROOT", message: "Git did not return its repository root") }
             let root = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
             guard !preparingQuit, !mutatingRepository else { throw BridgeFailure(code: "GIT_BUSY", message: "Client is preparing another operation") }
-            if let current = contentWindows.values.first(where: { $0.gitMode && $0.directory == root }) {
+            guard let state = model.state else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
+            let context = try await stateBridge.projectContext(expectedRevision: state.snapshot.revision)
+            guard let projectID = context.projectId, let selected = context.directory,
+                  URL(fileURLWithPath: selected).standardizedFileURL.resolvingSymlinksInPath() == directory.standardizedFileURL.resolvingSymlinksInPath() else {
+                throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open Git again.", "项目选择已变化，请重新打开 Git。"))
+            }
+            if let current = contentWindows.values.first(where: { $0.gitMode && $0.directory == root && $0.gitProjectID == projectID }) {
                 await worker.close()
                 current.showWindow(nil)
                 return current
             }
-            let content = try ContentWindow(bridge: worker, directory: root, path: "", gitMode: true, stateBridge: stateBridge, ownsBridge: true)
+            let content = try ContentWindow(bridge: worker, directory: root, path: "", gitMode: true, gitProjectID: projectID, stateBridge: stateBridge, ownsBridge: true)
             content.window?.appearance = window?.appearance
             content.mutateGit = { [weak self] method, params, bridge in
                 guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
-                return try await self.performRepositoryMutation(method: method, params: params, bridge: bridge)
+                return try await self.performRepositoryMutation(method: method, params: params, bridge: bridge, projectID: projectID)
             }
             content.openRepositoryFile = { [weak self] path in
                 guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
@@ -258,7 +264,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             throw error
         }
     }
-    private func performRepositoryMutation(method: String, params: JSONValue, bridge: CoreBridge) async throws -> JSONValue {
+    private func performRepositoryMutation(method: String, params: JSONValue, bridge: CoreBridge, projectID: String) async throws -> JSONValue {
         guard !preparingQuit, !mutatingRepository else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
         try Task.checkCancellation()
         mutatingRepository = true
@@ -279,7 +285,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         try Task.checkCancellation()
         guard contents.allSatisfy({ $0.isPreparedForQuit }) else { throw BridgeFailure(code: "CONTENT_CHANGED", message: localized("A file window changed. Retry the Git operation.", "文件窗口已变化，请重试 Git 操作。")) }
         started = true
-        return try await bridge.call(method, params: params)
+        let result = try await bridge.call(method, params: params)
+        do {
+            let snapshot = try await bridge.snapshot()
+            _ = try await bridge.call("project.worktrees.refresh", params: .object(["id": .string(projectID), "expectedRevision": .string(snapshot.revision)]))
+            await model.reload()
+        } catch {
+            throw BridgeFailure(code: "WORKTREE_SYNC", message: localized("The Git operation completed, but the project tree could not be refreshed. Refresh the project: ", "Git 操作已完成，但项目树刷新失败，请刷新项目：") + error.localizedDescription)
+        }
+        return result
     }
     @objc private func recoverEditorDrafts() { showEditorRecovery(restoring: false) }
     @objc private func restoreEditorRecovery() { showEditorRecovery(restoring: true) }

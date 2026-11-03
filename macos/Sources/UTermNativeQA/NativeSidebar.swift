@@ -9,6 +9,12 @@ struct NativeSidebar: NSViewRepresentable {
         let key: String
         let name: String
         let symbol: String?
+        let projectID: String?
+        let worktreeID: String?
+        init(key: String, name: String, symbol: String?, projectID: String? = nil, worktreeID: String? = nil) {
+            self.key = key; self.name = name; self.symbol = symbol
+            self.projectID = projectID; self.worktreeID = worktreeID
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -29,6 +35,10 @@ struct NativeSidebar: NSViewRepresentable {
         table.autoresizingMask = [.width]
         table.delegate = context.coordinator
         table.dataSource = context.coordinator
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.delegate = context.coordinator
+        table.menu = menu
         scroll.documentView = table
         context.coordinator.table = table
         context.coordinator.update(model)
@@ -37,7 +47,7 @@ struct NativeSidebar: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) { context.coordinator.update(model) }
 
     @MainActor
-    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
         weak var table: NSTableView?
         weak var model: WorkspaceModel?
         private var rows: [Row] = []
@@ -48,21 +58,43 @@ struct NativeSidebar: NSViewRepresentable {
         func update(_ model: WorkspaceModel) {
             self.model = model
             guard let table else { return }
-            let next = [Row(key: "projects", name: localized("Projects", "项目"), symbol: nil)]
-                + model.projectItems.map { Row(key: "p:" + $0.id, name: $0.name, symbol: "folder") }
-                + [Row(key: "sessions", name: localized("Sessions", "会话"), symbol: nil)]
+            var next = [Row(key: "projects", name: localized("Projects", "项目"), symbol: nil)]
+            for project in model.projects {
+                let id = project["id"].string ?? ""
+                next.append(Row(key: "p:" + id, name: project["name"].string ?? "", symbol: "folder"))
+                for tree in project["worktrees"].array {
+                    let suffix = tree["missing"] == .bool(true) ? localized(" (missing)", "（缺失）") : ""
+                    next.append(Row(key: "w:" + (tree["id"].string ?? ""), name: (tree["name"].string ?? "") + suffix, symbol: "arrow.triangle.branch", projectID: id, worktreeID: tree["id"].string))
+                }
+            }
+            next += [Row(key: "sessions", name: localized("Sessions", "会话"), symbol: nil)]
                 + model.sessionEntries.map { Row(key: "s:" + $0.sessionID, name: $0.session["name"].string ?? "", symbol: $0.session["agent"].string == nil ? "terminal" : "sparkle") }
             updating = true
             defer { updating = false }
             if next != rows { rows = next; table.reloadData() }
             guard !pending else { return }
-            let selected = model.selectedID.map { "s:" + $0 } ?? model.workspace["selectedProject"].string.map { "p:" + $0 }
+            let selected = model.selectedID.map { "s:" + $0 } ?? model.workspace["selectedWorktree"].string.map { "w:" + $0 } ?? model.workspace["selectedProject"].string.map { "p:" + $0 }
             let index = rows.firstIndex { $0.key == selected }
             let selection = index.map { IndexSet(integer: $0) } ?? IndexSet()
             if table.selectedRowIndexes != selection { table.selectRowIndexes(selection, byExtendingSelection: false) }
         }
 
         func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+        func menuNeedsUpdate(_ menu: NSMenu) {
+            menu.removeAllItems()
+            guard let table, rows.indices.contains(table.clickedRow), let model else { return }
+            let row = rows[table.clickedRow]
+            guard row.key.hasPrefix("p:") || row.worktreeID != nil else { return }
+            let item = NSMenuItem(title: localized("Refresh Worktrees", "刷新 Worktree"), action: #selector(refreshWorktrees(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = row.projectID ?? String(row.key.dropFirst(2))
+            item.isEnabled = !model.busy
+            menu.addItem(item)
+        }
+        @objc private func refreshWorktrees(_ item: NSMenuItem) {
+            guard let id = item.representedObject as? String, let model else { return }
+            Task { @MainActor in await model.refreshWorktrees(id) }
+        }
         func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
             rows.indices.contains(row) && rows[row].symbol != nil
         }
@@ -85,7 +117,7 @@ struct NativeSidebar: NSViewRepresentable {
                 icon.translatesAutoresizingMaskIntoConstraints = false
                 cell.addSubview(icon)
                 cell.imageView = icon
-                NSLayoutConstraint.activate([icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: 16), icon.heightAnchor.constraint(equalToConstant: 16)])
+                NSLayoutConstraint.activate([icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: item.worktreeID == nil ? 12 : 24), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: 16), icon.heightAnchor.constraint(equalToConstant: 16)])
                 leading = icon.trailingAnchor
                 inset = 6
             }
@@ -108,6 +140,7 @@ struct NativeSidebar: NSViewRepresentable {
                 Task { @MainActor in
                     let id = String(row.key.dropFirst(2))
                     if row.key.hasPrefix("s:") { await model.selectSession(id, focus: focus) }
+                    else if let project = row.projectID, let tree = row.worktreeID { await model.selectProject(project, worktree: tree, focus: focus) }
                     else { await model.selectProject(id, focus: focus) }
                     if self.request == token { self.pending = false; self.update(model) }
                 }

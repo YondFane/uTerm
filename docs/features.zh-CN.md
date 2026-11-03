@@ -161,45 +161,41 @@ ABI 的备份预览及缺失恢复。两个 Tauri 状态 QA 报告通过且清�
 ### 共享 Git 与 Worktree 服务
 
 开发核心的 `git` 与 `worktrees`
-模块管理状态、差异、提交历史、分支／引用及 Worktree 规则。相同的十五个 Git 和四个 Worktree 操作可通过
-`git.*` 请求使用，TypeScript／Swift
-DTO 由 Rust 生成。Tauri 保留原命令名和 Git 界面，并委派相同函数。
+模块管理状态、差异、提交历史、分支／引用和 Worktree 规则。相同的十五个 Git 与四个 Worktree 操作使用
+`git.*` 请求及 Rust 生成的 TypeScript／Swift DTO。Tauri 保留原命令名和 Git 界面，委派相同函数。
 
 选择本地项目或 Worktree 后，原生 QA 应用的**文件 →
-Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revision 解析选定目录，过期选择明确报错。Git 请求只能访问该窗口绑定的仓库；文件窗口不能调用 Git。差异／名称复制使用系统剪贴板。
+Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revision 解析选择，Git 请求绑定该仓库和项目，文件窗口不能调用 Git。差异／名称复制使用系统剪贴板；独立桥接避免仓库操作占用终端桥接。
 
-Git 使用独立桥接，长操作不占用终端桥接。写入前所有已打开的可编辑文件窗口确认待保存内容，并冻结编辑直到操作结束；文件冲突阻止 Git，保留文件和恢复草稿。Git 窗口在写操作期间拒绝关闭。干净编辑器重新读取仓库变化，脏／忙碌编辑器保留文本。原生 Git 收藏及 Worktree 侧栏登记仍待完成，收藏控件暂不可用，避免写入临时 WebView。
+写入前，已打开的可编辑文件窗口保存并冻结直到操作结束。文件冲突阻止 Git，保留文件和恢复草稿；Git 窗口在写入期间拒绝关闭。干净编辑器重新读取仓库变化，脏／忙碌编辑器保留文本。取消或超时不代表已分发写入回滚，重试前应检查仓库。原生收藏和 Worktree 删除菜单仍待完成。
 
-写入协调保留分支／Worktree 所有权、预期引用、选定目录状态及脏 Worktree 删除检查，保留字面目录末尾和 Unicode 分支空白。Worktree 命令使用共用 Git 运行器的流大小限制及子进程期限。取消或超时不代表已分发写入回滚，重试前应检查仓库状态。
+`project.worktrees.refresh`
+按已保存项目发现仓库，带预期 revision 原子更新 Worktree 列表。两端对已登记项目使用相同规则：保留 ID／自定义名称、更新随分支命名的名称、保留有会话的缺失 Worktree、移除未被会话引用且不再发现的项目并保留有效选择。过期 revision 或 Git 发现失败保留已存状态；子目录项目不会把主仓库根目录列为子 Worktree。
+
+原生侧栏在项目下显示 Worktree，选择行后使用其目录；右键项目或 Worktree 选**刷新 Worktree**重新发现。Git 写操作在报告成功前同步绑定项目列表；若 Git 已完成而列表保存失败，错误会明确说明，应刷新项目而非盲目重复 Git 写入。规范存储下的 Tauri 项目 Worktree 更新也走同一 Core 操作，浏览器夹具保留兼容路径。
+
+保留字面目录末尾和 Unicode 分支空白，包括自动创建 Worktree 的来源分支。Windows 扩展驱动器／UNC 目标会转换为 Git 可用路径，无法保留点／空格末尾的扩展路径明确拒绝。已加入真实 Windows 创建／脏目录拒删／删除回归，平台执行仍待完成。原生差异颜色现使用主题文本／画布颜色以适配浅色，可视验收待完成。
+
+草稿列表／文档读取仅对 `WRITER_BUSY`
+最多重试六次，共退避 620ms；关闭取消等待，写入和冲突不自动重试，首次打开失败可再次尝试。真实操作系统锁回归使用独立 Rust 进程，修正错误码前失败，修正后通过。QA 观察读取在既有三十秒期限内等待同一锁，并记录
+`observerBusyReads`，不会重试写入。
 
 #### Git 与编辑器并发验证
 
-head `31d3d5e3922a9e03d34b3287f1f19a6a3aa700ad`、tested merge
-`aeeccd9369965b45c652163981bd680cb9e9b91b` 的
-[旧端 CI](https://github.com/YondFane/uTerm/actions/runs/41568790602) Windows job 通过，macOS
-job 因真实首次打开草稿的 `WRITER_BUSY`
-失败。[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41568790616) 两 job 均在新增 Swift
-Git 断言失败：错误要求按行展示的 Diff 包含最后 LF，窗口检查未执行。失败及产物见
-[#35 证据](https://github.com/YondFane/uTerm/issues/35#issuecomment-6595018569)，不作为当前修改的平台通过结果。
+head `c637bccac8e6b7196f526ad054deca22a6fad443`、tested merge
+`b00bf1ea1601a44f9ce62d0ef2a56d9d316df45a` 的
+[原生 CI 41577219725](https://github.com/YondFane/uTerm/actions/runs/41577219725)
+两 job 通过，包含十四项 Swift 和真实 Git／编辑器／终端／控制场景。产物：[ARM 13203824672](https://github.com/YondFane/uTerm/actions/runs/41577219725/artifacts/13203824672)、[Intel 13204816712](https://github.com/YondFane/uTerm/actions/runs/41577219725/artifacts/13204816712)。`git-live.json`
+记录平台、架构、系统、head／merge 和准确场景。五张 `native-git-*.png`
+展示差异／历史／复制／分支／保存保护／Worktree／冲突及中文浅色 640px 输出。已目视检查 ARM 宽窗控件、满宽窄窗和英文冲突提示，先前问题已修正；浅色差异对比仍在改进。
 
-head `9a35977a2743cdace0310f10dd953b8f2c210253`、tested merge
-`fd2932c8b991225806f91935681948d835da8cc9` 的
-[macOS ARM 原生 job](https://github.com/YondFane/uTerm/actions/runs/41576097250)
-通过十四项 Swift、终端／编辑器／控制以及真实 Git 差异／历史／复制／分支／Worktree／冲突检查。[产物 13203259477](https://github.com/YondFane/uTerm/actions/runs/41576097250/artifacts/13203259477)
-包含 `git-live.json` 和五张
-`native-git-*.png`。目视检查发现窄窗浮层定位、宽窗差异控件裁切，以及重复冲突前缀阻止英文翻译；即使自动检查通过，也不验收这些视觉／语言结果。现已限定原生页修正布局和原始错误消息，并加强边界及英文提示断言，仍待自己的平台重跑。
+同一 head 的 [旧端 CI 41577219811](https://github.com/YondFane/uTerm/actions/runs/41577219811)
+两真实 QA
+job 失败：Windows 拒绝带设备前缀的目标，macOS 的只读 QA 观察者撞上写锁，当时编辑器已经显示恢复文本。保留失败产物：[Windows 13204577874](https://github.com/YondFane/uTerm/actions/runs/41577219811/artifacts/13204577874)、[macOS 13205005914](https://github.com/YondFane/uTerm/actions/runs/41577219811/artifacts/13205005914)。当前工作已修复这两项，新 head 仍需自己的平台结果。
 
-当前实现将 Diff 文本与完整原始文件字节分别断言。草稿列表／文档读取仅对 `WRITER_BUSY`
-最多重试六次，共退避 620ms，关闭取消等待；写入和冲突不会自动重试。首次打开失败时保留可见错误，可再次尝试，不再卡在不可见的放弃对话框。真实 Core 错误码为
-`WRITER_BUSY`，现使用独立 Rust 夹具进程持有操作系统写锁，执行读取／关闭／写入测试。此前模拟 `BUSY`
-未覆盖该码，不能作为恢复通过证据；`9a35977`
-的干净源码 Linux 重现首次打开失败，真实持锁回归在修正错误码前确实失败，现针对实际存储运行。
-
-云端 Linux 三十项真实 Rust／React 契约通过，包括忙碌读取、关闭、明确写入重试、首次打开重试、选定 Worktree 和过期 revision。核心／FFI 及明确文件系统失败通过；两项真实仓库回归覆盖末尾空白根目录和合法 Unicode 分支名。二十九项既有 Git／Worktree 测试移入 Core，没有删除。完整前端 384 项通过、十项跳过，包括修正后的翻译门禁。新增原生五场景及旧端四场景 Git 检查仍需本次干净源码的平台 CI、真实截图与目视检查。收藏、侧栏完整性、完整取消及人工焦点验收未完成，#35 保持开放。`d8345b6`
-的干净源码 Linux 实际运行已通过差异／历史／创建分支，随后因 QA 脚本写错现有 New
-worktree 按钮的大小写而停止。选择文本已修正，Worktree 截图仍需重跑通过。macOS Core CI 因 Git 返回
-`/private/var`、临时目录使用 `/var`
-别名而在新增回归夹具停止；测试现先规范化夹具路径，再比较准确根目录，仍保留末尾空白和其他仓库保护断言。该 head 后续 Swift／窗口检查未执行。
+c637bcc 干净源码的云端 Linux
+Tauri／X11 二十个真实场景通过，清理无错误，包括四个 Git 场景和持久 Worktree 登记。当前 Linux 检查通过五十项 Core 单元、集成／FFI／明确磁盘失败、三十一项真实 Rust／React 契约、385 项前端（十项跳过）、100 项后端（十项忽略）、类型／构建／生成契约／i18n。新增 Core
+Worktree 测试对照旧规则，验证过期写入、缺失会话保留、重开后稳定 ID 和真实 Git 失败不改存储。新原生 QA 增加侧栏登记／选择／移除的第六张截图，仍需本次干净源码的平台 CI 与图片检查。收藏、原生删除、完整取消、人工输入／IME／焦点及 #16 依赖未满足，#35 保持开放。
 
 ## 项目官网
 

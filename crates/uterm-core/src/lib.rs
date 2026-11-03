@@ -571,6 +571,39 @@ impl Core {
             )?)
             .map_err(Into::into),
             "snapshot.read" => serde_json::to_value(self.store.read()?).map_err(Into::into),
+            "project.worktrees.refresh" => {
+                if !params.as_object().is_some_and(|fields| {
+                    fields.len() == 2
+                        && fields.contains_key("id")
+                        && fields.contains_key("expectedRevision")
+                }) {
+                    return Err(CoreError::new(
+                        "INVALID_ARGUMENT",
+                        "Worktree refresh requires only a project ID and expected revision",
+                    ));
+                }
+                let revision = string(&params, "expectedRevision")?;
+                let id = string(&params, "id")?;
+                let snapshot = self.store.read()?;
+                if snapshot.revision != revision {
+                    return Err(CoreError::new(
+                        "CONFLICT",
+                        "Workspace changed; refresh Worktrees again",
+                    ));
+                }
+                let directory = snapshot.document.workspace["projects"]
+                    .as_array()
+                    .and_then(|projects| projects.iter().find(|project| project["id"] == id))
+                    .and_then(|project| project["directory"].as_str())
+                    .ok_or_else(|| CoreError::new("NOT_FOUND", "Project no longer exists"))?;
+                let discovered = worktrees::project_worktrees(directory.into())
+                    .map_err(|error| CoreError::new("GIT_ERROR", error))?;
+                self.store
+                    .update(&revision, |document| {
+                        state::reconcile_worktrees(&mut document.workspace, &id, &discovered)
+                    })
+                    .and_then(|snapshot| serde_json::to_value(snapshot).map_err(Into::into))
+            }
             "project.context" => {
                 let snapshot = self.store.read()?;
                 if string(&params, "expectedRevision")? != snapshot.revision {

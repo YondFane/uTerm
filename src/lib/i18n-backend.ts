@@ -68,6 +68,12 @@ export const backendMessages: Record<string, string> = {
   "Git 未能移除 Worktree 目录。": "Git could not remove the worktree directory.",
   "Git 状态格式无效。": "Invalid Git status format.",
   "Git 路径包含无法显示的字符。": "The Git path contains unrepresentable characters.",
+  "此 Worktree 路径无法准确传给 Git，请使用普通 Windows 绝对路径。":
+    "Git cannot preserve this Worktree path. Use a regular absolute Windows path.",
+  "项目已不存在。": "Project no longer exists",
+  "工作区已变化，请重新刷新 Worktree。": "Workspace changed; refresh Worktrees again",
+  "刷新 Worktree 仅接受项目 ID 和预期 revision。":
+    "Worktree refresh requires only a project ID and expected revision",
   "Git 返回了无法显示的当前分支名：{error}": "Git returned an unrepresentable branch name: {error}",
   "GitHub 响应超过 2 MB，请在浏览器中查看。": "GitHub response exceeds 2 MB. View it in a browser.",
   "Grok 登录凭据格式无效。": "Invalid Grok credential format.",

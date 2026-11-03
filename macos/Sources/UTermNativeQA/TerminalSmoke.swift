@@ -175,7 +175,7 @@ enum TerminalSmoke {
         return name
     }
 
-    private static func descendants(_ view: NSView) -> [NSView] {
+    static func descendants(_ view: NSView) -> [NSView] {
         [view] + view.subviews.flatMap(descendants)
     }
 

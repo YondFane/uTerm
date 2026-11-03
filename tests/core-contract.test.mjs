@@ -1,7 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
+import {
+  mkdtempSync,
+  rmSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  symlinkSync,
+  renameSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
@@ -18,6 +26,7 @@ import {
   removeProject,
   moveProject,
   selectProject,
+  reconcileWorktrees,
 } from "../src/lib/workspace.ts";
 import { draftKey, readDraft } from "../src/lib/file-document.ts";
 import { EditorDraftQueue } from "../src/lib/editor-drafts.ts";
@@ -1717,6 +1726,171 @@ test("shared Worktree contracts protect dirty work, repository identity, stale b
   rmSync(join(path, "retained.txt"));
   assert.deepEqual((await call("git.worktrees.delete", { directory, path })).result, []);
   assert.equal(git("branch", "--show-current").trim(), "main");
+});
+
+test("shared Worktree refresh retains identities, custom names, missing sessions and selections with real Git and CAS", async (t) => {
+  const store = mkdtempSync(join(tmpdir(), "uterm-worktree-state-"));
+  t.after(() => rmSync(store, { recursive: true, force: true }));
+  const call = await client(t, store),
+    fixture = gitFixture(t);
+  const create = async (branch, path) => {
+    const reply = await call("git.worktrees.create", {
+      directory: fixture.directory,
+      reference: "HEAD",
+      oid: fixture.head,
+      branch,
+      path,
+    });
+    assert.equal(reply.error, undefined);
+    return reply.result;
+  };
+  const discovered = await create("qa/tree", join(fixture.root, "tree-中文"));
+  const workspace = emptyWorkspace();
+  workspace.projects.push({
+    id: "shared-tree-project",
+    name: "Subdirectory project",
+    directory: join(fixture.directory, "src"),
+    workspaceId: "local",
+    sessions: [
+      {
+        id: "retained-session",
+        name: "Keep my session",
+        shell: "default",
+        pinned: false,
+        worktreeId: "missing-with-session",
+      },
+    ],
+    worktrees: [
+      {
+        ...discovered[0],
+        id: "existing-tree",
+        name: "My custom name",
+        branch: "old-label",
+        missing: true,
+      },
+      {
+        id: "missing-with-session",
+        name: "Retain missing",
+        branch: "removed",
+        path: join(fixture.root, "missing"),
+        missing: false,
+      },
+      {
+        id: "unused-missing",
+        name: "Unused",
+        branch: "unused",
+        path: join(fixture.root, "unused"),
+        missing: false,
+      },
+    ],
+  });
+  workspace.selectedProject = "shared-tree-project";
+  workspace.selectedWorktree = "missing-with-session";
+  workspace.selectedSession = "retained-session";
+  const imported = (await call("migration.import", { workspace, settings: defaults, legacy: {} }))
+    .result;
+  assert.ok(imported);
+  assert.deepEqual(
+    (await call("git.worktrees.list", { directory: workspace.projects[0].directory })).result,
+    discovered,
+    "Subdirectory projects cannot list their own main root as a child Worktree",
+  );
+  const params = { id: "shared-tree-project", expectedRevision: imported.revision };
+  assert.equal(
+    (await call("project.worktrees.refresh", { ...params, directory: "/unselected" })).error.code,
+    "INVALID_ARGUMENT",
+  );
+  const first = await call("project.worktrees.refresh", params);
+  assert.equal(first.error, undefined);
+  let state = first.result;
+  assert.deepEqual(
+    state.document.workspace,
+    reconcileWorktrees(imported.document.workspace, params.id, discovered),
+  );
+  assert.deepEqual(
+    state.document.workspace.projects[0].worktrees.map((tree) => ({
+      id: tree.id,
+      name: tree.name,
+      missing: tree.missing,
+      branch: tree.branch,
+    })),
+    [
+      { id: "existing-tree", name: "My custom name", missing: false, branch: "qa/tree" },
+      { id: "missing-with-session", name: "Retain missing", missing: true, branch: "removed" },
+    ],
+  );
+  assert.equal(state.document.workspace.selectedSession, "retained-session");
+  assert.equal((await call("project.worktrees.refresh", params)).error.code, "CONFLICT");
+  assert.deepEqual((await call("snapshot.read")).result, state);
+  fixture.git("-C", discovered[0].path, "branch", "-m", "qa/renamed");
+  const renamed = await call("project.worktrees.refresh", {
+    ...params,
+    expectedRevision: state.revision,
+  });
+  assert.equal(renamed.error, undefined);
+  assert.equal(renamed.result.document.workspace.projects[0].worktrees[0].name, "My custom name");
+  const autoNamed = structuredClone(renamed.result.document.workspace);
+  autoNamed.projects[0].worktrees[0].name = "qa/renamed";
+  state = (
+    await call("snapshot.replace", {
+      expectedRevision: renamed.result.revision,
+      workspace: autoNamed,
+      settings: defaults,
+    })
+  ).result;
+  fixture.git("-C", discovered[0].path, "branch", "-m", "qa/auto-next");
+  const autoRefreshed = await call("project.worktrees.refresh", {
+    ...params,
+    expectedRevision: state.revision,
+  });
+  assert.equal(autoRefreshed.error, undefined);
+  state = autoRefreshed.result;
+  assert.equal(state.document.workspace.projects[0].worktrees[0].name, "qa/auto-next");
+  assert.equal(
+    (await call("git.worktrees.delete", { directory: fixture.directory, path: discovered[0].path }))
+      .error,
+    undefined,
+  );
+  await create("qa/new", join(fixture.root, "new-tree"));
+  const refreshed = await call("project.worktrees.refresh", {
+    ...params,
+    expectedRevision: state.revision,
+  });
+  assert.equal(refreshed.error, undefined);
+  const project = refreshed.result.document.workspace.projects[0];
+  assert.deepEqual(
+    project.worktrees.map((tree) => tree.branch),
+    ["removed", "qa/new"],
+  );
+  assert.match(project.worktrees[1].id, /^[a-f0-9-]{36}$/);
+  assert.deepEqual(project.sessions, state.document.workspace.projects[0].sessions);
+  const reopened = await client(t, store);
+  assert.deepEqual((await reopened("snapshot.read")).result, refreshed.result);
+  const stable = await reopened("project.worktrees.refresh", {
+    ...params,
+    expectedRevision: refreshed.result.revision,
+  });
+  assert.equal(stable.error, undefined);
+  assert.deepEqual(
+    stable.result,
+    refreshed.result,
+    "A repeat discovery must retain new Worktree identities and revision",
+  );
+  renameSync(fixture.directory, fixture.directory + "-unavailable");
+  assert.equal(
+    (
+      await call("project.worktrees.refresh", {
+        ...params,
+        expectedRevision: stable.result.revision,
+      })
+    ).error.code,
+    "GIT_ERROR",
+  );
+  assert.deepEqual(
+    (await call("snapshot.read")).result,
+    stable.result,
+    "A failed Git discovery cannot replace stored Worktrees",
+  );
 });
 
 test("shared Git requests reject malformed cross-language fields before invoking Git", async (t) => {

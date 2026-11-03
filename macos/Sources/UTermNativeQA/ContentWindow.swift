@@ -49,6 +49,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     let path: String
     let editable: Bool
     let gitMode: Bool
+    let gitProjectID: String?
     private let bridge: CoreBridge
     private let stateBridge: CoreBridge
     private let ownsBridge: Bool
@@ -66,7 +67,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     var openRepositoryFile: ((String) async throws -> Void)?
     private let entry = URL(string: "uterm-content://bundle/native-content.html")!
 
-    init(bridge: CoreBridge, directory: URL, path: String, editable: Bool = false, gitMode: Bool = false, stateBridge: CoreBridge? = nil, ownsBridge: Bool = false) throws {
+    init(bridge: CoreBridge, directory: URL, path: String, editable: Bool = false, gitMode: Bool = false, gitProjectID: String? = nil, stateBridge: CoreBridge? = nil, ownsBridge: Bool = false) throws {
         guard let root = Bundle.main.resourceURL?.appendingPathComponent("content") else {
             throw BridgeFailure(code: "RESOURCE_MANIFEST", message: "Bundled content is missing")
         }
@@ -82,6 +83,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         self.path = path
         self.editable = editable
         self.gitMode = gitMode
+        self.gitProjectID = gitProjectID
         let window = NSWindow(contentRect: webView.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = gitMode ? "Git — " + self.directory.lastPathComponent : path
         window.minSize = NSSize(width: gitMode ? 640 : 540, height: gitMode ? 420 : 360)

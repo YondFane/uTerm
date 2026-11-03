@@ -213,9 +213,14 @@ final class WorkspaceModel: ObservableObject {
         }
     }
 
-    func selectProject(_ id: String, focus: Bool = true) async {
+    func selectProject(_ id: String, worktree: String? = nil, focus: Bool = true) async {
         if let operation { _ = await operation.value }
-        if await mutate("project.select", ["id": .string(id)]), focus { focusRevision += 1 }
+        if await mutate("project.select", ["id": .string(id), "worktreeId": worktree.map(JSONValue.string) ?? .null]), focus { focusRevision += 1 }
+    }
+
+    func refreshWorktrees(_ id: String) async {
+        if let operation { _ = await operation.value }
+        _ = await mutate("project.worktrees.refresh", ["id": .string(id)])
     }
 
     func newTerminal(agent: String? = nil) async {

@@ -4,14 +4,14 @@ use std::path::Path;
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 #[schemars(rename = "GitWorktree")]
 pub struct Worktree {
-    path: String,
-    branch: String,
-    missing: bool,
+    pub(crate) path: String,
+    pub(crate) branch: String,
+    pub(crate) missing: bool,
 }
 use crate::git::run as git;
 fn discover(directory: &str) -> Result<Vec<Worktree>, String> {
     let output = git(directory, &["worktree", "list", "--porcelain", "-z"])?;
-    let root = Path::new(directory)
+    let root = Path::new(&crate::git::root(directory)?)
         .canonicalize()
         .map_err(|error| error.to_string())?;
     parse_worktrees(&output).map(|worktrees| {
@@ -144,6 +144,7 @@ fn create_worktree_at(
     if !target.is_absolute() || target.exists() {
         return Err("Worktree 路径必须是尚不存在的绝对路径。".into());
     }
+    let argument = worktree_argument(target)?;
     crate::git::run(
         directory,
         &[
@@ -153,7 +154,7 @@ fn create_worktree_at(
             "-b",
             branch,
             "--",
-            path,
+            &argument,
             &oid,
         ],
     )?;
@@ -161,13 +162,32 @@ fn create_worktree_at(
 }
 
 fn current_branch(directory: &str) -> Result<String, String> {
-    let branch = String::from_utf8(git(directory, &["branch", "--show-current"])?)
-        .map_err(|error| format!("Git 返回了无法显示的当前分支名：{error}"))?;
-    let branch = branch.trim();
-    if branch.is_empty() {
-        return Err("当前检出为 detached HEAD，无法从当前分支创建 Worktree。".into());
+    crate::git::current_branch(directory)?
+        .ok_or_else(|| "当前检出为 detached HEAD，无法从当前分支创建 Worktree。".into())
+}
+
+fn worktree_argument(path: &Path) -> Result<String, String> {
+    let text = path.to_str().ok_or("Worktree 路径包含无法显示的字符。")?;
+    #[cfg(windows)]
+    {
+        let converted = if let Some(unc) = text.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{unc}")
+        } else if let Some(drive) = text.strip_prefix(r"\\?\") {
+            drive.to_owned()
+        } else {
+            return Ok(text.into());
+        };
+        if text
+            .split(['/', '\\'])
+            .any(|part| part.ends_with(['.', ' ']))
+            || !Path::new(&converted).is_absolute()
+        {
+            return Err("此 Worktree 路径无法准确传给 Git，请使用普通 Windows 绝对路径。".into());
+        }
+        return Ok(converted);
     }
-    Ok(branch.into())
+    #[cfg(not(windows))]
+    Ok(text.into())
 }
 
 fn directory_name(branch: &str) -> String {
@@ -220,13 +240,11 @@ fn next_worktree(directory: &str, root: &Path) -> Result<(String, std::path::Pat
 
 fn create_worktree_in(directory: &str, root: &Path) -> Result<Vec<Worktree>, String> {
     let (branch, path) = next_worktree(directory, root)?;
-    let path = path
-        .to_str()
-        .ok_or_else(|| "临时 Worktree 路径包含无法传给 Git 的字符。".to_string())?;
+    let path = worktree_argument(&path)?;
     let source = current_branch(directory)?;
     git(
         directory,
-        &["worktree", "add", "-b", &branch, "--", path, &source],
+        &["worktree", "add", "-b", &branch, "--", &path, &source],
     )?;
     discover(directory)
 }
@@ -253,6 +271,80 @@ fn delete_worktree_at(directory: &str, path: &str) -> Result<Vec<Worktree>, Stri
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn extended_windows_destination_creates_and_removes_the_exact_worktree() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().canonicalize().unwrap();
+        let repository = root.join("repository");
+        std::fs::create_dir(&repository).unwrap();
+        let directory = repository.to_str().unwrap();
+        git(directory, &["init", "--initial-branch=main"]).unwrap();
+        git(
+            directory,
+            &[
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "--no-gpg-sign",
+                "--allow-empty",
+                "-m",
+                "isolated extended-path fixture",
+            ],
+        )
+        .unwrap();
+        let path = root.join("tree-中文");
+        let entries = create_worktree_at(
+            directory,
+            "HEAD",
+            "qa/extended",
+            path.to_str().unwrap(),
+            None,
+        )
+        .unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(
+            Path::new(&entries[0].path).canonicalize().unwrap(),
+            path.canonicalize().unwrap()
+        );
+        std::fs::write(path.join("retain.txt"), "keep exact 中文\n").unwrap();
+        assert!(delete_worktree_at(directory, path.to_str().unwrap()).is_err());
+        assert_eq!(
+            std::fs::read(path.join("retain.txt")).unwrap(),
+            "keep exact 中文\n".as_bytes()
+        );
+        std::fs::remove_file(path.join("retain.txt")).unwrap();
+        assert!(delete_worktree_at(directory, path.to_str().unwrap())
+            .unwrap()
+            .is_empty());
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn worktree_source_branch_keeps_legal_unicode_whitespace() {
+        let temp = tempfile::tempdir().unwrap();
+        let directory = temp.path().to_str().unwrap();
+        git(directory, &["init", "--initial-branch=main"]).unwrap();
+        git(
+            directory,
+            &[
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "--no-gpg-sign",
+                "--allow-empty",
+                "-m",
+                "isolated branch fixture",
+            ],
+        )
+        .unwrap();
+        git(directory, &["switch", "--create", "feature\u{00a0}"]).unwrap();
+        assert_eq!(current_branch(directory).unwrap(), "feature\u{00a0}");
+    }
     #[test]
     fn selected_reference_worktree_uses_new_branch_and_checks_base_and_destination() {
         let root = tempfile::tempdir().unwrap();

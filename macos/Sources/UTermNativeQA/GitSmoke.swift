@@ -111,6 +111,26 @@ enum GitSmoke {
 
             let tree = temporary.appendingPathComponent("git-worktree 中文")
             guard try await ContentSmoke.request(content, method: "create_worktree", params: ["directory": root.path, "reference": "refs/heads/main", "oid": head, "branch": "native-worktree", "path": tree.path]) == "SUCCESS" else { throw BridgeFailure(code: "GIT_WORKTREE", message: "Cannot create isolated Worktree through native bridge") }
+            guard let project = model.projects.first(where: { $0["id"].string == "native-git-qa" }),
+                  let treeID = project["worktrees"].array.first(where: { $0["branch"].string == "native-worktree" })?["id"].string,
+                  let view = parent.contentView,
+                  let table = TerminalSmoke.descendants(view).first(where: { $0.identifier?.rawValue == "native-sidebar" }) as? NSTableView else {
+                throw BridgeFailure(code: "GIT_WORKTREE", message: "Created Worktree is absent from the shared native sidebar")
+            }
+            parent.makeKeyAndOrderFront(nil)
+            var row: Int?
+            try await TerminalSmoke.wait("Render actual native Worktree sidebar row") {
+                row = (0..<table.numberOfRows).first { (table.view(atColumn: 0, row: $0, makeIfNecessary: true) as? NSTableCellView)?.textField?.stringValue == "native-worktree" }
+                return row != nil
+            }
+            table.selectRowIndexes(IndexSet(integer: row!), byExtendingSelection: false)
+            try await TerminalSmoke.wait("Select Worktree through the real AppKit table") { model.workspace["selectedWorktree"].string == treeID && !model.busy }
+            guard let selectedState = model.state else { throw BridgeFailure(code: "GIT_WORKTREE", message: "Missing selected Worktree state") }
+            let selectedTree = try await bridge.projectContext(expectedRevision: selectedState.snapshot.revision)
+            guard selectedTree.directory.map({ Data($0.utf8) }) == Data(tree.path.utf8) else { throw BridgeFailure(code: "GIT_WORKTREE", message: "Native Worktree selection resolved a different directory") }
+            captures.append("native-git-worktree-sidebar.png")
+            try await TerminalSmoke.capture(window: parent, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(captures.last!))
+            report["worktreeSidebarRegisteredAndSelected"] = true
             let retained = tree.appendingPathComponent("keep-dirty.txt"), dirty = Data("RETAIN_DIRTY 中文 e\u{301}\n".utf8)
             try dirty.write(to: retained)
             let deletion = try await ContentSmoke.request(content, method: "delete_worktree", params: ["directory": root.path, "path": tree.path])
@@ -119,6 +139,7 @@ enum GitSmoke {
             try FileManager.default.removeItem(at: retained)
             guard try await ContentSmoke.request(content, method: "delete_worktree", params: ["directory": root.path, "path": tree.path]) == "SUCCESS" else { throw BridgeFailure(code: "GIT_WORKTREE", message: "Clean Worktree deletion failed") }
             report["worktreeBridgeCreateAndCleanDelete"] = !FileManager.default.fileExists(atPath: tree.path)
+            report["worktreeRemovedFromSharedSidebar"] = model.projects.first(where: { $0["id"].string == "native-git-qa" })?["worktrees"].array.isEmpty == true && model.workspace["selectedWorktree"] == .null
 
             let unsaved = "RETAIN_CONFLICT 中文 e\u{301}\n", external = Data("EXTERNAL_WRITER 中文\n".utf8)
             try await seed(unsaved)
@@ -150,7 +171,7 @@ enum GitSmoke {
             try await capture(narrow, captures.last!)
             report["narrowChineseLightGit"] = true
             report["gitCaptures"] = captures
-            report["gitScenario"] = ["data": "isolated real Git repository with a trailing-space root and a protected sibling", "wide": "English/dark 1000px", "narrow": "Chinese/light 640px", "input": "DOM events/forms and real WK requests; not manual keyboard or IME acceptance", "worktree": "bridge create/dirty refusal/clean delete; sidebar registration pending"]
+            report["gitScenario"] = ["data": "isolated real Git repository with a trailing-space root and a protected sibling", "wide": "English/dark 1000px", "narrow": "Chinese/light 640px", "input": "DOM events/forms, real WK requests and AppKit table selection; not manual keyboard or IME acceptance", "worktree": "bridge create/dirty refusal/clean delete, shared sidebar registration/selection/removal; native delete menu pending"]
         } catch {
             let image = "native-git-failure.png"
             do { try await capture(content, image); report["failureCapture"] = image }

@@ -58,6 +58,67 @@ pub fn project_context(workspace: &Value, revision: String) -> Result<ProjectCon
     })
 }
 
+pub fn reconcile_worktrees(
+    workspace: &mut Value,
+    project_id: &str,
+    discovered: &[crate::worktrees::Worktree],
+) -> Result<()> {
+    let project = workspace["projects"]
+        .as_array_mut()
+        .and_then(|projects| {
+            projects
+                .iter_mut()
+                .find(|project| project["id"] == project_id)
+        })
+        .ok_or_else(|| invalid("NOT_FOUND", "Project no longer exists"))?;
+    let mut worktrees = Vec::new();
+    for previous in project["worktrees"].as_array().into_iter().flatten() {
+        if let Some(found) = discovered.iter().find(|item| previous["path"] == item.path) {
+            let mut retained = previous.clone();
+            retained["path"] = json!(found.path);
+            retained["branch"] = json!(found.branch);
+            retained["missing"] = json!(found.missing);
+            if previous["name"] == previous["branch"] && !found.branch.is_empty() {
+                retained["name"] = json!(found.branch);
+            }
+            worktrees.push(retained);
+        } else if project["sessions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|session| session["worktreeId"] == previous["id"])
+        {
+            let mut retained = previous.clone();
+            retained["missing"] = json!(true);
+            worktrees.push(retained);
+        }
+    }
+    for item in discovered {
+        if worktrees
+            .iter()
+            .any(|previous| previous["path"] == item.path)
+        {
+            continue;
+        }
+        let name = if item.branch.is_empty() {
+            item.path
+                .rsplit(['/', '\\'])
+                .next()
+                .filter(|name| !name.is_empty())
+                .unwrap_or("Worktree")
+        } else {
+            &item.branch
+        };
+        worktrees.push(json!({
+            "id": uuid::Uuid::new_v4().to_string(), "name":name,
+            "path":item.path, "branch":item.branch, "missing":item.missing
+        }));
+    }
+    project["worktrees"] = json!(worktrees);
+    normalize_selection(workspace);
+    validate_workspace(workspace)
+}
+
 pub fn defaults() -> Value {
     serde_json::from_str(include_str!("../../../shared/fixtures/legacy-state.json"))
         .expect("checked-in legacy fixture")

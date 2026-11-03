@@ -4,6 +4,7 @@ import {
   flushSharedState,
   initializeSharedState,
   persistWorkspace,
+  refreshSharedWorktrees,
   sharedWorkspace,
 } from "./lib/shared-state";
 import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
@@ -733,11 +734,17 @@ export function App() {
     };
   }, []);
 
-  async function update(change: (workspace: Workspace) => Workspace, committed?: () => void) {
+  async function update(
+    change: (workspace: Workspace) => Workspace,
+    committed?: () => void,
+    sharedChange?: () => Promise<Workspace>,
+  ) {
     const previous = currentWorkspace.current;
     if (!previous) return false;
     try {
-      const next = canonicalStateActive() ? await persistWorkspace(change) : change(previous);
+      const next = canonicalStateActive()
+        ? await (sharedChange ? sharedChange() : persistWorkspace(change))
+        : change(previous);
       if (
         next.selectedWorkspace !== previous.selectedWorkspace ||
         next.selectedProject !== previous.selectedProject ||
@@ -1025,7 +1032,11 @@ export function App() {
         "create_worktree",
         { directory: project.directory },
       );
-      await update((previous) => reconcileWorktrees(previous, project.id, discovered));
+      await update(
+        (previous) => reconcileWorktrees(previous, project.id, discovered),
+        undefined,
+        () => refreshSharedWorktrees(project.id),
+      );
     } catch (reason) {
       setError(tx("无法创建 Worktree：{p0}", { p0: String(reason) }));
     } finally {
@@ -1047,7 +1058,11 @@ export function App() {
         "delete_worktree",
         { directory: project.directory, path: worktree.path },
       );
-      await update((previous) => reconcileWorktrees(previous, project.id, discovered));
+      await update(
+        (previous) => reconcileWorktrees(previous, project.id, discovered),
+        undefined,
+        () => refreshSharedWorktrees(project.id),
+      );
     } catch (reason) {
       setError(tx("无法删除 Worktree：{p0}", { p0: String(reason) }));
     }
@@ -3697,6 +3712,17 @@ export function App() {
                   project.directory === root ||
                   project.worktrees?.some((item) => item.path === root),
               );
+            if (owner && canonicalStateActive()) {
+              if (
+                !(await update(
+                  (previous) => previous,
+                  undefined,
+                  () => refreshSharedWorktrees(owner.id),
+                ))
+              )
+                throw new Error(tx("Worktree 已创建，但项目树保存失败。请刷新项目。"));
+              return;
+            }
             const workspaceId = workspace.selectedWorkspace;
             const discovered = await invoke<{ path: string; branch: string; missing: boolean }[]>(
               "project_worktrees",

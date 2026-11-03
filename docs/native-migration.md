@@ -587,67 +587,50 @@ and process reports for SIGKILL/reopen, frozen old keys and exact BOM/CRLF save;
 and macOS save images were inspected. Boot recovery conflict/corruption screenshots, tabs/window
 order, PDF marks and full manual acceptance remain in #33/#34.
 
-For #35, Git/Worktree rules and their 29 regressions now live in Core, while Tauri keeps command
-compatibility. The native **File → Git…** reuses the same panel with a root-scoped bridge, system
-copy and save/freeze confirmation from open editors before writes. A separate worker avoids blocking
-terminal consumption. `project.context` resolves the selected Worktree centrally with a revision
-check. Favorites and native Worktree sidebar registration remain incomplete.
+For #35, Core owns Git/Worktree services and their regressions; native **File → Git…** reuses the
+panel through root/project-scoped requests, native copy and editor save/freeze guards. Core's
+`project.worktrees.refresh` now owns list reconciliation and selection preservation for both
+clients. The native AppKit sidebar displays/selects Worktrees and offers Refresh Worktrees;
+registered Tauri projects use the same revisioned Core operation. IDs/custom names and
+missing-session references survive discovery and reopen. Subdirectory projects exclude their own
+root; failed/stale discovery preserves storage. Git completing before a metadata failure is reported
+explicitly.
 
-Head `31d3d5e3922a9e03d34b3287f1f19a6a3aa700ad`, merge `aeeccd9369965b45c652163981bd680cb9e9b91b`,
-passed Windows but failed old macOS on a real editor `WRITER_BUSY` read; both native jobs failed an
-incorrect trailing-LF diff assertion before window steps.
-[Failure reports/artifacts](https://github.com/YondFane/uTerm/issues/35#issuecomment-6595018569)
-remain accessible. The current fixes preserve full file bytes, retry only busy reads, permit a fresh
-open after failure and preserve whitespace paths/reference names. Thirty real Rust/React contracts
-and the core/FFI filesystem-failure checks pass locally on Linux. New clean-source platform results
-are pending; prior passing heads do not accept these changes.
+Native head `c637bccac8e6b7196f526ad054deca22a6fad443`, tested merge
+`b00bf1ea1601a44f9ce62d0ef2a56d9d316df45a`, passed both jobs in
+[run 41577219725](https://github.com/YondFane/uTerm/actions/runs/41577219725). Artifacts:
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41577219725/artifacts/13203824672) /
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41577219725/artifacts/13204816712). Fourteen
+Swift tests, real terminal/editor/control and five Git captures pass. ARM wide/narrow controls and
+English conflicts were visually checked; the previous positioning/cropping/message errors are
+corrected. Light diff contrast is being improved and needs new images.
 
-`bash scripts/macos-git-smoke.sh` adds five native captures for diff, history, branch creation,
-editor conflict and Chinese/light 640px layout, plus native pasteboard and dirty Worktree protection
-reports. `pnpm qa:shared-state` adds four actual old-client Git scenes, including durable Worktree
-registration. A clean-source Linux run at `d8345b6` reached diff/history/branch creation, then the
-QA selector failed on the case of New worktree; the selector is corrected and its failure evidence
-retained. The same head failed the macOS Core fixture on `/var` versus Git's canonical
-`/private/var`; fixture canonicalization now retains the exact trailing-whitespace/sibling checks.
-Swift/window steps did not execute. Successful Worktree rerun and platform screenshot inspection
-remain pending. Full cancellation, favorites/sidebar parity and manual focus stay in #35. M0/M1 and
-#29/#30 remain accepted and unmerged; #31/#32 and M3–M5 stay open. No protected-branch push, merge,
-tag, Release or production feed change occurred.
+The same head's [legacy run 41577219811](https://github.com/YondFane/uTerm/actions/runs/41577219811)
+failed actual QA: Windows could not create a verbatim destination; macOS's read-only observer
+encountered WRITER_BUSY while the restored editor was visible. Failure artifacts:
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41577219811/artifacts/13204577874) /
+[macOS](https://github.com/YondFane/uTerm/actions/runs/41577219811/artifacts/13205005914). Current
+work normalizes representable Windows destinations and bounds observer-only read waits, recording
+observerBusyReads without retrying writes. A Windows real extended-path regression awaits CI.
+Earlier synthetic BUSY tests did not cover WRITER_BUSY; actual OS-lock tests demonstrably fail
+before that correction and pass afterward.
 
-#35 的 Git／Worktree 规则及二十九项回归已进入 Core，Tauri 保留命令兼容。原生**文件 →
-Git…**复用相同面板，桥接限制仓库根目录，复制走系统剪贴板，写入前确认已打开编辑器保存并冻结。独立 worker 不占用终端消费桥接；`project.context`
-通过 revision 在 Core 解析所选 Worktree。原生收藏与 Worktree 侧栏登记仍未完成。
+Cloud Linux's clean c637bcc Tauri run passed 20 scenes with no cleanup errors. Current local checks
+pass Core 50 units, integration/FFI/disk failures, 31 real Rust/React contracts, 385 frontend checks
+(ten skipped), 100 backend checks (ten ignored), types/build/contracts/i18n. New native Git QA adds
+a sixth image for actual Worktree sidebar registration/selection/removal. These additions need their
+own clean-source platform CI and inspection. Favorites, native Worktree deletion, full cancellation,
+manual interaction and #16 dependencies keep #35 open. M0/M1 and #29/#30 remain accepted and
+unmerged; #31/#32 and M3–M5 remain open. No protected-branch push, merge, tag, Release or production
+feed change.
 
-上述
-`31d3d5e`／merge 在 Windows 通过，旧 macOS 因真实编辑器忙碌读取失败，两原生 job 因末尾 LF 的错误 Diff 断言失败，窗口步骤未执行，失败报告已公开。当前修复保留完整文件字节，仅重试忙碌读取，失败后可重新打开，且保留路径／引用末尾空白。Linux 三十项真实 Rust／React 契约和核心／FFI 文件失败检查通过；新源码平台结果待执行，不借用旧 head 的通过。
+#35 的 Git／Worktree 服务和回归归 Core 管理。原生**文件 →
+Git…**复用面板，桥接限制仓库／项目，系统复制，写入前保存／冻结编辑器。`project.worktrees.refresh`
+统一两端列表和选择规则；原生 AppKit 侧栏显示／选择／刷新 Worktree，已登记 Tauri 项目也走带 revision 的同一操作。保留 ID／自定义名称／缺失会话引用，重开身份稳定；子目录项目排除自身根目录，过期或发现失败保留存储，Git 已完成而元数据失败明确提示。
 
-原生 Git 脚本新增五张场景截图计划（差异、历史、创建分支、编辑器冲突、中文浅色 640px），另检查系统复制、脏 Worktree 保护。旧端 QA 新增四个真实 Git 场景，包括持久 Worktree 登记；`d8345b6`
-的干净源码 Linux 已运行差异／历史／创建分支，随后因 New
-worktree 文本大小写选择错误而停止；已修正选择器并保留失败证据，Worktree 重跑及平台图片检查仍待完成。同一 head 的 macOS
-Core 夹具还因 `/var` 与 Git 的规范路径 `/private/var`
-比较失败，现先规范化夹具路径并保留末尾空白／其他仓库断言；后续 Swift／窗口步骤未执行。完整取消、收藏／侧栏和人工焦点仍由 #35 验收。M0／M1 和 #29／#30 已验收未合入，#31／#32 及 M3–M5 保持开放；未修改受保护分支／合并／标签／发布／生产源。
+上述 c637bcc／merge 的原生双架构通过十四项 Swift、终端／编辑器／控制及五张真实 Git 图；ARM 宽窄控件和英文冲突已检查，先前定位／裁切／消息问题已修正，浅色差异对比仍待新图。相同 head 旧端 QA 失败：Windows 无法创建设备前缀目标，macOS 只读观察者遇到 WRITER_BUSY，而编辑器已经显示恢复文本。失败产物保留。当前修复可表示的 Windows 路径，只等待 QA 观察读取并记录 observerBusyReads，不重试写入；Windows 扩展路径真实回归仍待 CI。此前模拟 BUSY 未覆盖 WRITER_BUSY；实际操作系统锁测试已确认修正前失败、修正后通过。
 
-The real lock error is `WRITER_BUSY`: a clean-source Linux run at `9a35977` reproduced first-open
-failure because the earlier synthetic `BUSY` fixture missed that code. A separate Rust process now
-holds the actual OS store lock during read/close/write tests. This regression failed before the
-correction and all 30 real Rust/React contracts pass afterward, including exact draft retention and
-explicit write retry. Full frontend checks pass 384 tests (ten skipped). The current lock fix needs
-its own platform CI; no earlier result is reassigned to it.
-
-真实锁错误为 `WRITER_BUSY`：`9a35977` 的干净源码 Linux 重现首次打开失败，因为此前模拟 `BUSY`
-未覆盖宿主错误码。现用独立 Rust 进程持有实际操作系统存储锁验证读取／关闭／写入；修正前回归确实失败，修正后三十项真实 Rust／React 契约全通过，包含准确草稿保留和明确写入重试。完整前端 384 项通过、十项跳过。当前锁修复仍需自己的平台 CI，不沿用旧结果。
-
-Native ARM head `9a35977a2743cdace0310f10dd953b8f2c210253`, tested merge
-`fd2932c8b991225806f91935681948d835da8cc9`, passed all checks, including 14 Swift tests and five
-real Git captures. [Run](https://github.com/YondFane/uTerm/actions/runs/41576097250) /
-[artifact 13203259477](https://github.com/YondFane/uTerm/actions/runs/41576097250/artifacts/13203259477)
-record actual platform and source metadata. Inspection rejected narrow floating positioning, cropped
-wide diff controls and an English conflict message retaining Chinese after duplicate code prefixes.
-Scoped layout/raw-error corrections and stricter actual bounds/language checks await their own
-new-head CI; the earlier automated pass is not visual acceptance.
-
-原生 ARM 上述
-`9a35977`／merge 全部自动检查通过，含十四项 Swift 及五张真实 Git 图；产物包含准确平台／源码。目视拒绝窄窗浮层、宽窗差异控件裁切及重复错误码导致英文冲突提示仍有中文。限定原生页的布局／原始错误修正与严格边界／语言检查等待新 head 的 CI，先前自动通过不代表视觉验收。
+c637bcc 的干净源码 Linux 真实 Tauri 二十场景通过、清理无错误。当前本地 Core 五十单元、集成／FFI／磁盘失败、三十一真实 Rust／React 契约、385 前端（十跳过）、100 后端（十忽略）、类型／构建／契约／i18n 通过。新原生 QA 增加 Worktree 侧栏登记／选择／移除的第六张图，仍需自己的干净源码平台 CI 和检查。收藏、原生删除、完整取消、人工交互和 #16 依赖使 #35 保持开放。M0／M1、#29／#30 已验收未合入，#31／#32 及 M3–M5 仍开放；未直推受保护分支／合并／标签／发布／改生产源。
 
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 

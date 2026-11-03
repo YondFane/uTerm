@@ -30,6 +30,20 @@ const oldEditorText = editorFixture.oldText;
 const durableEditorText = editorFixture.durableText;
 const savedEditorText = editorFixture.savedText;
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
+let observerBusyReads = 0;
+async function observeCore(method: string, params?: Parameters<typeof coreRequest>[1]) {
+  assert(["snapshot.read", "editor.drafts.document"].includes(method), "QA observer is read-only");
+  const result = await until(async () => {
+    try {
+      return { value: await coreRequest(method, params) };
+    } catch (reason) {
+      if ((reason as { code?: string }).code !== "WRITER_BUSY") throw reason;
+      observerBusyReads++;
+      return null;
+    }
+  }, "read-only Core observer after writer lock");
+  return result.value;
+}
 async function until<T>(read: () => T | Promise<T>, description: string): Promise<NonNullable<T>> {
   const end = Date.now() + 30000;
   while (Date.now() < end) {
@@ -53,7 +67,10 @@ async function click(label: string) {
 }
 async function scene(name: string, checks: unknown) {
   await pause(500);
-  await invoke("qa_scene", { name, value: checks });
+  await invoke("qa_scene", {
+    name,
+    value: { ...(checks as Record<string, unknown>), observerBusyReads },
+  });
 }
 export async function reportEditorRecoveryFailure(reason: unknown) {
   await scene("failure", {
@@ -63,7 +80,7 @@ export async function reportEditorRecoveryFailure(reason: unknown) {
   });
 }
 async function settings() {
-  const snapshot = (await coreRequest("snapshot.read")) as unknown as {
+  const snapshot = (await observeCore("snapshot.read")) as unknown as {
     document: { settings: typeof defaults };
   };
   return snapshot.document.settings;
@@ -161,7 +178,7 @@ async function runEditor(context: Context) {
     "exact retained text loaded",
   );
   const documentDraft = async () =>
-    coreRequest("editor.drafts.document", {
+    observeCore("editor.drafts.document", {
       directory: context.project,
       path: editorFile,
     }) as unknown as Promise<CoreEditorDraftEntry | null>;
@@ -332,7 +349,7 @@ async function runGit(context: Context) {
   await pause(100);
   await click("New worktree");
   await until(async () => {
-    const shared = (await coreRequest("snapshot.read")) as unknown as {
+    const shared = (await observeCore("snapshot.read")) as unknown as {
       document: {
         workspace: { projects: { id: string; worktrees?: { path: string; branch: string }[] }[] };
       };

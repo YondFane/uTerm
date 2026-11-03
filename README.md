@@ -152,11 +152,12 @@ unprivileged user so directory permissions enforce the failure; Windows uses a h
 
 `uterm-core::{files,git,worktrees}` owns local file and Git/Worktree rules and their regression
 tests; Tauri commands delegate to the same functions. The new `git.*` contract and generated DTOs
-are used by **File → Git…** in the isolated native QA app. Native favorites and Worktree sidebar
-registration remain pending. `bash scripts/macos-git-smoke.sh` runs real-window diff/history/copy,
-branch creation, editor conflict protection and Worktree bridge checks, with temporary repositories
-and system screenshots. This requires a macOS GUI session; platform acceptance is recorded
-separately.
+are used by **File → Git…** in the isolated native QA app. Core now reconciles registered project
+Worktrees for both clients; the native sidebar supports selection and refresh. Favorites and a
+native delete menu remain pending, with platform acceptance tracked separately.
+`bash scripts/macos-git-smoke.sh` runs real-window diff/history/copy, branch creation, editor
+conflict protection and Worktree bridge checks, with temporary repositories and system screenshots.
+This requires a macOS GUI session; platform acceptance is recorded separately.
 
 The core's locked dependencies include the existing base64 decoder and ignore-aware file walker.
 Native file/content UI acceptance is tracked separately in the migration guide.

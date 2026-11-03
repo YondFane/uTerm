@@ -137,7 +137,7 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 `uterm-core::{files,git,worktrees}`
 管理本地文件及 Git／Worktree 规则和回归，Tauri 命令委派相同函数。新增 `git.*`
 契约及生成 DTO 供隔离原生 QA 应用的**文件 →
-Git…**使用，原生收藏和 Worktree 侧栏登记仍待完成。`bash scripts/macos-git-smoke.sh`
+Git…**使用，Core 现统一两端已登记项目的 Worktree 列表，原生侧栏支持选择和刷新；收藏和原生删除菜单仍待完成，平台验收单独记录。`bash scripts/macos-git-smoke.sh`
 使用临时仓库，检查真实窗口的差异／历史／复制、创建分支、编辑器冲突保护及 Worktree 桥接，并保存系统截图；需要 macOS 图形会话，平台验收单独记录。核心锁定依赖包含现有 base64 解码器及遵循忽略规则的文件遍历器，原生文件／内容界面验收单独记录于迁移指南。
 
 原生 QA 构建还执行

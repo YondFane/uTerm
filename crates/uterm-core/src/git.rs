@@ -104,7 +104,7 @@ fn path_text(bytes: Vec<u8>) -> Result<String, String> {
     let value = String::from_utf8(bytes).map_err(|_| "Git 路径包含无法显示的字符。")?;
     Ok(line_output(&value).to_owned())
 }
-fn root(directory: &str) -> Result<String, String> {
+pub(crate) fn root(directory: &str) -> Result<String, String> {
     path_text(run(directory, &["rev-parse", "--show-toplevel"])?)
 }
 pub(crate) fn revision(directory: &str, value: &str) -> Result<String, String> {
@@ -378,7 +378,7 @@ pub struct Commit {
     author: String,
     timestamp: String,
 }
-fn current_branch(directory: &str) -> Result<Option<String>, String> {
+pub(crate) fn current_branch(directory: &str) -> Result<Option<String>, String> {
     let path = Path::new(directory);
     if !path.is_dir() {
         return Err("项目目录不存在。".into());
