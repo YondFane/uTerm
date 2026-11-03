@@ -34,9 +34,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 'wideDiffControlsWithinWindow', 'narrowPanelFillsWindow', 'worktreeSidebarRegisteredAndSelected',
                 'worktreeRemovedFromSharedSidebar', 'rawWorktreeDeleteDenied', 'nativeDeleteCancelRetainedWorktree',
                 'nativeDeleteMenuCompleted', 'nativeFavoritesUsedSharedCore', 'nativeFavoritesRetainedAfterReload',
-                'favoriteRootDenied', 'favoriteContentImportDenied', 'fileWindowCannotReadGitFavorites']:
+                'favoriteRootDenied', 'favoriteContentImportDenied', 'fileWindowCannotReadGitFavorites',
+                'cancelledGitRetainedEditorFreezeUntilCompletion', 'cancelledGitReportedCompletedWriteAndRetainedBytes']:
         assert report[key], (key, report)
-    assert len(report['gitCaptures']) == 9, report
+    assert len(report['gitCaptures']) == 10, report
     for name in report['gitCaptures']:
         assert (evidence / name).is_file(), name
     report.update(passed=True, testedMergeSHA=report['sourceSHA'], platform='macOS',

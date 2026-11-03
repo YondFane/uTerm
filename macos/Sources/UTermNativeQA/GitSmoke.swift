@@ -200,6 +200,62 @@ enum GitSmoke {
             report["nativeDeleteInput"] = "Real AppKit NSMenu action and NSAlert buttons; automated dispatch, not manual mouse acceptance"
             report["worktreeRemovedFromSharedSidebar"] = model.projects.first(where: { $0["id"].string == "native-git-qa" })?["worktrees"].array.isEmpty == true && model.workspace["selectedWorktree"] == .null
 
+            let cancellationText = "SAVE_BEFORE_CANCELLED_GIT 中文 e\u{301}\n"
+            try await seed(cancellationText)
+            let cancellationEditor = try await openFile(root, path)
+            defer { cancellationEditor.forceClose() }
+            try await ContentSmoke.wait(cancellationEditor, "document.querySelector('.cm-content')?.textContent.includes('SAVE_BEFORE_CANCELLED_GIT') === true")
+            let hooks = root.appendingPathComponent(".git/hooks")
+            try FileManager.default.createDirectory(at: hooks, withIntermediateDirectories: true)
+            let hook = hooks.appendingPathComponent("post-checkout")
+            let releaseHook = root.appendingPathComponent(".git/uterm-qa-release")
+            let startedHook = root.appendingPathComponent(".git/uterm-qa-started")
+            let finishedHook = root.appendingPathComponent(".git/uterm-qa-finished")
+            guard !FileManager.default.fileExists(atPath: hook.path) else { throw BridgeFailure(code: "GIT_CANCEL_FIXTURE", message: "Isolated checkout hook already exists") }
+            try git(["config", "core.hooksPath", ".git/hooks"])
+            let hookScript = """
+                #!/bin/sh
+                : > .git/uterm-qa-started
+                attempt=0
+                while [ ! -e .git/uterm-qa-release ]; do
+                  attempt=$((attempt+1))
+                  if [ "$attempt" -ge 600 ]; then exit 77; fi
+                  sleep 0.1
+                done
+                : > .git/uterm-qa-finished
+                """
+            try Data((hookScript + "\n").utf8).write(to: hook)
+            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: hook.path)
+            defer { try? Data().write(to: releaseHook); try? FileManager.default.removeItem(at: hook) }
+            let cancellationID = UUID().uuidString
+            guard try await EditorSmoke.evaluate(content, script: """
+                window.qaGitCancellationResult=null;
+                window.webkit.messageHandlers.utermContent.postMessage({kind:'request',version:1,id:operationID,document:window.utermContentDocument,method:'git_switch_branch',params:{directory,branch:'topic',expected:'main'}})
+                  .then(reply=>{window.qaGitCancellationResult=reply;});
+                return true;
+                """, arguments: ["operationID": cancellationID, "directory": root.path]) else { throw BridgeFailure(code: "GIT_CANCEL_FIXTURE", message: "Cannot dispatch real Git request") }
+            try await TerminalSmoke.wait("Enter real Git checkout hook with editors frozen") { FileManager.default.fileExists(atPath: startedHook.path) && model.busy }
+            guard try Data(contentsOf: file) == Data(cancellationText.utf8) else { throw BridgeFailure(code: "GIT_CANCEL", message: "Git started before saving the editor") }
+            guard try await EditorSmoke.evaluate(content, script: """
+                await window.webkit.messageHandlers.utermContent.postMessage({kind:'cancel',version:1,id:operationID,document:window.utermContentDocument});return true;
+                """, arguments: ["operationID": cancellationID]) else { throw BridgeFailure(code: "GIT_CANCEL", message: "Cannot cancel the real WebKit operation") }
+            try await Task.sleep(for: .milliseconds(200))
+            guard model.busy, !FileManager.default.fileExists(atPath: finishedHook.path) else { throw BridgeFailure(code: "GIT_CANCEL", message: "Cancellation released repository protection before Git finished") }
+            try await ContentSmoke.wait(cancellationEditor, "document.querySelector('.cm-content')?.getAttribute('contenteditable') === 'false'")
+            report["cancelledGitRetainedEditorFreezeUntilCompletion"] = true
+            captures.append("native-git-cancel-frozen-editor.png")
+            try await capture(cancellationEditor, captures.last!)
+            try Data().write(to: releaseHook)
+            try await TerminalSmoke.wait("Wait for actual Git completion after cancellation") { FileManager.default.fileExists(atPath: finishedHook.path) && !model.busy }
+            try await ContentSmoke.wait(content, "window.qaGitCancellationResult?.error?.code === 'WORKTREE_SYNC'", allowAlert: true)
+            try await ContentSmoke.wait(cancellationEditor, "document.querySelector('.cm-content')?.getAttribute('contenteditable') === 'true'")
+            guard try git(["branch", "--show-current"]) == "topic", try Data(contentsOf: file) == Data(cancellationText.utf8) else { throw BridgeFailure(code: "GIT_CANCEL", message: "Cancelled reply lost the completed Git result or exact editor bytes") }
+            report["cancelledGitReportedCompletedWriteAndRetainedBytes"] = true
+            report["gitCancellationScenario"] = "Real post-checkout hook, exact saved UTF-8, WebKit protocol cancel after dispatch, editor frozen until Git completes; WORKTREE_SYNC requests explicit refresh, no rollback claim"
+            try FileManager.default.removeItem(at: hook)
+            cancellationEditor.forceClose()
+            await model.refreshWorktrees("native-git-qa")
+
             let unsaved = "RETAIN_CONFLICT 中文 e\u{301}\n", external = Data("EXTERNAL_WRITER 中文\n".utf8)
             try await seed(unsaved)
             let conflict = try await openFile(root, path)

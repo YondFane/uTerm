@@ -159,8 +159,9 @@ removal requires explicit refresh. Both clients use the Core Git favorite store 
 checks, exact old-source archives and explicit conflict handoff; favorite recovery UI and platform
 acceptance remain pending. `bash scripts/macos-git-smoke.sh` runs real-window diff/history/copy,
 branch creation, editor conflict protection and real Worktree menu
-confirmation/cancel/refusal/removal and favorite persistence checks, with temporary repositories and
-system screenshots. This requires a macOS GUI session; platform acceptance is recorded separately.
+confirmation/cancel/refusal/removal and favorite persistence and in-flight cancellation protection
+checks, with temporary repositories and system screenshots. This requires a macOS GUI session;
+platform acceptance is recorded separately.
 
 The core's locked dependencies include the existing base64 decoder and ignore-aware file walker.
 Native file/content UI acceptance is tracked separately in the migration guide.

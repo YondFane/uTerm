@@ -352,33 +352,37 @@ bytes; it does not perform an installed client downgrade.
 
 #### Git and editor concurrency validation
 
-Head `c21f75f6cc47d548fbd71bd53e2f56a27a05e923`, actual tested merge
-`8eeb14872b59754feb3547ad923d33e7bee2cc14`, passed all four jobs in
-[native CI 41586482528](https://github.com/YondFane/uTerm/actions/runs/41586482528) and
-[legacy CI 41586482532](https://github.com/YondFane/uTerm/actions/runs/41586482532). Artifacts:
-[ARM 13208108246](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208108246),
-[Intel 13208446559](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208446559),
-[Windows 13208079517](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208079517),
-[old Mac 13208751241](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208751241).
+Head `b1fecc55e8ce32e1a405d3fbc43dc3130063a8d4`, actual tested merge
+`e9434576adb2f41ab5757ece5654c0cad1514774`, passed all four jobs in
+[native CI 41589492119](https://github.com/YondFane/uTerm/actions/runs/41589492119) and
+[legacy CI 41589492180](https://github.com/YondFane/uTerm/actions/runs/41589492180). Artifacts:
+[ARM 13209169082](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209169082),
+[Intel 13209184946](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209184946),
+[Windows 13210200052](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13210200052),
+[old Mac 13209324758](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13209324758).
 
-Native macOS ARM64/Intel passed 14 Swift tests and real Git/editor/terminal/control scenes.
-`git-live.json` records clean source head/merge, OS, architecture and scenarios. Eight actual
-`native-git-*.png` images include Worktree confirmation/cancel/dirty refusal/clean removal;
-`native-git-worktree-delete-confirm.png` and `native-git-worktree-delete-error.png` were inspected
-on ARM macOS 15.8.2. Both legacy jobs passed 20 real Tauri scenes with no cleanup errors. Windows
-x64 Server 2025 passed all three Worktree deletion tests and the explicit post-Git metadata I/O
-failure; `core-ffi-tests.log` records commands/results. The earlier LF/CRLF fixture failure remains
-linked in #35 and is not counted as a pass.
+Both native architectures passed 14 Swift tests, including actual C ABI favorite decoding with exact
+NFD/UTF-8/UTF-16, shared Worktree identity and stale-write rejection. Real Git/editor/terminal/
+control scenes passed. `git-live.json` records clean head/merge, OS, architecture and scenarios.
+Nine `native-git-*.png` images include `native-git-favorites.png`, showing persisted main/topic
+favorites after a verified document reload; the ARM image was inspected. Worktree confirmation/
+cancel/dirty refusal/clean removal images remain included.
 
-Current favorite changes passed five real Git/Core integration tests plus explicit filesystem
-failure/retry, 35 real Rust/React contracts, 389 frontend tests (ten skipped), 100 backend tests
-(ten ignored), production build, generated contracts, types and i18n on Linux x86_64 / Rust 1.99.1 /
-Node 26.13. Tests cover shared Worktree identity, stale writes, exact NFD/CRLF source retention,
-conflict/receipt/quota failures, delayed reads, real writer-lock backoff, close cancellation, reopen
-and current-value export. The new native typed C ABI assertions and ninth Git screenshot, plus Tauri
-favorite handoff/menu scene (21 total), require this change's own platform CI and image inspection.
-Earlier eight-image results do not accept favorites. Recovery UI, complete cancellation/platform
-matrix, manual input/IME/focus and #16 dependencies keep #35 open.
+Both legacy jobs passed 21 actual Tauri scenes with no cleanup errors. `git-git-favorites.png` and
+its JSON report verify old-source import, real remove/re-add menu actions, frozen original bytes,
+versioned backup and receipt. Windows passed the late-WebView-source path-key export regression,
+real host/deletion guards and explicit post-Git metadata and favorite filesystem failure/retry.
+Linux clean-source Tauri/X11 also passed 21 scenes with no cleanup errors. Tests cover five real
+Git/favorite integrations, 35 actual Rust/React contracts, 389 frontend checks (ten skipped), 100
+backend checks (ten ignored), Core/FFI, build, types, contracts, i18n, format and bilingual docs.
+
+The new cancellation QA pauses an actual checkout hook after saving an editor, cancels the WebKit
+request and checks that readonly/editor/repository protection stays until Git completes. It expects
+exact saved bytes and an explicit post-write refresh error, with a tenth
+`native-git-cancel-frozen-editor.png` image. This added scenario has not run locally (no
+Swift/macOS) and needs its own source head's macOS CI and visual inspection. The earlier nine-image
+result does not accept this test. Recovery UI, complete platform/cancellation matrix, manual
+input/IME/focus and #16 dependencies keep #35 open.
 
 ## Project website
 

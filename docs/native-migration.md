@@ -637,55 +637,61 @@ Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
 
 存储保留最多八份先前快照和十六份原始来源内容，最多一千个仓库、每仓库一千引用。无效／损坏／缺失数据及占用的恢复路径阻止替换，恢复文件保留；收藏存储损坏／缺失的恢复界面仍待完成。**重新读取 Git 收藏**在失败后明确恢复。只读等锁有界且关闭时取消，写入不自动重试。旧版导出按规范目录及原客户端路径键反映当前共享收藏，并保留原始归档字节，不执行已安装客户端降级。
 
-Head `c21f75f6cc47d548fbd71bd53e2f56a27a05e923`, actual tested merge
-`8eeb14872b59754feb3547ad923d33e7bee2cc14`, passed all four jobs in
-[native CI 41586482528](https://github.com/YondFane/uTerm/actions/runs/41586482528) and
-[legacy CI 41586482532](https://github.com/YondFane/uTerm/actions/runs/41586482532). Artifacts:
-[ARM 13208108246](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208108246),
-[Intel 13208446559](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208446559),
-[Windows 13208079517](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208079517),
-[old Mac 13208751241](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208751241).
+Head `b1fecc55e8ce32e1a405d3fbc43dc3130063a8d4`, actual tested merge
+`e9434576adb2f41ab5757ece5654c0cad1514774`, passed all four jobs in
+[native CI 41589492119](https://github.com/YondFane/uTerm/actions/runs/41589492119) and
+[legacy CI 41589492180](https://github.com/YondFane/uTerm/actions/runs/41589492180). Artifacts:
+[ARM 13209169082](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209169082),
+[Intel 13209184946](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209184946),
+[Windows 13210200052](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13210200052),
+[old Mac 13209324758](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13209324758).
 
-Native macOS ARM64/Intel passed 14 Swift tests and real Git/editor/terminal/control scenes.
-`git-live.json` records clean source head/merge, OS, architecture and scenarios. Eight actual
-`native-git-*.png` images include Worktree confirmation/cancel/dirty refusal/clean removal;
-`native-git-worktree-delete-confirm.png` and `native-git-worktree-delete-error.png` were inspected
-on ARM macOS 15.8.2. Both legacy jobs passed 20 real Tauri scenes with no cleanup errors. Windows
-x64 Server 2025 passed all three Worktree deletion tests and the explicit post-Git metadata I/O
-failure; `core-ffi-tests.log` records commands/results. The earlier LF/CRLF fixture failure remains
-linked in #35 and is not counted as a pass.
+Both native architectures passed 14 Swift tests, including actual C ABI favorite decoding with exact
+NFD/UTF-8/UTF-16, shared Worktree identity and stale-write rejection. Real Git/editor/terminal/
+control scenes passed. `git-live.json` records clean head/merge, OS, architecture and scenarios.
+Nine `native-git-*.png` images include `native-git-favorites.png`, showing persisted main/topic
+favorites after a verified document reload; the ARM image was inspected. Worktree confirmation/
+cancel/dirty refusal/clean removal images remain included.
 
-Current favorite changes passed five real Git/Core integration tests plus explicit filesystem
-failure/retry, 35 real Rust/React contracts, 389 frontend tests (ten skipped), 100 backend tests
-(ten ignored), production build, generated contracts, types and i18n on Linux x86_64 / Rust 1.99.1 /
-Node 26.13. Tests cover shared Worktree identity, stale writes, exact NFD/CRLF source retention,
-conflict/receipt/quota failures, delayed reads, real writer-lock backoff, close cancellation, reopen
-and current-value export. The new native typed C ABI assertions and ninth Git screenshot, plus Tauri
-favorite handoff/menu scene (21 total), require this change's own platform CI and image inspection.
-Earlier eight-image results do not accept favorites. Recovery UI, complete cancellation/platform
-matrix, manual input/IME/focus and #16 dependencies keep #35 open.
+Both legacy jobs passed 21 actual Tauri scenes with no cleanup errors. `git-git-favorites.png` and
+its JSON report verify old-source import, real remove/re-add menu actions, frozen original bytes,
+versioned backup and receipt. Windows passed the late-WebView-source path-key export regression,
+real host/deletion guards and explicit post-Git metadata and favorite filesystem failure/retry.
+Linux clean-source Tauri/X11 also passed 21 scenes with no cleanup errors. Tests cover five real
+Git/favorite integrations, 35 actual Rust/React contracts, 389 frontend checks (ten skipped), 100
+backend checks (ten ignored), Core/FFI, build, types, contracts, i18n, format and bilingual docs.
 
-源码 head `c21f75f6cc47d548fbd71bd53e2f56a27a05e923`、实际 tested merge
-`8eeb14872b59754feb3547ad923d33e7bee2cc14` 的
-[原生 CI 41586482528](https://github.com/YondFane/uTerm/actions/runs/41586482528) 和
-[旧端 CI 41586482532](https://github.com/YondFane/uTerm/actions/runs/41586482532)
+The new cancellation QA pauses an actual checkout hook after saving an editor, cancels the WebKit
+request and checks that readonly/editor/repository protection stays until Git completes. It expects
+exact saved bytes and an explicit post-write refresh error, with a tenth
+`native-git-cancel-frozen-editor.png` image. This added scenario has not run locally (no
+Swift/macOS) and needs its own source head's macOS CI and visual inspection. The earlier nine-image
+result does not accept this test. Recovery UI, complete platform/cancellation matrix, manual
+input/IME/focus and #16 dependencies keep #35 open.
+
+源码 head `b1fecc55e8ce32e1a405d3fbc43dc3130063a8d4`、实际 tested merge
+`e9434576adb2f41ab5757ece5654c0cad1514774` 的
+[原生 CI 41589492119](https://github.com/YondFane/uTerm/actions/runs/41589492119) 和
+[旧端 CI 41589492180](https://github.com/YondFane/uTerm/actions/runs/41589492180)
 四 job 全通过。产物：
-[ARM 13208108246](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208108246)、
-[Intel 13208446559](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208446559)、
-[Windows 13208079517](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208079517)、
-[旧 Mac 13208751241](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208751241)。
+[ARM 13209169082](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209169082)、
+[Intel 13209184946](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209184946)、
+[Windows 13210200052](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13210200052)、
+[旧 Mac 13209324758](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13209324758)。
 
-原生 macOS ARM64／Intel 通过十四项 Swift 及真实 Git／编辑器／终端／控制场景。`git-live.json`
-记录干净源码 head／merge、系统、架构和场景。八张真实 `native-git-*.png`
-包括 Worktree 确认／取消／脏拒删／干净删除；ARM macOS 15.8.2 的
-`native-git-worktree-delete-confirm.png` 与 `native-git-worktree-delete-error.png`
-已目视检查。旧端两 job 各二十真实 Tauri 场景通过，清理无错误。Windows x64 Server
-2025 三项 Worktree 删除及明确执行的 Git 后元数据 I/O 失败通过，命令和结果见
-`core-ffi-tests.log`。先前 LF／CRLF 夹具失败链接保留在 #35，不计为通过。
+原生双架构通过十四项 Swift，包括实际 C
+ABI 收藏解码的准确 NFD／UTF-8／UTF-16、Worktree 共用身份和过期写入拒绝。真实 Git／编辑器／终端／控制场景通过。`git-live.json`
+记录干净 head／merge、系统、架构及场景。九张 `native-git-*.png` 包括
+`native-git-favorites.png`，显示经确认的文档重载后 main／topic 收藏；ARM 图片已检查。Worktree 确认／取消／脏拒删／干净删除图仍保留。
 
-本轮收藏在 Linux x86_64／Rust 1.99.1／Node
-26.13 通过五项真实 Git／Core 集成和明确文件系统失败／重试、三十五项真实 Rust／React 契约、389 前端（十跳过）、100 后端（十忽略）、生产构建、生成契约、类型与 i18n。覆盖 Worktree 共用身份、过期写入、准确 NFD／CRLF 来源保留、冲突／回执／配额失败、迟到读取、真实等锁、关闭取消、重开和当前值导出。新原生类型化 C
-ABI 断言和第九张 Git 截图、Tauri 收藏交接／菜单场景（总二十一场景）仍需本次改动自己的平台 CI 和图片检查，先前八图不验收收藏。恢复界面、完整取消／平台矩阵、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
+旧端两 job 各二十一个真实 Tauri 场景通过，清理无错误。`git-git-favorites.png`
+和 JSON 报告验证旧来源导入、真实取消收藏／重新收藏菜单、冻结原文、带版本备份及回执。Windows 通过主状态建立后 WebView 来源的路径键导出回归、真实宿主／删除保护及明确执行的 Git 后元数据和收藏文件系统失败／重试。Linux 干净源码 Tauri／X11 二十一场景也通过，清理无错误。检查包含五项真实 Git／收藏集成、三十五项真实 Rust／React 契约、389 前端（十跳过）、100 后端（十忽略）、Core／FFI、构建、类型、契约、i18n、格式和双语文档。
+
+新增取消 QA 在保存编辑器后暂停真实 checkout
+hook，取消 WebKit 请求，检查只读／编辑器／仓库保护保持到 Git 完成；核对准确保存字节和明确的写后刷新错误，新增第十图
+`native-git-cancel-frozen-editor.png`。本地无 Swift／macOS，尚未执行此新增场景，需其自己的源码 head
+macOS
+CI 和目视检查，先前九图不验收本测试。恢复界面、完整平台／取消矩阵、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
 
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 
