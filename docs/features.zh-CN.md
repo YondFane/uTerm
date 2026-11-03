@@ -200,28 +200,36 @@ Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
 
 #### Git 与编辑器并发验证
 
-完整 Git／Worktree／取消基线为 head `e1eb1964df2d96ef2c81b7a3393db5ffcdb8ec15`、实际 merge
-`28da0fef53400b712646012a1a58a589b68241c2`：[原生 ARM／Intel](https://github.com/YondFane/uTerm/actions/runs/41592376226)
-与 [Tauri Windows／macOS](https://github.com/YondFane/uTerm/actions/runs/41592376229)
-通过。覆盖 checkout
-hook 执行中取消、编辑器冻结至 Git 完成、WORKTREE_SYNC 明确刷新，以及当前分支、外部文件和草稿分别保留；两个 Tauri
-job 各二十一场景通过。
+已完成四平台恢复／并发基线为 head `9de80a8e1e4fb7f91a6b78bcf6d3dc6d4db45610`、实际 tested merge
+`020bee68b0733da08fa6528d6e51392a5132e6bb`。[原生 CI 41608100652](https://github.com/YondFane/uTerm/actions/runs/41608100652)
+和 [Tauri CI 41608101046](https://github.com/YondFane/uTerm/actions/runs/41608101046)
+各两个 job 均通过。产物：
+[ARM 13217632752](https://github.com/YondFane/uTerm/actions/runs/41608100652/artifacts/13217632752)、
+[Intel 13218091945](https://github.com/YondFane/uTerm/actions/runs/41608100652/artifacts/13218091945)、
+[Windows 13218207710](https://github.com/YondFane/uTerm/actions/runs/41608101046/artifacts/13218207710)、
+[旧 Mac 13218186999](https://github.com/YondFane/uTerm/actions/runs/41608101046/artifacts/13218186999)。报告均记录干净源码、系统、架构和工具链。
 
-原生收藏恢复在 head `0b3e96f1dbafb01827f27eadd72e66f6fd198cb0`、实际 merge
-`c7d6bb403ad1cc83c2f98f11ac4fbebe52b4a606` 的
-[CI 41605226766](https://github.com/YondFane/uTerm/actions/runs/41605226766)
-双架构通过。产物：[ARM 13216078878](https://github.com/YondFane/uTerm/actions/runs/41605226766/artifacts/13216078878)、
-[Intel 13216407814](https://github.com/YondFane/uTerm/actions/runs/41605226766/artifacts/13216407814)。报告记录干净源码、平台及工具链：ARM
-macOS 15.8.2、Intel macOS 15.7.9，十四项 Swift 测试和十四张真实 Git 图。已目视检查四张 ARM 图片：
-`native-git-favorite-recovery-preview.png`、`native-git-favorite-recovery-source.png`、
-`native-git-favorite-recovery-damaged.png`、`native-git-favorite-recovery-missing-zh-light.png`。真实 NSMenu／NSAlert／NSPopUpButton／NSButton 和 NSPasteboard 验证默认取消、准确原始来源复制且禁用恢复、过期拒绝、损坏字节保留、缺失只读预览及明确恢复。自动操作不代表人工键盘／IME／焦点验收。
+原生 ARM macOS 15.8.2 与 Intel macOS
+15.7.9 通过十四项 Swift 测试及十四张真实 Git 图。真实 NSMenu／NSAlert／NSPopUpButton／NSButton／NSPasteboard 验证默认取消、完整原始来源复制且禁用恢复、过期拒绝、损坏字节保留、缺失只读预览及明确恢复。已目视 ARM 的
+`native-git-favorite-recovery-preview.png` 和
+`native-git-favorite-recovery-missing-zh-light.png`。同一运行保留 checkout
+hook 执行中取消、编辑器冻结至 Git 完成、WORKTREE_SYNC 明确刷新，以及当前分支／外部文件／草稿分别保留的证据。
 
-核心恢复测试覆盖校验快照与准确来源、当前文件 CAS、校验和／占用路径失败、无覆盖安装、全仓库恢复／撤回及备份上限。真实 Rust／React 界面检查还覆盖迟到回复、超过 20k 预览的完整 CRLF／NFD 复制、原生复制可见失败／重试、先退出时拒绝恢复及等待已分发恢复确认。隔离 Linux 应用已验证真实写入锁拒绝、明确重试草稿、CRLF／NFD 持久化、SIGKILL／重启及 BOM／CRLF 保存；完整新恢复和正常退出流程仍需本次修改自己的重跑。其他编辑器／传输保护暂缓退出后，再次核对共享存储，保留恢复门禁及后续退出。
+Windows Server 2025 x64 和过渡期 macOS 26.6.2
+arm64 各通过三十个真实隔离 Tauri 场景，清理无错误。系统剪贴板与准确归档来源字节一致。已目视 Windows 的
+`git-git-favorite-recovery-source.png`、`git-git-favorite-recovery-conflict.png`、
+`editor-checkpoint-editor-write-rejected.png` 及旧 Mac 的来源复制图。 `editor-writer-lock.json`
+及对应场景报告证明真实写锁拒绝、明确重试草稿、CRLF／NFD 持久化、SIGKILL／重启、BOM／CRLF 保存和正常退出。基线中的核心／FFI／契约、392 前端（十跳过）、100 后端（十忽略）、类型、生产／桌面构建、本地化、格式及双语文档均通过。
 
-新的 Tauri 恢复界面仍待匹配版本剪贴板插件的 Windows／macOS 运行成功报告、系统剪贴板核对及截图。先前失败保留在
-[Issue #35](https://github.com/YondFane/uTerm/issues/35)。完整 Windows 删除／取消矩阵、人工输入／IME／焦点及 #16 依赖使 #35 保持开放；不代表合并、签名、安装升级或发版验收。
+核心恢复检查覆盖校验快照与准确来源、当前文件 CAS、校验和／占用路径失败、无覆盖安装、全仓库恢复／撤回及备份上限。真实 Rust／React 检查还覆盖迟到回复、超过 20k 预览的完整 CRLF／NFD 复制、原生复制可见失败／重试、先退出时拒绝恢复及等待已分发恢复确认。其他编辑器／传输保护暂缓退出后，会重新核对共享存储；失败迭代保留在
+[Issue #35](https://github.com/YondFane/uTerm/issues/35)。
 
-本次 Tauri 删除预览固定版本的修改在 Linux 通过三十六项核心／transport 检查及一项 App 集成检查（包括真实 Rust 进程队列冲突）、392 前端（十跳过）、类型、生产构建、本地化、格式及双语文档检查。SDK 回归持有真实设置写入回复，让删除排队，随后拒绝旧预览且不发送 Git 删除；另一次外部写入在 Core 拒绝旧预览。显示名称／路径变化会拒绝，脏数据保留至明确清理重试。本次真实应用的确认／取消／脏拒绝／过期／重新读取／删除截图和完整平台结果仍待验证。 真实应用脚本先展开所属项目再定位 Worktree，并在取消／脏拒绝前后核对元数据 revision 和文件字节；修正场景仍需自己的运行结果。
+Tauri 删除预览固定版本的修改在 Linux 通过三十六项核心／transport 检查及一项 App 集成检查（包括真实 Rust 进程队列冲突）、392 前端（十跳过）、类型、生产构建、本地化、格式及双语文档检查。SDK 持有真实设置写入回复，让删除排队，随后拒绝旧预览且不发送 Git 删除；另一次外部写入在 Core 拒绝。显示名称／路径变化会拒绝，脏数据保留至明确清理重试。
+
+干净 Linux head `a2a854a6edbba67c633c0ce49ce8d622a01456fd`
+通过三十六个真实桌面场景，含 Worktree 确认／默认取消、取消与脏拒绝后元数据／文件字节保留、外部版本冲突、明确重新读取工作区／再次预览，以及保留分支的干净删除；已目视四张删除图。紧凑的重新读取按钮对齐仍需自己的真实运行重验，本次 Windows／macOS 删除场景结果及产物待核对。
+
+完整取消／生命周期矩阵及 #16 依赖使 #35 保持开放。人工键盘／IME／焦点、正式签名／公证和已安装版本升级／回退未验收；上述检查不代表发版验收。
 
 ## 项目官网
 

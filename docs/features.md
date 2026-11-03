@@ -375,53 +375,59 @@ repositories' recovery data.
 
 #### Git and editor concurrency validation
 
-The complete Git/Worktree/cancellation baseline is head `e1eb1964df2d96ef2c81b7a3393db5ffcdb8ec15`,
-tested merge `28da0fef53400b712646012a1a58a589b68241c2`:
-[native ARM/Intel](https://github.com/YondFane/uTerm/actions/runs/41592376226) and
-[Tauri Windows/macOS](https://github.com/YondFane/uTerm/actions/runs/41592376229) pass. This
-includes the checkout-hook cancellation, editor freeze until Git completes, explicit WORKTREE_SYNC
-refresh and separately retained branch, external file and draft; both Tauri jobs pass 21 scenes.
+The completed four-platform recovery/concurrency baseline is head
+`9de80a8e1e4fb7f91a6b78bcf6d3dc6d4db45610`, actual tested merge
+`020bee68b0733da08fa6528d6e51392a5132e6bb`. Both jobs in
+[native CI 41608100652](https://github.com/YondFane/uTerm/actions/runs/41608100652) and
+[Tauri CI 41608101046](https://github.com/YondFane/uTerm/actions/runs/41608101046) pass. Artifacts:
+[ARM 13217632752](https://github.com/YondFane/uTerm/actions/runs/41608100652/artifacts/13217632752),
+[Intel 13218091945](https://github.com/YondFane/uTerm/actions/runs/41608100652/artifacts/13218091945),
+[Windows 13218207710](https://github.com/YondFane/uTerm/actions/runs/41608101046/artifacts/13218207710),
+[old Mac 13218186999](https://github.com/YondFane/uTerm/actions/runs/41608101046/artifacts/13218186999).
+All reports identify clean source, OS, architecture and toolchain.
 
-Native favorite recovery passes both architectures at head
-`0b3e96f1dbafb01827f27eadd72e66f6fd198cb0`, tested merge `c7d6bb403ad1cc83c2f98f11ac4fbebe52b4a606`,
-in [CI 41605226766](https://github.com/YondFane/uTerm/actions/runs/41605226766). Artifacts:
-[ARM 13216078878](https://github.com/YondFane/uTerm/actions/runs/41605226766/artifacts/13216078878)
-and
-[Intel 13216407814](https://github.com/YondFane/uTerm/actions/runs/41605226766/artifacts/13216407814).
-Reports record clean source, platform and toolchain: ARM macOS 15.8.2 and Intel macOS 15.7.9, 14
-Swift tests and 14 actual Git screenshots. Four ARM images were inspected:
-`native-git-favorite-recovery-preview.png`, `native-git-favorite-recovery-source.png`,
-`native-git-favorite-recovery-damaged.png` and `native-git-favorite-recovery-missing-zh-light.png`.
-Actual NSMenu/NSAlert/NSPopUpButton/NSButton and NSPasteboard checks cover default Cancel, exact
-original-source copy with Restore disabled, stale refusal, retained damaged bytes, readonly missing
-preview and explicit restoration. These automated operations do not establish manual
-keyboard/IME/focus acceptance.
+Native ARM macOS 15.8.2 and Intel macOS 15.7.9 pass 14 Swift tests and 14 actual Git captures. Real
+NSMenu/NSAlert/NSPopUpButton/NSButton/NSPasteboard checks cover default Cancel, full original source
+copy with Restore disabled, stale refusal, retained damaged bytes, readonly missing preview and
+explicit restoration. ARM `native-git-favorite-recovery-preview.png` and
+`native-git-favorite-recovery-missing-zh-light.png` were inspected. The same run retains actual
+checkout-hook cancellation, editor freeze until Git finishes, explicit WORKTREE_SYNC refresh and
+independently retained branch/file/draft evidence.
 
-Core recovery tests cover verified snapshots and exact sources, current-file CAS, checksum and
+Windows Server 2025 x64 and transitional macOS 26.6.2 arm64 each pass 30 actual isolated Tauri
+scenes with no cleanup errors. System clipboard contents match exact archived source bytes. Windows
+`git-git-favorite-recovery-source.png`, `git-git-favorite-recovery-conflict.png` and
+`editor-checkpoint-editor-write-rejected.png`, plus the Mac source-copy image, were inspected.
+`editor-writer-lock.json` and corresponding scene reports prove actual writer rejection, explicit
+draft retry, CRLF/NFD durability, SIGKILL/relaunch, BOM/CRLF save and normal exit.
+Core/FFI/contracts, 392 frontend checks (ten skipped), 100 backend checks (ten ignored), types,
+production/desktop builds, localization, formatting and bilingual documentation pass in this
+baseline.
+
+Core recovery checks cover verified snapshots and exact sources, current-file CAS, checksum and
 occupied-path failures, no-clobber installation, all-repository restore/undo and bounded backups.
-The real Rust/React interface checks also cover late replies, full CRLF/NFD copy beyond the 20k
-preview, visible native-copy failure/retry, quit-before-restore refusal and waiting for a dispatched
-restore acknowledgement. The isolated Linux app verifies actual writer-lock rejection, explicit
-draft retry, durable CRLF/NFD text, SIGKILL/relaunch and BOM/CRLF save; its complete new recovery
-and normal-exit flow still requires this change's own rerun. Shared-store approval is repeated when
-another editor/transfer guard defers quit, preserving both the restore gate and subsequent exit.
-
-The new Tauri recovery interface still needs successful Windows/macOS runtime reports, OS clipboard
-comparison and screenshots for the matching clipboard plugin versions. Earlier failures remain in
-[Issue #35](https://github.com/YondFane/uTerm/issues/35). Full Windows deletion/cancellation matrix,
-manual input/IME/focus and #16 dependencies keep #35 open. No merge, signing, installer-upgrade or
-release acceptance is implied.
+The real Rust/React checks also cover late replies, full CRLF/NFD copy beyond the 20k preview,
+visible native-copy failure/retry, quit-before-restore refusal and waiting for a dispatched restore
+acknowledgement. Shared-store approval repeats when another editor/transfer guard defers quit.
+Failed iterations remain available in [Issue #35](https://github.com/YondFane/uTerm/issues/35).
 
 The reviewed Tauri Worktree deletion change passes 36 core/transport checks and one App integration
 check, including real Rust-process queue conflicts, plus 392 frontend checks (ten skipped), types,
-production build, localization, formatting and bilingual documentation checks on Linux. The SDK
-regression holds a real settings-write reply while deletion queues, then rejects its old review
-without sending a Git delete; a separate external write rejects the review at Core. A changed
-displayed name/path is refused, and dirty data survives until an explicit clean retry. Actual
-application confirmation/cancel/dirty/stale/reload/delete screenshots and the complete platform
-result for this change remain pending. The real-app script expands the owning project before
-locating its Worktree and compares metadata revisions and file bytes across Cancel and dirty
-refusal; the corrected scene still requires its own runtime result.
+production build, localization, formatting and bilingual documentation on Linux. The SDK holds a
+real settings-write reply while deletion queues, then rejects the old review without sending Git
+delete; a separate external write is rejected at Core. Changed displayed names/paths are refused,
+and dirty data survives until explicit clean retry.
+
+Clean Linux head `a2a854a6edbba67c633c0ce49ce8d622a01456fd` passes 36 real desktop scenes, including
+Worktree confirmation/default Cancel, retained metadata/file bytes after cancel and dirty refusal,
+external revision conflict, explicit workspace reload/new review and clean deletion with branch
+retained. Four deletion images were inspected. The compact reload-action alignment requires its own
+runtime rerun; Windows/macOS deletion scene results and artifacts for the current change remain
+pending.
+
+Full cancellation/lifecycle matrix and #16 dependencies keep #35 open. Manual keyboard/IME/focus,
+formal signing/notarization and installed-version upgrade/rollback remain unverified. These checks
+do not establish release acceptance.
 
 ## Project website
 

@@ -881,6 +881,11 @@ select:focus-visible {
   min-height: 28px;
   padding: 4px 10px;
 }
+.workspace-reload {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  margin: 0 12px 8px;
+}
 
 .terminal-workspace {
   position: absolute;
