@@ -177,15 +177,25 @@ Git 使用独立桥接，长操作不占用终端桥接。写入前所有已打�
 head `31d3d5e3922a9e03d34b3287f1f19a6a3aa700ad`、tested merge
 `aeeccd9369965b45c652163981bd680cb9e9b91b` 的
 [旧端 CI](https://github.com/YondFane/uTerm/actions/runs/41568790602) Windows job 通过，macOS
-job 因真实首次打开草稿的 `BUSY`
+job 因真实首次打开草稿的 `WRITER_BUSY`
 失败。[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41568790616) 两 job 均在新增 Swift
 Git 断言失败：错误要求按行展示的 Diff 包含最后 LF，窗口检查未执行。失败及产物见
 [#35 证据](https://github.com/YondFane/uTerm/issues/35#issuecomment-6595018569)，不作为当前修改的平台通过结果。
 
-当前实现将 Diff 文本与完整原始文件字节分别断言。草稿列表／文档读取仅对 `BUSY`
-最多重试六次，共退避 620ms，关闭取消等待；写入和冲突不会自动重试。首次打开失败时保留可见错误，可再次尝试，不再卡在不可见的放弃对话框。
+head `9a35977a2743cdace0310f10dd953b8f2c210253`、tested merge
+`fd2932c8b991225806f91935681948d835da8cc9` 的
+[macOS ARM 原生 job](https://github.com/YondFane/uTerm/actions/runs/41576097250)
+通过十四项 Swift、终端／编辑器／控制以及真实 Git 差异／历史／复制／分支／Worktree／冲突检查。[产物 13203259477](https://github.com/YondFane/uTerm/actions/runs/41576097250/artifacts/13203259477)
+包含 `git-live.json` 和五张
+`native-git-*.png`。目视检查发现窄窗浮层定位、宽窗差异控件裁切，以及重复冲突前缀阻止英文翻译；即使自动检查通过，也不验收这些视觉／语言结果。现已限定原生页修正布局和原始错误消息，并加强边界及英文提示断言，仍待自己的平台重跑。
 
-云端 Linux 三十项真实 Rust／React 契约通过，包括忙碌读取、关闭、明确写入重试、首次打开重试、选定 Worktree 和过期 revision。核心／FFI 及明确文件系统失败通过；两项真实仓库回归覆盖末尾空白根目录和合法 Unicode 分支名。二十九项既有 Git／Worktree 测试移入 Core，没有删除。完整前端检查发现并修正 Git 标题未注册的问题，修正后翻译门禁通过。新增原生五场景及旧端四场景 Git 检查仍需本次干净源码的平台 CI、真实截图与目视检查。收藏、侧栏完整性、完整取消及人工焦点验收未完成，#35 保持开放。`d8345b6`
+当前实现将 Diff 文本与完整原始文件字节分别断言。草稿列表／文档读取仅对 `WRITER_BUSY`
+最多重试六次，共退避 620ms，关闭取消等待；写入和冲突不会自动重试。首次打开失败时保留可见错误，可再次尝试，不再卡在不可见的放弃对话框。真实 Core 错误码为
+`WRITER_BUSY`，现使用独立 Rust 夹具进程持有操作系统写锁，执行读取／关闭／写入测试。此前模拟 `BUSY`
+未覆盖该码，不能作为恢复通过证据；`9a35977`
+的干净源码 Linux 重现首次打开失败，真实持锁回归在修正错误码前确实失败，现针对实际存储运行。
+
+云端 Linux 三十项真实 Rust／React 契约通过，包括忙碌读取、关闭、明确写入重试、首次打开重试、选定 Worktree 和过期 revision。核心／FFI 及明确文件系统失败通过；两项真实仓库回归覆盖末尾空白根目录和合法 Unicode 分支名。二十九项既有 Git／Worktree 测试移入 Core，没有删除。完整前端 384 项通过、十项跳过，包括修正后的翻译门禁。新增原生五场景及旧端四场景 Git 检查仍需本次干净源码的平台 CI、真实截图与目视检查。收藏、侧栏完整性、完整取消及人工焦点验收未完成，#35 保持开放。`d8345b6`
 的干净源码 Linux 实际运行已通过差异／历史／创建分支，随后因 QA 脚本写错现有 New
 worktree 按钮的大小写而停止。选择文本已修正，Worktree 截图仍需重跑通过。macOS Core CI 因 Git 返回
 `/private/var`、临时目录使用 `/var`

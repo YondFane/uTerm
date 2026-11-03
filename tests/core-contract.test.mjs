@@ -88,25 +88,52 @@ function draftCall(call) {
   };
 }
 
+async function holdWriter(t, root) {
+  const target = resolve(process.env.CARGO_TARGET_DIR ?? "crates/uterm-core/target");
+  const child = spawn(
+    join(target, "debug", `uterm-core-contract${process.platform === "win32" ? ".exe" : ""}`),
+    ["--hold-store-lock", root],
+    { stdio: ["pipe", "pipe", "inherit"] },
+  );
+  const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
+  const exited = new Promise((resolve) => child.once("close", resolve));
+  t.after(() => child.kill());
+  assert.equal((await lines.next()).value, "locked");
+  return async () => {
+    child.stdin.end("release\n");
+    assert.equal(await exited, 0);
+  };
+}
+
 test("draft reads retry a busy Rust store but writes require explicit recovery", async (t) => {
-  const call = await client(t),
+  const root = mkdtempSync(join(tmpdir(), "uterm-real-writer-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const call = await client(t, root),
     raw = draftCall(call);
+  await raw("editor_drafts_import", { legacy: null });
+  const releaseRead = await holdWriter(t, root);
+  assert.equal((await call("editor.drafts.list")).error.code, "WRITER_BUSY");
   let reads = 0,
     writes = 0;
   const queue = new EditorDraftQueue(async (method, params) => {
-    if (method === "editor_drafts_list" && reads++ < 2)
-      throw Object.assign(Error("Another writer owns the canonical store"), { code: "BUSY" });
-    if (method === "editor_drafts_put" && ++writes === 1)
-      throw Object.assign(Error("Another writer owns the canonical store"), { code: "BUSY" });
-    return raw(method, params);
+    if (method === "editor_drafts_put") writes++;
+    try {
+      return await raw(method, params);
+    } catch (reason) {
+      if (method === "editor_drafts_list" && reason.code === "WRITER_BUSY" && ++reads === 2)
+        await releaseRead();
+      throw reason;
+    }
   });
   t.after(() => queue.close());
-  await queue.initialize(null);
-  assert.equal(reads, 4);
+  await queue.initialize();
+  assert.equal(reads, 2);
   const value = queueDraft("busy.txt", "retain exact 中文 e\u0301\r\n");
-  await assert.rejects(queue.put(value), { code: "BUSY" });
-  await assert.rejects(queue.flush(), { code: "BUSY" });
+  const releaseWrite = await holdWriter(t, root);
+  await assert.rejects(queue.put(value), { code: "WRITER_BUSY" });
+  await assert.rejects(queue.flush(), { code: "WRITER_BUSY" });
   assert.equal(writes, 1, "A write cannot retry automatically after an uncertain reply");
+  await releaseWrite();
   assert.equal(
     (await call("editor.drafts.document", { directory: value.directory, path: value.path })).result,
     null,
@@ -114,21 +141,36 @@ test("draft reads retry a busy Rust store but writes require explicit recovery",
   await queue.retry();
   assert.equal(writes, 2);
   assert.deepEqual((await queue.load(value.directory, value.path)).draft, value);
+  t.diagnostic(
+    `actual WRITER_BUSY reads=${reads}, write attempts=${writes}, explicit retry retained exact draft bytes`,
+  );
 });
 
-test("closing a draft queue cancels busy-read backoff before any import or delayed delivery", async () => {
+test("closing a draft queue cancels busy-read backoff before any import or delayed delivery", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "uterm-real-writer-close-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const call = await client(t, root),
+    raw = draftCall(call);
+  const release = await holdWriter(t, root);
   const entered = signal();
   let reads = 0;
-  const queue = new EditorDraftQueue(async (method) => {
+  const queue = new EditorDraftQueue(async (method, params) => {
     assert.equal(method, "editor_drafts_list");
     reads++;
-    entered.resolve();
-    throw Object.assign(Error("Another writer owns the canonical store"), { code: "BUSY" });
+    try {
+      return await raw(method, params);
+    } catch (reason) {
+      assert.equal(reason.code, "WRITER_BUSY");
+      entered.resolve();
+      throw reason;
+    }
   });
   const pending = assert.rejects(queue.initialize(null), { code: "CLOSED" });
   await entered.promise;
+  await Promise.resolve();
   queue.close();
   await pending;
+  await release();
   await new Promise((resolve) => setTimeout(resolve, 70));
   assert.equal(reads, 1);
 });
@@ -1047,7 +1089,12 @@ test("shared editor recovery restores durable text after unload and retains file
             const reply =
               busyReads && ["editor.drafts.list", "editor.drafts.document"].includes(method)
                 ? (rejectedReads++,
-                  { error: { code: "BUSY", message: "Another writer owns the canonical store" } })
+                  {
+                    error: {
+                      code: "WRITER_BUSY",
+                      message: "Another writer owns the canonical store",
+                    },
+                  })
                 : await call(method, request.params);
             result = reply.result;
             if (reply.error)

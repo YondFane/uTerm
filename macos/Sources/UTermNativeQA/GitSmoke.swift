@@ -56,6 +56,8 @@ enum GitSmoke {
             try await ContentSmoke.wait(content, "document.querySelector('.git-file')?.textContent.includes('中文.txt') === true && document.querySelector('[data-node=\"refs/heads/main\"]') !== null")
             _ = try await content.webView.evaluateJavaScript("document.querySelector('.git-file').click()")
             try await ContentSmoke.wait(content, "document.querySelector('.git-diff')?.textContent.includes('DIFF_NATIVE') === true")
+            try await ContentSmoke.wait(content, "[...document.querySelectorAll('.git-diff-actions button')].every(b=>{const r=b.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1})")
+            report["wideDiffControlsWithinWindow"] = true
             captures.append("native-git-diff-en-dark.png")
             try await capture(content, captures.last!)
             try await EditorSmoke.click(content, title: "Copy diff")
@@ -128,7 +130,7 @@ enum GitSmoke {
             let retainedDraft = try await bridge.call("editor.drafts.document", params: .object(["directory": .string(root.path), "path": .string(path)]))
             guard code == "GIT_FILES", try git(["branch", "--show-current"]) == "main", try Data(contentsOf: file) == external,
                   retainedDraft["draft"]["text"].string.map({ Data($0.utf8) }) == Data(unsaved.utf8) else { throw BridgeFailure(code: "GIT_CONFLICT", message: "A conflicting editor did not prevent Git while preserving both writers") }
-            try await ContentSmoke.wait(conflict, "document.querySelector('[role=alert]')?.textContent.length > 0", allowAlert: true)
+            try await ContentSmoke.wait(conflict, "document.querySelector('[role=alert]')?.textContent.includes('Another program modified this file') === true", allowAlert: true)
             captures.append("native-git-editor-conflict.png")
             try await capture(conflict, captures.last!)
             report["editorConflictBlockedGitAndPreservedBothWriters"] = true
@@ -140,7 +142,10 @@ enum GitSmoke {
             let narrow = try await open(root)
             defer { narrow.forceClose() }
             narrow.window?.setContentSize(NSSize(width: 640, height: 600))
-            try await ContentSmoke.wait(narrow, "innerWidth===640 && [...document.querySelectorAll('[role=tab]')].some(b=>b.textContent.trim()==='变更') && document.querySelector('.git-file') !== null && document.documentElement.scrollWidth<=innerWidth")
+            try await ContentSmoke.wait(narrow, "innerWidth===640 && [...document.querySelectorAll('[role=tab]')].some(b=>b.textContent.trim()==='变更') && document.querySelector('.git-file') !== null && (()=>{const r=document.querySelector('.git-panel').getBoundingClientRect();return r.left===0 && r.top===0 && Math.abs(r.right-innerWidth)<=1})()")
+            report["narrowPanelFillsWindow"] = true
+            _ = try await narrow.webView.evaluateJavaScript("document.querySelector('.git-file').click()")
+            try await ContentSmoke.wait(narrow, "document.querySelector('.git-diff')?.textContent.includes('EXTERNAL_WRITER') === true && [...document.querySelectorAll('.git-diff-actions button')].every(b=>{const r=b.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1}) && document.documentElement.scrollWidth<=innerWidth")
             captures.append("native-git-zh-light-640.png")
             try await capture(narrow, captures.last!)
             report["narrowChineseLightGit"] = true

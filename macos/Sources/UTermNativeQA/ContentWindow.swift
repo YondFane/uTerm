@@ -147,7 +147,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         var value: [String: Any] = ["version": 1, "id": request.id, "document": request.document]
         do {
             if let error {
-                value["error"] = ["code": (error as? BridgeFailure)?.code ?? (error is CancellationError ? "CANCELLED" : "HOST_ERROR"), "message": error.localizedDescription]
+                value["error"] = ["code": (error as? BridgeFailure)?.code ?? (error is CancellationError ? "CANCELLED" : "HOST_ERROR"), "message": (error as? BridgeFailure)?.message ?? error.localizedDescription]
             } else { value["result"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(result ?? .null), options: [.fragmentsAllowed]) }
             handler(value, nil)
         } catch { handler(nil, error.localizedDescription) }

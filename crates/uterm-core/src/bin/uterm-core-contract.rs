@@ -1,4 +1,4 @@
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Write};
 use uterm_core::{
     store::{Document, Import, Snapshot},
     Core, CoreError, Event, Request, Response,
@@ -6,7 +6,8 @@ use uterm_core::{
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
-    if args.next().as_deref() == Some("--schema") {
+    let mode = args.next();
+    if mode.as_deref() == Some("--schema") {
         let schemas = serde_json::json!({
             "EditorDraft":schemars::schema_for!(uterm_core::store::EditorDraft),
             "EditorDraftEntry":schemars::schema_for!(uterm_core::store::EditorDraftEntry),
@@ -50,7 +51,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let root = args
         .next()
-        .ok_or("Usage: uterm-core-contract --schema | --serve ROOT")?;
+        .ok_or("Usage: uterm-core-contract --schema | --serve ROOT | --hold-store-lock ROOT")?;
+    if mode.as_deref() == Some("--hold-store-lock") {
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(std::path::Path::new(&root).join("writer.lock"))?;
+        file.lock()?;
+        println!("locked");
+        io::stdout().flush()?;
+        io::stdin().lock().read_line(&mut String::new())?;
+        file.unlock()?;
+        return Ok(());
+    }
+    if mode.as_deref() != Some("--serve") {
+        return Err("Unknown contract fixture mode".into());
+    }
     let core = Core::open(root.into())?;
     for line in io::stdin().lock().lines() {
         println!(

@@ -594,7 +594,7 @@ terminal consumption. `project.context` resolves the selected Worktree centrally
 check. Favorites and native Worktree sidebar registration remain incomplete.
 
 Head `31d3d5e3922a9e03d34b3287f1f19a6a3aa700ad`, merge `aeeccd9369965b45c652163981bd680cb9e9b91b`,
-passed Windows but failed old macOS on a real editor `BUSY` read; both native jobs failed an
+passed Windows but failed old macOS on a real editor `WRITER_BUSY` read; both native jobs failed an
 incorrect trailing-LF diff assertion before window steps.
 [Failure reports/artifacts](https://github.com/YondFane/uTerm/issues/35#issuecomment-6595018569)
 remain accessible. The current fixes preserve full file bytes, retry only busy reads, permit a fresh
@@ -626,6 +626,28 @@ Git…**复用相同面板，桥接限制仓库根目录，复制走系统剪贴
 worktree 文本大小写选择错误而停止；已修正选择器并保留失败证据，Worktree 重跑及平台图片检查仍待完成。同一 head 的 macOS
 Core 夹具还因 `/var` 与 Git 的规范路径 `/private/var`
 比较失败，现先规范化夹具路径并保留末尾空白／其他仓库断言；后续 Swift／窗口步骤未执行。完整取消、收藏／侧栏和人工焦点仍由 #35 验收。M0／M1 和 #29／#30 已验收未合入，#31／#32 及 M3–M5 保持开放；未修改受保护分支／合并／标签／发布／生产源。
+
+The real lock error is `WRITER_BUSY`: a clean-source Linux run at `9a35977` reproduced first-open
+failure because the earlier synthetic `BUSY` fixture missed that code. A separate Rust process now
+holds the actual OS store lock during read/close/write tests. This regression failed before the
+correction and all 30 real Rust/React contracts pass afterward, including exact draft retention and
+explicit write retry. Full frontend checks pass 384 tests (ten skipped). The current lock fix needs
+its own platform CI; no earlier result is reassigned to it.
+
+真实锁错误为 `WRITER_BUSY`：`9a35977` 的干净源码 Linux 重现首次打开失败，因为此前模拟 `BUSY`
+未覆盖宿主错误码。现用独立 Rust 进程持有实际操作系统存储锁验证读取／关闭／写入；修正前回归确实失败，修正后三十项真实 Rust／React 契约全通过，包含准确草稿保留和明确写入重试。完整前端 384 项通过、十项跳过。当前锁修复仍需自己的平台 CI，不沿用旧结果。
+
+Native ARM head `9a35977a2743cdace0310f10dd953b8f2c210253`, tested merge
+`fd2932c8b991225806f91935681948d835da8cc9`, passed all checks, including 14 Swift tests and five
+real Git captures. [Run](https://github.com/YondFane/uTerm/actions/runs/41576097250) /
+[artifact 13203259477](https://github.com/YondFane/uTerm/actions/runs/41576097250/artifacts/13203259477)
+record actual platform and source metadata. Inspection rejected narrow floating positioning, cropped
+wide diff controls and an English conflict message retaining Chinese after duplicate code prefixes.
+Scoped layout/raw-error corrections and stricter actual bounds/language checks await their own
+new-head CI; the earlier automated pass is not visual acceptance.
+
+原生 ARM 上述
+`9a35977`／merge 全部自动检查通过，含十四项 Swift 及五张真实 Git 图；产物包含准确平台／源码。目视拒绝窄窗浮层、宽窗差异控件裁切及重复错误码导致英文冲突提示仍有中文。限定原生页的布局／原始错误修正与严格边界／语言检查等待新 head 的 CI，先前自动通过不代表视觉验收。
 
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 

@@ -30,7 +30,8 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     for key in ['realDiffAndHistory', 'copiedDiffThroughNativePasteboard', 'wrongRootRejected',
                 'oldDocumentRejected', 'fileWindowCannotInvokeGit', 'branchFormSavedOpenEditorBeforeWrite',
                 'dirtyWorktreeDeletionRefused', 'worktreeBridgeCreateAndCleanDelete',
-                'editorConflictBlockedGitAndPreservedBothWriters', 'literalRootAndSiblingPreserved', 'narrowChineseLightGit']:
+                'editorConflictBlockedGitAndPreservedBothWriters', 'literalRootAndSiblingPreserved', 'narrowChineseLightGit',
+                'wideDiffControlsWithinWindow', 'narrowPanelFillsWindow']:
         assert report[key], (key, report)
     assert len(report['gitCaptures']) == 5, report
     for name in report['gitCaptures']:

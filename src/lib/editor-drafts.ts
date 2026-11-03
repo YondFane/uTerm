@@ -64,7 +64,7 @@ export class EditorDraftQueue {
           return await call<T>(method, params);
         } catch (reason) {
           if (
-            (reason as { code?: string }).code !== "BUSY" ||
+            (reason as { code?: string }).code !== "WRITER_BUSY" ||
             !["editor_drafts_list", "editor_drafts_document"].includes(method) ||
             attempt >= 6 ||
             this.closed

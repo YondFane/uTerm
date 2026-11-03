@@ -302,29 +302,45 @@ state before retrying.
 Head `31d3d5e3922a9e03d34b3287f1f19a6a3aa700ad`, tested merge
 `aeeccd9369965b45c652163981bd680cb9e9b91b`, passed the Windows job in
 [legacy CI](https://github.com/YondFane/uTerm/actions/runs/41568790602). Its macOS job failed on a
-real first-open draft `BUSY` error. Both jobs in
+real first-open draft `WRITER_BUSY` error. Both jobs in
 [native CI](https://github.com/YondFane/uTerm/actions/runs/41568790616) failed the new Swift Git
 assertion, which incorrectly expected a final LF in line-formatted diff output; window checks did
 not execute. The failures and artifacts are recorded in
 [#35 evidence](https://github.com/YondFane/uTerm/issues/35#issuecomment-6595018569). These are not
 accepted platform results for the current changes.
 
+At head `9a35977a2743cdace0310f10dd953b8f2c210253`, tested merge
+`fd2932c8b991225806f91935681948d835da8cc9`, the
+[macOS ARM native job](https://github.com/YondFane/uTerm/actions/runs/41576097250) passed 14 Swift
+checks, terminal/editor/control scenarios and actual Git diff/history/copy/branch/Worktree/conflict
+checks.
+[Artifact 13203259477](https://github.com/YondFane/uTerm/actions/runs/41576097250/artifacts/13203259477)
+contains `git-live.json` and five `native-git-*.png` images. Inspection found narrow-window floating
+panel positioning, cropped wide diff controls and a duplicated conflict prefix preventing English
+translation. These visual/language results are not accepted despite passing automated checks. The
+native-scoped layout and raw error message are corrected, with stronger bounds and English-message
+assertions; their own platform run remains pending.
+
 The current implementation separates diff text assertions from exact original file-byte assertions.
-Draft list/document reads retry only `BUSY`, at most six times over 620 ms; close cancels the
+Draft list/document reads retry only `WRITER_BUSY`, at most six times over 620 ms; close cancels the
 backoff. Writes and conflicts are not automatically retried. A failed initial open keeps its error
-visible and allows another attempt without a hidden discard dialog.
+visible and allows another attempt without a hidden discard dialog. The real Core error is
+`WRITER_BUSY`; a dedicated Rust fixture process now holds the OS writer lock during read/close/write
+tests. The previous synthetic `BUSY` fixture missed that code and did not establish recovery; a
+clean-source Linux run at `9a35977` reproduced the first-open failure. The real-lock regression
+failed before the code correction and now runs against the actual store.
 
 Thirty real Rust/React contracts pass on cloud Linux, including busy reads, close, explicit write
 retry, first-open retry, selected Worktrees and stale revisions. The core/FFI suite and explicit
 filesystem failures pass; two real-repository regressions cover trailing whitespace roots and legal
 Unicode branch names. Twenty-nine existing Git/Worktree tests moved to Core rather than being
-removed. Full frontend checks found and corrected an unregistered Git title; its translation gate
-passes after correction. The new native five-scene and old-client four-scene Git checks still need
-their own clean-source platform CI, actual screenshots and inspection. Favorites, sidebar parity,
-full cancellation and manual focus acceptance keep #35 open. A clean-source Linux run at `d8345b6`
-passed actual diff/history/branch creation, then stopped because the QA script used the wrong case
-for the existing New worktree label. The label selector is corrected; Worktree screenshots still
-require a successful rerun. macOS Core CI stopped on this regression fixture because Git returned
+removed. Full frontend checks pass 384 tests (ten skipped), including the corrected translation
+gate. The new native five-scene and old-client four-scene Git checks still need their own
+clean-source platform CI, actual screenshots and inspection. Favorites, sidebar parity, full
+cancellation and manual focus acceptance keep #35 open. A clean-source Linux run at `d8345b6` passed
+actual diff/history/branch creation, then stopped because the QA script used the wrong case for the
+existing New worktree label. The label selector is corrected; Worktree screenshots still require a
+successful rerun. macOS Core CI stopped on this regression fixture because Git returned
 `/private/var` while the temporary directory was spelled `/var`. The test now canonicalizes its
 fixture before comparing exact roots, retaining the trailing-whitespace and protected-sibling
 assertions; subsequent Swift/window checks remain unexecuted on that head.

@@ -126,7 +126,7 @@ enum EditorSmoke {
         let external = Data("\u{feff}EXTERNAL_CHANGE 中文\r\n".utf8)
         try external.write(to: file)
         try await click(content, title: "Save")
-        try await ContentSmoke.wait(content, "document.querySelector('[role=alert]')?.textContent.length > 0", allowAlert: true)
+        try await ContentSmoke.wait(content, "document.querySelector('[role=alert]')?.textContent.includes('Another program modified this file') === true", allowAlert: true)
         guard try Data(contentsOf: file) == external else { throw BridgeFailure(code: "EDITOR_CONFLICT", message: "Save replaced an external change") }
         report["externalConflictRetainedFileAndDraft"] = (try await draft(bridge, root: root))["draft"]["text"].string.map { Data($0.utf8) == Data(edited.utf8) } == true
         captures.append("native-editor-conflict.png")
