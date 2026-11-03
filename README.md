@@ -155,11 +155,12 @@ tests; Tauri commands delegate to the same functions. The new `git.*` contract a
 are used by **File → Git…** in the isolated native QA app. Core now reconciles registered project
 Worktrees for both clients; the native sidebar supports selection, refresh and confirmed deletion.
 Core refuses saved/live session use, dirty files and stale writes; metadata failure after Git
-removal requires explicit refresh. Favorites remain pending, with platform acceptance tracked
-separately. `bash scripts/macos-git-smoke.sh` runs real-window diff/history/copy, branch creation,
-editor conflict protection and real Worktree menu confirmation/cancel/refusal/removal checks, with
-temporary repositories and system screenshots. This requires a macOS GUI session; platform
-acceptance is recorded separately.
+removal requires explicit refresh. Both clients use the Core Git favorite store with revision
+checks, exact old-source archives and explicit conflict handoff; favorite recovery UI and platform
+acceptance remain pending. `bash scripts/macos-git-smoke.sh` runs real-window diff/history/copy,
+branch creation, editor conflict protection and real Worktree menu
+confirmation/cancel/refusal/removal and favorite persistence checks, with temporary repositories and
+system screenshots. This requires a macOS GUI session; platform acceptance is recorded separately.
 
 The core's locked dependencies include the existing base64 decoder and ignore-aware file walker.
 Native file/content UI acceptance is tracked separately in the migration guide.
@@ -188,7 +189,8 @@ and explicit recovery. Native and Tauri editing adopt this API through the bound
 handoff before App, freezes the old draft key and offers conflict/corrupt-copy recovery choices.
 Native tabs/window order and complete editing acceptance remain pending. Content writes are
 restricted to the selected file. `pnpm test:core` explicitly runs filesystem failure/retry checks
-for workspace/draft snapshots and metadata saving after Worktree removal.
+for workspace/draft snapshots and metadata saving after Worktree removal, plus Git favorite
+save/retry.
 
 The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
 operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this

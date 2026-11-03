@@ -92,6 +92,20 @@ final class CoreBridgeTests: XCTestCase {
         ]))
         let entries = try JSONDecoder().decode([CoreGitWorktree].self, from: JSONEncoder().encode(created))
         XCTAssertEqual(entries.first?.branch, "qa/worktree")
+        let favoriteName = "refs/heads/中文-e\u{301}-𝄞"
+        let favoriteSource = String(decoding: try JSONEncoder().encode([favoriteName]), as: UTF8.self)
+        let favoriteResult = try await core.call("git.favorites.import", params: .object(["directory": .string(repository.path), "legacy": .string(favoriteSource)]))
+        let typedFavorites = try JSONDecoder().decode(CoreGitFavorites.self, from: JSONEncoder().encode(favoriteResult))
+        XCTAssertNotNil(typedFavorites.revision)
+        XCTAssertEqual(Array(typedFavorites.references[0].utf8), Array(favoriteName.utf8))
+        XCTAssertEqual(Array(typedFavorites.references[0].utf16), Array(favoriteName.utf16))
+        let writtenFavorites = try await core.call("git.favorites.write", params: .object(["directory": .string(worktree.path), "expectedRevision": favoriteResult["revision"], "references": .array([])]))
+        let readFavorites = try await core.call("git.favorites.read", params: .object(["directory": .string(repository.path)]))
+        XCTAssertEqual(writtenFavorites, readFavorites)
+        do {
+            _ = try await core.call("git.favorites.write", params: .object(["directory": .string(repository.path), "expectedRevision": favoriteResult["revision"], "references": .array([.string(favoriteName)])]))
+            XCTFail("A stale favorite write cannot replace newer shared references")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "CONFLICT") }
         let retained = worktree.appendingPathComponent("retained.txt")
         try Data(changed.utf8).write(to: retained)
         do {

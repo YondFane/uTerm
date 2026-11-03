@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { contentInvoke as invoke, copyContentText } from "../lib/content-host";
+import { contentInvoke as invoke, copyContentText, isContentHost } from "../lib/content-host";
+import { SharedGitFavorites } from "../lib/git-favorites";
 import { localizeMessage, tx } from "../lib/i18n";
 import { gitReadError } from "../lib/git-snapshot";
 import { useUiLanguage } from "../lib/useUiLanguage";
@@ -17,6 +18,7 @@ import {
 
 type FormKind = "create" | "rename" | "upstream" | "push" | "worktree" | "update";
 type ActionFields = { name?: string; remote?: string; branch?: string; path?: string };
+type FavoriteClient = { repository: string; client: SharedGitFavorites; ready: boolean };
 export function GitBranchTree({
   directory,
   disabled,
@@ -45,6 +47,10 @@ export function GitBranchTree({
   const [catalog, setCatalog] = useState<ReferenceCatalog | null>(null);
   const [advertised, setAdvertised] = useState<{ remote: string; branch: string }[]>([]);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [favoriteError, setFavoriteError] = useState("");
+  const [favoriteRetry, setFavoriteRetry] = useState(0);
+  const [favoriteRecovery, setFavoriteRecovery] = useState(false);
+  const favoriteClient = useRef<FavoriteClient | null>(null);
   const [readError, setReadError] = useState("");
   const [remoteError, setRemoteError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -94,6 +100,25 @@ export function GitBranchTree({
           JSON.stringify(previous) === JSON.stringify(next) ? previous : next,
         );
         setReadError("");
+        const current = favoriteClient.current;
+        if (current?.repository === next.repository && current.ready && !changing.current) {
+          try {
+            const saved = await current.client.refresh();
+            if (
+              alive.current &&
+              request === generation.current &&
+              favoriteClient.current === current &&
+              current.ready &&
+              !changing.current
+            )
+              setFavorites(new Set(saved.references));
+          } catch (reason) {
+            if (alive.current && favoriteClient.current === current) {
+              current.ready = false;
+              setFavoriteError(String(reason));
+            }
+          }
+        }
       }
     } catch (reason) {
       if (alive.current && request === generation.current) {
@@ -153,11 +178,50 @@ export function GitBranchTree({
   const repository = catalog?.repository;
   useEffect(() => {
     if (!repository) return;
+    void readRemote();
+  }, [repository]);
+  useEffect(() => {
+    favoriteClient.current = null;
+    setFavoriteError("");
+    setFavoriteRecovery(false);
+    setFavorites(new Set());
+    if (!repository || !allowFavorites) return;
+    if (isContentHost()) {
+      let current: FavoriteClient | undefined;
+      try {
+        const client = new SharedGitFavorites(
+          directory,
+          repository,
+          invoke,
+          window.webkit?.messageHandlers?.utermContent ? undefined : window.localStorage,
+        );
+        current = { repository, client, ready: false };
+        favoriteClient.current = current;
+        void client
+          .initialize()
+          .then((saved) => {
+            if (favoriteClient.current !== current) return;
+            current.ready = true;
+            setFavorites(new Set(saved.references));
+          })
+          .catch((reason) => {
+            if (favoriteClient.current !== current) return;
+            setFavoriteError(String(reason));
+            setFavoriteRecovery(client.canAcceptShared);
+          });
+      } catch (reason) {
+        setFavoriteError(String(reason));
+      }
+      return () => {
+        if (current) {
+          current.client.close();
+          if (favoriteClient.current === current) favoriteClient.current = null;
+        }
+      };
+    }
     try {
       const value: unknown = JSON.parse(
-        (allowFavorites
-          ? window.localStorage.getItem(`uterm.git.favorites:${repository}`)
-          : null) ?? "[]",
+        window.localStorage.getItem(`uterm.git.favorites:${repository}`) ?? "[]",
       );
       setFavorites(
         new Set(
@@ -167,10 +231,27 @@ export function GitBranchTree({
         ),
       );
     } catch (reason) {
-      setActionError(String(reason));
+      setFavoriteError(String(reason));
     }
-    void readRemote();
-  }, [repository, allowFavorites]);
+  }, [repository, directory, allowFavorites, favoriteRetry]);
+  async function saveFavorites(next: Set<string>) {
+    const current = favoriteClient.current;
+    if (isContentHost()) {
+      if (!current?.ready) throw Error(tx("请先重新读取 Git 收藏。"));
+      try {
+        const saved = await current.client.write([...next]);
+        if (alive.current && favoriteClient.current === current)
+          setFavorites(new Set(saved.references));
+      } catch (reason) {
+        current.ready = false;
+        if (alive.current) setFavoriteError(String(reason));
+        throw reason;
+      }
+    } else {
+      window.localStorage.setItem(`uterm.git.favorites:${repository}`, JSON.stringify([...next]));
+      setFavorites(next);
+    }
+  }
   const references = useMemo(
     () => mergeRemoteReferences(catalog?.references ?? [], advertised),
     [catalog, advertised],
@@ -349,11 +430,7 @@ export function GitBranchTree({
             const next = new Set(favorites);
             next.delete(target.full_name);
             next.add(`refs/heads/${extra.name}`);
-            window.localStorage.setItem(
-              `uterm.git.favorites:${repository}`,
-              JSON.stringify([...next]),
-            );
-            setFavorites(next);
+            await saveFavorites(next);
           }
         }
       } catch (reason) {
@@ -373,17 +450,23 @@ export function GitBranchTree({
     if (action === "switch" || action === "update") beforeMutation(operation);
     else void operation();
   }
-  function favorite(target: GitReference) {
-    if (!repository) return;
+  async function favorite(target: GitReference) {
+    if (!repository || disabled || changing.current) return;
     const next = new Set(favorites);
     if (next.has(target.full_name)) next.delete(target.full_name);
     else next.add(target.full_name);
     try {
-      window.localStorage.setItem(`uterm.git.favorites:${repository}`, JSON.stringify([...next]));
-      setFavorites(next);
+      changing.current = true;
+      setBusy(true);
+      callbacks.current.onBusyChange?.(true);
+      await saveFavorites(next);
       closeMenu(true);
     } catch (reason) {
-      setActionError(String(reason));
+      if (alive.current) setFavoriteError(String(reason));
+    } finally {
+      changing.current = false;
+      callbacks.current.onBusyChange?.(false);
+      if (alive.current) setBusy(false);
     }
   }
   function focusNode(id: string) {
@@ -502,7 +585,8 @@ export function GitBranchTree({
       if (allowFavorites && (target.kind === "local" || target.kind === "remote"))
         actions.push({
           label: favorites.has(target.full_name) ? tx("取消收藏") : tx("收藏分支"),
-          run: () => favorite(target),
+          disabled: !!favoriteError || (isContentHost() && !favoriteClient.current?.ready),
+          run: () => void favorite(target),
         });
       if (target.kind !== "head")
         actions.push({
@@ -682,6 +766,59 @@ export function GitBranchTree({
         <p role="alert" className="inspector-message git-tree-error">
           {localizeMessage(actionError || readError || remoteError)}
         </p>
+      )}
+      {favoriteError && (
+        <div className="inspector-message git-tree-error" role="alert">
+          <p>{localizeMessage(favoriteError)}</p>
+          <button disabled={busy} onClick={() => setFavoriteRetry((value) => value + 1)}>
+            {tx("重新读取 Git 收藏")}
+          </button>
+          {favoriteRecovery && (
+            <>
+              <button
+                disabled={busy}
+                onClick={() =>
+                  void copyContentText(favoriteClient.current?.client.oldSource ?? "").catch(
+                    (reason) => setFavoriteError(String(reason)),
+                  )
+                }
+              >
+                {tx("复制旧 Git 收藏来源")}
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  const current = favoriteClient.current;
+                  if (!current || changing.current) return;
+                  changing.current = true;
+                  setBusy(true);
+                  callbacks.current.onBusyChange?.(true);
+                  void current.client
+                    .acceptShared()
+                    .then((saved) => {
+                      if (favoriteClient.current !== current) return;
+                      current.ready = true;
+                      setFavorites(new Set(saved.references));
+                      setFavoriteError("");
+                      setFavoriteRecovery(false);
+                    })
+                    .catch((reason) => {
+                      if (favoriteClient.current === current) setFavoriteError(String(reason));
+                    })
+                    .finally(() => {
+                      changing.current = false;
+                      callbacks.current.onBusyChange?.(false);
+                      if (alive.current) setBusy(false);
+                    });
+                }}
+              >
+                {favoriteClient.current?.client.hasSharedData
+                  ? tx("继续使用共享 Git 收藏")
+                  : tx("保留旧来源并建立空共享收藏")}
+              </button>
+            </>
+          )}
+        </div>
       )}
       {(busy || result) && (
         <p role="status" className="inspector-message">

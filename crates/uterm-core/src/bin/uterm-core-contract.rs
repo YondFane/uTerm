@@ -25,6 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "GitRemoteBranches":schemars::schema_for!(uterm_core::git::RemoteBranches),
             "GitReference":schemars::schema_for!(uterm_core::git::Reference),
             "GitReferences":schemars::schema_for!(uterm_core::git::References),
+            "GitFavorites":schemars::schema_for!(uterm_core::store::GitFavorites),
             "GitReferenceAction":schemars::schema_for!(uterm_core::git::ReferenceAction),
             "GitWorktree":schemars::schema_for!(uterm_core::worktrees::Worktree),
             "GitWorktreeSuggestion":schemars::schema_for!(uterm_core::worktrees::WorktreeSuggestion),

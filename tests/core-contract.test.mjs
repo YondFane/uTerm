@@ -33,6 +33,8 @@ import { EditorDraftQueue } from "../src/lib/editor-drafts.ts";
 import { EditorDraftHandoff, editorDraftReceiptKey } from "../src/lib/editor-draft-handoff.ts";
 import { ContentFailure, ContentScope, editorDraftMethods } from "../src/lib/content-transport.ts";
 import { tauriContentPort } from "../src/lib/tauri-content.ts";
+import { SharedGitFavorites } from "../src/lib/git-favorites.ts";
+import { gitFavoriteMethods } from "../src/lib/content-transport.ts";
 
 execFileSync(
   "cargo",
@@ -2043,4 +2045,199 @@ test("project contexts use the selected Worktree directory and reject stale sele
   const empty = await call("project.context", { expectedRevision: 1 });
   assert.equal(empty.error.code, "INVALID_ARGUMENT");
   assert.equal((await call("snapshot.read")).result.revision, selected.revision);
+});
+
+test("shared Git favorite handoff retains exact sources, detects stale writes and reopens without replaying old choices", async (t) => {
+  const fixture = gitFixture(t),
+    call = await client(t);
+  const repository = (await call("git.references", { directory: fixture.directory })).result
+    .repository;
+  const storage = new JSDOM("", { url: "http://localhost" }).window.localStorage;
+  const key = `uterm.git.favorites:${repository}`;
+  const legacy = '[\r\n  "refs/heads/main"\r\n]';
+  storage.setItem(key, legacy);
+  const raw = async (method, params) => {
+    const reply = await call(gitFavoriteMethods[method], params);
+    if (reply.error) throw Object.assign(Error(reply.error.message), { code: reply.error.code });
+    return reply.result;
+  };
+  const first = new SharedGitFavorites(fixture.directory, repository, raw, storage);
+  assert.deepEqual((await first.initialize()).references, ["refs/heads/main"]);
+  const observer = new SharedGitFavorites(fixture.directory, repository, raw);
+  await observer.initialize();
+  const updated = await first.write(["refs/heads/中文-e\u0301"]);
+  await assert.rejects(observer.write([]), { code: "CONFLICT" });
+  assert.deepEqual((await observer.refresh()).references, updated.references);
+  first.close();
+  const reopened = new SharedGitFavorites(fixture.directory, repository, raw, storage);
+  assert.deepEqual((await reopened.initialize()).references, updated.references);
+  assert.equal(storage.getItem(key), legacy);
+  const backup = Object.keys(storage).find((name) => name.startsWith(`${key}.shared-v1-backup.`));
+  assert.equal(storage.getItem(backup), legacy);
+  const otherStorage = new JSDOM("", { url: "http://localhost" }).window.localStorage;
+  const other = '["refs/heads/other-old-中文"]';
+  otherStorage.setItem(key, other);
+  const conflict = new SharedGitFavorites(fixture.directory, repository, raw, otherStorage);
+  await assert.rejects(conflict.initialize(), { code: "FAVORITES_SOURCE_CONFLICT" });
+  assert.equal(conflict.canAcceptShared, true);
+  assert.equal(conflict.oldSource, other);
+  assert.deepEqual((await conflict.acceptShared()).references, updated.references);
+  conflict.close();
+  const accepted = new SharedGitFavorites(fixture.directory, repository, raw, otherStorage);
+  assert.deepEqual((await accepted.initialize()).references, updated.references);
+  otherStorage.setItem(key, '["refs/heads/concurrent-old-writer"]');
+  await assert.rejects(accepted.write([]), { code: "MIGRATION_CHANGED" });
+  assert.deepEqual((await reopened.refresh()).references, updated.references);
+});
+
+test("Git favorite late reads cannot replace acknowledged writes and closing cancels real writer-lock backoff", async (t) => {
+  const fixture = gitFixture(t),
+    root = mkdtempSync(join(tmpdir(), "uterm-favorites-lock-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const call = await client(t, root),
+    raw = async (method, params) => {
+      const reply = await call(gitFavoriteMethods[method], params);
+      if (reply.error) throw Object.assign(Error(reply.error.message), { code: reply.error.code });
+      return reply.result;
+    };
+  const defaults = (await call("state.defaults")).result;
+  assert.equal(
+    (
+      await call("migration.import", {
+        workspace: defaults.workspace,
+        settings: defaults.settings,
+        legacy: {},
+      })
+    ).error,
+    undefined,
+  );
+  const pending = signal(),
+    release = signal();
+  let delayed = false;
+  const clientA = new SharedGitFavorites(
+    fixture.directory,
+    "unused-without-WebView",
+    async (method, params) => {
+      const result = await raw(method, params);
+      if (method === "git_favorites_read" && !delayed) {
+        delayed = true;
+        pending.resolve();
+        await release.promise;
+      }
+      return result;
+    },
+  );
+  await clientA.initialize();
+  const reading = clientA.refresh();
+  await pending.promise;
+  const saved = await clientA.write(["refs/heads/main"]);
+  release.resolve();
+  assert.deepEqual(await reading, saved);
+  const releaseLock = await holdWriter(t, root);
+  let reads = 0;
+  const blocked = new SharedGitFavorites(fixture.directory, "unused", async (method, params) => {
+    if (method === "git_favorites_read") reads++;
+    return raw(method, params);
+  });
+  await assert.rejects(blocked.initialize(), { code: "WRITER_BUSY" });
+  assert.equal(reads, 0);
+  await releaseLock();
+  await blocked.initialize();
+  const unlock = await holdWriter(t, root);
+  const retrying = blocked.refresh();
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  blocked.close();
+  await assert.rejects(retrying, { code: "CLOSED" });
+  assert.equal(reads, 1);
+  await unlock();
+});
+
+test("Git favorite backup and receipt failures retain old WebView bytes and durable shared changes", async (t) => {
+  const fixture = gitFixture(t),
+    call = await client(t),
+    repository = (await call("git.references", { directory: fixture.directory })).result.repository;
+  const raw = async (method, params) => {
+    const reply = await call(gitFavoriteMethods[method], params);
+    if (reply.error) throw Object.assign(Error(reply.error.message), { code: reply.error.code });
+    return reply.result;
+  };
+  const key = `uterm.git.favorites:${repository}`,
+    legacy = '["refs/heads/main"]',
+    map = new Map([[key, legacy]]);
+  let writes = 0;
+  const denied = {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: () => {
+      writes++;
+      throw Error("quota denied");
+    },
+  };
+  await assert.rejects(
+    new SharedGitFavorites(fixture.directory, repository, raw, denied).initialize(),
+    /quota denied/,
+  );
+  assert.equal(writes, 1);
+  assert.equal(map.get(key), legacy);
+  assert.equal((await raw("git_favorites_read", { directory: fixture.directory })).revision, null);
+  const receiptDenied = {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (name, value) => {
+      if (name === `${key}.shared-v1`) throw Error("receipt denied");
+      map.set(name, value);
+    },
+  };
+  await assert.rejects(
+    new SharedGitFavorites(fixture.directory, repository, raw, receiptDenied).initialize(),
+    /receipt denied/,
+  );
+  assert.deepEqual((await raw("git_favorites_read", { directory: fixture.directory })).references, [
+    "refs/heads/main",
+  ]);
+  assert.equal(map.get(key), legacy);
+  const retried = new SharedGitFavorites(fixture.directory, repository, raw, {
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => map.set(key, value),
+  });
+  await retried.initialize();
+  await retried.write([]);
+  assert.deepEqual(
+    (
+      await new SharedGitFavorites(fixture.directory, repository, raw, {
+        getItem: (key) => map.get(key) ?? null,
+        setItem: (key, value) => map.set(key, value),
+      }).initialize()
+    ).references,
+    [],
+  );
+  const invalidFixture = gitFixture(t);
+  const invalidRepository = (await call("git.references", { directory: invalidFixture.directory }))
+    .result.repository;
+  const invalidKey = `uterm.git.favorites:${invalidRepository}`;
+  const invalidStorage = new JSDOM("", { url: "http://localhost" }).window.localStorage;
+  const invalidRaw = "{INVALID OLD SOURCE 中文\r\n";
+  invalidStorage.setItem(invalidKey, invalidRaw);
+  const invalidClient = new SharedGitFavorites(
+    invalidFixture.directory,
+    invalidRepository,
+    raw,
+    invalidStorage,
+  );
+  await assert.rejects(invalidClient.initialize(), { code: "INVALID_FAVORITES" });
+  assert.equal(invalidClient.canAcceptShared, true);
+  assert.equal(invalidClient.hasSharedData, false);
+  assert.equal(
+    (await raw("git_favorites_read", { directory: invalidFixture.directory })).revision,
+    null,
+  );
+  assert.deepEqual((await invalidClient.acceptShared()).references, []);
+  assert.equal(invalidClient.hasSharedData, true);
+  await invalidClient.write(["refs/heads/main"]);
+  assert.equal(invalidStorage.getItem(invalidKey), invalidRaw);
+  const invalidReopened = new SharedGitFavorites(
+    invalidFixture.directory,
+    invalidRepository,
+    raw,
+    invalidStorage,
+  );
+  assert.deepEqual((await invalidReopened.initialize()).references, ["refs/heads/main"]);
 });

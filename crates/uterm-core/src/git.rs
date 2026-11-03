@@ -1116,6 +1116,20 @@ fn references(directory: &str) -> Result<References, String> {
 pub fn git_references(directory: String) -> Result<References, String> {
     references(&directory)
 }
+pub(crate) fn favorite_repository(directory: &str) -> Result<(String, String), String> {
+    let root = root(directory)?;
+    let common = path_text(run(
+        &root,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )?)?;
+    let canonical = std::path::Path::new(&common)
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
+    canonical
+        .to_str()
+        .map(|value| (value.to_owned(), common))
+        .ok_or_else(|| "Repository path is not valid UTF-8".into())
+}
 pub(crate) fn validate_reference(
     directory: &str,
     reference: &str,

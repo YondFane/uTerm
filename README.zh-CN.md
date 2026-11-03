@@ -137,8 +137,8 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 `uterm-core::{files,git,worktrees}`
 管理本地文件及 Git／Worktree 规则和回归，Tauri 命令委派相同函数。新增 `git.*`
 契约及生成 DTO 供隔离原生 QA 应用的**文件 →
-Git…**使用，Core 现统一两端已登记项目的 Worktree 列表，原生侧栏支持选择、刷新及确认删除。Core 拒绝已保存／运行会话占用、脏文件和过期写入；Git 已删目录而元数据失败须明确刷新。收藏仍待完成，平台验收单独记录。`bash scripts/macos-git-smoke.sh`
-使用临时仓库，检查真实窗口的差异／历史／复制、创建分支、编辑器冲突保护及真实 Worktree 菜单确认／取消／拒删／移除，并保存系统截图；需要 macOS 图形会话，平台验收单独记录。核心锁定依赖包含现有 base64 解码器及遵循忽略规则的文件遍历器，原生文件／内容界面验收单独记录于迁移指南。
+Git…**使用，Core 现统一两端已登记项目的 Worktree 列表，原生侧栏支持选择、刷新及确认删除。Core 拒绝已保存／运行会话占用、脏文件和过期写入；Git 已删目录而元数据失败须明确刷新。两端使用 Core 收藏存储，核对 revision、保留准确旧来源并明确处理来源冲突；收藏恢复界面和平台验收仍待完成。`bash scripts/macos-git-smoke.sh`
+使用临时仓库，检查真实窗口的差异／历史／复制、创建分支、编辑器冲突保护及真实 Worktree 菜单确认／取消／拒删／移除和收藏持久化，并保存系统截图；需要 macOS 图形会话，平台验收单独记录。核心锁定依赖包含现有 base64 解码器及遵循忽略规则的文件遍历器，原生文件／内容界面验收单独记录于迁移指南。
 
 原生 QA 构建还执行
 `pnpm build`，打包共用 Web 内容及许可声明；请先安装锁定的 pnpm 依赖。`bash scripts/macos-content-smoke.sh`
@@ -155,7 +155,8 @@ CI 截取原生窗口，并将报告及图片上传到
 管理核对 revision 的多文档草稿、准确旧来源副本及明确恢复。原生和 Tauri 编辑均通过
 `src/lib/editor-drafts.ts`
 的有界队列接入。Tauri 在 App 前初始化准确的带版本旧来源备份及明确迁移，冻结旧草稿键，并提供来源冲突／损坏副本恢复选择。原生标签／窗口顺序及完整编辑验收仍待完成，内容写入仅限所选文件。
-`pnpm test:core` 明确执行工作区／草稿快照及 Worktree 删除后元数据保存的文件系统失败／重试检查。
+`pnpm test:core`
+明确执行工作区／草稿快照及 Worktree 删除后元数据及 Git 收藏保存的文件系统失败／重试检查。
 
 共享回环控制服务位于
 `crates/utermd-local/src/control/server.rs`，Tauri 与核心操作复用同一队列及生命周期；宿主为该服务直接声明 Tokio 和 tempfile。`pnpm test:host`

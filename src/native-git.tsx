@@ -46,7 +46,6 @@ export function NativeGit({ directory }: { directory: string }) {
           onBusyChange={setBusy}
           refreshRevision={revision}
           onChanged={() => setRevision((value) => value + 1)}
-          allowFavorites={false}
         />
         <section className="native-git-diff" ref={setTarget} hidden={!expanded} />
       </div>

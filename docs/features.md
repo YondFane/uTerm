@@ -160,10 +160,10 @@ Export legacy-compatible data** saves the current workspace/settings and origina
 as JSON. This export is a recovery artifact. A real Rust-process test reads the exported
 workspace/settings with unchanged release readers, preserving split/session IDs and opaque
 draft/backup bytes after repeated import. Automatic downgrade into an unmodified old client's
-WebView storage is not verified. Export refreshes the primary workspace/settings only; auxiliary
-values retain their first-import bytes. Before replacement, retain a fresh old WebView profile and
-the complete canonical store as well. Editor/PDF, Git favorites and Agent notification migration
-belong to #34, #35 and #40; full installation rollback remains #46.
+WebView storage is not verified. Export refreshes workspace/settings and adopted Git favorites;
+other auxiliary values retain their first-import bytes. Before replacement, retain a fresh old
+WebView profile and the complete canonical store as well. Editor/PDF, Git favorites and Agent
+notification migration belong to #34, #35 and #40; full installation rollback remains #46.
 
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
 conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI. A
@@ -326,45 +326,59 @@ Actual OS-lock regression uses a separate Rust process; it failed before the err
 and passes afterward. QA observation reads also wait for that lock within their existing 30-second
 deadline and record `observerBusyReads`; they never retry writes.
 
+#### Shared Git favorites
+
+Both clients' branch context menus use `git-favorites-v1.json` in the canonical store. Favorites
+belong to the real Git common directory, so the main repository and its Worktrees share them. Writes
+check that repository's revision; stale replies cannot replace newer selections. Rename updates a
+loaded favorite after the Git operation; a preference failure stays visible.
+
+Tauri retains the exact old `uterm.git.favorites:*` key, a verified versioned WebView backup and a
+Core source archive before handoff. A receipt binds the old bytes to the shared source; reopening
+cannot replay old choices over newer shared favorites. A different source offers **Copy old Git
+favorite source** and **Continue with shared Git favorites** after archival. With an invalid old
+source and no shared entry, **Keep old source and create empty shared favorites** requires an
+explicit choice. A concurrently changed old key requires reload; backup/quota/receipt failures
+retain data and block editing. The native window imports only Core's frozen canonical legacy source
+and cannot submit arbitrary old WebView sources. Its file windows cannot read or write favorites.
+
+The store retains up to eight prior snapshots and 16 original source contents, with at most 1,000
+repositories and 1,000 references per repository. Invalid/corrupt/missing data and occupied recovery
+paths block replacement; recovery files stay intact. Missing/corrupt favorite-store restoration UI
+is still pending. **Reload Git favorites** explicitly resumes after a failure. Read-only lock waits
+are bounded and cancelled on close; writes do not retry automatically. Legacy export overlays
+current shared favorites under canonical and original client path keys while retaining archived
+bytes; it does not perform an installed client downgrade.
+
 #### Git and editor concurrency validation
 
-Head `8fd5784f5bdb18557641ce3e0992374f7e704bf2`, tested merge
-`39164ab00f9c4d9424576e0add934e0ada65cf32`, passed all four jobs in
-[native CI](https://github.com/YondFane/uTerm/actions/runs/41582228344) and
-[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41582228375). Artifacts:
-[ARM 13205504332](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13205504332),
-[Intel 13206009198](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13206009198),
-[Windows 13206840745](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206840745),
-[old Mac 13206990529](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206990529).
+Head `c21f75f6cc47d548fbd71bd53e2f56a27a05e923`, actual tested merge
+`8eeb14872b59754feb3547ad923d33e7bee2cc14`, passed all four jobs in
+[native CI 41586482528](https://github.com/YondFane/uTerm/actions/runs/41586482528) and
+[legacy CI 41586482532](https://github.com/YondFane/uTerm/actions/runs/41586482532). Artifacts:
+[ARM 13208108246](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208108246),
+[Intel 13208446559](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208446559),
+[Windows 13208079517](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208079517),
+[old Mac 13208751241](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208751241).
 
-Both native architectures passed 14 Swift tests and real Git/editor/terminal/control scenes.
-`git-live.json` records platform, OS, architecture, source head and tested merge. Six
-`native-git-*.png` images cover diff/history/copy/branch/editor conflict, actual AppKit Worktree
-selection and Chinese/light 640px output. ARM sidebar and narrow light diff images were visually
-inspected. The path assertions verify selected IDs, exact stored UTF-8 and canonical directory
-identity separately, including macOS `/var` aliases.
+Native macOS ARM64/Intel passed 14 Swift tests and real Git/editor/terminal/control scenes.
+`git-live.json` records clean source head/merge, OS, architecture and scenarios. Eight actual
+`native-git-*.png` images include Worktree confirmation/cancel/dirty refusal/clean removal;
+`native-git-worktree-delete-confirm.png` and `native-git-worktree-delete-error.png` were inspected
+on ARM macOS 15.8.2. Both legacy jobs passed 20 real Tauri scenes with no cleanup errors. Windows
+x64 Server 2025 passed all three Worktree deletion tests and the explicit post-Git metadata I/O
+failure; `core-ffi-tests.log` records commands/results. The earlier LF/CRLF fixture failure remains
+linked in #35 and is not counted as a pass.
 
-Both legacy jobs passed 20 actual Tauri scenes with clean source trees and no cleanup errors.
-`tauri-state-qa/report.json` and four `git-git-*.png` images cover diff/history/branch/Worktree;
-Windows Worktree output was inspected. Windows's real extended-path create/dirty-refusal/delete
-regression passed with the required captured OID. Earlier failed runs and their corrective evidence
-remain linked in #35; they are not counted as passes.
-
-The deletion head `f5955a6e8e914ea0762c1b8980c6298bb4a05af7` passed a clean-source Linux real-app
-run (20 scenes, no cleanup errors). Its Windows Core test correctly rejected an unavailable host,
-but the retained-file assertion assumed LF after Git checked out CRLF. The fixture now compares
-exact before/after bytes without line-ending normalization; the corrected head still requires
-Windows CI.
-
-The current deletion changes passed Linux x86_64 / Rust 1.99.1 / Node 26.13 checks: Core 50 units,
-integration and six FFI tests, three real Worktree deletion tests plus the explicitly invoked
-post-Git filesystem-failure case; 33 real Rust/React contracts; 386 frontend tests (ten skipped),
-100 backend tests (ten ignored), types, production build, generated contracts and i18n. Tests verify
-stale/forged arguments, retained dirty bytes, saved references, a live standalone PTY host without a
-metadata reference, corrupt host endpoints and explicit metadata refresh after Git already removed
-the folder. The native deletion menu adds real confirmation/error captures to eight Git images;
-these changes still need their own clean-source platform CI and visual inspection. Favorites,
-complete cancellation, manual input/IME/focus and #16 dependencies keep #35 open.
+Current favorite changes passed five real Git/Core integration tests plus explicit filesystem
+failure/retry, 35 real Rust/React contracts, 389 frontend tests (ten skipped), 100 backend tests
+(ten ignored), production build, generated contracts, types and i18n on Linux x86_64 / Rust 1.99.1 /
+Node 26.13. Tests cover shared Worktree identity, stale writes, exact NFD/CRLF source retention,
+conflict/receipt/quota failures, delayed reads, real writer-lock backoff, close cancellation, reopen
+and current-value export. The new native typed C ABI assertions and ninth Git screenshot, plus Tauri
+favorite handoff/menu scene (21 total), require this change's own platform CI and image inspection.
+Earlier eight-image results do not accept favorites. Recovery UI, complete cancellation/platform
+matrix, manual input/IME/focus and #16 dependencies keep #35 open.
 
 ## Project website
 

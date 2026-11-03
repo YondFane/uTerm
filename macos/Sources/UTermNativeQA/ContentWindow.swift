@@ -156,6 +156,12 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     private func execute(_ request: ContentMessage) async throws -> JSONValue {
         let params = request.params ?? [:]
+        if let method = Self.gitFavoriteMethods[request.method ?? ""] {
+            guard gitMode else { throw BridgeFailure(code: "METHOD_DENIED", message: "This content window cannot access Git favorites") }
+            guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Git favorites cannot select another repository") }
+            guard request.method != "git_favorites_import" || params.count == 1 else { throw BridgeFailure(code: "METHOD_DENIED", message: "Native Git content cannot import old WebView sources") }
+            return try await bridge.call(method, params: .object(params))
+        }
         if let method = Self.gitMethods[request.method ?? ""] {
             guard gitMode else { throw BridgeFailure(code: "METHOD_DENIED", message: "This content window cannot access Git") }
             guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Git cannot select another repository") }
@@ -321,6 +327,9 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         "git_reference_action": "git.referenceAction", "git_working_comparison": "git.workingComparison",
         "project_worktrees": "git.worktrees.list", "create_worktree": "git.worktrees.create",
         "worktree_suggestion": "git.worktrees.suggestion"
+    ]
+    private static let gitFavoriteMethods: [String: String] = [
+        "git_favorites_read": "git.favorites.read", "git_favorites_import": "git.favorites.import", "git_favorites_write": "git.favorites.write"
     ]
     private static let gitWrites: Set<String> = ["git_switch_branch", "git_rollback_file", "git_switch_remote_branch", "git_branch_action", "git_reference_action", "create_worktree"]
 }

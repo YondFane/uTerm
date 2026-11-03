@@ -101,7 +101,7 @@ job 新增运行该 QA 应用，保存平台窗口截图和 head／merge 记录�
 Server 2025 x64 与 macOS
 ARM64 各上传十张真实窗口场景图及成功报告，清理无错误。[Windows 产物](https://github.com/YondFane/uTerm/actions/runs/41448284276/artifacts/13142824964)与[macOS 产物](https://github.com/YondFane/uTerm/actions/runs/41448284276/artifacts/13143776890)包含原始／损坏字节保留结果及源码元数据。QA 清理失败会使运行失败，并在保留已有场景图片的报告中记录。
 
-快照无法读取时进入恢复界面，不重置数据。**查看恢复副本**列出有效快照；明确选择恢复后，损坏字节仍保留。存储保留最多八份先前快照和原始导出。已有恢复副本必须与预期字节一致；摘要错误或备份路径被占用时，保存失败且不替换快照。恢复列表只列出文件名摘要与实际内容相符的副本。**设置 → 通用 → 导出旧版兼容数据**将当前工作区／设置和原始辅助数据保存为 JSON。此导出用于恢复。真实 Rust 进程测试使用与 release 一致、未修改的旧读取器读取工作区／设置，验证分屏／会话 ID 以及重复导入后的草稿／备份原始字节。尚未验证自动导入未修改旧客户端 WebView 存储的回退过程。导出只刷新主工作区／设置，辅助值仍为首次导入字节；替换前还需备份最新旧 WebView 配置及整个规范存储。编辑器／PDF、Git 收藏及 Agent 通知分别由 #34、#35、#40 迁移，完整安装回退仍由 #46 验证。
+快照无法读取时进入恢复界面，不重置数据。**查看恢复副本**列出有效快照；明确选择恢复后，损坏字节仍保留。存储保留最多八份先前快照和原始导出。已有恢复副本必须与预期字节一致；摘要错误或备份路径被占用时，保存失败且不替换快照。恢复列表只列出文件名摘要与实际内容相符的副本。**设置 → 通用 → 导出旧版兼容数据**将当前工作区／设置和原始辅助数据保存为 JSON。此导出用于恢复。真实 Rust 进程测试使用与 release 一致、未修改的旧读取器读取工作区／设置，验证分屏／会话 ID 以及重复导入后的草稿／备份原始字节。尚未验证自动导入未修改旧客户端 WebView 存储的回退过程。导出刷新工作区／设置及已接入的 Git 收藏，其他辅助值仍为首次导入字节；替换前还需备份最新旧 WebView 配置及整个规范存储。编辑器／PDF、Git 收藏及 Agent 通知分别由 #34、#35、#40 迁移，完整安装回退仍由 #46 验证。
 
 Linux 及 Windows／macOS
 CI 中的 Rust 存储／FFI 测试和真实进程 TypeScript 兼容测试覆盖重复导入、冲突、损坏恢复、所有权和回调排空。新增真实 helper 的 C
@@ -167,7 +167,7 @@ ABI 的备份预览及缺失恢复。两个 Tauri 状态 QA 报告通过且清�
 选择本地项目或 Worktree 后，原生 QA 应用的**文件 →
 Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revision 解析选择，Git 请求绑定该仓库和项目，文件窗口不能调用 Git。差异／名称复制使用系统剪贴板；独立桥接避免仓库操作占用终端桥接。
 
-写入前，已打开的可编辑文件窗口保存并冻结直到操作结束。文件冲突阻止 Git，保留文件和恢复草稿；Git 窗口在写入期间拒绝关闭。干净编辑器重新读取仓库变化，脏／忙碌编辑器保留文本。取消或超时不代表已分发写入回滚，重试前应检查仓库。原生收藏仍待完成。
+写入前，已打开的可编辑文件窗口保存并冻结直到操作结束。文件冲突阻止 Git，保留文件和恢复草稿；Git 窗口在写入期间拒绝关闭。干净编辑器重新读取仓库变化，脏／忙碌编辑器保留文本。取消或超时不代表已分发写入回滚，重试前应检查仓库。
 
 `project.worktrees.refresh`
 按已保存项目发现仓库，带预期 revision 原子更新 Worktree 列表。两端对已登记项目使用相同规则：保留 ID／自定义名称、更新随分支命名的名称、保留有会话的缺失 Worktree、移除未被会话引用且不再发现的项目并保留有效选择。过期 revision 或 Git 发现失败保留已存状态；子目录项目不会把主仓库根目录列为子 Worktree。
@@ -184,34 +184,39 @@ Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revisio
 最多重试六次，共退避 620ms；关闭取消等待，写入和冲突不自动重试，首次打开失败可再次尝试。真实操作系统锁回归使用独立 Rust 进程，修正错误码前失败，修正后通过。QA 观察读取在既有三十秒期限内等待同一锁，并记录
 `observerBusyReads`，不会重试写入。
 
+#### 共享 Git 收藏
+
+两端分支右键菜单使用规范存储中的
+`git-favorites-v1.json`。收藏按真实 Git 公共目录识别，主仓库和 Worktree 共用。写入核对该仓库 revision；迟到读取不能覆盖更新的选择。分支重命名在 Git 完成后更新已读取的收藏，偏好保存失败保持可见。
+
+Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
+键、校验后的带版本 WebView 备份和 Core 来源归档。回执绑定旧字节与共享来源，重开不把旧选择重放到更新的共享收藏。不同来源在归档后提供**复制旧 Git 收藏来源**和**继续使用共享 Git 收藏**。旧来源无效且尚无共享条目时，须明确选择**保留旧来源并建立空共享收藏**。旧键并发变化要求重新加载；备份／配额／回执失败保留数据并阻止编辑。原生窗口只导入 Core 中冻结的规范旧来源，不能提交任意旧 WebView 来源；其文件窗口不能读写收藏。
+
+存储保留最多八份先前快照和十六份原始来源内容，最多一千个仓库、每仓库一千引用。无效／损坏／缺失数据及占用的恢复路径阻止替换，恢复文件保留；收藏存储损坏／缺失的恢复界面仍待完成。**重新读取 Git 收藏**在失败后明确恢复。只读等锁有界且关闭时取消，写入不自动重试。旧版导出按规范目录及原客户端路径键反映当前共享收藏，并保留原始归档字节，不执行已安装客户端降级。
+
 #### Git 与编辑器并发验证
 
-head `8fd5784f5bdb18557641ce3e0992374f7e704bf2`、tested merge
-`39164ab00f9c4d9424576e0add934e0ada65cf32` 的
-[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41582228344) 与
-[旧端 CI](https://github.com/YondFane/uTerm/actions/runs/41582228375) 四 job 全通过。产物：
-[ARM 13205504332](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13205504332)、
-[Intel 13206009198](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13206009198)、
-[Windows 13206840745](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206840745)、
-[旧 Mac 13206990529](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206990529)。
+源码 head `c21f75f6cc47d548fbd71bd53e2f56a27a05e923`、实际 tested merge
+`8eeb14872b59754feb3547ad923d33e7bee2cc14` 的
+[原生 CI 41586482528](https://github.com/YondFane/uTerm/actions/runs/41586482528) 和
+[旧端 CI 41586482532](https://github.com/YondFane/uTerm/actions/runs/41586482532)
+四 job 全通过。产物：
+[ARM 13208108246](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208108246)、
+[Intel 13208446559](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208446559)、
+[Windows 13208079517](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208079517)、
+[旧 Mac 13208751241](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208751241)。
 
-原生双架构通过十四项 Swift 及真实 Git／编辑器／终端／控制场景。`git-live.json`
-记录平台、系统、架构、源码 head 和 tested merge。六张 `native-git-*.png`
-覆盖差异／历史／复制／分支／编辑器冲突、实际 AppKit
-Worktree 选择及中文浅色 640px。ARM 侧栏与窄窗浅色差异图片已目视检查。目录断言分别验证所选 ID、准确存储 UTF-8 和规范目录身份，包括 macOS
-`/var` 别名。
+原生 macOS ARM64／Intel 通过十四项 Swift 及真实 Git／编辑器／终端／控制场景。`git-live.json`
+记录干净源码 head／merge、系统、架构和场景。八张真实 `native-git-*.png`
+包括 Worktree 确认／取消／脏拒删／干净删除；ARM macOS 15.8.2 的
+`native-git-worktree-delete-confirm.png` 与 `native-git-worktree-delete-error.png`
+已目视检查。旧端两 job 各二十真实 Tauri 场景通过，清理无错误。Windows x64 Server
+2025 三项 Worktree 删除及明确执行的 Git 后元数据 I/O 失败通过，命令和结果见
+`core-ffi-tests.log`。先前 LF／CRLF 夹具失败链接保留在 #35，不计为通过。
 
-旧端两 job 都通过二十个真实 Tauri 场景，源码干净且清理无错误。`tauri-state-qa/report.json` 和四张
-`git-git-*.png` 覆盖差异／历史／分支／Worktree；Windows
-Worktree 输出已检查。Windows 真实扩展路径创建／脏目录拒删／删除回归传入必需的固定 OID 后通过。先前失败运行和修复证据保留在 #35，不计为通过。
-
-删除提交 `f5955a6e8e914ea0762c1b8980c6298bb4a05af7`
-的干净源码 Linux 真实应用二十场景通过，清理无错误。其 Windows
-Core 测试已正确拒绝不可用宿主，但保留文件断言假定 LF，而 Git 检出为 CRLF。夹具现比较操作前后准确字节，不归一化换行；修正 head 仍需 Windows
-CI。
-
-本轮删除改动在 Linux x86_64／Rust 1.99.1／Node
-26.13 通过 Core 五十单元、集成及六项 FFI，三项真实 Worktree 删除及明确执行的 Git 完成后文件系统失败检查；三十三项真实 Rust／React 契约、386 前端（十跳过）、100 后端（十忽略）、类型、生产构建、生成契约和 i18n。测试覆盖过期／伪造参数、脏字节保留、已保存引用、无元数据引用的真实独立 PTY 宿主、损坏宿主端点，以及 Git 已删目录后明确刷新元数据。原生删除菜单新增真实确认／错误图，总计八张 Git 图；本轮改动仍需自己的干净源码平台 CI 和目视检查。收藏、完整取消、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
+本轮收藏在 Linux x86_64／Rust 1.99.1／Node
+26.13 通过五项真实 Git／Core 集成和明确文件系统失败／重试、三十五项真实 Rust／React 契约、389 前端（十跳过）、100 后端（十忽略）、生产构建、生成契约、类型与 i18n。覆盖 Worktree 共用身份、过期写入、准确 NFD／CRLF 来源保留、冲突／回执／配额失败、迟到读取、真实等锁、关闭取消、重开和当前值导出。新原生类型化 C
+ABI 断言和第九张 Git 截图、Tauri 收藏交接／菜单场景（总二十一场景）仍需本次改动自己的平台 CI 和图片检查，先前八图不验收收藏。恢复界面、完整取消／平台矩阵、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
 
 ## 项目官网
 

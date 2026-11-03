@@ -130,6 +130,13 @@ public struct CoreGitDiff: Codable, Sendable {
     public var truncated: Bool
 }
 
+public struct CoreGitFavorites: Codable, Sendable {
+    public var references: [String]
+    public var repository: String
+    public var revision: String?
+    public var sourceDigest: String?
+}
+
 public struct CoreGitFileStatus: Codable, Sendable {
     public var changes: [CoreGitChange]
     public var root: String

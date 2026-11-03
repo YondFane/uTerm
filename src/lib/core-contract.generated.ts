@@ -131,6 +131,13 @@ export interface CoreGitDiff {
   truncated: boolean;
 }
 
+export interface CoreGitFavorites {
+  references: string[];
+  repository: string;
+  revision?: string | null;
+  sourceDigest?: string | null;
+}
+
 export interface CoreGitFileStatus {
   changes: CoreGitChange[];
   root: string;

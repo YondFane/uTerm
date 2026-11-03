@@ -124,14 +124,14 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态            | Evidence and next work / 证据与下一步                                                                                                                                         |
-| ------------ | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0           | Accepted, unmerged / 已验收，未合并 | Both native architectures and legacy Tauri jobs passed                                                                                                                        |
-| M1           | Accepted / 已验收                   | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                     |
-| M2           | In progress / 开发中                | #29/#30 accepted at 4c502ab, unmerged; #31/#32 retain Agent/manual/arbitration gaps / 两任务已验收，阶段仍有缺口。                                                            |
-| M3           | In progress / 开发中                | Editor/handoff passed c475567; Native Git adoption is under validation; favorites/sidebar/tabs/other workflows remain / 原生 Git 接入验证中，收藏／侧栏／标签及其他流程仍缺。 |
-| M4           | Pending / 待实现                    | Remaining capabilities, native interaction and measurements                                                                                                                   |
-| M5           | Pending / 待实现                    | Candidate packaging, signed update and rollback exercises                                                                                                                     |
+| Stage / 阶段 | Current state / 当前状态            | Evidence and next work / 证据与下一步                                                                                                                               |
+| ------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0           | Accepted, unmerged / 已验收，未合并 | Both native architectures and legacy Tauri jobs passed                                                                                                              |
+| M1           | Accepted / 已验收                   | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。           |
+| M2           | In progress / 开发中                | #29/#30 accepted at 4c502ab, unmerged; #31/#32 retain Agent/manual/arbitration gaps / 两任务已验收，阶段仍有缺口。                                                  |
+| M3           | In progress / 开发中                | Editor/handoff passed c475567; Native Git/sidebar/delete passed c21f75f; favorites/tabs/other workflows remain / 删除已通过 c21f75f，收藏／标签及其他流程继续开发。 |
+| M4           | Pending / 待实现                    | Remaining capabilities, native interaction and measurements                                                                                                         |
+| M5           | Pending / 待实现                    | Candidate packaging, signed update and rollback exercises                                                                                                           |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
@@ -241,7 +241,7 @@ PR；总跟踪与原验收标准不变。本轮只认领实际处理的基线归
 | M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                    |
 | M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                          |
 | M2 #16       | #29–#32       | #29/#30 closed at 4c502ab with four CI jobs; #31/#32 and stage remain open for Agent/manual/ownership gates. / 两任务已验收，阶段仍开放。                                                                              |
-| M3 #17       | #33–#37       | Editor/handoff passed c475567; Native Git is being verified; favorites/sidebar, tabs, SSH and tasks remain. / 原生 Git 验证中，收藏／侧栏、标签及后续流程仍缺。                                                        |
+| M3 #17       | #33–#37       | Editor/handoff passed c475567; Native Git/sidebar/delete passed c21f75f; favorites, tabs, SSH and tasks remain. / 原生 Git／侧栏／删除已测，收藏、标签及后续流程仍缺。                                                 |
 | M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                             |
 | M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。 |
 
@@ -335,12 +335,13 @@ for this added test is pending; its frontend log will be archived by the legacy 
 
 The data formats are canonical document schema 1 containing workspace schema 7 and settings schema
 1; legacy export is `{revision, values}`, where each `values` entry is the original WebView key and
-its string value. Workspace/settings strings reflect the current snapshot; auxiliary strings remain
-unchanged. `shared/fixtures/legacy-state.json` provides repeatable normalized defaults without user
-data. The process test constructs both old source values and an updated split/session example.
+its string value. Workspace/settings and adopted Git favorite strings reflect current snapshots;
+other auxiliary strings remain unchanged. `shared/fixtures/legacy-state.json` provides repeatable
+normalized defaults without user data. The process test constructs both old source values and an
+updated split/session example.
 
 规范文档 schema 1 包含工作区 schema 7 与设置 schema 1；导出为
-`{revision, values}`，values 保留键名和字符串值，主状态反映当前快照，辅助值保持原样。默认值及更新后分屏样例可由测试重复构造，不含用户数据。
+`{revision, values}`，values 保留键名和字符串值，主状态及已接入的 Git 收藏反映当前快照，其他辅助值保持原样。默认值及更新后分屏样例可由测试重复构造，不含用户数据。
 
 For recovery, keep the original WebView data and the canonical directory (including
 `legacy-original.json`, `snapshot-v1.json` and `snapshot-*.backup`) before attempting a client
@@ -358,13 +359,14 @@ keep #28 open.
 
 ### Auxiliary data ownership / 辅助数据归属
 
-The first import archives all `uterm.*` source strings. Subsequent export refreshes workspace and
-settings only. Auxiliary values in that export are the original imported bytes, not a live copy of
-later WebView edits. Retain a fresh copy of the old WebView profile as well as the canonical store
-before replacement. Native readonly content does not initialize, clear or migrate these keys.
+The first import archives all `uterm.*` source strings. Subsequent export refreshes
+workspace/settings and adopted shared Git favorites. Other auxiliary values retain original imported
+bytes, not a live copy of later WebView edits. Retain a fresh copy of the old WebView profile as
+well as the canonical store before replacement. Native readonly content does not initialize, clear
+or migrate these keys.
 
 首次导入归档全部 `uterm.*`
-原始字符串；后续导出只刷新工作区和设置。辅助值仍为首次导入字节，不是后续 WebView 修改的实时副本。替换前需另存最新旧 WebView 配置及整个规范存储；原生只读内容不初始化、清空或迁移这些键。
+原始字符串；后续导出刷新工作区／设置和已接入的共享 Git 收藏，其他辅助值仍为首次导入字节，不是后续 WebView 修改的实时副本。替换前需另存最新旧 WebView 配置及整个规范存储；原生只读内容不初始化、清空或迁移这些键。
 
 | Data / 数据                                                   | Current writer / 当前写入方                                                                                                 | Remaining owner / 后续任务                                                                                              |
 | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
@@ -601,65 +603,89 @@ later shell `cd` operations or provide the still-pending full client ownership a
 按已存 ID 推导目录，在引用检查、Git 删除和元数据保存期间持有规范写租约。已保存会话引用、运行宿主启动目录、过期 revision 和脏数据会阻止删除，不启动／重启宿主；端点不可读也拒绝。Git 已完成而元数据失败时须明确刷新，不承诺回滚。这些检查不跟踪后续 Shell
 `cd`，完整客户端所有权仲裁仍待完成。
 
-Head `8fd5784f5bdb18557641ce3e0992374f7e704bf2`, tested merge
-`39164ab00f9c4d9424576e0add934e0ada65cf32`, passed all four jobs in
-[native CI](https://github.com/YondFane/uTerm/actions/runs/41582228344) and
-[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41582228375). Artifacts:
-[ARM 13205504332](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13205504332),
-[Intel 13206009198](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13206009198),
-[Windows 13206840745](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206840745),
-[old Mac 13206990529](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206990529).
+#### Shared Git favorites
 
-Both native architectures passed 14 Swift tests and real Git/editor/terminal/control scenes.
-`git-live.json` records platform, OS, architecture, source head and tested merge. Six
-`native-git-*.png` images cover diff/history/copy/branch/editor conflict, actual AppKit Worktree
-selection and Chinese/light 640px output. ARM sidebar and narrow light diff images were visually
-inspected. The path assertions verify selected IDs, exact stored UTF-8 and canonical directory
-identity separately, including macOS `/var` aliases.
+Both clients' branch context menus use `git-favorites-v1.json` in the canonical store. Favorites
+belong to the real Git common directory, so the main repository and its Worktrees share them. Writes
+check that repository's revision; stale replies cannot replace newer selections. Rename updates a
+loaded favorite after the Git operation; a preference failure stays visible.
 
-Both legacy jobs passed 20 actual Tauri scenes with clean source trees and no cleanup errors.
-`tauri-state-qa/report.json` and four `git-git-*.png` images cover diff/history/branch/Worktree;
-Windows Worktree output was inspected. Windows's real extended-path create/dirty-refusal/delete
-regression passed with the required captured OID. Earlier failed runs and their corrective evidence
-remain linked in #35; they are not counted as passes.
+Tauri retains the exact old `uterm.git.favorites:*` key, a verified versioned WebView backup and a
+Core source archive before handoff. A receipt binds the old bytes to the shared source; reopening
+cannot replay old choices over newer shared favorites. A different source offers **Copy old Git
+favorite source** and **Continue with shared Git favorites** after archival. With an invalid old
+source and no shared entry, **Keep old source and create empty shared favorites** requires an
+explicit choice. A concurrently changed old key requires reload; backup/quota/receipt failures
+retain data and block editing. The native window imports only Core's frozen canonical legacy source
+and cannot submit arbitrary old WebView sources. Its file windows cannot read or write favorites.
 
-The Windows unavailable-host fixture now compares actual pre/post bytes, preserving CRLF/NFD instead
-of assuming checkout line endings. Windows CI rejected that assertion at f5955a6; the host rejection
-itself worked. Corrected-head platform validation is pending.
+The store retains up to eight prior snapshots and 16 original source contents, with at most 1,000
+repositories and 1,000 references per repository. Invalid/corrupt/missing data and occupied recovery
+paths block replacement; recovery files stay intact. Missing/corrupt favorite-store restoration UI
+is still pending. **Reload Git favorites** explicitly resumes after a failure. Read-only lock waits
+are bounded and cancelled on close; writes do not retry automatically. Legacy export overlays
+current shared favorites under canonical and original client path keys while retaining archived
+bytes; it does not perform an installed client downgrade.
 
-Windows 不可用宿主夹具现比较操作前后实际字节，保留 CRLF/NFD，不假定检出换行。f5955a6 的 CI 在该断言失败，宿主拒绝已生效；修正 head 平台验证待完成。
+#### 共享 Git 收藏
 
-The current deletion changes passed Linux x86_64 / Rust 1.99.1 / Node 26.13 checks: Core 50 units,
-integration and six FFI tests, three real Worktree deletion tests plus the explicitly invoked
-post-Git filesystem-failure case; 33 real Rust/React contracts; 386 frontend tests (ten skipped),
-100 backend tests (ten ignored), types, production build, generated contracts and i18n. Tests verify
-stale/forged arguments, retained dirty bytes, saved references, a live standalone PTY host without a
-metadata reference, corrupt host endpoints and explicit metadata refresh after Git already removed
-the folder. The native deletion menu adds real confirmation/error captures to eight Git images;
-these changes still need their own clean-source platform CI and visual inspection. Favorites,
-complete cancellation, manual input/IME/focus and #16 dependencies keep #35 open.
+两端分支右键菜单使用规范存储中的
+`git-favorites-v1.json`。收藏按真实 Git 公共目录识别，主仓库和 Worktree 共用。写入核对该仓库 revision；迟到读取不能覆盖更新的选择。分支重命名在 Git 完成后更新已读取的收藏，偏好保存失败保持可见。
 
-head `8fd5784f5bdb18557641ce3e0992374f7e704bf2`、tested merge
-`39164ab00f9c4d9424576e0add934e0ada65cf32` 的
-[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41582228344) 与
-[旧端 CI](https://github.com/YondFane/uTerm/actions/runs/41582228375) 四 job 全通过。产物：
-[ARM 13205504332](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13205504332)、
-[Intel 13206009198](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13206009198)、
-[Windows 13206840745](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206840745)、
-[旧 Mac 13206990529](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206990529)。
+Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
+键、校验后的带版本 WebView 备份和 Core 来源归档。回执绑定旧字节与共享来源，重开不把旧选择重放到更新的共享收藏。不同来源在归档后提供**复制旧 Git 收藏来源**和**继续使用共享 Git 收藏**。旧来源无效且尚无共享条目时，须明确选择**保留旧来源并建立空共享收藏**。旧键并发变化要求重新加载；备份／配额／回执失败保留数据并阻止编辑。原生窗口只导入 Core 中冻结的规范旧来源，不能提交任意旧 WebView 来源；其文件窗口不能读写收藏。
 
-原生双架构通过十四项 Swift 及真实 Git／编辑器／终端／控制场景。`git-live.json`
-记录平台、系统、架构、源码 head 和 tested merge。六张 `native-git-*.png`
-覆盖差异／历史／复制／分支／编辑器冲突、实际 AppKit
-Worktree 选择及中文浅色 640px。ARM 侧栏与窄窗浅色差异图片已目视检查。目录断言分别验证所选 ID、准确存储 UTF-8 和规范目录身份，包括 macOS
-`/var` 别名。
+存储保留最多八份先前快照和十六份原始来源内容，最多一千个仓库、每仓库一千引用。无效／损坏／缺失数据及占用的恢复路径阻止替换，恢复文件保留；收藏存储损坏／缺失的恢复界面仍待完成。**重新读取 Git 收藏**在失败后明确恢复。只读等锁有界且关闭时取消，写入不自动重试。旧版导出按规范目录及原客户端路径键反映当前共享收藏，并保留原始归档字节，不执行已安装客户端降级。
 
-旧端两 job 都通过二十个真实 Tauri 场景，源码干净且清理无错误。`tauri-state-qa/report.json` 和四张
-`git-git-*.png` 覆盖差异／历史／分支／Worktree；Windows
-Worktree 输出已检查。Windows 真实扩展路径创建／脏目录拒删／删除回归传入必需的固定 OID 后通过。先前失败运行和修复证据保留在 #35，不计为通过。
+Head `c21f75f6cc47d548fbd71bd53e2f56a27a05e923`, actual tested merge
+`8eeb14872b59754feb3547ad923d33e7bee2cc14`, passed all four jobs in
+[native CI 41586482528](https://github.com/YondFane/uTerm/actions/runs/41586482528) and
+[legacy CI 41586482532](https://github.com/YondFane/uTerm/actions/runs/41586482532). Artifacts:
+[ARM 13208108246](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208108246),
+[Intel 13208446559](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208446559),
+[Windows 13208079517](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208079517),
+[old Mac 13208751241](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208751241).
 
-本轮删除改动在 Linux x86_64／Rust 1.99.1／Node
-26.13 通过 Core 五十单元、集成及六项 FFI，三项真实 Worktree 删除及明确执行的 Git 完成后文件系统失败检查；三十三项真实 Rust／React 契约、386 前端（十跳过）、100 后端（十忽略）、类型、生产构建、生成契约和 i18n。测试覆盖过期／伪造参数、脏字节保留、已保存引用、无元数据引用的真实独立 PTY 宿主、损坏宿主端点，以及 Git 已删目录后明确刷新元数据。原生删除菜单新增真实确认／错误图，总计八张 Git 图；本轮改动仍需自己的干净源码平台 CI 和目视检查。收藏、完整取消、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
+Native macOS ARM64/Intel passed 14 Swift tests and real Git/editor/terminal/control scenes.
+`git-live.json` records clean source head/merge, OS, architecture and scenarios. Eight actual
+`native-git-*.png` images include Worktree confirmation/cancel/dirty refusal/clean removal;
+`native-git-worktree-delete-confirm.png` and `native-git-worktree-delete-error.png` were inspected
+on ARM macOS 15.8.2. Both legacy jobs passed 20 real Tauri scenes with no cleanup errors. Windows
+x64 Server 2025 passed all three Worktree deletion tests and the explicit post-Git metadata I/O
+failure; `core-ffi-tests.log` records commands/results. The earlier LF/CRLF fixture failure remains
+linked in #35 and is not counted as a pass.
+
+Current favorite changes passed five real Git/Core integration tests plus explicit filesystem
+failure/retry, 35 real Rust/React contracts, 389 frontend tests (ten skipped), 100 backend tests
+(ten ignored), production build, generated contracts, types and i18n on Linux x86_64 / Rust 1.99.1 /
+Node 26.13. Tests cover shared Worktree identity, stale writes, exact NFD/CRLF source retention,
+conflict/receipt/quota failures, delayed reads, real writer-lock backoff, close cancellation, reopen
+and current-value export. The new native typed C ABI assertions and ninth Git screenshot, plus Tauri
+favorite handoff/menu scene (21 total), require this change's own platform CI and image inspection.
+Earlier eight-image results do not accept favorites. Recovery UI, complete cancellation/platform
+matrix, manual input/IME/focus and #16 dependencies keep #35 open.
+
+源码 head `c21f75f6cc47d548fbd71bd53e2f56a27a05e923`、实际 tested merge
+`8eeb14872b59754feb3547ad923d33e7bee2cc14` 的
+[原生 CI 41586482528](https://github.com/YondFane/uTerm/actions/runs/41586482528) 和
+[旧端 CI 41586482532](https://github.com/YondFane/uTerm/actions/runs/41586482532)
+四 job 全通过。产物：
+[ARM 13208108246](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208108246)、
+[Intel 13208446559](https://github.com/YondFane/uTerm/actions/runs/41586482528/artifacts/13208446559)、
+[Windows 13208079517](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208079517)、
+[旧 Mac 13208751241](https://github.com/YondFane/uTerm/actions/runs/41586482532/artifacts/13208751241)。
+
+原生 macOS ARM64／Intel 通过十四项 Swift 及真实 Git／编辑器／终端／控制场景。`git-live.json`
+记录干净源码 head／merge、系统、架构和场景。八张真实 `native-git-*.png`
+包括 Worktree 确认／取消／脏拒删／干净删除；ARM macOS 15.8.2 的
+`native-git-worktree-delete-confirm.png` 与 `native-git-worktree-delete-error.png`
+已目视检查。旧端两 job 各二十真实 Tauri 场景通过，清理无错误。Windows x64 Server
+2025 三项 Worktree 删除及明确执行的 Git 后元数据 I/O 失败通过，命令和结果见
+`core-ffi-tests.log`。先前 LF／CRLF 夹具失败链接保留在 #35，不计为通过。
+
+本轮收藏在 Linux x86_64／Rust 1.99.1／Node
+26.13 通过五项真实 Git／Core 集成和明确文件系统失败／重试、三十五项真实 Rust／React 契约、389 前端（十跳过）、100 后端（十忽略）、生产构建、生成契约、类型与 i18n。覆盖 Worktree 共用身份、过期写入、准确 NFD／CRLF 来源保留、冲突／回执／配额失败、迟到读取、真实等锁、关闭取消、重开和当前值导出。新原生类型化 C
+ABI 断言和第九张 Git 截图、Tauri 收藏交接／菜单场景（总二十一场景）仍需本次改动自己的平台 CI 和图片检查，先前八图不验收收藏。恢复界面、完整取消／平台矩阵、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
 
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 

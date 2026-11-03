@@ -244,6 +244,78 @@ impl Core {
                 Ok(Value::Null)
             }
             method if method.starts_with("files.") => files::request(method, params),
+            method if method.starts_with("git.favorites.") => {
+                #[derive(Deserialize)]
+                #[serde(rename_all = "camelCase", deny_unknown_fields)]
+                struct Read {
+                    directory: String,
+                }
+                #[derive(Deserialize)]
+                #[serde(rename_all = "camelCase", deny_unknown_fields)]
+                struct Import {
+                    directory: String,
+                    legacy: Option<String>,
+                }
+                #[derive(Deserialize)]
+                #[serde(rename_all = "camelCase", deny_unknown_fields)]
+                struct Write {
+                    directory: String,
+                    expected_revision: Option<String>,
+                    references: Vec<String>,
+                }
+                let invalid = |error: serde_json::Error| {
+                    CoreError::new("INVALID_ARGUMENT", error.to_string())
+                };
+                let repository = |directory: &str| {
+                    git::favorite_repository(directory)
+                        .map_err(|error| CoreError::new("GIT_ERROR", error))
+                };
+                let result = match method {
+                    "git.favorites.read" => {
+                        let args: Read = serde_json::from_value(params).map_err(invalid)?;
+                        self.store.favorites_read(&repository(&args.directory)?.0)?
+                    }
+                    "git.favorites.import" | "git.favorites.acceptShared" => {
+                        let args: Import = serde_json::from_value(params).map_err(invalid)?;
+                        let (repository, alias) = repository(&args.directory)?;
+                        if method == "git.favorites.import" {
+                            self.store.favorites_import(
+                                &repository,
+                                &alias,
+                                args.legacy.as_deref(),
+                            )?
+                        } else {
+                            self.store.favorites_accept_shared(
+                                &repository,
+                                &alias,
+                                args.legacy.as_deref().ok_or_else(|| {
+                                    CoreError::new(
+                                        "INVALID_ARGUMENT",
+                                        "Missing old Git favorite source",
+                                    )
+                                })?,
+                            )?
+                        }
+                    }
+                    "git.favorites.write" => {
+                        let args: Write = serde_json::from_value(params).map_err(invalid)?;
+                        let (repository, alias) = repository(&args.directory)?;
+                        self.store.favorites_write(
+                            &repository,
+                            &alias,
+                            args.expected_revision.as_deref(),
+                            args.references,
+                        )?
+                    }
+                    _ => {
+                        return Err(CoreError::new(
+                            "UNKNOWN_METHOD",
+                            "Unknown Git favorite operation",
+                        ))
+                    }
+                };
+                serde_json::to_value(result).map_err(Into::into)
+            }
             method if method.starts_with("git.") => git::request(method, params),
             "directory.resolve" => Ok(json!(host::project_directory(string(
                 &params,
@@ -754,6 +826,7 @@ impl Core {
             "legacy.export" => {
                 let snapshot = self.store.read()?;
                 let mut legacy = snapshot.document.legacy;
+                self.store.favorites_export(&mut legacy)?;
                 legacy.insert(
                     "uterm.desktop.workspace.v1".into(),
                     serde_json::to_string(&snapshot.document.workspace)?,

@@ -1,7 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { CoreResponse, JSONValue } from "./core-contract.generated.ts";
-import { editorDraftMethods } from "./content-transport.ts";
+import { editorDraftMethods, gitFavoriteMethods } from "./content-transport.ts";
 import type { ContentPort } from "./content-transport.ts";
 
 export { isTauri };
@@ -9,19 +9,22 @@ export const tauriContentPort: ContentPort = {
   async request(message) {
     try {
       let result: unknown;
-      if (Object.hasOwn(editorDraftMethods, message.method)) {
+      if (
+        Object.hasOwn(editorDraftMethods, message.method) ||
+        Object.hasOwn(gitFavoriteMethods, message.method)
+      ) {
         const reply = JSON.parse(
           await invoke<string>("shared_core_request", {
             request: JSON.stringify({
               version: 1,
               id: message.id,
-              method: editorDraftMethods[message.method],
+              method: editorDraftMethods[message.method] ?? gitFavoriteMethods[message.method],
               params: message.params,
             }),
           }),
         ) as CoreResponse;
         if (reply.version !== 1 || reply.id !== message.id)
-          throw Object.assign(Error("Invalid shared draft response"), { code: "INVALID_REPLY" });
+          throw Object.assign(Error("Invalid shared content response"), { code: "INVALID_REPLY" });
         if (reply.error)
           throw Object.assign(Error(reply.error.message), { code: reply.error.code });
         result = reply.result ?? null;

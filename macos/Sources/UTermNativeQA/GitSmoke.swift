@@ -45,6 +45,8 @@ enum GitSmoke {
         let context = try await bridge.projectContext(expectedRevision: selected["revision"].string!)
         guard context.directory.map({ Data($0.utf8) }) == Data(root.path.utf8) else { throw BridgeFailure(code: "GIT_CONTEXT", message: "Selected project lost literal directory bytes") }
         await model.reload()
+        let favoriteSource = "[\n \"refs/heads/topic\"\n]"
+        _ = try await bridge.call("git.favorites.import", params: .object(["directory": .string(root.path), "legacy": .string(favoriteSource)]))
         let content = try await open(root)
         defer { content.forceClose() }
         var captures: [String] = []
@@ -72,6 +74,22 @@ enum GitSmoke {
             captures.append("native-git-history-en-dark.png")
             try await capture(content, captures.last!)
             report["realDiffAndHistory"] = true
+            _ = try await content.webView.evaluateJavaScript("document.querySelector('[data-node=\"refs/heads/main\"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:120,clientY:160}))")
+            try await ContentSmoke.wait(content, "[...document.querySelectorAll('[role=menuitem]')].some(b=>b.textContent==='Favorite branch' && !b.disabled)")
+            try await EditorSmoke.click(content, title: "Favorite branch")
+            try await ContentSmoke.wait(content, "document.querySelector('[data-node=\"refs/heads/main\"]')?.textContent.includes('★') === true")
+            let favorites = try await bridge.call("git.favorites.read", params: .object(["directory": .string(root.path)]))
+            guard Set(favorites["references"].array.compactMap { $0.string }) == Set(["refs/heads/main", "refs/heads/topic"]) else { throw BridgeFailure(code: "GIT_FAVORITES", message: "Native favorite menu did not persist the shared references") }
+            report["nativeFavoritesUsedSharedCore"] = true
+            report["favoriteRootDenied"] = try await ContentSmoke.request(content, method: "git_favorites_read", params: ["directory": sibling.path]) == "ROOT_DENIED"
+            report["favoriteContentImportDenied"] = try await ContentSmoke.request(content, method: "git_favorites_import", params: ["directory": root.path, "legacy": "[]"]) == "METHOD_DENIED"
+            guard let favoriteDocument = try await content.webView.evaluateJavaScript("window.utermContentDocument") as? String else { throw BridgeFailure(code: "GIT_FAVORITES", message: "Missing pre-reload favorite document") }
+            let previousFavoriteDocument = String(decoding: try JSONEncoder().encode(favoriteDocument), as: UTF8.self)
+            content.webView.reload()
+            try await ContentSmoke.wait(content, "typeof window.utermContentDocument === 'string' && window.utermContentDocument !== \(previousFavoriteDocument) && document.querySelector('[data-node=\"refs/heads/main\"]')?.textContent.includes('★') === true")
+            report["nativeFavoritesRetainedAfterReload"] = true
+            captures.append("native-git-favorites.png")
+            try await capture(content, captures.last!)
 
             _ = try await bridge.call("editor.drafts.import", params: .object(["legacy": .null]))
             func seed(_ text: String) async throws {
@@ -89,6 +107,7 @@ enum GitSmoke {
             defer { editor.forceClose() }
             try await ContentSmoke.wait(editor, "document.querySelector('.cm-content')?.textContent.includes('SAVE_BEFORE_GIT') === true")
             report["fileWindowCannotInvokeGit"] = try await ContentSmoke.request(editor, method: "git_snapshot", params: ["directory": root.path]) == "METHOD_DENIED"
+            report["fileWindowCannotReadGitFavorites"] = try await ContentSmoke.request(editor, method: "git_favorites_read", params: ["directory": root.path]) == "METHOD_DENIED"
             content.window?.makeKeyAndOrderFront(nil)
             _ = try await content.webView.evaluateJavaScript("document.querySelector('[data-node=\"refs/heads/main\"]').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:120,clientY:160}))")
             try await EditorSmoke.click(content, title: "New branch")

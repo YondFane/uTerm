@@ -1,4 +1,34 @@
 export const backendMessages: Record<string, string> = {
+  "请先导入旧 Git 收藏，再修改。": "Import old Git favorites before changing them",
+  "Git 收藏无效，原始数据已保留。": "Git favorites are invalid; original data was retained",
+  "Git 收藏已保留供恢复：{p0}": "Git favorites retained for recovery: {p0}",
+  "不支持此 Git 收藏格式。": "Git favorites schema is unsupported",
+  "Git 收藏的仓库数量已达上限。": "Git favorite repository limit reached",
+  "Git 收藏的仓库标识无效。": "Git favorite identity is invalid",
+  "Git 收藏快照缺失，请保留并恢复副本后继续。":
+    "Git favorites snapshot is missing; retain and restore a recovery copy before continuing",
+  "Git 收藏超过存储上限。": "Git favorites exceed the storage limit",
+  "Git 收藏在备份前发生变化，请明确重新读取。":
+    "Git favorites changed before backup; reload explicitly",
+  "Git 收藏恢复来源已满，未移除原始数据。":
+    "Git favorite recovery sources are full; no original data was removed",
+  "多个旧 Git 收藏来源匹配此仓库，原始数据已保留。":
+    "Multiple old Git favorite sources match this repository; originals were retained",
+  "旧 Git 收藏已保留但无法读取：{p0}": "Old Git favorites were retained but cannot be read: {p0}",
+  "旧 Git 收藏与共享收藏不同，请明确选择恢复数据。":
+    "Old Git favorites differ from shared favorites; choose recovery data explicitly",
+  "请先保留准确的旧 Git 收藏来源，再继续。":
+    "Retain the exact old Git favorite source before continuing",
+  "Git 收藏已变化，请重新读取后重试。": "Git favorites changed; reload before retrying",
+  "Git 收藏已关闭。": "Git favorites are closed",
+  "旧 Git 收藏已变化，请重新加载后选择恢复数据。":
+    "Old Git favorites changed. Reload before choosing recovery data.",
+  "旧 Git 收藏备份不同，原始数据已保留。":
+    "The old Git favorite backup differs; original data was retained.",
+  "无法确认旧 Git 收藏备份。": "The old Git favorite backup could not be verified.",
+  "无法确认 Git 收藏交接。": "The Git favorite handoff could not be verified.",
+  "请先归档旧 Git 收藏，再继续。": "Archive old Git favorites before continuing",
+  "请先完成 Git 收藏读取或保存。": "Finish loading or saving Git favorites first.",
   "请选择现有引用。": "Select an existing reference.",
   "引用列表过大，请在终端中查看。": "Too many references. View them in the terminal.",
   "目标引用已改变，请刷新后重试。": "The target reference has changed. Refresh and try again.",

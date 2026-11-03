@@ -330,7 +330,7 @@ try {
       assert(closed, `${phase} did not quit through the ordinary exit guard`);
       const expected =
         phase === "git"
-          ? 4
+          ? 5
           : phase.startsWith("editor-")
             ? 2
             : phase === "initial"

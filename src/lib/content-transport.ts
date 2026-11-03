@@ -28,9 +28,16 @@ export const gitMethods: Record<string, string> = {
   delete_worktree: "git.worktrees.delete",
   worktree_suggestion: "git.worktrees.suggestion",
 };
+export const gitFavoriteMethods: Record<string, string> = {
+  git_favorites_read: "git.favorites.read",
+  git_favorites_import: "git.favorites.import",
+  git_favorites_accept_shared: "git.favorites.acceptShared",
+  git_favorites_write: "git.favorites.write",
+};
 const contentMethods = new Set([
   ...Object.keys(editorDraftMethods),
   ...Object.keys(gitMethods),
+  ...Object.keys(gitFavoriteMethods),
   "content_open_file",
   "content_copy_text",
   "files_list",

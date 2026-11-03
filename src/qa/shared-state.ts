@@ -32,7 +32,10 @@ const savedEditorText = editorFixture.savedText;
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 let observerBusyReads = 0;
 async function observeCore(method: string, params?: Parameters<typeof coreRequest>[1]) {
-  assert(["snapshot.read", "editor.drafts.document"].includes(method), "QA observer is read-only");
+  assert(
+    ["snapshot.read", "editor.drafts.document", "git.favorites.read"].includes(method),
+    "QA observer is read-only",
+  );
   const result = await until(async () => {
     try {
       return { value: await coreRequest(method, params) };
@@ -118,6 +121,14 @@ async function editFont(value: number) {
 
 export async function prepare() {
   const context = await invoke<Context>("qa_context");
+  if (context.phase === "git") {
+    const references = (await coreRequest("git.references", {
+      directory: context.project,
+    })) as unknown as { repository: string };
+    const key = `uterm.git.favorites:${references.repository}`;
+    if (localStorage.getItem(key) === null)
+      localStorage.setItem(key, '[\r\n "refs/heads/main"\r\n]');
+  }
   if (
     ["initial", "editor-checkpoint"].includes(context.phase) &&
     localStorage.getItem(settingsKey) === null
@@ -312,6 +323,48 @@ async function runGit(context: Context) {
       }),
     );
   }
+  const catalog = (await coreRequest("git.references", {
+    directory: context.project,
+  })) as unknown as { repository: string };
+  const favoriteKey = `uterm.git.favorites:${catalog.repository}`;
+  const frozenFavoriteSource = localStorage.getItem(favoriteKey);
+  await until(
+    () => document.querySelector('[data-node="refs/heads/main"]')?.textContent?.includes("★"),
+    "imported old Git favorite",
+  );
+  await referenceMenu();
+  await click("Unfavorite");
+  await until(async () => {
+    const saved = (await observeCore("git.favorites.read", {
+      directory: context.project,
+    })) as unknown as { references: string[] };
+    return saved.references.length === 0;
+  }, "shared favorite removed by actual Tauri menu");
+  await referenceMenu();
+  await click("Favorite branch");
+  await until(
+    () => document.querySelector('[data-node="refs/heads/main"]')?.textContent?.includes("★"),
+    "shared favorite restored by actual Tauri menu",
+  );
+  assert(
+    localStorage.getItem(favoriteKey) === frozenFavoriteSource,
+    "Favorite actions changed frozen old source",
+  );
+  const oldBackup = Object.keys(localStorage).find((key) =>
+    key.startsWith(`${favoriteKey}.shared-v1-backup.`),
+  );
+  assert(
+    oldBackup && localStorage.getItem(oldBackup) === frozenFavoriteSource,
+    "Old favorite backup differs",
+  );
+  assert(localStorage.getItem(`${favoriteKey}.shared-v1`), "Missing favorite handoff receipt");
+  await scene("git-favorites", {
+    sharedCore: true,
+    exactOldSourceRetained: true,
+    menuRemoveAndRestore: true,
+    versionedBackup: true,
+    receipt: true,
+  });
   function input(label: string, value: string) {
     const field = document.querySelector<HTMLInputElement>(
       `dialog[open] input[aria-label="${label}"]`,

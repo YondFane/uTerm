@@ -9,10 +9,12 @@ use std::{
     path::{Path, PathBuf},
 };
 mod editor;
+mod git_favorites;
 pub use editor::{
     EditorDraft, EditorDraftCollection, EditorDraftDocument, EditorDraftEntry, EditorDraftSnapshot,
     EditorRecoveryCatalog,
 };
+pub use git_favorites::GitFavorites;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
