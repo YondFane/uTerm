@@ -19,6 +19,7 @@ export const messages: Record<string, string> = {
   复制完整预览: "Copy full preview",
   恢复所有仓库收藏: "Restore all repository favorites",
   "请先完成收藏恢复。": "Finish recovering favorites first.",
+  "正在退出应用，请等待或稍后重试恢复。": "The app is quitting. Wait or retry recovery later.",
   未保存的设置: "Unsaved settings",
   "请重试或放弃未保存的设置。": "Retry or discard unsaved settings.",
   重新读取设置: "Reload saved settings",

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
@@ -120,6 +120,7 @@ async function render(t, f, { intercept = async () => {} } = {}) {
   };
   let clipboard = "",
     clipboardFailure = false,
+    exitPending = false,
     closed = 0,
     restored = 0;
   const busy = [];
@@ -158,6 +159,7 @@ async function render(t, f, { intercept = async () => {} } = {}) {
       renderer.render(
         React.createElement(GitFavoritesRecovery, {
           key: ++key,
+          canRestore: () => !exitPending,
           onClose: () => {
             closed++;
             renderer.render(null);
@@ -214,6 +216,9 @@ async function render(t, f, { intercept = async () => {} } = {}) {
     busy,
     failClipboard: (value) => {
       clipboardFailure = value;
+    },
+    setExitPending: (value) => {
+      exitPending = value;
     },
     get clipboard() {
       return clipboard;
@@ -292,6 +297,18 @@ test("real Core recovery dialog retains corrupt bytes on cancel/copy and protect
     () => ui.button("Restore all repository favorites")?.disabled === false,
     "missing-store preview",
   );
+  ui.setExitPending(true);
+  await ui.click("Restore all repository favorites");
+  assert.match(
+    ui.dom.window.document.querySelector('[role="alert"]').textContent,
+    /app is quitting/,
+  );
+  assert.equal(
+    ui.requests.some((r) => r.method === "git.favorites.recovery.restore"),
+    false,
+  );
+  assert.equal(existsSync(f.file), false);
+  ui.setExitPending(false);
   await ui.click("Restore all repository favorites");
   await held.promise;
   assert.deepEqual(readFileSync(f.file), f.initial);

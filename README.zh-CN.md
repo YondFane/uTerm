@@ -152,7 +152,8 @@ CI 截取原生窗口，并将报告及图片上传到
 `legacy-checks-*/tauri-state-qa/`。此命令需要桌面会话，拒绝覆盖已有 QA 配置。专用配置路径链接将 QA 数据导向临时目录，不覆盖主目录变量，也不使用生产配置。自动化不代表人工键盘／输入法验收。
 
 QA 还验证真实写入锁拒绝及明确重试恢复草稿，以及 Git 收藏预览／复制／过期／缺失恢复。Tauri 共用内容通过锁定的原生 clipboard-manager 插件复制，只给主窗口写文本权限，不依赖 WebView 剪贴板许可。Windows／macOS
-QA 将完整原始来源与系统剪贴板核对，原生客户端使用限定范围的 NSPasteboard 调用。
+QA 将完整原始来源与系统剪贴板核对，原生客户端使用限定范围的 NSPasteboard 调用。 JS 与 Rust 剪贴板插件须保持相同主／次版本，Tauri
+CLI 会检查这组版本。
 
 核心 `store/editor.rs`
 管理核对 revision 的多文档草稿、准确旧来源副本及明确恢复。原生和 Tauri 编辑均通过

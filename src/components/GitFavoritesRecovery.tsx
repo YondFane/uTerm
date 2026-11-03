@@ -12,9 +12,11 @@ import { useUiLanguage } from "../lib/useUiLanguage";
 export function GitFavoritesRecovery({
   onClose,
   onBusyChange,
+  canRestore,
 }: {
   onClose: () => void;
   onBusyChange: (busy: boolean) => void;
+  canRestore: () => boolean;
 }) {
   useUiLanguage();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -23,8 +25,8 @@ export function GitFavoritesRecovery({
   const catalogEpoch = useRef(0);
   const previewEpoch = useRef(0);
   const working = useRef(false);
-  const callbacks = useRef({ onClose, onBusyChange });
-  callbacks.current = { onClose, onBusyChange };
+  const callbacks = useRef({ onClose, onBusyChange, canRestore });
+  callbacks.current = { onClose, onBusyChange, canRestore };
   const [catalog, setCatalog] = useState<CoreGitFavoriteRecoveryCatalog | null>(null);
   const [selection, setSelection] = useState("");
   const [preview, setPreview] = useState<{
@@ -143,6 +145,10 @@ export function GitFavoritesRecovery({
       preview.choice !== selection
     )
       return;
+    if (!callbacks.current.canRestore()) {
+      setError(tx("正在退出应用，请等待或稍后重试恢复。"));
+      return;
+    }
     working.current = true;
     setBusy(true);
     callbacks.current.onBusyChange(true);

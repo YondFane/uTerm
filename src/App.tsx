@@ -167,6 +167,7 @@ export function App() {
   useUiLanguage();
   const [favoriteRecoveryOpen, setFavoriteRecoveryOpen] = useState(false);
   const favoriteRecoveryBusy = useRef(false);
+  const exitPending = useRef(false);
   useEffect(() => {
     const open = () => setFavoriteRecoveryOpen(true);
     window.addEventListener("uterm:git-favorites-recovery", open);
@@ -785,10 +786,15 @@ export function App() {
         setError(tx("请先完成收藏恢复。"));
         return;
       }
+      if (exitPending.current) return;
+      exitPending.current = true;
       void flushSharedState()
         .then(() => assertSaved())
         .then(() => invoke("shared_core_exit"))
-        .catch((reason) => setError(String(reason)));
+        .catch((reason) => {
+          exitPending.current = false;
+          setError(String(reason));
+        });
     })
       .then(async (stop) => {
         if (disposed) {
@@ -4058,6 +4064,7 @@ export function App() {
       </dialog>
       {favoriteRecoveryOpen && (
         <GitFavoritesRecovery
+          canRestore={() => !exitPending.current}
           onClose={() => setFavoriteRecoveryOpen(false)}
           onBusyChange={(busy) => {
             favoriteRecoveryBusy.current = busy;

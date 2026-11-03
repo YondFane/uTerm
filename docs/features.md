@@ -363,8 +363,10 @@ changed current file rejects the write and requires a fresh catalog; a missing f
 without overwriting newly created data. Open Git views reload after successful restoration. Tauri
 shared content uses the native clipboard-manager plugin with write-text permission for the main
 window; failures remain visible. Browser-only fixtures retain the Web clipboard path. Copy failure
-never changes recovery data. Global recovery stays in the trusted application; scoped content can
-request its native dialog but cannot read or restore other repositories' recovery data.
+never changes recovery data. Once application quit begins, new restores are refused; a dispatched
+restore retains its quit guard until acknowledgement. Global recovery stays in the trusted
+application; scoped content can request its native dialog but cannot read or restore other
+repositories' recovery data.
 
 #### Git and editor concurrency validation
 
