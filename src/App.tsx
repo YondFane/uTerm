@@ -781,6 +781,13 @@ export function App() {
     if (!canonicalStateActive()) return;
     let disposed = false;
     let unlisten: (() => void) | undefined;
+    let unlistenDeferred: (() => void) | undefined;
+    const deferredReady = listen("shared-state-exit-deferred", () => {
+      exitPending.current = false;
+    }).then((stop) => {
+      if (disposed) stop();
+      else unlistenDeferred = stop;
+    });
     void listen("shared-state-exit-request", () => {
       if (favoriteRecoveryBusy.current) {
         setError(tx("请先完成收藏恢复。"));
@@ -802,12 +809,14 @@ export function App() {
           return;
         }
         unlisten = stop;
+        await deferredReady;
         await invoke("shared_core_ready");
       })
       .catch((reason) => setError(String(reason)));
     return () => {
       disposed = true;
       unlisten?.();
+      unlistenDeferred?.();
     };
   }, []);
 

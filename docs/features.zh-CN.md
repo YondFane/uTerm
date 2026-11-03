@@ -200,34 +200,26 @@ Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
 
 #### Git 与编辑器并发验证
 
-源码 head `e1eb1964df2d96ef2c81b7a3393db5ffcdb8ec15`、实际 tested merge
-`28da0fef53400b712646012a1a58a589b68241c2` 的
-[原生 CI 41592376226](https://github.com/YondFane/uTerm/actions/runs/41592376226) 和
-[旧端 CI 41592376229](https://github.com/YondFane/uTerm/actions/runs/41592376229)
-四 job 全通过。产物：
-[ARM 13211241361](https://github.com/YondFane/uTerm/actions/runs/41592376226/artifacts/13211241361)、
-[Intel 13210623520](https://github.com/YondFane/uTerm/actions/runs/41592376226/artifacts/13210623520)、
-[Windows 13211421894](https://github.com/YondFane/uTerm/actions/runs/41592376229/artifacts/13211421894)、
-[旧 Mac 13210483821](https://github.com/YondFane/uTerm/actions/runs/41592376229/artifacts/13210483821)。
+完整 Git／Worktree／取消基线为 head `e1eb1964df2d96ef2c81b7a3393db5ffcdb8ec15`、实际 merge
+`28da0fef53400b712646012a1a58a589b68241c2`：[原生 ARM／Intel](https://github.com/YondFane/uTerm/actions/runs/41592376226)
+与 [Tauri Windows／macOS](https://github.com/YondFane/uTerm/actions/runs/41592376229)
+通过。覆盖 checkout
+hook 执行中取消、编辑器冻结至 Git 完成、WORKTREE_SYNC 明确刷新，以及当前分支、外部文件和草稿分别保留；两个 Tauri
+job 各二十一场景通过。
 
-原生双架构通过十四项 Swift 和真实 Git／编辑器／终端／控制场景。`git-live.json`
-记录干净 head／merge、系统、架构及十张真实 Git 图。新 checkout
-hook 场景确认保存 UTF-8、分发后取消 WebKit、编辑器只读保持至 Git 实际完成、字节保留及 WORKTREE_SYNC 明确刷新反馈。后续冲突针对实际另一分支，分别确认当前分支、外部文件和草稿保留。ARM
-macOS 15.8.2 的 `native-git-cancel-frozen-editor.png` 与 `native-git-editor-conflict.png`
-已目视检查。旧端两 job 各二十一真实 Tauri 场景通过，含 Git／收藏／来源交接及磁盘失败。[Issue 证据](https://github.com/YondFane/uTerm/issues/35#issuecomment-6597742419)
-保留先前夹具失败。
+原生收藏恢复在 head `0b3e96f1dbafb01827f27eadd72e66f6fd198cb0`、实际 merge
+`c7d6bb403ad1cc83c2f98f11ac4fbebe52b4a606` 的
+[CI 41605226766](https://github.com/YondFane/uTerm/actions/runs/41605226766)
+双架构通过。产物：[ARM 13216078878](https://github.com/YondFane/uTerm/actions/runs/41605226766/artifacts/13216078878)、
+[Intel 13216407814](https://github.com/YondFane/uTerm/actions/runs/41605226766/artifacts/13216407814)。报告记录干净源码、平台及工具链：ARM
+macOS 15.8.2、Intel macOS 15.7.9，十四项 Swift 测试和十四张真实 Git 图。已目视检查四张 ARM 图片：
+`native-git-favorite-recovery-preview.png`、`native-git-favorite-recovery-source.png`、
+`native-git-favorite-recovery-damaged.png`、`native-git-favorite-recovery-missing-zh-light.png`。真实 NSMenu／NSAlert／NSPopUpButton／NSButton 和 NSPasteboard 验证默认取消、准确原始来源复制且禁用恢复、过期拒绝、损坏字节保留、缺失只读预览及明确恢复。自动操作不代表人工键盘／IME／焦点验收。
 
-本轮恢复服务在 Linux x86_64／Rust 1.99.1／Node
-26.13 通过九项真实 Git／收藏集成、明确保存／恢复磁盘失败和重试、三十六真实 Rust／React 契约、Core／FFI、390 前端（十跳过）、100 后端（十忽略）、类型、构建和生成契约。覆盖预览不写入、准确旧来源、当前文件 CAS、损坏／缺失快照、缺失安装不覆盖、损坏字节保留、校验和／占用副本失败、全仓库恢复／撤回及有效备份上限。新生成 TS／Swift 恢复 DTO 及真实 C
-ABI 断言仍需本次改动自己的平台 CI。恢复界面新增两项真实 Core／React 检查通过，覆盖完整 CRLF／NFD 来源复制、取消、迟到预览、缺失安装、过期冲突、明确重新读取及已分发恢复确认不能取消。Linux 针对性批次四十项通过，完整前端 392 项通过、十项跳过，类型、生产构建、格式、本地化和双语文档检查通过。本次界面的真实原生 ARM／Intel 和 Tauri
-Windows／macOS 场景与截图仍需自己的 CI；本地 DOM 测试不代表原生界面验收。前序 head
-`07b31b7`、实际 merge `249df048676050aea0a0ff9eeff74b6bce8356f8`
-的原生双架构和 Windows 通过，但[旧 macOS 运行](https://github.com/YondFane/uTerm/actions/runs/41595809802)暴露真实草稿 WRITER_BUSY 失败。新增真实应用场景主动持有 OS 写入锁，要求可见拒绝和明确**重试恢复草稿**，随后验证持久化和异常退出恢复；干净源码
-`9e748f3`
-的真实 Linux 应用通过实际写入拒绝、明确重试、CRLF／NFD 文本持久化、SIGKILL／重启及明确 BOM／CRLF 保存；干净源码
-`79c170d`
-的 Linux 真实恢复对话框也已验证取消焦点，Web 剪贴板拒绝时数据保持。Tauri 共用内容现使用原生剪贴板写入，插件 API 与真实 Core 的可见失败／重试检查通过。`79c170d`
-的原生构建和十四项 Swift 检查通过，但 Git 恢复夹具在新增场景前中止；当前 QA 通过真实后续写入准备已保留的前序快照。本次完整原生及 Tauri 恢复场景、系统剪贴板核对和截图仍待验证。完整 Windows 删除／取消矩阵、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
+核心恢复测试覆盖校验快照与准确来源、当前文件 CAS、校验和／占用路径失败、无覆盖安装、全仓库恢复／撤回及备份上限。真实 Rust／React 界面检查还覆盖迟到回复、超过 20k 预览的完整 CRLF／NFD 复制、原生复制可见失败／重试、先退出时拒绝恢复及等待已分发恢复确认。隔离 Linux 应用已验证真实写入锁拒绝、明确重试草稿、CRLF／NFD 持久化、SIGKILL／重启及 BOM／CRLF 保存；完整新恢复和正常退出流程仍需本次修改自己的重跑。其他编辑器／传输保护暂缓退出后，再次核对共享存储，保留恢复门禁及后续退出。
+
+新的 Tauri 恢复界面仍待匹配版本剪贴板插件的 Windows／macOS 运行成功报告、系统剪贴板核对及截图。先前失败保留在
+[Issue #35](https://github.com/YondFane/uTerm/issues/35)。完整 Windows 删除／取消矩阵、人工输入／IME／焦点及 #16 依赖使 #35 保持开放；不代表合并、签名、安装升级或发版验收。
 
 ## 项目官网
 

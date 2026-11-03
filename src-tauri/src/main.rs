@@ -569,6 +569,7 @@ fn main() {
                     if handle.state::<ssh::SshFiles>().busy() =>
                 {
                     api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
                     if let Err(error) = show_main_window(handle) {
                         eprintln!("Show transfer guard: {error}");
                     }
@@ -585,6 +586,7 @@ fn main() {
                             .load(std::sync::atomic::Ordering::SeqCst) =>
                 {
                     api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
                     let _ = show_main_window(handle);
                     let _ = handle.emit("database-close-request", ());
                 }
@@ -592,6 +594,7 @@ fn main() {
                     if handle.state::<redis::RedisState>().busy() =>
                 {
                     api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
                     if let Err(error) = show_main_window(handle) {
                         eprintln!("Show Redis operation: {error}");
                     }
@@ -603,6 +606,7 @@ fn main() {
                     if handle.state::<redis::RedisState>().dirty() =>
                 {
                     api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
                     if let Err(error) = show_main_window(handle) {
                         eprintln!("Show Redis guard: {error}");
                     }
@@ -620,6 +624,7 @@ fn main() {
                         .load(std::sync::atomic::Ordering::SeqCst) =>
                 {
                     api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
                     if let Err(error) = handle.emit("editor-close-request", ()) {
                         eprintln!("Editor close request: {error}");
                     }

@@ -370,52 +370,42 @@ repositories' recovery data.
 
 #### Git and editor concurrency validation
 
-Head `e1eb1964df2d96ef2c81b7a3393db5ffcdb8ec15`, actual tested merge
-`28da0fef53400b712646012a1a58a589b68241c2`, passed all four jobs in
-[native CI 41592376226](https://github.com/YondFane/uTerm/actions/runs/41592376226) and
-[legacy CI 41592376229](https://github.com/YondFane/uTerm/actions/runs/41592376229). Artifacts:
-[ARM 13211241361](https://github.com/YondFane/uTerm/actions/runs/41592376226/artifacts/13211241361),
-[Intel 13210623520](https://github.com/YondFane/uTerm/actions/runs/41592376226/artifacts/13210623520),
-[Windows 13211421894](https://github.com/YondFane/uTerm/actions/runs/41592376229/artifacts/13211421894),
-[old Mac 13210483821](https://github.com/YondFane/uTerm/actions/runs/41592376229/artifacts/13210483821).
+The complete Git/Worktree/cancellation baseline is head `e1eb1964df2d96ef2c81b7a3393db5ffcdb8ec15`,
+tested merge `28da0fef53400b712646012a1a58a589b68241c2`:
+[native ARM/Intel](https://github.com/YondFane/uTerm/actions/runs/41592376226) and
+[Tauri Windows/macOS](https://github.com/YondFane/uTerm/actions/runs/41592376229) pass. This
+includes the checkout-hook cancellation, editor freeze until Git completes, explicit WORKTREE_SYNC
+refresh and separately retained branch, external file and draft; both Tauri jobs pass 21 scenes.
 
-Both native architectures passed 14 Swift tests and actual Git/editor/terminal/control scenes.
-`git-live.json` records clean head/merge, OS, architecture and ten actual Git captures. The new
-checkout-hook scenario confirms saved UTF-8, WebKit cancellation after dispatch, editor readonly
-until Git actually completes, retained bytes and WORKTREE_SYNC requiring explicit refresh. The
-following conflict targets the other actual branch and independently confirms retained branch,
-external file and draft. ARM macOS 15.8.2 `native-git-cancel-frozen-editor.png` and
-`native-git-editor-conflict.png` were inspected. Both legacy jobs passed 21 real Tauri scenes;
-Git/favorite/source handoff and filesystem failures passed. Earlier fixture failures remain in the
-[Issue evidence](https://github.com/YondFane/uTerm/issues/35#issuecomment-6597742419).
+Native favorite recovery passes both architectures at head
+`0b3e96f1dbafb01827f27eadd72e66f6fd198cb0`, tested merge `c7d6bb403ad1cc83c2f98f11ac4fbebe52b4a606`,
+in [CI 41605226766](https://github.com/YondFane/uTerm/actions/runs/41605226766). Artifacts:
+[ARM 13216078878](https://github.com/YondFane/uTerm/actions/runs/41605226766/artifacts/13216078878)
+and
+[Intel 13216407814](https://github.com/YondFane/uTerm/actions/runs/41605226766/artifacts/13216407814).
+Reports record clean source, platform and toolchain: ARM macOS 15.8.2 and Intel macOS 15.7.9, 14
+Swift tests and 14 actual Git screenshots. Four ARM images were inspected:
+`native-git-favorite-recovery-preview.png`, `native-git-favorite-recovery-source.png`,
+`native-git-favorite-recovery-damaged.png` and `native-git-favorite-recovery-missing-zh-light.png`.
+Actual NSMenu/NSAlert/NSPopUpButton/NSButton and NSPasteboard checks cover default Cancel, exact
+original-source copy with Restore disabled, stale refusal, retained damaged bytes, readonly missing
+preview and explicit restoration. These automated operations do not establish manual
+keyboard/IME/focus acceptance.
 
-The current recovery service passed nine real Git/favorite integrations, explicit save/restore
-filesystem-failure and retry, 36 real Rust/React contracts, Core/FFI, 390 frontend checks (ten
-skipped), 100 backend checks (ten ignored), types, build and generated contracts on Linux x86_64 /
-Rust 1.99.1 / Node 26.13. Checks cover preview without writes, exact old sources, current-file CAS,
-corrupt/missing snapshots, no-clobber missing installation, retained damaged bytes, checksum and
-occupied-copy failures, all-repository restore/undo and bounded valid backups. Generated
-TypeScript/Swift recovery DTOs and added actual C ABI assertions still need this change's own
-platform CI. The recovery interfaces pass two additional real-Core/React checks for full CRLF/NFD
-source copy, cancel, late preview replies, missing-store installation, stale conflicts, explicit
-reload and non-cancellable dispatched restore acknowledgement. The focused Linux batch passes 40
-checks. The complete frontend suite passes 392 checks with ten skips; types, production build,
-formatting, localization and bilingual documentation checks pass. This interface change's actual
-native ARM/Intel and Tauri Windows/macOS scenes and screenshots still require its own CI; local DOM
-tests are not native UI acceptance. The preceding head `07b31b7`, tested merge
-`249df048676050aea0a0ff9eeff74b6bce8356f8`, passed native ARM/Intel and Windows, but its
-[old macOS run](https://github.com/YondFane/uTerm/actions/runs/41595809802) exposed a real draft
-WRITER_BUSY failure. The new real-app scenario deliberately holds the OS writer lock, requires a
-visible rejection and explicit **Retry recovery draft**, then verifies durability and forced-exit
-recovery. The clean-source Linux app at `9e748f3` passes actual writer rejection, explicit retry,
-durable CRLF/NFD text, SIGKILL/relaunch and explicit BOM/CRLF save. The clean-source `79c170d` Linux
-app also verifies Cancel focus in the actual recovery dialog; its Web clipboard rejection leaves
-data intact. Shared Tauri content now uses native clipboard writes, with a visible failure/retry
-check passing against the plugin API and real Core. The `79c170d` native build and 14 Swift checks
-pass, but its Git recovery fixture stops before the new scenes. Current QA seeds a retained prior
-snapshot through actual subsequent writes. This change's full native and Tauri recovery scenarios,
-OS clipboard comparison and screenshots remain pending. Full Windows deletion/cancellation matrix,
-manual input/IME/focus and #16 dependencies keep #35 open.
+Core recovery tests cover verified snapshots and exact sources, current-file CAS, checksum and
+occupied-path failures, no-clobber installation, all-repository restore/undo and bounded backups.
+The real Rust/React interface checks also cover late replies, full CRLF/NFD copy beyond the 20k
+preview, visible native-copy failure/retry, quit-before-restore refusal and waiting for a dispatched
+restore acknowledgement. The isolated Linux app verifies actual writer-lock rejection, explicit
+draft retry, durable CRLF/NFD text, SIGKILL/relaunch and BOM/CRLF save; its complete new recovery
+and normal-exit flow still requires this change's own rerun. Shared-store approval is repeated when
+another editor/transfer guard defers quit, preserving both the restore gate and subsequent exit.
+
+The new Tauri recovery interface still needs successful Windows/macOS runtime reports, OS clipboard
+comparison and screenshots for the matching clipboard plugin versions. Earlier failures remain in
+[Issue #35](https://github.com/YondFane/uTerm/issues/35). Full Windows deletion/cancellation matrix,
+manual input/IME/focus and #16 dependencies keep #35 open. No merge, signing, installer-upgrade or
+release acceptance is implied.
 
 ## Project website
 
