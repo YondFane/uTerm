@@ -461,6 +461,16 @@ async function runWorktreeDeletion() {
       button.title.includes(gitQA.worktreeName),
     );
   async function review() {
+    if (!row()) {
+      const parent = await until(
+        () =>
+          document.querySelector<HTMLButtonElement>(
+            '.folder-row[data-project-id="shared-state-qa"] .row-label',
+          ),
+        "owning project sidebar row",
+      );
+      if (parent.getAttribute("aria-expanded") === "false") parent.click();
+    }
     const target = await until(row, "actual Worktree sidebar row");
     target.dispatchEvent(
       new MouseEvent("contextmenu", {

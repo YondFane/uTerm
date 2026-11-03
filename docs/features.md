@@ -419,7 +419,9 @@ regression holds a real settings-write reply while deletion queues, then rejects
 without sending a Git delete; a separate external write rejects the review at Core. A changed
 displayed name/path is refused, and dirty data survives until an explicit clean retry. Actual
 application confirmation/cancel/dirty/stale/reload/delete screenshots and the complete platform
-result for this change remain pending.
+result for this change remain pending. The real-app script expands the owning project before
+locating its Worktree and compares metadata revisions and file bytes across Cancel and dirty
+refusal; the corrected scene still requires its own runtime result.
 
 ## Project website
 

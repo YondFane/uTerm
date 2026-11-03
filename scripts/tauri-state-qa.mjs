@@ -261,6 +261,7 @@ try {
     const worktreeSentinel = join(worktreeDirectory, "qa-retained-untracked.txt");
     const worktreeBytes = Buffer.from("RETAIN_DELETE_QA 中文 e\u0301\r\n");
     let originalProjectName;
+    let reviewedWorkspaceRevision;
     const args = ["--qa-data-root", root, "--qa-phase", phase];
     if (backup) args.push("--qa-backup", backup);
     child = spawn(binary, args, { env, stdio: ["ignore", "pipe", "pipe"] });
@@ -323,6 +324,7 @@ try {
             writeFileSync(worktreeSentinel, worktreeBytes);
           } else if (value.scene === "git-worktree-delete-review") {
             assert.deepEqual(readFileSync(worktreeSentinel), worktreeBytes);
+            reviewedWorkspaceRevision = coreFixture("snapshot.read").revision;
           } else if (value.scene === "git-worktree-delete-dirty") {
             assert.deepEqual(
               readFileSync(worktreeSentinel),
@@ -330,6 +332,11 @@ try {
               "Cancel or dirty refusal changed file bytes",
             );
             const snapshot = coreFixture("snapshot.read");
+            assert.equal(
+              snapshot.revision,
+              reviewedWorkspaceRevision,
+              "Cancel or dirty refusal changed workspace metadata",
+            );
             assert(
               snapshot.document.workspace.projects
                 .find((item) => item.id === "shared-state-qa")
