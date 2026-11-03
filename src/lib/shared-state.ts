@@ -1,5 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
-import { readWorkspace, workspaceKey, type Workspace } from "./workspace";
+import {
+  readWorkspace,
+  workspaceKey,
+  type Workspace,
+  type Project,
+  type Worktree,
+} from "./workspace";
 import { readSettings, settingsKey, type Settings } from "./settings";
 import type { CoreRequest, CoreResponse, CoreSnapshot, JSONValue } from "./core-contract.generated";
 
@@ -96,13 +102,40 @@ export function refreshSharedWorktrees(id: string): Promise<Workspace> {
   });
 }
 
-export function deleteSharedWorktree(id: string, worktreeId: string): Promise<Workspace> {
+function staleWorktreeReview(): Error & { code: string } {
+  return Object.assign(
+    Error("Shared workspace changed after deletion preview. Reload and review again."),
+    { code: "CONFLICT" },
+  );
+}
+export function worktreeDeletionRevision(
+  project: Pick<Project, "id" | "directory">,
+  worktree: Pick<Worktree, "id" | "name" | "path">,
+): string {
+  if (!snapshot) throw Error("Shared state is not initialized");
+  const savedProject = sharedWorkspace()?.projects.find((item) => item.id === project.id);
+  const savedTree = savedProject?.worktrees?.find((item) => item.id === worktree.id);
+  if (
+    savedProject?.directory !== project.directory ||
+    savedTree?.path !== worktree.path ||
+    savedTree?.name !== worktree.name
+  )
+    throw staleWorktreeReview();
+  return snapshot.revision;
+}
+
+export function deleteSharedWorktree(
+  id: string,
+  worktreeId: string,
+  expectedRevision: string,
+): Promise<Workspace> {
   return serial(async () => {
     if (!snapshot) throw Error("Shared state is not initialized");
+    if (expectedRevision !== snapshot.revision) throw staleWorktreeReview();
     snapshot = (await coreRequest("project.worktrees.delete", {
       id,
       worktreeId,
-      expectedRevision: snapshot.revision,
+      expectedRevision,
     })) as unknown as CoreSnapshot;
     return snapshot.document.workspace as unknown as Workspace;
   });

@@ -84,6 +84,21 @@ function gitFixture(args) {
     ...args,
   ]);
 }
+function coreFixture(method, params = null) {
+  const target = resolve(process.env.CARGO_TARGET_DIR ?? "crates/uterm-core/target");
+  const result = JSON.parse(
+    execute(
+      join(target, "debug", `uterm-core-contract${process.platform === "win32" ? ".exe" : ""}`),
+      ["--serve", join(root, "data/shared-state-v1")],
+      {
+        input: JSON.stringify({ version: 1, id: "qa-external-operation", method, params }) + "\n",
+      },
+    ),
+  );
+  assert.equal(result.id, "qa-external-operation");
+  assert.equal(result.error, undefined, JSON.stringify(result.error));
+  return result.result;
+}
 gitFixture(["init", "--initial-branch=main"]);
 writeFileSync(join(root, "project", gitQA.fileName), gitQA.originalText);
 gitFixture(["add", "--all"]);
@@ -242,6 +257,10 @@ try {
     const favoriteFile = join(root, "data/shared-state-v1/git-favorites-v1.json");
     const favoriteDamage = Buffer.from("{damaged isolated Tauri favorite recovery");
     const favoriteChanged = Buffer.from("{newer external Tauri favorite bytes must survive");
+    const worktreeDirectory = join(root, gitQA.worktreeName);
+    const worktreeSentinel = join(worktreeDirectory, "qa-retained-untracked.txt");
+    const worktreeBytes = Buffer.from("RETAIN_DELETE_QA 中文 e\u0301\r\n");
+    let originalProjectName;
     const args = ["--qa-data-root", root, "--qa-phase", phase];
     if (backup) args.push("--qa-backup", backup);
     child = spawn(binary, args, { env, stdio: ["ignore", "pipe", "pipe"] });
@@ -300,6 +319,77 @@ try {
               join(output, "control-disabled.json"),
               JSON.stringify({ ...metadata, endpointUnavailable: true }, null, 2),
             );
+          } else if (value.scene === "git-worktree") {
+            writeFileSync(worktreeSentinel, worktreeBytes);
+          } else if (value.scene === "git-worktree-delete-review") {
+            assert.deepEqual(readFileSync(worktreeSentinel), worktreeBytes);
+          } else if (value.scene === "git-worktree-delete-dirty") {
+            assert.deepEqual(
+              readFileSync(worktreeSentinel),
+              worktreeBytes,
+              "Cancel or dirty refusal changed file bytes",
+            );
+            const snapshot = coreFixture("snapshot.read");
+            assert(
+              snapshot.document.workspace.projects
+                .find((item) => item.id === "shared-state-qa")
+                .worktrees.some((item) => item.id === value.checks.worktreeId),
+            );
+            unlinkSync(worktreeSentinel);
+          } else if (value.scene === "git-worktree-delete-stale") {
+            const before = coreFixture("snapshot.read");
+            originalProjectName = before.document.workspace.projects.find(
+              (item) => item.id === value.checks.projectId,
+            ).name;
+            const after = coreFixture("project.rename", {
+              id: value.checks.projectId,
+              name: "External QA project",
+              expectedRevision: before.revision,
+            });
+            assert.notEqual(after.revision, before.revision);
+            writeFileSync(
+              join(output, "worktree-external-revision.json"),
+              JSON.stringify(
+                {
+                  ...metadata,
+                  before: before.revision,
+                  after: after.revision,
+                  projectId: value.checks.projectId,
+                },
+                null,
+                2,
+              ),
+            );
+          } else if (value.scene === "git-worktree-delete-conflict") {
+            assert(existsSync(worktreeDirectory), "Stale confirmation deleted the Worktree");
+            assert(
+              coreFixture("snapshot.read")
+                .document.workspace.projects.find((item) => item.id === "shared-state-qa")
+                .worktrees.some((item) => item.id === value.checks.worktreeId),
+            );
+          } else if (value.scene === "git-worktree-deleted") {
+            assert(!existsSync(worktreeDirectory));
+            const snapshot = coreFixture("snapshot.read");
+            assert(
+              !snapshot.document.workspace.projects
+                .find((item) => item.id === "shared-state-qa")
+                .worktrees.some((item) => item.id === value.checks.worktreeId),
+            );
+            assert(!gitFixture(["worktree", "list", "--porcelain"]).includes(gitQA.worktreeName));
+            assert.equal(
+              gitFixture(["rev-parse", "refs/heads/qa-tauri-worktree"]).trim(),
+              gitFixture(["rev-parse", "HEAD"]).trim(),
+            );
+            assert.equal(
+              readFileSync(join(root, "project", gitQA.fileName), "utf8"),
+              gitQA.changedText,
+            );
+            assert(originalProjectName);
+            coreFixture("project.rename", {
+              id: "shared-state-qa",
+              name: originalProjectName,
+              expectedRevision: snapshot.revision,
+            });
           } else if (value.scene === "git-favorite-recovery-ready") {
             favoriteOriginal = readFileSync(favoriteFile);
             assert.equal(
@@ -461,7 +551,7 @@ try {
       assert(closed, `${phase} did not quit through the ordinary exit guard`);
       const expected =
         phase === "git"
-          ? 13
+          ? 19
           : phase === "editor-checkpoint"
             ? 3
             : phase.startsWith("editor-")

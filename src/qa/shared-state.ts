@@ -440,7 +440,125 @@ async function runGit(context: Context) {
     sharedWorkspaceRegistered: true,
     temporaryDirectory: worktree,
   });
+  await runWorktreeDeletion();
   await invoke("qa_request_exit");
+}
+
+async function runWorktreeDeletion() {
+  const stored = async () =>
+    (await observeCore("snapshot.read")) as unknown as {
+      document: {
+        workspace: { projects: { id: string; worktrees?: { id: string; path: string }[] }[] };
+      };
+    };
+  const project = (await stored()).document.workspace.projects.find(
+    (item) => item.id === "shared-state-qa",
+  );
+  const worktree = project?.worktrees?.find((item) => item.path.includes(gitQA.worktreeName));
+  assert(worktree, "Shared QA Worktree was not registered");
+  const row = () =>
+    [...document.querySelectorAll<HTMLButtonElement>(".folder-row .row-label")].find((button) =>
+      button.title.includes(gitQA.worktreeName),
+    );
+  async function review() {
+    const target = await until(row, "actual Worktree sidebar row");
+    target.dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 180,
+        clientY: 350,
+      }),
+    );
+    await click("Delete worktree");
+    const dialog = await until(
+      () => document.querySelector<HTMLDialogElement>(".worktree-delete-dialog[open]"),
+      "real application delete confirmation",
+    );
+    assert(
+      dialog.textContent?.includes(gitQA.worktreeName),
+      "Deletion review omitted the target path",
+    );
+    assert(
+      document.activeElement?.textContent?.trim() === "Cancel",
+      "Delete confirmation did not default to Cancel",
+    );
+  }
+  async function confirm() {
+    const button = document.querySelector<HTMLButtonElement>(
+      '.worktree-delete-dialog button[type="submit"]',
+    );
+    assert(button, "Delete confirmation action is missing");
+    button.click();
+    await until(
+      () => !document.querySelector(".worktree-delete-dialog[open]"),
+      "confirmation handed off to guarded deletion",
+    );
+  }
+  await review();
+  await scene("git-worktree-delete-review", {
+    cancelDefault: true,
+    literalPathVisible: true,
+    worktreeId: worktree.id,
+  });
+  await click("Cancel");
+  await until(() => !document.querySelector(".worktree-delete-dialog[open]"), "Cancel deletion");
+  assert(
+    (await stored()).document.workspace.projects
+      .find((item) => item.id === project!.id)
+      ?.worktrees?.some((item) => item.id === worktree.id),
+    "Cancel removed shared metadata",
+  );
+  await review();
+  await confirm();
+  await until(
+    () =>
+      /modified|untracked|uncommitted|dirty/i.test(
+        document.querySelector(".workspace-error")?.textContent ?? "",
+      ),
+    "actual dirty Worktree refusal",
+  );
+  await scene("git-worktree-delete-dirty", {
+    dirtyRefused: true,
+    explicitRetryRequired: true,
+    worktreeId: worktree.id,
+  });
+  await review();
+  await scene("git-worktree-delete-stale", {
+    projectId: project!.id,
+    worktreeId: worktree.id,
+    capturedReview: true,
+  });
+  await confirm();
+  await until(
+    () => document.querySelector(".workspace-error")?.textContent?.includes("Snapshot changed"),
+    "stale reviewed snapshot refusal",
+  );
+  await scene("git-worktree-delete-conflict", {
+    staleReviewRejected: true,
+    worktreeId: worktree.id,
+  });
+  await click("Reload workspace");
+  await until(() => !button("Reload workspace"), "explicit workspace reload completed");
+  await review();
+  await scene("git-worktree-delete-fresh-review", {
+    explicitlyReloaded: true,
+    worktreeId: worktree.id,
+  });
+  await confirm();
+  await until(
+    async () =>
+      !(await stored()).document.workspace.projects
+        .find((item) => item.id === project!.id)
+        ?.worktrees?.some((item) => item.id === worktree.id),
+    "actual Git deletion and metadata commit",
+  );
+  await until(() => !row(), "removed Worktree disappeared from sidebar");
+  await scene("git-worktree-deleted", {
+    cleanDeleted: true,
+    sharedMetadataRemoved: true,
+    worktreeId: worktree.id,
+  });
 }
 
 async function runFavoriteRecovery(context: Context) {

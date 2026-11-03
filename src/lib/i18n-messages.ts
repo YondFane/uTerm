@@ -19,6 +19,11 @@ export const messages: Record<string, string> = {
   复制完整预览: "Copy full preview",
   恢复所有仓库收藏: "Restore all repository favorites",
   "请先完成收藏恢复。": "Finish recovering favorites first.",
+  "请先完成 Worktree 删除。": "Finish deleting the worktree first.",
+  "正在退出应用，请稍后重试删除。": "The app is quitting. Retry deletion later.",
+  "工作区在删除预览后发生变化，请重新读取并确认。":
+    "Shared workspace changed after deletion preview. Reload and review again.",
+  重新读取工作区: "Reload workspace",
   "正在退出应用，请等待或稍后重试恢复。": "The app is quitting. Wait or retry recovery later.",
   未保存的设置: "Unsaved settings",
   "请重试或放弃未保存的设置。": "Retry or discard unsaved settings.",

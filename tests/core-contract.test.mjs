@@ -10,6 +10,7 @@ import {
   mkdirSync,
   symlinkSync,
   renameSync,
+  existsSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -1896,7 +1897,7 @@ test("shared Worktree refresh retains identities, custom names, missing sessions
   );
 });
 
-test("Tauri Worktree deletion publishes only the shared Core result and keeps dirty failures retryable", async (t) => {
+test("Tauri Worktree deletion pins reviewed metadata across queued and external changes and keeps dirty failures retryable", async (t) => {
   const app = mkdtempSync(join(tmpdir(), "uterm-worktree-sdk-"));
   t.after(() => rmSync(app, { recursive: true, force: true }));
   const call = await client(t, join(app, "shared-state-v1")),
@@ -1947,25 +1948,73 @@ test("Tauri Worktree deletion publishes only the shared Core result and keeps di
     dom.window.close();
   });
   const methods = [];
+  const held = signal(),
+    release = signal();
+  t.after(() => release.resolve());
+  let holdSettings = true;
   mockIPC(async (command, args) => {
     assert.equal(command, "shared_core_request");
     const request = JSON.parse(args.request);
     methods.push(request.method);
-    return JSON.stringify(await call(request.method, request.params, request.id));
+    const reply = await call(request.method, request.params, request.id);
+    if (request.method === "snapshot.replace" && holdSettings) {
+      holdSettings = false;
+      held.resolve();
+      await release.promise;
+    }
+    return JSON.stringify(reply);
   });
   const state = await server.ssrLoadModule("/src/lib/shared-state.ts");
   await state.initializeSharedState();
+  const savedProject = state.sharedWorkspace().projects[0],
+    savedTree = savedProject.worktrees[0];
+  const writing = state.persistSettings((settings) => ({ ...settings, fontSize: 17 }));
+  await held.promise;
+  const reviewed = state.worktreeDeletionRevision(savedProject, savedTree);
+  const queuedDelete = state.deleteSharedWorktree("sdk-project", id, reviewed);
+  release.resolve();
+  await writing;
+  await assert.rejects(queuedDelete, { code: "CONFLICT" });
+  assert.equal(methods.includes("project.worktrees.delete"), false);
+  assert(existsSync(path));
+  await state.initializeSharedState();
+  const currentReview = state.worktreeDeletionRevision(savedProject, savedTree);
+  const external = await call("settings.patch", {
+    expectedRevision: currentReview,
+    patch: { fontSize: 18 },
+  });
+  assert.equal(external.error, undefined);
+  await assert.rejects(state.deleteSharedWorktree("sdk-project", id, currentReview), {
+    code: "CONFLICT",
+  });
+  assert(existsSync(path));
+  await state.initializeSharedState();
+  assert.throws(
+    () => state.worktreeDeletionRevision(savedProject, { ...savedTree, path: path + "/different" }),
+    { code: "CONFLICT" },
+  );
+  assert.throws(
+    () => state.worktreeDeletionRevision(savedProject, { ...savedTree, name: "different" }),
+    { code: "CONFLICT" },
+  );
+  const latestReview = state.worktreeDeletionRevision(savedProject, savedTree);
   const dirty = join(path, "retain.txt");
   writeFileSync(dirty, "preserve explicit edits 中文 e\u0301\n");
-  await assert.rejects(state.deleteSharedWorktree("sdk-project", id), { code: "GIT_ERROR" });
+  await assert.rejects(state.deleteSharedWorktree("sdk-project", id, latestReview), {
+    code: "GIT_ERROR",
+  });
   assert.deepEqual(state.sharedWorkspace(), refreshed.document.workspace);
   assert.equal(readFileSync(dirty, "utf8"), "preserve explicit edits 中文 e\u0301\n");
   rmSync(dirty);
-  const removed = await state.deleteSharedWorktree("sdk-project", id);
+  const removed = await state.deleteSharedWorktree("sdk-project", id, latestReview);
   assert.equal(removed.projects[0].worktrees.length, 0);
   assert.deepEqual(state.sharedWorkspace(), removed);
   assert.deepEqual((await call("snapshot.read")).result.document.workspace, removed);
   assert.deepEqual(methods, [
+    "snapshot.read",
+    "snapshot.replace",
+    "snapshot.read",
+    "project.worktrees.delete",
     "snapshot.read",
     "project.worktrees.delete",
     "project.worktrees.delete",

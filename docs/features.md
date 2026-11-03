@@ -317,13 +317,18 @@ colors; the Chinese/light narrow screenshot was inspected.
 
 Right-click a native Worktree and choose **Delete Worktree…**. The native confirmation defaults to
 Cancel; confirmation freezes/saves editable windows and calls `project.worktrees.delete` with the
-captured revision. Tauri's existing confirmation delegates to the same service. Core derives the
-path from saved IDs, rejects stale state, saved session references, live host sessions/tasks
-launched inside the folder and dirty Git data. Host inspection neither starts nor restarts it; an
-unreadable endpoint blocks deletion. Raw Web content cannot invoke native deletion. If Git removes
-the folder but metadata saving fails, the error requires explicit **Refresh Worktrees**. These
-guards use saved references and host launch directories; they do not track a shell's later `cd` or
-arbitrate every legacy host client. Complete ownership/cancellation acceptance remains pending.
+captured revision. Tauri's application confirmation shows the project and Worktree directories and
+defaults to Cancel. It pins the reviewed snapshot instead of adopting a revision updated later by
+the queue; changed queued or external data refuses deletion. **Reload workspace** reads saved data
+through the editor save/close guard before a new confirmation. Deletion errors remain visible until
+explicit retry/reload, and normal quit waits for dispatched deletion. Cancel does not save or
+delete. Both clients delegate to the same service. Core derives the path from saved IDs, rejects
+stale state, saved session references, live host sessions/tasks launched inside the folder and dirty
+Git data. Host inspection neither starts nor restarts it; an unreadable endpoint blocks deletion.
+Raw Web content cannot invoke native deletion. If Git removes the folder but metadata saving fails,
+the error requires explicit **Refresh Worktrees**. These guards use saved references and host launch
+directories; they do not track a shell's later `cd` or arbitrate every legacy host client. Complete
+ownership/cancellation acceptance remains pending.
 
 Draft list/document reads retry only `WRITER_BUSY`, at most six times over 620 ms. Close cancels
 backoff; writes and conflicts do not retry automatically. A failed initial open can be retried.
@@ -406,6 +411,15 @@ comparison and screenshots for the matching clipboard plugin versions. Earlier f
 [Issue #35](https://github.com/YondFane/uTerm/issues/35). Full Windows deletion/cancellation matrix,
 manual input/IME/focus and #16 dependencies keep #35 open. No merge, signing, installer-upgrade or
 release acceptance is implied.
+
+The reviewed Tauri Worktree deletion change passes 36 core/transport checks and one App integration
+check, including real Rust-process queue conflicts, plus 392 frontend checks (ten skipped), types,
+production build, localization, formatting and bilingual documentation checks on Linux. The SDK
+regression holds a real settings-write reply while deletion queues, then rejects its old review
+without sending a Git delete; a separate external write rejects the review at Core. A changed
+displayed name/path is refused, and dirty data survives until an explicit clean retry. Actual
+application confirmation/cancel/dirty/stale/reload/delete screenshots and the complete platform
+result for this change remain pending.
 
 ## Project website
 

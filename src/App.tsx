@@ -1,5 +1,6 @@
 import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
 import { GitFavoritesRecovery } from "./components/GitFavoritesRecovery";
+import { WorktreeDeleteDialog } from "./components/WorktreeDeleteDialog";
 import {
   canonicalStateActive,
   deleteSharedWorktree,
@@ -8,6 +9,7 @@ import {
   persistWorkspace,
   refreshSharedWorktrees,
   sharedWorkspace,
+  worktreeDeletionRevision,
 } from "./lib/shared-state";
 import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
 import { DatabaseComponents } from "./components/DatabaseComponents";
@@ -168,6 +170,7 @@ export function App() {
   const [favoriteRecoveryOpen, setFavoriteRecoveryOpen] = useState(false);
   const favoriteRecoveryBusy = useRef(false);
   const exitPending = useRef(false);
+  const worktreeDeletionBusy = useRef(false);
   useEffect(() => {
     const open = () => setFavoriteRecoveryOpen(true);
     window.addEventListener("uterm:git-favorites-recovery", open);
@@ -675,6 +678,13 @@ export function App() {
     project?: string;
   } | null>(null);
   const [creatingWorktree, setCreatingWorktree] = useState(false);
+  const [deletingWorktree, setDeletingWorktree] = useState(false);
+  const [worktreeDeletionError, setWorktreeDeletionError] = useState("");
+  const [worktreeDeletion, setWorktreeDeletion] = useState<{
+    project: Pick<Project, "id" | "directory">;
+    worktree: Pick<Worktree, "id" | "name" | "path">;
+    expectedRevision?: string;
+  } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const nameDialog = useRef<HTMLDialogElement>(null);
   const isEditing = editing !== null;
@@ -712,11 +722,14 @@ export function App() {
         !localStorage.getItem(`${workspaceKey}.v${savedVersion}-backup`)
       )
         localStorage.setItem(`${workspaceKey}.v${savedVersion}-backup`, serialized);
-      if (cancelled()) return;
+      if (cancelled()) return false;
       currentWorkspace.current = saved;
       setWorkspace(saved);
+      setWorktreeDeletionError("");
+      return true;
     } catch (reason) {
       if (!cancelled()) setError(tx("无法读取工作区：{p0}", { p0: String(reason) }));
+      return false;
     }
   }
   useEffect(() => {
@@ -748,6 +761,7 @@ export function App() {
     change: (workspace: Workspace) => Workspace,
     committed?: () => void,
     sharedChange?: () => Promise<Workspace>,
+    failed?: (message: string) => void,
   ) {
     const previous = currentWorkspace.current;
     if (!previous) return false;
@@ -772,7 +786,9 @@ export function App() {
       setError("");
       return true;
     } catch (reason) {
-      setError(tx("无法保存工作区：{p0}", { p0: String(reason) }));
+      const message = tx("无法保存工作区：{p0}", { p0: String(reason) });
+      setError(message);
+      failed?.(message);
       return false;
     }
   }
@@ -793,8 +809,13 @@ export function App() {
         setError(tx("请先完成收藏恢复。"));
         return;
       }
+      if (worktreeDeletionBusy.current) {
+        setError(tx("请先完成 Worktree 删除。"));
+        return;
+      }
       if (exitPending.current) return;
       exitPending.current = true;
+      setWorktreeDeletion(null);
       void flushSharedState()
         .then(() => assertSaved())
         .then(() => invoke("shared_core_exit"))
@@ -1073,25 +1094,65 @@ export function App() {
   }
   async function deleteWorktree(project: Project, worktree: Worktree) {
     if (
-      !window.confirm(
-        tx("删除 Worktree “{p0}”及其文件夹？未提交或未跟踪的文件会阻止删除。", {
-          p0: worktree.name,
-        }),
-      )
+      worktreeDeletionBusy.current ||
+      exitPending.current ||
+      editor.transitioning ||
+      editor.pending
     )
       return;
     setMenu(null);
-    if (canonicalStateActive()) {
-      await editor.closeDirectory(worktree.path, async () => {
-        await update(
-          (previous) => previous,
-          undefined,
-          () => deleteSharedWorktree(project.id, worktree.id),
-        );
-      });
-      return;
-    }
     try {
+      if (canonicalStateActive()) await flushSharedState();
+      if (exitPending.current) return;
+      setError((message) => (message === worktreeDeletionError ? "" : message));
+      setWorktreeDeletionError("");
+      setWorktreeDeletion({
+        project: { id: project.id, directory: project.directory },
+        worktree: { id: worktree.id, name: worktree.name, path: worktree.path },
+        expectedRevision: canonicalStateActive()
+          ? worktreeDeletionRevision(project, worktree)
+          : undefined,
+      });
+    } catch (reason) {
+      const message = tx("无法删除 Worktree：{p0}", { p0: String(reason) });
+      setError(message);
+      setWorktreeDeletionError(message);
+    }
+  }
+  async function confirmWorktreeDeletion() {
+    const review = worktreeDeletion;
+    if (!review || worktreeDeletionBusy.current || exitPending.current) return;
+    setWorktreeDeletion(null);
+    worktreeDeletionBusy.current = true;
+    setDeletingWorktree(true);
+    const { project, worktree, expectedRevision } = review;
+    try {
+      if (canonicalStateActive()) {
+        await editor.closeDirectory(worktree.path, async () => {
+          if (exitPending.current) {
+            setError(tx("正在退出应用，请稍后重试删除。"));
+            return;
+          }
+          worktreeDeletionBusy.current = true;
+          setDeletingWorktree(true);
+          try {
+            if (!expectedRevision) {
+              setError(tx("工作区在删除预览后发生变化，请重新读取并确认。"));
+              return;
+            }
+            await update(
+              (previous) => previous,
+              undefined,
+              () => deleteSharedWorktree(project.id, worktree.id, expectedRevision),
+              setWorktreeDeletionError,
+            );
+          } finally {
+            worktreeDeletionBusy.current = false;
+            setDeletingWorktree(false);
+          }
+        });
+        return;
+      }
       const discovered = await invoke<{ path: string; branch: string; missing: boolean }[]>(
         "delete_worktree",
         { directory: project.directory, path: worktree.path },
@@ -1102,7 +1163,12 @@ export function App() {
         () => refreshSharedWorktrees(project.id),
       );
     } catch (reason) {
-      setError(tx("无法删除 Worktree：{p0}", { p0: String(reason) }));
+      const message = tx("无法删除 Worktree：{p0}", { p0: String(reason) });
+      setError(message);
+      setWorktreeDeletionError(message);
+    } finally {
+      worktreeDeletionBusy.current = false;
+      setDeletingWorktree(false);
     }
   }
   function addLoose(kind: "terminals" | "chats", agent?: SessionConfig["agent"]) {
@@ -3057,10 +3123,29 @@ export function App() {
             <button onClick={() => setSettingsOpen(true)}>{tx("前往设置更新")}</button>
           </div>
         )}
-        {(error || sessionSyncError) && (
-          <TransientError key={error || sessionSyncError} message={error || sessionSyncError} />
+        {worktreeDeletionError && (
+          <div className="workspace-error worktree-delete-error" role="alert">
+            {localizeMessage(worktreeDeletionError)}
+          </div>
         )}
+        {(error || sessionSyncError) &&
+          (!worktreeDeletionError || error !== worktreeDeletionError) && (
+            <TransientError key={error || sessionSyncError} message={error || sessionSyncError} />
+          )}
         {!workspace && error && <button onClick={() => void load()}>{tx("重试读取")}</button>}
+        {workspace && error && canonicalStateActive() && (
+          <button
+            className="workspace-reload"
+            disabled={deletingWorktree || editor.transitioning || editor.pending}
+            onClick={() =>
+              void editor.hide(async () => {
+                await load();
+              })
+            }
+          >
+            {tx("重新读取工作区")}
+          </button>
+        )}
         {activeSsh && activeSshConnection && (
           <SshConnectionHeader
             target={activeSsh}
@@ -3965,7 +4050,7 @@ export function App() {
               </button>
               <button
                 role="menuitem"
-                disabled={menuWorktree?.missing || menuWorktreeHasSessions}
+                disabled={deletingWorktree || menuWorktree?.missing || menuWorktreeHasSessions}
                 title={
                   menuWorktreeHasSessions
                     ? tx("请先关闭此 Worktree 中的所有会话")
@@ -4078,6 +4163,15 @@ export function App() {
           onBusyChange={(busy) => {
             favoriteRecoveryBusy.current = busy;
           }}
+        />
+      )}
+      {worktreeDeletion && (
+        <WorktreeDeleteDialog
+          name={worktreeDeletion.worktree.name}
+          directory={worktreeDeletion.project.directory}
+          path={worktreeDeletion.worktree.path}
+          onCancel={() => setWorktreeDeletion(null)}
+          onConfirm={() => void confirmWorktreeDeletion()}
         />
       )}
       <dialog
