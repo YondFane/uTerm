@@ -317,7 +317,7 @@ async function runGit(context: Context) {
     currentBranchUnchanged: true,
   });
   await referenceMenu();
-  await click("New Worktree");
+  await click("New worktree");
   await until(
     () =>
       document.querySelector<HTMLInputElement>(
@@ -330,7 +330,7 @@ async function runGit(context: Context) {
   await pause(100);
   input("Worktree directory", worktree);
   await pause(100);
-  await click("New Worktree");
+  await click("New worktree");
   await until(async () => {
     const shared = (await coreRequest("snapshot.read")) as unknown as {
       document: {

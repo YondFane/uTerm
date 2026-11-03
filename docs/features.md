@@ -321,7 +321,13 @@ Unicode branch names. Twenty-nine existing Git/Worktree tests moved to Core rath
 removed. Full frontend checks found and corrected an unregistered Git title; its translation gate
 passes after correction. The new native five-scene and old-client four-scene Git checks still need
 their own clean-source platform CI, actual screenshots and inspection. Favorites, sidebar parity,
-full cancellation and manual focus acceptance keep #35 open.
+full cancellation and manual focus acceptance keep #35 open. A clean-source Linux run at `d8345b6`
+passed actual diff/history/branch creation, then stopped because the QA script used the wrong case
+for the existing New worktree label. The label selector is corrected; Worktree screenshots still
+require a successful rerun. macOS Core CI stopped on this regression fixture because Git returned
+`/private/var` while the temporary directory was spelled `/var`. The test now canonicalizes its
+fixture before comparing exact roots, retaining the trailing-whitespace and protected-sibling
+assertions; subsequent Swift/window checks remain unexecuted on that head.
 
 ## Project website
 

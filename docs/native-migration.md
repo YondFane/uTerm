@@ -605,10 +605,14 @@ are pending; prior passing heads do not accept these changes.
 `bash scripts/macos-git-smoke.sh` adds five native captures for diff, history, branch creation,
 editor conflict and Chinese/light 640px layout, plus native pasteboard and dirty Worktree protection
 reports. `pnpm qa:shared-state` adds four actual old-client Git scenes, including durable Worktree
-registration. Actual execution and screenshot inspection remain pending. Full cancellation,
-favorites/sidebar parity and manual focus stay in #35. M0/M1 and #29/#30 remain accepted and
-unmerged; #31/#32 and M3–M5 stay open. No protected-branch push, merge, tag, Release or production
-feed change occurred.
+registration. A clean-source Linux run at `d8345b6` reached diff/history/branch creation, then the
+QA selector failed on the case of New worktree; the selector is corrected and its failure evidence
+retained. The same head failed the macOS Core fixture on `/var` versus Git's canonical
+`/private/var`; fixture canonicalization now retains the exact trailing-whitespace/sibling checks.
+Swift/window steps did not execute. Successful Worktree rerun and platform screenshot inspection
+remain pending. Full cancellation, favorites/sidebar parity and manual focus stay in #35. M0/M1 and
+#29/#30 remain accepted and unmerged; #31/#32 and M3–M5 stay open. No protected-branch push, merge,
+tag, Release or production feed change occurred.
 
 #35 的 Git／Worktree 规则及二十九项回归已进入 Core，Tauri 保留命令兼容。原生**文件 →
 Git…**复用相同面板，桥接限制仓库根目录，复制走系统剪贴板，写入前确认已打开编辑器保存并冻结。独立 worker 不占用终端消费桥接；`project.context`
@@ -617,7 +621,11 @@ Git…**复用相同面板，桥接限制仓库根目录，复制走系统剪贴
 上述
 `31d3d5e`／merge 在 Windows 通过，旧 macOS 因真实编辑器忙碌读取失败，两原生 job 因末尾 LF 的错误 Diff 断言失败，窗口步骤未执行，失败报告已公开。当前修复保留完整文件字节，仅重试忙碌读取，失败后可重新打开，且保留路径／引用末尾空白。Linux 三十项真实 Rust／React 契约和核心／FFI 文件失败检查通过；新源码平台结果待执行，不借用旧 head 的通过。
 
-原生 Git 脚本新增五张场景截图计划（差异、历史、创建分支、编辑器冲突、中文浅色 640px），另检查系统复制、脏 Worktree 保护。旧端 QA 新增四个真实 Git 场景，包括持久 Worktree 登记；实际运行与目视检查仍待本次 CI。完整取消、收藏／侧栏和人工焦点仍由 #35 验收。M0／M1 和 #29／#30 已验收未合入，#31／#32 及 M3–M5 保持开放；未修改受保护分支／合并／标签／发布／生产源。
+原生 Git 脚本新增五张场景截图计划（差异、历史、创建分支、编辑器冲突、中文浅色 640px），另检查系统复制、脏 Worktree 保护。旧端 QA 新增四个真实 Git 场景，包括持久 Worktree 登记；`d8345b6`
+的干净源码 Linux 已运行差异／历史／创建分支，随后因 New
+worktree 文本大小写选择错误而停止；已修正选择器并保留失败证据，Worktree 重跑及平台图片检查仍待完成。同一 head 的 macOS
+Core 夹具还因 `/var` 与 Git 的规范路径 `/private/var`
+比较失败，现先规范化夹具路径并保留末尾空白／其他仓库断言；后续 Swift／窗口步骤未执行。完整取消、收藏／侧栏和人工焦点仍由 #35 验收。M0／M1 和 #29／#30 已验收未合入，#31／#32 及 M3–M5 保持开放；未修改受保护分支／合并／标签／发布／生产源。
 
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 

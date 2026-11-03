@@ -1454,6 +1454,7 @@ mod tests {
         for name in ["repository ", "repository\t", "repository\n"] {
             let selected = temp.path().join(name);
             std::fs::create_dir(&selected).unwrap();
+            let selected = selected.canonicalize().unwrap();
             let directory = selected.to_str().unwrap();
             run(directory, &["init", "--initial-branch=main"]).unwrap();
             std::fs::write(selected.join("value.txt"), b"selected repository\n").unwrap();
