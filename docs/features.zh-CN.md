@@ -167,14 +167,18 @@ ABI 的备份预览及缺失恢复。两个 Tauri 状态 QA 报告通过且清�
 选择本地项目或 Worktree 后，原生 QA 应用的**文件 →
 Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revision 解析选择，Git 请求绑定该仓库和项目，文件窗口不能调用 Git。差异／名称复制使用系统剪贴板；独立桥接避免仓库操作占用终端桥接。
 
-写入前，已打开的可编辑文件窗口保存并冻结直到操作结束。文件冲突阻止 Git，保留文件和恢复草稿；Git 窗口在写入期间拒绝关闭。干净编辑器重新读取仓库变化，脏／忙碌编辑器保留文本。取消或超时不代表已分发写入回滚，重试前应检查仓库。原生收藏和 Worktree 删除菜单仍待完成。
+写入前，已打开的可编辑文件窗口保存并冻结直到操作结束。文件冲突阻止 Git，保留文件和恢复草稿；Git 窗口在写入期间拒绝关闭。干净编辑器重新读取仓库变化，脏／忙碌编辑器保留文本。取消或超时不代表已分发写入回滚，重试前应检查仓库。原生收藏仍待完成。
 
 `project.worktrees.refresh`
 按已保存项目发现仓库，带预期 revision 原子更新 Worktree 列表。两端对已登记项目使用相同规则：保留 ID／自定义名称、更新随分支命名的名称、保留有会话的缺失 Worktree、移除未被会话引用且不再发现的项目并保留有效选择。过期 revision 或 Git 发现失败保留已存状态；子目录项目不会把主仓库根目录列为子 Worktree。
 
 原生侧栏在项目下显示 Worktree，选择行后使用其目录；右键项目或 Worktree 选**刷新 Worktree**重新发现。Git 写操作在报告成功前同步绑定项目列表；若 Git 已完成而列表保存失败，错误会明确说明，应刷新项目而非盲目重复 Git 写入。规范存储下的 Tauri 项目 Worktree 更新也走同一 Core 操作，浏览器夹具保留兼容路径。
 
-保留字面目录末尾和 Unicode 分支空白，包括自动创建 Worktree 的来源分支。Windows 扩展驱动器／UNC 目标会转换为 Git 可用路径，无法保留点／空格末尾的扩展路径明确拒绝。已加入真实 Windows 创建／脏目录拒删／删除回归，平台执行仍待完成。原生差异颜色现使用主题文本／画布颜色以适配浅色，可视验收待完成。
+保留字面目录末尾和 Unicode 分支空白，包括自动创建 Worktree 的来源分支。Windows 扩展驱动器／UNC 目标会转换为 Git 可用路径，无法保留点／空格末尾的扩展路径明确拒绝。真实 Windows 创建／脏目录拒删／删除回归已在 CI 通过。原生差异使用主题文本／画布颜色，中文浅色窄窗图片已检查。
+
+右键原生 Worktree 选择**删除 Worktree…**。原生确认默认取消；确认后保存并冻结可编辑窗口，以捕获的 revision 调用
+`project.worktrees.delete`。Tauri 原有确认也委派同一服务。Core 按已存 ID 推导路径，拒绝过期状态、已保存会话引用、从目录内启动且仍运行的宿主会话／任务和 Git 脏数据。检查宿主不启动／重启它；无法读取端点则阻止删除。原生 Web 内容不能直接删除。如果 Git 已移除目录但元数据保存失败，错误要求明确**刷新 Worktree**。保护范围是已保存引用和宿主启动目录，不追踪 Shell 后来的
+`cd`，也尚未仲裁所有旧宿主客户端；完整所有权／取消验收仍待完成。
 
 草稿列表／文档读取仅对 `WRITER_BUSY`
 最多重试六次，共退避 620ms；关闭取消等待，写入和冲突不自动重试，首次打开失败可再次尝试。真实操作系统锁回归使用独立 Rust 进程，修正错误码前失败，修正后通过。QA 观察读取在既有三十秒期限内等待同一锁，并记录
@@ -182,31 +186,27 @@ Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revisio
 
 #### Git 与编辑器并发验证
 
-同一 0f98369
-head 的旧 macOS 真实 Tauri 二十场景通过。Windows 在新增扩展路径夹具中漏传必需的预期提交 OID，引用检查在创建 Worktree 前正确拒绝；夹具现读取并传入固定 HEAD
-OID，生产过期引用保护保持有效，修正 head 的 Windows 执行仍待完成。
+head `8fd5784f5bdb18557641ce3e0992374f7e704bf2`、tested merge
+`39164ab00f9c4d9424576e0add934e0ada65cf32` 的
+[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41582228344) 与
+[旧端 CI](https://github.com/YondFane/uTerm/actions/runs/41582228375) 四 job 全通过。产物：
+[ARM 13205504332](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13205504332)、
+[Intel 13206009198](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13206009198)、
+[Windows 13206840745](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206840745)、
+[旧 Mac 13206990529](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206990529)。
 
-head `0f983699f9db69659a148a8ca955498cd5ae1e0e`、tested merge
-`1112d6dac5a706567d74e9e7617f361faa23c370` 的干净源码 Linux
-Tauri 二十场景通过。[ARM 原生 job](https://github.com/YondFane/uTerm/actions/runs/41580396300)
-在登记和 AppKit 选择后的新 Worktree 目录断言失败，后续 Git 检查未执行。[产物 13205407595](https://github.com/YondFane/uTerm/actions/runs/41580396300/artifacts/13205407595)
-保留 `git-live.json`
-和失败图片。断言现记录实际／存储／夹具路径，分别验证所选 ID、准确存储 UTF-8 字节及规范目录身份，避免将 macOS 别名误作其他目标；增加工作区失败截图。该修正仍需自己的平台执行。
+原生双架构通过十四项 Swift 及真实 Git／编辑器／终端／控制场景。`git-live.json`
+记录平台、系统、架构、源码 head 和 tested merge。六张 `native-git-*.png`
+覆盖差异／历史／复制／分支／编辑器冲突、实际 AppKit
+Worktree 选择及中文浅色 640px。ARM 侧栏与窄窗浅色差异图片已目视检查。目录断言分别验证所选 ID、准确存储 UTF-8 和规范目录身份，包括 macOS
+`/var` 别名。
 
-head `c637bccac8e6b7196f526ad054deca22a6fad443`、tested merge
-`b00bf1ea1601a44f9ce62d0ef2a56d9d316df45a` 的
-[原生 CI 41577219725](https://github.com/YondFane/uTerm/actions/runs/41577219725)
-两 job 通过，包含十四项 Swift 和真实 Git／编辑器／终端／控制场景。产物：[ARM 13203824672](https://github.com/YondFane/uTerm/actions/runs/41577219725/artifacts/13203824672)、[Intel 13204816712](https://github.com/YondFane/uTerm/actions/runs/41577219725/artifacts/13204816712)。`git-live.json`
-记录平台、架构、系统、head／merge 和准确场景。五张 `native-git-*.png`
-展示差异／历史／复制／分支／保存保护／Worktree／冲突及中文浅色 640px 输出。已目视检查 ARM 宽窗控件、满宽窄窗和英文冲突提示，先前问题已修正；浅色差异对比仍在改进。
+旧端两 job 都通过二十个真实 Tauri 场景，源码干净且清理无错误。`tauri-state-qa/report.json` 和四张
+`git-git-*.png` 覆盖差异／历史／分支／Worktree；Windows
+Worktree 输出已检查。Windows 真实扩展路径创建／脏目录拒删／删除回归传入必需的固定 OID 后通过。先前失败运行和修复证据保留在 #35，不计为通过。
 
-同一 head 的 [旧端 CI 41577219811](https://github.com/YondFane/uTerm/actions/runs/41577219811)
-两真实 QA
-job 失败：Windows 拒绝带设备前缀的目标，macOS 的只读 QA 观察者撞上写锁，当时编辑器已经显示恢复文本。保留失败产物：[Windows 13204577874](https://github.com/YondFane/uTerm/actions/runs/41577219811/artifacts/13204577874)、[macOS 13205005914](https://github.com/YondFane/uTerm/actions/runs/41577219811/artifacts/13205005914)。当前工作已修复这两项，新 head 仍需自己的平台结果。
-
-c637bcc 干净源码的云端 Linux
-Tauri／X11 二十个真实场景通过，清理无错误，包括四个 Git 场景和持久 Worktree 登记。当前 Linux 检查通过五十项 Core 单元、集成／FFI／明确磁盘失败、三十一项真实 Rust／React 契约、385 项前端（十项跳过）、100 项后端（十项忽略）、类型／构建／生成契约／i18n。新增 Core
-Worktree 测试对照旧规则，验证过期写入、缺失会话保留、重开后稳定 ID 和真实 Git 失败不改存储。新原生 QA 增加侧栏登记／选择／移除的第六张截图，仍需本次干净源码的平台 CI 与图片检查。收藏、原生删除、完整取消、人工输入／IME／焦点及 #16 依赖未满足，#35 保持开放。
+本轮删除改动在 Linux x86_64／Rust 1.99.1／Node
+26.13 通过 Core 五十单元、集成及六项 FFI，三项真实 Worktree 删除及明确执行的 Git 完成后文件系统失败检查；三十三项真实 Rust／React 契约、386 前端（十跳过）、100 后端（十忽略）、类型、生产构建、生成契约和 i18n。测试覆盖过期／伪造参数、脏字节保留、已保存引用、无元数据引用的真实独立 PTY 宿主、损坏宿主端点，以及 Git 已删目录后明确刷新元数据。原生删除菜单新增真实确认／错误图，总计八张 Git 图；本轮改动仍需自己的干净源码平台 CI 和目视检查。收藏、完整取消、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
 
 ## 项目官网
 

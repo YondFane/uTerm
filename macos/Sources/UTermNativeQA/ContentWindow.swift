@@ -319,8 +319,8 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         "git_branch_action": "git.branchAction", "git_file_status": "git.fileStatus", "git_snapshot": "git.snapshot",
         "git_diff": "git.diff", "git_history": "git.history", "git_files": "git.files", "git_references": "git.references",
         "git_reference_action": "git.referenceAction", "git_working_comparison": "git.workingComparison",
-        "project_worktrees": "git.worktrees.list", "create_worktree": "git.worktrees.create", "delete_worktree": "git.worktrees.delete",
+        "project_worktrees": "git.worktrees.list", "create_worktree": "git.worktrees.create",
         "worktree_suggestion": "git.worktrees.suggestion"
     ]
-    private static let gitWrites: Set<String> = ["git_switch_branch", "git_rollback_file", "git_switch_remote_branch", "git_branch_action", "git_reference_action", "create_worktree", "delete_worktree"]
+    private static let gitWrites: Set<String> = ["git_switch_branch", "git_rollback_file", "git_switch_remote_branch", "git_branch_action", "git_reference_action", "create_worktree"]
 }

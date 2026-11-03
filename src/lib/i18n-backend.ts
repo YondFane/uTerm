@@ -71,6 +71,17 @@ export const backendMessages: Record<string, string> = {
   "此 Worktree 路径无法准确传给 Git，请使用普通 Windows 绝对路径。":
     "Git cannot preserve this Worktree path. Use a regular absolute Windows path.",
   "项目已不存在。": "Project no longer exists",
+  "Worktree 已不存在。": "Worktree no longer exists",
+  "请先关闭此 Worktree 的会话，再删除。": "Close this Worktree's sessions before deleting it",
+  "请先停止或关闭此 Worktree 中的会话和运行任务，再删除。":
+    "Stop or close sessions and running tasks in this Worktree before deleting it",
+  "会话宿主不可用，无法确认 Worktree 占用，未移除文件：{p0}":
+    "Cannot verify Worktree use because the session host is unavailable; no files were removed: {p0}",
+  "宿主返回无效响应，无法确认 Worktree 占用。":
+    "Cannot verify Worktree use; the host returned an invalid response",
+  "无法读取 Worktree，请刷新项目：{p0}": "Cannot read Worktree; refresh the project: {p0}",
+  "Worktree 已移除，但项目列表无法保存，请刷新 Worktree：{p0}":
+    "The Worktree was removed, but its project list could not be saved; refresh Worktrees: {p0}",
   "工作区已变化，请重新刷新 Worktree。": "Workspace changed; refresh Worktrees again",
   "刷新 Worktree 仅接受项目 ID 和预期 revision。":
     "Worktree refresh requires only a project ID and expected revision",

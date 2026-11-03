@@ -32,9 +32,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 'dirtyWorktreeDeletionRefused', 'worktreeBridgeCreateAndCleanDelete',
                 'editorConflictBlockedGitAndPreservedBothWriters', 'literalRootAndSiblingPreserved', 'narrowChineseLightGit',
                 'wideDiffControlsWithinWindow', 'narrowPanelFillsWindow', 'worktreeSidebarRegisteredAndSelected',
-                'worktreeRemovedFromSharedSidebar']:
+                'worktreeRemovedFromSharedSidebar', 'rawWorktreeDeleteDenied', 'nativeDeleteCancelRetainedWorktree',
+                'nativeDeleteMenuCompleted']:
         assert report[key], (key, report)
-    assert len(report['gitCaptures']) == 6, report
+    assert len(report['gitCaptures']) == 8, report
     for name in report['gitCaptures']:
         assert (evidence / name).is_file(), name
     report.update(passed=True, testedMergeSHA=report['sourceSHA'], platform='macOS',

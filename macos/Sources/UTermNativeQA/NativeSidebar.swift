@@ -82,18 +82,36 @@ struct NativeSidebar: NSViewRepresentable {
         func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
         func menuNeedsUpdate(_ menu: NSMenu) {
             menu.removeAllItems()
-            guard let table, rows.indices.contains(table.clickedRow), let model else { return }
-            let row = rows[table.clickedRow]
+            guard let table else { return }
+            populate(menu, row: table.clickedRow)
+        }
+        func populate(_ menu: NSMenu, row index: Int) {
+            menu.autoenablesItems = false
+            menu.removeAllItems()
+            guard rows.indices.contains(index), let model else { return }
+            let row = rows[index]
             guard row.key.hasPrefix("p:") || row.worktreeID != nil else { return }
             let item = NSMenuItem(title: localized("Refresh Worktrees", "刷新 Worktree"), action: #selector(refreshWorktrees(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = row.projectID ?? String(row.key.dropFirst(2))
-            item.isEnabled = !model.busy
+            item.isEnabled = !model.busy && !model.worktreeDeletionPresented
             menu.addItem(item)
+            if let projectID = row.projectID, let worktreeID = row.worktreeID {
+                let deletion = NSMenuItem(title: localized("Delete Worktree…", "删除 Worktree…"), action: #selector(deleteWorktree(_:)), keyEquivalent: "")
+                deletion.target = self
+                deletion.representedObject = ["project": projectID, "worktree": worktreeID]
+                let sessions = model.projects.first(where: { $0["id"].string == projectID })?["sessions"].array ?? []
+                deletion.isEnabled = !model.busy && !model.worktreeDeletionPresented && !sessions.contains(where: { $0["worktreeId"].string == worktreeID })
+                menu.addItem(deletion)
+            }
         }
         @objc private func refreshWorktrees(_ item: NSMenuItem) {
             guard let id = item.representedObject as? String, let model else { return }
             Task { @MainActor in await model.refreshWorktrees(id) }
+        }
+        @objc private func deleteWorktree(_ item: NSMenuItem) {
+            guard let target = item.representedObject as? [String: String], let project = target["project"], let tree = target["worktree"] else { return }
+            model?.deleteWorktreeRequested?(project, tree)
         }
         func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
             rows.indices.contains(row) && rows[row].symbol != nil

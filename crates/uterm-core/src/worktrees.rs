@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
@@ -78,6 +78,80 @@ pub fn delete_worktree(directory: String, path: String) -> Result<Vec<Worktree>,
             .map_err(|error| error.to_string())?;
         delete_worktree_at(&directory, &path)
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DeleteProjectWorktree {
+    id: String,
+    worktree_id: String,
+    expected_revision: String,
+}
+
+fn inside_worktree(directory: &Path, target: &Path) -> bool {
+    directory.is_absolute()
+        && directory
+            .ancestors()
+            .find_map(|ancestor| ancestor.canonicalize().ok())
+            .is_some_and(|directory| directory.starts_with(target))
+}
+
+pub(crate) fn delete_project_worktree(
+    store: &crate::store::Store,
+    app_root: &Path,
+    params: serde_json::Value,
+) -> crate::Result<crate::store::Snapshot> {
+    use crate::{session_state, state, CoreError};
+    use utermd_local::daemon::{Client, Operation, Reply};
+    let args: DeleteProjectWorktree = serde_json::from_value(params)
+        .map_err(|error| CoreError::new("INVALID_ARGUMENT", error.to_string()))?;
+    let mut removed = false;
+    // Keep canonical writers out until Git and the matching metadata save finish.
+    // 在 Git 和对应元数据保存结束前，阻止其他规范存储写入者进入。
+    let result = store.update(&args.expected_revision, |document| {
+        let project = document.workspace["projects"]
+            .as_array()
+            .and_then(|projects| projects.iter().find(|project| project["id"] == args.id))
+            .ok_or_else(|| CoreError::new("NOT_FOUND", "Project no longer exists"))?;
+        let directory = project["directory"].as_str().unwrap().to_owned();
+        let path = project["worktrees"]
+            .as_array()
+            .and_then(|worktrees| worktrees.iter().find(|tree| tree["id"] == args.worktree_id))
+            .and_then(|tree| tree["path"].as_str())
+            .ok_or_else(|| CoreError::new("NOT_FOUND", "Worktree no longer exists"))?
+            .to_owned();
+        let target = Path::new(&path).canonicalize().map_err(|error| {
+            CoreError::new("GIT_ERROR", format!("Cannot read Worktree; refresh the project: {error}"))
+        })?;
+        if session_state::entries(&document.workspace).iter().any(|entry| {
+            entry.session["worktreeId"] == args.worktree_id
+                || inside_worktree(Path::new(&entry.directory), &target)
+        }) {
+            return Err(CoreError::new("WORKTREE_IN_USE", "Close this Worktree's sessions before deleting it"));
+        }
+        let host_root = app_root.join("local-daemon-v1");
+        if host_root.join("endpoint.json").try_exists()? {
+            let unavailable = |error| CoreError::new("HOST_UNAVAILABLE", format!("Cannot verify Worktree use because the session host is unavailable; no files were removed: {error}"));
+            let client = Client::connect(&host_root).map_err(unavailable)?;
+            let Reply::HostStatus(status) = client.request(Operation::HostStatus).map_err(unavailable)? else {
+                return Err(CoreError::new("HOST_UNAVAILABLE", "Cannot verify Worktree use; the host returned an invalid response"));
+            };
+            if status.sessions.iter().any(|session| session.running && inside_worktree(&session.spec.directory, &target)) {
+                return Err(CoreError::new("WORKTREE_IN_USE", "Stop or close sessions and running tasks in this Worktree before deleting it"));
+            }
+        }
+        let deleted = delete_worktree(directory, path.clone());
+        removed = Path::new(&path).try_exists().is_ok_and(|exists| !exists);
+        let discovered = deleted.map_err(|error| CoreError::new("GIT_ERROR", error))?;
+        state::reconcile_worktrees(&mut document.workspace, &args.id, &discovered)
+    });
+    result.map_err(|error| {
+        if removed {
+            CoreError::new("WORKTREE_SYNC", format!("The Worktree was removed, but its project list could not be saved; refresh Worktrees: {error}"))
+        } else {
+            error
+        }
+    })
 }
 
 fn worktree_root() -> std::path::PathBuf {

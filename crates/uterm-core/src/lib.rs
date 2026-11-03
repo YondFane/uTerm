@@ -571,6 +571,12 @@ impl Core {
             )?)
             .map_err(Into::into),
             "snapshot.read" => serde_json::to_value(self.store.read()?).map_err(Into::into),
+            "project.worktrees.delete" => serde_json::to_value(worktrees::delete_project_worktree(
+                &self.store,
+                self.data_root()?,
+                params,
+            )?)
+            .map_err(Into::into),
             "project.worktrees.refresh" => {
                 if !params.as_object().is_some_and(|fields| {
                     fields.len() == 2

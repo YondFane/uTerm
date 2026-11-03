@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.appearanceChanged = { [weak window] appearance in
             window?.appearance = appearance == "dark" ? NSAppearance(named: .darkAqua) : appearance == "light" ? NSAppearance(named: .aqua) : nil
         }
+        model.deleteWorktreeRequested = { [weak self] project, tree in self?.confirmWorktreeDeletion(projectID: project, worktreeID: tree) }
         configureMenu()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -129,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if preparingQuit || mutatingRepository || model.editorRecoveryPresented { return false }
+        if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented { return false }
         if menuItem.action == #selector(closeSession) {
             let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow }
             menuItem.title = fileFocused ? localized("Close file", "关闭文件") : localized("Close session", "关闭会话")
@@ -192,7 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func makeEditableContentWindow(directory: URL, path: String) async throws -> ContentWindow {
-        guard !mutatingRepository else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
+        guard !mutatingRepository, !model.worktreeDeletionPresented else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
         if let content = existingContent(directory: directory, path: path, editable: true) {
             content.showWindow(nil)
             return content
@@ -265,8 +266,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func performRepositoryMutation(method: String, params: JSONValue, bridge: CoreBridge, projectID: String) async throws -> JSONValue {
-        guard !preparingQuit, !mutatingRepository else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
+        guard !preparingQuit, !mutatingRepository, !model.worktreeDeletionPresented else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
         try Task.checkCancellation()
+        guard model.beginRepositoryMutation() else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current client operation first.", "请先完成当前客户端操作。")) }
         mutatingRepository = true
         let contents = contentWindows.values.filter { $0.editable }
         var started = false
@@ -276,6 +278,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 if started { content.refreshAfterRepositoryMutation() }
             }
             mutatingRepository = false
+            model.finishRepositoryMutation()
         }
         for content in contents {
             guard try await content.prepareForQuit() else {
@@ -287,13 +290,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         started = true
         let result = try await bridge.call(method, params: params)
         do {
-            let snapshot = try await bridge.snapshot()
-            _ = try await bridge.call("project.worktrees.refresh", params: .object(["id": .string(projectID), "expectedRevision": .string(snapshot.revision)]))
+            if method != "project.worktrees.delete" {
+                let snapshot = try await bridge.snapshot()
+                _ = try await bridge.call("project.worktrees.refresh", params: .object(["id": .string(projectID), "expectedRevision": .string(snapshot.revision)]))
+            }
             await model.reload()
         } catch {
             throw BridgeFailure(code: "WORKTREE_SYNC", message: localized("The Git operation completed, but the project tree could not be refreshed. Refresh the project: ", "Git 操作已完成，但项目树刷新失败，请刷新项目：") + error.localizedDescription)
         }
         return result
+    }
+    private func confirmWorktreeDeletion(projectID: String, worktreeID: String) {
+        guard !preparingQuit, !mutatingRepository, !model.busy, !model.worktreeDeletionPresented,
+              !model.editorRecoveryPresented, !model.settingsPresented, model.nameDraft == nil,
+              let window, window.attachedSheet == nil, let state = model.state,
+              let project = model.projects.first(where: { $0["id"].string == projectID }),
+              let tree = project["worktrees"].array.first(where: { $0["id"].string == worktreeID }) else { return }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = localized("Delete Worktree “", "删除 Worktree “") + (tree["name"].string ?? "") + localized("”?", "”？")
+        alert.informativeText = (tree["path"].string ?? "") + "\n\n" + localized("Delete this Worktree and its folder? Sessions, running tasks and uncommitted files prevent deletion.", "删除此 Worktree 及其文件夹？会话、运行任务和未提交文件会阻止删除。")
+        alert.addButton(withTitle: localized("Cancel", "取消"))
+        alert.addButton(withTitle: localized("Delete Worktree", "删除 Worktree"))
+        alert.buttons[1].hasDestructiveAction = true
+        model.worktreeDeletionPresented = true
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard let self else { return }
+            guard response == .alertSecondButtonReturn, !self.preparingQuit, !self.mutatingRepository else { self.model.worktreeDeletionPresented = false; return }
+            Task { @MainActor in
+                var worker: CoreBridge?
+                do {
+                    let bridge = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
+                    worker = bridge
+                    self.model.worktreeDeletionPresented = false
+                    _ = try await self.performRepositoryMutation(method: "project.worktrees.delete", params: .object([
+                        "id": .string(projectID), "worktreeId": .string(worktreeID), "expectedRevision": .string(state.snapshot.revision)
+                    ]), bridge: bridge, projectID: projectID)
+                } catch { self.model.worktreeDeletionPresented = false; self.model.error = error.localizedDescription }
+                await worker?.close()
+            }
+        }
     }
     @objc private func recoverEditorDrafts() { showEditorRecovery(restoring: false) }
     @objc private func restoreEditorRecovery() { showEditorRecovery(restoring: true) }
@@ -336,13 +372,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             Task { await self.model.selectSession(session.id, focus: false) }
         }
     }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { sender.orderOut(nil); return false }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { if !model.worktreeDeletionPresented { sender.orderOut(nil) }; return false }
     func windowDidEnterFullScreen(_ notification: Notification) { model.fullScreen = true }
     func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminating { return .terminateNow }
-        if preparingQuit || mutatingRepository || model.editorRecoveryPresented { return .terminateCancel }
+        if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented { return .terminateCancel }
         preparingQuit = true
         Task { @MainActor in
             guard await model.confirmQuit() else { self.preparingQuit = false; return }

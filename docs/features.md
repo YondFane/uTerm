@@ -289,7 +289,7 @@ Before a write, open editable file windows save and freeze until completion. A f
 Git and retains both file and recovery draft. The Git window refuses to close during a write. Clean
 editors reload repository changes; dirty or busy editors retain their text. Cancelling or timing out
 a dispatched write does not establish rollback; inspect the repository before retrying. Native
-favorites and a native Worktree delete menu remain pending.
+favorites remain pending.
 
 `project.worktrees.refresh` discovers the stored project's repository and atomically updates its
 Worktree list with an expected revision. Both clients use these rules for registered projects: keep
@@ -307,8 +307,18 @@ Worktree updates use the same Core operation; browser fixtures retain their comp
 Literal directory endings and Unicode branch whitespace are preserved, including the source branch
 for automatic Worktree creation. Windows extended drive/UNC destinations are translated for Git;
 extended paths whose dot/space endings cannot be preserved are rejected visibly. A real Windows
-creation/dirty-refusal/deletion regression is included but awaits its platform run. Native diff
-colors now use the theme text/canvas colors for readable light output; visual acceptance is pending.
+creation/dirty-refusal/deletion regression passed in CI. Native diff colors use theme text/canvas
+colors; the Chinese/light narrow screenshot was inspected.
+
+Right-click a native Worktree and choose **Delete Worktree…**. The native confirmation defaults to
+Cancel; confirmation freezes/saves editable windows and calls `project.worktrees.delete` with the
+captured revision. Tauri's existing confirmation delegates to the same service. Core derives the
+path from saved IDs, rejects stale state, saved session references, live host sessions/tasks
+launched inside the folder and dirty Git data. Host inspection neither starts nor restarts it; an
+unreadable endpoint blocks deletion. Raw Web content cannot invoke native deletion. If Git removes
+the folder but metadata saving fails, the error requires explicit **Refresh Worktrees**. These
+guards use saved references and host launch directories; they do not track a shell's later `cd` or
+arbitrate every legacy host client. Complete ownership/cancellation acceptance remains pending.
 
 Draft list/document reads retry only `WRITER_BUSY`, at most six times over 620 ms. Close cancels
 backoff; writes and conflicts do not retry automatically. A failed initial open can be retried.
@@ -318,51 +328,37 @@ deadline and record `observerBusyReads`; they never retry writes.
 
 #### Git and editor concurrency validation
 
-The same 0f98369 head passed old macOS's actual 20-scene Tauri QA. Windows stopped in the new
-extended-path fixture because it omitted the mandatory expected commit OID; the reference check
-correctly refused it before any Worktree creation. The fixture now captures/passes the immutable
-HEAD OID, retaining the production stale-reference guard. Its Windows execution is still pending on
-the corrected head.
+Head `8fd5784f5bdb18557641ce3e0992374f7e704bf2`, tested merge
+`39164ab00f9c4d9424576e0add934e0ada65cf32`, passed all four jobs in
+[native CI](https://github.com/YondFane/uTerm/actions/runs/41582228344) and
+[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41582228375). Artifacts:
+[ARM 13205504332](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13205504332),
+[Intel 13206009198](https://github.com/YondFane/uTerm/actions/runs/41582228344/artifacts/13206009198),
+[Windows 13206840745](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206840745),
+[old Mac 13206990529](https://github.com/YondFane/uTerm/actions/runs/41582228375/artifacts/13206990529).
 
-Head `0f983699f9db69659a148a8ca955498cd5ae1e0e`, tested merge
-`1112d6dac5a706567d74e9e7617f361faa23c370`, passed the 20-scene clean Linux Tauri run. Its
-[ARM native job](https://github.com/YondFane/uTerm/actions/runs/41580396300) failed at the new
-Worktree-directory assertion after registration and AppKit selection; remaining Git checks were not
-executed.
-[Artifact 13205407595](https://github.com/YondFane/uTerm/actions/runs/41580396300/artifacts/13205407595)
-retains `git-live.json` and failure captures. The assertion now records actual/stored/fixture paths
-and checks the selected IDs, exact stored UTF-8 bytes and canonical directory identity separately,
-so macOS aliases are not confused with a different target. A workspace failure capture is added;
-this correction still requires its own platform run.
+Both native architectures passed 14 Swift tests and real Git/editor/terminal/control scenes.
+`git-live.json` records platform, OS, architecture, source head and tested merge. Six
+`native-git-*.png` images cover diff/history/copy/branch/editor conflict, actual AppKit Worktree
+selection and Chinese/light 640px output. ARM sidebar and narrow light diff images were visually
+inspected. The path assertions verify selected IDs, exact stored UTF-8 and canonical directory
+identity separately, including macOS `/var` aliases.
 
-Head `c637bccac8e6b7196f526ad054deca22a6fad443`, tested merge
-`b00bf1ea1601a44f9ce62d0ef2a56d9d316df45a`, passed both jobs in
-[native CI 41577219725](https://github.com/YondFane/uTerm/actions/runs/41577219725), including 14
-Swift checks and real Git/editor/terminal/control scenes. Artifacts:
-[ARM 13203824672](https://github.com/YondFane/uTerm/actions/runs/41577219725/artifacts/13203824672),
-[Intel 13204816712](https://github.com/YondFane/uTerm/actions/runs/41577219725/artifacts/13204816712).
-`git-live.json` records platform, architecture, OS, head/merge and exact scenarios. Five
-`native-git-*.png` images cover diff/history/copy/branch/save protection/Worktree/conflict and
-Chinese/light 640px output. ARM wide controls, full-width narrow layout and English conflict text
-were inspected and corrected from the earlier capture; light diff contrast is being improved.
+Both legacy jobs passed 20 actual Tauri scenes with clean source trees and no cleanup errors.
+`tauri-state-qa/report.json` and four `git-git-*.png` images cover diff/history/branch/Worktree;
+Windows Worktree output was inspected. Windows's real extended-path create/dirty-refusal/delete
+regression passed with the required captured OID. Earlier failed runs and their corrective evidence
+remain linked in #35; they are not counted as passes.
 
-The same head's [legacy CI 41577219811](https://github.com/YondFane/uTerm/actions/runs/41577219811)
-failed both real QA jobs: Windows rejected a verbatim destination, and macOS's read-only QA observer
-encountered the writer lock while the editor displayed the recovered text. Failure artifacts remain
-available:
-[Windows 13204577874](https://github.com/YondFane/uTerm/actions/runs/41577219811/artifacts/13204577874),
-[macOS 13205005914](https://github.com/YondFane/uTerm/actions/runs/41577219811/artifacts/13205005914).
-These failures are corrected in the current work; the new head needs its own platform results.
-
-A clean-source cloud Linux Tauri/X11 run at c637bcc passed 20 actual scenes with no cleanup errors,
-including four Git scenes and durable Worktree registration. Current Linux checks pass 50 Core unit
-tests plus integration/FFI/explicit disk failures, 31 real Rust/React contracts, 385 frontend checks
-(ten skipped), 100 backend checks (ten ignored), types/build/generated contracts/i18n. The new Core
-Worktree test compares the legacy rules and verifies stale writes, preserved missing sessions,
-stable IDs after reopen and unchanged storage after actual Git failure. New native QA adds a sixth
-screenshot for sidebar registration/selection/removal. These changes still need their own
-clean-source platform CI and image inspection. Favorites, native deletion, complete cancellation,
-manual input/IME/focus and #16 dependencies keep #35 open.
+The current deletion changes passed Linux x86_64 / Rust 1.99.1 / Node 26.13 checks: Core 50 units,
+integration and six FFI tests, three real Worktree deletion tests plus the explicitly invoked
+post-Git filesystem-failure case; 33 real Rust/React contracts; 386 frontend tests (ten skipped),
+100 backend tests (ten ignored), types, production build, generated contracts and i18n. Tests verify
+stale/forged arguments, retained dirty bytes, saved references, a live standalone PTY host without a
+metadata reference, corrupt host endpoints and explicit metadata refresh after Git already removed
+the folder. The native deletion menu adds real confirmation/error captures to eight Git images;
+these changes still need their own clean-source platform CI and visual inspection. Favorites,
+complete cancellation, manual input/IME/focus and #16 dependencies keep #35 open.
 
 ## Project website
 

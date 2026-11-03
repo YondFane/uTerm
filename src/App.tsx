@@ -1,6 +1,7 @@
 import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
 import {
   canonicalStateActive,
+  deleteSharedWorktree,
   flushSharedState,
   initializeSharedState,
   persistWorkspace,
@@ -1053,6 +1054,16 @@ export function App() {
     )
       return;
     setMenu(null);
+    if (canonicalStateActive()) {
+      await editor.closeDirectory(worktree.path, async () => {
+        await update(
+          (previous) => previous,
+          undefined,
+          () => deleteSharedWorktree(project.id, worktree.id),
+        );
+      });
+      return;
+    }
     try {
       const discovered = await invoke<{ path: string; branch: string; missing: boolean }[]>(
         "delete_worktree",

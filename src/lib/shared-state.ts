@@ -96,6 +96,18 @@ export function refreshSharedWorktrees(id: string): Promise<Workspace> {
   });
 }
 
+export function deleteSharedWorktree(id: string, worktreeId: string): Promise<Workspace> {
+  return serial(async () => {
+    if (!snapshot) throw Error("Shared state is not initialized");
+    snapshot = (await coreRequest("project.worktrees.delete", {
+      id,
+      worktreeId,
+      expectedRevision: snapshot.revision,
+    })) as unknown as CoreSnapshot;
+    return snapshot.document.workspace as unknown as Workspace;
+  });
+}
+
 export function persistSettings(change: (settings: Settings) => Settings): Promise<Settings> {
   return serial(async () => {
     if (!snapshot) throw Error("Shared state is not initialized");

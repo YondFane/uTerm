@@ -1893,6 +1893,82 @@ test("shared Worktree refresh retains identities, custom names, missing sessions
   );
 });
 
+test("Tauri Worktree deletion publishes only the shared Core result and keeps dirty failures retryable", async (t) => {
+  const app = mkdtempSync(join(tmpdir(), "uterm-worktree-sdk-"));
+  t.after(() => rmSync(app, { recursive: true, force: true }));
+  const call = await client(t, join(app, "shared-state-v1")),
+    fixture = gitFixture(t);
+  const imported = (
+    await call("migration.import", { workspace: emptyWorkspace(), settings: defaults, legacy: {} })
+  ).result;
+  const project = (
+    await call("project.open", {
+      id: "sdk-project",
+      name: "SDK project",
+      directory: fixture.directory,
+      workspaceId: "local",
+      expectedRevision: imported.revision,
+    })
+  ).result;
+  const path = join(fixture.root, "sdk-tree");
+  assert.equal(
+    (
+      await call("git.worktrees.create", {
+        directory: fixture.directory,
+        reference: "HEAD",
+        oid: fixture.head,
+        branch: "sdk/tree",
+        path,
+      })
+    ).error,
+    undefined,
+  );
+  const refreshed = (
+    await call("project.worktrees.refresh", {
+      id: "sdk-project",
+      expectedRevision: project.revision,
+    })
+  ).result;
+  const id = refreshed.document.workspace.projects[0].worktrees[0].id;
+  const dom = new JSDOM("", { url: "http://localhost/" });
+  for (const key of ["window", "document", "localStorage"])
+    Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
+  const server = await createServer({
+    configFile: false,
+    server: { middlewareMode: true, hmr: false, watch: null },
+    appType: "custom",
+  });
+  t.after(async () => {
+    clearMocks();
+    await server.close();
+    dom.window.close();
+  });
+  const methods = [];
+  mockIPC(async (command, args) => {
+    assert.equal(command, "shared_core_request");
+    const request = JSON.parse(args.request);
+    methods.push(request.method);
+    return JSON.stringify(await call(request.method, request.params, request.id));
+  });
+  const state = await server.ssrLoadModule("/src/lib/shared-state.ts");
+  await state.initializeSharedState();
+  const dirty = join(path, "retain.txt");
+  writeFileSync(dirty, "preserve explicit edits 中文 e\u0301\n");
+  await assert.rejects(state.deleteSharedWorktree("sdk-project", id), { code: "GIT_ERROR" });
+  assert.deepEqual(state.sharedWorkspace(), refreshed.document.workspace);
+  assert.equal(readFileSync(dirty, "utf8"), "preserve explicit edits 中文 e\u0301\n");
+  rmSync(dirty);
+  const removed = await state.deleteSharedWorktree("sdk-project", id);
+  assert.equal(removed.projects[0].worktrees.length, 0);
+  assert.deepEqual(state.sharedWorkspace(), removed);
+  assert.deepEqual((await call("snapshot.read")).result.document.workspace, removed);
+  assert.deepEqual(methods, [
+    "snapshot.read",
+    "project.worktrees.delete",
+    "project.worktrees.delete",
+  ]);
+});
+
 test("shared Git requests reject malformed cross-language fields before invoking Git", async (t) => {
   const call = await client(t);
   for (const params of [null, {}, { directory: null }, { directory: "/unused", ignored: true }])
