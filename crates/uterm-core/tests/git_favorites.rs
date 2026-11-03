@@ -349,6 +349,43 @@ fn filesystem_failure_preserves_git_favorites_and_allows_explicit_retry() {
         ),
         saved
     );
+    let damaged = b"{interrupted favorite store before restore";
+    fs::write(&path, damaged).unwrap();
+    let revision = digest(&before);
+    let damaged_revision = digest(damaged);
+    let blocker = WriteBlocker::new(&fixture.store);
+    assert_eq!(
+        execute(
+            &fixture.core,
+            "git.favorites.recovery.restore",
+            json!({"revision":revision,"expectedRevision":damaged_revision,"expectedMissing":false})
+        )
+        .error
+        .unwrap()
+        .code,
+        "IO"
+    );
+    assert_eq!(fs::read(&path).unwrap(), damaged);
+    assert_eq!(
+        fs::read(fixture.store.join("legacy-original.json")).unwrap(),
+        original
+    );
+    drop(blocker);
+    call(
+        &fixture.core,
+        "git.favorites.recovery.restore",
+        json!({"revision":revision,"expectedRevision":damaged_revision,"expectedMissing":false}),
+    );
+    assert_eq!(fs::read(&path).unwrap(), before);
+    assert_eq!(
+        fs::read(
+            fixture
+                .store
+                .join(format!("git-favorites-{damaged_revision}.damaged"))
+        )
+        .unwrap(),
+        damaged
+    );
 }
 
 #[test]
@@ -397,5 +434,368 @@ fn a_later_webview_import_exports_the_actual_old_client_key_as_well_as_canonical
     assert_eq!(
         call(&fixture.core, "snapshot.read", Value::Null)["document"]["legacy"],
         json!({})
+    );
+}
+
+fn digest(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+#[test]
+fn recovery_preview_restore_and_missing_installation_preserve_current_and_damaged_bytes() {
+    let fixture = Fixture::new();
+    let first = fixture.import();
+    let path = fixture.store.join("git-favorites-v1.json");
+    let first_bytes = fs::read(&path).unwrap();
+    let first_revision = digest(&first_bytes);
+    let original = fs::read(fixture.store.join("legacy-original.json")).unwrap();
+    call(
+        &fixture.core,
+        "git.favorites.write",
+        json!({"directory":fixture.directory,"expectedRevision":first["revision"],"references":["refs/heads/recovered-中文-e\u{301}"]}),
+    );
+    let second_bytes = fs::read(&path).unwrap();
+    let second_revision = digest(&second_bytes);
+    let catalog = call(&fixture.core, "git.favorites.recovery.list", Value::Null);
+    assert_eq!(catalog["currentRevision"], second_revision);
+    assert!(catalog["backups"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(first_revision)));
+    let preview = call(
+        &fixture.core,
+        "git.favorites.recovery.preview",
+        json!({"revision":first_revision}),
+    );
+    assert_eq!(fs::read(&path).unwrap(), second_bytes);
+    assert_eq!(preview["revision"], first_revision);
+    call(
+        &fixture.core,
+        "git.favorites.recovery.restore",
+        json!({"revision":first_revision,"expectedRevision":second_revision,"expectedMissing":false}),
+    );
+    assert_eq!(fs::read(&path).unwrap(), first_bytes);
+    assert_eq!(
+        fs::read(
+            fixture
+                .store
+                .join(format!("git-favorites-{second_revision}.backup"))
+        )
+        .unwrap(),
+        second_bytes
+    );
+    assert_eq!(
+        call(
+            &fixture.core,
+            "git.favorites.recovery.source",
+            json!({"revision":first["sourceDigest"]})
+        ),
+        fixture.legacy
+    );
+    let damaged = b"{CORRUPT FAVORITE DATA RETAINED\r\n";
+    fs::write(&path, damaged).unwrap();
+    let damaged_revision = digest(damaged);
+    for params in [
+        json!({"revision":second_revision,"expectedRevision":first_revision,"expectedMissing":false}),
+        json!({"revision":second_revision,"expectedRevision":null,"expectedMissing":true}),
+    ] {
+        assert_eq!(
+            execute(&fixture.core, "git.favorites.recovery.restore", params)
+                .error
+                .unwrap()
+                .code,
+            "CONFLICT"
+        );
+        assert_eq!(fs::read(&path).unwrap(), damaged);
+    }
+    assert_eq!(
+        execute(
+            &fixture.core,
+            "git.favorites.recovery.restore",
+            json!({"revision":second_revision,"expectedRevision":null,"expectedMissing":false})
+        )
+        .error
+        .unwrap()
+        .code,
+        "INVALID_ARGUMENT"
+    );
+    let restored = call(
+        &fixture.core,
+        "git.favorites.recovery.restore",
+        json!({"revision":second_revision,"expectedRevision":damaged_revision,"expectedMissing":false}),
+    );
+    assert_eq!(restored["revision"], second_revision);
+    assert_eq!(fs::read(&path).unwrap(), second_bytes);
+    assert_eq!(
+        fs::read(
+            fixture
+                .store
+                .join(format!("git-favorites-{damaged_revision}.damaged"))
+        )
+        .unwrap(),
+        damaged
+    );
+    fs::remove_file(&path).unwrap();
+    assert!(
+        call(&fixture.core, "git.favorites.recovery.list", Value::Null)["currentRevision"]
+            .is_null()
+    );
+    assert_eq!(
+        execute(
+            &fixture.core,
+            "git.favorites.import",
+            json!({"directory":fixture.directory})
+        )
+        .error
+        .unwrap()
+        .code,
+        "MISSING_FAVORITES"
+    );
+    call(
+        &fixture.core,
+        "git.favorites.recovery.restore",
+        json!({"revision":first_revision,"expectedRevision":null,"expectedMissing":true}),
+    );
+    assert_eq!(fs::read(&path).unwrap(), first_bytes);
+    assert_eq!(
+        execute(
+            &fixture.core,
+            "git.favorites.recovery.restore",
+            json!({"revision":second_revision,"expectedRevision":null,"expectedMissing":true})
+        )
+        .error
+        .unwrap()
+        .code,
+        "CONFLICT"
+    );
+    assert_eq!(fs::read(&path).unwrap(), first_bytes);
+    assert_eq!(
+        fs::read(fixture.store.join("legacy-original.json")).unwrap(),
+        original
+    );
+    let reopened = Core::open(fixture.store.clone()).unwrap();
+    assert_eq!(
+        call(
+            &reopened,
+            "git.favorites.read",
+            json!({"directory":fixture.directory})
+        ),
+        first
+    );
+}
+
+#[test]
+fn recovery_rejects_forged_checksums_unknown_fields_and_occupied_damaged_copies() {
+    let fixture = Fixture::new();
+    let imported = fixture.import();
+    let path = fixture.store.join("git-favorites-v1.json");
+    let bytes = fs::read(&path).unwrap();
+    let revision = digest(&bytes);
+    let backup = fixture
+        .store
+        .join(format!("git-favorites-{revision}.backup"));
+    fs::write(&backup, b"{\"schemaVersion\":1,\"repositories\":{}}").unwrap();
+    assert_eq!(
+        execute(
+            &fixture.core,
+            "git.favorites.recovery.preview",
+            json!({"revision":revision})
+        )
+        .error
+        .unwrap()
+        .code,
+        "CORRUPT_FAVORITES"
+    );
+    assert!(
+        !call(&fixture.core, "git.favorites.recovery.list", Value::Null)["backups"]
+            .as_array()
+            .unwrap()
+            .contains(&json!(revision))
+    );
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    fs::write(&backup, &bytes).unwrap();
+    for params in [
+        json!({"revision":"../snapshot-v1"}),
+        json!({"revision":revision,"directory":fixture.directory}),
+    ] {
+        assert_eq!(
+            execute(&fixture.core, "git.favorites.recovery.preview", params)
+                .error
+                .unwrap()
+                .code,
+            "INVALID_ARGUMENT"
+        );
+    }
+    assert_eq!(
+        execute(
+            &fixture.core,
+            "git.favorites.recovery.list",
+            json!({"directory":fixture.directory})
+        )
+        .error
+        .unwrap()
+        .code,
+        "INVALID_ARGUMENT"
+    );
+    let source = fixture.store.join(format!(
+        "git-favorite-source-{}.json",
+        imported["sourceDigest"].as_str().unwrap()
+    ));
+    fs::write(&source, b"unrelated source bytes").unwrap();
+    assert_eq!(
+        execute(
+            &fixture.core,
+            "git.favorites.recovery.source",
+            json!({"revision":imported["sourceDigest"]})
+        )
+        .error
+        .unwrap()
+        .code,
+        "CORRUPT_FAVORITES"
+    );
+    assert_eq!(fs::read(&source).unwrap(), b"unrelated source bytes");
+    let damaged = b"{interrupted favorites write";
+    fs::write(&path, damaged).unwrap();
+    let damaged_revision = digest(damaged);
+    let occupied = fixture
+        .store
+        .join(format!("git-favorites-{damaged_revision}.damaged"));
+    fs::write(&occupied, b"retained unrelated data").unwrap();
+    assert_eq!(
+        execute(
+            &fixture.core,
+            "git.favorites.recovery.restore",
+            json!({"revision":revision,"expectedRevision":damaged_revision,"expectedMissing":false})
+        )
+        .error
+        .unwrap()
+        .code,
+        "CORRUPT_STORE"
+    );
+    assert_eq!(fs::read(&path).unwrap(), damaged);
+    assert_eq!(fs::read(&occupied).unwrap(), b"retained unrelated data");
+    assert_eq!(fs::read(&backup).unwrap(), bytes);
+}
+
+#[test]
+fn global_recovery_restores_the_selected_snapshot_for_every_repository_and_keeps_undo() {
+    let fixture = Fixture::new();
+    let first = fixture.import();
+    let other = fixture._root.path().join("other-repository");
+    uterm_core::git::run(
+        fixture.directory.to_str().unwrap(),
+        &[
+            "clone",
+            "--no-hardlinks",
+            "--",
+            fixture.directory.to_str().unwrap(),
+            other.to_str().unwrap(),
+        ],
+    )
+    .unwrap();
+    let peer = call(
+        &fixture.core,
+        "git.favorites.import",
+        json!({"directory":other,"legacy":"[\"refs/heads/peer\"]"}),
+    );
+    let path = fixture.store.join("git-favorites-v1.json");
+    let together = fs::read(&path).unwrap();
+    let together_revision = digest(&together);
+    call(
+        &fixture.core,
+        "git.favorites.write",
+        json!({"directory":fixture.directory,"expectedRevision":first["revision"],"references":[]}),
+    );
+    let changed = fs::read(&path).unwrap();
+    let changed_revision = digest(&changed);
+    let restored = call(
+        &fixture.core,
+        "git.favorites.recovery.restore",
+        json!({"revision":together_revision,"expectedRevision":changed_revision,"expectedMissing":false}),
+    );
+    assert_eq!(
+        restored["document"]["repositories"]
+            .as_object()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(fixture.read(), first);
+    assert_eq!(
+        call(
+            &fixture.core,
+            "git.favorites.read",
+            json!({"directory":other})
+        ),
+        peer
+    );
+    assert_eq!(fs::read(&path).unwrap(), together);
+    assert_eq!(
+        fs::read(
+            fixture
+                .store
+                .join(format!("git-favorites-{changed_revision}.backup"))
+        )
+        .unwrap(),
+        changed
+    );
+}
+
+#[test]
+fn restoration_keeps_its_selected_copy_and_immediate_undo_within_the_valid_backup_limit() {
+    let fixture = Fixture::new();
+    let mut current = fixture.import();
+    for index in 0..14 {
+        current = call(
+            &fixture.core,
+            "git.favorites.write",
+            json!({"directory":fixture.directory,"expectedRevision":current["revision"],"references":[format!("refs/heads/iteration-{index}")]}),
+        );
+    }
+    let catalog = call(&fixture.core, "git.favorites.recovery.list", Value::Null);
+    assert_eq!(catalog["backups"].as_array().unwrap().len(), 8);
+    let previous = catalog["currentRevision"].as_str().unwrap();
+    let selected = catalog["backups"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()
+        .as_str()
+        .unwrap();
+    let unrelated = fixture
+        .store
+        .join(format!("git-favorites-{}.backup", "0".repeat(64)));
+    fs::write(
+        &unrelated,
+        b"invalid copy retained for manual investigation",
+    )
+    .unwrap();
+    call(
+        &fixture.core,
+        "git.favorites.recovery.restore",
+        json!({"revision":selected,"expectedRevision":previous,"expectedMissing":false}),
+    );
+    let after = call(&fixture.core, "git.favorites.recovery.list", Value::Null);
+    assert_eq!(after["backups"].as_array().unwrap().len(), 8);
+    assert!(after["backups"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(selected)));
+    assert!(after["backups"]
+        .as_array()
+        .unwrap()
+        .contains(&json!(previous)));
+    assert_eq!(
+        fs::read(&unrelated).unwrap(),
+        b"invalid copy retained for manual investigation"
+    );
+    assert_eq!(
+        call(
+            &fixture.core,
+            "git.favorites.recovery.source",
+            json!({"revision":current["sourceDigest"]})
+        ),
+        fixture.legacy
     );
 }

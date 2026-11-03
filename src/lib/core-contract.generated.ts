@@ -131,6 +131,28 @@ export interface CoreGitDiff {
   truncated: boolean;
 }
 
+export interface CoreGitFavoriteDocument {
+  repositories: Record<string, CoreGitFavoriteRepository>;
+  schemaVersion: number;
+}
+
+export interface CoreGitFavoriteRecoveryCatalog {
+  backups: string[];
+  currentRevision?: string | null;
+  sources: string[];
+}
+
+export interface CoreGitFavoriteRecoverySnapshot {
+  document: CoreGitFavoriteDocument;
+  revision: string;
+}
+
+export interface CoreGitFavoriteRepository {
+  aliases: string[];
+  references: string[];
+  sourceDigest?: string | null;
+}
+
 export interface CoreGitFavorites {
   references: string[];
   repository: string;

@@ -352,47 +352,36 @@ bytes; it does not perform an installed client downgrade.
 
 #### Git and editor concurrency validation
 
-Head `b1fecc55e8ce32e1a405d3fbc43dc3130063a8d4`, actual tested merge
-`e9434576adb2f41ab5757ece5654c0cad1514774`, passed all four jobs in
-[native CI 41589492119](https://github.com/YondFane/uTerm/actions/runs/41589492119) and
-[legacy CI 41589492180](https://github.com/YondFane/uTerm/actions/runs/41589492180). Artifacts:
-[ARM 13209169082](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209169082),
-[Intel 13209184946](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209184946),
-[Windows 13210200052](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13210200052),
-[old Mac 13209324758](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13209324758).
+Head `e1eb1964df2d96ef2c81b7a3393db5ffcdb8ec15`, actual tested merge
+`28da0fef53400b712646012a1a58a589b68241c2`, passed all four jobs in
+[native CI 41592376226](https://github.com/YondFane/uTerm/actions/runs/41592376226) and
+[legacy CI 41592376229](https://github.com/YondFane/uTerm/actions/runs/41592376229). Artifacts:
+[ARM 13211241361](https://github.com/YondFane/uTerm/actions/runs/41592376226/artifacts/13211241361),
+[Intel 13210623520](https://github.com/YondFane/uTerm/actions/runs/41592376226/artifacts/13210623520),
+[Windows 13211421894](https://github.com/YondFane/uTerm/actions/runs/41592376229/artifacts/13211421894),
+[old Mac 13210483821](https://github.com/YondFane/uTerm/actions/runs/41592376229/artifacts/13210483821).
 
-Both native architectures passed 14 Swift tests, including actual C ABI favorite decoding with exact
-NFD/UTF-8/UTF-16, shared Worktree identity and stale-write rejection. Real Git/editor/terminal/
-control scenes passed. `git-live.json` records clean head/merge, OS, architecture and scenarios.
-Nine `native-git-*.png` images include `native-git-favorites.png`, showing persisted main/topic
-favorites after a verified document reload; the ARM image was inspected. Worktree confirmation/
-cancel/dirty refusal/clean removal images remain included.
+Both native architectures passed 14 Swift tests and actual Git/editor/terminal/control scenes.
+`git-live.json` records clean head/merge, OS, architecture and ten actual Git captures. The new
+checkout-hook scenario confirms saved UTF-8, WebKit cancellation after dispatch, editor readonly
+until Git actually completes, retained bytes and WORKTREE_SYNC requiring explicit refresh. The
+following conflict targets the other actual branch and independently confirms retained branch,
+external file and draft. ARM macOS 15.8.2 `native-git-cancel-frozen-editor.png` and
+`native-git-editor-conflict.png` were inspected. Both legacy jobs passed 21 real Tauri scenes;
+Git/favorite/source handoff and filesystem failures passed. Earlier fixture failures remain in the
+[Issue evidence](https://github.com/YondFane/uTerm/issues/35#issuecomment-6597742419).
 
-Both legacy jobs passed 21 actual Tauri scenes with no cleanup errors. `git-git-favorites.png` and
-its JSON report verify old-source import, real remove/re-add menu actions, frozen original bytes,
-versioned backup and receipt. Windows passed the late-WebView-source path-key export regression,
-real host/deletion guards and explicit post-Git metadata and favorite filesystem failure/retry.
-Linux clean-source Tauri/X11 also passed 21 scenes with no cleanup errors. Tests cover five real
-Git/favorite integrations, 35 actual Rust/React contracts, 389 frontend checks (ten skipped), 100
-backend checks (ten ignored), Core/FFI, build, types, contracts, i18n, format and bilingual docs.
-
-At head `0d9c7a4a5115e028d6eb6d6fbc85f0f23acad64e`, tested merge
-`b870b68dcffd3a3596a2f39aae781c8a73a90a52`, ARM's new actual cancellation/frozen-editor and
-exact-byte checks passed, but the following conflict fixture still assumed `main` after that test
-switched to `topic`. The [failed run](https://github.com/YondFane/uTerm/actions/runs/41591186324)
-and
-[artifact 13209734495](https://github.com/YondFane/uTerm/actions/runs/41591186324/artifacts/13209734495)
-retain the partial report and real frozen-editor/failure images. The fixture now captures the actual
-branch, targets the other branch and reports branch/file/draft checks separately. Whole-scenario
-acceptance remains pending on the corrected head; this failed job is not a pass.
-
-The new cancellation QA pauses an actual checkout hook after saving an editor, cancels the WebKit
-request and checks that readonly/editor/repository protection stays until Git completes. It expects
-exact saved bytes and an explicit post-write refresh error, with a tenth
-`native-git-cancel-frozen-editor.png` image. This added scenario has not run locally (no
-Swift/macOS) and needs its own source head's macOS CI and visual inspection. The earlier nine-image
-result does not accept this test. Recovery UI, complete platform/cancellation matrix, manual
-input/IME/focus and #16 dependencies keep #35 open.
+The current recovery service passed nine real Git/favorite integrations, explicit save/restore
+filesystem-failure and retry, 36 real Rust/React contracts, Core/FFI, 390 frontend checks (ten
+skipped), 100 backend checks (ten ignored), types, build and generated contracts on Linux x86_64 /
+Rust 1.99.1 / Node 26.13. Checks cover preview without writes, exact old sources, current-file CAS,
+corrupt/missing snapshots, no-clobber missing installation, retained damaged bytes, checksum and
+occupied-copy failures, all-repository restore/undo and bounded valid backups. Generated
+TypeScript/Swift recovery DTOs and added actual C ABI assertions still need this change's own
+platform CI. Recovery operations stay outside root-scoped Web content; a new native denial check is
+also pending CI. The two recovery interfaces remain pending; no recovery UI screenshots are claimed.
+Full Windows deletion/cancellation matrix, manual input/IME/focus and #16 dependencies keep #35
+open.
 
 ## Project website
 

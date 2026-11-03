@@ -244,6 +244,63 @@ impl Core {
                 Ok(Value::Null)
             }
             method if method.starts_with("files.") => files::request(method, params),
+            method if method.starts_with("git.favorites.recovery.") => {
+                #[derive(Deserialize)]
+                #[serde(rename_all = "camelCase", deny_unknown_fields)]
+                struct Preview {
+                    revision: String,
+                }
+                #[derive(Deserialize)]
+                #[serde(rename_all = "camelCase", deny_unknown_fields)]
+                struct Restore {
+                    revision: String,
+                    expected_revision: Option<String>,
+                    expected_missing: bool,
+                }
+                let invalid = |error: serde_json::Error| {
+                    CoreError::new("INVALID_ARGUMENT", error.to_string())
+                };
+                match method {
+                    "git.favorites.recovery.list" => {
+                        if !params.is_null()
+                            && !params.as_object().is_some_and(|object| object.is_empty())
+                        {
+                            return Err(CoreError::new(
+                                "INVALID_ARGUMENT",
+                                "Git favorite recovery listing takes no arguments",
+                            ));
+                        }
+                        serde_json::to_value(self.store.favorites_recovery_catalog()?)
+                            .map_err(Into::into)
+                    }
+                    "git.favorites.recovery.preview" | "git.favorites.recovery.source" => {
+                        let args: Preview = serde_json::from_value(params).map_err(invalid)?;
+                        if method == "git.favorites.recovery.preview" {
+                            serde_json::to_value(
+                                self.store.favorites_recovery_preview(&args.revision)?,
+                            )
+                            .map_err(Into::into)
+                        } else {
+                            Ok(Value::String(
+                                self.store.favorites_recovery_source(&args.revision)?,
+                            ))
+                        }
+                    }
+                    "git.favorites.recovery.restore" => {
+                        let args: Restore = serde_json::from_value(params).map_err(invalid)?;
+                        serde_json::to_value(self.store.favorites_recovery_restore(
+                            &args.revision,
+                            args.expected_revision.as_deref(),
+                            args.expected_missing,
+                        )?)
+                        .map_err(Into::into)
+                    }
+                    _ => Err(CoreError::new(
+                        "UNKNOWN_METHOD",
+                        "Unknown Git favorite recovery operation",
+                    )),
+                }
+            }
             method if method.starts_with("git.favorites.") => {
                 #[derive(Deserialize)]
                 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -35,6 +35,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 'worktreeRemovedFromSharedSidebar', 'rawWorktreeDeleteDenied', 'nativeDeleteCancelRetainedWorktree',
                 'nativeDeleteMenuCompleted', 'nativeFavoritesUsedSharedCore', 'nativeFavoritesRetainedAfterReload',
                 'favoriteRootDenied', 'favoriteContentImportDenied', 'fileWindowCannotReadGitFavorites',
+                'contentCannotReadGlobalFavoriteRecovery',
                 'cancelledGitRetainedEditorFreezeUntilCompletion', 'cancelledGitReportedCompletedWriteAndRetainedBytes']:
         assert report[key], (key, report)
     assert len(report['gitCaptures']) == 10, report

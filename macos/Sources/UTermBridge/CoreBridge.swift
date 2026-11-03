@@ -91,6 +91,12 @@ public actor CoreBridge {
     public func editorRecoveryCatalog() throws -> CoreEditorRecoveryCatalog {
         try JSONDecoder().decode(CoreEditorRecoveryCatalog.self, from: JSONEncoder().encode(call("editor.drafts.recovery.list")))
     }
+    public func gitFavoriteRecoveryCatalog() throws -> CoreGitFavoriteRecoveryCatalog {
+        try JSONDecoder().decode(CoreGitFavoriteRecoveryCatalog.self, from: JSONEncoder().encode(call("git.favorites.recovery.list")))
+    }
+    public func gitFavoriteRecoveryPreview(revision: String) throws -> CoreGitFavoriteRecoverySnapshot {
+        try JSONDecoder().decode(CoreGitFavoriteRecoverySnapshot.self, from: JSONEncoder().encode(call("git.favorites.recovery.preview", params: .object(["revision": .string(revision)]))))
+    }
     public func editorRecoveryPreview(revision: String) throws -> CoreEditorDraftSnapshot {
         try JSONDecoder().decode(CoreEditorDraftSnapshot.self, from: JSONEncoder().encode(call("editor.drafts.recovery.preview", params: .object(["revision": .string(revision)]))))
     }

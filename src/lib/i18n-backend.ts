@@ -1,4 +1,19 @@
 export const backendMessages: Record<string, string> = {
+  "Git 收藏恢复版本无效。": "Invalid Git favorite recovery revision",
+  "Git 收藏恢复副本校验和不同，未替换数据。":
+    "Git favorite recovery checksum differs; no data was replaced",
+  "Git 收藏来源版本无效。": "Invalid Git favorite source revision",
+  "Git 收藏来源校验和不同，原始数据已保留。":
+    "Git favorite source checksum differs; original data was retained",
+  "Git 收藏来源不是有效 UTF-8，原始数据已保留。":
+    "Git favorite source is not valid UTF-8; original data was retained",
+  "恢复 Git 收藏需要预期版本或明确确认快照缺失。":
+    "Git favorite restore requires an expected revision or explicit missing-store acknowledgement",
+  "Git 收藏在预览后发生变化，请重新选择恢复副本。":
+    "Git favorites changed after preview; choose the recovery copy again",
+  "Git 收藏在安装恢复副本前发生变化。": "Git favorites changed before recovery installation",
+  "Git 收藏在安装恢复副本前已被创建。": "Git favorites were created before recovery installation",
+  "列出 Git 收藏恢复副本不接受参数。": "Git favorite recovery listing takes no arguments",
   "请先导入旧 Git 收藏，再修改。": "Import old Git favorites before changing them",
   "Git 收藏无效，原始数据已保留。": "Git favorites are invalid; original data was retained",
   "Git 收藏已保留供恢复：{p0}": "Git favorites retained for recovery: {p0}",

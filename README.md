@@ -191,7 +191,7 @@ handoff before App, freezes the old draft key and offers conflict/corrupt-copy r
 Native tabs/window order and complete editing acceptance remain pending. Content writes are
 restricted to the selected file. `pnpm test:core` explicitly runs filesystem failure/retry checks
 for workspace/draft snapshots and metadata saving after Worktree removal, plus Git favorite
-save/retry.
+save/restore/retry.
 
 The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
 operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this

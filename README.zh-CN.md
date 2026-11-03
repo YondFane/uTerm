@@ -156,7 +156,7 @@ CI 截取原生窗口，并将报告及图片上传到
 `src/lib/editor-drafts.ts`
 的有界队列接入。Tauri 在 App 前初始化准确的带版本旧来源备份及明确迁移，冻结旧草稿键，并提供来源冲突／损坏副本恢复选择。原生标签／窗口顺序及完整编辑验收仍待完成，内容写入仅限所选文件。
 `pnpm test:core`
-明确执行工作区／草稿快照及 Worktree 删除后元数据及 Git 收藏保存的文件系统失败／重试检查。
+明确执行工作区／草稿快照及 Worktree 删除后元数据及 Git 收藏保存／恢复的文件系统失败／重试检查。
 
 共享回环控制服务位于
 `crates/utermd-local/src/control/server.rs`，Tauri 与核心操作复用同一队列及生命周期；宿主为该服务直接声明 Tokio 和 tempfile。`pnpm test:host`

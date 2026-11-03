@@ -372,7 +372,7 @@ or migrate these keys.
 | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `uterm.desktop.editorDraft.v1`, `.invalid`, `.backup`         | Shared queue after verified handoff; old draft/invalid/backup keys frozen / 校验迁移后使用共享队列，旧草稿及副本冻结        | #34: versioned shared drafts, abnormal exit and restore / 版本化共享草稿、异常退出及恢复                                |
 | `uterm.pdf.marks:<path>:<version>`                            | `PdfReader.tsx`, original WebView; native annotations disabled / 原 WebView，原生批注禁用                                   | #34: file identity and annotation preservation / 文件身份及批注保留                                                     |
-| `uterm.git.favorites:<repository>`                            | `GitBranchTree.tsx`, original WebView / 原 WebView                                                                          | #35: Git preference migration / Git 偏好迁移                                                                            |
+| `uterm.git.favorites:<repository>`                            | Core `git-favorites-v1.json`; frozen old WebView keys and source archives / Core 共享快照、冻结旧键及来源归档               | #35: recovery interfaces, platform matrix and manual gates / 恢复界面、平台矩阵及人工验收                               |
 | `uterm.desktop.agentNotifications`                            | `AgentPanel.tsx`, original WebView / 原 WebView                                                                             | #40: native notification permission and preference / 原生通知权限及偏好                                                 |
 | Workspace/settings version, `.backup` and `.invalid` suffixes | Original source archive plus existing readers; primary values use Rust snapshots / 原始归档及既有读取器，主值使用 Rust 快照 | #28 inventories and preserves bytes; #46 validates installation rollback / 本任务盘点保留字节，安装级回退由 #46 验证    |
 | Session/layout reducers in `workspace.ts` and `App.tsx`       | Tauri adapters retain reducers; Rust serializes writes / Tauri 保留 reducer，Rust 串行保存                                  | #32 session/layout parity, #41 full settings, #46 shared installed-data adoption / 会话布局对齐、完整设置及安装数据接入 |
@@ -637,78 +637,73 @@ Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
 
 存储保留最多八份先前快照和十六份原始来源内容，最多一千个仓库、每仓库一千引用。无效／损坏／缺失数据及占用的恢复路径阻止替换，恢复文件保留；收藏存储损坏／缺失的恢复界面仍待完成。**重新读取 Git 收藏**在失败后明确恢复。只读等锁有界且关闭时取消，写入不自动重试。旧版导出按规范目录及原客户端路径键反映当前共享收藏，并保留原始归档字节，不执行已安装客户端降级。
 
-Head `b1fecc55e8ce32e1a405d3fbc43dc3130063a8d4`, actual tested merge
-`e9434576adb2f41ab5757ece5654c0cad1514774`, passed all four jobs in
-[native CI 41589492119](https://github.com/YondFane/uTerm/actions/runs/41589492119) and
-[legacy CI 41589492180](https://github.com/YondFane/uTerm/actions/runs/41589492180). Artifacts:
-[ARM 13209169082](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209169082),
-[Intel 13209184946](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209184946),
-[Windows 13210200052](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13210200052),
-[old Mac 13209324758](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13209324758).
+#### Git favorite recovery APIs / Git 收藏恢复 API
 
-Both native architectures passed 14 Swift tests, including actual C ABI favorite decoding with exact
-NFD/UTF-8/UTF-16, shared Worktree identity and stale-write rejection. Real Git/editor/terminal/
-control scenes passed. `git-live.json` records clean head/merge, OS, architecture and scenarios.
-Nine `native-git-*.png` images include `native-git-favorites.png`, showing persisted main/topic
-favorites after a verified document reload; the ARM image was inspected. Worktree confirmation/
-cancel/dirty refusal/clean removal images remain included.
+The privileged application uses `git.favorites.recovery.list`, `.preview`, `.source` and `.restore`.
+Catalog/preview verify backup and source checksums without changing data. Restore replaces the full
+favorite snapshot for all repositories. `expectedRevision` is the catalog's raw current-file hash,
+not a repository favorite revision. Missing installation requires `expectedMissing: true` and a null
+expected revision; it never replaces a newly created file. Changed bytes reject restoration. Damaged
+bytes and the immediate undo copy remain; valid backups stay bounded and original sources are not
+pruned. Root-scoped WK/Tauri content cannot invoke these global operations. Shared recovery
+interfaces are still pending.
 
-Both legacy jobs passed 21 actual Tauri scenes with no cleanup errors. `git-git-favorites.png` and
-its JSON report verify old-source import, real remove/re-add menu actions, frozen original bytes,
-versioned backup and receipt. Windows passed the late-WebView-source path-key export regression,
-real host/deletion guards and explicit post-Git metadata and favorite filesystem failure/retry.
-Linux clean-source Tauri/X11 also passed 21 scenes with no cleanup errors. Tests cover five real
-Git/favorite integrations, 35 actual Rust/React contracts, 389 frontend checks (ten skipped), 100
-backend checks (ten ignored), Core/FFI, build, types, contracts, i18n, format and bilingual docs.
+应用的可信界面调用 `git.favorites.recovery.list`、`.preview`、`.source` 和
+`.restore`。目录／预览校验备份与来源摘要，不修改数据。恢复替换全部仓库的完整收藏快照；`expectedRevision`
+是目录返回的当前文件原始字节摘要，不是单仓库收藏 revision。缺失安装须 `expectedMissing: true`
+且预期 revision 为 null，不覆盖后来新建的文件。字节变化拒绝恢复；保留损坏字节和立即撤回副本，有效备份有界，不清理原始来源。限定根目录的 WK／Tauri 内容不能调用这些全局操作，共享恢复界面仍待接入。
 
-At head `0d9c7a4a5115e028d6eb6d6fbc85f0f23acad64e`, tested merge
-`b870b68dcffd3a3596a2f39aae781c8a73a90a52`, ARM's new actual cancellation/frozen-editor and
-exact-byte checks passed, but the following conflict fixture still assumed `main` after that test
-switched to `topic`. The [failed run](https://github.com/YondFane/uTerm/actions/runs/41591186324)
-and
-[artifact 13209734495](https://github.com/YondFane/uTerm/actions/runs/41591186324/artifacts/13209734495)
-retain the partial report and real frozen-editor/failure images. The fixture now captures the actual
-branch, targets the other branch and reports branch/file/draft checks separately. Whole-scenario
-acceptance remains pending on the corrected head; this failed job is not a pass.
+Head `e1eb1964df2d96ef2c81b7a3393db5ffcdb8ec15`, actual tested merge
+`28da0fef53400b712646012a1a58a589b68241c2`, passed all four jobs in
+[native CI 41592376226](https://github.com/YondFane/uTerm/actions/runs/41592376226) and
+[legacy CI 41592376229](https://github.com/YondFane/uTerm/actions/runs/41592376229). Artifacts:
+[ARM 13211241361](https://github.com/YondFane/uTerm/actions/runs/41592376226/artifacts/13211241361),
+[Intel 13210623520](https://github.com/YondFane/uTerm/actions/runs/41592376226/artifacts/13210623520),
+[Windows 13211421894](https://github.com/YondFane/uTerm/actions/runs/41592376229/artifacts/13211421894),
+[old Mac 13210483821](https://github.com/YondFane/uTerm/actions/runs/41592376229/artifacts/13210483821).
 
-The new cancellation QA pauses an actual checkout hook after saving an editor, cancels the WebKit
-request and checks that readonly/editor/repository protection stays until Git completes. It expects
-exact saved bytes and an explicit post-write refresh error, with a tenth
-`native-git-cancel-frozen-editor.png` image. This added scenario has not run locally (no
-Swift/macOS) and needs its own source head's macOS CI and visual inspection. The earlier nine-image
-result does not accept this test. Recovery UI, complete platform/cancellation matrix, manual
-input/IME/focus and #16 dependencies keep #35 open.
+Both native architectures passed 14 Swift tests and actual Git/editor/terminal/control scenes.
+`git-live.json` records clean head/merge, OS, architecture and ten actual Git captures. The new
+checkout-hook scenario confirms saved UTF-8, WebKit cancellation after dispatch, editor readonly
+until Git actually completes, retained bytes and WORKTREE_SYNC requiring explicit refresh. The
+following conflict targets the other actual branch and independently confirms retained branch,
+external file and draft. ARM macOS 15.8.2 `native-git-cancel-frozen-editor.png` and
+`native-git-editor-conflict.png` were inspected. Both legacy jobs passed 21 real Tauri scenes;
+Git/favorite/source handoff and filesystem failures passed. Earlier fixture failures remain in the
+[Issue evidence](https://github.com/YondFane/uTerm/issues/35#issuecomment-6597742419).
 
-源码 head `b1fecc55e8ce32e1a405d3fbc43dc3130063a8d4`、实际 tested merge
-`e9434576adb2f41ab5757ece5654c0cad1514774` 的
-[原生 CI 41589492119](https://github.com/YondFane/uTerm/actions/runs/41589492119) 和
-[旧端 CI 41589492180](https://github.com/YondFane/uTerm/actions/runs/41589492180)
+The current recovery service passed nine real Git/favorite integrations, explicit save/restore
+filesystem-failure and retry, 36 real Rust/React contracts, Core/FFI, 390 frontend checks (ten
+skipped), 100 backend checks (ten ignored), types, build and generated contracts on Linux x86_64 /
+Rust 1.99.1 / Node 26.13. Checks cover preview without writes, exact old sources, current-file CAS,
+corrupt/missing snapshots, no-clobber missing installation, retained damaged bytes, checksum and
+occupied-copy failures, all-repository restore/undo and bounded valid backups. Generated
+TypeScript/Swift recovery DTOs and added actual C ABI assertions still need this change's own
+platform CI. Recovery operations stay outside root-scoped Web content; a new native denial check is
+also pending CI. The two recovery interfaces remain pending; no recovery UI screenshots are claimed.
+Full Windows deletion/cancellation matrix, manual input/IME/focus and #16 dependencies keep #35
+open.
+
+源码 head `e1eb1964df2d96ef2c81b7a3393db5ffcdb8ec15`、实际 tested merge
+`28da0fef53400b712646012a1a58a589b68241c2` 的
+[原生 CI 41592376226](https://github.com/YondFane/uTerm/actions/runs/41592376226) 和
+[旧端 CI 41592376229](https://github.com/YondFane/uTerm/actions/runs/41592376229)
 四 job 全通过。产物：
-[ARM 13209169082](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209169082)、
-[Intel 13209184946](https://github.com/YondFane/uTerm/actions/runs/41589492119/artifacts/13209184946)、
-[Windows 13210200052](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13210200052)、
-[旧 Mac 13209324758](https://github.com/YondFane/uTerm/actions/runs/41589492180/artifacts/13209324758)。
+[ARM 13211241361](https://github.com/YondFane/uTerm/actions/runs/41592376226/artifacts/13211241361)、
+[Intel 13210623520](https://github.com/YondFane/uTerm/actions/runs/41592376226/artifacts/13210623520)、
+[Windows 13211421894](https://github.com/YondFane/uTerm/actions/runs/41592376229/artifacts/13211421894)、
+[旧 Mac 13210483821](https://github.com/YondFane/uTerm/actions/runs/41592376229/artifacts/13210483821)。
 
-原生双架构通过十四项 Swift，包括实际 C
-ABI 收藏解码的准确 NFD／UTF-8／UTF-16、Worktree 共用身份和过期写入拒绝。真实 Git／编辑器／终端／控制场景通过。`git-live.json`
-记录干净 head／merge、系统、架构及场景。九张 `native-git-*.png` 包括
-`native-git-favorites.png`，显示经确认的文档重载后 main／topic 收藏；ARM 图片已检查。Worktree 确认／取消／脏拒删／干净删除图仍保留。
+原生双架构通过十四项 Swift 和真实 Git／编辑器／终端／控制场景。`git-live.json`
+记录干净 head／merge、系统、架构及十张真实 Git 图。新 checkout
+hook 场景确认保存 UTF-8、分发后取消 WebKit、编辑器只读保持至 Git 实际完成、字节保留及 WORKTREE_SYNC 明确刷新反馈。后续冲突针对实际另一分支，分别确认当前分支、外部文件和草稿保留。ARM
+macOS 15.8.2 的 `native-git-cancel-frozen-editor.png` 与 `native-git-editor-conflict.png`
+已目视检查。旧端两 job 各二十一真实 Tauri 场景通过，含 Git／收藏／来源交接及磁盘失败。[Issue 证据](https://github.com/YondFane/uTerm/issues/35#issuecomment-6597742419)
+保留先前夹具失败。
 
-旧端两 job 各二十一个真实 Tauri 场景通过，清理无错误。`git-git-favorites.png`
-和 JSON 报告验证旧来源导入、真实取消收藏／重新收藏菜单、冻结原文、带版本备份及回执。Windows 通过主状态建立后 WebView 来源的路径键导出回归、真实宿主／删除保护及明确执行的 Git 后元数据和收藏文件系统失败／重试。Linux 干净源码 Tauri／X11 二十一场景也通过，清理无错误。检查包含五项真实 Git／收藏集成、三十五项真实 Rust／React 契约、389 前端（十跳过）、100 后端（十忽略）、Core／FFI、构建、类型、契约、i18n、格式和双语文档。
-
-head `0d9c7a4a5115e028d6eb6d6fbc85f0f23acad64e`、tested merge
-`b870b68dcffd3a3596a2f39aae781c8a73a90a52`
-的 ARM 新真实取消／冻结编辑器／准确字节检查通过，但后续冲突夹具仍假定 `main`，而该场景已切到
-`topic`。[失败运行](https://github.com/YondFane/uTerm/actions/runs/41591186324) 和
-[产物 13209734495](https://github.com/YondFane/uTerm/actions/runs/41591186324/artifacts/13209734495)
-保留部分报告和真实冻结编辑器／失败图。夹具现捕获实际分支、切换到另一分支，并分别报告分支／文件／草稿检查。整体场景仍需修正 head 的验收，此失败 job 不计为通过。
-
-新增取消 QA 在保存编辑器后暂停真实 checkout
-hook，取消 WebKit 请求，检查只读／编辑器／仓库保护保持到 Git 完成；核对准确保存字节和明确的写后刷新错误，新增第十图
-`native-git-cancel-frozen-editor.png`。本地无 Swift／macOS，尚未执行此新增场景，需其自己的源码 head
-macOS
-CI 和目视检查，先前九图不验收本测试。恢复界面、完整平台／取消矩阵、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
+本轮恢复服务在 Linux x86_64／Rust 1.99.1／Node
+26.13 通过九项真实 Git／收藏集成、明确保存／恢复磁盘失败和重试、三十六真实 Rust／React 契约、Core／FFI、390 前端（十跳过）、100 后端（十忽略）、类型、构建和生成契约。覆盖预览不写入、准确旧来源、当前文件 CAS、损坏／缺失快照、缺失安装不覆盖、损坏字节保留、校验和／占用副本失败、全仓库恢复／撤回及有效备份上限。新生成 TS／Swift 恢复 DTO 及真实 C
+ABI 断言仍需本次改动自己的平台 CI。全局恢复不向限定根目录的 Web 内容开放，新增原生拒绝检查也待 CI。两端恢复界面仍待接入，不声称已有恢复界面截图。完整 Windows 删除／取消矩阵、人工输入／IME／焦点和 #16 依赖使 #35 保持开放。
 
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 

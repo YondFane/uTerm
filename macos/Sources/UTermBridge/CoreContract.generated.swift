@@ -130,6 +130,28 @@ public struct CoreGitDiff: Codable, Sendable {
     public var truncated: Bool
 }
 
+public struct CoreGitFavoriteDocument: Codable, Sendable {
+    public var repositories: [String: CoreGitFavoriteRepository]
+    public var schemaVersion: UInt32
+}
+
+public struct CoreGitFavoriteRecoveryCatalog: Codable, Sendable {
+    public var backups: [String]
+    public var currentRevision: String?
+    public var sources: [String]
+}
+
+public struct CoreGitFavoriteRecoverySnapshot: Codable, Sendable {
+    public var document: CoreGitFavoriteDocument
+    public var revision: String
+}
+
+public struct CoreGitFavoriteRepository: Codable, Sendable {
+    public var aliases: [String]
+    public var references: [String]
+    public var sourceDigest: String?
+}
+
 public struct CoreGitFavorites: Codable, Sendable {
     public var references: [String]
     public var repository: String

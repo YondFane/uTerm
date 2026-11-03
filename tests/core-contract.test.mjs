@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   mkdtempSync,
   rmSync,
@@ -2240,4 +2241,112 @@ test("Git favorite backup and receipt failures retain old WebView bytes and dura
     invalidStorage,
   );
   assert.deepEqual((await invalidReopened.initialize()).references, ["refs/heads/main"]);
+});
+
+test("Git favorite recovery RPC preserves exact source bytes, global revisions and explicit absent-store restoration", async (t) => {
+  let privilegedCalls = 0;
+  const scoped = new ContentScope(
+    {
+      request: async () => {
+        privilegedCalls++;
+        throw Error("Unexpected global recovery request");
+      },
+      cancel() {},
+      subscribe() {
+        return () => {};
+      },
+    },
+    "favorite-content-document",
+  );
+  await assert.rejects(scoped.call("git.favorites.recovery.list"), { code: "METHOD_DENIED" });
+  await assert.rejects(scoped.call("git_favorites_recovery_list"), { code: "METHOD_DENIED" });
+  assert.equal(privilegedCalls, 0);
+  scoped.close();
+  const fixture = gitFixture(t),
+    root = mkdtempSync(join(tmpdir(), "uterm-favorite-recovery-rpc-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const call = await client(t, root);
+  const legacy = '[\r\n "refs/heads/中文-e\u0301-𝄞"\r\n]';
+  const imported = (await call("git.favorites.import", { directory: fixture.directory, legacy }))
+    .result;
+  assert.ok(imported?.revision);
+  const catalog = (await call("git.favorites.recovery.list")).result;
+  const revision = catalog.backups[0];
+  const preview = (await call("git.favorites.recovery.preview", { revision })).result;
+  assert.equal(preview.revision, revision);
+  assert.equal(preview.document.schemaVersion, 1);
+  assert.deepEqual(
+    preview.document.repositories[imported.repository].references,
+    JSON.parse(legacy),
+  );
+  assert.deepEqual(
+    Buffer.from(
+      (await call("git.favorites.recovery.source", { revision: imported.sourceDigest })).result,
+    ),
+    Buffer.from(legacy),
+  );
+  const path = join(root, "git-favorites-v1.json"),
+    before = readFileSync(path);
+  assert.equal(createHash("sha256").update(before).digest("hex"), revision);
+  assert.deepEqual(readFileSync(path), before);
+  const updated = await call("git.favorites.write", {
+    directory: fixture.directory,
+    expectedRevision: imported.revision,
+    references: [],
+  });
+  assert.equal(updated.error, undefined);
+  const after = readFileSync(path);
+  assert.equal(
+    (
+      await call("git.favorites.recovery.restore", {
+        revision,
+        expectedRevision: catalog.currentRevision,
+        expectedMissing: false,
+      })
+    ).error.code,
+    "CONFLICT",
+  );
+  assert.deepEqual(readFileSync(path), after);
+  const damaged = Buffer.from("{DAMAGED FAVORITES 中文\r\n");
+  writeFileSync(path, damaged);
+  const damagedRevision = createHash("sha256").update(damaged).digest("hex");
+  assert.equal((await call("git.favorites.recovery.list")).result.currentRevision, damagedRevision);
+  const restored = await call("git.favorites.recovery.restore", {
+    revision,
+    expectedRevision: damagedRevision,
+    expectedMissing: false,
+  });
+  assert.equal(restored.error, undefined);
+  assert.deepEqual(restored.result, preview);
+  assert.deepEqual(readFileSync(path), before);
+  assert.deepEqual(readFileSync(join(root, `git-favorites-${damagedRevision}.damaged`)), damaged);
+  rmSync(path);
+  assert.equal((await call("git.favorites.recovery.list")).result.currentRevision, null);
+  assert.equal(
+    (await call("git.favorites.import", { directory: fixture.directory })).error.code,
+    "MISSING_FAVORITES",
+  );
+  const absent = await call("git.favorites.recovery.restore", {
+    revision,
+    expectedRevision: null,
+    expectedMissing: true,
+  });
+  assert.equal(absent.error, undefined);
+  assert.deepEqual(absent.result, preview);
+  assert.deepEqual(readFileSync(path), before);
+  assert.equal(
+    (
+      await call("git.favorites.recovery.restore", {
+        revision,
+        expectedRevision: null,
+        expectedMissing: true,
+      })
+    ).error.code,
+    "CONFLICT",
+  );
+  assert.equal(
+    (await call("git.favorites.recovery.preview", { revision, directory: fixture.directory })).error
+      .code,
+    "INVALID_ARGUMENT",
+  );
 });

@@ -83,6 +83,7 @@ enum GitSmoke {
             report["nativeFavoritesUsedSharedCore"] = true
             report["favoriteRootDenied"] = try await ContentSmoke.request(content, method: "git_favorites_read", params: ["directory": sibling.path]) == "ROOT_DENIED"
             report["favoriteContentImportDenied"] = try await ContentSmoke.request(content, method: "git_favorites_import", params: ["directory": root.path, "legacy": "[]"]) == "METHOD_DENIED"
+            report["contentCannotReadGlobalFavoriteRecovery"] = try await ContentSmoke.request(content, method: "git.favorites.recovery.list", params: [:]) == "METHOD_DENIED"
             guard let favoriteDocument = try await content.webView.evaluateJavaScript("window.utermContentDocument") as? String else { throw BridgeFailure(code: "GIT_FAVORITES", message: "Missing pre-reload favorite document") }
             let previousFavoriteDocument = String(decoding: try JSONEncoder().encode(favoriteDocument), as: UTF8.self)
             content.webView.reload()

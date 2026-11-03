@@ -107,6 +107,17 @@ final class CoreBridgeTests: XCTestCase {
             XCTFail("A stale favorite write cannot replace newer shared references")
         } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "CONFLICT") }
         let retained = worktree.appendingPathComponent("retained.txt")
+        let favoriteCatalog = try await core.gitFavoriteRecoveryCatalog()
+        let favoriteBackup = try XCTUnwrap(favoriteCatalog.backups.first)
+        let favoritePreview = try await core.gitFavoriteRecoveryPreview(revision: favoriteBackup)
+        let previewEntry = try XCTUnwrap(favoritePreview.document.repositories.values.first)
+        XCTAssertEqual(Array(previewEntry.references[0].utf8), Array(favoriteName.utf8))
+        let oldFavoriteSource = try await core.call("git.favorites.recovery.source", params: .object(["revision": .string(try XCTUnwrap(typedFavorites.sourceDigest))]))
+        XCTAssertEqual(Array(try XCTUnwrap(oldFavoriteSource.string).utf8), Array(favoriteSource.utf8))
+        let favoriteRestored = try await core.call("git.favorites.recovery.restore", params: .object(["revision": .string(favoriteBackup), "expectedRevision": .string(try XCTUnwrap(favoriteCatalog.currentRevision)), "expectedMissing": .bool(false)]))
+        let typedRestored = try JSONDecoder().decode(CoreGitFavoriteRecoverySnapshot.self, from: JSONEncoder().encode(favoriteRestored))
+        XCTAssertEqual(typedRestored.revision, favoriteBackup)
+        XCTAssertEqual(Array(try XCTUnwrap(typedRestored.document.repositories.values.first).references[0].utf8), Array(favoriteName.utf8))
         try Data(changed.utf8).write(to: retained)
         do {
             _ = try await core.call("git.worktrees.delete", params: .object(["directory": .string(repository.path), "path": .string(worktree.path)]))
