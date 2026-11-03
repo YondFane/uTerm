@@ -632,6 +632,19 @@ Git…**复用面板，桥接限制仓库／项目，系统复制，写入前保
 
 c637bcc 的干净源码 Linux 真实 Tauri 二十场景通过、清理无错误。当前本地 Core 五十单元、集成／FFI／磁盘失败、三十一真实 Rust／React 契约、385 前端（十跳过）、100 后端（十忽略）、类型／构建／契约／i18n 通过。新原生 QA 增加 Worktree 侧栏登记／选择／移除的第六张图，仍需自己的干净源码平台 CI 和检查。收藏、原生删除、完整取消、人工交互和 #16 依赖使 #35 保持开放。M0／M1、#29／#30 已验收未合入，#31／#32 及 M3–M5 仍开放；未直推受保护分支／合并／标签／发布／改生产源。
 
+At head `0f983699f9db69659a148a8ca955498cd5ae1e0e`, merge
+`1112d6dac5a706567d74e9e7617f361faa23c370`, Linux's clean 20-scene Tauri run passed. Native ARM's
+new Worktree-directory assertion failed after registration and AppKit selection; later Git checks
+did not run. [Run](https://github.com/YondFane/uTerm/actions/runs/41580396300) /
+[artifact 13205407595](https://github.com/YondFane/uTerm/actions/runs/41580396300/artifacts/13205407595)
+retain the real failure. The correction logs actual/stored/fixture paths and separately verifies
+IDs, exact stored UTF-8 and canonical directory identity; aliases do not authorize a different
+physical target. A workspace failure capture supplements the Git-window capture. New-head platform
+validation is pending.
+
+上述 0f98369／merge 的干净源码 Linux
+Tauri 二十场景通过。原生 ARM 在登记／AppKit 选择后的目录断言失败，后续 Git 检查未执行，真实失败产物保留。修正后记录实际／存储／夹具路径，分别验证 ID、准确存储 UTF-8 与规范目录身份，路径别名不放宽物理目标检查；新增工作区失败图片补充 Git 窗口图，仍待新 head 平台验证。
+
 ### M1 recovery-copy integrity / M1 恢复副本完整性
 
 Task #25 now rejects existing recovery/damaged paths whose bytes or file type differ. Recovery

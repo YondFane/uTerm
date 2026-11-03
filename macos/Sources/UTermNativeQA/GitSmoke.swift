@@ -127,7 +127,17 @@ enum GitSmoke {
             try await TerminalSmoke.wait("Select Worktree through the real AppKit table") { model.workspace["selectedWorktree"].string == treeID && !model.busy }
             guard let selectedState = model.state else { throw BridgeFailure(code: "GIT_WORKTREE", message: "Missing selected Worktree state") }
             let selectedTree = try await bridge.projectContext(expectedRevision: selectedState.snapshot.revision)
-            guard selectedTree.directory.map({ Data($0.utf8) }) == Data(tree.path.utf8) else { throw BridgeFailure(code: "GIT_WORKTREE", message: "Native Worktree selection resolved a different directory") }
+            let storedPath = project["worktrees"].array.first(where: { $0["id"].string == treeID })?["path"].string
+            report["selectedWorktreeDirectory"] = selectedTree.directory ?? ""
+            report["storedWorktreeDirectory"] = storedPath ?? ""
+            report["fixtureWorktreeDirectory"] = tree.path
+            report["canonicalFixtureWorktreeDirectory"] = tree.standardizedFileURL.resolvingSymlinksInPath().path
+            guard selectedTree.projectId == "native-git-qa", selectedTree.worktreeId == treeID,
+                  let selectedPath = selectedTree.directory, let storedPath,
+                  Data(selectedPath.utf8) == Data(storedPath.utf8),
+                  URL(fileURLWithPath: selectedPath).standardizedFileURL.resolvingSymlinksInPath() == tree.standardizedFileURL.resolvingSymlinksInPath() else {
+                throw BridgeFailure(code: "GIT_WORKTREE", message: "Native Worktree selection changed its ID, stored path bytes or canonical directory")
+            }
             captures.append("native-git-worktree-sidebar.png")
             try await TerminalSmoke.capture(window: parent, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(captures.last!))
             report["worktreeSidebarRegisteredAndSelected"] = true
@@ -176,6 +186,11 @@ enum GitSmoke {
             let image = "native-git-failure.png"
             do { try await capture(content, image); report["failureCapture"] = image }
             catch { report["failureCaptureError"] = error.localizedDescription }
+            do {
+                let image = "native-git-workspace-failure.png"
+                try await TerminalSmoke.capture(window: parent, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(image))
+                report["failureWorkspaceCapture"] = image
+            } catch { report["failureWorkspaceCaptureError"] = error.localizedDescription }
             report["gitCaptures"] = captures
             throw error
         }

@@ -318,6 +318,17 @@ deadline and record `observerBusyReads`; they never retry writes.
 
 #### Git and editor concurrency validation
 
+Head `0f983699f9db69659a148a8ca955498cd5ae1e0e`, tested merge
+`1112d6dac5a706567d74e9e7617f361faa23c370`, passed the 20-scene clean Linux Tauri run. Its
+[ARM native job](https://github.com/YondFane/uTerm/actions/runs/41580396300) failed at the new
+Worktree-directory assertion after registration and AppKit selection; remaining Git checks were not
+executed.
+[Artifact 13205407595](https://github.com/YondFane/uTerm/actions/runs/41580396300/artifacts/13205407595)
+retains `git-live.json` and failure captures. The assertion now records actual/stored/fixture paths
+and checks the selected IDs, exact stored UTF-8 bytes and canonical directory identity separately,
+so macOS aliases are not confused with a different target. A workspace failure capture is added;
+this correction still requires its own platform run.
+
 Head `c637bccac8e6b7196f526ad054deca22a6fad443`, tested merge
 `b00bf1ea1601a44f9ce62d0ef2a56d9d316df45a`, passed both jobs in
 [native CI 41577219725](https://github.com/YondFane/uTerm/actions/runs/41577219725), including 14

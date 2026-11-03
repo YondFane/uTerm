@@ -182,6 +182,13 @@ Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revisio
 
 #### Git 与编辑器并发验证
 
+head `0f983699f9db69659a148a8ca955498cd5ae1e0e`、tested merge
+`1112d6dac5a706567d74e9e7617f361faa23c370` 的干净源码 Linux
+Tauri 二十场景通过。[ARM 原生 job](https://github.com/YondFane/uTerm/actions/runs/41580396300)
+在登记和 AppKit 选择后的新 Worktree 目录断言失败，后续 Git 检查未执行。[产物 13205407595](https://github.com/YondFane/uTerm/actions/runs/41580396300/artifacts/13205407595)
+保留 `git-live.json`
+和失败图片。断言现记录实际／存储／夹具路径，分别验证所选 ID、准确存储 UTF-8 字节及规范目录身份，避免将 macOS 别名误作其他目标；增加工作区失败截图。该修正仍需自己的平台执行。
+
 head `c637bccac8e6b7196f526ad054deca22a6fad443`、tested merge
 `b00bf1ea1601a44f9ce62d0ef2a56d9d316df45a` 的
 [原生 CI 41577219725](https://github.com/YondFane/uTerm/actions/runs/41577219725)
