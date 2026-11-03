@@ -661,6 +661,16 @@ Linux clean-source Tauri/X11 also passed 21 scenes with no cleanup errors. Tests
 Git/favorite integrations, 35 actual Rust/React contracts, 389 frontend checks (ten skipped), 100
 backend checks (ten ignored), Core/FFI, build, types, contracts, i18n, format and bilingual docs.
 
+At head `0d9c7a4a5115e028d6eb6d6fbc85f0f23acad64e`, tested merge
+`b870b68dcffd3a3596a2f39aae781c8a73a90a52`, ARM's new actual cancellation/frozen-editor and
+exact-byte checks passed, but the following conflict fixture still assumed `main` after that test
+switched to `topic`. The [failed run](https://github.com/YondFane/uTerm/actions/runs/41591186324)
+and
+[artifact 13209734495](https://github.com/YondFane/uTerm/actions/runs/41591186324/artifacts/13209734495)
+retain the partial report and real frozen-editor/failure images. The fixture now captures the actual
+branch, targets the other branch and reports branch/file/draft checks separately. Whole-scenario
+acceptance remains pending on the corrected head; this failed job is not a pass.
+
 The new cancellation QA pauses an actual checkout hook after saving an editor, cancels the WebKit
 request and checks that readonly/editor/repository protection stays until Git completes. It expects
 exact saved bytes and an explicit post-write refresh error, with a tenth
@@ -686,6 +696,13 @@ ABI 收藏解码的准确 NFD／UTF-8／UTF-16、Worktree 共用身份和过期�
 
 旧端两 job 各二十一个真实 Tauri 场景通过，清理无错误。`git-git-favorites.png`
 和 JSON 报告验证旧来源导入、真实取消收藏／重新收藏菜单、冻结原文、带版本备份及回执。Windows 通过主状态建立后 WebView 来源的路径键导出回归、真实宿主／删除保护及明确执行的 Git 后元数据和收藏文件系统失败／重试。Linux 干净源码 Tauri／X11 二十一场景也通过，清理无错误。检查包含五项真实 Git／收藏集成、三十五项真实 Rust／React 契约、389 前端（十跳过）、100 后端（十忽略）、Core／FFI、构建、类型、契约、i18n、格式和双语文档。
+
+head `0d9c7a4a5115e028d6eb6d6fbc85f0f23acad64e`、tested merge
+`b870b68dcffd3a3596a2f39aae781c8a73a90a52`
+的 ARM 新真实取消／冻结编辑器／准确字节检查通过，但后续冲突夹具仍假定 `main`，而该场景已切到
+`topic`。[失败运行](https://github.com/YondFane/uTerm/actions/runs/41591186324) 和
+[产物 13209734495](https://github.com/YondFane/uTerm/actions/runs/41591186324/artifacts/13209734495)
+保留部分报告和真实冻结编辑器／失败图。夹具现捕获实际分支、切换到另一分支，并分别报告分支／文件／草稿检查。整体场景仍需修正 head 的验收，此失败 job 不计为通过。
 
 新增取消 QA 在保存编辑器后暂停真实 checkout
 hook，取消 WebKit 请求，检查只读／编辑器／仓库保护保持到 Git 完成；核对准确保存字节和明确的写后刷新错误，新增第十图

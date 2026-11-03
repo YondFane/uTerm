@@ -261,11 +261,17 @@ enum GitSmoke {
             let conflict = try await openFile(root, path)
             defer { conflict.forceClose() }
             try await ContentSmoke.wait(conflict, "document.querySelector('.cm-content')?.textContent.includes('RETAIN_CONFLICT') === true")
+            let conflictBranch = try git(["branch", "--show-current"])
+            let conflictTarget = conflictBranch == "topic" ? "main" : "topic"
             try external.write(to: file)
-            let code = try await ContentSmoke.request(content, method: "git_switch_branch", params: ["directory": root.path, "branch": "topic", "expected": "main"])
+            let code = try await ContentSmoke.request(content, method: "git_switch_branch", params: ["directory": root.path, "branch": conflictTarget, "expected": conflictBranch])
             let retainedDraft = try await bridge.call("editor.drafts.document", params: .object(["directory": .string(root.path), "path": .string(path)]))
-            guard code == "GIT_FILES", try git(["branch", "--show-current"]) == "main", try Data(contentsOf: file) == external,
-                  retainedDraft["draft"]["text"].string.map({ Data($0.utf8) }) == Data(unsaved.utf8) else { throw BridgeFailure(code: "GIT_CONFLICT", message: "A conflicting editor did not prevent Git while preserving both writers") }
+            let retainedBranch = try git(["branch", "--show-current"]) == conflictBranch
+            let retainedFile = try Data(contentsOf: file) == external
+            let retainedText = retainedDraft["draft"]["text"].string.map({ Data($0.utf8) }) == Data(unsaved.utf8)
+            let conflictDiagnostics: [String: Any] = ["expectedBranch": conflictBranch, "targetBranch": conflictTarget, "replyCode": code, "branchRetained": retainedBranch, "externalFileRetained": retainedFile, "draftRetained": retainedText]
+            report["editorConflictDiagnostics"] = conflictDiagnostics
+            guard code == "GIT_FILES", retainedBranch, retainedFile, retainedText else { throw BridgeFailure(code: "GIT_CONFLICT", message: "A conflicting editor did not prevent Git while preserving both writers") }
             try await ContentSmoke.wait(conflict, "document.querySelector('[role=alert]')?.textContent.includes('Another program modified this file') === true", allowAlert: true)
             captures.append("native-git-editor-conflict.png")
             try await capture(conflict, captures.last!)

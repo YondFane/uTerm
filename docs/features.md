@@ -376,6 +376,16 @@ Linux clean-source Tauri/X11 also passed 21 scenes with no cleanup errors. Tests
 Git/favorite integrations, 35 actual Rust/React contracts, 389 frontend checks (ten skipped), 100
 backend checks (ten ignored), Core/FFI, build, types, contracts, i18n, format and bilingual docs.
 
+At head `0d9c7a4a5115e028d6eb6d6fbc85f0f23acad64e`, tested merge
+`b870b68dcffd3a3596a2f39aae781c8a73a90a52`, ARM's new actual cancellation/frozen-editor and
+exact-byte checks passed, but the following conflict fixture still assumed `main` after that test
+switched to `topic`. The [failed run](https://github.com/YondFane/uTerm/actions/runs/41591186324)
+and
+[artifact 13209734495](https://github.com/YondFane/uTerm/actions/runs/41591186324/artifacts/13209734495)
+retain the partial report and real frozen-editor/failure images. The fixture now captures the actual
+branch, targets the other branch and reports branch/file/draft checks separately. Whole-scenario
+acceptance remains pending on the corrected head; this failed job is not a pass.
+
 The new cancellation QA pauses an actual checkout hook after saving an editor, cancels the WebKit
 request and checks that readonly/editor/repository protection stays until Git completes. It expects
 exact saved bytes and an explicit post-write refresh error, with a tenth
