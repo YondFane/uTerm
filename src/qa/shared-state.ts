@@ -444,12 +444,22 @@ async function runGit(context: Context) {
 }
 
 async function runFavoriteRecovery(context: Context) {
-  const initial = (await coreRequest(
-    "git.favorites.recovery.list",
-  )) as unknown as CoreGitFavoriteRecoveryCatalog;
   const favorites = (await coreRequest("git.favorites.read", {
     directory: context.project,
   })) as unknown as CoreGitFavorites;
+  const checkpoint = (await coreRequest("git.favorites.write", {
+    directory: context.project,
+    expectedRevision: favorites.revision,
+    references: [],
+  })) as unknown as CoreGitFavorites;
+  await coreRequest("git.favorites.write", {
+    directory: context.project,
+    expectedRevision: checkpoint.revision,
+    references: favorites.references,
+  });
+  const initial = (await coreRequest(
+    "git.favorites.recovery.list",
+  )) as unknown as CoreGitFavoriteRecoveryCatalog;
   assert(initial.currentRevision && favorites.sourceDigest, "Missing recovery snapshot or source");
   assert(
     initial.backups.includes(initial.currentRevision),

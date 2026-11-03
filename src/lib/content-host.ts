@@ -1,6 +1,7 @@
 import { ContentScope } from "./content-transport.ts";
 import { applyTauriWindowAppearance, isTauri, tauriContentPort } from "./tauri-content.ts";
 import { webKitContentPort, type WebKitHandler } from "./webkit-content.ts";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 declare global {
   interface Window {
@@ -33,7 +34,9 @@ export function contentInvoke<T>(method: string, params?: Record<string, unknown
 export function copyContentText(text: string): Promise<void> {
   return window.webkit?.messageHandlers?.utermContent
     ? contentInvoke("content_copy_text", { text })
-    : navigator.clipboard.writeText(text);
+    : isTauri()
+      ? writeText(text)
+      : navigator.clipboard.writeText(text);
 }
 export function listenContent(kind: string, receive: () => void): Promise<() => void> {
   return current().subscribe(kind, receive);

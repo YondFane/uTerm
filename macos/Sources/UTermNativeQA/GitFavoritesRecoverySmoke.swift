@@ -49,6 +49,14 @@ enum GitFavoritesRecoverySmoke {
                     sourceRevision: String, reportPath: String, captures: inout [String], report: inout [String: Any]) async throws {
         guard let bridge = model.bridge else { throw BridgeFailure(code: "FAVORITE_RECOVERY_BRIDGE", message: "Missing shared bridge") }
         let root = try WorkspaceModel.dataRoot(), file = root.appendingPathComponent("git-favorites-v1.json")
+        let params: JSONValue = .object(["directory": .string(content.directory.path)])
+        let current = try await bridge.call("git.favorites.read", params: params)
+        let checkpoint = try await bridge.call("git.favorites.write", params: .object([
+            "directory": .string(content.directory.path), "expectedRevision": current["revision"], "references": .array([])
+        ]))
+        _ = try await bridge.call("git.favorites.write", params: .object([
+            "directory": .string(content.directory.path), "expectedRevision": checkpoint["revision"], "references": current["references"]
+        ]))
         let original = try Data(contentsOf: file)
         let catalog = try await bridge.gitFavoriteRecoveryCatalog()
         guard let revision = catalog.currentRevision, catalog.backups.contains(revision) else {

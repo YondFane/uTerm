@@ -184,6 +184,12 @@ QA profiles. Dedicated profile links redirect QA data into a temporary directory
 override or production profile is used. This automation does not establish manual keyboard/IME
 acceptance.
 
+The QA also exercises an actual writer-lock rejection and explicit recovery-draft retry, plus Git
+favorite preview/copy/stale/missing recovery. Shared Tauri content copies through the locked native
+clipboard-manager plugin with write-text permission for the main window; it does not depend on
+WebView clipboard permission. Windows/macOS QA verifies full original source bytes against the OS
+clipboard. The native client uses scoped NSPasteboard calls.
+
 The core's `store/editor.rs` owns revision-checked multi-document drafts, exact legacy-source copies
 and explicit recovery. Native and Tauri editing adopt this API through the bounded queue in
 `src/lib/editor-drafts.ts`. Tauri initializes exact versioned old-source backups and an explicit

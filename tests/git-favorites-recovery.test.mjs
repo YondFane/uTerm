@@ -103,9 +103,13 @@ async function render(t, f, { intercept = async () => {} } = {}) {
     "Node",
     "Event",
     "CustomEvent",
+    "isTauri",
   ]) {
     saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
-    Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
+    Object.defineProperty(globalThis, key, {
+      configurable: true,
+      value: key === "isTauri" ? true : dom.window[key],
+    });
   }
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   dom.window.HTMLDialogElement.prototype.showModal = function () {
@@ -115,22 +119,20 @@ async function render(t, f, { intercept = async () => {} } = {}) {
     this.open = false;
   };
   let clipboard = "",
+    clipboardFailure = false,
     closed = 0,
     restored = 0;
   const busy = [];
   const requests = [];
-  Object.defineProperty(dom.window.navigator, "clipboard", {
-    configurable: true,
-    value: {
-      writeText: async (text) => {
-        clipboard = text;
-      },
-    },
-  });
   dom.window.addEventListener("uterm:git-favorites-restored", () => {
     restored++;
   });
   mockIPC(async (command, args) => {
+    if (command === "plugin:clipboard-manager|write_text") {
+      if (clipboardFailure) throw Error("Native clipboard unavailable");
+      clipboard = args.text;
+      return;
+    }
     assert.equal(command, "shared_core_request");
     const request = JSON.parse(args.request);
     requests.push(request);
@@ -210,6 +212,9 @@ async function render(t, f, { intercept = async () => {} } = {}) {
     choose,
     requests,
     busy,
+    failClipboard: (value) => {
+      clipboardFailure = value;
+    },
     get clipboard() {
       return clipboard;
     },
@@ -267,7 +272,16 @@ test("real Core recovery dialog retains corrupt bytes on cancel/copy and protect
     true,
   );
   assert.match(ui.dom.window.document.body.textContent, /Preview is truncated/);
+  ui.failClipboard(true);
   await ui.click("Copy full preview");
+  assert.match(
+    ui.dom.window.document.querySelector('[role="alert"]').textContent,
+    /Native clipboard unavailable/,
+  );
+  assert.deepEqual(readFileSync(f.file), damaged);
+  ui.failClipboard(false);
+  await ui.click("Copy full preview");
+  assert.equal(ui.dom.window.document.querySelector('[role="alert"]'), null);
   assert.deepEqual(Buffer.from(ui.clipboard), Buffer.from(f.legacy));
   assert.deepEqual(readFileSync(f.file), damaged);
   await ui.click("Cancel");

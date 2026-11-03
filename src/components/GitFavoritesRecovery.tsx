@@ -37,6 +37,7 @@ export function GitFavoritesRecovery({
   const loading = catalogLoading || previewLoading;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [copyError, setCopyError] = useState("");
   const [copied, setCopied] = useState(false);
   async function load() {
     if (working.current) return;
@@ -48,6 +49,7 @@ export function GitFavoritesRecovery({
     setError("");
     setPreview(null);
     setCopied(false);
+    setCopyError("");
     try {
       const next = (await coreRequest(
         "git.favorites.recovery.list",
@@ -86,6 +88,7 @@ export function GitFavoritesRecovery({
   useEffect(() => {
     setPreview(null);
     setCopied(false);
+    setCopyError("");
     if (!selection || !catalog) {
       setPreviewLoading(false);
       return;
@@ -207,7 +210,7 @@ export function GitFavoritesRecovery({
       {preview && !preview.snapshot && (
         <p>{tx("原始来源只能预览和复制，不会直接替换共享收藏。")}</p>
       )}
-      {error && <p role="alert">{localizeMessage(error)}</p>}
+      {(error || copyError) && <p role="alert">{localizeMessage(error || copyError)}</p>}
       {copied && <p role="status">{tx("已复制完整预览。")}</p>}
       <div className="git-favorite-recovery-actions">
         <button
@@ -227,12 +230,14 @@ export function GitFavoritesRecovery({
           disabled={busy || loading || !preview || preview.choice !== selection}
           onClick={() => {
             const request = previewEpoch.current;
+            setCopyError("");
+            setCopied(false);
             void copyContentText(preview?.text ?? "")
               .then(() => {
                 if (alive.current && request === previewEpoch.current) setCopied(true);
               })
               .catch((reason) => {
-                if (alive.current && request === previewEpoch.current) setError(String(reason));
+                if (alive.current && request === previewEpoch.current) setCopyError(String(reason));
               });
           }}
         >

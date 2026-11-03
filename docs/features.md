@@ -360,9 +360,11 @@ copy keeps the complete preview even when the displayed text is truncated. Origi
 copied but cannot directly replace favorites. **Restore all repository favorites** replaces the
 global favorite snapshot, retaining damaged bytes and the immediately preceding valid copy. A
 changed current file rejects the write and requires a fresh catalog; a missing file is installed
-without overwriting newly created data. Open Git views reload after successful restoration. Global
-recovery stays in the trusted application; scoped content can request its native dialog but cannot
-read or restore other repositories' recovery data.
+without overwriting newly created data. Open Git views reload after successful restoration. Tauri
+shared content uses the native clipboard-manager plugin with write-text permission for the main
+window; failures remain visible. Browser-only fixtures retain the Web clipboard path. Copy failure
+never changes recovery data. Global recovery stays in the trusted application; scoped content can
+request its native dialog but cannot read or restore other repositories' recovery data.
 
 #### Git and editor concurrency validation
 
@@ -404,11 +406,14 @@ tests are not native UI acceptance. The preceding head `07b31b7`, tested merge
 WRITER_BUSY failure. The new real-app scenario deliberately holds the OS writer lock, requires a
 visible rejection and explicit **Retry recovery draft**, then verifies durability and forced-exit
 recovery. The clean-source Linux app at `9e748f3` passes actual writer rejection, explicit retry,
-durable CRLF/NFD text, SIGKILL/relaunch and explicit BOM/CRLF save. Its favorite recovery scene
-exposed missing Cancel focus; explicit dialog focus now passes the React check and needs a real-app
-rerun. The native nested preview type has an explicit main-actor annotation; its corrected platform
-build and new recovery screenshots remain pending. Full Windows deletion/cancellation matrix, manual
-input/IME/focus and #16 dependencies keep #35 open.
+durable CRLF/NFD text, SIGKILL/relaunch and explicit BOM/CRLF save. The clean-source `79c170d` Linux
+app also verifies Cancel focus in the actual recovery dialog; its Web clipboard rejection leaves
+data intact. Shared Tauri content now uses native clipboard writes, with a visible failure/retry
+check passing against the plugin API and real Core. The `79c170d` native build and 14 Swift checks
+pass, but its Git recovery fixture stops before the new scenes. Current QA seeds a retained prior
+snapshot through actual subsequent writes. This change's full native and Tauri recovery scenarios,
+OS clipboard comparison and screenshots remain pending. Full Windows deletion/cancellation matrix,
+manual input/IME/focus and #16 dependencies keep #35 open.
 
 ## Project website
 

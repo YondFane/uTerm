@@ -383,6 +383,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin({
             let builder = tauri_plugin_autostart::Builder::new()
                 .app_name(if cfg!(debug_assertions) {
