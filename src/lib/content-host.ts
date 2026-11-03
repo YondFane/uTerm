@@ -30,6 +30,11 @@ export function isContentHost(): boolean {
 export function contentInvoke<T>(method: string, params?: Record<string, unknown>): Promise<T> {
   return current().call(method, params);
 }
+export function copyContentText(text: string): Promise<void> {
+  return window.webkit?.messageHandlers?.utermContent
+    ? contentInvoke("content_copy_text", { text })
+    : navigator.clipboard.writeText(text);
+}
 export function listenContent(kind: string, receive: () => void): Promise<() => void> {
   return current().subscribe(kind, receive);
 }

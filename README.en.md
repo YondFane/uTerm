@@ -152,7 +152,11 @@ unprivileged user so directory permissions enforce the failure; Windows uses a h
 
 `uterm-core::{files,git,worktrees}` owns local file and Git/Worktree rules and their regression
 tests; Tauri commands delegate to the same functions. The new `git.*` contract and generated DTOs
-are available to the native bridge; the native Git UI remains pending.
+are used by **File → Git…** in the isolated native QA app. Native favorites and Worktree sidebar
+registration remain pending. `bash scripts/macos-git-smoke.sh` runs real-window diff/history/copy,
+branch creation, editor conflict protection and Worktree bridge checks, with temporary repositories
+and system screenshots. This requires a macOS GUI session; platform acceptance is recorded
+separately.
 
 The core's locked dependencies include the existing base64 decoder and ignore-aware file walker.
 Native file/content UI acceptance is tracked separately in the migration guide.
@@ -167,12 +171,13 @@ GUI session and an isolated QA App; it uses temporary files and does not establi
 keyboard/IME acceptance. Recovery selection and copy/restore checks also run in this script.
 
 `pnpm qa:shared-state` builds a compile-gated, isolated Tauri QA app
-(`sh.uterm.desktop.qa.sharedstate`) and runs editor import/durable draft/SIGKILL/reopen/exact-save
-plus state save/conflict/reload/quit/recovery scenarios in its real WebView. Windows/macOS CI
-captures native windows and uploads reports and images under `legacy-checks-*/tauri-state-qa/`. It
-requires a desktop session and refuses existing QA profiles. Dedicated profile links redirect QA
-data into a temporary directory; no home-directory override or production profile is used. This
-automation does not establish manual keyboard/IME acceptance.
+(`sh.uterm.desktop.qa.sharedstate`) and runs Git/diff/history/branch/Worktree registration, editor
+import/durable draft/SIGKILL/reopen/exact-save plus state save/conflict/reload/quit/recovery
+scenarios in its real WebView. Windows/macOS CI captures native windows and uploads reports and
+images under `legacy-checks-*/tauri-state-qa/`. It requires a desktop session and refuses existing
+QA profiles. Dedicated profile links redirect QA data into a temporary directory; no home-directory
+override or production profile is used. This automation does not establish manual keyboard/IME
+acceptance.
 
 The core's `store/editor.rs` owns revision-checked multi-document drafts, exact legacy-source copies
 and explicit recovery. Native and Tauri editing adopt this API through the bounded queue in

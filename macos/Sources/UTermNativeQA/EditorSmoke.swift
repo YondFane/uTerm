@@ -8,7 +8,7 @@ enum EditorSmoke {
     private static let original = Data("\u{feff}ORIGINAL_DISK 中文\r\n".utf8)
     private static let edited = "NATIVE_EDIT_中文 é\r\ndurable recovery text\r\n"
 
-    private static func evaluate(_ content: ContentWindow, script: String, arguments: [String: Any]) async throws -> Bool {
+    static func evaluate(_ content: ContentWindow, script: String, arguments: [String: Any]) async throws -> Bool {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
             content.webView.callAsyncJavaScript(script, arguments: arguments, in: nil, in: .page) { result in
                 switch result {
@@ -21,7 +21,7 @@ enum EditorSmoke {
         }
     }
 
-    private static func replace(_ content: ContentWindow, text: String) async throws {
+    static func replace(_ content: ContentWindow, text: String) async throws {
         guard let window = content.window else { throw BridgeFailure(code: "EDITOR_WINDOW", message: "Editor window missing") }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
@@ -36,7 +36,7 @@ enum EditorSmoke {
             """, arguments: ["text": text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")])
         guard ready else { throw BridgeFailure(code: "EDITOR_INPUT", message: "Native WK editor did not accept DOM insertText") }
     }
-    private static func click(_ content: ContentWindow, title: String) async throws {
+    static func click(_ content: ContentWindow, title: String) async throws {
         let deadline = Date().addingTimeInterval(5)
         while Date() < deadline {
             let found = try await evaluate(content, script: """

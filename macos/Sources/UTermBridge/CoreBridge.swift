@@ -85,6 +85,9 @@ public actor CoreBridge {
     public func editorDrafts() throws -> CoreEditorDraftCollection {
         try JSONDecoder().decode(CoreEditorDraftCollection.self, from: JSONEncoder().encode(call("editor.drafts.list")))
     }
+    public func projectContext(expectedRevision: String) throws -> CoreProjectContext {
+        try JSONDecoder().decode(CoreProjectContext.self, from: JSONEncoder().encode(call("project.context", params: .object(["expectedRevision": .string(expectedRevision)]))))
+    }
     public func editorRecoveryCatalog() throws -> CoreEditorRecoveryCatalog {
         try JSONDecoder().decode(CoreEditorRecoveryCatalog.self, from: JSONEncoder().encode(call("editor.drafts.recovery.list")))
     }

@@ -75,6 +75,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "recover",
         "editor-checkpoint",
         "editor-reopen",
+        "git",
     ]
     .contains(&phase.as_str())
     {

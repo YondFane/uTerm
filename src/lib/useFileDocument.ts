@@ -167,8 +167,10 @@ export function useFileDocument(
     setTransitioning(true);
     try {
       if (!(await flush())) {
-        pendingAction.current = action;
-        setPending(true);
+        if (current.current) {
+          pendingAction.current = action;
+          setPending(true);
+        }
         return;
       }
       await action();
@@ -395,8 +397,12 @@ export function useFileDocument(
       if (!ready) resumeQuit(payload);
     }
   }
-  const latest = useRef({ request, exit, prepareQuit, resumeQuit });
-  latest.current = { request, exit, prepareQuit, resumeQuit };
+  async function refreshAfterRepository() {
+    if (transition.current || pendingAction.current || isDirty(current.current)) return;
+    await reload();
+  }
+  const latest = useRef({ request, exit, prepareQuit, resumeQuit, refreshAfterRepository });
+  latest.current = { request, exit, prepareQuit, resumeQuit, refreshAfterRepository };
   useEffect(() => {
     if (!isContentHost()) return;
     let disposed = false;
@@ -405,6 +411,7 @@ export function useFileDocument(
       ["editor-close-request", () => void latest.current.request(latest.current.exit)],
       ["editor-prepare-quit", (payload: JSONValue) => void latest.current.prepareQuit(payload)],
       ["editor-resume", (payload: JSONValue) => latest.current.resumeQuit(payload)],
+      ["editor-repository-refresh", () => void latest.current.refreshAfterRepository()],
     ] as const)
       void currentTransport()
         .subscribe(event, receive)

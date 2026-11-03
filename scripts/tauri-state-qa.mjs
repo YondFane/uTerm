@@ -20,6 +20,7 @@ import assert from "node:assert/strict";
 const editorFixture = JSON.parse(
   readFileSync(resolve("shared/fixtures/editor-draft-qa.json"), "utf8"),
 );
+const gitQA = JSON.parse(readFileSync(resolve("shared/fixtures/git-qa.json"), "utf8"));
 const identifier = "sh.uterm.desktop.qa.sharedstate";
 const output = resolve("ci-evidence/tauri-state-qa");
 rmSync(output, { recursive: true, force: true });
@@ -73,6 +74,29 @@ function execute(file, args, options = {}) {
     throw Error(`${file} failed (${result.status}): ${result.error ?? ""}\n${result.stderr ?? ""}`);
   return result.stdout;
 }
+function gitFixture(args) {
+  return execute("git", [
+    "-c",
+    `core.hooksPath=${join(root, "no-hooks")}`,
+    "-C",
+    join(root, "project"),
+    ...args,
+  ]);
+}
+gitFixture(["init", "--initial-branch=main"]);
+writeFileSync(join(root, "project", gitQA.fileName), gitQA.originalText);
+gitFixture(["add", "--all"]);
+gitFixture([
+  "-c",
+  "user.name=Fixture",
+  "-c",
+  "user.email=fixture@example.invalid",
+  "commit",
+  "--no-gpg-sign",
+  "-m",
+  gitQA.commitSubject,
+]);
+writeFileSync(join(root, "project", gitQA.fileName), gitQA.changedText);
 const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 const scenes = [];
 const profileLinks = [];
@@ -304,13 +328,16 @@ try {
         await delay(100);
       }
       assert(closed, `${phase} did not quit through the ordinary exit guard`);
-      const expected = phase.startsWith("editor-")
-        ? 2
-        : phase === "initial"
-          ? 8
-          : phase === "reopen"
-            ? 1
-            : 3;
+      const expected =
+        phase === "git"
+          ? 4
+          : phase.startsWith("editor-")
+            ? 2
+            : phase === "initial"
+              ? 8
+              : phase === "reopen"
+                ? 1
+                : 3;
       assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       writeFileSync(join(output, `${phase}.log`), log);
@@ -322,6 +349,12 @@ try {
     readFileSync(join(root, "project", editorFixture.fileName), "utf8"),
     "\ufeff" + editorFixture.savedText,
   );
+  await run("git");
+  assert.equal(
+    gitFixture(["rev-parse", "refs/heads/qa-tauri-created"]).trim(),
+    gitFixture(["rev-parse", "HEAD"]).trim(),
+  );
+  assert.equal(readFileSync(join(root, "project", gitQA.fileName), "utf8"), gitQA.changedText);
   await run("initial");
   const store = join(root, "data/shared-state-v1");
   const original = readFileSync(join(store, "legacy-original.json"));

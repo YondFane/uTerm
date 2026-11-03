@@ -204,6 +204,13 @@ public struct CoreImport: Codable, Sendable {
     public var workspace: JSONValue
 }
 
+public struct CoreProjectContext: Codable, Sendable {
+    public var directory: String?
+    public var projectId: String?
+    public var revision: String
+    public var worktreeId: String?
+}
+
 public struct CoreRequest: Codable, Sendable {
     public var id: String
     public var method: String

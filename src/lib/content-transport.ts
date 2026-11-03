@@ -7,8 +7,32 @@ export const editorDraftMethods: Record<string, string> = {
   editor_drafts_put: "editor.drafts.putDocument",
   editor_drafts_remove: "editor.drafts.removeDocument",
 };
+export const gitMethods: Record<string, string> = {
+  git_branch: "git.branch",
+  git_branches: "git.branches",
+  git_switch_branch: "git.switchBranch",
+  git_rollback_file: "git.rollbackFile",
+  git_remote_branches: "git.remoteBranches",
+  git_switch_remote_branch: "git.switchRemoteBranch",
+  git_branch_action: "git.branchAction",
+  git_file_status: "git.fileStatus",
+  git_snapshot: "git.snapshot",
+  git_diff: "git.diff",
+  git_history: "git.history",
+  git_files: "git.files",
+  git_references: "git.references",
+  git_reference_action: "git.referenceAction",
+  git_working_comparison: "git.workingComparison",
+  project_worktrees: "git.worktrees.list",
+  create_worktree: "git.worktrees.create",
+  delete_worktree: "git.worktrees.delete",
+  worktree_suggestion: "git.worktrees.suggestion",
+};
 const contentMethods = new Set([
   ...Object.keys(editorDraftMethods),
+  ...Object.keys(gitMethods),
+  "content_open_file",
+  "content_copy_text",
   "files_list",
   "file_read",
   "file_save",
@@ -155,7 +179,14 @@ export class ContentScope {
   }
   async subscribe(kind: string, receive: (payload: JSONValue) => void): Promise<() => void> {
     if (this.closed) throw new ContentFailure("CLOSED", "Content document is closed");
-    if (!["editor-close-request", "editor-prepare-quit", "editor-resume"].includes(kind))
+    if (
+      ![
+        "editor-close-request",
+        "editor-prepare-quit",
+        "editor-resume",
+        "editor-repository-refresh",
+      ].includes(kind)
+    )
       throw new ContentFailure("EVENT_DENIED", "Content event is not allowed");
     let listening = true;
     const stop = await this.port.subscribe(kind, this.document, (event) => {

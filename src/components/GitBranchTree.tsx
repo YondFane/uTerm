@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke, copyContentText } from "../lib/content-host";
 import { localizeMessage, tx } from "../lib/i18n";
 import { gitReadError } from "../lib/git-snapshot";
 import { useUiLanguage } from "../lib/useUiLanguage";
@@ -27,6 +27,7 @@ export function GitBranchTree({
   onCompare,
   onBusyChange,
   onWorktreeCreated,
+  allowFavorites = true,
 }: {
   directory: string;
   disabled: boolean;
@@ -37,6 +38,7 @@ export function GitBranchTree({
   onCompare: (reference: GitReference) => void;
   onBusyChange?: (busy: boolean) => void;
   onWorktreeCreated?: (root: string) => Promise<void>;
+  allowFavorites?: boolean;
 }) {
   useUiLanguage();
   const [view, setView] = useState(() => referenceView(directory));
@@ -153,7 +155,9 @@ export function GitBranchTree({
     if (!repository) return;
     try {
       const value: unknown = JSON.parse(
-        window.localStorage.getItem(`uterm.git.favorites:${repository}`) ?? "[]",
+        (allowFavorites
+          ? window.localStorage.getItem(`uterm.git.favorites:${repository}`)
+          : null) ?? "[]",
       );
       setFavorites(
         new Set(
@@ -166,7 +170,7 @@ export function GitBranchTree({
       setActionError(String(reason));
     }
     void readRemote();
-  }, [repository]);
+  }, [repository, allowFavorites]);
   const references = useMemo(
     () => mergeRemoteReferences(catalog?.references ?? [], advertised),
     [catalog, advertised],
@@ -336,6 +340,7 @@ export function GitBranchTree({
           }
           if (
             action === "rename" &&
+            allowFavorites &&
             extra.name &&
             target &&
             repository &&
@@ -494,7 +499,7 @@ export function GitBranchTree({
       }
       if (target.kind === "remote")
         actions.push({ label: tx("获取此分支"), run: () => execute("fetch", target) });
-      if (target.kind === "local" || target.kind === "remote")
+      if (allowFavorites && (target.kind === "local" || target.kind === "remote"))
         actions.push({
           label: favorites.has(target.full_name) ? tx("取消收藏") : tx("收藏分支"),
           run: () => favorite(target),
@@ -504,9 +509,7 @@ export function GitBranchTree({
           label: tx("复制名称"),
           run: () => {
             closeMenu(true);
-            void navigator.clipboard
-              .writeText(target.name)
-              .catch((reason) => setActionError(String(reason)));
+            void copyContentText(target.name).catch((reason) => setActionError(String(reason)));
           },
         });
     }

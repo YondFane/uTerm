@@ -88,6 +88,51 @@ function draftCall(call) {
   };
 }
 
+test("draft reads retry a busy Rust store but writes require explicit recovery", async (t) => {
+  const call = await client(t),
+    raw = draftCall(call);
+  let reads = 0,
+    writes = 0;
+  const queue = new EditorDraftQueue(async (method, params) => {
+    if (method === "editor_drafts_list" && reads++ < 2)
+      throw Object.assign(Error("Another writer owns the canonical store"), { code: "BUSY" });
+    if (method === "editor_drafts_put" && ++writes === 1)
+      throw Object.assign(Error("Another writer owns the canonical store"), { code: "BUSY" });
+    return raw(method, params);
+  });
+  t.after(() => queue.close());
+  await queue.initialize(null);
+  assert.equal(reads, 4);
+  const value = queueDraft("busy.txt", "retain exact 中文 e\u0301\r\n");
+  await assert.rejects(queue.put(value), { code: "BUSY" });
+  await assert.rejects(queue.flush(), { code: "BUSY" });
+  assert.equal(writes, 1, "A write cannot retry automatically after an uncertain reply");
+  assert.equal(
+    (await call("editor.drafts.document", { directory: value.directory, path: value.path })).result,
+    null,
+  );
+  await queue.retry();
+  assert.equal(writes, 2);
+  assert.deepEqual((await queue.load(value.directory, value.path)).draft, value);
+});
+
+test("closing a draft queue cancels busy-read backoff before any import or delayed delivery", async () => {
+  const entered = signal();
+  let reads = 0;
+  const queue = new EditorDraftQueue(async (method) => {
+    assert.equal(method, "editor_drafts_list");
+    reads++;
+    entered.resolve();
+    throw Object.assign(Error("Another writer owns the canonical store"), { code: "BUSY" });
+  });
+  const pending = assert.rejects(queue.initialize(null), { code: "CLOSED" });
+  await entered.promise;
+  queue.close();
+  await pending;
+  await new Promise((resolve) => setTimeout(resolve, 70));
+  assert.equal(reads, 1);
+});
+
 test("shared draft queues use Rust document revisions without replacing another writer", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "uterm-draft-clients-"));
   const callA = await client(t, root),
@@ -983,7 +1028,9 @@ test("shared editor recovery restores durable text after unload and retains file
     { createRoot } = await import("react-dom/client"),
     { useFileDocument } = await server.ssrLoadModule("/src/lib/useFileDocument.ts");
   let root = createRoot(document.getElementById("root")),
-    editor;
+    editor,
+    busyReads = true,
+    rejectedReads = 0;
   window.utermContentDocument = "shared-editor-recovery";
   window.webkit = {
     messageHandlers: {
@@ -997,7 +1044,11 @@ test("shared editor recovery restores durable text after unload and retains file
               editorDraftMethods[request.method] ??
               { file_read: "files.read", file_save: "files.save" }[request.method];
             assert.ok(method, request.method);
-            const reply = await call(method, request.params);
+            const reply =
+              busyReads && ["editor.drafts.list", "editor.drafts.document"].includes(method)
+                ? (rejectedReads++,
+                  { error: { code: "BUSY", message: "Another writer owns the canonical store" } })
+                : await call(method, request.params);
             result = reply.result;
             if (reply.error)
               error = {
@@ -1022,6 +1073,16 @@ test("shared editor recovery restores durable text after unload and retains file
   });
   await React.act(async () => root.render(React.createElement(Harness)));
   await React.act(async () => editor.open(directory, path));
+  assert.equal(editor.document, null);
+  assert.equal(
+    editor.pending,
+    false,
+    "A failed initial open cannot strand an invisible discard dialog",
+  );
+  assert.match(editor.error, /Another writer owns/);
+  assert.ok(rejectedReads >= 7);
+  busyReads = false;
+  await React.act(async () => editor.open(directory, path));
   assert.equal(editor.document.text, "recovered 中文\r\n");
   assert.ok(editor.document.notice);
   assert.equal(readFileSync(join(directory, path), "utf8"), "\ufeffdisk 中文\r\n");
@@ -1038,6 +1099,20 @@ test("shared editor recovery restores durable text after unload and retains file
   assert.equal(editor.document.text, "durable before unload 中文\r\n");
   assert.equal(localStorage.getItem(draftKey), "old WebView bytes must stay unchanged");
   writeFileSync(join(directory, path), "external change");
+  await React.act(async () =>
+    window.dispatchEvent(
+      new dom.window.CustomEvent("uterm-content-event", {
+        detail: {
+          version: 1,
+          document: window.utermContentDocument,
+          kind: "editor-repository-refresh",
+          payload: "git-refresh",
+        },
+      }),
+    ),
+  );
+  assert.equal(editor.document.text, "durable before unload 中文\r\n");
+  assert.equal(editor.pending, false);
   await React.act(async () => assert.equal(await editor.save(), false));
   assert.equal(editor.conflict, true);
   assert.equal(editor.document.text, "durable before unload 中文\r\n");
@@ -1051,6 +1126,24 @@ test("shared editor recovery restores durable text after unload and retains file
   await React.act(async () => assert.equal(await editor.save(), true));
   assert.equal(readFileSync(join(directory, path), "utf8"), "explicitly saved");
   assert.equal((await call("editor.drafts.document", { directory, path })).result, null);
+  writeFileSync(join(directory, path), "clean file changed by Git 中文\r\n");
+  await React.act(async () =>
+    window.dispatchEvent(
+      new dom.window.CustomEvent("uterm-content-event", {
+        detail: {
+          version: 1,
+          document: window.utermContentDocument,
+          kind: "editor-repository-refresh",
+          payload: "git-refresh-clean",
+        },
+      }),
+    ),
+  );
+  const refreshed = Date.now() + 5000;
+  while (editor.document.text !== "clean file changed by Git 中文\r\n") {
+    assert.ok(Date.now() < refreshed, "Clean editor did not reload repository changes");
+    await React.act(async () => new Promise((done) => setTimeout(done, 25)));
+  }
   await React.act(async () => editor.change("retain text when the disk file disappears 中文"));
   await React.act(async () => assert.rejects(editor.prepareUpdate()));
   rmSync(join(directory, path));
@@ -1603,4 +1696,54 @@ test("shared Git requests reject malformed cross-language fields before invoking
     "INVALID_ARGUMENT",
   );
   assert.equal((await call("git.notPermitted", {})).error.code, "UNKNOWN_METHOD");
+});
+
+test("project contexts use the selected Worktree directory and reject stale selection revisions", async (t) => {
+  const call = await client(t),
+    workspace = emptyWorkspace();
+  workspace.projects.push({
+    id: "p-context",
+    name: "Context",
+    directory: "/qa/parent",
+    workspaceId: "local",
+    sessions: [],
+    splitGroups: [],
+    worktrees: [
+      {
+        id: "tree-context",
+        name: "Selected tree",
+        path: "/qa/worktree ",
+        branch: "qa/branch",
+        missing: false,
+      },
+    ],
+    pinned: false,
+    collapsed: false,
+  });
+  workspace.selectedProject = "p-context";
+  workspace.selectedWorktree = "tree-context";
+  const initial = (await call("migration.import", { workspace, settings: defaults, legacy: {} }))
+    .result;
+  const context = await call("project.context", { expectedRevision: initial.revision });
+  assert.equal(context.error, undefined);
+  assert.deepEqual(context.result, {
+    revision: initial.revision,
+    projectId: "p-context",
+    worktreeId: "tree-context",
+    directory: "/qa/worktree ",
+  });
+  const selected = (
+    await call("project.select", { id: "p-context", expectedRevision: initial.revision })
+  ).result;
+  assert.equal(
+    (await call("project.context", { expectedRevision: initial.revision })).error.code,
+    "CONFLICT",
+  );
+  assert.equal(
+    (await call("project.context", { expectedRevision: selected.revision })).result.directory,
+    "/qa/parent",
+  );
+  const empty = await call("project.context", { expectedRevision: 1 });
+  assert.equal(empty.error.code, "INVALID_ARGUMENT");
+  assert.equal((await call("snapshot.read")).result.revision, selected.revision);
 });

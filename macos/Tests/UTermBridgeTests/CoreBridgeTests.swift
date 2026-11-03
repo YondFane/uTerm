@@ -61,6 +61,18 @@ final class CoreBridgeTests: XCTestCase {
         try git(["add", "--all"])
         try git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--no-gpg-sign", "-m", "isolated C ABI Git fixture"])
         let core = try await CoreBridge.open(root: root.appendingPathComponent("store"))
+        let defaults = try await core.call("state.defaults")
+        let imported = try await core.call("migration.import", params: .object([
+            "workspace": defaults["workspace"], "settings": defaults["settings"], "legacy": .object([:])
+        ]))
+        let project = try await core.call("project.open", params: .object([
+            "id": .string("ffi-git-project"), "name": .string("Git QA"), "directory": .string(repository.path),
+            "workspaceId": .string("local"), "expectedRevision": imported["revision"]
+        ]))
+        let context = try await core.projectContext(expectedRevision: project["revision"].string!)
+        XCTAssertEqual(context.projectId, "ffi-git-project")
+        XCTAssertNil(context.worktreeId)
+        XCTAssertEqual(context.directory.map { Data($0.utf8) }, Data(repository.path.utf8))
         let snapshot = try await core.call("git.snapshot", params: .object(["directory": .string(repository.path)]))
         let typed = try JSONDecoder().decode(CoreGitSnapshot.self, from: JSONEncoder().encode(snapshot))
         let head = try XCTUnwrap(typed.head)
@@ -71,7 +83,8 @@ final class CoreBridgeTests: XCTestCase {
             "directory": .string(repository.path), "path": .string("中文.txt"), "mode": .string("working"), "reference": .null
         ]))
         let diff = try JSONDecoder().decode(CoreGitDiff.self, from: JSONEncoder().encode(reply))
-        XCTAssertNotNil(Data(diff.text.utf8).range(of: Data(changed.utf8)))
+        XCTAssertNotNil(Data(diff.text.utf8).range(of: Data("after 中文 e\u{301}".utf8)))
+        XCTAssertEqual(try Data(contentsOf: file), Data(changed.utf8))
         let worktree = root.appendingPathComponent("worktree-中文")
         let created = try await core.call("git.worktrees.create", params: .object([
             "directory": .string(repository.path), "reference": .string("HEAD"), "branch": .string("qa/worktree"),

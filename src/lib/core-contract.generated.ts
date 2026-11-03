@@ -205,6 +205,13 @@ export interface CoreImport {
   workspace: JSONValue;
 }
 
+export interface CoreProjectContext {
+  directory?: string | null;
+  projectId?: string | null;
+  revision: string;
+  worktreeId?: string | null;
+}
+
 export interface CoreRequest {
   id: string;
   method: string;

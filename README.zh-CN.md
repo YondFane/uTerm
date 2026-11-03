@@ -136,7 +136,9 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 
 `uterm-core::{files,git,worktrees}`
 管理本地文件及 Git／Worktree 规则和回归，Tauri 命令委派相同函数。新增 `git.*`
-契约及生成 DTO 可供原生桥接使用，原生 Git 界面仍待接入。核心锁定依赖包含现有 base64 解码器及遵循忽略规则的文件遍历器，原生文件／内容界面验收单独记录于迁移指南。
+契约及生成 DTO 供隔离原生 QA 应用的**文件 →
+Git…**使用，原生收藏和 Worktree 侧栏登记仍待完成。`bash scripts/macos-git-smoke.sh`
+使用临时仓库，检查真实窗口的差异／历史／复制、创建分支、编辑器冲突保护及 Worktree 桥接，并保存系统截图；需要 macOS 图形会话，平台验收单独记录。核心锁定依赖包含现有 base64 解码器及遵循忽略规则的文件遍历器，原生文件／内容界面验收单独记录于迁移指南。
 
 原生 QA 构建还执行
 `pnpm build`，打包共用 Web 内容及许可声明；请先安装锁定的 pnpm 依赖。`bash scripts/macos-content-smoke.sh`
@@ -145,7 +147,7 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 App，使用临时文件，不代表人工键盘／输入法验收；脚本也执行恢复选择、复制／恢复副本检查。
 
 `pnpm qa:shared-state`
-构建仅 QA 特性启用的隔离 Tauri 应用（`sh.uterm.desktop.qa.sharedstate`），在真实 WebView 中执行编辑器导入／持久草稿／SIGKILL／重开／准确保存，以及状态保存／冲突／重载／退出／恢复场景。Windows／macOS
+构建仅 QA 特性启用的隔离 Tauri 应用（`sh.uterm.desktop.qa.sharedstate`），在真实 WebView 中执行 Git／差异／历史／分支／Worktree 登记、编辑器导入／持久草稿／SIGKILL／重开／准确保存，以及状态保存／冲突／重载／退出／恢复场景。Windows／macOS
 CI 截取原生窗口，并将报告及图片上传到
 `legacy-checks-*/tauri-state-qa/`。此命令需要桌面会话，拒绝覆盖已有 QA 配置。专用配置路径链接将 QA 数据导向临时目录，不覆盖主目录变量，也不使用生产配置。自动化不代表人工键盘／输入法验收。
 

@@ -571,6 +571,20 @@ impl Core {
             )?)
             .map_err(Into::into),
             "snapshot.read" => serde_json::to_value(self.store.read()?).map_err(Into::into),
+            "project.context" => {
+                let snapshot = self.store.read()?;
+                if string(&params, "expectedRevision")? != snapshot.revision {
+                    return Err(CoreError::new(
+                        "CONFLICT",
+                        "Project selection changed; reload before opening its directory",
+                    ));
+                }
+                serde_json::to_value(state::project_context(
+                    &snapshot.document.workspace,
+                    snapshot.revision,
+                )?)
+                .map_err(Into::into)
+            }
             "snapshot.view" => {
                 let snapshot = self.store.read()?;
                 let sessions = session_state::entries(&snapshot.document.workspace);

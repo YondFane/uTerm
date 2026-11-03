@@ -27,6 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "GitReferenceAction":schemars::schema_for!(uterm_core::git::ReferenceAction),
             "GitWorktree":schemars::schema_for!(uterm_core::worktrees::Worktree),
             "GitWorktreeSuggestion":schemars::schema_for!(uterm_core::worktrees::WorktreeSuggestion),
+            "ProjectContext":schemars::schema_for!(uterm_core::state::ProjectContext),
             "FileDocument":schemars::schema_for!(uterm_core::files::FileDocument),
             "FileEntry":schemars::schema_for!(uterm_core::files::FileEntry),
             "FileListing":schemars::schema_for!(uterm_core::files::FileListing),

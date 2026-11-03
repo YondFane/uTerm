@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private let model = WorkspaceModel()
     private var terminating = false
     private var preparingQuit = false
+    private var mutatingRepository = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
@@ -43,6 +44,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--git-smoke-report") {
+                var report = baseReport()
+                do { try await GitSmoke.run(model: model, parent: window, open: { directory in try await self.makeGitContentWindow(directory: directory) }, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report) }
+                catch { report["failure"] = error.localizedDescription }
+                finishReport(report, path: path)
+                return
+            }
             if let path = WorkspaceModel.argument("--editor-smoke-report") {
                 var report = baseReport()
                 do { try await EditorSmoke.run(model: model, parent: window, open: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, lookup: { directory, path in self.existingContent(directory: directory, path: path, editable: true) }, report: &report) }
@@ -93,6 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let file = menu(localized("File", "文件"))
         add(file, localized("Open project…", "打开项目…"), #selector(openProject), "o")
         add(file, localized("Open file…", "打开文件…"), #selector(openFile), "o", [.command, .shift])
+        add(file, "Git…", #selector(openGit))
         add(file, localized("Recover editor drafts…", "恢复编辑器草稿…"), #selector(recoverEditorDrafts))
         add(file, localized("Restore editor recovery copy…", "恢复编辑器备份副本…"), #selector(restoreEditorRecovery))
         add(file, localized("New workspace…", "新建工作区…"), #selector(newWorkspace), "n", [.command, .shift])
@@ -120,7 +129,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if preparingQuit || model.editorRecoveryPresented { return false }
+        if preparingQuit || mutatingRepository || model.editorRecoveryPresented { return false }
         if menuItem.action == #selector(closeSession) {
             let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow }
             menuItem.title = fileFocused ? localized("Close file", "关闭文件") : localized("Close session", "关闭会话")
@@ -143,19 +152,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         else { window?.performClose(nil) }
     }
     @objc private func openProject() { model.openProject() }
-    @objc private func openFile() {
-        guard model.bridge != nil, let selected = model.workspace["selectedProject"].string,
-              let project = model.workspace["projects"].array.first(where: { $0["id"].string == selected }),
-              let path = project["directory"].string else {
-            model.error = localized("Select a local project before opening a file.", "打开文件前请先选择本地项目。")
-            return
+    @objc private func openGit() {
+        Task { @MainActor in
+            do {
+                let directory = try await selectedProjectDirectory()
+                _ = try await makeGitContentWindow(directory: directory)
+            }
+            catch { model.error = error.localizedDescription }
         }
-        let root = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+    }
+    private func selectedProjectDirectory() async throws -> URL {
+        guard let bridge = model.bridge, let state = model.state else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
+        let context = try await bridge.projectContext(expectedRevision: state.snapshot.revision)
+        guard let path = context.directory, path.hasPrefix("/") else { throw BridgeFailure(code: "LOCAL_PROJECT", message: localized("Select a local project or Worktree first.", "请先选择本地项目或 Worktree。")) }
+        return URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+    }
+    @objc private func openFile() {
+        Task { @MainActor in
+            do { try await presentFilePicker() }
+            catch { model.error = error.localizedDescription }
+        }
+    }
+    private func presentFilePicker() async throws {
+        let root = try await selectedProjectDirectory()
+        guard !preparingQuit, !mutatingRepository, let window, window.attachedSheet == nil else { throw BridgeFailure(code: "CONTENT_BUSY", message: localized("Finish the current client operation first.", "请先完成当前客户端操作。")) }
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.directoryURL = root
-        guard let window else { return }
         panel.beginSheetModal(for: window) { [weak self] response in
             guard response == .OK, let self, let file = panel.url else { return }
             let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
@@ -168,6 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func makeEditableContentWindow(directory: URL, path: String) async throws -> ContentWindow {
+        guard !mutatingRepository else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
         if let content = existingContent(directory: directory, path: path, editable: true) {
             content.showWindow(nil)
             return content
@@ -196,7 +221,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     private func existingContent(directory: URL, path: String, editable: Bool) -> ContentWindow? {
         let root = directory.standardizedFileURL.resolvingSymlinksInPath()
-        return contentWindows.values.first { $0.directory == root && $0.path == path && $0.editable == editable }
+        return contentWindows.values.first { !$0.gitMode && $0.directory == root && $0.path == path && $0.editable == editable }
+    }
+    private func makeGitContentWindow(directory: URL) async throws -> ContentWindow {
+        guard !preparingQuit, !mutatingRepository, let stateBridge = model.bridge else {
+            throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current client operation first.", "请先完成当前客户端操作。"))
+        }
+        let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
+        do {
+            let snapshot = try await worker.call("git.snapshot", params: .object(["directory": .string(directory.path)]))
+            guard let path = snapshot["root"].string else { throw BridgeFailure(code: "GIT_ROOT", message: "Git did not return its repository root") }
+            let root = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+            guard !preparingQuit, !mutatingRepository else { throw BridgeFailure(code: "GIT_BUSY", message: "Client is preparing another operation") }
+            if let current = contentWindows.values.first(where: { $0.gitMode && $0.directory == root }) {
+                await worker.close()
+                current.showWindow(nil)
+                return current
+            }
+            let content = try ContentWindow(bridge: worker, directory: root, path: "", gitMode: true, stateBridge: stateBridge, ownsBridge: true)
+            content.window?.appearance = window?.appearance
+            content.mutateGit = { [weak self] method, params, bridge in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
+                return try await self.performRepositoryMutation(method: method, params: params, bridge: bridge)
+            }
+            content.openRepositoryFile = { [weak self] path in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
+                _ = try await self.makeEditableContentWindow(directory: root, path: path)
+            }
+            let id = UUID()
+            contentWindows[id] = content
+            content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
+            content.showWindow(nil)
+            return content
+        } catch {
+            await worker.close()
+            throw error
+        }
+    }
+    private func performRepositoryMutation(method: String, params: JSONValue, bridge: CoreBridge) async throws -> JSONValue {
+        guard !preparingQuit, !mutatingRepository else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
+        try Task.checkCancellation()
+        mutatingRepository = true
+        let contents = contentWindows.values.filter { $0.editable }
+        var started = false
+        defer {
+            for content in contents {
+                content.resumeAfterQuit()
+                if started { content.refreshAfterRepositoryMutation() }
+            }
+            mutatingRepository = false
+        }
+        for content in contents {
+            guard try await content.prepareForQuit() else {
+                throw BridgeFailure(code: "GIT_FILES", message: localized("Save or resolve open file changes before the Git operation.", "执行 Git 操作前请保存或处理已打开文件的修改。"))
+            }
+        }
+        try Task.checkCancellation()
+        guard contents.allSatisfy({ $0.isPreparedForQuit }) else { throw BridgeFailure(code: "CONTENT_CHANGED", message: localized("A file window changed. Retry the Git operation.", "文件窗口已变化，请重试 Git 操作。")) }
+        started = true
+        return try await bridge.call(method, params: params)
     }
     @objc private func recoverEditorDrafts() { showEditorRecovery(restoring: false) }
     @objc private func restoreEditorRecovery() { showEditorRecovery(restoring: true) }
@@ -245,7 +328,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminating { return .terminateNow }
-        if preparingQuit || model.editorRecoveryPresented { return .terminateCancel }
+        if preparingQuit || mutatingRepository || model.editorRecoveryPresented { return .terminateCancel }
         preparingQuit = true
         Task { @MainActor in
             guard await model.confirmQuit() else { self.preparingQuit = false; return }

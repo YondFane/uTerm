@@ -2,6 +2,62 @@ use crate::{string, CoreError, Result};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 
+#[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectContext {
+    pub revision: String,
+    pub project_id: Option<String>,
+    pub worktree_id: Option<String>,
+    pub directory: Option<String>,
+}
+pub fn project_context(workspace: &Value, revision: String) -> Result<ProjectContext> {
+    let Some(id) = workspace["selectedProject"].as_str() else {
+        return Ok(ProjectContext {
+            revision,
+            project_id: None,
+            worktree_id: None,
+            directory: None,
+        });
+    };
+    let project = workspace["projects"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|project| {
+            project["id"] == id && project["workspaceId"] == workspace["selectedWorkspace"]
+        })
+        .ok_or_else(|| {
+            invalid(
+                "INVALID_WORKSPACE",
+                "Selected project does not exist in this workspace",
+            )
+        })?;
+    let tree = workspace["selectedWorktree"].as_str();
+    let directory = if let Some(tree) = tree {
+        project["worktrees"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|item| item["id"] == tree)
+            .and_then(|item| item["path"].as_str())
+    } else {
+        project["directory"].as_str()
+    }
+    .filter(|path| !path.is_empty())
+    .ok_or_else(|| {
+        invalid(
+            "INVALID_WORKSPACE",
+            "Selected project or Worktree directory is unavailable",
+        )
+    })?;
+    Ok(ProjectContext {
+        revision,
+        project_id: Some(id.into()),
+        worktree_id: tree.map(String::from),
+        directory: Some(directory.into()),
+    })
+}
+
 pub fn defaults() -> Value {
     serde_json::from_str(include_str!("../../../shared/fixtures/legacy-state.json"))
         .expect("checked-in legacy fixture")

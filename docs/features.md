@@ -274,24 +274,54 @@ remain open.
 
 ### Shared Git and Worktree service
 
-The development core's `git` and `worktrees` modules now own the existing status, diff, commit
-history, branches/references and Worktree rules. The same 15 Git and four Worktree operations are
-available through `git.*` requests with Rust-generated TypeScript/Swift DTOs. Tauri keeps its
-existing command names and delegates to the shared functions. Its current Git UI remains available;
-the native Git entry is not connected yet.
+The development core's `git` and `worktrees` modules own status, diff, commit history,
+branches/references and Worktree rules. The same 15 Git and four Worktree operations are available
+through `git.*` requests with Rust-generated TypeScript/Swift DTOs. Tauri keeps its existing command
+names and Git interface and delegates to the same functions.
 
-The shared mutation coordinator preserves branch/Worktree ownership and expected-reference checks.
-Literal paths, selected-directory status, dirty Worktree removal refusal and existing conflict rules
-remain. Worktree commands now use the common Git runner's stream bounds and subprocess deadline. An
-RPC timeout does not establish rollback; check repository state before retrying a write.
+With a local project or Worktree selected, the native QA application's **File → Git…** opens the
+shared Git panel in a separate window. The core resolves the selected directory against the current
+workspace revision; a stale selection fails visibly. Git requests are restricted to that window's
+repository. File windows cannot invoke Git. Diff/name copying uses the system pasteboard.
 
-Twenty-six existing Git and three Worktree regressions passed on Linux, as did 27 real Rust-process
-contracts covering selected roots, exact Unicode text, stale branches, dirty/foreign Worktrees and
-malformed cross-language parameters. Core/FFI and explicit filesystem failures passed, with 381
-frontend tests (ten skipped), 100 backend tests (ten ignored), types and generated-contract checks.
-The backend count dropped by 29 because those tests now run in Core; none were deleted. The new
-fourteenth Swift C ABI test and platform CI are pending. Native Git UI, complete cancellation and
-focus evidence remain in #35; these service tests do not close it.
+Git runs through a separate bridge so long repository operations do not occupy the terminal bridge.
+Before a write, all open editable file windows confirm their pending saves and freeze editing until
+the operation finishes. A file conflict blocks Git and retains both the file and recovery draft. The
+Git window refuses to close during a write. Clean editors reload repository changes; dirty or busy
+editors retain their text. Native Git favorites and Worktree sidebar registration are still pending;
+the native favorite control is unavailable rather than stored in a temporary WebView.
+
+The mutation coordinator retains branch/Worktree ownership, expected references, selected-directory
+status and dirty Worktree deletion checks. Literal directory endings and Unicode branch whitespace
+are preserved. Worktree commands use the common Git runner's stream bounds and subprocess deadline.
+Cancellation or a timeout does not establish rollback of a dispatched write; inspect repository
+state before retrying.
+
+#### Git and editor concurrency validation
+
+Head `31d3d5e3922a9e03d34b3287f1f19a6a3aa700ad`, tested merge
+`aeeccd9369965b45c652163981bd680cb9e9b91b`, passed the Windows job in
+[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41568790602). Its macOS job failed on a
+real first-open draft `BUSY` error. Both jobs in
+[native CI](https://github.com/YondFane/uTerm/actions/runs/41568790616) failed the new Swift Git
+assertion, which incorrectly expected a final LF in line-formatted diff output; window checks did
+not execute. The failures and artifacts are recorded in
+[#35 evidence](https://github.com/YondFane/uTerm/issues/35#issuecomment-6595018569). These are not
+accepted platform results for the current changes.
+
+The current implementation separates diff text assertions from exact original file-byte assertions.
+Draft list/document reads retry only `BUSY`, at most six times over 620 ms; close cancels the
+backoff. Writes and conflicts are not automatically retried. A failed initial open keeps its error
+visible and allows another attempt without a hidden discard dialog.
+
+Thirty real Rust/React contracts pass on cloud Linux, including busy reads, close, explicit write
+retry, first-open retry, selected Worktrees and stale revisions. The core/FFI suite and explicit
+filesystem failures pass; two real-repository regressions cover trailing whitespace roots and legal
+Unicode branch names. Twenty-nine existing Git/Worktree tests moved to Core rather than being
+removed. Full frontend checks found and corrected an unregistered Git title; its translation gate
+passes after correction. The new native five-scene and old-client four-scene Git checks still need
+their own clean-source platform CI, actual screenshots and inspection. Favorites, sidebar parity,
+full cancellation and manual focus acceptance keep #35 open.
 
 ## Project website
 

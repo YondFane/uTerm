@@ -57,7 +57,30 @@ export class EditorDraftQueue {
   private call: Call;
   readonly directory?: string;
   constructor(call: Call, directory?: string) {
-    this.call = call;
+    this.call = async <T>(method: string, params?: Record<string, unknown>): Promise<T> => {
+      for (let attempt = 0; ; attempt++) {
+        if (this.closed) throw new ContentFailure("CLOSED", "Draft queue is closed");
+        try {
+          return await call<T>(method, params);
+        } catch (reason) {
+          if (
+            (reason as { code?: string }).code !== "BUSY" ||
+            !["editor_drafts_list", "editor_drafts_document"].includes(method) ||
+            attempt >= 6 ||
+            this.closed
+          )
+            throw reason;
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          await Promise.race([
+            new Promise<void>((resolve) => {
+              timer = setTimeout(resolve, Math.min(20 * 2 ** attempt, 160));
+            }),
+            this.closedSignal,
+          ]);
+          if (timer !== undefined) clearTimeout(timer);
+        }
+      }
+    };
     this.directory = directory;
   }
 

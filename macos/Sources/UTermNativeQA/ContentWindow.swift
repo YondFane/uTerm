@@ -48,19 +48,25 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     let directory: URL
     let path: String
     let editable: Bool
+    let gitMode: Bool
     private let bridge: CoreBridge
+    private let stateBridge: CoreBridge
+    private let ownsBridge: Bool
+    private var gitMutationInProgress = false
     private var documentID = UUID().uuidString
     private var tasks: [String: Task<Void, Never>] = [:]
     private var permitsClose = false
     private let quitGate = ContentQuitGate()
     private var quitToken: String?
     private var preparedDocument: String?
-    var isPreparedForQuit: Bool { permitsClose || (quitToken != nil && preparedDocument == documentID) }
+    var isPreparedForQuit: Bool { permitsClose || (preparedDocument == documentID && (gitMode ? !gitMutationInProgress : quitToken != nil)) }
     private(set) var navigationError = ""
     var closed: (() -> Void)?
+    var mutateGit: ((String, JSONValue, CoreBridge) async throws -> JSONValue)?
+    var openRepositoryFile: ((String) async throws -> Void)?
     private let entry = URL(string: "uterm-content://bundle/native-content.html")!
 
-    init(bridge: CoreBridge, directory: URL, path: String, editable: Bool = false) throws {
+    init(bridge: CoreBridge, directory: URL, path: String, editable: Bool = false, gitMode: Bool = false, stateBridge: CoreBridge? = nil, ownsBridge: Bool = false) throws {
         guard let root = Bundle.main.resourceURL?.appendingPathComponent("content") else {
             throw BridgeFailure(code: "RESOURCE_MANIFEST", message: "Bundled content is missing")
         }
@@ -70,12 +76,15 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         configuration.setURLSchemeHandler(ContentSchemeHandler(resources: resources), forURLScheme: ContentResources.scheme)
         webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700), configuration: configuration)
         self.bridge = bridge
+        self.stateBridge = stateBridge ?? bridge
+        self.ownsBridge = ownsBridge
         self.directory = directory.standardizedFileURL.resolvingSymlinksInPath()
         self.path = path
         self.editable = editable
+        self.gitMode = gitMode
         let window = NSWindow(contentRect: webView.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = path
-        window.minSize = NSSize(width: 540, height: 360)
+        window.title = gitMode ? "Git — " + self.directory.lastPathComponent : path
+        window.minSize = NSSize(width: gitMode ? 640 : 540, height: gitMode ? 420 : 360)
         window.contentView = webView
         super.init(window: window)
         window.delegate = self
@@ -145,10 +154,33 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     private func execute(_ request: ContentMessage) async throws -> JSONValue {
         let params = request.params ?? [:]
+        if let method = Self.gitMethods[request.method ?? ""] {
+            guard gitMode else { throw BridgeFailure(code: "METHOD_DENIED", message: "This content window cannot access Git") }
+            guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Git cannot select another repository") }
+            if Self.gitWrites.contains(request.method ?? "") {
+                guard !gitMutationInProgress, let mutateGit else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
+                gitMutationInProgress = true
+                window?.standardWindowButton(.closeButton)?.isEnabled = false
+                defer { gitMutationInProgress = false; window?.standardWindowButton(.closeButton)?.isEnabled = true }
+                return try await mutateGit(method, .object(params), bridge)
+            }
+            return try await bridge.call(method, params: .object(params))
+        }
         switch request.method {
         case "content_context":
-            let state = try await bridge.snapshot()
-            return .object(["directory": .string(directory.path), "path": .string(path), "settings": state.document.settings, "editable": .bool(editable)])
+            let state = try await stateBridge.snapshot()
+            return .object(["directory": .string(directory.path), "path": .string(path), "settings": state.document.settings, "editable": .bool(editable), "kind": .string(gitMode ? "git" : "file")])
+        case "content_copy_text":
+            guard params.count == 1, let text = params["text"]?.string else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing clipboard text") }
+            NSPasteboard.general.clearContents()
+            guard NSPasteboard.general.setString(text, forType: .string) else { throw BridgeFailure(code: "COPY_FAILED", message: localized("Could not copy the text.", "无法复制文本。")) }
+            return .null
+        case "content_open_file":
+            guard gitMode, params.count == 1, let path = params["path"]?.string, let openRepositoryFile else { throw BridgeFailure(code: "METHOD_DENIED", message: "This window cannot open repository files") }
+            _ = try await bridge.call("files.read", params: .object(["directory": .string(directory.path), "path": .string(path)]))
+            try Task.checkCancellation()
+            try await openRepositoryFile(path)
+            return .null
         case "file_read", "files_list", "files_search":
             guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Content cannot select a different project root") }
             let methods = ["file_read": "files.read", "files_list": "files.list", "files_search": "files.search"]
@@ -184,24 +216,30 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             }
             try quitGate.respond(token: token, ready: ready)
             return .null
-        case "editor_exit": forceClose(); return .null
+        case "editor_exit":
+            guard !gitMutationInProgress else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
+            forceClose(); return .null
         case "open_external":
             guard let text = params["url"]?.string, let url = URL(string: text), ["https", "http"].contains(url.scheme?.lowercased() ?? ""), url.host != nil, NSWorkspace.shared.open(url) else {
                 throw BridgeFailure(code: "URL_DENIED", message: "Could not open external web address")
             }
             return .null
         case "content_font_adjust", "content_settings_patch":
-            let snapshot = try await bridge.snapshot()
+            let snapshot = try await stateBridge.snapshot()
             var values = params
             values["expectedRevision"] = .string(snapshot.revision)
             let method = request.method == "content_font_adjust" ? "settings.font.adjust" : "settings.patch"
-            let saved = try await bridge.call(method, params: .object(values))
+            let saved = try await stateBridge.call(method, params: .object(values))
             return saved["document"]["settings"]
         default: throw BridgeFailure(code: "METHOD_DENIED", message: "Content method is not allowed")
         }
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if permitsClose { return true }
+        if gitMode {
+            if !gitMutationInProgress { forceClose() }
+            return false
+        }
         if quitToken != nil { return false }
         let event: [String: Any] = ["version": 1, "document": documentID, "kind": "editor-close-request", "payload": NSNull()]
         if let bytes = try? JSONSerialization.data(withJSONObject: event), let json = String(data: bytes, encoding: .utf8) {
@@ -236,6 +274,11 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     func prepareForQuit(timeout: Duration = .seconds(20)) async throws -> Bool {
         if permitsClose { return true }
+        if gitMode {
+            if gitMutationInProgress { return false }
+            preparedDocument = documentID
+            return true
+        }
         guard quitToken == nil else { throw BridgeFailure(code: "QUIT_BUSY", message: "Content is already preparing to quit") }
         let sourceDocument = documentID
         do {
@@ -252,11 +295,30 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         } catch { resumeAfterQuit(); throw error }
     }
     func resumeAfterQuit() {
+        if gitMode { preparedDocument = nil; return }
         guard let token = quitToken else { return }
         quitToken = nil
         preparedDocument = nil
         quitGate.invalidate()
         try? event("editor-resume", token: token)
     }
-    func windowWillClose(_ notification: Notification) { quitGate.invalidate(); closed?() }
+    func refreshAfterRepositoryMutation() {
+        guard !permitsClose, !gitMode else { return }
+        try? event("editor-repository-refresh", token: UUID().uuidString)
+    }
+    func windowWillClose(_ notification: Notification) {
+        quitGate.invalidate()
+        closed?()
+        if ownsBridge { let worker = bridge; Task { await worker.close() } }
+    }
+    private static let gitMethods: [String: String] = [
+        "git_branch": "git.branch", "git_branches": "git.branches", "git_switch_branch": "git.switchBranch",
+        "git_rollback_file": "git.rollbackFile", "git_remote_branches": "git.remoteBranches", "git_switch_remote_branch": "git.switchRemoteBranch",
+        "git_branch_action": "git.branchAction", "git_file_status": "git.fileStatus", "git_snapshot": "git.snapshot",
+        "git_diff": "git.diff", "git_history": "git.history", "git_files": "git.files", "git_references": "git.references",
+        "git_reference_action": "git.referenceAction", "git_working_comparison": "git.workingComparison",
+        "project_worktrees": "git.worktrees.list", "create_worktree": "git.worktrees.create", "delete_worktree": "git.worktrees.delete",
+        "worktree_suggestion": "git.worktrees.suggestion"
+    ]
+    private static let gitWrites: Set<String> = ["git_switch_branch", "git_rollback_file", "git_switch_remote_branch", "git_branch_action", "git_reference_action", "create_worktree", "delete_worktree"]
 }

@@ -8,8 +8,10 @@ import { readSettings, type Settings } from "./lib/settings";
 import { useFileDocument } from "./lib/useFileDocument";
 import "./styles.css";
 import "./native-content.css";
+import { NativeGit } from "./native-git";
 
 interface Context {
+  kind?: "file" | "git";
   directory: string;
   path: string;
   settings: Settings;
@@ -66,7 +68,11 @@ async function start() {
     };
     root.render(
       <SettingsProvider content={content}>
-        <Content context={context} />
+        {context.kind === "git" ? (
+          <NativeGit directory={context.directory} />
+        ) : (
+          <Content context={context} />
+        )}
       </SettingsProvider>,
     );
   } catch (reason) {

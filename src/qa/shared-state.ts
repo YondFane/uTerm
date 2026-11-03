@@ -1,4 +1,5 @@
 import editorFixtureJSON from "../../shared/fixtures/editor-draft-qa.json?raw";
+import gitFixtureJSON from "../../shared/fixtures/git-qa.json?raw";
 import { invoke } from "@tauri-apps/api/core";
 import { coreRequest } from "../lib/shared-state";
 import { defaults, settingsKey } from "../lib/settings";
@@ -8,8 +9,9 @@ import { editorDraftReceiptKey } from "../lib/editor-draft-handoff";
 import type { CoreEditorDraftEntry, CoreFileDocument } from "../lib/core-contract.generated";
 
 interface Context {
+  root: string;
   project: string;
-  phase: "initial" | "reopen" | "recover" | "editor-checkpoint" | "editor-reopen";
+  phase: "initial" | "reopen" | "recover" | "editor-checkpoint" | "editor-reopen" | "git";
   backup?: string;
   ready: boolean;
 }
@@ -23,6 +25,7 @@ const editorFixture = JSON.parse(editorFixtureJSON) as {
   savedText: string;
 };
 const editorFile = editorFixture.fileName;
+const gitQA = JSON.parse(gitFixtureJSON) as { fileName: string; worktreeName: string };
 const oldEditorText = editorFixture.oldText;
 const durableEditorText = editorFixture.durableText;
 const savedEditorText = editorFixture.savedText;
@@ -227,6 +230,126 @@ async function runEditor(context: Context) {
   await invoke("qa_request_exit");
 }
 
+async function runGit(context: Context) {
+  const project = await until(
+    () =>
+      [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+        (b) => b.textContent?.trim() === "Temporary QA project",
+      ),
+    "selected QA project",
+  );
+  project.click();
+  const entry = await until(
+    () => document.querySelector<HTMLButtonElement>('.inspector-switcher button[title="Git"]'),
+    "Git entry",
+  );
+  entry.click();
+  const changed = await until(
+    () =>
+      [...document.querySelectorAll<HTMLButtonElement>(".git-file")].find((b) =>
+        b.textContent?.includes(gitQA.fileName),
+      ),
+    "Git changed file",
+  );
+  changed.click();
+  await until(
+    () => document.querySelector(".git-diff")?.textContent?.includes("TAURI_GIT_DIFF"),
+    "real Git diff",
+  );
+  const snapshot = await invoke<{ root: string; branch: string }>("git_snapshot", {
+    directory: context.project,
+  });
+  assert(snapshot.branch === "main", "Git selected the wrong branch");
+  await scene("git-diff", {
+    root: snapshot.root,
+    branch: snapshot.branch,
+    selectedDirectory: context.project,
+    exactUnicode: true,
+  });
+  await click("History");
+  (
+    await until(
+      () => document.querySelector<HTMLButtonElement>(".git-commit"),
+      "Git history commit",
+    )
+  ).click();
+  await until(
+    () =>
+      document
+        .querySelector(".git-commit-message")
+        ?.textContent?.includes("Isolated Tauri Git fixture"),
+    "Git commit details",
+  );
+  await scene("git-history", { realCommitDetails: true });
+  async function referenceMenu() {
+    const reference = await until(
+      () => document.querySelector<HTMLButtonElement>('[data-node="refs/heads/main"]'),
+      "main branch reference",
+    );
+    reference.dispatchEvent(
+      new MouseEvent("contextmenu", {
+        bubbles: true,
+        cancelable: true,
+        clientX: 250,
+        clientY: 200,
+      }),
+    );
+  }
+  function input(label: string, value: string) {
+    const field = document.querySelector<HTMLInputElement>(
+      `dialog[open] input[aria-label="${label}"]`,
+    );
+    assert(field, `Missing Git form field: ${label}`);
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  await referenceMenu();
+  await click("New branch");
+  input("Branch name", "qa-tauri-created");
+  await pause(100);
+  await click("New branch");
+  await until(
+    () => document.querySelector('[data-node="refs/heads/qa-tauri-created"]'),
+    "new shared branch",
+  );
+  await scene("git-created-branch", {
+    createdBranch: "qa-tauri-created",
+    currentBranchUnchanged: true,
+  });
+  await referenceMenu();
+  await click("New Worktree");
+  await until(
+    () =>
+      document.querySelector<HTMLInputElement>(
+        'dialog[open] input[aria-label="Worktree directory"]',
+      )?.value,
+    "Worktree suggestion",
+  );
+  const worktree = context.root + "/" + gitQA.worktreeName;
+  input("Branch name", "qa-tauri-worktree");
+  await pause(100);
+  input("Worktree directory", worktree);
+  await pause(100);
+  await click("New Worktree");
+  await until(async () => {
+    const shared = (await coreRequest("snapshot.read")) as unknown as {
+      document: {
+        workspace: { projects: { id: string; worktrees?: { path: string; branch: string }[] }[] };
+      };
+    };
+    return shared.document.workspace.projects
+      .find((p) => p.id === "shared-state-qa")
+      ?.worktrees?.some((w) => w.branch === "qa-tauri-worktree");
+  }, "durable Worktree sidebar registration");
+  await until(() => !document.querySelector("dialog[open]"), "Worktree dialog dismissed");
+  await scene("git-worktree", {
+    branch: "qa-tauri-worktree",
+    sharedWorkspaceRegistered: true,
+    temporaryDirectory: worktree,
+  });
+  await invoke("qa_request_exit");
+}
+
 export async function run(recovery: boolean) {
   try {
     const context = await invoke<Context>("qa_context");
@@ -245,6 +368,10 @@ export async function run(recovery: boolean) {
     assert(localStorage.getItem(backupKey) === sentinel, "Auxiliary backup was changed");
     if (context.phase === "editor-checkpoint" || context.phase === "editor-reopen") {
       await runEditor(context);
+      return;
+    }
+    if (context.phase === "git") {
+      await runGit(context);
       return;
     }
     if (context.phase === "initial") {

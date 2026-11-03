@@ -92,10 +92,20 @@ pub fn run_command(mut command: Command) -> Result<Vec<u8>, String> {
     Ok(output)
 }
 fn text(bytes: Vec<u8>) -> String {
-    String::from_utf8_lossy(&bytes).trim().to_string()
+    line_output(&String::from_utf8_lossy(&bytes)).to_owned()
+}
+fn line_output(value: &str) -> &str {
+    let value = value.strip_suffix('\n').unwrap_or(value);
+    #[cfg(windows)]
+    let value = value.strip_suffix('\r').unwrap_or(value);
+    value
+}
+fn path_text(bytes: Vec<u8>) -> Result<String, String> {
+    let value = String::from_utf8(bytes).map_err(|_| "Git 路径包含无法显示的字符。")?;
+    Ok(line_output(&value).to_owned())
 }
 fn root(directory: &str) -> Result<String, String> {
-    Ok(text(run(directory, &["rev-parse", "--show-toplevel"])?))
+    path_text(run(directory, &["rev-parse", "--show-toplevel"])?)
 }
 pub(crate) fn revision(directory: &str, value: &str) -> Result<String, String> {
     let commit = text(run(
@@ -1011,10 +1021,10 @@ pub struct References {
 }
 fn references(directory: &str) -> Result<References, String> {
     let directory = root(directory)?;
-    let repository = text(run(
+    let repository = path_text(run(
         &directory,
         &["rev-parse", "--path-format=absolute", "--git-common-dir"],
-    )?);
+    )?)?;
     let remote_names = remotes(&directory)?;
     let current = current_branch(&directory)?;
     let current_ref = run(&directory, &["symbolic-ref", "--quiet", "HEAD"])
@@ -1419,6 +1429,64 @@ pub fn git_working_comparison(directory: String, reference: String) -> Result<Ve
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn branch_labels_preserve_unicode_whitespace_in_reference_names() {
+        let temp = branch_fixture();
+        let directory = temp.path().to_str().unwrap();
+        let name = "feature\u{00a0}";
+        run(directory, &["branch", "--", name]).unwrap();
+        git_switch_branch(directory.into(), name.into(), "main".into()).unwrap();
+        assert_eq!(current_branch(directory).unwrap().as_deref(), Some(name));
+        let catalog = references(directory).unwrap();
+        assert_eq!(catalog.current.as_deref(), Some(name));
+        assert!(catalog
+            .references
+            .iter()
+            .any(|reference| reference.name == name && reference.current));
+    }
+    #[cfg(not(windows))]
+    #[test]
+    fn repository_paths_keep_trailing_whitespace_and_do_not_redirect_to_a_sibling() {
+        let temp = tempfile::tempdir().unwrap();
+        let other = temp.path().join("repository");
+        std::fs::create_dir(&other).unwrap();
+        run(other.to_str().unwrap(), &["init", "--initial-branch=main"]).unwrap();
+        for name in ["repository ", "repository\t", "repository\n"] {
+            let selected = temp.path().join(name);
+            std::fs::create_dir(&selected).unwrap();
+            let directory = selected.to_str().unwrap();
+            run(directory, &["init", "--initial-branch=main"]).unwrap();
+            std::fs::write(selected.join("value.txt"), b"selected repository\n").unwrap();
+            run(directory, &["add", "--all"]).unwrap();
+            fixture_commit(directory);
+            let snapshot = git_snapshot(directory.to_owned()).unwrap();
+            assert_eq!(
+                snapshot.root, directory,
+                "Git operations selected a different repository"
+            );
+            git_reference_action(
+                directory.to_owned(),
+                ReferenceAction {
+                    action: "create".into(),
+                    reference: "HEAD".into(),
+                    oid: snapshot.head,
+                    current: None,
+                    name: Some("selected-only".into()),
+                    remote: None,
+                    branch: None,
+                },
+            )
+            .unwrap();
+            assert!(branches(directory)
+                .unwrap()
+                .local
+                .contains(&"selected-only".into()));
+            assert!(!branches(other.to_str().unwrap())
+                .unwrap()
+                .local
+                .contains(&"selected-only".into()));
+        }
+    }
     #[test]
     fn file_status_scopes_changes_to_the_selected_subdirectory_without_writing_index() {
         let temp = branch_fixture();
