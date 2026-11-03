@@ -65,6 +65,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     var closed: (() -> Void)?
     var mutateGit: ((String, JSONValue, CoreBridge) async throws -> JSONValue)?
     var openRepositoryFile: ((String) async throws -> Void)?
+    var recoverGitFavorites: (() throws -> Void)?
     private let entry = URL(string: "uterm-content://bundle/native-content.html")!
 
     init(bridge: CoreBridge, directory: URL, path: String, editable: Bool = false, gitMode: Bool = false, gitProjectID: String? = nil, stateBridge: CoreBridge? = nil, ownsBridge: Bool = false) throws {
@@ -156,6 +157,12 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     private func execute(_ request: ContentMessage) async throws -> JSONValue {
         let params = request.params ?? [:]
+        if request.method == "git_favorites_recovery_open" {
+            guard gitMode, let recoverGitFavorites else { throw BridgeFailure(code: "METHOD_DENIED", message: "This window cannot open favorite recovery") }
+            guard params.count == 1, params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Favorite recovery cannot select another repository") }
+            try recoverGitFavorites()
+            return .null
+        }
         if let method = Self.gitFavoriteMethods[request.method ?? ""] {
             guard gitMode else { throw BridgeFailure(code: "METHOD_DENIED", message: "This content window cannot access Git favorites") }
             guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Git favorites cannot select another repository") }
@@ -318,6 +325,10 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         quitGate.invalidate()
         closed?()
         if ownsBridge { let worker = bridge; Task { await worker.close() } }
+    }
+    func favoritesDidRestore() {
+        guard gitMode else { return }
+        webView.evaluateJavaScript("window.dispatchEvent(new Event('uterm:git-favorites-restored'))") { _, _ in }
     }
     private static let gitMethods: [String: String] = [
         "git_branch": "git.branch", "git_branches": "git.branches", "git_switch_branch": "git.switchBranch",

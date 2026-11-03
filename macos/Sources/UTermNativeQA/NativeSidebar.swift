@@ -94,14 +94,14 @@ struct NativeSidebar: NSViewRepresentable {
             let item = NSMenuItem(title: localized("Refresh Worktrees", "刷新 Worktree"), action: #selector(refreshWorktrees(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = row.projectID ?? String(row.key.dropFirst(2))
-            item.isEnabled = !model.busy && !model.worktreeDeletionPresented
+            item.isEnabled = !model.busy && !model.worktreeDeletionPresented && !model.gitFavoritesRecoveryPresented
             menu.addItem(item)
             if let projectID = row.projectID, let worktreeID = row.worktreeID {
                 let deletion = NSMenuItem(title: localized("Delete Worktree…", "删除 Worktree…"), action: #selector(deleteWorktree(_:)), keyEquivalent: "")
                 deletion.target = self
                 deletion.representedObject = ["project": projectID, "worktree": worktreeID]
                 let sessions = model.projects.first(where: { $0["id"].string == projectID })?["sessions"].array ?? []
-                deletion.isEnabled = !model.busy && !model.worktreeDeletionPresented && !sessions.contains(where: { $0["worktreeId"].string == worktreeID })
+                deletion.isEnabled = !model.busy && !model.worktreeDeletionPresented && !model.gitFavoritesRecoveryPresented && !sessions.contains(where: { $0["worktreeId"].string == worktreeID })
                 menu.addItem(deletion)
             }
         }
@@ -114,7 +114,7 @@ struct NativeSidebar: NSViewRepresentable {
             model?.deleteWorktreeRequested?(project, tree)
         }
         func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
-            rows.indices.contains(row) && rows[row].symbol != nil
+            model?.gitFavoritesRecoveryPresented != true && rows.indices.contains(row) && rows[row].symbol != nil
         }
         func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
             guard rows.indices.contains(row) else { return nil }

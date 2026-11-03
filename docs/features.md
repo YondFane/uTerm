@@ -201,6 +201,11 @@ document-close guard. Native quit freezes and confirms all content documents, re
 refusal/timeout/reload/stale replies and resumes prepared documents after cancellation. Quit errors
 reveal the main window.
 
+If recovery delivery fails, **Retry recovery draft** explicitly retries the retained queue without
+saving the file. Text stays in the editor, writes do not replay automatically, and file autosave
+remains paused until explicit Save. The same control is available in the Tauri and native content
+editors. A failed retry retains the error and text.
+
 A missing draft snapshot with existing backup/damaged files now blocks automatic import. The
 development APIs `editor.drafts.recovery.preview` and `editor.drafts.recovery.restoreMissing` expose
 verified backups and explicit absent-file restoration. The latter requires `expectedMissing: true`
@@ -344,11 +349,20 @@ and cannot submit arbitrary old WebView sources. Its file windows cannot read or
 
 The store retains up to eight prior snapshots and 16 original source contents, with at most 1,000
 repositories and 1,000 references per repository. Invalid/corrupt/missing data and occupied recovery
-paths block replacement; recovery files stay intact. Missing/corrupt favorite-store restoration UI
-is still pending. **Reload Git favorites** explicitly resumes after a failure. Read-only lock waits
-are bounded and cancelled on close; writes do not retry automatically. Legacy export overlays
-current shared favorites under canonical and original client path keys while retaining archived
-bytes; it does not perform an installed client downgrade.
+paths block replacement; recovery files stay intact. **Reload Git favorites** explicitly resumes
+after a failure. Read-only lock waits are bounded and cancelled on close; writes do not retry
+automatically. Legacy export overlays current shared favorites under canonical and original client
+path keys while retaining archived bytes; it does not perform an installed client downgrade.
+
+The branch toolbar's **Recover Git favorites…** action opens verified snapshot and original-source
+previews. The native client also provides **File → Recover Git favorites…**. Cancel is the default;
+copy keeps the complete preview even when the displayed text is truncated. Original sources can be
+copied but cannot directly replace favorites. **Restore all repository favorites** replaces the
+global favorite snapshot, retaining damaged bytes and the immediately preceding valid copy. A
+changed current file rejects the write and requires a fresh catalog; a missing file is installed
+without overwriting newly created data. Open Git views reload after successful restoration. Global
+recovery stays in the trusted application; scoped content can request its native dialog but cannot
+read or restore other repositories' recovery data.
 
 #### Git and editor concurrency validation
 
@@ -378,10 +392,19 @@ Rust 1.99.1 / Node 26.13. Checks cover preview without writes, exact old sources
 corrupt/missing snapshots, no-clobber missing installation, retained damaged bytes, checksum and
 occupied-copy failures, all-repository restore/undo and bounded valid backups. Generated
 TypeScript/Swift recovery DTOs and added actual C ABI assertions still need this change's own
-platform CI. Recovery operations stay outside root-scoped Web content; a new native denial check is
-also pending CI. The two recovery interfaces remain pending; no recovery UI screenshots are claimed.
-Full Windows deletion/cancellation matrix, manual input/IME/focus and #16 dependencies keep #35
-open.
+platform CI. The recovery interfaces pass two additional real-Core/React checks for full CRLF/NFD
+source copy, cancel, late preview replies, missing-store installation, stale conflicts, explicit
+reload and non-cancellable dispatched restore acknowledgement. The focused Linux batch passes 40
+checks. The complete frontend suite passes 392 checks with ten skips; types, production build,
+formatting, localization and bilingual documentation checks pass. This interface change's actual
+native ARM/Intel and Tauri Windows/macOS scenes and screenshots still require its own CI; local DOM
+tests are not native UI acceptance. The preceding head `07b31b7`, tested merge
+`249df048676050aea0a0ff9eeff74b6bce8356f8`, passed native ARM/Intel and Windows, but its
+[old macOS run](https://github.com/YondFane/uTerm/actions/runs/41595809802) exposed a real draft
+WRITER_BUSY failure. The new real-app scenario deliberately holds the OS writer lock, requires a
+visible rejection and explicit **Retry recovery draft**, then verifies durability and forced-exit
+recovery. Its platform result is pending; no new recovery screenshots are claimed yet. Full Windows
+deletion/cancellation matrix, manual input/IME/focus and #16 dependencies keep #35 open.
 
 ## Project website
 

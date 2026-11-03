@@ -6337,3 +6337,55 @@ button:hover:not(:disabled) > .close-icon > circle {
   max-height: 280px;
   overflow: auto;
 }
+
+.git-favorite-recovery-dialog {
+  box-sizing: border-box;
+  width: min(720px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+}
+.git-favorite-recovery-dialog::backdrop {
+  background: #0008;
+}
+.git-favorite-recovery-dialog h2 {
+  margin: 0 0 12px;
+}
+.git-favorite-recovery-dialog > label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+}
+.git-favorite-recovery-dialog select,
+.git-favorite-recovery-dialog textarea {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.git-favorite-recovery-dialog textarea {
+  box-sizing: border-box;
+  height: min(240px, 30vh);
+  min-height: 140px;
+  padding: 8px;
+  resize: vertical;
+  font:
+    12px/1.4 ui-monospace,
+    monospace;
+}
+.git-favorite-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.git-favorite-recovery-actions button {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 28px;
+  padding: 4px 10px;
+}

@@ -105,6 +105,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(file, "Git…", #selector(openGit))
         add(file, localized("Recover editor drafts…", "恢复编辑器草稿…"), #selector(recoverEditorDrafts))
         add(file, localized("Restore editor recovery copy…", "恢复编辑器备份副本…"), #selector(restoreEditorRecovery))
+        add(file, localized("Recover Git favorites…", "恢复 Git 收藏…"), #selector(recoverGitFavorites))
         add(file, localized("New workspace…", "新建工作区…"), #selector(newWorkspace), "n", [.command, .shift])
         add(file, localized("New terminal", "新建终端"), #selector(newTerminal), "t")
         add(file, localized("New Agent session", "新建 Agent 会话"), #selector(newAgent), "n")
@@ -130,7 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented { return false }
+        if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return false }
         if menuItem.action == #selector(closeSession) {
             let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow }
             menuItem.title = fileFocused ? localized("Close file", "关闭文件") : localized("Close session", "关闭会话")
@@ -193,7 +194,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func makeEditableContentWindow(directory: URL, path: String) async throws -> ContentWindow {
-        guard !mutatingRepository, !model.worktreeDeletionPresented else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
+        guard !mutatingRepository, !model.worktreeDeletionPresented, !model.gitFavoritesRecoveryPresented else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
         if let content = existingContent(directory: directory, path: path, editable: true) {
             content.showWindow(nil)
             return content
@@ -255,6 +256,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
                 _ = try await self.makeEditableContentWindow(directory: root, path: path)
             }
+            content.recoverGitFavorites = { [weak self] in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
+                try self.beginGitFavoritesRecovery()
+            }
             let id = UUID()
             contentWindows[id] = content
             content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
@@ -302,7 +307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     private func confirmWorktreeDeletion(projectID: String, worktreeID: String) {
         guard !preparingQuit, !mutatingRepository, !model.busy, !model.worktreeDeletionPresented,
-              !model.editorRecoveryPresented, !model.settingsPresented, model.nameDraft == nil,
+              !model.editorRecoveryPresented, !model.gitFavoritesRecoveryPresented, !model.settingsPresented, model.nameDraft == nil,
               let window, window.attachedSheet == nil, let state = model.state,
               let project = model.projects.first(where: { $0["id"].string == projectID }),
               let tree = project["worktrees"].array.first(where: { $0["id"].string == worktreeID }) else { return }
@@ -333,8 +338,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc private func recoverEditorDrafts() { showEditorRecovery(restoring: false) }
     @objc private func restoreEditorRecovery() { showEditorRecovery(restoring: true) }
+    @objc private func recoverGitFavorites() {
+        do { try beginGitFavoritesRecovery() }
+        catch { model.error = GitFavoritesRecovery.message(error) }
+    }
+    private func beginGitFavoritesRecovery() throws {
+        guard !preparingQuit, !mutatingRepository, !model.busy, !model.gitFavoritesRecoveryPresented,
+              !model.editorRecoveryPresented, !model.worktreeDeletionPresented, !model.settingsPresented, model.nameDraft == nil,
+              let window, window.attachedSheet == nil, let bridge = model.bridge else {
+            throw BridgeFailure(code: "RECOVERY_BUSY", message: localized("Finish the current dialog or operation first.", "请先完成当前对话框或操作。"))
+        }
+        model.gitFavoritesRecoveryPresented = true
+        let previousKey = NSApp.keyWindow
+        window.makeKeyAndOrderFront(nil)
+        Task { @MainActor in
+            defer {
+                model.gitFavoritesRecoveryPresented = false
+                if let previousKey, previousKey.isVisible { previousKey.makeKeyAndOrderFront(nil) }
+            }
+            do {
+                if try await GitFavoritesRecovery.present(bridge: bridge, window: window) {
+                    for content in contentWindows.values where content.gitMode { content.favoritesDidRestore() }
+                }
+                model.error = ""
+            } catch { model.error = GitFavoritesRecovery.message(error) }
+        }
+    }
     private func showEditorRecovery(restoring: Bool) {
-        guard !preparingQuit, !model.busy, !model.editorRecoveryPresented, !model.settingsPresented, model.nameDraft == nil,
+        guard !preparingQuit, !model.busy, !model.editorRecoveryPresented, !model.gitFavoritesRecoveryPresented, !model.settingsPresented, model.nameDraft == nil,
               let window, window.attachedSheet == nil, let bridge = model.bridge else { return }
         model.editorRecoveryPresented = true
         window.makeKeyAndOrderFront(nil)
@@ -372,13 +403,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             Task { await self.model.selectSession(session.id, focus: false) }
         }
     }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { if !model.worktreeDeletionPresented { sender.orderOut(nil) }; return false }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { if !model.worktreeDeletionPresented && !model.gitFavoritesRecoveryPresented { sender.orderOut(nil) }; return false }
     func windowDidEnterFullScreen(_ notification: Notification) { model.fullScreen = true }
     func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminating { return .terminateNow }
-        if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented { return .terminateCancel }
+        if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return .terminateCancel }
         preparingQuit = true
         Task { @MainActor in
             guard await model.confirmQuit() else { self.preparingQuit = false; return }

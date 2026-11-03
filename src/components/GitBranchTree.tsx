@@ -50,7 +50,31 @@ export function GitBranchTree({
   const [favoriteError, setFavoriteError] = useState("");
   const [favoriteRetry, setFavoriteRetry] = useState(0);
   const [favoriteRecovery, setFavoriteRecovery] = useState(false);
+  function openFavoriteRecovery() {
+    if (changing.current) return;
+    if (!window.webkit?.messageHandlers?.utermContent) {
+      window.dispatchEvent(new Event("uterm:git-favorites-recovery"));
+      return;
+    }
+    changing.current = true;
+    setBusy(true);
+    callbacks.current.onBusyChange?.(true);
+    void invoke("git_favorites_recovery_open", { directory })
+      .catch((reason) => {
+        if (alive.current) setFavoriteError(String(reason));
+      })
+      .finally(() => {
+        changing.current = false;
+        callbacks.current.onBusyChange?.(false);
+        if (alive.current) setBusy(false);
+      });
+  }
   const favoriteClient = useRef<FavoriteClient | null>(null);
+  useEffect(() => {
+    const restored = () => setFavoriteRetry((value) => value + 1);
+    window.addEventListener("uterm:git-favorites-restored", restored);
+    return () => window.removeEventListener("uterm:git-favorites-restored", restored);
+  }, []);
   const [readError, setReadError] = useState("");
   const [remoteError, setRemoteError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -623,6 +647,16 @@ export function GitBranchTree({
         >
           ↻
         </button>
+        {allowFavorites && isContentHost() && (
+          <button
+            disabled={disabled || busy}
+            title={tx("恢复 Git 收藏…")}
+            aria-label={tx("恢复 Git 收藏…")}
+            onClick={openFavoriteRecovery}
+          >
+            ↶
+          </button>
+        )}
       </header>
       {!view.folded && (
         <>
@@ -773,6 +807,11 @@ export function GitBranchTree({
           <button disabled={busy} onClick={() => setFavoriteRetry((value) => value + 1)}>
             {tx("重新读取 Git 收藏")}
           </button>
+          {isContentHost() && (
+            <button disabled={busy || disabled} onClick={openFavoriteRecovery}>
+              {tx("恢复 Git 收藏…")}
+            </button>
+          )}
           {favoriteRecovery && (
             <>
               <button

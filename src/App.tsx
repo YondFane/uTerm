@@ -1,4 +1,5 @@
 import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
+import { GitFavoritesRecovery } from "./components/GitFavoritesRecovery";
 import {
   canonicalStateActive,
   deleteSharedWorktree,
@@ -164,6 +165,13 @@ function javaPanelHasFocus() {
 
 export function App() {
   useUiLanguage();
+  const [favoriteRecoveryOpen, setFavoriteRecoveryOpen] = useState(false);
+  const favoriteRecoveryBusy = useRef(false);
+  useEffect(() => {
+    const open = () => setFavoriteRecoveryOpen(true);
+    window.addEventListener("uterm:git-favorites-recovery", open);
+    return () => window.removeEventListener("uterm:git-favorites-recovery", open);
+  }, []);
 
   const { settings, save: saveSettings, resizeFont, assertSaved } = useSettings();
   const inspectorOnLeft = settings.inspectorPosition === "left";
@@ -773,6 +781,10 @@ export function App() {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     void listen("shared-state-exit-request", () => {
+      if (favoriteRecoveryBusy.current) {
+        setError(tx("请先完成收藏恢复。"));
+        return;
+      }
       void flushSharedState()
         .then(() => assertSaved())
         .then(() => invoke("shared_core_exit"))
@@ -4044,6 +4056,14 @@ export function App() {
           </form>
         )}
       </dialog>
+      {favoriteRecoveryOpen && (
+        <GitFavoritesRecovery
+          onClose={() => setFavoriteRecoveryOpen(false)}
+          onBusyChange={(busy) => {
+            favoriteRecoveryBusy.current = busy;
+          }}
+        />
+      )}
       <dialog
         ref={nameDialog}
         className="name-dialog"

@@ -29,7 +29,7 @@ struct WorkspaceView: View {
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
-            .disabled(!model.ready || model.busy)
+            .disabled(!model.ready || model.busy || model.gitFavoritesRecoveryPresented)
             .padding(.leading, model.fullScreen ? 12 : 83)
             .padding(.trailing, 12)
             .frame(height: 40)
@@ -42,13 +42,13 @@ struct WorkspaceView: View {
                     Picker(localized("Workspace", "工作区"), selection: Binding(get: { model.groupID }, set: { id in Task { await model.mutate("workspace.switch", ["id": .string(id)]) } })) {
                         ForEach(model.groupItems) { group in Text(group.name).tag(group.id) }
                     }
-                    .labelsHidden().padding(10).disabled(model.busy)
+                    .labelsHidden().padding(10).disabled(model.busy || model.gitFavoritesRecoveryPresented)
                     NativeSidebar(model: model).frame(maxHeight: .infinity)
                     HStack {
                         Button { model.newWorkspace() } label: { Label(localized("New workspace", "新建工作区"), systemImage: "plus") }
                         Button { model.renameWorkspace() } label: { Label(localized("Rename workspace", "重命名工作区"), systemImage: "pencil") }
                         Spacer()
-                    }.labelStyle(.iconOnly).buttonStyle(.borderless).padding(12).disabled(model.busy || !model.ready)
+                    }.labelStyle(.iconOnly).buttonStyle(.borderless).padding(12).disabled(model.busy || !model.ready || model.gitFavoritesRecoveryPresented)
                 }
                 .frame(minWidth: 176, idealWidth: 220, maxWidth: 320)
                 }
@@ -72,7 +72,7 @@ struct WorkspaceView: View {
                             if session.exited { Text(localized("Exited", "已退出")).foregroundStyle(.secondary) }
                             Button(localized("Reconnect", "重新连接")) { Task { await session.reconnect() } }
                             Button(localized("Close session", "关闭会话")) { Task { await model.closeSession() } }
-                                .disabled(model.busy)
+                                .disabled(model.busy || model.gitFavoritesRecoveryPresented)
                         }.font(.caption).padding(.horizontal, 10).frame(height: 30)
                         if !session.error.isEmpty { Text(session.error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(6) }
                     }
@@ -106,7 +106,7 @@ struct NameEditorView: View {
                 Button(localized("Save", "保存")) { Task { await model.saveNameDraft() } }.keyboardShortcut(.defaultAction)
                     .disabled(model.nameDraft?.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false)
             }
-        }.padding(20).frame(width: 380).disabled(model.busy)
+        }.padding(20).frame(width: 380).disabled(model.busy || model.gitFavoritesRecoveryPresented)
     }
 }
 
@@ -152,7 +152,7 @@ struct BasicSettingsView: View {
                     Text(localized("Installed command-line tools are detected automatically.", "自动检测已安装的命令行工具。"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
-            }.formStyle(.grouped).disabled(model.busy)
+            }.formStyle(.grouped).disabled(model.busy || model.gitFavoritesRecoveryPresented)
             if !model.error.isEmpty { Text(model.error).font(.caption).textSelection(.enabled) }
             HStack { Spacer(); Button(localized("Done", "完成")) { model.settingsPresented = false }.keyboardShortcut(.defaultAction) }.padding()
         }.frame(width: 440, height: 420)

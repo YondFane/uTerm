@@ -15,6 +15,7 @@ import {
 import { tmpdir, homedir, platform, arch, release, version } from "node:os";
 import { resolve, join, dirname } from "node:path";
 import { createHash } from "node:crypto";
+import { createInterface } from "node:readline";
 import assert from "node:assert/strict";
 
 const editorFixture = JSON.parse(
@@ -233,6 +234,14 @@ try {
     assert(readFileSync(path).length > 5000, "Screenshot was not captured");
   }
   async function run(phase, backup) {
+    let writer;
+    let writerExited;
+    const writerEvents = [];
+    let favoriteOriginal;
+    let favoriteSource;
+    const favoriteFile = join(root, "data/shared-state-v1/git-favorites-v1.json");
+    const favoriteDamage = Buffer.from("{damaged isolated Tauri favorite recovery");
+    const favoriteChanged = Buffer.from("{newer external Tauri favorite bytes must survive");
     const args = ["--qa-data-root", root, "--qa-phase", phase];
     if (backup) args.push("--qa-backup", backup);
     child = spawn(binary, args, { env, stdio: ["ignore", "pipe", "pipe"] });
@@ -291,6 +300,128 @@ try {
               join(output, "control-disabled.json"),
               JSON.stringify({ ...metadata, endpointUnavailable: true }, null, 2),
             );
+          } else if (value.scene === "git-favorite-recovery-ready") {
+            favoriteOriginal = readFileSync(favoriteFile);
+            assert.equal(
+              createHash("sha256").update(favoriteOriginal).digest("hex"),
+              value.checks.revision,
+            );
+            assert.match(value.checks.sourceDigest, /^[a-f0-9]{64}$/);
+            favoriteSource = readFileSync(
+              join(
+                root,
+                "data/shared-state-v1",
+                `git-favorite-source-${value.checks.sourceDigest}.json`,
+              ),
+              "utf8",
+            );
+            writeFileSync(favoriteFile, favoriteDamage);
+          } else if (value.scene === "git-favorite-recovery-preview") {
+            assert.deepEqual(
+              readFileSync(favoriteFile),
+              favoriteDamage,
+              "Preview changed damaged favorites",
+            );
+          } else if (value.scene === "git-favorite-recovery-source") {
+            let copied;
+            if (process.platform === "darwin") copied = execute("/usr/bin/pbpaste", []);
+            else if (process.platform === "win32")
+              copied = JSON.parse(
+                execute("powershell.exe", [
+                  "-NoProfile",
+                  "-Command",
+                  "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; ConvertTo-Json -Compress -InputObject (Get-Clipboard -Raw)",
+                ])
+                  .trim()
+                  .replace(/^\uFEFF/, ""),
+              );
+            else
+              copied = JSON.parse(
+                execute("/usr/bin/python3", [
+                  "-c",
+                  "import gi,json;gi.require_version('Gtk','3.0');from gi.repository import Gtk,Gdk;Gtk.init([]);print(json.dumps(Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD).wait_for_text()))",
+                ]),
+              );
+            assert.equal(
+              copied,
+              favoriteSource,
+              "Actual OS clipboard differs from complete original favorite source",
+            );
+            assert.deepEqual(
+              readFileSync(favoriteFile),
+              favoriteDamage,
+              "Cancel/copy modified favorite data",
+            );
+            writeFileSync(
+              join(output, "git-favorite-recovery-clipboard.json"),
+              JSON.stringify(
+                {
+                  ...metadata,
+                  exactSource: true,
+                  sourceDigest: value.checks.sourceDigest,
+                  sourceBytes: Buffer.byteLength(favoriteSource),
+                },
+                null,
+                2,
+              ),
+            );
+          } else if (value.scene === "git-favorite-recovery-stale") {
+            writeFileSync(favoriteFile, favoriteChanged);
+          } else if (value.scene === "git-favorite-recovery-conflict") {
+            assert.deepEqual(
+              readFileSync(favoriteFile),
+              favoriteChanged,
+              "Stale restore overwrote newer bytes",
+            );
+          } else if (value.scene === "git-favorite-recovery-restored") {
+            assert.deepEqual(readFileSync(favoriteFile), favoriteOriginal);
+            const digest = createHash("sha256").update(favoriteChanged).digest("hex");
+            assert.deepEqual(
+              readFileSync(join(root, "data/shared-state-v1", `git-favorites-${digest}.damaged`)),
+              favoriteChanged,
+            );
+            unlinkSync(favoriteFile);
+          } else if (value.scene === "git-favorite-recovery-missing") {
+            assert(!existsSync(favoriteFile), "Preview recreated absent snapshot");
+          } else if (value.scene === "git-favorite-recovery-complete") {
+            assert.deepEqual(readFileSync(favoriteFile), favoriteOriginal);
+          } else if (value.scene === "editor-imported") {
+            const target = resolve(process.env.CARGO_TARGET_DIR ?? "crates/uterm-core/target");
+            writer = spawn(
+              join(
+                target,
+                "debug",
+                `uterm-core-contract${process.platform === "win32" ? ".exe" : ""}`,
+              ),
+              ["--hold-store-lock", join(root, "data/shared-state-v1")],
+              { env, stdio: ["pipe", "pipe", "pipe"] },
+            );
+            writerExited = new Promise((done, reject) => {
+              writer.once("error", reject);
+              writer.once("close", (status) => done(status));
+            });
+            writer.stderr.on("data", (text) => {
+              log += text;
+            });
+            const lines = createInterface({ input: writer.stdout });
+            const deadline = setTimeout(() => writer.kill(), 15000);
+            try {
+              assert.equal((await lines[Symbol.asyncIterator]().next()).value, "locked");
+            } finally {
+              clearTimeout(deadline);
+              lines.close();
+            }
+            writerEvents.push({ state: "locked", pid: writer.pid });
+          } else if (value.scene === "editor-write-rejected") {
+            assert(writer, "Missing owned writer fixture");
+            writer.stdin.end("release\n");
+            assert.equal(await writerExited, 0);
+            writerEvents.push({ state: "released-after-rejection", pid: writer.pid });
+            writer = undefined;
+            writeFileSync(
+              join(output, "editor-writer-lock.json"),
+              JSON.stringify({ ...metadata, events: writerEvents }, null, 2),
+            );
           }
           scenes.push({
             file,
@@ -330,16 +461,23 @@ try {
       assert(closed, `${phase} did not quit through the ordinary exit guard`);
       const expected =
         phase === "git"
-          ? 5
-          : phase.startsWith("editor-")
-            ? 2
-            : phase === "initial"
-              ? 8
-              : phase === "reopen"
-                ? 1
-                : 3;
+          ? 13
+          : phase === "editor-checkpoint"
+            ? 3
+            : phase.startsWith("editor-")
+              ? 2
+              : phase === "initial"
+                ? 8
+                : phase === "reopen"
+                  ? 1
+                  : 3;
       assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
+      if (writer) {
+        writer.stdin.end("release\n");
+        writer.kill();
+        await writerExited;
+      }
       writeFileSync(join(output, `${phase}.log`), log);
     }
   }

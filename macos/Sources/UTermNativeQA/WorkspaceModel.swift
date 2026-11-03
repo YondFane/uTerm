@@ -19,6 +19,7 @@ final class WorkspaceModel: ObservableObject {
     @Published private(set) var terminalError = ""
     @Published var settingsPresented = false
     @Published var editorRecoveryPresented = false
+    @Published var gitFavoritesRecoveryPresented = false
     @Published var worktreeDeletionPresented = false
     @Published var nameDraft: NameDraft?
     @Published var fullScreen = false
@@ -161,7 +162,7 @@ final class WorkspaceModel: ObservableObject {
 
     @discardableResult
     func mutate(_ method: String, _ values: [String: JSONValue], revision: String? = nil) async -> Bool {
-        guard !busy, !shuttingDown, !worktreeDeletionPresented, let bridge, let state else { return false }
+        guard !busy, !shuttingDown, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, let bridge, let state else { return false }
         busy = true
         var params = values
         params["expectedRevision"] = .string(revision ?? state.snapshot.revision)
@@ -180,7 +181,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func beginRepositoryMutation() -> Bool {
-        guard !busy, !shuttingDown, !worktreeDeletionPresented else { return false }
+        guard !busy, !shuttingDown, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented else { return false }
         busy = true
         return true
     }
@@ -195,7 +196,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func performControlAction(_ request: JSONValue) async throws -> JSONValue {
-        guard !busy, !shuttingDown, !settingsPresented, !editorRecoveryPresented, !worktreeDeletionPresented, nameDraft == nil,
+        guard !busy, !shuttingDown, !settingsPresented, !editorRecoveryPresented, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, nameDraft == nil,
               let bridge, let state else {
             throw BridgeFailure(code: "CONTROL_BUSY", message: localized("Finish the current dialog or operation first.", "请先完成当前对话框或操作。"))
         }

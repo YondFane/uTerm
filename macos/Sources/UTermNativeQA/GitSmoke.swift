@@ -45,7 +45,7 @@ enum GitSmoke {
         let context = try await bridge.projectContext(expectedRevision: selected["revision"].string!)
         guard context.directory.map({ Data($0.utf8) }) == Data(root.path.utf8) else { throw BridgeFailure(code: "GIT_CONTEXT", message: "Selected project lost literal directory bytes") }
         await model.reload()
-        let favoriteSource = "[\n \"refs/heads/topic\"\n]"
+        let favoriteSource = "[\r\n \"refs/heads/to\\u0070ic\"\r\n]"
         _ = try await bridge.call("git.favorites.import", params: .object(["directory": .string(root.path), "legacy": .string(favoriteSource)]))
         let content = try await open(root)
         defer { content.forceClose() }
@@ -91,6 +91,9 @@ enum GitSmoke {
             report["nativeFavoritesRetainedAfterReload"] = true
             captures.append("native-git-favorites.png")
             try await capture(content, captures.last!)
+
+            try await GitFavoritesRecoverySmoke.run(model: model, parent: parent, content: content, source: favoriteSource,
+                sourceRevision: favorites["sourceDigest"].string!, reportPath: reportPath, captures: &captures, report: &report)
 
             _ = try await bridge.call("editor.drafts.import", params: .object(["legacy": .null]))
             func seed(_ text: String) async throws {

@@ -344,6 +344,14 @@ export function FileEditor({
       {editor.error && (
         <div className="editor-error" role="alert">
           {localizeMessage(editor.error)}
+          {editor.recoveryFailed && (
+            <button
+              disabled={editor.saving || editor.transitioning}
+              onClick={() => void editor.retryRecovery()}
+            >
+              {tx("重试恢复草稿")}
+            </button>
+          )}
           {editor.conflict && (
             <button disabled={editor.saving} onClick={() => void editor.save(true)}>
               {tx("覆盖磁盘版本")}

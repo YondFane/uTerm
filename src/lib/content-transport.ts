@@ -35,6 +35,7 @@ export const gitFavoriteMethods: Record<string, string> = {
   git_favorites_write: "git.favorites.write",
 };
 const contentMethods = new Set([
+  "git_favorites_recovery_open",
   ...Object.keys(editorDraftMethods),
   ...Object.keys(gitMethods),
   ...Object.keys(gitFavoriteMethods),

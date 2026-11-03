@@ -1,4 +1,24 @@
 export const messages: Record<string, string> = {
+  "收藏恢复预览无效。": "Invalid Git favorite recovery preview.",
+  "恢复 Git 收藏": "Recover Git favorites",
+  "恢复 Git 收藏…": "Recover Git favorites…",
+  "恢复会替换所有仓库的收藏，并保留损坏字节及恢复前副本。":
+    "Restore replaces favorites for all repositories and retains damaged bytes and the previous snapshot.",
+  收藏恢复副本或原始来源: "Favorite recovery copy or original source",
+  没有校验通过的收藏恢复数据: "No verified favorite recovery data",
+  收藏副本: "Favorite snapshot",
+  原始来源: "Original source",
+  没有收藏: "No favorites",
+  收藏恢复预览: "Favorite recovery preview",
+  "正在读取收藏恢复数据…": "Loading favorite recovery data…",
+  "预览已截断，复制会保留全部内容。": "Preview is truncated. Copy retains the full contents.",
+  "原始来源只能预览和复制，不会直接替换共享收藏。":
+    "Original sources can be previewed and copied; they do not directly replace shared favorites.",
+  "已复制完整预览。": "Copied the full preview.",
+  重新读取恢复副本: "Reload recovery copies",
+  复制完整预览: "Copy full preview",
+  恢复所有仓库收藏: "Restore all repository favorites",
+  "请先完成收藏恢复。": "Finish recovering favorites first.",
   未保存的设置: "Unsaved settings",
   "请重试或放弃未保存的设置。": "Retry or discard unsaved settings.",
   重新读取设置: "Reload saved settings",
@@ -1352,8 +1372,9 @@ export const messages: Record<string, string> = {
   "主题调色板序号无效。": "Invalid theme palette index.",
   "主题颜色应为六位十六进制。": "Theme colors must be six-digit hexadecimal values.",
   "没有找到 Ghostty 主题颜色。": "No Ghostty theme colors found.",
-  "无法保存恢复草稿，请手动保存文件：{p0}":
-    "Could not save recovery draft. Save the file manually: {p0}",
+  "无法保存恢复草稿，请重试或手动保存文件：{p0}":
+    "Could not save recovery draft. Retry or save the file manually: {p0}",
+  重试恢复草稿: "Retry recovery draft",
   "请先保存或放弃文件修改，再安装更新。": "Save or discard file changes before installing updates.",
   "工作区数据无效，原数据已保留。": "Workspace data is invalid. Original data was preserved.",
   "工作区列表无效，原数据已保留。": "Workspace list is invalid. Original data was preserved.",

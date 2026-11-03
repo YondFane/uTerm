@@ -53,6 +53,17 @@ export function useFileDocument(
     renderDocuments(values);
   }
   const [error, setError] = useState("");
+  const [recoveryFailed, setRecoveryFailed] = useState(false);
+  const recoveryError = useRef("");
+  const retryingRecovery = useRef(false);
+  function reportRecoveryFailure(reason: unknown) {
+    recoveryError.current = tx("无法保存恢复草稿，请重试或手动保存文件：{p0}", {
+      p0: String(reason),
+    });
+    setRecoveryFailed(true);
+    setRecovered(true);
+    setError(recoveryError.current);
+  }
   const [conflict, setConflict] = useState(false);
   const [saving, setSaving] = useState(false);
   const [recovered, setRecovered] = useState(false);
@@ -98,8 +109,7 @@ export function useFileDocument(
           saved = queue.remove(value.directory, value.path);
       }
       void saved?.catch((reason) => {
-        if (recovery.current === queue)
-          setError(tx("无法保存恢复草稿，请手动保存文件：{p0}", { p0: String(reason) }));
+        if (recovery.current === queue) reportRecoveryFailure(reason);
       });
       return;
     }
@@ -107,7 +117,33 @@ export function useFileDocument(
       if (isDirty(value)) localStorage.setItem(draftKey, JSON.stringify(value));
       else localStorage.removeItem(draftKey);
     } catch (reason) {
-      setError(tx("无法保存恢复草稿，请手动保存文件：{p0}", { p0: String(reason) }));
+      reportRecoveryFailure(reason);
+    }
+  }
+  async function retryRecovery() {
+    if (retryingRecovery.current || transition.current) return;
+    retryingRecovery.current = true;
+    try {
+      return await writing.current.run(async () => {
+        setSaving(true);
+        try {
+          const queue = currentRecovery();
+          if (queue) await queue.retry();
+          else if (isDirty(current.current))
+            localStorage.setItem(draftKey, JSON.stringify(current.current));
+          else localStorage.removeItem(draftKey);
+          setRecoveryFailed(false);
+          setError((value) => (value === recoveryError.current ? "" : value));
+          return true;
+        } catch (reason) {
+          reportRecoveryFailure(reason);
+          return false;
+        } finally {
+          setSaving(false);
+        }
+      });
+    } finally {
+      retryingRecovery.current = false;
     }
   }
   async function save(force = false): Promise<boolean> {
@@ -117,6 +153,7 @@ export function useFileDocument(
       setSaving(true);
       try {
         await currentRecovery()?.retry();
+        setRecoveryFailed(false);
         if (!snapshot || !isDirty(snapshot) || snapshot.readonly) {
           if (currentRecovery()) {
             setError("");
@@ -499,6 +536,8 @@ export function useFileDocument(
     document,
     documents,
     error,
+    recoveryFailed,
+    retryRecovery,
     conflict,
     saving,
     transitioning,

@@ -6,7 +6,12 @@ import { defaults, settingsKey } from "../lib/settings";
 import { emptyWorkspace, workspaceKey } from "../lib/workspace";
 import { draftKey } from "../lib/file-document";
 import { editorDraftReceiptKey } from "../lib/editor-draft-handoff";
-import type { CoreEditorDraftEntry, CoreFileDocument } from "../lib/core-contract.generated";
+import type {
+  CoreEditorDraftEntry,
+  CoreFileDocument,
+  CoreGitFavoriteRecoveryCatalog,
+  CoreGitFavorites,
+} from "../lib/core-contract.generated";
 
 interface Context {
   root: string;
@@ -206,6 +211,23 @@ async function runEditor(context: Context) {
     document.execCommand("insertText", false, next.replace(/\r\n/g, "\n")),
     "CodeMirror insertText failed",
   );
+  if (context.phase === "editor-checkpoint") {
+    await until(
+      () => document.querySelector(".editor-error")?.textContent?.includes("writer"),
+      "real recovery writer lock rejection",
+    );
+    const retry = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === "Retry recovery draft",
+    );
+    assert(retry && !retry.disabled, "Explicit draft retry is unavailable");
+    assert(field.innerText.includes(next.split("\r")[0]), "Rejected write lost editor text");
+    await scene("editor-write-rejected", {
+      realWriterLockRejected: true,
+      editorTextRetained: true,
+      explicitRetryVisible: true,
+    });
+    retry.click();
+  }
   await until(
     async () => (await documentDraft())?.draft.text === next,
     "durable shared editor text",
@@ -365,6 +387,7 @@ async function runGit(context: Context) {
     versionedBackup: true,
     receipt: true,
   });
+  await runFavoriteRecovery(context);
   function input(label: string, value: string) {
     const field = document.querySelector<HTMLInputElement>(
       `dialog[open] input[aria-label="${label}"]`,
@@ -418,6 +441,146 @@ async function runGit(context: Context) {
     temporaryDirectory: worktree,
   });
   await invoke("qa_request_exit");
+}
+
+async function runFavoriteRecovery(context: Context) {
+  const initial = (await coreRequest(
+    "git.favorites.recovery.list",
+  )) as unknown as CoreGitFavoriteRecoveryCatalog;
+  const favorites = (await coreRequest("git.favorites.read", {
+    directory: context.project,
+  })) as unknown as CoreGitFavorites;
+  assert(initial.currentRevision && favorites.sourceDigest, "Missing recovery snapshot or source");
+  assert(
+    initial.backups.includes(initial.currentRevision),
+    "Current favorite snapshot was not retained",
+  );
+  const revision = initial.currentRevision;
+  await scene("git-favorite-recovery-ready", { revision, sourceDigest: favorites.sourceDigest });
+  async function open() {
+    const entry = await until(
+      () =>
+        document.querySelector<HTMLButtonElement>(
+          '.git-tree-tools button[aria-label="Recover Git favorites…"]',
+        ),
+      "actual favorite recovery toolbar action",
+    );
+    entry.click();
+    await until(
+      () => document.querySelector(".git-favorite-recovery-dialog[open]"),
+      "actual favorite recovery dialog",
+    );
+  }
+  async function select(value: string, source = false) {
+    const field = await until(
+      () => document.querySelector<HTMLSelectElement>(".git-favorite-recovery-dialog select"),
+      "recovery copy selector",
+    );
+    await until(
+      () => [...field.options].some((option) => option.value === value),
+      "verified recovery choice",
+    );
+    field.value = value;
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    await until(() => {
+      const text = document.querySelector<HTMLTextAreaElement>(
+        ".git-favorite-recovery-dialog textarea",
+      )?.value;
+      return (
+        field.value === value &&
+        !button("Copy full preview")?.disabled &&
+        text !== undefined &&
+        text.trimStart().startsWith("[") === source
+      );
+    }, "verified favorite recovery preview");
+    assert(
+      button("Restore all repository favorites")?.disabled === source,
+      "Original source must not directly replace favorites",
+    );
+  }
+  async function closed() {
+    await until(
+      () => !document.querySelector(".git-favorite-recovery-dialog[open]"),
+      "recovery dialog closed",
+    );
+  }
+  await until(() => button("Recover Git favorites…"), "visible real corrupt favorite error");
+  await click("Recover Git favorites…");
+  await select(`backup:${revision}`);
+  assert(
+    document.activeElement?.textContent === "Cancel",
+    "Cancel is not the initial recovery action",
+  );
+  await scene("git-favorite-recovery-preview", {
+    actualErrorEntry: true,
+    cancelDefault: true,
+    verifiedAllRepositoryPreview: true,
+  });
+  await click("Cancel");
+  await closed();
+  await open();
+  await select(`source:${favorites.sourceDigest}`, true);
+  await click("Copy full preview");
+  await until(
+    () =>
+      document.querySelector(".git-favorite-recovery-dialog [role=status]")?.textContent ===
+      "Copied the full preview.",
+    "native clipboard copy acknowledgement",
+  );
+  await scene("git-favorite-recovery-source", {
+    sourceDigest: favorites.sourceDigest,
+    sourceCannotRestore: true,
+    fullSourceCopied: true,
+  });
+  await click("Cancel");
+  await closed();
+  await open();
+  await select(`backup:${revision}`);
+  await scene("git-favorite-recovery-stale", { revision, pinnedCurrentFile: true });
+  await click("Restore all repository favorites");
+  await until(
+    () =>
+      document
+        .querySelector(".git-favorite-recovery-dialog [role=alert]")
+        ?.textContent?.includes("changed"),
+    "visible actual stale restore conflict",
+  );
+  await scene("git-favorite-recovery-conflict", {
+    staleRestoreRejected: true,
+    explicitReloadRequired: true,
+  });
+  await click("Reload recovery copies");
+  await select(`backup:${revision}`);
+  await click("Restore all repository favorites");
+  await closed();
+  await until(
+    () => document.querySelector('[data-node="refs/heads/main"]')?.textContent?.includes("★"),
+    "Git favorites refreshed after actual restore",
+  );
+  await scene("git-favorite-recovery-restored", {
+    verifiedSnapshotRestored: true,
+    damagedBytesRetained: true,
+    gitViewRefreshed: true,
+  });
+  await open();
+  await select(`backup:${revision}`);
+  await scene("git-favorite-recovery-missing", {
+    explicitMissingRestore: true,
+    previewReadonly: true,
+  });
+  await click("Restore all repository favorites");
+  await closed();
+  const restored = (await observeCore("git.favorites.read", {
+    directory: context.project,
+  })) as unknown as CoreGitFavorites;
+  assert(
+    JSON.stringify(restored.references) === JSON.stringify(favorites.references),
+    "Missing favorite restore lost references",
+  );
+  await scene("git-favorite-recovery-complete", {
+    exactReferencesRestored: true,
+    explicitMissingRestore: true,
+  });
 }
 
 export async function run(recovery: boolean) {

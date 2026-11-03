@@ -2,23 +2,25 @@ import AppKit
 import UTermBridge
 
 @MainActor
-private final class EditorRecoveryPanel: NSObject {
+final class RecoveryPreviewPanel: NSObject {
     let alert = NSAlert()
     let choices = NSPopUpButton(frame: NSRect(x: 0, y: 240, width: 460, height: 28), pullsDown: false)
     private let preview = NSTextView(frame: NSRect(x: 0, y: 0, width: 440, height: 220))
     var changed: ((Int) -> Void)?
+    private let readyButtonIndex: Int
 
-    init(title: String, message: String, choices titles: [String], buttons: [String]) {
+    init(title: String, message: String, choices titles: [String], buttons: [String], readyButtonIndex: Int = 0, cancelButtonIndex: Int = 1, identifierPrefix: String = "editor-recovery") {
+        self.readyButtonIndex = readyButtonIndex
         super.init()
         alert.messageText = title
         alert.informativeText = message
         for (index, title) in buttons.enumerated() {
             let button = alert.addButton(withTitle: title)
-            button.identifier = NSUserInterfaceItemIdentifier("editor-recovery-button-\(index)")
-            if index == 1 { button.keyEquivalent = "\u{1b}" }
+            button.identifier = NSUserInterfaceItemIdentifier("\(identifierPrefix)-button-\(index)")
+            if index == cancelButtonIndex { button.keyEquivalent = "\u{1b}" }
         }
         choices.addItems(withTitles: titles)
-        choices.identifier = NSUserInterfaceItemIdentifier("editor-recovery-choice")
+        choices.identifier = NSUserInterfaceItemIdentifier("\(identifierPrefix)-choice")
         choices.target = self
         choices.action = #selector(select)
         preview.isEditable = false
@@ -29,7 +31,7 @@ private final class EditorRecoveryPanel: NSObject {
         preview.textContainer?.widthTracksTextView = true
         preview.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         preview.autoresizingMask = [.width]
-        preview.identifier = NSUserInterfaceItemIdentifier("editor-recovery-preview")
+        preview.identifier = NSUserInterfaceItemIdentifier("\(identifierPrefix)-preview")
         let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 460, height: 230))
         scroll.hasVerticalScroller = true
         scroll.borderType = .bezelBorder
@@ -43,7 +45,7 @@ private final class EditorRecoveryPanel: NSObject {
     @objc private func select() { changed?(choices.indexOfSelectedItem) }
     func show(_ text: String, ready: Bool) {
         preview.string = text
-        alert.buttons[0].isEnabled = ready
+        alert.buttons[readyButtonIndex].isEnabled = ready
     }
     func present(for window: NSWindow) async -> NSApplication.ModalResponse {
         await withCheckedContinuation { continuation in
@@ -69,7 +71,7 @@ enum EditorRecovery {
         }
         let drafts = collection.drafts.map(\.draft)
         guard !drafts.isEmpty else { throw BridgeFailure(code: "NO_DRAFTS", message: localized("There are no retained editor drafts.", "没有保留的编辑器草稿。")) }
-        let panel = EditorRecoveryPanel(
+        let panel = RecoveryPreviewPanel(
             title: localized("Recover editor drafts", "恢复编辑器草稿"),
             message: localized("Open loads the latest retained draft. Copy text copies this preview's complete text without changing files or recovery data.", "打开会读取最新保留草稿。复制文本会复制此预览的完整文本，不修改文件或恢复数据。"),
             choices: drafts.map { $0.path + " — " + $0.directory },
@@ -97,7 +99,7 @@ enum EditorRecovery {
     static func restoreCopy(bridge: CoreBridge, window: NSWindow) async throws {
         let catalog = try await bridge.editorRecoveryCatalog()
         guard !catalog.backups.isEmpty else { throw BridgeFailure(code: "NO_BACKUPS", message: localized("There are no verified editor recovery copies.", "没有校验通过的编辑器恢复副本。")) }
-        let panel = EditorRecoveryPanel(
+        let panel = RecoveryPreviewPanel(
             title: localized("Restore editor recovery copy", "恢复编辑器备份副本"),
             message: localized("Choose and preview a saved copy. Restore replaces recovery data, keeps damaged bytes and leaves files unchanged. Open editors keep their text; reopen files to load restored drafts.", "选择并预览已保存副本。恢复会替换恢复数据、保留损坏字节，不修改文件。已打开的编辑器保留当前文本，重新打开文件后读取恢复草稿。"),
             choices: catalog.backups,
