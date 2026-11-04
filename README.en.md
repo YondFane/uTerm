@@ -150,6 +150,11 @@ Native terminal QA: `bash scripts/macos-terminal-smoke.sh` runs two real app pro
 temporary data, a bundled standalone helper and language/theme/width screenshot artifacts. SwiftPM
 resolves the pinned SwiftTerm 1.20.0 dependency; it does not change the legacy terminal renderer.
 
+Concurrent native ownership QA: `bash scripts/macos-input-control-smoke.sh` runs two isolated native
+app processes against the same session, exercises the take-control button and passive input/resize
+safeguards, and records source-bound reports and four real window screenshots. Manual keyboard, IME
+and system-clipboard acceptance remain separate.
+
 Native Java QA: choose **File → Java build and run…** for the shared Maven/JDK configuration,
 build/run actions and task logs. `bash scripts/macos-java-smoke.sh` requires JDK 21 and a macOS
 graphical session; it compiles an isolated JAR and records real configuration/task/window evidence.

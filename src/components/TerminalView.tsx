@@ -21,6 +21,7 @@ import {
   taskLogText,
 } from "../lib/terminal-replay";
 import type { AgentActivityEvent } from "../lib/terminal-frame";
+import type { CoreInputControl } from "../lib/core-contract.generated";
 import { attachTerminalScrollInput } from "../lib/terminal-scroll";
 import { attachTerminalFit, createTerminalResizeQueue } from "../lib/terminal-resize";
 import { terminalRendererPool } from "../lib/terminal-renderer";
@@ -45,6 +46,8 @@ type Connection = {
   replayViewport: number | null;
   queue: Promise<void>;
   bytes: number;
+  inputControl?: CoreInputControl | null;
+  controlRevision: number;
   resize: ReturnType<typeof createTerminalResizeQueue>;
 };
 const action = (id: string, action: string, values = {}) =>
@@ -101,6 +104,8 @@ export function TerminalView({
 }) {
   const uiLanguage = useUiLanguage();
   const [autoFollow, setAutoFollow] = useState(true);
+  const [inputControl, setInputControl] = useState<CoreInputControl | null>();
+  const [takingControl, setTakingControl] = useState(false);
   const followOutput = useRef(true);
   function followLogs(value: boolean) {
     followOutput.current = value;
@@ -153,6 +158,7 @@ export function TerminalView({
   const terminal = useRef<Terminal | null>(null);
   const renderer = useRef<ReturnType<typeof terminalRendererPool.register> | null>(null);
   const fitLayout = useRef<ReturnType<typeof attachTerminalFit> | null>(null);
+  const fitAddon = useRef<FitAddon | null>(null);
   const connection = useRef<Connection | null>(null);
   const closeRef = useRef(close);
   closeRef.current = close;
@@ -216,6 +222,7 @@ export function TerminalView({
       theme: { background: "#212121", foreground: "#c8cdd3" },
     });
     const fit = new FitAddon();
+    fitAddon.current = fit;
     term.loadAddon(fit);
     const searchAddon = new SearchAddon();
     term.loadAddon(searchAddon);
@@ -298,22 +305,28 @@ export function TerminalView({
     const send = (data: Uint8Array) => {
       if (logView) return;
       const current = connection.current;
-      if (!current || current.closed || current.replaying) return;
+      if (!current || current.closed || current.replaying || term.options.disableStdin) return;
       if (current.bytes + data.length > 1024 * 1024) {
         setError(tx("输入过长，请分段粘贴。"));
         return;
       }
       current.bytes += data.length;
+      const revision = current.controlRevision;
       current.queue = current.queue
         .then(async () => {
           await current.ready;
-          for (let offset = 0; offset < data.length && !current.closed; offset += 16384)
+          for (
+            let offset = 0;
+            offset < data.length && !current.closed && current.controlRevision === revision;
+            offset += 16384
+          )
             await action(current.id, "write", {
               data: Array.from(data.subarray(offset, offset + 16384)),
             });
         })
         .catch((reason: unknown) => {
-          if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
+          if (!current.closed && current.controlRevision === revision)
+            setError(session.ssh ? sshError(reason) : String(reason));
         })
         .finally(() => {
           current.bytes -= data.length;
@@ -343,14 +356,14 @@ export function TerminalView({
     const disposeScrollInput = attachTerminalScrollInput(term, send);
     const resize = term.onResize(({ rows, cols }) => {
       const current = connection.current;
-      if (!current || current.replaying) return;
+      if (!current || current.replaying || current.inputControl?.owned === false) return;
       current.resize.request({ rows, cols });
     });
     const layout = attachTerminalFit(
       term,
       container.current,
       () => fit.fit(),
-      () => !connection.current?.replaying,
+      () => !connection.current?.replaying && connection.current?.inputControl?.owned !== false,
       (reason) => setError(String(reason)),
       () => {
         const current = connection.current;
@@ -370,6 +383,7 @@ export function TerminalView({
       }
       layout.dispose();
       fitLayout.current = null;
+      fitAddon.current = null;
       searchListener.dispose();
       search.current = null;
       queryHandlers.forEach((handler) => handler.dispose());
@@ -441,6 +455,7 @@ export function TerminalView({
     if (!term || connection.current) return;
     detectedAgentRef.current(null);
     setError("");
+    setInputControl(undefined);
     setStatus("starting");
     term.reset();
     const events = new Channel<ArrayBuffer>();
@@ -453,11 +468,13 @@ export function TerminalView({
       ready: Promise.resolve(),
       queue: Promise.resolve(),
       bytes: 0,
+      controlRevision: 0,
       resize: createTerminalResizeQueue(
         async ({ rows, cols }) => {
           await current.ready;
           if (
             !current.closed &&
+            current.inputControl?.owned !== false &&
             (!logView || !current.exited) &&
             !current.replaying &&
             connection.current === current &&
@@ -486,6 +503,12 @@ export function TerminalView({
         return;
       }
       const { data, ...event } = decoded;
+      if (current.inputControl?.owned !== event.input_control?.owned) current.controlRevision++;
+      const gainedControl =
+        current.inputControl?.owned === false && event.input_control?.owned === true;
+      current.inputControl = event.input_control;
+      setInputControl(event.input_control);
+      term.options.disableStdin = logView || current.exited || event.input_control?.owned === false;
       setActivityError(event.agent_activity_error ?? "");
       if (event.agent_state)
         agentStateRef.current(event.agent_state, event.reset, Array.isArray(event.agent_events));
@@ -507,6 +530,10 @@ export function TerminalView({
         fitLayout.current?.cancel();
         term.reset();
         term.resize(event.cols, event.rows);
+      } else if (event.input_control?.owned === false) {
+        fitLayout.current?.cancel();
+        if (term.cols !== event.cols || term.rows !== event.rows)
+          term.resize(event.cols, event.rows);
       }
       const retainedViewport =
         logView && !followOutput.current ? term.buffer.active.viewportY : null;
@@ -522,6 +549,7 @@ export function TerminalView({
         } else if (existingOnly && data.length && (!logView || followOutput.current)) {
           current.replayViewport = followTaskReplayViewport(term, current.replayViewport);
         }
+        if (gainedControl) fitLayout.current?.schedule();
         if (retainedViewport !== null) term.scrollToLine(retainedViewport);
         if (event.exited) {
           current.exited = true;
@@ -573,7 +601,8 @@ export function TerminalView({
     try {
       await current.ready;
       if (!current.closed) {
-        term.options.disableStdin = logView || current.exited;
+        term.options.disableStdin =
+          logView || current.exited || current.inputControl?.owned === false;
         setStatus((value) => (value === "starting" ? "running" : value));
         if (activeRef.current) term.focus();
       }
@@ -648,6 +677,26 @@ export function TerminalView({
     await start();
   }
 
+  async function takeInputControl() {
+    const current = connection.current;
+    if (!current || current.closed || current.exited || takingControl || logView) return;
+    setTakingControl(true);
+    try {
+      await current.ready;
+      if (current.closed || connection.current !== current) return;
+      const size = fitAddon.current?.proposeDimensions();
+      await action(current.id, "takeControl", size ?? {});
+      if (!current.closed && connection.current === current) {
+        setError("");
+        terminal.current?.focus();
+      }
+    } catch (reason) {
+      if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
+    } finally {
+      setTakingControl(false);
+    }
+  }
+
   return (
     <section
       data-session-id={session.id}
@@ -700,6 +749,21 @@ export function TerminalView({
         <span className="session-working-directory" title={sessionDirectory}>
           {logView ? session.name : sessionDirectory}
         </span>
+        {!logView && inputControl?.owned === false && (
+          <>
+            <span className="terminal-control-state" role="status">
+              {tx("只读连接")}
+            </span>
+            <button
+              type="button"
+              data-terminal-take-control
+              disabled={takingControl || status !== "running"}
+              onClick={() => void takeInputControl()}
+            >
+              {tx("接管输入")}
+            </button>
+          </>
+        )}
         {logView && (
           <>
             <label className="python-log-follow">
@@ -882,7 +946,11 @@ export function TerminalView({
       {(fontError || error || activityError) && (
         <p role="alert">{localizeMessage(fontError || error || activityError)}</p>
       )}
-      <div ref={container} className="terminal" aria-label={tx("本地终端")} />
+      <div
+        ref={container}
+        className={`terminal${inputControl?.owned === false ? " terminal-readonly" : ""}`}
+        aria-label={tx("本地终端")}
+      />
     </section>
   );
 }

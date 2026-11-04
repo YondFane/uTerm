@@ -600,6 +600,14 @@ h1 {
 .terminal .xterm {
   height: 100%;
 }
+.terminal-readonly {
+  overflow-x: auto;
+}
+.terminal-control-state {
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--ui-muted);
+}
 
 [role="alert"] {
   color: #f5b5aa;

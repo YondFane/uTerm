@@ -70,6 +70,10 @@ struct WorkspaceView: View {
                             Text(model.state?.sessions.first { $0.sessionID == session.id }?.session["name"].string ?? "")
                             Spacer()
                             if session.exited { Text(localized("Exited", "已退出")).foregroundStyle(.secondary) }
+                            if session.inputControl?.owned == false {
+                                Text(localized("Read-only attachment", "只读连接")).foregroundStyle(.secondary)
+                                InputControlButton(session: session)
+                            }
                             Button(localized("Reconnect", "重新连接")) { Task { await session.reconnect() } }
                             Button(localized("Close session", "关闭会话")) { Task { await model.closeSession() } }
                                 .disabled(model.busy || model.gitFavoritesRecoveryPresented)
@@ -84,6 +88,30 @@ struct WorkspaceView: View {
         .ignoresSafeArea(.container, edges: .top)
         .sheet(isPresented: $model.settingsPresented) { BasicSettingsView(model: model) }
         .sheet(item: $model.nameDraft) { _ in NameEditorView(model: model) }
+    }
+}
+
+@MainActor
+private struct InputControlButton: NSViewRepresentable {
+    let session: TerminalSession
+    func makeCoordinator() -> Coordinator { Coordinator(session) }
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.takeControl))
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.identifier = NSUserInterfaceItemIdentifier("native-terminal-take-control")
+        button.setAccessibilityIdentifier("native-terminal-take-control")
+        return button
+    }
+    func updateNSView(_ button: NSButton, context: Context) {
+        context.coordinator.session = session
+        button.title = localized("Take input control", "接管输入")
+        button.isEnabled = context.environment.isEnabled && !session.takingInputControl && !session.exited
+    }
+    @MainActor final class Coordinator: NSObject {
+        var session: TerminalSession
+        init(_ session: TerminalSession) { self.session = session }
+        @objc func takeControl() { Task { await session.takeInputControl() } }
     }
 }
 

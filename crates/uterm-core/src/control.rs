@@ -98,8 +98,18 @@ pub(crate) fn execute(core: &Core, request: Request, options: &Value) -> Result<
             let generation = options["generation"].as_str().ok_or_else(|| {
                 CoreError::new("HOST_NOT_READY", "Reconnect before sending to this session")
             })?;
-            let reply = core
-                .host_client()?
+            let link = core
+                .links
+                .find(&id)
+                .map_err(|error| CoreError::new("HOST_NOT_READY", error))?;
+            if link.generation != generation {
+                return Err(CoreError::new(
+                    "STALE_GENERATION",
+                    "The session changed; send cancelled",
+                ));
+            }
+            let reply = link
+                .client
                 .request(utermd_local::daemon::Operation::Write {
                     id: id.clone(),
                     generation: generation.into(),
@@ -130,5 +140,134 @@ pub(crate) fn execute(core: &Core, request: Request, options: &Value) -> Result<
             "INVALID_PARAMS",
             "Unsupported control action",
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        path::PathBuf,
+        sync::Arc,
+        time::{Duration, Instant},
+    };
+
+    #[test]
+    fn cli_send_uses_the_current_attachment_lease_and_never_takes_control_implicitly() {
+        let temporary = tempfile::tempdir().unwrap();
+        let root = temporary.path().canonicalize().unwrap();
+        let core = Core::open(root.join("shared-state-v1")).unwrap();
+        let other = Core::open(root.join("shared-state-v1")).unwrap();
+        let invoke =
+            |core: &Core, method: &str, params: Value| core.dispatch(method, params).unwrap();
+        let defaults = invoke(&core, "state.defaults", Value::Null);
+        let imported = invoke(
+            &core,
+            "migration.import",
+            json!({"workspace":defaults["workspace"],"settings":defaults["settings"],"legacy":{}}),
+        );
+        let created = execute(
+            &core,
+            Request {
+                id: "new".into(),
+                method: "sessions.new".into(),
+                params: json!({"directory":root}),
+            },
+            &json!({"expectedRevision":imported["revision"]}),
+        )
+        .unwrap();
+        let id = created["result"]["id"].as_str().unwrap().to_owned();
+        let name = if cfg!(windows) {
+            "utermd-local.exe"
+        } else {
+            "utermd-local"
+        };
+        let helper = std::env::var_os("CARGO_TARGET_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../utermd-local/target")
+            })
+            .join("debug")
+            .join(name)
+            .canonicalize()
+            .unwrap();
+        for client in [&core, &other] {
+            invoke(client, "host.configure", json!({"helper":helper}));
+            client
+                .set_terminal_sink(Arc::new(|_, _, _| Ok(())))
+                .unwrap();
+        }
+        struct Cleanup<'a>(&'a Core);
+        impl Drop for Cleanup<'_> {
+            fn drop(&mut self) {
+                if let Ok(status) = self.0.dispatch("host.status", Value::Null) {
+                    for session in status["sessions"].as_array().unwrap() {
+                        let _ = self.0.dispatch(
+                            "host.close",
+                            json!({"id":session["spec"]["id"],"generation":session["generation"]}),
+                        );
+                    }
+                    let _ = self.0.dispatch("host.shutdownIdle", Value::Null);
+                }
+            }
+        }
+        let _cleanup = Cleanup(&core);
+        let open = |attachment: &str| json!({"id":id,"attachment":attachment,"directory":root,"shell":"default","rows":24,"cols":80});
+        let generation = invoke(&core, "terminal.open", open("cli-owner"))["generation"].clone();
+        invoke(&other, "terminal.open", open("cli-other"));
+        let send = |text: &str, generation: Value| {
+            execute(
+                &core,
+                Request {
+                    id: "send".into(),
+                    method: "sessions.send".into(),
+                    params: json!({"id":id,"text":text}),
+                },
+                &json!({"expectedRevision":created["revision"],"generation":generation}),
+            )
+        };
+        let enter = if cfg!(windows) { "\r" } else { "\n" };
+        send(
+            &format!("echo FIRST > cli-first.txt{enter}"),
+            generation.clone(),
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !root.join("cli-first.txt").exists() {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        invoke(
+            &other,
+            "terminal.action",
+            json!({"attachment":"cli-other","action":"takeControl"}),
+        );
+        let error = send(
+            &format!("echo STALE > cli-stale.txt{enter}"),
+            generation.clone(),
+        )
+        .unwrap_err();
+        assert!(
+            error.message.contains("SESSION_CONTROL_REQUIRED"),
+            "{error:?}"
+        );
+        let stale = send("ignored", json!("old-generation")).unwrap_err();
+        assert_eq!(stale.code, "STALE_GENERATION");
+        invoke(
+            &core,
+            "terminal.action",
+            json!({"attachment":"cli-owner","action":"takeControl"}),
+        );
+        send(
+            &format!("echo RETURNED > cli-returned.txt{enter}"),
+            generation,
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !root.join("cli-returned.txt").exists() {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(!root.join("cli-stale.txt").exists());
     }
 }

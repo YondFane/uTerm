@@ -140,6 +140,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             if let report = WorkspaceModel.argument("--terminal-smoke-report") { await runTerminalSmoke(report, reconnect: false) }
             if let report = WorkspaceModel.argument("--terminal-reconnect-report") { await runTerminalSmoke(report, reconnect: true) }
+            if let path = WorkspaceModel.argument("--input-control-report") {
+                var result = baseReport()
+                do { try await InputControlSmoke.run(model: model, window: window, report: &result) }
+                catch { result["failure"] = error.localizedDescription }
+                finishReport(result, path: path)
+            }
         }
     }
 

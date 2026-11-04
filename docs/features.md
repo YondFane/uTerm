@@ -121,6 +121,13 @@ acceptance; Windows and legacy macOS retain the existing full feature set. See
 
 ### Shared input and size control
 
+When another current client owns a session, its terminal shows **Read-only attachment** and a **Take
+input control** button. Reading, selection and copying remain available. Explicitly press this
+button to move input and window-size control to this view; focusing a window never takes control.
+Passive views follow the host grid without resizing it. Losing control discards queued input,
+including clipboard data, so it cannot be sent after a later takeover. Task logs remain readonly and
+do not show takeover controls.
+
 The development host/Core assigns one input/resize lease per live session generation. Other
 attachments keep reading and acknowledging output. Explicit takeover revokes previous writes and
 resizes; a late release cannot revoke the new owner or a replacement generation. Releasing or
@@ -140,8 +147,22 @@ process/generation reattachment and exact close. A TCP gate delays an old readon
 after takeover and verifies that its response cannot overwrite the new control state. Clock-driven
 policy checks cover expiry/renewal and legacy fallback without waiting for the lease in real time.
 `input-control-host.json`, `input-control-core.json` and test logs retain source/platform metadata;
-CI runs host checks before unrelated Java task checks. These are protocol checks: window takeover
-controls and real macOS/Windows interaction acceptance are still pending in this subrange.
+CI runs host checks before unrelated Java task checks. Native CLI sending uses the current app
+attachment and its existing lease; it cannot implicitly take over another client's control. A real
+host regression checks accepted CLI input, rejected input after takeover and stale-generation
+refusal.
+
+The shared u64 fixtures also carry owned/passive/unowned metadata through the real Rust encoder and
+Swift/TypeScript decoders; malformed roles are rejected without rounding sequence or acknowledgement
+values.
+
+`bash scripts/macos-input-control-smoke.sh` drives two concurrent, isolated native app processes,
+the native take-control button, passive input/resize rejection, output/ack, ordinary viewer exit,
+reacquisition and exact close, with four WindowServer captures. `pnpm qa:shared-state` includes two
+concurrent real Tauri processes and six ownership scenes using actual terminal input and takeover
+buttons. These newly added window checks are pending platform execution; manual keyboard, IME and
+system-clipboard acceptance remain unexecuted. Successful protocol tests do not establish those
+platform/interaction results.
 
 ### Shared saved state
 

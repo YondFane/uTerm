@@ -18,7 +18,15 @@ import type {
 interface Context {
   root: string;
   project: string;
-  phase: "initial" | "reopen" | "recover" | "editor-checkpoint" | "editor-reopen" | "git";
+  phase:
+    | "initial"
+    | "reopen"
+    | "recover"
+    | "editor-checkpoint"
+    | "editor-reopen"
+    | "git"
+    | "input-owner"
+    | "input-viewer";
   backup?: string;
   ready: boolean;
 }
@@ -775,6 +783,167 @@ async function runFavoriteRecovery(context: Context) {
   });
 }
 
+async function runInputControl(context: Context) {
+  const owner = context.phase === "input-owner";
+  if (owner) {
+    const create = await until(
+      () =>
+        document.querySelector<HTMLButtonElement>(
+          'button[aria-label="New terminal in Temporary QA project"]',
+        ),
+      "new actual terminal button",
+    );
+    create.click();
+  }
+  const section = await until(
+    () => document.querySelector<HTMLElement>(".local-session.visible[data-session-id]"),
+    "visible real terminal",
+  );
+  await until(
+    () => section.querySelector('.terminal-status[aria-label="Running"]'),
+    "real terminal running",
+  );
+  const readonly = () => section.querySelector("[data-terminal-take-control]");
+  const send = (command: string) => {
+    const field = section.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
+    assert(field, "Missing actual xterm input field");
+    field.focus();
+    const data = new DataTransfer();
+    data.setData("text/plain", command);
+    field.dispatchEvent(
+      new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }),
+    );
+    field.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+    field.dispatchEvent(
+      new KeyboardEvent("keyup", {
+        key: "Enter",
+        code: "Enter",
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+      }),
+    );
+  };
+  const file = async (path: string): Promise<string | null> => {
+    try {
+      return (
+        (await coreRequest("files.read", { directory: context.project, path })) as unknown as {
+          text: string;
+        }
+      ).text;
+    } catch (reason) {
+      if (
+        /No such file|cannot find|not found|找不到|不存在/i.test(
+          String((reason as { message?: string }).message ?? reason),
+        )
+      )
+        return null;
+      throw reason;
+    }
+  };
+  const host = async () =>
+    (await coreRequest("host.status")) as unknown as {
+      pid: number;
+      sessions: { spec: { id: string }; generation: string }[];
+    };
+  const initial = await host();
+  const session = initial.sessions.find((s) => s.spec.id === section.dataset.sessionId);
+  assert(session, "The visible terminal has no actual hosted process");
+  const identity = {
+    sessionID: session.spec.id,
+    generation: session.generation,
+    hostPID: initial.pid,
+    manualKeyboardClipboardAcceptance: false,
+  };
+  if (owner) {
+    await until(() => !readonly(), "initial owner input");
+    send("echo OWNER_READY > owner-input.txt");
+    await until(
+      async () => (await file("owner-input.txt"))?.includes("OWNER_READY"),
+      "actual original owner input side effect",
+    );
+    await scene("input-owner-ready", { ...identity, actualInput: true });
+    await until(readonly, "old owner becomes readonly after viewer takeover");
+    send("echo STALE_OWNER > stale-owner.txt");
+    await until(
+      async () => (await file("viewer-input.txt"))?.includes("VIEWER_READY"),
+      "new owner output side effect",
+    );
+    await scene("input-owner-readonly", { ...identity, passive: true });
+    assert(
+      (await file("stale-owner.txt")) === null && (await file("passive-viewer.txt")) === null,
+      "Passive UI input reached the real shell",
+    );
+    const take = readonly() as HTMLButtonElement;
+    assert(take && !take.disabled, "Take input control is unavailable after viewer exit");
+    take.click();
+    await until(
+      () => !readonly(),
+      "original client explicitly reacquires after ordinary viewer exit",
+    );
+    send("echo OWNER_RETURNED > owner-returned.txt");
+    await until(
+      async () => (await file("owner-returned.txt"))?.includes("OWNER_RETURNED"),
+      "input survives the other application's ordinary exit",
+    );
+    const retained = await host();
+    assert(
+      retained.pid === initial.pid &&
+        retained.sessions.some(
+          (s) => s.spec.id === session.spec.id && s.generation === session.generation,
+        ),
+      "Takeover or quit replaced the process",
+    );
+    await scene("input-owner-returned", {
+      ...identity,
+      passiveInputRejected: true,
+      sameHostAndGeneration: true,
+      viewerQuitRetainedProcess: true,
+    });
+    const close = document.querySelector<HTMLButtonElement>(".session-close");
+    assert(close, "Close Session is unavailable");
+    close.click();
+    await until(
+      async () => !(await host()).sessions.some((s) => s.spec.id === session.spec.id),
+      "explicit close removes the exact process",
+    );
+    await scene("input-owner-closed", { ...identity, explicitClose: true });
+  } else {
+    await until(readonly, "second actual application attaches readonly");
+    send("echo PASSIVE > passive-viewer.txt");
+    await scene("input-viewer-readonly", { ...identity, passive: true });
+    const take = readonly() as HTMLButtonElement;
+    assert(take && !take.disabled, "The real take-control button is unavailable");
+    take.click();
+    await until(() => !readonly(), "explicit take-control DOM click");
+    send("echo VIEWER_READY > viewer-input.txt");
+    await until(
+      async () => (await file("viewer-input.txt"))?.includes("VIEWER_READY"),
+      "new owner sends actual terminal input",
+    );
+    assert(
+      (await file("passive-viewer.txt")) === null,
+      "Passive clipboard input was replayed after takeover",
+    );
+    await scene("input-viewer-owned", {
+      ...identity,
+      actualInput: true,
+      explicitTakeover: true,
+      passiveInputDiscarded: true,
+    });
+  }
+  await invoke("qa_request_exit");
+}
+
 export async function run(recovery: boolean) {
   try {
     const context = await invoke<Context>("qa_context");
@@ -791,6 +960,10 @@ export async function run(recovery: boolean) {
     }
     await until(async () => (await invoke<Context>("qa_context")).ready, "normal quit listener");
     assert(localStorage.getItem(backupKey) === sentinel, "Auxiliary backup was changed");
+    if (context.phase === "input-owner" || context.phase === "input-viewer") {
+      await runInputControl(context);
+      return;
+    }
     if (context.phase === "editor-checkpoint" || context.phase === "editor-reopen") {
       await runEditor(context);
       return;

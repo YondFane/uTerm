@@ -93,6 +93,12 @@ export function decodeTerminalFrame(payload: ArrayBuffer): TerminalFrame {
     (metadata.agent_state != null && typeof metadata.agent_state !== "string") ||
     (metadata.foreground_agent != null && typeof metadata.foreground_agent !== "string") ||
     (metadata.agent_activity_error != null && typeof metadata.agent_activity_error !== "string") ||
+    (metadata.input_control != null &&
+      (typeof metadata.input_control !== "object" ||
+        Array.isArray(metadata.input_control) ||
+        typeof metadata.input_control.owned !== "boolean" ||
+        (metadata.input_control.owner != null &&
+          typeof metadata.input_control.owner !== "string"))) ||
     (metadata.agent_events != null &&
       (!Array.isArray(metadata.agent_events) ||
         metadata.agent_events.length > 128 ||

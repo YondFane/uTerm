@@ -15,6 +15,11 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private var connecting: Task<Void, Never>?
     private var inputTask: Task<Void, Never>?
     private var input = Data()
+    private var inputRevision = 0
+    private(set) var inputControl: CoreInputControl?
+    private(set) var takingInputControl = false
+    private var hostSize: (Int, Int)?
+    private var viewportSize: (Int, Int)?
     private var desiredSize: (Int, Int)?
     private var reconnecting = false
     private var applyingReplay = false
@@ -44,6 +49,8 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         self.bridge = bridge
         attachment = UUID().uuidString
         generation = nil
+        inputControl = nil
+        hostSize = nil
         exited = false
         error = ""
         reconnecting = false
@@ -114,20 +121,37 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             guard packet.header.attachment == attachment, packet.header.generation == generation else { return }
         }
         let terminal = view.getTerminal()
+        let previousControl = inputControl?.owned
+        inputControl = packet.header.input_control
+        hostSize = (Int(packet.header.cols), Int(packet.header.rows))
+        if previousControl != inputControl?.owned {
+            inputRevision += 1
+            input.removeAll()
+            view.allowMouseReporting = taskGeneration == nil && inputControl?.owned != false
+            changed?()
+        }
         let pausedAnchor = taskGeneration != nil && !taskLogFollowsOutput
             ? terminal.buffer.totalLinesTrimmed + terminal.buffer.yDisp : nil
         if taskGeneration != nil { applyingTaskLogViewport = true }
         if packet.header.reset {
-            let intended = desiredSize ?? (terminal.cols, terminal.rows)
+            let intended = viewportSize ?? desiredSize ?? (terminal.cols, terminal.rows)
+            viewportSize = intended
             applyingReplay = true
             terminal.resetToInitialState()
             terminal.resize(cols: Int(packet.header.cols), rows: Int(packet.header.rows))
             view.feed(byteArray: Array(packet.bytes)[...])
-            terminal.resize(cols: intended.0, rows: intended.1)
+            if inputControl?.owned != false { terminal.resize(cols: intended.0, rows: intended.1) }
             applyingReplay = false
             desiredSize = intended
         } else {
+            restorePassiveSize()
             view.feed(byteArray: Array(packet.bytes)[...])
+        }
+        if previousControl == false && inputControl?.owned == true, let viewportSize {
+            applyingReplay = true
+            terminal.resize(cols: viewportSize.0, rows: viewportSize.1)
+            applyingReplay = false
+            desiredSize = viewportSize
         }
         if taskGeneration != nil {
             if let anchor = pausedAnchor {
@@ -164,13 +188,15 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         catch { self.error = error.localizedDescription }
         attachment = UUID().uuidString
         generation = nil
+        inputControl = nil
+        hostSize = nil
         exited = false
         input.removeAll()
         await connect(reconnectOnly: true)
     }
 
     func enqueue(_ bytes: Data) {
-        guard taskGeneration == nil, generation != nil, error.isEmpty, !exited, !reconnecting else { return }
+        guard taskGeneration == nil, inputControl?.owned != false, generation != nil, error.isEmpty, !exited, !reconnecting else { return }
         guard input.count + bytes.count <= 1024 * 1024 else {
             error = localized("Input queue is full. Wait before pasting again.", "输入队列已满，请等待后再粘贴。")
             changed?(); return
@@ -182,10 +208,12 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             defer { self.inputTask = nil }
             while !self.input.isEmpty {
                 let bytes = Data(self.input.prefix(16 * 1024))
+                let revision = self.inputRevision
                 do {
                     try await self.bridge.write(attachment: self.attachment, bytes: bytes)
-                    self.input.removeFirst(bytes.count)
+                    if revision == self.inputRevision { self.input.removeFirst(bytes.count) }
                 } catch {
+                    if revision != self.inputRevision { continue }
                     self.input.removeAll()
                     self.error = error.localizedDescription
                     self.changed?(); return
@@ -200,12 +228,37 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     func finishConnection() async { if let connecting { await connecting.value } }
 
     private func resizeIfNeeded() async {
-        guard generation != nil, let (cols, rows) = desiredSize else { return }
+        guard generation != nil, inputControl?.owned != false, let (cols, rows) = desiredSize else { return }
         desiredSize = nil
         do { _ = try await bridge.call("terminal.action", params: .object([
             "attachment": .string(attachment), "action": .string("resize"),
             "cols": .number(Double(cols)), "rows": .number(Double(rows))
         ])) } catch { self.error = error.localizedDescription; changed?() }
+    }
+
+    func takeInputControl() async {
+        guard taskGeneration == nil, inputControl?.owned == false, !takingInputControl, !exited else { return }
+        takingInputControl = true
+        changed?()
+        defer { takingInputControl = false; changed?() }
+        let size = viewportSize ?? (view.getTerminal().cols, view.getTerminal().rows)
+        do {
+            _ = try await bridge.call("terminal.action", params: .object([
+                "attachment": .string(attachment), "action": .string("takeControl"),
+                "cols": .number(Double(size.0)), "rows": .number(Double(size.1))
+            ]))
+            error = ""
+            view.window?.makeFirstResponder(view)
+        } catch { self.error = error.localizedDescription }
+    }
+
+    private func restorePassiveSize() {
+        guard inputControl?.owned == false, let hostSize else { return }
+        let terminal = view.getTerminal()
+        guard terminal.cols != hostSize.0 || terminal.rows != hostSize.1 else { return }
+        applyingReplay = true
+        terminal.resize(cols: hostSize.0, rows: hostSize.1)
+        applyingReplay = false
     }
 
     var text: String {
@@ -222,7 +275,9 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
         guard newCols > 0, newRows > 0, newCols <= 1000, newRows <= 1000 else { return }
         guard !applyingReplay else { return }
+        viewportSize = (newCols, newRows)
         desiredSize = (newCols, newRows)
+        if inputControl?.owned == false { restorePassiveSize(); return }
         Task { await resizeIfNeeded() }
     }
     func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}

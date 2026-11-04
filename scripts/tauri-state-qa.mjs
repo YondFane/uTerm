@@ -118,6 +118,7 @@ const delay = (ms) => new Promise((done) => setTimeout(done, ms));
 const scenes = [];
 const profileLinks = [];
 let child;
+const inputControlChildren = [];
 let binary;
 let successful = false;
 try {
@@ -230,9 +231,9 @@ try {
       `param([int]$TargetProcessId,[string]$Destination)\nAdd-Type -AssemblyName System.Drawing\nAdd-Type @'\nusing System; using System.Runtime.InteropServices;\npublic class WindowCapture {\n [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }\n [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);\n [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);\n [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);\n}\n'@\n$p = Get-Process -Id $TargetProcessId\n$p.Refresh()\n$handle = $p.MainWindowHandle\nif ($handle -eq [IntPtr]::Zero) { throw 'No native window' }\n[void][WindowCapture]::ShowWindow($handle, 9)\n[void][WindowCapture]::SetForegroundWindow($handle)\nStart-Sleep -Milliseconds 300\n$rect = New-Object WindowCapture+Rect\nif (![WindowCapture]::GetWindowRect($handle,[ref]$rect)) { throw 'GetWindowRect failed' }\n$w=$rect.Right-$rect.Left; $h=$rect.Bottom-$rect.Top\nif ($w -lt 600 -or $h -lt 400) { throw 'Invalid native window dimensions' }\n$image=New-Object System.Drawing.Bitmap($w,$h)\n$g=[System.Drawing.Graphics]::FromImage($image)\ntry { $g.CopyFromScreen($rect.Left,$rect.Top,0,0,$image.Size); $image.Save($Destination,[System.Drawing.Imaging.ImageFormat]::Png) } finally { $g.Dispose(); $image.Dispose() }\n`,
     );
   }
-  function capture(path) {
+  function capture(path, process = child) {
     if (process.platform === "darwin") {
-      const id = execute(join(root, "window-id"), [String(child.pid)]).trim();
+      const id = execute(join(root, "window-id"), [String(process.pid)]).trim();
       execute("/usr/sbin/screencapture", ["-x", "-o", "-l", id, path]);
     } else if (process.platform === "win32") {
       execute("powershell.exe", [
@@ -242,12 +243,108 @@ try {
         "-File",
         join(root, "capture.ps1"),
         "-TargetProcessId",
-        String(child.pid),
+        String(process.pid),
         "-Destination",
         path,
       ]);
     } else execute("import", ["-window", "root", path]);
     assert(readFileSync(path).length > 5000, "Screenshot was not captured");
+  }
+  async function runInputControl() {
+    const applications = [];
+    function start(phase) {
+      const process = spawn(binary, ["--qa-data-root", root, "--qa-phase", phase], {
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      inputControlChildren.push(process);
+      const state = { phase, process, log: "", closed: false, code: null, observed: new Set() };
+      process.stdout.on("data", (text) => (state.log += text));
+      process.stderr.on("data", (text) => (state.log += text));
+      process.once("error", (error) => {
+        state.log += String(error);
+        state.closed = true;
+      });
+      process.once("close", (code) => {
+        state.code = code;
+        state.closed = true;
+      });
+      applications.push(state);
+      return state;
+    }
+    const owner = start("input-owner");
+    let viewer;
+    let ownerReadonlyAck;
+    const deadline = Date.now() + 180000;
+    try {
+      while (Date.now() < deadline) {
+        for (const state of [...applications]) {
+          for (const file of readdirSync(evidence).filter(
+            (name) => name.startsWith(state.phase + "-") && name.endsWith(".json"),
+          )) {
+            if (state.observed.has(file)) continue;
+            state.observed.add(file);
+            const value = JSON.parse(readFileSync(join(evidence, file), "utf8"));
+            assert.equal(value.context.head, head);
+            assert.equal(value.context.tested, tested);
+            const screenshot = file.replace(/\.json$/, ".png");
+            capture(join(output, screenshot), state.process);
+            copyFileSync(join(evidence, file), join(output, file));
+            scenes.push({
+              file,
+              screenshot,
+              scenario: value.scene,
+              checks: value.checks,
+              ...metadata,
+            });
+            assert.notEqual(value.scene, "failure", JSON.stringify(value.checks));
+            const ack = join(evidence, file.replace(/\.json$/, ".ack"));
+            if (value.scene === "input-owner-readonly") ownerReadonlyAck = ack;
+            else writeFileSync(ack, "captured");
+            if (value.scene === "input-owner-ready") viewer = start("input-viewer");
+          }
+        }
+        if (viewer?.closed) {
+          assert.equal(viewer.code, 0, viewer.log);
+          if (ownerReadonlyAck) {
+            writeFileSync(ownerReadonlyAck, "viewer ordinary exit verified");
+            ownerReadonlyAck = undefined;
+          }
+        }
+        if (owner.closed) {
+          assert.equal(owner.code, 0, owner.log);
+          assert(viewer?.closed, "Original owner exited before the viewer completed");
+          assert.equal(owner.observed.size, 4, owner.log);
+          assert.equal(viewer.observed.size, 2, viewer.log);
+          const ready = scenes.find((s) => s.scenario === "input-owner-ready").checks;
+          const passive = scenes.find((s) => s.scenario === "input-viewer-readonly").checks;
+          assert.equal(ready.sessionID, passive.sessionID);
+          assert.equal(ready.generation, passive.generation);
+          assert.equal(ready.hostPID, passive.hostPID);
+          for (const name of ["stale-owner.txt", "passive-viewer.txt"])
+            assert(!existsSync(join(root, "project", name)), name);
+          assert(
+            coreFixture("host.status").sessions.length === 0,
+            "Explicit close retained the QA session",
+          );
+          return;
+        }
+        await delay(100);
+      }
+      throw Error("Concurrent actual Tauri input-control acceptance timed out");
+    } finally {
+      for (const state of applications) {
+        writeFileSync(join(output, state.phase + ".log"), state.log);
+        writeFileSync(
+          join(output, state.phase + "-process.json"),
+          JSON.stringify(
+            { ...metadata, phase: state.phase, exitCode: state.code, closed: state.closed },
+            null,
+            2,
+          ),
+        );
+      }
+    }
   }
   async function run(phase, backup) {
     let writer;
@@ -645,6 +742,7 @@ try {
   const original = readFileSync(join(store, "legacy-original.json"));
   await run("reopen");
   assert.deepEqual(readFileSync(join(store, "legacy-original.json")), original);
+  await runInputControl();
   const backup = readdirSync(store).find((p) => {
     if (!/^snapshot-[a-f0-9]{64}\.backup$/.test(p)) return false;
     const s = JSON.parse(readFileSync(join(store, p), "utf8")).settings;
@@ -673,6 +771,16 @@ try {
   successful = true;
 } finally {
   const cleanupErrors = [];
+  for (const application of inputControlChildren) {
+    if (application.exitCode === null && application.signalCode === null) {
+      application.kill();
+      await Promise.race([new Promise((done) => application.once("close", done)), delay(3000)]);
+      if (application.exitCode === null && application.signalCode === null) {
+        application.kill("SIGKILL");
+        await new Promise((done) => application.once("close", done));
+      }
+    }
+  }
   if (child?.exitCode === null) {
     child.kill();
     await Promise.race([new Promise((done) => child.once("close", done)), delay(3000)]);

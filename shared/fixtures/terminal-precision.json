@@ -9,14 +9,14 @@
   },
   {
     "sequence": "9007199254740992",
-    "header": "{\"attachment\":\"precision\",\"generation\":\"generation\",\"agent_state\":null,\"agent_events\":[{\"id\":\"precision\",\"sequence\":9007199254740992,\"kind\":\"notice\",\"source\":\"terminal\"}],\"agent_activity_error\":null,\"foreground_agent\":null,\"sequence\":9007199254740992,\"reset\":true,\"rows\":24,\"cols\":80,\"exited\":false,\"code\":null,\"error\":null}"
+    "header": "{\"attachment\":\"precision\",\"generation\":\"generation\",\"agent_state\":null,\"agent_events\":[{\"id\":\"precision\",\"sequence\":9007199254740992,\"kind\":\"notice\",\"source\":\"terminal\"}],\"agent_activity_error\":null,\"foreground_agent\":null,\"sequence\":9007199254740992,\"reset\":true,\"rows\":24,\"cols\":80,\"exited\":false,\"code\":null,\"error\":null,\"input_control\":{\"owned\":true,\"owner\":\"uTerm 中文 é\"}}"
   },
   {
     "sequence": "9007199254740993",
-    "header": "{\"attachment\":\"precision\",\"generation\":\"generation\",\"agent_state\":null,\"agent_events\":[{\"id\":\"precision\",\"sequence\":9007199254740993,\"kind\":\"notice\",\"source\":\"terminal\"}],\"agent_activity_error\":null,\"foreground_agent\":null,\"sequence\":9007199254740993,\"reset\":true,\"rows\":24,\"cols\":80,\"exited\":false,\"code\":null,\"error\":null}"
+    "header": "{\"attachment\":\"precision\",\"generation\":\"generation\",\"agent_state\":null,\"agent_events\":[{\"id\":\"precision\",\"sequence\":9007199254740993,\"kind\":\"notice\",\"source\":\"terminal\"}],\"agent_activity_error\":null,\"foreground_agent\":null,\"sequence\":9007199254740993,\"reset\":true,\"rows\":24,\"cols\":80,\"exited\":false,\"code\":null,\"error\":null,\"input_control\":{\"owned\":false,\"owner\":\"uTerm Windows\"}}"
   },
   {
     "sequence": "18446744073709551615",
-    "header": "{\"attachment\":\"precision\",\"generation\":\"generation\",\"agent_state\":null,\"agent_events\":[{\"id\":\"precision\",\"sequence\":18446744073709551615,\"kind\":\"notice\",\"source\":\"terminal\"}],\"agent_activity_error\":null,\"foreground_agent\":null,\"sequence\":18446744073709551615,\"reset\":true,\"rows\":24,\"cols\":80,\"exited\":false,\"code\":null,\"error\":null}"
+    "header": "{\"attachment\":\"precision\",\"generation\":\"generation\",\"agent_state\":null,\"agent_events\":[{\"id\":\"precision\",\"sequence\":18446744073709551615,\"kind\":\"notice\",\"source\":\"terminal\"}],\"agent_activity_error\":null,\"foreground_agent\":null,\"sequence\":18446744073709551615,\"reset\":true,\"rows\":24,\"cols\":80,\"exited\":false,\"code\":null,\"error\":null,\"input_control\":{\"owned\":false,\"owner\":null}}"
   }
 ]

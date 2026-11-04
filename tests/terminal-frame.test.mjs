@@ -84,11 +84,28 @@ test("Rust terminal fixtures and acknowledgements retain every u64 digit", () =>
     const decoded = decodeTerminalFrame(frame);
     assert.equal(decoded.sequence.toString(), sequence);
     assert.equal(decoded.agent_events[0].sequence.toString(), sequence);
+    assert.deepEqual(decoded.input_control, JSON.parse(header).input_control);
     const wire = terminalAcknowledgement(decoded.sequence);
     assert.equal(BigInt(wire).toString(), sequence);
     assert.equal(JSON.parse(JSON.stringify({ sequence: wire })).sequence, wire);
     if (BigInt(sequence) > BigInt(Number.MAX_SAFE_INTEGER)) assert.equal(typeof wire, "string");
     else assert.equal(typeof wire, "number");
+  }
+});
+
+test("control metadata rejects malformed roles without weakening u64 acknowledgement precision", () => {
+  for (const input_control of [false, [], {}, { owned: "true" }, { owned: false, owner: 42 }])
+    assert.throws(() => decodeTerminalFrame(encode({ ...metadata, input_control })));
+  for (const input_control of [
+    null,
+    { owned: false, owner: null },
+    { owned: true, owner: "中文" },
+  ]) {
+    const decoded = decodeTerminalFrame(
+      encode({ ...metadata, input_control, sequence: "18446744073709551615" }),
+    );
+    assert.deepEqual(decoded.input_control, input_control);
+    assert.equal(terminalAcknowledgement(decoded.sequence), "18446744073709551615");
   }
 });
 

@@ -537,7 +537,12 @@ mod tests {
                 sequence
             );
             let frame = Frame {
-                input_control: None,
+                input_control: expected.input_control.as_ref().map(|control| {
+                    utermd_local::session_control::Status {
+                        owned: control.owned,
+                        owner: control.owner.clone(),
+                    }
+                }),
                 sequence,
                 agent_events: Some(vec![utermd_local::activity::ActivityEvent {
                     id: "precision".into(),

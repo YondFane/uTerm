@@ -90,6 +90,8 @@ jobs:
         run: bash scripts/macos-native-smoke.sh
       - name: Real native PTY, split, detach and replay smoke
         run: bash scripts/macos-terminal-smoke.sh
+      - name: Real concurrent native input and resize ownership
+        run: bash scripts/macos-input-control-smoke.sh
       - name: Real native content and resource boundary smoke
         run: bash scripts/macos-content-smoke.sh
       - name: Real native editor save, conflict and forced-exit recovery

@@ -25,9 +25,21 @@ final class TerminalPacketTests: XCTestCase {
             let expected = try XCTUnwrap(UInt64(fixture.sequence))
             XCTAssertEqual(packet.header.sequence, expected)
             XCTAssertEqual(packet.header.agent_events?.first?.sequence, expected)
+            let metadata = try JSONSerialization.jsonObject(with: Data(fixture.header.utf8)) as? [String: Any]
+            let control = metadata?["input_control"] as? [String: Any]
+            XCTAssertEqual(packet.header.input_control?.owned, control?["owned"] as? Bool)
+            XCTAssertEqual(packet.header.input_control?.owner, control?["owner"] as? String)
             XCTAssertEqual(packet.bytes, Data([0, 255]))
             let encoded = try JSONEncoder().encode(JSONValue.object(["sequence": .unsigned(packet.header.sequence)]))
             XCTAssertEqual(String(decoding: encoded, as: UTF8.self), "{\"sequence\":\(fixture.sequence)}")
+        }
+    }
+
+    func testMalformedInputControlCannotEnterTheNativeStream() throws {
+        let header = try XCTUnwrap(try fixtures().first).header
+        for control in ["false", "[]", "{}", "{\"owned\":\"true\"}", "{\"owned\":false,\"owner\":42}"] {
+            let malformed = String(header.dropLast()) + ",\"input_control\":" + control + "}"
+            XCTAssertThrowsError(try TerminalPacket(frame(malformed)))
         }
     }
 

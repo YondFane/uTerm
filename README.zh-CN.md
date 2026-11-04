@@ -137,6 +137,9 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 
 共享核心检查会明确执行文件系统失败案例。Unix 需以普通用户运行以便目录权限生效；Windows 使用文件占用租约验证替换失败。
 
+原生并存控制 QA：`bash scripts/macos-input-control-smoke.sh`
+让两个隔离原生应用进程连接同一会话，操作接管按钮及只读输入／resize 保护，记录对应源码的报告和四张真实窗口截图。人工键盘、输入法和系统剪贴板验收单独保留。
+
 原生 Java QA：通过**文件 →
 Java 构建与运行…**使用共享 Maven／JDK 配置、构建／运行操作与任务日志。`bash scripts/macos-java-smoke.sh`
 需要 JDK

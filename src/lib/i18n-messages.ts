@@ -1,4 +1,6 @@
 export const messages: Record<string, string> = {
+  只读连接: "Read-only attachment",
+  接管输入: "Take input control",
   "收藏恢复预览无效。": "Invalid Git favorite recovery preview.",
   "恢复 Git 收藏": "Recover Git favorites",
   "恢复 Git 收藏…": "Recover Git favorites…",
