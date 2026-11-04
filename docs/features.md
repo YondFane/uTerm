@@ -2759,13 +2759,15 @@ runs the manifested child beside those exact runtime files. It does not install/
 modify the selected installation. The mirror is bounded to 32,768 entries, 2 GiB and 32 directory
 levels and rejects reparse points. Parent/child shared locks protect live caches; normal completion
 removes the cache, and a later launch reclaims released orphan caches older than one minute. Windows
-regressions check live-owner exclusion, orphan cleanup, depth rejection and source retention. A
-bounded anonymous stdin pipe carries literal arguments; no argument/environment file or shell
-interpolation is introduced. The child retains the task console and process-tree lifetime, then
-returns the actual JVM exit code. ASCII steps retain direct Java launching. New Windows Java tasks
-require the helper's UTF-8-launch capability; an older active helper reports an upgrade requirement
-without killing its existing sessions/tasks. The Unicode route needs Windows per-process UTF-8
-support and a JDK matching the child architecture.
+regressions check live-owner exclusion, orphan cleanup, depth rejection and source retention. The
+JDK 8 child also explicitly sets its native JNU encoding to UTF-8 because that JDK derives it from
+the system locale independently of the process code page; application file encoding remains
+configurable. A bounded anonymous stdin pipe carries literal arguments; no argument/environment file
+or shell interpolation is introduced. The child retains the task console and process-tree lifetime,
+then returns the actual JVM exit code. ASCII steps retain direct Java launching. New Windows Java
+tasks require the helper's UTF-8-launch capability; an older active helper reports an upgrade
+requirement without killing its existing sessions/tasks. The Unicode route needs Windows per-process
+UTF-8 support and a JDK matching the child architecture.
 
 `bash scripts/macos-java-smoke.sh` uses JDK 21 to build a disposable JAR and operate the actual
 native menu/window. Native ARM/Intel configuration, conflict, output, search/copy/follow,

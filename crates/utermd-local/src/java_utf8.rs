@@ -400,6 +400,11 @@ mod windows {
                 .context("JAVA_UTF8_JDK_INVALID")?
                 .to_owned()];
             values.extend(payload.arguments);
+            if payload.cache.is_some() {
+                // JDK 8 derives JNU encoding from the system locale, independently of the process code page.
+                // JDK 8 从系统区域设置推导 JNU 编码，与进程代码页无关。
+                values.insert(1, "-Dsun.jnu.encoding=UTF-8".into());
+            }
             let legacy_values: Vec<CString> = values
                 .iter()
                 .map(|value| CString::new(value.as_str()))
