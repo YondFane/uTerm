@@ -3,7 +3,7 @@ title: Native clients and shared core / 原生客户端与共享核心
 status: active
 type: reference
 created: 2026-11-02
-updated: 2026-11-03
+updated: 2026-11-04
 ---
 
 # Native clients and shared core / 原生客户端与共享核心
@@ -124,14 +124,14 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态            | Evidence and next work / 证据与下一步                                                                                                                               |
-| ------------ | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0           | Accepted, unmerged / 已验收，未合并 | Both native architectures and legacy Tauri jobs passed                                                                                                              |
-| M1           | Accepted / 已验收                   | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。           |
-| M2           | In progress / 开发中                | #29/#30 accepted at 4c502ab, unmerged; #31/#32 retain Agent/manual/arbitration gaps / 两任务已验收，阶段仍有缺口。                                                  |
-| M3           | In progress / 开发中                | Editor/handoff passed c475567; Native Git/sidebar/delete passed c21f75f; favorites/tabs/other workflows remain / 删除已通过 c21f75f，收藏／标签及其他流程继续开发。 |
-| M4           | Pending / 待实现                    | Remaining capabilities, native interaction and measurements                                                                                                         |
-| M5           | Pending / 待实现                    | Candidate packaging, signed update and rollback exercises                                                                                                           |
+| Stage / 阶段 | Current state / 当前状态            | Evidence and next work / 证据与下一步                                                                                                                                                                                                  |
+| ------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0           | Accepted, unmerged / 已验收，未合并 | Both native architectures and legacy Tauri jobs passed                                                                                                                                                                                 |
+| M1           | Accepted / 已验收                   | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                                                                              |
+| M2           | In progress / 开发中                | #29/#30 accepted; actual native Vim and shared ownership verified on both architectures at 1fd91cf; Agent/manual, GPU capture and lifecycle gaps remain / 原生Vim与并存子范围已验收，阶段仍有缺口。                                    |
+| M3           | In progress / 开发中                | Shared editor/Git/Worktree/Python/Java and native entry points exist; favorite preview contention passes 48 real Windows/macOS scenes at ff60a6b; JDK8/tabs/PDF/SSH/full workflows remain / 共享服务与收藏争用子范围通过，阶段未完成。 |
+| M4           | Pending / 待实现                    | Remaining capabilities, native interaction and measurements                                                                                                                                                                            |
+| M5           | Pending / 待实现                    | Candidate packaging, signed update and rollback exercises                                                                                                                                                                              |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
@@ -230,20 +230,20 @@ Continue branch `feat/native-macos-shared-core` and Draft PR
 [#12](https://github.com/YondFane/uTerm/pull/12). Tracking
 [#13](https://github.com/YondFane/uTerm/issues/13) and all acceptance criteria remain authoritative.
 Do not merge, tag, publish or modify `release`/`main` directly. YondFane is the authenticated
-executor; M0 evidence tasks #20–#23, M1 export task #28 and active M2 tasks #29–#32 have been
-claimed. No project/status labels are invented.
+executor. Preserve accepted M0/M1 and #29/#30 evidence; this round advances the already assigned
+#31/#32/#35/#37 scopes. Future work is not bulk claimed, and no project/status labels are invented.
 
 沿用当前分支和 Draft
-PR；总跟踪与原验收标准不变。本轮只认领实际处理的基线归档、旧格式验证与 M2 任务，不合并、不发版、不直接修改受保护目标分支。
+PR；总跟踪与原验收标准不变。本轮实际推进已分配的 #31／#32／#35／#37，保留已验收工作，不批量认领后续任务，不合并、不发版、不直接修改受保护目标分支。
 
-| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                      |
-| ------------ | ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                    |
-| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                          |
-| M2 #16       | #29–#32       | #29/#30 closed at 4c502ab with four CI jobs; #31/#32 and stage remain open for Agent/manual/ownership gates. / 两任务已验收，阶段仍开放。                                                                              |
-| M3 #17       | #33–#37       | Editor/handoff passed c475567; Native Git/sidebar/delete passed c21f75f; favorites, tabs, SSH and tasks remain. / 原生 Git／侧栏／删除已测，收藏、标签及后续流程仍缺。                                                 |
-| M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                             |
-| M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。 |
+| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                                    |
+| ------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                                  |
+| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                                        |
+| M2 #16       | #29–#32       | #29/#30 accepted; actual Vim/ownership passed native ARM/Intel at 1fd91cf; Agent/manual, GPU and lifecycle gaps remain. / 两任务已验收，原生Vim与并存子范围通过，阶段仍开放。                                                        |
+| M3 #17       | #33–#37       | Shared editor/Git/Worktree/Python/Java and native entry points exist; real favorite-preview contention passed both Tauri platforms at ff60a6b; JDK8/tabs/PDF/SSH/full workflows remain. / 共享服务与收藏争用子范围通过，阶段未完成。 |
+| M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                                           |
+| M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。               |
 
 ### M2 implementation and verification / M2 实现与验证
 

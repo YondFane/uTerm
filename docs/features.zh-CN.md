@@ -85,16 +85,17 @@ M0 #14、M1 #15 及任务 #20–#30 已验收，尚未合入 release。M2 #16 �
 CLI／TUI、人工输入法／剪贴板／鼠标、并存输入／resize 仲裁、休眠／多屏及剩余生命周期未完整验收。原生 SSH／完整设置／编辑／数据工作台、同机性能、macOS
 14 实际运行及 M3–M5 仍未完成。自动原生操作不代表人工验收；Windows 与旧 macOS 保持现有完整功能。证据和未执行步骤见[原生迁移状态](native-migration.md)及 Issue 评论。
 
-原生终端冒烟还在实际 PTY 中启动已安装的
-`/usr/bin/vim`。原生按键事件进入／退出插入模式，`NSTextInputClient.insertText`
-输入中文／组合字符／emoji，终端原生 `paste:`
-动作使用系统剪贴板。检查保存文件准确 UTF-8 字节、alternate
-screen 返回及原视图／generation 恢复 Shell。产物包含
-`vim-toolchain.txt`、`native-vim-edit.png`、`native-vim-saved.txt` 和 `terminal-live.json` 中的
-`realVim`。渲染器在消费宿主字节时将自动终端协商回复交由共享宿主，避免重复响应进入实际 TUI 输入；键盘、粘贴及原生 CLI 输入仍独立处理。首次实际 Vim
-CI 暴露插入模式超时，待修正源码的 macOS
-ARM／Intel 验证，暂不计为通过。失败产物也保留实际终端窗口和抑制回复字节数。脚本驱动的原生输入不代表人工输入法、实际 Agent
-CLI 或性能验收。
+原生终端冒烟在实际 PTY 中启动已安装的
+`/usr/bin/vim`。原生按键进入／退出插入模式，`NSTextInputClient.insertText`
+输入中文／组合字符／emoji，原生 `paste:` 使用系统剪贴板及实际 bracketed
+paste。渲染器将自动终端协商回复交由共享宿主，键盘、粘贴与 CLI 输入仍独立处理。[Native CI 41834172198](https://github.com/YondFane/uTerm/actions/runs/41834172198)
+在 source `1fd91cf7422b34546440e21ddadd4d69361db457`／tested merge
+`dde20cbbf9d35c3dd0885148ad5ad1edf90b0276` 通过 macOS 15.8.2 ARM64 和 15.7.9
+Intel。两者均核对准确 44 字节 UTF-8 保存文件、alternate
+screen 返回、相同视图／generation 与原 Shell 恢复，各抑制 35 字节渲染器自动回复。产物含
+`vim-toolchain.txt`、`native-vim-edit.png`、`native-vim-saved.txt` 和
+`terminal-live.json.realVim`，两张真实 Vim 图均已目视。[报告与保留的首轮失败](https://github.com/YondFane/uTerm/issues/31#issuecomment-6631702456)
+区分脚本原生输入与尚未执行的人工输入法、实际 Agent CLI 及性能验收。
 
 ### 共享输入与尺寸控制
 
@@ -119,16 +120,18 @@ CI 在 Core 测试失败后继续执行独立契约、构建和真实应用检�
 包含两个同时运行的真实 Tauri 进程，通过实际终端输入和接管按钮执行六个场景。隔离 QA 构建允许并存应用进程，为观察者分配单独的临时 CLI 控制端点，但两个进程仍连接同一共享存储、宿主和会话。Windows 样例通过真实 PowerShell 终端输入明确写出 UTF-8 标记文件，与文本读取器匹配，不更改应用 Shell。编译隔离的观察器读取 Tauri 实际会话宿主，失败清理只关闭临时 QA 根目录内准确 generation 的会话，再停止空闲宿主。真实原生并存检查已在 macOS
 ARM／Intel 通过，对应 source `670f421354150e112f71d0ac3c94f29681296993`／tested merge
 `c5e4c54dfa4acbe381c64a81b113b4d5c659a97b`（Native run
-41818643260），包含每架构四张 WindowServer 截图及独立 CLI 回归。云端 Linux 在干净源码
-`d5e56c83ee0479487d6fc735dde49c71648522a1`
-通过全部 46 个真实 Tauri 场景，含六个并存控制场景，cleanupErrors=[]。Windows 和过渡 macOS 根据 Node 宿主平台选择真实系统截图工具，当前并存检查仍待同源码 CI
-artifacts 成功。并存场景新增要求实际 xterm 无障碍行包含预期 Shell 标记，截图前记录终端尺寸及画布尺寸。源码
-`b7a5e60f6252aab6b829a8e0659a35c8e5509637`
-的两个 Tauri 报告均通过 46 场景，但目视核验发现 macOS 终端区域为空白，其输出显示验收保留开放，待此项加强观测定位；Windows 输出可见。人工键盘、输入法和系统剪贴板验收仍未执行；协议或构建通过不能替代对应交互结果。
+41818643260），包含每架构四张 WindowServer 截图及独立 CLI 回归。Tauri source
+`b7a5e60f6252aab6b829a8e0659a35c8e5509637`／tested merge `3029133cd9dd7433a06d31cb1ea76db885df94aa`
+在 Windows 和过渡 macOS 通过 46 场景，含六个并存场景，cleanupErrors=[]。Windows 输出可见，但目视发现 macOS 终端区域为空白。`1fd91cf`
+又确认实际 xterm 无障碍行含预期 Shell 标记、终端／画布尺寸非零，其 macOS
+GPU 截图仍为空白。输入文件副作用与已解析文字不代表 GPU 显示验收。[对应源码报告与产物](https://github.com/YondFane/uTerm/issues/32#issuecomment-6631153924)
+保留此缺口。人工键盘、输入法与系统剪贴板仍未执行。
 
-Tauri 并存 QA 还保留原始 GPU 截图，再通过 `WEBGL_lose_context`
-令实际 WebGL 上下文丢失，要求 xterm 现有 DOM 回退显示相同 Shell 标记。两个实际应用进程在恢复、接管与输出期间保持同一会话／generation；报告区分初始 WebGL 与原已使用 DOM 的情况。DOM 截图不代表 GPU 捕获／显示验收。新增两恢复场景待对应源码运行，macOS
-GPU 空白截图缺口保持开放。
+Tauri 并存 QA 保留原始 GPU 截图，再通过 `WEBGL_lose_context`
+令实际 WebGL 上下文丢失，要求 xterm 现有 DOM 回退显示相同 Shell 标记。两个真实应用进程在恢复、接管与输出期间保持同一会话／generation，报告区分初始 WebGL 与已使用 DOM。云端 Linux 在干净 source
+`6b2a892ae410c575d3d5e7a161be9d4dad46ab0d`
+通过全部 50 场景，两个进程均实际从 WebGL2 丢失后恢复 DOM，cleanupErrors=[]；对应 Windows／macOS
+CI 仍待完成。DOM 图不代表 GPU 捕获／显示验收，macOS GPU 空白截图缺口保持开放。
 
 ### 共享保存状态
 
@@ -275,9 +278,13 @@ hook 暂停 Git；取消保留调用方，正常退出显示拒绝，释放后�
 原生恢复 QA 在恢复或设置变化后，等待实际收藏菜单操作可用，再开始编辑器写入。可见写锁忙碌失败仅允许一次明确**重新读取 Git 收藏**。Tauri 预览 QA 只在可见的只读规范存储写锁忙碌错误后，最多三次明确点击**重新读取恢复副本**，报告记录
 `favoritePreviewReloads`。这些操作不重放恢复或 Git 写入；其他错误仍失败，来源／恢复字节必须准确，原冲突／确认检查继续保留。原生 Git 失败报告在正常退出前保留进程采样。
 
-收藏恢复 QA 在损坏数据入口显示后，由自有 helper 持有实际规范存储系统锁，记录只读争用失败及禁用的恢复按钮；随后仅释放该 helper 的锁，再明确重读预览。核对损坏字节保持不变，并记录
-`favorite-writer-lock.json`、争用截图及实际
-`favoritePreviewReloads`。新增两场景待对应源码 CI；早先零次重读的成功运行不代表已覆盖争用路径。
+收藏恢复 QA 在损坏数据入口显示后，由自有 helper 持有实际规范存储系统锁，记录只读争用失败及禁用恢复按钮，随后仅释放该 helper 的锁，再明确重读。在 source
+`ff60a6bdca87228c55194ffa7eab09713c7eda85`／tested merge
+`05746e82247e34b0b41631a187285112756112cb`，[Tauri CI 41834709552](https://github.com/YondFane/uTerm/actions/runs/41834709552)
+通过 Windows Server 2025 x64 与 macOS 26.6.2
+ARM64 各 48 场景，包含实际重读一次、损坏字节不变和 cleanupErrors=[]。`favorite-writer-lock.json`、`git-git-favorite-recovery-busy.png`
+与 `git-git-favorite-recovery-preview.png`
+记录自有进程及失败／恢复。这些证据覆盖实际争用分支，早先零次重读成功不代表覆盖。
 
 完整取消／生命周期矩阵及 #16 依赖使 #35 保持开放。人工键盘／IME／焦点、正式签名／公证和已安装版本升级／回退未验收；上述检查不代表发版验收。
 
@@ -1642,7 +1649,8 @@ Java 步骤的程序、工作目录或参数包含非 ASCII 字符时，新宿�
 8 需要独立启动目录布局：执行器通过文件硬链接（跨卷时复制）将所选已安装 JDK 镜像到任务专属缓存，在这些准确运行文件旁启动带 manifest 的子进程，不安装／下载 JDK，也不修改所选安装。镜像上限为 32,768 项、2
 GiB 和 32 层目录，拒绝 reparse
 points。父／子进程共用读锁保护活动缓存；正常结束移除缓存，之后启动会清理超过一分钟且已释放的孤立缓存。Windows 回归检查活动所有者保护、孤立清理、深度拒绝及原文件保留。JDK
-8 子进程也明确将原生 JNU 编码设为 UTF-8，因为该 JDK 会独立于进程代码页从系统区域设置推导原生编码；应用文件编码仍可配置。有界匿名 stdin 管道传递字面参数，不增加参数／环境文件或 Shell 插值。子进程保留任务控制台和进程树生命周期，返回实际 JVM 退出码。ASCII 步骤保留直接 Java 启动。新的 Windows
+8 子进程也明确传入 UTF-8 的 `sun.jnu.encoding`
+属性，因为该 JDK 会独立于进程代码页从系统区域设置推导原生编码；应用文件编码仍可配置。有界匿名 stdin 管道传递字面参数，不增加参数／环境文件或 Shell 插值。子进程保留任务控制台和进程树生命周期，返回实际 JVM 退出码。ASCII 步骤保留直接 Java 启动。新的 Windows
 Java 任务要求 helper 的 UTF-8 启动能力；旧活动 helper 会提示升级，不终止已有会话／任务。Unicode 路径需要 Windows 的进程 UTF-8 支持，JDK 架构须与子进程匹配。
 
 `bash scripts/macos-java-smoke.sh` 使用 JDK
@@ -1656,9 +1664,15 @@ JAR 文件名、Unicode／emoji／引号／通配符／结尾反斜线及空参�
 
 运行 `pnpm test:core` 和前端检查时，将 `JAVA_HOME` 指向 JDK 21，并把其 `bin` 加入
 `PATH`。Java 互操作 workflow 在 JDK 8／11／17／21 上运行实际 Windows 宿主，上传
-`java-live-core.json`、源码／工具链信息及专项日志。新的 Unicode 启动路径已通过 Linux 回归及 Windows 目标 Rust 类型检查，真实 Windows 执行仍待完成，矩阵通过后才能验收。`java-launcher-probe.json`
-仍仅为诊断证据。完整真实 Maven／Spring
-Boot 工作流及平台／人工验收尚未完成，编译或 JAR 样例通过不能替代这些结果。
+`java-live-core.json`、源码／工具链信息及专项日志。Source
+`de4eff74a87ab8cee62c3fe15bf42051847616dc`／tested merge `ecb7c8e3adaefb84fbc322228af48d16c656d86d`
+的真实 Windows Unicode JAR 样例通过 Temurin 11.0.32.1+1、17.0.20.1+1 和 21.0.13+9。JDK
+8.0.504-1 仍报
+`Could not find or load main class TaskProbe`，退出 1 而非预期 7；UTF-8 属性覆盖未解决其早期原生编码转换，整个矩阵失败，JDK
+8
+Unicode 验收保持开放。[报告与产物](https://github.com/YondFane/uTerm/issues/37#issuecomment-6631095310)
+区分以上结果与尚未完成的完整真实 Maven／Spring Boot 及人工／平台验收；`java-launcher-probe.json`
+仍仅为诊断证据。
 
 ### 任务生命周期与验证
 

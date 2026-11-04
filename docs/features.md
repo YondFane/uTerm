@@ -119,17 +119,19 @@ performance, macOS 14 runtime and M3–M5 gates are incomplete. Automatic native
 acceptance; Windows and legacy macOS retain the existing full feature set. See
 [native migration status](native-migration.md) and Issue comments for evidence and unexecuted steps.
 
-The native terminal smoke also launches the installed `/usr/bin/vim` in the actual PTY. Native key
-events enter/leave insertion, `NSTextInputClient.insertText` supplies Chinese/combining characters/
-emoji and the terminal's native `paste:` action uses the system clipboard. It checks exact saved
-UTF-8 bytes, alternate-screen return and the same terminal view/generation resuming its shell.
-Artifacts include `vim-toolchain.txt`, `native-vim-edit.png`, `native-vim-saved.txt` and the
-`realVim` section of `terminal-live.json`. The renderer now leaves automatic terminal negotiation
-replies to the shared host, avoiding duplicate replies entering actual TUI input during byte
-feeding; keyboard, paste and native CLI input remain distinct. The first real Vim CI exposed an
-insertion mode timeout; it remains unaccepted pending the corrected source-bound macOS ARM/Intel
-run. Failure artifacts also retain the actual terminal window and reply-byte count. Scripted native
-input does not establish manual IME, actual Agent CLI or performance acceptance.
+The native terminal smoke launches installed `/usr/bin/vim` in the actual PTY. Native key events
+enter/leave insertion, `NSTextInputClient.insertText` supplies Chinese/combining characters/emoji
+and the native `paste:` action uses the system clipboard with actual bracketed paste. The renderer
+leaves automatic terminal negotiation replies to the shared host; keyboard, paste and CLI input
+remain distinct. [Native CI 41834172198](https://github.com/YondFane/uTerm/actions/runs/41834172198)
+passed both macOS 15.8.2 ARM64 and 15.7.9 Intel at source `1fd91cf7422b34546440e21ddadd4d69361db457`
+/ tested merge `dde20cbbf9d35c3dd0885148ad5ad1edf90b0276`. Each run verifies the exact 44 saved
+UTF-8 bytes, alternate-screen return, same view/generation and resumed shell; 35 renderer-reply
+bytes are suppressed. Artifacts contain `vim-toolchain.txt`, `native-vim-edit.png`,
+`native-vim-saved.txt` and `terminal-live.json.realVim`; both real Vim captures were inspected.
+[Reports and the retained initial failure](https://github.com/YondFane/uTerm/issues/31#issuecomment-6631702456)
+distinguish scripted native input from unexecuted manual IME, actual Agent CLI and performance
+acceptance.
 
 ### Shared input and size control
 
@@ -187,24 +189,24 @@ the actual Tauri session host, and failure cleanup closes only the disposable QA
 session generations before idle shutdown. Real native ownership checks passed on macOS ARM/Intel at
 source `670f421354150e112f71d0ac3c94f29681296993` / tested merge
 `c5e4c54dfa4acbe381c64a81b113b4d5c659a97b` (Native run 41818643260), including four WindowServer
-captures per architecture and the standalone CLI regression. Cloud Linux passed all 46 real Tauri
-scenes at clean source `d5e56c83ee0479487d6fc735dde49c71648522a1`, including six concurrent
-ownership scenes and cleanupErrors=[]. Windows and transitional macOS use their native screenshot
-tools selected from the Node host platform; their current ownership checks still need successful
-source-matched CI artifacts. Ownership scenes now also require actual xterm accessibility rows to
-contain the expected shell marker and record terminal/canvas dimensions before capture. At source
-`b7a5e60f6252aab6b829a8e0659a35c8e5509637`, both Tauri reports passed 46 scenes, but visual
-inspection found blank macOS terminal areas; its output-display acceptance remains open pending this
-stronger observation. Windows output was visible. Manual keyboard, IME and system-clipboard
-acceptance remain unexecuted. Protocol or build success does not establish those interaction
-results.
+captures per architecture and the standalone CLI regression. Tauri source
+`b7a5e60f6252aab6b829a8e0659a35c8e5509637` / tested merge `3029133cd9dd7433a06d31cb1ea76db885df94aa`
+passed 46 scenes on Windows and transitional macOS, including six ownership scenes and
+cleanupErrors=[]. Windows output was visible, but visual inspection found blank macOS terminal
+areas. Source `1fd91cf` additionally confirms actual xterm accessibility rows contain the expected
+shell markers with nonzero terminal/canvas dimensions; its macOS GPU captures remain blank. Input
+side effects and parsed text do not establish GPU display acceptance.
+[Source-bound reports/artifacts](https://github.com/YondFane/uTerm/issues/32#issuecomment-6631153924)
+retain this gap. Manual keyboard, IME and system-clipboard acceptance remain unexecuted.
 
 Tauri ownership QA also retains baseline GPU captures before explicitly losing the actual WebGL
 context through `WEBGL_lose_context`, then requires xterm's existing DOM fallback to display the
 same shell marker. Both actual application processes retain the same session/generation during
 recovery, takeover and output; reports distinguish initial WebGL from an already active DOM
-renderer. A DOM capture does not establish GPU capture/display acceptance. These two additional
-recovery scenes await their source-bound run; the macOS GPU blank-capture gap remains open.
+renderer. Cloud Linux passed all 50 real app scenes at clean source
+`6b2a892ae410c575d3d5e7a161be9d4dad46ab0d`, including actual WebGL2 context loss and DOM recovery in
+both processes, with cleanupErrors=[]. Windows/macOS source-bound CI remains pending. A DOM capture
+does not establish GPU capture/display acceptance; the macOS GPU blank-capture gap remains open.
 
 ### Shared saved state
 
@@ -531,12 +533,16 @@ record `favoritePreviewReloads`. These actions do not repeat a restore or Git wr
 fail the check, source/restore bytes remain exact, and the original conflict/confirmation checks
 remain required. Native Git failure reports retain process samples before graceful exit.
 
-The favorite-recovery QA now holds the actual canonical-store OS lock in an owned helper after
-showing the corrupt-data entry, captures the read-only busy failure with restore disabled, then
-releases only that helper's lock before explicitly reloading the preview. It checks that damaged
-bytes remain unchanged and records `favorite-writer-lock.json`, the busy screenshot and actual
-`favoritePreviewReloads`. These two additional scenes await source-bound CI; a zero-retry success
-from earlier runs does not establish the contention path.
+Favorite-recovery QA holds the actual canonical-store OS lock in an owned helper after showing the
+corrupt-data entry, captures the read-only busy failure with restore disabled, then releases only
+that helper's lock before explicitly reloading. At source `ff60a6bdca87228c55194ffa7eab09713c7eda85`
+/ tested merge `05746e82247e34b0b41631a187285112756112cb`,
+[Tauri CI 41834709552](https://github.com/YondFane/uTerm/actions/runs/41834709552) passed 48 scenes
+on Windows Server 2025 x64 and macOS 26.6.2 ARM64, including one actual preview reload, unchanged
+damaged bytes and cleanupErrors=[]. `favorite-writer-lock.json`,
+`git-git-favorite-recovery-busy.png` and `git-git-favorite-recovery-preview.png` record the owned
+process and failure/recovery. This evidence covers the actual contention branch; earlier zero-retry
+successes do not.
 
 Full cancellation/lifecycle matrix and #16 dependencies keep #35 open. Manual keyboard/IME/focus,
 formal signing/notarization and installed-version upgrade/rollback remain unverified. These checks
@@ -2794,8 +2800,8 @@ modify the selected installation. The mirror is bounded to 32,768 entries, 2 GiB
 levels and rejects reparse points. Parent/child shared locks protect live caches; normal completion
 removes the cache, and a later launch reclaims released orphan caches older than one minute. Windows
 regressions check live-owner exclusion, orphan cleanup, depth rejection and source retention. The
-JDK 8 child also explicitly sets its native JNU encoding to UTF-8 because that JDK derives it from
-the system locale independently of the process code page; application file encoding remains
+JDK 8 child also explicitly passes a UTF-8 `sun.jnu.encoding` property because that JDK derives it
+from the system locale independently of the process code page; application file encoding remains
 configurable. A bounded anonymous stdin pipe carries literal arguments; no argument/environment file
 or shell interpolation is introduced. The child retains the task console and process-tree lifetime,
 then returns the actual JVM exit code. ASCII steps retain direct Java launching. New Windows Java
@@ -2819,11 +2825,15 @@ explicit retry, registry locking and damaged-byte retention.
 
 Run `pnpm test:core` and frontend checks with `JAVA_HOME` pointing to JDK 21 and its `bin` on
 `PATH`. The Java interoperability workflow runs the actual Windows host on JDK 8/11/17/21 and
-uploads `java-live-core.json`, source/toolchain data and targeted logs. The new Unicode launch route
-has passed Linux regressions and a Windows-target Rust type check; actual Windows execution is still
-pending and must pass its matrix before acceptance. `java-launcher-probe.json` remains diagnostic
-evidence. Full real Maven/Spring Boot workflows and platform/manual acceptance remain incomplete;
-successful compilation or a JAR fixture does not establish those results.
+uploads `java-live-core.json`, source/toolchain data and targeted logs. Source
+`de4eff74a87ab8cee62c3fe15bf42051847616dc` / tested merge `ecb7c8e3adaefb84fbc322228af48d16c656d86d`
+passes the actual Windows Unicode JAR fixture on Temurin 11.0.32.1+1, 17.0.20.1+1 and 21.0.13+9. JDK
+8.0.504-1 still fails with `Could not find or load main class TaskProbe` (exit 1 instead of 7); its
+early native encoding conversion remains incompatible despite the UTF-8 property override. The
+matrix therefore fails, and JDK 8 Unicode acceptance remains open.
+[Reports/artifacts](https://github.com/YondFane/uTerm/issues/37#issuecomment-6631095310) distinguish
+those results from full real Maven/Spring Boot and manual/platform acceptance, which remain
+incomplete. `java-launcher-probe.json` is diagnostic evidence.
 
 ### Task lifetime and validation
 
