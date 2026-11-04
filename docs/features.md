@@ -2721,6 +2721,9 @@ actual OS writer lock, explicit retry, shared registry locking and damaged-byte 
 Existing Maven, archive and source-scan regressions move with their implementation. These are
 fixture checks, not a full real Maven/Spring Boot acceptance.
 
+Classpath and manifest-helper diagnostic variants separate native pre-VM JAR reads from Java-level
+class loading. They do not ship a compatibility fix.
+
 Run `pnpm test:core` and the frontend suite with `JAVA_HOME` pointing to a JDK 21 and its `bin` on
 `PATH`. CI installs Temurin 21 and uploads `java-live-core.json`, core/frontend logs and toolchain
 metadata. The Java migration and native window still need their own macOS/Windows CI and

@@ -1598,6 +1598,9 @@ JDK 归档工具仍在任务启动前失败。样例改为创建 ASCII 归档，
 对比直接参数与 UTF-8 参数文件方式，包含 Unicode 参数及 JVM 属性和准确源码／工具链信息。此产物为诊断证据，不代表任务或平台验收。参数文件以换行结束，保留最后一个空参数；另用 premain 编码探针对比启动器初始化，不将该探针作为应用行为交付。Windows 仍未验收。两个 Rust 进程检查全局／项目 CAS、实际 OS 写锁、明确重试、注册表共用锁及损坏原文保留。既有 Maven、归档和源码扫描回归随实现迁入。这些为临时样例检查，不代表完整真实 Maven／Spring
 Boot 验收。
 
+classpath 与 manifest
+helper 诊断方式区分 VM 启动前的原生 JAR 读取与 Java 层类加载，仍未交付兼容性修复。
+
 运行 `pnpm test:core` 及前端套件时，`JAVA_HOME` 指向 JDK 21，其 `bin` 加入 `PATH`。CI 安装 Temurin
 21，上传 `java-live-core.json`、Core／前端日志及工具链信息。Java 迁移仍需自己的 macOS／Windows
 CI 和原生窗口截图；本地报告明确标记工作区含未提交改动，不宣称已经通过提交对应 CI。本地 Core／FFI、宿主及后端套件通过（84 项后端通过、九项忽略），前端 400 项通过、十项可选／平台检查跳过。TypeScript／生产及桌面构建、生成契约漂移、格式、国际化和文档检查通过。

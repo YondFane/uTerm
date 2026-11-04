@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, writeFileSync, renameSync, rmSync } from "node:fs";
 import { tmpdir, release } from "node:os";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 
 const output = resolve(process.argv[2] ?? "ci-evidence/java-launcher-probe.json");
 const home = process.env.JAVA_HOME;
@@ -63,6 +63,23 @@ try {
     "EncodingAgent.class",
   ]);
   renameSync(join(root, "agent.jar"), join(root, "agent 中文.jar"));
+  writeFileSync(
+    join(root, "EncodingBootstrap.java"),
+    `import java.util.*;
+import java.nio.charset.*;
+public class EncodingBootstrap {
+  public static void main(String[] args) throws Exception {
+    String jar = new String(Base64.getDecoder().decode(args[0]), StandardCharsets.UTF_8);
+    Class<?> helper = Class.forName("sun.launcher.LauncherHelper");
+    Class<?> main = (Class<?>) helper.getMethod("checkAndLoadMain", boolean.class, int.class, String.class).invoke(null, false, 2, jar);
+    String[] values = new String[args.length - 1];
+    for (int i = 0; i < values.length; i++) values[i] = new String(Base64.getDecoder().decode(args[i+1]), StandardCharsets.UTF_8);
+    main.getMethod("main", String[].class).invoke(null, (Object) values);
+  }
+}`,
+  );
+  build("javac", ["-encoding", "UTF-8", "-source", "8", "-target", "8", "EncodingBootstrap.java"]);
+  build("jar", ["--create", "--file", "bootstrap.jar", "EncodingBootstrap.class"]);
   const jar = "literal 中文 & %.jar";
   renameSync(join(root, "fixture.jar"), join(root, jar));
   const args = [
@@ -84,8 +101,37 @@ try {
     '\"-javaagent:agent 中文.jar\"\n' + quoted + "\n",
     "utf8",
   );
+  const classArgs = [
+    ...args.slice(0, args.indexOf("-jar")),
+    "-cp",
+    jar,
+    "EncodingProbe",
+    ...args.slice(args.indexOf("-jar") + 2),
+  ];
+  const argumentFile = (name, values) =>
+    writeFileSync(
+      join(root, name),
+      values
+        .map((value) => '"' + value.replaceAll("\\", "\\\\").replaceAll('"', '\\"') + '"')
+        .join("\n") + "\n",
+      "utf8",
+    );
+  argumentFile("class.args", classArgs);
+  const encoded = [jar, ...args.slice(args.indexOf("-jar") + 2)].map((value) =>
+    Buffer.from(value, "utf8").toString("base64"),
+  );
+  argumentFile("bootstrap.args", [
+    ...args.slice(0, args.indexOf("-jar")),
+    "--add-exports=java.base/sun.launcher=ALL-UNNAMED",
+    "-cp",
+    jar + delimiter + "bootstrap.jar",
+    "EncodingBootstrap",
+    ...encoded,
+  ]);
   const variants = [
     ["direct", args],
+    ["utf8-classpath", ["@class.args"]],
+    ["utf8-bootstrap", ["@bootstrap.args"]],
     ["utf8-argfile", ["@utf8.args"]],
     ["utf8-agent-argfile", ["@agent.args"]],
     ["utf8-argfile-jnu", ["-Dsun.jnu.encoding=UTF-8", "@utf8.args"]],
