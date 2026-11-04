@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert 'failure' not in report, report
     assert 'cleanupError' not in report, report
     assert report['coreReady'] and not report['productionDataAccess'], report
-    for key in ['nativePythonMenuOpened', 'configurationConflictRetainedDraft', 'realPythonFinalOutputAndExitCode',
+    for key in ['nativePathSelectionBoundaries', 'nativePythonMenuOpened', 'configurationConflictRetainedDraft', 'realPythonFinalOutputAndExitCode',
                 'windowDetachRetainedTask', 'reopenedSameGenerationAndReplay', 'staleGenerationStopRefused',
                 'forceStopCompleted', 'temporaryEnvironmentNotSaved', 'nativeLogSearchFoundLiteralOutput',
                 'nativePausedFollowRetainedAnchor', 'nativeFollowResumed', 'reattachRetainedHostPID',
@@ -41,7 +41,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert not endpoint.exists(), 'Private Python host was not cleaned up'
     report.update(passed=True, testedMergeSHA=report['sourceSHA'], platform='macOS',
         sourceTreeDirty=bool(subprocess.check_output(['git', 'status', '--porcelain'])),
-        manualKeyboardIMEAcceptance=False, processExitCode=code)
+        manualKeyboardIMEAcceptance=False, manualPickerAcceptance=False, processExitCode=code)
     assert not report['sourceTreeDirty'], report
     path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps(report, ensure_ascii=False))

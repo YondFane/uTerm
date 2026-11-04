@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Manager;
 use uterm_core::python::{
-    configuration, display_path, inside, interpreters, project_info, root, save_configuration,
+    configuration, interpreters, project_info, root, save_configuration, selected_path,
 };
 pub use uterm_core::python::{Configuration, Interpreter, ProjectInfo, RunConfig};
 use utermd_local::daemon::TaskSession;
@@ -79,12 +79,7 @@ pub async fn python_select_path(
             let path = file
                 .into_path()
                 .map_err(|_| anyhow::anyhow!("PYTHON_PROJECT_INVALID"))?;
-            if kind == "interpreter" {
-                Ok(display_path(&path))
-            } else {
-                let path = inside(&root, &path.to_string_lossy())?;
-                Ok(path.strip_prefix(&root)?.to_string_lossy().to_string())
-            }
+            selected_path(&root, &path, &kind)
         })
         .transpose()
     })

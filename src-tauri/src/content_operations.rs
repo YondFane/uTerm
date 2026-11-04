@@ -53,6 +53,7 @@ impl ContentOperations {
                     | "python.configuration"
                     | "python.interpreters"
                     | "python.project"
+                    | "python.path.validate"
                     | "python.tasks"
                     | "java.configuration"
                     | "java.jdks.list"

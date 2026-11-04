@@ -88,6 +88,30 @@ function queueDraft(path, text) {
   };
 }
 
+test("shared Python path validation preserves literal selections and refuses project escape", async (t) => {
+  const call = await client(t),
+    { directory } = gitFixture(t);
+  const script = join(directory, "literal 中文 & %.py");
+  writeFileSync(script, "print('fixture')\n");
+  const selected = await call("python.path.validate", { directory, path: script, kind: "script" });
+  assert.equal(selected.error, undefined);
+  assert.equal(selected.result, "literal 中文 & %.py");
+  const outside = resolve(directory, "..");
+  assert.equal(
+    (await call("python.path.validate", { directory, path: outside, kind: "directory" })).error
+      .code,
+    "PYTHON_PROJECT_INVALID",
+  );
+  assert.equal(
+    (await call("python.path.validate", { directory, path: script, kind: "unknown" })).error.code,
+    "PYTHON_CONFIG_INVALID",
+  );
+  assert.equal(
+    (await call("python.path.validate", { directory, path: script, kind: "interpreter" })).result,
+    script,
+  );
+});
+
 test("shared Java configuration retains defaults, global/project CAS, busy retries and damaged bytes", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "uterm-java-config-")),
     store = join(root, "shared-state-v1"),

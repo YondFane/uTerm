@@ -24,6 +24,17 @@ enum PythonSmoke {
         guard let first = lookup(root.path), let firstWindow = first.window else { throw BridgeFailure(code: "PYTHON_QA", message: "Python window is missing") }
         report["nativePythonMenuOpened"] = firstWindow.isVisible
         let run = first.model
+        let original = run.config?.target
+        guard !(await run.applySelection(nil, kind: "script")), run.config?.target == original, !run.dirty else { throw BridgeFailure(code: "PYTHON_QA", message: "Cancelled path selection changed the draft") }
+        let link = root.appendingPathComponent("venv-python")
+        try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: interpreter)
+        guard await run.applySelection(link, kind: "interpreter"), run.config?.interpreter == link.path else { throw BridgeFailure(code: "PYTHON_QA", message: "Selected interpreter symlink spelling was lost") }
+        guard await run.applySelection(root.appendingPathComponent("task 中文 & %.py"), kind: "script"), run.config?.target == "task 中文 & %.py" else { throw BridgeFailure(code: "PYTHON_QA", message: "Literal script selection failed") }
+        guard await run.applySelection(root, kind: "directory"), run.config?.working_directory == "." else { throw BridgeFailure(code: "PYTHON_QA", message: "Root working-directory selection failed") }
+        let outside = root.deletingLastPathComponent().appendingPathComponent("outside.py")
+        try "print('outside')".write(to: outside, atomically: true, encoding: .utf8)
+        guard !(await run.applySelection(outside, kind: "script")), run.config?.target == "task 中文 & %.py", run.error.contains("PYTHON_PROJECT_INVALID") else { throw BridgeFailure(code: "PYTHON_QA", message: "Outside script selection changed the draft") }
+        report["nativePathSelectionBoundaries"] = true
         run.config?.interpreter = interpreter; run.config?.target = "task 中文 & %.py"
         run.arguments = [PythonArgument(text: "literal & %PATH%")]
         var environment = PythonEnvironment(); environment.key = "VALUE"; environment.value = "环境 & %PATH%"
@@ -125,7 +136,7 @@ enum PythonSmoke {
         _ = try await bridge.call("host.shutdownIdle")
         await reopened.forceClose()
         report["pythonCaptures"] = captures
-        report["pythonInputMethod"] = "Actual NSMenu entry, native bound form state and Core/FFI calls; no manual keyboard/IME acceptance"
+        report["pythonInputMethod"] = "Actual NSMenu entry, native bound form and selection-result state with Core/FFI calls; no manual picker/keyboard/IME acceptance"
         report["pythonInterpreter"] = interpreter
     }
 }

@@ -112,6 +112,19 @@ pub fn config_path(data_root: &Path) -> PathBuf {
     data_root.join("python-run-v1/configuration.json")
 }
 
+pub fn selected_path(root: &Path, selected: &Path, kind: &str) -> Result<String> {
+    match kind {
+        // Preserve the selected venv executable path; resolving its symlink changes Python's environment.
+        // 保留所选虚拟环境可执行路径；解析该符号链接会改变 Python 环境。
+        "interpreter" => Ok(display_path(selected)),
+        "script" | "directory" => {
+            let path = inside(root, &selected.to_string_lossy())?;
+            Ok(path.strip_prefix(root)?.to_string_lossy().into_owned())
+        }
+        _ => bail!("PYTHON_CONFIG_INVALID"),
+    }
+}
+
 fn read_store(path: &Path) -> Result<(Store, String)> {
     let bytes = match fs::read(path) {
         Ok(value) => value,
@@ -685,6 +698,40 @@ pub fn stop(client: &Client, id: String, generation: String, force: bool) -> Res
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn selected_paths_keep_interpreter_spelling_and_reject_project_escape() {
+        let directory = tempfile::tempdir().unwrap();
+        let parent = directory.path().canonicalize().unwrap();
+        let root = parent.join("project");
+        fs::create_dir(&root).unwrap();
+        let script = root.join("literal 中文 & %.py");
+        fs::write(&script, b"print('fixture')").unwrap();
+        let outside = parent.join("outside.py");
+        fs::write(&outside, b"fixture").unwrap();
+        assert_eq!(
+            selected_path(&root, &script, "script").unwrap(),
+            "literal 中文 & %.py"
+        );
+        assert_eq!(selected_path(&root, &root, "directory").unwrap(), "");
+        assert_eq!(
+            selected_path(&root, &outside, "interpreter").unwrap(),
+            display_path(&outside)
+        );
+        assert!(selected_path(&root, &outside, "script").is_err());
+        assert!(selected_path(&root, &parent, "directory").is_err());
+        assert!(selected_path(&root, &script, "unknown").is_err());
+        #[cfg(unix)]
+        {
+            let linked = root.join("venv-python");
+            std::os::unix::fs::symlink(&outside, &linked).unwrap();
+            assert_eq!(
+                selected_path(&root, &linked, "interpreter").unwrap(),
+                display_path(&linked)
+            );
+            assert!(selected_path(&root, &linked, "script").is_err());
+        }
+    }
 
     fn fixture() -> (tempfile::TempDir, PathBuf) {
         let temp = tempfile::tempdir().unwrap();

@@ -2970,8 +2970,20 @@ acknowledged while the viewport keeps its buffer-line anchor. Rechecking follow 
 and starts a new generation; a task still stopping after five seconds requires explicit Force stop.
 Normal stop retains final cleanup output, and copy reports native clipboard failures visibly.
 
-File pickers and full settings/menu integration remain pending. Java/Maven shares the Core service
-but still needs its own native window and platform acceptance.
+Native Choose buttons select an interpreter, script (Script/Django modes) or working directory. Both
+clients validate selection results through the shared Rust path rules. Interpreter symlink spelling
+is preserved for virtual environments; script/directory selections cannot escape the project.
+Cancelling leaves the draft unchanged and invalid selections show an error without replacing it.
+Reload's Save choice saves successfully before adopting saved values.
+
+Core and real-process contract checks cover literal selections, symlinks, project escape and invalid
+kinds. The native smoke also checks cancellation-result handling, interpreter spelling and
+project-bound selection results through the bound form/Core calls; it does not operate the system
+picker. Linux Core/FFI and focused backend checks pass, as do 401 frontend checks (ten skipped),
+TypeScript/production build, contracts, formatting, localization and documentation. The new picker
+controls still need their own macOS CI and manual dialog/keyboard/IME acceptance. Full settings/menu
+integration remains pending; Java's native window has separate implementation and acceptance
+records.
 
 The `python-run-v1/configuration.json` format and project-root keys remain unchanged. An OS writer
 lock serializes updated clients before revision checks and atomic replacement; a busy writer
@@ -2995,8 +3007,8 @@ ordering. Four screenshots include English/dark, paused output and Chinese/light
 ARM/Intel for source `ee0b1ac` and tested merge `e213eaa61e119c307566a50329acd85985432032`. The ARM
 artifact `native-qa-macos-15-ee0b1ac38fe42db2ad772bb68a8ae144268c47be` includes `python-live.json`
 and the four `native-python-*.png` screenshots, including paused output. This Linux environment has
-no AppKit/Swift toolchain. Manual input/IME and missing native controls remain unaccepted; the later
-Java migration is not covered by this Python evidence.
+no AppKit/Swift toolchain. Manual input/IME and full settings/menu integration remain unaccepted;
+the later Java migration is not covered by this Python evidence.
 
 The raw-task replay check uses one ten-second deadline for the complete operation, including each
 receive, and reports the last sequence and actual host task state on failure. The corrected check

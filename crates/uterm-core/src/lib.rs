@@ -219,6 +219,11 @@ impl Core {
                 service_json(python::interpreters(&root()?, &string(params, "selected")?))
             }
             "python.project" => service_json(python_result(python::project_info(&root()?))?),
+            "python.path.validate" => service_json(python_result(python::selected_path(
+                &root()?,
+                std::path::Path::new(&string(params, "path")?),
+                &string(params, "kind")?,
+            ))?),
             "python.tasks" => service_json(python_result(python::tasks(
                 &self.data_root()?.join("local-daemon-v1"),
                 &directory()?,

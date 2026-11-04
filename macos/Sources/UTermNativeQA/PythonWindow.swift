@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import SwiftTerm
+import UniformTypeIdentifiers
 import UTermBridge
 
 struct PythonArgument: Identifiable { let id = UUID(); var text: String }
@@ -95,6 +96,35 @@ final class PythonRunModel: ObservableObject {
         busy = true; error = ""
         defer { busy = false }
         do { try await detectValues() } catch { self.error = error.localizedDescription }
+    }
+    func applySelection(_ selected: URL?, kind: String) async -> Bool {
+        guard let selected else { return false }
+        do {
+            let value = try await bridge.call("python.path.validate", params: .object([
+                "directory": .string(directory), "path": .string(selected.standardizedFileURL.path), "kind": .string(kind)
+            ]))
+            guard let path = value.string else { throw BridgeFailure(code: "PYTHON_PROJECT_INVALID", message: localized("The selected path is invalid.", "所选路径无效。")) }
+            switch kind {
+            case "interpreter": config?.interpreter = path
+            case "script": config?.target = path
+            case "directory": config?.working_directory = path.isEmpty ? "." : path
+            default: return false
+            }
+            dirty = true; error = ""
+            return true
+        } catch { self.error = error.localizedDescription; return false }
+    }
+    func choosePath(_ kind: String) async {
+        guard !busy, !prepared else { return }
+        busy = true
+        defer { busy = false }
+        let panel = NSOpenPanel()
+        panel.resolvesAliases = false; panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = kind == "directory"; panel.canChooseFiles = !panel.canChooseDirectories
+        panel.directoryURL = URL(fileURLWithPath: directory)
+        if kind == "script" { panel.allowedContentTypes = [.pythonScript] }
+        guard panel.runModal() == .OK else { return }
+        _ = await applySelection(panel.url, kind: kind)
     }
     private func formConfig() throws -> CorePythonRunConfig {
         guard var result = config, let number = UInt16(port) else {
@@ -255,6 +285,7 @@ struct PythonRunView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
                         TextField(localized("Python interpreter", "Python 解释器"), text: text(\.interpreter))
+                        Button(localized("Choose…", "选择…")) { Task { await model.choosePath("interpreter") } }
                         Menu(localized("Detected", "已检测")) {
                             ForEach(Array(model.interpreters.enumerated()), id: \.offset) { _, interpreter in
                                 Button(interpreter["path"].string ?? "") { text(\.interpreter).wrappedValue = interpreter["path"].string ?? "" }
@@ -269,6 +300,9 @@ struct PythonRunView: View {
                     }
                     HStack {
                         TextField(localized("Entry point", "应用入口"), text: text(\.target))
+                        if ["script", "django"].contains(model.config?.mode ?? "") {
+                            Button(localized("Choose…", "选择…")) { Task { await model.choosePath("script") } }
+                        }
                         Menu(localized("Project entries", "项目入口")) {
                             ForEach(Array(model.candidates.enumerated()), id: \.offset) { _, candidate in
                                 Button(candidate["target"].string ?? "") {
@@ -279,7 +313,10 @@ struct PythonRunView: View {
                             }
                         }
                     }
+                    HStack {
                     TextField(localized("Working directory", "工作目录"), text: text(\.working_directory))
+                        Button(localized("Choose…", "选择…")) { Task { await model.choosePath("directory") } }
+                    }
                     if ["fastapi", "flask", "django"].contains(model.config?.mode ?? "") {
                         HStack {
                             TextField(localized("Listen address", "监听地址"), text: text(\.host))
@@ -382,8 +419,16 @@ final class PythonWindow: NSWindowController, NSWindowDelegate {
     }
     private func reloadSaved() {
         guard !model.busy, !model.prepared else { return }
-        if model.dirty && discardChoice() != .alertSecondButtonReturn { return }
-        Task { await model.reload() }
+        Task {
+            if model.dirty {
+                switch discardChoice() {
+                case .alertSecondButtonReturn: break
+                case .alertThirdButtonReturn: guard await model.save() else { return }
+                default: return
+                }
+            }
+            await model.reload()
+        }
     }
     func prepareForQuit() async -> Bool {
         guard !model.busy else { model.error = localized("Wait for the Python operation to finish.", "请等待 Python 操作完成。"); return false }
