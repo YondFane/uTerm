@@ -87,6 +87,11 @@ jobs:
       - name: Check formatting
         shell: bash
         run: pnpm format:check 2>&1 | tee ci-evidence/format.log
+      - name: Java launcher encoding diagnostics
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/java-launcher-probe.mjs ci-evidence/java-launcher-probe.json
       - name: Shared core and generated contracts
         shell: bash
         env:

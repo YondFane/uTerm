@@ -2711,11 +2711,13 @@ canonical prefix. The Windows JDK archive tool failed before task startup even a
 that path. The fixture now creates an ASCII archive and renames it to the same
 Unicode/Shell-character filename before the actual shared-host run; literal-path/argument assertions
 remain. Both failures are retained. The renamed fixture now reaches the Windows host but exits 1;
-the check records actual raw output with the exit assertion for diagnosis. Windows remains
-unaccepted. Two Rust processes check global/project CAS, an actual OS writer lock, explicit retry,
-shared registry locking and damaged-byte preservation. Existing Maven, archive and source-scan
-regressions move with their implementation. These are fixture checks, not a full real Maven/Spring
-Boot acceptance.
+the raw output confirms that the Windows launcher converted Chinese filename characters to `??`.
+`java-launcher-probe.json` compares direct and UTF-8 argument-file delivery, including a Unicode
+argument and JVM property, with exact source/toolchain metadata. It is diagnostic evidence and does
+not accept a task or platform. Windows remains unaccepted. Two Rust processes check global/project
+CAS, an actual OS writer lock, explicit retry, shared registry locking and damaged-byte
+preservation. Existing Maven, archive and source-scan regressions move with their implementation.
+These are fixture checks, not a full real Maven/Spring Boot acceptance.
 
 Run `pnpm test:core` and the frontend suite with `JAVA_HOME` pointing to a JDK 21 and its `bin` on
 `PATH`. CI installs Temurin 21 and uploads `java-live-core.json`, core/frontend logs and toolchain
