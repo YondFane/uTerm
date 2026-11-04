@@ -1585,15 +1585,15 @@ Java 构建与运行…**打开窗口。原生表单编辑共用模块／JDK、�
 `bash scripts/macos-java-smoke.sh` 使用 JDK
 21 构建临时 JAR，打开实际原生菜单／窗口，检查注册、冲突、字面数据／非零退出收尾、暂停／跟随、复制、同宿主／generation 重连、过期停止、有序重新运行及强制停止清理。保存
 `java-live.json`、构建／进程日志和四张真实 WindowServer 截图，覆盖英文深色与中文浅色窄窗。Shell／内嵌驱动语法、真实 Java 样例及仓库格式／类型／文档检查在 Linux 通过。新窗口仍需自己的 macOS
-ARM／Intel CI 构建运行，本地没有 AppKit。人工选择器、键盘／IME 及完整 Maven／Java 版本矩阵仍未验收。
+ARM／Intel
+CI 构建运行，本地没有 AppKit。人工选择器、键盘／IME 及完整 Maven／Java 版本矩阵仍未验收。首次 ARM 运行的全部 Java 窗口场景通过，但重复宿主关闭的清理失败；改由 QA 所有者单独清理一次，修正后仍需自己的 CI。失败产物保留以供核查。
 
 `java-build-v1`
 配置和注册表格式、默认值及项目根目录键保持一致。更新客户端在配置 CAS 或注册表替换前共用 OS 写锁；写入占用需明确重试。过期或损坏配置保留原文。读取默认值／任务不会创建配置或启动宿主。Java 停止先核对实际任务族与 generation，再请求宿主停止。Java 只读查询不占用待完成写入的退出保护；保存、JDK 注册和任务准备仍受保护。
 
 Linux x86_64 使用 Temurin JDK
-21.0.13 编译打包临时 JAR，通过真实共享 Core 和隔离宿主启动，验证 Unicode 与字面／空参数、临时环境／JVM 属性、两个输出流的末尾内容、退出码 7、相同 generation 重连／ack、过期及跨任务族停止拒绝、强制停止清理与空闲宿主退出。无效 Wrapper 配合离线模式证明已有 JAR 绕过 Maven 解析。样例编译／归档工具使用标准 Windows 工作目录路径，而非 Rust 扩展规范前缀。首次 Windows
-CI 在 JDK 归档工具中失败，尚未启动任务；保留该失败，修正后的样例仍需自己的 Windows
-CI。两个 Rust 进程检查全局／项目 CAS、实际 OS 写锁、明确重试、注册表共用锁及损坏原文保留。既有 Maven、归档和源码扫描回归随实现迁入。这些为临时样例检查，不代表完整真实 Maven／Spring
+21.0.13 编译打包临时 JAR，通过真实共享 Core 和隔离宿主启动，验证 Unicode 与字面／空参数、临时环境／JVM 属性、两个输出流的末尾内容、退出码 7、相同 generation 重连／ack、过期及跨任务族停止拒绝、强制停止清理与空闲宿主退出。无效 Wrapper 配合离线模式证明已有 JAR 绕过 Maven 解析。样例编译／归档工具使用标准 Windows 工作目录路径，而非 Rust 扩展规范前缀。标准化该路径后 Windows
+JDK 归档工具仍在任务启动前失败。样例改为创建 ASCII 归档，再重命名为相同 Unicode／Shell 字符文件名，之后通过实际共享宿主运行；保留字面路径／参数断言。两次失败均保留。重命名后的样例已进入 Windows 宿主，但退出码为 1；检查在退出断言中记录实际原始输出以便诊断，Windows 仍未验收。两个 Rust 进程检查全局／项目 CAS、实际 OS 写锁、明确重试、注册表共用锁及损坏原文保留。既有 Maven、归档和源码扫描回归随实现迁入。这些为临时样例检查，不代表完整真实 Maven／Spring
 Boot 验收。
 
 运行 `pnpm test:core` 及前端套件时，`JAVA_HOME` 指向 JDK 21，其 `bin` 加入 `PATH`。CI 安装 Temurin

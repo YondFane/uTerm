@@ -2692,7 +2692,7 @@ and repository format/type/documentation checks pass on Linux. This new window s
 macOS ARM/Intel CI build and execution; no AppKit runs locally. Manual picker, keyboard/IME and full
 Maven/Java version matrices remain unaccepted. The first ARM run passed all Java window scenarios
 but failed a duplicate host-shutdown cleanup; the QA owner now performs that cleanup once, and the
-corrected run still needs its own CI.
+corrected run still needs its own CI. Failed artifacts remain available for inspection.
 
 The `java-build-v1` configuration and registry formats, defaults and project-root keys stay the
 same. Updated clients share an OS writer lock before configuration CAS or registry replacement;
