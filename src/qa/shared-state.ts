@@ -47,6 +47,7 @@ const durableEditorText = editorFixture.durableText;
 const savedEditorText = editorFixture.savedText;
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 let observerBusyReads = 0;
+let favoritePreviewReloads = 0;
 async function observeCore(method: string, params?: Parameters<typeof coreRequest>[1]) {
   assert(
     ["snapshot.read", "editor.drafts.document", "git.favorites.read"].includes(method),
@@ -88,7 +89,7 @@ async function scene(name: string, checks: unknown) {
   await pause(500);
   await invoke("qa_scene", {
     name,
-    value: { ...(checks as Record<string, unknown>), observerBusyReads },
+    value: { ...(checks as Record<string, unknown>), observerBusyReads, favoritePreviewReloads },
   });
 }
 export async function reportEditorRecoveryFailure(reason: unknown) {
@@ -673,27 +674,39 @@ async function runFavoriteRecovery(context: Context) {
     );
   }
   async function select(value: string, source = false) {
-    const field = await until(
-      () => document.querySelector<HTMLSelectElement>(".git-favorite-recovery-dialog select"),
-      "recovery copy selector",
-    );
-    await until(
-      () => [...field.options].some((option) => option.value === value),
-      "verified recovery choice",
-    );
-    field.value = value;
-    field.dispatchEvent(new Event("change", { bubbles: true }));
+    let selected = false;
+    let reloads = 0;
     await until(() => {
-      const text = document.querySelector<HTMLTextAreaElement>(
-        ".git-favorite-recovery-dialog textarea",
-      )?.value;
+      const dialog = document.querySelector(".git-favorite-recovery-dialog[open]");
+      const error = dialog?.querySelector('[role="alert"]')?.textContent ?? "";
+      if (error.includes("Another writer owns the canonical store") && reloads < 3) {
+        const reload = [...(dialog?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+          (button) => button.textContent?.trim() === "Reload recovery copies",
+        );
+        if (reload && !reload.disabled) {
+          reload.click();
+          reloads++;
+          favoritePreviewReloads++;
+          selected = false;
+          return false;
+        }
+      }
+      const field = dialog?.querySelector<HTMLSelectElement>("select");
+      if (!field || field.disabled || ![...field.options].some((option) => option.value === value))
+        return false;
+      if (!selected || field.value !== value) {
+        field.value = value;
+        field.dispatchEvent(new Event("change", { bubbles: true }));
+        selected = true;
+        return false;
+      }
+      const text = dialog?.querySelector<HTMLTextAreaElement>("textarea")?.value;
       return (
-        field.value === value &&
         !button("Copy full preview")?.disabled &&
         text !== undefined &&
         text.trimStart().startsWith("[") === source
       );
-    }, "verified favorite recovery preview");
+    }, "verified favorite recovery preview after explicit read-only reload");
     assert(
       button("Restore all repository favorites")?.disabled === source,
       "Original source must not directly replace favorites",
