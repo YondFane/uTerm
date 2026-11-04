@@ -147,6 +147,13 @@ Native terminal QA: `bash scripts/macos-terminal-smoke.sh` runs two real app pro
 temporary data, a bundled standalone helper and language/theme/width screenshot artifacts. SwiftPM
 resolves the pinned SwiftTerm 1.20.0 dependency; it does not change the legacy terminal renderer.
 
+Native Python QA: choose **File → Python run…** after selecting a local project or Worktree. The
+native form uses the shared Rust Python service and raw task-output channel. Run
+`bash scripts/macos-python-smoke.sh` in a macOS graphical session for isolated configuration,
+conflict, real-process output, detach/replay and stop checks with screenshots. This requires an
+existing Python 3; it does not install Python or packages. Platform execution remains separately
+recorded in the feature guides.
+
 The shared-core command explicitly runs the filesystem-failure case. Unix tests require an
 unprivileged user so directory permissions enforce the failure; Windows uses a held file lease.
 
@@ -156,9 +163,9 @@ are used by **File → Git…** in the isolated native QA app. Core now reconcil
 Worktrees for both clients; the native sidebar supports selection, refresh and confirmed deletion.
 Core refuses saved/live session use, dirty files and stale writes; metadata failure after Git
 removal requires explicit refresh. Both clients use the Core Git favorite store with revision
-checks, exact old-source archives and explicit conflict handoff; favorite recovery UI and platform
-acceptance remain pending. `bash scripts/macos-git-smoke.sh` runs real-window diff/history/copy,
-branch creation, editor conflict protection and real Worktree menu
+checks, exact old-source archives and explicit conflict handoff; favorite recovery interfaces have
+platform evidence; full manual acceptance remains pending. `bash scripts/macos-git-smoke.sh` runs
+real-window diff/history/copy, branch creation, editor conflict protection and real Worktree menu
 confirmation/cancel/refusal/removal and favorite persistence and in-flight cancellation protection
 checks, with temporary repositories and system screenshots. This requires a macOS GUI session;
 platform acceptance is recorded separately.

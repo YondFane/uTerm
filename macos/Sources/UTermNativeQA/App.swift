@@ -15,6 +15,7 @@ func localized(_ english: String, _ chinese: String) -> String {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     private var window: NSWindow?
     private var contentWindows: [UUID: ContentWindow] = [:]
+    private var pythonWindows: [String: PythonWindow] = [:]
     private let model = WorkspaceModel()
     private var terminating = false
     private var preparingQuit = false
@@ -45,6 +46,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--python-smoke-report") {
+                var report = baseReport()
+                do {
+                    try await PythonSmoke.run(model: model, open: { try await self.makePythonWindow(directory: $0) }, lookup: { self.pythonWindows[$0] }, report: &report)
+                } catch { report["failure"] = error.localizedDescription }
+                for run in Array(pythonWindows.values) {
+                    if let tasks = try? await run.model.bridge.call("python.tasks", params: .object(["directory": .string(run.model.directory)])) {
+                        for task in tasks.array where task["running"].bool == true {
+                            _ = try? await run.model.bridge.call("python.stop", params: .object(["id": task["spec"]["id"], "generation": task["generation"], "force": .bool(true)]))
+                        }
+                        for _ in 0..<100 {
+                            let current = try? await run.model.bridge.call("python.tasks", params: .object(["directory": .string(run.model.directory)]))
+                            if current?.array.contains(where: { $0["running"].bool == true }) == false { break }
+                            try? await Task.sleep(for: .milliseconds(50))
+                        }
+                        if let root = try? WorkspaceModel.dataRoot(), FileManager.default.fileExists(atPath: root.deletingLastPathComponent().appendingPathComponent("local-daemon-v1/endpoint.json").path) {
+                            do { _ = try await run.model.bridge.call("host.shutdownIdle") }
+                            catch { report["cleanupError"] = error.localizedDescription }
+                        }
+                    }
+                    run.model.dirty = false
+                    await run.forceClose()
+                }
+                finishReport(report, path: path)
+                return
+            }
             if let path = WorkspaceModel.argument("--git-smoke-report") {
                 var report = baseReport()
                 do { try await GitSmoke.run(model: model, parent: window, open: { directory in try await self.makeGitContentWindow(directory: directory) }, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report) }
@@ -103,6 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(file, localized("Open project…", "打开项目…"), #selector(openProject), "o")
         add(file, localized("Open file…", "打开文件…"), #selector(openFile), "o", [.command, .shift])
         add(file, "Git…", #selector(openGit))
+        add(file, localized("Python run…", "Python 运行…"), #selector(openPython))
         add(file, localized("Recover editor drafts…", "恢复编辑器草稿…"), #selector(recoverEditorDrafts))
         add(file, localized("Restore editor recovery copy…", "恢复编辑器备份副本…"), #selector(restoreEditorRecovery))
         add(file, localized("Recover Git favorites…", "恢复 Git 收藏…"), #selector(recoverGitFavorites))
@@ -133,6 +161,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return false }
         if menuItem.action == #selector(closeSession) {
+            if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) {
+                menuItem.title = localized("Close window", "关闭窗口")
+                return !run.model.busy && !run.model.prepared
+            }
             let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow }
             menuItem.title = fileFocused ? localized("Close file", "关闭文件") : localized("Close session", "关闭会话")
             if fileFocused { return true }
@@ -150,6 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func settings() { model.settingsPresented = true }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func hideWindow() {
+        if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
         else { window?.performClose(nil) }
     }
@@ -162,6 +195,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             catch { model.error = error.localizedDescription }
         }
+    }
+    @objc private func openPython() {
+        Task { @MainActor in
+            do {
+                let directory = try await selectedProjectDirectory()
+                _ = try await makePythonWindow(directory: directory)
+            }
+            catch { model.error = error.localizedDescription }
+        }
+    }
+    private func makePythonWindow(directory: URL) async throws -> PythonWindow {
+        let root = directory.standardizedFileURL.resolvingSymlinksInPath().path
+        if let existing = pythonWindows[root] { existing.showWindow(nil); existing.window?.makeKeyAndOrderFront(nil); return existing }
+        guard !preparingQuit, let resources = Bundle.main.resourceURL else { throw BridgeFailure(code: "CLOSED", message: localized("The client is closing.", "客户端正在关闭。")) }
+        let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
+        do {
+            _ = try await worker.call("host.configure", params: .object(["helper": .string(resources.appendingPathComponent("bin/utermd-local").path)]))
+            let run = PythonRunModel(directory: root, bridge: worker, settings: model.settings)
+            let controller = PythonWindow(model: run)
+            controller.didClose = { [weak self] in self?.pythonWindows.removeValue(forKey: root) }
+            pythonWindows[root] = controller
+            controller.showWindow(nil); controller.window?.makeKeyAndOrderFront(nil)
+            await run.start()
+            return controller
+        } catch { await worker.close(); throw error }
     }
     private func selectedProjectDirectory() async throws -> URL {
         guard let bridge = model.bridge, let state = model.state else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
@@ -385,6 +443,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }
     @objc private func closeSession() {
+        if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
         else { Task { await model.closeSession() } }
     }
@@ -409,12 +468,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminating { return .terminateNow }
-        if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return .terminateCancel }
+        if let run = pythonWindows.values.first(where: { $0.model.busy }) {
+            run.model.error = localized("Wait for the Python operation to finish.", "请等待 Python 操作完成。")
+            run.window?.makeKeyAndOrderFront(nil)
+            return .terminateCancel
+        }
+        if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented || pythonWindows.values.contains(where: { $0.model.busy }) { return .terminateCancel }
         preparingQuit = true
         Task { @MainActor in
             guard await model.confirmQuit() else { self.preparingQuit = false; return }
             let contents = Array(self.contentWindows.values)
+            let runs = Array(self.pythonWindows.values)
             do {
+                for run in runs {
+                    guard await run.prepareForQuit() else { throw BridgeFailure(code: "PYTHON_QUIT_REFUSED", message: localized("Resolve Python configuration changes before quitting.", "退出前请处理 Python 配置修改。")) }
+                }
                 for content in contents {
                     guard try await content.prepareForQuit() else {
                         throw BridgeFailure(code: "QUIT_REFUSED", message: localized("Save or resolve file changes before quitting.", "退出前请保存或处理文件修改。"))
@@ -425,6 +493,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 }
             } catch {
                 for content in contents { content.resumeAfterQuit() }
+                for run in runs { run.resumeAfterQuit() }
                 self.model.error = error.localizedDescription
                 self.window?.makeKeyAndOrderFront(nil)
                 NSApp.activate(ignoringOtherApps: true)
@@ -432,6 +501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 return
             }
             for content in contents { content.forceClose() }
+            for run in runs { await run.forceClose() }
             await model.shutdown()
             self.terminating = true
             sender.terminate(nil)

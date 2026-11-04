@@ -2888,8 +2888,17 @@ be installed elsewhere.
 The development `uterm-core::python` service owns existing interpreter detection, source scanning,
 five launch modes, configuration and host-task rules. Tauri retains only IPC, file pickers and
 platform app-data/helper adapters. Versioned `python.*` Core/FFI calls use the same service;
-generated Rust DTOs supply TypeScript and Swift types. The native Python window and Java/Maven
-adoption remain pending; these APIs do not imply that those interfaces are available.
+generated Rust DTOs supply TypeScript and Swift types. In the native QA app, select a local project
+or Worktree and choose **File → Python run…**. Its native window edits the shared configuration,
+selects detected interpreters/entries, accepts one literal argument per row and temporary
+environment pairs, and shows readonly task output/history. Saving pins the loaded revision; explicit
+reload and closing prompt before discarding edited configuration. Run saves configuration before
+starting; Stop/Force stop use the captured task generation. Closing the window detaches without
+stopping its task.
+
+Native log search, explicit follow controls, run-again workflow, file pickers, full settings/menu
+integration and Java/Maven adoption remain pending. The new native window requires its own CI build
+and actual window evidence; its implementation is not platform acceptance.
 
 The `python-run-v1/configuration.json` format and project-root keys remain unchanged. An OS writer
 lock serializes updated clients before revision checks and atomic replacement; a busy writer
@@ -2905,6 +2914,11 @@ lock, explicit retry and damaged-file preservation. Existing Python mode/path/sc
 with the implementation; no separate Swift launch planner was added. Core/FFI, frontend and backend
 regressions pass locally. This extraction still needs its own Windows/macOS CI and native-window
 acceptance; older Windows framework evidence below is not reused for it.
+`bash scripts/macos-python-smoke.sh` adds actual native menu/window checks for configuration
+conflict, real script output/nonzero exit, detach/replay with the same generation, stale stop
+refusal and force stop, with three screenshots including English/dark and Chinese/light narrow
+windows. The new script and window have not executed locally: this Linux environment has no
+AppKit/Swift toolchain. Manual input/IME and the missing native controls remain unaccepted.
 
 #### Python control layout validation on Linux
 

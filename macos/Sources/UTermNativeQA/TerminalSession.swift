@@ -19,6 +19,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private var reconnecting = false
     private var applyingReplay = false
     private var entry: CoreSessionEntry
+    private let taskGeneration: String?
     var qaRenderDelay: Duration?
     private(set) var qaWaitingToRender = false
     private(set) var qaRenderedBytes = 0
@@ -26,9 +27,10 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private(set) var qaAcknowledgedFrames = 0
     private(set) var qaLargestFrame = 0
 
-    init(entry: CoreSessionEntry, bridge: CoreBridge) {
+    init(entry: CoreSessionEntry, bridge: CoreBridge, taskGeneration: String? = nil) {
         self.entry = entry
         self.bridge = bridge
+        self.taskGeneration = taskGeneration
         id = entry.session["id"].string ?? ""
         view = TerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
         super.init()
@@ -77,11 +79,16 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
                     "cols": .number(Double(terminal.cols)), "reconnectOnly": .bool(reconnectOnly)
                 ]
                 if let agent = self.entry.session["agent"].string { params["agent"] = .string(agent) }
+                if self.taskGeneration != nil { params["taskOnly"] = .bool(true) }
                 if self.entry.session["ssh"] != .null {
                     throw BridgeFailure(code: "UNSUPPORTED", message: localized("SSH service adoption is pending.", "SSH 服务接入尚待完成。"))
                 }
                 let result = try await self.bridge.call("terminal.open", params: .object(params))
                 guard self.attachment == token else { return }
+                if let expected = self.taskGeneration, result["generation"].string != expected {
+                    _ = try await self.bridge.call("terminal.action", params: .object(["attachment": .string(token), "action": .string("detach")]))
+                    throw BridgeFailure(code: "TASK_REPLACED", message: localized("The task changed. Reload its status.", "任务已变化，请重新读取状态。"))
+                }
                 self.generation = result["generation"].string
                 self.error = ""
                 await self.resizeIfNeeded()
@@ -93,6 +100,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
 
     func receive(_ packet: TerminalPacket) async {
         guard packet.header.attachment == attachment else { return }
+        if let expected = taskGeneration, packet.header.generation != expected { return }
         if let generation, generation != packet.header.generation { return }
         generation = packet.header.generation
         if let message = packet.header.error { error = message; changed?(); return }
@@ -148,7 +156,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     }
 
     func enqueue(_ bytes: Data) {
-        guard generation != nil, error.isEmpty, !exited, !reconnecting else { return }
+        guard taskGeneration == nil, generation != nil, error.isEmpty, !exited, !reconnecting else { return }
         guard input.count + bytes.count <= 1024 * 1024 else {
             error = localized("Input queue is full. Wait before pasting again.", "输入队列已满，请等待后再粘贴。")
             changed?(); return

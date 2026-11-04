@@ -82,6 +82,8 @@ jobs:
         run: bash scripts/macos-content-smoke.sh
       - name: Real native editor save, conflict and forced-exit recovery
         run: bash scripts/macos-editor-smoke.sh
+      - name: Real native Python configuration, output and task lifetime
+        run: bash scripts/macos-python-smoke.sh
       - name: Real native Git, Worktree and open-editor protection
         run: bash scripts/macos-git-smoke.sh
       - name: Real native control and standalone CLI smoke
