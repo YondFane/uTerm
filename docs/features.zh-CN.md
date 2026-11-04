@@ -1595,7 +1595,7 @@ Linux x86_64 使用 Temurin JDK
 21.0.13 编译打包临时 JAR，通过真实共享 Core 和隔离宿主启动，验证 Unicode 与字面／空参数、临时环境／JVM 属性、两个输出流的末尾内容、退出码 7、相同 generation 重连／ack、过期及跨任务族停止拒绝、强制停止清理与空闲宿主退出。无效 Wrapper 配合离线模式证明已有 JAR 绕过 Maven 解析。样例编译／归档工具使用标准 Windows 工作目录路径，而非 Rust 扩展规范前缀。标准化该路径后 Windows
 JDK 归档工具仍在任务启动前失败。样例改为创建 ASCII 归档，再重命名为相同 Unicode／Shell 字符文件名，之后通过实际共享宿主运行；保留字面路径／参数断言。两次失败均保留。重命名后的样例已进入 Windows 宿主，但退出码为 1；原始输出证实 Windows 启动器将文件名中文转换为
 `??`。`java-launcher-probe.json`
-对比直接参数与 UTF-8 参数文件方式，包含 Unicode 参数及 JVM 属性和准确源码／工具链信息。此产物为诊断证据，不代表任务或平台验收。Windows 仍未验收。两个 Rust 进程检查全局／项目 CAS、实际 OS 写锁、明确重试、注册表共用锁及损坏原文保留。既有 Maven、归档和源码扫描回归随实现迁入。这些为临时样例检查，不代表完整真实 Maven／Spring
+对比直接参数与 UTF-8 参数文件方式，包含 Unicode 参数及 JVM 属性和准确源码／工具链信息。此产物为诊断证据，不代表任务或平台验收。参数文件以换行结束，保留最后一个空参数；另用 premain 编码探针对比启动器初始化，不将该探针作为应用行为交付。Windows 仍未验收。两个 Rust 进程检查全局／项目 CAS、实际 OS 写锁、明确重试、注册表共用锁及损坏原文保留。既有 Maven、归档和源码扫描回归随实现迁入。这些为临时样例检查，不代表完整真实 Maven／Spring
 Boot 验收。
 
 运行 `pnpm test:core` 及前端套件时，`JAVA_HOME` 指向 JDK 21，其 `bin` 加入 `PATH`。CI 安装 Temurin

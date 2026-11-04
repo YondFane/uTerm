@@ -2714,10 +2714,12 @@ remain. Both failures are retained. The renamed fixture now reaches the Windows 
 the raw output confirms that the Windows launcher converted Chinese filename characters to `??`.
 `java-launcher-probe.json` compares direct and UTF-8 argument-file delivery, including a Unicode
 argument and JVM property, with exact source/toolchain metadata. It is diagnostic evidence and does
-not accept a task or platform. Windows remains unaccepted. Two Rust processes check global/project
-CAS, an actual OS writer lock, explicit retry, shared registry locking and damaged-byte
-preservation. Existing Maven, archive and source-scan regressions move with their implementation.
-These are fixture checks, not a full real Maven/Spring Boot acceptance.
+not accept a task or platform. Argument files end with a newline to preserve a final empty argument;
+a separate premain encoding probe checks launcher initialization without shipping that probe as
+application behavior. Windows remains unaccepted. Two Rust processes check global/project CAS, an
+actual OS writer lock, explicit retry, shared registry locking and damaged-byte preservation.
+Existing Maven, archive and source-scan regressions move with their implementation. These are
+fixture checks, not a full real Maven/Spring Boot acceptance.
 
 Run `pnpm test:core` and the frontend suite with `JAVA_HOME` pointing to a JDK 21 and its `bin` on
 `PATH`. CI installs Temurin 21 and uploads `java-live-core.json`, core/frontend logs and toolchain

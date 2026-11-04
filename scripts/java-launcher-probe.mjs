@@ -48,6 +48,21 @@ try {
     "EncodingProbe",
     "EncodingProbe.class",
   ]);
+  writeFileSync(
+    join(root, "EncodingAgent.java"),
+    'public class EncodingAgent { public static void premain(String args) { System.setProperty("sun.jnu.encoding", "UTF-8"); } }',
+  );
+  writeFileSync(join(root, "agent.mf"), "Premain-Class: EncodingAgent\n\n");
+  build("javac", ["-encoding", "UTF-8", "-source", "8", "-target", "8", "EncodingAgent.java"]);
+  build("jar", [
+    "--create",
+    "--file",
+    "agent.jar",
+    "--manifest",
+    "agent.mf",
+    "EncodingAgent.class",
+  ]);
+  renameSync(join(root, "agent.jar"), join(root, "agent 中文.jar"));
   const jar = "literal 中文 & %.jar";
   renameSync(join(root, "fixture.jar"), join(root, jar));
   const args = [
@@ -63,10 +78,16 @@ try {
   const quoted = args
     .map((value) => '"' + value.replaceAll("\\", "\\\\").replaceAll('"', '\\"') + '"')
     .join("\n");
-  writeFileSync(join(root, "utf8.args"), quoted, "utf8");
+  writeFileSync(join(root, "utf8.args"), quoted + "\n", "utf8");
+  writeFileSync(
+    join(root, "agent.args"),
+    '\"-javaagent:agent 中文.jar\"\n' + quoted + "\n",
+    "utf8",
+  );
   const variants = [
     ["direct", args],
     ["utf8-argfile", ["@utf8.args"]],
+    ["utf8-agent-argfile", ["@agent.args"]],
     ["utf8-argfile-jnu", ["-Dsun.jnu.encoding=UTF-8", "@utf8.args"]],
     [
       "utf8-argfile-native-jnu",
