@@ -3,7 +3,7 @@ title: uTerm development guide
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-11-02
+updated: 2026-11-04
 ---
 
 # uTerm development guide
@@ -31,6 +31,11 @@ see the [feature guide](features.md).
 `crates/uterm-ffi` exposes C ABI 1; manifests and lockfiles remain independent from the desktop and
 host. Run `pnpm test:core`, `pnpm contracts:generate` and `pnpm contracts:check` after DTO changes.
 Generated boundary types are committed; intermediate JSON schemas are not.
+
+Shared Java task/configuration checks require an existing JDK 21 with `JAVA_HOME` set and its `bin`
+on `PATH`. They compile a disposable JAR and use the isolated host; setting `UTERM_JAVA_CORE_REPORT`
+writes a structured source/platform/behavior report. CI uploads it as `java-live-core.json`.
+Building the application does not require or bundle Java.
 
 On macOS 14 or newer, `bash scripts/macos-native-build.sh` builds the ad-hoc-signed QA app and
 `bash scripts/macos-native-test.sh` runs Swift bridge tests against the Rust static library.

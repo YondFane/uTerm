@@ -139,9 +139,12 @@ Native macOS development is isolated from stable releases. See
 [native migration](docs/native-migration.md) for the QA app, platform checks and staged feature
 status.
 
-Shared core checks: `pnpm test:core` and `pnpm contracts:check`. Regenerate TS/Swift boundary types
-with `pnpm contracts:generate`. On macOS, run `bash scripts/macos-native-build.sh` and
-`bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift bridge tests.
+Shared core checks: `pnpm test:core` and `pnpm contracts:check`. The shared Java task checks require
+JDK 21 (`JAVA_HOME` and its `bin` on `PATH`); application builds still do not bundle or require a
+JDK. `uterm-core::{java,python}` owns shared run configuration and task rules; Tauri provides
+platform adapters and generated DTOs keep Swift/TypeScript boundaries aligned. Regenerate TS/Swift
+boundary types with `pnpm contracts:generate`. On macOS, run `bash scripts/macos-native-build.sh`
+and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift bridge tests.
 
 Native terminal QA: `bash scripts/macos-terminal-smoke.sh` runs two real app processes with
 temporary data, a bundled standalone helper and language/theme/width screenshot artifacts. SwiftPM

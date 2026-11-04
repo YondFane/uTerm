@@ -47,6 +47,11 @@ pub(super) fn update(path: &Path, home: &str, jdk: Option<&JavaHome>) -> Result<
     let _guard = CONFIG_LOCK
         .lock()
         .map_err(|_| anyhow::anyhow!("JAVA_CONFIG_SAVE"))?;
+    let _writer = crate::configuration::ConfigurationWriter::acquire(
+        path,
+        "JAVA_CONFIG_BUSY",
+        "JAVA_CONFIG_SAVE",
+    )?;
     let mut homes = read(path)?;
     homes.retain(|entry| key(&entry.home) != key(home));
     if let Some(jdk) = jdk {

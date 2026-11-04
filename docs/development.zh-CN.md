@@ -3,7 +3,7 @@ title: uTerm 开发指南
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-11-02
+updated: 2026-11-04
 ---
 
 # uTerm 开发指南
@@ -30,6 +30,10 @@ updated: 2026-11-02
 1；manifest 和 lockfile 继续与桌面及宿主隔离。修改 DTO 后执行 `pnpm test:core`、
 `pnpm contracts:generate` 和 `pnpm contracts:check`。生成的边界类型需要提交，中间 JSON
 schema 不提交。
+
+共享 Java 任务／配置检查需要已有 JDK 21，设置 `JAVA_HOME` 并将其 `bin` 加入
+`PATH`。检查编译临时 JAR 并使用隔离宿主；设置 `UTERM_JAVA_CORE_REPORT`
+可输出源码／平台／行为结构化报告，CI 以 `java-live-core.json` 上传。应用构建不要求或捆绑 Java。
 
 在 macOS 14 或更新系统上，使用 `bash scripts/macos-native-build.sh` 构建 ad-hoc 签名 QA 应用，使用
 `bash scripts/macos-native-test.sh` 运行连接 Rust 静态库的 Swift 桥接测试。

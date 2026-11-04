@@ -1574,6 +1574,24 @@ Silicon 原生 Java 8 使用 Zulu 外，其余采用 Temurin。归档版本、�
 `node scripts/java-components.mjs`，通过 curl 与厂商元数据刷新清单；脚本先对照 Apache
 SHA-512 校验 Maven，再记录 SHA-256。
 
+### 共享 Java 服务验证
+
+开发中的 `uterm-core::java`
+管理既有 Java／Maven 配置、JDK 注册与探测、有界 POM／主类扫描、Wrapper 解析和任务启动规则。Tauri 只保留 IPC、原生选择器、变更通知及应用数据／helper 适配。版本化
+`java.*` Core／FFI 和生成的 TypeScript／Swift
+DTO 使用同一服务。原生 Java 窗口及其平台交互检查仍待完成。
+
+`java-build-v1`
+配置和注册表格式、默认值及项目根目录键保持一致。更新客户端在配置 CAS 或注册表替换前共用 OS 写锁；写入占用需明确重试。过期或损坏配置保留原文。读取默认值／任务不会创建配置或启动宿主。Java 停止先核对实际任务族与 generation，再请求宿主停止。Java 只读查询不占用待完成写入的退出保护；保存、JDK 注册和任务准备仍受保护。
+
+Linux x86_64 使用 Temurin JDK
+21.0.13 编译打包临时 JAR，通过真实共享 Core 和隔离宿主启动，验证 Unicode 与字面／空参数、临时环境／JVM 属性、两个输出流的末尾内容、退出码 7、相同 generation 重连／ack、过期及跨任务族停止拒绝、强制停止清理与空闲宿主退出。无效 Wrapper 配合离线模式证明已有 JAR 绕过 Maven 解析。两个 Rust 进程检查全局／项目 CAS、实际 OS 写锁、明确重试、注册表共用锁及损坏原文保留。既有 Maven、归档和源码扫描回归随实现迁入。这些为临时样例检查，不代表完整真实 Maven／Spring
+Boot 验收。
+
+运行 `pnpm test:core` 及前端套件时，`JAVA_HOME` 指向 JDK 21，其 `bin` 加入 `PATH`。CI 安装 Temurin
+21，上传 `java-live-core.json`、Core／前端日志及工具链信息。Java 迁移仍需自己的 macOS／Windows
+CI 和原生窗口截图；本地报告明确标记工作区含未提交改动，不宣称已经通过提交对应 CI。本地 Core／FFI、宿主及后端套件通过（84 项后端通过、九项忽略），前端 400 项通过、十项可选／平台检查跳过。TypeScript／生产及桌面构建、生成契约漂移、格式、国际化和文档检查通过。
+
 ### 任务生命周期与验证
 
 每个项目根目录同一时间运行一个任务。“停止”请求中断，“强制停止”终止整个进程树。“重新运行”先停止旧任务并等待退出。进程状态与退出码单独显示，不将进程启动成功视为 Web 服务已就绪。
@@ -1688,16 +1706,24 @@ Python 运行…**打开原生窗口。它编辑共享配置、选择探测到�
 
 日志工具栏使用固定终端库的字面前后搜索及匹配计数，带原生自动跟随复选框。向上滚动暂停跟随；输出仍持续消费／确认，视口按缓冲区行锚点保留。重新勾选跟随回到末尾。**重新运行**先保存配置，仅正常停止本根目录的 Python 任务，等退出后才启动新 generation；停止超过五秒须明确强制停止。普通停止保留收尾输出，原生复制失败明确提示。
 
-文件选择器、完整设置／菜单集成及 Java／Maven 接入仍待完成。新窗口尚需自己的 CI 构建及真实窗口证据，实现不代表平台验收。
+文件选择器及完整设置／菜单集成仍待完成。Java／Maven 已共用 Core 服务，但仍需自己的原生窗口与平台验收。
 
 `python-run-v1/configuration.json`
 格式和项目根目录键不变。更新后的客户端在修订校验和原子替换前使用操作系统写锁；忙碌须明确重试。读取默认值／任务不创建配置或宿主；损坏字节和过期版本拒绝替换。此锁不能改造旧的已安装二进制。停止先核对任务 generation 及 Python 任务族，再请求宿主终止。
 
-Linux 检查实际运行 Python 脚本及隔离 Rust 宿主，覆盖 Unicode／Shell 字面参数、临时环境、非零退出、原始收尾输出、消费 ack、分离／回放和有界清理。过期 generation 及实际其他任务族不能被 Python 请求终止。独立 Rust 进程验证配置 CAS、真实操作系统写锁、明确重试和损坏文件保留。原有模式／路径／扫描测试随实现迁入，没有添加另一套 Swift 启动计划器。Core／FFI、前端及后端回归在本地通过。此抽取仍需自己的 Windows／macOS
-CI 及原生窗口验收；下方旧 Windows 框架证据不用于本改动。 `bash scripts/macos-python-smoke.sh`
-新增真实原生菜单／窗口检查，覆盖配置冲突、实际脚本输出／非零退出、相同 generation 分离／回放、过期停止拒绝及强制停止，另查搜索、暂停时消费并保留视口、恢复跟随、相同宿主 PID、正常停止的收尾输出／复制及重新运行顺序。保存四张截图，含英文深色、暂停输出及中文浅色窄窗。新脚本和窗口尚未在本地执行；此 Linux 环境没有 AppKit／Swift 工具链。人工输入／IME 及缺失原生控件仍未验收。
+Linux 检查实际运行 Python 脚本及隔离 Rust 宿主，覆盖 Unicode／Shell 字面参数、临时环境、非零退出、原始收尾输出、消费 ack、分离／回放和有界清理。过期 generation 及实际其他任务族不能被 Python 请求终止。独立 Rust 进程验证配置 CAS、真实操作系统写锁、明确重试和损坏文件保留。原有模式／路径／扫描测试随实现迁入，没有添加另一套 Swift 启动计划器。Core／FFI、前端及后端回归在本地通过。Python 服务在
+`692cd6c` 的 macOS／Windows CI 通过；下方旧 Windows 框架证据不用于此次抽取。
+`bash scripts/macos-python-smoke.sh`
+新增真实原生菜单／窗口检查，覆盖配置冲突、实际脚本输出／非零退出、相同 generation 分离／回放、过期停止拒绝及强制停止，另查搜索、暂停时消费并保留视口、恢复跟随、相同宿主 PID、正常停止的收尾输出／复制及重新运行顺序。保存四张截图，含英文深色、暂停输出及中文浅色窄窗。[Native CI 41771783432](https://github.com/YondFane/uTerm/actions/runs/41771783432)
+在 macOS ARM／Intel 通过，对应源码 `ee0b1ac`、tested merge
+`e213eaa61e119c307566a50329acd85985432032`。ARM artifact
+`native-qa-macos-15-ee0b1ac38fe42db2ad772bb68a8ae144268c47be` 包含 `python-live.json` 和四张
+`native-python-*.png`
+截图，包括暂停输出。此 Linux 环境没有 AppKit／Swift 工具链。人工输入／IME 及缺失原生控件仍未验收；这些 Python 证据不覆盖后续 Java 迁移。
 
-原始任务回放检查为完整操作及每次接收共用十秒期限；失败报告最后 sequence 及实际宿主任务状态。此新服务的 Windows 回放仍需自己的 CI 通过，之前的内层两秒接收在声明的整体期限前失败。未跳过测试或必要平台。
+原始任务回放检查为完整操作及每次接收共用十秒期限；失败报告最后 sequence 及实际宿主任务状态。修正后的检查在源码
+`692cd6c` 的 CI
+41770931806 通过 Windows／macOS；之前的内层两秒接收在声明的整体期限前失败。未跳过测试或必要平台。
 
 #### Python 控件布局 Linux 验证
 

@@ -54,6 +54,10 @@ jobs:
           key: pnpm-${{ runner.os }}-${{ runner.arch }}-11-${{ hashFiles('pnpm-lock.yaml') }}
           restore-keys: |
             pnpm-${{ runner.os }}-${{ runner.arch }}-11-
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -76,8 +80,10 @@ jobs:
             pnpm --version
             rustc --version
             cargo --version
+            java -version
+            javac -version
             node -e 'const os=require("node:os"); console.log(JSON.stringify({platform:os.platform(),arch:os.arch(),release:os.release(),version:os.version()}))'
-          } | tee ci-evidence/toolchain.txt
+          } 2>&1 | tee ci-evidence/toolchain.txt
       - name: Check formatting
         shell: bash
         run: pnpm format:check 2>&1 | tee ci-evidence/format.log
@@ -86,6 +92,7 @@ jobs:
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/ci-evidence/terminal-load-core.json
+          UTERM_JAVA_CORE_REPORT: ${{ github.workspace }}/ci-evidence/java-live-core.json
         run: |
           pnpm test:core 2>&1 | tee ci-evidence/core-ffi-tests.log
           pnpm contracts:check 2>&1 | tee ci-evidence/contracts.log

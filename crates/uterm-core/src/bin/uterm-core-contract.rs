@@ -11,6 +11,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = args.next();
     if mode.as_deref() == Some("--schema") {
         let schemas = serde_json::json!({
+            "JavaMavenConfig":schemars::schema_for!(uterm_core::java::MavenConfig),
+            "JavaProjectConfig":schemars::schema_for!(uterm_core::java::ProjectConfig),
+            "JavaConfiguration":schemars::schema_for!(uterm_core::java::Configuration),
+            "JavaHome":schemars::schema_for!(uterm_core::java::JavaHome),
+            "JavaModule":schemars::schema_for!(uterm_core::java::Module),
+            "JavaMainClass":schemars::schema_for!(uterm_core::java::MainClass),
+            "JavaProjectInfo":schemars::schema_for!(uterm_core::java::ProjectInfo),
             "PythonRunConfig":schemars::schema_for!(uterm_core::python::RunConfig),
             "PythonConfiguration":schemars::schema_for!(uterm_core::python::Configuration),
             "PythonInterpreter":schemars::schema_for!(uterm_core::python::Interpreter),

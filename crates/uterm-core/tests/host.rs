@@ -56,6 +56,253 @@ impl Drop for HostCleanup {
 }
 
 #[test]
+fn java_jar_uses_shared_host_literal_arguments_replay_and_generation_safe_stop() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().canonicalize().unwrap();
+    let core = Core::open(root.join("shared-state-v1")).unwrap();
+    let host_root = root.join("local-daemon-v1");
+    let _cleanup = HostCleanup(host_root.clone());
+    call(&core, "host.configure", json!({"helper":helper()}));
+    let java_home =
+        PathBuf::from(std::env::var_os("JAVA_HOME").expect("JAVA_HOME must point to JDK 21"));
+    let tool = |name: &str| {
+        java_home.join("bin").join(if cfg!(windows) {
+            format!("{name}.exe")
+        } else {
+            name.into()
+        })
+    };
+    let run = |name: &str, args: &[&str]| {
+        let output = std::process::Command::new(tool(name))
+            .args(args)
+            .current_dir(&root)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        output
+    };
+    std::fs::create_dir_all(root.join("target")).unwrap();
+    std::fs::write(root.join("TaskProbe.java"), r#"
+public class TaskProbe {
+    public static void main(String[] args) throws Exception {
+        System.out.println("READY:" + args[0] + ":" + System.getenv("VALUE") + ":" + System.getProperty("qa.value") + ":empty=" + args[1].isEmpty());
+        System.out.flush();
+        if (args.length > 2) Thread.sleep(60000);
+        System.out.println("LAST:中文 e\u0301");
+        System.err.println("ERR_LAST:中文");
+        System.exit(7);
+    }
+}
+"#).unwrap();
+    run(
+        "javac",
+        &["-encoding", "UTF-8", "-d", "target", "TaskProbe.java"],
+    );
+    run(
+        "jar",
+        &[
+            "--create",
+            "--file",
+            "target/literal 中文 & %.jar",
+            "--main-class",
+            "TaskProbe",
+            "-C",
+            "target",
+            "TaskProbe.class",
+        ],
+    );
+    std::fs::write(root.join("pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>qa</groupId><artifactId>literal</artifactId><version>1</version></project>").unwrap();
+    std::fs::create_dir_all(root.join(".mvn/wrapper")).unwrap();
+    std::fs::write(
+        root.join(".mvn/wrapper/maven-wrapper.properties"),
+        "distributionUrl=invalid:must-not-download\n",
+    )
+    .unwrap();
+    let mut config =
+        call(&core, "java.configuration", json!({"directory":root}))["project"].clone();
+    config["java_home"] = json!(java_home);
+    config["mode"] = json!("jar");
+    config["jar"] = json!("target/literal 中文 & %.jar");
+    config["offline"] = json!(true);
+    config["arguments"] = json!(["literal & %PATH%", ""]);
+    config["vm_arguments"] = json!(["-Dqa.value=property & %PATH%"]);
+    let start = |config: &Value| {
+        call(
+            &core,
+            "java.start",
+            json!({"directory":root,"action":"run","config":config,"environment":{"VALUE":"环境 & %PATH%"}}),
+        )
+    };
+    let task = start(&config);
+    let client = Client::connect(&host_root).unwrap();
+    let (send, receive) = mpsc::channel();
+    core.set_terminal_sink(Arc::new(move |_, generation, frame| {
+        send.send((generation.to_owned(), frame))
+            .map_err(|e| e.to_string())
+    }))
+    .unwrap();
+    let attach = |attachment: &str| json!({"id":task["spec"]["id"],"attachment":attachment,"directory":root,"shell":"default","rows":30,"cols":100,"taskOnly":true});
+    call(&core, "terminal.open", attach("java-first"));
+    let (first_generation, first) = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert_eq!(first_generation, task["generation"].as_str().unwrap());
+    call(
+        &core,
+        "terminal.action",
+        json!({"attachment":"java-first","action":"detach"}),
+    );
+    assert!(
+        matches!(client.request(Operation::TaskSnapshot).unwrap(), Reply::Tasks(tasks) if tasks.iter().any(|entry| entry.spec.id == task["spec"]["id"].as_str().unwrap() && entry.generation == task["generation"].as_str().unwrap()))
+    );
+    for _ in receive.try_iter() {}
+    call(&core, "terminal.open", attach("java-replay"));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut bytes = Vec::new();
+    let mut sequences = Vec::new();
+    loop {
+        let (generation, frame) = receive
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Java final frame: {error}; host {:?}",
+                    client.request(Operation::TaskSnapshot)
+                )
+            });
+        assert_eq!(generation, task["generation"].as_str().unwrap());
+        if let Some(previous) = sequences.last() {
+            assert!(frame.sequence >= *previous);
+        }
+        sequences.push(frame.sequence);
+        bytes.extend_from_slice(&frame.data);
+        call(
+            &core,
+            "terminal.action",
+            json!({"attachment":"java-replay","action":"ack","sequence":frame.sequence.to_string()}),
+        );
+        if frame.exited {
+            assert_eq!(frame.code, Some(7));
+            break;
+        }
+    }
+    let text = String::from_utf8(bytes).unwrap();
+    assert!(
+        text.contains("READY:literal & %PATH%:环境 & %PATH%:property & %PATH%:empty=true"),
+        "{text}"
+    );
+    assert!(
+        text.contains("LAST:中文 e\u{301}") && text.contains("ERR_LAST:中文"),
+        "{text}"
+    );
+    assert!(first.sequence <= *sequences.last().unwrap());
+    config["arguments"] = json!(["literal & %PATH%", "", "wait"]);
+    let live = start(&config);
+    let request = |method: &str, generation: &str| {
+        core.execute(&serde_json::to_vec(&json!({"version":1,"id":"java-stop","method":method,"params":{"id":live["spec"]["id"],"generation":generation,"force":true}})).unwrap())
+    };
+    assert_eq!(
+        request("java.stop", "stale-generation").error.unwrap().code,
+        "JAVA_TASK_REPLACED"
+    );
+    assert_eq!(
+        request("python.stop", live["generation"].as_str().unwrap())
+            .error
+            .unwrap()
+            .code,
+        "PYTHON_TASK_INVALID"
+    );
+    assert!(
+        matches!(client.request(Operation::TaskSnapshot).unwrap(), Reply::Tasks(tasks) if tasks.iter().any(|entry| entry.spec.id == live["spec"]["id"].as_str().unwrap() && entry.running))
+    );
+    assert!(request("java.stop", live["generation"].as_str().unwrap())
+        .error
+        .is_none());
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let Reply::Tasks(tasks) = client.request(Operation::TaskSnapshot).unwrap() else {
+            panic!("Expected tasks")
+        };
+        if tasks.iter().all(|task| !task.running) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Java force stop left a running task"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    let python = std::process::Command::new(if cfg!(windows) { "python" } else { "python3" })
+        .args(["-I", "-c", "import sys; print(sys.executable)"])
+        .output()
+        .unwrap();
+    assert!(python.status.success());
+    std::fs::write(root.join("foreign.py"), "import time\ntime.sleep(60)\n").unwrap();
+    let mut foreign_config =
+        call(&core, "python.configuration", json!({"directory":root}))["project"].clone();
+    foreign_config["interpreter"] = json!(String::from_utf8(python.stdout).unwrap().trim());
+    foreign_config["target"] = json!("foreign.py");
+    let foreign = call(
+        &core,
+        "python.start",
+        json!({"directory":root,"config":foreign_config,"environment":{}}),
+    );
+    let rejected = core.execute(&serde_json::to_vec(&json!({"version":1,"id":"foreign-java-stop","method":"java.stop","params":{"id":foreign["spec"]["id"],"generation":foreign["generation"],"force":true}})).unwrap());
+    assert_eq!(rejected.error.unwrap().code, "JAVA_TASK_FAMILY");
+    assert!(
+        matches!(client.request(Operation::TaskSnapshot).unwrap(), Reply::Tasks(tasks) if tasks.iter().any(|entry| entry.spec.id == foreign["spec"]["id"].as_str().unwrap() && entry.running))
+    );
+    call(
+        &core,
+        "python.stop",
+        json!({"id":foreign["spec"]["id"],"generation":foreign["generation"],"force":true}),
+    );
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let Reply::Tasks(tasks) = client.request(Operation::TaskSnapshot).unwrap() else {
+            panic!("Expected tasks")
+        };
+        if tasks.iter().all(|task| !task.running) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Foreign task cleanup did not finish"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    core.close();
+    client.request(Operation::ShutdownIfIdle).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while host_root.join("endpoint.json").exists() {
+        assert!(Instant::now() < deadline, "Java host did not clean up");
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    if let Some(path) = std::env::var_os("UTERM_JAVA_CORE_REPORT") {
+        let git = |args: &[&str]| {
+            let result = std::process::Command::new("git")
+                .args(args)
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .output()
+                .unwrap();
+            assert!(result.status.success());
+            String::from_utf8(result.stdout).unwrap().trim().to_owned()
+        };
+        let tested = git(&["rev-parse", "HEAD"]);
+        let java_version = run("java", &["-version"]);
+        std::fs::write(path, serde_json::to_vec_pretty(&json!({
+            "passed":true,"sourceHeadSHA":std::env::var("PR_HEAD_SHA").unwrap_or_else(|_|tested.clone()),"testedMergeSHA":tested,
+            "sourceTreeDirty":!git(&["status","--porcelain","--untracked-files=no"]).is_empty(),
+            "platform":std::env::consts::OS,"architecture":std::env::consts::ARCH,"java":String::from_utf8_lossy(&java_version.stderr),
+            "exitCode":7,"output":text,"generation":task["generation"],"sequences":sequences.iter().map(u64::to_string).collect::<Vec<_>>(),
+            "literalArgumentsEnvironmentAndVmProperty":true,"emptyArgumentPreserved":true,"invalidWrapperBypassedForExistingJar":true,
+            "detachReattachSameGeneration":true,"staleStopRefused":true,"pythonStopRefused":true,"javaStopRefusedPythonTask":true,"forceStopCleanedTask":true,"hostCleanedUp":true
+        })).unwrap()).unwrap();
+    }
+}
+
+#[test]
 fn python_task_replays_exact_pipe_bytes_and_survives_client_detach() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().canonicalize().unwrap();

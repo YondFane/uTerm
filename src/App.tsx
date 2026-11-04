@@ -800,7 +800,7 @@ export function App() {
     let unlistenDeferred: (() => void) | undefined;
     let unlistenOperation: (() => void) | undefined;
     const operationReady = listen("content-operation-exit-request", () => {
-      setError(tx("请等待文件或 Git 操作完成后再退出。"));
+      setError(tx("请等待当前操作完成后再退出。"));
     }).then((stop) => {
       if (disposed) stop();
       else unlistenOperation = stop;

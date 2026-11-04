@@ -124,9 +124,12 @@ uTerm 按 [PolyForm Noncommercial License 1.0.0](LICENSE)
 
 macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和分阶段功能状态见[原生迁移说明](docs/native-migration.md)。
 
-共享核心检查使用 `pnpm test:core` 和 `pnpm contracts:check`；执行 `pnpm contracts:generate`
-重新生成 TS／Swift 边界类型。macOS 上使用 `bash scripts/macos-native-build.sh` 和
-`bash scripts/macos-native-test.sh` 构建隔离 QA 应用并运行 Rust／Swift 桥接测试。
+共享核心检查使用 `pnpm test:core` 和 `pnpm contracts:check`。共享 Java 任务检查需要 JDK 21（设置
+`JAVA_HOME` 并将其 `bin` 加入 `PATH`）；应用构建仍不要求或捆绑 JDK。`uterm-core::{java,python}`
+管理共用运行配置及任务规则，Tauri 提供平台适配，生成的 DTO 保持 Swift／TypeScript 边界一致。执行
+`pnpm contracts:generate` 重新生成 TS／Swift 边界类型。macOS 上使用
+`bash scripts/macos-native-build.sh` 和 `bash scripts/macos-native-test.sh`
+构建隔离 QA 应用并运行 Rust／Swift 桥接测试。
 
 原生终端 QA：`bash scripts/macos-terminal-smoke.sh`
 使用临时数据及包内独立 helper，运行两个真实应用进程并保存双语／主题／宽度截图产物。SwiftPM 解析固定的 SwiftTerm

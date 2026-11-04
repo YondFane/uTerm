@@ -88,6 +88,76 @@ function queueDraft(path, text) {
   };
 }
 
+test("shared Java configuration retains defaults, global/project CAS, busy retries and damaged bytes", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "uterm-java-config-")),
+    store = join(root, "shared-state-v1"),
+    a = await client(t, store),
+    b = await client(t, store),
+    directory = gitFixture(t).directory,
+    folder = join(root, "java-build-v1"),
+    path = join(folder, "configuration.json");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const initial = await a("java.configuration", { directory });
+  assert.equal(initial.error, undefined);
+  assert.equal(initial.result.revision, "missing");
+  assert.equal(initial.result.configured, false);
+  assert.equal(initial.result.project.java_version, 21);
+  assert.equal(initial.result.project.mode, "development");
+  assert.equal(initial.result.project.maven_scope, "global");
+  assert.equal(existsSync(folder), false, "Reading defaults must not create configuration");
+  assert.deepEqual((await a("java.tasks", { directory })).result, []);
+  assert.equal(existsSync(join(root, "local-daemon-v1")), false);
+  const project = {
+    ...initial.result.project,
+    mode: "jar",
+    jar: "target/literal 中文 & %.jar",
+    arguments: ["", "&", "e\u0301\r\n"],
+  };
+  const global = { ...initial.result.global, home: "literal & %PATH%" };
+  const params = { directory, revision: "missing", project, global };
+  const saved = await a("java.saveConfiguration", params);
+  assert.equal(saved.error, undefined);
+  assert.deepEqual(saved.result.project, project);
+  assert.deepEqual(saved.result.global, global);
+  const bytes = readFileSync(path);
+  assert.equal((await b("java.saveConfiguration", params)).error.code, "JAVA_CONFIG_CONFLICT");
+  assert.deepEqual(readFileSync(path), bytes);
+  const release = await holdWriter(t, folder);
+  const retry = {
+    ...params,
+    revision: saved.result.revision,
+    project: { ...project, offline: true },
+  };
+  assert.equal((await b("java.saveConfiguration", retry)).error.code, "JAVA_CONFIG_BUSY");
+  assert.deepEqual(readFileSync(path), bytes);
+  const home = process.env.JAVA_HOME;
+  assert.ok(home, "Set JAVA_HOME to a real JDK 21 for the shared-service checks");
+  assert.equal(
+    (await b("java.jdks.register", { home, remove: false })).error.code,
+    "JAVA_CONFIG_BUSY",
+  );
+  assert.equal(existsSync(join(folder, "jdks.json")), false);
+  await release();
+  const retried = await b("java.saveConfiguration", retry);
+  assert.equal(retried.error, undefined);
+  assert.equal((await a("java.configuration", { directory })).result.project.offline, true);
+  const registered = await b("java.jdks.register", { home, remove: false });
+  assert.equal(registered.error, undefined);
+  assert.ok(registered.result.some((jdk) => jdk.registered && jdk.available && jdk.version === 21));
+  const afterSave = readFileSync(path);
+  assert.equal((await a("java.jdks.register", { home, remove: true })).error, undefined);
+  assert.deepEqual(readFileSync(path), afterSave, "Registry updates preserve configuration bytes");
+  assert.equal(existsSync(home), true, "Removing a registry entry must not delete the JDK");
+  const damaged = Buffer.from("{damaged Java configuration 中文");
+  writeFileSync(path, damaged);
+  assert.equal((await a("java.configuration", { directory })).error.code, "JAVA_CONFIG_INVALID");
+  assert.equal(
+    (await b("java.saveConfiguration", { ...retry, revision: retried.result.revision })).error.code,
+    "JAVA_CONFIG_INVALID",
+  );
+  assert.deepEqual(readFileSync(path), damaged);
+});
+
 test("shared Python configuration preserves defaults, cross-process CAS, busy errors and damaged bytes", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "uterm-python-config-")),
     store = join(root, "shared-state-v1"),

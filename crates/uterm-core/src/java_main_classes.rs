@@ -2,7 +2,8 @@ use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::{fs, path::Path};
 
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq, schemars::JsonSchema)]
+#[schemars(rename = "JavaMainClass")]
 pub struct MainClass {
     pub name: String,
     pub spring_boot: bool,

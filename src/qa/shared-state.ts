@@ -479,7 +479,7 @@ async function runGitWriteExit(context: Context) {
   await until(
     () =>
       document.body.textContent?.includes(
-        "Wait for file or Git operations to finish before quitting.",
+        "Wait for the current operation to finish before quitting.",
       ),
     "backend Git operation exit guard",
   );

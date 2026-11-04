@@ -2669,6 +2669,38 @@ Main application builds still need no JDK. Maintainers refresh the catalog with
 `node scripts/java-components.mjs` using curl and vendor metadata; the helper checks Maven against
 Apache's SHA-512 before recording SHA-256.
 
+### Shared Java service validation
+
+The development `uterm-core::java` service owns the existing Java/Maven configuration, JDK registry
+and probing, bounded POM/main-class discovery, Wrapper resolution and task launch rules. Tauri
+retains IPC, native pickers, change notifications and app-data/helper adapters. Versioned `java.*`
+Core/FFI calls and generated TypeScript/Swift DTOs use this service. The native Java window and its
+platform interaction checks remain pending.
+
+The `java-build-v1` configuration and registry formats, defaults and project-root keys stay the
+same. Updated clients share an OS writer lock before configuration CAS or registry replacement;
+writer contention requires explicit retry. Stale or damaged configuration is preserved. Reading
+defaults/tasks does not create configuration or start a host. Java stop checks the actual task
+family and generation before asking the host to stop it. Read-only Java queries do not occupy the
+pending-write quit guard; saves, JDK registration and task preparation remain protected.
+
+Linux x86_64 checks use Temurin JDK 21.0.13 to compile and package a disposable JAR, then start it
+through the actual shared Core and isolated host. They verify Unicode and literal/empty arguments,
+temporary environment/JVM properties, both final output streams, exit code 7, same-generation
+reattachment/ack, stale and cross-family stop rejection, force-stop cleanup and idle host shutdown.
+An invalid Wrapper with offline mode proves existing-JAR runs bypass Maven resolution. Two Rust
+processes check global/project CAS, an actual OS writer lock, explicit retry, shared registry
+locking and damaged-byte preservation. Existing Maven, archive and source-scan regressions move with
+their implementation. These are fixture checks, not a full real Maven/Spring Boot acceptance.
+
+Run `pnpm test:core` and the frontend suite with `JAVA_HOME` pointing to a JDK 21 and its `bin` on
+`PATH`. CI installs Temurin 21 and uploads `java-live-core.json`, core/frontend logs and toolchain
+metadata. The Java migration still needs its own macOS/Windows CI and native-window screenshots;
+local reports mark the dirty source tree explicitly rather than claiming a committed CI pass. Local
+Core/FFI, host and backend suites pass (84 backend checks, nine ignored); frontend checks pass 400
+with ten optional/platform checks skipped. TypeScript/production and desktop builds,
+generated-contract drift, formatting, localization and documentation checks pass.
+
 ### Task lifetime and validation
 
 Each project root runs one task at a time. Stop requests interruption; Force stop terminates its
@@ -2914,9 +2946,8 @@ acknowledged while the viewport keeps its buffer-line anchor. Rechecking follow 
 and starts a new generation; a task still stopping after five seconds requires explicit Force stop.
 Normal stop retains final cleanup output, and copy reports native clipboard failures visibly.
 
-File pickers, full settings/menu integration and Java/Maven adoption remain pending. The new native
-window requires its own CI build and actual window evidence; its implementation is not platform
-acceptance.
+File pickers and full settings/menu integration remain pending. Java/Maven shares the Core service
+but still needs its own native window and platform acceptance.
 
 The `python-run-v1/configuration.json` format and project-root keys remain unchanged. An OS writer
 lock serializes updated clients before revision checks and atomic replacement; a busy writer
@@ -2930,19 +2961,22 @@ detach/replay and bounded cleanup. Stale generations and an actual other-family 
 stopped by Python requests. Separate Rust processes verify configuration CAS, an actual OS writer
 lock, explicit retry and damaged-file preservation. Existing Python mode/path/scanning tests moved
 with the implementation; no separate Swift launch planner was added. Core/FFI, frontend and backend
-regressions pass locally. This extraction still needs its own Windows/macOS CI and native-window
-acceptance; older Windows framework evidence below is not reused for it.
-`bash scripts/macos-python-smoke.sh` adds actual native menu/window checks for configuration
-conflict, real script output/nonzero exit, detach/replay with the same generation, stale stop
-refusal and force stop, plus search, paused viewport consumption, follow resumption, same-host PID,
-normal-stop final output/copy and run-again ordering. Four screenshots include English/dark, paused
-output and Chinese/light narrow windows. The new script and window have not executed locally: this
-Linux environment has no AppKit/Swift toolchain. Manual input/IME and the missing native controls
-remain unaccepted.
+regressions pass locally. The Python service passed macOS/Windows CI at `692cd6c`; older Windows
+framework evidence below is not reused for the extraction. `bash scripts/macos-python-smoke.sh` adds
+actual native menu/window checks for configuration conflict, real script output/nonzero exit,
+detach/replay with the same generation, stale stop refusal and force stop, plus search, paused
+viewport consumption, follow resumption, same-host PID, normal-stop final output/copy and run-again
+ordering. Four screenshots include English/dark, paused output and Chinese/light narrow windows.
+[Native CI 41771783432](https://github.com/YondFane/uTerm/actions/runs/41771783432) passes on macOS
+ARM/Intel for source `ee0b1ac` and tested merge `e213eaa61e119c307566a50329acd85985432032`. The ARM
+artifact `native-qa-macos-15-ee0b1ac38fe42db2ad772bb68a8ae144268c47be` includes `python-live.json`
+and the four `native-python-*.png` screenshots, including paused output. This Linux environment has
+no AppKit/Swift toolchain. Manual input/IME and missing native controls remain unaccepted; the later
+Java migration is not covered by this Python evidence.
 
 The raw-task replay check uses one ten-second deadline for the complete operation, including each
-receive, and reports the last sequence and actual host task state on failure. Windows replay for
-this new service remains unaccepted until its own CI passes; an earlier inner two-second receive
+receive, and reports the last sequence and actual host task state on failure. The corrected check
+passes on Windows/macOS in CI 41770931806 for source `692cd6c`; an earlier inner two-second receive
 failed before the declared operation deadline. No test or required platform is skipped.
 
 #### Python control layout validation on Linux

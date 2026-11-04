@@ -234,6 +234,67 @@ export interface CoreImport {
   workspace: JSONValue;
 }
 
+export interface CoreJavaConfiguration {
+  configured: boolean;
+  global: CoreJavaMavenConfig;
+  jdks: CoreJavaHome[];
+  maven_home?: string | null;
+  project: CoreJavaProjectConfig;
+  revision: string;
+}
+
+export interface CoreJavaHome {
+  available: boolean;
+  home: string;
+  registered: boolean;
+  version: number;
+}
+
+export interface CoreJavaMainClass {
+  name: string;
+  spring_boot: boolean;
+}
+
+export interface CoreJavaMavenConfig {
+  distribution?: string;
+  home?: string;
+  repository?: string;
+  settings?: string;
+  wrapper?: boolean;
+}
+
+export interface CoreJavaModule {
+  boot: boolean;
+  jars: string[];
+  java_version?: number | null;
+  main_classes: CoreJavaMainClass[];
+  name: string;
+  packaging: string;
+  path: string;
+}
+
+export interface CoreJavaProjectConfig {
+  arguments?: string[];
+  jar?: string;
+  java_home?: string;
+  java_version?: number;
+  main_class?: string;
+  maven?: CoreJavaMavenConfig;
+  maven_configured?: boolean;
+  maven_profiles?: string;
+  maven_scope?: string;
+  mode?: string;
+  module?: string;
+  offline?: boolean;
+  skip_tests?: boolean;
+  spring_profiles?: string;
+  vm_arguments?: string[];
+}
+
+export interface CoreJavaProjectInfo {
+  modules: CoreJavaModule[];
+}
+
 export interface CoreProjectContext {
   directory?: string | null;
   projectId?: string | null;

@@ -1,8 +1,11 @@
+pub mod archives;
+mod configuration;
 mod connections;
 mod control;
 pub mod files;
 pub mod git;
 pub mod host;
+pub mod java;
 pub mod python;
 pub mod session_state;
 pub mod state;
@@ -117,25 +120,106 @@ impl Core {
             control.take();
         }
     }
+    fn java_request(&self, method: &str, params: &Value) -> Result<Value> {
+        let directory = match params.get("directory") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(value)) => Some(value.as_str()),
+            _ => {
+                return Err(CoreError::new(
+                    "INVALID_PARAMS",
+                    "directory must be text or null",
+                ))
+            }
+        };
+        match method {
+            "java.configuration" => service_json(java_result(java::configuration(
+                self.data_root()?,
+                directory,
+                true,
+            ))?),
+            "java.saveConfiguration" => {
+                let global = if params["global"].is_null() {
+                    None
+                } else {
+                    Some(serde_json::from_value(params["global"].clone())?)
+                };
+                let project = if params["project"].is_null() {
+                    None
+                } else {
+                    Some(serde_json::from_value(params["project"].clone())?)
+                };
+                service_json(java_result(java::save_configuration(
+                    self.data_root()?,
+                    directory,
+                    &string(params, "revision")?,
+                    global,
+                    project,
+                ))?)
+            }
+            "java.project" => service_json(java_result(java::project_info(&string(
+                params,
+                "directory",
+            )?))?),
+            "java.jdks.list" => service_json(java_result(java::find_jdks(self.data_root()?))?),
+            "java.jdks.register" => {
+                java_result(java::register_jdk(
+                    self.data_root()?,
+                    &string(params, "home")?,
+                    params["remove"].as_bool().ok_or_else(|| {
+                        CoreError::new("INVALID_PARAMS", "remove must be a boolean")
+                    })?,
+                ))?;
+                service_json(java_result(java::find_jdks(self.data_root()?))?)
+            }
+            "java.tasks" => service_json(java_result(java::tasks(
+                &self.data_root()?.join("local-daemon-v1"),
+                &string(params, "directory")?,
+            ))?),
+            "java.start" => {
+                let config = serde_json::from_value(params["config"].clone())?;
+                let environment = serde_json::from_value(params["environment"].clone())?;
+                let prepared = java_result(java::build_launch(
+                    self.data_root()?,
+                    &string(params, "directory")?,
+                    &config,
+                    &string(params, "action")?,
+                    environment,
+                ))?;
+                service_json(java_result(java::start(&self.host_client()?, prepared))?)
+            }
+            "java.stop" => {
+                java_result(java::stop(
+                    &self.host_client()?,
+                    string(params, "id")?,
+                    string(params, "generation")?,
+                    params["force"].as_bool().ok_or_else(|| {
+                        CoreError::new("INVALID_PARAMS", "force must be a boolean")
+                    })?,
+                ))?;
+                Ok(Value::Null)
+            }
+            _ => Err(CoreError::new("METHOD_NOT_FOUND", "Unknown Java method")),
+        }
+    }
     fn python_request(&self, method: &str, params: &Value) -> Result<Value> {
         let directory = || string(params, "directory");
         let root = || python_result(python::root(&directory()?));
         match method {
-            "python.configuration" => python_json(python_result(python::configuration(
+            "python.configuration" => service_json(python_result(python::configuration(
                 &python::config_path(self.data_root()?),
                 &root()?,
             ))?),
-            "python.saveConfiguration" => python_json(python_result(python::save_configuration(
+            "python.saveConfiguration" => service_json(python_result(python::save_configuration(
                 &python::config_path(self.data_root()?),
                 &root()?,
                 &string(params, "revision")?,
                 serde_json::from_value(params["config"].clone())?,
             ))?),
             "python.interpreters" => {
-                python_json(python::interpreters(&root()?, &string(params, "selected")?))
+                service_json(python::interpreters(&root()?, &string(params, "selected")?))
             }
-            "python.project" => python_json(python_result(python::project_info(&root()?))?),
-            "python.tasks" => python_json(python_result(python::tasks(
+            "python.project" => service_json(python_result(python::project_info(&root()?))?),
+            "python.tasks" => service_json(python_result(python::tasks(
                 &self.data_root()?.join("local-daemon-v1"),
                 &directory()?,
             ))?),
@@ -143,7 +227,7 @@ impl Core {
                 let config = serde_json::from_value(params["config"].clone())?;
                 let environment = serde_json::from_value(params["environment"].clone())?;
                 let prepared = python_result(python::prepare(&directory()?, &config, environment))?;
-                python_json(python_result(python::start(
+                service_json(python_result(python::start(
                     &self.host_client()?,
                     prepared,
                 ))?)
@@ -535,6 +619,7 @@ impl Core {
                 self.links.stop_session(&id);
                 Ok(Value::Null)
             }
+            method if method.starts_with("java.") => self.java_request(method, &params),
             method if method.starts_with("python.") => self.python_request(method, &params),
             "terminal.open" => {
                 if params.get("ssh").is_some() {
@@ -1022,6 +1107,19 @@ fn draft_revision(params: &Value) -> Result<Option<&str>> {
         )),
     }
 }
+fn java_result<T>(result: anyhow::Result<T>) -> Result<T> {
+    result.map_err(|error| {
+        let message = format!("{error:#}");
+        let code = message
+            .split(':')
+            .next()
+            .filter(|value| {
+                value.contains('_') && value.chars().all(|c| c.is_ascii_uppercase() || c == '_')
+            })
+            .unwrap_or("JAVA_OPERATION_FAILED");
+        CoreError::new(code, &message)
+    })
+}
 fn python_result<T>(result: anyhow::Result<T>) -> Result<T> {
     result.map_err(|error| {
         let message = format!("{error:#}");
@@ -1036,7 +1134,7 @@ fn python_result<T>(result: anyhow::Result<T>) -> Result<T> {
         CoreError::new(code, &message)
     })
 }
-fn python_json(value: impl Serialize) -> Result<Value> {
+fn service_json(value: impl Serialize) -> Result<Value> {
     serde_json::to_value(value).map_err(Into::into)
 }
 

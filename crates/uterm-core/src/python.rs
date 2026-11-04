@@ -14,44 +14,6 @@ use utermd_local::tasks::{Launch, Step, TaskInfo};
 static CONFIG_LOCK: Mutex<()> = Mutex::new(());
 const MAX_CONFIG_BYTES: usize = 2 * 1024 * 1024;
 
-struct ConfigWriter(fs::File);
-impl Drop for ConfigWriter {
-    fn drop(&mut self) {
-        loop {
-            match self.0.unlock() {
-                Ok(()) => break,
-                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
-                Err(error) => {
-                    eprintln!("Python configuration unlock: {error}");
-                    break;
-                }
-            }
-        }
-    }
-}
-fn config_writer(path: &Path) -> Result<ConfigWriter> {
-    let parent = path.parent().context("PYTHON_CONFIG_SAVE")?;
-    fs::create_dir_all(parent)?;
-    let file = fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(parent.join("writer.lock"))?;
-    loop {
-        match file.try_lock() {
-            Ok(()) => return Ok(ConfigWriter(file)),
-            Err(fs::TryLockError::Error(error))
-                if error.kind() == std::io::ErrorKind::Interrupted =>
-            {
-                continue
-            }
-            Err(fs::TryLockError::WouldBlock) => bail!("PYTHON_CONFIG_BUSY"),
-            Err(fs::TryLockError::Error(error)) => return Err(error.into()),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 #[schemars(rename = "PythonRunConfig")]
@@ -217,7 +179,11 @@ pub fn save_configuration(
     let _lock = CONFIG_LOCK
         .lock()
         .map_err(|_| anyhow::anyhow!("PYTHON_CONFIG_SAVE"))?;
-    let _writer = config_writer(path)?;
+    let _writer = crate::configuration::ConfigurationWriter::acquire(
+        path,
+        "PYTHON_CONFIG_BUSY",
+        "PYTHON_CONFIG_SAVE",
+    )?;
     let (mut store, current) = read_store(path)?;
     if current != revision {
         bail!("PYTHON_CONFIG_CONFLICT");

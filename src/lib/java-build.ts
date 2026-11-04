@@ -1,47 +1,36 @@
 import { tx, localizeMessage } from "./i18n.ts";
 import { databaseError } from "./database.ts";
+import type {
+  CoreJavaMavenConfig,
+  CoreJavaProjectConfig,
+  CoreJavaConfiguration,
+  CoreJavaHome,
+  CoreJavaModule,
+  CoreJavaMainClass,
+} from "./core-contract.generated";
 
-export interface MavenConfig {
+export type MavenConfig = Omit<Required<CoreJavaMavenConfig>, "distribution"> & {
   distribution: "local" | "managed";
-  home: string;
-  settings: string;
-  repository: string;
-  wrapper: boolean;
-}
-export interface JavaProjectConfig {
+};
+export type JavaProjectConfig = Omit<
+  Required<CoreJavaProjectConfig>,
+  "maven_scope" | "maven_configured" | "maven" | "mode" | "main_class"
+> & {
   maven_scope: "global" | "project";
   maven_configured?: boolean;
   maven: MavenConfig;
-  module: string;
-  java_version: number;
-  java_home: string;
   mode: "development" | "jar";
   main_class?: string;
-  maven_profiles: string;
-  spring_profiles: string;
-  vm_arguments: string[];
-  arguments: string[];
-  jar: string;
-  skip_tests: boolean;
-  offline: boolean;
-}
-export interface JavaConfiguration {
-  revision: string;
+};
+export type JavaConfiguration = Omit<CoreJavaConfiguration, "global" | "project" | "jdks"> & {
   global: MavenConfig;
   project: JavaProjectConfig;
-  configured: boolean;
-  jdks: { home: string; version: number; registered?: boolean; available?: boolean }[];
-  maven_home: string | null;
-}
-export interface JavaModule {
-  path: string;
-  name: string;
-  packaging: string;
-  java_version: number | null;
-  boot: boolean;
-  jars: string[];
-  main_classes?: { name: string; spring_boot: boolean }[];
-}
+  jdks: (Omit<CoreJavaHome, "registered" | "available"> &
+    Partial<Pick<CoreJavaHome, "registered" | "available">>)[];
+};
+export type JavaModule = Omit<CoreJavaModule, "main_classes"> & {
+  main_classes?: CoreJavaMainClass[];
+};
 export interface JavaTask {
   spec: { id: string; directory: string; shell: string; agent: null };
   generation: string;
@@ -136,6 +125,9 @@ export function javaError(reason: unknown): string {
     ),
     JAVA_CONFIG_INVALID: tx("Java 构建配置无效，原配置已保留。"),
     JAVA_CONFIG_CONFLICT: tx("配置已被其他窗口修改，请重新读取后再保存。"),
+    JAVA_CONFIG_BUSY: tx("其他窗口正在保存配置，请稍后明确重试。"),
+    JAVA_TASK_REPLACED: tx("任务已被替换，停止请求已取消，请重新读取运行状态。"),
+    JAVA_TASK_FAMILY: tx("此任务不属于 Java 构建运行，停止请求已取消。"),
     JAVA_CONFIG_SAVE: tx("无法保存构建配置，原配置已保留。"),
     JAVA_PROJECT_INVALID: tx("项目路径必须位于所选根目录内。"),
     JAVA_POM_INVALID: tx("无法读取 Maven 项目，请检查 pom.xml 与模块路径。"),

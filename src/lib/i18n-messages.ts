@@ -18,6 +18,10 @@ export const messages: Record<string, string> = {
   重新读取恢复副本: "Reload recovery copies",
   复制完整预览: "Copy full preview",
   恢复所有仓库收藏: "Restore all repository favorites",
+  "其他窗口正在保存配置，请稍后明确重试。":
+    "Another window is saving configuration. Retry explicitly after it finishes.",
+  "此任务不属于 Java 构建运行，停止请求已取消。":
+    "This is not a Java build/run task. Stop was cancelled.",
   "请先完成收藏恢复。": "Finish recovering favorites first.",
   "其他窗口正在保存 Python 配置，请稍后明确重试。":
     "Another window is saving Python configuration. Retry explicitly after it finishes.",
@@ -26,8 +30,7 @@ export const messages: Record<string, string> = {
     "The task was replaced. Stop was cancelled; reload its status.",
   "此任务不属于 Python 运行，停止请求已取消。": "This is not a Python task. Stop was cancelled.",
   "请先完成 Worktree 删除。": "Finish deleting the worktree first.",
-  "请等待文件或 Git 操作完成后再退出。":
-    "Wait for file or Git operations to finish before quitting.",
+  "请等待当前操作完成后再退出。": "Wait for the current operation to finish before quitting.",
   "正在退出应用，请稍后重试删除。": "The app is quitting. Retry deletion later.",
   "工作区在删除预览后发生变化，请重新读取并确认。":
     "Shared workspace changed after deletion preview. Reload and review again.",

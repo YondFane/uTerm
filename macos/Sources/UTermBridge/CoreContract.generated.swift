@@ -233,6 +233,67 @@ public struct CoreImport: Codable, Sendable {
     public var workspace: JSONValue
 }
 
+public struct CoreJavaConfiguration: Codable, Sendable {
+    public var configured: Bool
+    public var global: CoreJavaMavenConfig
+    public var jdks: [CoreJavaHome]
+    public var maven_home: String?
+    public var project: CoreJavaProjectConfig
+    public var revision: String
+}
+
+public struct CoreJavaHome: Codable, Sendable {
+    public var available: Bool
+    public var home: String
+    public var registered: Bool
+    public var version: UInt32
+}
+
+public struct CoreJavaMainClass: Codable, Sendable {
+    public var name: String
+    public var spring_boot: Bool
+}
+
+public struct CoreJavaMavenConfig: Codable, Sendable {
+    public var distribution: String?
+    public var home: String?
+    public var repository: String?
+    public var settings: String?
+    public var wrapper: Bool?
+}
+
+public struct CoreJavaModule: Codable, Sendable {
+    public var boot: Bool
+    public var jars: [String]
+    public var java_version: UInt32?
+    public var main_classes: [CoreJavaMainClass]
+    public var name: String
+    public var packaging: String
+    public var path: String
+}
+
+public struct CoreJavaProjectConfig: Codable, Sendable {
+    public var arguments: [String]?
+    public var jar: String?
+    public var java_home: String?
+    public var java_version: UInt32?
+    public var main_class: String?
+    public var maven: CoreJavaMavenConfig?
+    public var maven_configured: Bool?
+    public var maven_profiles: String?
+    public var maven_scope: String?
+    public var mode: String?
+    public var module: String?
+    public var offline: Bool?
+    public var skip_tests: Bool?
+    public var spring_profiles: String?
+    public var vm_arguments: [String]?
+}
+
+public struct CoreJavaProjectInfo: Codable, Sendable {
+    public var modules: [CoreJavaModule]
+}
+
 public struct CoreProjectContext: Codable, Sendable {
     public var directory: String?
     public var projectId: String?

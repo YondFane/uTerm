@@ -54,6 +54,10 @@ impl ContentOperations {
                     | "python.interpreters"
                     | "python.project"
                     | "python.tasks"
+                    | "java.configuration"
+                    | "java.jdks.list"
+                    | "java.project"
+                    | "java.tasks"
             )
         });
         if !read {
