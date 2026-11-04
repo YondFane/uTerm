@@ -155,6 +155,10 @@ the failed Core step. Native CLI sending uses the current app attachment and its
 cannot implicitly take over another client's control. A real host regression checks accepted CLI
 input, rejected input after takeover and stale-generation refusal.
 
+An explicitly confirmed idle helper upgrade waits for both endpoint removal and release of the old
+process's OS lock before starting its replacement. Deterministic OS-lock regressions cover the gap
+between those events and a bounded timeout without stealing a live lock.
+
 The shared u64 fixtures also carry owned/passive/unowned metadata through the real Rust encoder and
 Swift/TypeScript decoders; malformed roles are rejected without rounding sequence or acknowledgement
 values.

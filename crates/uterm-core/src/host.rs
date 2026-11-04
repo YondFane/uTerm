@@ -64,16 +64,34 @@ impl HostBroker {
                 }
                 _ => return Err("后台未确认安全退出。".into()),
             }
-            let deadline = std::time::Instant::now() + Duration::from_secs(5);
-            while root.join("endpoint.json").exists() {
-                if std::time::Instant::now() >= deadline {
-                    return Err("后台尚未退出，请稍后重试。".into());
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
+            wait_for_shutdown(root, Duration::from_secs(5))?;
         }
         utermd_local::daemon::ensure_running(&root, &executable)
             .map_err(|error| format!("{error:#}"))
+    }
+}
+
+fn wait_for_shutdown(root: &std::path::Path, timeout: Duration) -> Result<(), String> {
+    let ownership = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(root.join("host.lock"))
+        .map_err(|error| error.to_string())?;
+    let deadline = std::time::Instant::now() + timeout;
+    loop {
+        if !root.join("endpoint.json").exists() {
+            // Endpoint removal precedes the old process dropping its OS lock; wait for both.
+            // 旧进程先移除端点再释放系统锁，必须等待两者都完成。
+            match ownership.try_lock() {
+                Ok(()) => return Ok(()),
+                Err(std::fs::TryLockError::WouldBlock) => {}
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            return Err("后台尚未退出，请稍后重试。".into());
+        }
+        std::thread::sleep(Duration::from_millis(25));
     }
 }
 
@@ -157,5 +175,59 @@ pub fn stage_host(
             stage_host(root, source)
         }
         Err(error) => Err(error.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn idle_upgrade_waits_for_the_os_lock_after_endpoint_removal() {
+        let root = tempfile::tempdir().unwrap();
+        let owner = std::fs::OpenOptions::new()
+            .create_new(true)
+            .read(true)
+            .write(true)
+            .open(root.path().join("host.lock"))
+            .unwrap();
+        owner.lock().unwrap();
+        let path = root.path().to_owned();
+        let (send, receive) = std::sync::mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            send.send(wait_for_shutdown(&path, Duration::from_secs(2)))
+                .unwrap();
+        });
+        assert!(
+            receive.recv_timeout(Duration::from_millis(100)).is_err(),
+            "Endpoint absence must not be mistaken for lock release"
+        );
+        owner.unlock().unwrap();
+        assert!(receive
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap()
+            .is_ok());
+        worker.join().unwrap();
+    }
+    #[test]
+    fn unavailable_lock_times_out_without_removing_or_stealing_it() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("host.lock");
+        let owner = std::fs::OpenOptions::new()
+            .create_new(true)
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        owner.lock().unwrap();
+        assert!(wait_for_shutdown(root.path(), Duration::from_millis(10)).is_err());
+        let observer = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        assert!(matches!(
+            observer.try_lock(),
+            Err(std::fs::TryLockError::WouldBlock)
+        ));
     }
 }
