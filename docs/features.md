@@ -119,6 +119,14 @@ performance, macOS 14 runtime and M3–M5 gates are incomplete. Automatic native
 acceptance; Windows and legacy macOS retain the existing full feature set. See
 [native migration status](native-migration.md) and Issue comments for evidence and unexecuted steps.
 
+The native terminal smoke also launches the installed `/usr/bin/vim` in the actual PTY. Native key
+events enter/leave insertion, `NSTextInputClient.insertText` supplies Chinese/combining characters/
+emoji and the terminal's native `paste:` action uses the system clipboard. It checks exact saved
+UTF-8 bytes, alternate-screen return and the same terminal view/generation resuming its shell.
+Artifacts include `vim-toolchain.txt`, `native-vim-edit.png`, `native-vim-saved.txt` and the
+`realVim` section of `terminal-live.json`. These new checks await source-bound macOS ARM/Intel CI;
+they are scripted native input, not manual IME, actual Agent CLI or performance acceptance.
+
 ### Shared input and size control
 
 When another current client owns a session, its terminal shows **Read-only attachment** and a **Take

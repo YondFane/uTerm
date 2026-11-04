@@ -8,6 +8,7 @@ python3 - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" 
 import json, os, subprocess, sys, tempfile, time
 from pathlib import Path
 app=Path(sys.argv[1]); evidence=Path(sys.argv[2]); evidence.mkdir(parents=True,exist_ok=True)
+(evidence/'vim-toolchain.txt').write_text(subprocess.check_output(['/usr/bin/vim','--version'],text=True))
 with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     reports=[]
     try:
@@ -56,7 +57,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
         assert first[key],(key,first)
     assert first['splitSessionCount']==2 and first['runningProcessesBeforeQuit']==2,first
     assert abs(first['nativeToolbarHeight']-40)<1,first
-    assert len(first['captures'])==12 and 'native-terminal-slow-consumer.png' in first['captures'],first
+    assert len(first['captures'])==13 and 'native-vim-edit.png' in first['captures'] and 'native-terminal-slow-consumer.png' in first['captures'],first
+    vim=first['realVim']
+    for key in ['passed','alternateScreenReturned','nativeTextInput','nativeClipboardPaste','sameGenerationAndView','shellResumed']: assert vim[key],(key,vim)
+    assert not vim['manualIMEAcceptance'] and not vim['performanceComparison'],vim
+    assert (evidence/vim['savedFile']).read_bytes()=='NATIVE_VIM_中文 é 😀 PASTE_中文 é\n'.encode('utf-8'),vim
     load=first['slowConsumer']
     assert load['renderedBytes']>=100000 and load['records']==1024 and load['injectedDelayMilliseconds']==150,load
     assert load['acknowledgedAfterRendering'] and load['nativeMenuResponsive'] and load['generationRetained'],load

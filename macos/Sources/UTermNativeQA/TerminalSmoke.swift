@@ -45,6 +45,7 @@ enum TerminalSmoke {
         try await wait("Return from alternate screen") { first.text.contains("TUI_READY") }
         report["unicodeAndAnsiParsed"] = true
         report["alternateScreenReturned"] = true
+        let vimCapture = try await verifyVim(window: window, terminal: first, project: project, report: &report)
         let loadCapture = try await verifySlowConsumer(model: model, window: window, terminal: first, report: &report)
 
         await model.split("horizontal")
@@ -69,7 +70,7 @@ enum TerminalSmoke {
         window.makeKeyAndOrderFront(nil)
         report["hideAndReopenRetainedOutput"] = window.isVisible
 
-        var captures: [String] = [loadCapture]
+        var captures: [String] = [loadCapture, vimCapture]
         guard let settingsMenu = NSApp.mainMenu?.items.first?.submenu,
               let item = settingsMenu.items.first(where: { $0.action.map(NSStringFromSelector) == "settings" }),
               let action = item.action, NSApp.sendAction(action, to: item.target, from: item) else {
@@ -135,6 +136,57 @@ enum TerminalSmoke {
         report["hostExecutable"] = status["executable"].string ?? ""
         report["hostStarted"] = true
         report["runningProcessesBeforeQuit"] = 2
+    }
+
+    private static func verifyVim(window: NSWindow, terminal: TerminalSession, project: URL, report: inout [String: Any]) async throws -> String {
+        guard FileManager.default.isExecutableFile(atPath: "/usr/bin/vim"),
+              let path = WorkspaceModel.argument("--terminal-smoke-report"),
+              window.makeFirstResponder(terminal.view) else {
+            throw BridgeFailure(code: "SMOKE_VIM", message: "System Vim or native terminal focus is unavailable")
+        }
+        let file = project.appendingPathComponent("native-tui-qa.txt")
+        guard !FileManager.default.fileExists(atPath: file.path) else { throw BridgeFailure(code: "SMOKE_VIM", message: "The disposable Vim file already exists") }
+        let generation = terminal.generation
+        let view = ObjectIdentifier(terminal.view)
+        terminal.enqueue(Data("printf '\\033[?1000l\\033[?2004l'; /usr/bin/vim -Nu NONE -n -i NONE --cmd 'set encoding=utf-8 fileencoding=utf-8' native-tui-qa.txt\r".utf8))
+        try await wait("Start the actual Vim alternate screen") { terminal.view.getTerminal().isCurrentBufferAlternate && terminal.text.contains("native-tui-qa.txt") }
+        try postKey(window: window, code: 34, characters: "i")
+        try await wait("Enter Vim insertion through the native key event") { terminal.text.contains("-- INSERT --") }
+        let typed = "NATIVE_VIM_中文 é 😀"
+        terminal.view.insertText(typed as NSString, replacementRange: NSRange(location: NSNotFound, length: 0))
+        try await wait("Render actual Vim Unicode input") { terminal.text.contains(typed) }
+        let clipboard = NSPasteboard.general
+        let previous = clipboard.string(forType: .string)
+        defer { clipboard.clearContents(); if let previous { clipboard.setString(previous, forType: .string) } }
+        clipboard.clearContents()
+        let pasted = " PASTE_中文 é"
+        guard clipboard.setString(pasted, forType: .string) else { throw BridgeFailure(code: "SMOKE_VIM", message: "Native clipboard write failed") }
+        let bracketed = terminal.view.getTerminal().bracketedPasteMode
+        guard NSApp.sendAction(NSSelectorFromString("paste:"), to: terminal.view, from: NSApp) else {
+            throw BridgeFailure(code: "SMOKE_VIM", message: "Native terminal paste action is unavailable")
+        }
+        try await wait("Paste through the actual native terminal action") { terminal.text.contains(typed + pasted) }
+        let name = "native-vim-edit.png"
+        let evidence = URL(fileURLWithPath: path).deletingLastPathComponent()
+        try await capture(window: window, path: evidence.appendingPathComponent(name))
+        try postKey(window: window, code: 53, characters: "\u{1b}")
+        try await wait("Leave actual Vim insertion") { !terminal.text.contains("-- INSERT --") }
+        terminal.view.insertText(":wq" as NSString, replacementRange: NSRange(location: NSNotFound, length: 0))
+        try postKey(window: window, code: 36, characters: "\r")
+        let expected = typed + pasted + "\n"
+        try await wait("Save actual Vim bytes and return to the original screen") {
+            !terminal.view.getTerminal().isCurrentBufferAlternate && (try? String(contentsOf: file, encoding: .utf8)) == expected
+        }
+        terminal.enqueue(Data("printf 'NATIVE_SHELL_%s\\n' RETURNED\r".utf8))
+        try await wait("Resume the retained real shell after Vim") { terminal.text.contains("NATIVE_SHELL_RETURNED") }
+        guard terminal.generation == generation, ObjectIdentifier(terminal.view) == view, terminal.error.isEmpty else {
+            throw BridgeFailure(code: "SMOKE_VIM", message: "Vim replaced the terminal or left a transport error")
+        }
+        let saved = try Data(contentsOf: file)
+        guard saved == Data(expected.utf8) else { throw BridgeFailure(code: "SMOKE_VIM", message: "Vim changed the expected UTF-8 bytes") }
+        try saved.write(to: evidence.appendingPathComponent("native-vim-saved.txt"), options: .atomic)
+        report["realVim"] = ["passed": true, "binary": "/usr/bin/vim", "inputDriver": "Native NSEvent keyDown/up, NSTextInputClient.insertText and native paste: target/action", "alternateScreenReturned": true, "nativeTextInput": true, "nativeClipboardPaste": true, "bracketedPasteActive": bracketed, "savedUTF8Bytes": saved.count, "savedFile": "native-vim-saved.txt", "sameGenerationAndView": true, "shellResumed": true, "manualIMEAcceptance": false, "performanceComparison": false] as [String: Any]
+        return name
     }
 
     private static func verifySlowConsumer(model: WorkspaceModel, window: NSWindow, terminal: TerminalSession, report: inout [String: Any]) async throws -> String {

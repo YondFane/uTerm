@@ -85,6 +85,15 @@ M0 #14、M1 #15 及任务 #20–#30 已验收，尚未合入 release。M2 #16 �
 CLI／TUI、人工输入法／剪贴板／鼠标、并存输入／resize 仲裁、休眠／多屏及剩余生命周期未完整验收。原生 SSH／完整设置／编辑／数据工作台、同机性能、macOS
 14 实际运行及 M3–M5 仍未完成。自动原生操作不代表人工验收；Windows 与旧 macOS 保持现有完整功能。证据和未执行步骤见[原生迁移状态](native-migration.md)及 Issue 评论。
 
+原生终端冒烟还在实际 PTY 中启动已安装的
+`/usr/bin/vim`。原生按键事件进入／退出插入模式，`NSTextInputClient.insertText`
+输入中文／组合字符／emoji，终端原生 `paste:`
+动作使用系统剪贴板。检查保存文件准确 UTF-8 字节、alternate
+screen 返回及原视图／generation 恢复 Shell。产物包含
+`vim-toolchain.txt`、`native-vim-edit.png`、`native-vim-saved.txt` 和 `terminal-live.json` 中的
+`realVim`。新增检查待对应源码 macOS ARM／Intel
+CI 验证；脚本驱动的原生输入不代表人工输入法、实际 Agent CLI 或性能验收。
+
 ### 共享输入与尺寸控制
 
 其他当前客户端拥有会话时，终端显示**只读连接**与**接管输入**按钮，仍可读取、选择和复制。明确点击按钮才把输入与窗口尺寸控制权交给此视图；聚焦窗口不会接管。只读视图跟随宿主网格，不调整宿主尺寸。失去控制权会丢弃排队输入（包括剪贴板内容），避免之后接管时发送旧输入。两个客户端均等待首个宿主帧后再启用输入或提交尺寸，避免新只读连接在初始控制元数据到达前发生竞态。任务日志保持只读，不显示接管控件。

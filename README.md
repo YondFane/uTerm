@@ -147,7 +147,9 @@ boundary types with `pnpm contracts:generate`. On macOS, run `bash scripts/macos
 and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift bridge tests.
 
 Native terminal QA: `bash scripts/macos-terminal-smoke.sh` runs two real app processes with
-temporary data, a bundled standalone helper and language/theme/width screenshot artifacts. SwiftPM
+temporary data, a bundled standalone helper and language/theme/width screenshot artifacts. It also
+launches system Vim, enters and pastes Unicode through native terminal actions, verifies the saved
+UTF-8 file and records the actual TUI window. This does not replace manual IME acceptance. SwiftPM
 resolves the pinned SwiftTerm 1.20.0 dependency; it does not change the legacy terminal renderer.
 
 Concurrent native ownership QA: `bash scripts/macos-input-control-smoke.sh` runs two isolated native
