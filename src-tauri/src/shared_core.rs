@@ -24,12 +24,14 @@ pub fn shared_core_exit(app: tauri::AppHandle, state: tauri::State<'_, Lifecycle
 
 #[tauri::command]
 pub async fn shared_core_request(app: tauri::AppHandle, request: String) -> Result<String, String> {
+    let operation = crate::content_operations::begin(&app)?;
     let root = app
         .path()
         .app_data_dir()
         .map_err(|e| e.to_string())?
         .join("shared-state-v1");
     tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
         let state = app.state::<Lifecycle>();
         if state.core.get().is_none() {
             let core = Arc::new(uterm_core::Core::open(root).map_err(|e| e.to_string())?);

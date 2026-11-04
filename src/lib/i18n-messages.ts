@@ -20,6 +20,8 @@ export const messages: Record<string, string> = {
   恢复所有仓库收藏: "Restore all repository favorites",
   "请先完成收藏恢复。": "Finish recovering favorites first.",
   "请先完成 Worktree 删除。": "Finish deleting the worktree first.",
+  "请等待文件或 Git 操作完成后再退出。":
+    "Wait for file or Git operations to finish before quitting.",
   "正在退出应用，请稍后重试删除。": "The app is quitting. Retry deletion later.",
   "工作区在删除预览后发生变化，请重新读取并确认。":
     "Shared workspace changed after deletion preview. Reload and review again.",

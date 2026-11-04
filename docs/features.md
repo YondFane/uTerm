@@ -298,6 +298,11 @@ retains the caller's busy/editor protection until the actual IPC write finishes,
 cancel/timeout/closed error without delivering a late success. Read cancellation remains immediate.
 Native favorites use the shared recovery controls described below.
 
+The Tauri backend independently retains queued/running Git, Worktree and local-file writes, plus
+shared-store requests. Normal quit visibly refuses while they run, even if WebView state is lost.
+Final exit and new-operation admission share one lock, preventing a write from starting after exit
+has been approved.
+
 `project.worktrees.refresh` discovers the stored project's repository and atomically updates its
 Worktree list with an expected revision. Both clients use these rules for registered projects: keep
 IDs/custom names, update branch-derived names, retain missing Worktrees with sessions, drop
@@ -441,7 +446,17 @@ abort/timeout/close cases. A bounded actual post-checkout hook pauses the write;
 fix, the caller remains protected until release, the final file bytes and branch prove the Git write
 completed, and cancellation suppresses late success. Read-only cancellation and a failed write after
 cancellation are checked separately. This transport change needs its own Windows/macOS CI results;
-the preceding 218 results do not establish its acceptance.
+the preceding 218 results do not establish its acceptance. Linux passes 48 focused content/Core
+checks, 397 frontend checks (ten skipped), types, production build, formatting, localization and
+bilingual documentation for the transport change.
+
+The backend quit guard passes two worker-lifetime checks: dropping a caller does not release a
+queued/running worker, and worker failure releases only its own operation. The Linux backend suite
+passes 102 checks (ten ignored); frontend 397 (ten skipped), types, production build, formatting and
+localization pass. The real isolated Tauri QA now includes a paused actual checkout, cancelled
+content request, refused normal quit, exact final hook output and successful subsequent quit. Those
+new window scenarios require execution on their own committed source and platform CI; no screenshot
+or runtime pass is claimed here yet.
 
 Full cancellation/lifecycle matrix and #16 dependencies keep #35 open. Manual keyboard/IME/focus,
 formal signing/notarization and installed-version upgrade/rollback remain unverified. These checks

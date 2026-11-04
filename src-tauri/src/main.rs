@@ -4,6 +4,7 @@ use serde::Serialize;
 use tauri::{Emitter, Manager};
 mod agent_install;
 mod agents;
+mod content_operations;
 mod control;
 mod database;
 mod database_components;
@@ -309,6 +310,7 @@ fn main() {
         .plugin(tauri_plugin_deep_link::init())
         .manage(updates::Updates::default())
         .manage(shared_core::Lifecycle::default())
+        .manage(content_operations::ContentOperations::default())
         .manage(taskbar::Taskbar::default())
         .setup(|app| {
             use tauri_plugin_deep_link::DeepLinkExt;
@@ -628,6 +630,16 @@ fn main() {
                     if let Err(error) = handle.emit("editor-close-request", ()) {
                         eprintln!("Editor close request: {error}");
                     }
+                }
+                tauri::RunEvent::ExitRequested { api, .. }
+                    if !handle
+                        .state::<content_operations::ContentOperations>()
+                        .prepare_exit() =>
+                {
+                    api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
+                    let _ = show_main_window(handle);
+                    let _ = handle.emit("content-operation-exit-request", ());
                 }
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen {

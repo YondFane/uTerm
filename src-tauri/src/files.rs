@@ -75,12 +75,15 @@ pub fn menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wr
 
 #[tauri::command]
 pub async fn file_copy(
+    app: tauri::AppHandle,
     directory: String,
     source_directory: String,
     path: String,
     destination: String,
 ) -> Result<(), String> {
+    let operation = crate::content_operations::begin(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
         copy_between_roots(&source_directory, &path, &directory, &destination)
     })
     .await
@@ -89,14 +92,19 @@ pub async fn file_copy(
 
 #[tauri::command]
 pub async fn file_mutate(
+    app: tauri::AppHandle,
     directory: String,
     path: String,
     action: String,
     name: String,
 ) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || mutate_file(&directory, &path, &action, &name))
-        .await
-        .map_err(|error| error.to_string())?
+    let operation = crate::content_operations::begin(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
+        mutate_file(&directory, &path, &action, &name)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]
@@ -138,15 +146,20 @@ pub async fn file_read(directory: String, path: String) -> Result<Document, Stri
 
 #[tauri::command]
 pub async fn file_save(
+    app: tauri::AppHandle,
     directory: String,
     path: String,
     text: String,
     expected: String,
     force: bool,
 ) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || save(&directory, &path, &text, &expected, force))
-        .await
-        .map_err(|error| error.to_string())?
+    let operation = crate::content_operations::begin(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
+        save(&directory, &path, &text, &expected, force)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]

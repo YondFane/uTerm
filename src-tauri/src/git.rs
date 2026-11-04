@@ -20,11 +20,14 @@ pub async fn git_branches(directory: String) -> Result<Branches, String> {
 
 #[tauri::command]
 pub async fn git_switch_branch(
+    app: tauri::AppHandle,
     directory: String,
     branch: String,
     expected: String,
 ) -> Result<(), String> {
+    let operation = crate::content_operations::begin(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
         uterm_core::git::git_switch_branch(directory, branch, expected)
     })
     .await
@@ -33,11 +36,14 @@ pub async fn git_switch_branch(
 
 #[tauri::command]
 pub async fn git_rollback_file(
+    app: tauri::AppHandle,
     directory: String,
     expected: Change,
     head: Option<String>,
 ) -> Result<(), String> {
+    let operation = crate::content_operations::begin(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
         uterm_core::git::git_rollback_file(directory, expected, head)
     })
     .await
@@ -53,12 +59,15 @@ pub async fn git_remote_branches(directory: String) -> Result<RemoteBranches, St
 
 #[tauri::command]
 pub async fn git_switch_remote_branch(
+    app: tauri::AppHandle,
     directory: String,
     remote: String,
     branch: String,
     expected: String,
 ) -> Result<(), String> {
+    let operation = crate::content_operations::begin(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
         uterm_core::git::git_switch_remote_branch(directory, remote, branch, expected)
     })
     .await
@@ -67,11 +76,14 @@ pub async fn git_switch_remote_branch(
 
 #[tauri::command]
 pub async fn git_branch_action(
+    app: tauri::AppHandle,
     directory: String,
     action: String,
     expected: String,
 ) -> Result<(), String> {
+    let operation = crate::content_operations::begin(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
         uterm_core::git::git_branch_action(directory, action, expected)
     })
     .await
@@ -141,10 +153,13 @@ pub async fn git_references(directory: String) -> Result<References, String> {
 
 #[tauri::command]
 pub async fn git_reference_action(
+    app: tauri::AppHandle,
     directory: String,
     target: ReferenceAction,
 ) -> Result<(), String> {
+    let operation = crate::content_operations::begin(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
         uterm_core::git::git_reference_action(directory, target)
     })
     .await

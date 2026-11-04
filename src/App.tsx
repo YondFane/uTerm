@@ -798,6 +798,13 @@ export function App() {
     let disposed = false;
     let unlisten: (() => void) | undefined;
     let unlistenDeferred: (() => void) | undefined;
+    let unlistenOperation: (() => void) | undefined;
+    const operationReady = listen("content-operation-exit-request", () => {
+      setError(tx("请等待文件或 Git 操作完成后再退出。"));
+    }).then((stop) => {
+      if (disposed) stop();
+      else unlistenOperation = stop;
+    });
     const deferredReady = listen("shared-state-exit-deferred", () => {
       exitPending.current = false;
     }).then((stop) => {
@@ -830,7 +837,7 @@ export function App() {
           return;
         }
         unlisten = stop;
-        await deferredReady;
+        await Promise.all([deferredReady, operationReady]);
         await invoke("shared_core_ready");
       })
       .catch((reason) => setError(String(reason)));
@@ -838,6 +845,7 @@ export function App() {
       disposed = true;
       unlisten?.();
       unlistenDeferred?.();
+      unlistenOperation?.();
     };
   }, []);
 

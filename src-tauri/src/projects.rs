@@ -14,13 +14,16 @@ pub async fn project_worktrees(directory: String) -> Result<Vec<Worktree>, Strin
 
 #[tauri::command]
 pub async fn create_worktree(
+    app: tauri::AppHandle,
     directory: String,
     reference: Option<String>,
     branch: Option<String>,
     path: Option<String>,
     oid: Option<String>,
 ) -> Result<Vec<Worktree>, String> {
+    let operation = crate::content_operations::begin(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
         uterm_core::worktrees::create_worktree(directory, reference, branch, path, oid)
     })
     .await
@@ -28,8 +31,14 @@ pub async fn create_worktree(
 }
 
 #[tauri::command]
-pub async fn delete_worktree(directory: String, path: String) -> Result<Vec<Worktree>, String> {
+pub async fn delete_worktree(
+    app: tauri::AppHandle,
+    directory: String,
+    path: String,
+) -> Result<Vec<Worktree>, String> {
+    let operation = crate::content_operations::begin(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _operation = operation;
         uterm_core::worktrees::delete_worktree(directory, path)
     })
     .await

@@ -11,6 +11,7 @@ import {
   symlinkSync,
   lstatSync,
   unlinkSync,
+  chmodSync,
 } from "node:fs";
 import { tmpdir, homedir, platform, arch, release, version } from "node:os";
 import { resolve, join, dirname } from "node:path";
@@ -320,6 +321,54 @@ try {
               join(output, "control-disabled.json"),
               JSON.stringify({ ...metadata, endpointUnavailable: true }, null, 2),
             );
+          } else if (value.scene === "git-write-prepared") {
+            const hooks = join(root, "project/.git/qa-hooks");
+            mkdirSync(hooks);
+            const hook = join(hooks, "post-checkout");
+            writeFileSync(
+              hook,
+              "#!/bin/sh\n: > .git/qa-git-entered\ni=0\n" +
+                'while [ ! -e .git/qa-git-release ] && [ "$i" -lt 1200 ]; do\n' +
+                "i=$((i+1))\nsleep 0.05\ndone\n" +
+                "test -e .git/qa-git-release || exit 1\n" +
+                "printf 'GIT_WRITE_FINISHED\\n' > qa-cancel-finished.txt\n",
+            );
+            chmodSync(hook, 0o755);
+            gitFixture(["config", "core.hooksPath", hooks.replaceAll("\\", "/")]);
+          } else if (value.scene === "git-write-started") {
+            const deadline = Date.now() + 10000;
+            while (!existsSync(join(root, "project/.git/qa-git-entered")) && Date.now() < deadline)
+              await delay(20);
+            assert(
+              existsSync(join(root, "project/.git/qa-git-entered")),
+              "Actual Git hook did not start",
+            );
+            assert(!existsSync(join(root, "project/qa-cancel-finished.txt")));
+          } else if (value.scene === "git-write-quit-blocked") {
+            assert(!closed, "Normal quit terminated the running Git write");
+            assert(!existsSync(join(root, "project/qa-cancel-finished.txt")));
+            writeFileSync(join(root, "project/.git/qa-git-release"), "release\n");
+          } else if (value.scene === "git-write-completed") {
+            assert.equal(
+              readFileSync(join(root, "project/qa-cancel-finished.txt"), "utf8"),
+              "GIT_WRITE_FINISHED\n",
+            );
+            assert.equal(gitFixture(["branch", "--show-current"]).trim(), "qa-tauri-created");
+            writeFileSync(
+              join(output, "git-cancel-exit.json"),
+              JSON.stringify(
+                {
+                  ...metadata,
+                  actualHookPaused: true,
+                  cancelledCallerRetained: true,
+                  normalQuitRefused: true,
+                  finalBranch: "qa-tauri-created",
+                  finalBytes: "GIT_WRITE_FINISHED\n",
+                },
+                null,
+                2,
+              ),
+            );
           } else if (value.scene === "git-worktree") {
             writeFileSync(worktreeSentinel, worktreeBytes);
           } else if (value.scene === "git-worktree-delete-review") {
@@ -558,7 +607,7 @@ try {
       assert(closed, `${phase} did not quit through the ordinary exit guard`);
       const expected =
         phase === "git"
-          ? 19
+          ? 23
           : phase === "editor-checkpoint"
             ? 3
             : phase.startsWith("editor-")
@@ -570,6 +619,7 @@ try {
                   : 3;
       assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
+      if (phase === "git") writeFileSync(join(root, "project/.git/qa-git-release"), "release\n");
       if (writer) {
         writer.stdin.end("release\n");
         writer.kill();

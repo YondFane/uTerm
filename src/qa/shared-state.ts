@@ -6,6 +6,8 @@ import { defaults, settingsKey } from "../lib/settings";
 import { emptyWorkspace, workspaceKey } from "../lib/workspace";
 import { draftKey } from "../lib/file-document";
 import { editorDraftReceiptKey } from "../lib/editor-draft-handoff";
+import { ContentScope } from "../lib/content-transport";
+import { tauriContentPort } from "../lib/tauri-content";
 import type {
   CoreEditorDraftEntry,
   CoreFileDocument,
@@ -441,7 +443,59 @@ async function runGit(context: Context) {
     temporaryDirectory: worktree,
   });
   await runWorktreeDeletion();
+  await runGitWriteExit(context);
   await invoke("qa_request_exit");
+}
+
+async function runGitWriteExit(context: Context) {
+  await scene("git-write-prepared", { realPostCheckoutHook: true });
+  const scope = new ContentScope(tauriContentPort, "qa-git-cancel-exit"),
+    controller = new AbortController();
+  let settled = false;
+  const pending = scope
+    .call(
+      "git_switch_branch",
+      {
+        directory: context.project,
+        branch: "qa-tauri-created",
+        expected: "main",
+      },
+      controller.signal,
+    )
+    .then(
+      () => {
+        throw Error("Cancelled Git write delivered late success");
+      },
+      (reason) => {
+        assert(reason.code === "CANCELLED", "Git cancellation lost its error code");
+      },
+    )
+    .finally(() => {
+      settled = true;
+    });
+  await scene("git-write-started", { actualIPCDispatched: true });
+  controller.abort();
+  await invoke("qa_request_exit");
+  await until(
+    () =>
+      document.body.textContent?.includes(
+        "Wait for file or Git operations to finish before quitting.",
+      ),
+    "backend Git operation exit guard",
+  );
+  assert(!settled, "Git cancellation released its caller before the backend write ended");
+  await scene("git-write-quit-blocked", {
+    cancelledCallerProtected: true,
+    normalQuitRefused: true,
+  });
+  await pending;
+  scope.close();
+  const snapshot = await invoke<{ branch: string }>("git_snapshot", { directory: context.project });
+  assert(snapshot.branch === "qa-tauri-created", "The actual Git write did not complete");
+  await scene("git-write-completed", {
+    cancellationSuppressedLateSuccess: true,
+    finalBranch: snapshot.branch,
+  });
 }
 
 async function runWorktreeDeletion() {
