@@ -169,6 +169,13 @@ fn real_maven_reactor_and_spring_boot_use_shared_task_lifetimes() {
             std::fs::read_to_string(root.join("app/target/classes/qa.properties"))
                 .unwrap_or_default()
         );
+        if cfg!(windows) && mode == "development" {
+            assert!(
+                std::fs::read_to_string(root.join("app/target/classes/qa.properties"))
+                    .unwrap()
+                    .contains("verifiedChildren=false")
+            );
+        }
         for marker in [
             r#"READY_MAVEN:from-reactor:ENV & %PATH%:VM & %PATH% " ' C:\path\"#,
             "PROFILES:qa",

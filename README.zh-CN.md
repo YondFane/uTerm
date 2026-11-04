@@ -145,7 +145,8 @@ Java 构建与运行…**使用共享 Maven／JDK 配置、构建／运行操作
 需要 JDK
 21 和 macOS 图形会话，编译隔离 JAR 并记录真实配置／任务／窗口证据。选择器／键盘验收和完整 Maven 工作流与脚本冒烟分别核对。Windows 启动器互操作 CI 使用 JDK
 8／11／17／21 验证实际共享宿主。宿主与 Tauri 程序共用 `shared/windows/application.manifest`
-提供进程 UTF-8；Java 步骤中的 Unicode、内嵌引号或空参数通过子进程中所选 JDK 自身启动器传递。平台执行、编译及完整 Maven／人工验收分开记录。
+提供进程 UTF-8；Unicode
+Java 步骤在子进程中使用所选 JDK 自身启动器。平台执行、编译及完整 Maven／人工验收分开记录。
 
 可选真实 Maven QA 在临时项目中使用 Maven 3.9.9 和 Spring Boot 2.7.18。设置
 `JAVA_HOME`、`UTERM_MAVEN_HOME` 及可选的 `UTERM_MAVEN_REPOSITORY`，然后执行：

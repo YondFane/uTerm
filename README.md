@@ -162,9 +162,9 @@ build/run actions and task logs. `bash scripts/macos-java-smoke.sh` requires JDK
 graphical session; it compiles an isolated JAR and records real configuration/task/window evidence.
 Picker/keyboard acceptance and full Maven workflows remain separate from the scripted smoke. Windows
 launcher interop CI exercises the actual shared host with JDK 8/11/17/21. The host and Tauri
-executable share `shared/windows/application.manifest` for per-process UTF-8; Java steps with
-Unicode, embedded quotes or empty arguments use the selected JDK's own launcher in a child process.
-Platform results remain separate from compilation and full Maven/manual acceptance.
+executable share `shared/windows/application.manifest` for per-process UTF-8; Unicode Java steps use
+the selected JDK's own launcher in a child process. Platform results remain separate from
+compilation and full Maven/manual acceptance.
 
 Optional real Maven QA uses Maven 3.9.9 and Spring Boot 2.7.18 in temporary projects. Set
 `JAVA_HOME`, `UTERM_MAVEN_HOME` and optionally `UTERM_MAVEN_REPOSITORY`, then run:

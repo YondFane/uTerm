@@ -25,18 +25,6 @@ struct Cache {
     _ownership: std::fs::File,
     directory: tempfile::TempDir,
 }
-#[cfg(any(windows, test))]
-fn needs_literal_launcher(
-    program: &std::path::Path,
-    directory: &std::path::Path,
-    arguments: &[String],
-) -> bool {
-    !program.as_os_str().as_encoded_bytes().is_ascii()
-        || !directory.as_os_str().as_encoded_bytes().is_ascii()
-        || arguments
-            .iter()
-            .any(|value| !value.is_ascii() || value.is_empty() || value.contains('"'))
-}
 #[cfg(not(windows))]
 pub(crate) fn prepare(
     _step: &crate::tasks::Step,
@@ -50,7 +38,9 @@ pub(crate) fn prepare(
     root: &std::path::Path,
 ) -> Result<Option<Prepared>> {
     if !step.windows_java_utf8
-        || !needs_literal_launcher(&step.program, &step.directory, &step.arguments)
+        || (step.program.as_os_str().as_encoded_bytes().is_ascii()
+            && step.directory.as_os_str().as_encoded_bytes().is_ascii()
+            && step.arguments.iter().all(|value| value.is_ascii()))
     {
         return Ok(None);
     }
@@ -473,20 +463,6 @@ mod windows {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn ascii_quotes_and_empty_values_also_need_literal_java_launching() {
-        let program = std::path::Path::new("C:/Java/bin/java.exe");
-        let root = std::path::Path::new("C:/project");
-        assert!(!needs_literal_launcher(program, root, &["-version".into()]));
-        for value in ["", r#"-Dvalue=quoted " and slash\"#, "中文"] {
-            assert!(needs_literal_launcher(program, root, &[value.into()]));
-        }
-        assert!(needs_literal_launcher(
-            program,
-            std::path::Path::new("C:/项目"),
-            &[]
-        ));
-    }
     #[cfg(windows)]
     #[test]
     fn jdk8_cache_cleanup_respects_live_owners_and_retains_the_selected_jdk() {

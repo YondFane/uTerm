@@ -1145,18 +1145,29 @@ pub fn build_launch(
     let home = resolve_maven_home(data_root, &root, &maven, &environment, config.offline)?;
     let launcher_arguments = maven_launcher(&home, &root, &environment)?;
     let common_options = maven_options(config, &maven)?;
-    let maven_step = |arguments: Vec<String>, label: &str| Step {
-        program: java.clone(),
-        arguments: launcher_arguments
-            .iter()
-            .cloned()
-            .chain(arguments)
-            .collect(),
-        directory: root.clone(),
-        environment: environment.clone(),
-        label: label.into(),
-        windows_java_utf8: cfg!(windows),
-        jar_directory: None,
+    let maven_step = |arguments: Vec<String>, label: &str| {
+        let mut launcher = launcher_arguments.clone();
+        if cfg!(windows)
+            && arguments
+                .last()
+                .is_some_and(|goal| goal == "spring-boot:run")
+        {
+            // Verify quoting in Maven's forked Java process instead of using ProcessBuilder's legacy mode.
+            // Maven 派生 Java 进程采用严格引号转义，避免 ProcessBuilder 的旧解析模式。
+            launcher.insert(
+                launcher.len() - 3,
+                "-Djdk.lang.Process.allowAmbiguousCommands=false".into(),
+            );
+        }
+        Step {
+            program: java.clone(),
+            arguments: launcher.into_iter().chain(arguments).collect(),
+            directory: root.clone(),
+            environment: environment.clone(),
+            label: label.into(),
+            windows_java_utf8: cfg!(windows),
+            jar_directory: None,
+        }
     };
     let mut reactor_arguments = common_options.clone();
     if config.module != "." {
