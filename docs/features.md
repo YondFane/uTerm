@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-04
+updated: 2026-11-05
 ---
 
 # uTerm feature guide
@@ -382,10 +382,11 @@ terminal bridge.
 Before a write, open editable file windows save and freeze until completion. A file conflict blocks
 Git and retains both file and recovery draft. The Git window refuses to close during a write. Clean
 editors reload repository changes; dirty or busy editors retain their text. Cancelling or timing out
-a dispatched write does not establish rollback; inspect the repository before retrying. Tauri
-retains the caller's busy/editor protection until the actual IPC write finishes, then reports the
-cancel/timeout/closed error without delivering a late success. Read cancellation remains immediate.
-Native favorites use the shared recovery controls described below.
+a dispatched write does not establish rollback; inspect the repository before retrying. Both Tauri
+and WebKit retain the caller's busy/editor protection until the actual dispatched write finishes,
+then report the cancel/timeout/closed error without delivering a late success. A native cancel
+acknowledgement alone does not release this protection. Read cancellation remains immediate. Native
+favorites use the shared recovery controls described below.
 
 The Tauri backend independently retains queued/running Git, Worktree and local-file writes, plus
 mutating shared-store requests. Normal quit visibly refuses while they run, even if WebView state is
@@ -1809,9 +1810,14 @@ its Web content is still loading or fails. Those added lifecycle checks await fr
 do not establish human focus or writable-draft acceptance. Window appearance effects also remain
 behind the platform adapter rather than Tauri-specific calls in the shared settings view.
 
-Seven Linux protocol tests cover reordered/mismatched replies, timeout/abort/unload, late
-subscriptions, bounds and the JavaScript WebKit adapter. The frontend suite, types, production
-build, formatting and documentation are checked locally; native platform acceptance is separate.
+Linux protocol checks cover reordered/mismatched replies, timeout/abort/unload, late subscriptions,
+bounds and the JavaScript WebKit adapter. Actual Rust/Git processes pause a real checkout hook and
+verify abort, timeout and close through both JavaScript adapters: the caller remains protected until
+the write finishes, the final file bytes and branch are checked, and late success is suppressed. All
+three WebKit cases fail against the previous adapter and pass with write draining. Additional checks
+cover immediate read cancellation and failed writes when cancel delivery fails. These tests use an
+adapter harness connected to real Rust/Git; they are separate from native application and manual
+focus/IME acceptance. Fresh platform CI for this adapter change is pending.
 
 ### Shared local file service
 

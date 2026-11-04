@@ -1,39 +1,21 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { CoreResponse, JSONValue } from "./core-contract.generated.ts";
-import { editorDraftMethods, gitFavoriteMethods } from "./content-transport.ts";
+import {
+  contentWriteMethods,
+  editorDraftMethods,
+  gitFavoriteMethods,
+} from "./content-transport.ts";
 import type { ContentPort } from "./content-transport.ts";
 
 export { isTauri };
-const writes = new Set([
-  "editor_drafts_import",
-  "editor_drafts_put",
-  "editor_drafts_remove",
-  "git_favorites_import",
-  "git_favorites_accept_shared",
-  "git_favorites_write",
-  "file_save",
-  "file_copy",
-  "file_mutate",
-  "ssh_file_save",
-  "ssh_file_mutate",
-  "git_switch_branch",
-  "git_rollback_file",
-  "git_switch_remote_branch",
-  "git_branch_action",
-  "git_reference_action",
-  "create_worktree",
-  "delete_worktree",
-  "content_font_adjust",
-  "content_settings_patch",
-]);
 const pendingWrites = new Map<string, Promise<void>>();
 const requestKey = (document: string, id: string) => JSON.stringify([document, id]);
 export const tauriContentPort: ContentPort = {
   async request(message) {
     const key = requestKey(message.document, message.id);
     let complete: (() => void) | undefined;
-    if (writes.has(message.method))
+    if (contentWriteMethods.has(message.method))
       pendingWrites.set(
         key,
         new Promise<void>((resolve) => {

@@ -220,11 +220,17 @@ test("WebKit uses the same request envelope, cancellation and document-filtered 
   assert.deepEqual(received, ["close"]);
   const abort = new AbortController();
   const value = scope.call("file_save", { path: "a", text: "new" }, abort.signal);
+  let settled = false;
+  void value.then(
+    () => (settled = true),
+    () => (settled = true),
+  );
   const rejected = assert.rejects(value, { code: "CANCELLED" });
   await tick();
   assert.equal(sent[0].kind, "request");
   abort.abort();
-  await rejected;
+  await tick();
+  assert.equal(settled, false, "the native cancellation acknowledgement must not release a write");
   assert.deepEqual(sent[1], {
     kind: "cancel",
     version: 1,
@@ -232,6 +238,7 @@ test("WebKit uses the same request envelope, cancellation and document-filtered 
     id: sent[0].id,
   });
   pending.resolve(reply(sent[0], "late"));
+  await rejected;
   stop();
   scope.close();
   target.dispatchEvent(
@@ -245,6 +252,42 @@ test("WebKit uses the same request envelope, cancellation and document-filtered 
     }),
   );
   assert.deepEqual(received, ["close"]);
+});
+
+test("WebKit read cancellation is immediate and failed writes drain even if cancel delivery fails", async () => {
+  const readReply = deferred(),
+    writeReply = deferred();
+  const port = webKitContentPort(
+    {
+      postMessage(message) {
+        if (message.kind === "cancel") return Promise.reject(Error("native cancel unavailable"));
+        return message.method === "file_read" ? readReply.promise : writeReply.promise;
+      },
+    },
+    new EventTarget(),
+  );
+  const scope = new ContentScope(port, "webkit-failed-write"),
+    controller = new AbortController();
+  let writeSettled = false;
+  const read = assert.rejects(scope.call("file_read", {}, controller.signal), {
+    code: "CANCELLED",
+  });
+  const write = assert.rejects(
+    scope.call("file_save", {}, controller.signal).finally(() => {
+      writeSettled = true;
+    }),
+    { code: "CANCELLED", message: /reload before retrying/ },
+  );
+  await tick();
+  controller.abort();
+  await read;
+  await tick();
+  assert.equal(writeSettled, false);
+  writeReply.resolve(Promise.reject(Error("native write failed after cancellation")));
+  await write;
+  assert.equal(writeSettled, true);
+  readReply.resolve(null);
+  scope.close();
 });
 
 test("content operation IDs work when custom-scheme contexts lack randomUUID", async (t) => {
