@@ -5,7 +5,7 @@ test "$(uname -s)" = Darwin
 launchctl print "gui/$(id -u)" >/dev/null
 pgrep -x WindowServer >/dev/null
 python3 - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" <<'PY'
-import json, subprocess, sys, tempfile
+import json, subprocess, sys, tempfile, time
 from pathlib import Path
 app, evidence = map(Path, sys.argv[1:])
 evidence.mkdir(parents=True, exist_ok=True)
@@ -16,7 +16,18 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
         process = subprocess.Popen([str(app / 'Contents/MacOS/UTermNativeQA'), '--qa-data-root', root,
             '--git-smoke-report', str(path)], stdout=out, stderr=err)
         try:
-            code = process.wait(timeout=150)
+            deadline = time.monotonic() + 150
+            while process.poll() is None and time.monotonic() < deadline:
+                if path.exists() and 'failure' in json.loads(path.read_text()):
+                    subprocess.run(['sample', str(process.pid), '3', '-file', str(evidence / 'git-failure-termination-sample.txt')], timeout=10, check=False)
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill(); process.wait(timeout=10)
+                    raise AssertionError(json.loads(path.read_text()))
+                time.sleep(0.1)
+            code = process.wait(timeout=max(0.1, deadline - time.monotonic()))
         except subprocess.TimeoutExpired:
             subprocess.run(['sample', str(process.pid), '3', '-file', str(evidence / 'git-timeout-sample.txt')], timeout=10, check=False)
             process.kill()
@@ -39,6 +50,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 'favoriteRecoveryCancelRetainedBytes', 'favoriteRecoveryCopiedExactSourceWithoutRestore',
                 'favoriteRecoveryOpenedFromScopedGitError', 'favoriteRecoveryStaleSelectionRetainedBytes',
                 'favoriteRecoveryRestoredAndRetainedDamage', 'favoriteRecoveryMissingPreviewReadonlyAndExplicitRestore',
+                'favoriteRecoveryReadyBeforeEditorWrite',
                 'cancelledGitRetainedEditorFreezeUntilCompletion', 'cancelledGitReportedCompletedWriteAndRetainedBytes']:
         assert report[key], (key, report)
     assert len(report['gitCaptures']) == 14, report

@@ -432,6 +432,13 @@ fix and pass afterward; read cancellation remains immediate. Backend lifetime ch
 workers after caller loss and release only the failed worker's ownership. These results do not
 accept subsequent Python service changes.
 
+Native recovery QA waits for the actual favorite menu action to become enabled after the final
+restore/settings change before beginning an editor write. A visible writer-busy failure may use one
+explicit **Reload Git favorites** action; other errors fail the check, restored bytes must stay
+exact, and Git writes are never replayed. A failed native Git report is collected immediately with
+process sampling instead of being hidden behind a later quit timeout. These QA changes await their
+own macOS run; the failed `ee15844` ARM artifact remains available.
+
 Full cancellation/lifecycle matrix and #16 dependencies keep #35 open. Manual keyboard/IME/focus,
 formal signing/notarization and installed-version upgrade/rollback remain unverified. These checks
 do not establish release acceptance.

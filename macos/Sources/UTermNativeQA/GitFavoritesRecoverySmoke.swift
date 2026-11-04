@@ -133,5 +133,30 @@ enum GitFavoritesRecoverySmoke {
         report["favoriteRecoveryMissingPreviewReadonlyAndExplicitRestore"] = true
         report["favoriteRecoveryUIScenarios"] = ["controls": "actual NSMenu / NSAlert / NSPopUpButton / NSButton / NSPasteboard", "languages": ["en", "zh-Hans"], "appearances": ["dark", "light"], "manualAcceptance": false] as [String: Any]
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
+        let retained = try Data(contentsOf: file)
+        let deadline = Date().addingTimeInterval(20)
+        var retried = false
+        while Date() < deadline {
+            let failure = (try? await content.webView.evaluateJavaScript("document.querySelector('[role=alert]')?.textContent || ''")) as? String ?? ""
+            if !failure.isEmpty {
+                guard !retried, failure.contains("Another writer owns the canonical store") else {
+                    throw BridgeFailure(code: "FAVORITE_RECOVERY_RELOAD", message: failure)
+                }
+                try await EditorSmoke.click(content, title: "Reload Git favorites")
+                retried = true
+                try await ContentSmoke.wait(content, "document.querySelector('[role=alert]') === null", allowAlert: true)
+            }
+            _ = try await content.webView.evaluateJavaScript("document.querySelector('[data-node=\"refs/heads/main\"]')?.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:120,clientY:160}))")
+            let ready = (try? await content.webView.evaluateJavaScript("[...document.querySelectorAll('[role=menuitem]')].some(b=>['Favorite branch','Unfavorite'].includes(b.textContent) && !b.disabled)")) as? Bool == true
+            if ready {
+                _ = try await content.webView.evaluateJavaScript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))")
+                guard try Data(contentsOf: file) == retained else { throw BridgeFailure(code: "FAVORITE_RECOVERY_RELOAD", message: "Explicit reload changed restored favorite bytes") }
+                report["favoriteRecoveryReadyBeforeEditorWrite"] = true
+                report["favoriteRecoveryExplicitBusyReload"] = retried
+                return
+            }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        throw BridgeFailure(code: "FAVORITE_RECOVERY_RELOAD", message: "Favorite controls did not become ready before the next editor write")
     }
 }
