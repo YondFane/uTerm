@@ -2705,11 +2705,13 @@ temporary environment/JVM properties, both final output streams, exit code 7, sa
 reattachment/ack, stale and cross-family stop rejection, force-stop cleanup and idle host shutdown.
 An invalid Wrapper with offline mode proves existing-JAR runs bypass Maven resolution. Fixture
 compiler/archive tools receive a normal Windows working-directory path rather than Rust's extended
-canonical prefix. The first Windows CI failed in the JDK archive tool before starting the task; that
-failure is retained and the corrected fixture still needs its own Windows CI. Two Rust processes
-check global/project CAS, an actual OS writer lock, explicit retry, shared registry locking and
-damaged-byte preservation. Existing Maven, archive and source-scan regressions move with their
-implementation. These are fixture checks, not a full real Maven/Spring Boot acceptance.
+canonical prefix. The Windows JDK archive tool failed before task startup even after normalizing
+that path. The fixture now creates an ASCII archive and renames it to the same
+Unicode/Shell-character filename before the actual shared-host run; literal-path/argument assertions
+remain. Both failures are retained and this correction still needs its own Windows CI. Two Rust
+processes check global/project CAS, an actual OS writer lock, explicit retry, shared registry
+locking and damaged-byte preservation. Existing Maven, archive and source-scan regressions move with
+their implementation. These are fixture checks, not a full real Maven/Spring Boot acceptance.
 
 Run `pnpm test:core` and the frontend suite with `JAVA_HOME` pointing to a JDK 21 and its `bin` on
 `PATH`. CI installs Temurin 21 and uploads `java-live-core.json`, core/frontend logs and toolchain

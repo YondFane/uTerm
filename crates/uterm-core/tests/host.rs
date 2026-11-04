@@ -107,7 +107,7 @@ public class TaskProbe {
         &[
             "--create",
             "--file",
-            "target/literal 中文 & %.jar",
+            "target/fixture.jar",
             "--main-class",
             "TaskProbe",
             "-C",
@@ -115,6 +115,11 @@ public class TaskProbe {
             "TaskProbe.class",
         ],
     );
+    std::fs::rename(
+        root.join("target/fixture.jar"),
+        root.join("target/literal 中文 & %.jar"),
+    )
+    .unwrap();
     std::fs::write(root.join("pom.xml"), "<project><modelVersion>4.0.0</modelVersion><groupId>qa</groupId><artifactId>literal</artifactId><version>1</version></project>").unwrap();
     std::fs::create_dir_all(root.join(".mvn/wrapper")).unwrap();
     std::fs::write(
