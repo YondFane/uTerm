@@ -121,14 +121,17 @@ final class JavaRunModel: ObservableObject {
         return values
     }
     private func startSaved(environment: [String: JSONValue]) async throws {
-        let task: JSONValue
-        do { task = try await bridge.call("java.start", params: .object([
+        let task = try await bridge.call("java.start", params: .object([
             "directory": .string(directory), "config": try value(formConfig()), "action": .string(action), "environment": .object(environment)
-        ])) } catch let failure as BridgeFailure where failure.code == "JAVA_DEVELOPMENT_ARGUMENTS_UNSUPPORTED" {
-            throw BridgeFailure(code: failure.code, message: localized("Spring Boot development mode cannot preserve empty or whitespace-only arguments, line breaks or tabs. Use JAR mode.", "Spring Boot 开发模式无法保留空参数、纯空白参数、换行或制表符，请使用 JAR 模式。"))
-        }
+        ]))
         selectedID = task["spec"]["id"].string ?? ""
         await refreshTasks()
+    }
+    private func runError(_ error: Error) -> String {
+        if let failure = error as? BridgeFailure, failure.code == "JAVA_DEVELOPMENT_ARGUMENTS_UNSUPPORTED" {
+            return localized("Spring Boot development mode cannot preserve empty or whitespace-only arguments, line breaks or tabs. Use JAR mode.", "Spring Boot 开发模式无法保留空参数、纯空白参数、换行或制表符，请使用 JAR 模式。")
+        }
+        return error.localizedDescription
     }
     func save() async -> Bool {
         guard !busy, !prepared else { return false }
@@ -145,7 +148,7 @@ final class JavaRunModel: ObservableObject {
             let values = try environmentValues()
             try await persist()
             try await startSaved(environment: values)
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = runError(error) }
     }
     func runAgain() async {
         guard !busy, !prepared else { return }
@@ -167,7 +170,7 @@ final class JavaRunModel: ObservableObject {
                 guard !running else { throw BridgeFailure(code: "JAVA_STOPPING", message: localized("The task is still stopping. Use Force stop before running again.", "任务仍在停止，请强制停止后再重新运行。")) }
             }
             try await startSaved(environment: values)
-        } catch { self.error = error.localizedDescription }
+        } catch { self.error = runError(error) }
     }
     func registerJDK(remove: Bool = false) async {
         guard !busy, !prepared, let home = config?.java_home, !home.isEmpty else { return }

@@ -2794,8 +2794,9 @@ paths or a JAR inside the project.
 Spring Boot development mode quotes arguments for the plugin's Plexus parser, preserving embedded
 single/double quotes and literal backslashes. That plugin discards empty/whitespace-only tokens and
 replaces line breaks/tabs; the shared service rejects these values before starting a host or
-resolving Maven. Both clients show a **Use JAR mode** instruction and retain the configured values.
-JAR mode continues to pass application arguments directly, including empty strings.
+resolving Maven. Both clients show the same localized **Use JAR mode** instruction and retain the
+configured values. JAR mode continues to pass application arguments directly, including empty
+strings.
 
 On Windows, the development Maven process uses `-Djdk.lang.Process.allowAmbiguousCommands=false` so
 Spring Boot's forked Java process preserves embedded quotes and trailing backslashes. This option
