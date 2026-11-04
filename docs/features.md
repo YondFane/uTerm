@@ -524,6 +524,13 @@ record `favoritePreviewReloads`. These actions do not repeat a restore or Git wr
 fail the check, source/restore bytes remain exact, and the original conflict/confirmation checks
 remain required. Native Git failure reports retain process samples before graceful exit.
 
+The favorite-recovery QA now holds the actual canonical-store OS lock in an owned helper after
+showing the corrupt-data entry, captures the read-only busy failure with restore disabled, then
+releases only that helper's lock before explicitly reloading the preview. It checks that damaged
+bytes remain unchanged and records `favorite-writer-lock.json`, the busy screenshot and actual
+`favoritePreviewReloads`. These two additional scenes await source-bound CI; a zero-retry success
+from earlier runs does not establish the contention path.
+
 Full cancellation/lifecycle matrix and #16 dependencies keep #35 open. Manual keyboard/IME/focus,
 formal signing/notarization and installed-version upgrade/rollback remain unverified. These checks
 do not establish release acceptance.

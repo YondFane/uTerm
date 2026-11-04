@@ -556,6 +556,11 @@ try {
             );
             writeFileSync(favoriteFile, favoriteDamage);
           } else if (value.scene === "git-favorite-recovery-preview") {
+            assert(
+              value.checks.favoritePreviewReloads > 0,
+              "Missing actual explicit preview reload",
+            );
+            assert(value.checks.recoveredAfterOwnedWriterReleased);
             assert.deepEqual(
               readFileSync(favoriteFile),
               favoriteDamage,
@@ -624,7 +629,10 @@ try {
             assert(!existsSync(favoriteFile), "Preview recreated absent snapshot");
           } else if (value.scene === "git-favorite-recovery-complete") {
             assert.deepEqual(readFileSync(favoriteFile), favoriteOriginal);
-          } else if (value.scene === "editor-imported") {
+          } else if (
+            value.scene === "editor-imported" ||
+            value.scene === "git-favorite-recovery-lock-ready"
+          ) {
             const target = resolve(process.env.CARGO_TARGET_DIR ?? "crates/uterm-core/target");
             writer = spawn(
               join(
@@ -651,14 +659,28 @@ try {
               lines.close();
             }
             writerEvents.push({ state: "locked", pid: writer.pid });
-          } else if (value.scene === "editor-write-rejected") {
+          } else if (
+            value.scene === "editor-write-rejected" ||
+            value.scene === "git-favorite-recovery-busy"
+          ) {
             assert(writer, "Missing owned writer fixture");
             writer.stdin.end("release\n");
             assert.equal(await writerExited, 0);
-            writerEvents.push({ state: "released-after-rejection", pid: writer.pid });
+            const favoritePreview = value.scene === "git-favorite-recovery-busy";
+            if (favoritePreview) {
+              assert(value.checks.canonicalWriterBusy && value.checks.restoreDisabled);
+              assert.deepEqual(readFileSync(favoriteFile), favoriteDamage);
+            }
+            writerEvents.push({
+              state: favoritePreview ? "released-after-busy-preview" : "released-after-rejection",
+              pid: writer.pid,
+            });
             writer = undefined;
             writeFileSync(
-              join(output, "editor-writer-lock.json"),
+              join(
+                output,
+                favoritePreview ? "favorite-writer-lock.json" : "editor-writer-lock.json",
+              ),
               JSON.stringify({ ...metadata, events: writerEvents }, null, 2),
             );
           }
@@ -700,7 +722,7 @@ try {
       assert(closed, `${phase} did not quit through the ordinary exit guard`);
       const expected =
         phase === "git"
-          ? 23
+          ? 25
           : phase === "editor-checkpoint"
             ? 3
             : phase.startsWith("editor-")

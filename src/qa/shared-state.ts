@@ -719,8 +719,26 @@ async function runFavoriteRecovery(context: Context) {
     );
   }
   await until(() => button("Recover Git favorites…"), "visible real corrupt favorite error");
+  await scene("git-favorite-recovery-lock-ready", { actualErrorEntry: true });
   await click("Recover Git favorites…");
+  await until(
+    () =>
+      document
+        .querySelector('.git-favorite-recovery-dialog[open] [role="alert"]')
+        ?.textContent?.includes("Another writer owns the canonical store"),
+    "actual canonical writer lock rejects the read-only recovery preview",
+  );
+  assert(button("Restore all repository favorites")?.disabled, "Busy preview enabled restoration");
+  await scene("git-favorite-recovery-busy", {
+    canonicalWriterBusy: true,
+    restoreDisabled: true,
+    readOnlyFailure: true,
+  });
   await select(`backup:${revision}`);
+  assert(
+    favoritePreviewReloads > 0,
+    "The busy preview did not use explicit Reload recovery copies",
+  );
   assert(
     document.activeElement?.textContent === "Cancel",
     "Cancel is not the initial recovery action",
@@ -729,6 +747,7 @@ async function runFavoriteRecovery(context: Context) {
     actualErrorEntry: true,
     cancelDefault: true,
     verifiedAllRepositoryPreview: true,
+    recoveredAfterOwnedWriterReleased: true,
   });
   await click("Cancel");
   await closed();
