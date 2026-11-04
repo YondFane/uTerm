@@ -27,9 +27,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert report['coreReady'] and not report['productionDataAccess'], report
     for key in ['nativePythonMenuOpened', 'configurationConflictRetainedDraft', 'realPythonFinalOutputAndExitCode',
                 'windowDetachRetainedTask', 'reopenedSameGenerationAndReplay', 'staleGenerationStopRefused',
-                'forceStopCompleted', 'temporaryEnvironmentNotSaved']:
+                'forceStopCompleted', 'temporaryEnvironmentNotSaved', 'nativeLogSearchFoundLiteralOutput',
+                'nativePausedFollowRetainedAnchor', 'nativeFollowResumed', 'reattachRetainedHostPID',
+                'runAgainWaitedForOldExit', 'normalStopRetainedFinalOutputAndCopy']:
         assert report[key], (key, report)
-    assert len(report['pythonCaptures']) == 3, report
+    assert len(report['pythonCaptures']) == 4, report
     for name in report['pythonCaptures']:
         assert (evidence / name).is_file(), name
     endpoint = Path(root) / 'local-daemon-v1/endpoint.json'

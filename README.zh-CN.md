@@ -136,7 +136,7 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 
 原生 Python QA：选择本地项目或 Worktree 后使用**文件 → Python 运行…**。原生表单调用共享 Rust
 Python 服务及原始任务输出通道。在 macOS 图形会话运行
-`bash scripts/macos-python-smoke.sh`，使用隔离配置和真实进程检查配置冲突、输出、分离／回放和停止，并保存截图。需要已有 Python
+`bash scripts/macos-python-smoke.sh`，使用隔离配置和真实进程检查配置冲突、输出、分离／回放、搜索／跟随、停止及重新运行，并保存截图。需要已有 Python
 3，不安装 Python 或依赖包；实际平台执行结果单独记录于功能指南。
 
 `uterm-core::{files,git,worktrees}`

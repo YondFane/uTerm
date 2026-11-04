@@ -1,4 +1,5 @@
 import AppKit
+import SwiftTerm
 import UTermBridge
 
 @MainActor
@@ -13,7 +14,7 @@ enum PythonSmoke {
         let root = try WorkspaceModel.dataRoot().deletingLastPathComponent().appendingPathComponent("python-project 中文")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try "import sys,os\nprint('ARGV:'+sys.argv[1],flush=True)\nprint('ENV:'+os.environ['VALUE'],flush=True)\nprint('LAST:中文 e\\u0301',flush=True)\nsys.exit(7)\n".write(to: root.appendingPathComponent("task 中文 & %.py"), atomically: true, encoding: .utf8)
-        try "import time\nprint('LONG_READY 中文',flush=True)\ntime.sleep(60)\n".write(to: root.appendingPathComponent("long.py"), atomically: true, encoding: .utf8)
+        try "import time,signal,sys,pathlib\ndef stop(*args):\n print('STOP_CLEANUP',flush=True)\n sys.exit(0)\nsignal.signal(signal.SIGINT,stop)\nprint('LONG_READY 中文',flush=True)\nfor i in range(120): print('BEFORE_PAUSE_'+str(i),flush=True)\nwhile not pathlib.Path('qa-continue').exists(): time.sleep(0.02)\nfor i in range(120): print('AFTER_PAUSE_'+str(i),flush=True)\ntime.sleep(60)\n".write(to: root.appendingPathComponent("long.py"), atomically: true, encoding: .utf8)
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         guard await model.mutate("project.open", ["id": .string("native-python-qa"), "name": .string("Python QA"), "directory": .string(root.path), "workspaceId": .string(model.groupID)]) else { throw BridgeFailure(code: "PYTHON_QA", message: model.error) }
         guard let menu = NSApp.mainMenu?.items.compactMap(\.submenu).first(where: { $0.items.contains { $0.title == "Python run…" } }),
@@ -55,11 +56,30 @@ enum PythonSmoke {
               run.terminal?.text.contains("ARGV:literal & %PATH%") == true,
               run.terminal?.text.contains("ENV:环境 & %PATH%") == true else { throw BridgeFailure(code: "PYTHON_QA", message: "Python lost literal arguments, environment, final output or exit code") }
         report["realPythonFinalOutputAndExitCode"] = true
+        report["hostStarted"] = true
+        let host = try await bridge.call("host.status")
+        report["pythonHostPID"] = host["pid"].number
+        run.search = "ARGV:literal & %PATH%"; run.find()
+        guard run.terminal?.view.searchMatchSummary(run.search).total == 1 else { throw BridgeFailure(code: "PYTHON_QA", message: "Native log search did not find literal output") }
+        report["nativeLogSearchFoundLiteralOutput"] = true
         let output = "native-python-output-en-dark.png"
         try await capture(first, output); captures.append(output)
         run.config?.target = "long.py"; run.dirty = true
         await run.run()
-        try await TerminalSmoke.wait("Start the disposable long Python task") { run.terminal?.text.contains("LONG_READY 中文") == true }
+        try await TerminalSmoke.wait("Start the disposable long Python task") { run.terminal?.text.contains("BEFORE_PAUSE_119") == true }
+        guard let log = run.terminal else { throw BridgeFailure(code: "PYTHON_QA", message: "No task log for scroll acceptance") }
+        log.view.scrollUp(lines: 20)
+        guard !log.taskLogFollowsOutput else { throw BridgeFailure(code: "PYTHON_QA", message: "Scrolling up did not pause following") }
+        let anchor = log.view.getTerminal().buffer.totalLinesTrimmed + log.view.getTerminal().buffer.yDisp
+        try Data().write(to: root.appendingPathComponent("qa-continue"))
+        try await TerminalSmoke.wait("Consume raw output while follow is paused") { log.text.contains("AFTER_PAUSE_119") }
+        guard !log.taskLogFollowsOutput, log.view.getTerminal().buffer.totalLinesTrimmed + log.view.getTerminal().buffer.yDisp == anchor else { throw BridgeFailure(code: "PYTHON_QA", message: "New output moved the paused viewport") }
+        report["nativePausedFollowRetainedAnchor"] = true
+        let paused = "native-python-paused-output-en-dark.png"
+        try await capture(first, paused); captures.append(paused)
+        log.followTaskLog(true)
+        guard log.taskLogFollowsOutput, log.view.scrollPosition == 1 else { throw BridgeFailure(code: "PYTHON_QA", message: "Follow did not resume at the final output") }
+        report["nativeFollowResumed"] = true
         let active = run.selectedTask
         await first.forceClose()
         let retained = try await bridge.call("python.tasks", params: .object(["directory": .string(root.path)]))
@@ -70,6 +90,8 @@ enum PythonSmoke {
         try await TerminalSmoke.wait("Replay Python output after reopening") { reopened.model.terminal?.text.contains("LONG_READY 中文") == true }
         guard reopened.model.selectedTask["generation"] == active["generation"] else { throw BridgeFailure(code: "PYTHON_QA", message: "Python reattach changed generation") }
         report["reopenedSameGenerationAndReplay"] = true
+        guard (try await bridge.call("host.status"))["pid"] == host["pid"] else { throw BridgeFailure(code: "PYTHON_QA", message: "Reopening replaced the active Python host") }
+        report["reattachRetainedHostPID"] = true
         reopened.window?.setContentSize(NSSize(width: 660, height: 620))
         let narrow = "native-python-replay-zh-light.png"
         try await capture(reopened, narrow); captures.append(narrow)
@@ -77,6 +99,20 @@ enum PythonSmoke {
             _ = try await bridge.call("python.stop", params: .object(["id": active["spec"]["id"], "generation": .string("stale"), "force": .bool(true)]))
             throw BridgeFailure(code: "PYTHON_QA", message: "Stale Python stop was accepted")
         } catch let error as BridgeFailure where error.code == "PYTHON_TASK_REPLACED" { report["staleGenerationStopRefused"] = true }
+        await reopened.model.runAgain()
+        guard reopened.model.error.isEmpty, reopened.model.selectedTask["running"].bool == true,
+              reopened.model.selectedTask["generation"] != active["generation"],
+              reopened.model.tasks.contains(where: { $0["spec"]["id"] == active["spec"]["id"] && $0["running"].bool == false && $0["code"].number == 0 }) else { throw BridgeFailure(code: "PYTHON_QA", message: "Run again did not wait for normal stop before the new generation") }
+        let restartedID = reopened.model.selectedID
+        reopened.model.selectedID = active["spec"]["id"].string ?? ""
+        await reopened.model.selectTask()
+        try await TerminalSmoke.wait("Replay final cleanup from the old task") { reopened.model.terminal?.text.contains("STOP_CLEANUP") == true }
+        reopened.model.copyOutput()
+        guard NSPasteboard.general.string(forType: .string)?.contains("STOP_CLEANUP") == true else { throw BridgeFailure(code: "PYTHON_QA", message: "Native copy lost retained final output") }
+        report["runAgainWaitedForOldExit"] = true
+        report["normalStopRetainedFinalOutputAndCopy"] = true
+        reopened.model.selectedID = restartedID
+        await reopened.model.selectTask()
         await reopened.model.stop(force: true)
         for _ in 0..<100 {
             await reopened.model.refreshTasks()

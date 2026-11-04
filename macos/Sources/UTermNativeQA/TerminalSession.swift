@@ -20,6 +20,8 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private var applyingReplay = false
     private var entry: CoreSessionEntry
     private let taskGeneration: String?
+    private(set) var taskLogFollowsOutput = true
+    private var applyingTaskLogViewport = false
     var qaRenderDelay: Duration?
     private(set) var qaWaitingToRender = false
     private(set) var qaRenderedBytes = 0
@@ -35,6 +37,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         view = TerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
         super.init()
         view.terminalDelegate = self
+        if taskGeneration != nil { view.allowMouseReporting = false }
     }
     func update(entry: CoreSessionEntry) { self.entry = entry }
     func rebind(_ bridge: CoreBridge) {
@@ -111,6 +114,9 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             guard packet.header.attachment == attachment, packet.header.generation == generation else { return }
         }
         let terminal = view.getTerminal()
+        let pausedAnchor = taskGeneration != nil && !taskLogFollowsOutput
+            ? terminal.buffer.totalLinesTrimmed + terminal.buffer.yDisp : nil
+        if taskGeneration != nil { applyingTaskLogViewport = true }
         if packet.header.reset {
             let intended = desiredSize ?? (terminal.cols, terminal.rows)
             applyingReplay = true
@@ -122,6 +128,14 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             desiredSize = intended
         } else {
             view.feed(byteArray: Array(packet.bytes)[...])
+        }
+        if taskGeneration != nil {
+            if let anchor = pausedAnchor {
+                view.scrollTo(row: max(0, anchor - terminal.buffer.totalLinesTrimmed), notifyAccessibility: false)
+            } else {
+                view.scrollDown(lines: terminal.options.scrollback + terminal.rows)
+            }
+            applyingTaskLogViewport = false
         }
         qaRenderedBytes += packet.bytes.count
         qaRenderedFrames += 1
@@ -215,7 +229,25 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     func send(source: TerminalView, data: ArraySlice<UInt8>) { enqueue(Data(data)) }
     func setTerminalTitle(source: TerminalView, title: String) {}
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
-    func scrolled(source: TerminalView, position: Double) {}
+    func scrolled(source: TerminalView, position: Double) {
+        guard taskGeneration != nil, !applyingTaskLogViewport, position < 1 else { return }
+        let terminal = view.getTerminal()
+        if terminal.getScrollInvariantLine(row: terminal.buffer.totalLinesTrimmed + terminal.rows) != nil {
+            taskLogFollowsOutput = false
+            changed?()
+        }
+    }
+    func followTaskLog(_ follow: Bool) {
+        guard taskGeneration != nil else { return }
+        taskLogFollowsOutput = follow
+        if follow {
+            applyingTaskLogViewport = true
+            let terminal = view.getTerminal()
+            view.scrollDown(lines: terminal.options.scrollback + terminal.rows)
+            applyingTaskLogViewport = false
+        }
+        changed?()
+    }
     func requestOpenLink(source: TerminalView, link: String, params: [String: String]) {
         guard let url = URL(string: link), ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return }
         NSWorkspace.shared.open(url)

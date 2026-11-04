@@ -2903,9 +2903,16 @@ reload and closing prompt before discarding edited configuration. Run saves conf
 starting; Stop/Force stop use the captured task generation. Closing the window detaches without
 stopping its task.
 
-Native log search, explicit follow controls, run-again workflow, file pickers, full settings/menu
-integration and Java/Maven adoption remain pending. The new native window requires its own CI build
-and actual window evidence; its implementation is not platform acceptance.
+The log toolbar uses the pinned terminal library's literal next/previous search and match counter,
+with a native Auto follow checkbox. Scrolling up pauses follow; output continues to be consumed and
+acknowledged while the viewport keeps its buffer-line anchor. Rechecking follow returns to the end.
+**Run again** saves configuration, normally stops only this root's Python task, waits for its exit,
+and starts a new generation; a task still stopping after five seconds requires explicit Force stop.
+Normal stop retains final cleanup output, and copy reports native clipboard failures visibly.
+
+File pickers, full settings/menu integration and Java/Maven adoption remain pending. The new native
+window requires its own CI build and actual window evidence; its implementation is not platform
+acceptance.
 
 The `python-run-v1/configuration.json` format and project-root keys remain unchanged. An OS writer
 lock serializes updated clients before revision checks and atomic replacement; a busy writer
@@ -2923,9 +2930,11 @@ regressions pass locally. This extraction still needs its own Windows/macOS CI a
 acceptance; older Windows framework evidence below is not reused for it.
 `bash scripts/macos-python-smoke.sh` adds actual native menu/window checks for configuration
 conflict, real script output/nonzero exit, detach/replay with the same generation, stale stop
-refusal and force stop, with three screenshots including English/dark and Chinese/light narrow
-windows. The new script and window have not executed locally: this Linux environment has no
-AppKit/Swift toolchain. Manual input/IME and the missing native controls remain unaccepted.
+refusal and force stop, plus search, paused viewport consumption, follow resumption, same-host PID,
+normal-stop final output/copy and run-again ordering. Four screenshots include English/dark, paused
+output and Chinese/light narrow windows. The new script and window have not executed locally: this
+Linux environment has no AppKit/Swift toolchain. Manual input/IME and the missing native controls
+remain unaccepted.
 
 The raw-task replay check uses one ten-second deadline for the complete operation, including each
 receive, and reports the last sequence and actual host task state on failure. Windows replay for

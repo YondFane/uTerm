@@ -150,9 +150,9 @@ resolves the pinned SwiftTerm 1.20.0 dependency; it does not change the legacy t
 Native Python QA: choose **File → Python run…** after selecting a local project or Worktree. The
 native form uses the shared Rust Python service and raw task-output channel. Run
 `bash scripts/macos-python-smoke.sh` in a macOS graphical session for isolated configuration,
-conflict, real-process output, detach/replay and stop checks with screenshots. This requires an
-existing Python 3; it does not install Python or packages. Platform execution remains separately
-recorded in the feature guides.
+conflict, real-process output, detach/replay, search/follow, stop and run-again checks with
+screenshots. This requires an existing Python 3; it does not install Python or packages. Platform
+execution remains separately recorded in the feature guides.
 
 The shared-core command explicitly runs the filesystem-failure case. Unix tests require an
 unprivileged user so directory permissions enforce the failure; Windows uses a held file lease.

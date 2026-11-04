@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import SwiftTerm
 import UTermBridge
 
 struct PythonArgument: Identifiable { let id = UUID(); var text: String }
@@ -23,6 +24,8 @@ final class PythonRunModel: ObservableObject {
     @Published var interpreters: [JSONValue] = []
     @Published var candidates: [JSONValue] = []
     @Published var selectedID = ""
+    @Published var search = ""
+    @Published var searchSummary = ""
     @Published private(set) var terminal: TerminalSession?
     private var revision = ""
     private var polling: Task<Void, Never>?
@@ -107,6 +110,23 @@ final class PythonRunModel: ObservableObject {
         try apply(response)
         feedback = localized("Configuration saved.", "配置已保存。")
     }
+    private func environmentValues() throws -> [String: JSONValue] {
+        var values: [String: JSONValue] = [:]
+        for row in environment {
+            guard values[row.key] == nil else {
+                throw BridgeFailure(code: "PYTHON_ENVIRONMENT_INVALID", message: localized("Environment names must be unique.", "环境变量名称不能重复。"))
+            }
+            values[row.key] = .string(row.value)
+        }
+        return values
+    }
+    private func startSaved(environment: [String: JSONValue]) async throws {
+        let task = try await bridge.call("python.start", params: .object([
+            "directory": .string(directory), "config": try value(formConfig()), "environment": .object(environment)
+        ]))
+        selectedID = task["spec"]["id"].string ?? ""
+        await refreshTasks()
+    }
     func save() async -> Bool {
         guard !busy, !prepared else { return false }
         busy = true; error = ""
@@ -119,20 +139,48 @@ final class PythonRunModel: ObservableObject {
         busy = true; error = ""; feedback = ""
         defer { busy = false }
         do {
-            var values: [String: JSONValue] = [:]
-            for row in environment {
-                guard values[row.key] == nil else {
-                    throw BridgeFailure(code: "PYTHON_ENVIRONMENT_INVALID", message: localized("Environment names must be unique.", "环境变量名称不能重复。"))
-                }
-                values[row.key] = .string(row.value)
-            }
+            let values = try environmentValues()
             try await persist()
-            let task = try await bridge.call("python.start", params: .object([
-                "directory": .string(directory), "config": try value(formConfig()), "environment": .object(values)
-            ]))
-            selectedID = task["spec"]["id"].string ?? ""
-            await refreshTasks()
+            try await startSaved(environment: values)
         } catch { self.error = error.localizedDescription }
+    }
+    func runAgain() async {
+        guard !busy, !prepared else { return }
+        busy = true; error = ""; feedback = ""
+        defer { busy = false }
+        do {
+            let values = try environmentValues()
+            try await persist()
+            if let active = tasks.first(where: { $0["running"].bool == true }) {
+                _ = try await bridge.call("python.stop", params: .object([
+                    "id": active["spec"]["id"], "generation": active["generation"], "force": .bool(false)
+                ]))
+                let deadline = Date().addingTimeInterval(5)
+                while Date() < deadline {
+                    await refreshTasks()
+                    if !running { break }
+                    try await Task.sleep(for: .milliseconds(50))
+                }
+                guard !running else { throw BridgeFailure(code: "PYTHON_STOPPING", message: localized("The task is still stopping. Use Force stop before running again.", "任务仍在停止，请强制停止后再重新运行。")) }
+            }
+            try await startSaved(environment: values)
+        } catch { self.error = error.localizedDescription }
+    }
+    func find(previous: Bool = false) {
+        guard let terminal else { return }
+        if search.isEmpty { terminal.view.clearSearch(); searchSummary = ""; return }
+        terminal.followTaskLog(false)
+        if previous { terminal.view.findPrevious(search) }
+        else { terminal.view.findNext(search) }
+        let result = terminal.view.searchMatchSummary(search)
+        searchSummary = "\(result.index)/\(result.total)"
+    }
+    func copyOutput() {
+        guard let terminal else { return }
+        NSPasteboard.general.clearContents()
+        if NSPasteboard.general.setString(terminal.text, forType: .string) {
+            feedback = localized("Output copied.", "输出已复制。")
+        } else { error = localized("Could not copy retained output.", "无法复制保留的输出。") }
     }
     func stop(force: Bool) async {
         let task = selectedTask
@@ -179,6 +227,7 @@ final class PythonRunModel: ObservableObject {
             log.apply(settings: settings)
             log.changed = { [weak self] in self?.objectWillChange.send() }
             terminal = log
+            searchSummary = ""
             await log.connect(reconnectOnly: true)
             if !log.error.isEmpty { error = log.error }
         } catch { self.error = error.localizedDescription }
@@ -267,6 +316,7 @@ struct PythonRunView: View {
                 Button(localized("Reload saved configuration", "重新读取已保存的配置"), action: reload)
                 Spacer()
                 Button(localized("Run", "运行")) { Task { await model.run() } }.disabled(model.running)
+                Button(localized("Run again", "重新运行")) { Task { await model.runAgain() } }.disabled(model.tasks.isEmpty)
                 Button(localized("Stop", "停止")) { Task { await model.stop(force: false) } }.disabled(model.selectedTask["running"].bool != true)
                 Button(localized("Force stop", "强制停止")) { Task { await model.stop(force: true) } }.disabled(model.selectedTask["running"].bool != true)
             }.disabled(model.busy || model.prepared)
@@ -278,12 +328,20 @@ struct PythonRunView: View {
                 }.onChange(of: model.selectedID) { _, _ in Task { await model.selectTask() } }.disabled(model.busy || model.prepared)
             }
             if let terminal = model.terminal {
+                HStack {
+                    TextField(localized("Search output", "搜索输出"), text: $model.search).onSubmit { model.find() }
+                        .onChange(of: model.search) { _, value in if value.isEmpty { model.find() } }
+                    Button("↑") { model.find(previous: true) }.accessibilityLabel(localized("Previous match", "上一个匹配"))
+                    Button("↓") { model.find() }.accessibilityLabel(localized("Next match", "下一个匹配"))
+                    Text(model.searchSummary).font(.caption)
+                    Toggle(localized("Auto follow", "自动跟随"), isOn: Binding(get: { terminal.taskLogFollowsOutput }, set: { terminal.followTaskLog($0) })).toggleStyle(.checkbox)
+                }
                 PythonLogCanvas(terminal: terminal).id(terminal.attachment).frame(minHeight: 160)
                 HStack {
                     Text(terminal.error).foregroundStyle(.red)
                     Spacer()
                     Button(localized("Copy retained output", "复制保留的输出")) {
-                        NSPasteboard.general.clearContents(); NSPasteboard.general.setString(terminal.text, forType: .string)
+                        model.copyOutput()
                     }
                 }
             } else { Text(localized("No task output yet.", "尚无任务输出。")).frame(maxWidth: .infinity, maxHeight: .infinity) }
