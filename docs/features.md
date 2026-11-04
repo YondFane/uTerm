@@ -2862,6 +2862,9 @@ JDK21, uploading `maven-live-core.json`, toolchain and command logs; source-boun
 are recorded in Issue #37. Its ASCII paths/arguments do not accept the separate Windows JDK8 Unicode
 failure.
 
+The QA Maven installation and dependency cache stay in the runner temporary directory; neither is
+bundled with the application.
+
 ### Task lifetime and validation
 
 Each project root runs one task at a time. Stop requests interruption; Force stop terminates its

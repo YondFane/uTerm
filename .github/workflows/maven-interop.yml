@@ -27,7 +27,6 @@ jobs:
         shell: bash
     env:
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      UTERM_MAVEN_REPOSITORY: ${{ runner.temp }}/uterm-maven-repository
       UTERM_MAVEN_CORE_REPORT: ${{ github.workspace }}/ci-evidence/maven-live-core.json
     steps:
       - uses: actions/checkout@v7
@@ -43,10 +42,6 @@ jobs:
             crates/utermd-local -> target
             crates/uterm-core -> target
           cache-bin: false
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.UTERM_MAVEN_REPOSITORY }}
-          key: maven-3.9.9-boot-2.7.18-${{ runner.os }}-${{ matrix.java }}-${{ hashFiles('tests/fixtures/maven-live/**') }}
       - name: Install verified Maven into the temporary QA directory
         run: |
           python3 - <<'PY'
@@ -63,10 +58,15 @@ jobs:
           assert (home / 'bin/m2.conf').is_file()
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('UTERM_MAVEN_HOME=' + str(home) + '\n')
+              output.write('UTERM_MAVEN_REPOSITORY=' + str(pathlib.Path(os.environ['RUNNER_TEMP']) / 'uterm-maven-repository') + '\n')
           pathlib.Path('ci-evidence').mkdir()
           pathlib.Path('ci-evidence/maven-tool.json').write_text(
               __import__('json').dumps({'version': '3.9.9', 'sha512': expected, 'source': base}, indent=2))
           PY
+      - uses: actions/cache@v4
+        with:
+          path: ${{ env.UTERM_MAVEN_REPOSITORY }}
+          key: maven-3.9.9-boot-2.7.18-${{ runner.os }}-${{ matrix.java }}-${{ hashFiles('tests/fixtures/maven-live/**') }}
       - name: Record source and toolchain
         run: |
           {
