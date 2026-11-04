@@ -2690,7 +2690,9 @@ records `java-live.json`, build/process logs and four actual WindowServer screen
 English/dark and Chinese/light narrow windows. Shell/embedded-driver syntax, the real Java fixture
 and repository format/type/documentation checks pass on Linux. This new window still needs its own
 macOS ARM/Intel CI build and execution; no AppKit runs locally. Manual picker, keyboard/IME and full
-Maven/Java version matrices remain unaccepted.
+Maven/Java version matrices remain unaccepted. The first ARM run passed all Java window scenarios
+but failed a duplicate host-shutdown cleanup; the QA owner now performs that cleanup once, and the
+corrected run still needs its own CI.
 
 The `java-build-v1` configuration and registry formats, defaults and project-root keys stay the
 same. Updated clients share an OS writer lock before configuration CAS or registry replacement;
@@ -2708,10 +2710,12 @@ compiler/archive tools receive a normal Windows working-directory path rather th
 canonical prefix. The Windows JDK archive tool failed before task startup even after normalizing
 that path. The fixture now creates an ASCII archive and renames it to the same
 Unicode/Shell-character filename before the actual shared-host run; literal-path/argument assertions
-remain. Both failures are retained and this correction still needs its own Windows CI. Two Rust
-processes check global/project CAS, an actual OS writer lock, explicit retry, shared registry
-locking and damaged-byte preservation. Existing Maven, archive and source-scan regressions move with
-their implementation. These are fixture checks, not a full real Maven/Spring Boot acceptance.
+remain. Both failures are retained. The renamed fixture now reaches the Windows host but exits 1;
+the check records actual raw output with the exit assertion for diagnosis. Windows remains
+unaccepted. Two Rust processes check global/project CAS, an actual OS writer lock, explicit retry,
+shared registry locking and damaged-byte preservation. Existing Maven, archive and source-scan
+regressions move with their implementation. These are fixture checks, not a full real Maven/Spring
+Boot acceptance.
 
 Run `pnpm test:core` and the frontend suite with `JAVA_HOME` pointing to a JDK 21 and its `bin` on
 `PATH`. CI installs Temurin 21 and uploads `java-live-core.json`, core/frontend logs and toolchain

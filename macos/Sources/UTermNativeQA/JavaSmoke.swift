@@ -113,7 +113,6 @@ enum JavaSmoke {
         try await TerminalSmoke.wait("Force stop Java") { !reopened.model.running }
         report["forceStopCompleted"] = true
         report["temporaryEnvironmentNotSaved"] = (try await bridge.call("java.configuration", params: .object(["directory": .string(root.path)])))["project"]["environment"] == .null
-        _ = try await bridge.call("host.shutdownIdle")
         await reopened.forceClose()
         report["javaCaptures"] = captures
         report["javaInputMethod"] = "Actual NSMenu entry, native bound form state and Core/FFI calls; manual picker/keyboard/IME not accepted"

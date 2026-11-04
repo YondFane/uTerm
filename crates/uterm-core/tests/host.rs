@@ -188,7 +188,12 @@ public class TaskProbe {
             json!({"attachment":"java-replay","action":"ack","sequence":frame.sequence.to_string()}),
         );
         if frame.exited {
-            assert_eq!(frame.code, Some(7));
+            assert_eq!(
+                frame.code,
+                Some(7),
+                "Java task final output: {}",
+                String::from_utf8_lossy(&bytes)
+            );
             break;
         }
     }
