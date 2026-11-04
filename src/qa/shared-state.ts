@@ -818,6 +818,31 @@ async function runInputControl(context: Context) {
     "real terminal running",
   );
   const readonly = () => section.querySelector("[data-terminal-take-control]");
+  const display = () => {
+    const screen = section.querySelector<HTMLElement>(".xterm-screen");
+    const bounds = screen?.getBoundingClientRect();
+    const rows = [...section.querySelectorAll(".xterm-accessibility-tree > div")];
+    return {
+      text: rows.map((row) => row.textContent ?? "").join(""),
+      rows: rows.length,
+      width: bounds?.width ?? 0,
+      height: bounds?.height ?? 0,
+      canvases: [...section.querySelectorAll("canvas")].map((canvas) => ({
+        width: canvas.width,
+        height: canvas.height,
+      })),
+    };
+  };
+  const rendered = async (marker: string) => {
+    try {
+      return await until(() => {
+        const value = display();
+        return value.width > 0 && value.height > 0 && value.text.includes(marker) && value;
+      }, `actual terminal accessibility rows display ${marker}`);
+    } catch (reason) {
+      throw Error(`${String(reason)}; terminal display: ${JSON.stringify(display())}`);
+    }
+  };
   const send = (command: string) => {
     const field = section.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
     assert(field, "Missing actual xterm input field");
@@ -896,14 +921,22 @@ async function runInputControl(context: Context) {
       async () => (await file("owner-input.txt"))?.includes("OWNER_READY"),
       "actual original owner input side effect",
     );
-    await scene("input-owner-ready", { ...identity, actualInput: true });
+    await scene("input-owner-ready", {
+      ...identity,
+      actualInput: true,
+      terminalDisplay: await rendered("OWNER_READY"),
+    });
     await until(readonly, "old owner becomes readonly after viewer takeover");
     sendMarker("STALE_OWNER", "stale-owner.txt");
     await until(
       async () => (await file("viewer-input.txt"))?.includes("VIEWER_READY"),
       "new owner output side effect",
     );
-    await scene("input-owner-readonly", { ...identity, passive: true });
+    await scene("input-owner-readonly", {
+      ...identity,
+      passive: true,
+      terminalDisplay: await rendered("VIEWER_READY"),
+    });
     assert(
       (await file("stale-owner.txt")) === null && (await file("passive-viewer.txt")) === null,
       "Passive UI input reached the real shell",
@@ -933,6 +966,7 @@ async function runInputControl(context: Context) {
       passiveInputRejected: true,
       sameHostAndGeneration: true,
       viewerQuitRetainedProcess: true,
+      terminalDisplay: await rendered("OWNER_RETURNED"),
     });
     const close = document.querySelector<HTMLButtonElement>(".session-close");
     assert(close, "Close Session is unavailable");
@@ -945,7 +979,11 @@ async function runInputControl(context: Context) {
   } else {
     await until(readonly, "second actual application attaches readonly");
     sendMarker("PASSIVE", "passive-viewer.txt");
-    await scene("input-viewer-readonly", { ...identity, passive: true });
+    await scene("input-viewer-readonly", {
+      ...identity,
+      passive: true,
+      terminalDisplay: await rendered("OWNER_READY"),
+    });
     const take = readonly() as HTMLButtonElement;
     assert(take && !take.disabled, "The real take-control button is unavailable");
     take.click();
@@ -964,6 +1002,7 @@ async function runInputControl(context: Context) {
       actualInput: true,
       explicitTakeover: true,
       passiveInputDiscarded: true,
+      terminalDisplay: await rendered("VIEWER_READY"),
     });
   }
   await invoke("qa_request_exit");

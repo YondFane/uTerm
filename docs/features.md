@@ -187,8 +187,13 @@ captures per architecture and the standalone CLI regression. Cloud Linux passed 
 scenes at clean source `d5e56c83ee0479487d6fc735dde49c71648522a1`, including six concurrent
 ownership scenes and cleanupErrors=[]. Windows and transitional macOS use their native screenshot
 tools selected from the Node host platform; their current ownership checks still need successful
-source-matched CI artifacts. Manual keyboard, IME and system-clipboard acceptance remain unexecuted.
-Protocol or build success does not establish those interaction results.
+source-matched CI artifacts. Ownership scenes now also require actual xterm accessibility rows to
+contain the expected shell marker and record terminal/canvas dimensions before capture. At source
+`b7a5e60f6252aab6b829a8e0659a35c8e5509637`, both Tauri reports passed 46 scenes, but visual
+inspection found blank macOS terminal areas; its output-display acceptance remains open pending this
+stronger observation. Windows output was visible. Manual keyboard, IME and system-clipboard
+acceptance remain unexecuted. Protocol or build success does not establish those interaction
+results.
 
 ### Shared saved state
 
