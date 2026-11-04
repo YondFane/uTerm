@@ -169,9 +169,11 @@ reacquisition and exact close, with four WindowServer captures. `pnpm qa:shared-
 concurrent real Tauri processes and six ownership scenes using actual terminal input and takeover
 buttons. The isolated QA build permits concurrent app processes and gives the viewer a separate
 temporary CLI-control endpoint while both processes retain the same shared store, host and session.
-Its compile-gated observer reads the actual Tauri session host, and failure cleanup closes only the
-disposable QA root's exact session generations before idle shutdown. Real native ownership checks
-passed on macOS ARM/Intel at source `670f421354150e112f71d0ac3c94f29681296993` / tested merge
+The Windows fixture explicitly writes UTF-8 marker files through actual PowerShell terminal input,
+matching the text reader without changing the application shell. Its compile-gated observer reads
+the actual Tauri session host, and failure cleanup closes only the disposable QA root's exact
+session generations before idle shutdown. Real native ownership checks passed on macOS ARM/Intel at
+source `670f421354150e112f71d0ac3c94f29681296993` / tested merge
 `c5e4c54dfa4acbe381c64a81b113b4d5c659a97b` (Native run 41818643260), including four WindowServer
 captures per architecture and the standalone CLI regression. Cloud Linux passed all 46 real Tauri
 scenes at clean source `d5e56c83ee0479487d6fc735dde49c71648522a1`, including six concurrent

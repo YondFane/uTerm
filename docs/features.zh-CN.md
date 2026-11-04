@@ -105,7 +105,7 @@ CI 在 Core 测试失败后继续执行独立契约、构建和真实应用检�
 
 `bash scripts/macos-input-control-smoke.sh`
 操作两个同时运行的隔离原生应用进程，检查原生接管按钮、只读输入／resize 拒绝、输出／ack、观察者正常退出、重新接管和准确关闭，并采集四张 WindowServer 截图。`pnpm qa:shared-state`
-包含两个同时运行的真实 Tauri 进程，通过实际终端输入和接管按钮执行六个场景。隔离 QA 构建允许并存应用进程，为观察者分配单独的临时 CLI 控制端点，但两个进程仍连接同一共享存储、宿主和会话。编译隔离的观察器读取 Tauri 实际会话宿主，失败清理只关闭临时 QA 根目录内准确 generation 的会话，再停止空闲宿主。真实原生并存检查已在 macOS
+包含两个同时运行的真实 Tauri 进程，通过实际终端输入和接管按钮执行六个场景。隔离 QA 构建允许并存应用进程，为观察者分配单独的临时 CLI 控制端点，但两个进程仍连接同一共享存储、宿主和会话。Windows 样例通过真实 PowerShell 终端输入明确写出 UTF-8 标记文件，与文本读取器匹配，不更改应用 Shell。编译隔离的观察器读取 Tauri 实际会话宿主，失败清理只关闭临时 QA 根目录内准确 generation 的会话，再停止空闲宿主。真实原生并存检查已在 macOS
 ARM／Intel 通过，对应 source `670f421354150e112f71d0ac3c94f29681296993`／tested merge
 `c5e4c54dfa4acbe381c64a81b113b4d5c659a97b`（Native run
 41818643260），包含每架构四张 WindowServer 截图及独立 CLI 回归。云端 Linux 在干净源码

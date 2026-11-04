@@ -18,6 +18,7 @@ import type {
 interface Context {
   root: string;
   project: string;
+  platform: string;
   phase:
     | "initial"
     | "reopen"
@@ -850,6 +851,17 @@ async function runInputControl(context: Context) {
       throw reason;
     }
   };
+  const sendMarker = (value: string, path: string) => {
+    assert(
+      /^[A-Z_]+$/.test(value) && /^[a-z-]+\.txt$/.test(path),
+      "Only static shell markers are allowed",
+    );
+    send(
+      context.platform === "windows"
+        ? `'${value}' | Set-Content -Encoding UTF8 '${path}'`
+        : `echo ${value} > ${path}`,
+    );
+  };
   const host = async () =>
     (await invoke("qa_host_status")) as {
       pid: number;
@@ -866,14 +878,14 @@ async function runInputControl(context: Context) {
   };
   if (owner) {
     await until(() => !readonly(), "initial owner input");
-    send("echo OWNER_READY > owner-input.txt");
+    sendMarker("OWNER_READY", "owner-input.txt");
     await until(
       async () => (await file("owner-input.txt"))?.includes("OWNER_READY"),
       "actual original owner input side effect",
     );
     await scene("input-owner-ready", { ...identity, actualInput: true });
     await until(readonly, "old owner becomes readonly after viewer takeover");
-    send("echo STALE_OWNER > stale-owner.txt");
+    sendMarker("STALE_OWNER", "stale-owner.txt");
     await until(
       async () => (await file("viewer-input.txt"))?.includes("VIEWER_READY"),
       "new owner output side effect",
@@ -890,7 +902,7 @@ async function runInputControl(context: Context) {
       () => !readonly(),
       "original client explicitly reacquires after ordinary viewer exit",
     );
-    send("echo OWNER_RETURNED > owner-returned.txt");
+    sendMarker("OWNER_RETURNED", "owner-returned.txt");
     await until(
       async () => (await file("owner-returned.txt"))?.includes("OWNER_RETURNED"),
       "input survives the other application's ordinary exit",
@@ -919,13 +931,13 @@ async function runInputControl(context: Context) {
     await scene("input-owner-closed", { ...identity, explicitClose: true });
   } else {
     await until(readonly, "second actual application attaches readonly");
-    send("echo PASSIVE > passive-viewer.txt");
+    sendMarker("PASSIVE", "passive-viewer.txt");
     await scene("input-viewer-readonly", { ...identity, passive: true });
     const take = readonly() as HTMLButtonElement;
     assert(take && !take.disabled, "The real take-control button is unavailable");
     take.click();
     await until(() => !readonly(), "explicit take-control DOM click");
-    send("echo VIEWER_READY > viewer-input.txt");
+    sendMarker("VIEWER_READY", "viewer-input.txt");
     await until(
       async () => (await file("viewer-input.txt"))?.includes("VIEWER_READY"),
       "new owner sends actual terminal input",
