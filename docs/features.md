@@ -170,9 +170,15 @@ concurrent real Tauri processes and six ownership scenes using actual terminal i
 buttons. The isolated QA build permits concurrent app processes and gives the viewer a separate
 temporary CLI-control endpoint while both processes retain the same shared store, host and session.
 Its compile-gated observer reads the actual Tauri session host, and failure cleanup closes only the
-disposable QA root's exact session generations before idle shutdown. These newly added window checks
-are pending platform execution; manual keyboard, IME and system-clipboard acceptance remain
-unexecuted. Successful protocol tests do not establish those platform/interaction results.
+disposable QA root's exact session generations before idle shutdown. Real native ownership checks
+passed on macOS ARM/Intel at source `670f421354150e112f71d0ac3c94f29681296993` / tested merge
+`c5e4c54dfa4acbe381c64a81b113b4d5c659a97b` (Native run 41818643260), including four WindowServer
+captures per architecture and the standalone CLI regression. Cloud Linux passed all 46 real Tauri
+scenes at clean source `d5e56c83ee0479487d6fc735dde49c71648522a1`, including six concurrent
+ownership scenes and cleanupErrors=[]. Windows and transitional macOS use their native screenshot
+tools selected from the Node host platform; their current ownership checks still need successful
+source-matched CI artifacts. Manual keyboard, IME and system-clipboard acceptance remain unexecuted.
+Protocol or build success does not establish those interaction results.
 
 ### Shared saved state
 

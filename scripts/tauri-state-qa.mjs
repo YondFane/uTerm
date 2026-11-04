@@ -231,9 +231,9 @@ try {
       `param([int]$TargetProcessId,[string]$Destination)\nAdd-Type -AssemblyName System.Drawing\nAdd-Type @'\nusing System; using System.Runtime.InteropServices;\npublic class WindowCapture {\n [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }\n [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);\n [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);\n [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);\n}\n'@\n$p = Get-Process -Id $TargetProcessId\n$p.Refresh()\n$handle = $p.MainWindowHandle\nif ($handle -eq [IntPtr]::Zero) { throw 'No native window' }\n[void][WindowCapture]::ShowWindow($handle, 9)\n[void][WindowCapture]::SetForegroundWindow($handle)\nStart-Sleep -Milliseconds 300\n$rect = New-Object WindowCapture+Rect\nif (![WindowCapture]::GetWindowRect($handle,[ref]$rect)) { throw 'GetWindowRect failed' }\n$w=$rect.Right-$rect.Left; $h=$rect.Bottom-$rect.Top\nif ($w -lt 600 -or $h -lt 400) { throw 'Invalid native window dimensions' }\n$image=New-Object System.Drawing.Bitmap($w,$h)\n$g=[System.Drawing.Graphics]::FromImage($image)\ntry { $g.CopyFromScreen($rect.Left,$rect.Top,0,0,$image.Size); $image.Save($Destination,[System.Drawing.Imaging.ImageFormat]::Png) } finally { $g.Dispose(); $image.Dispose() }\n`,
     );
   }
-  function capture(path, process = child) {
+  function capture(path, target = child) {
     if (process.platform === "darwin") {
-      const id = execute(join(root, "window-id"), [String(process.pid)]).trim();
+      const id = execute(join(root, "window-id"), [String(target.pid)]).trim();
       execute("/usr/sbin/screencapture", ["-x", "-o", "-l", id, path]);
     } else if (process.platform === "win32") {
       execute("powershell.exe", [
@@ -243,7 +243,7 @@ try {
         "-File",
         join(root, "capture.ps1"),
         "-TargetProcessId",
-        String(process.pid),
+        String(target.pid),
         "-Destination",
         path,
       ]);
