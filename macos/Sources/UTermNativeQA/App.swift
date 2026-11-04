@@ -647,7 +647,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             finishReport(report, path: path)
         } catch {
             report["failure"] = error.localizedDescription
-            report["terminalDiagnostics"] = model.terminals.values.map { ["id": $0.id, "generation": $0.generation ?? "", "error": $0.error, "exited": $0.exited, "text": String($0.text.suffix(4096))] as [String: Any] }
+            report["terminalDiagnostics"] = model.terminals.values.map { ["id": $0.id, "generation": $0.generation ?? "", "error": $0.error, "exited": $0.exited, "suppressedRendererReplyBytes": $0.qaSuppressedReplyBytes, "text": String($0.text.suffix(4096))] as [String: Any] }
+            if let window {
+                let name = "native-terminal-failure.png"
+                do {
+                    try await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
+                    report["failureCapture"] = name
+                } catch { report["failureCaptureError"] = error.localizedDescription }
+            }
             finishReport(report, path: path)
         }
     }

@@ -185,7 +185,7 @@ enum TerminalSmoke {
         let saved = try Data(contentsOf: file)
         guard saved == Data(expected.utf8) else { throw BridgeFailure(code: "SMOKE_VIM", message: "Vim changed the expected UTF-8 bytes") }
         try saved.write(to: evidence.appendingPathComponent("native-vim-saved.txt"), options: .atomic)
-        report["realVim"] = ["passed": true, "binary": "/usr/bin/vim", "inputDriver": "Native NSEvent keyDown/up, NSTextInputClient.insertText and native paste: target/action", "alternateScreenReturned": true, "nativeTextInput": true, "nativeClipboardPaste": true, "bracketedPasteActive": bracketed, "savedUTF8Bytes": saved.count, "savedFile": "native-vim-saved.txt", "sameGenerationAndView": true, "shellResumed": true, "manualIMEAcceptance": false, "performanceComparison": false] as [String: Any]
+        report["realVim"] = ["passed": true, "binary": "/usr/bin/vim", "inputDriver": "Native NSEvent keyDown/up, NSTextInputClient.insertText and native paste: target/action", "alternateScreenReturned": true, "nativeTextInput": true, "nativeClipboardPaste": true, "bracketedPasteActive": bracketed, "suppressedRendererReplyBytes": terminal.qaSuppressedReplyBytes, "savedUTF8Bytes": saved.count, "savedFile": "native-vim-saved.txt", "sameGenerationAndView": true, "shellResumed": true, "manualIMEAcceptance": false, "performanceComparison": false] as [String: Any]
         return name
     }
 

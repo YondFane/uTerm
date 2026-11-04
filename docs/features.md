@@ -124,8 +124,12 @@ events enter/leave insertion, `NSTextInputClient.insertText` supplies Chinese/co
 emoji and the terminal's native `paste:` action uses the system clipboard. It checks exact saved
 UTF-8 bytes, alternate-screen return and the same terminal view/generation resuming its shell.
 Artifacts include `vim-toolchain.txt`, `native-vim-edit.png`, `native-vim-saved.txt` and the
-`realVim` section of `terminal-live.json`. These new checks await source-bound macOS ARM/Intel CI;
-they are scripted native input, not manual IME, actual Agent CLI or performance acceptance.
+`realVim` section of `terminal-live.json`. The renderer now leaves automatic terminal negotiation
+replies to the shared host, avoiding duplicate replies entering actual TUI input during byte
+feeding; keyboard, paste and native CLI input remain distinct. The first real Vim CI exposed an
+insertion mode timeout; it remains unaccepted pending the corrected source-bound macOS ARM/Intel
+run. Failure artifacts also retain the actual terminal window and reply-byte count. Scripted native
+input does not establish manual IME, actual Agent CLI or performance acceptance.
 
 ### Shared input and size control
 

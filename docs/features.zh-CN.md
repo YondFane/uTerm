@@ -91,8 +91,10 @@ CLI／TUI、人工输入法／剪贴板／鼠标、并存输入／resize 仲裁�
 动作使用系统剪贴板。检查保存文件准确 UTF-8 字节、alternate
 screen 返回及原视图／generation 恢复 Shell。产物包含
 `vim-toolchain.txt`、`native-vim-edit.png`、`native-vim-saved.txt` 和 `terminal-live.json` 中的
-`realVim`。新增检查待对应源码 macOS ARM／Intel
-CI 验证；脚本驱动的原生输入不代表人工输入法、实际 Agent CLI 或性能验收。
+`realVim`。渲染器在消费宿主字节时将自动终端协商回复交由共享宿主，避免重复响应进入实际 TUI 输入；键盘、粘贴及原生 CLI 输入仍独立处理。首次实际 Vim
+CI 暴露插入模式超时，待修正源码的 macOS
+ARM／Intel 验证，暂不计为通过。失败产物也保留实际终端窗口和抑制回复字节数。脚本驱动的原生输入不代表人工输入法、实际 Agent
+CLI 或性能验收。
 
 ### 共享输入与尺寸控制
 

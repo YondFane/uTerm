@@ -24,6 +24,8 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private var desiredSize: (Int, Int)?
     private var reconnecting = false
     private var applyingReplay = false
+    private var feedingHostOutput = false
+    private(set) var qaSuppressedReplyBytes = 0
     private var entry: CoreSessionEntry
     private let taskGeneration: String?
     private(set) var taskLogFollowsOutput = true
@@ -142,13 +144,13 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             applyingReplay = true
             terminal.resetToInitialState()
             terminal.resize(cols: Int(packet.header.cols), rows: Int(packet.header.rows))
-            view.feed(byteArray: Array(packet.bytes)[...])
+            feedFromHost(packet.bytes)
             if inputControl?.owned != false { terminal.resize(cols: intended.0, rows: intended.1) }
             applyingReplay = false
             desiredSize = intended
         } else {
             restorePassiveSize()
-            view.feed(byteArray: Array(packet.bytes)[...])
+            feedFromHost(packet.bytes)
         }
         if previousControl == false && inputControl?.owned == true, let viewportSize {
             applyingReplay = true
@@ -285,7 +287,17 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         Task { await resizeIfNeeded() }
     }
     func rangeChanged(source: TerminalView, startY: Int, endY: Int) {}
-    func send(source: TerminalView, data: ArraySlice<UInt8>) { enqueue(Data(data)) }
+    private func feedFromHost(_ bytes: Data) {
+        feedingHostOutput = true
+        defer { feedingHostOutput = false }
+        view.feed(byteArray: Array(bytes)[...])
+    }
+    func send(source: TerminalView, data: ArraySlice<UInt8>) {
+        // The shared host owns terminal negotiation, including while no view is attached.
+        // 共享宿主负责终端协商，包括没有视图连接时；避免渲染器重复回复污染 TUI 输入。
+        guard !feedingHostOutput else { qaSuppressedReplyBytes += data.count; return }
+        enqueue(Data(data))
+    }
     func setTerminalTitle(source: TerminalView, title: String) {}
     func hostCurrentDirectoryUpdate(source: TerminalView, directory: String?) {}
     func scrolled(source: TerminalView, position: Double) {
