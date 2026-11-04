@@ -4428,6 +4428,10 @@ resizes for the old attachment. Resize errors remain visible in the session.
 
 #### Panel-drag checks on macOS
 
+The App regression freezes periodic timers before mounting so background refreshes cannot count as
+pointer-driven renders. Explicit task-activity updates and timed collapse hints remain checked. The
+focused regression passes on Linux; the corrected timing boundary still needs its own macOS CI.
+
 - App regressions cover frame coalescing without session rerenders on pointer movement, task-state
   updates during a drag, the final release position, cancellation, unmount cleanup, collapse hints,
   navigation-rail reopening and either inspector position. A 60-move regression produces 60 extra
