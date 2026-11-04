@@ -119,6 +119,30 @@ performance, macOS 14 runtime and M3–M5 gates are incomplete. Automatic native
 acceptance; Windows and legacy macOS retain the existing full feature set. See
 [native migration status](native-migration.md) and Issue comments for evidence and unexecuted steps.
 
+### Shared input and size control
+
+The development host/Core assigns one input/resize lease per live session generation. Other
+attachments keep reading and acknowledging output. Explicit takeover revokes previous writes and
+resizes; a late release cannot revoke the new owner or a replacement generation. Releasing or
+closing a client detaches its control without stopping the process. A 30-second lease expires if
+renewal stops; the stream renews every five seconds even while waiting for rendering
+acknowledgement.
+
+A concurrent claim causes a pending read to reread its original cursor with current control state,
+with a bounded retry count. Input is never replayed. Current host support is detected explicitly;
+unmodified old hosts keep their existing behavior and do not gain control arbitration retroactively.
+Rust generates the optional control metadata for Swift/TypeScript; raw terminal bytes and exact u64
+sequence/ack representations remain intact.
+
+Linux checks use a real isolated host, independent TCP/Core clients and a PTY. They cover takeover,
+rejected old input/resize, passive output/ack, late release, stale generation, detach/quit, same
+process/generation reattachment and exact close. A TCP gate delays an old readonly request until
+after takeover and verifies that its response cannot overwrite the new control state. Clock-driven
+policy checks cover expiry/renewal and legacy fallback without waiting for the lease in real time.
+`input-control-host.json`, `input-control-core.json` and test logs retain source/platform metadata;
+CI runs host checks before unrelated Java task checks. These are protocol checks: window takeover
+controls and real macOS/Windows interaction acceptance are still pending in this subrange.
+
 ### Shared saved state
 
 The development client imports workspace and settings data through its existing WebView on first

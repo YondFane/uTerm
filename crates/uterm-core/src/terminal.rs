@@ -4,7 +4,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc, Condvar, Mutex,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use utermd_local::daemon::{Client, Frame, Operation, Reply};
 
@@ -16,7 +16,14 @@ pub struct ActivityEvent {
     pub source: String,
 }
 #[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
+pub struct InputControl {
+    pub owned: bool,
+    pub owner: Option<String>,
+}
+#[derive(serde::Serialize, serde::Deserialize, schemars::JsonSchema)]
 pub struct TerminalHeader {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_control: Option<InputControl>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attachment: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -68,6 +75,13 @@ impl Link {
         self.stopped.load(Ordering::Acquire)
     }
 }
+impl Drop for Link {
+    fn drop(&mut self) {
+        if let Err(error) = self.client.release_control(&self.session, &self.generation) {
+            eprintln!("Input control cleanup: {error:#}");
+        }
+    }
+}
 #[derive(Default)]
 struct Registry {
     links: HashMap<String, Arc<Link>>,
@@ -87,6 +101,13 @@ struct Worker {
 impl Drop for Worker {
     fn drop(&mut self) {
         self.link.stop();
+        if let Err(error) = self
+            .link
+            .client
+            .release_control(&self.link.session, &self.link.generation)
+        {
+            eprintln!("Input control cleanup: {error:#}");
+        }
         let mut state = self
             .links
             .registry
@@ -119,7 +140,8 @@ impl Links {
             .map_err(|e| e.to_string())?
             .links
             .values()
-            .find(|link| link.session == session && !link.stopped())
+            .filter(|link| link.session == session && !link.stopped())
+            .max_by_key(|link| link.client.has_input_control())
             .cloned()
             .ok_or_else(|| "会话尚未连接，请稍后重试。".into())
     }
@@ -182,6 +204,14 @@ impl Links {
                 return Err("Terminal attachment limit reached".into());
             }
         }
+        let task_only = matches!(&operation, Operation::Attach { .. });
+        let client = if task_only {
+            client
+        } else {
+            client
+                .for_view("uTerm")
+                .map_err(|error| format!("{error:#}"))?
+        };
         let generation = match client.request(operation).map_err(|e| format!("{e:#}"))? {
             Reply::Opened { generation } => generation,
             _ => return Err("Invalid session response".into()),
@@ -194,6 +224,21 @@ impl Links {
             pending: Mutex::new(None),
             acknowledged: Condvar::new(),
         });
+        if link
+            .client
+            .claim_control(&link.session, &link.generation, false)
+            .map_err(|error| format!("{error:#}"))?
+            .is_some_and(|status| status.owned)
+        {
+            link.client
+                .request(Operation::Resize {
+                    id: link.session.clone(),
+                    generation: link.generation.clone(),
+                    rows,
+                    cols,
+                })
+                .map_err(|error| format!("{error:#}"))?;
+        }
         {
             let mut state = self.registry.lock().map_err(|e| e.to_string())?;
             if state.closed {
@@ -219,6 +264,7 @@ impl Links {
                 if let Err(error) = stream(&link, &_worker.attachment, &sink) {
                     if !link.stopped() {
                         let frame = Frame {
+                            input_control: None,
                             agent_events: None,
                             agent_activity_error: None,
                             agent_state: None,
@@ -266,6 +312,31 @@ impl Links {
             }
             return Ok(());
         }
+        if action == "takeControl" {
+            if !link.client.supports_input_control() {
+                return Err("SESSION_CONTROL_UNSUPPORTED".into());
+            }
+            link.client
+                .claim_control(&link.session, &link.generation, true)
+                .map_err(|error| format!("{error:#}"))?;
+            if let (Some(rows), Some(cols)) = (rows, cols) {
+                link.client
+                    .request(Operation::Resize {
+                        id: link.session.clone(),
+                        generation: link.generation.clone(),
+                        rows,
+                        cols,
+                    })
+                    .map_err(|error| format!("{error:#}"))?;
+            }
+            return Ok(());
+        }
+        if action == "releaseControl" {
+            return link
+                .client
+                .release_control(&link.session, &link.generation)
+                .map_err(|error| format!("{error:#}"));
+        }
         let id = link.session.clone();
         let generation = link.generation.clone();
         let operation = match action {
@@ -295,6 +366,10 @@ impl Links {
 }
 pub fn encode_frame(frame: &Frame, identity: Option<(&str, &str)>) -> Vec<u8> {
     let metadata = TerminalHeader {
+        input_control: frame.input_control.as_ref().map(|status| InputControl {
+            owned: status.owned,
+            owner: status.owner.clone(),
+        }),
         attachment: identity.map(|v| v.0.to_string()),
         generation: identity.map(|v| v.1.to_string()),
         agent_state: frame.agent_state.clone(),
@@ -328,6 +403,7 @@ pub fn encode_frame(frame: &Frame, identity: Option<(&str, &str)>) -> Vec<u8> {
 }
 fn stream(link: &Link, attachment: &str, sink: &Sink) -> Result<(), String> {
     let mut cursor = None;
+    let mut heartbeat = Instant::now();
     while !link.stopped() {
         let frame = match link
             .client
@@ -360,6 +436,16 @@ fn stream(link: &Link, attachment: &str, sink: &Sink) -> Result<(), String> {
                 .wait_timeout(pending, Duration::from_millis(250))
                 .map_err(|e| e.to_string())?
                 .0;
+            if !link.stopped() && heartbeat.elapsed() >= Duration::from_secs(5) {
+                drop(pending);
+                if link.client.has_input_control() {
+                    link.client
+                        .claim_control(&link.session, &link.generation, false)
+                        .map_err(|error| format!("{error:#}"))?;
+                }
+                heartbeat = Instant::now();
+                pending = link.pending.lock().map_err(|error| error.to_string())?;
+            }
         }
         if exited {
             while !link.stopped() {
@@ -402,6 +488,10 @@ mod tests {
     #[test]
     fn binary_frame_preserves_metadata_and_raw_output() {
         let frame = Frame {
+            input_control: Some(utermd_local::session_control::Status {
+                owned: true,
+                owner: Some("uTerm 中文 e\u{301}".into()),
+            }),
             agent_events: None,
             agent_activity_error: None,
             agent_state: Some("idle".into()),
@@ -447,6 +537,7 @@ mod tests {
                 sequence
             );
             let frame = Frame {
+                input_control: None,
                 sequence,
                 agent_events: Some(vec![utermd_local::activity::ActivityEvent {
                     id: "precision".into(),

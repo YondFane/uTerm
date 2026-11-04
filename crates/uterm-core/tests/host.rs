@@ -56,6 +56,162 @@ impl Drop for HostCleanup {
 }
 
 #[test]
+fn two_core_clients_handoff_input_without_stopping_replay_or_detached_processes() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().canonicalize().unwrap();
+    let _cleanup = HostCleanup(root.join("local-daemon-v1"));
+    let first = Core::open(root.join("shared-state-v1")).unwrap();
+    let second = Core::open(root.join("shared-state-v1")).unwrap();
+    for core in [&first, &second] {
+        call(core, "host.configure", json!({"helper":helper()}));
+    }
+    let (a_send, a_receive) = mpsc::channel();
+    let (b_send, b_receive) = mpsc::channel();
+    first
+        .set_terminal_sink(Arc::new(move |_, generation, frame| {
+            a_send
+                .send((generation.to_owned(), frame))
+                .map_err(|e| e.to_string())
+        }))
+        .unwrap();
+    second
+        .set_terminal_sink(Arc::new(move |_, generation, frame| {
+            b_send
+                .send((generation.to_owned(), frame))
+                .map_err(|e| e.to_string())
+        }))
+        .unwrap();
+    let open = |attachment: &str| json!({"id":"shared-control","attachment":attachment,"directory":root,"shell":"default","rows":24,"cols":80});
+    let generation = call(&first, "terminal.open", open("control-a"))["generation"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let wait_role = |core: &Core,
+                     receive: &mpsc::Receiver<(String, utermd_local::daemon::Frame)>,
+                     attachment: &str,
+                     owned: bool| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let (actual, frame) = receive
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .unwrap();
+            assert_eq!(actual, generation);
+            assert!(frame.error.is_none(), "{:?}", frame.error);
+            call(
+                core,
+                "terminal.action",
+                json!({"attachment":attachment,"action":"ack","sequence":frame.sequence.to_string()}),
+            );
+            if frame
+                .input_control
+                .as_ref()
+                .is_some_and(|status| status.owned == owned)
+            {
+                break frame;
+            }
+        }
+    };
+    let a = wait_role(&first, &a_receive, "control-a", true);
+    assert_eq!(
+        call(&second, "terminal.open", open("control-b"))["generation"],
+        generation
+    );
+    let b = wait_role(&second, &b_receive, "control-b", false);
+    let denied = |core: &Core, attachment: &str| {
+        let error = core
+            .terminal_write(attachment, b"echo DENIED\n")
+            .unwrap_err();
+        assert!(
+            error.message.contains("SESSION_CONTROL_REQUIRED"),
+            "{error:?}"
+        );
+    };
+    denied(&second, "control-b");
+    call(
+        &second,
+        "terminal.action",
+        json!({"attachment":"control-b","action":"takeControl","rows":34,"cols":109}),
+    );
+    let acquired = wait_role(&second, &b_receive, "control-b", true);
+    let revoked = wait_role(&first, &a_receive, "control-a", false);
+    denied(&first, "control-a");
+    call(
+        &first,
+        "terminal.action",
+        json!({"attachment":"control-a","action":"detach"}),
+    );
+    first.close();
+    let observer = Client::connect(&root.join("local-daemon-v1")).unwrap();
+    let before = status(&observer);
+    assert!(before
+        .sessions
+        .iter()
+        .any(|session| session.spec.id == "shared-control" && session.running));
+    second
+        .terminal_write(
+            "control-b",
+            if cfg!(windows) {
+                b"echo HANDOFF_ACCEPTED > handoff.txt\r"
+            } else {
+                b"echo HANDOFF_ACCEPTED > handoff.txt\n"
+            },
+        )
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !root.join("handoff.txt").exists() {
+        assert!(
+            Instant::now() < deadline,
+            "The remaining Core client could not write to its real PTY"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    second.close();
+    let reopened = Core::open(root.join("shared-state-v1")).unwrap();
+    call(&reopened, "host.configure", json!({"helper":helper()}));
+    let (c_send, c_receive) = mpsc::channel();
+    reopened
+        .set_terminal_sink(Arc::new(move |_, generation, frame| {
+            c_send
+                .send((generation.to_owned(), frame))
+                .map_err(|e| e.to_string())
+        }))
+        .unwrap();
+    assert_eq!(
+        call(&reopened, "terminal.open", open("control-c"))["generation"],
+        generation
+    );
+    let reattached = wait_role(&reopened, &c_receive, "control-c", true);
+    assert_eq!(status(&observer).pid, before.pid);
+    call(
+        &reopened,
+        "terminal.action",
+        json!({"attachment":"control-c","action":"close"}),
+    );
+    assert!(!status(&observer)
+        .sessions
+        .iter()
+        .any(|session| session.spec.id == "shared-control"));
+    reopened.close();
+    if let Some(path) = std::env::var_os("UTERM_INPUT_CONTROL_CORE_REPORT") {
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .args(args)
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            String::from_utf8(output.stdout).unwrap().trim().to_owned()
+        };
+        let tested = git(&["rev-parse", "HEAD"]);
+        std::fs::write(path,serde_json::to_vec_pretty(&json!({"passed":true,"platform":std::env::consts::OS,"architecture":std::env::consts::ARCH,
+            "sourceHeadSHA":std::env::var("PR_HEAD_SHA").unwrap_or_else(|_|tested.clone()),"testedMergeSHA":tested,"sourceTreeDirty":!git(&["status","--porcelain","--untracked-files=no"]).is_empty(),
+            "sameGeneration":generation,"frameSequences":[a.sequence.to_string(),b.sequence.to_string(),acquired.sequence.to_string(),revoked.sequence.to_string(),reattached.sequence.to_string()],
+            "passiveWriteRejected":true,"explicitTakeoverUpdatedBothStreams":true,"oldOwnerWriteRejected":true,"oldDetachRetainedNewOwner":true,"realPTYWriteAfterPeerClosed":true,
+            "reopenRetainedGenerationAndHost":true,"reopenAcquiredReleasedControl":true,"explicitCloseTerminatedTarget":true})).unwrap()).unwrap();
+    }
+}
+
+#[test]
 fn java_jar_uses_shared_host_literal_arguments_replay_and_generation_safe_stop() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().canonicalize().unwrap();

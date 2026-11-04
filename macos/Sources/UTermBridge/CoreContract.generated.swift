@@ -233,6 +233,11 @@ public struct CoreImport: Codable, Sendable {
     public var workspace: JSONValue
 }
 
+public struct CoreInputControl: Codable, Sendable {
+    public var owned: Bool
+    public var owner: String?
+}
+
 public struct CoreJavaConfiguration: Codable, Sendable {
     public var configured: Bool
     public var global: CoreJavaMavenConfig
@@ -373,6 +378,7 @@ public struct CoreTerminalHeader: Codable, Sendable {
     public var exited: Bool
     public var foreground_agent: String?
     public var generation: String?
+    public var input_control: CoreInputControl?
     public var reset: Bool
     public var rows: UInt16
     public var sequence: UInt64

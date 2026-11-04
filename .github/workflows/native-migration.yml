@@ -69,8 +69,13 @@ jobs:
         env:
           UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/macos/.build/evidence/terminal-load-core.json
           UTERM_JAVA_CORE_REPORT: ${{ github.workspace }}/macos/.build/evidence/java-live-core.json
+          UTERM_INPUT_CONTROL_REPORT: ${{ github.workspace }}/macos/.build/evidence/input-control-host.json
+          UTERM_INPUT_CONTROL_CORE_REPORT: ${{ github.workspace }}/macos/.build/evidence/input-control-core.json
         run: |
           cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local
+          cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib session_control::tests 2>&1 | tee macos/.build/evidence/session-control-policy-tests.log
+          cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --test daemon session_control_rejects_old_writers_and_sizes_while_both_real_clients_keep_reading 2>&1 | tee macos/.build/evidence/session-control-host-tests.log
+          cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --test daemon delayed_read_cannot_publish_readonly_state_after_the_same_client_takes_control 2>&1 | tee macos/.build/evidence/session-control-race-tests.log
           cargo test --locked --manifest-path crates/uterm-core/Cargo.toml 2>&1 | tee macos/.build/evidence/core-tests.log
           cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test persistence filesystem_failure_preserves_snapshot_and_allows_retry -- --include-ignored 2>&1 | tee macos/.build/evidence/core-io-test.log
           cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test editor_drafts filesystem_failure_preserves_editor_drafts_and_allows_retry -- --include-ignored 2>&1 | tee macos/.build/evidence/editor-io-test.log

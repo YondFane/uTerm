@@ -234,6 +234,11 @@ export interface CoreImport {
   workspace: JSONValue;
 }
 
+export interface CoreInputControl {
+  owned: boolean;
+  owner?: string | null;
+}
+
 export interface CoreJavaConfiguration {
   configured: boolean;
   global: CoreJavaMavenConfig;
@@ -374,6 +379,7 @@ export interface CoreTerminalHeader {
   exited: boolean;
   foreground_agent: string | null;
   generation?: string | null;
+  input_control?: CoreInputControl | null;
   reset: boolean;
   rows: number;
   sequence: bigint;
