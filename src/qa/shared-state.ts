@@ -851,7 +851,7 @@ async function runInputControl(context: Context) {
     }
   };
   const host = async () =>
-    (await coreRequest("host.status")) as unknown as {
+    (await invoke("qa_host_status")) as {
       pid: number;
       sessions: { spec: { id: string }; generation: string }[];
     };

@@ -11,6 +11,19 @@ pub fn cleanup() -> Result<(), String> {
         return Ok(());
     }
     let client = Client::connect(&directory).map_err(|e| e.to_string())?;
+    if let Reply::HostStatus(status) = client
+        .request(Operation::HostStatus)
+        .map_err(|e| e.to_string())?
+    {
+        for session in status.sessions {
+            client
+                .request(Operation::Close {
+                    id: session.spec.id,
+                    generation: session.generation,
+                })
+                .map_err(|e| e.to_string())?;
+        }
+    }
     match client
         .request(Operation::ShutdownIfIdle)
         .map_err(|e| e.to_string())?
@@ -63,6 +76,24 @@ fn check(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         return Err("QA data override was not applied".into());
     }
     Ok(root)
+}
+
+#[tauri::command]
+pub async fn qa_host_status(app: tauri::AppHandle) -> Result<Value, String> {
+    let directory = check(&app)?.join("data/local-daemon-v1");
+    tauri::async_runtime::spawn_blocking(move || {
+        use utermd_local::daemon::{Client, Operation, Reply};
+        let client = Client::connect(&directory).map_err(|error| error.to_string())?;
+        let Reply::HostStatus(status) = client
+            .request(Operation::HostStatus)
+            .map_err(|error| error.to_string())?
+        else {
+            return Err("Unexpected QA host status reply".into());
+        };
+        serde_json::to_value(status).map_err(|error| error.to_string())
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 #[tauri::command]

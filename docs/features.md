@@ -160,9 +160,10 @@ values.
 the native take-control button, passive input/resize rejection, output/ack, ordinary viewer exit,
 reacquisition and exact close, with four WindowServer captures. `pnpm qa:shared-state` includes two
 concurrent real Tauri processes and six ownership scenes using actual terminal input and takeover
-buttons. These newly added window checks are pending platform execution; manual keyboard, IME and
-system-clipboard acceptance remain unexecuted. Successful protocol tests do not establish those
-platform/interaction results.
+buttons. Its compile-gated observer reads the actual Tauri session host, and failure cleanup closes
+only the disposable QA root's exact session generations before idle shutdown. These newly added
+window checks are pending platform execution; manual keyboard, IME and system-clipboard acceptance
+remain unexecuted. Successful protocol tests do not establish those platform/interaction results.
 
 ### Shared saved state
 

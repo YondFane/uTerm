@@ -412,6 +412,8 @@ fn main() {
             #[cfg(feature = "qa")]
             qa::qa_context,
             #[cfg(feature = "qa")]
+            qa::qa_host_status,
+            #[cfg(feature = "qa")]
             qa::qa_external_settings,
             #[cfg(feature = "qa")]
             qa::qa_scene,

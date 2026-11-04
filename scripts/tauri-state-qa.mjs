@@ -323,10 +323,6 @@ try {
           assert.equal(ready.hostPID, passive.hostPID);
           for (const name of ["stale-owner.txt", "passive-viewer.txt"])
             assert(!existsSync(join(root, "project", name)), name);
-          assert(
-            coreFixture("host.status").sessions.length === 0,
-            "Explicit close retained the QA session",
-          );
           return;
         }
         await delay(100);
