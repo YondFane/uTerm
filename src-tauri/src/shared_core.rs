@@ -24,7 +24,7 @@ pub fn shared_core_exit(app: tauri::AppHandle, state: tauri::State<'_, Lifecycle
 
 #[tauri::command]
 pub async fn shared_core_request(app: tauri::AppHandle, request: String) -> Result<String, String> {
-    let operation = crate::content_operations::begin(&app)?;
+    let operation = crate::content_operations::begin_request(&app, &request)?;
     let root = app
         .path()
         .app_data_dir()

@@ -299,9 +299,13 @@ cancel/timeout/closed error without delivering a late success. Read cancellation
 Native favorites use the shared recovery controls described below.
 
 The Tauri backend independently retains queued/running Git, Worktree and local-file writes, plus
-shared-store requests. Normal quit visibly refuses while they run, even if WebView state is lost.
-Final exit and new-operation admission share one lock, preventing a write from starting after exit
-has been approved.
+mutating shared-store requests. Normal quit visibly refuses while they run, even if WebView state is
+lost. Final exit and new-operation admission share one lock, preventing a write from starting after
+exit has been approved. Known read-only queries do not hold the write guard, so a background
+favorite/snapshot reply cannot spuriously refuse the final quit. New or unknown methods remain
+guarded, and approval rejects new requests including reads. A real Core snapshot reply and a
+committed settings write check these distinct lifetimes; the new policy requires its own platform
+CI.
 
 `project.worktrees.refresh` discovers the stored project's repository and atomically updates its
 Worktree list with an expected revision. Both clients use these rules for registered projects: keep
