@@ -2803,23 +2803,24 @@ requires explicit retry. Stale or damaged data is retained. Read-only queries do
 configuration, start a host or occupy the write quit guard. Stop verifies both the task family and
 generation. Saves, registration and task preparation remain protected operations.
 
-For Windows Java steps containing a non-ASCII executable, working directory or argument, the new
-host starts an isolated UTF-8 child and delegates to the selected JDK's own `jli.dll` launcher. The
-host process never loads a JVM. JDK 8 needs a private launcher layout: the runner mirrors the
-selected installed JDK into a task-owned cache using file hardlinks (copies across volumes), then
-runs the manifested child beside those exact runtime files. It does not install/download a JDK or
-modify the selected installation. The mirror is bounded to 32,768 entries, 2 GiB and 32 directory
-levels and rejects reparse points. Parent/child shared locks protect live caches; normal completion
-removes the cache, and a later launch reclaims released orphan caches older than one minute. Windows
-regressions check live-owner exclusion, orphan cleanup, depth rejection and source retention. The
-JDK 8 child also explicitly passes a UTF-8 `sun.jnu.encoding` property because that JDK derives it
-from the system locale independently of the process code page; application file encoding remains
-configurable. A bounded anonymous stdin pipe carries literal arguments; no argument/environment file
-or shell interpolation is introduced. The child retains the task console and process-tree lifetime,
-then returns the actual JVM exit code. ASCII steps retain direct Java launching. New Windows Java
-tasks require the helper's UTF-8-launch capability; an older active helper reports an upgrade
-requirement without killing its existing sessions/tasks. The Unicode route needs Windows per-process
-UTF-8 support and a JDK matching the child architecture.
+For Windows Java steps containing a non-ASCII executable, working directory or argument, or an
+argument with embedded double quotes or an empty value, the new host starts an isolated UTF-8 child
+and delegates to the selected JDK's own `jli.dll` launcher. The host process never loads a JVM. JDK
+8 needs a private launcher layout: the runner mirrors the selected installed JDK into a task-owned
+cache using file hardlinks (copies across volumes), then runs the manifested child beside those
+exact runtime files. It does not install/download a JDK or modify the selected installation. The
+mirror is bounded to 32,768 entries, 2 GiB and 32 directory levels and rejects reparse points.
+Parent/child shared locks protect live caches; normal completion removes the cache, and a later
+launch reclaims released orphan caches older than one minute. Windows regressions check live-owner
+exclusion, orphan cleanup, depth rejection and source retention. The JDK 8 child also explicitly
+passes a UTF-8 `sun.jnu.encoding` property because that JDK derives it from the system locale
+independently of the process code page; application file encoding remains configurable. A bounded
+anonymous stdin pipe carries literal arguments; no argument/environment file or shell interpolation
+is introduced. The child retains the task console and process-tree lifetime, then returns the actual
+JVM exit code. Simple ASCII steps without embedded quotes or empty arguments retain direct Java
+launching. New Windows Java tasks require the helper's UTF-8-launch capability; an older active
+helper reports an upgrade requirement without killing its existing sessions/tasks. The Unicode route
+needs Windows per-process UTF-8 support and a JDK matching the child architecture.
 
 `bash scripts/macos-java-smoke.sh` uses JDK 21 to build a disposable JAR and operate the actual
 native menu/window. Native ARM/Intel configuration, conflict, output, search/copy/follow,
