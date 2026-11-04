@@ -120,6 +120,9 @@ export function parseJavaEnvironment(text: string): Record<string, string> {
 export function javaError(reason: unknown): string {
   const value = String(reason);
   const errors: Record<string, string> = {
+    JAVA_UTF8_HOST_UPGRADE_REQUIRED: tx(
+      "后台服务需要升级。请先关闭现有会话，再重新打开应用；已有进程未被终止。",
+    ),
     JAVA_HOST_UPGRADE_REQUIRED: tx(
       "后台服务需要升级。请先关闭现有会话，再重新打开应用；已有进程未被终止。",
     ),

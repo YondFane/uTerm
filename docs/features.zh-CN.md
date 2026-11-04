@@ -1605,33 +1605,38 @@ SHA-512 校验 Maven，再记录 SHA-256。
 ### 共享 Java 服务验证
 
 开发中的 `uterm-core::java`
-管理既有 Java／Maven 配置、JDK 注册与探测、有界 POM／主类扫描、Wrapper 解析和任务启动规则。Tauri 只保留 IPC、原生选择器、变更通知及应用数据／helper 适配。版本化
-`java.*` Core／FFI 和生成的 TypeScript／Swift
-DTO 使用同一服务。在原生 QA 应用选择本地项目或 Worktree，通过**文件 →
-Java 构建与运行…**打开窗口。原生表单编辑共用模块／JDK、全局／项目 Maven 设置、Profile 及字面 JVM／应用参数；临时环境不保存。提供打包／测试／安装／运行、任务历史、只读搜索／复制／跟随日志、停止／强制停止及有序重新运行。配置保存固定已读 revision，冲突时保留草稿。关闭前提示未保存配置并只分离任务；正常退出拒绝忙碌运行操作。原生路径选择器选择 JDK／Maven 路径或项目内 JAR。
+负责既有 Java／Maven 配置、JDK 注册与检测、有界 POM／主类扫描、Wrapper 解析和任务启动规则。版本化
+`java.*` Core／FFI 调用及生成的 TypeScript／Swift
+DTO 共用该服务。Tauri 保留 IPC、原生选择器、变更通知和应用目录／helper 适配。
 
-`bash scripts/macos-java-smoke.sh` 使用 JDK
-21 构建临时 JAR，打开实际原生菜单／窗口，检查注册、冲突、字面数据／非零退出收尾、暂停／跟随、复制、同宿主／generation 重连、过期停止、有序重新运行及强制停止清理。保存
-`java-live.json`、构建／进程日志和四张真实 WindowServer 截图，覆盖英文深色与中文浅色窄窗。Shell／内嵌驱动语法、真实 Java 样例及仓库格式／类型／文档检查在 Linux 通过。新窗口仍需自己的 macOS
-ARM／Intel
-CI 构建运行，本地没有 AppKit。人工选择器、键盘／IME 及完整 Maven／Java 版本矩阵仍未验收。首次 ARM 运行的全部 Java 窗口场景通过，但重复宿主关闭的清理失败；改由 QA 所有者单独清理一次，修正后仍需自己的 CI。失败产物保留以供核查。
+在原生 QA 应用选择本地项目或 Worktree，再通过**文件 →
+Java 构建与运行…**打开窗口，编辑模块／JDK、全局／项目 Maven 配置、profiles 及字面 JVM／应用参数；临时环境变量不保存。窗口提供打包／测试／安装／运行、任务历史、只读搜索／复制／跟随日志、停止／强制停止及有序重新运行。保存固定已读取 revision，冲突时保留草稿。关闭会提示未保存配置并分离任务；正常退出会拒绝忙碌运行操作。选择器可选 JDK／Maven 路径或项目内 JAR。
 
 `java-build-v1`
-配置和注册表格式、默认值及项目根目录键保持一致。更新客户端在配置 CAS 或注册表替换前共用 OS 写锁；写入占用需明确重试。过期或损坏配置保留原文。读取默认值／任务不会创建配置或启动宿主。Java 停止先核对实际任务族与 generation，再请求宿主停止。Java 只读查询不占用待完成写入的退出保护；保存、JDK 注册和任务准备仍受保护。
+配置／注册表格式、默认值及根目录键保持。更新后的客户端在配置 CAS 或注册表替换前获取系统写锁；争用需明确重试，过期或损坏数据保留。只读查询不创建配置、不启动宿主，也不占用写入退出保护。停止同时校验任务族和 generation。保存、注册及任务准备继续受保护。
 
-Linux x86_64 使用 Temurin JDK
-21.0.13 编译打包临时 JAR，通过真实共享 Core 和隔离宿主启动，验证 Unicode 与字面／空参数、临时环境／JVM 属性、两个输出流的末尾内容、退出码 7、相同 generation 重连／ack、过期及跨任务族停止拒绝、强制停止清理与空闲宿主退出。无效 Wrapper 配合离线模式证明已有 JAR 绕过 Maven 解析。样例编译／归档工具使用标准 Windows 工作目录路径，而非 Rust 扩展规范前缀。标准化该路径后 Windows
-JDK 归档工具仍在任务启动前失败。样例改为创建 ASCII 归档，再重命名为相同 Unicode／Shell 字符文件名，之后通过实际共享宿主运行；保留字面路径／参数断言。两次失败均保留。重命名后的样例已进入 Windows 宿主，但退出码为 1；原始输出证实 Windows 启动器将文件名中文转换为
-`??`。`java-launcher-probe.json`
-对比直接参数与 UTF-8 参数文件方式，包含 Unicode 参数及 JVM 属性和准确源码／工具链信息。此产物为诊断证据，不代表任务或平台验收。参数文件以换行结束，保留最后一个空参数；另用 premain 编码探针对比启动器初始化，不将该探针作为应用行为交付。Windows 仍未验收。两个 Rust 进程检查全局／项目 CAS、实际 OS 写锁、明确重试、注册表共用锁及损坏原文保留。既有 Maven、归档和源码扫描回归随实现迁入。这些为临时样例检查，不代表完整真实 Maven／Spring
-Boot 验收。
+Windows
+Java 步骤的程序、工作目录或参数包含非 ASCII 字符时，新宿主启动隔离 UTF-8 子进程，委托所选 JDK 自身的
+`jli.dll` 启动器执行，宿主进程不加载 JVM。JDK
+8 需要独立启动目录布局：执行器通过文件硬链接（跨卷时复制）将所选已安装 JDK 镜像到任务专属缓存，在这些准确运行文件旁启动带 manifest 的子进程，不安装／下载 JDK，也不修改所选安装。镜像上限为 32,768 项、2
+GiB 和 32 层目录，拒绝 reparse
+points。父／子进程共用读锁保护活动缓存；正常结束移除缓存，之后启动会清理超过一分钟且已释放的孤立缓存。Windows 回归检查活动所有者保护、孤立清理、深度拒绝及原文件保留。有界匿名 stdin 管道传递字面参数，不增加参数／环境文件或 Shell 插值。子进程保留任务控制台和进程树生命周期，返回实际 JVM 退出码。ASCII 步骤保留直接 Java 启动。新的 Windows
+Java 任务要求 helper 的 UTF-8 启动能力；旧活动 helper 会提示升级，不终止已有会话／任务。Unicode 路径需要 Windows 的进程 UTF-8 支持，JDK 架构须与子进程匹配。
 
-classpath 与 manifest
-helper 诊断方式区分 VM 启动前的原生 JAR 读取与 Java 层类加载，仍未交付兼容性修复。
+`bash scripts/macos-java-smoke.sh` 使用 JDK
+21 编译临时 JAR，操作真实原生菜单／窗口。原生 ARM／Intel 的配置、冲突、输出、搜索／复制／跟随、重连、停止／重新运行和清理证据记录在对应源码的报告和每架构四张 WindowServer 截图中；已验收基线与 artifact 链接见 Issue
+#37。人工系统选择器、键盘及输入法验收仍未执行。
 
-运行 `pnpm test:core` 及前端套件时，`JAVA_HOME` 指向 JDK 21，其 `bin` 加入 `PATH`。CI 安装 Temurin
-21，上传 `java-live-core.json`、Core／前端日志及工具链信息。Java 迁移仍需自己的 macOS／Windows
-CI 和原生窗口截图；本地报告明确标记工作区含未提交改动，不宣称已经通过提交对应 CI。本地 Core／FFI、宿主及后端套件通过（84 项后端通过、九项忽略），前端 400 项通过、十项可选／平台检查跳过。TypeScript／生产及桌面构建、生成契约漂移、格式、国际化和文档检查通过。
+真实 Core／宿主样例检查 Unicode
+JAR 文件名、Unicode／emoji／引号／通配符／结尾反斜线及空参数、临时环境／JVM 属性、两路最终输出、退出码 7、同 generation 回放／ack、过期／跨任务族停止拒绝、强制停止与宿主清理。无效的离线 Wrapper 证明运行已有 JAR 会绕过 Maven 解析。`jar cfe`
+先创建 ASCII 归档，再重命名为原 Unicode 文件名，使同一样例可用于 JDK
+8／11／17／21。两个 Rust 进程检查全局／项目 CAS、实际写锁争用、明确重试、注册表锁及损坏原文保留。
+
+运行 `pnpm test:core` 和前端检查时，将 `JAVA_HOME` 指向 JDK 21，并把其 `bin` 加入
+`PATH`。Java 互操作 workflow 在 JDK 8／11／17／21 上运行实际 Windows 宿主，上传
+`java-live-core.json`、源码／工具链信息及专项日志。新的 Unicode 启动路径已通过 Linux 回归及 Windows 目标 Rust 类型检查，真实 Windows 执行仍待完成，矩阵通过后才能验收。`java-launcher-probe.json`
+仍仅为诊断证据。完整真实 Maven／Spring
+Boot 工作流及平台／人工验收尚未完成，编译或 JAR 样例通过不能替代这些结果。
 
 ### 任务生命周期与验证
 

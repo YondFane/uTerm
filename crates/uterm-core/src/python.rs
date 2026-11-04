@@ -580,6 +580,7 @@ pub fn build_launch(
             directory,
             environment,
             label: format!("Python · {}", config.mode),
+            windows_java_utf8: false,
             jar_directory: None,
         }],
     };

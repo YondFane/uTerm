@@ -219,8 +219,10 @@ fn java_jar_uses_shared_host_literal_arguments_replay_and_generation_safe_stop()
     let host_root = root.join("local-daemon-v1");
     let _cleanup = HostCleanup(host_root.clone());
     call(&core, "host.configure", json!({"helper":helper()}));
-    let java_home =
-        PathBuf::from(std::env::var_os("JAVA_HOME").expect("JAVA_HOME must point to JDK 21"));
+    let java_home = PathBuf::from(
+        std::env::var_os("JAVA_HOME")
+            .expect("JAVA_HOME must point to a supported JDK 8, 11, 17 or 21"),
+    );
     let tool = |name: &str| {
         java_home.join("bin").join(if cfg!(windows) {
             format!("{name}.exe")
@@ -261,10 +263,8 @@ public class TaskProbe {
     run(
         "jar",
         &[
-            "--create",
-            "--file",
+            "cfe",
             "target/fixture.jar",
-            "--main-class",
             "TaskProbe",
             "-C",
             "target",
@@ -286,11 +286,13 @@ public class TaskProbe {
     let mut config =
         call(&core, "java.configuration", json!({"directory":root}))["project"].clone();
     config["java_home"] = json!(java_home);
+    config["java_version"] = json!(uterm_core::java::probe(&java_home).unwrap().version);
     config["mode"] = json!("jar");
     config["jar"] = json!("target/literal 中文 & %.jar");
     config["offline"] = json!(true);
-    config["arguments"] = json!(["literal & %PATH%", ""]);
-    config["vm_arguments"] = json!(["-Dqa.value=property & %PATH%"]);
+    let literal = "中文😀 & %PATH% * \" \\";
+    config["arguments"] = json!([literal, ""]);
+    config["vm_arguments"] = json!(["-Dqa.value=属性 & %PATH%"]);
     let start = |config: &Value| {
         call(
             &core,
@@ -353,9 +355,21 @@ public class TaskProbe {
             break;
         }
     }
+    if cfg!(windows) {
+        assert!(
+            !std::fs::read_dir(&host_root).unwrap().any(|entry| entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .starts_with("java-utf8-jdk8-")),
+            "A normally completed Java task must release its launcher cache"
+        );
+    }
     let text = String::from_utf8(bytes).unwrap();
     assert!(
-        text.contains("READY:literal & %PATH%:环境 & %PATH%:property & %PATH%:empty=true"),
+        text.contains(&format!(
+            "READY:{literal}:环境 & %PATH%:属性 & %PATH%:empty=true"
+        )),
         "{text}"
     );
     assert!(
@@ -363,7 +377,7 @@ public class TaskProbe {
         "{text}"
     );
     assert!(first.sequence <= *sequences.last().unwrap());
-    config["arguments"] = json!(["literal & %PATH%", "", "wait"]);
+    config["arguments"] = json!([literal, "", "wait"]);
     let live = start(&config);
     let request = |method: &str, generation: &str| {
         core.execute(&serde_json::to_vec(&json!({"version":1,"id":"java-stop","method":method,"params":{"id":live["spec"]["id"],"generation":generation,"force":true}})).unwrap())
@@ -462,7 +476,7 @@ public class TaskProbe {
             "sourceTreeDirty":!git(&["status","--porcelain","--untracked-files=no"]).is_empty(),
             "platform":std::env::consts::OS,"architecture":std::env::consts::ARCH,"java":String::from_utf8_lossy(&java_version.stderr),
             "exitCode":7,"output":text,"generation":task["generation"],"sequences":sequences.iter().map(u64::to_string).collect::<Vec<_>>(),
-            "literalArgumentsEnvironmentAndVmProperty":true,"emptyArgumentPreserved":true,"invalidWrapperBypassedForExistingJar":true,
+            "normalLauncherCacheReleased":true,"literalArgumentsEnvironmentAndVmProperty":true,"unicodeQuotesWildcardAndTrailingSlashPreserved":true,"emptyArgumentPreserved":true,"invalidWrapperBypassedForExistingJar":true,
             "detachReattachSameGeneration":true,"staleStopRefused":true,"pythonStopRefused":true,"javaStopRefusedPythonTask":true,"forceStopCleanedTask":true,"hostCleanedUp":true
         })).unwrap()).unwrap();
     }
@@ -1106,6 +1120,18 @@ fn immutable_release_host_preserves_real_binary_replay_and_upgrades_only_after_c
     );
     assert_eq!(attached["generation"], generation);
     assert_eq!(status(&old).pid, before.pid);
+    if cfg!(windows) {
+        assert!(old
+            .require_java_utf8_support()
+            .unwrap_err()
+            .to_string()
+            .contains("JAVA_UTF8_HOST_UPGRADE_REQUIRED"));
+        assert_eq!(
+            status(&old).pid,
+            before.pid,
+            "Unsupported new Java launch must not restart an active old host"
+        );
+    }
     let command = if cfg!(windows) {
         b"set UTERM_REFERENCE_SUFFIX=READY\recho UTERM_REFERENCE_%UTERM_REFERENCE_SUFFIX%\r"
             .as_slice()

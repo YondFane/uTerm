@@ -2733,65 +2733,61 @@ Apache's SHA-512 before recording SHA-256.
 ### Shared Java service validation
 
 The development `uterm-core::java` service owns the existing Java/Maven configuration, JDK registry
-and probing, bounded POM/main-class discovery, Wrapper resolution and task launch rules. Tauri
-retains IPC, native pickers, change notifications and app-data/helper adapters. Versioned `java.*`
-Core/FFI calls and generated TypeScript/Swift DTOs use this service. Select a local project or
-Worktree in the native QA app, then choose **File → Java build and run…**. Its native window edits
-the shared module/JDK, global/project Maven settings, profiles and literal JVM/application
-arguments; temporary environment values are never saved. It offers Package/Test/ Install/Run, task
-history, readonly search/copy/follow logs, Stop/Force stop and ordered Run again. Configuration save
-pins the loaded revision and retains conflicting drafts. Closing prompts for unsaved configuration
-and detaches tasks; normal quit refuses busy run operations. Native path pickers select the
-JDK/Maven paths or a JAR inside the project.
+and probing, bounded POM/main-class discovery, Wrapper resolution and task launch rules. Versioned
+`java.*` Core/FFI calls and generated TypeScript/Swift DTOs share this service. Tauri retains IPC,
+native pickers, change notifications and app-data/helper adapters.
 
-`bash scripts/macos-java-smoke.sh` uses JDK 21 to build a disposable JAR, opens the actual native
-menu/window, and checks registration, conflicts, literal data/nonzero final output, pause/follow,
-copy, same-host/generation reattachment, stale stop, ordered rerun and force-stop cleanup. It
-records `java-live.json`, build/process logs and four actual WindowServer screenshots across
-English/dark and Chinese/light narrow windows. Shell/embedded-driver syntax, the real Java fixture
-and repository format/type/documentation checks pass on Linux. This new window still needs its own
-macOS ARM/Intel CI build and execution; no AppKit runs locally. Manual picker, keyboard/IME and full
-Maven/Java version matrices remain unaccepted. The first ARM run passed all Java window scenarios
-but failed a duplicate host-shutdown cleanup; the QA owner now performs that cleanup once, and the
-corrected run still needs its own CI. Failed artifacts remain available for inspection.
+Select a local project or Worktree in the native QA app, then choose **File → Java build and run…**.
+The native window edits module/JDK, global/project Maven settings, profiles and literal
+JVM/application arguments; temporary environment values are never saved. It offers Package/Test/
+Install/Run, task history, readonly search/copy/follow logs, Stop/Force stop and ordered Run again.
+Saving pins the loaded revision and retains conflicting drafts. Closing prompts for unsaved
+configuration and detaches tasks; normal quit refuses busy run operations. Pickers select JDK/Maven
+paths or a JAR inside the project.
 
-The `java-build-v1` configuration and registry formats, defaults and project-root keys stay the
-same. Updated clients share an OS writer lock before configuration CAS or registry replacement;
-writer contention requires explicit retry. Stale or damaged configuration is preserved. Reading
-defaults/tasks does not create configuration or start a host. Java stop checks the actual task
-family and generation before asking the host to stop it. Read-only Java queries do not occupy the
-pending-write quit guard; saves, JDK registration and task preparation remain protected.
+The `java-build-v1` configuration/registry formats, defaults and root keys stay unchanged. Updated
+clients acquire an OS writer lock before configuration CAS or registry replacement; contention
+requires explicit retry. Stale or damaged data is retained. Read-only queries do not create
+configuration, start a host or occupy the write quit guard. Stop verifies both the task family and
+generation. Saves, registration and task preparation remain protected operations.
 
-Linux x86_64 checks use Temurin JDK 21.0.13 to compile and package a disposable JAR, then start it
-through the actual shared Core and isolated host. They verify Unicode and literal/empty arguments,
-temporary environment/JVM properties, both final output streams, exit code 7, same-generation
-reattachment/ack, stale and cross-family stop rejection, force-stop cleanup and idle host shutdown.
-An invalid Wrapper with offline mode proves existing-JAR runs bypass Maven resolution. Fixture
-compiler/archive tools receive a normal Windows working-directory path rather than Rust's extended
-canonical prefix. The Windows JDK archive tool failed before task startup even after normalizing
-that path. The fixture now creates an ASCII archive and renames it to the same
-Unicode/Shell-character filename before the actual shared-host run; literal-path/argument assertions
-remain. Both failures are retained. The renamed fixture now reaches the Windows host but exits 1;
-the raw output confirms that the Windows launcher converted Chinese filename characters to `??`.
-`java-launcher-probe.json` compares direct and UTF-8 argument-file delivery, including a Unicode
-argument and JVM property, with exact source/toolchain metadata. It is diagnostic evidence and does
-not accept a task or platform. Argument files end with a newline to preserve a final empty argument;
-a separate premain encoding probe checks launcher initialization without shipping that probe as
-application behavior. Windows remains unaccepted. Two Rust processes check global/project CAS, an
-actual OS writer lock, explicit retry, shared registry locking and damaged-byte preservation.
-Existing Maven, archive and source-scan regressions move with their implementation. These are
-fixture checks, not a full real Maven/Spring Boot acceptance.
+For Windows Java steps containing a non-ASCII executable, working directory or argument, the new
+host starts an isolated UTF-8 child and delegates to the selected JDK's own `jli.dll` launcher. The
+host process never loads a JVM. JDK 8 needs a private launcher layout: the runner mirrors the
+selected installed JDK into a task-owned cache using file hardlinks (copies across volumes), then
+runs the manifested child beside those exact runtime files. It does not install/download a JDK or
+modify the selected installation. The mirror is bounded to 32,768 entries, 2 GiB and 32 directory
+levels and rejects reparse points. Parent/child shared locks protect live caches; normal completion
+removes the cache, and a later launch reclaims released orphan caches older than one minute. Windows
+regressions check live-owner exclusion, orphan cleanup, depth rejection and source retention. A
+bounded anonymous stdin pipe carries literal arguments; no argument/environment file or shell
+interpolation is introduced. The child retains the task console and process-tree lifetime, then
+returns the actual JVM exit code. ASCII steps retain direct Java launching. New Windows Java tasks
+require the helper's UTF-8-launch capability; an older active helper reports an upgrade requirement
+without killing its existing sessions/tasks. The Unicode route needs Windows per-process UTF-8
+support and a JDK matching the child architecture.
 
-Classpath and manifest-helper diagnostic variants separate native pre-VM JAR reads from Java-level
-class loading. They do not ship a compatibility fix.
+`bash scripts/macos-java-smoke.sh` uses JDK 21 to build a disposable JAR and operate the actual
+native menu/window. Native ARM/Intel configuration, conflict, output, search/copy/follow,
+reattachment, stop/rerun and cleanup evidence is recorded with source-bound reports and four
+WindowServer screenshots per architecture; accepted baselines and artifact links are in Issue #37.
+Manual system-picker, keyboard and IME acceptance remain unexecuted.
 
-Run `pnpm test:core` and the frontend suite with `JAVA_HOME` pointing to a JDK 21 and its `bin` on
-`PATH`. CI installs Temurin 21 and uploads `java-live-core.json`, core/frontend logs and toolchain
-metadata. The Java migration and native window still need their own macOS/Windows CI and
-screenshots; local reports mark the dirty source tree explicitly rather than claiming a committed CI
-pass. Local Core/FFI, host and backend suites pass (84 backend checks, nine ignored); frontend
-checks pass 400 with ten optional/platform checks skipped. TypeScript/production and desktop builds,
-generated-contract drift, formatting, localization and documentation checks pass.
+The real Core/host fixture checks a Unicode JAR filename, Unicode/emoji/quotes/wildcard/trailing
+backslash and empty arguments, temporary environment/JVM properties, both final streams, exit code
+7, same-generation replay/ack, stale/cross-family stop refusal, force stop and host cleanup. An
+invalid offline Wrapper proves existing-JAR execution bypasses Maven resolution. `jar cfe` creates
+an ASCII archive before renaming it to the original Unicode filename, allowing the same fixture to
+run on JDK 8/11/17/21. Two Rust processes check global/project CAS, actual writer contention,
+explicit retry, registry locking and damaged-byte retention.
+
+Run `pnpm test:core` and frontend checks with `JAVA_HOME` pointing to JDK 21 and its `bin` on
+`PATH`. The Java interoperability workflow runs the actual Windows host on JDK 8/11/17/21 and
+uploads `java-live-core.json`, source/toolchain data and targeted logs. The new Unicode launch route
+has passed Linux regressions and a Windows-target Rust type check; actual Windows execution is still
+pending and must pass its matrix before acceptance. `java-launcher-probe.json` remains diagnostic
+evidence. Full real Maven/Spring Boot workflows and platform/manual acceptance remain incomplete;
+successful compilation or a JAR fixture does not establish those results.
 
 ### Task lifetime and validation
 

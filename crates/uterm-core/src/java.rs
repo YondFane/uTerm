@@ -1064,6 +1064,7 @@ fn existing_jar_step(
         directory: module.into(),
         environment,
         label: "Spring Boot JAR run".into(),
+        windows_java_utf8: cfg!(windows),
         jar_directory: None,
     })
 }
@@ -1136,6 +1137,7 @@ pub fn build_launch(
         directory: root.clone(),
         environment: environment.clone(),
         label: label.into(),
+        windows_java_utf8: cfg!(windows),
         jar_directory: None,
     };
     let mut reactor_arguments = common_options.clone();
@@ -1180,6 +1182,7 @@ pub fn build_launch(
             label: "Spring Boot JAR run".into(),
             // The runner resolves the final artifact after packaging, without a shell glob.
             // 执行器在打包完成后解析最终产物，不通过 Shell 通配符查找。
+            windows_java_utf8: cfg!(windows),
             jar_directory: Some(module.join("target")),
         };
         steps.push(step);
@@ -1489,6 +1492,9 @@ pub fn tasks(host_root: &Path, directory: &str) -> Result<Vec<TaskSession>> {
 pub fn start(client: &Client, prepared: (TaskInfo, Launch)) -> Result<TaskSession> {
     client.require_task_support()?;
     client.require_task_output_support()?;
+    if cfg!(windows) {
+        client.require_java_utf8_support()?;
+    }
     let (task, launch) = prepared;
     let spec = SessionSpec {
         id: uuid::Uuid::new_v4().to_string(),

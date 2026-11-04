@@ -1,3 +1,6 @@
 fn main() {
-    tauri_build::build();
+    let windows = tauri_build::WindowsAttributes::new()
+        .app_manifest(include_str!("../shared/windows/application.manifest"));
+    tauri_build::try_build(tauri_build::Attributes::new().windows_attributes(windows))
+        .expect("Tauri build failed");
 }

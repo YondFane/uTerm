@@ -386,6 +386,7 @@ fn normal_stop_waits_for_child_cleanup_and_force_stop_remains_available() {
                 ),
             ]),
             label: "Task cleanup".into(),
+            windows_java_utf8: false,
             jar_directory: None,
         };
         let next_step = Step {
@@ -628,6 +629,7 @@ fn python_tasks_stream_reconnect_and_terminate_web_reload_children() {
                             ("PYTHONUNBUFFERED".into(), "1".into()),
                         ]),
                         label: format!("Python {mode}"),
+                        windows_java_utf8: false,
                         jar_directory: None,
                     }],
                 },
@@ -774,6 +776,7 @@ fn completed_task_drains_both_streams_before_publishing_exit() {
                     directory: root,
                     environment: Default::default(),
                     label: "Final output".into(),
+                    windows_java_utf8: false,
                     jar_directory: None,
                 }],
             },
@@ -855,6 +858,7 @@ fn structured_tasks_reconnect_keep_output_and_stay_out_of_shell_discovery() {
             directory: root,
             environment: Default::default(),
             label: "Task fixture".into(),
+            windows_java_utf8: false,
             jar_directory: None,
         }],
     };

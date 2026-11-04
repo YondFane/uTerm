@@ -143,7 +143,10 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 原生 Java QA：通过**文件 →
 Java 构建与运行…**使用共享 Maven／JDK 配置、构建／运行操作与任务日志。`bash scripts/macos-java-smoke.sh`
 需要 JDK
-21 和 macOS 图形会话，编译隔离 JAR 并记录真实配置／任务／窗口证据。选择器／键盘验收和完整 Maven 工作流与脚本冒烟分别核对。
+21 和 macOS 图形会话，编译隔离 JAR 并记录真实配置／任务／窗口证据。选择器／键盘验收和完整 Maven 工作流与脚本冒烟分别核对。Windows 启动器互操作 CI 使用 JDK
+8／11／17／21 验证实际共享宿主。宿主与 Tauri 程序共用 `shared/windows/application.manifest`
+提供进程 UTF-8；Unicode
+Java 步骤在子进程中使用所选 JDK 自身启动器。平台执行、编译及完整 Maven／人工验收分开记录。
 
 原生 Python QA：选择本地项目或 Worktree 后使用**文件 → Python 运行…**。原生表单调用共享 Rust
 Python 服务及原始任务输出通道。在 macOS 图形会话运行

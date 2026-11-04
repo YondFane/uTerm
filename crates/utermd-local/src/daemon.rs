@@ -246,6 +246,13 @@ impl Client {
             _ => bail!("Invalid response from local session host"),
         }
     }
+    pub fn require_java_utf8_support(&self) -> Result<()> {
+        if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == crate::java_utf8::CAPABILITY))
+        {
+            return Ok(());
+        }
+        bail!("JAVA_UTF8_HOST_UPGRADE_REQUIRED");
+    }
     pub fn require_agent_support(&self) -> Result<()> {
         if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "agent-reports-v1"))
         {
@@ -1403,6 +1410,9 @@ impl Host {
                         crate::session_control::CAPABILITY.into(),
                         "task-pipe-output-v1".into(),
                     ];
+                    if cfg!(windows) {
+                        values.push(crate::java_utf8::CAPABILITY.into());
+                    }
                     if std::env::current_exe()?
                         .file_stem()
                         .is_some_and(|name| name == "uterm-session-host")
