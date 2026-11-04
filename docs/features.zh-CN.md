@@ -1579,7 +1579,13 @@ SHA-512 校验 Maven，再记录 SHA-256。
 开发中的 `uterm-core::java`
 管理既有 Java／Maven 配置、JDK 注册与探测、有界 POM／主类扫描、Wrapper 解析和任务启动规则。Tauri 只保留 IPC、原生选择器、变更通知及应用数据／helper 适配。版本化
 `java.*` Core／FFI 和生成的 TypeScript／Swift
-DTO 使用同一服务。原生 Java 窗口及其平台交互检查仍待完成。
+DTO 使用同一服务。在原生 QA 应用选择本地项目或 Worktree，通过**文件 →
+Java 构建与运行…**打开窗口。原生表单编辑共用模块／JDK、全局／项目 Maven 设置、Profile 及字面 JVM／应用参数；临时环境不保存。提供打包／测试／安装／运行、任务历史、只读搜索／复制／跟随日志、停止／强制停止及有序重新运行。配置保存固定已读 revision，冲突时保留草稿。关闭前提示未保存配置并只分离任务；正常退出拒绝忙碌运行操作。原生路径选择器选择 JDK／Maven 路径或项目内 JAR。
+
+`bash scripts/macos-java-smoke.sh` 使用 JDK
+21 构建临时 JAR，打开实际原生菜单／窗口，检查注册、冲突、字面数据／非零退出收尾、暂停／跟随、复制、同宿主／generation 重连、过期停止、有序重新运行及强制停止清理。保存
+`java-live.json`、构建／进程日志和四张真实 WindowServer 截图，覆盖英文深色与中文浅色窄窗。Shell／内嵌驱动语法、真实 Java 样例及仓库格式／类型／文档检查在 Linux 通过。新窗口仍需自己的 macOS
+ARM／Intel CI 构建运行，本地没有 AppKit。人工选择器、键盘／IME 及完整 Maven／Java 版本矩阵仍未验收。
 
 `java-build-v1`
 配置和注册表格式、默认值及项目根目录键保持一致。更新客户端在配置 CAS 或注册表替换前共用 OS 写锁；写入占用需明确重试。过期或损坏配置保留原文。读取默认值／任务不会创建配置或启动宿主。Java 停止先核对实际任务族与 generation，再请求宿主停止。Java 只读查询不占用待完成写入的退出保护；保存、JDK 注册和任务准备仍受保护。

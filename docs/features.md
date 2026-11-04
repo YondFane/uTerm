@@ -2674,8 +2674,23 @@ Apache's SHA-512 before recording SHA-256.
 The development `uterm-core::java` service owns the existing Java/Maven configuration, JDK registry
 and probing, bounded POM/main-class discovery, Wrapper resolution and task launch rules. Tauri
 retains IPC, native pickers, change notifications and app-data/helper adapters. Versioned `java.*`
-Core/FFI calls and generated TypeScript/Swift DTOs use this service. The native Java window and its
-platform interaction checks remain pending.
+Core/FFI calls and generated TypeScript/Swift DTOs use this service. Select a local project or
+Worktree in the native QA app, then choose **File → Java build and run…**. Its native window edits
+the shared module/JDK, global/project Maven settings, profiles and literal JVM/application
+arguments; temporary environment values are never saved. It offers Package/Test/ Install/Run, task
+history, readonly search/copy/follow logs, Stop/Force stop and ordered Run again. Configuration save
+pins the loaded revision and retains conflicting drafts. Closing prompts for unsaved configuration
+and detaches tasks; normal quit refuses busy run operations. Native path pickers select the
+JDK/Maven paths or a JAR inside the project.
+
+`bash scripts/macos-java-smoke.sh` uses JDK 21 to build a disposable JAR, opens the actual native
+menu/window, and checks registration, conflicts, literal data/nonzero final output, pause/follow,
+copy, same-host/generation reattachment, stale stop, ordered rerun and force-stop cleanup. It
+records `java-live.json`, build/process logs and four actual WindowServer screenshots across
+English/dark and Chinese/light narrow windows. Shell/embedded-driver syntax, the real Java fixture
+and repository format/type/documentation checks pass on Linux. This new window still needs its own
+macOS ARM/Intel CI build and execution; no AppKit runs locally. Manual picker, keyboard/IME and full
+Maven/Java version matrices remain unaccepted.
 
 The `java-build-v1` configuration and registry formats, defaults and project-root keys stay the
 same. Updated clients share an OS writer lock before configuration CAS or registry replacement;
@@ -2698,10 +2713,10 @@ implementation. These are fixture checks, not a full real Maven/Spring Boot acce
 
 Run `pnpm test:core` and the frontend suite with `JAVA_HOME` pointing to a JDK 21 and its `bin` on
 `PATH`. CI installs Temurin 21 and uploads `java-live-core.json`, core/frontend logs and toolchain
-metadata. The Java migration still needs its own macOS/Windows CI and native-window screenshots;
-local reports mark the dirty source tree explicitly rather than claiming a committed CI pass. Local
-Core/FFI, host and backend suites pass (84 backend checks, nine ignored); frontend checks pass 400
-with ten optional/platform checks skipped. TypeScript/production and desktop builds,
+metadata. The Java migration and native window still need their own macOS/Windows CI and
+screenshots; local reports mark the dirty source tree explicitly rather than claiming a committed CI
+pass. Local Core/FFI, host and backend suites pass (84 backend checks, nine ignored); frontend
+checks pass 400 with ten optional/platform checks skipped. TypeScript/production and desktop builds,
 generated-contract drift, formatting, localization and documentation checks pass.
 
 ### Task lifetime and validation

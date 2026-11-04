@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var window: NSWindow?
     private var contentWindows: [UUID: ContentWindow] = [:]
     private var pythonWindows: [String: PythonWindow] = [:]
+    private var javaWindows: [String: JavaWindow] = [:]
     private let model = WorkspaceModel()
     private var terminating = false
     private var preparingQuit = false
@@ -46,6 +47,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--java-smoke-report") {
+                var report = baseReport()
+                do {
+                    try await JavaSmoke.run(model: model, open: { try await self.makeJavaWindow(directory: $0) }, lookup: { self.javaWindows[$0] }, report: &report)
+                } catch {
+                    report["failure"] = error.localizedDescription
+                    if let current = javaWindows.values.first?.window {
+                        let name = "native-java-failure.png"
+                        try? await TerminalSmoke.capture(window: current, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
+                        report["failureCapture"] = name
+                    }
+                }
+                if let cleanup = model.bridge, let sharedRoot = try? WorkspaceModel.dataRoot() {
+                    let directory = sharedRoot.deletingLastPathComponent().appendingPathComponent("java-project 中文").path
+                    do {
+                        let tasks = try await cleanup.call("java.tasks", params: .object(["directory": .string(directory)]))
+                        for task in tasks.array where task["running"].bool == true {
+                            _ = try await cleanup.call("java.stop", params: .object(["id": task["spec"]["id"], "generation": task["generation"], "force": .bool(true)]))
+                        }
+                        var running = false
+                        for _ in 0..<100 {
+                            running = try await cleanup.call("java.tasks", params: .object(["directory": .string(directory)])).array.contains { $0["running"].bool == true }
+                            if !running { break }
+                            try await Task.sleep(for: .milliseconds(50))
+                        }
+                        if running { throw BridgeFailure(code: "JAVA_QA_CLEANUP", message: "Disposable Java task did not stop") }
+                        if FileManager.default.fileExists(atPath: sharedRoot.deletingLastPathComponent().appendingPathComponent("local-daemon-v1/endpoint.json").path) {
+                            _ = try await cleanup.call("host.shutdownIdle")
+                        }
+                    } catch { report["cleanupError"] = error.localizedDescription }
+                }
+                for run in Array(javaWindows.values) { run.model.dirty = false; await run.forceClose() }
+                finishReport(report, path: path)
+                return
+            }
             if let path = WorkspaceModel.argument("--python-smoke-report") {
                 var report = baseReport()
                 do {
@@ -130,6 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(file, localized("Open project…", "打开项目…"), #selector(openProject), "o")
         add(file, localized("Open file…", "打开文件…"), #selector(openFile), "o", [.command, .shift])
         add(file, "Git…", #selector(openGit))
+        add(file, localized("Java build and run…", "Java 构建与运行…"), #selector(openJava))
         add(file, localized("Python run…", "Python 运行…"), #selector(openPython))
         add(file, localized("Recover editor drafts…", "恢复编辑器草稿…"), #selector(recoverEditorDrafts))
         add(file, localized("Restore editor recovery copy…", "恢复编辑器备份副本…"), #selector(restoreEditorRecovery))
@@ -161,6 +198,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return false }
         if menuItem.action == #selector(closeSession) {
+            if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) {
+                menuItem.title = localized("Close window", "关闭窗口")
+                return !run.model.busy && !run.model.prepared
+            }
             if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) {
                 menuItem.title = localized("Close window", "关闭窗口")
                 return !run.model.busy && !run.model.prepared
@@ -182,6 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func settings() { model.settingsPresented = true }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func hideWindow() {
+        if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
         else { window?.performClose(nil) }
@@ -195,6 +237,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             catch { model.error = error.localizedDescription }
         }
+    }
+    @objc private func openJava() {
+        Task { @MainActor in
+            do {
+                let directory = try await selectedProjectDirectory()
+                _ = try await makeJavaWindow(directory: directory)
+            }
+            catch { model.error = error.localizedDescription }
+        }
+    }
+    private func makeJavaWindow(directory: URL) async throws -> JavaWindow {
+        let root = directory.standardizedFileURL.resolvingSymlinksInPath().path
+        if let existing = javaWindows[root] { existing.showWindow(nil); existing.window?.makeKeyAndOrderFront(nil); return existing }
+        guard !preparingQuit, let resources = Bundle.main.resourceURL else { throw BridgeFailure(code: "CLOSED", message: localized("The client is closing.", "客户端正在关闭。")) }
+        let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
+        do {
+            _ = try await worker.call("host.configure", params: .object(["helper": .string(resources.appendingPathComponent("bin/utermd-local").path)]))
+            let run = JavaRunModel(directory: root, bridge: worker, settings: model.settings)
+            let controller = JavaWindow(model: run)
+            controller.didClose = { [weak self] in self?.javaWindows.removeValue(forKey: root) }
+            javaWindows[root] = controller
+            controller.showWindow(nil); controller.window?.makeKeyAndOrderFront(nil)
+            await run.start()
+            return controller
+        } catch { await worker.close(); throw error }
     }
     @objc private func openPython() {
         Task { @MainActor in
@@ -443,6 +510,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }
     @objc private func closeSession() {
+        if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
         else { Task { await model.closeSession() } }
@@ -468,6 +536,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminating { return .terminateNow }
+        if let run = javaWindows.values.first(where: { $0.model.busy }) {
+            run.model.error = localized("Wait for the Java operation to finish.", "请等待 Java 操作完成。")
+            run.window?.makeKeyAndOrderFront(nil)
+            return .terminateCancel
+        }
         if let run = pythonWindows.values.first(where: { $0.model.busy }) {
             run.model.error = localized("Wait for the Python operation to finish.", "请等待 Python 操作完成。")
             run.window?.makeKeyAndOrderFront(nil)
@@ -479,9 +552,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             guard await model.confirmQuit() else { self.preparingQuit = false; return }
             let contents = Array(self.contentWindows.values)
             let runs = Array(self.pythonWindows.values)
+            let javaRuns = Array(self.javaWindows.values)
             do {
                 for run in runs {
                     guard await run.prepareForQuit() else { throw BridgeFailure(code: "PYTHON_QUIT_REFUSED", message: localized("Resolve Python configuration changes before quitting.", "退出前请处理 Python 配置修改。")) }
+                }
+                for run in javaRuns {
+                    guard await run.prepareForQuit() else { throw BridgeFailure(code: "JAVA_QUIT_REFUSED", message: localized("Resolve Java configuration changes before quitting.", "退出前请处理 Java 配置修改。")) }
                 }
                 for content in contents {
                     guard try await content.prepareForQuit() else {
@@ -494,6 +571,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             } catch {
                 for content in contents { content.resumeAfterQuit() }
                 for run in runs { run.resumeAfterQuit() }
+                for run in javaRuns { run.resumeAfterQuit() }
                 self.model.error = error.localizedDescription
                 self.window?.makeKeyAndOrderFront(nil)
                 NSApp.activate(ignoringOtherApps: true)
@@ -502,6 +580,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             for content in contents { content.forceClose() }
             for run in runs { await run.forceClose() }
+            for run in javaRuns { await run.forceClose() }
             await model.shutdown()
             self.terminating = true
             sender.terminate(nil)

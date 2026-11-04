@@ -150,6 +150,11 @@ Native terminal QA: `bash scripts/macos-terminal-smoke.sh` runs two real app pro
 temporary data, a bundled standalone helper and language/theme/width screenshot artifacts. SwiftPM
 resolves the pinned SwiftTerm 1.20.0 dependency; it does not change the legacy terminal renderer.
 
+Native Java QA: choose **File → Java build and run…** for the shared Maven/JDK configuration,
+build/run actions and task logs. `bash scripts/macos-java-smoke.sh` requires JDK 21 and a macOS
+graphical session; it compiles an isolated JAR and records real configuration/task/window evidence.
+Picker/keyboard acceptance and full Maven workflows remain separate from the scripted smoke.
+
 Native Python QA: choose **File → Python run…** after selecting a local project or Worktree. The
 native form uses the shared Rust Python service and raw task-output channel. Run
 `bash scripts/macos-python-smoke.sh` in a macOS graphical session for isolated configuration,

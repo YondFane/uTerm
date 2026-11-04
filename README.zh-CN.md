@@ -137,6 +137,11 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 
 共享核心检查会明确执行文件系统失败案例。Unix 需以普通用户运行以便目录权限生效；Windows 使用文件占用租约验证替换失败。
 
+原生 Java QA：通过**文件 →
+Java 构建与运行…**使用共享 Maven／JDK 配置、构建／运行操作与任务日志。`bash scripts/macos-java-smoke.sh`
+需要 JDK
+21 和 macOS 图形会话，编译隔离 JAR 并记录真实配置／任务／窗口证据。选择器／键盘验收和完整 Maven 工作流与脚本冒烟分别核对。
+
 原生 Python QA：选择本地项目或 Worktree 后使用**文件 → Python 运行…**。原生表单调用共享 Rust
 Python 服务及原始任务输出通道。在 macOS 图形会话运行
 `bash scripts/macos-python-smoke.sh`，使用隔离配置和真实进程检查配置冲突、输出、分离／回放、搜索／跟随、停止及重新运行，并保存截图。需要已有 Python
