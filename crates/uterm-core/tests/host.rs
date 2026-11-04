@@ -7,6 +7,9 @@ use std::{
 use uterm_core::Core;
 use utermd_local::daemon::{Client, Operation, Reply};
 
+#[path = "host/maven.rs"]
+mod maven;
+
 fn call(core: &Core, method: &str, params: Value) -> Value {
     let response = core.execute(
         &serde_json::to_vec(&json!({"version":1,"id":"host-test","method":method,"params":params}))

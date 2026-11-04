@@ -1642,6 +1642,9 @@ DTO 共用该服务。Tauri 保留 IPC、原生选择器、变更通知和应用
 在原生 QA 应用选择本地项目或 Worktree，再通过**文件 →
 Java 构建与运行…**打开窗口，编辑模块／JDK、全局／项目 Maven 配置、profiles 及字面 JVM／应用参数；临时环境变量不保存。窗口提供打包／测试／安装／运行、任务历史、只读搜索／复制／跟随日志、停止／强制停止及有序重新运行。保存固定已读取 revision，冲突时保留草稿。关闭会提示未保存配置并分离任务；正常退出会拒绝忙碌运行操作。选择器可选 JDK／Maven 路径或项目内 JAR。
 
+Spring
+Boot 开发模式按插件的 Plexus 规则引用参数，保留内嵌单／双引号及字面反斜杠。插件会丢弃空／纯空白参数，并替换换行／制表符；共享服务在启动宿主或解析 Maven 前拒绝这些值。两个客户端显示**请使用 JAR 模式**提示并保留配置值；JAR 模式仍直接传递应用参数，包括空字符串。
+
 `java-build-v1`
 配置／注册表格式、默认值及根目录键保持。更新后的客户端在配置 CAS 或注册表替换前获取系统写锁；争用需明确重试，过期或损坏数据保留。只读查询不创建配置、不启动宿主，也不占用写入退出保护。停止同时校验任务族和 generation。保存、注册及任务准备继续受保护。
 
@@ -1656,7 +1659,7 @@ points。父／子进程共用读锁保护活动缓存；正常结束移除缓�
 Java 任务要求 helper 的 UTF-8 启动能力；旧活动 helper 会提示升级，不终止已有会话／任务。Unicode 路径需要 Windows 的进程 UTF-8 支持，JDK 架构须与子进程匹配。
 
 `bash scripts/macos-java-smoke.sh` 使用 JDK
-21 编译临时 JAR，操作真实原生菜单／窗口。原生 ARM／Intel 的配置、冲突、输出、搜索／复制／跟随、重连、停止／重新运行和清理证据记录在对应源码的报告和每架构四张 WindowServer 截图中；已验收基线与 artifact 链接见 Issue
+21 编译临时 JAR，操作真实原生菜单／窗口。原生 ARM／Intel 的配置、冲突、输出、搜索／复制／跟随、重连、停止／重新运行、开发模式不支持参数的可见拒绝和清理证据记录在对应源码的报告和每架构五张 WindowServer 截图中；已验收基线与 artifact 链接见 Issue
 #37。人工系统选择器、键盘及输入法验收仍未执行。
 
 真实 Core／宿主样例检查 Unicode
@@ -1675,6 +1678,15 @@ JAR 文件名、Unicode／emoji／引号／通配符／结尾反斜线及空参�
 Unicode 验收保持开放。[报告与产物](https://github.com/YondFane/uTerm/issues/37#issuecomment-6631095310)
 区分以上结果与尚未完成的完整真实 Maven／Spring Boot 及人工／平台验收；`java-launcher-probe.json`
 仍仅为诊断证据。
+
+可选真实 Maven 样例使用 Maven 3.9.9 和 Spring Boot
+2.7.18，创建临时三项目 reactor，经 Core 和独立宿主执行打包／测试／安装、模块准备、开发运行及打包后 JAR 运行。真实检查核对所选 settings.xml、Maven／Spring
+profiles、`.mvn/jvm.config`、含两种引号及结尾反斜杠的环境／JVM／应用字面值、最终 stdout／stderr 和 JAR 空参数。故意失败的 JUnit 检查必须使任务失败，明确重试后取得新 generation 并通过。分离／回放保留宿主及 generation，拒绝过期停止，优雅停止保留真实 shutdown
+hook 输出。Linux x86_64／JDK21 已通过全部八个场景并清理宿主；这些是真实 Maven／Spring
+Boot 进程，不是模拟构建或 GUI 验收。独立 Maven 互操作 workflow 在 Windows
+JDK8／11／17／21 与原生 macOS ARM／Intel JDK21 运行，上传
+`maven-live-core.json`、工具链及命令日志；对应源码的平台结果记录在 Issue
+#37。其 ASCII 路径／参数不代表另行失败的 Windows JDK8 Unicode 已验收。
 
 ### 任务生命周期与验证
 

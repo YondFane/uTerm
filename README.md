@@ -166,6 +166,19 @@ executable share `shared/windows/application.manifest` for per-process UTF-8; Un
 the selected JDK's own launcher in a child process. Platform results remain separate from
 compilation and full Maven/manual acceptance.
 
+Optional real Maven QA uses Maven 3.9.9 and Spring Boot 2.7.18 in temporary projects. Set
+`JAVA_HOME`, `UTERM_MAVEN_HOME` and optionally `UTERM_MAVEN_REPOSITORY`, then run:
+
+```sh
+cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test host \
+  real_maven_reactor_and_spring_boot_use_shared_task_lifetimes -- --ignored --nocapture
+```
+
+This explicit test downloads Maven Central dependencies unless the selected repository is warm. Set
+`UTERM_MAVEN_CORE_REPORT` to save its source/platform report. The Maven interoperability CI runs
+Windows JDK8/11/17/21 and native macOS ARM/Intel JDK21, separately from Unicode launcher and GUI
+acceptance. The default test suite does not download Maven dependencies.
+
 Native Python QA: choose **File → Python run…** after selecting a local project or Worktree. The
 native form uses the shared Rust Python service and raw task-output channel. Run
 `bash scripts/macos-python-smoke.sh` in a macOS graphical session for isolated configuration,

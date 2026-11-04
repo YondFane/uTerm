@@ -657,7 +657,9 @@ pub fn project_info(directory: &str) -> Result<ProjectInfo> {
 fn quoted(values: &[String]) -> String {
     values
         .iter()
-        .map(|value| format!("\"{}\"", value.replace('\\', "\\\\").replace('"', "\\\"")))
+        // Plexus treats backslashes literally; concatenate quote styles for an embedded double quote.
+        // Plexus 按字面处理反斜杠；内嵌双引号通过拼接不同引号片段保留。
+        .map(|value| format!("\"{}\"", value.replace('"', "\"'\"'\"")))
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -1018,6 +1020,19 @@ fn development_arguments(
     options.push("spring-boot:run".into());
     options
 }
+fn validate_development_arguments(config: &ProjectConfig) -> Result<()> {
+    // Spring Boot filters blank tokens and replaces line breaks/tabs before parsing its arguments.
+    // Spring Boot 会过滤空白参数，并在解析参数前替换换行和制表符。
+    if config
+        .arguments
+        .iter()
+        .chain(&config.vm_arguments)
+        .any(|value| value.trim().is_empty() || value.contains(['\r', '\n', '\t']))
+    {
+        bail!("JAVA_DEVELOPMENT_ARGUMENTS_UNSUPPORTED");
+    }
+    Ok(())
+}
 fn jar_arguments(config: &ProjectConfig, jar: Option<&Path>) -> Vec<String> {
     let mut arguments = log_jvm_arguments(&config.vm_arguments);
     arguments.push("-jar".into());
@@ -1099,6 +1114,9 @@ pub fn build_launch(
     validate_project(config)?;
     if !["build", "test", "install", "run"].contains(&action) {
         bail!("JAVA_TASK_INVALID");
+    }
+    if action == "run" && config.mode == "development" {
+        validate_development_arguments(config)?;
     }
     let root = root(directory)?;
     let module = inside(&root, &config.module)?;
@@ -1342,15 +1360,40 @@ mod tests {
             args.last().unwrap(),
             "org.codehaus.plexus.classworlds.launcher.Launcher"
         );
-        assert_eq!(
-            split_arguments(&quoted(&[
-                "C:\\path with spaces\\".into(),
-                "a\"b".into(),
-                "".into()
-            ]))
-            .unwrap(),
-            ["C:\\path with spaces\\", "a\"b", ""]
-        );
+    }
+    #[test]
+    fn development_rejects_tokens_the_plugin_would_silently_change_but_jar_preserves_them() {
+        for argument in [
+            "",
+            " ",
+            "\t",
+            "line\nbreak",
+            "carriage\rreturn",
+            "tab\tvalue",
+        ] {
+            let config = ProjectConfig {
+                arguments: vec![argument.into()],
+                ..ProjectConfig::default()
+            };
+            assert_eq!(
+                validate_development_arguments(&config)
+                    .unwrap_err()
+                    .to_string(),
+                "JAVA_DEVELOPMENT_ARGUMENTS_UNSUPPORTED"
+            );
+            assert_eq!(jar_arguments(&config, None).last().unwrap(), argument);
+            let config = ProjectConfig {
+                vm_arguments: vec![argument.into()],
+                arguments: vec![],
+                ..config
+            };
+            assert!(validate_development_arguments(&config).is_err());
+        }
+        let config = ProjectConfig {
+            arguments: vec![" a ".into(), r#"quote'" and slash\"#.into()],
+            ..ProjectConfig::default()
+        };
+        validate_development_arguments(&config).unwrap();
     }
     #[test]
     fn java_stream_encoding_is_utf8_without_changing_file_encoding() {

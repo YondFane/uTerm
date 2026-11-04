@@ -154,6 +154,9 @@ export function javaError(reason: unknown): string {
     JAVA_TASK_BUSY: tx("已有安装或任务正在准备，请稍后重试。"),
     JAVA_TASK_INVALID: tx("构建任务参数无效，请检查参数和环境变量。"),
     JAVA_ARGUMENTS_INVALID: tx("参数中的引号未闭合，或包含无效字符。"),
+    JAVA_DEVELOPMENT_ARGUMENTS_UNSUPPORTED: tx(
+      "Spring Boot 开发模式无法保留空参数、纯空白参数、换行或制表符，请使用 JAR 模式。",
+    ),
     JAVA_ENVIRONMENT_INVALID: tx("环境变量须逐行填写 KEY=value，名称不可重复或以 UTERM_ 开头。"),
     JAVA_COMPONENT_MISSING: tx("找不到所选开发组件。"),
     JAVA_COMPONENT_INVALID: tx("开发组件缺少所需程序，请重新安装。"),

@@ -148,6 +148,18 @@ Java 构建与运行…**使用共享 Maven／JDK 配置、构建／运行操作
 提供进程 UTF-8；Unicode
 Java 步骤在子进程中使用所选 JDK 自身启动器。平台执行、编译及完整 Maven／人工验收分开记录。
 
+可选真实 Maven QA 在临时项目中使用 Maven 3.9.9 和 Spring Boot 2.7.18。设置
+`JAVA_HOME`、`UTERM_MAVEN_HOME` 及可选的 `UTERM_MAVEN_REPOSITORY`，然后执行：
+
+```sh
+cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test host \
+  real_maven_reactor_and_spring_boot_use_shared_task_lifetimes -- --ignored --nocapture
+```
+
+此显式测试会下载 Maven Central 依赖，所选仓库已有缓存时复用。设置 `UTERM_MAVEN_CORE_REPORT`
+可保存源码／平台报告。Maven 互操作 CI 运行 Windows JDK8／11／17／21 及原生 macOS ARM／Intel
+JDK21，与 Unicode 启动器及 GUI 验收分开。默认测试套件不下载 Maven 依赖。
+
 原生 Python QA：选择本地项目或 Worktree 后使用**文件 → Python 运行…**。原生表单调用共享 Rust
 Python 服务及原始任务输出通道。在 macOS 图形会话运行
 `bash scripts/macos-python-smoke.sh`，使用隔离配置和真实进程检查配置冲突、输出、分离／回放、搜索／跟随、停止及重新运行，并保存截图。需要已有 Python

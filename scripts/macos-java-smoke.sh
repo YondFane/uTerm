@@ -66,7 +66,8 @@ public class TaskProbe {
                 'nativePausedFollowRetainedAnchor', 'nativeFollowResumed', 'runAgainWaitedForOldExit',
                 'normalStopRetainedFinalOutputAndCopy']:
         assert report[key], (key, report)
-    assert len(report['javaCaptures']) == 4, report
+    assert report['unsupportedDevelopmentArgumentsRejected'], report
+    assert len(report['javaCaptures']) == 5, report
     for name in report['javaCaptures']:
         assert (evidence / name).is_file(), name
     endpoint = root / 'local-daemon-v1/endpoint.json'

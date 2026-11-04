@@ -2791,6 +2791,12 @@ Saving pins the loaded revision and retains conflicting drafts. Closing prompts 
 configuration and detaches tasks; normal quit refuses busy run operations. Pickers select JDK/Maven
 paths or a JAR inside the project.
 
+Spring Boot development mode quotes arguments for the plugin's Plexus parser, preserving embedded
+single/double quotes and literal backslashes. That plugin discards empty/whitespace-only tokens and
+replaces line breaks/tabs; the shared service rejects these values before starting a host or
+resolving Maven. Both clients show a **Use JAR mode** instruction and retain the configured values.
+JAR mode continues to pass application arguments directly, including empty strings.
+
 The `java-build-v1` configuration/registry formats, defaults and root keys stay unchanged. Updated
 clients acquire an OS writer lock before configuration CAS or registry replacement; contention
 requires explicit retry. Stale or damaged data is retained. Read-only queries do not create
@@ -2817,9 +2823,10 @@ UTF-8 support and a JDK matching the child architecture.
 
 `bash scripts/macos-java-smoke.sh` uses JDK 21 to build a disposable JAR and operate the actual
 native menu/window. Native ARM/Intel configuration, conflict, output, search/copy/follow,
-reattachment, stop/rerun and cleanup evidence is recorded with source-bound reports and four
-WindowServer screenshots per architecture; accepted baselines and artifact links are in Issue #37.
-Manual system-picker, keyboard and IME acceptance remain unexecuted.
+reattachment, stop/rerun, visible unsupported-development-argument rejection and cleanup are
+recorded with source-bound reports and five WindowServer screenshots per architecture; accepted
+baselines and artifact links are in Issue #37. Manual system-picker, keyboard and IME acceptance
+remain unexecuted.
 
 The real Core/host fixture checks a Unicode JAR filename, Unicode/emoji/quotes/wildcard/trailing
 backslash and empty arguments, temporary environment/JVM properties, both final streams, exit code
@@ -2840,6 +2847,20 @@ matrix therefore fails, and JDK 8 Unicode acceptance remains open.
 [Reports/artifacts](https://github.com/YondFane/uTerm/issues/37#issuecomment-6631095310) distinguish
 those results from full real Maven/Spring Boot and manual/platform acceptance, which remain
 incomplete. `java-launcher-probe.json` is diagnostic evidence.
+
+The optional real Maven fixture uses Maven 3.9.9 and Spring Boot 2.7.18 with a disposable
+three-project reactor. It exercises Package/Test/Install, module preparation, development and
+package-then-JAR runs through Core and the independent host. Actual tests verify selected
+settings.xml, Maven/Spring profiles, `.mvn/jvm.config`, environment/JVM/application literals with
+both quote styles and trailing backslashes, final stdout/stderr and empty JAR arguments. A
+deliberately failing JUnit check must fail the task; an explicit retry gets a new generation and
+passes. Detach/replay retains the host and generation, stale Stop is refused, and graceful stop
+preserves the real shutdown hook output. Linux x86_64/JDK21 passes all eight scenarios and cleans up
+the host. These are real Maven/Spring Boot processes, not a simulated build or GUI acceptance. The
+independent Maven interoperability workflow runs Windows JDK8/11/17/21 and native macOS ARM/Intel
+JDK21, uploading `maven-live-core.json`, toolchain and command logs; source-bound platform results
+are recorded in Issue #37. Its ASCII paths/arguments do not accept the separate Windows JDK8 Unicode
+failure.
 
 ### Task lifetime and validation
 

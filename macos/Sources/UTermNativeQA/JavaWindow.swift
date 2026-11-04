@@ -121,9 +121,12 @@ final class JavaRunModel: ObservableObject {
         return values
     }
     private func startSaved(environment: [String: JSONValue]) async throws {
-        let task = try await bridge.call("java.start", params: .object([
+        let task: JSONValue
+        do { task = try await bridge.call("java.start", params: .object([
             "directory": .string(directory), "config": try value(formConfig()), "action": .string(action), "environment": .object(environment)
-        ]))
+        ])) } catch let failure as BridgeFailure where failure.code == "JAVA_DEVELOPMENT_ARGUMENTS_UNSUPPORTED" {
+            throw BridgeFailure(code: failure.code, message: localized("Spring Boot development mode cannot preserve empty or whitespace-only arguments, line breaks or tabs. Use JAR mode.", "Spring Boot 开发模式无法保留空参数、纯空白参数、换行或制表符，请使用 JAR 模式。"))
+        }
         selectedID = task["spec"]["id"].string ?? ""
         await refreshTasks()
     }

@@ -3,7 +3,7 @@ title: uTerm 开发指南
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-11-04
+updated: 2026-11-05
 ---
 
 # uTerm 开发指南
@@ -34,6 +34,12 @@ schema 不提交。
 共享 Java 任务／配置检查需要已有 JDK 21，设置 `JAVA_HOME` 并将其 `bin` 加入
 `PATH`。检查编译临时 JAR 并使用隔离宿主；设置 `UTERM_JAVA_CORE_REPORT`
 可输出源码／平台／行为结构化报告，CI 以 `java-live-core.json` 上传。应用构建不要求或捆绑 Java。
+
+可选 Maven 工作流样例另需 Maven 3.9.9（`UTERM_MAVEN_HOME`）和网络，或已有缓存的
+`UTERM_MAVEN_REPOSITORY`。按 README 的命令明确运行默认忽略的宿主测试
+`real_maven_reactor_and_spring_boot_use_shared_task_lifetimes`；`UTERM_MAVEN_CORE_REPORT`
+输出八场景详细报告。独立 Maven CI 运行真实 Windows JDK8／11／17／21 及 macOS ARM／Intel
+JDK21 进程，不掩盖独立的 JDK8 Unicode 启动器失败；此样例不代表 GUI 或人工验收。
 
 在 macOS 14 或更新系统上，使用 `bash scripts/macos-native-build.sh` 构建 ad-hoc 签名 QA 应用，使用
 `bash scripts/macos-native-test.sh` 运行连接 Rust 静态库的 Swift 桥接测试。

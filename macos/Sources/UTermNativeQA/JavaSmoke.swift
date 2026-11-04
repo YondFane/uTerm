@@ -51,6 +51,12 @@ enum JavaSmoke {
         try await capture(first, "native-java-conflict-en-dark.png")
         await run.reload()
         run.config?.jar = "target/literal 中文 & %.jar"; run.dirty = true
+        run.config?.mode = "development"
+        await run.run()
+        guard !run.running, run.error.contains("Use JAR mode."), run.arguments.contains(where: { $0.text.isEmpty }) else { throw BridgeFailure(code: "JAVA_QA", message: "Unsupported development arguments were not visibly rejected and retained") }
+        report["unsupportedDevelopmentArgumentsRejected"] = true
+        try await capture(first, "native-java-arguments-rejected-en-dark.png")
+        run.config?.mode = "jar"; run.dirty = true
         await run.run()
         try await TerminalSmoke.wait("Receive Java final bytes and nonzero exit") { run.selectedTask["running"].bool == false && run.terminal?.text.contains("ERR_LAST:中文") == true }
         guard run.selectedTask["code"].number == 7,

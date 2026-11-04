@@ -4,7 +4,20 @@ import {
   parseJavaArguments,
   formatJavaArguments,
   parseJavaEnvironment,
+  javaError,
 } from "../src/lib/java-build.ts";
+import { setUiLanguage } from "../src/lib/i18n.ts";
+
+test("unsupported Spring Boot arguments explain how to retain them in both languages", () => {
+  try {
+    setUiLanguage("en");
+    assert.match(javaError(Error("JAVA_DEVELOPMENT_ARGUMENTS_UNSUPPORTED")), /empty.*JAR mode/);
+    setUiLanguage("zh-Hans");
+    assert.match(javaError(Error("JAVA_DEVELOPMENT_ARGUMENTS_UNSUPPORTED")), /空参数.*JAR 模式/);
+  } finally {
+    setUiLanguage("en");
+  }
+});
 
 test("Java arguments preserve Windows paths, quotes, empty values and shell metacharacters", () => {
   const values = [

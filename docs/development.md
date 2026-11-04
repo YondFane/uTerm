@@ -3,7 +3,7 @@ title: uTerm development guide
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-11-04
+updated: 2026-11-05
 ---
 
 # uTerm development guide
@@ -36,6 +36,13 @@ Shared Java task/configuration checks require an existing JDK 21 with `JAVA_HOME
 on `PATH`. They compile a disposable JAR and use the isolated host; setting `UTERM_JAVA_CORE_REPORT`
 writes a structured source/platform/behavior report. CI uploads it as `java-live-core.json`.
 Building the application does not require or bundle Java.
+
+The optional Maven workflow fixture additionally needs Maven 3.9.9 (`UTERM_MAVEN_HOME`) and network
+access or a populated `UTERM_MAVEN_REPOSITORY`. Run the ignored
+`real_maven_reactor_and_spring_boot_use_shared_task_lifetimes` host test explicitly as documented in
+the README. `UTERM_MAVEN_CORE_REPORT` writes the detailed eight-scenario report. The dedicated Maven
+CI runs actual Windows JDK8/11/17/21 and macOS ARM/Intel JDK21 processes without masking the
+separate JDK8 Unicode launcher failure. This fixture does not establish GUI or manual acceptance.
 
 On macOS 14 or newer, `bash scripts/macos-native-build.sh` builds the ad-hoc-signed QA app and
 `bash scripts/macos-native-test.sh` runs Swift bridge tests against the Rust static library.
