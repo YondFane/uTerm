@@ -98,16 +98,19 @@ jobs:
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: node scripts/java-launcher-probe.mjs ci-evidence/java-launcher-probe.json
-      - name: Shared core and generated contracts
+      - name: Shared core tests
+        id: shared-core
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         shell: bash
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/ci-evidence/terminal-load-core.json
           UTERM_JAVA_CORE_REPORT: ${{ github.workspace }}/ci-evidence/java-live-core.json
           UTERM_INPUT_CONTROL_CORE_REPORT: ${{ github.workspace }}/ci-evidence/input-control-core.json
-        run: |
-          pnpm test:core 2>&1 | tee ci-evidence/core-ffi-tests.log
-          pnpm contracts:check 2>&1 | tee ci-evidence/contracts.log
+        run: pnpm test:core 2>&1 | tee ci-evidence/core-ffi-tests.log
+      - name: Generated contracts
+        shell: bash
+        run: pnpm contracts:check 2>&1 | tee ci-evidence/contracts.log
       - name: Immutable release helper compatibility
         shell: bash
         env:
@@ -130,6 +133,12 @@ jobs:
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: pnpm qa:shared-state 2>&1 | tee ci-evidence/tauri-state-qa-run.log
+      - name: Preserve shared Core failure
+        if: ${{ always() && steps.shared-core.outcome == 'failure' }}
+        shell: bash
+        run: |
+          echo "Shared Core tests failed; see core-ffi-tests.log. Independent QA does not waive this failure." | tee ci-evidence/core-failure.txt
+          exit 1
       - uses: actions/upload-artifact@v4
         if: always()
         with:

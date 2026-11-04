@@ -148,10 +148,12 @@ process/generation reattachment and exact close. A TCP gate delays an old readon
 after takeover and verifies that its response cannot overwrite the new control state. Clock-driven
 policy checks cover expiry/renewal and legacy fallback without waiting for the lease in real time.
 `input-control-host.json`, `input-control-core.json` and test logs retain source/platform metadata;
-CI runs host checks before unrelated Java task checks. Native CLI sending uses the current app
-attachment and its existing lease; it cannot implicitly take over another client's control. A real
-host regression checks accepted CLI input, rejected input after takeover and stale-generation
-refusal.
+CI runs host checks before unrelated Java task checks. Pull-request CI continues independent
+contract, build and real-app checks after a Core test failure, then explicitly fails the job; the
+original failing log and additional artifacts are both retained. Direct branch checks still stop at
+the failed Core step. Native CLI sending uses the current app attachment and its existing lease; it
+cannot implicitly take over another client's control. A real host regression checks accepted CLI
+input, rejected input after takeover and stale-generation refusal.
 
 The shared u64 fixtures also carry owned/passive/unowned metadata through the real Rust encoder and
 Swift/TypeScript decoders; malformed roles are rejected without rounding sequence or acknowledgement

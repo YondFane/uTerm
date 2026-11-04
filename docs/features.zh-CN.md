@@ -96,7 +96,8 @@ sequence／ack 精度保持。
 
 Linux 检查使用真实隔离宿主、独立 TCP／Core 客户端与 PTY，覆盖接管、旧输入／resize 拒绝、只读输出／ack、迟到释放、过期 generation、分离／退出、同进程／generation 重连和准确关闭。TCP
 gate 将旧只读请求延迟到接管后，验证其响应不能覆盖新控制状态。时钟驱动的规则测试覆盖到期／续期及旧客户端回退，不等待实际租约时长。`input-control-host.json`、`input-control-core.json`
-及日志保留源码／平台信息；CI 先运行宿主检查，再运行独立的 Java 任务检查。原生 CLI 发送使用当前应用连接及其已有租约，不会隐式接管其他客户端。真实宿主回归检查 CLI 输入接受、接管后旧输入拒绝及过期 generation 拒绝。
+及日志保留源码／平台信息；CI 先运行宿主检查，再运行独立的 Java 任务检查。PR
+CI 在 Core 测试失败后继续执行独立契约、构建和真实应用检查，随后明确使 job 失败，保留原失败日志及后续 artifacts。直接分支检查仍在 Core 失败步骤停止。原生 CLI 发送使用当前应用连接及其已有租约，不会隐式接管其他客户端。真实宿主回归检查 CLI 输入接受、接管后旧输入拒绝及过期 generation 拒绝。
 
 共享 u64 场景也将拥有／只读／无所有者元数据交给真实 Rust 编码器与 Swift／TypeScript 解码器，拒绝无效角色，sequence／ack 数值不发生舍入。
 
