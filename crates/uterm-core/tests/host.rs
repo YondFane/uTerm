@@ -75,7 +75,7 @@ fn java_jar_uses_shared_host_literal_arguments_replay_and_generation_safe_stop()
     let run = |name: &str, args: &[&str]| {
         let output = std::process::Command::new(tool(name))
             .args(args)
-            .current_dir(&root)
+            .current_dir(uterm_core::java::path_text(&root))
             .output()
             .unwrap();
         assert!(

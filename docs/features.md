@@ -2688,10 +2688,13 @@ Linux x86_64 checks use Temurin JDK 21.0.13 to compile and package a disposable 
 through the actual shared Core and isolated host. They verify Unicode and literal/empty arguments,
 temporary environment/JVM properties, both final output streams, exit code 7, same-generation
 reattachment/ack, stale and cross-family stop rejection, force-stop cleanup and idle host shutdown.
-An invalid Wrapper with offline mode proves existing-JAR runs bypass Maven resolution. Two Rust
-processes check global/project CAS, an actual OS writer lock, explicit retry, shared registry
-locking and damaged-byte preservation. Existing Maven, archive and source-scan regressions move with
-their implementation. These are fixture checks, not a full real Maven/Spring Boot acceptance.
+An invalid Wrapper with offline mode proves existing-JAR runs bypass Maven resolution. Fixture
+compiler/archive tools receive a normal Windows working-directory path rather than Rust's extended
+canonical prefix. The first Windows CI failed in the JDK archive tool before starting the task; that
+failure is retained and the corrected fixture still needs its own Windows CI. Two Rust processes
+check global/project CAS, an actual OS writer lock, explicit retry, shared registry locking and
+damaged-byte preservation. Existing Maven, archive and source-scan regressions move with their
+implementation. These are fixture checks, not a full real Maven/Spring Boot acceptance.
 
 Run `pnpm test:core` and the frontend suite with `JAVA_HOME` pointing to a JDK 21 and its `bin` on
 `PATH`. CI installs Temurin 21 and uploads `java-live-core.json`, core/frontend logs and toolchain
