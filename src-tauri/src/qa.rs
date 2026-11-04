@@ -4,6 +4,15 @@ use tauri::Manager;
 
 pub const IDENTIFIER: &str = "sh.uterm.desktop.qa.sharedstate";
 
+pub fn control_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let root = check(app)?;
+    Ok(if argument("--qa-phase")? == "input-viewer" {
+        root.join("input-viewer-control")
+    } else {
+        root.join("data")
+    })
+}
+
 pub fn cleanup() -> Result<(), String> {
     use utermd_local::daemon::{Client, Operation, Reply};
     let directory = root()?.join("data/local-daemon-v1");

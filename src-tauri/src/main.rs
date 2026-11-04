@@ -341,8 +341,13 @@ fn main() {
             }
             #[cfg(any(windows, target_os = "macos"))]
             taskbar::install(app)?;
-            let state = control::Control::start(&app.path().app_data_dir()?)
-                .map_err(std::io::Error::other)?;
+            #[cfg(feature = "qa")]
+            let control_directory =
+                qa::control_directory(app.handle()).map_err(std::io::Error::other)?;
+            #[cfg(not(feature = "qa"))]
+            let control_directory = app.path().app_data_dir()?;
+            let state =
+                control::Control::start(&control_directory).map_err(std::io::Error::other)?;
             app.manage(state.clone());
             #[cfg(any(windows, target_os = "linux"))]
             app.deep_link().register_all()?;
