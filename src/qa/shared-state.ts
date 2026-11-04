@@ -862,6 +862,31 @@ async function runInputControl(context: Context) {
       throw Error(`${String(reason)}; terminal display: ${JSON.stringify(display())}`);
     }
   };
+  const recoverRenderer = async (marker: string) => {
+    const contexts = [...section.querySelectorAll<HTMLCanvasElement>(".xterm-screen canvas")]
+      .map((canvas) => canvas.getContext("webgl2"))
+      .filter((context): context is WebGL2RenderingContext => context !== null);
+    if (contexts.length) {
+      assert(contexts.length === 1, "Unexpected multiple WebGL terminal contexts");
+      const loss = contexts[0].getExtension("WEBGL_lose_context");
+      assert(loss, "The actual WebGL context cannot exercise context-loss recovery");
+      loss.loseContext();
+    }
+    const domText = await until(() => {
+      const text = [...section.querySelectorAll(".xterm-rows > div")]
+        .map((row) => row.textContent ?? "")
+        .join("");
+      return text.includes(marker) && text;
+    }, "actual terminal DOM fallback renders the same shell output");
+    return {
+      initialRenderer: contexts.length ? "webgl2" : "dom",
+      injectedContextLoss: contexts.length === 1,
+      recoveredRenderer: "dom",
+      domText,
+      terminalDisplay: await rendered(marker),
+    };
+  };
+  let rendererRecovery: Awaited<ReturnType<typeof recoverRenderer>>;
   const send = (command: string) => {
     const field = section.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
     assert(field, "Missing actual xterm input field");
@@ -940,11 +965,13 @@ async function runInputControl(context: Context) {
       async () => (await file("owner-input.txt"))?.includes("OWNER_READY"),
       "actual original owner input side effect",
     );
-    await scene("input-owner-ready", {
+    await scene("input-owner-gpu-ready", {
       ...identity,
       actualInput: true,
       terminalDisplay: await rendered("OWNER_READY"),
     });
+    rendererRecovery = await recoverRenderer("OWNER_READY");
+    await scene("input-owner-ready", { ...identity, actualInput: true, rendererRecovery });
     await until(readonly, "old owner becomes readonly after viewer takeover");
     sendMarker("STALE_OWNER", "stale-owner.txt");
     await until(
@@ -955,6 +982,7 @@ async function runInputControl(context: Context) {
       ...identity,
       passive: true,
       terminalDisplay: await rendered("VIEWER_READY"),
+      rendererRecovery,
     });
     assert(
       (await file("stale-owner.txt")) === null && (await file("passive-viewer.txt")) === null,
@@ -986,6 +1014,7 @@ async function runInputControl(context: Context) {
       sameHostAndGeneration: true,
       viewerQuitRetainedProcess: true,
       terminalDisplay: await rendered("OWNER_RETURNED"),
+      rendererRecovery,
     });
     const close = document.querySelector<HTMLButtonElement>(".session-close");
     assert(close, "Close Session is unavailable");
@@ -998,11 +1027,13 @@ async function runInputControl(context: Context) {
   } else {
     await until(readonly, "second actual application attaches readonly");
     sendMarker("PASSIVE", "passive-viewer.txt");
-    await scene("input-viewer-readonly", {
+    await scene("input-viewer-gpu-readonly", {
       ...identity,
       passive: true,
       terminalDisplay: await rendered("OWNER_READY"),
     });
+    rendererRecovery = await recoverRenderer("OWNER_READY");
+    await scene("input-viewer-readonly", { ...identity, passive: true, rendererRecovery });
     const take = readonly() as HTMLButtonElement;
     assert(take && !take.disabled, "The real take-control button is unavailable");
     take.click();
@@ -1022,6 +1053,7 @@ async function runInputControl(context: Context) {
       explicitTakeover: true,
       passiveInputDiscarded: true,
       terminalDisplay: await rendered("VIEWER_READY"),
+      rendererRecovery,
     });
   }
   await invoke("qa_request_exit");

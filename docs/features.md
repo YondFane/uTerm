@@ -199,6 +199,13 @@ stronger observation. Windows output was visible. Manual keyboard, IME and syste
 acceptance remain unexecuted. Protocol or build success does not establish those interaction
 results.
 
+Tauri ownership QA also retains baseline GPU captures before explicitly losing the actual WebGL
+context through `WEBGL_lose_context`, then requires xterm's existing DOM fallback to display the
+same shell marker. Both actual application processes retain the same session/generation during
+recovery, takeover and output; reports distinguish initial WebGL from an already active DOM
+renderer. A DOM capture does not establish GPU capture/display acceptance. These two additional
+recovery scenes await their source-bound run; the macOS GPU blank-capture gap remains open.
+
 ### Shared saved state
 
 The development client imports workspace and settings data through its existing WebView on first

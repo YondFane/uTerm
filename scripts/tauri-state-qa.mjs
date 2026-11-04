@@ -314,13 +314,19 @@ try {
         if (owner.closed) {
           assert.equal(owner.code, 0, owner.log);
           assert(viewer?.closed, "Original owner exited before the viewer completed");
-          assert.equal(owner.observed.size, 4, owner.log);
-          assert.equal(viewer.observed.size, 2, viewer.log);
+          assert.equal(owner.observed.size, 5, owner.log);
+          assert.equal(viewer.observed.size, 3, viewer.log);
           const ready = scenes.find((s) => s.scenario === "input-owner-ready").checks;
           const passive = scenes.find((s) => s.scenario === "input-viewer-readonly").checks;
           assert.equal(ready.sessionID, passive.sessionID);
           assert.equal(ready.generation, passive.generation);
           assert.equal(ready.hostPID, passive.hostPID);
+          for (const value of [ready, passive]) {
+            assert.equal(value.rendererRecovery.recoveredRenderer, "dom");
+            assert(value.rendererRecovery.domText.includes("OWNER_READY"));
+            if (value.rendererRecovery.initialRenderer === "webgl2")
+              assert(value.rendererRecovery.injectedContextLoss);
+          }
           for (const name of ["stale-owner.txt", "passive-viewer.txt"])
             assert(!existsSync(join(root, "project", name)), name);
           return;
