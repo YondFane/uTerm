@@ -241,6 +241,40 @@ export interface CoreProjectContext {
   worktreeId?: string | null;
 }
 
+export interface CorePythonCandidate {
+  mode: string;
+  target: string;
+  working_directory: string;
+}
+
+export interface CorePythonConfiguration {
+  configured: boolean;
+  project: CorePythonRunConfig;
+  revision: string;
+}
+
+export interface CorePythonInterpreter {
+  path: string;
+  version: string;
+  virtual_environment: boolean;
+}
+
+export interface CorePythonProjectInfo {
+  candidates: CorePythonCandidate[];
+  truncated: boolean;
+}
+
+export interface CorePythonRunConfig {
+  arguments?: string[];
+  host?: string;
+  interpreter?: string;
+  mode?: string;
+  port?: number;
+  reload?: boolean;
+  target?: string;
+  working_directory?: string;
+}
+
 export interface CoreRequest {
   id: string;
   method: string;

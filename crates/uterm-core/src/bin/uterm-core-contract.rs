@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use std::io::{self, BufRead, Write};
 use uterm_core::{
     store::{Document, Import, Snapshot},
@@ -9,6 +11,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mode = args.next();
     if mode.as_deref() == Some("--schema") {
         let schemas = serde_json::json!({
+            "PythonRunConfig":schemars::schema_for!(uterm_core::python::RunConfig),
+            "PythonConfiguration":schemars::schema_for!(uterm_core::python::Configuration),
+            "PythonInterpreter":schemars::schema_for!(uterm_core::python::Interpreter),
+            "PythonCandidate":schemars::schema_for!(uterm_core::python::Candidate),
+            "PythonProjectInfo":schemars::schema_for!(uterm_core::python::ProjectInfo),
             "EditorDraft":schemars::schema_for!(uterm_core::store::EditorDraft),
             "EditorDraftEntry":schemars::schema_for!(uterm_core::store::EditorDraftEntry),
             "EditorDraftCollection":schemars::schema_for!(uterm_core::store::EditorDraftCollection),

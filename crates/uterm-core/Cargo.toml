@@ -18,3 +18,4 @@ utermd-local = { path = "../utermd-local" }
 base64 = "0.22"
 ignore = "0.4"
 uuid = { version = "1", features = ["v4"] }
+anyhow = "1"

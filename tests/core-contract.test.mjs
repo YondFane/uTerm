@@ -87,6 +87,195 @@ function queueDraft(path, text) {
     bom: false,
   };
 }
+
+test("shared Python configuration preserves defaults, cross-process CAS, busy errors and damaged bytes", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "uterm-python-config-")),
+    store = join(root, "shared-state-v1"),
+    a = await client(t, store),
+    b = await client(t, store),
+    directory = gitFixture(t).directory,
+    path = join(root, "python-run-v1/configuration.json");
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const initial = await a("python.configuration", { directory });
+  assert.equal(initial.error, undefined);
+  assert.equal(initial.result.revision, "missing");
+  assert.equal(initial.result.configured, false);
+  assert.equal(
+    existsSync(join(root, "python-run-v1")),
+    false,
+    "Reading defaults must not persist them",
+  );
+  assert.deepEqual((await a("python.tasks", { directory })).result, []);
+  assert.equal(
+    existsSync(join(root, "local-daemon-v1")),
+    false,
+    "Reading tasks must not start a host",
+  );
+  const config = {
+    ...initial.result.project,
+    target: "literal 中文 & %.py",
+    arguments: ["", "&", "e\u0301\r\n"],
+  };
+  const saved = await a("python.saveConfiguration", { directory, revision: "missing", config });
+  assert.equal(saved.error, undefined);
+  assert.deepEqual(saved.result.project, config);
+  const bytes = readFileSync(path);
+  assert.equal(
+    (await b("python.saveConfiguration", { directory, revision: "missing", config })).error.code,
+    "PYTHON_CONFIG_CONFLICT",
+  );
+  assert.deepEqual(readFileSync(path), bytes);
+  const release = await holdWriter(t, join(root, "python-run-v1"));
+  const params = {
+    directory,
+    revision: saved.result.revision,
+    config: { ...config, target: "explicit retry.py" },
+  };
+  assert.equal((await b("python.saveConfiguration", params)).error.code, "PYTHON_CONFIG_BUSY");
+  assert.deepEqual(readFileSync(path), bytes);
+  await release();
+  const retried = await b("python.saveConfiguration", params);
+  assert.equal(retried.error, undefined);
+  assert.equal(
+    (await a("python.configuration", { directory })).result.project.target,
+    "explicit retry.py",
+  );
+  const damaged = Buffer.from("{damaged Python configuration 中文");
+  writeFileSync(path, damaged);
+  assert.equal(
+    (await a("python.configuration", { directory })).error.code,
+    "PYTHON_CONFIG_INVALID",
+  );
+  assert.equal(
+    (await a("python.saveConfiguration", { ...params, revision: retried.result.revision })).error
+      .code,
+    "PYTHON_CONFIG_INVALID",
+  );
+  assert.deepEqual(readFileSync(path), damaged);
+});
+
+test("shared Python runs a real task with literal arguments, exit status and generation-safe stop", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "uterm-python-task-")),
+    directory = join(root, "project"),
+    call = await client(t, join(root, "shared-state-v1"));
+  mkdirSync(directory);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const interpreter = execFileSync(
+    process.platform === "win32" ? "python" : "python3",
+    ["-I", "-c", "import sys; print(sys.executable)"],
+    { encoding: "utf8" },
+  ).trim();
+  const hostTarget = resolve(process.env.CARGO_TARGET_DIR ?? "crates/utermd-local/target");
+  execFileSync(
+    "cargo",
+    [
+      "build",
+      "--quiet",
+      "--locked",
+      "--manifest-path",
+      "crates/utermd-local/Cargo.toml",
+      "--bin",
+      "utermd-local",
+    ],
+    { stdio: "inherit" },
+  );
+  assert.equal(
+    (
+      await call("host.configure", {
+        helper: join(
+          hostTarget,
+          "debug",
+          `utermd-local${process.platform === "win32" ? ".exe" : ""}`,
+        ),
+      })
+    ).error,
+    undefined,
+  );
+  const started = [];
+  try {
+    writeFileSync(
+      join(directory, "task 中文 & %.py"),
+      "import sys,os,time\nprint('READY:'+sys.argv[1]+':'+os.environ['VALUE'],flush=True)\ntime.sleep(0.1)\nprint('LAST:中文 e\\u0301',flush=True)\nsys.exit(7)\n",
+    );
+    const config = {
+      ...(await call("python.configuration", { directory })).result.project,
+      interpreter,
+      target: "task 中文 & %.py",
+      arguments: ["literal & %PATH%"],
+    };
+    const launched = await call("python.start", {
+      directory,
+      config,
+      environment: { VALUE: "环境 & %PATH%" },
+    });
+    assert.equal(launched.error, undefined);
+    const task = launched.result;
+    started.push(task);
+    assert.match(task.task.action, /^python:/);
+    assert.equal(
+      (await call("python.stop", { id: task.spec.id, generation: "stale", force: true })).error
+        .code,
+      "PYTHON_TASK_REPLACED",
+    );
+    const deadline = Date.now() + 10000;
+    let finished;
+    while (Date.now() < deadline) {
+      finished = (await call("python.tasks", { directory })).result.find(
+        (item) => item.spec.id === task.spec.id,
+      );
+      if (finished && !finished.running) break;
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(finished.running, false);
+    assert.equal(finished.code, 7);
+    const read = await call("host.status");
+    assert.equal(read.error, undefined);
+    t.diagnostic(
+      `real Python ${interpreter}: literal argv/environment, generation ${task.generation}, final exit code 7`,
+    );
+    writeFileSync(
+      join(directory, "long.py"),
+      "import time\nprint('LONG_READY',flush=True)\ntime.sleep(60)\n",
+    );
+    const running = await call("python.start", {
+      directory,
+      config: { ...config, target: "long.py" },
+      environment: {},
+    });
+    assert.equal(running.error, undefined);
+    started.push(running.result);
+    assert.equal(
+      (
+        await call("python.stop", {
+          id: running.result.spec.id,
+          generation: running.result.generation,
+          force: true,
+        })
+      ).error,
+      undefined,
+    );
+    assert.equal(
+      (await call("python.stop", { id: "another-task", generation: task.generation, force: true }))
+        .error.code,
+      "PYTHON_TASK_MISSING",
+    );
+  } finally {
+    if (existsSync(join(root, "local-daemon-v1/endpoint.json"))) {
+      for (const task of started)
+        await call("python.stop", { id: task.spec.id, generation: task.generation, force: true });
+      const deadline = Date.now() + 10000;
+      while (Date.now() < deadline) {
+        const tasks = (await call("python.tasks", { directory })).result;
+        if (tasks.every((task) => !task.running)) break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      assert.equal((await call("host.shutdownIdle")).error, undefined);
+      while (existsSync(join(root, "local-daemon-v1/endpoint.json")) && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      assert.equal(existsSync(join(root, "local-daemon-v1/endpoint.json")), false);
+    }
+  }
+});
 function signal() {
   let resolve;
   const promise = new Promise((done) => {

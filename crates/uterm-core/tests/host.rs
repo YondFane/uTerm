@@ -54,6 +54,126 @@ impl Drop for HostCleanup {
         }
     }
 }
+
+#[test]
+fn python_task_replays_exact_pipe_bytes_and_survives_client_detach() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().canonicalize().unwrap();
+    let core = Core::open(root.join("shared-state-v1")).unwrap();
+    let host_root = root.join("local-daemon-v1");
+    let _cleanup = HostCleanup(host_root.clone());
+    call(&core, "host.configure", json!({"helper":helper()}));
+    let output = std::process::Command::new(if cfg!(windows) { "python" } else { "python3" })
+        .args(["-I", "-c", "import sys; print(sys.executable)"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let interpreter = String::from_utf8(output.stdout).unwrap().trim().to_owned();
+    std::fs::write(root.join("task 中文 & %.py"),
+        "import sys,os,time\nprint('READY:'+sys.argv[1]+':'+os.environ['VALUE'],flush=True)\ntime.sleep(0.2)\nprint('LAST:中文 e\\u0301',flush=True)\nsys.exit(7)\n").unwrap();
+    let mut config =
+        call(&core, "python.configuration", json!({"directory":root}))["project"].clone();
+    config["interpreter"] = json!(interpreter);
+    config["target"] = json!("task 中文 & %.py");
+    config["arguments"] = json!(["literal & %PATH%"]);
+    let task = call(
+        &core,
+        "python.start",
+        json!({"directory":root,"config":config,"environment":{"VALUE":"环境 & %PATH%"}}),
+    );
+    let (send, receive) = mpsc::channel();
+    core.set_terminal_sink(Arc::new(move |_, _, frame| {
+        send.send(frame).map_err(|e| e.to_string())
+    }))
+    .unwrap();
+    let attach = |attachment: &str| json!({"id":task["spec"]["id"],"attachment":attachment,"directory":root,"shell":"default","rows":30,"cols":100,"taskOnly":true});
+    call(&core, "terminal.open", attach("python-first"));
+    let first = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+    call(
+        &core,
+        "terminal.action",
+        json!({"attachment":"python-first","action":"detach"}),
+    );
+    let client = Client::connect(&host_root).unwrap();
+    assert!(
+        matches!(client.request(Operation::TaskSnapshot).unwrap(), Reply::Tasks(tasks) if tasks.iter().any(|value| value.spec.id == task["spec"]["id"].as_str().unwrap()))
+    );
+    call(&core, "terminal.open", attach("python-replay"));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut bytes = Vec::new();
+    let mut sequence = None;
+    loop {
+        assert!(
+            Instant::now() < deadline,
+            "Python task did not publish its final frame"
+        );
+        let frame = receive.recv_timeout(Duration::from_secs(2)).unwrap();
+        if let Some(previous) = sequence {
+            assert!(frame.sequence >= previous);
+        }
+        sequence = Some(frame.sequence);
+        bytes.extend_from_slice(&frame.data);
+        call(
+            &core,
+            "terminal.action",
+            json!({"attachment":"python-replay","action":"ack","sequence":frame.sequence.to_string()}),
+        );
+        if frame.exited {
+            assert_eq!(frame.code, Some(7));
+            break;
+        }
+    }
+    let text = String::from_utf8(bytes).unwrap();
+    assert!(
+        text.contains("READY:literal & %PATH%:环境 & %PATH%"),
+        "{text}"
+    );
+    assert!(text.contains("LAST:中文 e\u{301}"), "{text}");
+    assert!(first.sequence <= sequence.unwrap());
+    std::fs::write(root.join("foreign.py"), "import time\ntime.sleep(30)\n").unwrap();
+    let foreign_config = uterm_core::python::RunConfig {
+        interpreter: config["interpreter"].as_str().unwrap().into(),
+        target: "foreign.py".into(),
+        ..Default::default()
+    };
+    let Reply::Opened { generation } = client
+        .request(Operation::OpenTask {
+            spec: utermd_local::daemon::SessionSpec {
+                id: "foreign-task".into(),
+                directory: root.clone(),
+                shell: "default".into(),
+                agent: None,
+                ssh: None,
+            },
+            task: utermd_local::tasks::TaskInfo {
+                root: root.clone(),
+                name: "Other task".into(),
+                action: "java:run".into(),
+                created: 1,
+            },
+            launch: uterm_core::python::build_launch(&root, &foreign_config, Default::default())
+                .unwrap(),
+            rows: 30,
+            cols: 100,
+        })
+        .unwrap()
+    else {
+        panic!("Foreign task did not open");
+    };
+    let denied = core.execute(&serde_json::to_vec(&json!({"version":1,"id":"foreign-stop","method":"python.stop","params":{"id":"foreign-task","generation":generation,"force":true}})).unwrap());
+    assert_eq!(denied.error.unwrap().code, "PYTHON_TASK_INVALID");
+    assert!(
+        matches!(client.request(Operation::TaskSnapshot).unwrap(), Reply::Tasks(tasks) if tasks.iter().any(|task| task.spec.id == "foreign-task" && task.running))
+    );
+    client
+        .request(Operation::StopTask {
+            id: "foreign-task".into(),
+            generation,
+            force: true,
+        })
+        .unwrap();
+    core.close();
+}
 #[test]
 fn cli_close_rejects_a_stale_generation_and_preserves_the_saved_session() {
     let temporary = tempfile::tempdir().unwrap();

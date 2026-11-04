@@ -202,52 +202,30 @@ Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
 
 #### Git 与编辑器并发验证
 
-已完成四平台恢复／并发基线为 head `9de80a8e1e4fb7f91a6b78bcf6d3dc6d4db45610`、实际 tested merge
-`020bee68b0733da08fa6528d6e51392a5132e6bb`。[原生 CI 41608100652](https://github.com/YondFane/uTerm/actions/runs/41608100652)
-和 [Tauri CI 41608101046](https://github.com/YondFane/uTerm/actions/runs/41608101046)
-各两个 job 均通过。产物：
-[ARM 13217632752](https://github.com/YondFane/uTerm/actions/runs/41608100652/artifacts/13217632752)、
-[Intel 13218091945](https://github.com/YondFane/uTerm/actions/runs/41608100652/artifacts/13218091945)、
-[Windows 13218207710](https://github.com/YondFane/uTerm/actions/runs/41608101046/artifacts/13218207710)、
-[旧 Mac 13218186999](https://github.com/YondFane/uTerm/actions/runs/41608101046/artifacts/13218186999)。报告均记录干净源码、系统、架构和工具链。
+当前四平台 Git／编辑器基线为源码 head `429428cbb8787c657c39c14450b4e997d0f6a6fe`、实际 tested merge
+`a0b1b0806bfae1558b9f87ea6c46859ebd93792d`。
+[两个原生 job](https://github.com/YondFane/uTerm/actions/runs/41765322849)和
+[两个 Tauri job](https://github.com/YondFane/uTerm/actions/runs/41765322731)均通过。可下载产物：
+[ARM 13292342975](https://github.com/YondFane/uTerm/actions/runs/41765322849/artifacts/13292342975)、
+[Intel 13291844070](https://github.com/YondFane/uTerm/actions/runs/41765322849/artifacts/13291844070)、
+[Windows 13292857277](https://github.com/YondFane/uTerm/actions/runs/41765322731/artifacts/13292857277)、
+[Tauri Mac 13292343203](https://github.com/YondFane/uTerm/actions/runs/41765322731/artifacts/13292343203)。报告记录干净源码、系统、架构和工具链；merge 父提交已核对为 release 基线及本源码。
+[准确证据和前序失败](https://github.com/YondFane/uTerm/issues/35#issuecomment-6621732619)保留在 #35。
 
-原生 ARM macOS 15.8.2 与 Intel macOS
-15.7.9 通过十四项 Swift 测试及十四张真实 Git 图。真实 NSMenu／NSAlert／NSPopUpButton／NSButton／NSPasteboard 验证默认取消、完整原始来源复制且禁用恢复、过期拒绝、损坏字节保留、缺失只读预览及明确恢复。已目视 ARM 的
-`native-git-favorite-recovery-preview.png` 和
-`native-git-favorite-recovery-missing-zh-light.png`。同一运行保留 checkout
-hook 执行中取消、编辑器冻结至 Git 完成、WORKTREE_SYNC 明确刷新，以及当前分支／外部文件／草稿分别保留的证据。
+原生 ARM macOS 15.8.2、Intel 15.7.9 使用 Xcode 16.4／Swift 6.1.2／Rust
+1.99.1，十四项 Swift 检查及十四张真实 Git 图通过。真实原生菜单、确认与剪贴板覆盖默认取消、完整原始来源复制且禁用恢复、过期拒绝、损坏字节保留、缺失预览及明确恢复。实际在途 WebKit 取消保持编辑器冻结至 Git 完成；仓库／列表同步失败要求明确刷新。
 
 Windows Server 2025 x64 和过渡期 macOS 26.6.2
-arm64 各通过三十个真实隔离 Tauri 场景，清理无错误。系统剪贴板与准确归档来源字节一致。已目视 Windows 的
-`git-git-favorite-recovery-source.png`、`git-git-favorite-recovery-conflict.png`、
-`editor-checkpoint-editor-write-rejected.png` 及旧 Mac 的来源复制图。 `editor-writer-lock.json`
-及对应场景报告证明真实写锁拒绝、明确重试草稿、CRLF／NFD 持久化、SIGKILL／重启、BOM／CRLF 保存和正常退出。基线中的核心／FFI／契约、392 前端（十跳过）、100 后端（十忽略）、类型、生产／桌面构建、本地化、格式及双语文档均通过。
+arm64 各通过四十个真实隔离 Tauri 场景，清理无错误。实际 post-checkout
+hook 暂停 Git；取消保留调用方，正常退出显示拒绝，释放后产生准确 `GIT_WRITE_FINISHED\n`
+字节和目标分支，随后正常退出。已目视两平台的 `git-git-write-quit-blocked.png`；图片附有
+`git-cancel-exit.json`、场景 JSON 及进程日志。Linux 在同一干净源码也通过四十场景，并目视退出保护截图。
 
-核心恢复检查覆盖校验快照与准确来源、当前文件 CAS、校验和／占用路径失败、无覆盖安装、全仓库恢复／撤回及备份上限。真实 Rust／React 检查还覆盖迟到回复、超过 20k 预览的完整 CRLF／NFD 复制、原生复制可见失败／重试、先退出时拒绝恢复及等待已分发恢复确认。其他编辑器／传输保护暂缓退出后，会重新核对共享存储；失败迭代保留在
-[Issue #35](https://github.com/YondFane/uTerm/issues/35)。
+同一运行保留真实 Worktree 确认、取消／脏／过期拒绝、明确重新读取／再次预览及干净删除；拒绝保留元数据／文件字节，成功保留分支。固定预览版本拒绝队列／外部更新，不悄然采用新状态。真实 SDK 检查持有实际设置写入回复，拒绝排队删除且不发送 Git 删除；显示名称／路径仍须匹配预览快照。
 
-Tauri 删除预览固定版本的修改在 Linux 通过三十六项核心／transport 检查及一项 App 集成检查（包括真实 Rust 进程队列冲突）、392 前端（十跳过）、类型、生产构建、本地化、格式及双语文档检查。SDK 持有真实设置写入回复，让删除排队，随后拒绝旧预览且不发送 Git 删除；另一次外部写入在 Core 拒绝。显示名称／路径变化会拒绝，脏数据保留至明确清理重试。
+恢复检查覆盖准确来源剪贴板字节、真实写锁拒绝后的明确草稿重试、CRLF／NFD 持久化、SIGKILL／重启、BOM／CRLF 保存和正常退出。核心恢复覆盖校验和、当前文件 CAS、占用路径、缺失无覆盖安装、全仓库恢复／撤回及备份上限。真实 Rust／React 检查覆盖迟到回复、超过 20k 显示预览的完整来源、原生复制可见失败／重试、先退出时拒绝恢复及等待恢复确认。其他保护暂缓退出后重新核对共享存储。
 
-紧凑的重新读取操作及删除预览固定版本在干净 head
-`218f7e012aa362cab7cf6073c340f5c3dc6714ad`、实际 tested merge
-`1574b341bcfe6d2f24801fd2c6f2c9bd4dfd5bec` 通过：
-[两个原生 job](https://github.com/YondFane/uTerm/actions/runs/41617704972)和
-[两个 Tauri job](https://github.com/YondFane/uTerm/actions/runs/41617704870)均成功。产物：
-[ARM](https://github.com/YondFane/uTerm/actions/runs/41617704972/artifacts/13222326850)、
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41617704972/artifacts/13222292634)、
-[Windows](https://github.com/YondFane/uTerm/actions/runs/41617704870/artifacts/13221884137)、
-[旧 Mac](https://github.com/YondFane/uTerm/actions/runs/41617704870/artifacts/13223430105)。Windows
-x64 Server 2025 和过渡期 macOS 26.6.2
-arm64 各通过三十六个真实桌面场景，源码干净且清理无错误。取消／脏拒绝保留元数据和文件字节；外部版本冲突须明确重新读取／再次预览；干净删除保留分支。已目视 Windows 的
-`git-git-worktree-delete-conflict.png`，确认重新读取按钮紧凑；已目视旧 Mac 的
-`git-git-worktree-delete-review.png`，确认字面目录及默认取消。Linux 在此 head 也通过三十六个真实场景。
-
-另一个 Linux 真实 Rust／Git 回归先在取消、超时、关闭三种情况复现调用方提前解除保护。真实 post-checkout
-hook 有界暂停写入；修复 transport 后，调用方保持保护至释放，最终文件字节及分支证明 Git 写入已完成，取消不交付迟到成功。另行检查只读立即取消，以及取消后实际写入失败。本 transport 修改仍需自己的 Windows／macOS
-CI 结果，前述 218 结果不代表此修改验收。此 transport 修改在 Linux 通过四十八项内容／Core 专项、397 前端（十跳过）、类型、生产构建、格式、本地化及双语文档检查。
-
-后端退出保护通过两项工作线程生命周期检查：调用方丢失不释放排队／执行中的线程，线程失败只释放其自己的操作。Linux 后端 102 项通过（十忽略），前端 397（十跳过）、类型、生产构建、格式及本地化通过。真实隔离 Tauri
-QA 新增实际 checkout 暂停、取消内容请求、拒绝正常退出、准确 hook 最终输出及随后正常退出。这些新窗口场景还需在自己的已提交源码及各平台 CI 执行，此处尚不声称有截图或运行通过。
+基线通过 397 前端（十跳过）、102 后端（十忽略）、Core／FFI、不可变 helper 兼容、类型、生产／桌面构建、本地化、格式及双语文档。真实 Git 取消／超时／关闭专项在调用方等待修复前失败、修复后通过；只读取消仍立即返回。后端生命周期检查在调用方丢失后保留排队线程，失败只释放自身所有权。这些结果不代表后续 Python 服务修改验收。
 
 完整取消／生命周期矩阵及 #16 依赖使 #35 保持开放。人工键盘／IME／焦点、正式签名／公证和已安装版本升级／回退未验收；上述检查不代表发版验收。
 
@@ -1696,6 +1674,19 @@ MiB 输出，宿主合计保留最多 32 个已完成任务。历史有界且仅
 普通“停止”允许中断清理完成，并保留进程的收尾日志。清理期间任务保持运行状态，仍可使用“强制停止”。
 
 退出 uTerm 只分离后台任务；重新打开同一项目的 Python 面板，可重新附加原任务并回放日志。普通终端发现不包含这些任务。旧宿主缺少任务／管道支持时显示升级错误，保留已有会话继续运行。脚本和工作目录的选择不能越出所选根目录；解释器可以安装在其他目录。
+
+#### 共享 Python 服务验证
+
+开发中的 `uterm-core::python`
+管理既有解释器探测、源码扫描、五种启动模式、配置及宿主任务规则。Tauri 只保留 IPC、文件选择和平台应用数据／helper 适配。版本化
+`python.*` Core／FFI 调用使用同一服务，Rust
+DTO 生成 TypeScript／Swift 类型。原生 Python 窗口及 Java／Maven 接入仍待完成，不能由这些 API 推断对应界面已可用。
+
+`python-run-v1/configuration.json`
+格式和项目根目录键不变。更新后的客户端在修订校验和原子替换前使用操作系统写锁；忙碌须明确重试。读取默认值／任务不创建配置或宿主；损坏字节和过期版本拒绝替换。此锁不能改造旧的已安装二进制。停止先核对任务 generation 及 Python 任务族，再请求宿主终止。
+
+Linux 检查实际运行 Python 脚本及隔离 Rust 宿主，覆盖 Unicode／Shell 字面参数、临时环境、非零退出、原始收尾输出、消费 ack、分离／回放和有界清理。过期 generation 及实际其他任务族不能被 Python 请求终止。独立 Rust 进程验证配置 CAS、真实操作系统写锁、明确重试和损坏文件保留。原有模式／路径／扫描测试随实现迁入，没有添加另一套 Swift 启动计划器。Core／FFI、前端及后端回归在本地通过。此抽取仍需自己的 Windows／macOS
+CI 及原生窗口验收；下方旧 Windows 框架证据不用于本改动。
 
 #### Python 控件布局 Linux 验证
 

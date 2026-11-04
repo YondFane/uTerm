@@ -3,6 +3,7 @@ mod control;
 pub mod files;
 pub mod git;
 pub mod host;
+pub mod python;
 pub mod session_state;
 pub mod state;
 pub mod store;
@@ -114,6 +115,51 @@ impl Core {
         self.links.shutdown();
         if let Ok(mut control) = self.control.lock() {
             control.take();
+        }
+    }
+    fn python_request(&self, method: &str, params: &Value) -> Result<Value> {
+        let directory = || string(params, "directory");
+        let root = || python_result(python::root(&directory()?));
+        match method {
+            "python.configuration" => python_json(python_result(python::configuration(
+                &python::config_path(self.data_root()?),
+                &root()?,
+            ))?),
+            "python.saveConfiguration" => python_json(python_result(python::save_configuration(
+                &python::config_path(self.data_root()?),
+                &root()?,
+                &string(params, "revision")?,
+                serde_json::from_value(params["config"].clone())?,
+            ))?),
+            "python.interpreters" => {
+                python_json(python::interpreters(&root()?, &string(params, "selected")?))
+            }
+            "python.project" => python_json(python_result(python::project_info(&root()?))?),
+            "python.tasks" => python_json(python_result(python::tasks(
+                &self.data_root()?.join("local-daemon-v1"),
+                &directory()?,
+            ))?),
+            "python.start" => {
+                let config = serde_json::from_value(params["config"].clone())?;
+                let environment = serde_json::from_value(params["environment"].clone())?;
+                let prepared = python_result(python::prepare(&directory()?, &config, environment))?;
+                python_json(python_result(python::start(
+                    &self.host_client()?,
+                    prepared,
+                ))?)
+            }
+            "python.stop" => {
+                python_result(python::stop(
+                    &self.host_client()?,
+                    string(params, "id")?,
+                    string(params, "generation")?,
+                    params["force"].as_bool().ok_or_else(|| {
+                        CoreError::new("INVALID_PARAMS", "force must be a boolean")
+                    })?,
+                ))?;
+                Ok(Value::Null)
+            }
+            _ => Err(CoreError::new("METHOD_NOT_FOUND", "Unknown Python method")),
         }
     }
     fn control(&self) -> Result<Arc<utermd_local::control::Control>> {
@@ -489,6 +535,7 @@ impl Core {
                 self.links.stop_session(&id);
                 Ok(Value::Null)
             }
+            method if method.starts_with("python.") => self.python_request(method, &params),
             "terminal.open" => {
                 if params.get("ssh").is_some() {
                     return Err(CoreError::new(
@@ -975,6 +1022,24 @@ fn draft_revision(params: &Value) -> Result<Option<&str>> {
         )),
     }
 }
+fn python_result<T>(result: anyhow::Result<T>) -> Result<T> {
+    result.map_err(|error| {
+        let message = format!("{error:#}");
+        let code = message
+            .split(':')
+            .next()
+            .filter(|value| {
+                value.starts_with("PYTHON_")
+                    && value.chars().all(|c| c.is_ascii_uppercase() || c == '_')
+            })
+            .unwrap_or("PYTHON_OPERATION_FAILED");
+        CoreError::new(code, &message)
+    })
+}
+fn python_json(value: impl Serialize) -> Result<Value> {
+    serde_json::to_value(value).map_err(Into::into)
+}
+
 pub(crate) fn string(value: &Value, key: &str) -> Result<String> {
     value
         .get(key)

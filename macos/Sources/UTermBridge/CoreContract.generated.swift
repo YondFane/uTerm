@@ -240,6 +240,40 @@ public struct CoreProjectContext: Codable, Sendable {
     public var worktreeId: String?
 }
 
+public struct CorePythonCandidate: Codable, Sendable {
+    public var mode: String
+    public var target: String
+    public var working_directory: String
+}
+
+public struct CorePythonConfiguration: Codable, Sendable {
+    public var configured: Bool
+    public var project: CorePythonRunConfig
+    public var revision: String
+}
+
+public struct CorePythonInterpreter: Codable, Sendable {
+    public var path: String
+    public var version: String
+    public var virtual_environment: Bool
+}
+
+public struct CorePythonProjectInfo: Codable, Sendable {
+    public var candidates: [CorePythonCandidate]
+    public var truncated: Bool
+}
+
+public struct CorePythonRunConfig: Codable, Sendable {
+    public var arguments: [String]?
+    public var host: String?
+    public var interpreter: String?
+    public var mode: String?
+    public var port: UInt16?
+    public var reload: Bool?
+    public var target: String?
+    public var working_directory: String?
+}
+
 public struct CoreRequest: Codable, Sendable {
     public var id: String
     public var method: String

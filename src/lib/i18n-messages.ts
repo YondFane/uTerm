@@ -19,6 +19,12 @@ export const messages: Record<string, string> = {
   复制完整预览: "Copy full preview",
   恢复所有仓库收藏: "Restore all repository favorites",
   "请先完成收藏恢复。": "Finish recovering favorites first.",
+  "其他窗口正在保存 Python 配置，请稍后明确重试。":
+    "Another window is saving Python configuration. Retry explicitly after it finishes.",
+  "任务已不存在，请重新读取运行状态。": "The task no longer exists. Reload its status.",
+  "任务已被替换，停止请求已取消，请重新读取运行状态。":
+    "The task was replaced. Stop was cancelled; reload its status.",
+  "此任务不属于 Python 运行，停止请求已取消。": "This is not a Python task. Stop was cancelled.",
   "请先完成 Worktree 删除。": "Finish deleting the worktree first.",
   "请等待文件或 Git 操作完成后再退出。":
     "Wait for file or Git operations to finish before quitting.",
