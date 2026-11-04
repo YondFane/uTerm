@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-05
+updated: 2026-11-04
 ---
 
 # uTerm 功能说明
@@ -117,7 +117,7 @@ CI 在 Core 测试失败后继续执行独立契约、构建和真实应用检�
 
 `bash scripts/macos-input-control-smoke.sh`
 操作两个同时运行的隔离原生应用进程，检查原生接管按钮、只读输入／resize 拒绝、输出／ack、观察者正常退出、重新接管和准确关闭，并采集四张 WindowServer 截图。`pnpm qa:shared-state`
-包含两个同时运行的真实 Tauri 进程，通过实际终端输入和接管按钮执行六个场景。隔离 QA 构建允许并存应用进程，为观察者分配单独的临时 CLI 控制端点，但两个进程仍连接同一共享存储、宿主和会话。Windows 样例通过真实 PowerShell 终端输入明确写出 UTF-8 标记文件，与文本读取器匹配，不更改应用 Shell。编译隔离的观察器读取 Tauri 实际会话宿主，失败清理只关闭临时 QA 根目录内准确 generation 的会话，再停止空闲宿主。真实原生并存检查已在 macOS
+包含两个同时运行的真实 Tauri 进程，通过实际终端输入和接管按钮执行六个场景。QA 首条命令等待实际 xterm 输入框可写且已解析终端行显示 Shell 提示符，接管后也等待输入可写；报告保留首次就绪证据。命令只发送一次，不修改应用 Shell，不重放输入。隔离 QA 构建允许并存应用进程，为观察者分配单独的临时 CLI 控制端点，但两个进程仍连接同一共享存储、宿主和会话。Windows 样例通过真实 PowerShell 终端输入明确写出 UTF-8 标记文件，与文本读取器匹配，不更改应用 Shell。编译隔离的观察器读取 Tauri 实际会话宿主，失败清理只关闭临时 QA 根目录内准确 generation 的会话，再停止空闲宿主。真实原生并存检查已在 macOS
 ARM／Intel 通过，对应 source `670f421354150e112f71d0ac3c94f29681296993`／tested merge
 `c5e4c54dfa4acbe381c64a81b113b4d5c659a97b`（Native run
 41818643260），包含每架构四张 WindowServer 截图及独立 CLI 回归。Tauri source
@@ -130,8 +130,10 @@ GPU 截图仍为空白。输入文件副作用与已解析文字不代表 GPU �
 Tauri 并存 QA 保留原始 GPU 截图，再通过 `WEBGL_lose_context`
 令实际 WebGL 上下文丢失，要求 xterm 现有 DOM 回退显示相同 Shell 标记。两个真实应用进程在恢复、接管与输出期间保持同一会话／generation，报告区分初始 WebGL 与已使用 DOM。云端 Linux 在干净 source
 `6b2a892ae410c575d3d5e7a161be9d4dad46ab0d`
-通过全部 50 场景，两个进程均实际从 WebGL2 丢失后恢复 DOM，cleanupErrors=[]；对应 Windows／macOS
-CI 仍待完成。DOM 图不代表 GPU 捕获／显示验收，macOS GPU 空白截图缺口保持开放。
+通过全部 50 场景，两个进程均实际从 WebGL2 丢失后恢复 DOM，cleanupErrors=[]。source
+`192f00a4ae0cfd665383a820d903e86e2ed97295`／tested merge `4c2ba5479312daaf11a127efb18757d9e3b64936`
+的 Windows 通过 50 场景；macOS 在 40 场景后因首次拥有者命令未生成标记文件而失败。就绪等待在 Linux 工作树通过 44 项终端回归、类型检查、生产构建和全部 50 个真实应用场景（dirty=true，cleanupErrors=[]），仍需新源码对应的 Windows／macOS 应用证据。DOM 图不代表 GPU 捕获／显示验收，macOS
+GPU 空白截图缺口保持开放。
 
 ### 共享保存状态
 

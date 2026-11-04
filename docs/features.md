@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-05
+updated: 2026-11-04
 ---
 
 # uTerm feature guide
@@ -181,13 +181,16 @@ values.
 the native take-control button, passive input/resize rejection, output/ack, ordinary viewer exit,
 reacquisition and exact close, with four WindowServer captures. `pnpm qa:shared-state` includes two
 concurrent real Tauri processes and six ownership scenes using actual terminal input and takeover
-buttons. The isolated QA build permits concurrent app processes and gives the viewer a separate
-temporary CLI-control endpoint while both processes retain the same shared store, host and session.
-The Windows fixture explicitly writes UTF-8 marker files through actual PowerShell terminal input,
-matching the text reader without changing the application shell. Its compile-gated observer reads
-the actual Tauri session host, and failure cleanup closes only the disposable QA root's exact
-session generations before idle shutdown. Real native ownership checks passed on macOS ARM/Intel at
-source `670f421354150e112f71d0ac3c94f29681296993` / tested merge
+buttons. Before its first command, QA waits for the actual xterm input field to become writable and
+the shell prompt to appear in parsed terminal rows; takeovers also wait for writable input. The
+report retains that initial readiness evidence. Commands are sent once, without changing the
+application shell or replaying input. The isolated QA build permits concurrent app processes and
+gives the viewer a separate temporary CLI-control endpoint while both processes retain the same
+shared store, host and session. The Windows fixture explicitly writes UTF-8 marker files through
+actual PowerShell terminal input, matching the text reader without changing the application shell.
+Its compile-gated observer reads the actual Tauri session host, and failure cleanup closes only the
+disposable QA root's exact session generations before idle shutdown. Real native ownership checks
+passed on macOS ARM/Intel at source `670f421354150e112f71d0ac3c94f29681296993` / tested merge
 `c5e4c54dfa4acbe381c64a81b113b4d5c659a97b` (Native run 41818643260), including four WindowServer
 captures per architecture and the standalone CLI regression. Tauri source
 `b7a5e60f6252aab6b829a8e0659a35c8e5509637` / tested merge `3029133cd9dd7433a06d31cb1ea76db885df94aa`
@@ -205,8 +208,13 @@ same shell marker. Both actual application processes retain the same session/gen
 recovery, takeover and output; reports distinguish initial WebGL from an already active DOM
 renderer. Cloud Linux passed all 50 real app scenes at clean source
 `6b2a892ae410c575d3d5e7a161be9d4dad46ab0d`, including actual WebGL2 context loss and DOM recovery in
-both processes, with cleanupErrors=[]. Windows/macOS source-bound CI remains pending. A DOM capture
-does not establish GPU capture/display acceptance; the macOS GPU blank-capture gap remains open.
+both processes, with cleanupErrors=[]. At source `192f00a4ae0cfd665383a820d903e86e2ed97295` / tested
+merge `4c2ba5479312daaf11a127efb18757d9e3b64936`, Windows passed 50 scenes; macOS failed after 40
+scenes when the first owner command produced no marker file. The readiness wait passed 44 terminal
+regressions, type checking, production build and all 50 real app scenes on the Linux working tree
+(dirty=true, cleanupErrors=[]). It still requires new source-bound Windows/macOS app evidence. A DOM
+capture does not establish GPU capture/display acceptance; the macOS GPU blank-capture gap remains
+open.
 
 ### Shared saved state
 

@@ -837,6 +837,10 @@ async function runInputControl(context: Context) {
     "real terminal running",
   );
   const readonly = () => section.querySelector("[data-terminal-take-control]");
+  const writable = () => {
+    const field = section.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
+    return !!field && !field.readOnly && !field.disabled && !readonly();
+  };
   const display = () => {
     const screen = section.querySelector<HTMLElement>(".xterm-screen");
     const bounds = screen?.getBoundingClientRect();
@@ -959,7 +963,10 @@ async function runInputControl(context: Context) {
     manualKeyboardClipboardAcceptance: false,
   };
   if (owner) {
-    await until(() => !readonly(), "initial owner input");
+    const initialInput = await until(() => {
+      const prompt = display().text.replaceAll("\u00a0", " ").trimEnd();
+      return writable() && /[$#>%]$/.test(prompt) && { writable: true, prompt: prompt.slice(-256) };
+    }, "initial actual shell prompt and writable xterm input");
     sendMarker("OWNER_READY", "owner-input.txt");
     await until(
       async () => (await file("owner-input.txt"))?.includes("OWNER_READY"),
@@ -967,11 +974,17 @@ async function runInputControl(context: Context) {
     );
     await scene("input-owner-gpu-ready", {
       ...identity,
+      initialInput,
       actualInput: true,
       terminalDisplay: await rendered("OWNER_READY"),
     });
     rendererRecovery = await recoverRenderer("OWNER_READY");
-    await scene("input-owner-ready", { ...identity, actualInput: true, rendererRecovery });
+    await scene("input-owner-ready", {
+      ...identity,
+      initialInput,
+      actualInput: true,
+      rendererRecovery,
+    });
     await until(readonly, "old owner becomes readonly after viewer takeover");
     sendMarker("STALE_OWNER", "stale-owner.txt");
     await until(
@@ -991,10 +1004,7 @@ async function runInputControl(context: Context) {
     const take = readonly() as HTMLButtonElement;
     assert(take && !take.disabled, "Take input control is unavailable after viewer exit");
     take.click();
-    await until(
-      () => !readonly(),
-      "original client explicitly reacquires after ordinary viewer exit",
-    );
+    await until(writable, "original client explicitly reacquires after ordinary viewer exit");
     sendMarker("OWNER_RETURNED", "owner-returned.txt");
     await until(
       async () => (await file("owner-returned.txt"))?.includes("OWNER_RETURNED"),
@@ -1037,7 +1047,7 @@ async function runInputControl(context: Context) {
     const take = readonly() as HTMLButtonElement;
     assert(take && !take.disabled, "The real take-control button is unavailable");
     take.click();
-    await until(() => !readonly(), "explicit take-control DOM click");
+    await until(writable, "explicit take-control enables actual xterm input");
     sendMarker("VIEWER_READY", "viewer-input.txt");
     await until(
       async () => (await file("viewer-input.txt"))?.includes("VIEWER_READY"),

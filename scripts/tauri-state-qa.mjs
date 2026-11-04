@@ -317,6 +317,8 @@ try {
           assert.equal(owner.observed.size, 5, owner.log);
           assert.equal(viewer.observed.size, 3, viewer.log);
           const ready = scenes.find((s) => s.scenario === "input-owner-ready").checks;
+          assert.equal(ready.initialInput.writable, true);
+          assert.match(ready.initialInput.prompt, /[$#>%]$/);
           const passive = scenes.find((s) => s.scenario === "input-viewer-readonly").checks;
           assert.equal(ready.sessionID, passive.sessionID);
           assert.equal(ready.generation, passive.generation);
