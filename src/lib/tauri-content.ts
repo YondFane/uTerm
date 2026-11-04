@@ -5,8 +5,41 @@ import { editorDraftMethods, gitFavoriteMethods } from "./content-transport.ts";
 import type { ContentPort } from "./content-transport.ts";
 
 export { isTauri };
+const writes = new Set([
+  "editor_drafts_import",
+  "editor_drafts_put",
+  "editor_drafts_remove",
+  "git_favorites_import",
+  "git_favorites_accept_shared",
+  "git_favorites_write",
+  "file_save",
+  "file_copy",
+  "file_mutate",
+  "ssh_file_save",
+  "ssh_file_mutate",
+  "git_switch_branch",
+  "git_rollback_file",
+  "git_switch_remote_branch",
+  "git_branch_action",
+  "git_reference_action",
+  "create_worktree",
+  "delete_worktree",
+  "content_font_adjust",
+  "content_settings_patch",
+]);
+const pendingWrites = new Map<string, Promise<void>>();
+const requestKey = (document: string, id: string) => JSON.stringify([document, id]);
 export const tauriContentPort: ContentPort = {
   async request(message) {
+    const key = requestKey(message.document, message.id);
+    let complete: (() => void) | undefined;
+    if (writes.has(message.method))
+      pendingWrites.set(
+        key,
+        new Promise<void>((resolve) => {
+          complete = resolve;
+        }),
+      );
     try {
       let result: unknown;
       if (
@@ -43,11 +76,18 @@ export const tauriContentPort: ContentPort = {
           message: messageText,
         },
       };
+    } finally {
+      if (complete) {
+        pendingWrites.delete(key);
+        complete();
+      }
     }
   },
-  // Existing IPC cannot interrupt a committed file write; ContentScope discards late replies.
-  // 现有 IPC 不能中断已提交的文件写入；ContentScope 丢弃迟到响应。
-  cancel() {},
+  // IPC cannot stop an ongoing write; retain its caller until the actual reply.
+  // IPC 无法停止执行中的写入；保留调用方直到实际回复。
+  cancel(document, id) {
+    return pendingWrites.get(requestKey(document, id));
+  },
   subscribe(kind, document, receive) {
     return listen(kind, (event) =>
       receive({ version: 1, document, kind, payload: (event.payload ?? null) as JSONValue }),

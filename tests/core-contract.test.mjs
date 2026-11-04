@@ -11,6 +11,7 @@ import {
   symlinkSync,
   renameSync,
   existsSync,
+  chmodSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -1634,6 +1635,97 @@ function gitFixture(t) {
   );
   return { root, directory, git, head: git("rev-parse", "HEAD").trim() };
 }
+
+test("Tauri Git cancellation keeps the caller protected until the actual checkout finishes", async (t) => {
+  const previous = Object.getOwnPropertyDescriptor(global, "window");
+  Object.defineProperty(global, "window", { configurable: true, writable: true, value: {} });
+  t.after(() => {
+    clearMocks();
+    if (previous === undefined) delete global.window;
+    else Object.defineProperty(global, "window", previous);
+  });
+  for (const kind of ["abort", "timeout", "close"]) {
+    await t.test(kind, async (t) => {
+      const call = await client(t),
+        { directory, git } = gitFixture(t),
+        hooks = join(directory, ".git", "qa-hooks"),
+        entered = join(directory, ".git", "qa-git-entered"),
+        release = join(directory, ".git", "qa-git-release"),
+        completed = signal();
+      git("branch", "topic");
+      mkdirSync(hooks);
+      const hook = join(hooks, "post-checkout");
+      writeFileSync(
+        hook,
+        "#!/bin/sh\n: > .git/qa-git-entered\ni=0\n" +
+          'while [ ! -e .git/qa-git-release ] && [ "$i" -lt 400 ]; do\n' +
+          "i=$((i+1))\nsleep 0.05\ndone\n" +
+          "test -e .git/qa-git-release || exit 1\n" +
+          "printf 'GIT_WRITE_FINISHED\\n' > outside.txt\n",
+      );
+      chmodSync(hook, 0o755);
+      git("config", "core.hooksPath", hooks.replaceAll("\\", "/"));
+      let backendFinished = false,
+        protectedByCaller = true;
+      mockIPC(async (command, args) => {
+        assert.equal(command, "git_switch_branch");
+        try {
+          const reply = await call("git.switchBranch", args);
+          assert.equal(reply.error, undefined);
+          return reply.result;
+        } finally {
+          backendFinished = true;
+          completed.resolve();
+        }
+      });
+      const scope = new ContentScope(
+          tauriContentPort,
+          `actual-git-${kind}`,
+          kind === "timeout" ? 50 : 10000,
+        ),
+        controller = new AbortController(),
+        pending = scope
+          .call(
+            "git_switch_branch",
+            { directory, branch: "topic", expected: "main" },
+            controller.signal,
+          )
+          .finally(() => {
+            protectedByCaller = false;
+          });
+      const rejected = assert.rejects(pending, {
+        code: { abort: "CANCELLED", timeout: "TIMEOUT", close: "CLOSED" }[kind],
+      });
+      try {
+        const deadline = Date.now() + 10000;
+        while (!existsSync(entered) && Date.now() < deadline)
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        assert.ok(existsSync(entered), "actual Git post-checkout hook must be running");
+        if (kind === "abort") controller.abort();
+        if (kind === "close") scope.close();
+        await new Promise((resolve) => setTimeout(resolve, 90));
+        assert.equal(backendFinished, false);
+        assert.equal(readFileSync(join(directory, "outside.txt"), "utf8"), "outside\n");
+        assert.equal(
+          protectedByCaller,
+          true,
+          "cancellation must not release the editor/quit caller while Git can still write",
+        );
+      } finally {
+        writeFileSync(release, "release\n");
+        await completed.promise;
+        await rejected;
+        scope.close();
+      }
+      assert.equal(protectedByCaller, false);
+      assert.equal(git("branch", "--show-current").trim(), "topic");
+      assert.equal(readFileSync(join(directory, "outside.txt"), "utf8"), "GIT_WRITE_FINISHED\n");
+      t.diagnostic(
+        `actual Git hook: ${kind} suppressed success and retained the caller until completion`,
+      );
+    });
+  }
+});
 
 test("shared Git contracts preserve selected-directory status, literal paths, history and stale branch protection", async (t) => {
   const call = await client(t),

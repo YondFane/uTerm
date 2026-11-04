@@ -2,7 +2,49 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { ContentScope } from "../src/lib/content-transport.ts";
 import { webKitContentPort } from "../src/lib/webkit-content.ts";
+import { tauriContentPort } from "../src/lib/tauri-content.ts";
+import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test("Tauri read cancellation remains immediate while write failures drain without late delivery", async (t) => {
+  const previous = global.window;
+  global.window = {};
+  const backend = deferred();
+  mockIPC(() => backend.promise);
+  const read = new ContentScope(tauriContentPort, "read-cancel"),
+    write = new ContentScope(tauriContentPort, "write-cancel"),
+    controller = new AbortController();
+  t.after(() => {
+    read.close();
+    write.close();
+    clearMocks();
+    if (previous === undefined) delete global.window;
+    else global.window = previous;
+  });
+  const pendingRead = read.call("file_read", {}, controller.signal),
+    pendingWrite = write.call("file_save", {}, controller.signal);
+  let writeSettled = false;
+  const failedWrite = assert.rejects(
+    pendingWrite.finally(() => {
+      writeSettled = true;
+    }),
+    {
+      code: "CANCELLED",
+      message: /reload before retrying/,
+    },
+  );
+  const failedRead = assert.rejects(pendingRead, { code: "CANCELLED" });
+  await tick();
+  controller.abort();
+  await failedRead;
+  await tick();
+  assert.equal(writeSettled, false);
+  backend.resolve(Promise.reject(Error("actual backend failure after cancellation")));
+  await failedWrite;
+  assert.equal(writeSettled, true);
+  mockIPC(() => "new document reply");
+  assert.equal(await write.call("file_read"), "new document reply");
+});
 function deferred() {
   let resolve;
   const promise = new Promise((value) => {

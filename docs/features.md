@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-03
+updated: 2026-11-04
 ---
 
 # uTerm feature guide
@@ -293,8 +293,10 @@ terminal bridge.
 Before a write, open editable file windows save and freeze until completion. A file conflict blocks
 Git and retains both file and recovery draft. The Git window refuses to close during a write. Clean
 editors reload repository changes; dirty or busy editors retain their text. Cancelling or timing out
-a dispatched write does not establish rollback; inspect the repository before retrying. Native
-favorites remain pending.
+a dispatched write does not establish rollback; inspect the repository before retrying. Tauri
+retains the caller's busy/editor protection until the actual IPC write finishes, then reports the
+cancel/timeout/closed error without delivering a late success. Read cancellation remains immediate.
+Native favorites use the shared recovery controls described below.
 
 `project.worktrees.refresh` discovers the stored project's repository and atomically updates its
 Worktree list with an expected revision. Both clients use these rules for registered projects: keep
@@ -418,12 +420,28 @@ real settings-write reply while deletion queues, then rejects the old review wit
 delete; a separate external write is rejected at Core. Changed displayed names/paths are refused,
 and dirty data survives until explicit clean retry.
 
-Clean Linux head `a2a854a6edbba67c633c0ce49ce8d622a01456fd` passes 36 real desktop scenes, including
-Worktree confirmation/default Cancel, retained metadata/file bytes after cancel and dirty refusal,
-external revision conflict, explicit workspace reload/new review and clean deletion with branch
-retained. Four deletion images were inspected. The compact reload-action alignment requires its own
-runtime rerun; Windows/macOS deletion scene results and artifacts for the current change remain
-pending.
+The compact reload action and reviewed deletion pass at clean head
+`218f7e012aa362cab7cf6073c340f5c3dc6714ad`, actual tested merge
+`1574b341bcfe6d2f24801fd2c6f2c9bd4dfd5bec`: both
+[native jobs](https://github.com/YondFane/uTerm/actions/runs/41617704972) and both
+[Tauri jobs](https://github.com/YondFane/uTerm/actions/runs/41617704870) pass. Artifacts:
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41617704972/artifacts/13222326850),
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41617704972/artifacts/13222292634),
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41617704870/artifacts/13221884137),
+[old Mac](https://github.com/YondFane/uTerm/actions/runs/41617704870/artifacts/13223430105). Windows
+x64 Server 2025 and transitional macOS 26.6.2 arm64 each pass 36 real desktop scenes, with clean
+source and no cleanup errors. Cancel and dirty refusal retain metadata/file bytes; external revision
+conflicts require explicit reload/new review; clean deletion retains the branch. Windows
+`git-git-worktree-delete-conflict.png` shows the compact reload button; Mac
+`git-git-worktree-delete-review.png` shows the literal directories and default Cancel. Both were
+inspected. Linux also passed 36 real scenes on this head.
+
+A separate Linux real Rust/Git regression first reproduced early caller release in all three
+abort/timeout/close cases. A bounded actual post-checkout hook pauses the write; after the transport
+fix, the caller remains protected until release, the final file bytes and branch prove the Git write
+completed, and cancellation suppresses late success. Read-only cancellation and a failed write after
+cancellation are checked separately. This transport change needs its own Windows/macOS CI results;
+the preceding 218 results do not establish its acceptance.
 
 Full cancellation/lifecycle matrix and #16 dependencies keep #35 open. Manual keyboard/IME/focus,
 formal signing/notarization and installed-version upgrade/rollback remain unverified. These checks

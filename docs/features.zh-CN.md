@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-03
+updated: 2026-11-04
 ---
 
 # uTerm 功能说明
@@ -169,7 +169,7 @@ ABI 的备份预览及缺失恢复。两个 Tauri 状态 QA 报告通过且清�
 选择本地项目或 Worktree 后，原生 QA 应用的**文件 →
 Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revision 解析选择，Git 请求绑定该仓库和项目，文件窗口不能调用 Git。差异／名称复制使用系统剪贴板；独立桥接避免仓库操作占用终端桥接。
 
-写入前，已打开的可编辑文件窗口保存并冻结直到操作结束。文件冲突阻止 Git，保留文件和恢复草稿；Git 窗口在写入期间拒绝关闭。干净编辑器重新读取仓库变化，脏／忙碌编辑器保留文本。取消或超时不代表已分发写入回滚，重试前应检查仓库。
+写入前，已打开的可编辑文件窗口保存并冻结直到操作结束。文件冲突阻止 Git，保留文件和恢复草稿；Git 窗口在写入期间拒绝关闭。干净编辑器重新读取仓库变化，脏／忙碌编辑器保留文本。取消或超时不代表已分发写入回滚，重试前应检查仓库。Tauri 保留调用方忙碌／编辑器保护至实际 IPC 写入结束，再报告取消／超时／关闭错误，不交付迟到成功；只读取消仍立即返回。
 
 `project.worktrees.refresh`
 按已保存项目发现仓库，带预期 revision 原子更新 Worktree 列表。两端对已登记项目使用相同规则：保留 ID／自定义名称、更新随分支命名的名称、保留有会话的缺失 Worktree、移除未被会话引用且不再发现的项目并保留有效选择。过期 revision 或 Git 发现失败保留已存状态；子目录项目不会把主仓库根目录列为子 Worktree。
@@ -226,8 +226,23 @@ arm64 各通过三十个真实隔离 Tauri 场景，清理无错误。系统剪�
 
 Tauri 删除预览固定版本的修改在 Linux 通过三十六项核心／transport 检查及一项 App 集成检查（包括真实 Rust 进程队列冲突）、392 前端（十跳过）、类型、生产构建、本地化、格式及双语文档检查。SDK 持有真实设置写入回复，让删除排队，随后拒绝旧预览且不发送 Git 删除；另一次外部写入在 Core 拒绝。显示名称／路径变化会拒绝，脏数据保留至明确清理重试。
 
-干净 Linux head `a2a854a6edbba67c633c0ce49ce8d622a01456fd`
-通过三十六个真实桌面场景，含 Worktree 确认／默认取消、取消与脏拒绝后元数据／文件字节保留、外部版本冲突、明确重新读取工作区／再次预览，以及保留分支的干净删除；已目视四张删除图。紧凑的重新读取按钮对齐仍需自己的真实运行重验，本次 Windows／macOS 删除场景结果及产物待核对。
+紧凑的重新读取操作及删除预览固定版本在干净 head
+`218f7e012aa362cab7cf6073c340f5c3dc6714ad`、实际 tested merge
+`1574b341bcfe6d2f24801fd2c6f2c9bd4dfd5bec` 通过：
+[两个原生 job](https://github.com/YondFane/uTerm/actions/runs/41617704972)和
+[两个 Tauri job](https://github.com/YondFane/uTerm/actions/runs/41617704870)均成功。产物：
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41617704972/artifacts/13222326850)、
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41617704972/artifacts/13222292634)、
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41617704870/artifacts/13221884137)、
+[旧 Mac](https://github.com/YondFane/uTerm/actions/runs/41617704870/artifacts/13223430105)。Windows
+x64 Server 2025 和过渡期 macOS 26.6.2
+arm64 各通过三十六个真实桌面场景，源码干净且清理无错误。取消／脏拒绝保留元数据和文件字节；外部版本冲突须明确重新读取／再次预览；干净删除保留分支。已目视 Windows 的
+`git-git-worktree-delete-conflict.png`，确认重新读取按钮紧凑；已目视旧 Mac 的
+`git-git-worktree-delete-review.png`，确认字面目录及默认取消。Linux 在此 head 也通过三十六个真实场景。
+
+另一个 Linux 真实 Rust／Git 回归先在取消、超时、关闭三种情况复现调用方提前解除保护。真实 post-checkout
+hook 有界暂停写入；修复 transport 后，调用方保持保护至释放，最终文件字节及分支证明 Git 写入已完成，取消不交付迟到成功。另行检查只读立即取消，以及取消后实际写入失败。本 transport 修改仍需自己的 Windows／macOS
+CI 结果，前述 218 结果不代表此修改验收。
 
 完整取消／生命周期矩阵及 #16 依赖使 #35 保持开放。人工键盘／IME／焦点、正式签名／公证和已安装版本升级／回退未验收；上述检查不代表发版验收。
 

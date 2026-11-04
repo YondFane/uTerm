@@ -82,7 +82,7 @@ export interface ContentEvent {
 }
 export interface ContentPort {
   request(message: ContentRequest): Promise<ContentReply>;
-  cancel(document: string, id: string): void;
+  cancel(document: string, id: string): void | Promise<void>;
   subscribe(
     kind: string,
     document: string,
@@ -144,11 +144,25 @@ export class ContentScope {
         clearTimeout(timer);
         signal?.removeEventListener("abort", aborted);
         this.pending.delete(id);
-        // Cancellation suppresses delivery; a write already running may still commit.
-        // 取消抑制结果交付；已经执行的写入仍可能提交。
+        // A dispatched write retains its caller's guard until the port drains it.
+        // 已分发写入保留调用方保护，直到端口确认操作结束。
         if (cancel && started) {
           try {
-            this.port.cancel(this.document, id);
+            const drained = this.port.cancel(this.document, id);
+            if (drained) {
+              const failure =
+                error instanceof ContentFailure
+                  ? new ContentFailure(
+                      error.code,
+                      `${error.message}. Dispatched write may have completed; reload before retrying.`,
+                    )
+                  : error;
+              void drained.then(
+                () => reject(failure),
+                () => reject(failure),
+              );
+              return;
+            }
           } catch {
             /* Delivery is already cancelled. 结果交付已取消。 */
           }
