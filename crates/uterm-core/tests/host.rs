@@ -107,7 +107,14 @@ fn python_task_replays_exact_pipe_bytes_and_survives_client_detach() {
             Instant::now() < deadline,
             "Python task did not publish its final frame"
         );
-        let frame = receive.recv_timeout(Duration::from_secs(2)).unwrap();
+        let frame = receive
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .unwrap_or_else(|error| {
+                panic!(
+                    "Python replay did not finish within the shared deadline: {error}; last sequence {sequence:?}; host {:?}",
+                    client.request(Operation::TaskSnapshot)
+                )
+            });
         if let Some(previous) = sequence {
             assert!(frame.sequence >= previous);
         }

@@ -1695,6 +1695,8 @@ Linux 检查实际运行 Python 脚本及隔离 Rust 宿主，覆盖 Unicode／S
 CI 及原生窗口验收；下方旧 Windows 框架证据不用于本改动。 `bash scripts/macos-python-smoke.sh`
 新增真实原生菜单／窗口检查，覆盖配置冲突、实际脚本输出／非零退出、相同 generation 分离／回放、过期停止拒绝及强制停止，保存三张截图，含英文深色及中文浅色窄窗。新脚本和窗口尚未在本地执行；此 Linux 环境没有 AppKit／Swift 工具链。人工输入／IME 及缺失原生控件仍未验收。
 
+原始任务回放检查为完整操作及每次接收共用十秒期限；失败报告最后 sequence 及实际宿主任务状态。此新服务的 Windows 回放仍需自己的 CI 通过，之前的内层两秒接收在声明的整体期限前失败。未跳过测试或必要平台。
+
 #### Python 控件布局 Linux 验证
 
 - 隔离原生应用（`sh.uterm.desktop.qa.pythonlayout`）通过 16 种布局组合：脚本与 FastAPI 配置表单、1380

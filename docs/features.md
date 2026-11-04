@@ -2927,6 +2927,11 @@ refusal and force stop, with three screenshots including English/dark and Chines
 windows. The new script and window have not executed locally: this Linux environment has no
 AppKit/Swift toolchain. Manual input/IME and the missing native controls remain unaccepted.
 
+The raw-task replay check uses one ten-second deadline for the complete operation, including each
+receive, and reports the last sequence and actual host task state on failure. Windows replay for
+this new service remains unaccepted until its own CI passes; an earlier inner two-second receive
+failed before the declared operation deadline. No test or required platform is skipped.
+
 #### Python control layout validation on Linux
 
 - The isolated native app (`sh.uterm.desktop.qa.pythonlayout`) passes 16 layout combinations: script
