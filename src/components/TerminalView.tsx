@@ -48,6 +48,7 @@ type Connection = {
   bytes: number;
   inputControl?: CoreInputControl | null;
   controlRevision: number;
+  receivedInitialFrame: boolean;
   resize: ReturnType<typeof createTerminalResizeQueue>;
 };
 const action = (id: string, action: string, values = {}) =>
@@ -356,7 +357,13 @@ export function TerminalView({
     const disposeScrollInput = attachTerminalScrollInput(term, send);
     const resize = term.onResize(({ rows, cols }) => {
       const current = connection.current;
-      if (!current || current.replaying || current.inputControl?.owned === false) return;
+      if (
+        !current ||
+        !current.receivedInitialFrame ||
+        current.replaying ||
+        current.inputControl?.owned === false
+      )
+        return;
       current.resize.request({ rows, cols });
     });
     const layout = attachTerminalFit(
@@ -458,6 +465,7 @@ export function TerminalView({
     setInputControl(undefined);
     setStatus("starting");
     term.reset();
+    term.options.disableStdin = true;
     const events = new Channel<ArrayBuffer>();
     const current: Connection = {
       id: crypto.randomUUID(),
@@ -469,11 +477,13 @@ export function TerminalView({
       queue: Promise.resolve(),
       bytes: 0,
       controlRevision: 0,
+      receivedInitialFrame: false,
       resize: createTerminalResizeQueue(
         async ({ rows, cols }) => {
           await current.ready;
           if (
             !current.closed &&
+            current.receivedInitialFrame &&
             current.inputControl?.owned !== false &&
             (!logView || !current.exited) &&
             !current.replaying &&
@@ -503,6 +513,7 @@ export function TerminalView({
         return;
       }
       const { data, ...event } = decoded;
+      current.receivedInitialFrame = true;
       if (current.inputControl?.owned !== event.input_control?.owned) current.controlRevision++;
       const gainedControl =
         current.inputControl?.owned === false && event.input_control?.owned === true;
@@ -602,7 +613,10 @@ export function TerminalView({
       await current.ready;
       if (!current.closed) {
         term.options.disableStdin =
-          logView || current.exited || current.inputControl?.owned === false;
+          logView ||
+          !current.receivedInitialFrame ||
+          current.exited ||
+          current.inputControl?.owned === false;
         setStatus((value) => (value === "starting" ? "running" : value));
         if (activeRef.current) term.focus();
       }

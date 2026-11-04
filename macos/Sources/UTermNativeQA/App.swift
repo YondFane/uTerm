@@ -143,7 +143,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             if let path = WorkspaceModel.argument("--input-control-report") {
                 var result = baseReport()
                 do { try await InputControlSmoke.run(model: model, window: window, report: &result) }
-                catch { result["failure"] = error.localizedDescription }
+                catch {
+                    result["failure"] = error.localizedDescription
+                    result["terminalDiagnostics"] = model.terminals.values.map { ["id": $0.id, "generation": $0.generation ?? "", "error": $0.error, "inputOwned": $0.inputControl?.owned ?? false, "renderedFrames": $0.qaRenderedFrames] as [String: Any] }
+                }
                 finishReport(result, path: path)
             }
         }

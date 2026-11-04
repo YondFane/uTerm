@@ -125,8 +125,9 @@ When another current client owns a session, its terminal shows **Read-only attac
 input control** button. Reading, selection and copying remain available. Explicitly press this
 button to move input and window-size control to this view; focusing a window never takes control.
 Passive views follow the host grid without resizing it. Losing control discards queued input,
-including clipboard data, so it cannot be sent after a later takeover. Task logs remain readonly and
-do not show takeover controls.
+including clipboard data, so it cannot be sent after a later takeover. Both clients wait for the
+first host frame before enabling input or sending size changes, so a new passive attachment cannot
+race its initial control metadata. Task logs remain readonly and do not show takeover controls.
 
 The development host/Core assigns one input/resize lease per live session generation. Other
 attachments keep reading and acknowledging output. Explicit takeover revokes previous writes and

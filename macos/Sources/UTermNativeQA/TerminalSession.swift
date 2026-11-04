@@ -16,6 +16,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private var inputTask: Task<Void, Never>?
     private var input = Data()
     private var inputRevision = 0
+    private var receivedInitialFrame = false
     private(set) var inputControl: CoreInputControl?
     private(set) var takingInputControl = false
     private var hostSize: (Int, Int)?
@@ -50,6 +51,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         attachment = UUID().uuidString
         generation = nil
         inputControl = nil
+        receivedInitialFrame = false
         hostSize = nil
         exited = false
         error = ""
@@ -121,6 +123,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             guard packet.header.attachment == attachment, packet.header.generation == generation else { return }
         }
         let terminal = view.getTerminal()
+        receivedInitialFrame = true
         let previousControl = inputControl?.owned
         inputControl = packet.header.input_control
         hostSize = (Int(packet.header.cols), Int(packet.header.rows))
@@ -189,6 +192,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         attachment = UUID().uuidString
         generation = nil
         inputControl = nil
+        receivedInitialFrame = false
         hostSize = nil
         exited = false
         input.removeAll()
@@ -196,7 +200,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     }
 
     func enqueue(_ bytes: Data) {
-        guard taskGeneration == nil, inputControl?.owned != false, generation != nil, error.isEmpty, !exited, !reconnecting else { return }
+        guard taskGeneration == nil, receivedInitialFrame, inputControl?.owned != false, generation != nil, error.isEmpty, !exited, !reconnecting else { return }
         guard input.count + bytes.count <= 1024 * 1024 else {
             error = localized("Input queue is full. Wait before pasting again.", "输入队列已满，请等待后再粘贴。")
             changed?(); return
@@ -228,7 +232,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     func finishConnection() async { if let connecting { await connecting.value } }
 
     private func resizeIfNeeded() async {
-        guard generation != nil, inputControl?.owned != false, let (cols, rows) = desiredSize else { return }
+        guard generation != nil, receivedInitialFrame, inputControl?.owned != false, let (cols, rows) = desiredSize else { return }
         desiredSize = nil
         do { _ = try await bridge.call("terminal.action", params: .object([
             "attachment": .string(attachment), "action": .string("resize"),

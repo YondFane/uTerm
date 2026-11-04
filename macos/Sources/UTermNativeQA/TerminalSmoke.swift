@@ -35,7 +35,7 @@ enum TerminalSmoke {
             throw BridgeFailure(code: "SMOKE_PROJECT", message: model.error)
         }
         await model.newTerminal()
-        try await wait("Create the first real PTY") { model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true }
+        try await wait("Create the first real PTY") { model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true && (model.selectedTerminal?.qaRenderedFrames ?? 0) > 0 }
         guard let first = model.selectedTerminal else { throw BridgeFailure(code: "SMOKE_SESSION", message: "No first terminal") }
         let firstID = first.id
         let firstView = ObjectIdentifier(first.view)
@@ -48,7 +48,7 @@ enum TerminalSmoke {
         let loadCapture = try await verifySlowConsumer(model: model, window: window, terminal: first, report: &report)
 
         await model.split("horizontal")
-        try await wait("Create a real split peer") { model.state?.sessions.count == 2 && model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true }
+        try await wait("Create a real split peer") { model.state?.sessions.count == 2 && model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true && (model.selectedTerminal?.qaRenderedFrames ?? 0) > 0 }
         guard let second = model.selectedTerminal, second.id != firstID else { throw BridgeFailure(code: "SMOKE_SPLIT", message: "A split peer was not created") }
         let secondView = ObjectIdentifier(second.view)
         try await wait("Display both native terminal views") { first.view.window === window && second.view.window === window && first.view.bounds.width > 0 && second.view.bounds.width > 0 }

@@ -289,24 +289,26 @@ fn main() {
             }
         }
     }
-    let result = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
-            if let Some(state) = app.try_state::<std::sync::Arc<control::Control>>() {
-                for value in arguments
-                    .iter()
-                    .filter(|value| value.starts_with("uterm://"))
-                {
-                    if let Err(error) = state.open_link(value) {
-                        eprintln!("Session link: {error}");
-                    }
+    let builder = tauri::Builder::default();
+    #[cfg(not(feature = "qa"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
+        if let Some(state) = app.try_state::<std::sync::Arc<control::Control>>() {
+            for value in arguments
+                .iter()
+                .filter(|value| value.starts_with("uterm://"))
+            {
+                if let Err(error) = state.open_link(value) {
+                    eprintln!("Session link: {error}");
                 }
             }
-            if !starts_in_background(arguments.iter().skip(1)) {
-                if let Err(error) = show_main_window(app) {
-                    eprintln!("Show desktop: {error}");
-                }
+        }
+        if !starts_in_background(arguments.iter().skip(1)) {
+            if let Err(error) = show_main_window(app) {
+                eprintln!("Show desktop: {error}");
             }
-        }))
+        }
+    }));
+    let result = builder
         .plugin(tauri_plugin_deep_link::init())
         .manage(updates::Updates::default())
         .manage(shared_core::Lifecycle::default())
