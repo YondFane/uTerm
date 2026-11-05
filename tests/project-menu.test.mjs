@@ -77,6 +77,16 @@ test("project actions copy paths and expand workspace choices with keyboard and 
     assert.equal(trigger.getAttribute("aria-expanded"), "true");
     assert.equal(document.activeElement.textContent, "后台2");
     const menu = document.querySelector('[role="menu"]');
+    assert.equal(menu.parentElement, document.body);
+    let outsidePointerDown = false;
+    const dismiss = () => (outsidePointerDown = true);
+    window.addEventListener("pointerdown", dismiss);
+    await act(async () =>
+      button("后台2").dispatchEvent(new dom.window.Event("pointerdown", { bubbles: true })),
+    );
+    window.removeEventListener("pointerdown", dismiss);
+    assert.equal(outsidePointerDown, false);
+    assert.equal(trigger.getAttribute("aria-expanded"), "true");
     assert.ok(Number.parseFloat(menu.style.left) < 900);
     assert.ok(Number.parseFloat(menu.style.top) < 740);
     await key(document.activeElement, "ArrowDown");

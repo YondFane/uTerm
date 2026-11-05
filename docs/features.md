@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-02
+updated: 2026-11-05
 ---
 
 # uTerm feature guide
@@ -491,8 +491,9 @@ Project context menus offer Copy project path for the absolute local directory a
 workspace, whose submenu lists other workspaces by name. Hover, click or Right Arrow expands it;
 Up/Down selects a destination and Left Arrow/Escape returns to the parent menu.
 
-- The submenu opens toward the available space near window edges and scrolls for long lists. With no
-  other workspace, moving is disabled.
+- The submenu displays above the parent menu without being clipped by its scroll area. It opens
+  toward the available space near window edges and scrolls for long lists. With no other workspace,
+  moving is disabled.
 
 - Moving changes workspace membership only, preserving project files and sessions. New Worktree
   remains in the project menu; New terminal and Refresh Worktrees are not offered there.
@@ -4365,6 +4366,12 @@ use separate Cargo manifests and lockfiles.
   remain.
 
 ### Project-menu coverage
+
+- Linux component regression passes for independent submenu mounting, destination pointer events
+  without outside dismissal, focus retention and keyboard return. TypeScript and production build
+  pass. Linux Chromium with the actual menu component, application styles and fixture workspaces
+  confirms visible destinations at 800×600 and 410×375 and verifies destination clicks. The current
+  fix still requires macOS/Windows native WebView acceptance.
 
 - Project-menu validation on macOS: 139 frontend/build-helper tests, formatting, localization,
   TypeScript/production build and an isolated desktop build pass. Component tests cover path copying

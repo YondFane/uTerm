@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { clipboardPath } from "../lib/file-document";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
@@ -100,7 +101,11 @@ export function ProjectMenuActions({
         onPointerEnter={() => open()}
         onPointerLeave={() => setPosition(null)}
         onBlur={(event) => {
-          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setPosition(null);
+          if (
+            !event.currentTarget.contains(event.relatedTarget as Node | null) &&
+            !submenu.current?.contains(event.relatedTarget as Node | null)
+          )
+            setPosition(null);
         }}
       >
         <button
@@ -123,48 +128,51 @@ export function ProjectMenuActions({
           {tx("移动到工作空间")}
           <span aria-hidden="true">›</span>
         </button>
-        {position && (
-          <div
-            ref={submenu}
-            role="menu"
-            aria-label={tx("移动到工作空间")}
-            className="context-menu workspace-submenu"
-            style={position}
-            onKeyDown={(event) => {
-              if (["Escape", "ArrowLeft"].includes(event.key)) {
-                event.preventDefault();
-                event.stopPropagation();
-                collapse();
-              } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
-                event.preventDefault();
-                event.stopPropagation();
-                const buttons = Array.from(event.currentTarget.querySelectorAll("button"));
-                const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
-                buttons[
-                  event.key === "Home"
-                    ? 0
-                    : event.key === "End"
-                      ? buttons.length - 1
-                      : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
-                        buttons.length
-                ]?.focus();
-              }
-            }}
-          >
-            {workspaces.map((workspace) => (
-              <button
-                key={workspace.id}
-                role="menuitem"
-                onClick={() => {
-                  move(workspace.id);
-                  close();
-                }}
-              >
-                {workspace.name}
-              </button>
-            ))}
-          </div>
-        )}
+        {position &&
+          createPortal(
+            <div
+              ref={submenu}
+              role="menu"
+              aria-label={tx("移动到工作空间")}
+              className="context-menu workspace-submenu"
+              style={position}
+              onPointerDown={(event) => event.stopPropagation()}
+              onKeyDown={(event) => {
+                if (["Escape", "ArrowLeft"].includes(event.key)) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  collapse();
+                } else if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const buttons = Array.from(event.currentTarget.querySelectorAll("button"));
+                  const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+                  buttons[
+                    event.key === "Home"
+                      ? 0
+                      : event.key === "End"
+                        ? buttons.length - 1
+                        : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) %
+                          buttons.length
+                  ]?.focus();
+                }
+              }}
+            >
+              {workspaces.map((workspace) => (
+                <button
+                  key={workspace.id}
+                  role="menuitem"
+                  onClick={() => {
+                    move(workspace.id);
+                    close();
+                  }}
+                >
+                  {workspace.name}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
       </div>
     </>
   );
