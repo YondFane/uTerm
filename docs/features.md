@@ -1679,6 +1679,9 @@ connections…** and reuses the connection form and workbench through the scoped
 Temporary passwords match canonical configuration values; changing an inactive target recreates its
 workbench without the previous password. Profile conflicts retain input.
 
+Structured content errors retain their code for the shared Redis handlers. Profile conflict messages
+do not need to repeat the code for the form to retain input and request a reload.
+
 Closing the window hides it while retaining its connection/draft; quitting freezes the view, checks
 pending operations and confirms draft loss. Cancelling quit resumes it with draft protection. CA
 selection uses AppKit; content cannot choose a picker path. Language/theme updates use shared
@@ -5630,6 +5633,10 @@ reuses the SQL/document workbenches and component/connection forms through the s
 transport. Profile save/removal uses revision-checked Core storage and refuses active or dirty
 profiles. Temporary passwords stay in application memory and match canonical configuration values;
 changing a profile's target recreates its inactive workbench without carrying the old password.
+
+Structured content errors retain their code when existing database handlers classify the message.
+Revision conflicts keep the connection form open and request a reload; busy/pending errors retain
+their specific guidance even when the host message does not repeat the code.
 
 Closing this window hides it while retaining connections, drafts and results. Application quit
 refuses active work or pending transactions and confirms draft loss. If another window cancels quit,

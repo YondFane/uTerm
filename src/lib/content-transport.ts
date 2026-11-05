@@ -162,6 +162,9 @@ export class ContentFailure extends Error {
     super(message);
     this.code = code;
   }
+  override toString(): string {
+    return this.message.startsWith(this.code) ? this.message : `${this.code}: ${this.message}`;
+  }
 }
 export class ContentScope {
   private closed = false;

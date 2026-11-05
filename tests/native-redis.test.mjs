@@ -58,7 +58,7 @@ test("native Redis profile conflicts retain input and quit/resume keeps a modal 
                 version: 1,
                 document: message.document,
                 id: message.id,
-                error: { code: "CONFLICT", message: "CONFLICT: changed revision" },
+                error: { code: "CONFLICT", message: "Snapshot revision changed" },
               };
             catalog.groups[0].redisConnections = [
               Object.fromEntries(Object.entries(message.params.config).reverse()),

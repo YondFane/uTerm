@@ -57,7 +57,7 @@ test("native database profile conflicts retain input and quit/resume keeps a mod
                 version: 1,
                 document: message.document,
                 id: message.id,
-                error: { code: "CONFLICT", message: "CONFLICT: changed revision" },
+                error: { code: "CONFLICT", message: "Snapshot revision changed" },
               };
             catalog.groups[0].databaseConnections = [structuredClone(message.params.config)];
             catalog.revision = "saved";
