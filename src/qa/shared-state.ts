@@ -1,6 +1,7 @@
 import editorFixtureJSON from "../../shared/fixtures/editor-draft-qa.json?raw";
 import gitFixtureJSON from "../../shared/fixtures/git-qa.json?raw";
 import previewFixtureJSON from "../../shared/fixtures/content-preview-qa.json?raw";
+import sshFixtureJSON from "../../shared/fixtures/ssh-qa.json?raw";
 import { invoke } from "@tauri-apps/api/core";
 import { coreRequest } from "../lib/shared-state";
 import { defaults, settingsKey } from "../lib/settings";
@@ -54,6 +55,12 @@ const previewQA = JSON.parse(previewFixtureJSON) as {
 const oldEditorText = editorFixture.oldText;
 const durableEditorText = editorFixture.durableText;
 const savedEditorText = editorFixture.savedText;
+const sshQA = JSON.parse(sshFixtureJSON) as {
+  profileName: string;
+  originalFile: string;
+  sourceFile: string;
+  previewText: string;
+};
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 let observerBusyReads = 0;
 let favoritePreviewReloads = 0;
@@ -1307,32 +1314,32 @@ async function runSSH(context: Context) {
   const advanced = document.querySelector<HTMLDetailsElement>(`${dialog} details`);
   assert(advanced, "SSH advanced settings missing");
   advanced.open = true;
-  await field(dialog, "Connection name (optional)", "SSH native QA 中文");
+  await field(dialog, "Connection name (optional)", sshQA.profileName);
   await field(dialog, "Remote system", context.platform === "windows" ? "windows" : "posix");
   await field(dialog, "Remote file root", fixture.remote.replaceAll("\\", "/"));
   await scene("ssh-profile", { realNativeApplication: true, isolatedOpenSSH: true });
   await until(() => button("Save only")?.disabled === false, "SSH configuration ready");
   await click("Save only");
   await until(() => !document.querySelector(dialog), "SSH profile saved");
-  await click("SSH native QA 中文");
+  await click(sshQA.profileName);
   await click("Remote files");
   await click("Connect files");
   const file = await until(
     () =>
       [...document.querySelectorAll<HTMLButtonElement>(".file-row")].find((item) =>
-        item.textContent?.includes("original 中文.txt"),
+        item.textContent?.includes(sshQA.originalFile),
       ),
     "actual SFTP listing",
   );
   file.click();
   await until(
-    () => document.body.innerText.includes("SSH file 中文"),
+    () => document.body.innerText.includes(sshQA.previewText),
     "actual remote text preview",
   );
   await scene("ssh-files", {
     actualSFTP: true,
     unicodeFileListingAndPreview: true,
-    actualRemoteBytes: "SSH file 中文 é",
+    actualRemoteBytes: sshQA.previewText,
   });
   await click("New SSH terminal");
   const terminal = await until(

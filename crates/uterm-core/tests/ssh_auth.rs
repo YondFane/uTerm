@@ -181,11 +181,13 @@ fn actual_os_store_is_isolated_and_reference_deletion_is_idempotent() {
     let store = SystemCredentials::new(format!("sh.uterm.desktop.qa.ssh.{}", uuid::Uuid::new_v4()))
         .unwrap();
     let reference = uuid::Uuid::new_v4().to_string();
+    assert_eq!(store.access(&reference, None).unwrap(), None);
     store
         .access(&reference, Some(Some(b"isolated-test-value".to_vec())))
         .unwrap();
     let result = store.access(&reference, None);
     store.access(&reference, Some(None)).unwrap();
     store.access(&reference, Some(None)).unwrap();
+    assert_eq!(store.access(&reference, None).unwrap(), None);
     assert_eq!(result.unwrap(), Some(b"isolated-test-value".to_vec()));
 }

@@ -35,13 +35,15 @@ class SSHService:
         self.mac_ssh_group = False
         self.password = secrets.token_hex(24) + "aA1!"
         try:
-            for name in ["host", "client"]:
+            for name in ["host", "client", "host-ca"]:
                 subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(self.directory / name)], check=True)
+            subprocess.run(["ssh-keygen", "-q", "-s", str(self.directory / "host-ca"), "-I", "uterm-isolated-host", "-h", "-n", "qa-native-host", str(self.directory / "host.pub")], check=True)
             self.remote = self.directory / "remote 中文"
             self.remote.mkdir()
-            self.local = self.directory / "local 中文.txt"
-            self.local.write_bytes("SSH file 中文 e\u0301\r\n".encode())
-            (self.remote / "original 中文.txt").write_bytes(self.local.read_bytes())
+            self.qa = json.loads((Path(__file__).resolve().parent.parent / "shared/fixtures/ssh-qa.json").read_text(encoding="utf-8"))
+            self.local = self.directory / self.qa["sourceFile"]
+            self.local.write_bytes((self.qa["previewText"] + "\r\n").encode())
+            (self.remote / self.qa["originalFile"]).write_bytes(self.local.read_bytes())
             (self.directory / "authorized_keys").write_bytes((self.directory / "client.pub").read_bytes())
             self.user = getpass.getuser()
             with socket.socket() as reserved:
@@ -57,6 +59,7 @@ class SSHService:
                     self._mac_account()
                 config.write_text(
                 f"ListenAddress 127.0.0.1\nPort {self.server_port}\nHostKey {self.directory}/host\n"
+                f"HostCertificate {self.directory}/host-cert.pub\n"
                 f"PidFile {self.directory}/server.pid\nAuthorizedKeysFile {self.directory}/authorized_keys\n"
                 f"StrictModes no\nPasswordAuthentication {'yes' if self.mac_user else 'no'}\nKbdInteractiveAuthentication no\nUsePAM {'yes' if self.mac_user else 'no'}\n"
                 f"AllowUsers {self.user} {self.mac_user or ''}\nLogLevel VERBOSE\nSubsystem sftp internal-sftp\n"

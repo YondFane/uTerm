@@ -16,7 +16,15 @@ if ($Action -eq 'Stop') {
     Stop-ScheduledTask -TaskName $owned.task -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $owned.task -Confirm:$false -ErrorAction SilentlyContinue
     $user = Get-LocalUser -Name $owned.user -ErrorAction SilentlyContinue
-    if ($user -and $user.SID.Value -eq $owned.sid) { Remove-LocalUser -Name $owned.user }
+    if ($user -and $user.SID.Value -eq $owned.sid) {
+        try {
+            $profile = Get-CimInstance Win32_UserProfile -Filter "SID='$($owned.sid)'"
+            if ($profile) {
+                if ($profile.Special) { throw 'Refuse to remove a special Windows profile' }
+                $profile | Remove-CimInstance
+            }
+        } finally { Remove-LocalUser -Name $owned.user }
+    }
     Remove-Item $manifest
     return
 }
@@ -38,19 +46,28 @@ try {
     $acl = Get-Acl $settings.remote
     $acl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new($user.SID, 'Modify', 'ContainerInherit,ObjectInherit', 'None', 'Allow'))
     Set-Acl $settings.remote $acl
-    $keyAcl = Get-Acl (Join-Path $Root 'host')
+    $keyAcl = [System.Security.AccessControl.FileSecurity]::new()
     $keyAcl.SetOwner([System.Security.Principal.SecurityIdentifier]::new('S-1-5-32-544'))
     $keyAcl.SetAccessRuleProtection($true, $false)
     foreach ($sid in @('S-1-5-18', 'S-1-5-32-544')) {
         $keyAcl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($sid), 'FullControl', 'Allow'))
     }
     Set-Acl (Join-Path $Root 'host') $keyAcl
+    $clientAcl = [System.Security.AccessControl.FileSecurity]::new()
+    $clientOwner = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+    $clientAcl.SetOwner($clientOwner)
+    $clientAcl.SetAccessRuleProtection($true, $false)
+    foreach ($sid in @($clientOwner.Value, 'S-1-5-18', 'S-1-5-32-544')) {
+        $clientAcl.AddAccessRule([System.Security.AccessControl.FileSystemAccessRule]::new([System.Security.Principal.SecurityIdentifier]::new($sid), 'FullControl', 'Allow'))
+    }
+    Set-Acl (Join-Path $Root 'client') $clientAcl
     $config = Join-Path $Root 'sshd_config'
     $path = $Root.Replace('\', '/')
     @"
 ListenAddress 127.0.0.1
 Port $($settings.port)
 HostKey "$path/host"
+HostCertificate "$path/host-cert.pub"
 PidFile "$path/server.pid"
 AuthorizedKeysFile "$path/authorized_keys"
 StrictModes no

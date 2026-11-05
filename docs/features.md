@@ -1333,7 +1333,7 @@ Keychain/Credential Manager reference; its Windows/macOS result is recorded sepa
 tests do not establish actual SSH login or native host-trust interaction. Native entry points and
 outstanding checks are described below. Run them with
 `cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test ssh_auth`. Full
-host/Core/FFI, 73 backend checks (nine optional tests ignored), 410 frontend checks (ten optional
+host/Core/FFI, 73 backend checks (nine optional tests ignored), 411 frontend checks (ten optional
 tests skipped), contracts, TypeScript/production/desktop builds, format/docs and workflow checks
 pass on Linux. This does not establish Windows/macOS credential-store acceptance.
 
@@ -1373,12 +1373,17 @@ separate short-lived account and home directory for password checks. No producti
 changed. The first platform run failed: macOS rejected the temporary user through PAM account
 access, and the Windows task did not start. The fixture now adds/removes only its temporary Mac user
 in an existing SSH access group, resolves the Windows log path absolutely and saves task-startup
-status. Reruns remain pending; these checks do not establish GUI acceptance.
+status. The next macOS public-client run passes actual password login. Windows starts the server but
+rejects an inherited OWNER RIGHTS ACL on the private client key; the fixture now sets an explicit
+owner/System/Administrators ACL on that generated key only. The portable fixture also checks real
+host-CA acceptance and wrong-CA refusal, passing on Linux with dirty source. Platform reruns remain
+pending; these checks do not establish GUI acceptance.
 
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` adds three real Tauri window scenes:
 saved SSH profile, authenticated SFTP listing/text preview and remote terminal output. It uses the
 existing isolated QA identifier and uploads screenshots with source/platform metadata. This new
-phase awaits CI execution and does not exercise a manual file picker or IME.
+phase awaits CI execution and does not exercise a manual file picker or IME. Its Unicode sample
+names/text live in `shared/fixtures/ssh-qa.json`; the localized-source coverage check passes.
 
 ### Native SSH workspace
 
@@ -1430,8 +1435,12 @@ literal digits without locale grouping. These capture/port fixes and the added r
 still await a new platform run. Native password retention changes use the saved credential location
 when the password field is empty; deletion cleans the saved reference even if the draft changes. The
 native smoke now also checks remembered/temporary conversions, obsolete-reference deletion and
-authenticated reconnect after terminal transport reopening. Windows real-service and manual
-picker/IME acceptance remain pending. #36 stays open; no merge or release is claimed.
+authenticated reconnect after terminal transport reopening. Native smoke confirms actual password
+login but exposed missing OS references being reported as a generic credential failure. The SSH
+credential port now maps only the OS not-found result to an absent reference; other failures and the
+legacy Redis/database adapter are unchanged. Platform regressions check before creation and after
+deletion; reruns remain pending. Windows real-service and manual picker/IME acceptance remain
+pending. #36 stays open; no merge or release is claimed.
 
 ### Quick connections and host search
 

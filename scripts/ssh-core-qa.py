@@ -120,6 +120,15 @@ def main():
                 finally:
                     known.write_bytes(trusted)
                 checks["changedHostKeyRefused"] = True
+                try:
+                    known.write_text("@cert-authority qa-native-host " + (service.directory / "host-ca.pub").read_text())
+                    remote = client.operation("files.open", connection=connection, expected=remote)
+                    known.write_text("@cert-authority qa-native-host " + (service.directory / "client.pub").read_text())
+                    invalid_ca = client.wait(client.start("files.open", connection=connection), success=False)
+                    assert invalid_ca["state"] == "failed"
+                finally:
+                    known.write_bytes(trusted)
+                checks["actualHostCertificateAcceptedAndWrongCARefused"] = True
                 service.local.write_bytes(b"replacement" * (4 * 1024 * 1024))
                 def cancel(value):
                     assert isinstance(value["progress"]["completed"], str)

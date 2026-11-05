@@ -106,6 +106,26 @@ impl SystemCredentials {
 }
 impl Credentials for SystemCredentials {
     fn access(&self, reference: &str, value: Option<Option<Vec<u8>>>) -> Result<Option<Vec<u8>>> {
-        access(&self.service, reference, value)
+        let reading = value.is_none();
+        match access(&self.service, reference, value) {
+            Err(error) if reading && missing(&error) => Ok(None),
+            result => result,
+        }
+    }
+}
+
+fn missing(error: &anyhow::Error) -> bool {
+    #[cfg(target_os = "macos")]
+    return error
+        .downcast_ref::<security_framework::base::Error>()
+        .is_some_and(|error| error.code() == -25300);
+    #[cfg(windows)]
+    return error.downcast_ref::<std::io::Error>().is_some_and(|error| {
+        error.raw_os_error() == Some(windows_sys::Win32::Foundation::ERROR_NOT_FOUND as i32)
+    });
+    #[cfg(not(any(target_os = "macos", windows)))]
+    {
+        let _ = error;
+        false
     }
 }
