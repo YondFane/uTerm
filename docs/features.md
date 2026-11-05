@@ -433,6 +433,21 @@ revision. Git requests bind to that repository and project; file windows cannot 
 Diff/name copying uses the system pasteboard. A separate bridge keeps repository work off the
 terminal bridge.
 
+Both clients support the same existing operation set:
+
+| Operation                                                           | Native macOS entry                             | Windows entry                                      | Shared service                                                                                 |
+| ------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Status, working/staged diff, commit details/history and comparisons | File → Git…                                    | Git inspector                                      | `git.snapshot`, `fileStatus`, `diff`, `history`, `files`, `workingComparison`                  |
+| Branch catalog, switch and remote discovery                         | Git tree/context menu                          | Git tree and branch picker                         | `git.branch`, `branches`, `references`, `remoteBranches`, `switchBranch`, `switchRemoteBranch` |
+| Create/rename, upstream, fetch, pull/update and push                | Git context menu                               | Same shared Git context menu                       | `git.referenceAction`, `branchAction`                                                          |
+| Revert a selected file                                              | Git change menu                                | Same shared change menu                            | `git.rollbackFile`                                                                             |
+| Suggest/create/list Worktrees                                       | Git context menu and project sidebar           | Git context menu and project sidebar               | `git.worktrees.suggestion`, `create`, `list`                                                   |
+| Confirm/remove a registered Worktree                                | Native sidebar menu and default-Cancel NSAlert | Sidebar menu and default-Cancel application dialog | `project.worktrees.delete` plus shared Git deletion rules                                      |
+
+Commit creation/staging is not an existing panel action; commit rows show details/history. Native
+content cannot directly call raw Worktree deletion or global recovery; trusted AppKit controls
+perform those operations. Windows uses its application dialogs for the same guarded actions.
+
 Before a write, open editable file windows save and freeze until completion. A file conflict blocks
 Git and retains both file and recovery draft. The Git window refuses to close during a write. Clean
 editors reload repository changes; dirty or busy editors retain their text. Cancelling or timing out
@@ -529,6 +544,20 @@ application; scoped content can request its native dialog but cannot read or res
 repositories' recovery data.
 
 #### Git and editor concurrency validation
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test git_operations` exercises
+all 19 Git/Worktree methods through Core JSON with actual local Git processes and a disposable bare
+remote. It verifies the selected repository/Worktree, unrelated bytes and checkout identity,
+stale-reference/branch refusal, checkout conflicts, targeted rollback, upstream/push and dirty/clean
+Worktree deletion. CI saves `git-operations-core.json` with source/merge, platform and Git version.
+Linux x86_64 passes locally; the working-tree report is not platform or GUI acceptance.
+
+The native Git smoke now owns an independent `uterm-core-contract --hold-store-lock` process. It
+waits for the real writer-lock acknowledgement, reloads a new Git document until the bounded read
+reports contention, captures `native-git-favorites-writer-busy.png`, releases its own writer and
+clicks **Reload Git favorites** once. The report requires unchanged bytes, exit 0, enabled favorite
+controls and 15 screenshot files. New macOS ARM/Intel execution remains pending; previous
+`favoriteRecoveryExplicitBusyReload=false` reports do not prove this path.
 
 The current four-platform Git/editor baseline is source head
 `429428cbb8787c657c39c14450b4e997d0f6a6fe`, actual tested merge
@@ -2948,16 +2977,17 @@ source/asset reproducibility does not replace execution.
 Run `pnpm test:core` and frontend checks with `JAVA_HOME` pointing to JDK 21 and its `bin` on
 `PATH`. The Java interoperability workflow runs the actual Windows host on JDK 8/11/17/21 and
 uploads `java-live-core.json`, source/toolchain data and targeted logs. Source
-`cd82fb1eead3edf18c1f8102a13501d6d13b9edf` / tested merge `96d639eb79a77189eb1033b3fc96ad532c75e837`
-passes the strict Windows task on JDK 11/17/21. Its JDK 8 diagnostic runs both ASCII and Chinese JAR
-paths with exact arguments/properties and exit 7, but a Unicode application-data cache fails before
-premain with `UnsatisfiedLinkError: no zip in java.library.path`. The
-[Java matrix](https://github.com/YondFane/uTerm/actions/runs/41975963071) therefore fails. Source
-`e7a14e91885d63b611992b02a598432cdff85263` repeats this failure with a relative bootstrap path. The
-separate-data run at source `3367bd31ca356611a228572340f9b122b51e1a26` reaches user premain but
-fails to find `TaskAgent`: the compatibility replacement omitted appended user-agent JARs. Restoring
-those entries requires a fresh Windows result. JDK 8 and full #37 acceptance remain open. Diagnostic
-collection, Linux execution and asset reproducibility do not replace that result.
+`ca769d0dd6f8872c5b800dc5dba46fe2ad342976` / tested merge `c4190078b7b2d7053c6f52f3b3cb7d0247d5a63a`
+passes the strict Windows matrix on Temurin 8u504, 11.0.32.1+1, 17.0.20.1+1 and 21.0.13+9. Each
+clean-source report verifies Chinese project/JAR paths, the user's premain property, exact
+Unicode/emoji and empty arguments, final stdout/stderr, exit 7, replay/ack, stale/cross-family stop,
+forced cleanup and released caches. All four ASCII/Chinese encoding diagnostics also exit 7 with
+exact properties/arguments.
+[Run41978309724](https://github.com/YondFane/uTerm/actions/runs/41978309724) retains
+[JDK8 artifact13393076315](https://github.com/YondFane/uTerm/actions/runs/41978309724/artifacts/13393076315)
+and the corresponding 11/17/21 artifacts. The explicit Unicode Java8 application-data cache
+limitation and stock-JDK supplementary-directory failures remain recorded; full #37 and manual
+acceptance are open. Original failures and the scoped fix are retained in Issue #37.
 
 The optional real Maven fixture uses Maven 3.9.9 and Spring Boot 2.7.18 with a disposable
 three-project reactor. It exercises Package/Test/Install, module preparation, development and

@@ -74,6 +74,7 @@ jobs:
           UTERM_INPUT_REACQUIRE_REPORT: ${{ github.workspace }}/macos/.build/evidence/input-reacquire-core.json
           UTERM_M2_SIMULATION_REPORT: ${{ github.workspace }}/macos/.build/evidence/m2-simulation-core.json
           UTERM_SSH_CONFIGURATION_REPORT: ${{ github.workspace }}/macos/.build/evidence/ssh-configuration-core.json
+          UTERM_GIT_CORE_REPORT: ${{ github.workspace }}/macos/.build/evidence/git-operations-core.json
           UTERM_TASK_OUTPUT_AUTH_REPORT: ${{ github.workspace }}/macos/.build/evidence/task-output-auth.json
         run: |
           cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local

@@ -4,6 +4,32 @@ import UTermBridge
 
 @MainActor
 enum GitFavoritesRecoverySmoke {
+    private final class StoreWriter: @unchecked Sendable {
+        let process = Process(), input = Pipe(), output = Pipe()
+        init(root: URL, helper: String) throws {
+            process.executableURL = URL(fileURLWithPath: helper)
+            process.arguments = ["--hold-store-lock", root.path]
+            process.standardInput = input
+            process.standardOutput = output
+            try process.run()
+        }
+        func ready() async throws {
+            let bytes = try await Task.detached { [self] in try output.fileHandleForReading.read(upToCount: 7) }.value
+            guard bytes == Data("locked\n".utf8) else {
+                throw BridgeFailure(code: "FAVORITE_RECOVERY_WRITER", message: "Rust fixture did not acknowledge its real OS writer lock")
+            }
+        }
+        func release() async throws {
+            try input.fileHandleForWriting.write(contentsOf: Data("release\n".utf8))
+            try input.fileHandleForWriting.close()
+            let status = await Task.detached { [self] in process.waitUntilExit(); return process.terminationStatus }.value
+            guard status == 0 else { throw BridgeFailure(code: "FAVORITE_RECOVERY_WRITER", message: "Rust writer fixture did not release cleanly") }
+        }
+        deinit {
+            try? input.fileHandleForWriting.close()
+            if process.isRunning { process.terminate() }
+        }
+    }
     private static func descendants(_ view: NSView) -> [NSView] { [view] + view.subviews.flatMap(descendants) }
     private static func control<T: NSView>(_ parent: NSWindow, _ suffix: String, as type: T.Type) throws -> T {
         guard let view = parent.attachedSheet?.contentView,
@@ -134,17 +160,35 @@ enum GitFavoritesRecoverySmoke {
         report["favoriteRecoveryUIScenarios"] = ["controls": "actual NSMenu / NSAlert / NSPopUpButton / NSButton / NSPasteboard", "languages": ["en", "zh-Hans"], "appearances": ["dark", "light"], "manualAcceptance": false] as [String: Any]
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         let retained = try Data(contentsOf: file)
+        guard let helper = WorkspaceModel.argument("--qa-store-lock-helper"), let gitWindow = content.window,
+              let previousDocument = try await content.webView.evaluateJavaScript("window.utermContentDocument") as? String else {
+            throw BridgeFailure(code: "FAVORITE_RECOVERY_WRITER", message: "Missing isolated Rust fixture or active Git document")
+        }
+        let writer = try StoreWriter(root: root, helper: helper)
+        try await writer.ready()
+        let writerPID = writer.process.processIdentifier
+        gitWindow.makeKeyAndOrderFront(nil)
+        // Force a new document to exhaust its bounded read while an independent Rust process owns the lock.
+        // 独立 Rust 进程持锁时强制打开新文档，使其有界读取确定地耗尽。
+        let previous = String(decoding: try JSONEncoder().encode(previousDocument), as: UTF8.self)
+        content.webView.reload()
+        try await ContentSmoke.wait(content, "typeof window.utermContentDocument === 'string' && window.utermContentDocument !== \(previous)", allowAlert: true)
+        try await ContentSmoke.wait(content, "document.querySelector('[role=alert]')?.textContent.includes('Another writer owns the canonical store') === true", allowAlert: true)
+        guard try Data(contentsOf: file) == retained else {
+            throw BridgeFailure(code: "FAVORITE_RECOVERY_RELOAD", message: "Readonly contention changed restored favorite bytes")
+        }
+        try await Task.sleep(for: .milliseconds(200))
+        let busyCapture = "native-git-favorites-writer-busy.png"
+        try await TerminalSmoke.capture(window: gitWindow, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(busyCapture))
+        captures.append(busyCapture)
+        try await writer.release()
+        try await EditorSmoke.click(content, title: "Reload Git favorites")
+        try await ContentSmoke.wait(content, "document.querySelector('[role=alert]') === null", allowAlert: true)
         let deadline = Date().addingTimeInterval(20)
-        var retried = false
         while Date() < deadline {
             let failure = (try? await content.webView.evaluateJavaScript("document.querySelector('[role=alert]')?.textContent || ''")) as? String ?? ""
             if !failure.isEmpty {
-                guard !retried, failure.contains("Another writer owns the canonical store") else {
-                    throw BridgeFailure(code: "FAVORITE_RECOVERY_RELOAD", message: failure)
-                }
-                try await EditorSmoke.click(content, title: "Reload Git favorites")
-                retried = true
-                try await ContentSmoke.wait(content, "document.querySelector('[role=alert]') === null", allowAlert: true)
+                throw BridgeFailure(code: "FAVORITE_RECOVERY_RELOAD", message: failure)
             }
             _ = try await content.webView.evaluateJavaScript("document.querySelector('[data-node=\"refs/heads/main\"]')?.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:120,clientY:160}))")
             let ready = (try? await content.webView.evaluateJavaScript("[...document.querySelectorAll('[role=menuitem]')].some(b=>['Favorite branch','Unfavorite'].includes(b.textContent) && !b.disabled)")) as? Bool == true
@@ -152,7 +196,8 @@ enum GitFavoritesRecoverySmoke {
                 _ = try await content.webView.evaluateJavaScript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))")
                 guard try Data(contentsOf: file) == retained else { throw BridgeFailure(code: "FAVORITE_RECOVERY_RELOAD", message: "Explicit reload changed restored favorite bytes") }
                 report["favoriteRecoveryReadyBeforeEditorWrite"] = true
-                report["favoriteRecoveryExplicitBusyReload"] = retried
+                report["favoriteRecoveryExplicitBusyReload"] = true
+                report["favoriteRecoveryWriter"] = ["pid": writerPID, "independentRustProcess": true, "actualOSLock": true, "releaseExitCode": 0, "explicitReloads": 1, "bytesRetained": true] as [String: Any]
                 return
             }
             try await Task.sleep(for: .milliseconds(50))

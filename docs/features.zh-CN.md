@@ -244,6 +244,19 @@ ABI 的备份预览及缺失恢复。两个 Tauri 状态 QA 报告通过且清�
 选择本地项目或 Worktree 后，原生 QA 应用的**文件 →
 Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revision 解析选择，Git 请求绑定该仓库和项目，文件窗口不能调用 Git。差异／名称复制使用系统剪贴板；独立桥接避免仓库操作占用终端桥接。
 
+两个客户端支持相同的既有操作集合：
+
+| 操作                                         | 原生 macOS 入口                  | Windows 入口                   | 共享服务                                                                                       |
+| -------------------------------------------- | -------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| 状态、工作区／暂存差异、提交详情／历史及对比 | 文件 → Git…                      | Git 检查器                     | `git.snapshot`、`fileStatus`、`diff`、`history`、`files`、`workingComparison`                  |
+| 分支目录、切换与远程发现                     | Git 树／右键菜单                 | Git 树与分支选择器             | `git.branch`、`branches`、`references`、`remoteBranches`、`switchBranch`、`switchRemoteBranch` |
+| 创建／重命名、上游、获取、拉取／更新及推送   | Git 右键菜单                     | 相同的共用 Git 右键菜单        | `git.referenceAction`、`branchAction`                                                          |
+| 回退选定文件                                 | Git 变更菜单                     | 相同的共用变更菜单             | `git.rollbackFile`                                                                             |
+| 建议／创建／列出 Worktree                    | Git 右键菜单与项目侧栏           | Git 右键菜单与项目侧栏         | `git.worktrees.suggestion`、`create`、`list`                                                   |
+| 确认／移除已登记 Worktree                    | 原生侧栏菜单及默认取消的 NSAlert | 侧栏菜单及默认取消的应用对话框 | `project.worktrees.delete` 及共享 Git 删除规则                                                 |
+
+创建提交／暂存不属于既有面板操作，提交行显示详情／历史。原生内容不能直接调用原始 Worktree 删除或全局恢复，由可信 AppKit 控件执行；Windows 使用应用对话框执行相同的受保护操作。
+
 写入前，已打开的可编辑文件窗口保存并冻结直到操作结束。文件冲突阻止 Git，保留文件和恢复草稿；Git 窗口在写入期间拒绝关闭。干净编辑器重新读取仓库变化，脏／忙碌编辑器保留文本。取消或超时不代表已分发写入回滚，重试前应检查仓库。Tauri 与 WebKit 均保留调用方忙碌／编辑器保护至实际已分发写入结束，再报告取消／超时／关闭错误，不交付迟到成功。仅收到原生取消确认不会解除保护；只读取消仍立即返回。
 
 `project.worktrees.refresh`
@@ -276,6 +289,16 @@ Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
 分支工具栏的**恢复 Git 收藏…**打开校验后的快照与原始来源预览，原生客户端也提供**文件 → 恢复 Git 收藏…**。默认动作为取消；显示截断时仍复制完整预览。原始来源可复制，不能直接替换收藏。**恢复所有仓库收藏**替换全局收藏快照，保留损坏字节和紧邻恢复前的有效副本。当前文件变化则拒绝写入并要求重新读取副本，缺失安装不覆盖新建数据。恢复成功后已打开的 Git 视图重新读取。Tauri 共用内容使用原生 clipboard-manager 插件，只给主窗口写文本权限，失败保持可见；纯浏览器示例保留 Web 剪贴板路径。复制失败不修改恢复数据。 应用开始退出后拒绝新恢复，已分发恢复的退出保护保持到确认。全局恢复位于可信应用，限定范围的内容可以请求原生对话框，不能读取或恢复其他仓库数据。
 
 #### Git 与编辑器并发验证
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test git_operations`
+使用真实本地 Git 进程与可丢弃裸远程仓库，通过 Core
+JSON 执行全部 19 个 Git／Worktree 方法，核对选中仓库／Worktree、无关字节与检出身份、过期引用／分支拒绝、检出冲突、定向回退、上游／推送及脏／干净 Worktree 删除。CI 保存包含 source／merge、平台及 Git 版本的
+`git-operations-core.json`。Linux x86_64 本地通过，工作区报告不作为平台或 GUI 验收。
+
+原生 Git 冒烟现在持有独立 `uterm-core-contract --hold-store-lock`
+进程，等待真实写锁确认，重载新 Git 文档直至有界读取报告争用，保存
+`native-git-favorites-writer-busy.png`，释放自身持锁进程后点击一次**重新读取 Git 收藏**。报告要求字节不变、进程退出 0、收藏控件可用及 15 张图片。新的 macOS
+ARM／Intel 执行仍待 CI，旧 `favoriteRecoveryExplicitBusyReload=false` 报告不能证明该路径通过。
 
 当前四平台 Git／编辑器基线为源码 head `429428cbb8787c657c39c14450b4e997d0f6a6fe`、实际 tested merge
 `a0b1b0806bfae1558b9f87ea6c46859ebd93792d`。
@@ -1734,15 +1757,11 @@ URL 解码内失败，此上游限制不计为桥接成功。Windows 桥接自�
 运行 `pnpm test:core` 和前端检查时，将 `JAVA_HOME` 指向 JDK 21，并把其 `bin` 加入
 `PATH`。Java 互操作 workflow 在 JDK 8／11／17／21 上运行实际 Windows 宿主，上传
 `java-live-core.json`、源码／工具链信息及专项日志。Source
-`cd82fb1eead3edf18c1f8102a13501d6d13b9edf`／tested merge `96d639eb79a77189eb1033b3fc96ad532c75e837`
-的严格 Windows 任务通过 JDK 11／17／21。其 JDK
-8 诊断使用 ASCII 与中文 JAR 路径，准确保留参数／属性并退出 7，但 Unicode 应用数据缓存在 premain 前报
-`UnsatisfiedLinkError: no zip in java.library.path`。因此[Java 矩阵](https://github.com/YondFane/uTerm/actions/runs/41975963071)失败。Source
-`e7a14e91885d63b611992b02a598432cdff85263` 使用相对启动库路径后仍出现同样失败。Source
-`3367bd31ca356611a228572340f9b122b51e1a26`
-将应用数据分开后进入用户 premain，但由于兼容替换遗漏已追加的用户 Agent JAR 而找不到
-`TaskAgent`。恢复这些搜索项仍须等待新的 Windows 结果，JDK
-8 和 #37 完整验收保持开放。诊断采集、Linux 执行及资产可复现检查不能代替该结果。
+`ca769d0dd6f8872c5b800dc5dba46fe2ad342976`／tested merge `c4190078b7b2d7053c6f52f3b3cb7d0247d5a63a`
+在 Temurin
+8u504、11.0.32.1+1、17.0.20.1+1 和 21.0.13+9 上通过严格 Windows 矩阵。每份干净源码报告核对中文项目／JAR 路径、用户 premain 属性、准确 Unicode／emoji 及空参数、最终 stdout／stderr、退出 7、回放／ack、过期／跨任务族停止拒绝、强制清理及缓存释放。四套 ASCII／中文编码诊断也均准确保留属性／参数并退出 7。[Run41978309724](https://github.com/YondFane/uTerm/actions/runs/41978309724)保存[JDK8 artifact13393076315](https://github.com/YondFane/uTerm/actions/runs/41978309724/artifacts/13393076315)及对应 11／17／21 产物。Java8
+Unicode 应用数据缓存的明确限制及原版 JDK 补充字符目录失败仍记录保留；#37 完整验收及人工验收继续开放。原失败与本次修复范围保存在 Issue
+#37。
 
 可选真实 Maven 样例使用 Maven 3.9.9 和 Spring Boot
 2.7.18，创建临时三项目 reactor，经 Core 和独立宿主执行打包／测试／安装、模块准备、开发运行及打包后 JAR 运行。真实检查核对所选 settings.xml、Maven／Spring

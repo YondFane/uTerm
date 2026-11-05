@@ -4,17 +4,19 @@ cd "$(dirname "$0")/.."
 test "$(uname -s)" = Darwin
 launchctl print "gui/$(id -u)" >/dev/null
 pgrep -x WindowServer >/dev/null
-python3 - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" <<'PY'
+cargo build --locked --manifest-path crates/uterm-core/Cargo.toml --bin uterm-core-contract
+git_qa_target="${CARGO_TARGET_DIR:-$PWD/crates/uterm-core/target}"
+python3 - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" "$git_qa_target/debug/uterm-core-contract" <<'PY'
 import json, subprocess, sys, tempfile, time
 from pathlib import Path
-app, evidence = map(Path, sys.argv[1:])
+app, evidence, writer = map(Path, sys.argv[1:])
 evidence.mkdir(parents=True, exist_ok=True)
 path = evidence / 'git-live.json'
 path.unlink(missing_ok=True)
 with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     with (evidence / 'git-stdout.log').open('w') as out, (evidence / 'git-stderr.log').open('w') as err:
         process = subprocess.Popen([str(app / 'Contents/MacOS/UTermNativeQA'), '--qa-data-root', root,
-            '--git-smoke-report', str(path)], stdout=out, stderr=err)
+            '--git-smoke-report', str(path), '--qa-store-lock-helper', str(writer)], stdout=out, stderr=err)
         try:
             deadline = time.monotonic() + 150
             while process.poll() is None and time.monotonic() < deadline:
@@ -50,10 +52,12 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 'favoriteRecoveryCancelRetainedBytes', 'favoriteRecoveryCopiedExactSourceWithoutRestore',
                 'favoriteRecoveryOpenedFromScopedGitError', 'favoriteRecoveryStaleSelectionRetainedBytes',
                 'favoriteRecoveryRestoredAndRetainedDamage', 'favoriteRecoveryMissingPreviewReadonlyAndExplicitRestore',
-                'favoriteRecoveryReadyBeforeEditorWrite',
+                'favoriteRecoveryReadyBeforeEditorWrite', 'favoriteRecoveryExplicitBusyReload',
                 'cancelledGitRetainedEditorFreezeUntilCompletion', 'cancelledGitReportedCompletedWriteAndRetainedBytes']:
         assert report[key], (key, report)
-    assert len(report['gitCaptures']) == 14, report
+    assert len(report['gitCaptures']) == 15, report
+    assert report['favoriteRecoveryWriter']['actualOSLock'] and report['favoriteRecoveryWriter']['releaseExitCode'] == 0, report
+    assert report['favoriteRecoveryWriter']['explicitReloads'] == 1 and report['favoriteRecoveryWriter']['bytesRetained'], report
     for name in report['gitCaptures']:
         assert (evidence / name).is_file(), name
     report.update(passed=True, testedMergeSHA=report['sourceSHA'], platform='macOS',

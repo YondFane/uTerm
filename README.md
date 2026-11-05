@@ -209,8 +209,9 @@ checks, exact old-source archives and explicit conflict handoff; favorite recove
 platform evidence; full manual acceptance remains pending. `bash scripts/macos-git-smoke.sh` runs
 real-window diff/history/copy, branch creation, editor conflict protection and real Worktree menu
 confirmation/cancel/refusal/removal and favorite persistence and in-flight cancellation protection
-checks, with temporary repositories and system screenshots. This requires a macOS GUI session;
-platform acceptance is recorded separately.
+checks, including deterministic contention with an independent Rust writer, one explicit reload and
+unchanged favorite bytes, with temporary repositories and system screenshots. This requires a macOS
+GUI session; platform acceptance is recorded separately.
 
 The core's locked dependencies include the existing base64 decoder and ignore-aware file walker.
 Native file/content UI acceptance is tracked separately in the migration guide.
