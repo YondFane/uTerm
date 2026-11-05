@@ -364,7 +364,20 @@ selected copy, retaining damaged bytes. A changed snapshot rejects the restore; 
 uses non-overwriting installation. Cancel does not change recovery data. Open editors retain their
 current text; reopen files to load restored drafts.
 
-Tabs/window order and full manual editing/focus acceptance remain pending in #33/#34.
+Editable native files from the same canonical project open as AppKit window tabs in opening order.
+Opening an existing file selects its existing tab. Different projects, read-only previews and Git
+windows stay outside that editable group. Each tab keeps its own document-scoped bridge, recovery
+queue and close guard; cancelling a conflicted close retains both drafts and the external file.
+Closing one tab continues to guard and acknowledge only its own document.
+
+The real editor smoke now edits two recovered files in their native tab group, verifies exact shared
+drafts and unchanged originals, then leaves both tabs open for SIGKILL. The relaunch phase
+explicitly reopens both files, checks recovered text/order/reuse, isolates another project/preview,
+and exercises conflict/Keep editing/discard plus exact sibling Save. It requests
+`native-editor-tabs-checkpoint.png`, `native-editor-tabs-reopen.png` and
+`native-editor-tabs-conflict-640.png`; new ARM/Intel execution is pending CI, not inferred from
+syntax or compilation. Persisted tab order/window geometry, PDF marks and full manual
+keyboard/IME/focus acceptance remain open in #34.
 
 #### Tauri editor draft handoff
 

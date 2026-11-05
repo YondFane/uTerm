@@ -330,7 +330,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private func makeEditableContentWindow(directory: URL, path: String) async throws -> ContentWindow {
         guard !mutatingRepository, !model.worktreeDeletionPresented, !model.gitFavoritesRecoveryPresented else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
         if let content = existingContent(directory: directory, path: path, editable: true) {
-            content.showWindow(nil)
+            content.reveal()
             return content
         }
         guard let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
@@ -344,14 +344,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard !preparingQuit else { throw BridgeFailure(code: "QUIT_BUSY", message: localized("The client is preparing to quit.", "客户端正在准备退出。")) }
         guard let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
         if let content = existingContent(directory: directory, path: path, editable: editable) {
-            content.showWindow(nil)
+            content.reveal()
             return content
         }
         let content = try ContentWindow(bridge: bridge, directory: directory, path: path, editable: editable)
+        if editable, let next = content.window {
+            let siblings = contentWindows.values.filter { $0.editable && !$0.gitMode && $0.directory == content.directory }
+            if let anchor = NSApp.orderedWindows.first(where: { window in siblings.contains { $0.window === window } }) {
+                // Append after the group's last tab; dictionary iteration must not choose the tab order.
+                // 在分组末尾追加标签，避免由字典遍历顺序决定标签位置。
+                (anchor.tabbedWindows?.last ?? anchor).addTabbedWindow(next, ordered: .above)
+            }
+        }
         let id = UUID()
         contentWindows[id] = content
         content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
-        content.showWindow(nil)
+        content.reveal()
         return content
     }
 

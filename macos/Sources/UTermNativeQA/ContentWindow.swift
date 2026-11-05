@@ -87,6 +87,8 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         self.gitProjectID = gitProjectID
         let window = NSWindow(contentRect: webView.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = gitMode ? "Git — " + self.directory.lastPathComponent : path
+        window.tabbingMode = editable && !gitMode ? .preferred : .disallowed
+        window.tabbingIdentifier = "uterm-file:" + self.directory.path
         window.minSize = NSSize(width: gitMode ? 640 : 540, height: gitMode ? 420 : 360)
         window.contentView = webView
         super.init(window: window)
@@ -98,6 +100,13 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         window.center()
     }
     required init?(coder: NSCoder) { return nil }
+
+    func reveal() {
+        guard let window else { return }
+        window.tabGroup?.selectedWindow = window
+        showWindow(nil)
+        window.makeKeyAndOrderFront(nil)
+    }
 
     private func prepareDocument() {
         quitGate.invalidate()

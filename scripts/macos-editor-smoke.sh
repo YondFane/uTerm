@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
             process = subprocess.Popen([str(app / 'Contents/MacOS/UTermNativeQA'), '--qa-data-root', root,
                 '--editor-smoke-report', str(path), '--editor-smoke-phase', phase], stdout=out, stderr=err)
             try:
-                deadline = time.monotonic() + 90
+                deadline = time.monotonic() + 120
                 while not path.exists() and time.monotonic() < deadline:
                     if process.poll() is not None:
                         raise AssertionError(f'{phase}: app exited before its report: {process.returncode}')
@@ -29,6 +29,8 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 assert 'failure' not in report, report
                 assert report['coreReady'] and not report['productionDataAccess'], report
                 assert report['bundleIdentifier'] == 'sh.uterm.desktop.qa.native', report
+                for key in ['nativeFileTabsGroupedAndOrdered', 'nativeFileTabReopenSelectedExisting', 'nativeFileTabSwitchRetainedExactDrafts']:
+                    assert report[key], (key, report)
                 if phase == 'checkpoint':
                     for key in ['editedDraftDurableBeforeKill', 'originalBytesBeforeKill', 'wrongFileWriteRejected', 'awaitingForcedExit']:
                         assert report[key], (key, report)
@@ -44,6 +46,9 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                                 'recoveryCopyPreservedExactTextAndStore', 'recoveryCancelPreservedStore',
                                 'recoveryMenuOpenedAndReusedReadonlyWindow', 'recoveryStaleSelectionPreservedNewerBytes',
                                 'recoveryRestoreRetainedDamagedBytes', 'recoveryMissingPreviewReadonlyAndExplicitRestore']:
+                        assert report[key], (key, report)
+                    for key in ['nativeFileTabDraftsSurvivedForcedExit', 'nativeFileTabsExcludeOtherProjectsAndPreviews',
+                                'nativeFileTabConflictCancelRetainedBothDrafts', 'nativeFileTabClosePreservedSiblingAndExternalFile']:
                         assert report[key], (key, report)
                     code = process.wait(timeout=20)
                     assert code == 0, code

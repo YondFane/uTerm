@@ -108,7 +108,9 @@ enum EditorSmoke {
             report["wrongFileWriteRejected"] = try await ContentSmoke.request(content, method: "file_save", params: ["directory": root.path, "path": "other.txt", "text": "denied", "expected": String(repeating: "a", count: 64), "force": true]) == "ROOT_DENIED"
             let image = "native-editor-durable-draft.png"
             try await capture(content, reportPath: reportPath, name: image)
-            report["editorCaptures"] = [image]
+            var captures = [image]
+            try await EditorTabsSmoke.run(model: model, phase: phase, open: open, reportPath: reportPath, captures: &captures, report: &report)
+            report["editorCaptures"] = captures
             // The runner kills this QA process only after it reads the durable checkpoint report.
             // 运行器读取已持久化检查点报告后，才会强制结束此 QA 进程。
             report["awaitingForcedExit"] = true
@@ -189,6 +191,7 @@ enum EditorSmoke {
         report["missingSourceRetainedReadonlyAfterClose"] = (try await draft(bridge, root: root))["draft"]["text"].string.map { Data($0.utf8) == Data(missingText.utf8) } == true
         try await EditorRecoverySmoke.run(model: model, parent: parent, root: root, path: name, text: missingText,
                                           lookup: lookup, reportPath: reportPath, captures: &captures, report: &report)
+        try await EditorTabsSmoke.run(model: model, phase: phase, open: open, reportPath: reportPath, captures: &captures, report: &report)
         report["editorCaptures"] = captures
     }
 }
