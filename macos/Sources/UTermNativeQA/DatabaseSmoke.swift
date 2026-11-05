@@ -56,6 +56,10 @@ enum DatabaseSmoke {
         guard let native = content.window else { throw BridgeFailure(code: "DB_WINDOW", message: "Missing native database window") }
         var captures: [String] = []
         func capture(_ name: String) async throws {
+            // Wait for WebKit paint submission before capturing WindowServer's composited image.
+            // 等待 WebKit 提交绘制后再截取 WindowServer 合成图像。
+            _ = try await EditorSmoke.evaluate(content, script: "await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); return true;", arguments: [:])
+            try await Task.sleep(for: .milliseconds(200))
             try await TerminalSmoke.capture(window: native, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
             captures.append(name)
         }

@@ -51,6 +51,7 @@ export function NativeDatabase() {
     null,
   );
   const [components, setComponents] = useState(false);
+  const [componentsOpened, setComponentsOpened] = useState(false);
   const [busy, setBusy] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const [error, setError] = useState("");
@@ -224,7 +225,14 @@ export function NativeDatabase() {
         >
           {tx("重新读取")}
         </button>
-        <button onClick={() => setComponents((value) => !value)}>{tx("数据库组件")}</button>
+        <button
+          onClick={() => {
+            setComponentsOpened(true);
+            setComponents((value) => !value);
+          }}
+        >
+          {tx("数据库组件")}
+        </button>
       </header>
       {error && (
         <p className="native-database-error" role="alert">
@@ -271,7 +279,9 @@ export function NativeDatabase() {
         </aside>
         <section className="native-database-workbench">
           <div className="native-database-components" hidden={!components}>
-            <DatabaseComponents selectedKind={tabs.find((tab) => tab.id === selected)?.kind} />
+            {componentsOpened && (
+              <DatabaseComponents selectedKind={tabs.find((tab) => tab.id === selected)?.kind} />
+            )}
           </div>
           {!components && !selected && <p>{tx("选择或添加数据库连接后打开工作台。")}</p>}
           {tabs.map((config) => (

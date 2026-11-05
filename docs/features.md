@@ -1728,8 +1728,10 @@ merge `5bc1ec99a1e61007dc75687a644087011556bc69` passes all scenes with Homebrew
 checks the server again after application exit. Three WindowServer captures have been inspected in
 [artifact 13450055371](https://github.com/YondFane/uTerm/actions/runs/42097888353/artifacts/13450055371).
 The ARM job passes, but the entire workflow fails: Intel refuses a fixture profile write with
-`WRITER_BUSY` before opening Redis. This is an outstanding failure, not native Intel acceptance.
-Credential-store, picker and manual checks remain pending.
+`WRITER_BUSY` before opening Redis. Fixture profile initialization now uses the application's
+existing serialized mutation queue after settings settle; it keeps revision checks and does not
+retry mutations or treat refused writes as success. This needs a new Intel run. Credential-store,
+picker and manual checks remain pending.
 
 The isolated Tauri harness now includes four real Redis scenes: profile save/password exclusion,
 read-only binary preview, hidden draft retention, and protected exact-text save/reconnect. It starts
@@ -5703,9 +5705,13 @@ hide/reopen and active-profile protection. Actual macOS 15.8.2 uses PostgreSQL 1
 [artifact 13450055371](https://github.com/YondFane/uTerm/actions/runs/42097888353/artifacts/13450055371).
 Visual inspection found that the narrow Chinese/light scene changes the native frame but its Web
 content remains English/dark; its current Boolean report is insufficient for that acceptance. Intel
-fails earlier during profile editing with an operation-busy error. Both remain open findings. The
-native host logs fixed method names and bounded error codes only, excluding parameters/vendor text.
-Windows, other engines/document databases, native picker and manual acceptance remain pending.
+fails earlier during profile editing with an operation-busy error. The native manager now starts
+component detection only when Database components is first opened and retains that manager when
+hidden; a focused regression checks no unseen probe during profile editing and no duplicate probe on
+reopening. Native data screenshots now wait for WebKit paint submission and compositor settling.
+These fixes need their own macOS run and image inspection. The native host logs fixed method names
+and bounded error codes only, excluding parameters/vendor text. Windows, other engines/document
+databases, native picker and manual acceptance remain pending.
 
 ### Database setup and visibility
 

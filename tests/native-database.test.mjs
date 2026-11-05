@@ -137,6 +137,11 @@ test("native database profile conflicts retain input and quit/resume keeps a mod
     await act(async () =>
       document.querySelector('[aria-label="Edit database connection: PostgreSQL QA"]').click(),
     );
+    assert.equal(
+      calls.filter((call) => call.method === "database_components").length,
+      0,
+      "Opening the profile editor must not start an unseen component probe that blocks saving",
+    );
     const name = document.querySelector("dialog[open] input");
     await change(name, "Retained draft 中文");
     await change(input("Password"), "PRIVATE_TEMPORARY_PASSWORD");
@@ -213,6 +218,15 @@ test("native database profile conflicts retain input and quit/resume keeps a mod
     );
     assert.equal(catalog.groups[0].databaseConnections[0].host, "127.0.0.2");
     assert.equal(document.querySelector('[aria-label="Temporary password"]').value, "");
+    await act(async () => button("Database components").click());
+    assert.equal(calls.filter((call) => call.method === "database_components").length, 1);
+    await act(async () => button("Database components").click());
+    await act(async () => button("Database components").click());
+    assert.equal(
+      calls.filter((call) => call.method === "database_components").length,
+      1,
+      "Reopening the component manager must retain its mounted state",
+    );
   } finally {
     await act(async () => root.unmount());
     window.dispatchEvent(new window.Event("pagehide"));

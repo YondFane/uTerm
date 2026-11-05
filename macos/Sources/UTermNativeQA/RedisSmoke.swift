@@ -42,17 +42,24 @@ enum RedisSmoke {
         }
         let id = UUID().uuidString
         var config: [String: JSONValue] = ["id": .string(id), "name": .string("Redis Native QA 中文"), "host": .string("127.0.0.1"), "port": .number(Double(port)), "db": .number(0), "username": .string(""), "tls": .bool(false), "ca_file": .string(""), "server_name": .string(""), "ssh_host": .string(""), "credential_id": .null]
+        await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         report["redisFixtureStep"] = "read-profile-snapshot"
         let initial = try await bridge.snapshot()
         report["redisFixtureStep"] = "save-profile"
-        _ = try await bridge.call("redis.profile.save", params: .object(["expectedRevision": .string(initial.revision), "workspaceId": .string(model.groupID), "config": .object(config)]))
+        guard await model.mutate("redis.profile.save", ["workspaceId": .string(model.groupID), "config": .object(config)], revision: initial.revision) else {
+            throw BridgeFailure(code: "REDIS_FIXTURE_SAVE", message: "Queued Redis fixture profile save failed")
+        }
+        report["redisFixtureProfileUsedApplicationWriteQueue"] = true
         report["redisFixtureStep"] = "open-window"
         await model.reload()
-        await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         let content = try await open()
         guard let window = content.window else { throw BridgeFailure(code: "REDIS_WINDOW", message: "Native Redis window missing") }
         var captures: [String] = []
         func capture(_ filename: String) async throws {
+            // Wait for WebKit paint submission before capturing WindowServer's composited image.
+            // 等待 WebKit 提交绘制后再截取 WindowServer 合成图像。
+            _ = try await EditorSmoke.evaluate(content, script: "await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); return true;", arguments: [:])
+            try await Task.sleep(for: .milliseconds(200))
             try await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(filename))
             captures.append(filename)
         }
