@@ -1,0 +1,1127 @@
+use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
+use std::{
+    collections::{HashMap, HashSet},
+    process::{Command, Stdio},
+    sync::{
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        Arc, Mutex,
+    },
+    time::Duration,
+};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    net::{TcpListener, TcpStream},
+    sync::{oneshot, Mutex as AsyncMutex},
+};
+use utermd_local::BackgroundChild;
+
+mod document;
+mod host;
+pub use host::Host;
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Config {
+    id: String,
+    name: String,
+    kind: String,
+    host: String,
+    port: u16,
+    database: String,
+    username: String,
+    tls: bool,
+    ca_file: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ssh_target: Option<utermd_local::ssh::SshTarget>,
+    credential_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    auth_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    auth_mode: Option<String>,
+}
+impl Config {
+    fn validate(&self) -> Result<()> {
+        uuid::Uuid::parse_str(&self.id).context("DB_INVALID_CONFIG")?;
+        let clean = |value: &str, limit: usize| {
+            value.len() <= limit && !value.chars().any(char::is_control)
+        };
+        if !["mysql", "postgresql", "oracle", "elasticsearch", "mongodb"]
+            .contains(&self.kind.as_str())
+            || self.port == 0
+            || self.name.trim().is_empty()
+            || !clean(&self.name, 800)
+            || !clean(&self.username, 2048)
+            || !clean(&self.ca_file, 4096)
+            || self.host.is_empty()
+            || self.host.starts_with('-')
+            || self.host.len() > 255
+            || !self
+                .host
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"._-:".contains(&c))
+            || self.database.len() > 255
+            || !self
+                .database
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || b"_$.-".contains(&c))
+            || (self.kind == "oracle" && self.database.is_empty())
+            || self.auth_source.as_ref().is_some_and(|source| {
+                self.kind != "mongodb"
+                    || source.is_empty()
+                    || source.len() > 255
+                    || !source
+                        .bytes()
+                        .all(|c| c.is_ascii_alphanumeric() || b"_$.-".contains(&c))
+            })
+            || self.auth_mode.as_ref().is_some_and(|mode| {
+                self.kind != "elasticsearch" || !["basic", "api_key"].contains(&mode.as_str())
+            })
+        {
+            bail!("DB_INVALID_CONFIG");
+        }
+        if let Some(target) = &self.ssh_target {
+            target.validate()?;
+        }
+        if let Some(reference) = &self.credential_id {
+            uuid::Uuid::parse_str(reference).context("DB_INVALID_CONFIG")?;
+        }
+        Ok(())
+    }
+    async fn identity(&self) -> Result<String> {
+        let ssh = if let Some(target) = &self.ssh_target {
+            crate::ssh::effective_target(target).await?.identity
+        } else {
+            String::new()
+        };
+        let ca = if self.tls && !self.ca_file.is_empty() {
+            let file = tokio::fs::File::open(&self.ca_file).await?;
+            let mut bytes = Vec::new();
+            file.take(1048577).read_to_end(&mut bytes).await?;
+            if bytes.len() > 1048576 {
+                bail!("DB_CA_FAILED");
+            }
+            format!("{:x}", Sha256::digest(bytes))
+        } else {
+            String::new()
+        };
+        let mut identity = serde_json::to_vec(&(
+            &self.kind,
+            self.host.to_lowercase(),
+            self.port,
+            &self.database,
+            &self.username,
+            self.tls,
+            ca,
+            ssh,
+        ))?;
+        if ["mongodb", "elasticsearch"].contains(&self.kind.as_str()) {
+            identity.extend(serde_json::to_vec(&(&self.auth_source, &self.auth_mode))?);
+        }
+        Ok(format!("{:x}", Sha256::digest(identity)))
+    }
+}
+
+type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Result<Value, String>>>>>;
+struct Opening<'a>(&'a AtomicUsize);
+impl Drop for Opening<'_> {
+    fn drop(&mut self) {
+        self.0.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+struct Tunnel(tokio::task::JoinHandle<()>);
+impl Drop for Tunnel {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+struct Connection {
+    browser: Mutex<Option<(String, Arc<Connection>)>>,
+    browser_lock: AsyncMutex<()>,
+    session_lock: AsyncMutex<()>,
+    browser_config: Option<(Config, String, String)>,
+    child: Mutex<Option<BackgroundChild>>,
+    input: Option<AsyncMutex<tokio::fs::File>>,
+    elastic: Option<document::Elasticsearch>,
+    cancelled: tokio::sync::Notify,
+    pending: Pending,
+    sequence: AtomicU64,
+    busy: AtomicBool,
+    writable: AtomicBool,
+    transaction: AtomicBool,
+    dead: AtomicBool,
+    tunnel: Mutex<Option<Tunnel>>,
+    reader: Mutex<Option<tokio::task::JoinHandle<()>>>,
+    temporary: Mutex<Option<tempfile::TempDir>>,
+}
+impl Connection {
+    fn stop(&self) {
+        self.dead.store(true, Ordering::SeqCst);
+        self.cancelled.notify_waiters();
+        if let Ok(mut browser) = self.browser.lock() {
+            if let Some((_, browser)) = browser.take() {
+                browser.stop();
+            }
+        }
+        if let Ok(mut child) = self.child.lock() {
+            child.take();
+        }
+        if let Ok(mut tunnel) = self.tunnel.lock() {
+            tunnel.take();
+        }
+        if let Ok(mut reader) = self.reader.lock() {
+            if let Some(task) = reader.take() {
+                task.abort();
+            }
+        }
+        if let Ok(mut pending) = self.pending.lock() {
+            for (_, sender) in pending.drain() {
+                let _ = sender.send(Err("DB_DISCONNECTED".into()));
+            }
+        }
+        if let Ok(mut temporary) = self.temporary.lock() {
+            temporary.take();
+        }
+    }
+    async fn send(&self, mut request: Value) -> Result<Value, String> {
+        // Subscribe before checking dead so a concurrent stop cannot lose its notification.
+        // 先订阅再检查关闭状态，避免并发停止时丢失通知。
+        let cancelled = self.cancelled.notified();
+        if self.dead.load(Ordering::SeqCst) {
+            return Err("DB_DISCONNECTED".into());
+        }
+        if self.busy.swap(true, Ordering::SeqCst) {
+            return Err("DB_BUSY".into());
+        }
+        let result = async {
+            if let Some(elastic) = &self.elastic {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancelled => Err("DB_DISCONNECTED".into()),
+                    result = elastic.send(&request) => result,
+                };
+                if matches!(&result, Err(error) if error == "DB_DISCONNECTED" || error == "DB_TIMEOUT") { self.stop(); }
+                return result;
+            }
+            let id = self.sequence.fetch_add(1, Ordering::Relaxed);
+            request["id"] = id.into();
+            let mut bytes = serde_json::to_vec(&request).map_err(|_| "DB_INVALID_REQUEST")?;
+            if bytes.len() > 1048576 {
+                return Err("DB_INPUT_LIMIT".into());
+            }
+            bytes.push(b'\n');
+            let (sender, receiver) = oneshot::channel();
+            self.pending
+                .lock()
+                .map_err(|_| "DB_OPERATION_FAILED")?
+                .insert(id, sender);
+            if !matches!(
+                tokio::time::timeout(
+                    Duration::from_secs(8),
+                    self.input.as_ref().ok_or("DB_DISCONNECTED")?.lock().await.write_all(&bytes)
+                )
+                .await,
+                Ok(Ok(()))
+            ) {
+                self.stop();
+                return Err("DB_DISCONNECTED".into());
+            }
+            drop(bytes);
+            drop(request);
+            match tokio::time::timeout(Duration::from_secs(40), receiver).await {
+                Ok(Ok(result)) => {
+                    if matches!(&result, Err(error) if error == "DB_DISCONNECTED") {
+                        self.stop();
+                    }
+                    result
+                }
+                _ => {
+                    self.stop();
+                    Err("DB_TIMEOUT".into())
+                }
+            }
+        }
+        .await;
+        self.busy.store(false, Ordering::SeqCst);
+        result
+    }
+}
+impl Drop for Connection {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct DatabaseState {
+    connections: Arc<Mutex<HashMap<String, Arc<Connection>>>>,
+    drafts: Arc<Mutex<HashSet<String>>>,
+    opening: Arc<AtomicUsize>,
+}
+impl DatabaseState {
+    fn reserve(&self) -> Result<Opening<'_>> {
+        let mut connections = self
+            .connections
+            .lock()
+            .map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))?;
+        connections.retain(|_, connection| !connection.dead.load(Ordering::SeqCst));
+        if connections.len() + self.opening.load(Ordering::SeqCst) >= 8 {
+            bail!("DB_CONNECTION_LIMIT");
+        }
+        self.opening.fetch_add(1, Ordering::SeqCst);
+        Ok(Opening(&self.opening))
+    }
+    pub fn in_use(&self) -> bool {
+        self.opening.load(Ordering::SeqCst) > 0
+            || self.connections.lock().map_or(true, |items| {
+                items.values().any(|item| !item.dead.load(Ordering::SeqCst))
+            })
+    }
+    pub fn busy(&self) -> bool {
+        self.opening.load(Ordering::SeqCst) > 0
+            || self.connections.lock().map_or(true, |items| {
+                items.values().any(|item| {
+                    item.busy.load(Ordering::SeqCst) || item.transaction.load(Ordering::SeqCst)
+                })
+            })
+    }
+    pub fn dirty(&self) -> bool {
+        self.drafts.lock().map_or(true, |items| !items.is_empty())
+    }
+    pub fn stop(&self) {
+        if let Ok(mut items) = self.connections.lock() {
+            for (_, item) in items.drain() {
+                item.stop();
+            }
+        }
+    }
+}
+
+async fn socks(app: &Host, config: &Config) -> Result<(u16, String, Option<Tunnel>)> {
+    let Some(target) = config.ssh_target.clone() else {
+        return Ok((0, String::new(), None));
+    };
+    let prepared = (app.prepare_ssh)(target.clone()).await?;
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let port = listener.local_addr()?.port();
+    let token = uuid::Uuid::new_v4().simple().to_string();
+    let proxy_token = token.clone();
+    let destination = if config.host.contains(':') {
+        format!("[{}]:{}", config.host, config.port)
+    } else {
+        format!("{}:{}", config.host, config.port)
+    };
+    let task = tokio::spawn(async move {
+        // Owning the relays ensures closing a connection also stops its SSH children. 持有转发任务，确保断开连接时一并终止 SSH 子进程。
+        let mut relays = tokio::task::JoinSet::new();
+        loop {
+            tokio::select! {
+                accepted = listener.accept(), if relays.len() < 4 => {
+                    let Ok((socket, _)) = accepted else { break; };
+                    let prepared = prepared.clone();
+                    let target = target.clone();
+                    let destination = destination.clone();
+                    let token = proxy_token.clone();
+                    relays.spawn(async move {
+                        let _ = proxy(socket, prepared, target, destination, token).await;
+                    });
+                }
+                _ = relays.join_next(), if !relays.is_empty() => {}
+            }
+        }
+    });
+    Ok((port, token, Some(Tunnel(task))))
+}
+async fn proxy_handshake(socket: &mut TcpStream, token: &str) -> Result<()> {
+    let mut hello = [0; 2];
+    socket.read_exact(&mut hello).await?;
+    if hello[0] != 5 || hello[1] == 0 {
+        bail!("DB_TUNNEL");
+    }
+    let mut methods = vec![0; hello[1] as usize];
+    socket.read_exact(&mut methods).await?;
+    if !methods.contains(&2) {
+        socket.write_all(&[5, 255]).await?;
+        bail!("DB_TUNNEL");
+    }
+    socket.write_all(&[5, 2]).await?;
+    let mut auth = [0; 2];
+    socket.read_exact(&mut auth).await?;
+    let mut username = vec![0; auth[1] as usize];
+    socket.read_exact(&mut username).await?;
+    let mut password = vec![0; socket.read_u8().await? as usize];
+    socket.read_exact(&mut password).await?;
+    let authenticated = auth[0] == 1
+        && username == b"uterm"
+        && password.len() == token.len()
+        && password
+            .iter()
+            .zip(token.as_bytes())
+            .fold(0u8, |diff, (a, b)| diff | (a ^ b))
+            == 0;
+    socket.write_all(&[1, u8::from(!authenticated)]).await?;
+    if !authenticated {
+        bail!("DB_TUNNEL");
+    }
+    let mut header = [0; 4];
+    socket.read_exact(&mut header).await?;
+    if header[0..3] != [5, 1, 0] {
+        bail!("DB_TUNNEL");
+    }
+    let size = match header[3] {
+        1 => 4,
+        4 => 16,
+        3 => socket.read_u8().await? as usize,
+        _ => bail!("DB_TUNNEL"),
+    };
+    let mut address = vec![0; size + 2];
+    socket.read_exact(&mut address).await?;
+    Ok(())
+}
+async fn proxy(
+    mut socket: TcpStream,
+    prepared: crate::ssh::auth::Prepared,
+    target: utermd_local::ssh::SshTarget,
+    destination: String,
+    token: String,
+) -> Result<()> {
+    tokio::time::timeout(
+        Duration::from_secs(12),
+        proxy_handshake(&mut socket, &token),
+    )
+    .await??;
+    // This loopback proxy always forwards to the configured endpoint, never the caller's target. 回环代理始终转发到配置的端点，不使用调用方指定的目标。
+    let mut command = crate::ssh::base_command()?;
+    command.args(target.options());
+    prepared.apply(&mut command)?;
+    command.args([
+        "-T",
+        "-S",
+        "none",
+        "-o",
+        "ControlMaster=no",
+        "-o",
+        if prepared.askpass.is_some() {
+            "BatchMode=no"
+        } else {
+            "BatchMode=yes"
+        },
+        "-o",
+        if prepared.askpass.is_some() {
+            "StrictHostKeyChecking=ask"
+        } else {
+            "StrictHostKeyChecking=yes"
+        },
+        "-o",
+        "ClearAllForwardings=yes",
+        "-o",
+        "ForwardAgent=no",
+        "-o",
+        "ForwardX11=no",
+        "-o",
+        "RemoteCommand=none",
+        "-o",
+        "ConnectTimeout=12",
+        "-o",
+        &format!("HostName={}", prepared.effective.hostname),
+        "-l",
+        &prepared.effective.user,
+        "-p",
+        &prepared.effective.port,
+        "-W",
+        &destination,
+        "--",
+        &target.host,
+    ]);
+    command.stderr(Stdio::null());
+    let mut child = BackgroundChild::spawn(&mut command)?;
+    let mut remote = tokio::io::join(
+        crate::ssh::pipe_file(child.take_stdout().context("DB_TUNNEL")?),
+        crate::ssh::pipe_file(child.take_stdin().context("DB_TUNNEL")?),
+    );
+    socket.write_all(&[5, 0, 0, 1, 127, 0, 0, 1, 0, 0]).await?;
+    tokio::io::copy_bidirectional(&mut socket, &mut remote).await?;
+    Ok(())
+}
+
+pub async fn database_connect(
+    app: Host,
+    config: Config,
+    password: Option<String>,
+) -> Result<Value, String> {
+    config.validate().map_err(|_| "DB_INVALID_CONFIG")?;
+    if password.as_ref().is_some_and(|value| value.len() > 2048) {
+        return Err("DB_CREDENTIAL_SIZE".into());
+    }
+    let state = &app.database;
+    let _opening = state.reserve().map_err(|error| error.to_string())?;
+    let result = async {
+        if app.components.0.load(Ordering::SeqCst) { bail!("DB_BUSY"); }
+        if state.connections.lock().map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))?.len() >= 8 { bail!("DB_CONNECTION_LIMIT"); }
+        let identity = config.identity().await?;
+        let password = if let Some(password) = password { password } else if let Some(reference) = &config.credential_id {
+            let service = format!("{}.database", app.identifier);
+            let reference = reference.clone();
+            let bytes = tokio::task::spawn_blocking(move || crate::credentials::access(&service, &reference, None)).await?.map_err(|_| anyhow::anyhow!("DB_CREDENTIAL_FAILED"))?.context("DB_CREDENTIAL_MISSING")?;
+            let saved: Value = serde_json::from_slice(&bytes)?;
+            if saved["target"].as_str() != Some(&identity) { bail!("DB_CREDENTIAL_TARGET_CHANGED"); }
+            saved["password"].as_str().context("DB_CREDENTIAL_MISSING")?.to_owned()
+        } else { String::new() };
+        let (proxy_port, proxy_token, tunnel) = socks(&app, &config).await?;
+        if config.kind == "elasticsearch" {
+            let elastic = document::Elasticsearch::new(&config, &password, proxy_port, &proxy_token).await.map_err(anyhow::Error::msg)?;
+            let info = elastic.connect().await.map_err(anyhow::Error::msg)?;
+            if config.identity().await? != identity { bail!("DB_CREDENTIAL_TARGET_CHANGED"); }
+            let connection = Arc::new(Connection {
+                browser: Mutex::new(None), browser_lock: AsyncMutex::new(()), session_lock: AsyncMutex::new(()),
+                browser_config: Some((config, String::new(), identity)), child: Mutex::new(None), input: None,
+                elastic: Some(elastic), cancelled: tokio::sync::Notify::new(), pending: Arc::new(Mutex::new(HashMap::new())),
+                sequence: AtomicU64::new(1), busy: AtomicBool::new(false), writable: AtomicBool::new(false),
+                transaction: AtomicBool::new(false), dead: AtomicBool::new(false), tunnel: Mutex::new(tunnel),
+                reader: Mutex::new(None), temporary: Mutex::new(None),
+            });
+            let id = uuid::Uuid::new_v4().to_string();
+            state.connections.lock().map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))?.insert(id.clone(), connection);
+            return Ok(json!({"handle":id,"info":info}));
+        }
+        let handle = app.clone();
+        let kind = config.kind.clone();
+        let (java, classpath) = tokio::task::spawn_blocking(move || -> Result<_> {
+            let java = crate::database_components::java(&handle)?;
+            let engine = crate::database_components::bundled_engine(&handle)?;
+            let mut paths = vec![engine, crate::database_components::checked_file(&handle, &kind)?];
+            if kind == "mongodb" {
+                paths.push(crate::database_components::checked_file(&handle, "mongodb-core")?);
+                paths.push(crate::database_components::checked_file(&handle, "mongodb-bson")?);
+            }
+            Ok((java, std::env::join_paths(paths)?))
+        }).await??;
+        let temporary = tempfile::Builder::new().prefix("uterm-database-").tempdir()?;
+        let mut command = Command::new(java);
+        // SIGKILL skips Java's deleteOnExit, so the parent owns each worker's temporary files. SIGKILL 不执行 Java 的 deleteOnExit，因此由父进程清理每个连接的临时文件。
+        command.arg(format!("-Djava.io.tmpdir={}", temporary.path().display()));
+        command.args(["-Xmx192m", "-Djava.awt.headless=true", "-cp"]).arg(classpath).arg(if config.kind == "mongodb" { "MongoBridge" } else { "DatabaseBridge" })
+            .env_remove("JAVA_TOOL_OPTIONS").env_remove("JDK_JAVA_OPTIONS").env_remove("_JAVA_OPTIONS")
+            .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::null());
+        let mut child = BackgroundChild::spawn(&mut command).context("DB_JAVA")?;
+        let input = crate::ssh::pipe_file(child.take_stdin().context("DB_PROTOCOL")?);
+        let output = crate::ssh::pipe_file(child.take_stdout().context("DB_PROTOCOL")?);
+        let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
+        let connection = Arc::new(Connection { browser: Mutex::new(None), browser_lock: AsyncMutex::new(()), session_lock: AsyncMutex::new(()), browser_config: Some((config.clone(), password.clone(), identity.clone())), child: Mutex::new(Some(child)), input: Some(AsyncMutex::new(input)), elastic: None, cancelled: tokio::sync::Notify::new(), pending: pending.clone(), sequence: AtomicU64::new(1), busy: AtomicBool::new(false), writable: AtomicBool::new(false), transaction: AtomicBool::new(false), dead: AtomicBool::new(false), tunnel: Mutex::new(tunnel), reader: Mutex::new(None), temporary: Mutex::new(Some(temporary)) });
+        let weak = Arc::downgrade(&connection);
+        let pending_reader = pending.clone();
+        let reader = tokio::spawn(async move {
+            let mut reader = BufReader::new(output);
+            loop {
+                let mut line = Vec::new();
+                let result = (&mut reader).take(8 * 1024 * 1024 + 1).read_until(b'\n', &mut line).await;
+                if !matches!(result, Ok(count) if count > 0 && count <= 8 * 1024 * 1024 && line.last() == Some(&b'\n')) { break; }
+                let Ok(mut value) = serde_json::from_slice::<Value>(&line) else { break; };
+                let Some(id) = value["id"].as_u64() else { break; };
+                if let Ok(mut items) = pending_reader.lock() {
+                    if let Some(sender) = items.remove(&id) {
+                        let result = if let Some(error) = value["error"].as_str() { Err(error.to_owned()) } else { Ok(value["result"].take()) };
+                        let _ = sender.send(result);
+                    }
+                }
+            }
+            if let Some(connection) = weak.upgrade() { connection.stop(); }
+        });
+        *connection.reader.lock().map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))? = Some(reader);
+        if config.identity().await? != identity { bail!("DB_CREDENTIAL_TARGET_CHANGED"); }
+        let info = connection.send(json!({"op":"connect","config":config,"password":password,"proxy_port":proxy_port,"proxy_token":proxy_token})).await.map_err(anyhow::Error::msg)?;
+        let id = uuid::Uuid::new_v4().to_string();
+        let mut connections = state.connections.lock().map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))?;
+        if connections.len() >= 8 { bail!("DB_CONNECTION_LIMIT"); }
+        connections.insert(id.clone(), connection);
+        Ok(json!({"handle":id,"info":info}))
+    }.await;
+    result.map_err(|error: anyhow::Error| error.to_string())
+}
+
+fn browse_request(kind: &str, value: &Value) -> Result<Value, String> {
+    let view = value["view"].as_str().ok_or("DB_INVALID_REQUEST")?;
+    let name = |key: &str| -> Result<&str, String> {
+        let text = value[key].as_str().unwrap_or("");
+        if text.len() > 1024 || text.contains('\0') {
+            return Err("DB_INVALID_REQUEST".into());
+        }
+        Ok(text)
+    };
+    let catalog = name("catalog")?;
+    let schema = name("schema")?;
+    let table = name("table")?;
+    if ["catalogs", "tables", "columns"].contains(&view) {
+        return Ok(
+            json!({"op":"metadata", "view":view, "catalog":catalog, "schema":schema, "table":table}),
+        );
+    }
+    if !["data", "table"].contains(&view) || table.is_empty() {
+        return Err("DB_INVALID_REQUEST".into());
+    }
+    let offset = value
+        .get("offset")
+        .map_or(Some(0), Value::as_u64)
+        .filter(|offset| *offset <= 10000)
+        .ok_or("DB_INPUT_LIMIT")?;
+    if view == "table" {
+        let filters = value.get("filters").cloned().unwrap_or_else(|| json!([]));
+        if !filters.as_array().is_some_and(|filters| filters.len() <= 8) {
+            return Err("DB_INPUT_LIMIT".into());
+        }
+        return Ok(
+            json!({"op":"table", "catalog":catalog, "schema":schema, "table":table, "offset":offset, "filters":filters}),
+        );
+    }
+    let quote = if kind == "mysql" { "`" } else { "\"" };
+    let quoted = |name: &str| format!("{quote}{}{quote}", name.replace(quote, &quote.repeat(2)));
+    let namespace = if kind == "mysql" { catalog } else { schema };
+    let target = if namespace.is_empty() {
+        quoted(table)
+    } else {
+        format!("{}.{}", quoted(namespace), quoted(table))
+    };
+    Ok(json!({"op":"query", "sql":format!("SELECT * FROM {target}"), "offset":offset}))
+}
+
+pub async fn database_request(app: Host, handle: String, request: Value) -> Result<Value, String> {
+    let connection = app
+        .database
+        .connections
+        .lock()
+        .map_err(|_| "DB_OPERATION_FAILED")?
+        .get(&handle)
+        .cloned()
+        .ok_or("DB_DISCONNECTED")?;
+    let op = request["op"]
+        .as_str()
+        .ok_or("DB_INVALID_REQUEST")?
+        .to_owned();
+    let op = op.as_str();
+    let _session = connection.session_lock.lock().await;
+    if connection
+        .browser_config
+        .as_ref()
+        .is_some_and(|(config, _, _)| ["mongodb", "elasticsearch"].contains(&config.kind.as_str()))
+    {
+        document::validate(&request, connection.writable.load(Ordering::SeqCst))?;
+        let action = request["action"].as_str().ok_or("DB_INVALID_REQUEST")?;
+        let result = connection.send(request.clone()).await;
+        if action == "writable" {
+            if let Ok(value) = &result {
+                connection
+                    .writable
+                    .store(value["writable"] == true, Ordering::SeqCst);
+            }
+        }
+        return result;
+    }
+    if op == "browse" {
+        let (config, password, identity) = connection
+            .browser_config
+            .as_ref()
+            .ok_or("DB_INVALID_REQUEST")?;
+        let request = browse_request(&config.kind, &request)?;
+        let _lock = connection.browser_lock.lock().await;
+        if connection.dead.load(Ordering::SeqCst) {
+            return Err("DB_DISCONNECTED".into());
+        }
+        if !connection.writable.load(Ordering::SeqCst)
+            && !connection.transaction.load(Ordering::SeqCst)
+        {
+            return connection.send(request).await;
+        }
+        let existing = connection
+            .browser
+            .lock()
+            .map_err(|_| "DB_OPERATION_FAILED")?
+            .clone()
+            .filter(|(_, browser)| !browser.dead.load(Ordering::SeqCst));
+        let (id, browser) = if let Some(browser) = existing {
+            browser
+        } else {
+            if config
+                .identity()
+                .await
+                .map_err(|_| "DB_CREDENTIAL_FAILED")?
+                != *identity
+            {
+                return Err("DB_CREDENTIAL_TARGET_CHANGED".into());
+            }
+            let opened = database_connect(app.clone(), config.clone(), Some(password.clone()))
+                .await
+                .map_err(|error| {
+                    if error == "DB_DISCONNECTED" || error == "DB_TIMEOUT" {
+                        "DB_BROWSE_DISCONNECTED".to_owned()
+                    } else {
+                        error
+                    }
+                })?;
+            let id = opened["handle"].as_str().ok_or("DB_PROTOCOL")?.to_owned();
+            let browser = app
+                .database
+                .connections
+                .lock()
+                .map_err(|_| "DB_OPERATION_FAILED")?
+                .get(&id)
+                .cloned()
+                .ok_or("DB_DISCONNECTED")?;
+            let mut slot = connection
+                .browser
+                .lock()
+                .map_err(|_| "DB_OPERATION_FAILED")?;
+            if connection.dead.load(Ordering::SeqCst) {
+                browser.stop();
+                drop(slot);
+                app.database
+                    .connections
+                    .lock()
+                    .map_err(|_| "DB_OPERATION_FAILED")?
+                    .remove(&id);
+                return Err("DB_DISCONNECTED".into());
+            }
+            *slot = Some((id.clone(), browser.clone()));
+            (id, browser)
+        };
+        let result = browser.send(request).await;
+        if browser.dead.load(Ordering::SeqCst) {
+            app.database
+                .connections
+                .lock()
+                .map_err(|_| "DB_OPERATION_FAILED")?
+                .remove(&id);
+            connection
+                .browser
+                .lock()
+                .map_err(|_| "DB_OPERATION_FAILED")?
+                .take();
+            return Err("DB_BROWSE_DISCONNECTED".into());
+        }
+        return result;
+    }
+    if ![
+        "query", "metadata", "writable", "commit", "rollback", "table", "preview", "apply",
+        "explain",
+    ]
+    .contains(&op)
+    {
+        return Err("DB_INVALID_REQUEST".into());
+    }
+    if connection.transaction.load(Ordering::SeqCst) && ["metadata", "writable"].contains(&op) {
+        return Err("DB_PENDING".into());
+    }
+    if op == "apply" && !connection.writable.load(Ordering::SeqCst) {
+        return Err("DB_READ_ONLY".into());
+    }
+    if ["query", "table", "preview", "apply", "explain"].contains(&op)
+        && connection.writable.load(Ordering::SeqCst)
+    {
+        connection.transaction.store(true, Ordering::SeqCst);
+    }
+    let result = connection.send(request).await;
+    if let Ok(value) = &result {
+        if let Some(pending) = value["pending"].as_bool() {
+            connection.transaction.store(pending, Ordering::SeqCst);
+        }
+        if op == "writable" {
+            connection
+                .writable
+                .store(value["writable"] == true, Ordering::SeqCst);
+            if value["writable"] == false {
+                let browser = connection
+                    .browser
+                    .lock()
+                    .map_err(|_| "DB_OPERATION_FAILED")?
+                    .take();
+                if let Some((id, browser)) = browser {
+                    browser.stop();
+                    app.database
+                        .connections
+                        .lock()
+                        .map_err(|_| "DB_OPERATION_FAILED")?
+                        .remove(&id);
+                }
+            }
+        }
+        if ["commit", "rollback"].contains(&op) {
+            connection.transaction.store(false, Ordering::SeqCst);
+        }
+    }
+    result
+}
+
+pub async fn database_disconnect(app: Host, handle: String, discard: bool) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || -> Result<(), String> {
+        let state = &app.database;
+        let mut connections = state
+            .connections
+            .lock()
+            .map_err(|_| "DB_OPERATION_FAILED")?;
+        if let Some(connection) = connections.get(&handle) {
+            if connection.transaction.load(Ordering::SeqCst) && !discard {
+                return Err("DB_PENDING".into());
+            }
+        }
+        if let Some(connection) = connections.remove(&handle) {
+            if let Some((id, _)) = connection
+                .browser
+                .lock()
+                .map_err(|_| "DB_OPERATION_FAILED")?
+                .as_ref()
+            {
+                connections.remove(id);
+            }
+            connection.stop();
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|_| "DB_OPERATION_FAILED".to_owned())?
+}
+pub fn database_guard(app: Host, id: String, dirty: bool) -> Result<(), String> {
+    let state = &app.database;
+    let mut drafts = state.drafts.lock().map_err(|_| "DB_OPERATION_FAILED")?;
+    if dirty {
+        drafts.insert(id);
+    } else {
+        drafts.remove(&id);
+    }
+    Ok(())
+}
+pub fn database_prepare_exit(app: Host) -> Result<(), String> {
+    if app.database.busy() || app.components.0.load(Ordering::SeqCst) {
+        return Err("DB_BUSY".into());
+    }
+    app.database
+        .drafts
+        .lock()
+        .map_err(|_| "DB_OPERATION_FAILED")?
+        .clear();
+    Ok(())
+}
+
+pub async fn database_credential(
+    app: Host,
+    config: Config,
+    password: Option<String>,
+    remove: bool,
+) -> Result<Option<String>, String> {
+    config.validate().map_err(|_| "DB_INVALID_CONFIG")?;
+    if !remove && password.is_none() {
+        let reference = config
+            .credential_id
+            .clone()
+            .ok_or("DB_CREDENTIAL_MISSING")?;
+        let service = format!("{}.database", app.identifier);
+        let key = reference.clone();
+        let bytes =
+            tokio::task::spawn_blocking(move || crate::credentials::access(&service, &key, None))
+                .await
+                .map_err(|_| "DB_CREDENTIAL_FAILED")?
+                .map_err(|_| "DB_CREDENTIAL_FAILED")?
+                .ok_or("DB_CREDENTIAL_MISSING")?;
+        let credential: Value =
+            serde_json::from_slice(&bytes).map_err(|_| "DB_CREDENTIAL_FAILED")?;
+        if credential["target"].as_str()
+            != Some(
+                &config
+                    .identity()
+                    .await
+                    .map_err(|_| "DB_CREDENTIAL_FAILED")?,
+            )
+        {
+            return Err("DB_CREDENTIAL_TARGET_CHANGED".into());
+        }
+        return Ok(Some(reference));
+    }
+    let reference = if remove {
+        config
+            .credential_id
+            .clone()
+            .ok_or("DB_CREDENTIAL_MISSING")?
+    } else {
+        uuid::Uuid::new_v4().to_string()
+    };
+    let bytes = if remove {
+        None
+    } else {
+        let password = password.ok_or("DB_CREDENTIAL_MISSING")?;
+        if password.len() > 2048 {
+            return Err("DB_CREDENTIAL_SIZE".into());
+        }
+        let target = config
+            .identity()
+            .await
+            .map_err(|_| "DB_CREDENTIAL_FAILED")?;
+        Some(
+            serde_json::to_vec(&json!({"target":target,"password":password}))
+                .map_err(|_| "DB_CREDENTIAL_FAILED")?,
+        )
+    };
+    let service = format!("{}.database", app.identifier);
+    let id = reference.clone();
+    tokio::task::spawn_blocking(move || crate::credentials::access(&service, &id, Some(bytes)))
+        .await
+        .map_err(|_| "DB_CREDENTIAL_FAILED")?
+        .map_err(|_| "DB_CREDENTIAL_FAILED")?;
+    Ok(if remove { None } else { Some(reference) })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn browsing_only_generates_quoted_read_only_requests() {
+        let value = json!({"op":"browse", "view":"data", "catalog":"db`name", "schema":"public", "table":"a`b\"; DROP TABLE x", "offset":200, "sql":"DELETE FROM users"});
+        assert_eq!(
+            browse_request("mysql", &value).unwrap()["sql"],
+            "SELECT * FROM `db``name`.`a``b\"; DROP TABLE x`"
+        );
+        assert_eq!(
+            browse_request("postgresql", &value).unwrap()["sql"],
+            "SELECT * FROM \"public\".\"a`b\"\"; DROP TABLE x\""
+        );
+        assert_eq!(browse_request("oracle", &value).unwrap()["offset"], 200);
+        assert!(browse_request("mysql", &json!({"view":"writable", "enabled":true})).is_err());
+        assert!(
+            browse_request("mysql", &json!({"view":"data", "table":"x", "offset":-1})).is_err()
+        );
+        assert!(browse_request(
+            "mysql",
+            &json!({"view":"data", "table":"x", "offset":10001})
+        )
+        .is_err());
+        assert!(browse_request("mysql", &json!({"view":"data", "table":"x\0"})).is_err());
+        assert_eq!(
+            browse_request(
+                "mysql",
+                &json!({"view":"columns", "table":"x_%", "op":"rollback"})
+            )
+            .unwrap()["op"],
+            "metadata"
+        );
+        let request = browse_request("mysql", &json!({"view":"table", "table":"x", "sql":"DELETE FROM x", "op":"apply", "changes":[{}], "filters":[{"column":"id","operator":"eq","value":"1"}]})).unwrap();
+        assert_eq!(request["op"], "table");
+        assert!(request.get("sql").is_none() && request.get("changes").is_none());
+        assert_eq!(request["filters"][0]["value"], "1");
+        assert!(browse_request(
+            "mysql",
+            &json!({"view":"table","table":"x","filters":[{},{},{},{},{},{},{},{},{}]})
+        )
+        .is_err());
+    }
+    #[test]
+    fn stopping_an_owner_closes_browsing_and_reclaims_dead_slots() {
+        let owner = Arc::new(fixture());
+        let browser = Arc::new(fixture());
+        owner.transaction.store(true, Ordering::SeqCst);
+        *owner.browser.lock().unwrap() = Some(("browser".into(), browser.clone()));
+        owner.stop();
+        assert!(browser.dead.load(Ordering::SeqCst));
+        let state = DatabaseState::default();
+        state
+            .connections
+            .lock()
+            .unwrap()
+            .insert("owner".into(), owner);
+        state
+            .connections
+            .lock()
+            .unwrap()
+            .insert("browser".into(), browser);
+        let _slot = state.reserve().unwrap();
+        assert!(state.connections.lock().unwrap().is_empty());
+    }
+    fn fixture() -> Connection {
+        Connection {
+            browser: Mutex::new(None),
+            browser_lock: AsyncMutex::new(()),
+            session_lock: AsyncMutex::new(()),
+            browser_config: None,
+            child: Mutex::new(None),
+            input: Some(AsyncMutex::new(tokio::fs::File::from_std(
+                tempfile::tempfile().unwrap(),
+            ))),
+            elastic: None,
+            cancelled: tokio::sync::Notify::new(),
+            pending: Arc::new(Mutex::new(HashMap::new())),
+            sequence: AtomicU64::new(1),
+            busy: AtomicBool::new(false),
+            writable: AtomicBool::new(false),
+            transaction: AtomicBool::new(false),
+            dead: AtomicBool::new(false),
+            tunnel: Mutex::new(None),
+            reader: Mutex::new(None),
+            temporary: Mutex::new(None),
+        }
+    }
+
+    #[test]
+    fn connection_limit_counts_open_handles_and_handshakes_together() {
+        let state = DatabaseState::default();
+        let mut slots = Vec::new();
+        for _ in 0..8 {
+            slots.push(state.reserve().unwrap());
+        }
+        assert!(state.busy());
+        assert!(state.connections.try_lock().is_ok());
+        assert!(state.reserve().is_err());
+        slots.pop();
+        state
+            .connections
+            .lock()
+            .unwrap()
+            .insert("one".into(), Arc::new(fixture()));
+        assert!(state.reserve().is_err());
+        drop(slots);
+        assert!(!state.busy());
+        assert!(state.reserve().is_ok());
+        assert_eq!(state.opening.load(Ordering::SeqCst), 0);
+    }
+
+    #[tokio::test]
+    async fn disconnect_aborts_relays_drains_requests_and_removes_worker_files() {
+        let connection = fixture();
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().to_owned();
+        std::fs::write(path.join("trust.p12"), b"fixture").unwrap();
+        *connection.temporary.lock().unwrap() = Some(temporary);
+        let task = tokio::spawn(std::future::pending::<()>());
+        let abort = task.abort_handle();
+        *connection.tunnel.lock().unwrap() = Some(Tunnel(task));
+        let (sender, receiver) = oneshot::channel();
+        connection.pending.lock().unwrap().insert(1, sender);
+        connection.stop();
+        tokio::task::yield_now().await;
+        assert!(abort.is_finished());
+        assert!(!path.exists());
+        assert_eq!(receiver.await.unwrap(), Err("DB_DISCONNECTED".into()));
+        assert!(connection.dead.load(Ordering::SeqCst));
+        assert!(connection.send(json!({"op":"query"})).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn disconnect_cancels_a_pending_elasticsearch_request() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (started, received) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let (mut stream, _) = listener.accept().await.unwrap();
+            let mut bytes = [0; 4096];
+            assert!(stream.read(&mut bytes).await.unwrap() > 0);
+            started.send(()).unwrap();
+            while stream.read(&mut bytes).await.unwrap() != 0 {}
+        });
+        let config: Config = serde_json::from_value(json!({
+            "id": uuid::Uuid::new_v4().to_string(), "name":"QA", "kind":"elasticsearch",
+            "host":"127.0.0.1", "port":port, "database":"qa", "username":"",
+            "tls":false, "ca_file":"", "credential_id":null
+        }))
+        .unwrap();
+        let mut connection = fixture();
+        connection.elastic = Some(
+            document::Elasticsearch::new(&config, "", 0, "")
+                .await
+                .unwrap(),
+        );
+        let connection = Arc::new(connection);
+        let requested = connection.clone();
+        let response = tokio::spawn(async move {
+            requested
+                .send(json!({"op":"document", "action":"query", "collection":"qa", "query":"{}"}))
+                .await
+        });
+        tokio::time::timeout(Duration::from_secs(5), received)
+            .await
+            .unwrap()
+            .unwrap();
+        connection.stop();
+        assert_eq!(
+            tokio::time::timeout(Duration::from_secs(2), response)
+                .await
+                .unwrap()
+                .unwrap(),
+            Err("DB_DISCONNECTED".into())
+        );
+        assert!(!connection.busy.load(Ordering::SeqCst));
+        assert_eq!(
+            connection
+                .send(json!({"op":"document", "action":"query"}))
+                .await,
+            Err("DB_DISCONNECTED".into())
+        );
+        tokio::time::timeout(Duration::from_secs(2), server)
+            .await
+            .unwrap()
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn oversized_requests_release_the_busy_guard_without_writing() {
+        let connection = fixture();
+        let result = connection
+            .send(json!({"op":"query", "sql":"x".repeat(1048576)}))
+            .await;
+        assert_eq!(result, Err("DB_INPUT_LIMIT".into()));
+        assert!(!connection.busy.load(Ordering::SeqCst));
+        assert!(connection.pending.lock().unwrap().is_empty());
+    }
+    #[tokio::test]
+    async fn tunnel_requires_its_private_token() {
+        for password in [None, Some("wrong"), Some("private-token")] {
+            let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+            let address = listener.local_addr().unwrap();
+            let server = tokio::spawn(async move {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                proxy_handshake(&mut socket, "private-token").await.is_ok()
+            });
+            let mut client = TcpStream::connect(address).await.unwrap();
+            client
+                .write_all(&[5, 1, if password.is_some() { 2 } else { 0 }])
+                .await
+                .unwrap();
+            let mut reply = [0; 2];
+            client.read_exact(&mut reply).await.unwrap();
+            if let Some(password) = password {
+                assert_eq!(reply, [5, 2]);
+                let mut auth = vec![1, 5];
+                auth.extend_from_slice(b"uterm");
+                auth.push(password.len() as u8);
+                auth.extend_from_slice(password.as_bytes());
+                client.write_all(&auth).await.unwrap();
+                client.read_exact(&mut reply).await.unwrap();
+                assert_eq!(reply, [1, u8::from(password != "private-token")]);
+                if password == "private-token" {
+                    client
+                        .write_all(&[5, 1, 0, 1, 127, 0, 0, 1, 12, 234])
+                        .await
+                        .unwrap();
+                }
+            } else {
+                assert_eq!(reply, [5, 255]);
+            }
+            assert_eq!(server.await.unwrap(), password == Some("private-token"));
+        }
+    }
+    #[test]
+    fn profiles_reject_urls_and_secret_fields() {
+        let value = json!({"id":"11111111-1111-4111-8111-111111111111","name":"QA","kind":"mysql","host":"127.0.0.1","port":3306,"database":"test","username":"root","tls":false,"ca_file":"","credential_id":null});
+        assert!(serde_json::from_value::<Config>(value.clone())
+            .unwrap()
+            .validate()
+            .is_ok());
+        let mut secret = value.clone();
+        secret["password"] = "secret".into();
+        assert!(serde_json::from_value::<Config>(secret).is_err());
+        for field in ["host", "database"] {
+            let mut url = value.clone();
+            url[field] = "host?allowLoadLocalInfile=true".into();
+            assert!(serde_json::from_value::<Config>(url)
+                .unwrap()
+                .validate()
+                .is_err());
+        }
+    }
+}

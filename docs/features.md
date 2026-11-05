@@ -5540,6 +5540,30 @@ runtime acceptance recorded for each feature.
 
 ## Database connections and optional components
 
+### Shared database services
+
+`uterm-core::{database,database_components,downloads}` owns connections, SQL/document requests,
+read-only/transaction/cancellation guards, system-credential binding and verified component
+installation. Existing Tauri commands delegate to those services. Clients supply application
+directories, SSH authentication confirmation, native file selection and events; export pickers and
+actual application exit remain platform operations.
+
+Commands share connection/draft and component state. Cancelling file selection releases installation
+protection without writing default configuration. The bundled Java engine is restored atomically
+into the application cache, keeping the installed bundle unchanged. Drivers, runtimes and resumable
+data retain their application-data paths, catalog versions and SHA-256 rules. Existing credential
+service names and JSON configuration remain compatible.
+
+#### Shared-service validation and limits
+
+Linux x86_64 / Rust 1.99.1 passes 23 database/document/component regressions, five common download
+regressions and two host-port checks covering cross-command draft/exit protection, native picker
+cancellation and cached-engine repair. Full Core/FFI, host, backend (45 passed / nine ignored),
+frontend (411 passed / ten skipped), types and production/desktop builds pass. Current checks and
+actual database/dual-client acceptance are tracked in
+[#38](https://github.com/YondFane/uTerm/issues/38); native database-workbench acceptance is still
+pending.
+
 ### Database setup and visibility
 
 The workspace's Databases section supports MySQL, PostgreSQL, Oracle service-name, Elasticsearch and

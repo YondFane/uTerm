@@ -194,6 +194,11 @@ execution remains separately recorded in the feature guides.
 The shared-core command explicitly runs the filesystem-failure case. Unix tests require an
 unprivileged user so directory permissions enforce the failure; Windows uses a held file lease.
 
+`uterm-core::{database,database_components,downloads}` shares database business rules, credential
+binding and verified component installation/resume. Clients provide directories, SSH confirmation,
+pickers and events; existing Tauri database commands and quit guards remain available. Native
+database entry points and actual-service acceptance are tracked separately in #38.
+
 `uterm-core::ssh` owns OpenSSH configuration/path rules, credential binding/system adapters,
 SFTP/transfer services and owned tunnel lifetimes. Tauri delegates to those same services while
 retaining its commands, pickers and trust dialogs. The isolated native app offers **File → SSH
