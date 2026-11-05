@@ -1362,6 +1362,22 @@ MiB per file, 128 files and 16 Include levels, and does not execute Match rules.
 retains the system client's `ssh -G` behavior, a 15-second timeout and bounded output. The results
 contain endpoint metadata; password/private-key content fields are rejected.
 
+`uterm-core::ssh::paths` also owns the existing SFTP lexical path rules. Tauri imports the same
+functions: POSIX/Windows server-root normalization, validated relative paths, component containment
+and joining. Server rules are independent of the local OS. Drive/slash handling, literal Unix
+backslashes, Unicode names, the 4,096-byte relative-path limit and existing error codes stay
+unchanged. The transport still validates roots and resolves server symlinks before containment;
+these helpers do not authorize a connection or resolve filesystem links.
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh::paths::tests` passes
+two Linux x86_64/Rust1.99.1 checks, including the migrated boundary cases and exact UTF-8 byte
+limits. `cargo test --locked --manifest-path src-tauri/Cargo.toml ssh::tests -- --nocapture` passes
+four actual OpenSSH `sftp-server` subprocess checks: conflict-safe save, symlink/original retention,
+streaming cancellation and confirmed overwrite, recursive deletion and root refusal. These use the
+real SFTP subsystem over pipes; they do not test SSH authentication, host trust or network
+reconnection. Platform CI retains the Core/backend test logs for the actual source. No new FFI or
+JSON path endpoint is claimed.
+
 This shared subset does not provide the native SSH connection interface, credential adapter, SFTP
 transfer or tunnel lifecycle yet. Existing Tauri authentication and remote services retain their
 owners. Full dual-client SSH/SFTP acceptance remains open in #36.

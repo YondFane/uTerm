@@ -20,6 +20,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     sync::Mutex as AsyncMutex,
 };
+use uterm_core::ssh::paths::{canonical, join, relative, within};
 use utermd_local::{ssh::SshTarget, BackgroundChild};
 
 const CHUNK: usize = 32 * 1024;
@@ -100,67 +101,6 @@ fn cancelled(cancel: &AtomicBool) -> Result<()> {
 pub(crate) use uterm_core::ssh::{
     base_command, effective_identity, effective_target, pipe_file, EffectiveSsh,
 };
-
-fn canonical(path: &str, windows: bool) -> Result<String> {
-    if path.is_empty() || path.contains(['\0', '\r', '\n']) {
-        bail!("SSH_INVALID_ROOT");
-    }
-    let mut value = if windows {
-        path.replace('\\', "/")
-    } else {
-        path.to_owned()
-    };
-    if windows {
-        if value.starts_with('/') && value.as_bytes().get(2) == Some(&b':') {
-            value.remove(0);
-        }
-        if value.starts_with("//")
-            || !value
-                .as_bytes()
-                .first()
-                .is_some_and(u8::is_ascii_alphabetic)
-            || value.as_bytes().get(1) != Some(&b':')
-            || value.as_bytes().get(2) != Some(&b'/')
-        {
-            bail!("SSH_INVALID_ROOT");
-        }
-        value.replace_range(..1, &value[..1].to_ascii_uppercase());
-    } else if !value.starts_with('/') {
-        bail!("SSH_INVALID_ROOT");
-    }
-    if value.split('/').any(|part| part == ".." || part == ".") {
-        bail!("SSH_INVALID_ROOT");
-    }
-    while value.ends_with('/') && value.len() > if windows { 3 } else { 1 } {
-        value.pop();
-    }
-    Ok(value)
-}
-fn relative(path: &str) -> Result<()> {
-    if path.len() > 4096
-        || (!path.is_empty()
-            && path
-                .split('/')
-                .any(|part| part.is_empty() || part == "." || part == ".."))
-        || path.contains(['\\', ':', '\0', '\r', '\n'])
-    {
-        bail!("SSH_PATH_OUTSIDE_ROOT");
-    }
-    Ok(())
-}
-fn within(root: &str, path: &str) -> bool {
-    path == root
-        || path
-            .strip_prefix(root)
-            .is_some_and(|tail| root.ends_with('/') || tail.starts_with('/'))
-}
-fn join(root: &str, path: &str) -> String {
-    if path.is_empty() {
-        root.to_owned()
-    } else {
-        format!("{}/{path}", root.trim_end_matches('/'))
-    }
-}
 
 impl RemoteFs {
     async fn connect(
@@ -1248,29 +1188,6 @@ pub async fn ssh_transfer_cancel_all(
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn remote_paths_use_server_rules_and_component_boundaries() {
-        assert_eq!(canonical("/srv/app/", false).unwrap(), "/srv/app");
-        assert_eq!(canonical("c:\\Users\\测试", true).unwrap(), "C:/Users/测试");
-        assert_eq!(canonical("/c:/data/", true).unwrap(), "C:/data");
-        for path in ["\\\\server\\share", "C:relative", "/", "C:/a/../b"] {
-            assert!(canonical(path, true).is_err());
-        }
-        for path in [
-            "../escape",
-            "/etc/passwd",
-            "x/../y",
-            "C:/x",
-            "x\\y",
-            "x\0",
-            "x//y",
-        ] {
-            assert!(relative(path).is_err());
-        }
-        assert!(within("C:/data", "C:/data/file"));
-        assert!(!within("C:/data", "C:/database/file"));
-        assert!(!within("/data", "/data-other"));
-    }
     #[cfg(unix)]
     async fn fixture(path: &Path) -> Arc<RemoteFs> {
         let program = ["/usr/libexec/sftp-server", "/usr/lib/openssh/sftp-server"]

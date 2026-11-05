@@ -803,6 +803,14 @@ macOS 和 Windows 的普通 Shell 会话会识别子进程中的 Claude/Codex �
 MiB，最多 128 个文件、16 层 Include，不执行 Match 规则；明确解析保留系统客户端 `ssh -G`
 行为、15 秒超时和输出大小限制。结果只包含端点元数据，拒绝密码／私钥内容字段。
 
+`uterm-core::ssh::paths`
+同时管理既有 SFTP 词法路径规则，Tauri 直接导入相同函数：POSIX／Windows 服务端根规范化、相对路径校验、组件包含及拼接。服务端规则与本地系统无关；保留盘符／斜线处理、Unix 字面反斜线、Unicode 名称、4,096 字节相对路径上限及原错误码。传输层仍在包含检查前校验根并解析服务端符号链接；这些辅助函数不授权连接，也不解析文件系统链接。
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh::paths::tests` 在 Linux
+x86_64／Rust1.99.1 通过两项检查，包括迁移的边界样例与准确 UTF-8 字节上限。`cargo test --locked --manifest-path src-tauri/Cargo.toml ssh::tests -- --nocapture`
+通过四项实际 OpenSSH `sftp-server`
+子进程检查：冲突安全保存、符号链接／原文件保留、流式取消与明确覆盖、递归删除及根目录拒绝。这些通过管道使用真实 SFTP 子系统，不验证 SSH 认证、主机信任或网络重连。平台 CI 按实际源码保存 Core／后端日志，不宣称新增 FFI 或 JSON 路径端点。
+
 这个共享子范围尚不提供原生 SSH 连接界面、凭据适配、SFTP 传输或隧道生命周期。既有 Tauri 认证和远程服务保留当前拥有者。完整双客户端 SSH／SFTP 验收在 #36 保持开放。
 
 ### 快速连接与主机搜索

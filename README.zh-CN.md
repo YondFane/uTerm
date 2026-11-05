@@ -170,7 +170,9 @@ Python 服务及原始任务输出通道。在 macOS 图形会话运行
 3，不安装 Python 或依赖包；实际平台执行结果单独记录于功能指南。
 
 `uterm-core::ssh`
-管理只读 OpenSSH 别名发现和生效配置解析，Tauri 委派同一服务，Core／FFI 提供生成的 Swift／TypeScript 端点 DTO。仍需系统 OpenSSH。原生凭据、SFTP 和隧道接入尚未完成，配置检查不代表已认证远程服务验收。
+管理只读 OpenSSH 别名发现／生效配置解析及既有 SFTP 服务端路径规则，Tauri 导入相同规则；配置结果具有生成的 Core／FFI
+Swift／TypeScript DTO。路径辅助函数保留原错误码，不增加 RPC 端点；Core 路径测试与真实 OpenSSH
+SFTP 子系统后端检查覆盖其调用方。仍需系统 OpenSSH。原生凭据、SFTP 和隧道接入尚未完成，配置检查不代表已认证远程服务验收。
 
 `uterm-core::{files,git,worktrees}`
 管理本地文件及 Git／Worktree 规则和回归，Tauri 命令委派相同函数。新增 `git.*`
