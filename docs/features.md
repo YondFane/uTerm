@@ -1855,87 +1855,44 @@ Connected, busy or dirty profiles cannot be edited or removed.
 
 ### Shared content calls
 
-File components use a content transport with an explicit method/event allowlist, a document ID and
-an operation ID. Requests own their arguments and are limited to 32 MiB. Timeouts, cancellation,
-editor unmount and page unload suppress late delivery and remove subscriptions. Cancelling a call
-does not undo a write already running in Rust. Replies for another document or operation are
-rejected. Request IDs also work in custom-scheme contexts without `crypto.randomUUID`.
+File components use the same content contract through Tauri and WebKit adapters. Each request owns
+its arguments, document ID and operation ID; the method/event allowlists and 32 MiB UTF-8 limit
+apply before delivery. Timeout, cancellation, unload and document changes suppress stale delivery
+and remove subscriptions. A dispatched write retains the caller's guard until Rust finishes;
+cancellation does not roll it back. Shared editor/preview components do not call Tauri directly.
 
-The Tauri adapter retains existing command names. Native QA **File → Open file…** opens a read-only
-shared CodeMirror/HTML/PDF view for the selected local project. Its WKWebView uses an ephemeral data
-store, manifest-listed bundle resources and main-document messages. Navigation invalidates pending
-operations; the host rejects stale document IDs, another project root and file writes. Fonts use
-shared revision-checked settings. HTML previews retain their script-free sandbox. Native editing,
-draft recovery and human focus acceptance remain open. PDF annotation controls are unavailable in
-this ephemeral preview so they cannot create marks lost when the window closes.
+In native QA, **File → Open file…** opens a read-only shared CodeMirror/HTML/PDF window for the
+selected local project. Its ephemeral WKWebView loads manifest-listed bundle resources and accepts
+only main-document messages. The host rejects stale document IDs, another root and writes from the
+readonly preview. Fonts use revision-checked shared settings; static HTML cannot run scripts or load
+external resources. This preview does not offer PDF annotation controls. Writable-editor and manual
+focus/IME acceptance remain tracked separately in #34/#42.
 
-The build bundles the frontend and license notices. `bash scripts/macos-content-smoke.sh` checks
-real readonly rendering, font persistence, stale identity/root/write denial, sandbox isolation and
-PDF rendering, capturing three WindowServer scenes. Swift resource tests reject unapproved origins,
-traversal, symlinks, nonregular/oversized files and invalid manifests.
+At source `8a72b00754c5580150546ea2ae104f5166e04a39` / tested merge
+`ea3895ab1d8db65ad59159fc45f3deff7326baf6`,
+[Native CI](https://github.com/YondFane/uTerm/actions/runs/41966239836) passed on macOS 15.8.2 ARM64
+and 15.7.9 Intel with Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. `bash scripts/macos-content-smoke.sh`
+passed all 19 content/lifecycle assertions: actual CodeMirror, HTML and PDF rendering, exact denial
+codes, scoped drafts, font persistence, document reload, native-menu/early close, stale quit replies
+and timeout protection. Swift resource and quit-gate checks also passed. The bundle includes
+frontend resources and license notices.
 
-At head `b8c2459b2aa10354ab47e2a5f85f1715f790f483`, tested merge
-`e4ca9a8371d01bf12ec4cb9cb5a7e0846e81b8d6`,
-[native ARM/Intel CI](https://github.com/YondFane/uTerm/actions/runs/41432663064) and
-[legacy Windows/macOS CI](https://github.com/YondFane/uTerm/actions/runs/41432663047) passed. The
-content report records actual `DOCUMENT_DENIED`, `ROOT_DENIED` and `READ_ONLY` responses, completed
-PDF rendering, font persistence and sandbox isolation. ARM's three content images and Intel's PDF
-image were inspected; the PDF now displays its expected text without an error. Reports and images:
-[ARM](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13135332912) and
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13136295927). The
-earlier failed PDF image and canvas-allocation check are excluded from acceptance.
+[Tauri CI](https://github.com/YondFane/uTerm/actions/runs/41966239844) passed 53 actual application
+scenes on Windows Server 2025 x64 and macOS 26.7.2 ARM64, with clean source trees and no cleanup
+errors. The actual file tree opens temporary HTML/PDF, renders the PDF canvas, closes previews and
+restores the editor. `preview-resource-isolation.json` records zero forbidden requests to an owned
+loopback HTTP observer and successful cleanup. Native content and Windows HTML/PDF captures were
+visually inspected; reports, screenshot filenames and artifact links are in
+[#33 acceptance](https://github.com/YondFane/uTerm/issues/33#issuecomment-6650215412).
 
-The smoke also reloads a real document, rejects its previous identity and closes files through the
-native menu using the same window registration as the file picker. A read-only window can close when
-its Web content is still loading or fails. Those lifecycle checks passed both native architectures
-at source `8491bae96401829e5cc5c3420d5aaccb58494356` / tested merge
-`f25eef9b077d0b9be88ed35f311db52868d17f88`, including all 19 content-report assertions. They do not
-establish human focus or writable-draft acceptance. Window appearance effects also remain behind the
-platform adapter rather than Tauri-specific calls in the shared settings view.
-
-`pnpm qa:shared-state` also opens temporary HTML/PDF through the actual file tree, checks the opaque
-script-free preview, paints a real PDF canvas, closes both previews and restores the original
-editor. An owned loopback HTTP observer confirms forbidden image/style/frame requests stay absent;
-the PDF bytes remain unchanged. `preview-resource-isolation.json` records the observer and its
-cleanup, while three `editor-reopen-preview-*.png` captures show the real app.
-
-At source `14596527f8c0642a68fc194f4e505903fc928040` / tested merge
-`c48d62c2a0ddce10ffaa92adce6887f91fb40f44`, macOS passed all 53 application scenes with a clean
-source tree, no forbidden requests and no cleanup errors. Windows stopped before opening HTML:
-workspace loading had failed and the file tree still showed the runner home. Its failed report
-remains retained.
-
-QA now uses the visible **Retry loading** action when needed, selects the imported temporary project
-only when necessary, and verifies the actual file-tree root before opening a preview. It compares
-Windows's displayed path with the displayed canonical root. The driver compares exact bigint
-filesystem device/inode identities, requiring real directories and a nonzero identity, so macOS's
-`/var` → `/private/var` and Windows 8.3 short/long names can identify the same root without
-accepting another directory. Source `aa86df0` failed these two path-representation checks on
-Windows/macOS; those artifacts remain retained. The corrected Linux working tree passed 53 scenes
-with no cleanup errors before the control-stream change; platform evidence is recorded against its
-source in the Issue comments. The later `29516c6` Windows failure showed `RUNNER~1` versus
-`runneradmin` after JavaScript realpath resolution; its original report remains retained, and the
-identity check replaces that string comparison.
-
-Recovery-fixture setup uses the existing bounded read-only observer for favorite reads/catalogs when
-another writer holds the store. Fixture and application writes still report failures without
-automatic retries.
-
-Earlier Linux working-tree checks passed 53 scenes, 12 HTML/PDF/transport checks and types; HTML/PDF
-captures were inspected separately from clean CI evidence. An earlier root-selection run stopped at
-input-control reacquisition after viewer exit (49 scenes, no cleanup errors); its failure is
-retained. The current working tree passed all 53 scenes after the control-stream fix, with actual
-owner-return and read-only viewer captures inspected. These local results do not accept pending
-platform CI.
-
-Linux protocol checks cover reordered/mismatched replies, timeout/abort/unload, late subscriptions,
-bounds and the JavaScript WebKit adapter. Actual Rust/Git processes pause a real checkout hook and
-verify abort, timeout and close through both JavaScript adapters: the caller remains protected until
-the write finishes, the final file bytes and branch are checked, and late success is suppressed. All
-three WebKit cases fail against the previous adapter and pass with write draining. Additional checks
-cover immediate read cancellation and failed writes when cancel delivery fails. These tests use an
-adapter harness connected to real Rust/Git; they are separate from native application and manual
-focus/IME acceptance. Fresh platform CI for this adapter change is pending.
+`pnpm test` also passed both adapters' abort/timeout/close cases against real Rust/Git checkout
+hooks: the caller stays protected until the write ends, final branch/file bytes are checked and late
+success is suppressed. Protocol checks cover mismatched/reordered replies, late subscriptions,
+failed writes, immediate read cancellation, unload, bounds and custom-scheme IDs. Windows ran 407
+frontend checks with 11 skipped; macOS ran 408 with 10 skipped. Harness checks, real app actions and
+unexecuted human IME/focus checks remain distinct. This accepts #33 without a simulation exemption;
+#34–#37 and M3 remain open. Earlier PDF, workspace/path and input-control failures remain linked in
+the Issue's source-bound history.
 
 ### Shared local file service
 
@@ -2958,6 +2915,13 @@ invalid offline Wrapper proves existing-JAR execution bypasses Maven resolution.
 an ASCII archive before renaming it to the original Unicode filename, allowing the same fixture to
 run on JDK 8/11/17/21. Two Rust processes check global/project CAS, actual writer contention,
 explicit retry, registry locking and damaged-byte retention.
+
+The Java interoperability workflow separately collects `java-encoding-diagnostics.json` by launching
+ASCII and Unicode JAR paths through the selected real Core/host/JVM. It records actual properties,
+literal arguments, launcher traces and exit codes on JDK 8/11/17/21. This bounded, disposable-data
+probe is explicitly diagnostic; a collected report is not a passing Unicode acceptance result. The
+strict task test still requires exact arguments/properties, final output, exit code 7, replay and
+generation-safe stop. Windows JDK 8 remains failed until that test passes.
 
 Run `pnpm test:core` and frontend checks with `JAVA_HOME` pointing to JDK 21 and its `bin` on
 `PATH`. The Java interoperability workflow runs the actual Windows host on JDK 8/11/17/21 and

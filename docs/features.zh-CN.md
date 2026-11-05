@@ -1084,51 +1084,30 @@ Redis 值及编辑草稿不写入本地存储。切换所编辑的值、DB，或
 
 ### 共用内容调用
 
-文件组件通过明确列出方法／事件的内容 transport 调用，以文档 ID 和操作 ID 区分请求。参数由请求持有，大小限制为 32
-MiB。超时、取消、编辑器卸载及页面离开会抑制迟到交付并移除订阅；取消不能撤销已经执行的 Rust 写入。其他文档或操作的响应会被拒绝，请求 ID 也支持缺少
-`crypto.randomUUID` 的自定义协议上下文。
+文件组件通过 Tauri 与 WebKit 适配使用同一内容契约。每个请求持有参数、文档 ID 和操作 ID；方法／事件允许列表和 32
+MiB
+UTF-8 上限在交付前检查。超时、取消、卸载及文档变化会抑制迟到交付并移除订阅。已分发的写入保留调用方保护，直到 Rust 完成；取消不会回滚写入。共用编辑器／预览组件不直接调用 Tauri。
 
-Tauri 适配保留现有命令名。原生 QA 选择本地项目后，通过**文件 → 打开文件…**打开共用的只读 CodeMirror／HTML／PDF 视图。WKWebView 使用临时数据存储、清单列出的包内资源及主文档消息。导航使待处理操作失效；宿主拒绝过期文档 ID、其他项目根目录及文件写入。字号通过共用 revision 设置保存，HTML 预览保留禁脚本沙箱。原生编辑、草稿恢复及人工焦点验收仍开放；此临时预览不提供 PDF 标注控件，避免创建随窗口关闭而丢失的标注。
+在原生 QA 中，选择本地项目后，通过**文件 → 打开文件…**打开共用的只读 CodeMirror／HTML／PDF 窗口。临时 WKWebView 只加载清单内包资源、接受主文档消息；宿主拒绝过期文档身份、其他根目录及只读预览写入。字号使用核对 revision 的共用设置；静态 HTML 不能执行脚本或加载外部资源，此预览不提供 PDF 标注控件。可写编辑器与人工焦点／输入法验收仍分别记录在 #34／#42。
 
-构建打包前端及许可声明。`bash scripts/macos-content-smoke.sh`
-检查真实只读渲染、字号持久化、过期身份／越界／写入拒绝、沙箱隔离及 PDF 渲染，记录三种 WindowServer 场景。Swift 资源测试拒绝未许可来源、路径越界、符号链接、特殊／过大文件及错误清单。
+source `8a72b00754c5580150546ea2ae104f5166e04a39`／tested merge
+`ea3895ab1d8db65ad59159fc45f3deff7326baf6` 的
+[Native CI](https://github.com/YondFane/uTerm/actions/runs/41966239836) 在 macOS 15.8.2
+ARM64 和 15.7.9 Intel 通过，使用 Xcode 16.4、Swift 6.1.2 和 Rust 1.99.1。
+`bash scripts/macos-content-smoke.sh`
+的 19 项内容／生命周期断言全部通过：真实 CodeMirror／HTML／PDF 渲染、准确拒绝码、作用域草稿、字号持久化、文档重载、原生菜单／加载中关闭、迟到退出回复与超时保护。Swift 资源与退出保护检查也通过，应用包包含前端资源及许可声明。
 
-head `b8c2459b2aa10354ab47e2a5f85f1715f790f483`、tested merge
-`e4ca9a8371d01bf12ec4cb9cb5a7e0846e81b8d6`
-的[原生 ARM／Intel CI](https://github.com/YondFane/uTerm/actions/runs/41432663064)及[旧客户端 Windows／macOS CI](https://github.com/YondFane/uTerm/actions/runs/41432663047)已通过。报告记录实际
-`DOCUMENT_DENIED`、`ROOT_DENIED`、`READ_ONLY`
-响应、完成的 PDF 渲染、字号持久化及沙箱隔离。已目视检查 ARM 三种内容图片及 Intel
-PDF 图，页面正常显示预期文字且无错误。报告及图片见
-[ARM](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13135332912) 和
-[Intel](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13136295927)；早先失败 PDF 图及仅创建画布的检查不计为验收通过。
+[Tauri CI](https://github.com/YondFane/uTerm/actions/runs/41966239844) 在 Windows Server 2025
+x64 与 macOS 26.7.2
+ARM64 各通过 53 个真实应用场景，源码干净且清理无错误。实际文件树打开临时 HTML／PDF、绘制 PDF 画布、关闭预览并恢复编辑器。
+`preview-resource-isolation.json`
+记录自有回环 HTTP 观察器的禁止请求为零、清理成功。已目视原生内容与 Windows
+HTML／PDF 截图，报告、图片文件名和 artifact 链接见
+[#33 验收](https://github.com/YondFane/uTerm/issues/33#issuecomment-6650215412)。
 
-smoke 还检查真实文档重载、拒绝旧文档身份、通过原生菜单关闭文件，使用与文件选择器相同的窗口登记；只读窗口在 Web 内容加载中或失效时也能关闭。这些生命周期检查已在 source
-`8491bae96401829e5cc5c3420d5aaccb58494356`／tested merge `f25eef9b077d0b9be88ed35f311db52868d17f88`
-的两原生架构通过，含全部 19 项内容报告断言；不代表人工焦点或可写草稿验收。窗口外观效果也通过平台适配调用，共用设置视图不直接调用 Tauri
-API。
-
-`pnpm qa:shared-state`
-也通过实际文件树打开临时 HTML／PDF，检查不运行脚本的隔离预览，绘制实际 PDF 画布，关闭两份预览并恢复原编辑器。自有回环 HTTP 观察器确认被禁止的图片／样式／框架请求始终为零，PDF 字节保持不变。`preview-resource-isolation.json`
-记录观察器及其清理，三张 `editor-reopen-preview-*.png` 展示真实应用。
-
-source `14596527f8c0642a68fc194f4e505903fc928040`／tested merge
-`c48d62c2a0ddce10ffaa92adce6887f91fb40f44`
-的 macOS 通过全部 53 个应用场景，源码干净、禁止请求及清理错误均为零。Windows 在打开 HTML 前停止：工作区加载失败，文件树仍显示 runner 用户目录，失败报告继续保留。
-
-QA 现在在需要时点击可见的“重试读取”，仅在必要时选中已导入临时项目，并在打开预览前核对实际文件树根目录。Windows 显示路径与规范根目录的显示形式比较；驱动使用 bigint 精确比较文件系统设备／inode 标识，要求实际目录及非零标识，使 macOS 的
-`/var` → `/private/var`、Windows 的 8.3 短／长名能指向同一根目录，同时拒绝其他目录。source `aa86df0`
-在 Windows／macOS 的这两项路径表示核对失败，产物继续保留。修正后的 Linux 工作树在控制流改动前通过 53 场景且无清理错误，平台证据在 Issue 评论按 source 记录。后续
-`29516c6` 的 Windows 失败显示 JavaScript realpath 解析后仍有 `RUNNER~1` 与 `runneradmin`
-差异，原报告继续保留，改用目录标识核对代替字符串比较。
-
-恢复样例准备中的收藏读取／目录读取使用既有有界只读观察器，等待其他写入者释放存储；样例和应用写入仍直接报告失败，不自动重试。
-
-此前 Linux 工作树通过 53 个场景、12 项 HTML／PDF／transport 专项及类型检查；其 HTML／PDF 截图已另行目视检查，不作为干净 CI 证据。较早一次目录选择运行停在查看端退出后的输入权重新取得（49 个场景、无清理错误），失败记录继续保留。当前工作树在控制流修复后通过全部 53 场景，已目视原拥有者返回与只读查看端截图；这些本地结果不接受待执行的平台 CI。
-
-Linux 协议检查覆盖乱序／错配响应、超时／取消／卸载、迟到订阅、上限及 JavaScript
-WebKit 适配。真实 Rust／Git 进程暂停实际 checkout
-hook，经两个 JavaScript 适配分别验证取消、超时及关闭：写入结束前调用方保持保护，核对最终文件字节与分支，并抑制迟到成功。三个 WebKit 场景在旧适配上均失败，加入写入排空后通过。另覆盖立即取消读取，以及取消消息交付失败时写入失败仍能排空。这些检查使用连接真实 Rust／Git 的适配测试环境，与原生应用运行及人工焦点／IME 验收分开。Linux 完整前端检查 406 项通过、十项跳过，类型、生产构建、格式及文档检查通过。平台结果在 Issue
-#33 按源码 head 与实际 tested merge 分别记录。
+`pnpm test` 中，两适配还通过真实 Rust／Git checkout
+hook 的取消／超时／关闭检查：写入结束前调用方持续受保护，核对最终分支／文件字节并抑制迟到成功。协议检查覆盖错配／乱序回复、迟到订阅、写入失败、立即取消读取、卸载、上限及自定义协议 ID。Windows 前端 407 项通过、11 项跳过，macOS
+408 项通过、10 项跳过。测试环境、真实应用操作与未执行的人工输入法／焦点检查分开记录。#33 未使用模拟豁免即完成验收；#34–#37 和 M3 仍开放。早先 PDF、工作区／路径及输入控制失败按原源码保留在 Issue 历史中。
 
 ### 共用本地文件服务
 
@@ -1733,6 +1712,11 @@ Java 任务要求 helper 的 UTF-8 启动能力；旧活动 helper 会提示升�
 JAR 文件名、Unicode／emoji／引号／通配符／结尾反斜线及空参数、临时环境／JVM 属性、两路最终输出、退出码 7、同 generation 回放／ack、过期／跨任务族停止拒绝、强制停止与宿主清理。无效的离线 Wrapper 证明运行已有 JAR 会绕过 Maven 解析。`jar cfe`
 先创建 ASCII 归档，再重命名为原 Unicode 文件名，使同一样例可用于 JDK
 8／11／17／21。两个 Rust 进程检查全局／项目 CAS、实际写锁争用、明确重试、注册表锁及损坏原文保留。
+
+Java 互操作 workflow 另外通过所选真实 Core／宿主／JVM 启动 ASCII 与 Unicode JAR 路径，收集
+`java-encoding-diagnostics.json`，记录 JDK
+8／11／17／21 的实际属性、字面参数、启动器跟踪及退出码。此有界、可丢弃数据探针明确属于诊断；采集报告不代表 Unicode 验收通过。严格任务检查仍要求准确参数／属性、最终输出、退出码 7、回放及代次安全停止；Windows
+JDK 8 在该检查通过前继续记为失败。
 
 运行 `pnpm test:core` 和前端检查时，将 `JAVA_HOME` 指向 JDK 21，并把其 `bin` 加入
 `PATH`。Java 互操作 workflow 在 JDK 8／11／17／21 上运行实际 Windows 宿主，上传

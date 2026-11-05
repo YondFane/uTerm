@@ -53,6 +53,10 @@ jobs:
         run: cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local 2>&1 | tee ci-evidence/host-build.log
       - name: Argument boundary regressions
         run: cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib java_utf8::tests 2>&1 | tee ci-evidence/argument-tests.log
+      - name: Selected JVM encoding diagnostics
+        env:
+          UTERM_JAVA_ENCODING_REPORT: ${{ github.workspace }}/ci-evidence/java-encoding-diagnostics.json
+        run: cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test host selected_jvm_reports_encoding_for_ascii_and_unicode_jar_paths -- --ignored --nocapture 2>&1 | tee ci-evidence/java-encoding-diagnostics.log
       - name: Actual Unicode JAR, replay, final bytes and stop
         run: cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test host java_jar_uses_shared_host_literal_arguments_replay_and_generation_safe_stop -- --nocapture 2>&1 | tee ci-evidence/java-host-tests.log
       - uses: actions/upload-artifact@v4
