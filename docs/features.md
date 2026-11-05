@@ -172,7 +172,15 @@ input, rejected input after takeover and stale-generation refusal.
 
 An explicitly confirmed idle helper upgrade waits for both endpoint removal and release of the old
 process's OS lock before starting its replacement. Deterministic OS-lock regressions cover the gap
-between those events and a bounded timeout without stealing a live lock.
+between those events and a bounded timeout without stealing a live lock. A successful probe
+explicitly unlocks before returning, so a descriptor inherited by a concurrent PTY fork cannot
+retain the probe's lock and block the replacement host.
+
+The duplicate-descriptor regression reproduces the former retained lock and passes with explicit
+unlock on Linux, together with all three shutdown-lock checks and ten host integration tests. The
+Intel `3990ebf` CI failure in idle-host replacement is retained: its new mock CLI test passed, but
+the job failed before native window smoke. Platform acceptance of the unlock fix requires its own
+source-bound CI evidence in #32.
 
 The shared u64 fixtures also carry owned/passive/unowned metadata through the real Rust encoder and
 Swift/TypeScript decoders; malformed roles are rejected without rounding sequence or acknowledgement

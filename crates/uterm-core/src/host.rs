@@ -77,13 +77,26 @@ fn wait_for_shutdown(root: &std::path::Path, timeout: Duration) -> Result<(), St
         .write(true)
         .open(root.join("host.lock"))
         .map_err(|error| error.to_string())?;
+    wait_for_shutdown_lock(root, ownership, timeout)
+}
+
+fn wait_for_shutdown_lock(
+    root: &std::path::Path,
+    ownership: std::fs::File,
+    timeout: Duration,
+) -> Result<(), String> {
     let deadline = std::time::Instant::now() + timeout;
     loop {
         if !root.join("endpoint.json").exists() {
             // Endpoint removal precedes the old process dropping its OS lock; wait for both.
             // 旧进程先移除端点再释放系统锁，必须等待两者都完成。
             match ownership.try_lock() {
-                Ok(()) => return Ok(()),
+                Ok(()) => {
+                    // Explicit unlock also releases duplicates inherited by a concurrent PTY fork.
+                    // 显式解锁也释放并发 PTY fork 继承的重复描述符上的锁。
+                    ownership.unlock().map_err(|error| error.to_string())?;
+                    return Ok(());
+                }
                 Err(std::fs::TryLockError::WouldBlock) => {}
                 Err(error) => return Err(error.to_string()),
             }
@@ -207,6 +220,30 @@ mod tests {
             .unwrap()
             .is_ok());
         worker.join().unwrap();
+    }
+    #[test]
+    #[cfg(unix)]
+    fn shutdown_wait_does_not_leave_the_probe_lock_on_a_duplicated_descriptor() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("host.lock");
+        let ownership = std::fs::OpenOptions::new()
+            .create_new(true)
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        let inherited = ownership.try_clone().unwrap();
+        wait_for_shutdown_lock(root.path(), ownership, Duration::from_secs(1)).unwrap();
+        let next = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+        assert!(
+            next.try_lock().is_ok(),
+            "A duplicate inherited during a concurrent PTY fork must not retain the probe lock"
+        );
+        drop(inherited);
     }
     #[test]
     fn unavailable_lock_times_out_without_removing_or_stealing_it() {
