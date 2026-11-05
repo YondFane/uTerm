@@ -15,6 +15,15 @@ public struct CoreCoreError: Codable, Sendable {
     public var recoverable: Bool
 }
 
+public struct CoreDatabaseOperation: Codable, Sendable {
+    public var error: String?
+    public var generation: String
+    public var id: String
+    public var kind: String
+    public var result: JSONValue?
+    public var state: String
+}
+
 public struct CoreDocument: Codable, Sendable {
     public var legacy: [String: String]
     public var migrationId: String

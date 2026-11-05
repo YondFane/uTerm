@@ -16,6 +16,15 @@ export interface CoreCoreError {
   recoverable: boolean;
 }
 
+export interface CoreDatabaseOperation {
+  error?: string | null;
+  generation: string;
+  id: string;
+  kind: string;
+  result?: JSONValue;
+  state: string;
+}
+
 export interface CoreDocument {
   legacy: Record<string, string>;
   migrationId: string;

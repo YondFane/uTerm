@@ -20,7 +20,7 @@ fn failure(error: impl std::fmt::Display) -> CoreError {
     CoreError::new(code, &message)
 }
 impl Core {
-    fn ssh_service(&self, namespace: Option<String>) -> Result<Arc<Service>> {
+    pub(crate) fn ssh_service(&self, namespace: Option<String>) -> Result<Arc<Service>> {
         let mut current = self
             .ssh
             .lock()

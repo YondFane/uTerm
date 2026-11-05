@@ -20,6 +20,8 @@ use utermd_local::BackgroundChild;
 
 mod document;
 mod host;
+mod request;
+pub mod service;
 pub use host::Host;
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -152,11 +154,34 @@ struct Connection {
     writable: AtomicBool,
     transaction: AtomicBool,
     dead: AtomicBool,
+    closing: AtomicBool,
     tunnel: Mutex<Option<Tunnel>>,
     reader: Mutex<Option<tokio::task::JoinHandle<()>>>,
     temporary: Mutex<Option<tempfile::TempDir>>,
 }
 impl Connection {
+    async fn cancel_running(&self) {
+        let Some(input) = &self.input else { return };
+        if !self.busy.load(Ordering::SeqCst) {
+            return;
+        }
+        let id = self.sequence.fetch_add(1, Ordering::Relaxed);
+        let (sender, receiver) = oneshot::channel();
+        if let Ok(mut pending) = self.pending.lock() {
+            pending.insert(id, sender);
+        }
+        // JDBC cancellation must reach the server before killing its worker process.
+        // JDBC 取消必须先送达数据库服务端，再终止工作进程。
+        let bytes = format!("{{\"id\":{id},\"op\":\"cancel\"}}\n");
+        let _ = tokio::time::timeout(Duration::from_secs(1), async {
+            input.lock().await.write_all(bytes.as_bytes()).await.ok()?;
+            receiver.await.ok()
+        })
+        .await;
+        if let Ok(mut pending) = self.pending.lock() {
+            pending.remove(&id);
+        }
+    }
     fn stop(&self) {
         self.dead.store(true, Ordering::SeqCst);
         self.cancelled.notify_waiters();
@@ -189,7 +214,7 @@ impl Connection {
         // Subscribe before checking dead so a concurrent stop cannot lose its notification.
         // 先订阅再检查关闭状态，避免并发停止时丢失通知。
         let cancelled = self.cancelled.notified();
-        if self.dead.load(Ordering::SeqCst) {
+        if self.dead.load(Ordering::SeqCst) || self.closing.load(Ordering::SeqCst) {
             return Err("DB_DISCONNECTED".into());
         }
         if self.busy.swap(true, Ordering::SeqCst) {
@@ -245,12 +270,38 @@ impl Connection {
         }
         .await;
         self.busy.store(false, Ordering::SeqCst);
-        result
+        if self.closing.load(Ordering::SeqCst) {
+            Err("DB_DISCONNECTED".into())
+        } else {
+            result
+        }
     }
 }
 impl Drop for Connection {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+struct Closing(Vec<Arc<Connection>>);
+impl Closing {
+    async fn finish(&self) {
+        let mut tasks = tokio::task::JoinSet::new();
+        for connection in &self.0 {
+            connection.closing.store(true, Ordering::SeqCst);
+            let connection = connection.clone();
+            tasks.spawn(async move {
+                connection.cancel_running().await;
+                connection.stop();
+            });
+        }
+        while tasks.join_next().await.is_some() {}
+    }
+}
+impl Drop for Closing {
+    fn drop(&mut self) {
+        for connection in &self.0 {
+            connection.stop();
+        }
     }
 }
 
@@ -259,6 +310,7 @@ pub struct DatabaseState {
     connections: Arc<Mutex<HashMap<String, Arc<Connection>>>>,
     drafts: Arc<Mutex<HashSet<String>>>,
     opening: Arc<AtomicUsize>,
+    closed: Arc<AtomicBool>,
 }
 impl DatabaseState {
     fn reserve(&self) -> Result<Opening<'_>> {
@@ -266,6 +318,9 @@ impl DatabaseState {
             .connections
             .lock()
             .map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))?;
+        if self.closed.load(Ordering::SeqCst) {
+            bail!("DB_DISCONNECTED");
+        }
         connections.retain(|_, connection| !connection.dead.load(Ordering::SeqCst));
         if connections.len() + self.opening.load(Ordering::SeqCst) >= 8 {
             bail!("DB_CONNECTION_LIMIT");
@@ -291,11 +346,22 @@ impl DatabaseState {
         self.drafts.lock().map_or(true, |items| !items.is_empty())
     }
     pub fn stop(&self) {
+        self.closed.store(true, Ordering::SeqCst);
         if let Ok(mut items) = self.connections.lock() {
             for (_, item) in items.drain() {
                 item.stop();
             }
         }
+    }
+    pub async fn shutdown(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+        let connections = self
+            .connections
+            .lock()
+            .map(|mut values| values.drain().map(|(_, value)| value).collect())
+            .unwrap_or_default();
+        let connections = Closing(connections);
+        connections.finish().await;
     }
 }
 
@@ -479,11 +545,13 @@ pub async fn database_connect(
                 browser_config: Some((config, String::new(), identity)), child: Mutex::new(None), input: None,
                 elastic: Some(elastic), cancelled: tokio::sync::Notify::new(), pending: Arc::new(Mutex::new(HashMap::new())),
                 sequence: AtomicU64::new(1), busy: AtomicBool::new(false), writable: AtomicBool::new(false),
-                transaction: AtomicBool::new(false), dead: AtomicBool::new(false), tunnel: Mutex::new(tunnel),
+                transaction: AtomicBool::new(false), dead: AtomicBool::new(false), closing: AtomicBool::new(false), tunnel: Mutex::new(tunnel),
                 reader: Mutex::new(None), temporary: Mutex::new(None),
             });
             let id = uuid::Uuid::new_v4().to_string();
-            state.connections.lock().map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))?.insert(id.clone(), connection);
+            let mut connections = state.connections.lock().map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))?;
+            if state.closed.load(Ordering::SeqCst) { bail!("DB_DISCONNECTED"); }
+            connections.insert(id.clone(), connection);
             return Ok(json!({"handle":id,"info":info}));
         }
         let handle = app.clone();
@@ -509,7 +577,7 @@ pub async fn database_connect(
         let input = crate::ssh::pipe_file(child.take_stdin().context("DB_PROTOCOL")?);
         let output = crate::ssh::pipe_file(child.take_stdout().context("DB_PROTOCOL")?);
         let pending: Pending = Arc::new(Mutex::new(HashMap::new()));
-        let connection = Arc::new(Connection { browser: Mutex::new(None), browser_lock: AsyncMutex::new(()), session_lock: AsyncMutex::new(()), browser_config: Some((config.clone(), password.clone(), identity.clone())), child: Mutex::new(Some(child)), input: Some(AsyncMutex::new(input)), elastic: None, cancelled: tokio::sync::Notify::new(), pending: pending.clone(), sequence: AtomicU64::new(1), busy: AtomicBool::new(false), writable: AtomicBool::new(false), transaction: AtomicBool::new(false), dead: AtomicBool::new(false), tunnel: Mutex::new(tunnel), reader: Mutex::new(None), temporary: Mutex::new(Some(temporary)) });
+        let connection = Arc::new(Connection { browser: Mutex::new(None), browser_lock: AsyncMutex::new(()), session_lock: AsyncMutex::new(()), browser_config: Some((config.clone(), password.clone(), identity.clone())), child: Mutex::new(Some(child)), input: Some(AsyncMutex::new(input)), elastic: None, cancelled: tokio::sync::Notify::new(), pending: pending.clone(), sequence: AtomicU64::new(1), busy: AtomicBool::new(false), writable: AtomicBool::new(false), transaction: AtomicBool::new(false), dead: AtomicBool::new(false), closing: AtomicBool::new(false), tunnel: Mutex::new(tunnel), reader: Mutex::new(None), temporary: Mutex::new(Some(temporary)) });
         let weak = Arc::downgrade(&connection);
         let pending_reader = pending.clone();
         let reader = tokio::spawn(async move {
@@ -534,6 +602,7 @@ pub async fn database_connect(
         let info = connection.send(json!({"op":"connect","config":config,"password":password,"proxy_port":proxy_port,"proxy_token":proxy_token})).await.map_err(anyhow::Error::msg)?;
         let id = uuid::Uuid::new_v4().to_string();
         let mut connections = state.connections.lock().map_err(|_| anyhow::anyhow!("DB_OPERATION_FAILED"))?;
+        if state.closed.load(Ordering::SeqCst) { bail!("DB_DISCONNECTED"); }
         if connections.len() >= 8 { bail!("DB_CONNECTION_LIMIT"); }
         connections.insert(id.clone(), connection);
         Ok(json!({"handle":id,"info":info}))
@@ -753,9 +822,9 @@ pub async fn database_request(app: Host, handle: String, request: Value) -> Resu
 }
 
 pub async fn database_disconnect(app: Host, handle: String, discard: bool) -> Result<(), String> {
-    tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let state = &app.database;
-        let mut connections = state
+    let closing = {
+        let mut connections = app
+            .database
             .connections
             .lock()
             .map_err(|_| "DB_OPERATION_FAILED")?;
@@ -764,22 +833,28 @@ pub async fn database_disconnect(app: Host, handle: String, discard: bool) -> Re
                 return Err("DB_PENDING".into());
             }
         }
-        if let Some(connection) = connections.remove(&handle) {
-            if let Some((id, _)) = connection
-                .browser
-                .lock()
-                .map_err(|_| "DB_OPERATION_FAILED")?
-                .as_ref()
-            {
-                connections.remove(id);
-            }
-            connection.stop();
+        let Some(connection) = connections.remove(&handle) else {
+            return Ok(());
+        };
+        let mut targets = vec![connection.clone()];
+        if let Some((id, browser)) = connection
+            .browser
+            .lock()
+            .map_err(|_| "DB_OPERATION_FAILED")?
+            .as_ref()
+        {
+            connections.remove(id);
+            targets.push(browser.clone());
         }
-        Ok(())
-    })
-    .await
-    .map_err(|_| "DB_OPERATION_FAILED".to_owned())?
+        for connection in &targets {
+            connection.closing.store(true, Ordering::SeqCst);
+        }
+        Closing(targets)
+    };
+    closing.finish().await;
+    Ok(())
 }
+
 pub fn database_guard(app: Host, id: String, dirty: bool) -> Result<(), String> {
     let state = &app.database;
     let mut drafts = state.drafts.lock().map_err(|_| "DB_OPERATION_FAILED")?;
@@ -952,6 +1027,7 @@ mod tests {
             writable: AtomicBool::new(false),
             transaction: AtomicBool::new(false),
             dead: AtomicBool::new(false),
+            closing: AtomicBool::new(false),
             tunnel: Mutex::new(None),
             reader: Mutex::new(None),
             temporary: Mutex::new(None),

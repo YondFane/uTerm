@@ -3,6 +3,43 @@ import XCTest
 @testable import UTermBridge
 
 final class CoreBridgeTests: XCTestCase {
+    func testDatabaseValuesKeepExactTextAcrossSwiftEncoding() throws {
+        var root = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { root.deleteLastPathComponent() }
+        let data = try Data(contentsOf: root.appendingPathComponent("shared/contracts/database-values-v1.json"))
+        let operation = try JSONDecoder().decode(CoreDatabaseOperation.self, from: data)
+        let result = try XCTUnwrap(operation.result)
+        guard case .array(let rows) = result["rows"], let row = rows.first, case .array(let cells) = row else {
+            XCTFail("Database rows must survive the shared contract"); return
+        }
+        XCTAssertEqual(cells, [.string("9223372036854775807"), .string("12345678901234567890.1234567890"), .object(["binary": .string("AP9/"), "truncated": .bool(false)]), .null, .string("中文🚀")])
+        let encoded = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(operation))
+        XCTAssertEqual(encoded["result"], result)
+    }
+
+    func testDatabaseAsynchronousGuardsAndGenerationThroughCABI() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let core = try await CoreBridge.open(root: root.appendingPathComponent("shared-state-v1"))
+        _ = try await core.call("database.configure", params: .object(["identifier": .string("sh.uterm.qa.database-bridge")]))
+        let started = try await core.call("database.operation.start", params: .object(["kind": .string("guard"), "id": .string("draft"), "dirty": .bool(true)]))
+        let operation = try JSONDecoder().decode(CoreDatabaseOperation.self, from: JSONEncoder().encode(started))
+        var completed = false
+        for _ in 0..<200 {
+            let value = try await core.call("database.operation.read", params: .object(["id": .string(operation.id), "generation": .string(operation.generation), "consume": .bool(true)]))
+            if value["state"] == .string("completed") { completed = true; break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(completed)
+        let status = try await core.call("database.status")
+        XCTAssertEqual(status["dirty"], .bool(true))
+        do {
+            _ = try await core.call("database.operation.read", params: .object(["id": .string(operation.id), "generation": .string("stale"), "consume": .bool(true)]))
+            XCTFail("A stale generation must not read another operation")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "DB_OPERATION_CHANGED") }
+        await core.close()
+    }
+
     func testSSHProgressKeepsExactUnsignedCounts() throws {
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<4 { root.deleteLastPathComponent() }

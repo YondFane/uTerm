@@ -5554,15 +5554,34 @@ into the application cache, keeping the installed bundle unchanged. Drivers, run
 data retain their application-data paths, catalog versions and SHA-256 rules. Existing credential
 service names and JSON configuration remain compatible.
 
+The Core JSON interface starts database work asynchronously and returns an opaque operation ID and
+generation. Clients poll or consume the matching result while disconnect and component cancellation
+remain available. Admission reserves capacity for at most eight running or unread business results;
+control operations have separate capacity. Progress events are coalesced and bounded. Operation
+lists omit query results and request parameters. Closing the client stops owned database workers and
+prevents a connection that finishes late from registering a new handle. Disconnect and client close
+send the existing JDBC statement-cancel request with a bounded wait before terminating the owned
+worker. They do not retry writes with an uncertain outcome.
+
 #### Shared-service validation and limits
 
-Linux x86_64 / Rust 1.99.1 passes 23 database/document/component regressions, five common download
+Linux x86_64 / Rust 1.99.1 passes 24 database/document/component regressions, five common download
 regressions and two host-port checks covering cross-command draft/exit protection, native picker
 cancellation and cached-engine repair. Full Core/FFI, host, backend (45 passed / nine ignored),
-frontend (411 passed / ten skipped), types and production/desktop builds pass. Current checks and
+frontend (412 passed / ten skipped), types and production/desktop builds pass. Current checks and
 actual database/dual-client acceptance are tracked in
 [#38](https://github.com/YondFane/uTerm/issues/38); native database-workbench acceptance is still
 pending.
+
+Five additional Linux protocol/contract regressions pass, including late connection completion after
+close, result backpressure, generation mismatch and parameter redaction. An isolated real PostgreSQL
+16.11 server with the catalog-verified JDBC driver passes exact bigint/decimal/binary/null/Unicode
+values, default read-only protection, pending-transaction disconnect/quit protection, rollback,
+concurrent stale-write conflicts and disconnect of an observed slow query. It also checks that
+disconnect and client close release the active server query. The shared database CI workflow
+archives source-bound reports and logs. Swift C ABI and exact-value contract checks are included in
+native CI; their results must be checked for the actual source commit. These service tests do not
+establish native database UI acceptance or acceptance of other database engines.
 
 ### Database setup and visibility
 
