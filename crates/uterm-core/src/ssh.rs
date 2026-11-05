@@ -1,5 +1,9 @@
 pub mod auth;
+pub mod files;
 pub mod paths;
+#[cfg(all(test, unix))]
+mod service_tests;
+pub mod tunnels;
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};

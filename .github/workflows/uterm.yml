@@ -111,6 +111,7 @@ jobs:
           UTERM_INPUT_REACQUIRE_REPORT: ${{ github.workspace }}/ci-evidence/input-reacquire-core.json
           UTERM_M2_SIMULATION_REPORT: ${{ github.workspace }}/ci-evidence/m2-simulation-core.json
           UTERM_SSH_CONFIGURATION_REPORT: ${{ github.workspace }}/ci-evidence/ssh-configuration-core.json
+          UTERM_SSH_SERVICE_REPORT: ${{ github.workspace }}/ci-evidence/ssh-service-core.json
           UTERM_GIT_CORE_REPORT: ${{ github.workspace }}/ci-evidence/git-operations-core.json
         run: pnpm test:core 2>&1 | tee ci-evidence/core-ffi-tests.log
       - name: Generated contracts

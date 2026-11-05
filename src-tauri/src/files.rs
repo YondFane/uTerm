@@ -2,7 +2,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Manager;
 use uterm_core::files::{copy_between_roots, list, mutate_file, read, resolve, save, search};
 pub use uterm_core::files::{
-    document_from_bytes, FileDocument as Document, FileListing as Listing, FileSearch as Search,
+    FileDocument as Document, FileListing as Listing, FileSearch as Search,
 };
 
 #[derive(Default)]

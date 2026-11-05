@@ -778,7 +778,7 @@ MiB，最多 128 个文件、16 层 Include，不执行 Match 规则；明确解
 同时管理既有 SFTP 词法路径规则，Tauri 直接导入相同函数：POSIX／Windows 服务端根规范化、相对路径校验、组件包含及拼接。服务端规则与本地系统无关；保留盘符／斜线处理、Unix 字面反斜线、Unicode 名称、4,096 字节相对路径上限及原错误码。传输层仍在包含检查前校验根并解析服务端符号链接；这些辅助函数不授权连接，也不解析文件系统链接。
 
 `cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh::paths::tests` 在 Linux
-x86_64／Rust1.99.1 通过两项检查，包括迁移的边界样例与准确 UTF-8 字节上限。`cargo test --locked --manifest-path src-tauri/Cargo.toml ssh::tests -- --nocapture`
+x86_64／Rust1.99.1 通过两项检查，包括迁移的边界样例与准确 UTF-8 字节上限。`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh::files::tests -- --nocapture`
 通过四项实际 OpenSSH `sftp-server`
 子进程检查：冲突安全保存、符号链接／原文件保留、流式取消与明确覆盖、递归删除及根目录拒绝。这些通过管道使用真实 SFTP 子系统，不验证 SSH 认证、主机信任或网络重连。平台 CI 按实际源码保存 Core／后端日志，不宣称新增 FFI 或 JSON 路径端点。
 
@@ -786,8 +786,18 @@ x86_64／Rust1.99.1 通过两项检查，包括迁移的边界样例与准确 UT
 服务管理密码引用绑定、临时凭据、记住／忘记和有界的一次性 askpass 服务。两端可以提供主机信任确认回调和凭据存储接口。共享系统适配保留 macOS 钥匙串、Windows 凭据管理器的服务名与引用；Tauri 继续提供既有应用标识和原生对话框。Redis／数据库凭据调用复用相同系统适配，不改变各自命名空间。凭据仍绑定连接与 OpenSSH 生效端点：重命名不使其失效，端点变化则拒绝复用；损坏凭据返回固定错误，不暴露原内容。
 
 两项 Linux `ssh_auth`
-集成检查通过，使用内存凭据接口、真实 OpenSSH 配置解析和实际回环 askpass 监听，覆盖目标变化、记住转临时、忘记、损坏存储、无效密码及代理密码拒绝。平台专属测试向唯一 QA 钥匙串／凭据管理器引用写入、读取并删除；Windows／macOS 结果由 CI 单独记录。这些测试不代表真实 SSH 登录或原生主机信任交互已通过。原生连接界面、SFTP 传输及隧道生命周期接入仍在 #36 开放。执行命令为
-`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test ssh_auth`。八项相关 Core 配置／路径／绑定检查、81 项后端检查（九项可选测试忽略）及 13 项 SSH 前端检查也在 Linux 通过；这不代表 Windows／macOS 凭据存储已验收。
+集成检查通过，使用内存凭据接口、真实 OpenSSH 配置解析和实际回环 askpass 监听，覆盖目标变化、记住转临时、忘记、损坏存储、无效密码及代理密码拒绝。平台专属测试向唯一 QA 钥匙串／凭据管理器引用写入、读取并删除；Windows／macOS 结果由 CI 单独记录。这些测试不代表真实 SSH 登录或原生主机信任交互已通过。原生连接界面接入仍在 #36 开放。执行命令为
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test ssh_auth`。完整宿主／Core／FFI、73 项后端检查（九项可选测试忽略）、410 项前端检查（十项可选测试跳过）、契约、TypeScript／生产／桌面构建、格式／文档及工作流检查在 Linux 通过；这不代表 Windows／macOS 凭据存储已验收。
+
+共享 `ssh::files` 与 `ssh::tunnels`
+服务管理远程根、串行安全写入、流式传输、取消／退出保护、监听就绪和所属 OpenSSH 进程。Tauri 的既有命令委派这些服务，保留原生选择器和进度通道。带代次的取消／停止拒绝过期请求，既有 Tauri 命令签名保持兼容；取消等待中的隧道也释放认证 future。退出等待取消时阻止新传输；放弃退出等待会释放临时阻止，让客户端继续使用。
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture`
+在 Linux 通过 19 项检查，其中包括真实隔离
+`sshd`／internal-sftp 服务。临时主机／客户端密钥、known_hosts 和切断连接的 TCP 代理验证已认证 Unicode 上传下载、取消与断线覆盖后原文件保留、明确重连／重试、固定主机密钥及主机 CA 的接受／拒绝、两条真实隧道回显和兄弟／过期停止保护。Unix 测试需要
+`/usr/sbin/sshd` 与 `ssh-keygen`，不修改系统 SSH 服务或 `~/.ssh`。CI 保存带源码／merge SHA 的
+`ssh-service-core.json`
+和测试日志；提交前本地报告明确标记源码未提交。这些服务用例尚未在 Windows 执行，密码登录及原生连接界面验收也待完成。断线可能保留隐藏的远端上传临时文件，原目标仍保持不变，重试需明确执行；夹具清理自身遗留临时数据，不宣称应用自动完成远端清理。
 
 ### 快速连接与主机搜索
 

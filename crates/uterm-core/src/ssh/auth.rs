@@ -25,6 +25,8 @@ pub struct SshAuth {
 pub struct Prepared {
     pub effective: super::EffectiveSsh,
     pub askpass: Option<Endpoint>,
+    #[cfg(test)]
+    pub(crate) configuration: Option<std::path::PathBuf>,
 }
 impl Prepared {
     pub fn resolved(&self) -> Result<ResolvedTarget> {
@@ -35,6 +37,10 @@ impl Prepared {
         })
     }
     pub fn apply(&self, command: &mut std::process::Command) -> Result<()> {
+        #[cfg(test)]
+        if let Some(configuration) = &self.configuration {
+            command.arg("-F").arg(configuration);
+        }
         if let Some(endpoint) = &self.askpass {
             command.envs(endpoint.environment()?);
             command.args(["-o", "ProxyCommand=none", "-o", "ProxyJump=none"]);
@@ -90,6 +96,8 @@ impl SshAuth {
         let mut prepared = Prepared {
             effective,
             askpass: None,
+            #[cfg(test)]
+            configuration: None,
         };
         if connection.authentication.as_deref() != Some("password") {
             return Ok(prepared);

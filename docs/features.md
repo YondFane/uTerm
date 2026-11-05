@@ -1308,12 +1308,13 @@ these helpers do not authorize a connection or resolve filesystem links.
 
 `cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh::paths::tests` passes
 two Linux x86_64/Rust1.99.1 checks, including the migrated boundary cases and exact UTF-8 byte
-limits. `cargo test --locked --manifest-path src-tauri/Cargo.toml ssh::tests -- --nocapture` passes
-four actual OpenSSH `sftp-server` subprocess checks: conflict-safe save, symlink/original retention,
-streaming cancellation and confirmed overwrite, recursive deletion and root refusal. These use the
-real SFTP subsystem over pipes; they do not test SSH authentication, host trust or network
-reconnection. Platform CI retains the Core/backend test logs for the actual source. No new FFI or
-JSON path endpoint is claimed.
+limits.
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh::files::tests -- --nocapture`
+passes four actual OpenSSH `sftp-server` subprocess checks: conflict-safe save, symlink/original
+retention, streaming cancellation and confirmed overwrite, recursive deletion and root refusal.
+These use the real SFTP subsystem over pipes; they do not test SSH authentication, host trust or
+network reconnection. Platform CI retains the Core/backend test logs for the actual source. No new
+FFI or JSON path endpoint is claimed.
 
 The shared `ssh::auth` service owns password-reference binding, temporary credentials,
 remember/forget and bounded one-use askpass servers. Both clients can supply a host-trust
@@ -1329,12 +1330,32 @@ configuration resolution and a real loopback askpass listener. They cover change
 remember-to-temporary conversion, forgetting, malformed storage, invalid passwords and
 proxy-password refusal. The platform-only test writes, reads and deletes a unique QA
 Keychain/Credential Manager reference; its Windows/macOS result is recorded separately by CI. These
-tests do not establish actual SSH login or native host-trust interaction. Native connection UI, SFTP
-transfer and tunnel lifecycle adoption remain open in #36. Run them with
-`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test ssh_auth`. The eight
-related Core configuration/path/binding checks, 81 backend checks (nine optional tests ignored) and
-13 SSH frontend checks also pass on Linux; this does not establish Windows/macOS credential-store
-acceptance.
+tests do not establish actual SSH login or native host-trust interaction. Native SSH UI adoption
+remains open in #36. Run them with
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test ssh_auth`. Full
+host/Core/FFI, 73 backend checks (nine optional tests ignored), 410 frontend checks (ten optional
+tests skipped), contracts, TypeScript/production/desktop builds, format/docs and workflow checks
+pass on Linux. This does not establish Windows/macOS credential-store acceptance.
+
+The shared `ssh::files` and `ssh::tunnels` services own remote roots, serialized safe writes,
+streaming transfers, cancellation/quit protection, listener readiness and owned OpenSSH processes.
+Tauri delegates its existing commands to them and retains native pickers and progress channels.
+Generation-aware cancellation/stop refuses stale requests; the existing Tauri command signatures
+remain compatible. Cancelling a pending tunnel also releases its authentication future. Quit blocks
+new transfers while waiting for active cancellation; abandoning that wait releases the temporary
+block so the client can continue.
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture` passes
+19 Linux checks, including an actual isolated `sshd`/internal-sftp service. Temporary host/client
+keys, known_hosts and a connection-cutting TCP proxy verify authenticated Unicode upload/download,
+cancelled and interrupted overwrite preservation, explicit reconnect/retry, pinned-host-key and host
+CA acceptance/rejection, two real tunnel echo routes and sibling/stale-stop protection. Unix tests
+require `/usr/sbin/sshd` and `ssh-keygen`; they do not change the system SSH service or `~/.ssh`. CI
+saves `ssh-service-core.json` and test logs with source/merge SHAs. Local reports before a commit
+explicitly mark the source dirty. These service cases do not run on Windows yet, and password login
+and native connection UI acceptance remain pending. A network interruption may leave a hidden remote
+upload temporary file; the original destination stays intact and retries are explicit. The test
+fixture cleans its own abandoned temporary data rather than claiming automatic remote cleanup.
 
 ### Quick connections and host search
 
