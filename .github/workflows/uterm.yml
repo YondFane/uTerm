@@ -109,6 +109,7 @@ jobs:
           UTERM_JAVA_CORE_REPORT: ${{ github.workspace }}/ci-evidence/java-live-core.json
           UTERM_INPUT_CONTROL_CORE_REPORT: ${{ github.workspace }}/ci-evidence/input-control-core.json
           UTERM_INPUT_REACQUIRE_REPORT: ${{ github.workspace }}/ci-evidence/input-reacquire-core.json
+          UTERM_M2_SIMULATION_REPORT: ${{ github.workspace }}/ci-evidence/m2-simulation-core.json
           UTERM_SSH_CONFIGURATION_REPORT: ${{ github.workspace }}/ci-evidence/ssh-configuration-core.json
         run: pnpm test:core 2>&1 | tee ci-evidence/core-ffi-tests.log
       - name: Generated contracts

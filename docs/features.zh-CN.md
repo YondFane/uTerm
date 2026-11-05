@@ -81,8 +81,8 @@ App。图片包括空窗口、八个语言／主题／宽度场景、隐藏侧�
 `native-control-*.png`。已目视检查 ARM 负载／窄窗／全屏／控制、Intel 窄窗／控制及 Windows
 Tauri 控制图；Tauri 的 12 场景保存／恢复／控制报告通过，清理无错误。
 
-M0 #14、M1 #15 及任务 #20–#30 已验收，尚未合入 release。M2 #16 因 #31／#32 继续开放：真实 Agent
-CLI／TUI、人工输入法／剪贴板／鼠标、并存输入／resize 仲裁、休眠／多屏及剩余生命周期未完整验收。原生 SSH／完整设置／编辑／数据工作台、同机性能、macOS
+M0 #14、M1 #15 及任务 #20–#30 已验收，尚未合入 release。M2
+#31／#32 使用下述用户批准的模拟范围，源码绑定结果与验收状态记录在对应 Issue。真实服务任务、人工输入法／剪贴板／鼠标及实际休眠／多屏检查仍未执行。原生 SSH／完整设置／编辑／数据工作台、同机性能、macOS
 14 实际运行及 M3–M5 仍未完成。自动原生操作不代表人工验收；Windows 与旧 macOS 保持现有完整功能。证据和未执行步骤见[原生迁移状态](native-migration.md)及 Issue 评论。
 
 原生终端冒烟在实际 PTY 中启动已安装的
@@ -145,6 +145,15 @@ source `29516c6dd78399d305099611cddebac7f825d46c`／tested merge
 `dcb2332a60bc712c0fb86ba6aa32bd946b88964a`
 的四份干净 Core／PTY 报告均通过，两原生架构各实际观察到一次没有新字节游标的纯控制变化；两原生应用接管／Vim／慢消费报告通过，macOS
 Tauri 通过 53 场景。Windows 应用 QA 更早停在短／长路径比较，UI 验收尚未完成。真实应用 QA 在失败时保留接管点击／只读诊断；平台报告在 #32 中绑定其实际 source／merge。Agent 认证／任务、人工输入法／剪贴板／鼠标及休眠／多屏仍待验收。
+
+M2 模拟使用自定义 Python Agent CLI 样例，通过正常 Agent 定义由真实宿主／Core
+PTY 启动。样例输出 alternate-screen、颜色及 bracketed-paste 序列；检查覆盖两轮字面参数／Unicode 字节、可恢复模拟错误与取消、客户端分离／重连、旧输出回放、拒绝旧输入、回调清理、退出码 7 及准确关闭。`m2-simulation-core.json`
+明确记录
+`mockAgentCLI=true`、`actualAgentProvider=false`、`actualOSPowerSleep=false`、`guiAcceptance=false`。客户端暂停由分离模拟，时钟驱动的租约检查模拟到期／续期；这是用户批准的 #31／#32 模拟范围，不代表真实服务认证或系统电源休眠测试。
+
+Linux 样例通过实际进程并核对保存的 UTF-8 文件。原生 SwiftTerm 解析／鼠标模式与前端 composition／剪贴板／渲染器模拟，与真实原生 Vim 和 Windows 窗口证据分开。可选的已安装 Codex
+0.163.0＋回环模型活动测试仍报
+`thread/read: list_turns is not supported yet`，保留失败，不计为模拟 CLI 测试通过；M3–M5 验收要求不变。
 
 ### 共享保存状态
 
@@ -1106,6 +1115,8 @@ QA 现在在需要时点击可见的“重试读取”，仅在必要时选中�
 在 Windows／macOS 的这两项路径表示核对失败，产物继续保留。修正后的 Linux 工作树在控制流改动前通过 53 场景且无清理错误，平台证据在 Issue 评论按 source 记录。后续
 `29516c6` 的 Windows 失败显示 JavaScript realpath 解析后仍有 `RUNNER~1` 与 `runneradmin`
 差异，原报告继续保留，改用目录标识核对代替字符串比较。
+
+恢复样例准备中的收藏读取／目录读取使用既有有界只读观察器，等待其他写入者释放存储；样例和应用写入仍直接报告失败，不自动重试。
 
 此前 Linux 工作树通过 53 个场景、12 项 HTML／PDF／transport 专项及类型检查；其 HTML／PDF 截图已另行目视检查，不作为干净 CI 证据。较早一次目录选择运行停在查看端退出后的输入权重新取得（49 个场景、无清理错误），失败记录继续保留。当前工作树在控制流修复后通过全部 53 场景，已目视原拥有者返回与只读查看端截图；这些本地结果不接受待执行的平台 CI。
 

@@ -112,11 +112,12 @@ scenes, sidebar hidden/full-screen/settings, `native-terminal-slow-consumer.png`
 Tauri control images were visually inspected. Tauri's 12-scene save/recovery/control report passed
 without cleanup errors.
 
-M0 #14, M1 #15 and tasks #20–#30 are accepted, unmerged. M2 #16 stays open for #31/#32: real Agent
-CLI/TUI, manual IME/clipboard/mouse, concurrent input/resize ownership, sleep/multiple displays and
-remaining lifecycle acceptance. Native SSH/full settings/editing/data workspaces, same-machine
-performance, macOS 14 runtime and M3–M5 gates are incomplete. Automatic native actions are not human
-acceptance; Windows and legacy macOS retain the existing full feature set. See
+M0 #14, M1 #15 and tasks #20–#30 are accepted, unmerged. M2 #31/#32 use the user-approved simulation
+scope described below; their source-bound results and acceptance are tracked in the Issues. Real
+provider tasks, manual IME/clipboard/mouse and physical sleep/multiple-display checks remain
+unexecuted. Native SSH/full settings/editing/data workspaces, same-machine performance, macOS 14
+runtime and M3–M5 gates are incomplete. Automatic native actions are not human acceptance; Windows
+and legacy macOS retain the existing full feature set. See
 [native migration status](native-migration.md) and Issue comments for evidence and unexecuted steps.
 
 The native terminal smoke launches installed `/usr/bin/vim` in the actual PTY. Native key events
@@ -237,6 +238,21 @@ stopped earlier at its short/long path comparison, so its UI acceptance is still
 real-app QA retains control-click/read-only diagnostics on failure. Platform reports remain bound to
 their own source/merge in Issue #32. Agent authentication/tasks, manual IME/clipboard/mouse and
 sleep/display acceptance remain open.
+
+M2 simulation uses a custom Python Agent CLI fixture launched by the real host/Core PTY through
+normal Agent definitions. The fixture emits alternate-screen, color and bracketed-paste sequences;
+checks preserve literal arguments and Unicode bytes over two turns, a recoverable mock error and
+cancel, client detachment/reconnection, prior-output replay, stale-input refusal, callback cleanup,
+exit code 7 and exact close. `m2-simulation-core.json` explicitly records `mockAgentCLI=true`,
+`actualAgentProvider=false`, `actualOSPowerSleep=false` and `guiAcceptance=false`. Client suspension
+is modeled by detachment; clock-driven lease checks model expiry/renewal. These checks are the
+user-approved simulation scope for #31/#32, not real provider authentication or OS power testing.
+
+The Linux fixture passes through actual processes and validates the saved UTF-8 files. Native
+SwiftTerm parser/mouse-mode and frontend composition/clipboard/renderer simulations remain separate
+from the actual native Vim and Windows window evidence. The optional installed Codex 0.163.0 plus
+loopback-model activity test still fails with `thread/read: list_turns is not supported yet`; that
+failure is retained and is not counted as passing the mock CLI test. M3–M5 acceptance is unchanged.
 
 ### Shared saved state
 
@@ -1892,6 +1908,10 @@ with no cleanup errors before the control-stream change; platform evidence is re
 source in the Issue comments. The later `29516c6` Windows failure showed `RUNNER~1` versus
 `runneradmin` after JavaScript realpath resolution; its original report remains retained, and the
 identity check replaces that string comparison.
+
+Recovery-fixture setup uses the existing bounded read-only observer for favorite reads/catalogs when
+another writer holds the store. Fixture and application writes still report failures without
+automatic retries.
 
 Earlier Linux working-tree checks passed 53 scenes, 12 HTML/PDF/transport checks and types; HTML/PDF
 captures were inspected separately from clean CI evidence. An earlier root-selection run stopped at

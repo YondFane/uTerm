@@ -72,6 +72,7 @@ jobs:
           UTERM_INPUT_CONTROL_REPORT: ${{ github.workspace }}/macos/.build/evidence/input-control-host.json
           UTERM_INPUT_CONTROL_CORE_REPORT: ${{ github.workspace }}/macos/.build/evidence/input-control-core.json
           UTERM_INPUT_REACQUIRE_REPORT: ${{ github.workspace }}/macos/.build/evidence/input-reacquire-core.json
+          UTERM_M2_SIMULATION_REPORT: ${{ github.workspace }}/macos/.build/evidence/m2-simulation-core.json
           UTERM_SSH_CONFIGURATION_REPORT: ${{ github.workspace }}/macos/.build/evidence/ssh-configuration-core.json
           UTERM_TASK_OUTPUT_AUTH_REPORT: ${{ github.workspace }}/macos/.build/evidence/task-output-auth.json
         run: |

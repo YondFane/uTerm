@@ -58,7 +58,12 @@ let observerBusyReads = 0;
 let favoritePreviewReloads = 0;
 async function observeCore(method: string, params?: Parameters<typeof coreRequest>[1]) {
   assert(
-    ["snapshot.read", "editor.drafts.document", "git.favorites.read"].includes(method),
+    [
+      "snapshot.read",
+      "editor.drafts.document",
+      "git.favorites.read",
+      "git.favorites.recovery.list",
+    ].includes(method),
     "QA observer is read-only",
   );
   const result = await until(async () => {
@@ -814,7 +819,7 @@ async function runWorktreeDeletion() {
 }
 
 async function runFavoriteRecovery(context: Context) {
-  const favorites = (await coreRequest("git.favorites.read", {
+  const favorites = (await observeCore("git.favorites.read", {
     directory: context.project,
   })) as unknown as CoreGitFavorites;
   const checkpoint = (await coreRequest("git.favorites.write", {
@@ -827,7 +832,7 @@ async function runFavoriteRecovery(context: Context) {
     expectedRevision: checkpoint.revision,
     references: favorites.references,
   });
-  const initial = (await coreRequest(
+  const initial = (await observeCore(
     "git.favorites.recovery.list",
   )) as unknown as CoreGitFavoriteRecoveryCatalog;
   assert(initial.currentRevision && favorites.sourceDigest, "Missing recovery snapshot or source");
