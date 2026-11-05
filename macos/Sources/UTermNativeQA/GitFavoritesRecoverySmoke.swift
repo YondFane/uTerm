@@ -160,19 +160,16 @@ enum GitFavoritesRecoverySmoke {
         report["favoriteRecoveryUIScenarios"] = ["controls": "actual NSMenu / NSAlert / NSPopUpButton / NSButton / NSPasteboard", "languages": ["en", "zh-Hans"], "appearances": ["dark", "light"], "manualAcceptance": false] as [String: Any]
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         let retained = try Data(contentsOf: file)
-        guard let helper = WorkspaceModel.argument("--qa-store-lock-helper"), let gitWindow = content.window,
-              let previousDocument = try await content.webView.evaluateJavaScript("window.utermContentDocument") as? String else {
+        guard let helper = WorkspaceModel.argument("--qa-store-lock-helper"), let gitWindow = content.window else {
             throw BridgeFailure(code: "FAVORITE_RECOVERY_WRITER", message: "Missing isolated Rust fixture or active Git document")
         }
         let writer = try StoreWriter(root: root, helper: helper)
         try await writer.ready()
         let writerPID = writer.process.processIdentifier
         gitWindow.makeKeyAndOrderFront(nil)
-        // Force a new document to exhaust its bounded read while an independent Rust process owns the lock.
-        // 独立 Rust 进程持锁时强制打开新文档，使其有界读取确定地耗尽。
-        let previous = String(decoding: try JSONEncoder().encode(previousDocument), as: UTF8.self)
-        content.webView.reload()
-        try await ContentSmoke.wait(content, "typeof window.utermContentDocument === 'string' && window.utermContentDocument !== \(previous)", allowAlert: true)
+        // Use the native restoration notification after bootstrap; a whole-page reload first reads settings.
+        // 启动完成后使用原生恢复通知，整页重载会先读取设置。
+        content.favoritesDidRestore()
         try await ContentSmoke.wait(content, "document.querySelector('[role=alert]')?.textContent.includes('Another writer owns the canonical store') === true", allowAlert: true)
         guard try Data(contentsOf: file) == retained else {
             throw BridgeFailure(code: "FAVORITE_RECOVERY_RELOAD", message: "Readonly contention changed restored favorite bytes")
@@ -198,10 +195,37 @@ enum GitFavoritesRecoverySmoke {
                 report["favoriteRecoveryReadyBeforeEditorWrite"] = true
                 report["favoriteRecoveryExplicitBusyReload"] = true
                 report["favoriteRecoveryWriter"] = ["pid": writerPID, "independentRustProcess": true, "actualOSLock": true, "releaseExitCode": 0, "explicitReloads": 1, "bytesRetained": true] as [String: Any]
+                try await bootstrapRecovery(content: content, root: root, file: file, retained: retained, helper: helper,
+                                            reportPath: reportPath, captures: &captures, report: &report)
                 return
             }
             try await Task.sleep(for: .milliseconds(50))
         }
         throw BridgeFailure(code: "FAVORITE_RECOVERY_RELOAD", message: "Favorite controls did not become ready before the next editor write")
+    }
+
+    private static func bootstrapRecovery(content: ContentWindow, root: URL, file: URL, retained: Data, helper: String,
+                                          reportPath: String, captures: inout [String], report: inout [String: Any]) async throws {
+        guard let window = content.window,
+              let document = try await content.webView.evaluateJavaScript("window.utermContentDocument") as? String else {
+            throw BridgeFailure(code: "CONTENT_BOOTSTRAP", message: "Missing loaded native document")
+        }
+        let writer = try StoreWriter(root: root, helper: helper)
+        try await writer.ready()
+        let previous = String(decoding: try JSONEncoder().encode(document), as: UTF8.self)
+        content.webView.reload()
+        try await ContentSmoke.wait(content, "window.utermContentDocument !== \(previous) && document.querySelector('[role=alert]')?.textContent.includes('Another writer owns the canonical store') === true && [...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Retry' && !b.disabled)", allowAlert: true)
+        let name = "native-git-bootstrap-writer-busy.png"
+        window.makeKeyAndOrderFront(nil)
+        try await Task.sleep(for: .milliseconds(200))
+        try await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(name))
+        captures.append(name)
+        guard try Data(contentsOf: file) == retained else { throw BridgeFailure(code: "CONTENT_BOOTSTRAP", message: "Failed startup changed favorite bytes") }
+        try await writer.release()
+        try await EditorSmoke.click(content, title: "Retry")
+        try await ContentSmoke.wait(content, "document.querySelector('[role=alert]') === null && document.querySelector('[data-node=\"refs/heads/main\"]')?.textContent.includes('★') === true", allowAlert: true)
+        guard try Data(contentsOf: file) == retained else { throw BridgeFailure(code: "CONTENT_BOOTSTRAP", message: "Explicit startup retry changed favorite bytes") }
+        report["nativeBootstrapWriterRetry"] = true
+        report["nativeBootstrapWriter"] = ["pid": writer.process.processIdentifier, "actualOSLock": true, "releaseExitCode": 0, "explicitRetries": 1, "bytesRetained": true] as [String: Any]
     }
 }

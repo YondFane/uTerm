@@ -299,10 +299,15 @@ Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
 JSON 执行全部 19 个 Git／Worktree 方法，核对选中仓库／Worktree、无关字节与检出身份、过期引用／分支拒绝、检出冲突、定向回退、上游／推送及脏／干净 Worktree 删除。CI 保存包含 source／merge、平台及 Git 版本的
 `git-operations-core.json`。Linux x86_64 本地通过，工作区报告不作为平台或 GUI 验收。
 
-原生 Git 冒烟现在持有独立 `uterm-core-contract --hold-store-lock`
-进程，等待真实写锁确认，重载新 Git 文档直至有界读取报告争用，保存
-`native-git-favorites-writer-busy.png`，释放自身持锁进程后点击一次**重新读取 Git 收藏**。报告要求字节不变、进程退出 0、收藏控件可用及 15 张图片。新的 macOS
-ARM／Intel 执行仍待 CI，旧 `favoriteRecoveryExplicitBusyReload=false` 报告不能证明该路径通过。
+原生 Git 冒烟持有独立 `uterm-core-contract --hold-store-lock`
+进程，在启动完成后、写锁仍被持有时发送真实原生收藏恢复通知，保存
+`native-git-favorites-writer-busy.png`，释放自身持锁进程后点击一次**重新读取 Git 收藏**。独立的第二个持锁整页重载场景检查启动失败：原生内容错误页现提供**重试**，请求期间禁用，重复失败后仍可再次重试。场景保存
+`native-git-bootstrap-writer-busy.png`，释放第二个持锁进程后明确重试启动，收藏字节保持不变。报告要求两次真实操作系统锁、退出 0、收藏控件可用及 16 张图片。新的 ARM／Intel 执行仍待 CI，旧
+`favoriteRecoveryExplicitBusyReload=false` 报告不能证明这些路径。
+
+Source `580405b2786943e6257979027e8083d2e118b2fe`／merge `ec2df4c9aed72e6466d202357cd787c3688e3dc1`
+的 ARM
+19 项 Core 操作报告通过，但新增原生 Git 冒烟失败：持锁整页重载先在设置／上下文读取失败，收藏控件尚未出现。[失败 run／artifact](https://github.com/YondFane/uTerm/actions/runs/41978931526/artifacts/13393467857)保留真实错误页截图。启动重试及独立的启动后收藏通知修复此恢复缺口，两者都不能仅凭编译验收。React／WebKit 协议回归验证明确重试、请求中禁用及重复失败后的再次重试。
 
 当前四平台 Git／编辑器基线为源码 head `429428cbb8787c657c39c14450b4e997d0f6a6fe`、实际 tested merge
 `a0b1b0806bfae1558b9f87ea6c46859ebd93792d`。

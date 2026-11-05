@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FileEditor, UnsavedDialog } from "./components/FileEditor";
 import { SettingsProvider } from "./lib/SettingsContext";
@@ -47,36 +47,56 @@ function Content({ context }: { context: Context }) {
     </main>
   );
 }
+function StartupFailure({ reason, retry }: { reason: unknown; retry: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <main className="native-content">
+      <p role="alert">{localizeMessage(String(reason))}</p>
+      <button
+        disabled={busy}
+        onClick={() => {
+          setBusy(true);
+          void retry().finally(() => setBusy(false));
+        }}
+      >
+        {tx("重试")}
+      </button>
+    </main>
+  );
+}
 async function start() {
   const target = document.getElementById("root");
   if (!target) throw new Error("Missing content root");
   const root = createRoot(target);
-  try {
-    const context = await contentInvoke<Context>("content_context");
-    context.settings = readSettings(JSON.stringify(context.settings));
-    setUiLanguage(activeLanguage(context.settings.language));
-    const content = {
-      settings: context.settings,
-      read: async () => {
-        const current = await contentInvoke<Context>("content_context");
-        return readSettings(JSON.stringify(current.settings));
-      },
-      update: async (patch: Partial<Settings>) =>
-        readSettings(JSON.stringify(await contentInvoke("content_settings_patch", { patch }))),
-      adjust: async (key: "fontSize" | "fileFontSize" | "gitDiffFontSize", delta: number) =>
-        readSettings(JSON.stringify(await contentInvoke("content_font_adjust", { key, delta }))),
-    };
-    root.render(
-      <SettingsProvider content={content}>
-        {context.kind === "git" ? (
-          <NativeGit directory={context.directory} />
-        ) : (
-          <Content context={context} />
-        )}
-      </SettingsProvider>,
-    );
-  } catch (reason) {
-    root.render(<p role="alert">{localizeMessage(String(reason))}</p>);
+  async function load() {
+    try {
+      const context = await contentInvoke<Context>("content_context");
+      context.settings = readSettings(JSON.stringify(context.settings));
+      setUiLanguage(activeLanguage(context.settings.language));
+      const content = {
+        settings: context.settings,
+        read: async () => {
+          const current = await contentInvoke<Context>("content_context");
+          return readSettings(JSON.stringify(current.settings));
+        },
+        update: async (patch: Partial<Settings>) =>
+          readSettings(JSON.stringify(await contentInvoke("content_settings_patch", { patch }))),
+        adjust: async (key: "fontSize" | "fileFontSize" | "gitDiffFontSize", delta: number) =>
+          readSettings(JSON.stringify(await contentInvoke("content_font_adjust", { key, delta }))),
+      };
+      root.render(
+        <SettingsProvider content={content}>
+          {context.kind === "git" ? (
+            <NativeGit directory={context.directory} />
+          ) : (
+            <Content context={context} />
+          )}
+        </SettingsProvider>,
+      );
+    } catch (reason) {
+      root.render(<StartupFailure reason={reason} retry={load} />);
+    }
   }
+  await load();
 }
 void start();

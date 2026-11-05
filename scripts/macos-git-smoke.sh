@@ -52,12 +52,14 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 'favoriteRecoveryCancelRetainedBytes', 'favoriteRecoveryCopiedExactSourceWithoutRestore',
                 'favoriteRecoveryOpenedFromScopedGitError', 'favoriteRecoveryStaleSelectionRetainedBytes',
                 'favoriteRecoveryRestoredAndRetainedDamage', 'favoriteRecoveryMissingPreviewReadonlyAndExplicitRestore',
-                'favoriteRecoveryReadyBeforeEditorWrite', 'favoriteRecoveryExplicitBusyReload',
+                'favoriteRecoveryReadyBeforeEditorWrite', 'favoriteRecoveryExplicitBusyReload', 'nativeBootstrapWriterRetry',
                 'cancelledGitRetainedEditorFreezeUntilCompletion', 'cancelledGitReportedCompletedWriteAndRetainedBytes']:
         assert report[key], (key, report)
-    assert len(report['gitCaptures']) == 15, report
+    assert len(report['gitCaptures']) == 16, report
     assert report['favoriteRecoveryWriter']['actualOSLock'] and report['favoriteRecoveryWriter']['releaseExitCode'] == 0, report
     assert report['favoriteRecoveryWriter']['explicitReloads'] == 1 and report['favoriteRecoveryWriter']['bytesRetained'], report
+    assert report['nativeBootstrapWriter']['actualOSLock'] and report['nativeBootstrapWriter']['releaseExitCode'] == 0, report
+    assert report['nativeBootstrapWriter']['explicitRetries'] == 1 and report['nativeBootstrapWriter']['bytesRetained'], report
     for name in report['gitCaptures']:
         assert (evidence / name).is_file(), name
     report.update(passed=True, testedMergeSHA=report['sourceSHA'], platform='macOS',
