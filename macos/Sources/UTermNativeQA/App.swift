@@ -331,7 +331,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func makeSSHWindow(selected: String? = nil) async throws -> SSHWindow {
-        guard !preparingQuit, let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: "The client is closing") }
+        guard !preparingQuit, let bridge = model.sshBridge else { throw BridgeFailure(code: "CLOSED", message: "The client is closing") }
         if let current = sshWindow, current.model.workspaceID != model.groupID {
             guard await current.model.prepareForQuit() else { throw BridgeFailure(code: "SSH_CONNECTION_BUSY", message: localized("Resolve the other workspace's SSH window first.", "请先处理另一工作区的 SSH 窗口。")) }
             await current.forceClose()

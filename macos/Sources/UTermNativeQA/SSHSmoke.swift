@@ -5,7 +5,7 @@ import UTermBridge
 @MainActor
 enum SSHSmoke {
     static func run(model: WorkspaceModel, open: () async throws -> SSHWindow, lookup: @escaping () -> SSHWindow?, report: inout [String: Any]) async throws {
-        guard let bridge = model.bridge,
+        guard let bridge = model.sshBridge,
               let reportPath = WorkspaceModel.argument("--ssh-smoke-report"),
               let fixturePath = WorkspaceModel.argument("--ssh-smoke-fixture") else { throw BridgeFailure(code: "SSH_QA", message: "Missing isolated SSH fixture") }
         let fixture = try JSONDecoder().decode(JSONValue.self, from: Data(contentsOf: URL(fileURLWithPath: fixturePath)))
@@ -100,7 +100,7 @@ enum SSHSmoke {
         let hostAfter = try await current.call("host.status")
         guard hostBefore["pid"] == hostAfter["pid"] else { throw BridgeFailure(code: "SSH_QA", message: "Reconnect replaced the SSH host") }
         report["remoteDetachReplayAndHostRetained"] = true
-        let reopened = try await open()
+        var reopened = try await open()
         await reopened.model.newTerminal()
         guard reopened.model.error.isEmpty, let second = model.selectedTerminal, second.id != first.id else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
         try await TerminalSmoke.wait("Second real SSH terminal") { second.generation != nil }
@@ -139,9 +139,16 @@ enum SSHSmoke {
                         _ = try await reopened.model.perform(["kind": .string("auth.configure"), "connection": previous, "password": .null, "remember": previous["remember_password"]])
                         throw BridgeFailure(code: "SSH_QA", message: "Obsolete password reference was retained")
                     } catch let failure as BridgeFailure where failure.message.contains("SSH_PASSWORD_REQUIRED") {}
+                    if !remembered {
+                        let passwordProfile = reopened.model.selectedID
+                        await model.reconnectTransport()
+                        reopened = try await open()
+                        await reopened.model.reload(select: passwordProfile)
+                    }
                     await reopened.model.connectFiles()
                     guard reopened.model.connected, reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: "Password retention conversion failed: " + reopened.model.error) }
                     await reopened.model.disconnectFiles()
+                    if !remembered { report["temporaryPasswordSurvivedTerminalTransportReconnect"] = true }
                 }
                 report["rememberedAndTemporaryPasswordConversion"] = true
             } catch {
@@ -161,8 +168,8 @@ enum SSHSmoke {
         cancel.performClick(nil); await connecting.value
         guard !reopened.model.connected, !reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: "Declined host trust permitted a connection") }
         report["nativeAskpassHostTrustCancellation"] = true
-        let exported = try JSONEncoder().encode(try await current.call("snapshot.read"))
-        let operations = try JSONEncoder().encode(try await current.call("ssh.operations"))
+        let exported = try JSONEncoder().encode(try await bridge.call("snapshot.read"))
+        let operations = try JSONEncoder().encode(try await bridge.call("ssh.operations"))
         guard !String(decoding: exported, as: UTF8.self).contains("isolated-qa-password"), !String(decoding: operations, as: UTF8.self).contains("isolated-qa-password") else { throw BridgeFailure(code: "SSH_QA", message: "Credential escaped into state or operation history") }
         report["passwordNotExportedOrReported"] = true
         if let actualPassword = fixture["password"].string {

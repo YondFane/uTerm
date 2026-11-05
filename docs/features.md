@@ -1399,12 +1399,13 @@ stale cancel/stop requests. Transfer byte counts cross Rust/Swift/TypeScript as 
 preserve u64 precision. Forwarding binds only to loopback; rules require explicit start and can be
 stopped independently.
 
-Passwords use temporary references in the current Core client or the QA app's own system-credential
-namespace. Closing/reopening the entire Core client expires temporary passwords. Password
-connections to unknown hosts use a real native fingerprint confirmation sheet; declining rejects the
-connection. Key/automatic authentication retains OpenSSH's strict known-host policy. Closing the SSH
-window or quitting resolves configuration drafts, transfers and forwarding while hosted SSH
-terminals remain running.
+Passwords use in-memory references valid for the application lifetime or the QA app's own
+system-credential namespace. The native SSH Core client stays alive across terminal transport
+reopening, preserving temporary credentials; quitting the app closes it and clears those references.
+Password connections to unknown hosts use a real native fingerprint confirmation sheet; declining
+rejects the connection. Key/automatic authentication retains OpenSSH's strict known-host policy.
+Closing the SSH window or quitting resolves configuration drafts, transfers and forwarding while
+hosted SSH terminals remain running.
 
 #### Native SSH validation and limits
 
@@ -1428,7 +1429,8 @@ progress row; capture now scrolls it into view and waits for SwiftUI rendering. 
 literal digits without locale grouping. These capture/port fixes and the added real password login
 still await a new platform run. Native password retention changes use the saved credential location
 when the password field is empty; deletion cleans the saved reference even if the draft changes. The
-native smoke now also checks remembered/temporary conversions. Windows real-service and manual
+native smoke now also checks remembered/temporary conversions, obsolete-reference deletion and
+authenticated reconnect after terminal transport reopening. Windows real-service and manual
 picker/IME acceptance remain pending. #36 stays open; no merge or release is claimed.
 
 ### Quick connections and host search

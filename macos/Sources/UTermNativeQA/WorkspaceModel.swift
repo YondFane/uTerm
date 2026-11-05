@@ -32,6 +32,9 @@ final class WorkspaceModel: ObservableObject {
     var controlTask: Task<Void, Never>?
     var requestActivation: (() -> Void)?
     private(set) var bridge: CoreBridge?
+    // Retain temporary SSH credentials when only the terminal transport is reopened.
+    // 仅重建终端传输时保留临时 SSH 凭据。
+    private(set) var sshBridge: CoreBridge?
     private(set) var terminals: [String: TerminalSession] = [:]
     var languageChanged: (() -> Void)?
     var appearanceChanged: ((String) -> Void)?
@@ -100,8 +103,15 @@ final class WorkspaceModel: ObservableObject {
             let helper = resources.appendingPathComponent("bin/utermd-local")
             _ = try await bridge.call("host.configure", params: .object(["helper": .string(helper.path)]))
             helperReady = true
-            _ = try await bridge.call("ssh.configure", params: .object(["credentialService": .string((Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native") + ".ssh")]))
-            startSSHTrust(bridge)
+            if sshBridge == nil {
+                let ssh = try await CoreBridge.open(root: Self.dataRoot())
+                do {
+                    _ = try await ssh.call("host.configure", params: .object(["helper": .string(helper.path)]))
+                    _ = try await ssh.call("ssh.configure", params: .object(["credentialService": .string((Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native") + ".ssh")]))
+                    sshBridge = ssh
+                } catch { await ssh.close(); throw error }
+            }
+            if let sshBridge { startSSHTrust(sshBridge) }
             for session in terminals.values { session.rebind(bridge) }
             environment = try await bridge.call("host.environment")
             await reload()
@@ -171,14 +181,19 @@ final class WorkspaceModel: ObservableObject {
     @discardableResult
     func mutate(_ method: String, _ values: [String: JSONValue], revision: String? = nil) async -> Bool {
         guard !busy, !shuttingDown, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, let bridge, let state else { return false }
+        let actionBridge: CoreBridge
+        if method.hasPrefix("ssh.") {
+            guard let sshBridge else { return false }
+            actionBridge = sshBridge
+        } else { actionBridge = bridge }
         busy = true
         var params = values
         params["expectedRevision"] = .string(revision ?? state.snapshot.revision)
-        let task = Task { @MainActor [weak self, bridge] in
+        let task = Task { @MainActor [weak self, actionBridge] in
             guard let self else { return false }
             defer { self.busy = false; self.operation = nil }
             do {
-                _ = try await bridge.call(method, params: .object(params))
+                _ = try await actionBridge.call(method, params: .object(params))
                 await self.reload()
                 if self.needsReload { self.needsReload = false; await self.reload() }
                 return true
@@ -268,7 +283,10 @@ final class WorkspaceModel: ObservableObject {
             "axis": .string(axis), "name": .string(localized("Terminal", "终端"))
         ]) {
             if let created = sessionEntries.first(where: { $0.sessionID == splitID }), created.session["ssh"] != .null {
-                do { _ = try await bridge?.call("ssh.session.start", params: .object(["id": .string(splitID)])); await reload() }
+                do {
+                    guard let sshBridge else { throw BridgeFailure(code: "CLOSED", message: "SSH client is unavailable") }
+                    _ = try await sshBridge.call("ssh.session.start", params: .object(["id": .string(splitID)])); await reload()
+                }
                 catch { self.error = error.localizedDescription }
             }
             focusRevision += 1
@@ -366,6 +384,8 @@ final class WorkspaceModel: ObservableObject {
         events?.cancel()
         frames?.cancel()
         failures?.cancel()
+        await sshBridge?.close()
+        sshBridge = nil
         await bridge?.close()
         bridge = nil
     }
