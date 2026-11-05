@@ -9,7 +9,8 @@ let package = Package(
     targets: [
         .systemLibrary(name: "UTermFFI", path: "Interop"),
         .target(name: "UTermBridge", dependencies: ["UTermFFI"]),
+        .target(name: "UTermTestSupport", path: "Tests/UTermTestSupport", publicHeadersPath: "include"),
         .executableTarget(name: "UTermNativeQA", dependencies: ["UTermBridge", .product(name: "SwiftTerm", package: "SwiftTerm")]),
-        .testTarget(name: "UTermBridgeTests", dependencies: ["UTermBridge", .product(name: "SwiftTerm", package: "SwiftTerm")])
+        .testTarget(name: "UTermBridgeTests", dependencies: ["UTermBridge", "UTermTestSupport", .product(name: "SwiftTerm", package: "SwiftTerm")])
     ]
 )

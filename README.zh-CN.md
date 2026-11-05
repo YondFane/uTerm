@@ -169,6 +169,8 @@ Python 服务及原始任务输出通道。在 macOS 图形会话运行
 `bash scripts/macos-python-smoke.sh`，使用隔离配置和真实进程检查配置冲突、输出、分离／回放、搜索／跟随、停止及重新运行，并保存截图。需要已有 Python
 3，不安装 Python 或依赖包；实际平台执行结果单独记录于功能指南。
 
+macOS 桥接测试通过 `macos/Tests/UTermTestSupport` 检查实际原生文件锁，该 C 辅助模块仅链接到测试。
+
 `uterm-core::redis`
 共享连接／凭据、TLS／SSH、二进制数据、TTL 和受保护写入规则；Tauri 命令保持既有接口及原生 CA 选择器。Core
 JSON 桥接提供异步操作、有界结果、配置 CAS 及退出／恢复保护。隔离原生应用从侧栏“Redis 连接”或**文件 →

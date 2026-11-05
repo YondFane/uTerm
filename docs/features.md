@@ -1724,8 +1724,13 @@ The real native run at source `2307afe` / tested merge `0d42fe12` fails with `WR
 opening Redis. Swift snapshot/view reads now retry that code briefly without blocking the UI or
 replaying mutations; persistent contention is still returned. Profile writes retain an explicit
 retry and preserve drafts, with a specific busy message. An actual macOS writer-lock test checks the
-read retry and immediate mutation failure. Native rerun results and Windows UI,
-credential/picker/manual interaction remain pending.
+read retry and immediate mutation failure. At source `6effb90` / tested merge `6b0ac3d7`, the actual
+macOS 15.8.2 ARM64 Redis window passes all scenes and verifies server data again after app exit,
+using Homebrew Redis 8.10.3. Three WindowServer captures have been inspected. The workflow still
+fails because the new writer-lock test resolved `Darwin.flock` as a struct; the test now calls libc
+through a separate C test-support target. That target passes strict C compilation and actual POSIX
+lock contention on Linux, but Swift/native rerun and Intel/Windows, credential/picker/manual
+acceptance remain pending.
 
 ### Redis connection setup
 

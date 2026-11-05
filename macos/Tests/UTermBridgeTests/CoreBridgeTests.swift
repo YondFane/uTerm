@@ -1,6 +1,7 @@
 import Foundation
 import Darwin
 import XCTest
+import UTermTestSupport
 @testable import UTermBridge
 
 final class CoreBridgeTests: XCTestCase {
@@ -12,8 +13,8 @@ final class CoreBridgeTests: XCTestCase {
         let initial = try await core.call("migration.import", params: .object(["workspace": defaults["workspace"], "settings": defaults["settings"], "legacy": .object([:])]))
         let descriptor = Darwin.open(root.appendingPathComponent("writer.lock").path, O_RDWR)
         guard descriptor >= 0 else { XCTFail("Could not open the actual canonical writer lock"); return }
-        defer { _ = Darwin.flock(descriptor, LOCK_UN); _ = Darwin.close(descriptor) }
-        XCTAssertEqual(Darwin.flock(descriptor, LOCK_EX | LOCK_NB), 0)
+        defer { _ = uterm_test_flock(descriptor, LOCK_UN); _ = Darwin.close(descriptor) }
+        XCTAssertEqual(uterm_test_flock(descriptor, LOCK_EX | LOCK_NB), 0)
         do {
             _ = try await core.call("snapshot.read")
             XCTFail("The actual writer must block a raw snapshot read")
@@ -24,7 +25,7 @@ final class CoreBridgeTests: XCTestCase {
         } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "WRITER_BUSY") }
         let read = Task { try await core.snapshot() }
         try await Task.sleep(for: .milliseconds(40))
-        XCTAssertEqual(Darwin.flock(descriptor, LOCK_UN), 0)
+        XCTAssertEqual(uterm_test_flock(descriptor, LOCK_UN), 0)
         let value = try await read.value
         XCTAssertEqual(value.revision, initial["revision"].string)
         await core.close()

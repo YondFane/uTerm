@@ -194,6 +194,9 @@ execution remains separately recorded in the feature guides.
 The shared-core command explicitly runs the filesystem-failure case. Unix tests require an
 unprivileged user so directory permissions enforce the failure; Windows uses a held file lease.
 
+macOS bridge tests use `macos/Tests/UTermTestSupport` for actual native file-lock checks; this C
+helper is linked only into tests.
+
 `uterm-core::redis` shares connection/credential, TLS/SSH, binary data, TTL and protected-write
 rules. Tauri commands retain their existing interface and native CA picker. The Core JSON bridge
 provides asynchronous operations, bounded results, profile CAS and quit/resume guards. The isolated
