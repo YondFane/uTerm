@@ -564,6 +564,10 @@ fn main() {
         .build(context);
     match result {
         Ok(app) => app.run(|handle, event| {
+            #[cfg(feature = "qa")]
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                eprintln!("QA lifecycle: ExitRequested");
+            }
             match &event {
                 tauri::RunEvent::WindowEvent {
                     event: tauri::WindowEvent::CloseRequested { api, .. },
@@ -675,7 +679,11 @@ fn main() {
                 _ => {}
             }
             if matches!(event, tauri::RunEvent::Exit) {
+                #[cfg(feature = "qa")]
+                eprintln!("QA lifecycle: Exit cleanup begin");
                 handle.state::<ssh::SshFiles>().stop();
+                #[cfg(feature = "qa")]
+                eprintln!("QA lifecycle: SFTP stopped");
                 handle.state::<ssh_auth::SshAuth>().clear();
                 handle.state::<ssh_tunnels::SshTunnels>().stop();
                 handle.state::<redis::RedisState>().stop();
@@ -683,6 +691,8 @@ fn main() {
                 handle
                     .state::<std::sync::Arc<sessions::Sessions>>()
                     .detach();
+                #[cfg(feature = "qa")]
+                eprintln!("QA lifecycle: Exit cleanup complete");
             }
         }),
         Err(error) => {

@@ -1383,10 +1383,12 @@ same session, generation, host PID and replay. Output from a hidden local termin
 remote acceptance.
 
 Full Tauri platform reruns remain pending; Windows exit is still unaccepted. Screenshots carry
-source/platform metadata. The Windows helper temporarily raises only its owned QA window, checks
-sampled points for occlusion and restores its topmost flag. Earlier images covered by the CI console
-are excluded. Process reports distinguish main-process exit from output-handle closure. Manual
-file-picker/IME acceptance is not performed; Unicode examples live in `shared/fixtures/ssh-qa.json`.
+source/platform metadata. The Windows helper captures the actual owned QA HWND with Win32
+PrintWindow and records each image’s method, dimensions and visibility samples. Its screen-copy
+fallback requires unobstructed samples; it restores the window’s topmost flag. Earlier images
+covered by the CI console are excluded. Process reports distinguish main-process exit from
+output-handle closure. Manual file-picker/IME acceptance is not performed; Unicode examples live in
+`shared/fixtures/ssh-qa.json`.
 
 ### Native SSH workspace
 

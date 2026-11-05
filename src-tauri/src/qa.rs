@@ -222,6 +222,7 @@ pub async fn qa_scene(app: tauri::AppHandle, name: String, value: Value) -> Resu
 #[tauri::command]
 pub fn qa_request_exit(app: tauri::AppHandle) -> Result<(), String> {
     check(&app)?;
+    eprintln!("QA lifecycle: ordinary exit requested");
     app.exit(0);
     Ok(())
 }

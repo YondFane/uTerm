@@ -15,6 +15,7 @@ public class WindowCapture {
     [DllImport("user32.dll", EntryPoint="GetWindowLongPtrW")] public static extern IntPtr GetWindowLongPtr(IntPtr h, int index);
     [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(Point point);
     [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
+    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
 }
 '@
 [void][WindowCapture]::SetProcessDPIAware()
@@ -34,16 +35,29 @@ try {
     $width = $rect.Right - $rect.Left
     $height = $rect.Bottom - $rect.Top
     if ($width -lt 600 -or $height -lt 400) { throw 'Invalid native QA window dimensions' }
+    $unobstructed = $true
+    $samples = @()
     foreach ($fraction in @(@(0.5,0.5), @(0.25,0.25), @(0.75,0.25), @(0.25,0.75), @(0.75,0.75))) {
         $point = [WindowCapture+Point]::new([int]($rect.Left + $width * $fraction[0]), [int]($rect.Top + $height * $fraction[1]))
         $visibleRoot = [WindowCapture]::GetAncestor([WindowCapture]::WindowFromPoint($point), 3)
-        if ($visibleRoot -ne $handle) { throw 'Native QA window is occluded; refuse an unrelated screenshot' }
+        $samples += @{ x=$point.X; y=$point.Y; visibleRoot=$visibleRoot.ToInt64() }
+        if ($visibleRoot -ne $handle) { $unobstructed = $false }
     }
     $image = [System.Drawing.Bitmap]::new($width, $height)
     $graphics = [System.Drawing.Graphics]::FromImage($image)
     try {
-        $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $image.Size)
+        # Ask the actual app window to render, even on a covered CI desktop. 即使 CI 桌面被遮挡，也由实际应用窗口渲染。
+        $dc = $graphics.GetHdc()
+        try { $printed = [WindowCapture]::PrintWindow($handle, $dc, 2) }
+        finally { $graphics.ReleaseHdc($dc) }
+        $method = 'Win32 PrintWindow PW_RENDERFULLCONTENT on owned QA HWND'
+        if (!$printed) {
+            if (!$unobstructed) { throw 'Native QA window is occluded and PrintWindow failed' }
+            $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $image.Size)
+            $method = 'CopyFromScreen with sampled occlusion checks'
+        }
         $image.Save($Destination, [System.Drawing.Imaging.ImageFormat]::Png)
+        @{ processId=$TargetProcessId; handle=$handle.ToInt64(); title=$application.MainWindowTitle; method=$method; width=$width; height=$height; unobstructed=$unobstructed; samples=$samples } | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 ($Destination + '.capture.json')
     } finally { $graphics.Dispose(); $image.Dispose() }
 } finally {
     if (!$topmost) { [void][WindowCapture]::SetWindowPos($handle, [IntPtr]::new(-2), 0, 0, 0, 0, 0x13) }

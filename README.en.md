@@ -244,8 +244,9 @@ scenarios in its real WebView. Windows/macOS CI captures native windows and uplo
 images under `legacy-checks-*/tauri-state-qa/`. It requires a desktop session and refuses existing
 QA profiles. Dedicated profile links redirect QA data into a temporary directory; no home-directory
 override or production profile is used. This automation does not establish manual keyboard/IME
-acceptance. Windows capture temporarily raises only the QA window and refuses an occluded frame;
-`scripts/windows-window-capture.ps1` restores its previous topmost flag afterwards.
+acceptance. Windows capture uses Win32 PrintWindow on the actual QA window with per-image metadata;
+screen-copy fallback requires unobstructed samples. `scripts/windows-window-capture.ps1` restores
+its previous topmost flag afterwards.
 
 The QA also exercises an actual writer-lock rejection and explicit recovery-draft retry, plus Git
 favorite preview/copy/stale/missing recovery. Shared Tauri content copies through the locked native

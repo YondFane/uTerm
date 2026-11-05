@@ -196,7 +196,8 @@ App，使用临时文件，不代表人工键盘／输入法验收；脚本也�
 `pnpm qa:shared-state`
 构建仅 QA 特性启用的隔离 Tauri 应用（`sh.uterm.desktop.qa.sharedstate`），在真实 WebView 中执行 Git／差异／历史／分支／Worktree 登记、编辑器导入／持久草稿／SIGKILL／重开／准确保存，以及状态保存／冲突／重载／退出／恢复场景。Windows／macOS
 CI 截取原生窗口，并将报告及图片上传到
-`legacy-checks-*/tauri-state-qa/`。此命令需要桌面会话，拒绝覆盖已有 QA 配置。专用配置路径链接将 QA 数据导向临时目录，不覆盖主目录变量，也不使用生产配置。自动化不代表人工键盘／输入法验收。Windows 截图仅临时置顶 QA 窗口并拒绝被遮挡画面，`scripts/windows-window-capture.ps1`
+`legacy-checks-*/tauri-state-qa/`。此命令需要桌面会话，拒绝覆盖已有 QA 配置。专用配置路径链接将 QA 数据导向临时目录，不覆盖主目录变量，也不使用生产配置。自动化不代表人工键盘／输入法验收。Windows 截图使用实际 QA 窗口的 Win32
+PrintWindow，逐图记录方法，屏幕复制回退必须未被遮挡；`scripts/windows-window-capture.ps1`
 在截图后恢复原置顶标记。
 
 QA 还验证真实写入锁拒绝及明确重试恢复草稿，以及 Git 收藏预览／复制／过期／缺失恢复。Tauri 共用内容通过锁定的原生 clipboard-manager 插件复制，只给主窗口写文本权限，不依赖 WebView 剪贴板许可。Windows／macOS

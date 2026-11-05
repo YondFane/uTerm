@@ -66,7 +66,7 @@ const metadata = {
     process.platform === "darwin"
       ? "WindowServer screencapture -l"
       : process.platform === "win32"
-        ? "owned native window CopyFromScreen with topmost and occlusion checks"
+        ? "owned native HWND PrintWindow, or unobstructed CopyFromScreen; per-image capture metadata"
         : "isolated X11 desktop",
   productionDataAccess: false,
   sourceTreeDirty,
