@@ -12,6 +12,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     if mode.as_deref() == Some("--schema") {
         let schemas = serde_json::json!({
             "InputControl":schemars::schema_for!(uterm_core::terminal::InputControl),
+            "SshInfo":schemars::schema_for!(uterm_core::ssh::Info),
+            "SshResolution":schemars::schema_for!(uterm_core::ssh::Resolution),
             "JavaMavenConfig":schemars::schema_for!(uterm_core::java::MavenConfig),
             "JavaProjectConfig":schemars::schema_for!(uterm_core::java::ProjectConfig),
             "JavaConfiguration":schemars::schema_for!(uterm_core::java::Configuration),

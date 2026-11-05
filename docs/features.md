@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-04
+updated: 2026-11-05
 ---
 
 # uTerm feature guide
@@ -202,19 +202,18 @@ side effects and parsed text do not establish GPU display acceptance.
 [Source-bound reports/artifacts](https://github.com/YondFane/uTerm/issues/32#issuecomment-6631153924)
 retain this gap. Manual keyboard, IME and system-clipboard acceptance remain unexecuted.
 
-Tauri ownership QA also retains baseline GPU captures before explicitly losing the actual WebGL
-context through `WEBGL_lose_context`, then requires xterm's existing DOM fallback to display the
-same shell marker. Both actual application processes retain the same session/generation during
-recovery, takeover and output; reports distinguish initial WebGL from an already active DOM
-renderer. Cloud Linux passed all 50 real app scenes at clean source
-`6b2a892ae410c575d3d5e7a161be9d4dad46ab0d`, including actual WebGL2 context loss and DOM recovery in
-both processes, with cleanupErrors=[]. At source `192f00a4ae0cfd665383a820d903e86e2ed97295` / tested
-merge `4c2ba5479312daaf11a127efb18757d9e3b64936`, Windows passed 50 scenes; macOS failed after 40
-scenes when the first owner command produced no marker file. The readiness wait passed 44 terminal
-regressions, type checking, production build and all 50 real app scenes on the Linux working tree
-(dirty=true, cleanupErrors=[]). It still requires new source-bound Windows/macOS app evidence. A DOM
-capture does not establish GPU capture/display acceptance; the macOS GPU blank-capture gap remains
-open.
+Tauri ownership QA retains baseline GPU captures before explicitly losing the actual WebGL context
+through `WEBGL_lose_context`, then requires xterm's existing DOM fallback to display the same shell
+marker. Both app processes retain the same session/generation through recovery, takeover and output.
+
+Source `1a30d7d90b08fedf9e16c0b695658a963b575037` / tested merge
+`321cce8300f8abc8e95b07e731baf40259b54885` passed all 50 actual application scenes on Windows Server
+2025 x64 and macOS 26.6.2 ARM64, dirty=false and cleanupErrors=[]. Both reports retain the actual
+writable-input/shell-prompt readiness, WebGL2 loss and DOM recovery. The corresponding Mac
+owner-returned and Windows viewer-owned captures show real shell output.
+[Reports, screenshots and preserved earlier failure](https://github.com/YondFane/uTerm/issues/32#issuecomment-6646250139)
+remain source-bound. DOM output does not establish GPU capture/display acceptance; that gap and
+manual keyboard, IME, clipboard, sleep/display and full lifecycle acceptance remain open.
 
 ### Shared saved state
 
@@ -1243,6 +1242,19 @@ address, port (default 22), username, remote system (Linux/macOS or Windows) and
 - System OpenSSH must be installed; Windows users can install the OpenSSH Client optional feature.
   No SSH executable, JVM or new runtime dependency is bundled for these connection options.
 
+### Shared SSH configuration service
+
+The development clients share OpenSSH configuration discovery and resolution through
+`uterm-core::ssh`. Existing Tauri commands use the same service; `ssh.info` and `ssh.resolve` also
+expose read-only Core/FFI results with generated Swift/TypeScript types. Discovery reads at most 1
+MiB per file, 128 files and 16 Include levels, and does not execute Match rules. Explicit resolution
+retains the system client's `ssh -G` behavior, a 15-second timeout and bounded output. The results
+contain endpoint metadata; password/private-key content fields are rejected.
+
+This shared subset does not provide the native SSH connection interface, credential adapter, SFTP
+transfer or tunnel lifecycle yet. Existing Tauri authentication and remote services retain their
+owners. Full dual-client SSH/SFTP acceptance remains open in #36.
+
 ### Quick connections and host search
 
 Choose **Quick SSH connection** in the SSH sidebar and enter a Host alias, `user@host:port` or
@@ -1422,6 +1434,17 @@ completion, errors and cancellation.
 - Existing sessions retain their target.
 
 #### SSH and SFTP checks
+
+- Shared configuration checks on Linux use real OpenSSH configuration resolution with temporary
+  profiles, proxy/forwarding metadata, identity changes and invalid-config errors. Rust tests cover
+  oversized files, Include cycles/depth/file-count bounds and coexistence with a client runtime.
+  Real Core/TypeScript requests reject secret fields without echoing values and preserve port
+  strings. `ssh-configuration-core.json` records the actual source/merge and confirms no remote
+  login, stored snapshot or host startup. Linux passed five Rust configuration tests, the Core
+  report test, 11 SSH backend checks, all Core/FFI/host checks, 408 frontend checks (ten skipped),
+  83 backend checks (nine ignored), types and production/desktop builds. The generated Swift/C ABI
+  test and affected-platform reports still need their own CI results; these checks do not accept an
+  authenticated service or native connection UI.
 
 - Windows automated checks: 17 focused frontend tests pass, including quick-address validation,
   temporary connection cleanup/promotion, host filtering, jump/rule persistence, Redis profile

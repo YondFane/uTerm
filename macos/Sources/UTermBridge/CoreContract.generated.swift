@@ -367,6 +367,18 @@ public struct CoreSnapshot: Codable, Sendable {
     public var revision: String
 }
 
+public struct CoreSshInfo: Codable, Sendable {
+    public var aliases: [String]
+    public var available: Bool
+}
+
+public struct CoreSshResolution: Codable, Sendable {
+    public var hostname: String
+    public var port: String
+    public var proxy: Bool
+    public var username: String
+}
+
 public struct CoreTerminalHeader: Codable, Sendable {
     public var agent_activity_error: String?
     public var agent_events: [CoreActivityEvent]?

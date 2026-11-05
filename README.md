@@ -189,6 +189,11 @@ execution remains separately recorded in the feature guides.
 The shared-core command explicitly runs the filesystem-failure case. Unix tests require an
 unprivileged user so directory permissions enforce the failure; Windows uses a held file lease.
 
+`uterm-core::ssh` owns read-only OpenSSH alias discovery and effective configuration resolution.
+Tauri delegates to the same service; Core/FFI exposes generated Swift/TypeScript endpoint DTOs.
+System OpenSSH remains required. Native credential, SFTP and tunnel adoption is still incomplete;
+configuration checks do not establish authenticated remote-service acceptance.
+
 `uterm-core::{files,git,worktrees}` owns local file and Git/Worktree rules and their regression
 tests; Tauri commands delegate to the same functions. The new `git.*` contract and generated DTOs
 are used by **File → Git…** in the isolated native QA app. Core now reconciles registered project

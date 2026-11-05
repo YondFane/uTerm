@@ -8,6 +8,7 @@ pub mod host;
 pub mod java;
 pub mod python;
 pub mod session_state;
+pub mod ssh;
 pub mod state;
 pub mod store;
 pub mod terminal;
@@ -329,6 +330,33 @@ impl Core {
     }
     fn dispatch(&self, method: &str, params: Value) -> Result<Value> {
         match method {
+            "ssh.info" => {
+                if !params.is_null() && params.as_object().is_none_or(|value| !value.is_empty()) {
+                    return Err(CoreError::new(
+                        "INVALID_PARAMS",
+                        "SSH info accepts no parameters",
+                    ));
+                }
+                service_json(ssh::info())
+            }
+            "ssh.resolve" => {
+                let request: ssh::ResolveRequest = serde_json::from_value(params)?;
+                let resolved = ssh::resolve(request.connection).map_err(|error| {
+                    let message = error.to_string();
+                    let prefix = message.split(':').next().unwrap_or_default();
+                    let code = if prefix.starts_with("SSH_")
+                        && prefix
+                            .bytes()
+                            .all(|byte| byte.is_ascii_uppercase() || byte == b'_')
+                    {
+                        prefix
+                    } else {
+                        "SSH_CONFIG_FAILED"
+                    };
+                    CoreError::new(code, &message)
+                })?;
+                service_json(resolved)
+            }
             "control.start" => {
                 let mut state = self
                     .control

@@ -165,6 +165,9 @@ Python 服务及原始任务输出通道。在 macOS 图形会话运行
 `bash scripts/macos-python-smoke.sh`，使用隔离配置和真实进程检查配置冲突、输出、分离／回放、搜索／跟随、停止及重新运行，并保存截图。需要已有 Python
 3，不安装 Python 或依赖包；实际平台执行结果单独记录于功能指南。
 
+`uterm-core::ssh`
+管理只读 OpenSSH 别名发现和生效配置解析，Tauri 委派同一服务，Core／FFI 提供生成的 Swift／TypeScript 端点 DTO。仍需系统 OpenSSH。原生凭据、SFTP 和隧道接入尚未完成，配置检查不代表已认证远程服务验收。
+
 `uterm-core::{files,git,worktrees}`
 管理本地文件及 Git／Worktree 规则和回归，Tauri 命令委派相同函数。新增 `git.*`
 契约及生成 DTO 供隔离原生 QA 应用的**文件 →

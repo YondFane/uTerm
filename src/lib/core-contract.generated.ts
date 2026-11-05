@@ -368,6 +368,18 @@ export interface CoreSnapshot {
   revision: string;
 }
 
+export interface CoreSshInfo {
+  aliases: string[];
+  available: boolean;
+}
+
+export interface CoreSshResolution {
+  hostname: string;
+  port: string;
+  proxy: boolean;
+  username: string;
+}
+
 export interface CoreTerminalHeader {
   agent_activity_error: string | null;
   agent_events: CoreActivityEvent[] | null;

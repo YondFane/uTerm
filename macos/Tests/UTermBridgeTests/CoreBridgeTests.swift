@@ -3,6 +3,25 @@ import XCTest
 @testable import UTermBridge
 
 final class CoreBridgeTests: XCTestCase {
+    func testSharedSSHConfigurationContractsThroughCABI() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let core = try await CoreBridge.open(root: root)
+        let info = try await core.call("ssh.info")
+        let typedInfo = try JSONDecoder().decode(CoreSshInfo.self, from: JSONEncoder().encode(info))
+        XCTAssertTrue(typedInfo.available)
+        let resolved = try await core.call("ssh.resolve", params: .object(["connection": .object([
+            "connection_id": .string("qa"), "workspace_id": .string("local"),
+            "name": .string("QA"), "host": .string("127.0.0.1"), "os": .string("posix"),
+            "root": .string(""), "mode": .string("direct"), "port": .number(2222),
+            "username": .string("qa-user")
+        ])]))
+        let typed = try JSONDecoder().decode(CoreSshResolution.self, from: JSONEncoder().encode(resolved))
+        XCTAssertEqual(typed.hostname, "127.0.0.1")
+        XCTAssertEqual(typed.username, "qa-user")
+        XCTAssertEqual(typed.port, "2222")
+        await core.close()
+    }
     func testImportEventsConflictAndReopen() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

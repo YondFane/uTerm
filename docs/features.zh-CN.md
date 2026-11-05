@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-04
+updated: 2026-11-05
 ---
 
 # uTerm 功能说明
@@ -128,12 +128,13 @@ GPU 截图仍为空白。输入文件副作用与已解析文字不代表 GPU �
 保留此缺口。人工键盘、输入法与系统剪贴板仍未执行。
 
 Tauri 并存 QA 保留原始 GPU 截图，再通过 `WEBGL_lose_context`
-令实际 WebGL 上下文丢失，要求 xterm 现有 DOM 回退显示相同 Shell 标记。两个真实应用进程在恢复、接管与输出期间保持同一会话／generation，报告区分初始 WebGL 与已使用 DOM。云端 Linux 在干净 source
-`6b2a892ae410c575d3d5e7a161be9d4dad46ab0d`
-通过全部 50 场景，两个进程均实际从 WebGL2 丢失后恢复 DOM，cleanupErrors=[]。source
-`192f00a4ae0cfd665383a820d903e86e2ed97295`／tested merge `4c2ba5479312daaf11a127efb18757d9e3b64936`
-的 Windows 通过 50 场景；macOS 在 40 场景后因首次拥有者命令未生成标记文件而失败。就绪等待在 Linux 工作树通过 44 项终端回归、类型检查、生产构建和全部 50 个真实应用场景（dirty=true，cleanupErrors=[]），仍需新源码对应的 Windows／macOS 应用证据。DOM 图不代表 GPU 捕获／显示验收，macOS
-GPU 空白截图缺口保持开放。
+令实际 WebGL 上下文丢失，要求 xterm 现有 DOM 回退显示相同 Shell 标记。两个应用进程在恢复、接管和输出期间保持同一会话／generation。
+
+source `1a30d7d90b08fedf9e16c0b695658a963b575037`／tested merge
+`321cce8300f8abc8e95b07e731baf40259b54885` 在 Windows Server 2025 x64 和 macOS 26.6.2
+ARM64 各通过全部 50 个真实应用场景，dirty=false、cleanupErrors=[]。两份报告均保留实际输入可写／Shell 提示符就绪、WebGL2 丢失及 DOM 恢复证据，对应 Mac 原拥有者返回与 Windows 观察者接管截图显示真实 Shell 输出。
+[报告、截图与保留的前次失败](https://github.com/YondFane/uTerm/issues/32#issuecomment-6646250139)
+均绑定对应源码。DOM 输出不代表 GPU 捕获／显示验收；该缺口及人工键盘、输入法、剪贴板、休眠／多屏和完整生命周期验收仍保持开放。
 
 ### 共享保存状态
 
@@ -732,6 +733,16 @@ macOS 和 Windows 的普通 Shell 会话会识别子进程中的 Claude/Codex �
 
 - 这些连接选项不捆绑 SSH 可执行文件、JVM 或新增运行时依赖。
 
+### 共享 SSH 配置服务
+
+开发客户端通过 `uterm-core::ssh`
+共用 OpenSSH 配置发现与解析。既有 Tauri 命令调用同一服务；`ssh.info` 与 `ssh.resolve`
+也提供只读 Core／FFI 结果及生成的 Swift／TypeScript 类型。发现每文件最多读取 1
+MiB，最多 128 个文件、16 层 Include，不执行 Match 规则；明确解析保留系统客户端 `ssh -G`
+行为、15 秒超时和输出大小限制。结果只包含端点元数据，拒绝密码／私钥内容字段。
+
+这个共享子范围尚不提供原生 SSH 连接界面、凭据适配、SFTP 传输或隧道生命周期。既有 Tauri 认证和远程服务保留当前拥有者。完整双客户端 SSH／SFTP 验收在 #36 保持开放。
+
 ### 快速连接与主机搜索
 
 在 SSH 侧栏选择**快速 SSH 连接**，输入 Host 别名、`user@host:port` 或
@@ -840,6 +851,10 @@ ACL。冲突检查采用乐观校验，不能阻止其他服务端程序并发�
 - 已有会话保留原目标。
 
 #### SSH 与 SFTP 检查
+
+- Linux 共享配置检查使用临时配置执行真实 OpenSSH 解析，覆盖代理／转发元数据、身份变化及无效配置错误。Rust 测试覆盖过大文件、Include 循环／深度／文件数限制及客户端运行时共存。真实 Core／TypeScript 请求拒绝秘密字段且不回显值，保留端口字符串。`ssh-configuration-core.json`
+  记录实际 source／merge，确认没有远程登录、保存快照或启动宿主。Linux 的五项 Rust 配置测试、Core 报告测试、11 项 SSH 后端专项、全部 Core／FFI／宿主检查、408 项前端检查（十项跳过）、83 项后端检查（九项忽略）、类型及生产／桌面构建通过。生成的 Swift／C
+  ABI 测试及受影响平台报告仍待各自 CI；这些检查不代表已认证服务或原生连接 UI 验收。
 
 - Windows 自动化检查：17 项前端专项测试通过，覆盖快速地址校验、临时连接清理／保存、主机筛选、跳板机与规则存储、Redis 配置引用、转发保存失败与显式启停，以及既有 SSH／SFTP 保护。全部 102 项常规后端测试和 26 项本地服务测试通过；六项可选后端测试仍忽略。进程模拟覆盖监听就绪、启动退出、超时、取消与清理，不代表真实 SSH 转发连接验收。
 

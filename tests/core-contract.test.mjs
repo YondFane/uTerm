@@ -89,6 +89,48 @@ function queueDraft(path, text) {
   };
 }
 
+test("shared SSH resolution uses OpenSSH and rejects secrets without echoing their values", async (t) => {
+  const call = await client(t);
+  const info = await call("ssh.info");
+  assert.equal(info.error, undefined);
+  assert.equal(info.result.available, true);
+  assert.ok(info.result.aliases.every((alias) => typeof alias === "string"));
+  const connection = {
+    connection_id: "qa",
+    workspace_id: "local",
+    name: "QA",
+    host: "127.0.0.1",
+    os: "posix",
+    root: "",
+    mode: "direct",
+    port: 2222,
+    username: "qa-user",
+  };
+  const resolved = await call("ssh.resolve", { connection });
+  assert.equal(resolved.error, undefined);
+  assert.deepEqual(Object.keys(resolved.result).sort(), ["hostname", "port", "proxy", "username"]);
+  assert.equal(resolved.result.hostname, "127.0.0.1");
+  assert.equal(resolved.result.username, "qa-user");
+  assert.equal(resolved.result.port, "2222");
+  assert.equal(typeof resolved.result.proxy, "boolean");
+  for (const params of [
+    { connection: { ...connection, password: "DONT_EXPORT_SECRET" } },
+    { connection, password: "DONT_EXPORT_SECRET" },
+  ]) {
+    const failure = await call("ssh.resolve", params);
+    assert.equal(failure.error.code, "INVALID_JSON");
+    assert.equal(JSON.stringify(failure).includes("DONT_EXPORT_SECRET"), false);
+  }
+  assert.equal(
+    (await call("ssh.info", { password: "DONT_EXPORT_SECRET" })).error.code,
+    "INVALID_PARAMS",
+  );
+  assert.equal(
+    (await call("ssh.resolve", { connection: { ...connection, host: "-bad" } })).error.code,
+    "SSH_INVALID_HOST",
+  );
+});
+
 test("shared Python path validation preserves literal selections and refuses project escape", async (t) => {
   const call = await client(t),
     { directory } = gitFixture(t);
