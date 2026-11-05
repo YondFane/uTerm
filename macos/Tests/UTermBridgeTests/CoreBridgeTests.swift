@@ -1,8 +1,35 @@
 import Foundation
+import Darwin
 import XCTest
 @testable import UTermBridge
 
 final class CoreBridgeTests: XCTestCase {
+    func testSnapshotReadWaitsForShortWriterContentionWithoutRetryingMutations() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("shared-state-v1")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        let core = try await CoreBridge.open(root: root)
+        let defaults = try await core.call("state.defaults")
+        let initial = try await core.call("migration.import", params: .object(["workspace": defaults["workspace"], "settings": defaults["settings"], "legacy": .object([:])]))
+        let descriptor = Darwin.open(root.appendingPathComponent("writer.lock").path, O_RDWR)
+        guard descriptor >= 0 else { XCTFail("Could not open the actual canonical writer lock"); return }
+        defer { _ = Darwin.flock(descriptor, LOCK_UN); _ = Darwin.close(descriptor) }
+        XCTAssertEqual(Darwin.flock(descriptor, LOCK_EX | LOCK_NB), 0)
+        do {
+            _ = try await core.call("snapshot.read")
+            XCTFail("The actual writer must block a raw snapshot read")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "WRITER_BUSY") }
+        do {
+            _ = try await core.call("settings.patch", params: .object(["expectedRevision": initial["revision"], "patch": .object(["language": .string("en")])]))
+            XCTFail("A mutation must report busy without replaying itself")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "WRITER_BUSY") }
+        let read = Task { try await core.snapshot() }
+        try await Task.sleep(for: .milliseconds(40))
+        XCTAssertEqual(Darwin.flock(descriptor, LOCK_UN), 0)
+        let value = try await read.value
+        XCTAssertEqual(value.revision, initial["revision"].string)
+        await core.close()
+    }
+
     func testRedisBinaryAndExactTextAcrossSwiftAndGuardThroughCABI() async throws {
         var repository = URL(fileURLWithPath: #filePath)
         for _ in 0..<4 { repository.deleteLastPathComponent() }

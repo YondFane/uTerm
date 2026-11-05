@@ -28,9 +28,11 @@ interface Catalog {
   groups: Group[];
 }
 const message = (reason: unknown) =>
-  /\bCONFLICT\b/.test(contentErrorText(reason))
-    ? tx("配置已被其他窗口修改，请重新读取后再保存。")
-    : redisError(reason);
+  /\bWRITER_BUSY\b/.test(contentErrorText(reason))
+    ? tx("配置正在由其他窗口保存，请稍后重试。")
+    : /\bCONFLICT\b/.test(contentErrorText(reason))
+      ? tx("配置已被其他窗口修改，请重新读取后再保存。")
+      : redisError(reason);
 
 export function NativeRedis() {
   useUiLanguage();

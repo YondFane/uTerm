@@ -117,7 +117,11 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
         React.createElement(
           SettingsProvider,
           null,
-          React.createElement(DatabaseWorkspace, { config, active, password: "" }),
+          React.createElement(DatabaseWorkspace, {
+            config,
+            active,
+            password: "TEMPORARY_QA_PASSWORD",
+          }),
         ),
       ),
     );
@@ -248,6 +252,10 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
     assert.equal(document.querySelector(".database-results td"), null);
     suspend = false;
     await click("Connect");
+    assert.equal(
+      calls.filter((call) => call.command === "database_connect").at(-1).args.password,
+      "TEMPORARY_QA_PASSWORD",
+    );
     failQuery = "DB_TIMEOUT";
     await click("Execute SQL");
     assert.ok(button("Connect"));

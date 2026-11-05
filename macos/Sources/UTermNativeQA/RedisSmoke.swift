@@ -42,8 +42,11 @@ enum RedisSmoke {
         }
         let id = UUID().uuidString
         var config: [String: JSONValue] = ["id": .string(id), "name": .string("Redis Native QA 中文"), "host": .string("127.0.0.1"), "port": .number(Double(port)), "db": .number(0), "username": .string(""), "tls": .bool(false), "ca_file": .string(""), "server_name": .string(""), "ssh_host": .string(""), "credential_id": .null]
+        report["redisFixtureStep"] = "read-profile-snapshot"
         let initial = try await bridge.snapshot()
+        report["redisFixtureStep"] = "save-profile"
         _ = try await bridge.call("redis.profile.save", params: .object(["expectedRevision": .string(initial.revision), "workspaceId": .string(model.groupID), "config": .object(config)]))
+        report["redisFixtureStep"] = "open-window"
         await model.reload()
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         let content = try await open()
@@ -105,10 +108,8 @@ enum RedisSmoke {
         report["nativeRedisThemeLanguageAndNarrowLayout"] = true
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         try await wait(content, "document.documentElement.lang==='en'")
-        try await EditorSmoke.click(content, title: "Disconnect")
-        try await wait(content, "!!document.querySelector('.redis-toolbar input[aria-label=\"Temporary password\"]')")
-        try await EditorSmoke.click(content, title: "Connect")
-        try await wait(content, "!!document.querySelector('.redis-toolbar input[aria-label=\"Allow editing\"]')")
+        try await EditorSmoke.click(content, title: "Reconnect")
+        try await wait(content, "document.querySelector('.redis-toolbar input[aria-label=\"Allow editing\"]')?.checked===false && !!document.querySelector('.redis-key')")
         report["nativeRedisTemporaryPasswordSurvivesReconnect"] = true
         try await EditorSmoke.click(content, title: "Disconnect")
         report["nativeRedisCaptures"] = captures

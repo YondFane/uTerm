@@ -43,6 +43,7 @@ test("native Redis profile conflicts retain input and quit/resume keeps a modal 
     groups: [{ id: "qa", name: "QA", redisConnections: [config], sshConnections: [] }],
   };
   const calls = [];
+  let busyWrite = false;
   window.webkit = {
     messageHandlers: {
       utermContent: {
@@ -53,6 +54,15 @@ test("native Redis profile conflicts retain input and quit/resume keeps a modal 
           if (message.method === "redis_components")
             result = { java: "/qa/java", items: [], busy: false };
           if (message.method === "redis_profile_save") {
+            if (busyWrite) {
+              busyWrite = false;
+              return {
+                version: 1,
+                document: message.document,
+                id: message.id,
+                error: { code: "WRITER_BUSY", message: "Another canonical writer owns the store" },
+              };
+            }
             if (message.params.expectedRevision !== catalog.revision)
               return {
                 version: 1,
@@ -172,6 +182,17 @@ test("native Redis profile conflicts retain input and quit/resume keeps a modal 
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     );
     await act(async () => button("Reload").click());
+    busyWrite = true;
+    await act(async () =>
+      document
+        .querySelector("dialog[open] form")
+        .dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })),
+    );
+    assert.ok(document.querySelector("dialog[open]"));
+    assert.match(
+      document.querySelector('[role="alert"]').textContent,
+      /saving the configuration.*retry/i,
+    );
     await act(async () =>
       document
         .querySelector("dialog[open] form")

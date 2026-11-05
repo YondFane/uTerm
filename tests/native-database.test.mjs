@@ -42,6 +42,7 @@ test("native database profile conflicts retain input and quit/resume keeps a mod
     groups: [{ id: "qa", name: "QA", databaseConnections: [config], sshConnections: [] }],
   };
   const calls = [];
+  let busyWrite = false;
   window.webkit = {
     messageHandlers: {
       utermContent: {
@@ -52,6 +53,15 @@ test("native database profile conflicts retain input and quit/resume keeps a mod
           if (message.method === "database_components")
             result = { java: "/qa/java", items: [], busy: false };
           if (message.method === "database_profile_save") {
+            if (busyWrite) {
+              busyWrite = false;
+              return {
+                version: 1,
+                document: message.document,
+                id: message.id,
+                error: { code: "WRITER_BUSY", message: "Another canonical writer owns the store" },
+              };
+            }
             if (message.params.expectedRevision !== catalog.revision)
               return {
                 version: 1,
@@ -166,6 +176,17 @@ test("native database profile conflicts retain input and quit/resume keeps a mod
       true,
     );
     await act(async () => button("Reload").click());
+    busyWrite = true;
+    await act(async () =>
+      document
+        .querySelector("dialog[open] form")
+        .dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })),
+    );
+    assert.ok(document.querySelector("dialog[open]"));
+    assert.match(
+      document.querySelector('[role="alert"]').textContent,
+      /saving the configuration.*retry/i,
+    );
     await act(async () =>
       document
         .querySelector("dialog[open] form")

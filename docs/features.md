@@ -1720,8 +1720,12 @@ installs Redis if absent, starts only a private temporary loopback server and re
 WindowServer binary/draft/narrow-window images, read-only defaults, real protected writes, exact
 text/TTL and a binary sibling value, hide/reopen and temporary-password reconnect. The report
 records the actual Homebrew Redis version and digest separately from the pinned Linux service suite.
-Native compilation/window results and Windows UI, credential/picker/manual interaction remain
-pending.
+The real native run at source `2307afe` / tested merge `0d42fe12` fails with `WRITER_BUSY` before
+opening Redis. Swift snapshot/view reads now retry that code briefly without blocking the UI or
+replaying mutations; persistent contention is still returned. Profile writes retain an explicit
+retry and preserve drafts, with a specific busy message. An actual macOS writer-lock test checks the
+read retry and immediate mutation failure. Native rerun results and Windows UI,
+credential/picker/manual interaction remain pending.
 
 ### Redis connection setup
 
@@ -5633,7 +5637,10 @@ The isolated macOS QA app opens **Databases** from its native sidebar or **File 
 reuses the SQL/document workbenches and component/connection forms through the same scoped content
 transport. Profile save/removal uses revision-checked Core storage and refuses active or dirty
 profiles. Temporary passwords stay in application memory and match canonical configuration values;
-changing a profile's target recreates its inactive workbench without carrying the old password.
+changing a profile's target recreates its inactive workbench without carrying the old password. A
+successful connection clears the visible password field but keeps the temporary password in private
+workbench memory for a later disconnect/connect; a changed or cleared password prop replaces that
+memory.
 
 Database handlers explicitly include structured error codes when classifying messages, while generic
 error strings keep their existing format. Revision conflicts keep the connection form open and
@@ -5673,12 +5680,13 @@ workflow runs `bash scripts/macos-database-smoke.sh` with an isolated real Postg
 catalog-verified JDBC driver, recording profile save, exact SQL values, hide/reopen/reconnect,
 language/theme/narrow-window behavior and WindowServer images. Runtime results for the new window
 must pass both Swift compilation and the actual window scenes at its actual source head; neither is
-accepted from the Linux checks. At source `b514148` / tested merge `af6c468e`, the macOS ARM64
-window failed with a generic database error while editing its profile; the full window scene has not
-passed. The native host now logs only a fixed method name and bounded error code for diagnosis,
-excluding parameters and vendor text. The smoke verifies copied SQL matches the edited query before
-execution; SQL/grid copying uses the shared native clipboard adapter. A successful window run,
-native picker/manual interaction and document-database acceptance remain pending.
+accepted from the Linux checks. Source `2307afe` / tested merge `0d42fe12` passes real macOS ARM64
+profile save/password exclusion, SQL copying, PostgreSQL connection, exact bigint/decimal/Unicode
+values, hide/reopen and active-profile mutation protection. Its window run still fails at
+disconnect/connect because the visible field was cleared without retaining the temporary password.
+Private-memory reconnect coverage now passes on Linux; a complete native rerun remains required. The
+native host logs only fixed method names and bounded error codes, excluding parameters/vendor text.
+Native picker/manual interaction and document-database acceptance remain pending.
 
 ### Database setup and visibility
 

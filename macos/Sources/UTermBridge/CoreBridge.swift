@@ -76,15 +76,28 @@ public actor CoreBridge {
         return response.result ?? .null
     }
 
-    public func snapshot() throws -> CoreSnapshot {
-        try JSONDecoder().decode(CoreSnapshot.self, from: JSONEncoder().encode(call("snapshot.read")))
+    private func readSnapshot(_ method: String) async throws -> JSONValue {
+        for attempt in 0..<20 {
+            do { return try call(method) }
+            catch let failure as BridgeFailure where failure.code == "WRITER_BUSY" && attempt < 19 {
+                // Only retry idempotent snapshot reads; mutations retain their explicit retry contract.
+                // 仅重试幂等快照读取，变更仍保留显式重试约定。
+                try await Task.sleep(for: .milliseconds(10))
+            }
+        }
+        throw BridgeFailure(code: "WRITER_BUSY", message: "Snapshot remains busy")
+    }
+    public func snapshot() async throws -> CoreSnapshot {
+        let value = try await readSnapshot("snapshot.read")
+        return try JSONDecoder().decode(CoreSnapshot.self, from: JSONEncoder().encode(value))
     }
 
     public func sessionEntries() throws -> [CoreSessionEntry] {
         try JSONDecoder().decode([CoreSessionEntry].self, from: JSONEncoder().encode(call("session.entries")))
     }
-    public func viewSnapshot() throws -> CoreViewSnapshot {
-        try JSONDecoder().decode(CoreViewSnapshot.self, from: JSONEncoder().encode(call("snapshot.view")))
+    public func viewSnapshot() async throws -> CoreViewSnapshot {
+        let value = try await readSnapshot("snapshot.view")
+        return try JSONDecoder().decode(CoreViewSnapshot.self, from: JSONEncoder().encode(value))
     }
     public func editorDrafts() throws -> CoreEditorDraftCollection {
         try JSONDecoder().decode(CoreEditorDraftCollection.self, from: JSONEncoder().encode(call("editor.drafts.list")))
