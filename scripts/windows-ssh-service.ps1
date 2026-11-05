@@ -1,7 +1,14 @@
-param([ValidateSet('Start', 'Stop')][string]$Action, [string]$Root)
+param([ValidateSet('Start', 'Stop', 'Status')][string]$Action, [string]$Root)
 $ErrorActionPreference = 'Stop'
 if ($env:GITHUB_ACTIONS -ne 'true') { throw 'This isolated SSH fixture only runs on disposable GitHub runners.' }
 $manifest = Join-Path $Root 'owned-service.json'
+if ($Action -eq 'Status') {
+    $owned = Get-Content -Raw $manifest | ConvertFrom-Json
+    $task = Get-ScheduledTask -TaskName $owned.task
+    $info = Get-ScheduledTaskInfo -TaskName $owned.task
+    @{state=[string]$task.State;lastResult=$info.LastTaskResult;lastRun=$info.LastRunTime.ToString('o')} | ConvertTo-Json
+    return
+}
 if ($Action -eq 'Stop') {
     if (!(Test-Path $manifest)) { return }
     $owned = Get-Content -Raw $manifest | ConvertFrom-Json

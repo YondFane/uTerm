@@ -123,15 +123,29 @@ enum SSHSmoke {
             await reopened.model.select(nil)
             reopened.model.name = "Password login QA"; reopened.model.host = fixture["passwordAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = fixture["password"].string ?? ""; reopened.model.remember = true; reopened.model.rootPath = fixture["passwordRemote"].string ?? ""
             guard await reopened.model.save() else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
-            let reference = reopened.model.profile["credential_id"]
+            var reference = reopened.model.profile["credential_id"]
             do {
                 await reopened.model.connectFiles()
                 guard reopened.model.connected, reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
                 try await capture(reopened.window!, "native-ssh-password-keychain-en-dark.png"); captures.append("native-ssh-password-keychain-en-dark.png")
                 await reopened.model.disconnectFiles()
                 report["passwordServiceLogin"] = true
+                for remembered in [false, true] {
+                    let previous = try reopened.model.target()
+                    reopened.model.remember = remembered
+                    guard await reopened.model.save(), reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+                    reference = reopened.model.profile["credential_id"]
+                    do {
+                        _ = try await reopened.model.perform(["kind": .string("auth.configure"), "connection": previous, "password": .null, "remember": previous["remember_password"]])
+                        throw BridgeFailure(code: "SSH_QA", message: "Obsolete password reference was retained")
+                    } catch let failure as BridgeFailure where failure.message.contains("SSH_PASSWORD_REQUIRED") {}
+                    await reopened.model.connectFiles()
+                    guard reopened.model.connected, reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: "Password retention conversion failed: " + reopened.model.error) }
+                    await reopened.model.disconnectFiles()
+                }
+                report["rememberedAndTemporaryPasswordConversion"] = true
             } catch {
-                _ = try? await reopened.model.perform(["kind": .string("auth.forget"), "reference": reference, "remember": .bool(true)])
+                _ = try? await reopened.model.perform(["kind": .string("auth.forget"), "reference": reference, "remember": reopened.model.profile["remember_password"]])
                 throw error
             }
             _ = try await reopened.model.perform(["kind": .string("auth.forget"), "reference": reference, "remember": .bool(true)])

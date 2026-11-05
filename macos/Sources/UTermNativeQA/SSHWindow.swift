@@ -134,7 +134,9 @@ final class SSHModel: ObservableObject {
         do {
             var connection = try target()
             if authentication == "password" {
-                created = try await perform(["kind": .string("auth.configure"), "connection": connection, "password": password.isEmpty ? .null : .string(password), "remember": .bool(remember)]).string
+                var previous = connection
+                if case .object(var object) = previous { object["remember_password"] = .bool(profile["remember_password"].bool ?? false); previous = .object(object) }
+                created = try await perform(["kind": .string("auth.configure"), "connection": previous, "password": password.isEmpty ? .null : .string(password), "remember": .bool(remember)]).string
                 if case .object(var object) = connection { object["credential_id"] = created.map(JSONValue.string) ?? .null; connection = .object(object) }
             }
             _ = try await bridge.call("ssh.profile.save", params: .object(["expectedRevision": .string(snapshot.revision), "connection": connection]))
@@ -261,7 +263,7 @@ final class SSHModel: ObservableObject {
         let alert = NSAlert(); alert.messageText = localized("Remove SSH connection?", "移除 SSH 连接？"); alert.informativeText = name; alert.addButton(withTitle: localized("Cancel", "取消")); alert.addButton(withTitle: localized("Remove", "移除"))
         guard alert.runModal() == .alertSecondButtonReturn else { return }
         await execute {
-            let reference = self.credential; let remembered = self.remember
+            let reference = self.profile["credential_id"].string; let remembered = self.profile["remember_password"].bool ?? false
             _ = try await self.bridge.call("ssh.profile.remove", params: .object(["id": .string(self.selectedID), "expectedRevision": .string(snapshot.revision)]))
             if let reference { _ = try await self.perform(["kind": .string("auth.forget"), "reference": .string(reference), "remember": .bool(remembered)]) }
             await self.reload(); await self.workspace?.reload()

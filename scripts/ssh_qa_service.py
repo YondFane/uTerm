@@ -19,8 +19,8 @@ import uuid
 
 class SSHService:
     def __init__(self, directory, evidence):
-        self.directory = Path(directory)
-        self.evidence = Path(evidence)
+        self.directory = Path(directory).resolve()
+        self.evidence = Path(evidence).resolve()
         self.directory.mkdir(parents=True, exist_ok=True)
         self.evidence.mkdir(parents=True, exist_ok=True)
         self.process = None
@@ -32,6 +32,7 @@ class SSHService:
         self.proxy = None
         self.client_backup = None
         self.mac_user = None
+        self.mac_ssh_group = False
         self.password = secrets.token_hex(24) + "aA1!"
         try:
             for name in ["host", "client"]:
@@ -63,7 +64,7 @@ class SSHService:
                 command = (["sudo", "-n"] if sys.platform == "darwin" else []) + ["/usr/sbin/sshd", "-D", "-e", "-f", str(config)]
                 self.log = (self.evidence / "ssh-server.log").open("w")
                 self.process = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=self.log, stderr=self.log)
-            deadline = time.monotonic() + 8
+            deadline = time.monotonic() + (30 if sys.platform == "win32" else 8)
             while True:
                 if self.process and self.process.poll() is not None:
                     raise RuntimeError("Isolated sshd stopped during startup; see ssh-server.log")
@@ -72,6 +73,8 @@ class SSHService:
                         break
                 except OSError:
                     if time.monotonic() >= deadline:
+                        if sys.platform == "win32":
+                            (self.evidence / "ssh-task-status.json").write_text(self._windows("Status"))
                         raise RuntimeError("Isolated sshd startup timeout")
                     time.sleep(0.05)
             self.listener = socket.socket()
@@ -128,7 +131,7 @@ class SSHService:
             (self.directory / "server-settings.json").write_text(json.dumps(settings))
         environment = os.environ.copy()
         environment["UTERM_QA_PASSWORD"] = self.password
-        subprocess.run(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(Path(__file__).with_name("windows-ssh-service.ps1")), "-Action", action, "-Root", str(self.directory)], env=environment, check=True)
+        return subprocess.check_output(["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(Path(__file__).with_name("windows-ssh-service.ps1")), "-Action", action, "-Root", str(self.directory)], env=environment, text=True)
 
     def _mac_account(self):
         self.mac_user = "utssh" + uuid.uuid4().hex[:12]
@@ -138,10 +141,13 @@ class SSHService:
         self.mac_home = Path("/private/tmp") / ("uterm-ssh-home-" + uuid.uuid4().hex)
         subprocess.run(["sudo", "-n", "mkdir", str(self.mac_home)], check=True)
         record = "/Users/" + self.mac_user
-        for key, value in [("UniqueID", str(identifier)), ("PrimaryGroupID", "20"), ("NFSHomeDirectory", str(self.mac_home)), ("UserShell", "/bin/bash")]:
+        for key, value in [("UniqueID", str(identifier)), ("GeneratedUID", str(uuid.uuid4()).upper()), ("PrimaryGroupID", "20"), ("NFSHomeDirectory", str(self.mac_home)), ("UserShell", "/bin/bash")]:
             subprocess.run(["sudo", "-n", "dscl", ".", "-create", record, key, value], check=True)
         subprocess.run(["sudo", "-n", "dscl", ".", "-passwd", record, self.password], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         subprocess.run(["sudo", "-n", "chown", self.mac_user + ":staff", str(self.mac_home)], check=True)
+        if subprocess.run(["dscl", ".", "-read", "/Groups/com.apple.access_ssh"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+            subprocess.run(["sudo", "-n", "dseditgroup", "-o", "edit", "-a", self.mac_user, "-t", "user", "com.apple.access_ssh"], check=True)
+            self.mac_ssh_group = True
         # Password checks do not read the caller's private fixture; use the account's own isolated home. 密码检查不读取调用者的私有夹具，使用该账户独立的临时主目录。
         (self.directory / "password-remote.txt").write_text(str(self.mac_home))
 
@@ -216,6 +222,8 @@ class SSHService:
         if sys.platform == "win32":
             self._windows("Stop")
         if self.mac_user:
+            if self.mac_ssh_group:
+                subprocess.run(["sudo", "-n", "dseditgroup", "-o", "edit", "-d", self.mac_user, "-t", "user", "com.apple.access_ssh"], check=True)
             subprocess.run(["sudo", "-n", "dscl", ".", "-delete", "/Users/" + self.mac_user], check=True)
             self.mac_user = None
             subprocess.run(["sudo", "-n", "rm", "-rf", str(self.mac_home)], check=True)
