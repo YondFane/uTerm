@@ -5563,25 +5563,46 @@ prevents a connection that finishes late from registering a new handle. Disconne
 send the existing JDBC statement-cancel request with a bounded wait before terminating the owned
 worker. They do not retry writes with an uncertain outcome.
 
+The isolated macOS QA app opens **Databases** from its native sidebar or **File → Databases…**. It
+reuses the SQL/document workbenches and component/connection forms through the same scoped content
+transport. Profile save/removal uses revision-checked Core storage and refuses active or dirty
+profiles. Temporary passwords stay in application memory and match canonical configuration values;
+changing a profile's target recreates its inactive workbench without carrying the old password.
+
+Closing this window hides it while retaining connections, drafts and results. Application quit
+refuses active work or pending transactions and confirms draft loss. If another window cancels quit,
+the database view resumes with its draft protection. Component selection uses AppKit; content cannot
+supply a picker path. Export uses a native save panel. Language/theme changes propagate from shared
+settings without saving defaults when opening the window.
+
 #### Shared-service validation and limits
 
 Linux x86_64 / Rust 1.99.1 passes 24 database/document/component regressions, five common download
 regressions and two host-port checks covering cross-command draft/exit protection, native picker
 cancellation and cached-engine repair. Full Core/FFI, host, backend (45 passed / nine ignored),
-frontend (412 passed / ten skipped), types and production/desktop builds pass. Current checks and
+frontend (416 passed / ten skipped), types and production/desktop builds pass. Current checks and
 actual database/dual-client acceptance are tracked in
 [#38](https://github.com/YondFane/uTerm/issues/38); native database-workbench acceptance is still
 pending.
 
-Five additional Linux protocol/contract regressions pass, including late connection completion after
+Six additional Linux protocol/contract regressions pass, including late connection completion after
 close, result backpressure, generation mismatch and parameter redaction. An isolated real PostgreSQL
 16.11 server with the catalog-verified JDBC driver passes exact bigint/decimal/binary/null/Unicode
 values, default read-only protection, pending-transaction disconnect/quit protection, rollback,
 concurrent stale-write conflicts and disconnect of an observed slow query. It also checks that
 disconnect and client close release the active server query. The shared database CI workflow
 archives source-bound reports and logs. Swift C ABI and exact-value contract checks are included in
-native CI; their results must be checked for the actual source commit. These service tests do not
-establish native database UI acceptance or acceptance of other database engines.
+native CI. The accepted service evidence at source `ef5c3f4` / tested merge `011da302` is available
+in [#38](https://github.com/YondFane/uTerm/issues/38#issuecomment-6664109569); it does not establish
+acceptance of the new database window or other database engines.
+
+Linux checks also cover profile CAS/draft/password exclusion, cancellation draining on both content
+ports, modal freeze/resume and clearing a temporary password after editing the target. The native
+workflow runs `bash scripts/macos-database-smoke.sh` with an isolated real PostgreSQL server and
+catalog-verified JDBC driver, recording profile save, exact SQL values, hide/reopen/reconnect,
+language/theme/narrow-window behavior and WindowServer images. Runtime results for the new window
+must be verified at its actual source head; native picker/manual interaction and document-database
+acceptance remain pending.
 
 ### Database setup and visibility
 

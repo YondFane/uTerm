@@ -50,6 +50,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     let editable: Bool
     let gitMode: Bool
     let gitProjectID: String?
+    let databaseHost: DatabaseHost?
     private let bridge: CoreBridge
     private let stateBridge: CoreBridge
     private let ownsBridge: Bool
@@ -60,7 +61,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     private let quitGate = ContentQuitGate()
     private var quitToken: String?
     private var preparedDocument: String?
-    var isPreparedForQuit: Bool { permitsClose || (preparedDocument == documentID && (gitMode ? !gitMutationInProgress : quitToken != nil)) }
+    var isPreparedForQuit: Bool { permitsClose || (databaseHost?.prepared ?? (preparedDocument == documentID && (gitMode ? !gitMutationInProgress : quitToken != nil))) }
     private(set) var navigationError = ""
     var closed: (() -> Void)?
     var mutateGit: ((String, JSONValue, CoreBridge) async throws -> JSONValue)?
@@ -68,7 +69,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     var recoverGitFavorites: (() throws -> Void)?
     private let entry = URL(string: "uterm-content://bundle/native-content.html")!
 
-    init(bridge: CoreBridge, directory: URL, path: String, editable: Bool = false, gitMode: Bool = false, gitProjectID: String? = nil, stateBridge: CoreBridge? = nil, ownsBridge: Bool = false) throws {
+    init(bridge: CoreBridge, directory: URL, path: String, editable: Bool = false, gitMode: Bool = false, gitProjectID: String? = nil, stateBridge: CoreBridge? = nil, ownsBridge: Bool = false, databaseHost: DatabaseHost? = nil) throws {
         guard let root = Bundle.main.resourceURL?.appendingPathComponent("content") else {
             throw BridgeFailure(code: "RESOURCE_MANIFEST", message: "Bundled content is missing")
         }
@@ -85,8 +86,9 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         self.editable = editable
         self.gitMode = gitMode
         self.gitProjectID = gitProjectID
+        self.databaseHost = databaseHost
         let window = NSWindow(contentRect: webView.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = gitMode ? "Git — " + self.directory.lastPathComponent : path
+        window.title = databaseHost != nil ? localized("Databases", "数据库") : gitMode ? "Git — " + self.directory.lastPathComponent : path
         window.tabbingMode = editable && !gitMode ? .preferred : .disallowed
         window.tabbingIdentifier = "uterm-file:" + self.directory.path
         window.minSize = NSSize(width: gitMode ? 640 : 540, height: gitMode ? 420 : 360)
@@ -95,6 +97,8 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         window.delegate = self
         webView.navigationDelegate = self
         configuration.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "utermContent")
+        databaseHost?.emit = { [weak self] kind, payload in self?.deliver(kind, payload: payload) }
+        databaseHost?.startEvents()
         prepareDocument()
         webView.load(URLRequest(url: entry))
         window.center()
@@ -170,6 +174,9 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     private func execute(_ request: ContentMessage) async throws -> JSONValue {
         let params = request.params ?? [:]
+        if let databaseHost, !["content_context", "content_copy_text", "open_external", "content_font_adjust", "content_settings_patch"].contains(request.method ?? "") {
+            return try await databaseHost.execute(request.method ?? "", params: params)
+        }
         if request.method == "git_favorites_recovery_open" {
             guard gitMode, let recoverGitFavorites else { throw BridgeFailure(code: "METHOD_DENIED", message: "This window cannot open favorite recovery") }
             guard params.count == 1, params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Favorite recovery cannot select another repository") }
@@ -197,7 +204,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         switch request.method {
         case "content_context":
             let state = try await stateBridge.snapshot()
-            return .object(["directory": .string(directory.path), "path": .string(path), "settings": state.document.settings, "editable": .bool(editable), "kind": .string(gitMode ? "git" : "file")])
+            return .object(["directory": .string(directory.path), "path": .string(path), "settings": state.document.settings, "editable": .bool(editable), "kind": .string(databaseHost != nil ? "database" : gitMode ? "git" : "file")])
         case "content_copy_text":
             guard params.count == 1, let text = params["text"]?.string else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing clipboard text") }
             NSPasteboard.general.clearContents()
@@ -264,6 +271,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if permitsClose { return true }
+        if databaseHost != nil { sender.orderOut(nil); return false }
         if gitMode {
             if !gitMutationInProgress { forceClose() }
             return false
@@ -284,6 +292,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         return false
     }
     func forceClose() {
+        databaseHost?.stopEvents()
         quitGate.invalidate()
         quitToken = nil
         preparedDocument = nil
@@ -300,8 +309,14 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             if let self, error != nil, self.quitToken == token { self.quitGate.invalidate() }
         }
     }
+    private func deliver(_ kind: String, payload: JSONValue) {
+        let value: JSONValue = .object(["version": .number(1), "document": .string(documentID), "kind": .string(kind), "payload": payload])
+        guard !permitsClose, let bytes = try? JSONEncoder().encode(value), let json = String(data: bytes, encoding: .utf8) else { return }
+        webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('uterm-content-event',{detail:\(json)}));")
+    }
     func prepareForQuit(timeout: Duration = .seconds(20)) async throws -> Bool {
         if permitsClose { return true }
+        if let databaseHost { return try await databaseHost.prepareForQuit() }
         if gitMode {
             if gitMutationInProgress { return false }
             preparedDocument = documentID
@@ -323,6 +338,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         } catch { resumeAfterQuit(); throw error }
     }
     func resumeAfterQuit() {
+        if let databaseHost { Task { await databaseHost.resumeAfterQuit() }; return }
         if gitMode { preparedDocument = nil; return }
         guard let token = quitToken else { return }
         quitToken = nil

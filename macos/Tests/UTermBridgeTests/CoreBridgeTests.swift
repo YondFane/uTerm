@@ -55,6 +55,31 @@ final class CoreBridgeTests: XCTestCase {
         }
     }
 
+    func testDatabaseProfileSavePublishesItsActualRevisionThroughCABI() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let core = try await CoreBridge.open(root: root.appendingPathComponent("shared-state-v1"))
+        let defaults = try await core.call("state.defaults")
+        let initial = try await core.call("migration.import", params: .object(["workspace": defaults["workspace"], "settings": defaults["settings"], "legacy": .object([:])]))
+        let delivered = expectation(description: "Database profile save invalidates its Core subscriber")
+        let event = Task<CoreEvent?, Never> {
+            for await value in core.events where value.revision != initial["revision"].string {
+                delivered.fulfill(); return value
+            }
+            return nil
+        }
+        let saved = try await core.call("database.profile.save", params: .object([
+            "expectedRevision": initial["revision"], "workspaceId": initial["document"]["workspace"]["selectedWorkspace"],
+            "config": .object(["id": .string(UUID().uuidString), "name": .string("QA 中文"), "kind": .string("postgresql"), "host": .string("127.0.0.1"), "port": .number(5432), "database": .string("qa"), "username": .string("qa"), "tls": .bool(true), "ca_file": .string(""), "credential_id": .null])
+        ]))
+        await fulfillment(of: [delivered], timeout: 5)
+        event.cancel()
+        let received = await event.value
+        XCTAssertEqual(received?.kind, "snapshot.changed")
+        XCTAssertEqual(received?.revision, saved["revision"].string)
+        await core.close()
+    }
+
     func testSharedSSHConfigurationContractsThroughCABI() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

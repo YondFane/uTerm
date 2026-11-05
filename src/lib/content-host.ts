@@ -16,6 +16,15 @@ export function createContentScope(): ContentScope {
   return new ContentScope(
     handler ? webKitContentPort(handler, window) : tauriContentPort,
     handler ? (window.utermContentDocument ?? "") : crypto.randomUUID(),
+    15000,
+    {
+      database_connect: 60000,
+      database_request: 60000,
+      database_components: 600000,
+      database_credential: 180000,
+      database_export_sql: 180000,
+      database_export_result: 180000,
+    },
   );
 }
 let scope: ContentScope | undefined;
@@ -39,8 +48,11 @@ export function copyContentText(text: string): Promise<void> {
       ? writeText(text)
       : navigator.clipboard.writeText(text);
 }
-export function listenContent(kind: string, receive: () => void): Promise<() => void> {
-  return current().subscribe(kind, receive);
+export function listenContent<T = unknown>(
+  kind: string,
+  receive: (payload: T) => void,
+): Promise<() => void> {
+  return current().subscribe(kind, (payload) => receive(payload as T));
 }
 
 export function applyContentWindowAppearance(blur: boolean): Promise<void> {

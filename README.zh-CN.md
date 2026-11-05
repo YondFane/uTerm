@@ -170,7 +170,10 @@ Python 服务及原始任务输出通道。在 macOS 图形会话运行
 3，不安装 Python 或依赖包；实际平台执行结果单独记录于功能指南。
 
 `uterm-core::{database,database_components,downloads}`
-共享数据库业务、凭据绑定和组件安装／续传规则。客户端提供目录、SSH 确认、选择器和事件；Tauri 的既有数据库命令及退出保护保留。原生数据库入口与真实服务验收按 #38 独立记录。
+共享数据库业务、凭据绑定和组件安装／续传规则。客户端提供目录、SSH 确认、选择器和事件；Tauri 的既有数据库命令及退出保护保留。隔离原生应用可从侧栏“数据库”或**文件 → 数据库…**打开共用 SQL／文档表单和工作台，使用 Core 配置 CAS 与应用生命周期内的临时密码；验收按 #38 单独记录。
+`bash scripts/macos-database-smoke.sh` 需要 macOS 图形会话、Homebrew、Python 3、curl 和 Java
+17+；缺少 PostgreSQL
+16 时安装该工具，下载目录校验的 JDBC 驱动，使用私有临时数据／凭据检查真实 SQL 窗口并截图，不注册 PostgreSQL 系统服务或访问生产数据库。
 
 `uterm-core::ssh`
 管理 OpenSSH 配置／路径规则、凭据绑定／系统适配、SFTP／传输服务及所属隧道生命周期。Tauri 委派相同服务，保留命令、选择器和信任提示；隔离原生应用通过**文件 →

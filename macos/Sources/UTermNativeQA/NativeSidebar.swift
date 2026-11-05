@@ -59,6 +59,7 @@ struct NativeSidebar: NSViewRepresentable {
             self.model = model
             guard let table else { return }
             var next = [Row(key: "projects", name: localized("Projects", "项目"), symbol: nil)]
+            next.append(Row(key: "db", name: localized("Databases", "数据库"), symbol: "externaldrive"))
             for project in model.projects {
                 let id = project["id"].string ?? ""
                 next.append(Row(key: "p:" + id, name: project["name"].string ?? "", symbol: "folder"))
@@ -162,7 +163,8 @@ struct NativeSidebar: NSViewRepresentable {
                 guard let self, let model, self.request == token else { return }
                 Task { @MainActor in
                     let id = String(row.key.dropFirst(2))
-                    if row.key.hasPrefix("q:") { model.openSSHRequested?(id) }
+                    if row.key == "db" { model.openDatabasesRequested?() }
+                    else if row.key.hasPrefix("q:") { model.openSSHRequested?(id) }
                     else if row.key.hasPrefix("s:") { await model.selectSession(id, focus: focus) }
                     else if let project = row.projectID, let tree = row.worktreeID { await model.selectProject(project, worktree: tree, focus: focus) }
                     else { await model.selectProject(id, focus: focus) }

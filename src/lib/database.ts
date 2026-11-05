@@ -43,6 +43,19 @@ export interface DatabaseConfig {
   auth_mode?: "basic" | "api_key";
 }
 
+/** Rust/Swift JSON can reorder fields; bind temporary passwords to canonical configuration values.
+ * Rust／Swift JSON 可能重排字段；临时密码绑定规范化后的配置值。
+ */
+export function databaseConfigFingerprint(config: DatabaseConfig): string {
+  return JSON.stringify(config, (_key, value) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value).sort(([left], [right]) => left.localeCompare(right)),
+        )
+      : value,
+  );
+}
+
 /** Parses a host or root HTTP(S) URL into connection fields; rejects unsupported URL parts.
  * 将主机或根 HTTP(S) URL 解析为连接字段；拒绝不支持的 URL 部分。
  */

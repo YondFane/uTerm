@@ -1,4 +1,7 @@
 export const messages: Record<string, string> = {
+  移除: "Remove",
+  "选择或添加数据库连接后打开工作台。":
+    "Select or add a database connection to open its workbench.",
   只读连接: "Read-only attachment",
   接管输入: "Take input control",
   "收藏恢复预览无效。": "Invalid Git favorite recovery preview.",

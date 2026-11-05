@@ -171,6 +171,7 @@ fn guards_errors_and_progress_do_not_expose_sql_or_secret_parameters() {
         .store(false, std::sync::atomic::Ordering::Release);
     let quit = service.start(Request::Quit).unwrap();
     assert_eq!(wait(&service, &quit, true).state, "completed");
+    assert_eq!(service.status().unwrap()["dirty"], true);
     assert_eq!(
         service.start(status()).err().unwrap().to_string(),
         "DB_QUITTING"
@@ -231,6 +232,108 @@ fn core_database_configuration_is_client_scoped_and_uses_existing_ssh_authentica
             .contains("PRIVATE_PASSWORD_MARKER")
     );
     core.close();
+}
+
+#[test]
+fn database_profiles_use_cas_preserve_other_data_and_refuse_dirty_or_secret_writes() {
+    let root = tempfile::tempdir().unwrap();
+    let core = Core::open(root.path().join("shared-state-v1")).unwrap();
+    let defaults = execute(&core, "state.defaults", Value::Null)
+        .result
+        .unwrap();
+    let initial = execute(
+        &core,
+        "migration.import",
+        json!({"workspace":defaults["workspace"],"settings":defaults["settings"],"legacy":{}}),
+    )
+    .result
+    .unwrap();
+    let workspace = initial["document"]["workspace"]["selectedWorkspace"].clone();
+    let id = uuid::Uuid::new_v4().to_string();
+    let config = json!({"id":id,"name":"数据库 中文","kind":"postgresql","host":"127.0.0.1","port":5432,"database":"qa","username":"qa","tls":true,"ca_file":"","credential_id":null});
+    let saved = execute(
+        &core,
+        "database.profile.save",
+        json!({"expectedRevision":initial["revision"],"workspaceId":workspace,"config":config}),
+    );
+    assert!(saved.error.is_none(), "{:?}", saved.error);
+    let saved = saved.result.unwrap();
+    assert_eq!(
+        saved["document"]["settings"],
+        initial["document"]["settings"]
+    );
+    let group = saved["document"]["workspace"]["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|group| group["id"] == workspace)
+        .unwrap();
+    assert_eq!(group["databaseConnections"], json!([config]));
+    let stale = execute(
+        &core,
+        "database.profile.remove",
+        json!({"expectedRevision":initial["revision"],"workspaceId":workspace,"id":id}),
+    );
+    assert_eq!(stale.error.unwrap().code, "CONFLICT");
+    let mut private = config.clone();
+    private["password"] = "PRIVATE_PASSWORD_MARKER".into();
+    let rejected = execute(
+        &core,
+        "database.profile.save",
+        json!({"expectedRevision":saved["revision"],"workspaceId":workspace,"config":private}),
+    );
+    assert_eq!(rejected.error.unwrap().code, "DB_INVALID_REQUEST");
+    let guard = execute(
+        &core,
+        "database.operation.start",
+        json!({"kind":"guard","id":id,"dirty":true}),
+    )
+    .result
+    .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        let value = execute(
+            &core,
+            "database.operation.read",
+            json!({"id":guard["id"],"generation":guard["generation"],"consume":true}),
+        )
+        .result
+        .unwrap();
+        if value["state"] == "completed" {
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let dirty = execute(
+        &core,
+        "database.profile.remove",
+        json!({"expectedRevision":saved["revision"],"workspaceId":workspace,"id":id}),
+    );
+    assert_eq!(dirty.error.unwrap().code, "DB_BUSY");
+    let unchanged = execute(&core, "snapshot.read", Value::Null).result.unwrap();
+    assert_eq!(unchanged, saved);
+    assert!(!serde_json::to_string(&unchanged)
+        .unwrap()
+        .contains("PRIVATE_PASSWORD_MARKER"));
+    core.close();
+    let reopened = Core::open(root.path().join("shared-state-v1")).unwrap();
+    let removed = execute(
+        &reopened,
+        "database.profile.remove",
+        json!({"expectedRevision":saved["revision"],"workspaceId":workspace,"id":id}),
+    );
+    assert!(removed.error.is_none(), "{:?}", removed.error);
+    let removed = removed.result.unwrap();
+    assert_eq!(
+        removed["document"]["workspace"],
+        initial["document"]["workspace"]
+    );
+    assert_eq!(
+        removed["document"]["settings"],
+        initial["document"]["settings"]
+    );
+    reopened.close();
 }
 
 #[tokio::test]

@@ -345,6 +345,19 @@ impl DatabaseState {
     pub fn dirty(&self) -> bool {
         self.drafts.lock().map_or(true, |items| !items.is_empty())
     }
+    pub(crate) fn profile_in_use(&self, id: &str) -> bool {
+        self.opening.load(Ordering::SeqCst) > 0
+            || self.drafts.lock().map_or(true, |items| items.contains(id))
+            || self.connections.lock().map_or(true, |items| {
+                items.values().any(|connection| {
+                    !connection.dead.load(Ordering::SeqCst)
+                        && connection
+                            .browser_config
+                            .as_ref()
+                            .is_some_and(|(config, _, _)| config.id == id)
+                })
+            })
+    }
     pub fn stop(&self) {
         self.closed.store(true, Ordering::SeqCst);
         if let Ok(mut items) = self.connections.lock() {

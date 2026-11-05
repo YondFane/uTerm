@@ -1,6 +1,16 @@
 import type { JSONValue } from "./core-contract.generated.ts";
 
 export const contentWriteMethods = new Set([
+  "database_connect",
+  "database_request",
+  "database_disconnect",
+  "database_guard",
+  "database_credential",
+  "database_components",
+  "database_profile_save",
+  "database_profile_remove",
+  "database_export_sql",
+  "database_export_result",
   "editor_drafts_import",
   "editor_drafts_put",
   "editor_drafts_remove",
@@ -58,6 +68,17 @@ export const gitFavoriteMethods: Record<string, string> = {
   git_favorites_write: "git.favorites.write",
 };
 const contentMethods = new Set([
+  "database_connect",
+  "database_request",
+  "database_disconnect",
+  "database_guard",
+  "database_credential",
+  "database_components",
+  "database_profiles",
+  "database_profile_save",
+  "database_profile_remove",
+  "database_export_sql",
+  "database_export_result",
   "git_favorites_recovery_open",
   ...Object.keys(editorDraftMethods),
   ...Object.keys(gitMethods),
@@ -126,12 +147,25 @@ export class ContentScope {
   private port: ContentPort;
   readonly document: string;
   private timeout: number;
-  constructor(port: ContentPort, document: string, timeout = 15000) {
+  private timeouts: Readonly<Record<string, number>>;
+  constructor(
+    port: ContentPort,
+    document: string,
+    timeout = 15000,
+    timeouts: Readonly<Record<string, number>> = {},
+  ) {
     this.port = port;
     this.document = document;
     this.timeout = timeout;
+    this.timeouts = { ...timeouts };
     if (!document || document.length > 128 || !Number.isFinite(timeout) || timeout <= 0)
       throw new ContentFailure("INVALID_SCOPE", "Invalid content document or timeout");
+    if (
+      Object.values(this.timeouts).some(
+        (value) => !Number.isFinite(value) || value <= 0 || value > 900000,
+      )
+    )
+      throw new ContentFailure("INVALID_SCOPE", "Invalid content operation timeout");
   }
   call<T>(method: string, params: Record<string, unknown> = {}, signal?: AbortSignal): Promise<T> {
     if (this.closed)
@@ -197,7 +231,7 @@ export class ContentScope {
         finish(new ContentFailure("CANCELLED", "Content request cancelled"), undefined, true);
       const timer = setTimeout(
         () => finish(new ContentFailure("TIMEOUT", "Content request timed out"), undefined, true),
-        this.timeout,
+        this.timeouts[method] ?? this.timeout,
       );
       this.pending.set(id, () =>
         finish(new ContentFailure("CLOSED", "Content document is closed"), undefined, true),
@@ -230,6 +264,11 @@ export class ContentScope {
         "editor-prepare-quit",
         "editor-resume",
         "editor-repository-refresh",
+        "database-component-progress",
+        "database-components-changed",
+        "database-frozen",
+        "database-host-error",
+        "database-settings-changed",
       ].includes(kind)
     )
       throw new ContentFailure("EVENT_DENIED", "Content event is not allowed");

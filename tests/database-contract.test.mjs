@@ -1,6 +1,32 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { databaseConfigFingerprint } from "../src/lib/database.ts";
+
+test("temporary password configuration identity survives Rust JSON key order but rejects changed endpoints", () => {
+  const config = {
+    id: "qa",
+    name: "QA",
+    kind: "postgresql",
+    host: "127.0.0.1",
+    port: 5432,
+    database: "qa",
+    username: "qa",
+    tls: true,
+    ca_file: "",
+    credential_id: null,
+  };
+  const reordered = Object.fromEntries(Object.entries(config).reverse());
+  assert.equal(databaseConfigFingerprint(config), databaseConfigFingerprint(reordered));
+  assert.notEqual(
+    databaseConfigFingerprint(config),
+    databaseConfigFingerprint({ ...reordered, port: 5433 }),
+  );
+  assert.notEqual(
+    databaseConfigFingerprint(config),
+    databaseConfigFingerprint({ ...reordered, tls: false }),
+  );
+});
 
 test("database contract keeps bigint, decimal, binary, null and Unicode cells across JSON", () => {
   const operation = JSON.parse(

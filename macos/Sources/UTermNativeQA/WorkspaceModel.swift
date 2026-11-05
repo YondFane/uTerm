@@ -40,6 +40,7 @@ final class WorkspaceModel: ObservableObject {
     var appearanceChanged: ((String) -> Void)?
     var deleteWorktreeRequested: ((String, String) -> Void)?
     var openSSHRequested: ((String?) -> Void)?
+    var openDatabasesRequested: (() -> Void)?
     var prepareSSHTransportReconnect: (() async -> Bool)?
     var sshTrustTask: Task<Void, Never>?
     var sshTrustAlert: NSAlert?
@@ -108,6 +109,7 @@ final class WorkspaceModel: ObservableObject {
                 do {
                     _ = try await ssh.call("host.configure", params: .object(["helper": .string(helper.path)]))
                     _ = try await ssh.call("ssh.configure", params: .object(["credentialService": .string((Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native") + ".ssh")]))
+                    _ = try await ssh.call("database.configure", params: .object(["identifier": .string(Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native")]))
                     sshBridge = ssh
                 } catch { await ssh.close(); throw error }
             }

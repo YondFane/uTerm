@@ -196,8 +196,14 @@ unprivileged user so directory permissions enforce the failure; Windows uses a h
 
 `uterm-core::{database,database_components,downloads}` shares database business rules, credential
 binding and verified component installation/resume. Clients provide directories, SSH confirmation,
-pickers and events; existing Tauri database commands and quit guards remain available. Native
-database entry points and actual-service acceptance are tracked separately in #38.
+pickers and events; existing Tauri database commands and quit guards remain available. The isolated
+native app opens **Databases** from its sidebar or **File → Databases…**, reusing SQL/document forms
+and workbenches with Core profile CAS and application-lived temporary passwords. Acceptance is
+tracked separately in #38. `bash scripts/macos-database-smoke.sh` requires a macOS graphical
+session, Homebrew, Python 3, curl and Java 17+; it installs PostgreSQL 16 if absent, downloads the
+catalog-verified JDBC driver, and uses private temporary data/credentials for a real SQL window
+check and screenshots. It does not install a PostgreSQL system service or access production
+databases.
 
 `uterm-core::ssh` owns OpenSSH configuration/path rules, credential binding/system adapters,
 SFTP/transfer services and owned tunnel lifetimes. Tauri delegates to those same services while

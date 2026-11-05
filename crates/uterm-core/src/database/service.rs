@@ -283,6 +283,35 @@ impl Service {
         self.quitting.store(false, Ordering::Release);
         Ok(())
     }
+    pub(crate) fn with_profile_change<T>(
+        &self,
+        id: &str,
+        change: impl FnOnce() -> crate::Result<T>,
+    ) -> crate::Result<T> {
+        // Hold admission through CAS persistence so a concurrent connect cannot use an edited profile.
+        // CAS 保存期间持有接收保护，避免并发连接使用正在修改的配置。
+        let operations = self
+            .operations
+            .lock()
+            .map_err(|_| crate::CoreError::new("DB_CLOSED", "Database service is unavailable"))?;
+        if self.closed.load(Ordering::Acquire) || self.quitting.load(Ordering::Acquire) {
+            return Err(crate::CoreError::new(
+                "DB_CLOSED",
+                "Database client is closing",
+            ));
+        }
+        if operations
+            .values()
+            .any(|(value, _)| value.state == "running")
+            || self.host.database.profile_in_use(id)
+        {
+            return Err(crate::CoreError::new(
+                "DB_BUSY",
+                "Disconnect and resolve drafts before changing this profile",
+            ));
+        }
+        change()
+    }
     pub fn close(&self) {
         if self.closed.swap(true, Ordering::AcqRel) {
             return;
@@ -401,6 +430,12 @@ async fn execute(mut host: Host, request: Request) -> std::result::Result<Value,
             serde_json::to_value(database_components::database_components(host, action, id).await?)
                 .map_err(|_| "DB_OPERATION_FAILED".into())
         }
-        Request::Quit => super::database_prepare_exit(host).map(|_| Value::Null),
+        Request::Quit => {
+            if host.database.busy() || host.components.0.load(Ordering::Acquire) {
+                Err("DB_BUSY".into())
+            } else {
+                Ok(Value::Null)
+            }
+        }
     }
 }

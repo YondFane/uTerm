@@ -9,9 +9,10 @@ import { useFileDocument } from "./lib/useFileDocument";
 import "./styles.css";
 import "./native-content.css";
 import { NativeGit } from "./native-git";
+import { NativeDatabase } from "./native-database";
 
 interface Context {
-  kind?: "file" | "git";
+  kind?: "file" | "git" | "database";
   directory: string;
   path: string;
   settings: Settings;
@@ -89,7 +90,9 @@ async function start() {
       };
       root.render(
         <SettingsProvider content={content}>
-          {context.kind === "git" ? (
+          {context.kind === "database" ? (
+            <NativeDatabase />
+          ) : context.kind === "git" ? (
             <NativeGit directory={context.directory} />
           ) : (
             <Content context={context} />

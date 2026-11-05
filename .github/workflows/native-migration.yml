@@ -15,7 +15,7 @@ jobs:
       matrix:
         os: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     defaults:
       run:
         shell: bash
@@ -109,6 +109,8 @@ jobs:
         run: bash scripts/macos-python-smoke.sh
       - name: Real native SSH, SFTP, transfer and host-trust workflows
         run: bash scripts/macos-ssh-smoke.sh
+      - name: Real native database profile, PostgreSQL, window lifetime and screenshots
+        run: bash scripts/macos-database-smoke.sh
       - name: Real native Git, Worktree and open-editor protection
         run: bash scripts/macos-git-smoke.sh
       - name: Real native control and standalone CLI smoke

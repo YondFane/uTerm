@@ -79,6 +79,74 @@ impl Core {
             return Ok(json!({"configured":true,"identifier":service.identifier}));
         }
         let service = self.database_service(None)?;
+        if method == "database.profile.save" || method == "database.profile.remove" {
+            #[derive(Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct Profile {
+                expected_revision: String,
+                workspace_id: String,
+                config: Option<super::Config>,
+                id: Option<String>,
+            }
+            let request: Profile =
+                serde_json::from_value(params).map_err(|_| failure("DB_INVALID_REQUEST"))?;
+            let id = if method == "database.profile.save" {
+                if request.id.is_some() {
+                    return Err(failure("DB_INVALID_REQUEST"));
+                }
+                let config = request
+                    .config
+                    .as_ref()
+                    .ok_or_else(|| failure("DB_INVALID_CONFIG"))?;
+                config
+                    .validate()
+                    .map_err(|_| failure("DB_INVALID_CONFIG"))?;
+                config.id.clone()
+            } else {
+                if request.config.is_some() {
+                    return Err(failure("DB_INVALID_REQUEST"));
+                }
+                request
+                    .id
+                    .clone()
+                    .ok_or_else(|| failure("DB_INVALID_REQUEST"))?
+            };
+            return service.with_profile_change(&id, || {
+                let saved = self.store.update(&request.expected_revision, |document| {
+                    let groups = document.workspace["groups"]
+                        .as_array_mut()
+                        .ok_or_else(|| failure("DB_INVALID_CONFIG"))?;
+                    let group = groups
+                        .iter_mut()
+                        .find(|group| group["id"] == request.workspace_id)
+                        .ok_or_else(|| failure("DB_INVALID_CONFIG"))?;
+                    let profiles = group
+                        .as_object_mut()
+                        .ok_or_else(|| failure("DB_INVALID_CONFIG"))?
+                        .entry("databaseConnections")
+                        .or_insert_with(|| json!([]))
+                        .as_array_mut()
+                        .ok_or_else(|| failure("DB_INVALID_CONFIG"))?;
+                    if let Some(config) = &request.config {
+                        let profile = serde_json::to_value(config)?;
+                        if let Some(existing) =
+                            profiles.iter_mut().find(|profile| profile["id"] == id)
+                        {
+                            *existing = profile;
+                        } else {
+                            profiles.push(profile);
+                        }
+                    } else {
+                        if !profiles.iter().any(|profile| profile["id"] == id) {
+                            return Err(failure("DB_INVALID_CONFIG"));
+                        }
+                        profiles.retain(|profile| profile["id"] != id);
+                    }
+                    crate::state::validate_workspace(&document.workspace)
+                })?;
+                service_json(saved)
+            });
+        }
         if [
             "database.operations",
             "database.events",

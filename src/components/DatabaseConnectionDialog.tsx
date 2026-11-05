@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke } from "../lib/content-host";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { useDialogBackdrop } from "../lib/useDialogBackdrop";

@@ -6,6 +6,75 @@ import { tauriContentPort } from "../src/lib/tauri-content.ts";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+for (const platform of ["Tauri", "WebKit"]) {
+  test(`${platform} database writes retain their caller after cancellation until the actual result`, async (t) => {
+    const previous = global.window;
+    global.window = {};
+    const upstream = deferred();
+    let writes = 0;
+    let cancelled = false;
+    const port =
+      platform === "Tauri"
+        ? tauriContentPort
+        : webKitContentPort(
+            {
+              async postMessage(message) {
+                if (message.kind === "cancel") {
+                  cancelled = true;
+                  return { version: 1, document: message.document, id: message.id, result: null };
+                }
+                writes++;
+                await upstream.promise;
+                return {
+                  version: 1,
+                  document: message.document,
+                  id: message.id,
+                  result: { affected: 1 },
+                };
+              },
+            },
+            new EventTarget(),
+          );
+    if (platform === "Tauri")
+      mockIPC(() => {
+        writes++;
+        return upstream.promise;
+      });
+    const scope = new ContentScope(port, "database-cancel");
+    t.after(() => {
+      scope.close();
+      clearMocks();
+      if (previous === undefined) delete global.window;
+      else global.window = previous;
+    });
+    const controller = new AbortController();
+    let finished = false;
+    const result = scope
+      .call(
+        "database_request",
+        { handle: "qa", request: { op: "query", sql: "UPDATE fixture SET value=1" } },
+        controller.signal,
+      )
+      .finally(() => {
+        finished = true;
+      });
+    const rejected = assert.rejects(result, {
+      code: "CANCELLED",
+      message: /reload before retrying/,
+    });
+    await tick();
+    controller.abort();
+    await tick();
+    assert.equal(finished, false);
+    if (platform === "WebKit") assert.equal(cancelled, true);
+    assert.equal(writes, 1);
+    upstream.resolve({ affected: 1 });
+    await rejected;
+    assert.equal(writes, 1);
+    assert.equal(finished, true);
+  });
+}
+
 test("Tauri read cancellation remains immediate while write failures drain without late delivery", async (t) => {
   const previous = global.window;
   global.window = {};

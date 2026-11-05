@@ -272,6 +272,7 @@ fn publish(client: &Client, handle: u64, operation: u64, request: &[u8], respons
         && !request.method.starts_with("session.")
         && !request.method.starts_with("settings.")
         && !request.method.starts_with("ssh.profile.")
+        && !request.method.starts_with("database.profile.")
         && !request.method.starts_with("ssh.session.")
     {
         return;

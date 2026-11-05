@@ -7,6 +7,80 @@ body,
   margin: 0;
   overflow: hidden;
 }
+.native-database {
+  flex-direction: column;
+}
+.native-database-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--ui-border);
+}
+.native-database-toolbar button {
+  width: auto;
+  min-height: 28px;
+}
+.native-database-toolbar select {
+  width: auto;
+  max-width: 220px;
+}
+.native-database-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.native-database-layout > aside {
+  width: 220px;
+  flex: none;
+  overflow: auto;
+  border-right: 1px solid var(--ui-border);
+}
+.native-database-profile {
+  padding: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.native-database-profile[data-selected] {
+  background: var(--ui-hover);
+}
+.native-database-profile-name {
+  flex: 1 0 100%;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.native-database-workbench {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.native-database-workbench > .database-workspace {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+.native-database-workbench > p,
+.native-database-error {
+  padding: 8px;
+}
+.native-database-components {
+  flex: 1;
+  overflow: auto;
+}
+.native-database-components[hidden] {
+  display: none;
+}
+.native-database dialog {
+  max-width: calc(100vw - 40px);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+}
 .native-content {
   background: var(--ui-canvas);
   color: var(--ui-text);
