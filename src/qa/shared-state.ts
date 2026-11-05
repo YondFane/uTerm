@@ -5,7 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { coreRequest } from "../lib/shared-state";
 import { defaults, settingsKey } from "../lib/settings";
 import { emptyWorkspace, workspaceKey } from "../lib/workspace";
-import { draftKey } from "../lib/file-document";
+import { clipboardPath, draftKey } from "../lib/file-document";
 import { editorDraftReceiptKey } from "../lib/editor-draft-handoff";
 import { ContentScope } from "../lib/content-transport";
 import { tauriContentPort } from "../lib/tauri-content";
@@ -334,7 +334,7 @@ async function runPreviews(context: Context) {
     files.click();
     const projectRoot = await until(() => {
       const path = document.querySelector<HTMLElement>(".file-panel-footer")?.title;
-      return path === context.project && path;
+      return path === clipboardPath(context.project) && path;
     }, "actual preview file tree uses the temporary project root");
     async function open(path: string) {
       const row = await until(
@@ -1181,8 +1181,26 @@ async function runInputControl(context: Context) {
     );
     const take = readonly() as HTMLButtonElement;
     assert(take && !take.disabled, "Take input control is unavailable after viewer exit");
+    let clickObserved = false;
+    take.addEventListener("click", () => (clickObserved = true), { once: true });
     take.click();
-    await until(writable, "original client explicitly reacquires after ordinary viewer exit");
+    try {
+      await until(writable, "original client explicitly reacquires after ordinary viewer exit");
+    } catch (reason) {
+      const field = section.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
+      throw Error(
+        `${String(reason)}; control diagnostics: ${JSON.stringify({
+          clickObserved,
+          sectionConnected: section.isConnected,
+          sectionInert: !!section.closest("[inert]"),
+          buttonConnected: take.isConnected,
+          buttonDisabled: take.disabled,
+          fieldReadonly: field?.readOnly,
+          fieldDisabled: field?.disabled,
+          status: section.querySelector(".terminal-status")?.getAttribute("aria-label"),
+        })}`,
+      );
+    }
     sendMarker("OWNER_RETURNED", "owner-returned.txt");
     await until(
       async () => (await file("owner-returned.txt"))?.includes("OWNER_RETURNED"),

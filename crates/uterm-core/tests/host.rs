@@ -215,6 +215,181 @@ fn two_core_clients_handoff_input_without_stopping_replay_or_detached_processes(
 }
 
 #[test]
+fn original_core_reacquires_after_repeated_viewer_exit_without_recreating_the_pty() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().canonicalize().unwrap();
+    let host_root = root.join("local-daemon-v1");
+    let _cleanup = HostCleanup(host_root.clone());
+    let owner = Core::open(root.join("shared-state-v1")).unwrap();
+    call(&owner, "host.configure", json!({"helper":helper()}));
+    let (send, receive) = mpsc::channel();
+    owner
+        .set_terminal_sink(Arc::new(move |_, generation, frame| {
+            send.send((generation.to_owned(), frame))
+                .map_err(|error| error.to_string())
+        }))
+        .unwrap();
+    let open = |attachment: &str| {
+        json!({"id":"reacquire-control","attachment":attachment,"directory":root,
+            "shell":"default","rows":24,"cols":80})
+    };
+    let generation = call(&owner, "terminal.open", open("reacquire-owner"))["generation"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let observed = std::sync::Mutex::new(std::collections::HashMap::new());
+    let same_cursor_updates = std::sync::atomic::AtomicUsize::new(0);
+    let role = |core: &Core,
+                receiver: &mpsc::Receiver<(String, utermd_local::daemon::Frame)>,
+                attachment: &str,
+                owned: bool| {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        loop {
+            let (actual_generation, frame) = receiver
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .unwrap_or_else(|error| {
+                    panic!("Expected owned={owned} on {attachment}: {error:?}")
+                });
+            eprintln!(
+                "Control frame {attachment}: sequence={}, status={:?}, desired={owned}",
+                frame.sequence, frame.input_control
+            );
+            assert_eq!(actual_generation, generation);
+            assert!(frame.error.is_none(), "{:?}", frame.error);
+            let previous = observed.lock().unwrap().insert(
+                attachment.to_owned(),
+                (frame.sequence, frame.input_control.clone()),
+            );
+            if previous.is_some_and(|(sequence, control)| {
+                sequence == frame.sequence && control != frame.input_control
+            }) {
+                assert!(frame.data.is_empty() && !frame.reset);
+                same_cursor_updates.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+            call(
+                core,
+                "terminal.action",
+                json!({"attachment":attachment,"action":"ack","sequence":frame.sequence.to_string()}),
+            );
+            if frame
+                .input_control
+                .as_ref()
+                .is_some_and(|value| value.owned == owned)
+            {
+                return frame;
+            }
+        }
+    };
+    let initial = role(&owner, &receive, "reacquire-owner", true);
+    let observer = Client::connect(&host_root).unwrap();
+    let pid = status(&observer).pid;
+    let mut sequences = vec![initial.sequence.to_string()];
+    for round in 0..4 {
+        eprintln!("Starting viewer exit round {round}");
+        let viewer = Core::open(root.join("shared-state-v1")).unwrap();
+        call(&viewer, "host.configure", json!({"helper":helper()}));
+        let (viewer_send, viewer_receive) = mpsc::channel();
+        viewer
+            .set_terminal_sink(Arc::new(move |_, generation, frame| {
+                viewer_send
+                    .send((generation.to_owned(), frame))
+                    .map_err(|error| error.to_string())
+            }))
+            .unwrap();
+        let attachment = format!("reacquire-viewer-{round}");
+        assert_eq!(
+            call(&viewer, "terminal.open", open(&attachment))["generation"],
+            generation
+        );
+        role(&viewer, &viewer_receive, &attachment, false);
+        call(
+            &viewer,
+            "terminal.action",
+            json!({"attachment":attachment,"action":"takeControl","rows":24,"cols":80}),
+        );
+        role(&viewer, &viewer_receive, &attachment, true);
+        let revoked = role(&owner, &receive, "reacquire-owner", false);
+        assert!(owner
+            .terminal_write("reacquire-owner", b"echo DENIED\n")
+            .unwrap_err()
+            .message
+            .contains("SESSION_CONTROL_REQUIRED"));
+        viewer.close();
+        let retained = status(&observer);
+        assert_eq!(retained.pid, pid);
+        assert!(retained
+            .sessions
+            .iter()
+            .any(|value| value.spec.id == "reacquire-control"
+                && value.generation == generation
+                && value.running));
+        call(
+            &owner,
+            "terminal.action",
+            json!({"attachment":"reacquire-owner","action":"takeControl","rows":24,"cols":80}),
+        );
+        let recovered = role(&owner, &receive, "reacquire-owner", true);
+        assert!(recovered.sequence >= revoked.sequence);
+        assert_eq!((recovered.rows, recovered.cols), (24, 80));
+        sequences.extend([revoked.sequence.to_string(), recovered.sequence.to_string()]);
+        let marker = format!("REACQUIRED_{round}");
+        let path = root.join(format!("round-{round}.txt"));
+        let command = if cfg!(windows) {
+            format!("'{marker}' | Set-Content -Encoding UTF8 'round-{round}.txt'\r")
+        } else {
+            format!("echo {marker} > round-{round}.txt\n")
+        };
+        owner
+            .terminal_write("reacquire-owner", command.as_bytes())
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !std::fs::read(&path)
+            .unwrap_or_default()
+            .windows(marker.len())
+            .any(|part| part == marker.as_bytes())
+        {
+            assert!(
+                Instant::now() < deadline,
+                "The retained PTY did not execute {marker}"
+            );
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    }
+    call(
+        &owner,
+        "terminal.action",
+        json!({"attachment":"reacquire-owner","action":"close"}),
+    );
+    assert!(!status(&observer)
+        .sessions
+        .iter()
+        .any(|value| value.spec.id == "reacquire-control"));
+    owner.close();
+    if let Some(path) = std::env::var_os("UTERM_INPUT_REACQUIRE_REPORT") {
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .args(args)
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            String::from_utf8(output.stdout).unwrap().trim().to_owned()
+        };
+        let tested = git(&["rev-parse", "HEAD"]);
+        std::fs::write(path, serde_json::to_vec_pretty(&json!({
+            "passed":true,"platform":std::env::consts::OS,"architecture":std::env::consts::ARCH,
+            "sourceHeadSHA":std::env::var("PR_HEAD_SHA").unwrap_or_else(|_|tested.clone()),
+            "testedMergeSHA":tested,"sourceTreeDirty":!git(&["status","--porcelain","--untracked-files=no"]).is_empty(),
+            "actualPTY":true,"repeatedPeerExits":4,"sameHostPID":true,"sameGeneration":true,
+            "ownerStreamRetained":true,"explicitTakeoverAfterEachExit":true,"oldInputRejected":true,
+            "realPTYWriteAfterEachPeerExit":true,"sameSizeAfterEachTakeover":true,
+            "controlChangesWithoutNewOutput":same_cursor_updates.load(std::sync::atomic::Ordering::Relaxed),
+            "frameSequences":sequences,"exactClose":true,"guiAcceptance":false
+        })).unwrap()).unwrap();
+    }
+}
+
+#[test]
 fn java_jar_uses_shared_host_literal_arguments_replay_and_generation_safe_stop() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().canonicalize().unwrap();

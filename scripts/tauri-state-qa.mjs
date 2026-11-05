@@ -12,6 +12,7 @@ import {
   lstatSync,
   unlinkSync,
   chmodSync,
+  realpathSync,
 } from "node:fs";
 import { tmpdir, homedir, platform, arch, release, version } from "node:os";
 import { resolve, join, dirname } from "node:path";
@@ -456,7 +457,10 @@ try {
               "Preview requested a forbidden loopback resource",
             );
             if (value.scene === "preview-html") {
-              assert.equal(value.checks.projectRoot, join(root, "project"));
+              assert.equal(
+                realpathSync(value.checks.projectRoot),
+                realpathSync(join(root, "project")),
+              );
               assert.equal(value.checks.activeContentRemoved, true);
               assert.equal(value.checks.opaqueDocumentAccessRejected, true);
               assert.equal(value.checks.escapedMessages, 0);

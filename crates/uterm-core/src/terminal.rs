@@ -403,6 +403,7 @@ pub fn encode_frame(frame: &Frame, identity: Option<(&str, &str)>) -> Vec<u8> {
 }
 fn stream(link: &Link, attachment: &str, sink: &Sink) -> Result<(), String> {
     let mut cursor = None;
+    let mut input_control = None;
     let mut heartbeat = Instant::now();
     while !link.stopped() {
         let frame = match link
@@ -420,10 +421,13 @@ fn stream(link: &Link, attachment: &str, sink: &Sink) -> Result<(), String> {
         if link.stopped() {
             break;
         }
-        if cursor == Some(frame.sequence) && !frame.reset {
+        // A claim can change the role at an already delivered byte cursor; forward that empty update.
+        // 接管可能在已交付的字节游标上改变输入角色，仍需交付该空内容更新。
+        if cursor == Some(frame.sequence) && input_control == frame.input_control && !frame.reset {
             continue;
         }
         cursor = Some(frame.sequence);
+        input_control = frame.input_control.clone();
         let exited = frame.exited;
         *link.pending.lock().map_err(|e| e.to_string())? = Some(frame.sequence);
         sink(attachment, &link.generation, frame)?;

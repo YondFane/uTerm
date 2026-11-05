@@ -215,6 +215,23 @@ owner-returned and Windows viewer-owned captures show real shell output.
 remain source-bound. DOM output does not establish GPU capture/display acceptance; that gap and
 manual keyboard, IME, clipboard, sleep/display and full lifecycle acceptance remain open.
 
+The shared stream also forwards control-role changes when no new output bytes have advanced the
+cursor. An in-flight read can report passive state at the new owner's sequence before the claim
+reply updates its local lease. Deduplicating that later owned frame solely by sequence used to leave
+the view read-only; the stream now compares control metadata as well. Byte sequences,
+acknowledgement rules and raw output remain unchanged.
+
+A real Core/host/PTY regression reproduces the previous timeout and checks four peer exits with
+explicit reacquisition through the original attachment, ordered role updates, rejected stale input,
+unchanged host PID/generation/grid, a real file write after each exit and exact close.
+`input-reacquire-core.json` records source/merge/platform and any observed control-only changes at
+the same cursor. Linux passed the targeted regression, full Core/FFI/Host/backend checks, 408
+frontend tests (10 skipped), types/production and desktop builds, formatting and documentation. The
+final working tree also passed all 53 real application scenes (dirty=true, cleanupErrors=[]).
+Platform checks for this source remain pending; the real-app QA retains control-click/read-only
+diagnostics on failure. Agent authentication/tasks, manual IME/clipboard/mouse and sleep/display
+acceptance remain open.
+
 ### Shared saved state
 
 The development client imports workspace and settings data through its existing WebView on first
@@ -1859,13 +1876,19 @@ workspace loading had failed and the file tree still showed the runner home. Its
 remains retained.
 
 QA now uses the visible **Retry loading** action when needed, selects the imported temporary project
-only when necessary, and verifies the actual file-tree root before opening a preview. The new source
-still requires its own Windows/macOS reports and screenshots.
+only when necessary, and verifies the actual file-tree root before opening a preview. It compares
+Windows's displayed path with the displayed canonical root and resolves both filesystem paths for
+the driver check, accepting macOS's `/var` → `/private/var` spelling without accepting a different
+root. Source `aa86df0` failed these two path-representation checks on Windows/macOS; those artifacts
+remain retained. The corrected Linux working tree passed 53 scenes with no cleanup errors before the
+control-stream change; the final source still needs its own application/platform evidence.
 
 Earlier Linux working-tree checks passed 53 scenes, 12 HTML/PDF/transport checks and types; HTML/PDF
-captures were inspected separately from clean CI evidence. The root-selection change passed all
-three preview scenes locally; its full run stopped at input-control reacquisition after viewer exit
-(49 scenes, no cleanup errors), so that run is not recorded as a complete application pass.
+captures were inspected separately from clean CI evidence. An earlier root-selection run stopped at
+input-control reacquisition after viewer exit (49 scenes, no cleanup errors); its failure is
+retained. The current working tree passed all 53 scenes after the control-stream fix, with actual
+owner-return and read-only viewer captures inspected. These local results do not accept pending
+platform CI.
 
 Linux protocol checks cover reordered/mismatched replies, timeout/abort/unload, late subscriptions,
 bounds and the JavaScript WebKit adapter. Actual Rust/Git processes pause a real checkout hook and
