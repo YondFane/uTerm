@@ -1700,8 +1700,9 @@ Five additional async/contract regressions pass: unread-result backpressure with
 available, generation/single-consumption checks and parameter exclusion, quit/resume with hidden
 drafts, closing during authentication, profile CAS/secret rejection and exact text/binary JSON. The
 authentication/close race passes 20 repeated runs after draining cancelled tasks on close.
-TypeScript fixture checks pass; Swift exact-value and actual C ABI guard checks are included in
-native CI and still require their own platform result.
+TypeScript fixture checks pass. Swift exact-value, actual C ABI guards and the real writer-lock
+read-retry/mutation-refusal checks pass on macOS ARM64 and Intel at source `7306f74` / tested merge
+`5bc1ec99a1e61007dc75687a644087011556bc69`.
 
 `pnpm test:redis` explicitly enables the seven real-server checks, each using temporary loopback
 servers. The normal Core suite runs the other four service checks and the two host-port checks.
@@ -1720,17 +1721,26 @@ installs Redis if absent, starts only a private temporary loopback server and re
 WindowServer binary/draft/narrow-window images, read-only defaults, real protected writes, exact
 text/TTL and a binary sibling value, hide/reopen and temporary-password reconnect. The report
 records the actual Homebrew Redis version and digest separately from the pinned Linux service suite.
-The real native run at source `2307afe` / tested merge `0d42fe12` fails with `WRITER_BUSY` before
-opening Redis. Swift snapshot/view reads now retry that code briefly without blocking the UI or
-replaying mutations; persistent contention is still returned. Profile writes retain an explicit
-retry and preserve drafts, with a specific busy message. An actual macOS writer-lock test checks the
-read retry and immediate mutation failure. At source `6effb90` / tested merge `6b0ac3d7`, the actual
-macOS 15.8.2 ARM64 Redis window passes all scenes and verifies server data again after app exit,
-using Homebrew Redis 8.10.3. Three WindowServer captures have been inspected. The workflow still
-fails because the new writer-lock test resolved `Darwin.flock` as a struct; the test now calls libc
-through a separate C test-support target. That target passes strict C compilation and actual POSIX
-lock contention on Linux, but Swift/native rerun and Intel/Windows, credential/picker/manual
-acceptance remain pending.
+Swift snapshot/view reads retry `WRITER_BUSY` briefly without blocking the UI or replaying
+mutations; persistent contention is still returned. Profile writes retain explicit retry, drafts and
+a specific busy message. The actual macOS 15.8.2 ARM64 Redis window at source `7306f74` / tested
+merge `5bc1ec99a1e61007dc75687a644087011556bc69` passes all scenes with Homebrew Redis 8.10.3 and
+checks the server again after application exit. Three WindowServer captures have been inspected in
+[artifact 13450055371](https://github.com/YondFane/uTerm/actions/runs/42097888353/artifacts/13450055371).
+The ARM job passes, but the entire workflow fails: Intel refuses a fixture profile write with
+`WRITER_BUSY` before opening Redis. This is an outstanding failure, not native Intel acceptance.
+Credential-store, picker and manual checks remain pending.
+
+The isolated Tauri harness now includes four real Redis scenes: profile save/password exclusion,
+read-only binary preview, hidden draft retention, and protected exact-text save/reconnect. It starts
+only an owned temporary loopback service and verifies final text, TTL and binary sibling bytes after
+the app exits. Windows downloads the portable community `redis-windows` 8.10.3 Cygwin build and
+verifies archive SHA256 `8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e`; macOS
+uses Homebrew Redis. Private credentials/configuration stay outside artifacts, and only owned
+processes are stopped. Linux real-service preflight passes authentication refusal, exact
+UTF-8/binary values, TTL preservation and cleanup; platform UI execution for these new scenes is
+pending. The existing Tauri run at `7306f74` passes both platforms but predates these added Redis
+scenes.
 
 ### Redis connection setup
 
@@ -5685,13 +5695,17 @@ workflow runs `bash scripts/macos-database-smoke.sh` with an isolated real Postg
 catalog-verified JDBC driver, recording profile save, exact SQL values, hide/reopen/reconnect,
 language/theme/narrow-window behavior and WindowServer images. Runtime results for the new window
 must pass both Swift compilation and the actual window scenes at its actual source head; neither is
-accepted from the Linux checks. Source `2307afe` / tested merge `0d42fe12` passes real macOS ARM64
-profile save/password exclusion, SQL copying, PostgreSQL connection, exact bigint/decimal/Unicode
-values, hide/reopen and active-profile mutation protection. Its window run still fails at
-disconnect/connect because the visible field was cleared without retaining the temporary password.
-Private-memory reconnect coverage now passes on Linux; a complete native rerun remains required. The
-native host logs only fixed method names and bounded error codes, excluding parameters/vendor text.
-Native picker/manual interaction and document-database acceptance remain pending.
+accepted from the Linux checks. Source `7306f74` / tested merge
+`5bc1ec99a1e61007dc75687a644087011556bc69` passes the ARM64 PostgreSQL window scenarios, including
+private-password disconnect/connect, SQL clipboard equality, exact bigint/decimal/Unicode values,
+hide/reopen and active-profile protection. Actual macOS 15.8.2 uses PostgreSQL 16.15 and JDBC
+42.7.14; reports and two WindowServer images are in
+[artifact 13450055371](https://github.com/YondFane/uTerm/actions/runs/42097888353/artifacts/13450055371).
+Visual inspection found that the narrow Chinese/light scene changes the native frame but its Web
+content remains English/dark; its current Boolean report is insufficient for that acceptance. Intel
+fails earlier during profile editing with an operation-busy error. Both remain open findings. The
+native host logs fixed method names and bounded error codes only, excluding parameters/vendor text.
+Windows, other engines/document databases, native picker and manual acceptance remain pending.
 
 ### Database setup and visibility
 

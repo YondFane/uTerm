@@ -10,6 +10,7 @@ import { clipboardPath, draftKey } from "../lib/file-document";
 import { editorDraftReceiptKey } from "../lib/editor-draft-handoff";
 import { ContentScope } from "../lib/content-transport";
 import { tauriContentPort } from "../lib/tauri-content";
+import { runRedis } from "./redis";
 import type {
   CoreEditorDraftEntry,
   CoreFileDocument,
@@ -30,6 +31,7 @@ interface Context {
     | "git"
     | "ssh"
     | "ssh-reopen"
+    | "redis"
     | "input-owner"
     | "input-viewer";
   backup?: string;
@@ -1550,6 +1552,10 @@ export async function run(recovery: boolean) {
     }
     if (context.phase === "ssh" || context.phase === "ssh-reopen") {
       await runSSH(context);
+      return;
+    }
+    if (context.phase === "redis") {
+      await runRedis(scene, () => observeCore("snapshot.read"));
       return;
     }
     if (context.phase === "initial") {

@@ -995,8 +995,9 @@ Redis 连接…**打开工作台，通过文档作用域 transport 复用连接�
 Linux x86_64／Rust 1.99.1 使用真实 Redis
 7.4.7／TLS 和 OpenSSL，通过全部 11 项 Redis 服务回归，覆盖二进制值、TTL、过期快照、只读保护、TLS 名称／CA 拒绝及不重试不确定写入。两项公开平台端口回归覆盖关闭后迟完成认证及取消认证。完整 Core／FFI、宿主、Tauri 后端（41 通过／2 忽略）、前端（419 通过／10 跳过）、类型、生产／桌面构建及契约检查通过。
 
-另有五项异步／契约回归通过，覆盖结果背压时仍可断开、generation／单次消费及参数不回显、隐藏草稿退出／恢复、认证中关闭、配置 CAS／密码拒绝及精确文本／二进制 JSON。关闭时排空已取消任务后，认证／关闭竞态连续 20 次通过。TypeScript 契约数据检查通过；Swift 精确值与实际 C
-ABI 保护检查纳入原生 CI，仍需对应平台结果。
+另有五项异步／契约回归通过，覆盖结果背压时仍可断开、generation／单次消费及参数不回显、隐藏草稿退出／恢复、认证中关闭、配置 CAS／密码拒绝及精确文本／二进制 JSON。关闭时排空已取消任务后，认证／关闭竞态连续 20 次通过。TypeScript 契约数据检查通过；源码
+`7306f74`／tested merge `5bc1ec99a1e61007dc75687a644087011556bc69` 的 macOS
+ARM64 和 Intel 均通过 Swift 精确值、实际 C ABI 保护以及真实写锁的读取退避／变更立即拒绝检查。
 
 `pnpm test:redis`
 明确启用七项真实服务检查，分别使用临时回环服务；普通 Core 套件运行其余四项服务及两项平台端口检查。`node scripts/redis-core-smoke.mjs /绝对路径/临时证据目录`
@@ -1009,13 +1010,19 @@ Linux 管理页回归覆盖配置冲突、密码排除、模态冻结／恢复�
 
 `bash scripts/macos-redis-smoke.sh` 需要 macOS 图形会话、Homebrew 和 Python
 3；缺少 Redis 时安装该工具，只启动私有临时回环服务，记录实际 WindowServer 二进制／草稿／窄窗口截图，检查默认只读、真实受保护写入、精确文本／TTL 及二进制相邻值、隐藏／重开和临时密码重连。报告记录实际 Homebrew
-Redis 版本和摘要，与固定版本的 Linux 服务套件分开。源码 `2307afe`／tested merge `0d42fe12`
-的真实原生运行在打开 Redis 前因 `WRITER_BUSY`
-失败。Swift 快照／视图读取现仅对该码短暂退避，不阻塞界面或重放变更；持续竞争仍返回错误。配置写入保留显式重试、草稿及具体忙碌提示；真实 macOS 写锁测试检查读取退避及变更立即失败。源码
-`6effb90`／tested merge `6b0ac3d7` 的实际 macOS 15.8.2 ARM64
-Redis 窗口通过全部场景，应用退出后再次核对服务数据，使用 Homebrew Redis
-8.10.3；三张 WindowServer 截图已目视检查。整项工作流仍失败：新增写锁测试将 `Darwin.flock`
-解析为结构体，现通过独立 C 测试支持目标调用 libc；该目标在 Linux 通过严格 C 编译及实际 POSIX 锁竞争。Swift／原生重跑、Intel／Windows、凭据／选择器及人工验收仍待完成。
+Redis 版本和摘要，与固定版本的 Linux 服务套件分开。Swift 快照／视图读取仅对 `WRITER_BUSY`
+短暂退避，不阻塞界面或重放变更；持续竞争仍返回错误。配置写入保留显式重试、草稿及具体忙碌提示。源码
+`7306f74`／tested merge `5bc1ec99a1e61007dc75687a644087011556bc69` 的实际 macOS 15.8.2 ARM64
+Redis 窗口使用 Homebrew Redis
+8.10.3，通过全部场景并在应用退出后再次核对服务数据。[artifact13450055371](https://github.com/YondFane/uTerm/actions/runs/42097888353/artifacts/13450055371)内三张 WindowServer 截图已目视检查。ARM
+job 通过，但整个工作流失败：Intel 在打开 Redis 前因 `WRITER_BUSY`
+拒绝测试配置写入。该失败仍需处理，不代表原生 Intel 已验收；凭据库／选择器及人工检查仍待完成。
+
+隔离 Tauri 验证新增四个真实 Redis 场景：保存配置／密码排除、只读二进制预览、隐藏后保留草稿、受保护的精确文本保存／重连。仅启动自有临时回环服务，应用退出后再次核对文本、TTL 和二进制相邻值。Windows 下载社区
+`redis-windows` 8.10.3 Cygwin 便携构建并校验归档 SHA256
+`8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e`；macOS 使用 Homebrew
+Redis。私有凭据／配置不进入产物，仅停止所属进程。Linux 真实服务前置检查通过未认证拒绝、精确 UTF-8／二进制值、TTL 保留及清理；新增场景的平台界面执行仍待完成。源码
+`7306f74` 的既有 Tauri 流程双平台通过，但不包含本次新增 Redis 场景。
 
 ### Redis 连接配置
 
@@ -3346,8 +3353,10 @@ C ABI 与精确值契约检查。已验收的服务证据对应源码 `ef5c3f4`�
 Linux 检查还覆盖配置 CAS／草稿／密码排除、两端内容 transport 取消后的写入排空、模态窗口冻结／恢复及目标修改后清除临时密码。原生工作流运行
 `bash scripts/macos-database-smoke.sh`，使用隔离的真实 PostgreSQL 服务和目录校验的 JDBC 驱动，记录配置保存、SQL 精确值、隐藏／重开／重连、语言／主题／窄窗口和 WindowServer 截图。新增窗口必须分别通过 Swift 编译和真实窗口场景，Linux 检查不能替代这两项验收，结果须按实际源码 head 核对。
 
-源码 `2307afe`／tested merge `0d42fe12` 的 macOS
-ARM64 通过真实配置保存／密码排除、SQL 复制、PostgreSQL 连接、bigint／decimal／Unicode 精确值、隐藏／重开及活跃配置变更保护，但断开后再次连接失败：可见密码框被清空，临时密码没有另行保留。私有内存重连回归已在 Linux 通过，仍需完整原生重跑。原生宿主仅记录固定方法名及有界错误码，不记录参数／厂商文本；原生选择器／人工交互及文档数据库验收仍待完成。
+源码 `7306f74`／tested merge `5bc1ec99a1e61007dc75687a644087011556bc69` 通过 ARM64
+PostgreSQL 窗口场景，包括私有密码断开／重连、SQL 剪贴板一致性、bigint／decimal／Unicode 精确值、隐藏／重开及活跃配置保护。实际 macOS
+15.8.2 使用 PostgreSQL 16.15 和 JDBC 42.7.14；报告及两张 WindowServer 图在
+[artifact13450055371](https://github.com/YondFane/uTerm/actions/runs/42097888353/artifacts/13450055371)。目视检查发现中文／浅色窄窗口场景仅改变原生框架，Web 内容仍为英文／深色，现有布尔报告不足以验收该项。Intel 更早在编辑配置时因操作忙碌失败；两项均保留待处理。原生宿主仅记录固定方法名及有界错误码，不记录参数／厂商文本。Windows、其他引擎／文档数据库、原生选择器及人工验收仍待完成。
 
 ### 数据库配置与区域显示
 

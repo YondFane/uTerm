@@ -197,7 +197,9 @@ SSH 连接…**提供配置、远程终端、SFTP 和转发；新增原生／平
 运行公开 Core 真实服务检查。平台 CI 使用 Python
 3.12 并增加隔离临时密码账户；Windows 下载校验摘要的固定 OpenSSH，并恢复 CI 用户的临时 SSH 别名。`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py`
 为真实 Tauri
-QA 提供该服务，增加配置／SFTP／远程终端截图及实际退出／重开回放验证。两条命令均不将私有夹具数据放入产物，创建账户要求使用一次性 CI。
+QA 提供该服务，增加配置／SFTP／远程终端截图及实际退出／重开回放验证。Tauri 包装器还会启动私有真实 Redis，验证配置／二进制／草稿／保存／重连场景，退出后核对最终文本、TTL 和二进制值。Windows 使用校验摘要的固定社区 redis-windows
+8.10.3 Cygwin 便携归档，macOS 使用 Homebrew
+Redis。报告和原生截图与私有凭据／配置分开上传，不安装 Redis 系统服务。两条命令均不将私有夹具数据放入产物，创建账户要求使用一次性 CI。
 
 `uterm-core::{files,git,worktrees}`
 管理本地文件及 Git／Worktree 规则和回归，Tauri 命令委派相同函数。新增 `git.*`

@@ -147,7 +147,7 @@ jobs:
       - name: Desktop build
         shell: bash
         run: node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle -- --locked 2>&1 | tee ci-evidence/desktop-build.log
-      - name: Isolated native shared-state QA
+      - name: Isolated native shared-state, SSH and Redis QA
         shell: bash
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}

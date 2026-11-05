@@ -234,8 +234,12 @@ runs the public Core real-service checks. Platform CI uses Python 3.12 and adds 
 password accounts; Windows downloads a checksum-verified pinned OpenSSH server and restores the CI
 user's temporary SSH aliases. `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` wraps the
 real Tauri QA with this service and adds profile/SFTP/remote-terminal screenshots plus actual
-quit/reopen replay verification. Both commands keep private fixture data outside artifacts and
-require disposable CI for account creation.
+quit/reopen replay verification. The Tauri wrapper also starts a private real Redis service for
+profile/binary/draft/save/reconnect scenes and verifies final text, TTL and binary bytes after exit.
+Windows uses the checksum-pinned community redis-windows 8.10.3 Cygwin portable archive; macOS uses
+Homebrew Redis. Reports and native screenshots are uploaded separately from private credentials and
+configuration; no Redis system service is installed. Both commands keep private fixture data outside
+artifacts and require disposable CI for account creation.
 
 `uterm-core::{files,git,worktrees}` owns local file and Git/Worktree rules and their regression
 tests; Tauri commands delegate to the same functions. The new `git.*` contract and generated DTOs

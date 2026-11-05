@@ -118,6 +118,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "git",
         "ssh",
         "ssh-reopen",
+        "redis",
         "input-owner",
         "input-viewer",
     ]
@@ -132,6 +133,20 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "platform": std::env::consts::OS, "architecture": std::env::consts::ARCH,
         "ready": app.state::<crate::shared_core::Lifecycle>().active.load(std::sync::atomic::Ordering::SeqCst)
     }))
+}
+
+#[tauri::command]
+pub fn qa_redis_fixture(app: tauri::AppHandle) -> Result<Value, String> {
+    let root = check(&app)?;
+    if argument("--qa-phase")? != "redis" {
+        return Err("Redis fixture is unavailable in this QA phase".into());
+    }
+    // Keep private credentials out of the public screenshot context.
+    // 私有凭据不进入公开截图上下文。
+    serde_json::from_slice(
+        &std::fs::read(root.join("redis-fixture.json")).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

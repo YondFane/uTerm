@@ -39,6 +39,10 @@ if (process.env.UTERM_QA_SSH_FIXTURE) {
   );
   writeFileSync(join(root, "ssh-fixture.json"), JSON.stringify({ alias, remote, port }));
 }
+if (process.env.UTERM_QA_REDIS_FIXTURE) {
+  copyFileSync(process.env.UTERM_QA_REDIS_FIXTURE, join(root, "redis-fixture.json"));
+  chmodSync(join(root, "redis-fixture.json"), 0o600);
+}
 mkdirSync(join(root, "project"));
 writeFileSync(join(root, "project", editorFixture.fileName), "\ufeff" + editorFixture.originalText);
 const evidence = join(root, "evidence");
@@ -472,6 +476,32 @@ try {
           const value = JSON.parse(readFileSync(join(evidence, file), "utf8"));
           assert.equal(value.context.head, head);
           assert.equal(value.context.tested, tested);
+          if (phase === "redis" && value.scene !== "failure") {
+            const checks = {
+              "redis-live-profile": [
+                "profileSavedInCore",
+                "temporaryPasswordNotPersisted",
+                "realAuthenticatedConnection",
+                "defaultReadonly",
+              ],
+              "redis-live-binary": ["binaryReadonlyPreview"],
+              "redis-live-draft": [
+                "hiddenWorkbenchRetainedEditor",
+                "hiddenWorkbenchRetainedDraftAndConnection",
+              ],
+              "redis-live-saved": [
+                "protectedWriteAndServerReread",
+                "temporaryPasswordReconnect",
+                "reconnectDefaultsReadonly",
+              ],
+            }[value.scene];
+            assert(checks, `Unexpected Redis acceptance scene: ${value.scene}`);
+            for (const key of checks) assert.equal(value.checks[key], true, key);
+            if (value.scene === "redis-live-binary") {
+              assert.equal(value.checks.exactBinaryKey, "00ff6b6579");
+              assert.equal(value.checks.exactBinaryValue, "ff007f");
+            }
+          }
           if (["ssh-terminal", "ssh-reopened"].includes(value.scene)) {
             const renderer = value.checks.rendererRecovery;
             assert.equal(renderer.recoveredRenderer, "dom");
@@ -837,21 +867,23 @@ try {
         `${phase} did not finish ordinary exit: mainExited=${mainExited}, code=${code}, log=${log.slice(-1000)}`,
       );
       const expected =
-        phase === "ssh"
-          ? 3
-          : phase === "ssh-reopen"
-            ? 1
-            : phase === "git"
-              ? 25
-              : phase === "editor-checkpoint"
-                ? 3
-                : phase.startsWith("editor-")
-                  ? 5
-                  : phase === "initial"
-                    ? 8
-                    : phase === "reopen"
-                      ? 1
-                      : 3;
+        phase === "redis"
+          ? 4
+          : phase === "ssh"
+            ? 3
+            : phase === "ssh-reopen"
+              ? 1
+              : phase === "git"
+                ? 25
+                : phase === "editor-checkpoint"
+                  ? 3
+                  : phase.startsWith("editor-")
+                    ? 5
+                    : phase === "initial"
+                      ? 8
+                      : phase === "reopen"
+                        ? 1
+                        : 3;
       assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       if (phase === "git") writeFileSync(join(root, "project/.git/qa-git-release"), "release\n");
@@ -897,6 +929,7 @@ try {
   const digest = createHash("sha256").update(damaged).digest("hex");
   assert.deepEqual(readFileSync(join(store, `snapshot-${digest}.damaged`)), damaged);
   assert.deepEqual(readFileSync(join(store, "legacy-original.json")), original);
+  if (process.env.UTERM_QA_REDIS_FIXTURE) await run("redis");
   if (process.env.UTERM_QA_SSH_FIXTURE) {
     await run("ssh");
     await run("ssh-reopen");
