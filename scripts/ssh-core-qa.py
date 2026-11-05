@@ -191,8 +191,6 @@ def main():
                     checks["actualAskpassTrustDeclinedAndSingleUse"] = True
                 for method in ["snapshot.read", "ssh.operations", "ssh.trust.pending"]:
                     assert service.password not in json.dumps(client.call(method))
-                assert service.password not in (evidence / "ssh-server.log").read_text(errors="replace")
-                checks["secretExcludedFromStateStatusAndServerLog"] = True
                 client.operation("prepareQuit")
                 client.call("ssh.resume")
         finally:
@@ -206,6 +204,8 @@ def main():
                         client.close()
             finally:
                 service.close()
+        assert service.password not in (evidence / "ssh-server.log").read_text(encoding="utf-8", errors="replace")
+        checks["secretExcludedFromStateStatusAndServerLog"] = True
     report.update(passed=True, cleanup=True)
     (evidence / "ssh-core-live.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     print(json.dumps(report, ensure_ascii=False))

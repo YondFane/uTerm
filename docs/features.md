@@ -1376,8 +1376,12 @@ in an existing SSH access group, resolves the Windows log path absolutely and sa
 status. The next macOS public-client run passes actual password login. Windows starts the server but
 rejects an inherited OWNER RIGHTS ACL on the private client key; the fixture now sets an explicit
 owner/System/Administrators ACL on that generated key only. The portable fixture also checks real
-host-CA acceptance and wrong-CA refusal, passing on Linux with dirty source. Platform reruns remain
-pending; these checks do not establish GUI acceptance.
+host-CA acceptance and wrong-CA refusal, passing on Linux with dirty source. Windows reaches the
+final log-exclusion assertion after its real authentication/transfer/tunnel checks, but sshd holds
+an exclusive log handle; the check now runs after owned-service shutdown. The QA-only Tauri command
+registration is also gated in normal backend builds; 73 Linux backend tests (nine optional ignored)
+and QA compilation pass. Platform reruns remain pending; these checks do not establish GUI
+acceptance.
 
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` adds three real Tauri window scenes:
 saved SSH profile, authenticated SFTP listing/text preview and remote terminal output. It uses the
