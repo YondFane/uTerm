@@ -5601,8 +5601,9 @@ ports, modal freeze/resume and clearing a temporary password after editing the t
 workflow runs `bash scripts/macos-database-smoke.sh` with an isolated real PostgreSQL server and
 catalog-verified JDBC driver, recording profile save, exact SQL values, hide/reopen/reconnect,
 language/theme/narrow-window behavior and WindowServer images. Runtime results for the new window
-must be verified at its actual source head; native picker/manual interaction and document-database
-acceptance remain pending.
+must pass both Swift compilation and the actual window scenes at its actual source head; neither is
+accepted from the Linux checks. Native picker/manual interaction and document-database acceptance
+remain pending.
 
 ### Database setup and visibility
 

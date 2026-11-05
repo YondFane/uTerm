@@ -67,8 +67,22 @@ enum DatabaseSmoke {
         try await EditorSmoke.click(content, title: "Save")
         try await wait(content, "!document.querySelector('dialog[open]') && document.querySelector('.native-database-profile-name')?.textContent==='PostgreSQL saved 中文'")
         let saved = try await bridge.snapshot()
-        guard saved.document.workspace["groups"].array.flatMap({ $0["databaseConnections"].array }).contains(where: { $0["id"] == .string(id) && $0["name"] == .string("PostgreSQL saved 中文") && $0["credential_id"] == .null }),
-              !(String(data: try JSONEncoder().encode(saved), encoding: .utf8) ?? "").contains(password) else { throw BridgeFailure(code: "DB_PERSISTENCE", message: "Profile save or temporary-password exclusion failed") }
+        var storedProfile: JSONValue?
+        for group in saved.document.workspace["groups"].array {
+            for profile in group["databaseConnections"].array {
+                if profile["id"].string == id { storedProfile = profile }
+            }
+        }
+        guard let storedProfile, storedProfile["name"].string == "PostgreSQL saved 中文" else {
+            throw BridgeFailure(code: "DB_PERSISTENCE", message: "Native profile save did not persist its name")
+        }
+        guard storedProfile["credential_id"] == .null else {
+            throw BridgeFailure(code: "DB_PERSISTENCE", message: "Temporary password unexpectedly produced a stored credential")
+        }
+        let savedBytes = try JSONEncoder().encode(saved)
+        guard !String(decoding: savedBytes, as: UTF8.self).contains(password) else {
+            throw BridgeFailure(code: "DB_PERSISTENCE", message: "Temporary password appeared in the saved snapshot")
+        }
         report["nativeProfileSaveWithoutPasswordPersistence"] = true
         try await EditorSmoke.click(content, title: "PostgreSQL saved 中文")
         try await EditorSmoke.click(content, title: "Connect")
