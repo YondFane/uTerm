@@ -50,6 +50,7 @@ enum SSHSmoke {
         let transfer = Task { @MainActor in await ssh.transfer(direction: "upload", paths: [large]) }
         try await TerminalSmoke.wait("Render real SFTP transfer progress") { ssh.active?.kind == "files.transfer" && ssh.active?.progress != nil && ssh.active?.state == "running" }
         let progress = ssh.active!
+        guard ssh.feedback.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: "Running transfer retained stale completion feedback") }
         do {
             _ = try await bridge.call("ssh.operation.cancel", params: .object(["id": .string(progress.id), "generation": .string(UUID().uuidString)]))
             throw BridgeFailure(code: "SSH_QA", message: "Stale transfer cancel succeeded")
@@ -58,6 +59,7 @@ enum SSHSmoke {
         try await capture(window, "native-ssh-transfer-progress-en-dark.png"); captures.append("native-ssh-transfer-progress-en-dark.png")
         guard ssh.active?.state == "running" else { throw BridgeFailure(code: "SSH_QA", message: "Transfer finished before progress capture") }
         await ssh.cancelTransfer(); await transfer.value
+        guard ssh.feedback.contains("cancelled") else { throw BridgeFailure(code: "SSH_QA", message: "Transfer cancellation feedback is missing") }
         let finalOperations = try await bridge.call("ssh.operations")
         guard finalOperations.array.contains(where: { $0["id"].string == progress.id && $0["state"].string == "cancelled" }) else { throw BridgeFailure(code: "SSH_QA", message: "Transfer cancellation did not complete") }
 
@@ -158,6 +160,7 @@ enum SSHSmoke {
             _ = try await reopened.model.perform(["kind": .string("auth.forget"), "reference": reference, "remember": .bool(true)])
         }
         await reopened.model.select(nil)
+        guard reopened.model.lastTransfer == nil else { throw BridgeFailure(code: "SSH_QA", message: "New connection inherited another profile's transfer status") }
         reopened.model.name = "Trust cancellation QA"; reopened.model.host = fixture["unknownAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = "isolated-qa-password"; reopened.model.rootPath = fixture["remote"].string ?? ""
         guard await reopened.model.save() else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
         let connecting = Task { @MainActor in await reopened.model.connectFiles() }

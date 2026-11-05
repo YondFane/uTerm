@@ -1406,7 +1406,8 @@ replacement, downloads and cancellation; download other preview types to open th
 protection also covers local file selection. Background operations carry generations, rejecting
 stale cancel/stop requests. Transfer byte counts cross Rust/Swift/TypeScript as decimal strings to
 preserve u64 precision. Forwarding binds only to loopback; rules require explicit start and can be
-stopped independently.
+stopped independently. Starting a transfer clears earlier feedback; selecting another profile or a
+new draft clears the previous profile's transfer status.
 
 Passwords use in-memory references valid for the application lifetime or the QA app's own
 system-credential namespace. The native SSH Core client stays alive across terminal transport

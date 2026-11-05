@@ -80,10 +80,12 @@ final class SSHModel: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
     func newDraft() {
+        lastTransfer = nil
         selectedID = ""; connectionID = UUID().uuidString; name = ""; host = ""; mode = "direct"; port = "22"; username = ""; authentication = "config"; identity = ""; jump = ""; remoteOS = "posix"; rootPath = ""; password = ""; remember = false; credential = nil; folder = ""; listing = []; selection = nil; remoteRoot = .null; baseline = fingerprint
     }
     func apply(_ id: String) {
         guard let value = connections.first(where: { $0["id"].string == id }) else { return }
+        if selectedID != id { lastTransfer = nil }
         selectedID = id; connectionID = id; name = value["name"].string ?? ""; host = value["host"].string ?? ""; mode = value["mode"].string ?? "alias"; port = value["port"].number.map { String(Int($0)) } ?? ""; username = value["username"].string ?? ""; authentication = value["authentication"].string ?? "config"; identity = value["identity_file"].string ?? ""; jump = value["jump_host"].string ?? ""; remoteOS = value["os"].string ?? "posix"; rootPath = value["root"].string ?? ""; password = ""; remember = value["remember_password"].bool ?? false; credential = value["credential_id"].string; folder = ""; listing = []; selection = nil; remoteRoot = roots[id] ?? .null; baseline = fingerprint
     }
     func select(_ id: String?) async {
@@ -220,7 +222,7 @@ final class SSHModel: ObservableObject {
     }
     func transfer(direction: String, paths: [URL]? = nil, overwrite: Bool = false) async {
         guard connected, !busy, !prepared else { return }
-        busy = true; error = ""
+        busy = true; error = ""; feedback = ""
         defer { busy = false; active = nil }
         var selected = paths
         if selected == nil {
