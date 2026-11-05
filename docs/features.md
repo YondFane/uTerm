@@ -1315,9 +1315,26 @@ real SFTP subsystem over pipes; they do not test SSH authentication, host trust 
 reconnection. Platform CI retains the Core/backend test logs for the actual source. No new FFI or
 JSON path endpoint is claimed.
 
-This shared subset does not provide the native SSH connection interface, credential adapter, SFTP
-transfer or tunnel lifecycle yet. Existing Tauri authentication and remote services retain their
-owners. Full dual-client SSH/SFTP acceptance remains open in #36.
+The shared `ssh::auth` service owns password-reference binding, temporary credentials,
+remember/forget and bounded one-use askpass servers. Both clients can supply a host-trust
+confirmation callback and a credential-store port. The shared system adapter retains macOS Keychain
+and Windows Credential Manager service/reference names; Tauri still supplies its existing
+application identifier and native dialog. Redis/database credential callers reuse that same system
+adapter without changing their namespaces. Credentials remain bound to the connection and effective
+OpenSSH endpoint; renaming a connection does not invalidate them, while an endpoint change refuses
+reuse. Corrupt credential data returns a fixed error without exposing its contents.
+
+The two Linux `ssh_auth` integration checks pass with an in-memory credential port, actual OpenSSH
+configuration resolution and a real loopback askpass listener. They cover changed targets,
+remember-to-temporary conversion, forgetting, malformed storage, invalid passwords and
+proxy-password refusal. The platform-only test writes, reads and deletes a unique QA
+Keychain/Credential Manager reference; its Windows/macOS result is recorded separately by CI. These
+tests do not establish actual SSH login or native host-trust interaction. Native connection UI, SFTP
+transfer and tunnel lifecycle adoption remain open in #36. Run them with
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test ssh_auth`. The eight
+related Core configuration/path/binding checks, 81 backend checks (nine optional tests ignored) and
+13 SSH frontend checks also pass on Linux; this does not establish Windows/macOS credential-store
+acceptance.
 
 ### Quick connections and host search
 

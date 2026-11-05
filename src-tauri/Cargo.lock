@@ -5507,7 +5507,6 @@ dependencies = [
  "reqwest 0.12.28",
  "russh-sftp",
  "rustls-native-certs",
- "security-framework",
  "semver",
  "serde",
  "serde_json",
@@ -5529,7 +5528,6 @@ dependencies = [
  "uterm-core",
  "utermd-local",
  "uuid",
- "windows-sys 0.61.2",
  "zip",
 ]
 
@@ -5546,6 +5544,7 @@ dependencies = [
  "regex",
  "reqwest 0.12.28",
  "schemars 1.2.2",
+ "security-framework",
  "serde",
  "serde_json",
  "sha2",
@@ -5554,6 +5553,7 @@ dependencies = [
  "tokio",
  "utermd-local",
  "uuid",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

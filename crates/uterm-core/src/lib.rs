@@ -2,6 +2,7 @@ pub mod archives;
 mod configuration;
 mod connections;
 mod control;
+pub mod credentials;
 pub mod files;
 pub mod git;
 pub mod host;

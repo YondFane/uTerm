@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod paths;
 
 use anyhow::{anyhow, bail, Context, Result};
