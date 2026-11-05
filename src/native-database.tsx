@@ -3,6 +3,7 @@ import { DatabaseComponents } from "./components/DatabaseComponents";
 import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
 import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
 import { contentInvoke, listenContent } from "./lib/content-host";
+import { contentErrorText } from "./lib/content-transport";
 import {
   databaseError,
   databaseConfigFingerprint,
@@ -27,7 +28,7 @@ interface Catalog {
   groups: Group[];
 }
 const message = (reason: unknown) =>
-  /\bCONFLICT\b/.test(String(reason))
+  /\bCONFLICT\b/.test(contentErrorText(reason))
     ? tx("配置已被其他窗口修改，请重新读取后再保存。")
     : databaseError(reason);
 

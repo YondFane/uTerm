@@ -1679,8 +1679,9 @@ connections…** and reuses the connection form and workbench through the scoped
 Temporary passwords match canonical configuration values; changing an inactive target recreates its
 workbench without the previous password. Profile conflicts retain input.
 
-Structured content errors retain their code for the shared Redis handlers. Profile conflict messages
-do not need to repeat the code for the form to retain input and request a reload.
+Redis handlers explicitly include structured error codes without changing generic error-string
+formatting. Profile conflict messages do not need to repeat the code for the form to retain input
+and request a reload.
 
 Closing the window hides it while retaining its connection/draft; quitting freezes the view, checks
 pending operations and confirms draft loss. Cancelling quit resumes it with draft protection. CA
@@ -1693,7 +1694,7 @@ Linux x86_64 / Rust 1.99.1 passes all 11 Redis service regressions with real Red
 OpenSSL, including binary values, TTL, stale snapshots, read-only enforcement, TLS name/CA rejection
 and uncertain writes without retry. Two public host-port regressions cover late authentication after
 shutdown and cancelled authentication. Full Core/FFI, host, Tauri backend (41 passed / two ignored),
-frontend (418 passed / ten skipped), types, production/desktop builds and contracts pass.
+frontend (419 passed / ten skipped), types, production/desktop builds and contracts pass.
 
 Five additional async/contract regressions pass: unread-result backpressure with disconnect still
 available, generation/single-consumption checks and parameter exclusion, quit/resume with hidden
@@ -5634,9 +5635,10 @@ transport. Profile save/removal uses revision-checked Core storage and refuses a
 profiles. Temporary passwords stay in application memory and match canonical configuration values;
 changing a profile's target recreates its inactive workbench without carrying the old password.
 
-Structured content errors retain their code when existing database handlers classify the message.
-Revision conflicts keep the connection form open and request a reload; busy/pending errors retain
-their specific guidance even when the host message does not repeat the code.
+Database handlers explicitly include structured error codes when classifying messages, while generic
+error strings keep their existing format. Revision conflicts keep the connection form open and
+request a reload; busy/pending errors retain their specific guidance even when the host message does
+not repeat the code.
 
 Closing this window hides it while retaining connections, drafts and results. Application quit
 refuses active work or pending transactions and confirms draft loss. If another window cancels quit,
@@ -5649,7 +5651,7 @@ settings without saving defaults when opening the window.
 Linux x86_64 / Rust 1.99.1 passes 24 database/document/component regressions, five common download
 regressions and two host-port checks covering cross-command draft/exit protection, native picker
 cancellation and cached-engine repair. Full Core/FFI, host, backend (41 passed / two ignored),
-frontend (418 passed / ten skipped), types and production/desktop builds pass. Current checks and
+frontend (419 passed / ten skipped), types and production/desktop builds pass. Current checks and
 actual database/dual-client acceptance are tracked in
 [#38](https://github.com/YondFane/uTerm/issues/38); native database-workbench acceptance is still
 pending.

@@ -1,7 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { databaseConfigFingerprint } from "../src/lib/database.ts";
+import { databaseConfigFingerprint, databaseError } from "../src/lib/database.ts";
+import { redisError } from "../src/lib/redis.ts";
+import { ContentFailure } from "../src/lib/content-transport.ts";
+
+test("data handlers classify structured error codes while generic error strings keep Git diagnostics", () => {
+  const busy = new ContentFailure("DB_BUSY", "A worker still owns this request");
+  assert.equal(databaseError(busy), databaseError("DB_BUSY"));
+  assert.equal(
+    redisError(new ContentFailure("REDIS_CONFLICT", "Value revision changed")),
+    redisError("REDIS_CONFLICT"),
+  );
+  const directory = new ContentFailure("HOST_ERROR", "fatal: not a git repository");
+  assert.equal(String(directory), "Error: fatal: not a git repository");
+});
 
 test("temporary password configuration identity survives Rust JSON key order but rejects changed endpoints", () => {
   const config = {

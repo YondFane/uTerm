@@ -1,6 +1,7 @@
 import { sshError } from "./file-target.ts";
 import { downloadError } from "./download-error.ts";
 import { tx } from "./i18n.ts";
+import { contentErrorText } from "./content-transport.ts";
 import { validSshTarget, type SshTarget } from "./workspace.ts";
 
 export const databaseKinds = ["mysql", "postgresql", "oracle", "elasticsearch", "mongodb"] as const;
@@ -262,7 +263,7 @@ export function validDatabaseConfig(value: unknown): value is DatabaseConfig {
 
 /** Maps backend codes without exposing credential-bearing diagnostics. 映射后端错误码，不显示可能含凭据的诊断信息。 */
 export function databaseError(reason: unknown): string {
-  const code = String(reason);
+  const code = contentErrorText(reason);
   if (code.includes("DB_DOCUMENT_QUERY"))
     return tx("查询必须是受支持的 JSON 对象，请检查操作和字段。");
   if (code.includes("DB_DOCUMENT_TARGET")) return tx("请选择数据库和集合，或指定一个索引。");

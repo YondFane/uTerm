@@ -162,9 +162,13 @@ export class ContentFailure extends Error {
     super(message);
     this.code = code;
   }
-  override toString(): string {
-    return this.message.startsWith(this.code) ? this.message : `${this.code}: ${this.message}`;
-  }
+}
+export function contentErrorText(reason: unknown): string {
+  const text = String(reason);
+  const code = reason && typeof reason === "object" ? (reason as { code?: unknown }).code : null;
+  return typeof code === "string" && code !== "HOST_ERROR" && !text.includes(code)
+    ? `${code}: ${text}`
+    : text;
 }
 export class ContentScope {
   private closed = false;

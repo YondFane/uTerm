@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { RedisConnectionDialog } from "./components/RedisConnectionDialog";
 import { RedisWorkspace } from "./components/RedisWorkspace";
 import { contentInvoke, listenContent } from "./lib/content-host";
+import { contentErrorText } from "./lib/content-transport";
 import {
   redisError,
   redisConfigFingerprint,
@@ -27,7 +28,7 @@ interface Catalog {
   groups: Group[];
 }
 const message = (reason: unknown) =>
-  /\bCONFLICT\b/.test(String(reason))
+  /\bCONFLICT\b/.test(contentErrorText(reason))
     ? tx("配置已被其他窗口修改，请重新读取后再保存。")
     : redisError(reason);
 
