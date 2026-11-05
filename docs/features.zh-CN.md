@@ -209,12 +209,10 @@ UTF-16 码元一致，保留 BOM／换行。保留最多八份有效前序快照
 
 同一规范项目的原生可编辑文件按打开顺序组成 AppKit 窗口标签，重复打开文件会选中原标签。不同项目、只读预览及 Git 窗口不进入该可编辑分组。每个标签保留独立的文档桥接、恢复队列和关闭保护；冲突关闭后选择继续编辑，保留两份草稿与外部文件；关闭一个标签仍只保护并确认其自身文档。
 
-真实编辑器冒烟在原生标签组中编辑两份恢复文件，核对准确共享草稿与未变原文件，再保持两个标签打开供 SIGKILL。重启阶段明确重开两份文件，检查恢复文本／顺序／复用、其他项目／预览隔离，并执行冲突／继续编辑／放弃及剩余文件的准确保存。Source
-`1801fa6dc67973e8aee67efd8fd4973ae788bd1c`／merge `1380abce17c927d68aa6f5147502bb0d4d234dfe` 在 ARM
-macOS
-15.8.2 通过这些检查，证据位于[artifact13393627827](https://github.com/YondFane/uTerm/actions/runs/41980083853/artifacts/13393627827)。`native-editor-tabs-checkpoint.png`、`native-editor-tabs-reopen.png`
-与 `native-editor-tabs-conflict-640.png`
-均为真实 WindowServer 截图，已检查重开图片，发现深色编辑器周围的原生标签栏为浅色。文件窗口现于打开时继承主窗口配置的外观，两阶段均要求深色窗口栏检查；该修复仍需自己的 ARM／Intel 结果。同一源码之后的 Git 启动争用检查另行失败。跨重启持久标签顺序／窗口位置、PDF 标记及完整人工键盘／输入法／焦点验收仍在 #34 开放。
+真实编辑器冒烟在原生标签组中编辑两份恢复文件，保持两个标签打开供 SIGKILL，重启后明确重开并检查准确草稿、标签顺序／复用、其他项目／预览隔离、冲突／继续编辑／放弃及剩余文件保存。Source
+`e06168dbe9491c3c862977dc931c6b7ad098a4ee`／merge `e48ce2f886987f92b17f77a42637f6b692bf6da2`
+的 ARM／Intel 两份报告均通过这些检查及深色窗口栏检查，保存
+`native-editor-tabs-checkpoint.png`、`native-editor-tabs-reopen.png`、`native-editor-tabs-conflict-640.png`。已查看本源码的重开图，原生标签栏与深色编辑器一致。[ARM 产物](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13395713575)与[Intel 产物](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13396400420)包含 editor-live.json、两阶段报告、系统／工具链及实际 WindowServer 图。跨重启持久标签顺序／窗口位置、PDF 标记及完整人工键盘／输入法／焦点验收仍在 #34 开放。
 
 #### Tauri 编辑器草稿迁移
 
@@ -297,61 +295,34 @@ Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
 
 #### Git 与编辑器并发验证
 
-`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test git_operations`
-使用真实本地 Git 进程与可丢弃裸远程仓库，通过 Core
-JSON 执行全部 19 个 Git／Worktree 方法，核对选中仓库／Worktree、无关字节与检出身份、过期引用／分支拒绝、检出冲突、定向回退、上游／推送及脏／干净 Worktree 删除。CI 保存包含 source／merge、平台及 Git 版本的
-`git-operations-core.json`。Linux x86_64 本地通过，工作区报告不作为平台或 GUI 验收。
+已验收的 Git／Worktree 实现为 source `e06168dbe9491c3c862977dc931c6b7ad098a4ee`／实际 CI merge
+`e48ce2f886987f92b17f77a42637f6b692bf6da2`，父提交已核对为本源码与 release
+`ca65aa9ca76abcc510124427398789ba01635c4d`；这是 CI 临时测试合并，不代表 PR 已合入。[两个原生 job](https://github.com/YondFane/uTerm/actions/runs/41984445494)和[两个 Tauri job](https://github.com/YondFane/uTerm/actions/runs/41984445471)均以干净源码报告通过，[Java 矩阵](https://github.com/YondFane/uTerm/actions/runs/41984445509)及[Maven 六组合](https://github.com/YondFane/uTerm/actions/runs/41984445498)也通过。
 
-原生 Git 冒烟持有独立 `uterm-core-contract --hold-store-lock`
-进程，在启动完成后、写锁仍被持有时发送真实原生收藏恢复通知，保存
-`native-git-favorites-writer-busy.png`，释放自身持锁进程后点击一次**重新读取 Git 收藏**。第二个独立持锁整页重载场景检查启动失败：原生错误页提供明确重试，请求期间禁用，重复失败后仍可再次重试；设置尚不可读时，使用应用缓存的语言和紧凑的 28
-px 按钮。场景保存
-`native-git-bootstrap-writer-busy.png`，释放第二个持锁进程后重试启动，收藏字节不变。报告要求两次真实锁、退出 0、控件可用及 16 张图。新的 ARM／Intel 执行仍待 CI，旧
-`favoriteRecoveryExplicitBusyReload=false` 报告不能证明这些路径。
+各平台 `git-operations-core.json` 记录真实 Git 进程、全部 19 个 Core
+JSON 方法、选中仓库／Worktree 隔离、工作区／暂存差异、过期引用／分支拒绝、检出冲突、定向回退、上游／推送及脏／干净删除。原生 macOS
+15.8.2 ARM64 与 15.7.9 Intel 各通过 35 项 Git／窗口断言，保存 16 张真实 WindowServer 图。Windows
+Server2025 x64 与过渡 macOS 26.6.2
+ARM64 各通过 53 个真实隔离应用场景，cleanupErrors 为空。source、merge、系统、架构与工具链均在报告中。
 
-Source `580405b2786943e6257979027e8083d2e118b2fe`／merge `ec2df4c9aed72e6466d202357cd787c3688e3dc1`
-的 ARM
-19 项 Core 操作报告通过，但整页重载在更早的上下文读取失败，真实错误图保留于[artifact13393467857](https://github.com/YondFane/uTerm/actions/runs/41978931526/artifacts/13393467857)。Source
-`e68c0b9a0d0186983d0fd5f672da29491c4d5415`
-的 ARM 启动后收藏重读及原生标签外观检查通过，但启动错误页默认中文，与所选英文不符，第二个场景超时；真实失败保留于[artifact13394905921](https://github.com/YondFane/uTerm/actions/runs/41981707594/artifacts/13394905921)。缓存启动语言及紧凑错误控件仍需自己的真实窗口结果。中英文 React／WebKit 测试检查初始按钮／文档语言、请求中禁用及重复失败后明确重试，不能代替原生平台验收。
+产物：[原生 ARM13395713575](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13395713575)、[原生 Intel13396400420](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13396400420)、[Windows13396047301](https://github.com/YondFane/uTerm/actions/runs/41984445471/artifacts/13396047301)、[Tauri Mac13396081499](https://github.com/YondFane/uTerm/actions/runs/41984445471/artifacts/13396081499)。原生
+`git-live.json`、`git-operations-core.json`、Tauri `tauri-state-qa/report.json`
+及测试日志索引各场景。`native-git-favorites-writer-busy.png`
+证明独立 Rust 进程真实持锁、读取争用可见及释放后一次明确重读；独立的
+`native-git-bootstrap-writer-busy.png`
+证明启动错误遵循缓存应用语言并显示紧凑重试按钮，请求期间禁用、再次失败后仍可重试。两个自有持锁进程均退出 0，收藏字节保持不变。
 
-当前四平台 Git／编辑器基线为源码 head `429428cbb8787c657c39c14450b4e997d0f6a6fe`、实际 tested merge
-`a0b1b0806bfae1558b9f87ea6c46859ebd93792d`。
-[两个原生 job](https://github.com/YondFane/uTerm/actions/runs/41765322849)和
-[两个 Tauri job](https://github.com/YondFane/uTerm/actions/runs/41765322731)均通过。可下载产物：
-[ARM 13292342975](https://github.com/YondFane/uTerm/actions/runs/41765322849/artifacts/13292342975)、
-[Intel 13291844070](https://github.com/YondFane/uTerm/actions/runs/41765322849/artifacts/13291844070)、
-[Windows 13292857277](https://github.com/YondFane/uTerm/actions/runs/41765322731/artifacts/13292857277)、
-[Tauri Mac 13292343203](https://github.com/YondFane/uTerm/actions/runs/41765322731/artifacts/13292343203)。报告记录干净源码、系统、架构和工具链；merge 父提交已核对为 release 基线及本源码。
-[准确证据和前序失败](https://github.com/YondFane/uTerm/issues/35#issuecomment-6621732619)保留在 #35。
+`native-git-cancel-frozen-editor.png`、`native-git-editor-conflict.png`
+与 Worktree 确认／拒绝图展示写入／编辑器保护；Windows
+`git-git-worktree-delete-dirty.png`、`git-git-write-quit-blocked.png`
+展示脏数据保留及实际在途 IPC 退出拒绝。依赖真实 Core 的 Tauri／WebKit
+abort／timeout／close 回归暂停真实 Git
+hook，保护保持至实际结束。已检查本源码的原生与 Windows 图片。旧失败及原产物保存在 #35，不当作通过结果。
 
-原生 ARM macOS 15.8.2、Intel 15.7.9 使用 Xcode 16.4／Swift 6.1.2／Rust
-1.99.1，十四项 Swift 检查及十四张真实 Git 图通过。真实原生菜单、确认与剪贴板覆盖默认取消、完整原始来源复制且禁用恢复、过期拒绝、损坏字节保留、缺失预览及明确恢复。实际在途 WebKit 取消保持编辑器冻结至 Git 完成；仓库／列表同步失败要求明确刷新。
-
-Windows Server 2025 x64 和过渡期 macOS 26.6.2
-arm64 各通过四十个真实隔离 Tauri 场景，清理无错误。实际 post-checkout
-hook 暂停 Git；取消保留调用方，正常退出显示拒绝，释放后产生准确 `GIT_WRITE_FINISHED\n`
-字节和目标分支，随后正常退出。已目视两平台的 `git-git-write-quit-blocked.png`；图片附有
-`git-cancel-exit.json`、场景 JSON 及进程日志。Linux 在同一干净源码也通过四十场景，并目视退出保护截图。
-
-同一运行保留真实 Worktree 确认、取消／脏／过期拒绝、明确重新读取／再次预览及干净删除；拒绝保留元数据／文件字节，成功保留分支。固定预览版本拒绝队列／外部更新，不悄然采用新状态。真实 SDK 检查持有实际设置写入回复，拒绝排队删除且不发送 Git 删除；显示名称／路径仍须匹配预览快照。
-
-恢复检查覆盖准确来源剪贴板字节、真实写锁拒绝后的明确草稿重试、CRLF／NFD 持久化、SIGKILL／重启、BOM／CRLF 保存和正常退出。核心恢复覆盖校验和、当前文件 CAS、占用路径、缺失无覆盖安装、全仓库恢复／撤回及备份上限。真实 Rust／React 检查覆盖迟到回复、超过 20k 显示预览的完整来源、原生复制可见失败／重试、先退出时拒绝恢复及等待恢复确认。其他保护暂缓退出后重新核对共享存储。
-
-基线通过 397 前端（十跳过）、102 后端（十忽略）、Core／FFI、不可变 helper 兼容、类型、生产／桌面构建、本地化、格式及双语文档。真实 Git 取消／超时／关闭专项在调用方等待修复前失败、修复后通过；只读取消仍立即返回。后端生命周期检查在调用方丢失后保留排队线程，失败只释放自身所有权。这些结果不代表后续 Python 服务修改验收。
-
-原生恢复 QA 在恢复或设置变化后，等待实际收藏菜单操作可用，再开始编辑器写入。可见写锁忙碌失败仅允许一次明确**重新读取 Git 收藏**。Tauri 预览 QA 只在可见的只读规范存储写锁忙碌错误后，最多三次明确点击**重新读取恢复副本**，报告记录
-`favoritePreviewReloads`。这些操作不重放恢复或 Git 写入；其他错误仍失败，来源／恢复字节必须准确，原冲突／确认检查继续保留。原生 Git 失败报告在正常退出前保留进程采样。
-
-收藏恢复 QA 在损坏数据入口显示后，由自有 helper 持有实际规范存储系统锁，记录只读争用失败及禁用恢复按钮，随后仅释放该 helper 的锁，再明确重读。在 source
-`ff60a6bdca87228c55194ffa7eab09713c7eda85`／tested merge
-`05746e82247e34b0b41631a187285112756112cb`，[Tauri CI 41834709552](https://github.com/YondFane/uTerm/actions/runs/41834709552)
-通过 Windows Server 2025 x64 与 macOS 26.6.2
-ARM64 各 48 场景，包含实际重读一次、损坏字节不变和 cleanupErrors=[]。`favorite-writer-lock.json`、`git-git-favorite-recovery-busy.png`
-与 `git-git-favorite-recovery-preview.png`
-记录自有进程及失败／恢复。这些证据覆盖实际争用分支，早先零次重读成功不代表覆盖。
-
-完整取消／生命周期矩阵及 #16 依赖使 #35 保持开放。人工键盘／IME／焦点、正式签名／公证和已安装版本升级／回退未验收；上述检查不代表发版验收。
+专项契约命令为
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test git_operations`，前端／传输检查为
+`pnpm test`，macOS 窗口流程为
+`bash scripts/macos-git-smoke.sh`。自动化使用真实 AppKit 控件和真实应用 DOM 事件，不宣称人工键盘／输入法验收。M3 文件／布局／PDF、已认证 SSH、完整运行面板及人工验收缺口仍按原标准保留，不宣称整个改造或发版完成。
 
 ## 项目官网
 
@@ -1780,9 +1751,9 @@ URL 解码内失败，此上游限制不计为桥接成功。Windows 桥接自�
 运行 `pnpm test:core` 和前端检查时，将 `JAVA_HOME` 指向 JDK 21，并把其 `bin` 加入
 `PATH`。Java 互操作 workflow 在 JDK 8／11／17／21 上运行实际 Windows 宿主，上传
 `java-live-core.json`、源码／工具链信息及专项日志。Source
-`ca769d0dd6f8872c5b800dc5dba46fe2ad342976`／tested merge `c4190078b7b2d7053c6f52f3b3cb7d0247d5a63a`
+`e06168dbe9491c3c862977dc931c6b7ad098a4ee`／tested merge `e48ce2f886987f92b17f77a42637f6b692bf6da2`
 在 Temurin
-8u504、11.0.32.1+1、17.0.20.1+1 和 21.0.13+9 上通过严格 Windows 矩阵。每份干净源码报告核对中文项目／JAR 路径、用户 premain 属性、准确 Unicode／emoji 及空参数、最终 stdout／stderr、退出 7、回放／ack、过期／跨任务族停止拒绝、强制清理及缓存释放。四套 ASCII／中文编码诊断也均准确保留属性／参数并退出 7。[Run41978309724](https://github.com/YondFane/uTerm/actions/runs/41978309724)保存[JDK8 artifact13393076315](https://github.com/YondFane/uTerm/actions/runs/41978309724/artifacts/13393076315)及对应 11／17／21 产物。Java8
+8u504、11.0.32.1+1、17.0.20.1+1 和 21.0.13+9 上通过严格 Windows 矩阵。每份干净源码报告核对中文项目／JAR 路径、用户 premain 属性、准确 Unicode／emoji 及空参数、最终 stdout／stderr、退出 7、回放／ack、过期／跨任务族停止拒绝、强制清理及缓存释放。四套 ASCII／中文编码诊断也均准确保留属性／参数并退出 7。[Run41984445509](https://github.com/YondFane/uTerm/actions/runs/41984445509)保存[JDK8 artifact13395571787](https://github.com/YondFane/uTerm/actions/runs/41984445509/artifacts/13395571787)及对应 11／17／21 产物。Java8
 Unicode 应用数据缓存的明确限制及原版 JDK 补充字符目录失败仍记录保留；#37 完整验收及人工验收继续开放。原失败与本次修复范围保存在 Issue
 #37。
 

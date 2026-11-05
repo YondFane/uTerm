@@ -370,20 +370,18 @@ windows stay outside that editable group. Each tab keeps its own document-scoped
 queue and close guard; cancelling a conflicted close retains both drafts and the external file.
 Closing one tab continues to guard and acknowledge only its own document.
 
-The real editor smoke edits two recovered files in their native tab group, verifies exact shared
-drafts and unchanged originals, then leaves both tabs open for SIGKILL. The relaunch phase
-explicitly reopens both files, checks recovered text/order/reuse, isolates another project/preview,
-and exercises conflict/Keep editing/discard plus exact sibling Save. Source
-`1801fa6dc67973e8aee67efd8fd4973ae788bd1c` / merge `1380abce17c927d68aa6f5147502bb0d4d234dfe` passes
-those ARM macOS 15.8.2 checks in
-[artifact13393627827](https://github.com/YondFane/uTerm/actions/runs/41980083853/artifacts/13393627827).
-`native-editor-tabs-checkpoint.png`, `native-editor-tabs-reopen.png` and
-`native-editor-tabs-conflict-640.png` are actual WindowServer captures; the reopen image was
-inspected. It exposed light native tab chrome around the dark editor. File windows now inherit the
-main window's configured appearance on opening, and both phases require the dark chrome check; that
-repair needs its own ARM/Intel result. The same source's later Git startup-contention smoke fails
-separately. Persisted tab order/window geometry, PDF marks and full manual keyboard/IME/focus
-acceptance remain open in #34.
+The real editor smoke edits two recovered files in native tabs, leaves both open for SIGKILL, then
+explicitly reopens and checks exact drafts, order/reuse, project/preview isolation, conflict/Keep
+editing/discard and sibling Save. Source `e06168dbe9491c3c862977dc931c6b7ad098a4ee` / merge
+`e48ce2f886987f92b17f77a42637f6b692bf6da2` passes both ARM/Intel flows and the configured dark
+native chrome check. Actual WindowServer captures are `native-editor-tabs-checkpoint.png`,
+`native-editor-tabs-reopen.png` and `native-editor-tabs-conflict-640.png`; the current reopen image
+was inspected and its tab chrome matches the dark editor.
+[ARM artifacts](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13395713575)
+and
+[Intel artifacts](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13396400420)
+include editor-live.json, both phase reports and system/toolchain data. Persisted tab order/window
+geometry, PDF marks and full manual keyboard/IME/focus acceptance remain open in #34.
 
 #### Tauri editor draft handoff
 
@@ -564,108 +562,47 @@ repositories' recovery data.
 
 #### Git and editor concurrency validation
 
-`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test git_operations` exercises
-all 19 Git/Worktree methods through Core JSON with actual local Git processes and a disposable bare
-remote. It verifies the selected repository/Worktree, unrelated bytes and checkout identity,
-stale-reference/branch refusal, checkout conflicts, targeted rollback, upstream/push and dirty/clean
-Worktree deletion. CI saves `git-operations-core.json` with source/merge, platform and Git version.
-Linux x86_64 passes locally; the working-tree report is not platform or GUI acceptance.
+The accepted Git/Worktree implementation is source `e06168dbe9491c3c862977dc931c6b7ad098a4ee` /
+actual CI merge `e48ce2f886987f92b17f77a42637f6b692bf6da2`. Merge parents were verified as this
+source and release `ca65aa9ca76abcc510124427398789ba01635c4d`; this is a CI test merge, not a merged
+PR. Both [native jobs](https://github.com/YondFane/uTerm/actions/runs/41984445494) and both
+[Tauri jobs](https://github.com/YondFane/uTerm/actions/runs/41984445471) pass with clean-source
+reports. The [Java matrix](https://github.com/YondFane/uTerm/actions/runs/41984445509) and
+[six-job Maven matrix](https://github.com/YondFane/uTerm/actions/runs/41984445498) also pass.
 
-The native Git smoke owns an independent `uterm-core-contract --hold-store-lock` process. After
-bootstrap it sends the real native favorite-restoration notification while the writer holds the
-lock, captures `native-git-favorites-writer-busy.png`, releases its own writer and clicks **Reload
-Git favorites** once. A separate held-lock page reload exercises startup failure; the native page
-shows explicit Retry, disables it during a request and permits retry after another failure. Before
-settings are readable, it uses the application's cached language and a compact 28 px button. The
-smoke captures `native-git-bootstrap-writer-busy.png`, releases its second writer and retries
-startup without changing favorite bytes. Both real locks, exit 0, enabled controls and 16 images are
-required. New ARM/Intel execution is pending; previous `favoriteRecoveryExplicitBusyReload=false`
-reports do not prove these paths.
+Each platform's `git-operations-core.json` records actual Git processes, all 19 Core JSON methods,
+selected repository/Worktree isolation, distinct staged/working diffs, stale-reference/branch
+refusal, checkout conflicts, targeted rollback, upstream/push and dirty/clean deletion. Native macOS
+15.8.2 ARM64 and 15.7.9 Intel each pass 35 Git/window assertions and save 16 real WindowServer
+captures. Windows Server 2025 x64 and transitional macOS 26.6.2 ARM64 each pass 53 real isolated app
+scenes with no cleanup errors. Source, merge, OS, architecture and toolchains are in the reports.
 
-Source `580405b2786943e6257979027e8083d2e118b2fe` / merge `ec2df4c9aed72e6466d202357cd787c3688e3dc1`
-passes the ARM 19-operation Core report but fails at the earlier context read on whole-page reload.
-Its actual error image remains in
-[artifact13393467857](https://github.com/YondFane/uTerm/actions/runs/41978931526/artifacts/13393467857).
-Source `e68c0b9a0d0186983d0fd5f672da29491c4d5415` passes the ARM post-bootstrap favorite reload and
-native tab appearance checks, but the startup error defaults to Chinese rather than the selected
-English, so its second scene times out. This actual failure remains in
-[artifact13394905921](https://github.com/YondFane/uTerm/actions/runs/41981707594/artifacts/13394905921).
-Cached bootstrap language and compact error controls require their own real-window result.
-English/Chinese React/WebKit tests verify initial button/document language, pending disable and
-explicit retry after repeated failures; they do not replace native platform acceptance.
+Artifacts:
+[native ARM13395713575](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13395713575),
+[native Intel13396400420](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13396400420),
+[Windows13396047301](https://github.com/YondFane/uTerm/actions/runs/41984445471/artifacts/13396047301),
+[Tauri Mac13396081499](https://github.com/YondFane/uTerm/actions/runs/41984445471/artifacts/13396081499).
+Native `git-live.json`, `git-operations-core.json`, Tauri `tauri-state-qa/report.json` and test logs
+index each scenario. `native-git-favorites-writer-busy.png` proves a real independent Rust writer,
+visible read contention and one explicit reload after release. The separate
+`native-git-bootstrap-writer-busy.png` proves the startup error uses the cached application language
+and a compact Retry button; retry remains disabled while pending and can recover after another
+failure. Both owned writers exit 0 and favorite bytes remain unchanged.
 
-The current four-platform Git/editor baseline is source head
-`429428cbb8787c657c39c14450b4e997d0f6a6fe`, actual tested merge
-`a0b1b0806bfae1558b9f87ea6c46859ebd93792d`. Both
-[native jobs](https://github.com/YondFane/uTerm/actions/runs/41765322849) and both
-[Tauri jobs](https://github.com/YondFane/uTerm/actions/runs/41765322731) pass. Downloadable
-artifacts:
-[ARM 13292342975](https://github.com/YondFane/uTerm/actions/runs/41765322849/artifacts/13292342975),
-[Intel 13291844070](https://github.com/YondFane/uTerm/actions/runs/41765322849/artifacts/13291844070),
-[Windows 13292857277](https://github.com/YondFane/uTerm/actions/runs/41765322731/artifacts/13292857277),
-[Tauri Mac 13292343203](https://github.com/YondFane/uTerm/actions/runs/41765322731/artifacts/13292343203).
-Reports record clean source, OS, architecture and toolchain; merge parents were checked against the
-release baseline and this source.
-[Exact evidence and prior failures](https://github.com/YondFane/uTerm/issues/35#issuecomment-6621732619)
-remain in Issue #35.
+`native-git-cancel-frozen-editor.png`, `native-git-editor-conflict.png` and Worktree confirmation/
+refusal captures show write/editor protection. Windows `git-git-worktree-delete-dirty.png` and
+`git-git-write-quit-blocked.png` show retained dirty data and an actual in-flight IPC quit refusal.
+The Core-backed Tauri/WebKit abort/timeout/close tests use a paused real Git hook and keep the
+caller protected until completion. Native and Windows current-source images were inspected. Earlier
+failures and their original artifacts remain in Issue #35; they are not treated as passing runs.
 
-Native ARM macOS 15.8.2 and Intel 15.7.9 use Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Fourteen Swift
-checks and fourteen real Git captures pass. Actual native menus, confirmations and clipboard cover
-default Cancel, complete original-source copy with Restore disabled, stale refusal, retained damaged
-bytes, missing-file preview and explicit restoration. Real in-flight WebKit cancellation retains the
-editor freeze until Git completes; repository/list synchronization failure requires explicit
-refresh.
-
-Windows Server 2025 x64 and transitional macOS 26.6.2 arm64 each pass 40 real isolated Tauri scenes,
-with no cleanup errors. An actual post-checkout hook pauses Git; cancellation retains its caller,
-normal quit visibly refuses, then release produces exact `GIT_WRITE_FINISHED\n` bytes and the
-intended branch, followed by successful normal quit. Both platforms'
-`git-git-write-quit-blocked.png` were inspected. `git-cancel-exit.json`, scene JSON and process logs
-accompany the images. Linux also passes all 40 scenes on this clean source; its quit-guard
-screenshot was inspected.
-
-The same runs retain actual Worktree confirmation, cancel/dirty/stale refusal, explicit reload/new
-review and clean deletion, preserving metadata/file bytes on refusals and retaining the branch on
-success. Reviewed metadata rejects queued/external revisions rather than silently adopting new
-state. Real SDK checks hold an actual settings-write reply and reject queued deletion without
-sending Git delete. Raw displayed names/paths must still match the reviewed snapshot.
-
-Recovery checks cover complete source clipboard bytes, explicit draft retry after an actual writer
-lock rejection, CRLF/NFD durability, SIGKILL/relaunch, BOM/CRLF save and normal exit. Core recovery
-covers verified checksums, current-file CAS, occupied paths, no-clobber missing installation,
-all-repository restore/undo and bounded backups. Real Rust/React checks cover late replies, sources
-beyond the 20k displayed preview, visible native-copy failure/retry, quit-before-restore refusal and
-waiting for the restore acknowledgement. Shared-store approval repeats if another guard defers quit.
-
-The baseline passes 397 frontend checks (ten skipped), 102 backend checks (ten ignored), Core/FFI,
-immutable helper compatibility, types, production/desktop builds, localization, formatting and
-bilingual documentation. Targeted real Git abort/timeout/close checks failed before the caller-drain
-fix and pass afterward; read cancellation remains immediate. Backend lifetime checks retain queued
-workers after caller loss and release only the failed worker's ownership. These results do not
-accept subsequent Python service changes.
-
-Native recovery QA waits for the actual favorite menu action to become enabled after restoring or
-changing settings before beginning an editor write. A visible writer-busy failure may use one
-explicit **Reload Git favorites** action. Tauri preview QA may explicitly click **Reload recovery
-copies** up to three times only after the visible read-only canonical-writer-busy error; reports
-record `favoritePreviewReloads`. These actions do not repeat a restore or Git write. Other errors
-fail the check, source/restore bytes remain exact, and the original conflict/confirmation checks
-remain required. Native Git failure reports retain process samples before graceful exit.
-
-Favorite-recovery QA holds the actual canonical-store OS lock in an owned helper after showing the
-corrupt-data entry, captures the read-only busy failure with restore disabled, then releases only
-that helper's lock before explicitly reloading. At source `ff60a6bdca87228c55194ffa7eab09713c7eda85`
-/ tested merge `05746e82247e34b0b41631a187285112756112cb`,
-[Tauri CI 41834709552](https://github.com/YondFane/uTerm/actions/runs/41834709552) passed 48 scenes
-on Windows Server 2025 x64 and macOS 26.6.2 ARM64, including one actual preview reload, unchanged
-damaged bytes and cleanupErrors=[]. `favorite-writer-lock.json`,
-`git-git-favorite-recovery-busy.png` and `git-git-favorite-recovery-preview.png` record the owned
-process and failure/recovery. This evidence covers the actual contention branch; earlier zero-retry
-successes do not.
-
-Full cancellation/lifecycle matrix and #16 dependencies keep #35 open. Manual keyboard/IME/focus,
-formal signing/notarization and installed-version upgrade/rollback remain unverified. These checks
-do not establish release acceptance.
+Run the focused contract with
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test git_operations`,
+frontend/transport checks with `pnpm test`, and the macOS window flow with
+`bash scripts/macos-git-smoke.sh`. Automation uses actual AppKit controls and DOM events in the real
+applications, not manual keyboard/IME acceptance. The full M3 file/layout/PDF, authenticated SSH,
+runtime-panel and manual acceptance gaps remain tracked separately without claiming the whole
+migration or release is complete.
 
 ## Project website
 
@@ -3028,14 +2965,14 @@ source/asset reproducibility does not replace execution.
 Run `pnpm test:core` and frontend checks with `JAVA_HOME` pointing to JDK 21 and its `bin` on
 `PATH`. The Java interoperability workflow runs the actual Windows host on JDK 8/11/17/21 and
 uploads `java-live-core.json`, source/toolchain data and targeted logs. Source
-`ca769d0dd6f8872c5b800dc5dba46fe2ad342976` / tested merge `c4190078b7b2d7053c6f52f3b3cb7d0247d5a63a`
+`e06168dbe9491c3c862977dc931c6b7ad098a4ee` / tested merge `e48ce2f886987f92b17f77a42637f6b692bf6da2`
 passes the strict Windows matrix on Temurin 8u504, 11.0.32.1+1, 17.0.20.1+1 and 21.0.13+9. Each
 clean-source report verifies Chinese project/JAR paths, the user's premain property, exact
 Unicode/emoji and empty arguments, final stdout/stderr, exit 7, replay/ack, stale/cross-family stop,
 forced cleanup and released caches. All four ASCII/Chinese encoding diagnostics also exit 7 with
 exact properties/arguments.
-[Run41978309724](https://github.com/YondFane/uTerm/actions/runs/41978309724) retains
-[JDK8 artifact13393076315](https://github.com/YondFane/uTerm/actions/runs/41978309724/artifacts/13393076315)
+[Run41984445509](https://github.com/YondFane/uTerm/actions/runs/41984445509) retains
+[JDK8 artifact13395571787](https://github.com/YondFane/uTerm/actions/runs/41984445509/artifacts/13395571787)
 and the corresponding 11/17/21 artifacts. The explicit Unicode Java8 application-data cache
 limitation and stock-JDK supplementary-directory failures remain recorded; full #37 and manual
 acceptance are open. Original failures and the scoped fix are retained in Issue #37.
