@@ -17,6 +17,19 @@ use std::{
 };
 use utermd_local::{ssh::SshTarget, BackgroundChild};
 
+fn sshd_command() -> Command {
+    #[cfg(target_os = "macos")]
+    {
+        // Run an isolated privileged macOS server; stop only its recorded PID.
+        // 运行隔离的特权 macOS 服务；停止时只处理该服务记录的 PID。
+        let mut command = Command::new("sudo");
+        command.args(["-n", "/usr/sbin/sshd"]);
+        command
+    }
+    #[cfg(not(target_os = "macos"))]
+    Command::new("/usr/sbin/sshd")
+}
+
 struct Service {
     directory: tempfile::TempDir,
     target: SshTarget,
@@ -120,8 +133,8 @@ impl Service {
         std::fs::write(&configuration, format!("Host qa-service\n HostName 127.0.0.1\n User {user}\n Port {port}\n HostKeyAlias qa-test-host\n IdentityFile \"{}\"\n IdentitiesOnly yes\n UserKnownHostsFile \"{}\"\n GlobalKnownHostsFile /dev/null\n", root.join("client").display(), root.join("known_hosts").display())).unwrap();
         let port = server_port;
         let config = root.join("server-config");
-        std::fs::write(&config, format!("ListenAddress 127.0.0.1\nPort {port}\nHostKey {}\nPidFile {}\nAuthorizedKeysFile {}\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nUsePAM no\nAllowUsers {user}\nLogLevel ERROR\nSubsystem sftp internal-sftp\n", root.join("host").display(), root.join("server.pid").display(), root.join("authorized_keys").display())).unwrap();
-        let mut command = Command::new("/usr/sbin/sshd");
+        std::fs::write(&config, format!("ListenAddress 127.0.0.1\nPort {port}\nHostKey {}\nPidFile {}\nAuthorizedKeysFile {}\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nUsePAM no\nAllowUsers {user}\nLogLevel VERBOSE\nSubsystem sftp internal-sftp\n", root.join("host").display(), root.join("server.pid").display(), root.join("authorized_keys").display())).unwrap();
+        let mut command = sshd_command();
         command
             .args(["-D", "-e", "-f"])
             .arg(&config)
@@ -161,10 +174,22 @@ impl Service {
             server_port,
         }
     }
-    fn restart(&mut self) {
+    fn stop_server(&mut self) {
+        #[cfg(target_os = "macos")]
+        if self.server.is_some() {
+            if let Ok(pid) = std::fs::read_to_string(self.directory.path().join("server.pid")) {
+                let pid: u32 = pid.trim().parse().expect("Owned fixture server PID");
+                let _ = Command::new("sudo")
+                    .args(["-n", "/bin/kill", "-TERM", &pid.to_string()])
+                    .status();
+            }
+        }
         self.server.take();
+    }
+    fn restart(&mut self) {
+        self.stop_server();
         let root = self.directory.path();
-        let mut command = Command::new("/usr/sbin/sshd");
+        let mut command = sshd_command();
         command
             .args(["-D", "-e", "-f"])
             .arg(root.join("server-config"))
@@ -198,6 +223,20 @@ impl Service {
             .unwrap(),
             askpass: None,
             configuration: Some(self.configuration.clone()),
+        }
+    }
+}
+
+impl Drop for Service {
+    fn drop(&mut self) {
+        self.stop_server();
+        if std::thread::panicking() {
+            if let Ok(log) = std::fs::read_to_string(self.directory.path().join("server.log")) {
+                eprintln!(
+                    "Isolated sshd diagnostics: {}",
+                    log.chars().take(8192).collect::<String>()
+                );
+            }
         }
     }
 }
@@ -522,7 +561,7 @@ async fn authenticated_ssh_transfers_reconnect_host_trust_and_tunnel_ownership()
         .unwrap_err()
         .to_string()
         .contains("SSH_SFTP_FAILED"));
-    fixture.server.take();
+    fixture.stop_server();
     let fixture_path = fixture.directory.path().to_owned();
     drop(fixture);
     assert!(!fixture_path.exists());

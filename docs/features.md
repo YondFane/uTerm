@@ -1350,12 +1350,16 @@ block so the client can continue.
 keys, known_hosts and a connection-cutting TCP proxy verify authenticated Unicode upload/download,
 cancelled and interrupted overwrite preservation, explicit reconnect/retry, pinned-host-key and host
 CA acceptance/rejection, two real tunnel echo routes and sibling/stale-stop protection. Unix tests
-require `/usr/sbin/sshd` and `ssh-keygen`; they do not change the system SSH service or `~/.ssh`. CI
-saves `ssh-service-core.json` and test logs with source/merge SHAs. Local reports before a commit
-explicitly mark the source dirty. These service cases do not run on Windows yet, and password login
-and native connection UI acceptance remain pending. A network interruption may leave a hidden remote
-upload temporary file; the original destination stays intact and retries are explicit. The test
-fixture cleans its own abandoned temporary data rather than claiming automatic remote cleanup.
+require `/usr/sbin/sshd` and `ssh-keygen`. macOS also needs noninteractive sudo for Apple’s
+privileged session helper; cleanup targets only the isolated server’s recorded PID. Tests do not
+change the system SSH service or `~/.ssh`. CI saves `ssh-service-core.json` and test logs with
+source/merge SHAs. Local reports before a commit explicitly mark the source dirty. The initial macOS
+CI closed the unprivileged server connection before authentication; the corrected fixture awaits
+platform reruns. An Intel dependency fetch also failed DNS resolution; neither is counted as
+passing. These service cases do not run on Windows yet, and password login and native connection UI
+acceptance remain pending. A network interruption may leave a hidden remote upload temporary file;
+the original destination stays intact and retries are explicit. The test fixture cleans its own
+abandoned temporary data rather than claiming automatic remote cleanup.
 
 ### Quick connections and host search
 
