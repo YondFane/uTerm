@@ -203,11 +203,16 @@ pnpm desktop:check
 独立设置预览可运行 `pnpm dev --port 1422`，然后打开
 `/tests/i18n-preview.html`；它使用模拟桌面数据和独立浏览器来源设置，不连接真实会话。
 
-Redis 集成测试单独运行 `pnpm test:redis`，需要 PATH 中有支持 TLS 的 `redis-server` 和
-`openssl`。它启动临时回环服务，不访问已有数据库。
+共享 Redis 回归单独运行 `pnpm test:redis`，需要 PATH 中有支持 TLS 的 `redis-server` 和
+`openssl`。它启动临时回环服务，不访问已有数据库；命令运行全部 11 项服务检查，其中七项使用真实服务。
 
-普通 `pnpm test:backend`
-将四项真实服务测试标为忽略，并运行不依赖 Redis 的协议预算/超时测试；完整验证需要同时运行两个命令。运行应用本身不需要这些测试程序。
+普通 `pnpm test:core`
+运行四项 Redis 协议／边界检查和两项平台端口关闭／取消检查，七项真实服务检查保持忽略。
+`pnpm test:backend` 检查其余 Tauri 后端，完整验证需覆盖这两层并运行
+`pnpm test:redis`。生成来源绑定的服务日志和 JSON 报告时，PATH 中还需有 `redis-cli`，再运行
+`node scripts/redis-core-smoke.mjs /绝对路径/临时证据目录`。共享 Redis
+CI 工作流构建经 SHA-256 校验的 Redis
+7.4.7／TLS 并上传报告；这些服务证据不代表原生 Redis 界面已验收。运行应用本身不需要这些测试程序。
 
 Redis 客户端关闭默认可选功能，TLS 复用现有 rustls/ring，凭据访问使用系统原生 API。
 

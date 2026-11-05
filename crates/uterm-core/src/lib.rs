@@ -11,6 +11,7 @@ pub mod git;
 pub mod host;
 pub mod java;
 pub mod python;
+pub mod redis;
 pub mod session_state;
 pub mod ssh;
 pub mod state;

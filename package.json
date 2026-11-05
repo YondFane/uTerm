@@ -31,7 +31,7 @@
     "test:host": "cargo test --manifest-path crates/utermd-local/Cargo.toml --locked",
     "database:build": "node scripts/database-component.mjs",
     "test:database": "pnpm database:build && node --experimental-strip-types --test tests/database-bridge.test.mjs",
-    "test:redis": "cargo test --manifest-path src-tauri/Cargo.toml --locked redis::tests -- --include-ignored",
+    "test:redis": "cargo test --manifest-path crates/uterm-core/Cargo.toml --locked --lib redis::tests -- --include-ignored",
     "test:backend": "cargo test --manifest-path src-tauri/Cargo.toml --locked",
     "docs:sync": "node scripts/docs-index.mjs",
     "docs:check": "node scripts/docs-index.mjs --check",

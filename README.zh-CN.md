@@ -169,6 +169,12 @@ Python 服务及原始任务输出通道。在 macOS 图形会话运行
 `bash scripts/macos-python-smoke.sh`，使用隔离配置和真实进程检查配置冲突、输出、分离／回放、搜索／跟随、停止及重新运行，并保存截图。需要已有 Python
 3，不安装 Python 或依赖包；实际平台执行结果单独记录于功能指南。
 
+`uterm-core::redis`
+共享连接／凭据、TLS／SSH、二进制数据、TTL 和受保护写入规则；Tauri 命令保持既有接口及原生 CA 选择器。原生 Redis 入口／异步桥接与双端验收仍由 #39 跟踪。PATH 中有支持 TLS 的
+`redis-server` 和 `openssl` 时运行 `pnpm test:redis`，测试使用临时回环服务；另有 `redis-cli`
+时可运行 `node scripts/redis-core-smoke.mjs /绝对路径/临时证据目录` 生成来源绑定报告。共享 Redis
+CI 构建经校验的 Redis 7.4.7 并上传证据。
+
 `uterm-core::{database,database_components,downloads}`
 共享数据库业务、凭据绑定和组件安装／续传规则。客户端提供目录、SSH 确认、选择器和事件；Tauri 的既有数据库命令及退出保护保留。隔离原生应用可从侧栏“数据库”或**文件 → 数据库…**打开共用 SQL／文档表单和工作台，使用 Core 配置 CAS 与应用生命周期内的临时密码；验收按 #38 单独记录。
 `bash scripts/macos-database-smoke.sh` 需要 macOS 图形会话、Homebrew、Python 3、curl 和 Java

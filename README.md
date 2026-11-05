@@ -194,6 +194,13 @@ execution remains separately recorded in the feature guides.
 The shared-core command explicitly runs the filesystem-failure case. Unix tests require an
 unprivileged user so directory permissions enforce the failure; Windows uses a held file lease.
 
+`uterm-core::redis` shares connection/credential, TLS/SSH, binary data, TTL and protected-write
+rules. Tauri commands retain their existing interface and native CA picker. Redis native entry/async
+bridging and dual-client acceptance remain tracked in #39. Run `pnpm test:redis` with TLS-enabled
+`redis-server` and `openssl` on PATH; it uses temporary loopback servers. With `redis-cli` also
+available, `node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory` records
+source-bound service reports. The shared Redis CI builds verified Redis 7.4.7 and uploads evidence.
+
 `uterm-core::{database,database_components,downloads}` shares database business rules, credential
 binding and verified component installation/resume. Clients provide directories, SSH confirmation,
 pickers and events; existing Tauri database commands and quit guards remain available. The isolated

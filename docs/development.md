@@ -241,13 +241,18 @@ tests using development-only `jsdom`; desktop APIs and canvas renderers are mock
 For an isolated settings preview, run `pnpm dev --port 1422` and open `/tests/i18n-preview.html`. It
 uses mock desktop data and separate browser-origin settings, not live sessions.
 
-Run Redis integration tests separately with `pnpm test:redis`; they require TLS-enabled
+Run shared Redis regressions separately with `pnpm test:redis`; they require TLS-enabled
 `redis-server` and `openssl` on PATH. Tests start temporary loopback servers and do not access
-existing databases.
+existing databases. The command runs all 11 service checks, including seven real-server checks.
 
-Ordinary `pnpm test:backend` marks four real-server tests ignored and runs the Redis-independent
-budget/timeout tests; complete validation requires both commands. The app does not require these
-test programs.
+Ordinary `pnpm test:core` runs the four Redis protocol/bounds checks and two host-port close/cancel
+checks, leaving the seven real-server checks ignored. `pnpm test:backend` tests the remaining Tauri
+backend. Complete validation includes both layers and `pnpm test:redis`. To generate source-bound
+service logs and a JSON report, place `redis-cli` on PATH as well and run
+`node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory`. The shared Redis CI
+workflow builds SHA-256-verified Redis 7.4.7 with TLS and uploads these reports. This service
+evidence does not establish native Redis UI acceptance. The app does not require these test
+programs.
 
 The Redis client disables default optional features, TLS reuses rustls/ring, and credential access
 uses native system APIs.

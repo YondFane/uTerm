@@ -2,7 +2,6 @@ use anyhow::{anyhow, bail, Result};
 pub use files::{RemoteListing, RemoteRoot, SshFiles, TransferProgress};
 use tauri::ipc::Channel;
 use uterm_core::ssh::files;
-pub(crate) use uterm_core::ssh::{base_command, effective_identity, effective_target, pipe_file};
 use utermd_local::ssh::SshTarget;
 
 async fn ensure(app: &tauri::AppHandle, state: &SshFiles, root: &RemoteRoot) -> Result<(), String> {

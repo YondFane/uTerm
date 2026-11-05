@@ -19,7 +19,6 @@ mod python;
 #[cfg(feature = "qa")]
 mod qa;
 mod redis;
-mod redis_credentials;
 mod sessions;
 mod shared_core;
 mod ssh;

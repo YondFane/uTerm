@@ -1657,6 +1657,31 @@ not an installer-size estimate.
 
 ## Redis connections and workbench
 
+### Shared Redis services
+
+`uterm-core::redis` owns connection/credential binding, TLS/SSH transports, binary key/member
+identity, bounded queries and read-only/write/TTL/conflict rules. Tauri supplies its application
+identifier and existing SSH authentication adapter, retaining native CA selection and application
+exit. State clones share connection, opening and draft protection. Shutdown rejects late handshakes;
+cancelling authentication releases its opening slot and socket. Existing credential namespaces and
+connection configuration remain compatible.
+
+#### Shared-service validation and limits
+
+Linux x86_64 / Rust 1.99.1 passes all 11 Redis service regressions with real Redis 7.4.7/TLS and
+OpenSSL, including binary values, TTL, stale snapshots, read-only enforcement, TLS name/CA rejection
+and uncertain writes without retry. Two public host-port regressions cover late authentication after
+shutdown and cancelled authentication. Full Core/FFI, host, Tauri backend (41 passed / two ignored),
+frontend (416 passed / ten skipped), types, production/desktop builds and contracts pass.
+
+`pnpm test:redis` explicitly enables the seven real-server checks, each using temporary loopback
+servers. The normal Core suite runs the other four service checks and the two host-port checks.
+`node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory` records toolchains,
+actual test names, logs, source/merge SHA and source-tree state. Shared Redis CI builds the verified
+7.4.7 source with TLS and uploads those reports. Native async bridging/entry, dual-client UI and
+platform credential acceptance remain tracked in [#39](https://github.com/YondFane/uTerm/issues/39);
+service tests do not establish UI acceptance.
+
 ### Redis connection setup
 
 Redis connections belong to a workspace. Add a name, host, port, database number and optional ACL
