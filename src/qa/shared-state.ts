@@ -29,6 +29,7 @@ interface Context {
     | "editor-reopen"
     | "git"
     | "ssh"
+    | "ssh-reopen"
     | "input-owner"
     | "input-viewer";
   backup?: string;
@@ -1283,7 +1284,41 @@ async function runSSH(context: Context) {
     alias: string;
     remote: string;
     port: string;
+    previous?: { sessionID: string; generation: string; hostPID: number };
   }>("qa_ssh_fixture");
+  const host = () =>
+    invoke<{
+      pid: number;
+      sessions: { spec: { id: string }; generation: string; running: boolean }[];
+    }>("qa_host_status");
+  if (context.phase === "ssh-reopen") {
+    const previous = fixture.previous;
+    assert(previous, "Missing previous actual SSH session");
+    const terminal = await until(
+      () => document.querySelector<HTMLElement>(".local-session.visible[data-session-id]"),
+      "reattached remote terminal",
+    );
+    assert(terminal.dataset.sessionId === previous.sessionID, "Reopen selected another session");
+    const status = await host();
+    const session = status.sessions.find((item) => item.spec.id === previous.sessionID);
+    assert(
+      status.pid === previous.hostPID &&
+        session?.generation === previous.generation &&
+        session.running,
+      "Quit replaced or stopped the hosted SSH session",
+    );
+    await until(
+      () => terminal.textContent?.includes("UTERM_SSH_TAURI_QA"),
+      "SSH replay after actual app quit and reopen",
+    );
+    await scene("ssh-reopened", {
+      ...previous,
+      authenticatedRemoteReplay: true,
+      sameHostAndGeneration: true,
+    });
+    await invoke("qa_request_exit");
+    return;
+  }
   const create = await until(
     () => document.querySelector<HTMLButtonElement>('button[aria-label="Add SSH connection"]'),
     "add real SSH profile",
@@ -1377,7 +1412,13 @@ async function runSSH(context: Context) {
     () => terminal.textContent?.includes("UTERM_SSH_TAURI_QA"),
     "authenticated remote shell output",
   );
+  const status = await host();
+  const session = status.sessions.find((item) => item.spec.id === terminal.dataset.sessionId);
+  assert(session?.running, "Actual remote session is not running");
   await scene("ssh-terminal", {
+    sessionID: session.spec.id,
+    generation: session.generation,
+    hostPID: status.pid,
     actualRemoteShell: true,
     renderedOutput: "UTERM_SSH_TAURI_QA",
     input: "DOM paste/key events through real xterm",
@@ -1414,7 +1455,7 @@ export async function run(recovery: boolean) {
       await runGit(context);
       return;
     }
-    if (context.phase === "ssh") {
+    if (context.phase === "ssh" || context.phase === "ssh-reopen") {
       await runSSH(context);
       return;
     }

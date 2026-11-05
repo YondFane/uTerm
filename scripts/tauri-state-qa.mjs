@@ -33,8 +33,12 @@ const output = resolve("ci-evidence/tauri-state-qa");
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 const root = mkdtempSync(join(tmpdir(), "uterm-tauri-qa-"));
-if (process.env.UTERM_QA_SSH_FIXTURE)
-  copyFileSync(process.env.UTERM_QA_SSH_FIXTURE, join(root, "ssh-fixture.json"));
+if (process.env.UTERM_QA_SSH_FIXTURE) {
+  const { alias, remote, port } = JSON.parse(
+    readFileSync(process.env.UTERM_QA_SSH_FIXTURE, "utf8"),
+  );
+  writeFileSync(join(root, "ssh-fixture.json"), JSON.stringify({ alias, remote, port }));
+}
 mkdirSync(join(root, "project"));
 writeFileSync(join(root, "project", editorFixture.fileName), "\ufeff" + editorFixture.originalText);
 const evidence = join(root, "evidence");
@@ -808,17 +812,19 @@ try {
       const expected =
         phase === "ssh"
           ? 3
-          : phase === "git"
-            ? 25
-            : phase === "editor-checkpoint"
-              ? 3
-              : phase.startsWith("editor-")
-                ? 5
-                : phase === "initial"
-                  ? 8
-                  : phase === "reopen"
-                    ? 1
-                    : 3;
+          : phase === "ssh-reopen"
+            ? 1
+            : phase === "git"
+              ? 25
+              : phase === "editor-checkpoint"
+                ? 3
+                : phase.startsWith("editor-")
+                  ? 5
+                  : phase === "initial"
+                    ? 8
+                    : phase === "reopen"
+                      ? 1
+                      : 3;
       assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       if (phase === "git") writeFileSync(join(root, "project/.git/qa-git-release"), "release\n");
@@ -845,7 +851,6 @@ try {
   );
   assert.equal(readFileSync(join(root, "project", gitQA.fileName), "utf8"), gitQA.changedText);
   await run("initial");
-  if (process.env.UTERM_QA_SSH_FIXTURE) await run("ssh");
   const store = join(root, "data/shared-state-v1");
   const original = readFileSync(join(store, "legacy-original.json"));
   await run("reopen");
@@ -863,6 +868,10 @@ try {
   const digest = createHash("sha256").update(damaged).digest("hex");
   assert.deepEqual(readFileSync(join(store, `snapshot-${digest}.damaged`)), damaged);
   assert.deepEqual(readFileSync(join(store, "legacy-original.json")), original);
+  if (process.env.UTERM_QA_SSH_FIXTURE) {
+    await run("ssh");
+    await run("ssh-reopen");
+  }
   writeFileSync(
     join(output, "storage.json"),
     JSON.stringify(

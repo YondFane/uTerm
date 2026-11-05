@@ -493,7 +493,7 @@ impl Service {
     }
     pub fn close(&self) {
         self.closed.store(true, Ordering::Release);
-        self.files.cancel_all();
+        self.files.stop();
         self.tunnels.stop();
         self.trust.clear();
         self.auth.clear();

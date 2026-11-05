@@ -792,8 +792,10 @@ x86_64／Rust1.99.1 通过两项检查，包括迁移的边界样例与准确 UT
 共享 `ssh::files` 与 `ssh::tunnels`
 服务管理远程根、串行安全写入、流式传输、取消／退出保护、监听就绪和所属 OpenSSH 进程。Tauri 的既有命令委派这些服务，保留原生选择器和进度通道。带代次的取消／停止拒绝过期请求，既有 Tauri 命令签名保持兼容；取消等待中的隧道也释放认证 future。退出等待取消时阻止新传输；放弃退出等待会释放临时阻止，让客户端继续使用。
 
+客户端最终关闭时，即使待处理读取仍持有远端根，也会停止所属 SFTP 进程，并拒绝迟到创建；不停止其他客户端的 SFTP 进程或已由宿主运行的 SSH 终端。Tauri 退出回调采用该清理，原有退出保护仍先执行。
+
 `cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture`
-在 Linux 通过 19 项检查，其中包括真实隔离
+在 Linux 通过 21 项检查，其中包括真实隔离
 `sshd`／internal-sftp 服务。临时主机／客户端密钥、known_hosts 和切断连接的 TCP 代理验证已认证 Unicode 上传下载、取消与断线覆盖后原文件保留、明确重连／重试、固定主机密钥及主机 CA 的接受／拒绝、两条真实隧道回显和兄弟／过期停止保护。Unix 测试需要
 `/usr/sbin/sshd` 与 `ssh-keygen`，不修改系统 SSH 服务或 `~/.ssh`。CI 保存带源码／merge SHA 的
 `ssh-service-core.json`
@@ -806,8 +808,9 @@ RIGHTS ACL 被拒绝；夹具现仅为生成的该私钥设置明确的所有者
 ACL。跨平台夹具还增加真实主机 CA 接受和错误 CA 拒绝，已在未提交源码的 Linux 通过。Windows 已经过真实认证／传输／隧道检查，到达最后的日志秘密排除断言；sshd 独占日志句柄，该检查现移至所属服务停止之后。仅供 QA 的 Tauri 命令注册也补齐普通后端构建条件；Linux 的 73 项后端检查（九项可选忽略）和 QA 编译通过。平台重跑仍待完成，这些检查不代表图形界面验收。
 
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py`
-增加三项真实 Tauri 窗口场景：保存 SSH 配置、已认证 SFTP 列表／文本预览、远程终端输出。使用既有隔离 QA 标识，上传带源码／平台元数据的截图。此新增阶段尚待 CI 执行，不验证人工文件选择器或输入法。Unicode 样例名称／文本放入
-`shared/fixtures/ssh-qa.json`，源码国际化覆盖检查通过。
+增加四项真实 Tauri 窗口场景：保存 SSH 配置、已认证 SFTP 列表／文本预览、远程终端输出，以及实际退出／重开后相同宿主 PID、会话代次和回放的附着。使用既有隔离 QA 标识，上传带源码／平台元数据的截图。此新增阶段尚待 CI 执行，不验证人工文件选择器或输入法。Unicode 样例名称／文本放入
+`shared/fixtures/ssh-qa.json`，源码国际化覆盖检查通过。前三项 SSH 场景已在源码 `405f4a5`
+的 Windows／macOS 运行并生成真实截图，但整条流程在 Windows 退出及后续 Mac 所有权夹具失败。现补齐所属进程退出清理，并将 SSH 放在既有所有权／恢复检查之后执行；完整重跑仍待完成。
 
 ### 原生 SSH 工作区
 

@@ -117,6 +117,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "editor-reopen",
         "git",
         "ssh",
+        "ssh-reopen",
         "input-owner",
         "input-viewer",
     ]
@@ -136,15 +137,25 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
 #[tauri::command]
 pub fn qa_ssh_fixture(app: tauri::AppHandle) -> Result<Value, String> {
     let root = check(&app)?;
-    if argument("--qa-phase")? != "ssh" {
+    let phase = argument("--qa-phase")?;
+    if phase != "ssh" && phase != "ssh-reopen" {
         return Err("SSH fixture is unavailable in this QA phase".into());
     }
     // Keep private credentials out of qa_context, which is embedded in screenshot reports.
     // 私有凭据不进入 qa_context，该上下文会写入截图报告。
-    serde_json::from_slice(
+    let mut fixture: Value = serde_json::from_slice(
         &std::fs::read(root.join("ssh-fixture.json")).map_err(|e| e.to_string())?,
     )
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    if phase == "ssh-reopen" {
+        let previous: Value = serde_json::from_slice(
+            &std::fs::read(root.join("evidence/ssh-ssh-terminal.json"))
+                .map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
+        fixture["previous"] = previous["checks"].clone();
+    }
+    Ok(fixture)
 }
 
 #[tauri::command]

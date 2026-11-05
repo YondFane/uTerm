@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex,
+        Arc, Mutex, Weak,
     },
     time::Duration,
 };
@@ -26,12 +26,15 @@ use utermd_local::{ssh::SshTarget, BackgroundChild};
 const CHUNK: usize = 32 * 1024;
 const PREVIEW_LIMIT: usize = 8 * 1024 * 1024;
 const TEXT_LIMIT: usize = 2 * 1024 * 1024;
+type OwnedChild = Arc<Mutex<Option<BackgroundChild>>>;
 
 #[derive(Default)]
 pub struct SshFiles {
     roots: AsyncMutex<HashMap<String, Arc<RemoteFs>>>,
     transfers: Arc<Mutex<HashMap<String, (uuid::Uuid, Arc<AtomicBool>)>>>,
     closing: AtomicBool,
+    stopped: AtomicBool,
+    children: Mutex<Vec<Weak<Mutex<Option<BackgroundChild>>>>>,
 }
 struct Closing<'a>(&'a AtomicBool);
 impl Drop for Closing<'_> {
@@ -40,6 +43,27 @@ impl Drop for Closing<'_> {
     }
 }
 impl SshFiles {
+    fn spawn_owned(&self, command: &mut std::process::Command) -> Result<OwnedChild> {
+        let mut children = self.children.lock().map_err(|_| anyhow!("SSH_CLOSED"))?;
+        if self.stopped.load(Ordering::Acquire) {
+            bail!("SSH_CLOSED");
+        }
+        let child = Arc::new(Mutex::new(Some(BackgroundChild::spawn(command)?)));
+        children.retain(|child| child.strong_count() > 0);
+        children.push(Arc::downgrade(&child));
+        Ok(child)
+    }
+    pub fn stop(&self) {
+        self.stopped.store(true, Ordering::Release);
+        self.cancel_all();
+        if let Ok(mut children) = self.children.lock() {
+            for child in children.drain(..).filter_map(|child| child.upgrade()) {
+                if let Ok(mut child) = child.lock() {
+                    child.take();
+                }
+            }
+        }
+    }
     pub fn busy(&self) -> bool {
         self.transfers
             .lock()
@@ -51,6 +75,11 @@ impl SshFiles {
                 task.store(true, Ordering::Release);
             }
         }
+    }
+}
+impl Drop for SshFiles {
+    fn drop(&mut self) {
+        self.stop();
     }
 }
 
@@ -82,7 +111,7 @@ struct RemoteFs {
     sftp: RawSftpSession,
     replace: bool,
     fsync: bool,
-    child: Mutex<BackgroundChild>,
+    child: OwnedChild,
     stderr: Arc<Mutex<Vec<u8>>>,
     writes: AsyncMutex<()>,
 }
@@ -109,6 +138,7 @@ use super::{base_command, pipe_file};
 
 impl RemoteFs {
     async fn connect(
+        owner: &SshFiles,
         connection: SshTarget,
         expected: Option<&RemoteRoot>,
         prepared: super::auth::Prepared,
@@ -164,12 +194,18 @@ impl RemoteFs {
             &connection.host,
             "sftp",
         ]);
-        let mut child = BackgroundChild::spawn(&mut command)?;
-        let stream = tokio::io::join(
-            pipe_file(child.take_stdout().context("SSH_PIPE_FAILED")?),
-            pipe_file(child.take_stdin().context("SSH_PIPE_FAILED")?),
-        );
-        let mut errors = pipe_file(child.take_stderr().context("SSH_PIPE_FAILED")?);
+        let child = owner.spawn_owned(&mut command)?;
+        let (stream, mut errors) = {
+            let mut guard = child.lock().map_err(|_| anyhow!("SSH_DISCONNECTED"))?;
+            let child = guard.as_mut().context("SSH_DISCONNECTED")?;
+            (
+                tokio::io::join(
+                    pipe_file(child.take_stdout().context("SSH_PIPE_FAILED")?),
+                    pipe_file(child.take_stdin().context("SSH_PIPE_FAILED")?),
+                ),
+                pipe_file(child.take_stderr().context("SSH_PIPE_FAILED")?),
+            )
+        };
         let stderr = Arc::new(Mutex::new(Vec::new()));
         let capture = stderr.clone();
         tokio::spawn(async move {
@@ -237,7 +273,7 @@ impl RemoteFs {
             sftp,
             replace: version.extensions.contains_key("posix-rename@openssh.com"),
             fsync: version.extensions.contains_key("fsync@openssh.com"),
-            child: Mutex::new(child),
+            child,
             stderr,
             writes: AsyncMutex::new(()),
         }))
@@ -247,6 +283,8 @@ impl RemoteFs {
             .child
             .lock()
             .map_err(|_| anyhow!("SSH_DISCONNECTED"))?
+            .as_mut()
+            .context("SSH_DISCONNECTED")?
             .try_wait()?
             .is_some()
         {
@@ -459,11 +497,14 @@ impl SshFiles {
         expected: Option<RemoteRoot>,
         prepared: super::auth::Prepared,
     ) -> Result<RemoteRoot> {
+        if self.stopped.load(Ordering::Acquire) {
+            bail!("SSH_CLOSED");
+        }
         if self.closing.load(Ordering::Acquire) {
             bail!("SSH_TRANSFER_BUSY");
         }
         let mut roots = self.roots.lock().await;
-        let remote = RemoteFs::connect(connection, expected.as_ref(), prepared).await?;
+        let remote = RemoteFs::connect(self, connection, expected.as_ref(), prepared).await?;
         let root = remote.root.clone();
         let key = root.key()?;
         if roots.len() >= 16 && !roots.contains_key(&key) {
@@ -1063,6 +1104,9 @@ impl SshFiles {
             .lock()
             .map_err(failure)
             .map_err(anyhow::Error::msg)?;
+        if self.stopped.load(Ordering::Acquire) {
+            bail!("SSH_CLOSED");
+        }
         if tasks.contains_key(id) || tasks.len() >= 4 || self.closing.load(Ordering::Acquire) {
             bail!("SSH_TRANSFER_BUSY");
         }
@@ -1161,6 +1205,52 @@ impl SshFiles {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stopping_owned_processes_ignores_other_clients_and_rejects_late_spawns() {
+        fn command() -> Command {
+            #[cfg(unix)]
+            let mut command = {
+                let mut command = Command::new("sh");
+                command.args(["-c", "exec cat"]);
+                command
+            };
+            #[cfg(windows)]
+            let mut command = {
+                let mut command = Command::new(
+                    PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+                        .join("System32/WindowsPowerShell/v1.0/powershell.exe"),
+                );
+                command.args(["-NoProfile", "-Command", "Start-Sleep 60"]);
+                command
+            };
+            command
+                .stdin(Stdio::piped())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            command
+        }
+        let first = SshFiles::default();
+        let second = SshFiles::default();
+        let held = first.spawn_owned(&mut command()).unwrap();
+        let sibling = second.spawn_owned(&mut command()).unwrap();
+        first.stop();
+        first.stop();
+        assert!(held.lock().unwrap().is_none());
+        assert!(sibling
+            .lock()
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .try_wait()
+            .unwrap()
+            .is_none());
+        assert!(first.spawn_owned(&mut command()).is_err());
+        assert!(first
+            .begin_transfer(&uuid::Uuid::new_v4().to_string())
+            .is_err());
+        second.stop();
+        assert!(sibling.lock().unwrap().is_none());
+    }
     #[tokio::test]
     async fn stale_cancellation_and_cancelled_quit_cannot_affect_a_new_transfer() {
         let state = SshFiles::default();
@@ -1234,7 +1324,7 @@ mod tests {
             sftp,
             replace: version.extensions.contains_key("posix-rename@openssh.com"),
             fsync: version.extensions.contains_key("fsync@openssh.com"),
-            child: Mutex::new(child),
+            child: Arc::new(Mutex::new(Some(child))),
             stderr: Arc::new(Mutex::new(vec![])),
             writes: AsyncMutex::new(()),
         })

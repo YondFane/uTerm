@@ -675,6 +675,8 @@ fn main() {
                 _ => {}
             }
             if matches!(event, tauri::RunEvent::Exit) {
+                handle.state::<ssh::SshFiles>().stop();
+                handle.state::<ssh_auth::SshAuth>().clear();
                 handle.state::<ssh_tunnels::SshTunnels>().stop();
                 handle.state::<redis::RedisState>().stop();
                 handle.state::<database::DatabaseState>().stop();

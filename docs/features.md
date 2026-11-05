@@ -1345,8 +1345,12 @@ remain compatible. Cancelling a pending tunnel also releases its authentication 
 new transfers while waiting for active cancellation; abandoning that wait releases the temporary
 block so the client can continue.
 
+Final client shutdown stops its owned SFTP processes even when a pending reader retains the remote
+root. It refuses late spawns without stopping another client's SFTP processes or hosted SSH
+terminals. The Tauri exit callback uses this cleanup; ordinary quit guards still run first.
+
 `cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture` passes
-19 Linux checks, including an actual isolated `sshd`/internal-sftp service. Temporary host/client
+21 Linux checks, including an actual isolated `sshd`/internal-sftp service. Temporary host/client
 keys, known_hosts and a connection-cutting TCP proxy verify authenticated Unicode upload/download,
 cancelled and interrupted overwrite preservation, explicit reconnect/retry, pinned-host-key and host
 CA acceptance/rejection, two real tunnel echo routes and sibling/stale-stop protection. Unix tests
@@ -1383,11 +1387,16 @@ registration is also gated in normal backend builds; 73 Linux backend tests (nin
 and QA compilation pass. Platform reruns remain pending; these checks do not establish GUI
 acceptance.
 
-`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` adds three real Tauri window scenes:
-saved SSH profile, authenticated SFTP listing/text preview and remote terminal output. It uses the
-existing isolated QA identifier and uploads screenshots with source/platform metadata. This new
-phase awaits CI execution and does not exercise a manual file picker or IME. Its Unicode sample
-names/text live in `shared/fixtures/ssh-qa.json`; the localized-source coverage check passes.
+`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` adds four real Tauri window scenes: saved
+SSH profile, authenticated SFTP listing/text preview, remote terminal output and actual quit/reopen
+attachment with the same host PID, session generation and replay. It uses the existing isolated QA
+identifier and uploads screenshots with source/platform metadata. This new phase awaits CI execution
+and does not exercise a manual file picker or IME. Its Unicode sample names/text live in
+`shared/fixtures/ssh-qa.json`; the localized-source coverage check passes. The initial three SSH
+scenes ran and produced screenshots on both Windows/macOS at source `405f4a5`; the overall run
+failed on Windows exit and a subsequent Mac ownership fixture. Owned-process exit cleanup and
+running SSH after the existing ownership/recovery checks address those cases; full reruns remain
+pending.
 
 ### Native SSH workspace
 
