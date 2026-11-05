@@ -146,6 +146,11 @@ platform adapters and generated DTOs keep Swift/TypeScript boundaries aligned. R
 boundary types with `pnpm contracts:generate`. On macOS, run `bash scripts/macos-native-build.sh`
 and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift bridge tests.
 
+The embedded Java 8 encoding agent includes its Java source and reproducible runtime bytes. After
+changing it, use JDK 21 to run `python3 scripts/java8-encoding-agent.py`, then
+`python3 scripts/java8-encoding-agent.py --check`. Normal Rust/application builds need no Java
+compiler; Windows interoperability CI checks the asset and runs the actual selected JDK.
+
 Native terminal QA: `bash scripts/macos-terminal-smoke.sh` runs two real app processes with
 temporary data, a bundled standalone helper and language/theme/width screenshot artifacts. It also
 launches system Vim, enters and pastes Unicode through native terminal actions, verifies the saved

@@ -51,6 +51,9 @@ jobs:
           } 2>&1 | tee ci-evidence/source-toolchain.txt
       - name: Build the manifested host and launcher child
         run: cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local 2>&1 | tee ci-evidence/host-build.log
+      - name: Verify embedded Java 8 encoding agent
+        if: matrix.java == 21
+        run: python scripts/java8-encoding-agent.py --check
       - name: Argument boundary regressions
         run: cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib java_utf8::tests 2>&1 | tee ci-evidence/argument-tests.log
       - name: Selected JVM encoding diagnostics

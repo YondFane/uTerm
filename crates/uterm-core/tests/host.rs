@@ -396,7 +396,9 @@ fn original_core_reacquires_after_repeated_viewer_exit_without_recreating_the_pt
 #[test]
 fn java_jar_uses_shared_host_literal_arguments_replay_and_generation_safe_stop() {
     let temporary = tempfile::tempdir().unwrap();
-    let root = temporary.path().canonicalize().unwrap();
+    let project = temporary.path().join("Java 项目");
+    std::fs::create_dir(&project).unwrap();
+    let root = project.canonicalize().unwrap();
     let core = Core::open(root.join("shared-state-v1")).unwrap();
     let host_root = root.join("local-daemon-v1");
     let _cleanup = HostCleanup(host_root.clone());
@@ -442,6 +444,25 @@ public class TaskProbe {
         "javac",
         &["-encoding", "UTF-8", "-d", "target", "TaskProbe.java"],
     );
+    std::fs::write(root.join("TaskAgent.java"), "public class TaskAgent { public static void premain(String ignored, java.lang.instrument.Instrumentation instrumentation) { System.out.println(\"PREMAIN:\"+System.getProperty(\"qa.value\")); } }").unwrap();
+    std::fs::write(root.join("agent.mf"), "Premain-Class: TaskAgent\n\n").unwrap();
+    run(
+        "javac",
+        &["-encoding", "UTF-8", "-d", "target", "TaskAgent.java"],
+    );
+    run(
+        "jar",
+        &[
+            "cfm",
+            "target/qa-agent.jar",
+            "agent.mf",
+            "-C",
+            "target",
+            "TaskAgent.class",
+        ],
+    );
+    let user_agent = temporary.path().join("user-agent.jar");
+    std::fs::copy(root.join("target/qa-agent.jar"), &user_agent).unwrap();
     run(
         "jar",
         &[
@@ -474,7 +495,10 @@ public class TaskProbe {
     config["offline"] = json!(true);
     let literal = "中文😀 & %PATH% * \" \\";
     config["arguments"] = json!([literal, ""]);
-    config["vm_arguments"] = json!(["-Dqa.value=属性 & %PATH%"]);
+    config["vm_arguments"] = json!([
+        format!("-javaagent:{}", uterm_core::java::path_text(&user_agent)),
+        "-Dqa.value=属性😀 & %PATH%"
+    ]);
     let start = |config: &Value| {
         call(
             &core,
@@ -550,10 +574,11 @@ public class TaskProbe {
     let text = String::from_utf8(bytes).unwrap();
     assert!(
         text.contains(&format!(
-            "READY:{literal}:环境 & %PATH%:属性 & %PATH%:empty=true"
+            "READY:{literal}:环境 & %PATH%:属性😀 & %PATH%:empty=true"
         )),
         "{text}"
     );
+    assert!(text.contains("PREMAIN:属性😀 & %PATH%"), "{text}");
     assert!(
         text.contains("LAST:中文 e\u{301}") && text.contains("ERR_LAST:中文"),
         "{text}"
@@ -658,7 +683,7 @@ public class TaskProbe {
             "sourceTreeDirty":!git(&["status","--porcelain","--untracked-files=no"]).is_empty(),
             "platform":std::env::consts::OS,"architecture":std::env::consts::ARCH,"java":String::from_utf8_lossy(&java_version.stderr),
             "exitCode":7,"output":text,"generation":task["generation"],"sequences":sequences.iter().map(u64::to_string).collect::<Vec<_>>(),
-            "normalLauncherCacheReleased":true,"literalArgumentsEnvironmentAndVmProperty":true,"unicodeQuotesWildcardAndTrailingSlashPreserved":true,"emptyArgumentPreserved":true,"invalidWrapperBypassedForExistingJar":true,
+            "normalLauncherCacheReleased":true,"literalArgumentsEnvironmentAndVmProperty":true,"unicodeQuotesWildcardAndTrailingSlashPreserved":true,"emptyArgumentPreserved":true,"invalidWrapperBypassedForExistingJar":true,"unicodeWorkingDirectory":true,"userAgentSawExactPropertyBeforeMain":true,
             "detachReattachSameGeneration":true,"staleStopRefused":true,"pythonStopRefused":true,"javaStopRefusedPythonTask":true,"forceStopCleanedTask":true,"hostCleanedUp":true
         })).unwrap()).unwrap();
     }

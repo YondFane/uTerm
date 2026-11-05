@@ -98,6 +98,27 @@ public class LauncherProbe {
         );
     }
     core.close();
+    let mut stock_paths = Vec::new();
+    for name in ["stock 目录", "stock 目录 😀"] {
+        let directory = root.join(name);
+        std::fs::create_dir(&directory).unwrap();
+        let jar = directory.join("probe.jar");
+        std::fs::copy(root.join("probe.jar"), &jar).unwrap();
+        let output = std::process::Command::new(tool("java"))
+            .args([
+                "-Dsun.stdout.encoding=UTF-8",
+                "-jar",
+                &uterm_core::java::path_text(&jar),
+                "literal",
+                "",
+            ])
+            .current_dir(uterm_core::java::path_text(&directory))
+            .output()
+            .unwrap();
+        stock_paths.push(json!({"directory":name,"viaUTermHost":false,"exitCode":output.status.code(),
+            "stdout":String::from_utf8_lossy(&output.stdout).chars().take(16384).collect::<String>(),
+            "stderr":String::from_utf8_lossy(&output.stderr).chars().take(16384).collect::<String>()}));
+    }
     let git = |arguments: &[&str]| {
         let output = std::process::Command::new("git")
             .args(arguments)
@@ -113,7 +134,7 @@ public class LauncherProbe {
         "sourceHeadSHA":std::env::var("PR_HEAD_SHA").unwrap_or_else(|_|tested.clone()),
         "testedMergeSHA":tested,"sourceTreeDirty":!git(&["status","--porcelain","--untracked-files=no"]).is_empty(),
         "platform":std::env::consts::OS,"architecture":std::env::consts::ARCH,
-        "java":uterm_core::java::probe(&home).unwrap().version,"variants":variants
+        "java":uterm_core::java::probe(&home).unwrap().version,"variants":variants,"stockJVMPathDiagnostics":stock_paths
     });
     if let Some(path) = std::env::var_os("UTERM_JAVA_ENCODING_REPORT") {
         std::fs::write(path, serde_json::to_vec_pretty(&report).unwrap()).unwrap();

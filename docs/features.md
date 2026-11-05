@@ -2892,14 +2892,19 @@ modify the selected installation. The mirror is bounded to 32,768 entries, 2 GiB
 levels and rejects reparse points. Parent/child shared locks protect live caches; normal completion
 removes the cache, and a later launch reclaims released orphan caches older than one minute. Windows
 regressions check live-owner exclusion, orphan cleanup, depth rejection and source retention. The
-JDK 8 child also explicitly passes a UTF-8 `sun.jnu.encoding` property because that JDK derives it
-from the system locale independently of the process code page; application file encoding remains
-configurable. A bounded anonymous stdin pipe carries literal arguments; no argument/environment file
-or shell interpolation is introduced. The child retains the task console and process-tree lifetime,
-then returns the actual JVM exit code. ASCII steps retain direct Java launching. New Windows Java
-tasks require the helper's UTF-8-launch capability; an older active helper reports an upgrade
-requirement without killing its existing sessions/tasks. The Unicode route needs Windows per-process
-UTF-8 support and a JDK matching the child architecture.
+JDK 8 child loads a small embedded compatibility agent before user agents and the main class. It
+restores original UTF-8 VM properties and the selected JDK's system URL classpath after Java 8's
+early locale decoding, then selects UTF-8 for launcher arguments. The runtime agent stores no user
+arguments; its versioned input stays in process memory. Its launcher path must have an ASCII
+relative or existing short representation; otherwise the helper reports
+`JAVA_UTF8_AGENT_PATH_UNSUPPORTED`. A non-URL custom system loader that needs classpath repair is
+explicitly refused. Application file encoding remains configurable. A bounded anonymous stdin pipe
+carries literal arguments; no argument/environment file or shell interpolation is introduced. The
+child retains the task console and process-tree lifetime, then returns the actual JVM exit code.
+ASCII steps retain direct Java launching. New Windows Java tasks require the helper's UTF-8-launch
+capability; an older active helper reports an upgrade requirement without killing its existing
+sessions/tasks. The Unicode route needs Windows per-process UTF-8 support and a JDK matching the
+child architecture.
 
 `bash scripts/macos-java-smoke.sh` uses JDK 21 to build a disposable JAR and operate the actual
 native menu/window. Native ARM/Intel configuration, conflict, output, search/copy/follow,
@@ -2918,10 +2923,19 @@ explicit retry, registry locking and damaged-byte retention.
 
 The Java interoperability workflow separately collects `java-encoding-diagnostics.json` by launching
 ASCII and Unicode JAR paths through the selected real Core/host/JVM. It records actual properties,
-literal arguments, launcher traces and exit codes on JDK 8/11/17/21. This bounded, disposable-data
-probe is explicitly diagnostic; a collected report is not a passing Unicode acceptance result. The
-strict task test still requires exact arguments/properties, final output, exit code 7, replay and
-generation-safe stop. Windows JDK 8 remains failed until that test passes.
+literal arguments, launcher traces and exit codes on JDK 8/11/17/21. Collection is diagnostic, not
+Unicode task acceptance. The earlier Java 8 report confirms correct application arguments but
+corrupted VM properties and classpath; the encoding property override alone was insufficient.
+
+The strict task test retains exact arguments/properties, final output, exit code 7, replay and
+generation-safe stop. It additionally uses a Chinese project directory and verifies that a user
+premain agent sees the original Unicode/emoji property before main. The disposable user-agent JAR
+has an ASCII path. Separate stock-JDK diagnostics retain BMP and supplementary-character directory
+results without using the uTerm host. Local JDK 21 also fails from an emoji directory without an
+agent, inside Java's URL decoding; that upstream limitation is not counted as a successful bridge
+result. The Windows bridge requires an existing ASCII short path when its own asset path contains
+supplementary characters. Platform acceptance of this fix requires its own strict CI result in #37;
+source/asset reproducibility does not replace execution.
 
 Run `pnpm test:core` and frontend checks with `JAVA_HOME` pointing to JDK 21 and its `bin` on
 `PATH`. The Java interoperability workflow runs the actual Windows host on JDK 8/11/17/21 and

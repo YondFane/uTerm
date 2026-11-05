@@ -1700,8 +1700,10 @@ Java 步骤的程序、工作目录或参数包含非 ASCII 字符时，新宿�
 8 需要独立启动目录布局：执行器通过文件硬链接（跨卷时复制）将所选已安装 JDK 镜像到任务专属缓存，在这些准确运行文件旁启动带 manifest 的子进程，不安装／下载 JDK，也不修改所选安装。镜像上限为 32,768 项、2
 GiB 和 32 层目录，拒绝 reparse
 points。父／子进程共用读锁保护活动缓存；正常结束移除缓存，之后启动会清理超过一分钟且已释放的孤立缓存。Windows 回归检查活动所有者保护、孤立清理、深度拒绝及原文件保留。JDK
-8 子进程也明确传入 UTF-8 的 `sun.jnu.encoding`
-属性，因为该 JDK 会独立于进程代码页从系统区域设置推导原生编码；应用文件编码仍可配置。有界匿名 stdin 管道传递字面参数，不增加参数／环境文件或 Shell 插值。子进程保留任务控制台和进程树生命周期，返回实际 JVM 退出码。ASCII 步骤保留直接 Java 启动。新的 Windows
+8 子进程在用户 Agent 与主类前加载小型内嵌兼容 Agent，在 Java 8 提前按区域设置解码后恢复原始 UTF-8
+VM 属性和所选 JDK 的系统 URL
+classpath，再为启动器参数选择 UTF-8。运行时 Agent 不保存用户参数，版本化输入只在进程内存传递。启动路径必须有 ASCII 相对或已有短路径表示，否则 helper 报告
+`JAVA_UTF8_AGENT_PATH_UNSUPPORTED`；需要修复 classpath 的非 URL 自定义系统加载器也会明确拒绝。应用文件编码仍可配置。有界匿名 stdin 管道传递字面参数，不增加参数／环境文件或 Shell 插值。子进程保留任务控制台和进程树生命周期，返回实际 JVM 退出码。ASCII 步骤保留直接 Java 启动。新的 Windows
 Java 任务要求 helper 的 UTF-8 启动能力；旧活动 helper 会提示升级，不终止已有会话／任务。Unicode 路径需要 Windows 的进程 UTF-8 支持，JDK 架构须与子进程匹配。
 
 `bash scripts/macos-java-smoke.sh` 使用 JDK
@@ -1715,8 +1717,14 @@ JAR 文件名、Unicode／emoji／引号／通配符／结尾反斜线及空参�
 
 Java 互操作 workflow 另外通过所选真实 Core／宿主／JVM 启动 ASCII 与 Unicode JAR 路径，收集
 `java-encoding-diagnostics.json`，记录 JDK
-8／11／17／21 的实际属性、字面参数、启动器跟踪及退出码。此有界、可丢弃数据探针明确属于诊断；采集报告不代表 Unicode 验收通过。严格任务检查仍要求准确参数／属性、最终输出、退出码 7、回放及代次安全停止；Windows
-JDK 8 在该检查通过前继续记为失败。
+8／11／17／21 的实际属性、字面参数、启动器跟踪及退出码。采集属于诊断，不代表 Unicode 任务验收。此前 Java
+8 报告确认应用参数正确，但 VM 属性和 classpath 损坏，仅覆盖编码属性不足以修复。
+
+严格任务检查保留准确参数／属性、最终输出、退出码 7、回放及代次安全停止，还使用中文项目目录，验证用户 premain
+Agent 在主类前读到原始 Unicode／emoji 属性。可丢弃用户 Agent
+JAR 使用 ASCII 路径。独立的原版 JDK 诊断记录 BMP 与补充字符目录结果，不经过 uTerm 宿主；本地 JDK
+21 在不带 Agent 的 emoji 目录运行也在 Java
+URL 解码内失败，此上游限制不计为桥接成功。Windows 桥接自身资产路径含补充字符时，要求已有 ASCII 短路径。此修复的平台验收须在 #37 核对其自身严格 CI 结果，源码／资产可复现检查不能代替实际运行。
 
 运行 `pnpm test:core` 和前端检查时，将 `JAVA_HOME` 指向 JDK 21，并把其 `bin` 加入
 `PATH`。Java 互操作 workflow 在 JDK 8／11／17／21 上运行实际 Windows 宿主，上传

@@ -2,6 +2,8 @@ use anyhow::Result;
 
 pub const CAPABILITY: &str = "java-utf8-launch-v1";
 #[cfg(windows)]
+mod agent;
+#[cfg(windows)]
 const LIMIT: usize = 16 * 1024 * 1024;
 
 #[cfg(windows)]
@@ -57,6 +59,17 @@ pub(crate) fn prepare(
         None
     };
     let executable = if let Some(cache) = &cache {
+        use std::io::Write;
+        let mut agent = std::fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(
+                cache
+                    .directory
+                    .path()
+                    .join("bin/uterm-java8-encoding-agent.jar"),
+            )?;
+        agent.write_all(agent::JAR)?;
         let target = cache
             .directory
             .path()
@@ -113,6 +126,75 @@ fn quoted_command(arguments: &[String]) -> Result<Vec<u8>> {
     Ok(std::ffi::CString::new(command)?.into_bytes_with_nul())
 }
 
+#[cfg(any(windows, test))]
+fn legacy_options(
+    arguments: &[String],
+    cache: &str,
+    directory: &str,
+    home: &str,
+    default_classpath: &str,
+) -> Result<String> {
+    let mut classpath = default_classpath.to_owned();
+    let mut properties = Vec::new();
+    let mut index = 0;
+    let target = loop {
+        let Some(argument) = arguments.get(index) else {
+            return Err(anyhow::anyhow!("JAVA_UTF8_ARGUMENTS_INVALID"));
+        };
+        if argument == "-cp" || argument == "-classpath" {
+            index += 1;
+            classpath = arguments
+                .get(index)
+                .ok_or_else(|| anyhow::anyhow!("JAVA_UTF8_ARGUMENTS_INVALID"))?
+                .clone();
+        } else if argument == "-jar" {
+            index += 1;
+            classpath = arguments
+                .get(index)
+                .ok_or_else(|| anyhow::anyhow!("JAVA_UTF8_ARGUMENTS_INVALID"))?
+                .clone();
+            break index;
+        } else if !argument.starts_with('-') {
+            break index;
+        } else if let Some(property) = argument.strip_prefix("-D") {
+            if let Some(value) = property.strip_prefix("java.class.path=") {
+                classpath = value.into();
+            }
+            if property.starts_with("sun.java.command=") || property.starts_with("java.class.path=")
+            {
+                index += 1;
+                continue;
+            }
+            properties.push(if property.contains('=') {
+                property.to_owned()
+            } else {
+                format!("{property}=")
+            });
+        }
+        index += 1;
+    };
+    let command = arguments[target..].join(" ");
+    let mut values = vec![
+        "1",
+        cache,
+        directory,
+        home,
+        classpath.as_str(),
+        command.as_str(),
+    ];
+    values.extend(properties.iter().map(String::as_str));
+    anyhow::ensure!(
+        values.iter().all(|value| !value.contains('\0')),
+        "JAVA_UTF8_ARGUMENTS_INVALID"
+    );
+    let bytes = values.join("\0").into_bytes();
+    anyhow::ensure!(
+        bytes.len() <= 16 * 1024 * 1024,
+        "JAVA_UTF8_ARGUMENTS_INVALID"
+    );
+    Ok(bytes.iter().map(|value| format!("{value:02x}")).collect())
+}
+
 #[cfg(windows)]
 pub fn run() -> Result<i32> {
     windows::run()
@@ -126,7 +208,7 @@ mod windows {
         ffi::{c_char, c_int, c_void, CString},
         io::Read,
         os::windows::{ffi::OsStrExt, io::IntoRawHandle},
-        path::Path,
+        path::{Path, PathBuf},
     };
     use windows_sys::Win32::{
         Foundation::HMODULE,
@@ -170,6 +252,62 @@ mod windows {
 
     fn wide(path: &Path) -> Vec<u16> {
         path.as_os_str().encode_wide().chain([0]).collect()
+    }
+    fn text_path(path: &Path) -> Result<String> {
+        let value = path.to_str().context("JAVA_UTF8_ARGUMENTS_INVALID")?;
+        Ok(if let Some(value) = value.strip_prefix("\\\\?\\UNC\\") {
+            format!("\\\\{value}")
+        } else {
+            value.strip_prefix("\\\\?\\").unwrap_or(value).to_owned()
+        })
+    }
+    pub(super) fn agent_path(agent: &Path, directory: &Path) -> Result<String> {
+        let agent = PathBuf::from(text_path(agent)?);
+        let directory = PathBuf::from(text_path(directory)?);
+        let target: Vec<_> = agent.components().collect();
+        let source: Vec<_> = directory.components().collect();
+        let common = target
+            .iter()
+            .zip(&source)
+            .take_while(|(left, right)| {
+                left.as_os_str()
+                    .as_encoded_bytes()
+                    .eq_ignore_ascii_case(right.as_os_str().as_encoded_bytes())
+            })
+            .count();
+        if common >= 2
+            && !text_path(&agent)?
+                .chars()
+                .any(|value| value as u32 > 0xffff)
+        {
+            let mut relative = PathBuf::new();
+            for _ in &source[common..] {
+                relative.push("..");
+            }
+            for part in &target[common..] {
+                relative.push(part.as_os_str());
+            }
+            if let Some(value) = relative.to_str().filter(|value| value.is_ascii()) {
+                return Ok(value.into());
+            }
+        }
+        let mut buffer = vec![0u16; 32768];
+        let length = unsafe {
+            windows_sys::Win32::Storage::FileSystem::GetShortPathNameW(
+                wide(&agent).as_ptr(),
+                buffer.as_mut_ptr(),
+                buffer.len() as u32,
+            )
+        } as usize;
+        if length > 0 && length < buffer.len() {
+            let value = String::from_utf16(&buffer[..length])?;
+            if value.is_ascii() {
+                return Ok(value);
+            }
+        }
+        let value = text_path(&agent)?;
+        anyhow::ensure!(value.is_ascii(), "JAVA_UTF8_AGENT_PATH_UNSUPPORTED");
+        Ok(value)
     }
     unsafe fn symbol(library: HMODULE, name: &'static [u8]) -> Result<*mut c_void> {
         GetProcAddress(library, name.as_ptr())
@@ -400,10 +538,31 @@ mod windows {
                 .context("JAVA_UTF8_JDK_INVALID")?
                 .to_owned()];
             values.extend(payload.arguments);
-            if payload.cache.is_some() {
-                // JDK 8 derives JNU encoding from the system locale, independently of the process code page.
-                // JDK 8 从系统区域设置推导 JNU 编码，与进程代码页无关。
-                values.insert(1, "-Dsun.jnu.encoding=UTF-8".into());
+            if let Some(cache) = &payload.cache {
+                let agent = cache.join("bin/uterm-java8-encoding-agent.jar");
+                let mut embedded = Vec::new();
+                std::fs::File::open(&agent)?
+                    .take((super::agent::JAR.len() + 1) as u64)
+                    .read_to_end(&mut embedded)?;
+                anyhow::ensure!(
+                    embedded.as_slice() == super::agent::JAR,
+                    "JAVA_UTF8_CACHE_INVALID"
+                );
+                let directory = std::env::current_dir()?;
+                let classpath = std::env::var("CLASSPATH").unwrap_or_else(|_| ".".into());
+                let options = legacy_options(
+                    &values[1..],
+                    &text_path(cache)?,
+                    &text_path(&directory)?,
+                    &text_path(home)?,
+                    &classpath,
+                )?;
+                // Java 8 initializes VM properties before the -D encoding override takes effect.
+                // Java 8 在 -D 编码覆盖生效前就初始化 VM 属性。
+                values.insert(
+                    1,
+                    format!("-javaagent:{}={options}", agent_path(&agent, &directory)?),
+                );
             }
             let legacy_values: Vec<CString> = values
                 .iter()
@@ -463,6 +622,78 @@ mod windows {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn legacy_agent_receives_original_properties_and_launcher_classpath_precedence() {
+        let decode = |arguments: &[&str]| {
+            let values = arguments
+                .iter()
+                .map(|value| (*value).into())
+                .collect::<Vec<_>>();
+            let encoded =
+                legacy_options(&values, "cache 中文", "project 😀", "jdk", "default").unwrap();
+            let bytes = (0..encoded.len())
+                .step_by(2)
+                .map(|index| u8::from_str_radix(&encoded[index..index + 2], 16).unwrap())
+                .collect();
+            String::from_utf8(bytes)
+                .unwrap()
+                .split('\0')
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        };
+        let values = decode(&[
+            "-Dqa.value=属性 😀=literal",
+            "-cp",
+            "before",
+            "-Djava.class.path=after",
+            "-Dempty",
+            "Main",
+            "-Dapplication-only=kept",
+        ]);
+        assert_eq!(
+            &values[..6],
+            [
+                "1",
+                "cache 中文",
+                "project 😀",
+                "jdk",
+                "after",
+                "Main -Dapplication-only=kept"
+            ]
+        );
+        assert_eq!(&values[6..], ["qa.value=属性 😀=literal", "empty="]);
+        let jar = decode(&[
+            "-Djava.class.path=ignored",
+            "-Dsun.java.command=ignored",
+            "-jar",
+            "中文.jar",
+            "",
+        ]);
+        assert_eq!(jar[4], "中文.jar");
+        assert_eq!(jar[5], "中文.jar ");
+        assert_eq!(jar.len(), 6);
+        assert!(legacy_options(&["-cp".into()], "cache", "dir", "jdk", ".").is_err());
+        assert!(legacy_options(
+            &["Main".into(), "bad\0value".into()],
+            "cache",
+            "dir",
+            "jdk",
+            "."
+        )
+        .is_err());
+    }
+    #[cfg(windows)]
+    #[test]
+    fn legacy_agent_path_stays_ascii_when_its_parent_directory_contains_unicode() {
+        let agent = std::path::Path::new(
+            r"\\?\C:\project 中文\local-daemon-v1\java-utf8-jdk8-test\bin\uterm-java8-encoding-agent.jar",
+        );
+        let directory = std::path::Path::new(r"C:\project 中文\module 😀");
+        assert_eq!(
+            windows::agent_path(agent, directory).unwrap(),
+            r"..\local-daemon-v1\java-utf8-jdk8-test\bin\uterm-java8-encoding-agent.jar"
+        );
+    }
     #[cfg(windows)]
     #[test]
     fn jdk8_cache_cleanup_respects_live_owners_and_retains_the_selected_jdk() {

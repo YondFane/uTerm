@@ -131,6 +131,10 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 `bash scripts/macos-native-build.sh` 和 `bash scripts/macos-native-test.sh`
 构建隔离 QA 应用并运行 Rust／Swift 桥接测试。
 
+内嵌 Java 8 编码 Agent 同时提供 Java 源码和可复现的运行时字节。修改后使用 JDK 21 运行
+`python3 scripts/java8-encoding-agent.py`，再执行
+`python3 scripts/java8-encoding-agent.py --check`。正常 Rust／应用构建不需要 Java 编译器；Windows 互操作 CI 核对资产并运行实际所选 JDK。
+
 原生终端 QA：`bash scripts/macos-terminal-smoke.sh`
 使用临时数据及包内独立 helper，运行两个真实应用进程并保存双语／主题／宽度截图产物。还会启动系统 Vim，通过原生终端动作输入及粘贴 Unicode，核对保存文件的 UTF-8 字节并记录真实 TUI 窗口，不替代人工输入法验收。SwiftPM 解析固定的 SwiftTerm
 1.20.0 依赖，不改变旧终端渲染器。
