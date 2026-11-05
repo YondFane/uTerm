@@ -92,6 +92,7 @@ jobs:
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           UTERM_INPUT_CONTROL_REPORT: ${{ github.workspace }}/ci-evidence/input-control-host.json
+          UTERM_TASK_OUTPUT_AUTH_REPORT: ${{ github.workspace }}/ci-evidence/task-output-auth.json
         run: cargo test --manifest-path crates/utermd-local/Cargo.toml --locked 2>&1 | tee ci-evidence/host-tests.log
       - name: Java launcher encoding diagnostics
         shell: bash

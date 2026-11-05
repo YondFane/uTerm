@@ -103,15 +103,27 @@ fn real_maven_reactor_and_spring_boot_use_shared_task_lifetimes() {
             let (generation, frame) = receive
                 .recv_timeout(deadline.saturating_duration_since(Instant::now()))
                 .unwrap_or_else(|error| {
-                    panic!("Maven output: {error}: {}", String::from_utf8_lossy(&bytes))
+                    panic!(
+                        "Maven output for task {} generation {}: {error}; last output: {}",
+                        task["spec"]["id"],
+                        task["generation"],
+                        String::from_utf8_lossy(&bytes[bytes.len().saturating_sub(64 * 1024)..])
+                    )
                 });
             assert_eq!(generation, task["generation"].as_str().unwrap());
-            assert!(frame.error.is_none(), "{:?}", frame.error);
             if let Some(previous) = sequences.last() {
                 assert!(frame.sequence >= *previous);
             }
             sequences.push(frame.sequence);
             bytes.extend_from_slice(&frame.data);
+            assert!(
+                frame.error.is_none(),
+                "Maven output transport for task {} generation {}: {:?}; last output: {}",
+                task["spec"]["id"],
+                task["generation"],
+                frame.error,
+                String::from_utf8_lossy(&bytes[bytes.len().saturating_sub(64 * 1024)..])
+            );
             assert!(
                 bytes.len() <= 4 * 1024 * 1024,
                 "Fixture output must stay bounded"

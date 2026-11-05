@@ -2952,6 +2952,26 @@ ordered terminal replay. Tasks stay separate from ordinary terminal discovery; t
 bounded history of completed task output for its current lifetime. An older host without task
 support is reported without stopping existing sessions.
 
+The private loopback output channel retains partial 32-byte authentication tokens across its 250 ms
+socket polls, within the peer's five-second write budget. Wrong tokens remain rejected. Shutdown
+interrupts an incomplete authentication wait while queued authenticated output still drains. The
+wire token and task/error formats stay unchanged.
+
+Seven Linux output checks cover controlled timeout/fragment sequences, actual loopback sockets
+delayed beyond a poll, exact final bytes, wrong-token refusal, expiry and close. The targeted
+command is
+`cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib task_output::tests`.
+`task-output-auth.json` records source/merge, platform and controlled-peer results without token
+values; real task subprocesses are checked separately. Full Host/Core/FFI checks and the eight real
+Linux Maven/Spring Boot scenarios pass. Windows/macOS results remain pending for this change.
+
+At source `8491bae96401829e5cc5c3420d5aaccb58494356` / tested merge
+`f25eef9b077d0b9be88ed35f311db52868d17f88`, Windows JDK11 Maven failed with
+`JAVA_TASK_OUTPUT_FAILED` while five other Maven reports passed. The connection to the
+authentication defect still needs new CI evidence. The fixture now retains task ID, generation and
+at most 64 KiB of output tail on transport failure or timeout; its original failure remains in Issue
+#37.
+
 - Windows native-host regression verifies that ordinary Stop keeps a task running throughout child
   cleanup, retains final stdout/stderr and prevents later task steps from starting. It also verifies
   Force stop during pending cleanup. Real Java and Python processes complete two-second shutdown

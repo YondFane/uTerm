@@ -1741,6 +1741,20 @@ Java 和 Python 日志区域的文字与不透明背景共同使用选定的终�
 
 退出应用只分离宿主；重新打开同一项目的 Java 面板，可恢复任务与有序终端回放。任务不会进入普通终端发现列表；宿主在本次运行期间保留有界的已完成任务输出。旧宿主不支持任务时明确报错，不终止已有会话。
 
+私有回环输出通道在对端五秒写入期限内，跨 250
+ms 套接字轮询保留未完整的 32 字节认证令牌，仍拒绝错误令牌。关闭会中断未完成的认证等待，已经到达的已认证输出继续排空。线协议令牌及任务／错误格式保持不变。
+
+Linux 七项输出检查覆盖可控超时／分片序列、跨越轮询期限的真实回环连接、准确最终字节、错误令牌拒绝、到期及关闭。专项命令为
+`cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib task_output::tests`。
+`task-output-auth.json`
+记录 source／merge、平台及受控对端结果，不记录令牌值；实际任务子进程另行检查。完整 Host／Core／FFI 及 Linux 真实 Maven／Spring
+Boot 八场景通过，此改动的 Windows／macOS 结果仍待确认。
+
+source `8491bae96401829e5cc5c3420d5aaccb58494356`／tested merge
+`f25eef9b077d0b9be88ed35f311db52868d17f88` 的 Windows JDK11 Maven 报
+`JAVA_TASK_OUTPUT_FAILED`，其余五份 Maven 报告通过；与认证缺陷的关联仍需新 CI 证据。样例现在在传输错误或超时后保留任务 ID、generation 及最多 64
+KiB 输出尾部，原失败继续保留在 #37。
+
 - Windows 原生宿主回归确认：普通“停止”在子进程清理期间保持任务运行，保留最终 stdout／stderr，并阻止后续任务步骤启动；清理期间仍可强制停止。真实 Java 与 Python 进程均在退出前完成两秒关闭清理。Agent 启用、通知及数据库 App 回归使用有效的运行摘要 IPC 夹具后通过。宿主套件 51 项通过、三项可选检查忽略；后端 144 项通过、十项忽略。这些检查不代表 macOS／Linux 运行验收。
 - Windows
   JDK 注册检查覆盖无效路径、原生目录选择取消、并发检测、添加／移除，以及运行配置保存指定 JDK。后端检查覆盖持久化去重、移除时保留 JDK 文件、Maven 文件保护和损坏记录拒绝。隔离 Windows 原生应用（`sh.uterm.desktop.qa.java`）验证目录选择、无效目录错误显示、添加 JDK
