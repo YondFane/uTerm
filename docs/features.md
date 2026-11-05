@@ -1399,7 +1399,8 @@ Rust and TypeScript pass on Linux; Swift execution awaits macOS CI.
 `bash scripts/macos-ssh-smoke.sh` uses an isolated app, temporary keys/known_hosts and a real SSH
 service for profile conflicts, SFTP transfers/cancellation, forwarding, remote terminal
 replay/detach/close and native host trust. It uploads `ssh-live.json`, logs and real window images.
-This new window still awaits macOS CI build/runtime validation; the existence of the script is not a
+The first macOS build caught an escaping-closure annotation missing from the QA menu lookup; that
+annotation is corrected and the build/runtime rerun is pending. The existence of the script is not a
 passing result. Windows real-service, successful password-login and manual picker/IME acceptance
 remain pending. #36 stays open; no merge or release is claimed.
 

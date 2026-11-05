@@ -4,7 +4,7 @@ import UTermBridge
 
 @MainActor
 enum SSHSmoke {
-    static func run(model: WorkspaceModel, open: () async throws -> SSHWindow, lookup: () -> SSHWindow?, report: inout [String: Any]) async throws {
+    static func run(model: WorkspaceModel, open: () async throws -> SSHWindow, lookup: @escaping () -> SSHWindow?, report: inout [String: Any]) async throws {
         guard let bridge = model.bridge,
               let reportPath = WorkspaceModel.argument("--ssh-smoke-report"),
               let fixturePath = WorkspaceModel.argument("--ssh-smoke-fixture") else { throw BridgeFailure(code: "SSH_QA", message: "Missing isolated SSH fixture") }
