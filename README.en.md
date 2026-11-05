@@ -247,11 +247,11 @@ The core's `store/editor.rs` owns revision-checked multi-document drafts, exact 
 and explicit recovery. Native and Tauri editing adopt this API through the bounded queue in
 `src/lib/editor-drafts.ts`. Tauri initializes exact versioned old-source backups and an explicit
 handoff before App, freezes the old draft key and offers conflict/corrupt-copy recovery choices.
-Editable native files now group into project-scoped AppKit tabs and reuse an existing file tab; new
-real-window tab checks await macOS CI. Persisted tab/window order and complete editing acceptance
-remain pending. Content writes are restricted to the selected file. `pnpm test:core` explicitly runs
-filesystem failure/retry checks for workspace/draft snapshots and metadata saving after Worktree
-removal, plus Git favorite save/restore/retry.
+Editable native files now group into project-scoped AppKit tabs and reuse an existing file tab;
+real-window tab checks pass on macOS ARM/Intel. Persisted tab/window order and complete editing
+acceptance remain pending. Content writes are restricted to the selected file. `pnpm test:core`
+explicitly runs filesystem failure/retry checks for workspace/draft snapshots and metadata saving
+after Worktree removal, plus Git favorite save/restore/retry.
 
 The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
 operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this
