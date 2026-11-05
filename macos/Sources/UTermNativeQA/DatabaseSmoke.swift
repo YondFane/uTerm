@@ -90,6 +90,15 @@ enum DatabaseSmoke {
         report["nativeRealPostgresqlConnection"] = true
         let sql = "SELECT 9223372036854775807::bigint AS exact_integer, 12345678901234567890.1234567890::numeric(30,10) AS exact_decimal, 'NATIVE_DATABASE_中文'::text AS text_value"
         try await EditorSmoke.replace(content, text: sql)
+        let inputDeadline = Date().addingTimeInterval(5)
+        var copied = false
+        while Date() < inputDeadline {
+            try await EditorSmoke.click(content, title: "Copy SQL")
+            if NSPasteboard.general.string(forType: .string) == sql { copied = true; break }
+            try await Task.sleep(for: .milliseconds(40))
+        }
+        guard copied else { throw BridgeFailure(code: "DB_INPUT_SYNC", message: "The SQL toolbar did not copy the actual edited query") }
+        report["nativeSQLClipboardMatchesEditedQuery"] = true
         try await EditorSmoke.click(content, title: "Execute SQL")
         try await wait(content, "document.querySelector('.database-grid-container')?.textContent.includes('9223372036854775807') && document.querySelector('.database-grid-container')?.textContent.includes('12345678901234567890.1234567890')")
         report["nativeExactBigintDecimalAndUnicode"] = true

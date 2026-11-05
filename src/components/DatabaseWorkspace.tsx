@@ -13,7 +13,7 @@ import {
   PLSQL,
   type SQLNamespace,
 } from "@codemirror/lang-sql";
-import { contentInvoke as invoke } from "../lib/content-host";
+import { contentInvoke as invoke, copyContentText } from "../lib/content-host";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import {
@@ -999,9 +999,7 @@ function SqlDatabaseWorkspace({
               <button
                 disabled={busy}
                 onClick={() => {
-                  void navigator.clipboard
-                    .writeText(sql)
-                    .catch(() => setError(tx("无法复制 SQL。")));
+                  void copyContentText(sql).catch(() => setError(tx("无法复制 SQL。")));
                 }}
               >
                 {tx("复制 SQL")}

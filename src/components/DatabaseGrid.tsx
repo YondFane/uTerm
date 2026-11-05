@@ -8,6 +8,7 @@ import {
   type DatabaseChange,
 } from "../lib/database";
 import { databaseDraftRows } from "../lib/database-data";
+import { copyContentText } from "../lib/content-host";
 
 const noChanges: DatabaseChange[] = [];
 
@@ -179,7 +180,7 @@ export const DatabaseGrid = memo(function DatabaseGrid({
   async function copy(headers = false) {
     if (!result || !range) return;
     try {
-      await navigator.clipboard.writeText(databaseClipboard(copiedResult, range, headers));
+      await copyContentText(databaseClipboard(copiedResult, range, headers));
     } catch {
       report(tx("无法复制结果。"));
     }
