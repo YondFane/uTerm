@@ -29,7 +29,8 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 assert 'failure' not in report, report
                 assert report['coreReady'] and not report['productionDataAccess'], report
                 assert report['bundleIdentifier'] == 'sh.uterm.desktop.qa.native', report
-                for key in ['nativeFileTabsGroupedAndOrdered', 'nativeFileTabReopenSelectedExisting', 'nativeFileTabSwitchRetainedExactDrafts']:
+                for key in ['nativeFileTabsGroupedAndOrdered', 'nativeFileTabReopenSelectedExisting', 'nativeFileTabSwitchRetainedExactDrafts',
+                            'nativeFileTabsMatchConfiguredAppearance']:
                     assert report[key], (key, report)
                 if phase == 'checkpoint':
                     for key in ['editedDraftDurableBeforeKill', 'originalBytesBeforeKill', 'wrongFileWriteRejected', 'awaitingForcedExit']:

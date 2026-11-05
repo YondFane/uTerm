@@ -348,6 +348,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return content
         }
         let content = try ContentWindow(bridge: bridge, directory: directory, path: path, editable: editable)
+        content.window?.appearance = window?.appearance
         if editable, let next = content.window {
             let siblings = contentWindows.values.filter { $0.editable && !$0.gitMode && $0.directory == content.directory }
             if let anchor = NSApp.orderedWindows.first(where: { window in siblings.contains { $0.window === window } }) {

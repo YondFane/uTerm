@@ -48,6 +48,10 @@ enum EditorTabsSmoke {
             firstWindow.tabbedWindows?.count == 2 && firstWindow.tabGroup === secondWindow.tabGroup
         }
         report["nativeFileTabTitles"] = firstWindow.tabbedWindows?.map(\.title) ?? []
+        guard [firstWindow, secondWindow].allSatisfy({ $0.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua }) else {
+            throw BridgeFailure(code: "EDITOR_TABS_APPEARANCE", message: "Native tab chrome did not inherit the configured dark appearance")
+        }
+        report["nativeFileTabsMatchConfiguredAppearance"] = true
         guard firstWindow.tabbedWindows?.map(\.title) == names else {
             throw BridgeFailure(code: "EDITOR_TABS_ORDER", message: "Native file tabs did not retain opening order")
         }

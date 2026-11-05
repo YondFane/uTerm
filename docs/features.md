@@ -370,14 +370,20 @@ windows stay outside that editable group. Each tab keeps its own document-scoped
 queue and close guard; cancelling a conflicted close retains both drafts and the external file.
 Closing one tab continues to guard and acknowledge only its own document.
 
-The real editor smoke now edits two recovered files in their native tab group, verifies exact shared
+The real editor smoke edits two recovered files in their native tab group, verifies exact shared
 drafts and unchanged originals, then leaves both tabs open for SIGKILL. The relaunch phase
 explicitly reopens both files, checks recovered text/order/reuse, isolates another project/preview,
-and exercises conflict/Keep editing/discard plus exact sibling Save. It requests
+and exercises conflict/Keep editing/discard plus exact sibling Save. Source
+`1801fa6dc67973e8aee67efd8fd4973ae788bd1c` / merge `1380abce17c927d68aa6f5147502bb0d4d234dfe` passes
+those ARM macOS 15.8.2 checks in
+[artifact13393627827](https://github.com/YondFane/uTerm/actions/runs/41980083853/artifacts/13393627827).
 `native-editor-tabs-checkpoint.png`, `native-editor-tabs-reopen.png` and
-`native-editor-tabs-conflict-640.png`; new ARM/Intel execution is pending CI, not inferred from
-syntax or compilation. Persisted tab order/window geometry, PDF marks and full manual
-keyboard/IME/focus acceptance remain open in #34.
+`native-editor-tabs-conflict-640.png` are actual WindowServer captures; the reopen image was
+inspected. It exposed light native tab chrome around the dark editor. File windows now inherit the
+main window's configured appearance on opening, and both phases require the dark chrome check; that
+repair needs its own ARM/Intel result. The same source's later Git startup-contention smoke fails
+separately. Persisted tab order/window geometry, PDF marks and full manual keyboard/IME/focus
+acceptance remain open in #34.
 
 #### Tauri editor draft handoff
 

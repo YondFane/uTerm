@@ -209,9 +209,12 @@ UTF-16 码元一致，保留 BOM／换行。保留最多八份有效前序快照
 
 同一规范项目的原生可编辑文件按打开顺序组成 AppKit 窗口标签，重复打开文件会选中原标签。不同项目、只读预览及 Git 窗口不进入该可编辑分组。每个标签保留独立的文档桥接、恢复队列和关闭保护；冲突关闭后选择继续编辑，保留两份草稿与外部文件；关闭一个标签仍只保护并确认其自身文档。
 
-真实编辑器冒烟现在在原生标签组中编辑两份恢复文件，核对准确共享草稿与未变原文件，再保持两个标签打开供 SIGKILL。重启阶段明确重开两份文件，检查恢复文本／顺序／复用、其他项目／预览隔离，并执行冲突／继续编辑／放弃及剩余文件的准确保存。场景要求
-`native-editor-tabs-checkpoint.png`、`native-editor-tabs-reopen.png` 与
-`native-editor-tabs-conflict-640.png`；新的 ARM／Intel 执行仍待 CI，不能从语法或编译推断通过。跨重启持久标签顺序／窗口位置、PDF 标记及完整人工键盘／输入法／焦点验收仍在 #34 开放。
+真实编辑器冒烟在原生标签组中编辑两份恢复文件，核对准确共享草稿与未变原文件，再保持两个标签打开供 SIGKILL。重启阶段明确重开两份文件，检查恢复文本／顺序／复用、其他项目／预览隔离，并执行冲突／继续编辑／放弃及剩余文件的准确保存。Source
+`1801fa6dc67973e8aee67efd8fd4973ae788bd1c`／merge `1380abce17c927d68aa6f5147502bb0d4d234dfe` 在 ARM
+macOS
+15.8.2 通过这些检查，证据位于[artifact13393627827](https://github.com/YondFane/uTerm/actions/runs/41980083853/artifacts/13393627827)。`native-editor-tabs-checkpoint.png`、`native-editor-tabs-reopen.png`
+与 `native-editor-tabs-conflict-640.png`
+均为真实 WindowServer 截图，已检查重开图片，发现深色编辑器周围的原生标签栏为浅色。文件窗口现于打开时继承主窗口配置的外观，两阶段均要求深色窗口栏检查；该修复仍需自己的 ARM／Intel 结果。同一源码之后的 Git 启动争用检查另行失败。跨重启持久标签顺序／窗口位置、PDF 标记及完整人工键盘／输入法／焦点验收仍在 #34 开放。
 
 #### Tauri 编辑器草稿迁移
 
