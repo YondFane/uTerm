@@ -228,9 +228,15 @@ unchanged host PID/generation/grid, a real file write after each exit and exact 
 the same cursor. Linux passed the targeted regression, full Core/FFI/Host/backend checks, 408
 frontend tests (10 skipped), types/production and desktop builds, formatting and documentation. The
 final working tree also passed all 53 real application scenes (dirty=true, cleanupErrors=[]).
-Platform checks for this source remain pending; the real-app QA retains control-click/read-only
-diagnostics on failure. Agent authentication/tasks, manual IME/clipboard/mouse and sleep/display
-acceptance remain open.
+
+At source `29516c6dd78399d305099611cddebac7f825d46c` / tested merge
+`dcb2332a60bc712c0fb86ba6aa32bd946b88964a`, all four clean Core/PTY reports passed, and each native
+architecture observed one control-only change without a new byte cursor. Both native application
+handoff/Vim/slow-consumer reports passed; macOS Tauri passed 53 scenes. Windows application QA
+stopped earlier at its short/long path comparison, so its UI acceptance is still incomplete. The
+real-app QA retains control-click/read-only diagnostics on failure. Platform reports remain bound to
+their own source/merge in Issue #32. Agent authentication/tasks, manual IME/clipboard/mouse and
+sleep/display acceptance remain open.
 
 ### Shared saved state
 
@@ -1877,11 +1883,15 @@ remains retained.
 
 QA now uses the visible **Retry loading** action when needed, selects the imported temporary project
 only when necessary, and verifies the actual file-tree root before opening a preview. It compares
-Windows's displayed path with the displayed canonical root and resolves both filesystem paths for
-the driver check, accepting macOS's `/var` → `/private/var` spelling without accepting a different
-root. Source `aa86df0` failed these two path-representation checks on Windows/macOS; those artifacts
-remain retained. The corrected Linux working tree passed 53 scenes with no cleanup errors before the
-control-stream change; the final source still needs its own application/platform evidence.
+Windows's displayed path with the displayed canonical root. The driver compares exact bigint
+filesystem device/inode identities, requiring real directories and a nonzero identity, so macOS's
+`/var` → `/private/var` and Windows 8.3 short/long names can identify the same root without
+accepting another directory. Source `aa86df0` failed these two path-representation checks on
+Windows/macOS; those artifacts remain retained. The corrected Linux working tree passed 53 scenes
+with no cleanup errors before the control-stream change; platform evidence is recorded against its
+source in the Issue comments. The later `29516c6` Windows failure showed `RUNNER~1` versus
+`runneradmin` after JavaScript realpath resolution; its original report remains retained, and the
+identity check replaces that string comparison.
 
 Earlier Linux working-tree checks passed 53 scenes, 12 HTML/PDF/transport checks and types; HTML/PDF
 captures were inspected separately from clean CI evidence. An earlier root-selection run stopped at
