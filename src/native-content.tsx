@@ -10,9 +10,10 @@ import "./styles.css";
 import "./native-content.css";
 import { NativeGit } from "./native-git";
 import { NativeDatabase } from "./native-database";
+import { NativeRedis } from "./native-redis";
 
 interface Context {
-  kind?: "file" | "git" | "database";
+  kind?: "file" | "git" | "database" | "redis";
   directory: string;
   path: string;
   settings: Settings;
@@ -92,6 +93,8 @@ async function start() {
         <SettingsProvider content={content}>
           {context.kind === "database" ? (
             <NativeDatabase />
+          ) : context.kind === "redis" ? (
+            <NativeRedis />
           ) : context.kind === "git" ? (
             <NativeGit directory={context.directory} />
           ) : (

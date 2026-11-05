@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { contentInvoke as invoke } from "../lib/content-host";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
+import { randomUUID } from "../lib/uuid";
 import { useDialogBackdrop } from "../lib/useDialogBackdrop";
 import {
   databaseError,
@@ -35,7 +36,7 @@ export function DatabaseConnectionDialog({
   ssh = ssh.filter((item) => !item.temporary);
   const [config, setConfig] = useState<DatabaseConfig>(
     connection ?? {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       name: "",
       kind: "mysql",
       host: "127.0.0.1",

@@ -1674,13 +1674,23 @@ revision-checked storage and refuses active/dirty profiles. Quit freezes new wor
 hidden draft protection. Client close drains cancelled async tasks as well as owned sockets and SSH
 processes; it does not retry writes with an uncertain outcome.
 
+The isolated native app opens **Redis connections** from its sidebar or **File → Redis
+connections…** and reuses the connection form and workbench through the scoped content transport.
+Temporary passwords match canonical configuration values; changing an inactive target recreates its
+workbench without the previous password. Profile conflicts retain input.
+
+Closing the window hides it while retaining its connection/draft; quitting freezes the view, checks
+pending operations and confirms draft loss. Cancelling quit resumes it with draft protection. CA
+selection uses AppKit; content cannot choose a picker path. Language/theme updates use shared
+settings without saving defaults.
+
 #### Shared-service validation and limits
 
 Linux x86_64 / Rust 1.99.1 passes all 11 Redis service regressions with real Redis 7.4.7/TLS and
 OpenSSL, including binary values, TTL, stale snapshots, read-only enforcement, TLS name/CA rejection
 and uncertain writes without retry. Two public host-port regressions cover late authentication after
 shutdown and cancelled authentication. Full Core/FFI, host, Tauri backend (41 passed / two ignored),
-frontend (417 passed / ten skipped), types, production/desktop builds and contracts pass.
+frontend (418 passed / ten skipped), types, production/desktop builds and contracts pass.
 
 Five additional async/contract regressions pass: unread-result backpressure with disconnect still
 available, generation/single-consumption checks and parameter exclusion, quit/resume with hidden
@@ -1693,9 +1703,21 @@ native CI and still require their own platform result.
 servers. The normal Core suite runs the other four service checks and the two host-port checks.
 `node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory` records toolchains,
 actual test names, logs, source/merge SHA and source-tree state. Shared Redis CI builds the verified
-7.4.7 source with TLS and uploads those reports. Native Redis entry, dual-client UI and platform
-credential acceptance remain tracked in [#39](https://github.com/YondFane/uTerm/issues/39); service
-tests do not establish UI acceptance.
+7.4.7 source with TLS and uploads those reports. Native Redis and platform credential acceptance
+remain tracked in [#39](https://github.com/YondFane/uTerm/issues/39); service tests do not establish
+UI acceptance.
+
+Linux manager regressions cover profile conflicts, password exclusion, modal freeze/resume,
+configuration key ordering and clearing a password after editing the target. Connection forms and
+the native draft guard use secure random UUIDs in custom-scheme contexts without `randomUUID`.
+
+`bash scripts/macos-redis-smoke.sh` requires a macOS graphical session, Homebrew and Python 3. It
+installs Redis if absent, starts only a private temporary loopback server and records actual
+WindowServer binary/draft/narrow-window images, read-only defaults, real protected writes, exact
+text/TTL and a binary sibling value, hide/reopen and temporary-password reconnect. The report
+records the actual Homebrew Redis version and digest separately from the pinned Linux service suite.
+Native compilation/window results and Windows UI, credential/picker/manual interaction remain
+pending.
 
 ### Redis connection setup
 
@@ -5619,8 +5641,8 @@ settings without saving defaults when opening the window.
 
 Linux x86_64 / Rust 1.99.1 passes 24 database/document/component regressions, five common download
 regressions and two host-port checks covering cross-command draft/exit protection, native picker
-cancellation and cached-engine repair. Full Core/FFI, host, backend (45 passed / nine ignored),
-frontend (416 passed / ten skipped), types and production/desktop builds pass. Current checks and
+cancellation and cached-engine repair. Full Core/FFI, host, backend (41 passed / two ignored),
+frontend (418 passed / ten skipped), types and production/desktop builds pass. Current checks and
 actual database/dual-client acceptance are tracked in
 [#38](https://github.com/YondFane/uTerm/issues/38); native database-workbench acceptance is still
 pending.
@@ -5642,12 +5664,12 @@ workflow runs `bash scripts/macos-database-smoke.sh` with an isolated real Postg
 catalog-verified JDBC driver, recording profile save, exact SQL values, hide/reopen/reconnect,
 language/theme/narrow-window behavior and WindowServer images. Runtime results for the new window
 must pass both Swift compilation and the actual window scenes at its actual source head; neither is
-accepted from the Linux checks. At source `03728e8` / tested merge `aa700f7d`, the macOS ARM64
-window passed profile save/password exclusion and real PostgreSQL connection, then timed out at
-exact-value verification with the default query result still visible. The smoke test now verifies
-that the Copy SQL action reflects the edited query before execution. SQL and grid copying use the
-shared native clipboard adapter. A successful window run, native picker/manual interaction and
-document-database acceptance remain pending.
+accepted from the Linux checks. At source `b514148` / tested merge `af6c468e`, the macOS ARM64
+window failed with a generic database error while editing its profile; the full window scene has not
+passed. The native host now logs only a fixed method name and bounded error code for diagnosis,
+excluding parameters and vendor text. The smoke verifies copied SQL matches the edited query before
+execution; SQL/grid copying uses the shared native clipboard adapter. A successful window run,
+native picker/manual interaction and document-database acceptance remain pending.
 
 ### Database setup and visibility
 

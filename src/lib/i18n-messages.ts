@@ -1,4 +1,5 @@
 export const messages: Record<string, string> = {
+  "选择或添加 Redis 连接后打开工作台。": "Select or add a Redis connection to open its workbench.",
   移除: "Remove",
   "选择或添加数据库连接后打开工作台。":
     "Select or add a database connection to open its workbench.",

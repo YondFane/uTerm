@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { EditorView } from "@codemirror/view";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { contentInvoke as invoke, listenContent, copyContentText } from "../lib/content-host";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { RedisBinaryPreview } from "./RedisBinaryPreview";
@@ -202,8 +201,8 @@ export function RedisWorkspace({
   useEffect(() => {
     let disposed = false;
     let stop: (() => void) | undefined;
-    void listen<string | null>("redis-close-request", (event) => {
-      if (event.payload === config.id)
+    void listenContent<string | null>("redis-close-request", (id) => {
+      if (id === config.id)
         setPending(() => () => {
           void invoke("redis_exit").catch((error) => setError(redisError(error)));
         });
@@ -532,7 +531,7 @@ export function RedisWorkspace({
   const keyLabel = (item: RedisBlob) => redisDisplay(item) || tx("空 Key");
   async function copyKey() {
     try {
-      await navigator.clipboard.writeText(selection?.key.text ?? "");
+      await copyContentText(selection?.key.text ?? "");
     } catch {
       setError(tx("无法复制 Key。"));
     }

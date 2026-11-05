@@ -24,6 +24,11 @@ export function createContentScope(): ContentScope {
       database_credential: 180000,
       database_export_sql: 180000,
       database_export_result: 180000,
+      redis_connect: 180000,
+      redis_reconnect: 180000,
+      redis_request: 30000,
+      redis_credential: 180000,
+      redis_pick_ca: 180000,
     },
   );
 }

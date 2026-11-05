@@ -1,6 +1,17 @@
 import type { JSONValue } from "./core-contract.generated.ts";
 
 export const contentWriteMethods = new Set([
+  "redis_connect",
+  "redis_reconnect",
+  "redis_request",
+  "redis_writable",
+  "redis_disconnect",
+  "redis_guard",
+  "redis_credential",
+  "redis_profile_save",
+  "redis_profile_remove",
+  "redis_pick_ca",
+  "redis_exit",
   "database_connect",
   "database_request",
   "database_disconnect",
@@ -68,6 +79,18 @@ export const gitFavoriteMethods: Record<string, string> = {
   git_favorites_write: "git.favorites.write",
 };
 const contentMethods = new Set([
+  "redis_profiles",
+  "redis_profile_save",
+  "redis_profile_remove",
+  "redis_connect",
+  "redis_reconnect",
+  "redis_request",
+  "redis_writable",
+  "redis_disconnect",
+  "redis_guard",
+  "redis_credential",
+  "redis_pick_ca",
+  "redis_exit",
   "database_connect",
   "database_request",
   "database_disconnect",
@@ -269,6 +292,10 @@ export class ContentScope {
         "database-frozen",
         "database-host-error",
         "database-settings-changed",
+        "redis-close-request",
+        "redis-frozen",
+        "redis-host-error",
+        "redis-settings-changed",
       ].includes(kind)
     )
       throw new ContentFailure("EVENT_DENIED", "Content event is not allowed");

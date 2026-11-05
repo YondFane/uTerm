@@ -60,6 +60,7 @@ struct NativeSidebar: NSViewRepresentable {
             guard let table else { return }
             var next = [Row(key: "projects", name: localized("Projects", "项目"), symbol: nil)]
             next.append(Row(key: "db", name: localized("Databases", "数据库"), symbol: "externaldrive"))
+            next.append(Row(key: "redis", name: localized("Redis connections", "Redis 连接"), symbol: "cylinder"))
             for project in model.projects {
                 let id = project["id"].string ?? ""
                 next.append(Row(key: "p:" + id, name: project["name"].string ?? "", symbol: "folder"))
@@ -164,6 +165,7 @@ struct NativeSidebar: NSViewRepresentable {
                 Task { @MainActor in
                     let id = String(row.key.dropFirst(2))
                     if row.key == "db" { model.openDatabasesRequested?() }
+                    else if row.key == "redis" { model.openRedisRequested?() }
                     else if row.key.hasPrefix("q:") { model.openSSHRequested?(id) }
                     else if row.key.hasPrefix("s:") { await model.selectSession(id, focus: focus) }
                     else if let project = row.projectID, let tree = row.worktreeID { await model.selectProject(project, worktree: tree, focus: focus) }

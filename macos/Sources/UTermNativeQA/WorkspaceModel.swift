@@ -41,6 +41,7 @@ final class WorkspaceModel: ObservableObject {
     var deleteWorktreeRequested: ((String, String) -> Void)?
     var openSSHRequested: ((String?) -> Void)?
     var openDatabasesRequested: (() -> Void)?
+    var openRedisRequested: (() -> Void)?
     var prepareSSHTransportReconnect: (() async -> Bool)?
     var sshTrustTask: Task<Void, Never>?
     var sshTrustAlert: NSAlert?

@@ -2,7 +2,8 @@ import AppKit
 import UTermBridge
 
 @MainActor
-final class DatabaseHost {
+final class DatabaseHost: WorkbenchHost {
+    let kind = "database"
     private let bridge: CoreBridge
     private var polling: Task<Void, Never>?
     private var pending = 0
@@ -70,6 +71,18 @@ final class DatabaseHost {
         ])
     }
     func execute(_ method: String, params: [String: JSONValue]) async throws -> JSONValue {
+        do { return try await perform(method, params: params) }
+        catch {
+            let methods = ["database_profiles", "database_profile_save", "database_profile_remove", "database_export_sql", "database_export_result", "database_connect", "database_request", "database_disconnect", "database_guard", "database_credential", "database_components"]
+            let code = (error as? BridgeFailure)?.code ?? "HOST_ERROR"
+            let safeCode = !code.isEmpty && code.count <= 64 && code.utf8.allSatisfy { (65...90).contains(Int($0)) || $0 == 95 }
+            // Log only a fixed method name and a bounded error code, never request or vendor text.
+            // 仅记录固定方法名及有界错误码，不记录请求内容或厂商文本。
+            NSLog("Database host failure: method=%@ code=%@", methods.contains(method) ? method : "denied", safeCode ? code : "HOST_ERROR")
+            throw error
+        }
+    }
+    private func perform(_ method: String, params: [String: JSONValue]) async throws -> JSONValue {
         if method == "database_profiles" {
             guard params.isEmpty else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Database profiles accepts no arguments") }
             return try await profiles()

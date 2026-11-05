@@ -64,6 +64,7 @@ jobs:
             javac -version
           } 2>&1 | tee macos/.build/evidence/toolchain.txt
       - name: Build isolated native application
+        id: native_build
         run: bash scripts/macos-native-build.sh 2>&1 | tee macos/.build/evidence/native-build.log
       - name: Shared core, FFI and Swift bridge tests
         env:
@@ -111,6 +112,9 @@ jobs:
         run: bash scripts/macos-ssh-smoke.sh
       - name: Real native database profile, PostgreSQL, window lifetime and screenshots
         run: bash scripts/macos-database-smoke.sh
+      - name: Real native Redis, binary identity, protected write and window lifetime
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        run: bash scripts/macos-redis-smoke.sh
       - name: Real native Git, Worktree and open-editor protection
         run: bash scripts/macos-git-smoke.sh
       - name: Real native control and standalone CLI smoke

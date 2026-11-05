@@ -38,7 +38,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self?.configureMenu()
             self?.sshWindow?.window?.title = localized("SSH connections", "SSH 连接")
             self?.sshWindow?.model.objectWillChange.send()
-            self?.contentWindows.values.filter { $0.databaseHost != nil }.forEach { $0.window?.title = localized("Databases", "数据库") }
+            self?.contentWindows.values.filter { $0.workbenchHost != nil }.forEach { $0.window?.title = $0.workbenchHost?.kind == "redis" ? localized("Redis connections", "Redis 连接") : localized("Databases", "数据库") }
         }
         model.requestActivation = { [weak window] in
             window?.makeKeyAndOrderFront(nil)
@@ -48,15 +48,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let value = appearance == "dark" ? NSAppearance(named: .darkAqua) : appearance == "light" ? NSAppearance(named: .aqua) : nil
             window?.appearance = value; self?.sshWindow?.window?.appearance = value
             if let self {
-                for content in self.contentWindows.values where content.databaseHost != nil {
+                for content in self.contentWindows.values where content.workbenchHost != nil {
                     content.window?.appearance = value
-                    content.databaseHost?.settingsChanged(self.model.settings)
+                    content.workbenchHost?.settingsChanged(self.model.settings)
                 }
             }
         }
         model.deleteWorktreeRequested = { [weak self] project, tree in self?.confirmWorktreeDeletion(projectID: project, worktreeID: tree) }
         model.openSSHRequested = { [weak self] id in Task { @MainActor in try? await self?.makeSSHWindow(selected: id) } }
         model.openDatabasesRequested = { [weak self] in self?.openDatabases() }
+        model.openRedisRequested = { [weak self] in self?.openRedis() }
         model.prepareSSHTransportReconnect = { [weak self] in
             guard let current = self?.sshWindow else { return true }
             guard await current.model.prepareForQuit() else { return false }
@@ -67,12 +68,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
-            if let path = WorkspaceModel.argument("--database-smoke-report") {
+            if let path = WorkspaceModel.argument("--redis-smoke-report") {
                 var report = baseReport()
-                do { try await DatabaseSmoke.run(model: model, open: { try await self.makeDatabaseWindow() }, lookup: { self.contentWindows.values.first { $0.databaseHost != nil } }, report: &report) }
+                do { try await RedisSmoke.run(model: model, open: { try await self.makeRedisWindow() }, lookup: { self.contentWindows.values.first { $0.workbenchHost?.kind == "redis" } }, report: &report) }
                 catch {
                     report["failure"] = error.localizedDescription
-                    if let content = contentWindows.values.first(where: { $0.databaseHost != nil }), let window = content.window {
+                    if let content = contentWindows.values.first(where: { $0.workbenchHost?.kind == "redis" }), let window = content.window {
+                        try? await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-redis-failure.png"))
+                    }
+                }
+                for content in Array(contentWindows.values) { content.forceClose() }
+                await model.sshBridge?.close()
+                if let bridge = model.bridge {
+                    do { _ = try await bridge.call("host.shutdownIdle") }
+                    catch { report["cleanupError"] = error.localizedDescription }
+                }
+                await model.shutdown()
+                finishReport(report, path: path)
+                return
+            }
+            if let path = WorkspaceModel.argument("--database-smoke-report") {
+                var report = baseReport()
+                do { try await DatabaseSmoke.run(model: model, open: { try await self.makeDatabaseWindow() }, lookup: { self.contentWindows.values.first { $0.workbenchHost?.kind == "database" } }, report: &report) }
+                catch {
+                    report["failure"] = error.localizedDescription
+                    if let content = contentWindows.values.first(where: { $0.workbenchHost?.kind == "database" }), let window = content.window {
                         try? await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-database-failure.png"))
                     }
                 }
@@ -241,6 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(file, localized("Open file…", "打开文件…"), #selector(openFile), "o", [.command, .shift])
         add(file, "Git…", #selector(openGit))
         add(file, localized("Databases…", "数据库…"), #selector(openDatabases))
+        add(file, localized("Redis connections…", "Redis 连接…"), #selector(openRedis))
         add(file, localized("Java build and run…", "Java 构建与运行…"), #selector(openJava))
         add(file, localized("Python run…", "Python 运行…"), #selector(openPython))
         add(file, localized("SSH connections…", "SSH 连接…"), #selector(openSSH))
@@ -326,16 +347,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     private func makeDatabaseWindow() async throws -> ContentWindow {
         guard !preparingQuit, let bridge = model.sshBridge else { throw BridgeFailure(code: "DB_CLOSED", message: localized("Database client is unavailable.", "数据库客户端不可用。")) }
-        if let content = contentWindows.values.first(where: { $0.databaseHost != nil }) { content.reveal(); return content }
+        if let content = contentWindows.values.first(where: { $0.workbenchHost?.kind == "database" }) { content.reveal(); return content }
         let host = DatabaseHost(bridge: bridge)
         host.report = { [weak self] message in self?.model.error = message }
         host.changed = { [weak self] in await self?.model.reload() }
-        let content = try ContentWindow(bridge: bridge, directory: WorkspaceModel.dataRoot().deletingLastPathComponent(), path: "Databases", stateBridge: bridge, databaseHost: host)
+        let content = try ContentWindow(bridge: bridge, directory: WorkspaceModel.dataRoot().deletingLastPathComponent(), path: "Databases", stateBridge: bridge, workbenchHost: host)
         content.window?.appearance = window?.appearance
         let id = UUID(); contentWindows[id] = content
         content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
         content.reveal()
         return content
+    }
+    @objc private func openRedis() {
+        Task { @MainActor in
+            do { _ = try await makeRedisWindow() }
+            catch { model.error = error.localizedDescription }
+        }
+    }
+    private func makeRedisWindow() async throws -> ContentWindow {
+        guard !preparingQuit, let bridge = model.sshBridge else { throw BridgeFailure(code: "REDIS_CLOSED", message: localized("Redis client is unavailable.", "Redis 客户端不可用。")) }
+        if let content = contentWindows.values.first(where: { $0.workbenchHost?.kind == "redis" }) { content.reveal(); return content }
+        let host = RedisHost(bridge: bridge)
+        host.report = { [weak self] message in self?.model.error = message }
+        host.changed = { [weak self] in await self?.model.reload() }
+        let content = try ContentWindow(bridge: bridge, directory: WorkspaceModel.dataRoot().deletingLastPathComponent(), path: "Redis", stateBridge: bridge, workbenchHost: host)
+        content.window?.appearance = window?.appearance
+        let id = UUID(); contentWindows[id] = content
+        content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
+        content.reveal(); return content
     }
     @objc private func openJava() {
         Task { @MainActor in
@@ -482,7 +521,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     private func existingContent(directory: URL, path: String, editable: Bool) -> ContentWindow? {
         let root = directory.standardizedFileURL.resolvingSymlinksInPath()
-        return contentWindows.values.first { !$0.gitMode && $0.databaseHost == nil && $0.directory == root && $0.path == path && $0.editable == editable }
+        return contentWindows.values.first { !$0.gitMode && $0.workbenchHost == nil && $0.directory == root && $0.path == path && $0.editable == editable }
     }
     private func makeGitContentWindow(directory: URL) async throws -> ContentWindow {
         guard !preparingQuit, !mutatingRepository, let stateBridge = model.bridge else {
@@ -699,7 +738,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 }
                 for content in contents {
                     guard try await content.prepareForQuit() else {
-                        throw BridgeFailure(code: "QUIT_REFUSED", message: content.databaseHost != nil ? localized("Finish database operations and commit or roll back transactions before quitting.", "退出前请完成数据库操作，并提交或回滚事务。") : localized("Save or resolve file changes before quitting.", "退出前请保存或处理文件修改。"))
+                        let message: String
+                        if content.workbenchHost?.kind == "redis" { message = localized("Finish Redis operations and resolve drafts before quitting.", "退出前请完成 Redis 操作并处理草稿。") }
+                        else if content.workbenchHost != nil { message = localized("Finish database operations and commit or roll back transactions before quitting.", "退出前请完成数据库操作，并提交或回滚事务。") }
+                        else { message = localized("Save or resolve file changes before quitting.", "退出前请保存或处理文件修改。") }
+                        throw BridgeFailure(code: "QUIT_REFUSED", message: message)
                     }
                 }
                 guard contents.allSatisfy({ $0.isPreparedForQuit }) else {

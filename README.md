@@ -196,11 +196,15 @@ unprivileged user so directory permissions enforce the failure; Windows uses a h
 
 `uterm-core::redis` shares connection/credential, TLS/SSH, binary data, TTL and protected-write
 rules. Tauri commands retain their existing interface and native CA picker. The Core JSON bridge
-provides asynchronous operations, bounded results, profile CAS and quit/resume guards; native Redis
-entry and dual-client acceptance remain tracked in #39. Run `pnpm test:redis` with TLS-enabled
-`redis-server` and `openssl` on PATH; it uses temporary loopback servers. With `redis-cli` also
-available, `node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory` records
-source-bound service reports. The shared Redis CI builds verified Redis 7.4.7 and uploads evidence.
+provides asynchronous operations, bounded results, profile CAS and quit/resume guards. The isolated
+native app opens **Redis connections** from its sidebar or **File → Redis connections…**; platform
+acceptance remains tracked in #39. `bash scripts/macos-redis-smoke.sh` requires a macOS graphical
+session, Homebrew and Python 3; it installs Redis if absent and uses a private temporary loopback
+server for actual window/write checks and screenshots without installing a system service. Run
+`pnpm test:redis` with TLS-enabled `redis-server` and `openssl` on PATH; it uses temporary loopback
+servers. With `redis-cli` also available,
+`node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory` records source-bound
+service reports. The shared Redis CI builds verified Redis 7.4.7 and uploads evidence.
 
 `uterm-core::{database,database_components,downloads}` shares database business rules, credential
 binding and verified component installation/resume. Clients provide directories, SSH confirmation,

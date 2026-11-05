@@ -60,7 +60,8 @@ body,
   min-width: 0;
   min-height: 0;
 }
-.native-database-workbench > .database-workspace {
+.native-database-workbench > .database-workspace,
+.native-database-workbench > .redis-workspace {
   width: 100%;
   height: 100%;
   min-height: 0;

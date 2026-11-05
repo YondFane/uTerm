@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke } from "./content-host.ts";
 import { tx } from "./i18n.ts";
 import {
   validSshHost,
@@ -22,6 +22,15 @@ export interface RedisConfig {
   ssh_host: string;
   ssh_target?: SshTarget;
   credential_id: string | null;
+}
+export function redisConfigFingerprint(config: RedisConfig): string {
+  return JSON.stringify(config, (_key, value) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value).sort(([left], [right]) => left.localeCompare(right)),
+        )
+      : value,
+  );
 }
 export function resolveRedisSsh(
   config: RedisConfig,
