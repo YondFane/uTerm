@@ -107,6 +107,10 @@ export async function runRedis(
     defaultReadonly: true,
   });
   const key = async (title: string) => {
+    const browse = workspace.querySelector<HTMLButtonElement>(".redis-browser-toggle");
+    assert(browse && !browse.disabled, "Redis key browser is unavailable");
+    if (browse.getAttribute("aria-expanded") !== "true") browse.click();
+    await until(() => browse.getAttribute("aria-expanded") === "true", "open key browser");
     const row = await until(
       () =>
         [...workspace.querySelectorAll<HTMLButtonElement>(".redis-key")].find(
@@ -114,6 +118,20 @@ export async function runRedis(
         ),
       `real key ${title}`,
     );
+    row.scrollIntoView({ block: "nearest" });
+    await until(() => {
+      const bounds = row.getBoundingClientRect();
+      const area = workspace.getBoundingClientRect();
+      return (
+        getComputedStyle(row).visibility === "visible" &&
+        bounds.width > 0 &&
+        bounds.height > 0 &&
+        bounds.left >= area.left - 1 &&
+        bounds.right <= innerWidth &&
+        bounds.top >= 0 &&
+        bounds.bottom <= innerHeight
+      );
+    }, "visible key row in the actual drawer");
     row.click();
   };
   await key("00 ff 6b 65 79");

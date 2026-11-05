@@ -177,17 +177,33 @@ class RedisService:
             self.report.update(ownedServerStopped=stopped, passed=self.verified and stopped)
         finally:
             leaked = []
+            unreadable = []
             # Credentials stay in the private fixture, never in uploaded evidence.
             # 凭据仅存于私有测试数据，不能进入上传证据。
             for file in Path("ci-evidence").rglob("*"):
                 if file.is_file() and file.suffix in (".log", ".json", ".txt"):
-                    content = file.read_bytes()
+                    content = None
+                    for attempt in range(20):
+                        try:
+                            content = file.read_bytes()
+                            break
+                        except PermissionError:
+                            if attempt < 19:
+                                time.sleep(0.05)
+                        except OSError:
+                            break
+                    if content is None:
+                        unreadable.append(str(file))
+                        continue
                     if self.password.encode() in content:
                         leaked.append(file.name)
                         file.write_bytes(content.replace(self.password.encode(), b"<REDACTED_QA_SECRET>"))
             self.report["credentialLeakDetected"] = bool(leaked)
-            self.report["passed"] = bool(self.report["passed"] and not leaked)
+            self.report["evidenceInspectionErrors"] = unreadable
+            self.report["passed"] = bool(self.report["passed"] and not leaked and not unreadable)
             (self.evidence / "redis-live.json").write_text(
                 json.dumps(self.report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             if leaked:
                 raise AssertionError("Temporary Redis credential appeared in evidence: " + ", ".join(leaked))
+            if unreadable:
+                raise AssertionError("QA evidence could not be inspected: " + ", ".join(unreadable))

@@ -21,6 +21,6 @@ with tempfile.TemporaryDirectory(prefix="uterm-ssh-tauri-qa-") as directory:
         redis.verify_after_app_exit()
     finally:
         try:
-            redis.close()
-        finally:
             service.close()
+        finally:
+            redis.close()

@@ -1723,15 +1723,14 @@ text/TTL and a binary sibling value, hide/reopen and temporary-password reconnec
 records the actual Homebrew Redis version and digest separately from the pinned Linux service suite.
 Swift snapshot/view reads retry `WRITER_BUSY` briefly without blocking the UI or replaying
 mutations; persistent contention is still returned. Profile writes retain explicit retry, drafts and
-a specific busy message. The actual macOS 15.8.2 ARM64 Redis window at source `7306f74` / tested
-merge `5bc1ec99a1e61007dc75687a644087011556bc69` passes all scenes with Homebrew Redis 8.10.3 and
-checks the server again after application exit. Three WindowServer captures have been inspected in
-[artifact 13450055371](https://github.com/YondFane/uTerm/actions/runs/42097888353/artifacts/13450055371).
-The ARM job passes, but the entire workflow fails: Intel refuses a fixture profile write with
-`WRITER_BUSY` before opening Redis. Fixture profile initialization now uses the application's
-existing serialized mutation queue after settings settle; it keeps revision checks and does not
-retry mutations or treat refused writes as success. This needs a new Intel run. Credential-store,
-picker and manual checks remain pending.
+a specific busy message. The actual macOS 15.8.2 ARM64 Redis window at source `54faefb` / tested
+merge `2748886d1257b0b7a6f6ffa1a69358e45c26de3b` passes all scenes with Homebrew Redis 8.10.3 and
+checks the server again after application exit. The entire ARM native job passes; three WindowServer
+captures have been inspected in
+[artifact 13450738593](https://github.com/YondFane/uTerm/actions/runs/42103209852/artifacts/13450738593).
+Fixture profile initialization uses the application's existing serialized mutation queue after
+settings settle, preserving revision checks without retrying mutations. Its Intel result is still
+pending, as are credential-store, picker and manual acceptance.
 
 The isolated Tauri harness now includes four real Redis scenes: profile save/password exclusion,
 read-only binary preview, hidden draft retention, and protected exact-text save/reconnect. It starts
@@ -1741,8 +1740,26 @@ verifies archive SHA256 `8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de1
 uses Homebrew Redis. Private credentials/configuration stay outside artifacts, and only owned
 processes are stopped. Linux real-service preflight passes authentication refusal, exact
 UTF-8/binary values, TTL preservation and cleanup; platform UI execution for these new scenes is
-pending. The existing Tauri run at `7306f74` passes both platforms but predates these added Redis
-scenes.
+pending for the latest source. The first Mac Tauri run at source `c2f84be` / tested merge
+`5a696af052b67dff5568aacb17598bc6c20b9b8e` passes all 61 native-application scenes, including the
+four Redis scenes, with macOS 26.6.2 ARM64 and actual Homebrew Redis 8.10.2. Its four WindowServer
+Redis images have been inspected in
+[artifact 13450722882](https://github.com/YondFane/uTerm/actions/runs/42102010514/artifacts/13450722882).
+The independent service report verifies final text/TTL/binary bytes, stopped owned process and no
+credential leak.
+
+Windows x64 / Server 2025 also completes all 61 UI scenes with real Redis, but its wrapper fails
+during evidence inspection because SSH still owns an exclusive log handle; the final Redis service
+report is missing, so the workflow is not accepted. Actual HWND images and the failure are retained
+in
+[artifact 13451531155](https://github.com/YondFane/uTerm/actions/runs/42102010514/artifacts/13451531155).
+
+Cleanup now closes SSH before Redis evidence inspection, waits briefly for exclusive handles and
+records a failed report if a file remains unreadable; unreadable files are not waived. Linux real
+Redis/fault checks cover transient denial, persistent denial, secret redaction and owned-process
+cleanup. The key-selection harness explicitly opens Browse keys and requires an on-screen row at
+narrow widths. Both changes need their own platform run; old source results do not accept the latest
+head.
 
 ### Redis connection setup
 
@@ -5697,21 +5714,19 @@ workflow runs `bash scripts/macos-database-smoke.sh` with an isolated real Postg
 catalog-verified JDBC driver, recording profile save, exact SQL values, hide/reopen/reconnect,
 language/theme/narrow-window behavior and WindowServer images. Runtime results for the new window
 must pass both Swift compilation and the actual window scenes at its actual source head; neither is
-accepted from the Linux checks. Source `7306f74` / tested merge
-`5bc1ec99a1e61007dc75687a644087011556bc69` passes the ARM64 PostgreSQL window scenarios, including
-private-password disconnect/connect, SQL clipboard equality, exact bigint/decimal/Unicode values,
-hide/reopen and active-profile protection. Actual macOS 15.8.2 uses PostgreSQL 16.15 and JDBC
-42.7.14; reports and two WindowServer images are in
-[artifact 13450055371](https://github.com/YondFane/uTerm/actions/runs/42097888353/artifacts/13450055371).
-Visual inspection found that the narrow Chinese/light scene changes the native frame but its Web
-content remains English/dark; its current Boolean report is insufficient for that acceptance. Intel
-fails earlier during profile editing with an operation-busy error. The native manager now starts
-component detection only when Database components is first opened and retains that manager when
-hidden; a focused regression checks no unseen probe during profile editing and no duplicate probe on
-reopening. Native data screenshots now wait for WebKit paint submission and compositor settling.
-These fixes need their own macOS run and image inspection. The native host logs fixed method names
-and bounded error codes only, excluding parameters/vendor text. Windows, other engines/document
-databases, native picker and manual acceptance remain pending.
+accepted from the Linux checks. Source `54faefb` / tested merge
+`2748886d1257b0b7a6f6ffa1a69358e45c26de3b` passes the entire ARM64 native job, including PostgreSQL
+window scenarios for private-password disconnect/connect, SQL clipboard equality, exact
+bigint/decimal/Unicode values, hide/reopen and active-profile protection. Actual macOS 15.8.2 uses
+PostgreSQL 16.15 and JDBC 42.7.14. Reports and two inspected WindowServer images are in
+[artifact 13450738593](https://github.com/YondFane/uTerm/actions/runs/42103209852/artifacts/13450738593);
+the narrow Chinese/light image now shows the correct Web content after waiting for WebKit paint
+submission and compositor settling. The native manager starts component detection only when Database
+components is first opened and retains the manager when hidden; a focused regression checks no
+unseen probe during profile editing and no duplicate probe on reopening. Intel still needs its own
+latest result. Fixed method names and bounded error codes exclude parameters/vendor text from native
+diagnostics. Windows, other engines/document databases, native picker and manual acceptance remain
+pending.
 
 ### Database setup and visibility
 

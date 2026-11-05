@@ -1012,17 +1012,24 @@ Linux 管理页回归覆盖配置冲突、密码排除、模态冻结／恢复�
 3；缺少 Redis 时安装该工具，只启动私有临时回环服务，记录实际 WindowServer 二进制／草稿／窄窗口截图，检查默认只读、真实受保护写入、精确文本／TTL 及二进制相邻值、隐藏／重开和临时密码重连。报告记录实际 Homebrew
 Redis 版本和摘要，与固定版本的 Linux 服务套件分开。Swift 快照／视图读取仅对 `WRITER_BUSY`
 短暂退避，不阻塞界面或重放变更；持续竞争仍返回错误。配置写入保留显式重试、草稿及具体忙碌提示。源码
-`7306f74`／tested merge `5bc1ec99a1e61007dc75687a644087011556bc69` 的实际 macOS 15.8.2 ARM64
+`54faefb`／tested merge `2748886d1257b0b7a6f6ffa1a69358e45c26de3b` 的实际 macOS 15.8.2 ARM64
 Redis 窗口使用 Homebrew Redis
-8.10.3，通过全部场景并在应用退出后再次核对服务数据。[artifact13450055371](https://github.com/YondFane/uTerm/actions/runs/42097888353/artifacts/13450055371)内三张 WindowServer 截图已目视检查。ARM
-job 通过，但整个工作流失败：Intel 在打开 Redis 前因 `WRITER_BUSY`
-拒绝测试配置写入。测试配置初始化现等待设置完成后进入应用既有串行写入队列，保留 revision 检查，不重试变更或将拒绝写入当作成功；仍需新 Intel 运行。凭据库／选择器及人工检查仍待完成。
+8.10.3，通过全部场景并在应用退出后再次核对服务数据。整个 ARM 原生 job 通过，[artifact13450738593](https://github.com/YondFane/uTerm/actions/runs/42103209852/artifacts/13450738593)内三张 WindowServer 截图已目视检查。测试配置初始化等待设置完成后进入应用既有串行写入队列，保留 revision 检查且不重试变更；自身 Intel 结果、凭据库／选择器及人工验收仍待完成。
 
 隔离 Tauri 验证新增四个真实 Redis 场景：保存配置／密码排除、只读二进制预览、隐藏后保留草稿、受保护的精确文本保存／重连。仅启动自有临时回环服务，应用退出后再次核对文本、TTL 和二进制相邻值。Windows 下载社区
 `redis-windows` 8.10.3 Cygwin 便携构建并校验归档 SHA256
 `8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e`；macOS 使用 Homebrew
-Redis。私有凭据／配置不进入产物，仅停止所属进程。Linux 真实服务前置检查通过未认证拒绝、精确 UTF-8／二进制值、TTL 保留及清理；新增场景的平台界面执行仍待完成。源码
-`7306f74` 的既有 Tauri 流程双平台通过，但不包含本次新增 Redis 场景。
+Redis。私有凭据／配置不进入产物，仅停止所属进程。Linux 真实服务前置检查通过未认证拒绝、精确 UTF-8／二进制值、TTL 保留及清理；最新源码的平台界面执行仍待完成。首次 Mac
+Tauri 运行对应源码 `c2f84be`／tested merge `5a696af052b67dff5568aacb17598bc6c20b9b8e`，在 macOS
+26.6.2 ARM64 和实际 Homebrew Redis
+8.10.2 通过全部 61 个真实应用场景，包括四个 Redis 场景。[artifact13450722882](https://github.com/YondFane/uTerm/actions/runs/42102010514/artifacts/13450722882)内四张 WindowServer
+Redis 截图已目视检查，独立服务报告核对最终文本／TTL／二进制值、所属进程已停止及无凭据泄漏。
+
+Windows x64／Server
+2025 也使用真实 Redis 完成全部 61 个界面场景，但包装器在证据扫描时因 SSH 独占日志句柄失败，缺少最终 Redis 服务报告，不能接受整个工作流；真实 HWND 图及失败保留在
+[artifact13451531155](https://github.com/YondFane/uTerm/actions/runs/42102010514/artifacts/13451531155)。
+
+清理现先关闭 SSH，再进行 Redis 证据扫描，短暂等待独占句柄释放；持续不可读时写出失败报告，不豁免文件检查。Linux 真实 Redis／故障检查覆盖暂时拒绝、持续拒绝、秘密脱敏及所属进程清理。Key 选择脚本明确先打开“浏览 Key”，并要求窄窗口目标行实际位于屏幕内。这两项变更仍需自身平台运行，旧源码结果不代表最新 head 已验收。
 
 ### Redis 连接配置
 
@@ -3353,10 +3360,10 @@ C ABI 与精确值契约检查。已验收的服务证据对应源码 `ef5c3f4`�
 Linux 检查还覆盖配置 CAS／草稿／密码排除、两端内容 transport 取消后的写入排空、模态窗口冻结／恢复及目标修改后清除临时密码。原生工作流运行
 `bash scripts/macos-database-smoke.sh`，使用隔离的真实 PostgreSQL 服务和目录校验的 JDBC 驱动，记录配置保存、SQL 精确值、隐藏／重开／重连、语言／主题／窄窗口和 WindowServer 截图。新增窗口必须分别通过 Swift 编译和真实窗口场景，Linux 检查不能替代这两项验收，结果须按实际源码 head 核对。
 
-源码 `7306f74`／tested merge `5bc1ec99a1e61007dc75687a644087011556bc69` 通过 ARM64
-PostgreSQL 窗口场景，包括私有密码断开／重连、SQL 剪贴板一致性、bigint／decimal／Unicode 精确值、隐藏／重开及活跃配置保护。实际 macOS
-15.8.2 使用 PostgreSQL 16.15 和 JDBC 42.7.14；报告及两张 WindowServer 图在
-[artifact13450055371](https://github.com/YondFane/uTerm/actions/runs/42097888353/artifacts/13450055371)。目视检查发现中文／浅色窄窗口场景仅改变原生框架，Web 内容仍为英文／深色，现有布尔报告不足以验收该项。Intel 更早在编辑配置时因操作忙碌失败。原生管理页现仅在首次打开“数据库组件”时启动组件探测，隐藏后保留管理页状态；专项回归检查编辑配置时不发起不可见探测，重复打开也不重复探测。原生数据截图现等待 WebKit 提交绘制及合成器稳定。这些修正仍需自身 macOS 运行及截图核对。原生宿主仅记录固定方法名及有界错误码，不记录参数／厂商文本。Windows、其他引擎／文档数据库、原生选择器及人工验收仍待完成。
+源码 `54faefb`／tested merge `2748886d1257b0b7a6f6ffa1a69358e45c26de3b`
+的整个 ARM64 原生 job 通过，包括 PostgreSQL 窗口的私有密码断开／重连、SQL 剪贴板一致性、bigint／decimal／Unicode 精确值、隐藏／重开及活跃配置保护。实际 macOS
+15.8.2 使用 PostgreSQL 16.15 和 JDBC
+42.7.14。[artifact13450738593](https://github.com/YondFane/uTerm/actions/runs/42103209852/artifacts/13450738593)包含报告及两张已目视核对的 WindowServer 图；等待 WebKit 提交绘制及合成器稳定后，中文／浅色窄窗口图已显示正确 Web 内容。原生管理页仅在首次打开“数据库组件”时启动组件探测，隐藏后保留管理页状态；专项回归检查编辑配置时不发起不可见探测，重复打开也不重复探测。Intel 仍需自身最新结果。原生诊断仅记录固定方法名及有界错误码，不记录参数／厂商文本。Windows、其他引擎／文档数据库、原生选择器及人工验收仍待完成。
 
 ### 数据库配置与区域显示
 
