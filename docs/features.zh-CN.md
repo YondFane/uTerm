@@ -3298,7 +3298,11 @@ C ABI 与精确值契约检查。已验收的服务证据对应源码 `ef5c3f4`�
 [#38](https://github.com/YondFane/uTerm/issues/38#issuecomment-6664109569)，不代表新增数据库窗口或其他数据库引擎已验收。
 
 Linux 检查还覆盖配置 CAS／草稿／密码排除、两端内容 transport 取消后的写入排空、模态窗口冻结／恢复及目标修改后清除临时密码。原生工作流运行
-`bash scripts/macos-database-smoke.sh`，使用隔离的真实 PostgreSQL 服务和目录校验的 JDBC 驱动，记录配置保存、SQL 精确值、隐藏／重开／重连、语言／主题／窄窗口和 WindowServer 截图。新增窗口必须分别通过 Swift 编译和真实窗口场景，Linux 检查不能替代这两项验收，结果须按实际源码 head 核对，原生选择器／人工交互和文档数据库验收仍待完成。
+`bash scripts/macos-database-smoke.sh`，使用隔离的真实 PostgreSQL 服务和目录校验的 JDBC 驱动，记录配置保存、SQL 精确值、隐藏／重开／重连、语言／主题／窄窗口和 WindowServer 截图。新增窗口必须分别通过 Swift 编译和真实窗口场景，Linux 检查不能替代这两项验收，结果须按实际源码 head 核对。
+
+源码 `5dae01e` 的 macOS
+ARM64／Intel 构建通过，但窗口测试在提交配置前失败：脚本查找“Save”，实际按钮是“Save
+connection”。更正后的选择器仍需真实窗口测试通过。原生选择器／人工交互和文档数据库验收仍待完成。
 
 ### 数据库配置与区域显示
 

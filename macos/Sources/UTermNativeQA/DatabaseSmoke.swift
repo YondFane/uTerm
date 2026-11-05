@@ -64,7 +64,7 @@ enum DatabaseSmoke {
         try await wait(content, "!!document.querySelector('dialog[open] input[type=password]')")
         try await input(content, selector: "dialog[open] input[type=password]", value: password)
         try await input(content, selector: "dialog[open] input", value: "PostgreSQL saved 中文")
-        try await EditorSmoke.click(content, title: "Save")
+        try await EditorSmoke.click(content, title: "Save connection")
         try await wait(content, "!document.querySelector('dialog[open]') && document.querySelector('.native-database-profile-name')?.textContent==='PostgreSQL saved 中文'")
         let saved = try await bridge.snapshot()
         var storedProfile: JSONValue?

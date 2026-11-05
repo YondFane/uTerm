@@ -5602,8 +5602,10 @@ workflow runs `bash scripts/macos-database-smoke.sh` with an isolated real Postg
 catalog-verified JDBC driver, recording profile save, exact SQL values, hide/reopen/reconnect,
 language/theme/narrow-window behavior and WindowServer images. Runtime results for the new window
 must pass both Swift compilation and the actual window scenes at its actual source head; neither is
-accepted from the Linux checks. Native picker/manual interaction and document-database acceptance
-remain pending.
+accepted from the Linux checks. The macOS ARM64/Intel run at source `5dae01e` built successfully but
+failed before profile submission because the smoke test searched for “Save” instead of the actual
+“Save connection” button. The corrected selector still needs a successful real-window run. Native
+picker/manual interaction and document-database acceptance remain pending.
 
 ### Database setup and visibility
 
