@@ -58,7 +58,9 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 'nativeForwardingStaleStopRejected', 'realRemoteTerminalOutput', 'remoteDetachReplayAndHostRetained',
                 'exactRemoteClosePreservedSibling', 'nativeAskpassHostTrustCancellation', 'passwordNotExportedOrReported']:
         assert report[key], (key, report)
-    assert len(report['sshCaptures']) == 7, report
+    password_required = os.environ.get('GITHUB_ACTIONS') == 'true'
+    assert report['passwordServiceLogin'] == password_required, report
+    assert len(report['sshCaptures']) == (8 if password_required else 7), report
     for name in report['sshCaptures']:
         assert (evidence / name).is_file(), name
     deadline = time.monotonic() + 5

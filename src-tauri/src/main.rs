@@ -429,6 +429,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             #[cfg(feature = "qa")]
             qa::qa_context,
+            qa::qa_ssh_fixture,
             #[cfg(feature = "qa")]
             qa::qa_host_status,
             #[cfg(feature = "qa")]

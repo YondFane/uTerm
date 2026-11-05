@@ -799,6 +799,13 @@ x86_64／Rust1.99.1 通过两项检查，包括迁移的边界样例与准确 UT
 `ssh-service-core.json`
 和测试日志；提交前本地报告明确标记源码未提交。macOS 平台回归仍待重跑；已修正测试代理接受连接继承非阻塞模式时误关连接的问题，之前失败及一次依赖获取 DNS 失败均保留，不计为通过。这些服务用例尚未在 Windows 执行，密码登录及原生连接界面验收也待完成。断线可能保留隐藏的远端上传临时文件，原目标仍保持不变，重试需明确执行；夹具清理自身遗留临时数据，不宣称应用自动完成远端清理。
 
+`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY`
+通过公开 Core 客户端连接真实隔离 OpenSSH。Linux 已通过过期保存、Unicode 上传下载、带代次取消、断线覆盖／重连、兄弟隧道保护、退出准入及秘密排除检查；提交前报告标明源码未提交。跨平台 CI 夹具在 macOS 和 Windows 增加真实密码／系统凭据检查。Windows 下载固定版本且校验摘要的 Win32
+OpenSSH，通过所属 SYSTEM 任务运行，并生成临时本地账户；仅在一次性 CI 用户的 OpenSSH 配置前临时添加唯一别名，清理时恢复原字节，拒绝在非 GitHub 运行器执行。macOS 密码检查使用独立的短期账户和主目录。不更改生产 SSH 服务。新增平台运行仍待完成，这些检查不代表图形界面验收。
+
+`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py`
+增加三项真实 Tauri 窗口场景：保存 SSH 配置、已认证 SFTP 列表／文本预览、远程终端输出。使用既有隔离 QA 标识，上传带源码／平台元数据的截图。此新增阶段尚待 CI 执行，不验证人工文件选择器或输入法。
+
 ### 原生 SSH 工作区
 
 隔离原生 QA 应用的**文件 →
@@ -813,11 +820,17 @@ SSH 连接…**打开连接窗口；侧栏的 SSH 连接行也可进入。选择
 #### 原生 SSH 验证与限制
 
 Linux 的三项客户端契约检查覆盖配置 CAS、既有 SSH 会话／依赖保留、密码不进入快照／操作历史、退出后明确恢复及超出 JavaScript 精度的计数。信任确认的一次性消费、关闭时拒绝待处理／迟到提示，以及完整 Core／FFI、后端编译和契约检查通过。共同的
-`shared/contracts/ssh-progress-v1.json` 用于 Rust、Swift 和 TypeScript 的实际 JSON 边界值校验。
+`shared/contracts/ssh-progress-v1.json`
+用于 Rust、Swift 和 TypeScript 的实际 JSON 边界值校验。Rust／TypeScript 在 Linux 通过。macOS
+ARM64 的源码 `0281deccf0bd6636e4b6c7979cce0e781a095729`／实际测试 merge
+`f226ca0f8dbd351f9b22dd34b4035dab1afb6093` 已在
+[CI 42004583197](https://github.com/YondFane/uTerm/actions/runs/42004583197)
+通过 Core、FFI、Swift 和真实 SSH 窗口流程。
 
 `bash scripts/macos-ssh-smoke.sh`
 使用隔离应用、临时密钥／known_hosts 和真实 SSH 服务，运行配置冲突、SFTP 传输／取消、转发、远程终端分离／回放／关闭和原生信任确认场景，并上传
-`ssh-live.json`、日志与真实窗口截图。首次 macOS 构建发现 QA 菜单查找闭包缺少逃逸标注，已修正，构建及运行重跑仍待完成；不将脚本存在视为通过。Windows 真实服务、成功密码登录、人工选择器／输入法仍未验收。#36 保持开放，不表示已合入或发布。
+`ssh-live.json`、日志与真实窗口截图。上述源码的 macOS
+ARM64 报告及七张真实截图已通过。目视确认中英文／深浅主题窗口中的配置冲突保留、SFTP 文件、转发、远程终端输出及原生信任提示。传输进度图的进度行曾被裁出画面，现改为滚动后等待 SwiftUI 渲染再截图；转发端口使用无本地化分组的字面数字。这些截图／端口修正和新增真实密码登录仍待新平台运行。Windows 真实服务、人工选择器／输入法仍待验收。#36 保持开放，不表示已合入或发布。
 
 ### 快速连接与主机搜索
 

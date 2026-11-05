@@ -379,7 +379,7 @@ struct SSHView: View {
             let rule = row.value
             let status = model.tunnels.first { $0["id"] == rule["id"] && $0["connection_id"].string == model.selectedID }
             HStack {
-                Text("127.0.0.1:\(Int(rule["local_port"].number ?? 0)) → \(rule["remote_host"].string ?? ""):\(Int(rule["remote_port"].number ?? 0))")
+                Text(verbatim: "127.0.0.1:\(Int(rule["local_port"].number ?? 0)) → \(rule["remote_host"].string ?? ""):\(Int(rule["remote_port"].number ?? 0))")
                 Text(status?["state"].string == "running" ? localized("Listening", "正在监听") : status?["state"].string == "starting" ? localized("Starting", "正在启动") : status?["state"].string == "error" ? localized("Failed", "失败") : localized("Stopped", "已停止")).font(.caption); Spacer()
                 if let status, status["state"].string != "error" { Button(localized("Stop forwarding", "停止转发")) { Task { await model.stopForward(status) } } }
                 else { Button(localized("Start forwarding", "启动转发")) { Task { await model.startForward(rule) } }; Button(localized("Remove", "移除")) { Task { await model.removeForward(rule) } } }

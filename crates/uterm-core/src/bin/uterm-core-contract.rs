@@ -7,6 +7,10 @@ use uterm_core::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let askpass = uterm_core::ssh::run_askpass_if_requested();
+    if askpass >= 0 {
+        std::process::exit(askpass);
+    }
     let mut args = std::env::args().skip(1);
     let mode = args.next();
     if mode.as_deref() == Some("--schema") {

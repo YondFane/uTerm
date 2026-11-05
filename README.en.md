@@ -203,7 +203,12 @@ acceptance is tracked separately.
 includes Unix authenticated-service tests requiring `/usr/sbin/sshd` and `ssh-keygen`; they use
 temporary keys, known_hosts and data without changing `~/.ssh` or the system SSH service. Core CI
 artifacts include `ssh-service-core.json`; Windows real-service and native UI acceptance are tracked
-separately.
+separately. `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY`
+runs the public Core real-service checks. Platform CI uses Python 3.12 and adds isolated temporary
+password accounts; Windows downloads a checksum-verified pinned OpenSSH server and restores the CI
+user's temporary SSH aliases. `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` wraps the
+real Tauri QA with this service and adds profile/SFTP/remote-terminal screenshots. Both commands
+keep private fixture data outside artifacts and require disposable CI for account creation.
 
 `uterm-core::{files,git,worktrees}` owns local file and Git/Worktree rules and their regression
 tests; Tauri commands delegate to the same functions. The new `git.*` contract and generated DTOs

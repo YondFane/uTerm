@@ -1361,6 +1361,22 @@ connection UI acceptance remain pending. A network interruption may leave a hidd
 temporary file; the original destination stays intact and retries are explicit. The test fixture
 cleans its own abandoned temporary data rather than claiming automatic remote cleanup.
 
+`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY` drives the
+public Core client against an actual isolated OpenSSH server. Linux passes stale saves, Unicode
+upload/download, generation cancellation, interrupted overwrite/reconnect, sibling tunnel
+protection, quit admission and secret-exclusion checks; its pre-commit report records dirty source.
+The portable CI fixture adds real password/OS-store checks on macOS and Windows. Windows downloads
+the pinned, checksum-verified Win32 OpenSSH server, runs an owned SYSTEM task and generates a
+temporary local account. It temporarily prepends unique aliases to the disposable CI user's OpenSSH
+config and restores the original bytes on cleanup; it refuses non-GitHub runners. macOS uses a
+separate short-lived account and home directory for password checks. No production SSH service is
+changed. New platform runs remain pending; these checks do not establish GUI acceptance.
+
+`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` adds three real Tauri window scenes:
+saved SSH profile, authenticated SFTP listing/text preview and remote terminal output. It uses the
+existing isolated QA identifier and uploads screenshots with source/platform metadata. This new
+phase awaits CI execution and does not exercise a manual file picker or IME.
+
 ### Native SSH workspace
 
 In the isolated native QA app, **File → SSH connections…** opens the connection window; SSH sidebar
@@ -1394,7 +1410,10 @@ excluded from snapshots/operation history, explicit resume after quit and counts
 numeric precision. Single-use trust responses, pending/late prompt rejection on close, full
 Core/FFI, backend compilation and contract checks pass. The common
 `shared/contracts/ssh-progress-v1.json` defines JSON boundary checks for Rust, Swift and TypeScript.
-Rust and TypeScript pass on Linux; Swift execution awaits macOS CI.
+Rust and TypeScript pass on Linux. On macOS ARM64, head `0281deccf0bd6636e4b6c7979cce0e781a095729` /
+tested merge `f226ca0f8dbd351f9b22dd34b4035dab1afb6093` passes the Core, FFI, Swift and actual SSH
+window workflows in
+[CI run 42004583197](https://github.com/YondFane/uTerm/actions/runs/42004583197).
 
 `bash scripts/macos-ssh-smoke.sh` uses an isolated app, temporary keys/known_hosts and a real SSH
 service for profile conflicts, SFTP transfers/cancellation, forwarding, remote terminal

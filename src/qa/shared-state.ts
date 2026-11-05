@@ -27,6 +27,7 @@ interface Context {
     | "editor-checkpoint"
     | "editor-reopen"
     | "git"
+    | "ssh"
     | "input-owner"
     | "input-viewer";
   backup?: string;
@@ -1270,6 +1271,114 @@ async function runInputControl(context: Context) {
   await invoke("qa_request_exit");
 }
 
+async function runSSH(context: Context) {
+  const fixture = await invoke<{
+    alias: string;
+    remote: string;
+    port: string;
+  }>("qa_ssh_fixture");
+  const create = await until(
+    () => document.querySelector<HTMLButtonElement>('button[aria-label="Add SSH connection"]'),
+    "add real SSH profile",
+  );
+  create.click();
+  await until(() => document.querySelector(".ssh-connection-dialog[open]"), "SSH profile dialog");
+  await click("OpenSSH configuration");
+  const field = async (scope: string, label: string, value: string) => {
+    const control = await until(
+      () =>
+        [...document.querySelectorAll(`${scope} label`)]
+          .find((item) => item.textContent?.trim().startsWith(label))
+          ?.querySelector<HTMLInputElement | HTMLSelectElement>("input,select"),
+      `SSH field ${label}`,
+    );
+    const prototype =
+      control instanceof HTMLSelectElement
+        ? HTMLSelectElement.prototype
+        : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(control, value);
+    control.dispatchEvent(
+      new Event(control instanceof HTMLSelectElement ? "change" : "input", { bubbles: true }),
+    );
+    await pause(50);
+  };
+  const dialog = ".ssh-connection-dialog[open]";
+  await field(dialog, "SSH Host alias", fixture.alias);
+  const advanced = document.querySelector<HTMLDetailsElement>(`${dialog} details`);
+  assert(advanced, "SSH advanced settings missing");
+  advanced.open = true;
+  await field(dialog, "Connection name (optional)", "SSH native QA 中文");
+  await field(dialog, "Remote system", context.platform === "windows" ? "windows" : "posix");
+  await field(dialog, "Remote file root", fixture.remote.replaceAll("\\", "/"));
+  await scene("ssh-profile", { realNativeApplication: true, isolatedOpenSSH: true });
+  await until(() => button("Save only")?.disabled === false, "SSH configuration ready");
+  await click("Save only");
+  await until(() => !document.querySelector(dialog), "SSH profile saved");
+  await click("SSH native QA 中文");
+  await click("Remote files");
+  await click("Connect files");
+  const file = await until(
+    () =>
+      [...document.querySelectorAll<HTMLButtonElement>(".file-row")].find((item) =>
+        item.textContent?.includes("original 中文.txt"),
+      ),
+    "actual SFTP listing",
+  );
+  file.click();
+  await until(
+    () => document.body.innerText.includes("SSH file 中文"),
+    "actual remote text preview",
+  );
+  await scene("ssh-files", {
+    actualSFTP: true,
+    unicodeFileListingAndPreview: true,
+    actualRemoteBytes: "SSH file 中文 é",
+  });
+  await click("New SSH terminal");
+  const terminal = await until(
+    () => document.querySelector<HTMLElement>(".local-session.visible[data-session-id]"),
+    "real remote terminal",
+  );
+  const input = await until(() => {
+    const value = terminal.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
+    return value && !value.readOnly && !value.disabled ? value : null;
+  }, "owned remote terminal input");
+  input.focus();
+  const clipboard = new DataTransfer();
+  clipboard.setData(
+    "text/plain",
+    context.platform === "windows"
+      ? `powershell -NoProfile -Command "Write-Output ('UTERM_' + 'SSH_TAURI_QA')"`
+      : "printf 'UTERM_%s\\n' 'SSH_TAURI_QA'",
+  );
+  input.dispatchEvent(
+    new ClipboardEvent("paste", { clipboardData: clipboard, bubbles: true, cancelable: true }),
+  );
+  await pause(100);
+  for (const type of ["keydown", "keyup"])
+    input.dispatchEvent(
+      new KeyboardEvent(type, {
+        key: "Enter",
+        code: "Enter",
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  await until(
+    () => terminal.textContent?.includes("UTERM_SSH_TAURI_QA"),
+    "authenticated remote shell output",
+  );
+  await scene("ssh-terminal", {
+    actualRemoteShell: true,
+    renderedOutput: "UTERM_SSH_TAURI_QA",
+    input: "DOM paste/key events through real xterm",
+    manualPickerAndIMEAcceptance: false,
+  });
+  await invoke("qa_request_exit");
+}
+
 export async function run(recovery: boolean) {
   try {
     const context = await invoke<Context>("qa_context");
@@ -1296,6 +1405,10 @@ export async function run(recovery: boolean) {
     }
     if (context.phase === "git") {
       await runGit(context);
+      return;
+    }
+    if (context.phase === "ssh") {
+      await runSSH(context);
       return;
     }
     if (context.phase === "initial") {

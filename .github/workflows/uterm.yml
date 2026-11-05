@@ -58,6 +58,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
@@ -117,6 +120,16 @@ jobs:
       - name: Generated contracts
         shell: bash
         run: pnpm contracts:check 2>&1 | tee ci-evidence/contracts.log
+      - name: Real SSH service and public Core client workflows
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: |
+          cargo build --locked --manifest-path crates/uterm-core/Cargo.toml --bin uterm-core-contract
+          suffix=""
+          if [ "$RUNNER_OS" = Windows ]; then suffix=".exe"; fi
+          python scripts/ssh-core-qa.py "${CARGO_TARGET_DIR:-crates/uterm-core/target}/debug/uterm-core-contract$suffix" ci-evidence/ssh-live
       - name: Immutable release helper compatibility
         shell: bash
         env:
@@ -138,7 +151,8 @@ jobs:
         shell: bash
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: pnpm qa:shared-state 2>&1 | tee ci-evidence/tauri-state-qa-run.log
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python scripts/ssh-tauri-qa.py 2>&1 | tee ci-evidence/tauri-state-qa-run.log
       - name: Preserve shared Core failure
         if: ${{ always() && steps.shared-core.outcome == 'failure' }}
         shell: bash

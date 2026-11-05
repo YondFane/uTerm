@@ -28,6 +28,7 @@ enum SSHSmoke {
         var captures: [String] = []
         func capture(_ target: NSWindow, _ name: String) async throws {
             target.makeKeyAndOrderFront(nil)
+            try await Task.sleep(for: .milliseconds(300))
             try await TerminalSmoke.capture(window: target, path: evidence.appendingPathComponent(name))
         }
         try await capture(window, "native-ssh-profile-conflict-en-dark.png"); captures.append("native-ssh-profile-conflict-en-dark.png")
@@ -53,7 +54,9 @@ enum SSHSmoke {
             _ = try await bridge.call("ssh.operation.cancel", params: .object(["id": .string(progress.id), "generation": .string(UUID().uuidString)]))
             throw BridgeFailure(code: "SSH_QA", message: "Stale transfer cancel succeeded")
         } catch let error as BridgeFailure where error.code == "SSH_OPERATION_CHANGED" {}
+        scrollToBottom(window)
         try await capture(window, "native-ssh-transfer-progress-en-dark.png"); captures.append("native-ssh-transfer-progress-en-dark.png")
+        guard ssh.active?.state == "running" else { throw BridgeFailure(code: "SSH_QA", message: "Transfer finished before progress capture") }
         await ssh.cancelTransfer(); await transfer.value
         let finalOperations = try await bridge.call("ssh.operations")
         guard finalOperations.array.contains(where: { $0["id"].string == progress.id && $0["state"].string == "cancelled" }) else { throw BridgeFailure(code: "SSH_QA", message: "Transfer cancellation did not complete") }
@@ -116,6 +119,23 @@ enum SSHSmoke {
         await reopened.model.disconnectFiles()
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         await reopened.model.reload(select: profileID)
+        if fixture["passwordServiceLogin"].bool == true {
+            await reopened.model.select(nil)
+            reopened.model.name = "Password login QA"; reopened.model.host = fixture["passwordAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = fixture["password"].string ?? ""; reopened.model.remember = true; reopened.model.rootPath = fixture["passwordRemote"].string ?? ""
+            guard await reopened.model.save() else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+            let reference = reopened.model.profile["credential_id"]
+            do {
+                await reopened.model.connectFiles()
+                guard reopened.model.connected, reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+                try await capture(reopened.window!, "native-ssh-password-keychain-en-dark.png"); captures.append("native-ssh-password-keychain-en-dark.png")
+                await reopened.model.disconnectFiles()
+                report["passwordServiceLogin"] = true
+            } catch {
+                _ = try? await reopened.model.perform(["kind": .string("auth.forget"), "reference": reference, "remember": .bool(true)])
+                throw error
+            }
+            _ = try await reopened.model.perform(["kind": .string("auth.forget"), "reference": reference, "remember": .bool(true)])
+        }
         await reopened.model.select(nil)
         reopened.model.name = "Trust cancellation QA"; reopened.model.host = fixture["unknownAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = "isolated-qa-password"; reopened.model.rootPath = fixture["remote"].string ?? ""
         guard await reopened.model.save() else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
@@ -131,11 +151,14 @@ enum SSHSmoke {
         let operations = try JSONEncoder().encode(try await current.call("ssh.operations"))
         guard !String(decoding: exported, as: UTF8.self).contains("isolated-qa-password"), !String(decoding: operations, as: UTF8.self).contains("isolated-qa-password") else { throw BridgeFailure(code: "SSH_QA", message: "Credential escaped into state or operation history") }
         report["passwordNotExportedOrReported"] = true
+        if let actualPassword = fixture["password"].string {
+            guard !String(decoding: exported, as: UTF8.self).contains(actualPassword), !String(decoding: operations, as: UTF8.self).contains(actualPassword) else { throw BridgeFailure(code: "SSH_QA", message: "Actual password escaped into state or operation history") }
+        }
         report["sshCaptures"] = captures
         report["inputMethod"] = "Actual NSMenu, native model actions used by buttons, SwiftTerm insertText, real NSAlert button; isolated OpenSSH"
         report["manualKeyboardIMEAcceptance"] = false
         report["manualPickerAcceptance"] = false
-        report["passwordServiceLogin"] = false
+        if report["passwordServiceLogin"] == nil { report["passwordServiceLogin"] = false }
     }
     static func scrollToBottom(_ window: NSWindow) {
         guard let view = window.contentView else { return }
