@@ -214,7 +214,7 @@ enum GitFavoritesRecoverySmoke {
         try await writer.ready()
         let previous = String(decoding: try JSONEncoder().encode(document), as: UTF8.self)
         content.webView.reload()
-        try await ContentSmoke.wait(content, "window.utermContentDocument !== \(previous) && document.querySelector('[role=alert]')?.textContent.includes('Another writer owns the canonical store') === true && [...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Retry' && !b.disabled)", allowAlert: true)
+        try await ContentSmoke.wait(content, "window.utermContentDocument !== \(previous) && window.utermContentLanguage === 'en' && document.querySelector('[role=alert]')?.textContent.includes('Another writer owns the canonical store') === true && [...document.querySelectorAll('button')].some(b=>{const r=b.getBoundingClientRect();return b.textContent.trim()==='Retry' && !b.disabled && r.width<200 && r.height>=24 && r.height<=34})", allowAlert: true)
         let name = "native-git-bootstrap-writer-busy.png"
         window.makeKeyAndOrderFront(nil)
         try await Task.sleep(for: .milliseconds(200))

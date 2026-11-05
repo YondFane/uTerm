@@ -304,13 +304,16 @@ JSON 执行全部 19 个 Git／Worktree 方法，核对选中仓库／Worktree�
 
 原生 Git 冒烟持有独立 `uterm-core-contract --hold-store-lock`
 进程，在启动完成后、写锁仍被持有时发送真实原生收藏恢复通知，保存
-`native-git-favorites-writer-busy.png`，释放自身持锁进程后点击一次**重新读取 Git 收藏**。独立的第二个持锁整页重载场景检查启动失败：原生内容错误页现提供**重试**，请求期间禁用，重复失败后仍可再次重试。场景保存
-`native-git-bootstrap-writer-busy.png`，释放第二个持锁进程后明确重试启动，收藏字节保持不变。报告要求两次真实操作系统锁、退出 0、收藏控件可用及 16 张图片。新的 ARM／Intel 执行仍待 CI，旧
+`native-git-favorites-writer-busy.png`，释放自身持锁进程后点击一次**重新读取 Git 收藏**。第二个独立持锁整页重载场景检查启动失败：原生错误页提供明确重试，请求期间禁用，重复失败后仍可再次重试；设置尚不可读时，使用应用缓存的语言和紧凑的 28
+px 按钮。场景保存
+`native-git-bootstrap-writer-busy.png`，释放第二个持锁进程后重试启动，收藏字节不变。报告要求两次真实锁、退出 0、控件可用及 16 张图。新的 ARM／Intel 执行仍待 CI，旧
 `favoriteRecoveryExplicitBusyReload=false` 报告不能证明这些路径。
 
 Source `580405b2786943e6257979027e8083d2e118b2fe`／merge `ec2df4c9aed72e6466d202357cd787c3688e3dc1`
 的 ARM
-19 项 Core 操作报告通过，但新增原生 Git 冒烟失败：持锁整页重载先在设置／上下文读取失败，收藏控件尚未出现。[失败 run／artifact](https://github.com/YondFane/uTerm/actions/runs/41978931526/artifacts/13393467857)保留真实错误页截图。启动重试及独立的启动后收藏通知修复此恢复缺口，两者都不能仅凭编译验收。React／WebKit 协议回归验证明确重试、请求中禁用及重复失败后的再次重试。
+19 项 Core 操作报告通过，但整页重载在更早的上下文读取失败，真实错误图保留于[artifact13393467857](https://github.com/YondFane/uTerm/actions/runs/41978931526/artifacts/13393467857)。Source
+`e68c0b9a0d0186983d0fd5f672da29491c4d5415`
+的 ARM 启动后收藏重读及原生标签外观检查通过，但启动错误页默认中文，与所选英文不符，第二个场景超时；真实失败保留于[artifact13394905921](https://github.com/YondFane/uTerm/actions/runs/41981707594/artifacts/13394905921)。缓存启动语言及紧凑错误控件仍需自己的真实窗口结果。中英文 React／WebKit 测试检查初始按钮／文档语言、请求中禁用及重复失败后明确重试，不能代替原生平台验收。
 
 当前四平台 Git／编辑器基线为源码 head `429428cbb8787c657c39c14450b4e997d0f6a6fe`、实际 tested merge
 `a0b1b0806bfae1558b9f87ea6c46859ebd93792d`。

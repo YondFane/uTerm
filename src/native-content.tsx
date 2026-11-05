@@ -50,7 +50,7 @@ function Content({ context }: { context: Context }) {
 function StartupFailure({ reason, retry }: { reason: unknown; retry: () => Promise<void> }) {
   const [busy, setBusy] = useState(false);
   return (
-    <main className="native-content">
+    <main className="native-content native-content-startup-error">
       <p role="alert">{localizeMessage(String(reason))}</p>
       <button
         disabled={busy}
@@ -65,6 +65,9 @@ function StartupFailure({ reason, retry }: { reason: unknown; retry: () => Promi
   );
 }
 async function start() {
+  const language = activeLanguage(window.utermContentLanguage ?? "system");
+  setUiLanguage(language);
+  document.documentElement.lang = language;
   const target = document.getElementById("root");
   if (!target) throw new Error("Missing content root");
   const root = createRoot(target);

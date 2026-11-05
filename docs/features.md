@@ -574,20 +574,25 @@ Linux x86_64 passes locally; the working-tree report is not platform or GUI acce
 The native Git smoke owns an independent `uterm-core-contract --hold-store-lock` process. After
 bootstrap it sends the real native favorite-restoration notification while the writer holds the
 lock, captures `native-git-favorites-writer-busy.png`, releases its own writer and clicks **Reload
-Git favorites** once. A separate held-lock page reload exercises startup failure; the native content
-page now displays **Retry**, disables it during the request and allows retry after a second failure.
-The smoke captures `native-git-bootstrap-writer-busy.png`, releases its second writer and explicitly
-retries startup without changing favorite bytes. The report requires both real OS locks, exit 0,
-enabled favorite controls and 16 screenshots. New ARM/Intel execution is pending; previous
-`favoriteRecoveryExplicitBusyReload=false` reports do not prove these paths.
+Git favorites** once. A separate held-lock page reload exercises startup failure; the native page
+shows explicit Retry, disables it during a request and permits retry after another failure. Before
+settings are readable, it uses the application's cached language and a compact 28 px button. The
+smoke captures `native-git-bootstrap-writer-busy.png`, releases its second writer and retries
+startup without changing favorite bytes. Both real locks, exit 0, enabled controls and 16 images are
+required. New ARM/Intel execution is pending; previous `favoriteRecoveryExplicitBusyReload=false`
+reports do not prove these paths.
 
 Source `580405b2786943e6257979027e8083d2e118b2fe` / merge `ec2df4c9aed72e6466d202357cd787c3688e3dc1`
-passes the ARM 19-operation Core report but fails the new native Git smoke: reloading the whole page
-under the lock fails at the earlier settings/context read, before the favorite controls exist. The
-[failed run/artifact](https://github.com/YondFane/uTerm/actions/runs/41978931526/artifacts/13393467857)
-retains the actual error-page screenshot. Startup retry and the distinct post-bootstrap favorite
-notification fix this recovery gap; neither is accepted from compilation alone. A React/WebKit
-protocol regression verifies explicit retry, pending disable and retry after repeated failures.
+passes the ARM 19-operation Core report but fails at the earlier context read on whole-page reload.
+Its actual error image remains in
+[artifact13393467857](https://github.com/YondFane/uTerm/actions/runs/41978931526/artifacts/13393467857).
+Source `e68c0b9a0d0186983d0fd5f672da29491c4d5415` passes the ARM post-bootstrap favorite reload and
+native tab appearance checks, but the startup error defaults to Chinese rather than the selected
+English, so its second scene times out. This actual failure remains in
+[artifact13394905921](https://github.com/YondFane/uTerm/actions/runs/41981707594/artifacts/13394905921).
+Cached bootstrap language and compact error controls require their own real-window result.
+English/Chinese React/WebKit tests verify initial button/document language, pending disable and
+explicit retry after repeated failures; they do not replace native platform acceptance.
 
 The current four-platform Git/editor baseline is source head
 `429428cbb8787c657c39c14450b4e997d0f6a6fe`, actual tested merge

@@ -117,7 +117,11 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         documentID = UUID().uuidString
         let controller = webView.configuration.userContentController
         controller.removeAllUserScripts()
-        controller.addUserScript(WKUserScript(source: "Object.defineProperty(window,'utermContentDocument',{value:'\(documentID)',writable:false,configurable:false});", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        // Bootstrap errors must use the cached application language before shared settings can be read.
+        // 共享设置尚不能读取时，启动错误页必须使用缓存的应用语言。
+        let preference = ["en", "zh-Hans", "system"].contains(NativeLocale.preference) ? NativeLocale.preference : "system"
+        let language = (try? JSONEncoder().encode(preference)).map { String(decoding: $0, as: UTF8.self) } ?? "\"system\""
+        controller.addUserScript(WKUserScript(source: "Object.defineProperties(window,{utermContentDocument:{value:'\(documentID)',writable:false,configurable:false},utermContentLanguage:{value:\(language),writable:false,configurable:false}});", injectionTime: .atDocumentStart, forMainFrameOnly: true))
     }
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) { prepareDocument() }
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) { navigationError = error.localizedDescription }

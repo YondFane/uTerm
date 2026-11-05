@@ -6,6 +6,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 declare global {
   interface Window {
     utermContentDocument?: string;
+    utermContentLanguage?: "system" | "zh-Hans" | "en";
     webkit?: { messageHandlers?: { utermContent?: WebKitHandler } };
   }
 }
