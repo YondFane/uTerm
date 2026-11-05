@@ -103,6 +103,31 @@ function button(label: string) {
     (b) => b.textContent?.trim() === label,
   );
 }
+function visibleTerminal(id: string) {
+  return [
+    ...document.querySelectorAll<HTMLElement>(".local-session.visible[data-session-id]"),
+  ].find((element) => {
+    const rect = element.getBoundingClientRect();
+    return (
+      element.dataset.sessionId === id &&
+      !element.closest('[aria-hidden="true"], [hidden]') &&
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.right > 0 &&
+      rect.bottom > 0 &&
+      rect.left < innerWidth &&
+      rect.top < innerHeight &&
+      getComputedStyle(element).visibility !== "hidden"
+    );
+  });
+}
+async function selectedVisibleTerminal() {
+  const snapshot = (await observeCore("snapshot.read")) as unknown as {
+    document: { workspace: { selectedSession: string | null } };
+  };
+  const id = snapshot.document.workspace.selectedSession;
+  return id ? visibleTerminal(id) : undefined;
+}
 async function click(label: string) {
   (await until(() => button(label), label)).click();
   await pause(100);
@@ -1010,20 +1035,24 @@ async function runFavoriteRecovery(context: Context) {
 
 async function runInputControl(context: Context) {
   const owner = context.phase === "input-owner";
+  const previous = new Set(
+    [...document.querySelectorAll<HTMLElement>("[data-session-id]")].map(
+      (element) => element.dataset.sessionId,
+    ),
+  );
   if (owner) {
-    const create = await until(
-      () =>
-        document.querySelector<HTMLButtonElement>(
-          'button[aria-label="New terminal in Temporary QA project"]',
-        ),
-      "new actual terminal button",
-    );
+    const create = await until(() => {
+      const value = document.querySelector<HTMLButtonElement>(
+        'button[aria-label="New terminal in Temporary QA project"]',
+      );
+      return value && !value.disabled ? value : null;
+    }, "new actual terminal button");
     create.click();
   }
-  const section = await until(
-    () => document.querySelector<HTMLElement>(".local-session.visible[data-session-id]"),
-    "visible real terminal",
-  );
+  const section = await until(async () => {
+    const value = await selectedVisibleTerminal();
+    return value && (!owner || !previous.has(value.dataset.sessionId)) ? value : null;
+  }, "visible real terminal");
   await until(
     () => section.querySelector('.terminal-status[aria-label="Running"]'),
     "real terminal running",
@@ -1284,27 +1313,30 @@ async function runSSH(context: Context) {
     alias: string;
     remote: string;
     port: string;
-    previous?: { sessionID: string; generation: string; hostPID: number };
+    previous?: { sessionID: string; generation: string; hostPID: number; connectionID: string };
   }>("qa_ssh_fixture");
   const host = () =>
     invoke<{
       pid: number;
-      sessions: { spec: { id: string }; generation: string; running: boolean }[];
+      sessions: {
+        spec: { id: string; ssh?: { host: string; connection_id: string } };
+        generation: string;
+        running: boolean;
+      }[];
     }>("qa_host_status");
   if (context.phase === "ssh-reopen") {
     const previous = fixture.previous;
     assert(previous, "Missing previous actual SSH session");
-    const terminal = await until(
-      () => document.querySelector<HTMLElement>(".local-session.visible[data-session-id]"),
-      "reattached remote terminal",
-    );
+    const terminal = await until(selectedVisibleTerminal, "reattached remote terminal");
     assert(terminal.dataset.sessionId === previous.sessionID, "Reopen selected another session");
     const status = await host();
     const session = status.sessions.find((item) => item.spec.id === previous.sessionID);
     assert(
       status.pid === previous.hostPID &&
         session?.generation === previous.generation &&
-        session.running,
+        session.running &&
+        session.spec.ssh?.host === fixture.alias &&
+        session.spec.ssh.connection_id === previous.connectionID,
       "Quit replaced or stopped the hosted SSH session",
     );
     await until(
@@ -1377,10 +1409,17 @@ async function runSSH(context: Context) {
     actualRemoteBytes: sshQA.previewText,
   });
   await click("New SSH terminal");
-  const terminal = await until(
-    () => document.querySelector<HTMLElement>(".local-session.visible[data-session-id]"),
-    "real remote terminal",
-  );
+  const terminal = await until(async () => {
+    const value = await selectedVisibleTerminal();
+    if (!value) return null;
+    const status = await host();
+    return status.sessions.some(
+      (session) =>
+        session.spec.id === value.dataset.sessionId && session.spec.ssh?.host === fixture.alias,
+    )
+      ? value
+      : null;
+  }, "real remote terminal");
   const input = await until(() => {
     const value = terminal.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
     return value && !value.readOnly && !value.disabled ? value : null;
@@ -1414,11 +1453,15 @@ async function runSSH(context: Context) {
   );
   const status = await host();
   const session = status.sessions.find((item) => item.spec.id === terminal.dataset.sessionId);
-  assert(session?.running, "Actual remote session is not running");
+  assert(
+    session?.running && session.spec.ssh?.host === fixture.alias,
+    "The visible process is not the expected SSH session",
+  );
   await scene("ssh-terminal", {
     sessionID: session.spec.id,
     generation: session.generation,
     hostPID: status.pid,
+    connectionID: session.spec.ssh.connection_id,
     actualRemoteShell: true,
     renderedOutput: "UTERM_SSH_TAURI_QA",
     input: "DOM paste/key events through real xterm",

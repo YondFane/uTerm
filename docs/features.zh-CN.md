@@ -786,8 +786,7 @@ x86_64／Rust1.99.1 通过两项检查，包括迁移的边界样例与准确 UT
 服务管理密码引用绑定、临时凭据、记住／忘记和有界的一次性 askpass 服务。两端可以提供主机信任确认回调和凭据存储接口。共享系统适配保留 macOS 钥匙串、Windows 凭据管理器的服务名与引用；Tauri 继续提供既有应用标识和原生对话框。Redis／数据库凭据调用复用相同系统适配，不改变各自命名空间。凭据仍绑定连接与 OpenSSH 生效端点：重命名不使其失效，端点变化则拒绝复用；损坏凭据返回固定错误，不暴露原内容。
 
 两项 Linux `ssh_auth`
-集成检查通过，使用内存凭据接口、真实 OpenSSH 配置解析和实际回环 askpass 监听，覆盖目标变化、记住转临时、忘记、损坏存储、无效密码及代理密码拒绝。平台专属测试向唯一 QA 钥匙串／凭据管理器引用写入、读取并删除；Windows／macOS 结果由 CI 单独记录。这些测试不代表真实 SSH 登录或原生主机信任交互已通过。原生入口及其待执行验证见下方原生 SSH 工作区。执行命令为
-`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test ssh_auth`。完整宿主／Core／FFI、73 项后端检查（九项可选测试忽略）、411 项前端检查（十项可选测试跳过）、契约、TypeScript／生产／桌面构建、格式／文档及工作流检查在 Linux 通过；这不代表 Windows／macOS 凭据存储已验收。
+集成检查使用内存凭据接口、真实 OpenSSH 配置解析和回环 askpass，覆盖目标变化、保留方式转换、忘记、损坏存储及代理密码拒绝。平台专属检查使用唯一 QA 引用，在创建前、写入后及删除后验证系统凭据；重复删除安全。SSH 接口仅将系统“未找到”映射为空，其他错误可见，Redis／数据库旧适配保持原行为。真实登录及平台证据见下方服务和原生验证。
 
 共享 `ssh::files` 与 `ssh::tunnels`
 服务管理远程根、串行安全写入、流式传输、取消／退出保护、监听就绪和所属 OpenSSH 进程。Tauri 的既有命令委派这些服务，保留原生选择器和进度通道。带代次的取消／停止拒绝过期请求，既有 Tauri 命令签名保持兼容；取消等待中的隧道也释放认证 future。退出等待取消时阻止新传输；放弃退出等待会释放临时阻止，让客户端继续使用。
@@ -795,22 +794,30 @@ x86_64／Rust1.99.1 通过两项检查，包括迁移的边界样例与准确 UT
 客户端最终关闭时，即使待处理读取仍持有远端根，也会停止所属 SFTP 进程，并拒绝迟到创建；不停止其他客户端的 SFTP 进程或已由宿主运行的 SSH 终端。Tauri 退出回调采用该清理，原有退出保护仍先执行。
 
 `cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture`
-在 Linux 通过 21 项检查，其中包括真实隔离
-`sshd`／internal-sftp 服务。临时主机／客户端密钥、known_hosts 和切断连接的 TCP 代理验证已认证 Unicode 上传下载、取消与断线覆盖后原文件保留、明确重连／重试、固定主机密钥及主机 CA 的接受／拒绝、两条真实隧道回显和兄弟／过期停止保护。Unix 测试需要
-`/usr/sbin/sshd` 与 `ssh-keygen`，不修改系统 SSH 服务或 `~/.ssh`。CI 保存带源码／merge SHA 的
-`ssh-service-core.json`
-和测试日志；提交前本地报告明确标记源码未提交。macOS 平台回归仍待重跑；已修正测试代理接受连接继承非阻塞模式时误关连接的问题，之前失败及一次依赖获取 DNS 失败均保留，不计为通过。这些服务用例尚未在 Windows 执行，密码登录及原生连接界面验收也待完成。断线可能保留隐藏的远端上传临时文件，原目标仍保持不变，重试需明确执行；夹具清理自身遗留临时数据，不宣称应用自动完成远端清理。
+在 Linux 通过 21 项检查。真实隔离
+`sshd`／internal-sftp 覆盖 Unicode 传输、取消／断线后原文件保留、明确重连、主机密钥／CA、兄弟隧道与过期停止，以及持有远端根时的所属进程关闭。Unix 夹具需要
+`/usr/sbin/sshd` 和
+`ssh-keygen`；macOS 需非交互 sudo 启动隔离服务。断线可能留下隐藏上传临时文件，原目标保持不变，重试需明确执行；不宣称自动清理远端遗留文件。
 
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY`
-通过公开 Core 客户端连接真实隔离 OpenSSH。Linux 已通过过期保存、Unicode 上传下载、带代次取消、断线覆盖／重连、兄弟隧道保护、退出准入及秘密排除检查；提交前报告标明源码未提交。跨平台 CI 夹具在 macOS 和 Windows 增加真实密码／系统凭据检查。Windows 下载固定版本且校验摘要的 Win32
-OpenSSH，通过所属 SYSTEM 任务运行，并生成临时本地账户；仅在一次性 CI 用户的 OpenSSH 配置前临时添加唯一别名，清理时恢复原字节，拒绝在非 GitHub 运行器执行。macOS 密码检查使用独立的短期账户和主目录。不更改生产 SSH 服务。首次平台运行失败：macOS 通过 PAM 账户访问规则拒绝临时用户，Windows 任务未启动。夹具现仅在既有 SSH 访问组加入／移除自身的临时 Mac 用户，将 Windows 日志改用绝对路径并保存任务启动状态。后续 macOS 公开客户端运行已通过真实密码登录。Windows 服务现可启动，但客户端私钥继承的 OWNER
-RIGHTS ACL 被拒绝；夹具现仅为生成的该私钥设置明确的所有者／System／Administrators
-ACL。跨平台夹具还增加真实主机 CA 接受和错误 CA 拒绝，已在未提交源码的 Linux 通过。Windows 已经过真实认证／传输／隧道检查，到达最后的日志秘密排除断言；sshd 独占日志句柄，该检查现移至所属服务停止之后。仅供 QA 的 Tauri 命令注册也补齐普通后端构建条件；Linux 的 73 项后端检查（九项可选忽略）和 QA 编译通过。平台重跑仍待完成，这些检查不代表图形界面验收。
+通过公开 Core 客户端驱动真实服务。源码 `405f4a520a5b0a14845f1eb5cb9c7461a76282b3`／tested merge
+`1b34460cede28e7dfb67c77bf80fe09efc68ea28` 的 Windows AMD64／macOS ARM64 报告在
+[CI 42012100684](https://github.com/YondFane/uTerm/actions/runs/42012100684)
+通过，dirty=false、cleanup=true。报告为 `ssh-core-live.json`，artifact 分别为
+`legacy-checks-windows-latest-405f4a520a5b0a14845f1eb5cb9c7461a76282b3` 和
+`legacy-checks-macos-latest-405f4a520a5b0a14845f1eb5cb9c7461a76282b3`；只代表服务验收，该次整体界面流程失败。
+
+服务验证包括真实密码／系统凭据、过期保存、Unicode 字节一致、主机密钥变更拒绝、正确／错误 CA、带代次取消、断线覆盖／重连、兄弟隧道、退出及秘密排除。新增密钥认证 ProxyJump 读取在 Linux 未提交源码通过，仍需平台 CI。首次主机拒绝后再批准、一次性响应及实际认证由后续平台运行单独记录。
+
+Windows 夹具下载固定版本且校验摘要的 Win32
+OpenSSH，以所属 SYSTEM 任务运行，创建临时账户并设置生成密钥的明确 ACL；仅在一次性 GitHub
+CI 用户配置前加入唯一别名，退出恢复原字节。macOS 使用短期账户和主目录，并仅在既有 SSH 访问组加入／移除自身账户。不更改生产 SSH 服务。测试日志在服务关闭后检查秘密排除，避免 Windows 独占日志句柄。
 
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py`
-增加四项真实 Tauri 窗口场景：保存 SSH 配置、已认证 SFTP 列表／文本预览、远程终端输出，以及实际退出／重开后相同宿主 PID、会话代次和回放的附着。使用既有隔离 QA 标识，上传带源码／平台元数据的截图。此新增阶段尚待 CI 执行，不验证人工文件选择器或输入法。Unicode 样例名称／文本放入
-`shared/fixtures/ssh-qa.json`，源码国际化覆盖检查通过。前三项 SSH 场景已在源码 `405f4a5`
-的 Windows／macOS 运行并生成真实截图，但整条流程在 Windows 退出及后续 Mac 所有权夹具失败。现补齐所属进程退出清理，并将 SSH 放在既有所有权／恢复检查之后执行；完整重跑仍待完成。目视检查发现旧 Windows 图被 CI 控制台遮挡，不计为有效界面证据。Windows 截图助手现仅临时置顶所属 QA 窗口，检查采样点未被遮挡，并恢复置顶标记；进程报告区分主进程退出与输出句柄仍打开。
+在真实隔离 Tauri 应用运行保存配置、已认证 SFTP 列表／预览、远程终端和实际退出／重开四项 SSH 场景，并保留既有所有权／恢复检查。终端必须是共享快照选中的可见面板，宿主报告必须确认 SSH 主机／连接身份；重开验证相同会话、代次、宿主 PID 和回放。隐藏本地终端的输出不计为远程验收。
+
+完整 Tauri 平台回归仍待通过，Windows 退出失败保持未验收。截图携带源码／平台元数据；Windows 助手临时置顶所属 QA 窗口，检查采样点未被遮挡，再恢复置顶标记。被 CI 控制台遮挡的旧图不作为证据。进程报告分别记录主进程退出和输出句柄关闭。不执行人工选择器或输入法验收，Unicode 样例放在
+`shared/fixtures/ssh-qa.json`。
 
 ### 原生 SSH 工作区
 
@@ -826,18 +833,21 @@ Core 客户端跨终端传输重建继续保留，临时凭据不丢失；退出
 
 #### 原生 SSH 验证与限制
 
-Linux 的三项客户端契约检查覆盖配置 CAS、既有 SSH 会话／依赖保留、密码不进入快照／操作历史、退出后明确恢复及超出 JavaScript 精度的计数。信任确认的一次性消费、关闭时拒绝待处理／迟到提示，以及完整 Core／FFI、后端编译和契约检查通过。共同的
-`shared/contracts/ssh-progress-v1.json`
-用于 Rust、Swift 和 TypeScript 的实际 JSON 边界值校验。Rust／TypeScript 在 Linux 通过。macOS
-ARM64 的源码 `0281deccf0bd6636e4b6c7979cce0e781a095729`／实际测试 merge
-`f226ca0f8dbd351f9b22dd34b4035dab1afb6093` 已在
-[CI 42004583197](https://github.com/YondFane/uTerm/actions/runs/42004583197)
-通过 Core、FFI、Swift 和真实 SSH 窗口流程。
+Linux 客户端契约覆盖配置 CAS、已有会话／依赖保留、秘密排除、明确恢复及一次性信任。共同的
+`shared/contracts/ssh-progress-v1.json` 在 Rust／Swift／TypeScript 实际 JSON 边界检查 `2^53` 以上及
+`u64::MAX` 的十进制字符串，避免只验证类型名称。
 
 `bash scripts/macos-ssh-smoke.sh`
-使用隔离应用、临时密钥／known_hosts 和真实 SSH 服务，运行配置冲突、SFTP 传输／取消、转发、远程终端分离／回放／关闭和原生信任确认场景。验收还要求密码认证经独立宿主建立 PTY，以及拒绝后再次批准首次主机并成功连接；Core 报告确认两种情况确实回复了真实信任请求。脚本上传
-`ssh-live.json`、日志与真实窗口截图。上述源码的 macOS
-ARM64 报告及七张真实截图已通过。目视确认中英文／深浅主题窗口中的配置冲突保留、SFTP 文件、转发、远程终端输出及原生信任提示。传输进度图的进度行曾被裁出画面，现改为滚动后等待 SwiftUI 渲染再截图；转发端口使用无本地化分组的字面数字。这些截图／端口修正和新增真实密码登录仍待新平台运行。原生密码字段留空切换保留方式时按已保存凭据位置读取，移除时也清理已保存引用，不受未保存草稿影响；原生冒烟增加记住／临时相互转换、旧引用删除及终端传输重建后已认证重连检查。原生冒烟已确认真实密码登录，但发现缺失系统引用被报告为一般凭据失败。SSH 凭据接口现仅将系统“未找到”结果映射为空引用，其他失败及 Redis／数据库旧适配保持原行为；平台回归检查创建前与删除后读取，重跑仍待完成。Windows 真实服务、人工选择器／输入法仍待验收。#36 保持开放，不表示已合入或发布。
+使用隔离原生 QA 应用、临时账户／密钥／known_hosts 及真实 OpenSSH。源码
+`b9af76beef3c517b188aea337b655a06f9fc710b`／tested merge `1a3d3ca152a3c467a2aa397196ea2612f55565a2`
+在 [CI 42013797745](https://github.com/YondFane/uTerm/actions/runs/42013797745)
+的 ARM64 和 Intel 均通过，dirty=false、cleanup=true。
+
+两份 `native-qa-macos-15[-intel]-b9af76beef3c517b188aea337b655a06f9fc710b` artifact 包含
+`ssh-live.json`、`ssh-service-core.json`、工具链／测试日志和十张真实 WindowServer 截图。场景覆盖配置冲突保留、SFTP 上传下载、可见传输进度／取消、实际转发、密钥及密码远程 PTY、退出附着／回放／独立关闭、中英文／深浅主题和 760px 窗口。真实 NSAlert 分别拒绝和批准主机，并在批准后成功认证；记住／临时转换、旧凭据删除和终端传输重建后的临时密码重连也通过。
+
+目视检查确认密码终端输出及原生信任批准后的连接窗口。新源码仍需各自的 CI 验证，不能沿用旧 SHA 的通过。人工选择器、输入法及 macOS
+14 交互未执行；不以最低部署目标或构建代替验收。#36 仍开放，尚未合入或发布。
 
 ### 快速连接与主机搜索
 

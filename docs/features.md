@@ -1325,17 +1325,12 @@ adapter without changing their namespaces. Credentials remain bound to the conne
 OpenSSH endpoint; renaming a connection does not invalidate them, while an endpoint change refuses
 reuse. Corrupt credential data returns a fixed error without exposing its contents.
 
-The two Linux `ssh_auth` integration checks pass with an in-memory credential port, actual OpenSSH
-configuration resolution and a real loopback askpass listener. They cover changed targets,
-remember-to-temporary conversion, forgetting, malformed storage, invalid passwords and
-proxy-password refusal. The platform-only test writes, reads and deletes a unique QA
-Keychain/Credential Manager reference; its Windows/macOS result is recorded separately by CI. These
-tests do not establish actual SSH login or native host-trust interaction. Native entry points and
-outstanding checks are described below. Run them with
-`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test ssh_auth`. Full
-host/Core/FFI, 73 backend checks (nine optional tests ignored), 411 frontend checks (ten optional
-tests skipped), contracts, TypeScript/production/desktop builds, format/docs and workflow checks
-pass on Linux. This does not establish Windows/macOS credential-store acceptance.
+The two Linux `ssh_auth` integration checks use an in-memory credential port, real OpenSSH
+configuration resolution and loopback askpass. They cover changed targets, retention conversion,
+forgetting, malformed storage and proxy-password refusal. Platform checks use unique QA references
+before creation, after writing and after deletion; repeated deletion is safe. The SSH port maps only
+OS not-found to an absent reference, leaving other errors visible and the legacy Redis/database
+adapter unchanged. Actual login and platform evidence appear below.
 
 The shared `ssh::files` and `ssh::tunnels` services own remote roots, serialized safe writes,
 streaming transfers, cancellation/quit protection, listener readiness and owned OpenSSH processes.
@@ -1350,56 +1345,48 @@ root. It refuses late spawns without stopping another client's SFTP processes or
 terminals. The Tauri exit callback uses this cleanup; ordinary quit guards still run first.
 
 `cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture` passes
-21 Linux checks, including an actual isolated `sshd`/internal-sftp service. Temporary host/client
-keys, known_hosts and a connection-cutting TCP proxy verify authenticated Unicode upload/download,
-cancelled and interrupted overwrite preservation, explicit reconnect/retry, pinned-host-key and host
-CA acceptance/rejection, two real tunnel echo routes and sibling/stale-stop protection. Unix tests
-require `/usr/sbin/sshd` and `ssh-keygen`. macOS also needs noninteractive sudo to launch the
-isolated privileged server; cleanup targets only the isolated server’s recorded PID. Tests do not
-change the system SSH service or `~/.ssh`. CI saves `ssh-service-core.json` and test logs with
-source/merge SHAs. Local reports before a commit explicitly mark the source dirty. macOS platform
-reruns remain pending. The test proxy now explicitly clears inherited nonblocking mode on accepted
-connections; earlier failures and an Intel dependency DNS failure remain recorded and are not
-counted as passing. These service cases do not run on Windows yet, and password login and native
-connection UI acceptance remain pending. A network interruption may leave a hidden remote upload
-temporary file; the original destination stays intact and retries are explicit. The test fixture
-cleans its own abandoned temporary data rather than claiming automatic remote cleanup.
+21 Linux checks. Real isolated `sshd`/internal-sftp cases cover Unicode transfers, originals
+retained after cancellation/interruption, explicit reconnect, host keys/CAs, sibling tunnels/stale
+stops and owned-process shutdown while a reader retains its remote root. Unix fixtures require
+`/usr/sbin/sshd` and `ssh-keygen`; macOS requires noninteractive sudo for the isolated server. An
+interrupted upload may leave a hidden temporary file; the original stays intact and retry is
+explicit. Automatic remote orphan cleanup is not claimed.
 
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY` drives the
-public Core client against an actual isolated OpenSSH server. Linux passes stale saves, Unicode
-upload/download, generation cancellation, interrupted overwrite/reconnect, sibling tunnel
-protection, quit admission and secret-exclusion checks; its pre-commit report records dirty source.
-The portable CI fixture adds real password/OS-store checks on macOS and Windows. Windows downloads
-the pinned, checksum-verified Win32 OpenSSH server, runs an owned SYSTEM task and generates a
-temporary local account. It temporarily prepends unique aliases to the disposable CI user's OpenSSH
-config and restores the original bytes on cleanup; it refuses non-GitHub runners. macOS uses a
-separate short-lived account and home directory for password checks. No production SSH service is
-changed. The first platform run failed: macOS rejected the temporary user through PAM account
-access, and the Windows task did not start. The fixture now adds/removes only its temporary Mac user
-in an existing SSH access group, resolves the Windows log path absolutely and saves task-startup
-status. The next macOS public-client run passes actual password login. Windows starts the server but
-rejects an inherited OWNER RIGHTS ACL on the private client key; the fixture now sets an explicit
-owner/System/Administrators ACL on that generated key only. The portable fixture also checks real
-host-CA acceptance and wrong-CA refusal, passing on Linux with dirty source. Windows reaches the
-final log-exclusion assertion after its real authentication/transfer/tunnel checks, but sshd holds
-an exclusive log handle; the check now runs after owned-service shutdown. The QA-only Tauri command
-registration is also gated in normal backend builds; 73 Linux backend tests (nine optional ignored)
-and QA compilation pass. Platform reruns remain pending; these checks do not establish GUI
-acceptance.
+public Core client against a real service. Windows AMD64/macOS ARM64 reports pass at source
+`405f4a520a5b0a14845f1eb5cb9c7461a76282b3` / tested merge `1b34460cede28e7dfb67c77bf80fe09efc68ea28`
+in [CI 42012100684](https://github.com/YondFane/uTerm/actions/runs/42012100684), dirty=false and
+cleanup=true. The reports are `ssh-core-live.json`, in artifacts
+`legacy-checks-windows-latest-405f4a520a5b0a14845f1eb5cb9c7461a76282b3` and
+`legacy-checks-macos-latest-405f4a520a5b0a14845f1eb5cb9c7461a76282b3`. These accept the service
+only; that overall GUI run failed.
 
-`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` adds four real Tauri window scenes: saved
-SSH profile, authenticated SFTP listing/text preview, remote terminal output and actual quit/reopen
-attachment with the same host PID, session generation and replay. It uses the existing isolated QA
-identifier and uploads screenshots with source/platform metadata. This new phase awaits CI execution
-and does not exercise a manual file picker or IME. Its Unicode sample names/text live in
-`shared/fixtures/ssh-qa.json`; the localized-source coverage check passes. The initial three SSH
-scenes ran and produced screenshots on both Windows/macOS at source `405f4a5`; the overall run
-failed on Windows exit and a subsequent Mac ownership fixture. Owned-process exit cleanup and
-running SSH after the existing ownership/recovery checks address those cases; full reruns remain
-pending. Visual review found the Windows CI console covering the earlier captures, so those images
-are not accepted UI evidence. The Windows helper now temporarily raises only the owned QA window,
-verifies sampled points are unobstructed and restores its topmost flag. Process reports distinguish
-main-process exit from output handles that remain open.
+Service checks include actual password/OS-store authentication, stale saves, exact Unicode bytes,
+changed-key refusal, correct/wrong CAs, generation cancellation, interrupted overwrite/reconnect,
+sibling tunnels, quit and secret exclusion. Added key-authenticated ProxyJump reading passes locally
+on Linux with dirty source and still requires platform CI. Actual first-host rejection followed by
+approval, single-use responses and authenticated results are recorded by subsequent platform runs
+separately.
+
+The Windows fixture downloads a pinned, checksum-verified Win32 OpenSSH server, runs an owned SYSTEM
+task and creates a temporary account with explicit generated-key ACLs. It prepends unique aliases
+only to the disposable GitHub CI user's configuration and restores the original bytes. macOS uses a
+short-lived account/home and adds/removes only that account in an existing SSH access group.
+Production SSH services are untouched. Secret-exclusion checks read server logs after shutdown to
+avoid Windows exclusive log handles.
+
+`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` runs saved-profile, authenticated SFTP
+listing/preview, remote-terminal and actual quit/reopen scenes in the isolated real Tauri app,
+retaining existing ownership/recovery checks. The terminal must be the visible panel selected by the
+shared snapshot, with SSH host/connection identity confirmed by the host. Reopening verifies the
+same session, generation, host PID and replay. Output from a hidden local terminal cannot satisfy
+remote acceptance.
+
+Full Tauri platform reruns remain pending; Windows exit is still unaccepted. Screenshots carry
+source/platform metadata. The Windows helper temporarily raises only its owned QA window, checks
+sampled points for occlusion and restores its topmost flag. Earlier images covered by the CI console
+are excluded. Process reports distinguish main-process exit from output-handle closure. Manual
+file-picker/IME acceptance is not performed; Unicode examples live in `shared/fixtures/ssh-qa.json`.
 
 ### Native SSH workspace
 
@@ -1431,35 +1418,29 @@ hosted SSH terminals remain running.
 
 #### Native SSH validation and limits
 
-Three Linux client-contract checks cover profile CAS, existing SSH sessions/dependencies, secrets
-excluded from snapshots/operation history, explicit resume after quit and counts above JavaScript's
-numeric precision. Single-use trust responses, pending/late prompt rejection on close, full
-Core/FFI, backend compilation and contract checks pass. The common
-`shared/contracts/ssh-progress-v1.json` defines JSON boundary checks for Rust, Swift and TypeScript.
-Rust and TypeScript pass on Linux. On macOS ARM64, head `0281deccf0bd6636e4b6c7979cce0e781a095729` /
-tested merge `f226ca0f8dbd351f9b22dd34b4035dab1afb6093` passes the Core, FFI, Swift and actual SSH
-window workflows in
-[CI run 42004583197](https://github.com/YondFane/uTerm/actions/runs/42004583197).
+Linux client contracts cover profile CAS, preserved sessions/dependencies, secret exclusion,
+explicit resume and one-use trust. The common `shared/contracts/ssh-progress-v1.json` exercises
+actual Rust/Swift/TypeScript JSON boundary values above `2^53` and at `u64::MAX` as decimal strings,
+checking precision rather than only type names.
 
-`bash scripts/macos-ssh-smoke.sh` uses an isolated app, temporary keys/known_hosts and a real SSH
-service for profile conflicts, SFTP transfers/cancellation, forwarding, remote terminal
-replay/detach/close and native host trust. Acceptance also requires a password-authenticated PTY
-through the independent host and successful first-host approval after declining; Core reports
-confirm that actual trust prompts were answered in both cases. It uploads `ssh-live.json`, logs and
-real window images. The macOS ARM64 report and seven real captures passed at the source above.
-Visual inspection confirmed profile conflict retention, SFTP files, forwarding, remote shell output
-and the native trust sheet in English/dark and Chinese/light windows. The transfer-progress image
-cropped the progress row; capture now scrolls it into view and waits for SwiftUI rendering.
-Forwarding ports use literal digits without locale grouping. These capture/port fixes and the added
-real password login still await a new platform run. Native password retention changes use the saved
-credential location when the password field is empty; deletion cleans the saved reference even if
-the draft changes. The native smoke now also checks remembered/temporary conversions,
-obsolete-reference deletion and authenticated reconnect after terminal transport reopening. Native
-smoke confirms actual password login but exposed missing OS references being reported as a generic
-credential failure. The SSH credential port now maps only the OS not-found result to an absent
-reference; other failures and the legacy Redis/database adapter are unchanged. Platform regressions
-check before creation and after deletion; reruns remain pending. Windows real-service and manual
-picker/IME acceptance remain pending. #36 stays open; no merge or release is claimed.
+`bash scripts/macos-ssh-smoke.sh` uses the isolated native QA app, temporary
+accounts/keys/known_hosts and real OpenSSH. Source `b9af76beef3c517b188aea337b655a06f9fc710b` /
+tested merge `1a3d3ca152a3c467a2aa397196ea2612f55565a2` passes on ARM64 and Intel in
+[CI 42013797745](https://github.com/YondFane/uTerm/actions/runs/42013797745), dirty=false and
+cleanup=true.
+
+The two `native-qa-macos-15[-intel]-b9af76beef3c517b188aea337b655a06f9fc710b` artifacts contain
+`ssh-live.json`, `ssh-service-core.json`, toolchain/test logs and ten real WindowServer captures.
+Scenarios cover retained conflict drafts, SFTP uploads/downloads, visible transfer
+progress/cancellation, actual forwarding, key/password remote PTYs, detach/replay/independent close,
+English/Chinese, dark/light and a 760px window. Real NSAlert rejection and approval followed by
+authentication pass, as do remembered/temporary conversions, obsolete-reference deletion and
+authenticated temporary-password reconnect after terminal transport reopening.
+
+Visual review confirms password-terminal output and the connection window after native trust
+approval. New source still requires its own CI evidence; previous SHAs cannot accept it. Manual
+pickers, IME and macOS 14 interaction are unexecuted; minimum deployment targets/builds do not
+replace acceptance. #36 remains open and unmerged/unreleased.
 
 ### Quick connections and host search
 

@@ -113,6 +113,12 @@ def main():
                 client.operation("files.transfer", root=remote, path=service.local.name, direction="download", paths=[str(destination)], overwrite=False)
                 assert destination.read_bytes() == service.local.read_bytes()
                 checks["unicodeBinaryUploadDownload"] = True
+                jump_connection = {**connection, "connection_id": str(uuid.uuid4()), "jump_host": service.jump_alias}
+                jump_root = client.operation("files.open", connection=jump_connection)
+                jump_file = client.operation("files.read", root=jump_root, path="original 中文.txt")
+                assert jump_file["text"].startswith("SSH file")
+                client.operation("files.disconnect", connection_id=jump_connection["connection_id"])
+                checks["actualKeyAuthenticatedJumpHost"] = True
                 known = service.directory / "known_hosts"
                 trusted = known.read_bytes()
                 known.write_text("qa-native-host " + (service.directory / "client.pub").read_text())

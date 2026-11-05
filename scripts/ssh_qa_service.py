@@ -93,6 +93,7 @@ class SSHService:
             self.alias = "qa-service-" + token
             self.unknown_alias = "qa-unknown-" + token
             self.password_alias = "qa-password-" + token
+            self.jump_alias = "qa-jump-" + token
             self.client_config = self.directory / "ssh_config"
             key_path = (self.directory / "client").as_posix()
             known_path = known.as_posix()
@@ -104,6 +105,9 @@ class SSHService:
                 f"Host {self.alias} {self.password_alias}\n HostKeyAlias qa-native-host\n"
                 f"Host {self.unknown_alias}\n HostKeyAlias qa-untrusted-host\n"
                 f"Host {self.password_alias} {self.unknown_alias}\n User {getattr(self, 'password_user', self.user)}\n"
+                f"Host {self.jump_alias}\n HostName 127.0.0.1\n User {self.user}\n Port {self.server_port}\n"
+                f" IdentityFile \"{key_path}\"\n IdentitiesOnly yes\n HostKeyAlias qa-native-host\n"
+                f" UserKnownHostsFile \"{known_path}\"\n GlobalKnownHostsFile {'NUL' if sys.platform == 'win32' else '/dev/null'}\n"
             )
             self.bin = self.directory / "bin"
             self.bin.mkdir()
