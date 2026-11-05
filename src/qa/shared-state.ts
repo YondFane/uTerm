@@ -308,11 +308,34 @@ async function runPreviews(context: Context) {
   };
   window.addEventListener("message", receive);
   try {
+    const retry = button("Retry loading");
+    if (retry) {
+      retry.click();
+      await until(() => !retry.isConnected, "explicit workspace read retry");
+    }
+    const project = await until(
+      () =>
+        document.querySelector<HTMLButtonElement>(
+          '.folder-row[data-project-id="shared-state-qa"] > .row-label',
+        ),
+      "imported QA project before preview",
+    );
+    if (!project.closest(".folder-row")?.classList.contains("selected")) {
+      project.click();
+      await until(
+        () => project.closest(".folder-row")?.classList.contains("selected"),
+        "completed project selection before preview",
+      );
+    }
     const files = await until(
       () => document.querySelector<HTMLButtonElement>('.inspector-switcher button[title="Files"]'),
       "actual Files entry",
     );
     files.click();
+    const projectRoot = await until(() => {
+      const path = document.querySelector<HTMLElement>(".file-panel-footer")?.title;
+      return path === context.project && path;
+    }, "actual preview file tree uses the temporary project root");
     async function open(path: string) {
       const row = await until(
         () =>
@@ -384,6 +407,8 @@ async function runPreviews(context: Context) {
     const bounds = frame.getBoundingClientRect();
     assert(bounds.width > 0 && bounds.height > 0, "HTML preview is not visible");
     await scene("preview-html", {
+      workspaceReadRetried: !!retry,
+      projectRoot,
       actualFileTree: true,
       staticContentRetained: true,
       activeContentRemoved: true,

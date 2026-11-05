@@ -1852,9 +1852,20 @@ editor. An owned loopback HTTP observer confirms forbidden image/style/frame req
 the PDF bytes remain unchanged. `preview-resource-isolation.json` records the observer and its
 cleanup, while three `editor-reopen-preview-*.png` captures show the real app.
 
-The Linux working tree passed all 53 application scenes (dirty=true, cleanupErrors=[]), 12 focused
-HTML/PDF/transport checks and types; HTML/PDF captures were inspected. This added UI scope still
-requires its own source-bound Windows/macOS CI reports and screenshots.
+At source `14596527f8c0642a68fc194f4e505903fc928040` / tested merge
+`c48d62c2a0ddce10ffaa92adce6887f91fb40f44`, macOS passed all 53 application scenes with a clean
+source tree, no forbidden requests and no cleanup errors. Windows stopped before opening HTML:
+workspace loading had failed and the file tree still showed the runner home. Its failed report
+remains retained.
+
+QA now uses the visible **Retry loading** action when needed, selects the imported temporary project
+only when necessary, and verifies the actual file-tree root before opening a preview. The new source
+still requires its own Windows/macOS reports and screenshots.
+
+Earlier Linux working-tree checks passed 53 scenes, 12 HTML/PDF/transport checks and types; HTML/PDF
+captures were inspected separately from clean CI evidence. The root-selection change passed all
+three preview scenes locally; its full run stopped at input-control reacquisition after viewer exit
+(49 scenes, no cleanup errors), so that run is not recorded as a complete application pass.
 
 Linux protocol checks cover reordered/mismatched replies, timeout/abort/unload, late subscriptions,
 bounds and the JavaScript WebKit adapter. Actual Rust/Git processes pause a real checkout hook and
@@ -2963,14 +2974,17 @@ command is
 `cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib task_output::tests`.
 `task-output-auth.json` records source/merge, platform and controlled-peer results without token
 values; real task subprocesses are checked separately. Full Host/Core/FFI checks and the eight real
-Linux Maven/Spring Boot scenarios pass. Windows/macOS results remain pending for this change.
+Linux Maven/Spring Boot scenarios pass. At source `14596527f8c0642a68fc194f4e505903fc928040` /
+tested merge `c48d62c2a0ddce10ffaa92adce6887f91fb40f44`, four clean Windows/macOS authentication
+reports passed, as did all six real Maven matrix jobs. These results do not accept the separate
+failing Windows JDK8 Unicode check or the Windows preview QA failure.
 
 At source `8491bae96401829e5cc5c3420d5aaccb58494356` / tested merge
 `f25eef9b077d0b9be88ed35f311db52868d17f88`, Windows JDK11 Maven failed with
-`JAVA_TASK_OUTPUT_FAILED` while five other Maven reports passed. The connection to the
-authentication defect still needs new CI evidence. The fixture now retains task ID, generation and
-at most 64 KiB of output tail on transport failure or timeout; its original failure remains in Issue
-#37.
+`JAVA_TASK_OUTPUT_FAILED` while five other Maven reports passed. The next source's six passing Maven
+jobs do not prove that authentication was the original failure's sole cause or establish long-term
+reliability. The fixture now retains task ID, generation and at most 64 KiB of output tail on
+transport failure or timeout; its original failure remains in Issue #37.
 
 - Windows native-host regression verifies that ordinary Stop keeps a task running throughout child
   cleanup, retains final stdout/stderr and prevents later task steps from starting. It also verifies

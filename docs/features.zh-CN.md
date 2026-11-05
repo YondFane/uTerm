@@ -1087,8 +1087,13 @@ API。
 也通过实际文件树打开临时 HTML／PDF，检查不运行脚本的隔离预览，绘制实际 PDF 画布，关闭两份预览并恢复原编辑器。自有回环 HTTP 观察器确认被禁止的图片／样式／框架请求始终为零，PDF 字节保持不变。`preview-resource-isolation.json`
 记录观察器及其清理，三张 `editor-reopen-preview-*.png` 展示真实应用。
 
-Linux 工作树通过全部 53 个应用场景（dirty=true、cleanupErrors=[]）、12 项 HTML／PDF／transport 专项和类型检查；已目视检查 HTML／PDF 截图。这个新增 UI 子范围仍需各自源码对应的 Windows／macOS
-CI 报告和截图。
+source `14596527f8c0642a68fc194f4e505903fc928040`／tested merge
+`c48d62c2a0ddce10ffaa92adce6887f91fb40f44`
+的 macOS 通过全部 53 个应用场景，源码干净、禁止请求及清理错误均为零。Windows 在打开 HTML 前停止：工作区加载失败，文件树仍显示 runner 用户目录，失败报告继续保留。
+
+QA 现在在需要时点击可见的“重试读取”，仅在必要时选中已导入临时项目，并在打开预览前核对实际文件树根目录。新源码仍需自己的 Windows／macOS 报告及截图。
+
+此前 Linux 工作树通过 53 个场景、12 项 HTML／PDF／transport 专项及类型检查；其 HTML／PDF 截图已另行目视检查，不作为干净 CI 证据。目录选择改动的本地三个预览场景均通过，但完整运行停在查看端退出后的输入权重新取得（49 个场景、无清理错误），不记录为完整应用检查通过。
 
 Linux 协议检查覆盖乱序／错配响应、超时／取消／卸载、迟到订阅、上限及 JavaScript
 WebKit 适配。真实 Rust／Git 进程暂停实际 checkout
@@ -1748,11 +1753,14 @@ Linux 七项输出检查覆盖可控超时／分片序列、跨越轮询期限�
 `cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib task_output::tests`。
 `task-output-auth.json`
 记录 source／merge、平台及受控对端结果，不记录令牌值；实际任务子进程另行检查。完整 Host／Core／FFI 及 Linux 真实 Maven／Spring
-Boot 八场景通过，此改动的 Windows／macOS 结果仍待确认。
+Boot 八场景通过。source `14596527f8c0642a68fc194f4e505903fc928040`／tested merge
+`c48d62c2a0ddce10ffaa92adce6887f91fb40f44`
+的四份干净 Windows／macOS 认证报告及六组真实 Maven 矩阵均通过。这些结果不代表独立失败的 Windows JDK8
+Unicode 检查或 Windows 预览 QA 已验收。
 
 source `8491bae96401829e5cc5c3420d5aaccb58494356`／tested merge
 `f25eef9b077d0b9be88ed35f311db52868d17f88` 的 Windows JDK11 Maven 报
-`JAVA_TASK_OUTPUT_FAILED`，其余五份 Maven 报告通过；与认证缺陷的关联仍需新 CI 证据。样例现在在传输错误或超时后保留任务 ID、generation 及最多 64
+`JAVA_TASK_OUTPUT_FAILED`，其余五份 Maven 报告通过；后续源码的六组 Maven 通过不能证明认证是原失败的唯一原因，也不代表长期可靠性。样例现在在传输错误或超时后保留任务 ID、generation 及最多 64
 KiB 输出尾部，原失败继续保留在 #37。
 
 - Windows 原生宿主回归确认：普通“停止”在子进程清理期间保持任务运行，保留最终 stdout／stderr，并阻止后续任务步骤启动；清理期间仍可强制停止。真实 Java 与 Python 进程均在退出前完成两秒关闭清理。Agent 启用、通知及数据库 App 回归使用有效的运行摘要 IPC 夹具后通过。宿主套件 51 项通过、三项可选检查忽略；后端 144 项通过、十项忽略。这些检查不代表 macOS／Linux 运行验收。
