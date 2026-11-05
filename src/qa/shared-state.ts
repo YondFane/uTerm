@@ -1041,11 +1041,22 @@ async function runInputControl(context: Context) {
     ),
   );
   if (owner) {
+    const project = await until(
+      () =>
+        document.querySelector<HTMLButtonElement>(
+          '.folder-row[data-project-id="shared-state-qa"] > .row-label',
+        ),
+      "visible ownership QA project",
+    );
+    project.click();
     const create = await until(() => {
-      const value = document.querySelector<HTMLButtonElement>(
-        'button[aria-label="New terminal in Temporary QA project"]',
-      );
-      return value && !value.disabled ? value : null;
+      const value = document.querySelector<HTMLButtonElement>(".welcome-action.primary");
+      return value &&
+        !value.disabled &&
+        value.querySelector("strong")?.textContent === "New terminal" &&
+        value.getBoundingClientRect().width > 0
+        ? value
+        : null;
     }, "new actual terminal button");
     create.click();
   }

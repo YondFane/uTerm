@@ -418,6 +418,9 @@ async fn authenticated_ssh_transfers_reconnect_host_trust_and_tunnel_ownership()
         while !stopped.load(Ordering::Acquire) {
             match echo.accept() {
                 Ok((mut stream, _)) => {
+                    // macOS inherits nonblocking mode; wait for forwarded bytes with a timeout.
+                    // macOS 会继承非阻塞模式，须带超时等待转发数据。
+                    stream.set_nonblocking(false).unwrap();
                     stream
                         .set_read_timeout(Some(Duration::from_secs(2)))
                         .unwrap();

@@ -1350,7 +1350,9 @@ retained after cancellation/interruption, explicit reconnect, host keys/CAs, sib
 stops and owned-process shutdown while a reader retains its remote root. Unix fixtures require
 `/usr/sbin/sshd` and `ssh-keygen`; macOS requires noninteractive sudo for the isolated server. An
 interrupted upload may leave a hidden temporary file; the original stays intact and retry is
-explicit. Automatic remote orphan cleanup is not claimed.
+explicit. Automatic remote orphan cleanup is not claimed. The TCP proxy and tunnel-echo fixtures
+explicitly restore blocking mode on accepted connections, retaining read timeouts so macOS
+nonblocking inheritance cannot cause premature EOF.
 
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY` drives the
 public Core client against a real service. Windows AMD64/macOS ARM64 reports pass at source
@@ -1379,7 +1381,9 @@ listing/preview, remote-terminal and actual quit/reopen scenes in the isolated r
 retaining existing ownership/recovery checks. The terminal must be the visible panel selected by the
 shared snapshot. It waits for a running attachment before reading the host endpoint and confirming
 SSH host/connection identity. Reopening verifies the same session, generation, host PID and replay.
-Output from a hidden local terminal cannot satisfy remote acceptance.
+Output from a hidden local terminal cannot satisfy remote acceptance. The ownership fixture creates
+its terminal through the enabled, visible project-home action after runtime readiness, avoiding
+closed sidebar popovers.
 
 SSH-output captures exercise the application's shipped fallback through actual WebGL context loss.
 They require a visible DOM-rendered row containing the remote result, then wait for painting.

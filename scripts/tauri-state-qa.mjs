@@ -130,6 +130,7 @@ const scenes = [];
 const profileLinks = [];
 let child;
 const inputControlChildren = [];
+const sshApplications = [];
 let binary;
 let successful = false;
 let previewServer;
@@ -447,6 +448,18 @@ try {
       exitSignal = signal;
       closed = true;
     });
+    const sshPhase = phase === "ssh" || phase === "ssh-reopen";
+    let closedAtPhaseEnd;
+    const processState = () => ({
+      ...metadata,
+      phase,
+      mainExited,
+      exitCode: code,
+      closed,
+      closedAtPhaseEnd,
+      signal: exitSignal,
+    });
+    if (sshPhase) sshApplications.push({ phase, application: child, state: processState });
     const observed = new Set();
     try {
       const deadline = Date.now() + 180000;
@@ -795,7 +808,9 @@ try {
             assert(child.kill("SIGKILL"), "Checkpoint process could not be forcibly terminated");
           }
         }
-        if (closed) {
+        // A retained SSH host can inherit logging pipes after the app exits.
+        // 保留的 SSH 宿主可在应用退出后继续持有日志管道。
+        if (sshPhase ? mainExited : closed) {
           writeFileSync(
             join(output, `${phase}-process.json`),
             JSON.stringify(
@@ -818,7 +833,7 @@ try {
         await delay(100);
       }
       assert(
-        closed,
+        sshPhase ? mainExited : closed,
         `${phase} did not finish ordinary exit: mainExited=${mainExited}, code=${code}, log=${log.slice(-1000)}`,
       );
       const expected =
@@ -846,14 +861,8 @@ try {
         await writerExited;
       }
       writeFileSync(join(output, `${phase}.log`), log);
-      writeFileSync(
-        join(output, `${phase}-process.json`),
-        JSON.stringify(
-          { ...metadata, phase, mainExited, exitCode: code, closed, signal: exitSignal },
-          null,
-          2,
-        ),
-      );
+      closedAtPhaseEnd = closed;
+      writeFileSync(join(output, `${phase}-process.json`), JSON.stringify(processState(), null, 2));
     }
   }
   await run("editor-checkpoint");
@@ -940,6 +949,47 @@ try {
     writeFileSync(join(output, "cleanup.log"), `${cleanup.stdout ?? ""}\n${cleanup.stderr ?? ""}`);
     if (cleanup.status !== 0)
       cleanupErrors.push("Private idle host cleanup failed; see cleanup.log");
+  }
+  // Require natural pipe closure after the owned host is stopped; do not hide orphaned writers.
+  // 所属宿主停止后必须自然关闭管道，不能掩盖遗留写入进程。
+  for (const item of sshApplications) {
+    const deadline = Date.now() + 10000;
+    while (!item.state().closed && Date.now() < deadline) await delay(100);
+    const state = item.state();
+    writeFileSync(
+      join(output, `${item.phase}-process.json`),
+      JSON.stringify({ ...state, stdioClosedAfterHostCleanup: state.closed }, null, 2),
+    );
+    if (!state.closed) {
+      cleanupErrors.push(`${item.phase} logging pipes remained open after owned-host cleanup`);
+      if (process.platform === "win32") {
+        const roots = [
+          ...sshApplications.map((value) => value.application.pid),
+          ...scenes
+            .filter((value) => value.scenario === "ssh-terminal")
+            .map((value) => value.checks.hostPID),
+        ].filter(Number.isSafeInteger);
+        const diagnostics = spawnSync(
+          "powershell.exe",
+          [
+            "-NoProfile",
+            "-Command",
+            `$records=@(Get-CimInstance Win32_Process); $owned=@(${roots.join(",")}); do { $previous=$owned.Count; $found=@($records | Where-Object { $_.ProcessId -in $owned -or $_.ParentProcessId -in $owned }); $owned=@($owned + $found.ProcessId | Select-Object -Unique) } while ($owned.Count -gt $previous); $found | Select-Object ProcessId,ParentProcessId,Name,SessionId | ConvertTo-Json`,
+          ],
+          { encoding: "utf8", timeout: 10000 },
+        );
+        writeFileSync(
+          join(output, `${item.phase}-process-tree.json`),
+          JSON.stringify(
+            { roots, stdout: diagnostics.stdout, stderr: diagnostics.stderr },
+            null,
+            2,
+          ),
+        );
+      }
+      item.application.stdout.destroy();
+      item.application.stderr.destroy();
+    }
   }
   for (const link of profileLinks.reverse()) {
     try {
