@@ -17,12 +17,16 @@ import { tmpdir, homedir, platform, arch, release, version } from "node:os";
 import { resolve, join, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { createInterface } from "node:readline";
+import { createServer } from "node:http";
 import assert from "node:assert/strict";
 
 const editorFixture = JSON.parse(
   readFileSync(resolve("shared/fixtures/editor-draft-qa.json"), "utf8"),
 );
 const gitQA = JSON.parse(readFileSync(resolve("shared/fixtures/git-qa.json"), "utf8"));
+const previewQA = JSON.parse(
+  readFileSync(resolve("shared/fixtures/content-preview-qa.json"), "utf8"),
+);
 const identifier = "sh.uterm.desktop.qa.sharedstate";
 const output = resolve("ci-evidence/tauri-state-qa");
 rmSync(output, { recursive: true, force: true });
@@ -121,7 +125,54 @@ let child;
 const inputControlChildren = [];
 let binary;
 let successful = false;
+let previewServer;
+let previewObserverStarted = false;
+const previewRequests = [];
 try {
+  previewServer = createServer((request, response) => {
+    previewRequests.push(request.url);
+    response.writeHead(200, { "Content-Type": "text/plain" }).end("forbidden preview fixture");
+  });
+  await new Promise((done, reject) => {
+    previewServer.once("error", reject);
+    previewServer.listen(0, "127.0.0.1", done);
+  });
+  previewObserverStarted = true;
+  const previewURL = `http://127.0.0.1:${previewServer.address().port}/forbidden`;
+  for (const value of [previewQA.htmlText, previewQA.pdfText, previewQA.escapeMessage])
+    assert.match(value, /^[A-Z_]+$/);
+  writeFileSync(
+    join(root, "project", previewQA.htmlFile),
+    `<!doctype html><html><head>
+<style>body { background: #eef7ee; color: #172b17; padding: 24px; } .external { background-image: url(${previewURL}); }</style>
+<link rel="stylesheet" href="${previewURL}"></head><body><h1>${previewQA.htmlText}</h1>
+<p>Static preview in the actual isolated application.</p><div class="external">External resources must stay blocked.</div>
+<script>parent.postMessage('${previewQA.escapeMessage}', '*')</script>
+<iframe src="${previewURL}"></iframe><img src="${previewURL}" onerror="parent.postMessage('${previewQA.escapeMessage}', '*')">
+</body></html>`,
+  );
+  const stream = `BT /F1 24 Tf 32 140 Td (${previewQA.pdfText}) Tj ET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 480 240] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xref = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${offsets.length}\n0000000000 65535 f \n`;
+  pdf += offsets
+    .slice(1)
+    .map((offset) => `${String(offset).padStart(10, "0")} 00000 n \n`)
+    .join("");
+  pdf += `trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  writeFileSync(join(root, "project", previewQA.pdfFile), pdf);
   function isolate(path, target) {
     try {
       lstatSync(path);
@@ -398,6 +449,23 @@ try {
           const value = JSON.parse(readFileSync(join(evidence, file), "utf8"));
           assert.equal(value.context.head, head);
           assert.equal(value.context.tested, tested);
+          if (value.scene.startsWith("preview-")) {
+            assert.deepEqual(
+              previewRequests,
+              [],
+              "Preview requested a forbidden loopback resource",
+            );
+            if (value.scene === "preview-html") {
+              assert.equal(value.checks.activeContentRemoved, true);
+              assert.equal(value.checks.opaqueDocumentAccessRejected, true);
+              assert.equal(value.checks.escapedMessages, 0);
+              assert.equal(value.checks.sandbox, "");
+            } else if (value.scene === "preview-pdf") {
+              assert.equal(value.checks.actualPDFCanvas, true);
+              assert.equal(value.checks.readonly, true);
+              assert(value.checks.darkPixels > 8);
+            }
+          }
           const screenshot = file.replace(/\.json$/, ".png");
           capture(join(output, screenshot));
           copyFileSync(join(evidence, file), join(output, file));
@@ -734,7 +802,7 @@ try {
           : phase === "editor-checkpoint"
             ? 3
             : phase.startsWith("editor-")
-              ? 2
+              ? 5
               : phase === "initial"
                 ? 8
                 : phase === "reopen"
@@ -753,6 +821,8 @@ try {
   }
   await run("editor-checkpoint");
   await run("editor-reopen");
+  assert.equal(readFileSync(join(root, "project", previewQA.pdfFile), "utf8"), pdf);
+  assert.deepEqual(previewRequests, []);
   assert.equal(
     readFileSync(join(root, "project", editorFixture.fileName), "utf8"),
     "\ufeff" + editorFixture.savedText,
@@ -797,6 +867,15 @@ try {
   successful = true;
 } finally {
   const cleanupErrors = [];
+  if (previewServer?.listening) {
+    previewServer.closeAllConnections();
+    await new Promise((done) =>
+      previewServer.close((error) => {
+        if (error) cleanupErrors.push(String(error));
+        done();
+      }),
+    );
+  }
   for (const application of inputControlChildren) {
     if (application.exitCode === null && application.signalCode === null) {
       application.kill();
@@ -839,6 +918,20 @@ try {
     }
   }
   successful &&= cleanupErrors.length === 0;
+  writeFileSync(
+    join(output, "preview-resource-isolation.json"),
+    JSON.stringify(
+      {
+        ...metadata,
+        passed: successful && previewRequests.length === 0,
+        actualLoopbackHTTPObserver: previewObserverStarted,
+        forbiddenRequests: previewRequests,
+        resourceServerClosed: !previewServer?.listening,
+      },
+      null,
+      2,
+    ),
+  );
   writeFileSync(
     join(output, "report.json"),
     JSON.stringify({ passed: successful, ...metadata, scenes, cleanupErrors }, null, 2),

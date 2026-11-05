@@ -1442,9 +1442,12 @@ completion, errors and cancellation.
   strings. `ssh-configuration-core.json` records the actual source/merge and confirms no remote
   login, stored snapshot or host startup. Linux passed five Rust configuration tests, the Core
   report test, 11 SSH backend checks, all Core/FFI/host checks, 408 frontend checks (ten skipped),
-  83 backend checks (nine ignored), types and production/desktop builds. The generated Swift/C ABI
-  test and affected-platform reports still need their own CI results; these checks do not accept an
-  authenticated service or native connection UI.
+  83 backend checks (nine ignored), types and production/desktop builds. Source
+  `8491bae96401829e5cc5c3420d5aaccb58494356` / tested merge
+  `f25eef9b077d0b9be88ed35f311db52868d17f88` has passed the configuration report on native Mac
+  ARM/Intel and Tauri Windows/macOS, dirty=false; both native Swift/C ABI checks passed. Reports and
+  logs are retained in Issue #36. This accepts the configuration subset, not an authenticated
+  service or native connection UI.
 
 - Windows automated checks: 17 focused frontend tests pass, including quick-address validation,
   temporary connection cleanup/promotion, host filtering, jump/rule persistence, Redis profile
@@ -1837,9 +1840,21 @@ earlier failed PDF image and canvas-allocation check are excluded from acceptanc
 
 The smoke also reloads a real document, rejects its previous identity and closes files through the
 native menu using the same window registration as the file picker. A read-only window can close when
-its Web content is still loading or fails. Those added lifecycle checks await fresh native CI; they
-do not establish human focus or writable-draft acceptance. Window appearance effects also remain
-behind the platform adapter rather than Tauri-specific calls in the shared settings view.
+its Web content is still loading or fails. Those lifecycle checks passed both native architectures
+at source `8491bae96401829e5cc5c3420d5aaccb58494356` / tested merge
+`f25eef9b077d0b9be88ed35f311db52868d17f88`, including all 19 content-report assertions. They do not
+establish human focus or writable-draft acceptance. Window appearance effects also remain behind the
+platform adapter rather than Tauri-specific calls in the shared settings view.
+
+`pnpm qa:shared-state` also opens temporary HTML/PDF through the actual file tree, checks the opaque
+script-free preview, paints a real PDF canvas, closes both previews and restores the original
+editor. An owned loopback HTTP observer confirms forbidden image/style/frame requests stay absent;
+the PDF bytes remain unchanged. `preview-resource-isolation.json` records the observer and its
+cleanup, while three `editor-reopen-preview-*.png` captures show the real app.
+
+The Linux working tree passed all 53 application scenes (dirty=true, cleanupErrors=[]), 12 focused
+HTML/PDF/transport checks and types; HTML/PDF captures were inspected. This added UI scope still
+requires its own source-bound Windows/macOS CI reports and screenshots.
 
 Linux protocol checks cover reordered/mismatched replies, timeout/abort/unload, late subscriptions,
 bounds and the JavaScript WebKit adapter. Actual Rust/Git processes pause a real checkout hook and

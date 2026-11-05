@@ -1,5 +1,6 @@
 import editorFixtureJSON from "../../shared/fixtures/editor-draft-qa.json?raw";
 import gitFixtureJSON from "../../shared/fixtures/git-qa.json?raw";
+import previewFixtureJSON from "../../shared/fixtures/content-preview-qa.json?raw";
 import { invoke } from "@tauri-apps/api/core";
 import { coreRequest } from "../lib/shared-state";
 import { defaults, settingsKey } from "../lib/settings";
@@ -42,6 +43,13 @@ const editorFixture = JSON.parse(editorFixtureJSON) as {
 };
 const editorFile = editorFixture.fileName;
 const gitQA = JSON.parse(gitFixtureJSON) as { fileName: string; worktreeName: string };
+const previewQA = JSON.parse(previewFixtureJSON) as {
+  htmlFile: string;
+  pdfFile: string;
+  htmlText: string;
+  pdfText: string;
+  escapeMessage: string;
+};
 const oldEditorText = editorFixture.oldText;
 const durableEditorText = editorFixture.durableText;
 const savedEditorText = editorFixture.savedText;
@@ -289,7 +297,152 @@ async function runEditor(context: Context) {
     draftCleared: true,
     frozenOldSource: true,
   });
+  await runPreviews(context);
   await invoke("qa_request_exit");
+}
+
+async function runPreviews(context: Context) {
+  let escapedMessages = 0;
+  const receive = (event: MessageEvent) => {
+    if (event.data === previewQA.escapeMessage) escapedMessages++;
+  };
+  window.addEventListener("message", receive);
+  try {
+    const files = await until(
+      () => document.querySelector<HTMLButtonElement>('.inspector-switcher button[title="Files"]'),
+      "actual Files entry",
+    );
+    files.click();
+    async function open(path: string) {
+      const row = await until(
+        () =>
+          [...document.querySelectorAll<HTMLButtonElement>(".file-row")].find(
+            (button) => button.dataset.path === path,
+          ),
+        `actual file tree row ${path}`,
+      );
+      row.click();
+    }
+    async function close(path: string) {
+      const button = await until(
+        () =>
+          [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+            (button) => button.getAttribute("aria-label") === `Close file ${path}`,
+          ),
+        `actual close file button ${path}`,
+      );
+      button.click();
+      await until(() => !button.isConnected, `closed preview tab ${path}`);
+    }
+    await open(previewQA.htmlFile);
+    const frame = await until(
+      () => document.querySelector<HTMLIFrameElement>("iframe.html-preview"),
+      "actual sandboxed HTML preview",
+    );
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(Error("HTML preview load timed out")), 10000);
+      frame.addEventListener(
+        "load",
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true },
+      );
+      frame.srcdoc = frame.srcdoc;
+    });
+    const html = new DOMParser().parseFromString(frame.srcdoc, "text/html");
+    assert(
+      html.body.textContent?.includes(previewQA.htmlText),
+      "Preview lost allowed static content",
+    );
+    assert(
+      !html.querySelector("script,iframe,object,embed,link,[onerror],[onload]"),
+      "Preview retained active content",
+    );
+    const policy =
+      html.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute("content") ??
+      "";
+    assert(
+      policy.includes("default-src 'none'") && policy.includes("img-src data:"),
+      "Preview lost its resource policy",
+    );
+    assert(
+      frame.hasAttribute("sandbox") && frame.sandbox.length === 0,
+      "Preview gained sandbox capabilities",
+    );
+    let opaqueDocumentAccessRejected = false;
+    try {
+      void frame.contentWindow!.document;
+    } catch (reason) {
+      opaqueDocumentAccessRejected = (reason as DOMException).name === "SecurityError";
+    }
+    assert(
+      opaqueDocumentAccessRejected && escapedMessages === 0,
+      "Untrusted preview crossed its origin boundary",
+    );
+    const bounds = frame.getBoundingClientRect();
+    assert(bounds.width > 0 && bounds.height > 0, "HTML preview is not visible");
+    await scene("preview-html", {
+      actualFileTree: true,
+      staticContentRetained: true,
+      activeContentRemoved: true,
+      opaqueDocumentAccessRejected,
+      escapedMessages,
+      sandbox: frame.getAttribute("sandbox"),
+      policy,
+      width: bounds.width,
+      height: bounds.height,
+    });
+    await close(previewQA.htmlFile);
+    await open(previewQA.pdfFile);
+    await click("Zoom out");
+    await click("Zoom out");
+    const rendered = await until(() => {
+      const canvas = document.querySelector<HTMLCanvasElement>(
+        '.pdf-page canvas[data-rendered="true"]',
+      );
+      if (!canvas || !canvas.width || !canvas.height) return null;
+      const pixels = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
+      let darkPixels = 0;
+      for (let i = 0; i < pixels.length; i += 4)
+        if (pixels[i + 3] === 255 && pixels[i] < 200 && pixels[i + 1] < 200 && pixels[i + 2] < 200)
+          darkPixels++;
+      return darkPixels > 8 && { width: canvas.width, height: canvas.height, darkPixels };
+    }, "actual PDF canvas paints the fixture page");
+    const pdf = (await coreRequest("files.read", {
+      directory: context.project,
+      path: previewQA.pdfFile,
+    })) as unknown as CoreFileDocument;
+    assert(pdf.kind === "pdf" && pdf.readonly, "PDF lost its read-only file boundary");
+    await scene("preview-pdf", {
+      actualFileTree: true,
+      actualPDFCanvas: true,
+      readonly: pdf.readonly,
+      ...rendered,
+    });
+    await close(previewQA.pdfFile);
+    await open(editorFile);
+    await until(
+      () =>
+        document
+          .querySelector<HTMLElement>(".cm-content")
+          ?.innerText.includes(savedEditorText.split("\r")[0]),
+      "return to the original saved editor",
+    );
+    assert(
+      !document.querySelector("iframe.html-preview,.pdf-reader"),
+      "Closed previews retained their view",
+    );
+    assert(escapedMessages === 0, "Late preview script execution reached the app");
+    await scene("preview-returned-editor", {
+      originalEditorRestored: true,
+      previewViewsReleased: true,
+      escapedMessages,
+    });
+  } finally {
+    window.removeEventListener("message", receive);
+  }
 }
 
 async function runGit(context: Context) {

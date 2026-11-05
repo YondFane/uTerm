@@ -854,7 +854,10 @@ ACL。冲突检查采用乐观校验，不能阻止其他服务端程序并发�
 
 - Linux 共享配置检查使用临时配置执行真实 OpenSSH 解析，覆盖代理／转发元数据、身份变化及无效配置错误。Rust 测试覆盖过大文件、Include 循环／深度／文件数限制及客户端运行时共存。真实 Core／TypeScript 请求拒绝秘密字段且不回显值，保留端口字符串。`ssh-configuration-core.json`
   记录实际 source／merge，确认没有远程登录、保存快照或启动宿主。Linux 的五项 Rust 配置测试、Core 报告测试、11 项 SSH 后端专项、全部 Core／FFI／宿主检查、408 项前端检查（十项跳过）、83 项后端检查（九项忽略）、类型及生产／桌面构建通过。生成的 Swift／C
-  ABI 测试及受影响平台报告仍待各自 CI；这些检查不代表已认证服务或原生连接 UI 验收。
+  ABI 检查已在 source `8491bae96401829e5cc5c3420d5aaccb58494356`／tested merge
+  `f25eef9b077d0b9be88ed35f311db52868d17f88` 的两原生架构通过；同 source 的原生 Mac
+  ARM／Intel 和 Tauri
+  Windows／macOS 四份配置报告通过、dirty=false，报告及日志保存在 #36。这只接受配置子范围，不代表已认证服务或原生连接 UI 验收。
 
 - Windows 自动化检查：17 项前端专项测试通过，覆盖快速地址校验、临时连接清理／保存、主机筛选、跳板机与规则存储、Redis 配置引用、转发保存失败与显式启停，以及既有 SSH／SFTP 保护。全部 102 项常规后端测试和 26 项本地服务测试通过；六项可选后端测试仍忽略。进程模拟覆盖监听就绪、启动退出、超时、取消与清理，不代表真实 SSH 转发连接验收。
 
@@ -1075,8 +1078,17 @@ PDF 图，页面正常显示预期文字且无错误。报告及图片见
 [ARM](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13135332912) 和
 [Intel](https://github.com/YondFane/uTerm/actions/runs/41432663064/artifacts/13136295927)；早先失败 PDF 图及仅创建画布的检查不计为验收通过。
 
-smoke 还新增真实文档重载、拒绝旧文档身份、通过原生菜单关闭文件，使用与文件选择器相同的窗口登记；只读窗口在 Web 内容加载中或失效时也能关闭。这些新增生命周期检查仍待新原生 CI，不代表人工焦点或可写草稿验收。窗口外观效果也通过平台适配调用，共用设置视图不直接调用 Tauri
+smoke 还检查真实文档重载、拒绝旧文档身份、通过原生菜单关闭文件，使用与文件选择器相同的窗口登记；只读窗口在 Web 内容加载中或失效时也能关闭。这些生命周期检查已在 source
+`8491bae96401829e5cc5c3420d5aaccb58494356`／tested merge `f25eef9b077d0b9be88ed35f311db52868d17f88`
+的两原生架构通过，含全部 19 项内容报告断言；不代表人工焦点或可写草稿验收。窗口外观效果也通过平台适配调用，共用设置视图不直接调用 Tauri
 API。
+
+`pnpm qa:shared-state`
+也通过实际文件树打开临时 HTML／PDF，检查不运行脚本的隔离预览，绘制实际 PDF 画布，关闭两份预览并恢复原编辑器。自有回环 HTTP 观察器确认被禁止的图片／样式／框架请求始终为零，PDF 字节保持不变。`preview-resource-isolation.json`
+记录观察器及其清理，三张 `editor-reopen-preview-*.png` 展示真实应用。
+
+Linux 工作树通过全部 53 个应用场景（dirty=true、cleanupErrors=[]）、12 项 HTML／PDF／transport 专项和类型检查；已目视检查 HTML／PDF 截图。这个新增 UI 子范围仍需各自源码对应的 Windows／macOS
+CI 报告和截图。
 
 Linux 协议检查覆盖乱序／错配响应、超时／取消／卸载、迟到订阅、上限及 JavaScript
 WebKit 适配。真实 Rust／Git 进程暂停实际 checkout
