@@ -55,6 +55,14 @@ fn target(connection: &SshTarget, effective: &super::EffectiveSsh) -> String {
     )
 }
 impl SshAuth {
+    pub fn clear(&self) {
+        if let Ok(mut pending) = self.pending.lock() {
+            pending.clear();
+        }
+        if let Ok(mut temporary) = self.temporary.lock() {
+            temporary.clear();
+        }
+    }
     async fn load(
         &self,
         credentials: Arc<dyn Credentials>,

@@ -97,6 +97,7 @@ pub struct Core {
     links: Arc<terminal::Links>,
     terminal_sink: Mutex<Option<terminal::Sink>>,
     control: Mutex<Option<Arc<utermd_local::control::Control>>>,
+    ssh: Mutex<Option<Arc<ssh::service::Service>>>,
 }
 impl Core {
     pub fn open(root: PathBuf) -> Result<Self> {
@@ -106,6 +107,7 @@ impl Core {
             links: Arc::new(terminal::Links::default()),
             terminal_sink: Mutex::new(None),
             control: Mutex::new(None),
+            ssh: Mutex::new(None),
         })
     }
     pub fn set_terminal_sink(&self, sink: terminal::Sink) -> Result<()> {
@@ -117,6 +119,11 @@ impl Core {
         Ok(())
     }
     pub fn close(&self) {
+        if let Ok(mut ssh) = self.ssh.lock() {
+            if let Some(service) = ssh.take() {
+                service.close();
+            }
+        }
         self.links.shutdown();
         if let Ok(mut control) = self.control.lock() {
             control.take();
@@ -358,6 +365,7 @@ impl Core {
                 })?;
                 service_json(resolved)
             }
+            method if method.starts_with("ssh.") => self.ssh_request(method, params),
             "control.start" => {
                 let mut state = self
                     .control
@@ -656,11 +664,15 @@ impl Core {
             method if method.starts_with("java.") => self.java_request(method, &params),
             method if method.starts_with("python.") => self.python_request(method, &params),
             "terminal.open" => {
-                if params.get("ssh").is_some() {
-                    return Err(CoreError::new(
-                        "UNSUPPORTED",
-                        "Remote terminals require SSH service adoption",
-                    ));
+                let ssh: Option<utermd_local::ssh::SshTarget> = params
+                    .get("ssh")
+                    .filter(|v| !v.is_null())
+                    .map(|v| serde_json::from_value(v.clone()))
+                    .transpose()?;
+                if let Some(target) = &ssh {
+                    target
+                        .validate()
+                        .map_err(|e| CoreError::new("SSH_INVALID_CONNECTION", e.to_string()))?;
                 }
                 use utermd_local::daemon::{Operation, SessionSpec};
                 let attachment = string(&params, "attachment")?;
@@ -693,7 +705,7 @@ impl Core {
                     directory,
                     shell,
                     agent,
-                    ssh: None,
+                    ssh,
                 };
                 if params["reconnectOnly"] == true {
                     match client
@@ -715,6 +727,26 @@ impl Core {
                         id: id.clone(),
                         rows,
                         cols,
+                    }
+                } else if spec.ssh.is_some() {
+                    client
+                        .require_ssh_support()
+                        .map_err(|e| host_error(e.to_string()))?;
+                    if spec.ssh.as_ref().is_some_and(|v| v.mode.is_some()) {
+                        client
+                            .require_ssh_config_support()
+                            .map_err(|e| host_error(e.to_string()))?;
+                    }
+                    if spec.ssh.as_ref().is_some_and(|v| v.jump_host.is_some()) {
+                        client
+                            .require_ssh_jump_support()
+                            .map_err(|e| host_error(e.to_string()))?;
+                    }
+                    Operation::OpenSsh {
+                        spec,
+                        rows,
+                        cols,
+                        create: false,
                     }
                 } else {
                     Operation::Open { spec, rows, cols }

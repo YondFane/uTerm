@@ -30,7 +30,7 @@ const TEXT_LIMIT: usize = 2 * 1024 * 1024;
 #[derive(Default)]
 pub struct SshFiles {
     roots: AsyncMutex<HashMap<String, Arc<RemoteFs>>>,
-    transfers: Mutex<HashMap<String, (uuid::Uuid, Arc<AtomicBool>)>>,
+    transfers: Arc<Mutex<HashMap<String, (uuid::Uuid, Arc<AtomicBool>)>>>,
     closing: AtomicBool,
 }
 struct Closing<'a>(&'a AtomicBool);
@@ -442,6 +442,13 @@ async fn remote(state: &SshFiles, root: &RemoteRoot) -> Result<Arc<RemoteFs>> {
     Ok(remote)
 }
 impl SshFiles {
+    pub(crate) async fn connected(&self, connection_id: &str) -> bool {
+        self.roots
+            .lock()
+            .await
+            .values()
+            .any(|v| v.root.connection.connection_id == connection_id)
+    }
     pub async fn contains(&self, root: &RemoteRoot) -> Result<bool> {
         root.validate()?;
         Ok(self.roots.lock().await.contains_key(&root.key()?))
@@ -737,15 +744,15 @@ pub struct TransferProgress {
     pub total: u64,
     pub state: String,
 }
-pub struct TransferGuard<'a> {
-    state: &'a SshFiles,
+pub struct TransferGuard {
+    registry: Arc<Mutex<HashMap<String, (uuid::Uuid, Arc<AtomicBool>)>>>,
     id: String,
     cancel: Arc<AtomicBool>,
     pub generation: uuid::Uuid,
 }
-impl Drop for TransferGuard<'_> {
+impl Drop for TransferGuard {
     fn drop(&mut self) {
-        if let Ok(mut tasks) = self.state.transfers.lock() {
+        if let Ok(mut tasks) = self.registry.lock() {
             if tasks
                 .get(&self.id)
                 .is_some_and(|(generation, _)| *generation == self.generation)
@@ -1046,7 +1053,7 @@ async fn local_version(path: PathBuf) -> Result<Option<String>> {
 }
 pub type Progress<'a> = dyn Fn(TransferProgress) -> Result<()> + Send + Sync + 'a;
 impl SshFiles {
-    pub fn begin_transfer(&self, id: &str) -> Result<TransferGuard<'_>> {
+    pub fn begin_transfer(&self, id: &str) -> Result<TransferGuard> {
         if uuid::Uuid::parse_str(id).is_err() {
             bail!("SSH_INVALID_ACTION");
         }
@@ -1062,7 +1069,7 @@ impl SshFiles {
         let generation = uuid::Uuid::new_v4();
         tasks.insert(id.to_owned(), (generation, cancel.clone()));
         Ok(TransferGuard {
-            state: self,
+            registry: self.transfers.clone(),
             id: id.to_owned(),
             cancel,
             generation,
@@ -1093,10 +1100,10 @@ impl SshFiles {
         direction: &str,
         paths: Vec<PathBuf>,
         overwrite: bool,
-        task: &TransferGuard<'_>,
+        task: &TransferGuard,
         events: &Progress<'_>,
     ) -> Result<()> {
-        if !std::ptr::eq(task.state, self) {
+        if !Arc::ptr_eq(&task.registry, &self.transfers) {
             bail!("SSH_INVALID_ACTION");
         }
         cancelled(&task.cancel)?;

@@ -37,6 +37,9 @@ UTermBuffer uterm_terminal_write(uint64_t handle, const uint8_t *attachment, siz
  * 不得在回调中同步调用、订阅或关闭；应排队至回调返回后执行。 */
 uint32_t uterm_close(uint64_t handle);
 uint32_t uterm_abi_version(void);
+/* Run before creating the UI; -1 means normal startup, otherwise exit with the returned status.
+ * 创建界面前调用；-1 表示正常启动，否则以返回状态退出。 */
+int32_t uterm_ssh_askpass(void);
 
 #ifdef __cplusplus
 }

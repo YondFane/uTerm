@@ -59,6 +59,10 @@ impl Proxy {
                 match listener.accept() {
                     Ok((mut incoming, _)) => {
                         let mut outgoing = TcpStream::connect(("127.0.0.1", destination)).unwrap();
+                        // macOS accepted sockets inherit the listener's nonblocking mode.
+                        // macOS 接受的套接字继承监听端的非阻塞模式。
+                        incoming.set_nonblocking(false).unwrap();
+                        outgoing.set_nonblocking(false).unwrap();
                         connections
                             .lock()
                             .unwrap()

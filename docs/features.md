@@ -1330,8 +1330,8 @@ configuration resolution and a real loopback askpass listener. They cover change
 remember-to-temporary conversion, forgetting, malformed storage, invalid passwords and
 proxy-password refusal. The platform-only test writes, reads and deletes a unique QA
 Keychain/Credential Manager reference; its Windows/macOS result is recorded separately by CI. These
-tests do not establish actual SSH login or native host-trust interaction. Native SSH UI adoption
-remains open in #36. Run them with
+tests do not establish actual SSH login or native host-trust interaction. Native entry points and
+outstanding checks are described below. Run them with
 `cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test ssh_auth`. Full
 host/Core/FFI, 73 backend checks (nine optional tests ignored), 410 frontend checks (ten optional
 tests skipped), contracts, TypeScript/production/desktop builds, format/docs and workflow checks
@@ -1350,16 +1350,58 @@ block so the client can continue.
 keys, known_hosts and a connection-cutting TCP proxy verify authenticated Unicode upload/download,
 cancelled and interrupted overwrite preservation, explicit reconnect/retry, pinned-host-key and host
 CA acceptance/rejection, two real tunnel echo routes and sibling/stale-stop protection. Unix tests
-require `/usr/sbin/sshd` and `ssh-keygen`. macOS also needs noninteractive sudo for Apple’s
-privileged session helper; cleanup targets only the isolated server’s recorded PID. Tests do not
+require `/usr/sbin/sshd` and `ssh-keygen`. macOS also needs noninteractive sudo to launch the
+isolated privileged server; cleanup targets only the isolated server’s recorded PID. Tests do not
 change the system SSH service or `~/.ssh`. CI saves `ssh-service-core.json` and test logs with
-source/merge SHAs. Local reports before a commit explicitly mark the source dirty. The initial macOS
-CI closed the unprivileged server connection before authentication; the corrected fixture awaits
-platform reruns. An Intel dependency fetch also failed DNS resolution; neither is counted as
-passing. These service cases do not run on Windows yet, and password login and native connection UI
-acceptance remain pending. A network interruption may leave a hidden remote upload temporary file;
-the original destination stays intact and retries are explicit. The test fixture cleans its own
-abandoned temporary data rather than claiming automatic remote cleanup.
+source/merge SHAs. Local reports before a commit explicitly mark the source dirty. macOS platform
+reruns remain pending. The test proxy now explicitly clears inherited nonblocking mode on accepted
+connections; earlier failures and an Intel dependency DNS failure remain recorded and are not
+counted as passing. These service cases do not run on Windows yet, and password login and native
+connection UI acceptance remain pending. A network interruption may leave a hidden remote upload
+temporary file; the original destination stays intact and retries are explicit. The test fixture
+cleans its own abandoned temporary data rather than claiming automatic remote cleanup.
+
+### Native SSH workspace
+
+In the isolated native QA app, **File → SSH connections…** opens the connection window; SSH sidebar
+rows open it too. Select a profile from the current workspace or add a host address/OpenSSH alias,
+port, username, authentication, remote system and file root. A blank alias port inherits system
+configuration. **Show effective configuration** resolves metadata without starting a login.
+
+**Save connection** before **New SSH terminal** or **Connect files**. Revision conflicts retain the
+form; failed profile storage attempts to remove a newly created credential reference and reports
+cleanup errors. Restoring an existing SSH terminal only reattaches; new terminals and splits are
+explicit login actions.
+
+The file area offers directory/hidden-entry browsing, read-only text preview, uploads, confirmed
+replacement, downloads and cancellation; download other preview types to open them. Window-close
+protection also covers local file selection. Background operations carry generations, rejecting
+stale cancel/stop requests. Transfer byte counts cross Rust/Swift/TypeScript as decimal strings to
+preserve u64 precision. Forwarding binds only to loopback; rules require explicit start and can be
+stopped independently.
+
+Passwords use temporary references in the current Core client or the QA app's own system-credential
+namespace. Closing/reopening the entire Core client expires temporary passwords. Password
+connections to unknown hosts use a real native fingerprint confirmation sheet; declining rejects the
+connection. Key/automatic authentication retains OpenSSH's strict known-host policy. Closing the SSH
+window or quitting resolves configuration drafts, transfers and forwarding while hosted SSH
+terminals remain running.
+
+#### Native SSH validation and limits
+
+Three Linux client-contract checks cover profile CAS, existing SSH sessions/dependencies, secrets
+excluded from snapshots/operation history, explicit resume after quit and counts above JavaScript's
+numeric precision. Single-use trust responses, pending/late prompt rejection on close, full
+Core/FFI, backend compilation and contract checks pass. The common
+`shared/contracts/ssh-progress-v1.json` defines JSON boundary checks for Rust, Swift and TypeScript.
+Rust and TypeScript pass on Linux; Swift execution awaits macOS CI.
+
+`bash scripts/macos-ssh-smoke.sh` uses an isolated app, temporary keys/known_hosts and a real SSH
+service for profile conflicts, SFTP transfers/cancellation, forwarding, remote terminal
+replay/detach/close and native host trust. It uploads `ssh-live.json`, logs and real window images.
+This new window still awaits macOS CI build/runtime validation; the existence of the script is not a
+passing result. Windows real-service, successful password-login and manual picker/IME acceptance
+remain pending. #36 stays open; no merge or release is claimed.
 
 ### Quick connections and host search
 

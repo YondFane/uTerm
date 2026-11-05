@@ -14,6 +14,10 @@ private final class EventSink: @unchecked Sendable {
 }
 
 public actor CoreBridge {
+    public static func runSSHAskpassIfRequested() -> Int32? {
+        let status = uterm_ssh_askpass()
+        return status < 0 ? nil : status
+    }
     private var handle: UInt64
     private let sink: EventSink
     private nonisolated let terminalSink: TerminalSink

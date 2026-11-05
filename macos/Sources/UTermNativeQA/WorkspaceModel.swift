@@ -36,6 +36,12 @@ final class WorkspaceModel: ObservableObject {
     var languageChanged: (() -> Void)?
     var appearanceChanged: ((String) -> Void)?
     var deleteWorktreeRequested: ((String, String) -> Void)?
+    var openSSHRequested: ((String?) -> Void)?
+    var prepareSSHTransportReconnect: (() async -> Bool)?
+    var sshTrustTask: Task<Void, Never>?
+    var sshTrustAlert: NSAlert?
+    var sshTrustID: String?
+    @Published var sshTrustPresented = false
     private var events: Task<Void, Never>?
     private var frames: Task<Void, Never>?
     private var failures: Task<Void, Never>?
@@ -94,6 +100,8 @@ final class WorkspaceModel: ObservableObject {
             let helper = resources.appendingPathComponent("bin/utermd-local")
             _ = try await bridge.call("host.configure", params: .object(["helper": .string(helper.path)]))
             helperReady = true
+            _ = try await bridge.call("ssh.configure", params: .object(["credentialService": .string((Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native") + ".ssh")]))
+            startSSHTrust(bridge)
             for session in terminals.values { session.rebind(bridge) }
             environment = try await bridge.call("host.environment")
             await reload()
@@ -238,6 +246,13 @@ final class WorkspaceModel: ObservableObject {
     func newTerminal(agent: String? = nil) async {
         let id = UUID().uuidString
         var values: [String: JSONValue] = ["id": .string(id), "name": .string(agent ?? localized("Terminal", "终端"))]
+        if agent == nil, let selected = sessionEntries.first(where: { $0.sessionID == selectedID }), let connection = selected.session["ssh"]["connection_id"].string {
+            values["sshConnectionId"] = .string(connection)
+            values["workspaceId"] = .string(selected.workspaceId)
+            if await mutate("ssh.session.create", values) { focusRevision += 1 }
+            else { let failure = error; await reload(); error = failure }
+            return
+        }
         if let agent { values["agent"] = .string(agent); values["projectId"] = .null }
         if await mutate("session.create", values) { focusRevision += 1 }
     }
@@ -247,10 +262,17 @@ final class WorkspaceModel: ObservableObject {
 
     func split(_ axis: String) async {
         guard let id = selectedID else { return }
+        let splitID = UUID().uuidString
         if await mutate("session.split", [
-            "anchor": .string(id), "id": .string(UUID().uuidString), "splitId": .string(UUID().uuidString),
+            "anchor": .string(id), "id": .string(splitID), "splitId": .string(UUID().uuidString),
             "axis": .string(axis), "name": .string(localized("Terminal", "终端"))
-        ]) { focusRevision += 1 }
+        ]) {
+            if let created = sessionEntries.first(where: { $0.sessionID == splitID }), created.session["ssh"] != .null {
+                do { _ = try await bridge?.call("ssh.session.start", params: .object(["id": .string(splitID)])); await reload() }
+                catch { self.error = error.localizedDescription }
+            }
+            focusRevision += 1
+        }
     }
 
     func closeSession() async {
@@ -337,6 +359,7 @@ final class WorkspaceModel: ObservableObject {
     func shutdown() async {
         if let operation { _ = await operation.value }
         shuttingDown = true
+        stopSSHTrust()
         await stopControl()
         for terminal in terminals.values { terminal.cancelConnection() }
         for terminal in terminals.values { await terminal.drainInput() }
@@ -350,6 +373,8 @@ final class WorkspaceModel: ObservableObject {
     func reconnectTransport() async {
         if let operation { _ = await operation.value }
         guard !shuttingDown else { return }
+        if let prepareSSHTransportReconnect, !(await prepareSSHTransportReconnect()) { return }
+        stopSSHTrust()
         busy = true
         defer { busy = false }
         await stopControl()

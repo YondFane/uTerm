@@ -107,6 +107,8 @@ jobs:
         run: bash scripts/macos-java-smoke.sh
       - name: Real native Python configuration, output and task lifetime
         run: bash scripts/macos-python-smoke.sh
+      - name: Real native SSH, SFTP, transfer and host-trust workflows
+        run: bash scripts/macos-ssh-smoke.sh
       - name: Real native Git, Worktree and open-editor protection
         run: bash scripts/macos-git-smoke.sh
       - name: Real native control and standalone CLI smoke

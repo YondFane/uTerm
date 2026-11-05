@@ -373,11 +373,32 @@ export interface CoreSshInfo {
   available: boolean;
 }
 
+export interface CoreSshOperation {
+  error?: string | null;
+  generation: string;
+  id: string;
+  kind: string;
+  progress?: CoreSshProgress | null;
+  result?: JSONValue;
+  state: string;
+}
+
+export interface CoreSshProgress {
+  completed: string;
+  name: string;
+  total: string;
+}
+
 export interface CoreSshResolution {
   hostname: string;
   port: string;
   proxy: boolean;
   username: string;
+}
+
+export interface CoreSshTrustPrompt {
+  id: string;
+  message: string;
 }
 
 export interface CoreTerminalHeader {

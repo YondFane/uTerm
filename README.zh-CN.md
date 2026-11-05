@@ -170,7 +170,8 @@ Python 服务及原始任务输出通道。在 macOS 图形会话运行
 3，不安装 Python 或依赖包；实际平台执行结果单独记录于功能指南。
 
 `uterm-core::ssh`
-管理 OpenSSH 配置／路径规则、凭据绑定／系统适配、SFTP／传输服务及所属隧道生命周期。Tauri 委派相同服务，保留命令、选择器和信任提示；原生 SSH 入口仍待完成。
+管理 OpenSSH 配置／路径规则、凭据绑定／系统适配、SFTP／传输服务及所属隧道生命周期。Tauri 委派相同服务，保留命令、选择器和信任提示；隔离原生应用通过**文件 →
+SSH 连接…**提供配置、远程终端、SFTP 和转发；新增原生／平台验收单独跟踪。
 `cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture`
 包含 Unix 已认证服务测试，需要 `/usr/sbin/sshd` 与
 `ssh-keygen`；使用临时密钥、known_hosts 和数据，不修改 `~/.ssh` 或系统 SSH 服务。Core CI 产物包含

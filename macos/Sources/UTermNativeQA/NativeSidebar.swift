@@ -67,6 +67,11 @@ struct NativeSidebar: NSViewRepresentable {
                     next.append(Row(key: "w:" + (tree["id"].string ?? ""), name: (tree["name"].string ?? "") + suffix, symbol: "arrow.triangle.branch", projectID: id, worktreeID: tree["id"].string))
                 }
             }
+            let connections = model.groups.first { $0["id"].string == model.groupID }?["sshConnections"].array ?? []
+            if !connections.isEmpty {
+                next.append(Row(key: "ssh", name: localized("SSH connections", "SSH 连接"), symbol: nil))
+                next += connections.map { Row(key: "q:" + ($0["id"].string ?? ""), name: $0["name"].string ?? "SSH", symbol: "network") }
+            }
             next += [Row(key: "sessions", name: localized("Sessions", "会话"), symbol: nil)]
                 + model.sessionEntries.map { Row(key: "s:" + $0.sessionID, name: $0.session["name"].string ?? "", symbol: $0.session["agent"].string == nil ? "terminal" : "sparkle") }
             updating = true
@@ -157,7 +162,8 @@ struct NativeSidebar: NSViewRepresentable {
                 guard let self, let model, self.request == token else { return }
                 Task { @MainActor in
                     let id = String(row.key.dropFirst(2))
-                    if row.key.hasPrefix("s:") { await model.selectSession(id, focus: focus) }
+                    if row.key.hasPrefix("q:") { model.openSSHRequested?(id) }
+                    else if row.key.hasPrefix("s:") { await model.selectSession(id, focus: focus) }
                     else if let project = row.projectID, let tree = row.worktreeID { await model.selectProject(project, worktree: tree, focus: focus) }
                     else { await model.selectProject(id, focus: focus) }
                     if self.request == token { self.pending = false; self.update(model) }

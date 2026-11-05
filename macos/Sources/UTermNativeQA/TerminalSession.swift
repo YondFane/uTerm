@@ -95,7 +95,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
                 if let agent = self.entry.session["agent"].string { params["agent"] = .string(agent) }
                 if self.taskGeneration != nil { params["taskOnly"] = .bool(true) }
                 if self.entry.session["ssh"] != .null {
-                    throw BridgeFailure(code: "UNSUPPORTED", message: localized("SSH service adoption is pending.", "SSH 服务接入尚待完成。"))
+                    params["ssh"] = self.entry.session["ssh"]
                 }
                 let result = try await self.bridge.call("terminal.open", params: .object(params))
                 guard self.attachment == token else { return }

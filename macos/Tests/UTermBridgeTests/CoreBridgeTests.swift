@@ -3,6 +3,21 @@ import XCTest
 @testable import UTermBridge
 
 final class CoreBridgeTests: XCTestCase {
+    func testSSHProgressKeepsExactUnsignedCounts() throws {
+        var root = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { root.deleteLastPathComponent() }
+        let fixture = try JSONSerialization.jsonObject(with: Data(contentsOf: root.appendingPathComponent("shared/contracts/ssh-progress-v1.json"))) as? [String: Any]
+        let values = try XCTUnwrap(fixture?["progress"] as? [[String: String]])
+        XCTAssertEqual(values.map { $0["completed"] ?? "" }, ["9007199254740993", "18446744073709551615"])
+        for row in values {
+            let value = try JSONDecoder().decode(CoreSshProgress.self, from: JSONSerialization.data(withJSONObject: row))
+            XCTAssertEqual(String(try XCTUnwrap(UInt64(value.completed))), row["completed"])
+            XCTAssertEqual(UInt64(value.total), UInt64.max)
+            let encoded = try JSONSerialization.jsonObject(with: JSONEncoder().encode(value)) as? [String: String]
+            XCTAssertEqual(encoded, row)
+        }
+    }
+
     func testSharedSSHConfigurationContractsThroughCABI() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

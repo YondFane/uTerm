@@ -215,8 +215,18 @@ pub fn transition(w: &mut Value, settings: &Value, method: &str, p: &Value) -> R
             let name = string(p, "name")?;
             let agent = p.get("agent").cloned().unwrap_or(Value::Null);
             enabled(settings, &agent)?;
-            let project = p.get("projectId").unwrap_or(&w["selectedProject"]).as_str();
-            let target = if let Some(project) = project {
+            let ssh = p["sshConnectionId"].as_str();
+            let project = if ssh.is_some() {
+                None
+            } else {
+                p.get("projectId").unwrap_or(&w["selectedProject"]).as_str()
+            };
+            let target = if let Some(connection) = ssh {
+                rosters(w).into_iter().find(|r| {
+                    r.id == format!("ssh:{connection}")
+                        && p.get("workspaceId").unwrap_or(&w["selectedWorkspace"]) == &r.workspace
+                })
+            } else if let Some(project) = project {
                 rosters(w)
                     .into_iter()
                     .find(|r| r.project.as_deref() == Some(project))
@@ -232,6 +242,30 @@ pub fn transition(w: &mut Value, settings: &Value, method: &str, p: &Value) -> R
             .ok_or_else(|| CoreError::new("INVALID_WORKSPACE", "Session roster does not exist"))?;
             let mut session =
                 json!({"id":id,"name":name,"shell":settings["defaultShell"],"pinned":false});
+            if let Some(connection) = ssh {
+                if !agent.is_null() {
+                    return Err(CoreError::new(
+                        "SSH_INVALID_CONNECTION",
+                        "SSH Agent sessions are unsupported",
+                    ));
+                }
+                let group = w["groups"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|g| g["id"] == target.workspace)
+                    .unwrap();
+                let profile = group["sshConnections"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|v| v["id"] == connection)
+                    .unwrap();
+                session["ssh"] = serde_json::to_value(crate::ssh::profiles::target(
+                    &target.workspace,
+                    profile,
+                )?)?;
+            }
             if !agent.is_null() {
                 session["agent"] = agent;
             }
@@ -325,10 +359,25 @@ pub fn transition(w: &mut Value, settings: &Value, method: &str, p: &Value) -> R
             let mut items = sessions(w, &r).to_vec();
             let mut next = items.iter().find(|s| s["id"] == anchor).unwrap().clone();
             if next.get("ssh").is_some() {
-                return Err(CoreError::new(
-                    "UNSUPPORTED",
-                    "Remote splits require SSH service adoption",
-                ));
+                let connection = next["ssh"]["connection_id"].clone();
+                let group = w["groups"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|g| g["id"] == r.workspace)
+                    .ok_or_else(|| {
+                        CoreError::new("SSH_CONNECTION_MISSING", "SSH workspace no longer exists")
+                    })?;
+                let profile = group["sshConnections"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|v| v["id"] == connection)
+                    .ok_or_else(|| {
+                        CoreError::new("SSH_CONNECTION_MISSING", "SSH connection no longer exists")
+                    })?;
+                next["ssh"] =
+                    serde_json::to_value(crate::ssh::profiles::target(&r.workspace, profile)?)?;
             }
             if r.project.is_some() {
                 next.as_object_mut().unwrap().remove("agent");

@@ -196,7 +196,9 @@ unprivileged user so directory permissions enforce the failure; Windows uses a h
 
 `uterm-core::ssh` owns OpenSSH configuration/path rules, credential binding/system adapters,
 SFTP/transfer services and owned tunnel lifetimes. Tauri delegates to those same services while
-retaining its commands, pickers and trust dialogs. Native SSH entry points remain incomplete.
+retaining its commands, pickers and trust dialogs. The isolated native app offers **File → SSH
+connections…** for saved profiles, remote terminals, SFTP and forwarding; new native/platform
+acceptance is tracked separately.
 `cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture`
 includes Unix authenticated-service tests requiring `/usr/sbin/sshd` and `ssh-keygen`; they use
 temporary keys, known_hosts and data without changing `~/.ssh` or the system SSH service. Core CI

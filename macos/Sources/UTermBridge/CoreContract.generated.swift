@@ -372,11 +372,32 @@ public struct CoreSshInfo: Codable, Sendable {
     public var available: Bool
 }
 
+public struct CoreSshOperation: Codable, Sendable {
+    public var error: String?
+    public var generation: String
+    public var id: String
+    public var kind: String
+    public var progress: CoreSshProgress?
+    public var result: JSONValue?
+    public var state: String
+}
+
+public struct CoreSshProgress: Codable, Sendable {
+    public var completed: String
+    public var name: String
+    public var total: String
+}
+
 public struct CoreSshResolution: Codable, Sendable {
     public var hostname: String
     public var port: String
     public var proxy: Bool
     public var username: String
+}
+
+public struct CoreSshTrustPrompt: Codable, Sendable {
+    public var id: String
+    public var message: String
 }
 
 public struct CoreTerminalHeader: Codable, Sendable {

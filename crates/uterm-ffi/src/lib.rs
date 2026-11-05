@@ -91,6 +91,14 @@ pub extern "C" fn uterm_abi_version() -> u32 {
 }
 
 #[no_mangle]
+pub extern "C" fn uterm_ssh_askpass() -> i32 {
+    match catch_unwind(uterm_core::ssh::run_askpass_if_requested) {
+        Ok(status) => status,
+        _ => 1,
+    }
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn uterm_open(
     root: *const u8,
     length: usize,
@@ -263,6 +271,8 @@ fn publish(client: &Client, handle: u64, operation: u64, request: &[u8], respons
         && !request.method.starts_with("project.")
         && !request.method.starts_with("session.")
         && !request.method.starts_with("settings.")
+        && !request.method.starts_with("ssh.profile.")
+        && !request.method.starts_with("ssh.session.")
     {
         return;
     }

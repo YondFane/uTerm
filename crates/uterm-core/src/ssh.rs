@@ -1,9 +1,23 @@
 pub mod auth;
 pub mod files;
 pub mod paths;
+pub mod profiles;
+mod request;
+pub mod service;
 #[cfg(all(test, unix))]
 mod service_tests;
 pub mod tunnels;
+
+pub fn run_askpass_if_requested() -> i32 {
+    if !utermd_local::ssh_askpass::requested() {
+        return -1;
+    }
+    if utermd_local::ssh_askpass::run().is_ok() {
+        0
+    } else {
+        1
+    }
+}
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};

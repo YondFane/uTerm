@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var contentWindows: [UUID: ContentWindow] = [:]
     private var pythonWindows: [String: PythonWindow] = [:]
     private var javaWindows: [String: JavaWindow] = [:]
+    private var sshWindow: SSHWindow?
     private let model = WorkspaceModel()
     private var terminating = false
     private var preparingQuit = false
@@ -33,20 +34,57 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.contentView = NSHostingView(rootView: WorkspaceView(model: model))
         window.center()
         self.window = window
-        model.languageChanged = { [weak self] in self?.configureMenu() }
+        model.languageChanged = { [weak self] in
+            self?.configureMenu()
+            self?.sshWindow?.window?.title = localized("SSH connections", "SSH 连接")
+            self?.sshWindow?.model.objectWillChange.send()
+        }
         model.requestActivation = { [weak window] in
             window?.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
         }
-        model.appearanceChanged = { [weak window] appearance in
-            window?.appearance = appearance == "dark" ? NSAppearance(named: .darkAqua) : appearance == "light" ? NSAppearance(named: .aqua) : nil
+        model.appearanceChanged = { [weak self, weak window] appearance in
+            let value = appearance == "dark" ? NSAppearance(named: .darkAqua) : appearance == "light" ? NSAppearance(named: .aqua) : nil
+            window?.appearance = value; self?.sshWindow?.window?.appearance = value
         }
         model.deleteWorktreeRequested = { [weak self] project, tree in self?.confirmWorktreeDeletion(projectID: project, worktreeID: tree) }
+        model.openSSHRequested = { [weak self] id in Task { @MainActor in try? await self?.makeSSHWindow(selected: id) } }
+        model.prepareSSHTransportReconnect = { [weak self] in
+            guard let current = self?.sshWindow else { return true }
+            guard await current.model.prepareForQuit() else { return false }
+            await current.forceClose(); return true
+        }
         configureMenu()
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--ssh-smoke-report") {
+                var report = baseReport()
+                do { try await SSHSmoke.run(model: model, open: { try await self.makeSSHWindow() }, lookup: { self.sshWindow }, report: &report) }
+                catch {
+                    report["failure"] = error.localizedDescription
+                    if let current = sshWindow?.window {
+                        try? await TerminalSmoke.capture(window: current, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-ssh-failure.png"))
+                    }
+                }
+                if let current = model.bridge {
+                    do {
+                        for prompt in try await current.call("ssh.trust.pending").array {
+                            _ = try await current.call("ssh.trust.confirm", params: .object(["id": prompt["id"], "approve": .bool(false)]))
+                        }
+                        let status = try await current.call("host.status")
+                        for session in status["sessions"].array {
+                            _ = try await current.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]]))
+                        }
+                        _ = try await current.call("host.shutdownIdle")
+                    } catch { report["cleanupError"] = error.localizedDescription }
+                }
+                await model.shutdown()
+                await sshWindow?.forceClose()
+                finishReport(report, path: path)
+                return
+            }
             if let path = WorkspaceModel.argument("--java-smoke-report") {
                 var report = baseReport()
                 do {
@@ -177,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(file, "Git…", #selector(openGit))
         add(file, localized("Java build and run…", "Java 构建与运行…"), #selector(openJava))
         add(file, localized("Python run…", "Python 运行…"), #selector(openPython))
+        add(file, localized("SSH connections…", "SSH 连接…"), #selector(openSSH))
         add(file, localized("Recover editor drafts…", "恢复编辑器草稿…"), #selector(recoverEditorDrafts))
         add(file, localized("Restore editor recovery copy…", "恢复编辑器备份副本…"), #selector(restoreEditorRecovery))
         add(file, localized("Recover Git favorites…", "恢复 Git 收藏…"), #selector(recoverGitFavorites))
@@ -207,6 +246,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return false }
         if menuItem.action == #selector(closeSession) {
+            if let sshWindow, sshWindow.window === NSApp.keyWindow {
+                menuItem.title = localized("Close window", "关闭窗口")
+                return !sshWindow.model.prepared
+            }
             if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) {
                 menuItem.title = localized("Close window", "关闭窗口")
                 return !run.model.busy && !run.model.prepared
@@ -280,6 +323,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             catch { model.error = error.localizedDescription }
         }
+    }
+    @objc private func openSSH() {
+        Task { @MainActor in
+            do { _ = try await makeSSHWindow() }
+            catch { model.error = error.localizedDescription }
+        }
+    }
+    private func makeSSHWindow(selected: String? = nil) async throws -> SSHWindow {
+        guard !preparingQuit, let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: "The client is closing") }
+        if let current = sshWindow, current.model.workspaceID != model.groupID {
+            guard await current.model.prepareForQuit() else { throw BridgeFailure(code: "SSH_CONNECTION_BUSY", message: localized("Resolve the other workspace's SSH window first.", "请先处理另一工作区的 SSH 窗口。")) }
+            await current.forceClose()
+        }
+        if let sshWindow {
+            if let selected { await sshWindow.model.select(selected) }
+            sshWindow.showWindow(nil); sshWindow.window?.makeKeyAndOrderFront(nil)
+            return sshWindow
+        }
+        let ssh = SSHModel(workspace: model, bridge: bridge)
+        let controller = SSHWindow(model: ssh)
+        controller.didClose = { [weak self] in self?.sshWindow = nil }
+        controller.window?.appearance = window?.appearance
+        sshWindow = controller
+        controller.showWindow(nil); controller.window?.makeKeyAndOrderFront(nil)
+        await ssh.start(selected: selected)
+        return controller
     }
     private func makePythonWindow(directory: URL) async throws -> PythonWindow {
         let root = directory.standardizedFileURL.resolvingSymlinksInPath().path
@@ -528,6 +597,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }
     @objc private func closeSession() {
+        if let sshWindow, sshWindow.window === NSApp.keyWindow { sshWindow.window?.performClose(nil); return }
         if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
@@ -554,6 +624,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminating { return .terminateNow }
+        if model.sshTrustPresented { return .terminateCancel }
         if let run = javaWindows.values.first(where: { $0.model.busy }) {
             run.model.error = localized("Wait for the Java operation to finish.", "请等待 Java 操作完成。")
             run.window?.makeKeyAndOrderFront(nil)
@@ -572,6 +643,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let runs = Array(self.pythonWindows.values)
             let javaRuns = Array(self.javaWindows.values)
             do {
+                if let current = self.sshWindow, !(await current.model.prepareForQuit()) { throw BridgeFailure(code: "SSH_QUIT_REFUSED", message: localized("Finish the SSH operation before quitting.", "退出前请完成 SSH 操作。")) }
                 for run in runs {
                     guard await run.prepareForQuit() else { throw BridgeFailure(code: "PYTHON_QUIT_REFUSED", message: localized("Resolve Python configuration changes before quitting.", "退出前请处理 Python 配置修改。")) }
                 }
@@ -587,6 +659,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     throw BridgeFailure(code: "CONTENT_CHANGED", message: localized("A file window changed while preparing to quit. Try again.", "准备退出时文件窗口已变化，请重试。"))
                 }
             } catch {
+                await self.sshWindow?.model.resumeAfterQuit()
                 for content in contents { content.resumeAfterQuit() }
                 for run in runs { run.resumeAfterQuit() }
                 for run in javaRuns { run.resumeAfterQuit() }
@@ -597,6 +670,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 return
             }
             for content in contents { content.forceClose() }
+            await self.sshWindow?.forceClose()
             for run in runs { await run.forceClose() }
             for run in javaRuns { await run.forceClose() }
             await model.shutdown()
@@ -672,6 +746,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 @main
 enum NativeMain {
     @MainActor static func main() {
+        if let status = CoreBridge.runSSHAskpassIfRequested() { exit(status) }
         let application = NSApplication.shared
         let delegate = AppDelegate()
         application.delegate = delegate
