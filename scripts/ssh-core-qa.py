@@ -20,6 +20,7 @@ class Client:
     def __init__(self, binary, root, environment, log):
         self.process = subprocess.Popen([str(binary), "--serve", str(root)], env=environment, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=log, text=True, encoding="utf-8")
         self.lines = queue.Queue()
+        self.trust_replies = []
         def read():
             for line in self.process.stdout:
                 self.lines.put(line)
@@ -56,6 +57,7 @@ class Client:
             if trust is not None:
                 for prompt in self.call("ssh.trust.pending"):
                     self.call("ssh.trust.confirm", {"id": prompt["id"], "approve": trust})
+                    self.trust_replies.append(trust)
                     stale = self.response("ssh.trust.confirm", {"id": prompt["id"], "approve": trust})
                     assert stale["error"]["code"] == "SSH_TRUST_EXPIRED"
             assert time.monotonic() < deadline, "SSH operation timeout"
@@ -183,12 +185,20 @@ def main():
                     client.operation("files.list", root=password_root, path="", hidden=True)
                     client.operation("files.disconnect", connection_id=password_connection["connection_id"])
                     checks["actualPasswordLoginViaAskpassAndOSCredentialStore"] = True
-                    unknown = {**password_connection, "connection_id": str(uuid.uuid4()), "host": service.unknown_alias, "root": connection["root"]}
+                    unknown = {**password_connection, "connection_id": str(uuid.uuid4()), "host": service.unknown_alias}
                     reference = client.operation("auth.configure", connection=unknown, password=service.password, remember=False)
                     unknown.update(credential_id=reference, remember_password=False)
+                    previous_replies = len(client.trust_replies)
                     declined = client.wait(client.start("files.open", connection=unknown), success=False, trust=False)
                     assert declined["state"] == "failed"
+                    assert client.trust_replies[previous_replies:] == [False]
                     checks["actualAskpassTrustDeclinedAndSingleUse"] = True
+                    previous_replies = len(client.trust_replies)
+                    approved = client.wait(client.start("files.open", connection=unknown), trust=True)["result"]
+                    assert client.trust_replies[previous_replies:] == [True]
+                    client.operation("files.list", root=approved, path="", hidden=True)
+                    client.operation("files.disconnect", connection_id=unknown["connection_id"])
+                    checks["actualAskpassTrustApprovedAndAuthenticated"] = True
                 for method in ["snapshot.read", "ssh.operations", "ssh.trust.pending"]:
                     assert service.password not in json.dumps(client.call(method))
                 client.operation("prepareQuit")

@@ -132,6 +132,18 @@ enum SSHSmoke {
                 try await capture(reopened.window!, "native-ssh-password-keychain-en-dark.png"); captures.append("native-ssh-password-keychain-en-dark.png")
                 await reopened.model.disconnectFiles()
                 report["passwordServiceLogin"] = true
+                let passwordProfile = reopened.model.selectedID
+                await reopened.model.newTerminal()
+                guard reopened.model.error.isEmpty, let terminal = model.selectedTerminal else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+                try await TerminalSmoke.wait("Attach password-authenticated SSH terminal") { terminal.generation != nil && terminal.inputControl?.owned == true }
+                terminal.view.insertText("printf 'UTERM_%s\\n' 'SSH_PASSWORD_NATIVE'\r", replacementRange: NSRange(location: NSNotFound, length: 0))
+                try await TerminalSmoke.wait("Password reaches the independent SSH session host") { terminal.text.contains("UTERM_SSH_PASSWORD_NATIVE") }
+                if let parent = NSApp.windows.first(where: { $0.title == "uTerm Native QA" }) {
+                    try await capture(parent, "native-ssh-password-terminal-en-dark.png"); captures.append("native-ssh-password-terminal-en-dark.png")
+                }
+                await model.closeSession()
+                await reopened.model.reload(select: passwordProfile)
+                report["actualPasswordRemoteTerminal"] = true
                 for remembered in [false, true] {
                     let previous = try reopened.model.target()
                     reopened.model.remember = remembered
@@ -161,7 +173,7 @@ enum SSHSmoke {
         }
         await reopened.model.select(nil)
         guard reopened.model.lastTransfer == nil else { throw BridgeFailure(code: "SSH_QA", message: "New connection inherited another profile's transfer status") }
-        reopened.model.name = "Trust cancellation QA"; reopened.model.host = fixture["unknownAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = "isolated-qa-password"; reopened.model.rootPath = fixture["remote"].string ?? ""
+        reopened.model.name = "Host trust QA"; reopened.model.host = fixture["unknownAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = fixture["password"].string ?? "isolated-qa-password"; reopened.model.rootPath = fixture["passwordRemote"].string ?? ""
         guard await reopened.model.save() else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
         let connecting = Task { @MainActor in await reopened.model.connectFiles() }
         try await TerminalSmoke.wait("Native host trust sheet through actual askpass") { model.sshTrustPresented && model.sshTrustAlert?.window.isVisible == true }
@@ -171,6 +183,18 @@ enum SSHSmoke {
         cancel.performClick(nil); await connecting.value
         guard !reopened.model.connected, !reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: "Declined host trust permitted a connection") }
         report["nativeAskpassHostTrustCancellation"] = true
+        try await TerminalSmoke.wait("Dismiss declined native host trust") { !model.sshTrustPresented }
+        if fixture["passwordServiceLogin"].bool == true {
+            let approving = Task { @MainActor in await reopened.model.connectFiles() }
+            try await TerminalSmoke.wait("Offer native host trust again after cancellation") { model.sshTrustPresented && model.sshTrustAlert?.window.isVisible == true }
+            guard let view = model.sshTrustAlert?.window.contentView,
+                  let approve = TerminalSmoke.descendants(view).compactMap({ $0 as? NSButton }).first(where: { $0.title == "Trust and connect" }) else { throw BridgeFailure(code: "SSH_QA", message: "Real native Trust button missing") }
+            approve.performClick(nil); await approving.value
+            guard reopened.model.connected, reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+            try await capture(reopened.window!, "native-ssh-host-trust-accepted-en-dark.png"); captures.append("native-ssh-host-trust-accepted-en-dark.png")
+            await reopened.model.disconnectFiles()
+            report["nativeAskpassHostTrustApprovedAndAuthenticated"] = true
+        }
         let exported = try JSONEncoder().encode(try await bridge.call("snapshot.read"))
         let operations = try JSONEncoder().encode(try await bridge.call("ssh.operations"))
         guard !String(decoding: exported, as: UTF8.self).contains("isolated-qa-password"), !String(decoding: operations, as: UTF8.self).contains("isolated-qa-password") else { throw BridgeFailure(code: "SSH_QA", message: "Credential escaped into state or operation history") }

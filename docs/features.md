@@ -1431,21 +1431,23 @@ window workflows in
 
 `bash scripts/macos-ssh-smoke.sh` uses an isolated app, temporary keys/known_hosts and a real SSH
 service for profile conflicts, SFTP transfers/cancellation, forwarding, remote terminal
-replay/detach/close and native host trust. It uploads `ssh-live.json`, logs and real window images.
-The macOS ARM64 report and seven real captures passed at the source above. Visual inspection
-confirmed profile conflict retention, SFTP files, forwarding, remote shell output and the native
-trust sheet in English/dark and Chinese/light windows. The transfer-progress image cropped the
-progress row; capture now scrolls it into view and waits for SwiftUI rendering. Forwarding ports use
-literal digits without locale grouping. These capture/port fixes and the added real password login
-still await a new platform run. Native password retention changes use the saved credential location
-when the password field is empty; deletion cleans the saved reference even if the draft changes. The
-native smoke now also checks remembered/temporary conversions, obsolete-reference deletion and
-authenticated reconnect after terminal transport reopening. Native smoke confirms actual password
-login but exposed missing OS references being reported as a generic credential failure. The SSH
-credential port now maps only the OS not-found result to an absent reference; other failures and the
-legacy Redis/database adapter are unchanged. Platform regressions check before creation and after
-deletion; reruns remain pending. Windows real-service and manual picker/IME acceptance remain
-pending. #36 stays open; no merge or release is claimed.
+replay/detach/close and native host trust. Acceptance also requires a password-authenticated PTY
+through the independent host and successful first-host approval after declining; Core reports
+confirm that actual trust prompts were answered in both cases. It uploads `ssh-live.json`, logs and
+real window images. The macOS ARM64 report and seven real captures passed at the source above.
+Visual inspection confirmed profile conflict retention, SFTP files, forwarding, remote shell output
+and the native trust sheet in English/dark and Chinese/light windows. The transfer-progress image
+cropped the progress row; capture now scrolls it into view and waits for SwiftUI rendering.
+Forwarding ports use literal digits without locale grouping. These capture/port fixes and the added
+real password login still await a new platform run. Native password retention changes use the saved
+credential location when the password field is empty; deletion cleans the saved reference even if
+the draft changes. The native smoke now also checks remembered/temporary conversions,
+obsolete-reference deletion and authenticated reconnect after terminal transport reopening. Native
+smoke confirms actual password login but exposed missing OS references being reported as a generic
+credential failure. The SSH credential port now maps only the OS not-found result to an absent
+reference; other failures and the legacy Redis/database adapter are unchanged. Platform regressions
+check before creation and after deletion; reruns remain pending. Windows real-service and manual
+picker/IME acceptance remain pending. #36 stays open; no merge or release is claimed.
 
 ### Quick connections and host search
 

@@ -100,10 +100,10 @@ class SSHService:
                 f"Host {self.alias} {self.unknown_alias} {self.password_alias}\n HostName 127.0.0.1\n Port {self.port}\n"
                 f" IdentityFile \"{key_path}\"\n IdentitiesOnly yes\n"
                 f" UserKnownHostsFile \"{known_path}\"\n GlobalKnownHostsFile {'NUL' if sys.platform == 'win32' else '/dev/null'}\n"
-                f"Host {self.alias} {self.unknown_alias}\n User {self.user}\n"
+                f"Host {self.alias}\n User {self.user}\n"
                 f"Host {self.alias} {self.password_alias}\n HostKeyAlias qa-native-host\n"
                 f"Host {self.unknown_alias}\n HostKeyAlias qa-untrusted-host\n"
-                f"Host {self.password_alias}\n User {getattr(self, 'password_user', self.user)}\n"
+                f"Host {self.password_alias} {self.unknown_alias}\n User {getattr(self, 'password_user', self.user)}\n"
             )
             self.bin = self.directory / "bin"
             self.bin.mkdir()
