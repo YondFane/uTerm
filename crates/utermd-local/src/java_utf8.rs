@@ -169,6 +169,10 @@ fn legacy_options(
             break index;
         } else if !argument.starts_with('-') {
             break index;
+        } else if let Some(agent) = argument.strip_prefix("-javaagent:") {
+            let path = agent.split_once('=').map_or(agent, |(path, _)| path);
+            anyhow::ensure!(!path.is_empty(), "JAVA_UTF8_ARGUMENTS_INVALID");
+            properties.push(format!("A{path}"));
         } else if let Some(property) = argument.strip_prefix("-D") {
             if let Some(value) = property.strip_prefix("java.class.path=") {
                 classpath = value.into();
@@ -179,16 +183,16 @@ fn legacy_options(
                 continue;
             }
             properties.push(if property.contains('=') {
-                property.to_owned()
+                format!("D{property}")
             } else {
-                format!("{property}=")
+                format!("D{property}=")
             });
         }
         index += 1;
     };
     let command = arguments[target..].join(" ");
     let mut values = vec![
-        "1",
+        "2",
         cache,
         directory,
         home,
@@ -660,13 +664,14 @@ mod tests {
             "before",
             "-Djava.class.path=after",
             "-Dempty",
+            "-javaagent:agents/用户 agent.jar=选项=值",
             "Main",
             "-Dapplication-only=kept",
         ]);
         assert_eq!(
             &values[..6],
             [
-                "1",
+                "2",
                 "cache 中文",
                 "project 😀",
                 "jdk",
@@ -674,7 +679,14 @@ mod tests {
                 "Main -Dapplication-only=kept"
             ]
         );
-        assert_eq!(&values[6..], ["qa.value=属性 😀=literal", "empty="]);
+        assert_eq!(
+            &values[6..],
+            [
+                "Dqa.value=属性 😀=literal",
+                "Dempty=",
+                "Aagents/用户 agent.jar"
+            ]
+        );
         let jar = decode(&[
             "-Djava.class.path=ignored",
             "-Dsun.java.command=ignored",

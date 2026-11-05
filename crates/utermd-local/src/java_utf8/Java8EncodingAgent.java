@@ -25,7 +25,7 @@ public final class Java8EncodingAgent {
             bytes[i] = (byte) ((high << 4) | low);
         }
         String[] values = new String(bytes, StandardCharsets.UTF_8).split("\u0000", -1);
-        if (values.length < 6 || !values[0].equals("1"))
+        if (values.length < 6 || !values[0].equals("2"))
             throw new IllegalArgumentException("JAVA_UTF8_ARGUMENTS_INVALID");
         Charset nativeEncoding = Charset.forName(System.getProperty("sun.jnu.encoding"));
         List<String> roots = new ArrayList<String>(Arrays.asList(values[1], values[2], values[3]));
@@ -46,9 +46,12 @@ public final class Java8EncodingAgent {
         // Restore original property values before later agents or the application can observe them.
         // 在后续 Agent 或应用能够读取属性之前，恢复原始属性值。
         for (int i = 6; i < values.length; i++) {
-            int equals = values[i].indexOf('=');
+            if (values[i].startsWith("A")) continue;
+            if (!values[i].startsWith("D")) throw new IllegalArgumentException("JAVA_UTF8_ARGUMENTS_INVALID");
+            String property = values[i].substring(1);
+            int equals = property.indexOf('=');
             if (equals <= 0) throw new IllegalArgumentException("JAVA_UTF8_ARGUMENTS_INVALID");
-            System.setProperty(values[i].substring(0, equals), values[i].substring(equals + 1));
+            System.setProperty(property.substring(0, equals), property.substring(equals + 1));
         }
         List<String> entries = new ArrayList<String>();
         for (String entry : values[4].split(Pattern.quote(File.pathSeparator), -1)) {
@@ -71,6 +74,11 @@ public final class Java8EncodingAgent {
             if (i > 0) classpath.append(File.pathSeparator);
             classpath.append(entry);
             urls.add(new File(entry.isEmpty() ? "." : entry).toURI().toURL());
+        }
+        // The VM appends all user-agent JARs before the first premain; retain their original search order.
+        // VM 在第一个 premain 前追加所有用户 Agent JAR，保留其原始搜索顺序。
+        for (int i = 6; i < values.length; i++) {
+            if (values[i].startsWith("A")) urls.add(new File(values[i].substring(1)).toURI().toURL());
         }
         ClassLoader loader = ClassLoader.getSystemClassLoader();
         if (loader instanceof URLClassLoader) {

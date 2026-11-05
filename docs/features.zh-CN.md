@@ -1702,7 +1702,8 @@ GiB 和 32 层目录，拒绝 reparse
 points。父／子进程共用读锁保护活动缓存；正常结束移除缓存，之后启动会清理超过一分钟且已释放的孤立缓存。Windows 回归检查活动所有者保护、孤立清理、深度拒绝及原文件保留。JDK
 8 子进程在用户 Agent 与主类前加载小型内嵌兼容 Agent，在 Java 8 提前按区域设置解码后恢复原始 UTF-8
 VM 属性和所选 JDK 的系统 URL
-classpath，再为启动器参数选择 UTF-8。运行时 Agent 不保存用户参数，版本化输入只在进程内存传递。启动路径必须有 ASCII 相对或已有短路径表示，否则 helper 报告
+classpath，再为启动器参数选择 UTF-8。修复后的搜索路径按启动器顺序保留用户 Agent
+JAR，使后续 premain 类仍可加载。运行时 Agent 不保存用户参数，版本化输入只在进程内存传递。启动路径必须有 ASCII 相对或已有短路径表示，否则 helper 报告
 `JAVA_UTF8_AGENT_PATH_UNSUPPORTED`；需要修复 classpath 的非 URL 自定义系统加载器也会明确拒绝。应用文件编码仍可配置。有界匿名 stdin 管道传递字面参数，不增加参数／环境文件或 Shell 插值。子进程保留任务控制台和进程树生命周期，返回实际 JVM 退出码。ASCII 步骤继续直接启动 Java。Java
 8 要求应用数据缓存路径为 ASCII：JVM 在 premain 能修复区域解码路径前就加载原生 ZIP 支持。缓存路径包含 Unicode 时，在启动前明确报告
 `JAVA_UTF8_JDK8_CACHE_PATH_UNSUPPORTED`
@@ -1737,9 +1738,11 @@ URL 解码内失败，此上游限制不计为桥接成功。Windows 桥接自�
 的严格 Windows 任务通过 JDK 11／17／21。其 JDK
 8 诊断使用 ASCII 与中文 JAR 路径，准确保留参数／属性并退出 7，但 Unicode 应用数据缓存在 premain 前报
 `UnsatisfiedLinkError: no zip in java.library.path`。因此[Java 矩阵](https://github.com/YondFane/uTerm/actions/runs/41975963071)失败。Source
-`e7a14e91885d63b611992b02a598432cdff85263`
-使用相对启动库路径后仍出现同样失败。明确拒绝不支持的缓存路径及分开存放的应用数据须等待新的 Windows 结果，JDK
-8 和 #37 完整验收仍开放。诊断采集、Linux 执行及资产可复现检查不能代替该结果。
+`e7a14e91885d63b611992b02a598432cdff85263` 使用相对启动库路径后仍出现同样失败。Source
+`3367bd31ca356611a228572340f9b122b51e1a26`
+将应用数据分开后进入用户 premain，但由于兼容替换遗漏已追加的用户 Agent JAR 而找不到
+`TaskAgent`。恢复这些搜索项仍须等待新的 Windows 结果，JDK
+8 和 #37 完整验收保持开放。诊断采集、Linux 执行及资产可复现检查不能代替该结果。
 
 可选真实 Maven 样例使用 Maven 3.9.9 和 Spring Boot
 2.7.18，创建临时三项目 reactor，经 Core 和独立宿主执行打包／测试／安装、模块准备、开发运行及打包后 JAR 运行。真实检查核对所选 settings.xml、Maven／Spring

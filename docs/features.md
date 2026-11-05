@@ -2894,9 +2894,10 @@ removes the cache, and a later launch reclaims released orphan caches older than
 regressions check live-owner exclusion, orphan cleanup, depth rejection and source retention. The
 JDK 8 child loads a small embedded compatibility agent before user agents and the main class. It
 restores original UTF-8 VM properties and the selected JDK's system URL classpath after Java 8's
-early locale decoding, then selects UTF-8 for launcher arguments. The runtime agent stores no user
-arguments; its versioned input stays in process memory. Its launcher path must have an ASCII
-relative or existing short representation; otherwise the helper reports
+early locale decoding, then selects UTF-8 for launcher arguments. The repaired search path retains
+user-agent JARs in launcher order, so later premain classes remain loadable. The runtime agent
+stores no user arguments; its versioned input stays in process memory. Its launcher path must have
+an ASCII relative or existing short representation; otherwise the helper reports
 `JAVA_UTF8_AGENT_PATH_UNSUPPORTED`. A non-URL custom system loader that needs classpath repair is
 explicitly refused. Application file encoding remains configurable. A bounded anonymous stdin pipe
 carries literal arguments; no argument/environment file or shell interpolation is introduced. The
@@ -2953,9 +2954,10 @@ paths with exact arguments/properties and exit 7, but a Unicode application-data
 premain with `UnsatisfiedLinkError: no zip in java.library.path`. The
 [Java matrix](https://github.com/YondFane/uTerm/actions/runs/41975963071) therefore fails. Source
 `e7a14e91885d63b611992b02a598432cdff85263` repeats this failure with a relative bootstrap path. The
-explicit cache-path refusal and separately stored application data require fresh Windows results;
-JDK 8 and full #37 acceptance remain open. Diagnostic collection, Linux execution and asset
-reproducibility do not replace that result.
+separate-data run at source `3367bd31ca356611a228572340f9b122b51e1a26` reaches user premain but
+fails to find `TaskAgent`: the compatibility replacement omitted appended user-agent JARs. Restoring
+those entries requires a fresh Windows result. JDK 8 and full #37 acceptance remain open. Diagnostic
+collection, Linux execution and asset reproducibility do not replace that result.
 
 The optional real Maven fixture uses Maven 3.9.9 and Spring Boot 2.7.18 with a disposable
 three-project reactor. It exercises Package/Test/Install, module preparation, development and
