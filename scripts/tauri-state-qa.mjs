@@ -459,6 +459,12 @@ try {
           const value = JSON.parse(readFileSync(join(evidence, file), "utf8"));
           assert.equal(value.context.head, head);
           assert.equal(value.context.tested, tested);
+          if (["ssh-terminal", "ssh-reopened"].includes(value.scene)) {
+            const renderer = value.checks.rendererRecovery;
+            assert.equal(renderer.recoveredRenderer, "dom");
+            assert(renderer.domText.includes("UTERM_SSH_TAURI_QA"));
+            assert(renderer.width > 0 && renderer.height > 0);
+          }
           if (value.scene.startsWith("preview-")) {
             assert.deepEqual(
               previewRequests,

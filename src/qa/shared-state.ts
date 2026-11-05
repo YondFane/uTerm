@@ -1308,6 +1308,38 @@ async function runInputControl(context: Context) {
   await invoke("qa_request_exit");
 }
 
+async function sshRenderedOutput(terminal: HTMLElement) {
+  const contexts = [...terminal.querySelectorAll<HTMLCanvasElement>(".xterm-screen canvas")]
+    .map((canvas) => canvas.getContext("webgl2"))
+    .filter((context): context is WebGL2RenderingContext => context !== null);
+  assert(contexts.length <= 1, "Unexpected multiple SSH terminal WebGL contexts");
+  // Exercise the shipped fallback; accessibility text alone cannot prove a visible capture.
+  // 验证应用实际交付的回退；仅无障碍文本不能证明截图中的可见输出。
+  if (contexts.length) {
+    const loss = contexts[0].getExtension("WEBGL_lose_context");
+    assert(loss, "SSH terminal cannot exercise actual renderer recovery");
+    loss.loseContext();
+  }
+  const output = await until(() => {
+    const row = [...terminal.querySelectorAll<HTMLElement>(".xterm-rows > div")].find((element) =>
+      element.textContent?.includes("UTERM_SSH_TAURI_QA"),
+    );
+    const bounds = row?.getBoundingClientRect();
+    return row && bounds && bounds.width > 0 && bounds.height > 0
+      ? { domText: row.textContent, width: bounds.width, height: bounds.height }
+      : null;
+  }, "actual SSH terminal DOM fallback displays authenticated output");
+  await new Promise<void>((done) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => done())),
+  );
+  return {
+    initialRenderer: contexts.length ? "webgl2" : "dom",
+    injectedContextLoss: contexts.length === 1,
+    recoveredRenderer: "dom",
+    ...output,
+  };
+}
+
 async function runSSH(context: Context) {
   const fixture = await invoke<{
     alias: string;
@@ -1327,7 +1359,10 @@ async function runSSH(context: Context) {
   if (context.phase === "ssh-reopen") {
     const previous = fixture.previous;
     assert(previous, "Missing previous actual SSH session");
-    const terminal = await until(selectedVisibleTerminal, "reattached remote terminal");
+    const terminal = await until(async () => {
+      const value = await selectedVisibleTerminal();
+      return value?.querySelector('.terminal-status[aria-label="Running"]') ? value : null;
+    }, "reattached remote terminal");
     assert(terminal.dataset.sessionId === previous.sessionID, "Reopen selected another session");
     const status = await host();
     const session = status.sessions.find((item) => item.spec.id === previous.sessionID);
@@ -1347,6 +1382,7 @@ async function runSSH(context: Context) {
       ...previous,
       authenticatedRemoteReplay: true,
       sameHostAndGeneration: true,
+      rendererRecovery: await sshRenderedOutput(terminal),
     });
     await invoke("qa_request_exit");
     return;
@@ -1411,7 +1447,9 @@ async function runSSH(context: Context) {
   await click("New SSH terminal");
   const terminal = await until(async () => {
     const value = await selectedVisibleTerminal();
-    if (!value) return null;
+    // Selection precedes host startup; inspect identity only after attach succeeds.
+    // 选择状态早于宿主启动，只在附着成功后核对身份。
+    if (!value?.querySelector('.terminal-status[aria-label="Running"]')) return null;
     const status = await host();
     return status.sessions.some(
       (session) =>
@@ -1466,6 +1504,7 @@ async function runSSH(context: Context) {
     renderedOutput: "UTERM_SSH_TAURI_QA",
     input: "DOM paste/key events through real xterm",
     manualPickerAndIMEAcceptance: false,
+    rendererRecovery: await sshRenderedOutput(terminal),
   });
   await invoke("qa_request_exit");
 }

@@ -800,24 +800,27 @@ x86_64／Rust1.99.1 通过两项检查，包括迁移的边界样例与准确 UT
 `ssh-keygen`；macOS 需非交互 sudo 启动隔离服务。断线可能留下隐藏上传临时文件，原目标保持不变，重试需明确执行；不宣称自动清理远端遗留文件。
 
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY`
-通过公开 Core 客户端驱动真实服务。源码 `405f4a520a5b0a14845f1eb5cb9c7461a76282b3`／tested merge
-`1b34460cede28e7dfb67c77bf80fe09efc68ea28` 的 Windows AMD64／macOS ARM64 报告在
-[CI 42012100684](https://github.com/YondFane/uTerm/actions/runs/42012100684)
+通过公开 Core 客户端驱动真实服务。源码 `721fd5ae84ac1c80694cea78b6eb9b72d26d5362`／tested merge
+`5e4f2fc737a07b850408d16bfcdbff1d2d1b085f` 的 Windows AMD64／macOS ARM64 报告在
+[CI 42022428501](https://github.com/YondFane/uTerm/actions/runs/42022428501)
 通过，dirty=false、cleanup=true。报告为 `ssh-core-live.json`，artifact 分别为
-`legacy-checks-windows-latest-405f4a520a5b0a14845f1eb5cb9c7461a76282b3` 和
-`legacy-checks-macos-latest-405f4a520a5b0a14845f1eb5cb9c7461a76282b3`；只代表服务验收，该次整体界面流程失败。
+`legacy-checks-windows-latest-721fd5ae84ac1c80694cea78b6eb9b72d26d5362` 和
+`legacy-checks-macos-latest-721fd5ae84ac1c80694cea78b6eb9b72d26d5362`；只代表服务验收，该次整体界面流程失败。
 
-服务验证包括真实密码／系统凭据、过期保存、Unicode 字节一致、主机密钥变更拒绝、正确／错误 CA、带代次取消、断线覆盖／重连、兄弟隧道、退出及秘密排除。新增密钥认证 ProxyJump 读取在 Linux 未提交源码通过，仍需平台 CI。首次主机拒绝后再批准、一次性响应及实际认证由后续平台运行单独记录。
+服务报告的 13 项检查通过：真实密码／系统凭据、过期保存、Unicode 字节一致、真实密钥 ProxyJump、主机密钥变更拒绝、正确／错误 CA、带代次取消、断线覆盖／重连、兄弟隧道、退出、首次主机拒绝及批准后实际认证、一次性响应和秘密排除。服务报告不代替窗口截图验收。
 
 Windows 夹具下载固定版本且校验摘要的 Win32
 OpenSSH，以所属 SYSTEM 任务运行，创建临时账户并设置生成密钥的明确 ACL；仅在一次性 GitHub
 CI 用户配置前加入唯一别名，退出恢复原字节。macOS 使用短期账户和主目录，并仅在既有 SSH 访问组加入／移除自身账户。不更改生产 SSH 服务。测试日志在服务关闭后检查秘密排除，避免 Windows 独占日志句柄。
 
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py`
-在真实隔离 Tauri 应用运行保存配置、已认证 SFTP 列表／预览、远程终端和实际退出／重开四项 SSH 场景，并保留既有所有权／恢复检查。终端必须是共享快照选中的可见面板，宿主报告必须确认 SSH 主机／连接身份；重开验证相同会话、代次、宿主 PID 和回放。隐藏本地终端的输出不计为远程验收。
+在真实隔离 Tauri 应用运行保存配置、已认证 SFTP 列表／预览、远程终端和实际退出／重开四项 SSH 场景，并保留既有所有权／恢复检查。终端必须是共享快照选中的可见面板；等待附着确认运行后才读取宿主端点，再确认 SSH 主机／连接身份；重开验证相同会话、代次、宿主 PID 和回放。隐藏本地终端的输出不计为远程验收。
 
-完整 Tauri 平台回归仍待通过，Windows 退出失败保持未验收。截图携带源码／平台元数据；Windows 助手通过 Win32
-PrintWindow 捕获实际所属 QA 窗口，逐图记录方法、尺寸和可见采样；屏幕复制回退仅允许未遮挡采样，并恢复置顶标记。被 CI 控制台遮挡的旧图不作为证据。进程报告分别记录主进程退出和输出句柄关闭。不执行人工选择器或输入法验收，Unicode 样例放在
+SSH 输出截图实际触发应用已有的 WebGL 上下文丢失回退，要求 DOM 渲染行可见且包含远端返回值，再等待绘制；报告记录原始渲染器、触发方式及回退结果。这验证真实应用的 DOM 回退输出，不代表默认 GPU 画面已通过。空白画布、隐藏的无障碍文本或单独运行报告不能充当可见输出证据。
+
+截图携带源码／平台元数据；Windows 助手通过 Win32
+PrintWindow 捕获实际所属 QA 窗口，逐图记录方法、尺寸和可见采样，屏幕复制回退必须未被遮挡，并恢复置顶标记。进程报告区分主进程退出与输出句柄关闭。各源码的完整平台报告、有效图片和剩余项见
+[#36](https://github.com/YondFane/uTerm/issues/36)。人工选择器／输入法未执行；Unicode 样例位于
 `shared/fixtures/ssh-qa.json`。
 
 ### 原生 SSH 工作区
@@ -840,15 +843,15 @@ Linux 客户端契约覆盖配置 CAS、已有会话／依赖保留、秘密排�
 
 `bash scripts/macos-ssh-smoke.sh`
 使用隔离原生 QA 应用、临时账户／密钥／known_hosts 及真实 OpenSSH。源码
-`b9af76beef3c517b188aea337b655a06f9fc710b`／tested merge `1a3d3ca152a3c467a2aa397196ea2612f55565a2`
-在 [CI 42013797745](https://github.com/YondFane/uTerm/actions/runs/42013797745)
+`721fd5ae84ac1c80694cea78b6eb9b72d26d5362`／tested merge `5e4f2fc737a07b850408d16bfcdbff1d2d1b085f`
+在 [CI 42022428571](https://github.com/YondFane/uTerm/actions/runs/42022428571)
 的 ARM64 和 Intel 均通过，dirty=false、cleanup=true。
 
-两份 `native-qa-macos-15[-intel]-b9af76beef3c517b188aea337b655a06f9fc710b` artifact 包含
+两份 `native-qa-macos-15[-intel]-721fd5ae84ac1c80694cea78b6eb9b72d26d5362` artifact 包含
 `ssh-live.json`、`ssh-service-core.json`、工具链／测试日志和十张真实 WindowServer 截图。场景覆盖配置冲突保留、SFTP 上传下载、可见传输进度／取消、实际转发、密钥及密码远程 PTY、退出附着／回放／独立关闭、中英文／深浅主题和 760px 窗口。真实 NSAlert 分别拒绝和批准主机，并在批准后成功认证；记住／临时转换、旧凭据删除和终端传输重建后的临时密码重连也通过。
 
 目视检查确认密码终端输出及原生信任批准后的连接窗口。新源码仍需各自的 CI 验证，不能沿用旧 SHA 的通过。人工选择器、输入法及 macOS
-14 交互未执行；不以最低部署目标或构建代替验收。#36 仍开放，尚未合入或发布。
+14 交互未执行；不以最低部署目标或构建代替验收。#36 按源码记录实际验收，与合入／发布状态分开。
 
 ### 快速连接与主机搜索
 
@@ -959,31 +962,12 @@ ACL。冲突检查采用乐观校验，不能阻止其他服务端程序并发�
 
 #### SSH 与 SFTP 检查
 
-- Linux 共享配置检查使用临时配置执行真实 OpenSSH 解析，覆盖代理／转发元数据、身份变化及无效配置错误。Rust 测试覆盖过大文件、Include 循环／深度／文件数限制及客户端运行时共存。真实 Core／TypeScript 请求拒绝秘密字段且不回显值，保留端口字符串。`ssh-configuration-core.json`
-  记录实际 source／merge，确认没有远程登录、保存快照或启动宿主。Linux 的五项 Rust 配置测试、Core 报告测试、11 项 SSH 后端专项、全部 Core／FFI／宿主检查、408 项前端检查（十项跳过）、83 项后端检查（九项忽略）、类型及生产／桌面构建通过。生成的 Swift／C
-  ABI 检查已在 source `8491bae96401829e5cc5c3420d5aaccb58494356`／tested merge
-  `f25eef9b077d0b9be88ed35f311db52868d17f88` 的两原生架构通过；同 source 的原生 Mac
-  ARM／Intel 和 Tauri
-  Windows／macOS 四份配置报告通过、dirty=false，报告及日志保存在 #36。这只接受配置子范围，不代表已认证服务或原生连接 UI 验收。
+配置解析、路径、认证／凭据和实际服务的命令及来源绑定报告见上方共享 SSH 服务；Swift 原生窗口、截图及未执行项见原生 SSH 工作区。服务报告与真实界面报告分别验收，不以模拟进程或构建代替已认证连接。
 
-- Windows 自动化检查：17 项前端专项测试通过，覆盖快速地址校验、临时连接清理／保存、主机筛选、跳板机与规则存储、Redis 配置引用、转发保存失败与显式启停，以及既有 SSH／SFTP 保护。全部 102 项常规后端测试和 26 项本地服务测试通过；六项可选后端测试仍忽略。进程模拟覆盖监听就绪、启动退出、超时、取消与清理，不代表真实 SSH 转发连接验收。
+`pnpm test`、`pnpm test:backend`
+及 Core 检查覆盖快速地址校验、临时连接保存／清理、配置升级、工作区／会话隔离、远端草稿身份、恢复时仅附着、凭据目标绑定与失败保存清理。进程夹具覆盖监听就绪、启动失败、超时、取消及所属清理；真实服务另覆盖认证、证书、路径边界、冲突保存、流式传输、取消覆盖、断线重连和兄弟隧道保留。
 
-- Windows 全量前端运行通过，241 项通过、11 项跳过。修改文件格式、TypeScript、国际化、文档检查及隔离桌面构建通过。
-
-- 隔离 Windows 应用（`sh.uterm.desktop.qa.sshredesign`）验证了原生连接表单、默认自动认证、“仅保存”返回零会话概览、生效 OpenSSH 地址、按需连接前保持未连接的远程文件面板，以及独立的 SFTP 连接进度和失败反馈。检查使用回环地址配置，没有连接已成功认证的远程服务。真实 Windows
-  SSH/SFTP 认证、Credential Manager 及重设计界面的 macOS/Linux 验收仍待完成。
-
-- 隔离 Windows 应用（`sh.uterm.desktop.qa.sshp1`）针对不可用的回环端点，检查了快速连接创建、临时标记、保存连接、显式启动转发和独立失败反馈。重开后保留规则且没有自动启动，并目视检查了 640×420 下的连接标题、转发规则和可滚动的跳板机表单。成功转发、真实跳板机、密码转发及重设计界面的 macOS/Linux 运行仍待验收。
-
-- 验证：macOS 自动化测试覆盖数据升级、连接/会话隔离、分组、目标校验、远程草稿身份、恢复时仅附着已有会话、排除本地工具及限制进度更新频率。真实系统 SFTP 服务测试覆盖中文名称、安全保存、冲突、根目录越界/链接拒绝、文件操作、流式上传下载、取消覆盖及临时文件清理。
-
-- 隔离原生应用（`sh.uterm.desktop.qa.ssh`）连接了回环地址上的 OpenSSH 服务，验证主机指纹确认、远程 Shell 输出、退出重开后的附着与回放、独立关闭分屏、文件编辑、冲突保留、上传/下载字节一致、文件通道重连、传输进度、取消清理及传输退出保护。
-
-- 连接与密码验证另包括：macOS 上 187 项前端及构建工具测试、32 项本地服务测试、56 项常规后端测试和六项 Redis 专项测试通过，覆盖旧选项序列化、版本 6 数据升级、无效字段/明文凭据拒绝、端口/用户/密钥参数分离、凭据目标绑定、保存失败清理、Redis 隧道完整配置，以及需认证的一次性 askpass、消息上限、指纹批准/拒绝和意外提示拒绝。
-
-- 隔离原生 QA（`sh.uterm.desktop.qa.sshauth`）使用真实系统 OpenSSH 和可丢弃的回环密码服务，验证指定端口/用户名、别名继承/HostKeyAlias、密码 SFTP 读取及中文文本保存、终端输出/重连附着、Redis 隧道 PING 和数据读取、重开应用后的 Keychain 保存/读取、凭据移除、临时密码重启失效，以及原生主机指纹窗口的批准/取消。
-
-- Windows 客户端/服务端、Credential Manager 和 Linux 运行仍未验证；密码模式不支持跳板机及 OTP。
+系统凭据使用唯一 QA 命名空间，检查创建前／保存后／删除后读取和重复删除。密码只经有界、需认证的一次性 askpass 交付；不写入工作区导出、状态摘要或测试日志。密码模式不支持跳板机及 OTP。Linux 原生图形界面、人工选择器／输入法及最低 macOS 版本交互尚未验收。
 
 当前 SSH 认证选项只增加代码，不增加运行时依赖。当前发布安装包体积尚未测量；隔离 debug 应用构建仅用于验证，不作为安装包体积估算。
 

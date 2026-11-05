@@ -1354,19 +1354,18 @@ explicit. Automatic remote orphan cleanup is not claimed.
 
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY` drives the
 public Core client against a real service. Windows AMD64/macOS ARM64 reports pass at source
-`405f4a520a5b0a14845f1eb5cb9c7461a76282b3` / tested merge `1b34460cede28e7dfb67c77bf80fe09efc68ea28`
-in [CI 42012100684](https://github.com/YondFane/uTerm/actions/runs/42012100684), dirty=false and
+`721fd5ae84ac1c80694cea78b6eb9b72d26d5362` / tested merge `5e4f2fc737a07b850408d16bfcdbff1d2d1b085f`
+in [CI 42022428501](https://github.com/YondFane/uTerm/actions/runs/42022428501), dirty=false and
 cleanup=true. The reports are `ssh-core-live.json`, in artifacts
-`legacy-checks-windows-latest-405f4a520a5b0a14845f1eb5cb9c7461a76282b3` and
-`legacy-checks-macos-latest-405f4a520a5b0a14845f1eb5cb9c7461a76282b3`. These accept the service
+`legacy-checks-windows-latest-721fd5ae84ac1c80694cea78b6eb9b72d26d5362` and
+`legacy-checks-macos-latest-721fd5ae84ac1c80694cea78b6eb9b72d26d5362`. These accept the service
 only; that overall GUI run failed.
 
-Service checks include actual password/OS-store authentication, stale saves, exact Unicode bytes,
-changed-key refusal, correct/wrong CAs, generation cancellation, interrupted overwrite/reconnect,
-sibling tunnels, quit and secret exclusion. Added key-authenticated ProxyJump reading passes locally
-on Linux with dirty source and still requires platform CI. Actual first-host rejection followed by
-approval, single-use responses and authenticated results are recorded by subsequent platform runs
-separately.
+All 13 service checks pass: actual password/OS-store authentication, stale saves, exact Unicode
+bytes, real key-authenticated ProxyJump, changed-key refusal, correct/wrong CAs, generation
+cancellation, interrupted overwrite/reconnect, sibling tunnels, quit, actual first-host
+rejection/approval followed by authentication, single-use responses and secret exclusion. Service
+reports do not replace actual-window screenshot acceptance.
 
 The Windows fixture downloads a pinned, checksum-verified Win32 OpenSSH server, runs an owned SYSTEM
 task and creates a temporary account with explicit generated-key ACLs. It prepends unique aliases
@@ -1378,17 +1377,22 @@ avoid Windows exclusive log handles.
 `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` runs saved-profile, authenticated SFTP
 listing/preview, remote-terminal and actual quit/reopen scenes in the isolated real Tauri app,
 retaining existing ownership/recovery checks. The terminal must be the visible panel selected by the
-shared snapshot, with SSH host/connection identity confirmed by the host. Reopening verifies the
-same session, generation, host PID and replay. Output from a hidden local terminal cannot satisfy
-remote acceptance.
+shared snapshot. It waits for a running attachment before reading the host endpoint and confirming
+SSH host/connection identity. Reopening verifies the same session, generation, host PID and replay.
+Output from a hidden local terminal cannot satisfy remote acceptance.
 
-Full Tauri platform reruns remain pending; Windows exit is still unaccepted. Screenshots carry
-source/platform metadata. The Windows helper captures the actual owned QA HWND with Win32
-PrintWindow and records each image’s method, dimensions and visibility samples. Its screen-copy
-fallback requires unobstructed samples; it restores the window’s topmost flag. Earlier images
-covered by the CI console are excluded. Process reports distinguish main-process exit from
-output-handle closure. Manual file-picker/IME acceptance is not performed; Unicode examples live in
-`shared/fixtures/ssh-qa.json`.
+SSH-output captures exercise the application's shipped fallback through actual WebGL context loss.
+They require a visible DOM-rendered row containing the remote result, then wait for painting.
+Reports record the initial renderer, injected loss and recovered renderer. This checks real-app DOM
+fallback output; it does not accept default GPU capture. Blank canvases, hidden accessibility text
+or a runtime report alone cannot establish visible output.
+
+Screenshots carry source/platform metadata. The Windows helper uses Win32 PrintWindow on the actual
+owned QA HWND, recording each image’s method, dimensions and visibility samples. Screen-copy
+fallback requires unobstructed samples and restores the topmost flag. Process reports distinguish
+main-process exit from output-handle closure. Source-specific platform reports, valid images and
+remaining checks are tracked in [#36](https://github.com/YondFane/uTerm/issues/36). Manual
+picker/IME checks are unexecuted; Unicode samples live in `shared/fixtures/ssh-qa.json`.
 
 ### Native SSH workspace
 
@@ -1426,12 +1430,12 @@ actual Rust/Swift/TypeScript JSON boundary values above `2^53` and at `u64::MAX`
 checking precision rather than only type names.
 
 `bash scripts/macos-ssh-smoke.sh` uses the isolated native QA app, temporary
-accounts/keys/known_hosts and real OpenSSH. Source `b9af76beef3c517b188aea337b655a06f9fc710b` /
-tested merge `1a3d3ca152a3c467a2aa397196ea2612f55565a2` passes on ARM64 and Intel in
-[CI 42013797745](https://github.com/YondFane/uTerm/actions/runs/42013797745), dirty=false and
+accounts/keys/known_hosts and real OpenSSH. Source `721fd5ae84ac1c80694cea78b6eb9b72d26d5362` /
+tested merge `5e4f2fc737a07b850408d16bfcdbff1d2d1b085f` passes on ARM64 and Intel in
+[CI 42022428571](https://github.com/YondFane/uTerm/actions/runs/42022428571), dirty=false and
 cleanup=true.
 
-The two `native-qa-macos-15[-intel]-b9af76beef3c517b188aea337b655a06f9fc710b` artifacts contain
+The two `native-qa-macos-15[-intel]-721fd5ae84ac1c80694cea78b6eb9b72d26d5362` artifacts contain
 `ssh-live.json`, `ssh-service-core.json`, toolchain/test logs and ten real WindowServer captures.
 Scenarios cover retained conflict drafts, SFTP uploads/downloads, visible transfer
 progress/cancellation, actual forwarding, key/password remote PTYs, detach/replay/independent close,
@@ -1442,7 +1446,8 @@ authenticated temporary-password reconnect after terminal transport reopening.
 Visual review confirms password-terminal output and the connection window after native trust
 approval. New source still requires its own CI evidence; previous SHAs cannot accept it. Manual
 pickers, IME and macOS 14 interaction are unexecuted; minimum deployment targets/builds do not
-replace acceptance. #36 remains open and unmerged/unreleased.
+replace acceptance. Issue #36 records source-specific acceptance separately from merge/release
+status.
 
 ### Quick connections and host search
 
@@ -1624,70 +1629,23 @@ completion, errors and cancellation.
 
 #### SSH and SFTP checks
 
-- Shared configuration checks on Linux use real OpenSSH configuration resolution with temporary
-  profiles, proxy/forwarding metadata, identity changes and invalid-config errors. Rust tests cover
-  oversized files, Include cycles/depth/file-count bounds and coexistence with a client runtime.
-  Real Core/TypeScript requests reject secret fields without echoing values and preserve port
-  strings. `ssh-configuration-core.json` records the actual source/merge and confirms no remote
-  login, stored snapshot or host startup. Linux passed five Rust configuration tests, the Core
-  report test, 11 SSH backend checks, all Core/FFI/host checks, 408 frontend checks (ten skipped),
-  83 backend checks (nine ignored), types and production/desktop builds. Source
-  `8491bae96401829e5cc5c3420d5aaccb58494356` / tested merge
-  `f25eef9b077d0b9be88ed35f311db52868d17f88` has passed the configuration report on native Mac
-  ARM/Intel and Tauri Windows/macOS, dirty=false; both native Swift/C ABI checks passed. Reports and
-  logs are retained in Issue #36. This accepts the configuration subset, not an authenticated
-  service or native connection UI.
+Commands and source-bound reports for configuration resolution, paths, authentication/credentials
+and real services appear in Shared SSH services above. Native SSH workspace records Swift windows,
+screenshots and unexecuted checks. Service and actual-window reports are accepted separately;
+process fixtures/builds do not establish authenticated login.
 
-- Windows automated checks: 17 focused frontend tests pass, including quick-address validation,
-  temporary connection cleanup/promotion, host filtering, jump/rule persistence, Redis profile
-  resolution, forwarding save failures and explicit start/stop, plus the existing SSH/SFTP guards.
-  All 102 regular backend tests and 26 local-service tests pass; six optional backend tests remain
-  ignored. Process fixtures cover listener readiness, startup exit, timeout, cancellation and
-  cleanup; they do not establish a real SSH forwarding connection.
+`pnpm test`, `pnpm test:backend` and Core checks cover quick-address validation, temporary-profile
+promotion/cleanup, configuration upgrades, workspace/session isolation, remote draft identity,
+attach-only restoration, credential target binding and failed-save cleanup. Process fixtures cover
+readiness, startup failure, timeout, cancellation and owned cleanup. Real-service checks separately
+cover authentication, certificates, path boundaries, stale saves, streaming transfers, cancelled
+overwrite, network reconnection and preserved sibling tunnels.
 
-- The full Windows frontend run passes with 241 passed and 11 skipped. Changed-file formatting,
-  TypeScript, localization, documentation checks and the isolated desktop build pass.
-
-- An isolated Windows application (`sh.uterm.desktop.qa.sshredesign`) verified the native connection
-  form, default automatic authentication, Save only returning to an overview with zero sessions,
-  effective OpenSSH endpoint display, a remote file panel that stays disconnected until requested,
-  and independent SFTP connection progress and failure feedback. These checks used a loopback
-  profile, not a successfully authenticated remote service. Real Windows SSH/SFTP authentication,
-  Credential Manager and macOS/Linux acceptance of the redesigned interface remain pending.
-
-- An isolated Windows application (`sh.uterm.desktop.qa.sshp1`) checked quick connection creation,
-  the Temporary marker, saving a connection, explicit forwarding startup and separate failure
-  feedback against an unavailable loopback endpoint. Reopening retained saved rules without starting
-  them. At 640×420, the connection header, forwarding rules and scrollable jump-host form were
-  visually inspected. Successful forwarding, a real jump server, password forwarding and the
-  redesigned macOS/Linux runtime remain pending acceptance.
-
-- Validation: macOS automated tests exercise migration, connection/session isolation, grouping,
-  target validation, remote draft identity, attach-only restoration, exclusion of local tools and
-  bounded progress updates. Real system SFTP-server tests cover Chinese names, safe saves,
-  conflicts, root escape/link rejection, file mutations, streamed upload/download, cancelled
-  overwrite and temporary-file cleanup.
-
-- An isolated native app (`sh.uterm.desktop.qa.ssh`) connected to a loopback OpenSSH server and
-  verified fingerprint confirmation, remote shell output, detach/relaunch attachment and replay,
-  independent split closing, file editing, conflict retention, upload/download with matching bytes,
-  file-channel reconnection, transfer progress, cancellation cleanup and the transfer exit guard.
-  Additional password/connection validation: 187 frontend/build-helper tests, 32 host tests, 56
-  regular backend tests and all six Redis-specific tests pass on macOS.
-
-- Coverage includes legacy option serialization, schema 6 upgrades, invalid/secret-field rejection,
-  distinct port/user/key arguments, credential target binding, failed-save cleanup, full Redis
-  tunnel snapshots and authenticated one-use askpass with bounded messages, fingerprint
-  approval/rejection and unexpected-prompt rejection.
-
-- Isolated native QA (`sh.uterm.desktop.qa.sshauth`) uses real system OpenSSH with a disposable
-  loopback password server to verify explicit port/username, alias inheritance/HostKeyAlias,
-  password SFTP reading and Chinese-text saving, terminal output/reattachment, Redis tunnel PING and
-  value reads, Keychain save/read after app restart, credential removal, temporary-password expiry
-  on restart, and approving/cancelling the native host-fingerprint sheet.
-
-- Windows client/server, Credential Manager and Linux runtime remain unverified; password-mode jump
-  hosts and OTP are unsupported.
+System-credential checks use unique QA namespaces and verify reads before creation, after writing
+and after deletion, including repeated deletion. Passwords pass only through bounded, authenticated
+one-use askpass; workspace exports, status summaries and test logs exclude them. Password-mode jump
+hosts and OTP are unsupported. Linux native GUI, manual pickers/IME and interaction on the minimum
+macOS version remain unaccepted.
 
 Current SSH authentication options add code without new runtime dependencies. Current release
 installer sizes have not been measured; the isolated debug application build is validation evidence,
