@@ -59,6 +59,19 @@ try {
       ],
       2,
     ],
+    [
+      "redis-client",
+      "cargo",
+      [
+        "test",
+        "--locked",
+        "--manifest-path",
+        "crates/uterm-core/Cargo.toml",
+        "--test",
+        "redis_client",
+      ],
+      5,
+    ],
   ]) {
     const { status, output } = run(command, args);
     const log = `${name}.log`;

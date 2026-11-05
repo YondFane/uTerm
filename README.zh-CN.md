@@ -170,7 +170,8 @@ Python 服务及原始任务输出通道。在 macOS 图形会话运行
 3，不安装 Python 或依赖包；实际平台执行结果单独记录于功能指南。
 
 `uterm-core::redis`
-共享连接／凭据、TLS／SSH、二进制数据、TTL 和受保护写入规则；Tauri 命令保持既有接口及原生 CA 选择器。原生 Redis 入口／异步桥接与双端验收仍由 #39 跟踪。PATH 中有支持 TLS 的
+共享连接／凭据、TLS／SSH、二进制数据、TTL 和受保护写入规则；Tauri 命令保持既有接口及原生 CA 选择器。Core
+JSON 桥接提供异步操作、有界结果、配置 CAS 及退出／恢复保护；原生 Redis 入口与双端验收仍由 #39 跟踪。PATH 中有支持 TLS 的
 `redis-server` 和 `openssl` 时运行 `pnpm test:redis`，测试使用临时回环服务；另有 `redis-cli`
 时可运行 `node scripts/redis-core-smoke.mjs /绝对路径/临时证据目录` 生成来源绑定报告。共享 Redis
 CI 构建经校验的 Redis 7.4.7 并上传证据。

@@ -1666,21 +1666,36 @@ exit. State clones share connection, opening and draft protection. Shutdown reje
 cancelling authentication releases its opening slot and socket. Existing credential namespaces and
 connection configuration remain compatible.
 
+The Core JSON interface returns operation IDs/generations without blocking the caller on Redis I/O.
+At most eight running or unread business results are admitted, with separate capacity for
+disconnect, write-permission and draft/quit controls. Result lists omit values and parameters. Reads
+check the generation and consume a completed result only once. Profile save/removal uses
+revision-checked storage and refuses active/dirty profiles. Quit freezes new work; resume retains
+hidden draft protection. Client close drains cancelled async tasks as well as owned sockets and SSH
+processes; it does not retry writes with an uncertain outcome.
+
 #### Shared-service validation and limits
 
 Linux x86_64 / Rust 1.99.1 passes all 11 Redis service regressions with real Redis 7.4.7/TLS and
 OpenSSL, including binary values, TTL, stale snapshots, read-only enforcement, TLS name/CA rejection
 and uncertain writes without retry. Two public host-port regressions cover late authentication after
 shutdown and cancelled authentication. Full Core/FFI, host, Tauri backend (41 passed / two ignored),
-frontend (416 passed / ten skipped), types, production/desktop builds and contracts pass.
+frontend (417 passed / ten skipped), types, production/desktop builds and contracts pass.
+
+Five additional async/contract regressions pass: unread-result backpressure with disconnect still
+available, generation/single-consumption checks and parameter exclusion, quit/resume with hidden
+drafts, closing during authentication, profile CAS/secret rejection and exact text/binary JSON. The
+authentication/close race passes 20 repeated runs after draining cancelled tasks on close.
+TypeScript fixture checks pass; Swift exact-value and actual C ABI guard checks are included in
+native CI and still require their own platform result.
 
 `pnpm test:redis` explicitly enables the seven real-server checks, each using temporary loopback
 servers. The normal Core suite runs the other four service checks and the two host-port checks.
 `node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory` records toolchains,
 actual test names, logs, source/merge SHA and source-tree state. Shared Redis CI builds the verified
-7.4.7 source with TLS and uploads those reports. Native async bridging/entry, dual-client UI and
-platform credential acceptance remain tracked in [#39](https://github.com/YondFane/uTerm/issues/39);
-service tests do not establish UI acceptance.
+7.4.7 source with TLS and uploads those reports. Native Redis entry, dual-client UI and platform
+credential acceptance remain tracked in [#39](https://github.com/YondFane/uTerm/issues/39); service
+tests do not establish UI acceptance.
 
 ### Redis connection setup
 

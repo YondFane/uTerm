@@ -350,6 +350,15 @@ export interface CorePythonRunConfig {
   working_directory?: string;
 }
 
+export interface CoreRedisOperation {
+  error?: string | null;
+  generation: string;
+  id: string;
+  kind: string;
+  result?: JSONValue;
+  state: string;
+}
+
 export interface CoreRequest {
   id: string;
   method: string;

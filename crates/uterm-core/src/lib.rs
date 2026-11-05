@@ -103,6 +103,7 @@ pub struct Core {
     control: Mutex<Option<Arc<utermd_local::control::Control>>>,
     ssh: Mutex<Option<Arc<ssh::service::Service>>>,
     database: Mutex<Option<Arc<database::service::Service>>>,
+    redis: Mutex<Option<Arc<redis::service::Service>>>,
 }
 impl Core {
     pub fn open(root: PathBuf) -> Result<Self> {
@@ -114,6 +115,7 @@ impl Core {
             control: Mutex::new(None),
             ssh: Mutex::new(None),
             database: Mutex::new(None),
+            redis: Mutex::new(None),
         })
     }
     pub fn set_terminal_sink(&self, sink: terminal::Sink) -> Result<()> {
@@ -125,6 +127,11 @@ impl Core {
         Ok(())
     }
     pub fn close(&self) {
+        if let Ok(mut redis) = self.redis.lock() {
+            if let Some(service) = redis.take() {
+                service.close();
+            }
+        }
         if let Ok(mut database) = self.database.lock() {
             if let Some(service) = database.take() {
                 service.close();
@@ -378,6 +385,7 @@ impl Core {
             }
             method if method.starts_with("ssh.") => self.ssh_request(method, params),
             method if method.starts_with("database.") => self.database_request(method, params),
+            method if method.starts_with("redis.") => self.redis_request(method, params),
             "control.start" => {
                 let mut state = self
                     .control

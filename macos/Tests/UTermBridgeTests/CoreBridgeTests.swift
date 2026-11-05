@@ -3,6 +3,40 @@ import XCTest
 @testable import UTermBridge
 
 final class CoreBridgeTests: XCTestCase {
+    func testRedisBinaryAndExactTextAcrossSwiftAndGuardThroughCABI() async throws {
+        var repository = URL(fileURLWithPath: #filePath)
+        for _ in 0..<4 { repository.deleteLastPathComponent() }
+        let data = try Data(contentsOf: repository.appendingPathComponent("shared/contracts/redis-values-v1.json"))
+        let value = try JSONDecoder().decode(CoreRedisOperation.self, from: data)
+        let result = try XCTUnwrap(value.result)
+        XCTAssertEqual(result["text"], .string("9223372036854775807 中文🚀"))
+        XCTAssertEqual(Data(base64Encoded: try XCTUnwrap(result["binary"]["data"].string)), Data([0, 255, 127]))
+        XCTAssertEqual(result["binary"]["text"], .null)
+        XCTAssertEqual(Data(base64Encoded: try XCTUnwrap(result["member"].string)), Data([255, 0]))
+        let encoded = try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(value))
+        XCTAssertEqual(encoded["result"], result)
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let core = try await CoreBridge.open(root: root.appendingPathComponent("shared-state-v1"))
+        _ = try await core.call("redis.configure", params: .object(["identifier": .string("sh.uterm.qa.redis-bridge")]))
+        let job = try await core.call("redis.operation.start", params: .object(["kind": .string("guard"), "id": .string(UUID().uuidString), "active": .bool(true)]))
+        let operation = try JSONDecoder().decode(CoreRedisOperation.self, from: JSONEncoder().encode(job))
+        var completed = false
+        for _ in 0..<200 {
+            let response = try await core.call("redis.operation.read", params: .object(["id": .string(operation.id), "generation": .string(operation.generation), "consume": .bool(true)]))
+            if response["state"] == .string("completed") { completed = true; break }
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        XCTAssertTrue(completed)
+        let status = try await core.call("redis.status")
+        XCTAssertEqual(status["dirty"], .bool(true))
+        do {
+            _ = try await core.call("redis.operation.read", params: .object(["id": .string(operation.id), "generation": .string("stale"), "consume": .bool(true)]))
+            XCTFail("A stale Redis generation must not consume a result")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "REDIS_OPERATION_CHANGED") }
+        await core.close()
+    }
+
     func testDatabaseValuesKeepExactTextAcrossSwiftEncoding() throws {
         var root = URL(fileURLWithPath: #filePath)
         for _ in 0..<4 { root.deleteLastPathComponent() }
@@ -71,6 +105,35 @@ final class CoreBridgeTests: XCTestCase {
         let saved = try await core.call("database.profile.save", params: .object([
             "expectedRevision": initial["revision"], "workspaceId": initial["document"]["workspace"]["selectedWorkspace"],
             "config": .object(["id": .string(UUID().uuidString), "name": .string("QA 中文"), "kind": .string("postgresql"), "host": .string("127.0.0.1"), "port": .number(5432), "database": .string("qa"), "username": .string("qa"), "tls": .bool(true), "ca_file": .string(""), "credential_id": .null])
+        ]))
+        await fulfillment(of: [delivered], timeout: 5)
+        event.cancel()
+        let received = await event.value
+        XCTAssertEqual(received?.kind, "snapshot.changed")
+        XCTAssertEqual(received?.revision, saved["revision"].string)
+        await core.close()
+    }
+
+    func testRedisProfileSavePublishesItsActualRevisionThroughCABI() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let core = try await CoreBridge.open(root: root.appendingPathComponent("shared-state-v1"))
+        let defaults = try await core.call("state.defaults")
+        let initial = try await core.call("migration.import", params: .object(["workspace": defaults["workspace"], "settings": defaults["settings"], "legacy": .object([:])]))
+        let delivered = expectation(description: "Redis profile save invalidates its Core subscriber")
+        let event = Task<CoreEvent?, Never> {
+            for await value in core.events where value.revision != initial["revision"].string {
+                delivered.fulfill(); return value
+            }
+            return nil
+        }
+        let profile: JSONValue = .object([
+            "id": .string(UUID().uuidString), "name": .string("QA 中文"), "host": .string("127.0.0.1"),
+            "port": .number(6379), "db": .number(0), "username": .string("qa"), "tls": .bool(false),
+            "ca_file": .string(""), "server_name": .string(""), "ssh_host": .string(""), "credential_id": .null
+        ])
+        let saved = try await core.call("redis.profile.save", params: .object([
+            "expectedRevision": initial["revision"], "workspaceId": initial["document"]["workspace"]["selectedWorkspace"], "config": profile
         ]))
         await fulfillment(of: [delivered], timeout: 5)
         event.cancel()

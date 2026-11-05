@@ -349,6 +349,15 @@ public struct CorePythonRunConfig: Codable, Sendable {
     public var working_directory: String?
 }
 
+public struct CoreRedisOperation: Codable, Sendable {
+    public var error: String?
+    public var generation: String
+    public var id: String
+    public var kind: String
+    public var result: JSONValue?
+    public var state: String
+}
+
 public struct CoreRequest: Codable, Sendable {
     public var id: String
     public var method: String

@@ -20,6 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "SshResolution":schemars::schema_for!(uterm_core::ssh::Resolution),
             "SshOperation":schemars::schema_for!(uterm_core::ssh::service::Operation),
             "DatabaseOperation":schemars::schema_for!(uterm_core::database::service::Operation),
+            "RedisOperation":schemars::schema_for!(uterm_core::redis::service::Operation),
             "SshProgress":schemars::schema_for!(uterm_core::ssh::service::Progress),
             "SshTrustPrompt":schemars::schema_for!(uterm_core::ssh::service::TrustPrompt),
             "JavaMavenConfig":schemars::schema_for!(uterm_core::java::MavenConfig),

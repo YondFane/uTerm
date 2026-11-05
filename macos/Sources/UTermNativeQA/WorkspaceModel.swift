@@ -110,6 +110,7 @@ final class WorkspaceModel: ObservableObject {
                     _ = try await ssh.call("host.configure", params: .object(["helper": .string(helper.path)]))
                     _ = try await ssh.call("ssh.configure", params: .object(["credentialService": .string((Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native") + ".ssh")]))
                     _ = try await ssh.call("database.configure", params: .object(["identifier": .string(Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native")]))
+                    _ = try await ssh.call("redis.configure", params: .object(["identifier": .string(Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native")]))
                     sshBridge = ssh
                 } catch { await ssh.close(); throw error }
             }

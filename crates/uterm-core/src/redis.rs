@@ -1,4 +1,6 @@
 mod host;
+mod request;
+pub mod service;
 pub use host::Host;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -1077,6 +1079,14 @@ impl RedisState {
     }
     pub fn first_dirty(&self) -> Option<String> {
         self.dirty.lock().ok()?.iter().next().cloned()
+    }
+    fn profile_in_use(&self, id: &str) -> bool {
+        self.dirty.lock().map_or(true, |values| values.contains(id))
+            || self.connections.try_lock().map_or(true, |connections| {
+                connections
+                    .values()
+                    .any(|connection| connection.config.id == id)
+            })
     }
     pub fn stop(&self) {
         self.closed.store(true, Ordering::SeqCst);
