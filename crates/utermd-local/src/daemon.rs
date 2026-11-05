@@ -1412,6 +1412,7 @@ impl Host {
                     ];
                     if cfg!(windows) {
                         values.push(crate::java_utf8::CAPABILITY.into());
+                        values.push(crate::java_utf8::LEGACY_CAPABILITY.into());
                     }
                     if std::env::current_exe()?
                         .file_stem()
@@ -1725,6 +1726,58 @@ pub fn report_from_environment(state: String) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn java_utf8_upgrade_probe_preserves_legacy_tasks_and_requires_the_repaired_helper() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let endpoint = Endpoint {
+            version: VERSION,
+            port: listener.local_addr().unwrap().port(),
+            token: uuid::Uuid::new_v4().to_string(),
+        };
+        std::fs::write(
+            directory.path().join("endpoint.json"),
+            serde_json::to_vec(&endpoint).unwrap(),
+        )
+        .unwrap();
+        let peer = std::thread::spawn(move || {
+            for probe in 0..5 {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let request: Request = receive(&mut stream).unwrap();
+                assert_eq!(request.version, VERSION);
+                assert_eq!(request.token, endpoint.token);
+                assert!(matches!(request.operation, Operation::Ping));
+                let mut capabilities = vec![
+                    "java-tasks-v1".into(),
+                    crate::java_utf8::LEGACY_CAPABILITY.into(),
+                ];
+                if probe == 4 {
+                    capabilities.push(crate::java_utf8::CAPABILITY.into());
+                }
+                send(
+                    &mut stream,
+                    &Reply::Ready {
+                        pid: 1,
+                        capabilities,
+                    },
+                )
+                .unwrap();
+            }
+        });
+        let client = Client::connect(directory.path()).unwrap();
+        client.require_task_support().unwrap();
+        assert_eq!(
+            client.require_java_utf8_support().unwrap_err().to_string(),
+            "JAVA_UTF8_HOST_UPGRADE_REQUIRED"
+        );
+        client.require_task_support().unwrap();
+        client.require_java_utf8_support().unwrap();
+        peer.join().unwrap();
+    }
 
     #[test]
     fn slow_agent_startup_keeps_host_requests_responsive() {

@@ -2901,10 +2901,13 @@ relative or existing short representation; otherwise the helper reports
 explicitly refused. Application file encoding remains configurable. A bounded anonymous stdin pipe
 carries literal arguments; no argument/environment file or shell interpolation is introduced. The
 child retains the task console and process-tree lifetime, then returns the actual JVM exit code.
-ASCII steps retain direct Java launching. New Windows Java tasks require the helper's UTF-8-launch
-capability; an older active helper reports an upgrade requirement without killing its existing
-sessions/tasks. The Unicode route needs Windows per-process UTF-8 support and a JDK matching the
-child architecture.
+ASCII steps retain direct Java launching. The Java 8 native bootstrap-library path also uses an
+ASCII relative or existing short representation, because the JVM loads ZIP support before any
+premain agent. New Windows Java tasks require `java-utf8-launch-v2`; an older active helper reports
+an upgrade requirement without killing its existing sessions/tasks. Updated helpers also advertise
+v1 for older clients. A loopback protocol regression verifies that v1 alone is refused for the
+Unicode route while ordinary task capability probes remain usable. The Unicode route needs Windows
+per-process UTF-8 support and a JDK matching the child architecture.
 
 `bash scripts/macos-java-smoke.sh` uses JDK 21 to build a disposable JAR and operate the actual
 native menu/window. Native ARM/Intel configuration, conflict, output, search/copy/follow,
@@ -2940,14 +2943,13 @@ source/asset reproducibility does not replace execution.
 Run `pnpm test:core` and frontend checks with `JAVA_HOME` pointing to JDK 21 and its `bin` on
 `PATH`. The Java interoperability workflow runs the actual Windows host on JDK 8/11/17/21 and
 uploads `java-live-core.json`, source/toolchain data and targeted logs. Source
-`de4eff74a87ab8cee62c3fe15bf42051847616dc` / tested merge `ecb7c8e3adaefb84fbc322228af48d16c656d86d`
-passes the actual Windows Unicode JAR fixture on Temurin 11.0.32.1+1, 17.0.20.1+1 and 21.0.13+9. JDK
-8.0.504-1 still fails with `Could not find or load main class TaskProbe` (exit 1 instead of 7); its
-early native encoding conversion remains incompatible despite the UTF-8 property override. The
-matrix therefore fails, and JDK 8 Unicode acceptance remains open.
-[Reports/artifacts](https://github.com/YondFane/uTerm/issues/37#issuecomment-6631095310) distinguish
-those results from full real Maven/Spring Boot and manual/platform acceptance, which remain
-incomplete. `java-launcher-probe.json` is diagnostic evidence.
+`cd82fb1eead3edf18c1f8102a13501d6d13b9edf` / tested merge `96d639eb79a77189eb1033b3fc96ad532c75e837`
+passes the strict Windows task on JDK 11/17/21. Its JDK 8 diagnostic runs both ASCII and Chinese JAR
+paths with exact arguments/properties and exit 7, but the stricter Chinese project-directory task
+fails before premain with `UnsatisfiedLinkError: no zip in java.library.path`. Therefore the
+[Java matrix](https://github.com/YondFane/uTerm/actions/runs/41975963071) fails. The native
+bootstrap path repair requires a fresh Windows result; JDK 8 and full #37 acceptance remain open.
+Diagnostic collection, Linux execution and asset reproducibility do not replace that result.
 
 The optional real Maven fixture uses Maven 3.9.9 and Spring Boot 2.7.18 with a disposable
 three-project reactor. It exercises Package/Test/Install, module preparation, development and

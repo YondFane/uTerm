@@ -39,6 +39,7 @@ public final class Java8EncodingAgent {
                 String wrong = new String(root.getBytes(StandardCharsets.UTF_8), nativeEncoding);
                 if (!wrong.equals(root)) value = value.replace(wrong, root);
             }
+            if (property.equals("sun.boot.library.path")) value = new File(value).getAbsolutePath();
             System.setProperty(property, value);
         }
         System.setProperty("user.dir", values[2]);

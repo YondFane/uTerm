@@ -1,6 +1,7 @@
 use anyhow::Result;
 
-pub const CAPABILITY: &str = "java-utf8-launch-v1";
+pub const CAPABILITY: &str = "java-utf8-launch-v2";
+pub const LEGACY_CAPABILITY: &str = "java-utf8-launch-v1";
 #[cfg(windows)]
 mod agent;
 #[cfg(windows)]
@@ -557,6 +558,16 @@ mod windows {
                     &text_path(home)?,
                     &classpath,
                 )?;
+                // System loads zip before premain; its native-library directory must survive locale decoding.
+                // System 在 premain 前加载 zip，原生库目录必须能经区域编码解码后保持准确。
+                let bootstrap = cache.join(bin.strip_prefix(home)?);
+                values.insert(
+                    1,
+                    format!(
+                        "-Dsun.boot.library.path={}",
+                        agent_path(&bootstrap, &directory)?
+                    ),
+                );
                 // Java 8 initializes VM properties before the -D encoding override takes effect.
                 // Java 8 在 -D 编码覆盖生效前就初始化 VM 属性。
                 values.insert(

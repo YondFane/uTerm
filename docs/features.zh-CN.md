@@ -1703,8 +1703,10 @@ points。父／子进程共用读锁保护活动缓存；正常结束移除缓�
 8 子进程在用户 Agent 与主类前加载小型内嵌兼容 Agent，在 Java 8 提前按区域设置解码后恢复原始 UTF-8
 VM 属性和所选 JDK 的系统 URL
 classpath，再为启动器参数选择 UTF-8。运行时 Agent 不保存用户参数，版本化输入只在进程内存传递。启动路径必须有 ASCII 相对或已有短路径表示，否则 helper 报告
-`JAVA_UTF8_AGENT_PATH_UNSUPPORTED`；需要修复 classpath 的非 URL 自定义系统加载器也会明确拒绝。应用文件编码仍可配置。有界匿名 stdin 管道传递字面参数，不增加参数／环境文件或 Shell 插值。子进程保留任务控制台和进程树生命周期，返回实际 JVM 退出码。ASCII 步骤保留直接 Java 启动。新的 Windows
-Java 任务要求 helper 的 UTF-8 启动能力；旧活动 helper 会提示升级，不终止已有会话／任务。Unicode 路径需要 Windows 的进程 UTF-8 支持，JDK 架构须与子进程匹配。
+`JAVA_UTF8_AGENT_PATH_UNSUPPORTED`；需要修复 classpath 的非 URL 自定义系统加载器也会明确拒绝。应用文件编码仍可配置。有界匿名 stdin 管道传递字面参数，不增加参数／环境文件或 Shell 插值。子进程保留任务控制台和进程树生命周期，返回实际 JVM 退出码。ASCII 步骤继续直接启动 Java。Java
+8 在任何 premain Agent 前加载 ZIP 支持，因此原生启动库目录也使用 ASCII 相对或已有短路径。新 Windows
+Java 任务要求
+`java-utf8-launch-v2`，旧活动 helper 提示升级，不终止已有会话／任务；新 helper 同时声明 v1 以兼容旧客户端。本地回环协议回归验证 v1 单独存在时拒绝 Unicode 路由，普通任务能力探测仍可使用。Unicode 路由要求 Windows 支持进程级 UTF-8，且 JDK 与子进程架构匹配。
 
 `bash scripts/macos-java-smoke.sh` 使用 JDK
 21 编译临时 JAR，操作真实原生菜单／窗口。原生 ARM／Intel 的配置、冲突、输出、搜索／复制／跟随、重连、停止／重新运行、开发模式不支持参数的可见拒绝和清理证据记录在对应源码的报告和每架构五张 WindowServer 截图中；已验收基线与 artifact 链接见 Issue
@@ -1729,14 +1731,11 @@ URL 解码内失败，此上游限制不计为桥接成功。Windows 桥接自�
 运行 `pnpm test:core` 和前端检查时，将 `JAVA_HOME` 指向 JDK 21，并把其 `bin` 加入
 `PATH`。Java 互操作 workflow 在 JDK 8／11／17／21 上运行实际 Windows 宿主，上传
 `java-live-core.json`、源码／工具链信息及专项日志。Source
-`de4eff74a87ab8cee62c3fe15bf42051847616dc`／tested merge `ecb7c8e3adaefb84fbc322228af48d16c656d86d`
-的真实 Windows Unicode JAR 样例通过 Temurin 11.0.32.1+1、17.0.20.1+1 和 21.0.13+9。JDK
-8.0.504-1 仍报
-`Could not find or load main class TaskProbe`，退出 1 而非预期 7；UTF-8 属性覆盖未解决其早期原生编码转换，整个矩阵失败，JDK
-8
-Unicode 验收保持开放。[报告与产物](https://github.com/YondFane/uTerm/issues/37#issuecomment-6631095310)
-区分以上结果与尚未完成的完整真实 Maven／Spring Boot 及人工／平台验收；`java-launcher-probe.json`
-仍仅为诊断证据。
+`cd82fb1eead3edf18c1f8102a13501d6d13b9edf`／tested merge `96d639eb79a77189eb1033b3fc96ad532c75e837`
+的严格 Windows 任务通过 JDK 11／17／21。其 JDK
+8 诊断使用 ASCII 与中文 JAR 路径，准确保留参数／属性并退出 7，但更严格的中文项目目录任务在 premain 前报
+`UnsatisfiedLinkError: no zip in java.library.path`。因此[Java 矩阵](https://github.com/YondFane/uTerm/actions/runs/41975963071)失败；原生启动库路径修复须等待新的 Windows 结果，JDK
+8 和 #37 完整验收仍开放。诊断采集、Linux 执行及资产可复现检查不能代替该结果。
 
 可选真实 Maven 样例使用 Maven 3.9.9 和 Spring Boot
 2.7.18，创建临时三项目 reactor，经 Core 和独立宿主执行打包／测试／安装、模块准备、开发运行及打包后 JAR 运行。真实检查核对所选 settings.xml、Maven／Spring
