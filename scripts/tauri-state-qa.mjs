@@ -66,7 +66,7 @@ const metadata = {
     process.platform === "darwin"
       ? "WindowServer screencapture -l"
       : process.platform === "win32"
-        ? "foreground native window CopyFromScreen"
+        ? "owned native window CopyFromScreen with topmost and occlusion checks"
         : "isolated X11 desktop",
   productionDataAccess: false,
   sourceTreeDirty,
@@ -284,10 +284,7 @@ try {
     execute("swiftc", [swift, "-o", join(root, "window-id")]);
   }
   if (process.platform === "win32") {
-    writeFileSync(
-      join(root, "capture.ps1"),
-      `param([int]$TargetProcessId,[string]$Destination)\nAdd-Type -AssemblyName System.Drawing\nAdd-Type @'\nusing System; using System.Runtime.InteropServices;\npublic class WindowCapture {\n [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }\n [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);\n [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);\n [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);\n}\n'@\n$p = Get-Process -Id $TargetProcessId\n$p.Refresh()\n$handle = $p.MainWindowHandle\nif ($handle -eq [IntPtr]::Zero) { throw 'No native window' }\n[void][WindowCapture]::ShowWindow($handle, 9)\n[void][WindowCapture]::SetForegroundWindow($handle)\nStart-Sleep -Milliseconds 300\n$rect = New-Object WindowCapture+Rect\nif (![WindowCapture]::GetWindowRect($handle,[ref]$rect)) { throw 'GetWindowRect failed' }\n$w=$rect.Right-$rect.Left; $h=$rect.Bottom-$rect.Top\nif ($w -lt 600 -or $h -lt 400) { throw 'Invalid native window dimensions' }\n$image=New-Object System.Drawing.Bitmap($w,$h)\n$g=[System.Drawing.Graphics]::FromImage($image)\ntry { $g.CopyFromScreen($rect.Left,$rect.Top,0,0,$image.Size); $image.Save($Destination,[System.Drawing.Imaging.ImageFormat]::Png) } finally { $g.Dispose(); $image.Dispose() }\n`,
-    );
+    copyFileSync(resolve("scripts/windows-window-capture.ps1"), join(root, "capture.ps1"));
   }
   function capture(path, target = child) {
     if (process.platform === "darwin") {
@@ -427,6 +424,7 @@ try {
     child = spawn(binary, args, { env, stdio: ["ignore", "pipe", "pipe"] });
     let log = "";
     let closed = false;
+    let mainExited = false;
     let code;
     let exitSignal;
     child.stdout.on("data", (s) => {
@@ -438,6 +436,11 @@ try {
     child.on("error", (error) => {
       log += String(error);
       closed = true;
+    });
+    child.on("exit", (status, signal) => {
+      mainExited = true;
+      code = status;
+      exitSignal = signal;
     });
     child.on("close", (status, signal) => {
       code = status;
@@ -808,7 +811,10 @@ try {
         }
         await delay(100);
       }
-      assert(closed, `${phase} did not quit through the ordinary exit guard`);
+      assert(
+        closed,
+        `${phase} did not finish ordinary exit: mainExited=${mainExited}, code=${code}, log=${log.slice(-1000)}`,
+      );
       const expected =
         phase === "ssh"
           ? 3
@@ -834,6 +840,14 @@ try {
         await writerExited;
       }
       writeFileSync(join(output, `${phase}.log`), log);
+      writeFileSync(
+        join(output, `${phase}-process.json`),
+        JSON.stringify(
+          { ...metadata, phase, mainExited, exitCode: code, closed, signal: exitSignal },
+          null,
+          2,
+        ),
+      );
     }
   }
   await run("editor-checkpoint");

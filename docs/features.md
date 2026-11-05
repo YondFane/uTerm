@@ -1396,7 +1396,10 @@ and does not exercise a manual file picker or IME. Its Unicode sample names/text
 scenes ran and produced screenshots on both Windows/macOS at source `405f4a5`; the overall run
 failed on Windows exit and a subsequent Mac ownership fixture. Owned-process exit cleanup and
 running SSH after the existing ownership/recovery checks address those cases; full reruns remain
-pending.
+pending. Visual review found the Windows CI console covering the earlier captures, so those images
+are not accepted UI evidence. The Windows helper now temporarily raises only the owned QA window,
+verifies sampled points are unobstructed and restores its topmost flag. Process reports distinguish
+main-process exit from output handles that remain open.
 
 ### Native SSH workspace
 
