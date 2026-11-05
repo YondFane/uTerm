@@ -2901,13 +2901,16 @@ relative or existing short representation; otherwise the helper reports
 explicitly refused. Application file encoding remains configurable. A bounded anonymous stdin pipe
 carries literal arguments; no argument/environment file or shell interpolation is introduced. The
 child retains the task console and process-tree lifetime, then returns the actual JVM exit code.
-ASCII steps retain direct Java launching. The Java 8 native bootstrap-library path also uses an
-ASCII relative or existing short representation, because the JVM loads ZIP support before any
-premain agent. New Windows Java tasks require `java-utf8-launch-v2`; an older active helper reports
-an upgrade requirement without killing its existing sessions/tasks. Updated helpers also advertise
-v1 for older clients. A loopback protocol regression verifies that v1 alone is refused for the
-Unicode route while ordinary task capability probes remain usable. The Unicode route needs Windows
-per-process UTF-8 support and a JDK matching the child architecture.
+ASCII steps retain direct Java launching. Java 8 requires an ASCII application-data cache path: its
+JVM loads native ZIP support before premain can repair locale-decoded paths. A Unicode cache path
+reports `JAVA_UTF8_JDK8_CACHE_PATH_UNSUPPORTED` before launch and removes the owned mirror,
+retaining the selected JDK. Relative bootstrap paths did not resolve the real Windows failure. This
+limitation concerns application data; selected project directories can contain Chinese. New Windows
+Java tasks require `java-utf8-launch-v2`; an older active helper reports an upgrade requirement
+without killing its existing sessions/tasks. Updated helpers also advertise v1 for older clients. A
+loopback protocol regression verifies that v1 alone is refused for the Unicode route while ordinary
+task capability probes remain usable. The Unicode route needs Windows per-process UTF-8 support and
+a JDK matching the child architecture.
 
 `bash scripts/macos-java-smoke.sh` uses JDK 21 to build a disposable JAR and operate the actual
 native menu/window. Native ARM/Intel configuration, conflict, output, search/copy/follow,
@@ -2932,8 +2935,9 @@ corrupted VM properties and classpath; the encoding property override alone was 
 
 The strict task test retains exact arguments/properties, final output, exit code 7, replay and
 generation-safe stop. It additionally uses a Chinese project directory and verifies that a user
-premain agent sees the original Unicode/emoji property before main. The disposable user-agent JAR
-has an ASCII path. Separate stock-JDK diagnostics retain BMP and supplementary-character directory
+premain agent sees the original Unicode/emoji property before main. Application data lives
+separately from the Chinese project, as in both desktop clients; the disposable user-agent JAR has
+an ASCII path. Separate stock-JDK diagnostics retain BMP and supplementary-character directory
 results without using the uTerm host. Local JDK 21 also fails from an emoji directory without an
 agent, inside Java's URL decoding; that upstream limitation is not counted as a successful bridge
 result. The Windows bridge requires an existing ASCII short path when its own asset path contains
@@ -2945,11 +2949,13 @@ Run `pnpm test:core` and frontend checks with `JAVA_HOME` pointing to JDK 21 and
 uploads `java-live-core.json`, source/toolchain data and targeted logs. Source
 `cd82fb1eead3edf18c1f8102a13501d6d13b9edf` / tested merge `96d639eb79a77189eb1033b3fc96ad532c75e837`
 passes the strict Windows task on JDK 11/17/21. Its JDK 8 diagnostic runs both ASCII and Chinese JAR
-paths with exact arguments/properties and exit 7, but the stricter Chinese project-directory task
-fails before premain with `UnsatisfiedLinkError: no zip in java.library.path`. Therefore the
-[Java matrix](https://github.com/YondFane/uTerm/actions/runs/41975963071) fails. The native
-bootstrap path repair requires a fresh Windows result; JDK 8 and full #37 acceptance remain open.
-Diagnostic collection, Linux execution and asset reproducibility do not replace that result.
+paths with exact arguments/properties and exit 7, but a Unicode application-data cache fails before
+premain with `UnsatisfiedLinkError: no zip in java.library.path`. The
+[Java matrix](https://github.com/YondFane/uTerm/actions/runs/41975963071) therefore fails. Source
+`e7a14e91885d63b611992b02a598432cdff85263` repeats this failure with a relative bootstrap path. The
+explicit cache-path refusal and separately stored application data require fresh Windows results;
+JDK 8 and full #37 acceptance remain open. Diagnostic collection, Linux execution and asset
+reproducibility do not replace that result.
 
 The optional real Maven fixture uses Maven 3.9.9 and Spring Boot 2.7.18 with a disposable
 three-project reactor. It exercises Package/Test/Install, module preparation, development and

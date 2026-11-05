@@ -55,7 +55,19 @@ pub(crate) fn prepare(
     let version = windows::version(home)?;
     let legacy = version.as_bytes().starts_with(b"1.8.") || version.as_bytes().starts_with(b"8.");
     let cache = if legacy {
-        Some(windows::cache_jdk8(root, home)?)
+        let cache = windows::cache_jdk8(root, home)?;
+        // Java 8 loads native bootstrap libraries before premain can repair its locale-decoded paths.
+        // Java 8 在 premain 能修复区域解码路径前就加载原生启动库。
+        anyhow::ensure!(
+            cache
+                .directory
+                .path()
+                .as_os_str()
+                .as_encoded_bytes()
+                .is_ascii(),
+            "JAVA_UTF8_JDK8_CACHE_PATH_UNSUPPORTED"
+        );
+        Some(cache)
     } else {
         None
     };
@@ -558,16 +570,6 @@ mod windows {
                     &text_path(home)?,
                     &classpath,
                 )?;
-                // System loads zip before premain; its native-library directory must survive locale decoding.
-                // System 在 premain 前加载 zip，原生库目录必须能经区域编码解码后保持准确。
-                let bootstrap = cache.join(bin.strip_prefix(home)?);
-                values.insert(
-                    1,
-                    format!(
-                        "-Dsun.boot.library.path={}",
-                        agent_path(&bootstrap, &directory)?
-                    ),
-                );
                 // Java 8 initializes VM properties before the -D encoding override takes effect.
                 // Java 8 在 -D 编码覆盖生效前就初始化 VM 属性。
                 values.insert(
@@ -692,6 +694,35 @@ mod tests {
             "."
         )
         .is_err());
+    }
+    #[cfg(windows)]
+    #[test]
+    fn jdk8_rejects_unicode_runtime_cache_before_launch_and_reclaims_its_owned_copy() {
+        let temporary = tempfile::tempdir().unwrap();
+        let home = temporary.path().join("selected-jdk");
+        let root = temporary.path().join("应用数据");
+        std::fs::create_dir_all(home.join("bin")).unwrap();
+        std::fs::create_dir(&root).unwrap();
+        std::fs::write(home.join("release"), "JAVA_VERSION=\"1.8.0_504\"\n").unwrap();
+        std::fs::write(home.join("bin/java.exe"), b"selected executable").unwrap();
+        let step = crate::tasks::Step {
+            program: home.join("bin/java.exe"),
+            arguments: vec!["-jar".into(), "中文.jar".into()],
+            directory: temporary.path().to_owned(),
+            environment: Default::default(),
+            label: "Java QA".into(),
+            windows_java_utf8: true,
+            jar_directory: None,
+        };
+        assert_eq!(
+            prepare(&step, &root).err().unwrap().to_string(),
+            "JAVA_UTF8_JDK8_CACHE_PATH_UNSUPPORTED"
+        );
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+        assert_eq!(
+            std::fs::read(home.join("bin/java.exe")).unwrap(),
+            b"selected executable"
+        );
     }
     #[cfg(windows)]
     #[test]

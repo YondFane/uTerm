@@ -1704,7 +1704,9 @@ points。父／子进程共用读锁保护活动缓存；正常结束移除缓�
 VM 属性和所选 JDK 的系统 URL
 classpath，再为启动器参数选择 UTF-8。运行时 Agent 不保存用户参数，版本化输入只在进程内存传递。启动路径必须有 ASCII 相对或已有短路径表示，否则 helper 报告
 `JAVA_UTF8_AGENT_PATH_UNSUPPORTED`；需要修复 classpath 的非 URL 自定义系统加载器也会明确拒绝。应用文件编码仍可配置。有界匿名 stdin 管道传递字面参数，不增加参数／环境文件或 Shell 插值。子进程保留任务控制台和进程树生命周期，返回实际 JVM 退出码。ASCII 步骤继续直接启动 Java。Java
-8 在任何 premain Agent 前加载 ZIP 支持，因此原生启动库目录也使用 ASCII 相对或已有短路径。新 Windows
+8 要求应用数据缓存路径为 ASCII：JVM 在 premain 能修复区域解码路径前就加载原生 ZIP 支持。缓存路径包含 Unicode 时，在启动前明确报告
+`JAVA_UTF8_JDK8_CACHE_PATH_UNSUPPORTED`
+并移除自建镜像，保留所选 JDK。相对启动库路径未解决真实 Windows 失败。此限制针对应用数据，所选项目目录仍可包含中文。新 Windows
 Java 任务要求
 `java-utf8-launch-v2`，旧活动 helper 提示升级，不终止已有会话／任务；新 helper 同时声明 v1 以兼容旧客户端。本地回环协议回归验证 v1 单独存在时拒绝 Unicode 路由，普通任务能力探测仍可使用。Unicode 路由要求 Windows 支持进程级 UTF-8，且 JDK 与子进程架构匹配。
 
@@ -1723,7 +1725,7 @@ Java 互操作 workflow 另外通过所选真实 Core／宿主／JVM 启动 ASCI
 8 报告确认应用参数正确，但 VM 属性和 classpath 损坏，仅覆盖编码属性不足以修复。
 
 严格任务检查保留准确参数／属性、最终输出、退出码 7、回放及代次安全停止，还使用中文项目目录，验证用户 premain
-Agent 在主类前读到原始 Unicode／emoji 属性。可丢弃用户 Agent
+Agent 在主类前读到原始 Unicode／emoji 属性。应用数据与中文项目分开存放，与两个桌面客户端一致；可丢弃用户 Agent
 JAR 使用 ASCII 路径。独立的原版 JDK 诊断记录 BMP 与补充字符目录结果，不经过 uTerm 宿主；本地 JDK
 21 在不带 Agent 的 emoji 目录运行也在 Java
 URL 解码内失败，此上游限制不计为桥接成功。Windows 桥接自身资产路径含补充字符时，要求已有 ASCII 短路径。此修复的平台验收须在 #37 核对其自身严格 CI 结果，源码／资产可复现检查不能代替实际运行。
@@ -1733,8 +1735,10 @@ URL 解码内失败，此上游限制不计为桥接成功。Windows 桥接自�
 `java-live-core.json`、源码／工具链信息及专项日志。Source
 `cd82fb1eead3edf18c1f8102a13501d6d13b9edf`／tested merge `96d639eb79a77189eb1033b3fc96ad532c75e837`
 的严格 Windows 任务通过 JDK 11／17／21。其 JDK
-8 诊断使用 ASCII 与中文 JAR 路径，准确保留参数／属性并退出 7，但更严格的中文项目目录任务在 premain 前报
-`UnsatisfiedLinkError: no zip in java.library.path`。因此[Java 矩阵](https://github.com/YondFane/uTerm/actions/runs/41975963071)失败；原生启动库路径修复须等待新的 Windows 结果，JDK
+8 诊断使用 ASCII 与中文 JAR 路径，准确保留参数／属性并退出 7，但 Unicode 应用数据缓存在 premain 前报
+`UnsatisfiedLinkError: no zip in java.library.path`。因此[Java 矩阵](https://github.com/YondFane/uTerm/actions/runs/41975963071)失败。Source
+`e7a14e91885d63b611992b02a598432cdff85263`
+使用相对启动库路径后仍出现同样失败。明确拒绝不支持的缓存路径及分开存放的应用数据须等待新的 Windows 结果，JDK
 8 和 #37 完整验收仍开放。诊断采集、Linux 执行及资产可复现检查不能代替该结果。
 
 可选真实 Maven 样例使用 Maven 3.9.9 和 Spring Boot

@@ -399,8 +399,10 @@ fn java_jar_uses_shared_host_literal_arguments_replay_and_generation_safe_stop()
     let project = temporary.path().join("Java 项目");
     std::fs::create_dir(&project).unwrap();
     let root = project.canonicalize().unwrap();
-    let core = Core::open(root.join("shared-state-v1")).unwrap();
-    let host_root = root.join("local-daemon-v1");
+    // Application data is separate from the selected project, as in both desktop clients.
+    // 应用数据与所选项目分离，与两个桌面客户端一致。
+    let core = Core::open(temporary.path().join("shared-state-v1")).unwrap();
+    let host_root = temporary.path().join("local-daemon-v1");
     let _cleanup = HostCleanup(host_root.clone());
     call(&core, "host.configure", json!({"helper":helper()}));
     let java_home = PathBuf::from(
