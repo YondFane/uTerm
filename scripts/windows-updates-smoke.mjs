@@ -90,6 +90,8 @@ let badSignature;
 let publicKey;
 let child;
 let installed = false;
+let stdout = "";
+let stderr = "";
 const counters = new Map();
 const server = createServer((request, response) => {
   const url = new URL(request.url, "http://127.0.0.1");
@@ -286,8 +288,6 @@ try {
   const binary = join(install, "uterm.exe");
   assert(existsSync(binary));
   child = spawn(binary, [], { env, stdio: ["ignore", "pipe", "pipe"] });
-  let stdout = "";
-  let stderr = "";
   child.stdout.on("data", (v) => {
     stdout += v;
   });
@@ -415,7 +415,15 @@ try {
       cleanup.push(String(error));
     }
   }
-  if (!cleanup.length) rmSync(root, { recursive: true, force: true });
+  if (!cleanup.length) {
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    } catch (error) {
+      cleanup.push(String(error));
+    }
+  }
+  writeFileSync(join(output, "stdout.log"), stdout);
+  writeFileSync(join(output, "stderr.log"), stderr);
   report.cleanupErrors = cleanup;
   if (cleanup.length) report.passed = false;
   writeFileSync(join(output, "http-requests.json"), JSON.stringify(requests, null, 2));

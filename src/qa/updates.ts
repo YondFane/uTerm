@@ -121,8 +121,16 @@ export async function runUpdates(
       inputAfterRelaunch: true,
       draftInput: "explicit simulated Core draft; actual persistence and upgrade",
     });
-    await coreRequest("host.close", { id: checkpoint.session, generation: checkpoint.generation });
-    await coreRequest("host.shutdownIdle");
+    const close = document.querySelector<HTMLElement>(
+      `[data-session-id="${checkpoint.session}"] .session-directory`,
+    );
+    assert(close, "Missing actual updated terminal close control");
+    close.dispatchEvent(new MouseEvent("auxclick", { button: 1, bubbles: true }));
+    await until(
+      async () => !(await host()).sessions.some((value) => value.spec.id === checkpoint.session),
+      "explicit updated terminal close",
+    );
+    await invoke("qa_shutdown_idle");
     await scene("complete", {
       passed: true,
       explicitSessionClose: true,

@@ -444,6 +444,8 @@ fn main() {
             qa::qa_scene,
             #[cfg(feature = "qa")]
             qa::qa_request_exit,
+            #[cfg(feature = "qa")]
+            qa::qa_shutdown_idle,
             shared_core::shared_core_request,
             shared_core::shared_core_ready,
             shared_core::shared_core_exit,

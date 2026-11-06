@@ -312,6 +312,6 @@ export async function runPerformance(
     async () => !(await host()).sessions.some((value) => value.spec.id === id),
     "close measured process",
   );
-  await coreRequest("host.shutdownIdle");
+  await invoke("qa_shutdown_idle");
   await invoke("qa_request_exit");
 }

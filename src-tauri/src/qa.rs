@@ -439,3 +439,24 @@ pub fn qa_request_exit(app: tauri::AppHandle) -> Result<(), String> {
     app.exit(0);
     Ok(())
 }
+
+#[tauri::command]
+pub async fn qa_shutdown_idle(app: tauri::AppHandle) -> Result<(), String> {
+    let directory = check(&app)?.join("data/local-daemon-v1");
+    tauri::async_runtime::spawn_blocking(move || {
+        use utermd_local::daemon::{Client, Operation, Reply};
+        if !directory.join("endpoint.json").exists() {
+            return Ok(());
+        }
+        let client = Client::connect(&directory).map_err(|error| error.to_string())?;
+        match client
+            .request(Operation::ShutdownIfIdle)
+            .map_err(|error| error.to_string())?
+        {
+            Reply::Done => Ok(()),
+            _ => Err("Owned QA host did not confirm idle shutdown".into()),
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}

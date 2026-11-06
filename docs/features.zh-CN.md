@@ -2773,7 +2773,8 @@ QA 上传安装包、公钥签名、HTTP 日志、源码／merge 元数据及所
 
 首次真实 Windows 源码56273d1、tested
 merge446673e43c359d066ed3c25c5a4755356558502c通过旧版本／错架构／坏签名／离线／中断下载及实际编辑器保护，进入手动检查和自动下载／确认，随后持久关闭因写入争用失败。报告及已查看的真实手动设置窗口保留在
-[artifact13521218962](https://github.com/YondFane/uTerm/actions/runs/42253055854/artifacts/13521218962)。QA 现使用既有“重试保存设置”实际控件，记录重试次数，另以明确模拟的数据库草稿执行实际安装保护。在调用可能直接退出的安装器前，Tauri 释放输入租约，保留宿主及 PTY；安装器启动失败时仍保留视图，可明确重新接管，不新增静默接管。修正后的平台结果待完成。
+[artifact13521218962](https://github.com/YondFane/uTerm/actions/runs/42253055854/artifacts/13521218962)。QA 现使用既有“重试保存设置”实际控件，记录重试次数，另以明确模拟的数据库草稿执行实际安装保护。在调用可能直接退出的安装器前，Tauri 释放输入租约，保留宿主及 PTY；安装器启动失败时仍保留视图，可明确重新接管，不新增静默接管。Windows 源码a5da831／merge4632afa8124e16fdbf9fafe52c679e0244ef284c随后完成签名0.2.4→0.2.5安装、不同PID、同一宿主／generation、草稿及新PTY输入保留；之后测试清理因Tauri桥接未配置独立Core
+helper失败。QA现通过真实终端控件关闭会话，仅关闭已验证且空闲的隔离Tauri宿主，保留活跃会话拒绝规则。Windows删除只对短暂文件占用作有界重试，清理失败也始终写出日志／汇总。[原始artifact13522119395](https://github.com/YondFane/uTerm/actions/runs/42256355715/artifacts/13522119395)仍为验收失败，修正后的平台结果待完成。
 
 #### Windows／Tauri 自动安装
 

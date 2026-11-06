@@ -4796,8 +4796,15 @@ opt-out fails under writer contention. Reports and the inspected manual-settings
 QA now uses the existing explicit Retry saving settings control, recording the retry count, and a
 simulated database draft additionally exercises the actual install guard. Before an installer that
 may exit directly, Tauri releases input leases without stopping host/PTYS. Failed installer startup
-retains views, which can explicitly take control again; no silent takeover is added. Corrected
-platform results remain pending.
+retains views, which can explicitly take control again; no silent takeover is added. Windows
+sourcea5da831 / merge4632afa8124e16fdbf9fafe52c679e0244ef284c subsequently completes signed
+0.2.4→0.2.5 installation, different PID, same host/generation, retained draft and fresh PTY input.
+It then fails fixture shutdown because the Tauri bridge has no standalone Core helper configured. QA
+now closes the actual terminal control and shuts down only its validated idle Tauri host, retaining
+normal active-session refusal rules. Windows removal retries bounded transient file locks and always
+writes logs/summary, including cleanup failures. The
+[original artifact13522119395](https://github.com/YondFane/uTerm/actions/runs/42256355715/artifacts/13522119395)
+remains a failed acceptance; corrected platform results remain pending.
 
 #### Windows/Tauri automatic installation
 
