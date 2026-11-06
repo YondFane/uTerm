@@ -529,6 +529,19 @@ from build time or a single throughput sample.
 
 在相同机器、架构、系统、工具链、Shell、14pt 字体、120×36 网格、3000 行回滚及临时项目下比较旧 Tauri 与原生 macOS，身份和数据隔离。每次只运行一个客户端，每例重复三次并保留单次结果。Windows 单独回归，不作跨系统性能结论；记录共享 runner 争用，不从构建时间或单次吞吐推断改善比例。
 
+The executable baseline uses `shared/fixtures/client-performance.json`: one PTY, twenty cycles of
+1,024 ANSI/Unicode records, 14pt text, 5,000-line scrollback, 64KiB CAS file service and 120-second
+idle soak. This first measurement records actual grids rather than claiming the target 120×36 is
+already enforced. `client-performance.yml` alternates native/Tauri on one Mac three times and
+archives raw CPU/RSS, per-cycle values, replay, screenshots and cleanup. Five warm-up cycles are
+excluded. Grid equality, TUI/database/slow-consumer workloads, longer leak checks and regression
+analysis remain acceptance gaps; no performance gain is inferred. Windows is a separate baseline.
+
+可执行基线使用
+`shared/fixtures/client-performance.json`：一个 PTY、二十轮各1,024条 ANSI／Unicode 输出、14pt 字体、5,000行回滚、64KiB
+CAS 文件服务及120秒空闲运行。首轮测量记录实际网格，不宣称目标120×36已强制一致。`client-performance.yml`
+在同一台 Mac 交替运行两端三次，归档原始 CPU／RSS、逐轮数据、回放、截图及清理，排除前五轮预热。网格一致、TUI／数据库／慢消费负载、长期泄漏及回退分析仍是验收缺口，不推断性能提升；Windows 单独记录基线。
+
 | Case / 场景                 | Reproducible workload and assertions / 可重复负载与断言                                                                                                                                                                                                     | Current acceptance / 当前验收                                                              |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | Idle / 空闲                 | 1, 4 and 16 real shell sessions; settle 30s, measure 60s. Record CPU, RSS and thread/FD or handle counts. / 真实会话静置 30 秒，测量 60 秒，记录 CPU、RSS、线程及资源句柄。                                                                                 | Not measured / 未测量                                                                      |

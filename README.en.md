@@ -209,6 +209,16 @@ decisions use an explicitly simulated SDK driver; installing/relaunching and aut
 remain separate acceptance. Reports, original windows, HTTP logs and the valid signed test ZIP are
 archived under `updates/`; private keys are never uploaded.
 
+The Client performance evidence workflow runs `node scripts/macos-performance-smoke.mjs` after the
+native build and `UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs` for Tauri. It
+alternates clients sequentially on the same Mac for three repetitions; Windows records its own Tauri
+baseline. `shared/fixtures/client-performance.json` controls the
+PTY/output/font/scrollback/file/replay/short soak workload. Raw PID-tree CPU/RSS, per-cycle
+response/order data, original windows, cleanup and source/workload hashes are archived.
+`node scripts/client-performance-report.mjs` audits the repetitions. Actual grids and unattributed
+WebContent/GPU/XPC exclusions remain explicit; database/TUI performance and long-run leak acceptance
+are pending. No performance improvement is claimed.
+
 The embedded Java 8 encoding agent includes its Java source and reproducible runtime bytes. After
 changing it, use JDK 21 to run `python3 scripts/java8-encoding-agent.py`, then
 `python3 scripts/java8-encoding-agent.py --check`. Normal Rust/application builds need no Java

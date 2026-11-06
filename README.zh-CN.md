@@ -175,6 +175,12 @@ workflow 执行。程序比较只允许 Tauri 唯一的 NSIS 类型标记变换�
 使用分别标识的原生 QA 应用、临时数据、一次性 CryptoKit 密钥及回环更新源运行真实 SDK。脚本下载经过哈希固定的官方签名工具，检查有效／无效签名、平台／渠道／版本拒绝、取消、中断／离线下载及重试。用户决定明确由模拟 SDK 驱动控制；安装／重启及自动调度仍须单独验收。报告、真实窗口原图、HTTP 日志及有效签名测试 ZIP 归档在
 `updates/`，私钥不上传。
 
+Client performance evidence workflow 在原生构建后运行
+`node scripts/macos-performance-smoke.mjs`，Tauri 使用
+`UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs`。同一台 Mac 顺序交替运行两端，共三次；Windows 单独记录 Tauri 基线。`shared/fixtures/client-performance.json`
+控制 PTY／输出／字体／回滚／文件／回放／短时运行负载。归档原始进程树 CPU／RSS、逐轮响应／顺序、窗口原图、清理及源码／负载哈希，`node scripts/client-performance-report.mjs`
+核对三次结果。明确记录实际网格和排除的未归属 WebContent／GPU／XPC；数据库／TUI 性能和长期泄漏验收仍待完成，不宣称性能改善。
+
 内嵌 Java 8 编码 Agent 同时提供 Java 源码和可复现的运行时字节。修改后使用 JDK 21 运行
 `python3 scripts/java8-encoding-agent.py`，再执行
 `python3 scripts/java8-encoding-agent.py --check`。正常 Rust／应用构建不需要 Java 编译器；Windows 互操作 CI 核对资产并运行实际所选 JDK。

@@ -65,28 +65,33 @@ link。脚本安装到所属临时目录，核对 x64 程序与只读资源文�
 配置；私有数据保留到测试清理，生产协议／卸载注册表指纹须保持一致。QA 安装器要求 CI 镜像已有 WebView2；仅供 QA 的安装／卸载钩子负责还原资源属性。
 
 两端在 `candidate/` 归档 SHA256、准确源码 head／tested merge
-SHA、平台／工具链证据、安装报告、日志及原始窗口截图。原生包使用 ad-hoc 签名，没有 Apple
-Developer 签名／公证；Windows 候选未签名，两端均无更新签名。
+SHA、平台／工具链、安装报告、日志及原始窗口截图。源码
+`8aacbb3b09925fe16f2bda24e66563eed9f27a31`、tested merge `0e9a3aa9c1d10b4ecad0127e922df760fcf195cc`
+在 macOS ARM64 15.8.2、Intel 15.7.9 和 Windows x64
+NT10.0.26100 通过候选安装。五份实际包的哈希均已独立复算，三张安装后窗口原图已查看。Mac 使用 Xcode16.4、Swift6.1.2、Rust1.99.1；Windows 使用 Node24.22.2、pnpm11.22.0、PowerShell7.6.9、Rust1.99.1。完整报告、产物与准确检查见
+[#44](https://github.com/YondFane/uTerm/issues/44#issuecomment-6686879466)，已在任务分支验收。Mac
+workflow 仍因独立 #41／#45 检查失败，候选成功不代表整体通过。
 
-Intel 候选安装已在源码 `b259cfce3000163a2fbf88e23fba316be7fdc44c`、tested merge
-`2cb7b9b1f69b2bc58dc6b9234ec4f978b66b52c7` 的 macOS 15.7.9、Xcode 16.4、Swift 6.1.2 和 Rust
-1.99.1 通过。[实际归档](https://github.com/YondFane/uTerm/actions/runs/42206471428/artifacts/13497786385)包含
-`candidate-macos.json`、安装后的 PTY 原图、App ZIP／DMG 及
-`SHA256SUMS`；两份包的哈希已独立重算，原图已核对。报告记录330份 Web 资源、匹配的 x86_64
-App／helper、只读挂载／资源、真实 helper 输出、明确关闭／空闲停止、卸载及私有数据保留。
+原生 App 使用 ad-hoc 签名，Sparkle 框架保留供应商签名，没有 Apple
+Developer 签名或公证。Windows 候选未签名，两端均无更新签名。Windows 候选对 Tauri 唯一的
+`__TAURI_BUNDLE_TYPE_VAR_UNK` → `__TAURI_BUNDLE_TYPE_VAR_NSS`
+变换后逐字节核对程序；标记缺失／重复或其他字节变化均失败。Candidate Windows QA
+workflow 独立执行安装器检查。签名更新、升级／数据回退及稳定切换继续开放；这些检查不发布，也不更改生产更新源。
 
-该 workflow 的其他 #41 检查仍失败，ARM 被 SSH 测试阻塞，Windows 报告构建与安装后程序的哈希不一致。此 Intel 结果不用于验收其他平台或后续提交。Windows 诊断逐块比较完整文件，保留两份哈希、大小及最先不同字节的偏移／值。
+#### 可复现的客户端测量
 
-Tauri 在 NSIS 打包时将唯一的 `__TAURI_BUNDLE_TYPE_VAR_UNK` 改为
-`__TAURI_BUNDLE_TYPE_VAR_NSS`，随后还原构建文件。候选身份检查要求恰好这一处变换，其余每个字节必须相同；标记缺失／重复、其他打包类型及任何代码／资源改动均失败。本地两项模拟文件测试通过，Windows 重跑待核对。**Candidate
-Windows QA** workflow 独立执行安装器范围，完整桌面回归保留在常规 workflow。
+Client performance evidence
+workflow 在同一台 Mac 顺序运行原生与 Tauri 客户端，各重复三次；Windows 另记录 Tauri 基线。共用负载为一个真实 PTY、二十轮各1,024条有序 ANSI／Unicode 输出、14pt 字体、5,000行回滚、64KiB
+CAS 文件保存／读取、连接回放和120秒空闲运行。前五轮预热；记录实际终端网格，网格不同时不作直接渲染速度结论。原生通过 NSTextInputClient 输入，Tauri 在真实应用内模拟 DOM 粘贴／回车；响应指标止于输出解析／确认，不等同物理输入或显示延迟。
 
-即使后续检查继续运行，独立的安装包、工具窗格及 GitHub 失败仍导致 CI 失败。签名更新、升级／数据回退及稳定切换是后续开放任务；这些命令不发布，也不更改生产更新源。
+原生构建后运行 `node scripts/macos-performance-smoke.mjs`；Tauri 运行
+`UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs`。脚本归档原始进程采样、负载／源码哈希、窗口原图、清理结果及逐轮数据，`scripts/client-performance-report.mjs`
+核对三次运行。CPU／RSS 覆盖应用、其子进程及经认证的宿主进程树；无法归属的 WebContent／GPU／XPC 仍排除。短 CI 运行不证明长期无泄漏；TUI／数据库性能及刻意慢消费对比仍未测量，不宣称改善比例。本地负例通过源码／负载／sequence／输出顺序与进程归属／计数检查；真实平台测量仍待 CI，#43 因结果和缺失场景保持开放。
 
 #### 原生 QA 验证
 
 迁移验收仍由 [#13](https://github.com/YondFane/uTerm/issues/13) 跟踪。M3
-#17 已按用户指示关闭，保留持久布局／PDF 标记及 Windows 运行面板／选择器覆盖缺口。数据库、Redis 和 Agent 的验收见 #38–#40。M4 仍需 #41 偏好补齐、#42 交互回归及 #43 性能证据；M5 候选安装包、更新、升级／回退及最终门禁在 #44–#47 保持开放。
+#17 已按用户指示关闭，保留持久布局／PDF 标记及 Windows 运行面板／选择器覆盖缺口。数据库、Redis 和 Agent 的验收见 #38–#40。M4 仍需 #41 偏好补齐、#42 交互回归及 #43 性能证据；M5 候选安装包 #44 已验收，更新、升级／回退及最终门禁在 #45–#47 保持开放。
 
 Redis 分页、删除、TTL、取消退出及系统凭据检查已在源码 `940f8d1` 验收，平台报告和截图见
 [#39](https://github.com/YondFane/uTerm/issues/39)。工作保留在 `feat/native-macos-shared-core`

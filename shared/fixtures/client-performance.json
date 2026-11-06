@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "sessions": 1,
+  "cycles": 20,
+  "warmupCycles": 5,
+  "recordsPerCycle": 1024,
+  "payloadColumns": 80,
+  "fileBytes": 65536,
+  "soakSeconds": 120,
+  "pollMilliseconds": 25,
+  "fontFamily": "Menlo, monospace",
+  "fontSize": 14,
+  "scrollback": 5000,
+  "windowWidth": 1200,
+  "windowHeight": 720,
+  "unicodeText": "中文 é"
+}

@@ -26,6 +26,7 @@ import { attachTerminalScrollInput } from "../lib/terminal-scroll";
 import { attachTerminalFit, createTerminalResizeQueue } from "../lib/terminal-resize";
 import { terminalRendererPool } from "../lib/terminal-renderer";
 import { attachTerminalAccessibilityLimit } from "../lib/terminal-accessibility";
+import { registerTerminalPerformanceProbe } from "../lib/terminal-performance-qa";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import type { DragEventHandler, PointerEventHandler } from "react";
@@ -157,6 +158,14 @@ export function TerminalView({
   activeRef.current = active;
   const container = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
+  const performanceStats = useRef({
+    frames: 0,
+    bytes: 0,
+    acknowledgedFrames: 0,
+    resets: 0,
+    sequence: "0",
+    lastAckMilliseconds: 0,
+  });
   const renderer = useRef<ReturnType<typeof terminalRendererPool.register> | null>(null);
   const fitLayout = useRef<ReturnType<typeof attachTerminalFit> | null>(null);
   const fitAddon = useRef<FitAddon | null>(null);
@@ -293,6 +302,27 @@ export function TerminalView({
     });
     term.open(container.current);
     terminal.current = term;
+    const disposePerformanceProbe =
+      import.meta.env.VITE_UTERM_STATE_QA === "1"
+        ? registerTerminalPerformanceProbe(
+            session.id,
+            () => {
+              const buffer = term.buffer.active;
+              const lines = Array.from(
+                { length: buffer.length },
+                (_, row) => buffer.getLine(row)?.translateToString(true) ?? "",
+              );
+              return {
+                ...performanceStats.current,
+                text: lines.join("\n"),
+                columns: term.cols,
+                rows: term.rows,
+                writable: !term.options.disableStdin,
+              };
+            },
+            reconnect,
+          )
+        : () => {};
     const disposeAccessibility = attachTerminalAccessibilityLimit(container.current, () =>
       tx("输出过多，请移动到各行以读取。"),
     );
@@ -399,6 +429,7 @@ export function TerminalView({
       resize.dispose();
       disposePunctuation();
       disposeAccessibility();
+      disposePerformanceProbe();
       renderer.current?.dispose();
       renderer.current = null;
       term.dispose();
@@ -550,6 +581,11 @@ export function TerminalView({
         logView && !followOutput.current ? term.buffer.active.viewportY : null;
       term.write(data, () => {
         if (current.closed) return;
+        if (import.meta.env.VITE_UTERM_STATE_QA === "1") {
+          performanceStats.current.frames++;
+          performanceStats.current.bytes += data.length;
+          if (event.reset) performanceStats.current.resets++;
+        }
         if (event.reset) {
           current.replaying = false;
           // A resized host buffer can replay logs into scrollback and leave the screen blank.
@@ -578,6 +614,11 @@ export function TerminalView({
               });
           })
           .then(() => {
+            if (import.meta.env.VITE_UTERM_STATE_QA === "1" && !current.closed) {
+              performanceStats.current.acknowledgedFrames++;
+              performanceStats.current.sequence = event.sequence.toString();
+              performanceStats.current.lastAckMilliseconds = performance.now();
+            }
             // Close agent chats only after consuming and acknowledging their final output.
             // 仅在消费并确认最后的输出后关闭 Agent 聊天。
             if (

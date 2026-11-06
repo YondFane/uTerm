@@ -84,28 +84,43 @@ registry fingerprints must stay unchanged. The QA installer requires the CI imag
 WebView2 runtime. Its resource attributes are restored by QA-only install/uninstall hooks.
 
 Both checks archive SHA256 sums, exact source head/tested merge SHAs, platform/toolchain evidence,
-installation reports, logs and original window captures under `candidate/`. Native packages are
-ad-hoc signed without Apple Developer signing/notarization; Windows candidates are unsigned, and
-neither carries an update signature. Intel candidate installation passes at source
-`b259cfce3000163a2fbf88e23fba316be7fdc44c`, tested merge `2cb7b9b1f69b2bc58dc6b9234ec4f978b66b52c7`,
-on macOS 15.7.9, Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Its
-[actual artifact](https://github.com/YondFane/uTerm/actions/runs/42206471428/artifacts/13497786385)
-includes `candidate-macos.json`, the installed PTY screenshot, App ZIP/DMG and `SHA256SUMS`. Both
-package hashes were independently rechecked and the original screenshot inspected. The report
-records 330 Web resources, matching x86_64 app/helper, read-only mount/resources, successful helper
-output, explicit close/idle shutdown, uninstall and retained private data. Other #41 checks fail in
-that workflow; ARM was blocked by an SSH fixture failure and Windows reports a built/installed
-executable hash mismatch. No other platform or later commit is accepted from this Intel result.
-Windows diagnostics compare blocks across the complete files and retain both hashes, sizes and the
-first differing byte offsets/values. Tauri patches its unique `__TAURI_BUNDLE_TYPE_VAR_UNK` token to
-`__TAURI_BUNDLE_TYPE_VAR_NSS` during NSIS packaging, then restores the build file. Candidate
-identity requires exactly that transform with every other byte unchanged; missing/duplicate tokens,
-another bundle type and any code/resource alteration fail. Two local fixture tests pass; Windows
-rerun is pending. The **Candidate Windows QA** workflow runs this installer scope independently,
-while full desktop regression remains in the normal workflows. Independent package, inspector and
-GitHub failures remain failing CI gates even when later checks run. Signed updates, upgrade/data
-rollback and stable cutover remain separate open tasks; these commands do not publish or change
-production update sources.
+installation reports, logs and original window captures under `candidate/`. Source
+`8aacbb3b09925fe16f2bda24e66563eed9f27a31`, tested merge `0e9a3aa9c1d10b4ecad0127e922df760fcf195cc`,
+passes candidate installation on macOS arm64 15.8.2, Intel 15.7.9 and Windows x64 NT10.0.26100. All
+five actual package hashes were independently recomputed and the three original installed-window
+captures inspected. Mac uses Xcode16.4, Swift6.1.2 and Rust1.99.1; Windows uses Node24.22.2,
+pnpm11.22.0, PowerShell7.6.9 and Rust1.99.1. Reports, artifacts and the exact checks are linked in
+[#44](https://github.com/YondFane/uTerm/issues/44#issuecomment-6686879466), now accepted on the task
+branch. The Mac workflow still fails separate #41/#45 checks; candidate success is not an overall
+workflow pass.
+
+Native Apps are ad-hoc signed, their Sparkle framework retains its vendor signatures, and neither
+Apple Developer signing nor notarization is available. Windows candidates are unsigned; neither
+client has an update signature. Windows candidate identity compares every executable byte after
+Tauri's single expected `__TAURI_BUNDLE_TYPE_VAR_UNK` to `__TAURI_BUNDLE_TYPE_VAR_NSS` transform.
+Missing/duplicate markers or any other change fail. The Candidate Windows QA workflow runs this
+installer scope independently. Signed updates, upgrade/data rollback and stable cutover remain open;
+these checks do not publish or change production sources.
+
+#### Reproducible client measurements
+
+The Client performance evidence workflow runs native and Tauri clients sequentially on the same Mac,
+repeating each three times, and records a separate Windows Tauri baseline. The shared fixture uses
+one real PTY, twenty cycles of 1,024 ordered ANSI/Unicode records, 14pt text, 5,000-line scrollback,
+64KiB CAS file save/read, attachment replay and a 120-second idle soak. The first five cycles are
+warm-up. Actual terminal grids are recorded; unequal grids prevent direct rendering-speed
+conclusions. Native input uses NSTextInputClient; Tauri uses DOM paste/Enter inside its real app.
+The response metric ends at parsed-output acknowledgement, not physical display/input latency.
+
+After the native build, run `node scripts/macos-performance-smoke.mjs`; run
+`UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs` for Tauri. The runner archives raw
+process samples, exact workload/source hashes, original windows, cleanup results and per-cycle
+metrics; `scripts/client-performance-report.mjs` audits three repetitions. CPU/RSS include the app,
+its descendants and the authenticated host tree. Unattributed WebContent/GPU/XPC processes remain
+excluded. The short CI soak cannot establish long-term leak acceptance. TUI/database performance and
+deliberately slow-consumer comparison remain unmeasured; no improvement percentage is claimed. Local
+negative tests pass source/workload/sequence/order checks and process ownership/accounting; actual
+platform measurements still require CI. #43 remains open for those results and missing cases.
 
 #### Native QA validation
 
@@ -113,7 +128,7 @@ Migration acceptance remains open in [#13](https://github.com/YondFane/uTerm/iss
 closed at the user's direction, retaining persistent-layout/PDF-mark and Windows run-panel/picker
 coverage gaps. Database, Redis and Agent acceptance is recorded in #38–#40. M4 still needs #41
 preference completion, #42 interaction regression and #43 performance evidence. M5 candidate
-packaging, updates, upgrade/rollback and final gates remain open in #44–#47.
+packaging #44 is accepted; updates, upgrade/rollback and final gates remain open in #45–#47.
 
 Redis paging, deletion, TTL, quit-cancellation and OS-credential checks are accepted at source
 `940f8d1`, with platform reports and screenshots in

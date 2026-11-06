@@ -124,6 +124,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "input-owner",
         "input-viewer",
         "package",
+        "performance",
     ]
     .contains(&phase.as_str())
     {
@@ -224,6 +225,26 @@ pub async fn qa_scene(app: tauri::AppHandle, name: String, value: Value) -> Resu
         return Err("Invalid QA scene".into());
     }
     let phase = argument("--qa-phase")?;
+    if phase == "performance" && name == "performance-progress" {
+        let measured = value
+            .get("phase")
+            .and_then(Value::as_str)
+            .ok_or("Missing performance phase")?;
+        if !["terminal", "file-service", "replay", "idle-soak", "cleanup"].contains(&measured) {
+            return Err("Invalid performance phase".into());
+        }
+        let status = qa_host_status(app.clone()).await?;
+        let mut heartbeat = value;
+        heartbeat["hostPID"] = status["pid"].clone();
+        let mut temporary =
+            tempfile::NamedTempFile::new_in(&root).map_err(|error| error.to_string())?;
+        serde_json::to_writer(temporary.as_file_mut(), &heartbeat)
+            .map_err(|error| error.to_string())?;
+        temporary
+            .persist(root.join("performance-phase.json"))
+            .map_err(|error| error.to_string())?;
+        return Ok(());
+    }
     let bytes = serde_json::to_vec_pretty(
         &json!({"context":qa_context(app)?, "scene":name,"checks":value}),
     )

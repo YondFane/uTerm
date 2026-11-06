@@ -53,6 +53,9 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private(set) var qaRenderedFrames = 0
     private(set) var qaAcknowledgedFrames = 0
     private(set) var qaLargestFrame = 0
+    private(set) var qaLastAcknowledgedSequence = "0"
+    private(set) var qaLastAckUptime: TimeInterval = 0
+    private(set) var qaReplayResets = 0
 
     init(entry: CoreSessionEntry, bridge: CoreBridge, taskGeneration: String? = nil) {
         self.entry = entry
@@ -185,6 +188,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             ? terminal.buffer.totalLinesTrimmed + terminal.buffer.yDisp : nil
         if taskGeneration != nil { applyingTaskLogViewport = true }
         if packet.header.reset {
+            qaReplayResets += 1
             let intended = viewportSize ?? desiredSize ?? (terminal.cols, terminal.rows)
             viewportSize = intended
             applyingReplay = true
@@ -224,6 +228,8 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
                 "sequence": .unsigned(packet.header.sequence)
             ]))
             qaAcknowledgedFrames += 1
+            qaLastAcknowledgedSequence = String(packet.header.sequence)
+            qaLastAckUptime = ProcessInfo.processInfo.systemUptime
         } catch { self.error = error.localizedDescription; changed?() }
         await resizeIfNeeded()
     }

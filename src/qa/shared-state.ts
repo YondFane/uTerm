@@ -13,6 +13,7 @@ import { tauriContentPort } from "../lib/tauri-content";
 import { runRedis } from "./redis";
 import { runDatabase } from "./database";
 import { runAgents } from "./agents";
+import { runPerformance } from "./performance";
 import type {
   CoreEditorDraftEntry,
   CoreFileDocument,
@@ -39,7 +40,8 @@ interface Context {
     | "agents"
     | "input-owner"
     | "input-viewer"
-    | "package";
+    | "package"
+    | "performance";
   backup?: string;
   ready: boolean;
 }
@@ -1545,6 +1547,10 @@ export async function run(recovery: boolean) {
       return;
     }
     await until(async () => (await invoke<Context>("qa_context")).ready, "normal quit listener");
+    if (context.phase === "performance") {
+      await runPerformance(context, scene);
+      return;
+    }
     if (context.phase === "package") {
       const snapshot = (await observeCore("snapshot.read")) as unknown as {
         document: { settings: typeof defaults; workspace: { projects: unknown[] } };

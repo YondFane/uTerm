@@ -20,6 +20,7 @@ import { createHash } from "node:crypto";
 import { createInterface } from "node:readline";
 import { createServer } from "node:http";
 import assert from "node:assert/strict";
+import { startResourceSampler } from "./client-resource-sampler.mjs";
 
 const editorFixture = JSON.parse(
   readFileSync(resolve("shared/fixtures/editor-draft-qa.json"), "utf8"),
@@ -29,6 +30,7 @@ const previewQA = JSON.parse(
   readFileSync(resolve("shared/fixtures/content-preview-qa.json"), "utf8"),
 );
 const identifier = "sh.uterm.desktop.qa.sharedstate";
+const performanceOnly = process.env.UTERM_QA_PERFORMANCE_ONLY === "1";
 const output = resolve("ci-evidence/tauri-state-qa");
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
@@ -94,6 +96,7 @@ const metadata = {
         : "isolated X11 desktop",
   productionDataAccess: false,
   sourceTreeDirty,
+  performanceOnly,
   productVersion:
     process.platform === "darwin"
       ? execute("/usr/bin/sw_vers", ["-productVersion"]).trim()
@@ -255,8 +258,8 @@ try {
         {
           label: "main",
           title: "uTerm Shared State QA",
-          width: 960,
-          height: 620,
+          width: performanceOnly ? 1200 : 960,
+          height: performanceOnly ? 720 : 620,
           minWidth: 640,
           minHeight: 420,
           visible: true,
@@ -447,6 +450,14 @@ try {
     const args = ["--qa-data-root", root, "--qa-phase", phase];
     if (backup) args.push("--qa-backup", backup);
     child = spawn(binary, args, { env, stdio: ["ignore", "pipe", "pipe"] });
+    const sampler =
+      phase === "performance"
+        ? startResourceSampler(
+            child.pid,
+            join(root, "performance-phase.json"),
+            join(output, "resources-tauri.json"),
+          )
+        : null;
     let log = "";
     let closed = false;
     let mainExited = false;
@@ -486,7 +497,7 @@ try {
     if (sshPhase) sshApplications.push({ phase, application: child, state: processState });
     const observed = new Set();
     try {
-      const deadline = Date.now() + 180000;
+      const deadline = Date.now() + (phase === "performance" ? 600000 : 180000);
       while (Date.now() < deadline) {
         for (const file of readdirSync(evidence).filter(
           (p) => p.startsWith(`${phase}-`) && p.endsWith(".json"),
@@ -962,27 +973,29 @@ try {
         `${phase} did not finish ordinary exit: mainExited=${mainExited}, code=${code}, log=${log.slice(-1000)}`,
       );
       const expected =
-        phase === "agents"
-          ? 3
-          : phase === "database"
-            ? 5
-            : phase === "redis"
-              ? 6
-              : phase === "ssh"
-                ? 3
-                : phase === "ssh-reopen"
-                  ? 1
-                  : phase === "git"
-                    ? 25
-                    : phase === "editor-checkpoint"
-                      ? 3
-                      : phase.startsWith("editor-")
-                        ? 5
-                        : phase === "initial"
-                          ? 10
-                          : phase === "reopen"
-                            ? 1
-                            : 3;
+        phase === "performance"
+          ? 1
+          : phase === "agents"
+            ? 3
+            : phase === "database"
+              ? 5
+              : phase === "redis"
+                ? 6
+                : phase === "ssh"
+                  ? 3
+                  : phase === "ssh-reopen"
+                    ? 1
+                    : phase === "git"
+                      ? 25
+                      : phase === "editor-checkpoint"
+                        ? 3
+                        : phase.startsWith("editor-")
+                          ? 5
+                          : phase === "initial"
+                            ? 10
+                            : phase === "reopen"
+                              ? 1
+                              : 3;
       assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       if (phase === "git") writeFileSync(join(root, "project/.git/qa-git-release"), "release\n");
@@ -994,92 +1007,97 @@ try {
       writeFileSync(join(output, `${phase}.log`), log);
       closedAtPhaseEnd = closed;
       writeFileSync(join(output, `${phase}-process.json`), JSON.stringify(processState(), null, 2));
+      if (sampler) await sampler.stop();
     }
   }
-  await run("editor-checkpoint");
-  await run("editor-reopen");
-  assert.equal(readFileSync(join(root, "project", previewQA.pdfFile), "utf8"), pdf);
-  assert.deepEqual(previewRequests, []);
-  assert.equal(
-    readFileSync(join(root, "project", editorFixture.fileName), "utf8"),
-    "\ufeff" + editorFixture.savedText,
-  );
-  await run("git");
-  assert.equal(
-    gitFixture(["rev-parse", "refs/heads/qa-tauri-created"]).trim(),
-    gitFixture(["rev-parse", "HEAD"]).trim(),
-  );
-  assert.equal(readFileSync(join(root, "project", gitQA.fileName), "utf8"), gitQA.changedText);
-  await run("initial");
-  const store = join(root, "data/shared-state-v1");
-  const original = readFileSync(join(store, "legacy-original.json"));
-  await run("reopen");
-  assert.deepEqual(readFileSync(join(store, "legacy-original.json")), original);
-  await runInputControl();
-  const backup = readdirSync(store).find((p) => {
-    if (!/^snapshot-[a-f0-9]{64}\.backup$/.test(p)) return false;
-    const s = JSON.parse(readFileSync(join(store, p), "utf8")).settings;
-    return s.fileFontSize === 17 && s.fontSize === 21;
-  });
-  assert(backup, "No recovery copy of external settings");
-  const damaged = Buffer.from('{"deliberatelyInterruptedQA":');
-  writeFileSync(join(store, "snapshot-v1.json"), damaged);
-  await run("recover", backup.slice(9, -7));
-  const digest = createHash("sha256").update(damaged).digest("hex");
-  assert.deepEqual(readFileSync(join(store, `snapshot-${digest}.damaged`)), damaged);
-  assert.deepEqual(readFileSync(join(store, "legacy-original.json")), original);
-  if (process.env.UTERM_QA_REDIS_FIXTURE) await run("redis");
-  if (process.env.UTERM_QA_DATABASE_FIXTURE) await run("database");
-  const agentSnapshot = coreFixture("snapshot.read");
-  coreFixture("settings.patch", {
-    expectedRevision: agentSnapshot.revision,
-    patch: { agentNotifications: true },
-  });
-  await run("agents");
-  const retainedAgentConfig = JSON.parse(readFileSync(join(agentHome, "settings.json"), "utf8"));
-  assert.equal(retainedAgentConfig.keep, "private QA setting");
-  assert.equal(
-    retainedAgentConfig.hooks.UserPromptSubmit[0].hooks[0].command,
-    "other-tool --start",
-  );
-  assert(
-    !JSON.stringify(retainedAgentConfig).includes("--agent-report"),
-    "Removing Hooks retained a managed reporter",
-  );
-  writeFileSync(
-    join(output, "agent-live.json"),
-    JSON.stringify(
-      {
-        ...metadata,
-        passed: true,
-        privateHomeOnly: true,
-        unrelatedHooksPreserved: true,
-        managedHooksRemoved: true,
-        providerAuthenticationExecuted: false,
-        notificationPermissionEnablePath:
-          "mocked frontend regressions; real window exercises opt-out only",
-      },
-      null,
-      2,
-    ),
-  );
-  if (process.env.UTERM_QA_SSH_FIXTURE) {
-    await run("ssh");
-    await run("ssh-reopen");
+  if (performanceOnly) {
+    await run("performance");
+  } else {
+    await run("editor-checkpoint");
+    await run("editor-reopen");
+    assert.equal(readFileSync(join(root, "project", previewQA.pdfFile), "utf8"), pdf);
+    assert.deepEqual(previewRequests, []);
+    assert.equal(
+      readFileSync(join(root, "project", editorFixture.fileName), "utf8"),
+      "\ufeff" + editorFixture.savedText,
+    );
+    await run("git");
+    assert.equal(
+      gitFixture(["rev-parse", "refs/heads/qa-tauri-created"]).trim(),
+      gitFixture(["rev-parse", "HEAD"]).trim(),
+    );
+    assert.equal(readFileSync(join(root, "project", gitQA.fileName), "utf8"), gitQA.changedText);
+    await run("initial");
+    const store = join(root, "data/shared-state-v1");
+    const original = readFileSync(join(store, "legacy-original.json"));
+    await run("reopen");
+    assert.deepEqual(readFileSync(join(store, "legacy-original.json")), original);
+    await runInputControl();
+    const backup = readdirSync(store).find((p) => {
+      if (!/^snapshot-[a-f0-9]{64}\.backup$/.test(p)) return false;
+      const s = JSON.parse(readFileSync(join(store, p), "utf8")).settings;
+      return s.fileFontSize === 17 && s.fontSize === 21;
+    });
+    assert(backup, "No recovery copy of external settings");
+    const damaged = Buffer.from('{"deliberatelyInterruptedQA":');
+    writeFileSync(join(store, "snapshot-v1.json"), damaged);
+    await run("recover", backup.slice(9, -7));
+    const digest = createHash("sha256").update(damaged).digest("hex");
+    assert.deepEqual(readFileSync(join(store, `snapshot-${digest}.damaged`)), damaged);
+    assert.deepEqual(readFileSync(join(store, "legacy-original.json")), original);
+    if (process.env.UTERM_QA_REDIS_FIXTURE) await run("redis");
+    if (process.env.UTERM_QA_DATABASE_FIXTURE) await run("database");
+    const agentSnapshot = coreFixture("snapshot.read");
+    coreFixture("settings.patch", {
+      expectedRevision: agentSnapshot.revision,
+      patch: { agentNotifications: true },
+    });
+    await run("agents");
+    const retainedAgentConfig = JSON.parse(readFileSync(join(agentHome, "settings.json"), "utf8"));
+    assert.equal(retainedAgentConfig.keep, "private QA setting");
+    assert.equal(
+      retainedAgentConfig.hooks.UserPromptSubmit[0].hooks[0].command,
+      "other-tool --start",
+    );
+    assert(
+      !JSON.stringify(retainedAgentConfig).includes("--agent-report"),
+      "Removing Hooks retained a managed reporter",
+    );
+    writeFileSync(
+      join(output, "agent-live.json"),
+      JSON.stringify(
+        {
+          ...metadata,
+          passed: true,
+          privateHomeOnly: true,
+          unrelatedHooksPreserved: true,
+          managedHooksRemoved: true,
+          providerAuthenticationExecuted: false,
+          notificationPermissionEnablePath:
+            "mocked frontend regressions; real window exercises opt-out only",
+        },
+        null,
+        2,
+      ),
+    );
+    if (process.env.UTERM_QA_SSH_FIXTURE) {
+      await run("ssh");
+      await run("ssh-reopen");
+    }
+    writeFileSync(
+      join(output, "storage.json"),
+      JSON.stringify(
+        {
+          originalRetained: true,
+          damagedBytesRetained: true,
+          recoveryBackup: backup,
+          scenes: scenes.length,
+        },
+        null,
+        2,
+      ),
+    );
   }
-  writeFileSync(
-    join(output, "storage.json"),
-    JSON.stringify(
-      {
-        originalRetained: true,
-        damagedBytesRetained: true,
-        recoveryBackup: backup,
-        scenes: scenes.length,
-      },
-      null,
-      2,
-    ),
-  );
   successful = true;
 } finally {
   const cleanupErrors = [];

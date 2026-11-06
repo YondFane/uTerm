@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,6 +12,25 @@ spec.loader.exec_module(matrix)
 
 
 class InteractionEvidenceTests(unittest.TestCase):
+    def test_relative_capture_paths_and_unicode_reports_use_artifact_root(self):
+        with tempfile.TemporaryDirectory() as path:
+            root = Path(path)
+            names = ["editor-saved", "preview-returned-editor", "git-worktree", "theme-imported", "input-owner-returned", "input-owner-closed", "input-viewer-owned"]
+            source = {"head": "head", "tested": "merge", "productionDataAccess": False}
+            scenes = []
+            for name in names:
+                image = name + ".png"
+                (root / image).write_bytes(b"\x89PNG\r\n\x1a\n" + bytes(1024))
+                scenes.append({**source, "scenario": name, "screenshot": image, "checks": {"text": "中文 é"}})
+            report = {**source, "passed": True, "platform": "win32", "architecture": "x64", "system": "fixture", "scenes": scenes}
+            (root / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+            result = matrix.tauri_matrix(root, "head", "merge")
+            self.assertEqual(len(result["captures"]), len(names))
+            scenes[0]["screenshot"] = "../escape.png"
+            (root / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+            with self.assertRaises(ValueError):
+                matrix.tauri_matrix(root, "head", "merge")
+
     def test_source_and_tested_merge_must_both_match_and_failures_stay_failed(self):
         valid = {"sourceHeadSHA": "head", "testedMergeSHA": "merge", "sourceTreeDirty": False, "productionDataAccess": False}
         matrix.verify_source(valid, "head", "merge")

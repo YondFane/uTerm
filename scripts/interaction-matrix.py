@@ -26,7 +26,7 @@ def image_evidence(directory, names):
 
 def native_matrix(directory, head, tested):
     names = ["terminal-live", "terminal-reconnect", "settings-native", "inspector-native", "github-native", "editor-live", "agent-native"]
-    reports = {name: json.loads((directory / (name + ".json")).read_text()) for name in names}
+    reports = {name: json.loads((directory / (name + ".json")).read_text(encoding="utf-8")) for name in names}
     captures = []
     for name, report in reports.items():
         verify_source(report, head, tested)
@@ -66,7 +66,7 @@ def native_matrix(directory, head, tested):
 
 
 def tauri_matrix(directory, head, tested):
-    report = json.loads((directory / "report.json").read_text())
+    report = json.loads((directory / "report.json").read_text(encoding="utf-8"))
     verify_source(report, head, tested)
     assert report["passed"] and report["platform"] in ("win32", "darwin")
     scenes = report["scenes"]
@@ -75,7 +75,7 @@ def tauri_matrix(directory, head, tested):
     for scene in scenes:
         verify_source(scene, head, tested)
         assert scene["scenario"] != "failure"
-    captures = [str(Path(scene["screenshot"]).resolve().relative_to(directory.resolve())) for scene in scenes if scene.get("screenshot")]
+    captures = [str(((directory / scene["screenshot"]) if not Path(scene["screenshot"]).is_absolute() else Path(scene["screenshot"])).resolve().relative_to(directory.resolve())) for scene in scenes if scene.get("screenshot")]
     image_evidence(directory, captures)
     return {
         "platform": report["platform"], "architecture": report["architecture"], "system": report["system"],
@@ -105,6 +105,6 @@ if __name__ == "__main__":
         result = {"passed": False, "failure": str(error), "client": mode}
     result.update(sourceHeadSHA=head, testedMergeSHA=tested, sourceTreeDirty=dirty,
                   manualAcceptance="waived by user; simulations stay explicitly labelled", productionDataAccess=False)
-    (directory / "interaction-matrix.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+    (directory / "interaction-matrix.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result, ensure_ascii=False))
     sys.exit(0 if result["passed"] else 1)

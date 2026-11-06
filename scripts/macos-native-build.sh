@@ -12,6 +12,7 @@ native_app="$PWD/macos/.build/qa/UTermNativeQA.app"
 mkdir -p "$native_app/Contents/MacOS"
 mkdir -p "$native_app/Contents/Resources/bin" "$native_app/Contents/Resources/Licenses"
 cp "$native_bin/UTermNativeQA" "$native_app/Contents/MacOS/UTermNativeQA"
+cp shared/fixtures/client-performance.json "$native_app/Contents/Resources/client-performance.json"
 native_sparkle=$(find macos/.build/artifacts -type d -name Sparkle.framework -print)
 test -n "$native_sparkle" && test "$(printf '%s\n' "$native_sparkle" | wc -l | tr -d ' ')" = 1
 mkdir -p "$native_app/Contents/Frameworks"
