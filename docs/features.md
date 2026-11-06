@@ -4211,116 +4211,89 @@ acknowledged.
 ### Appearance and terminal preferences
 
 Settings include appearance, color themes, fonts, terminal cursor and scrollback, keyboard
-shortcuts, default shell and Agent. Theme import accepts supported color fields only.
+shortcuts, default shell and Agent. Core `settings.catalog` reads the existing defaults and a
+generated bilingual catalog of 31 commands, eight terminal themes and six interface themes from the
+current TypeScript sources. Opening the catalog does not save defaults. `pnpm settings:check` and
+the normal contract checks verify generation.
 
-Core `settings.catalog` reads the existing defaults and a generated bilingual catalog of 31
-commands, eight terminal themes and six interface themes from the current TypeScript sources. It
-does not persist defaults. `settings.validate` checks the full settings shape and macOS/Windows
-shortcut conflicts, reserved system/editor keys and optional default bindings without writing
-configuration. Generation is checked by `pnpm settings:check` and the normal contract checks.
+Core `settings.validate` checks the full settings shape, platform shortcut conflicts, reserved
+system/editor keys and optional default bindings without writing configuration. `settings.commands`
+resolves bindings from the same rules. The native **Commands** menu updates its keys after saving
+and clears colliding fallback menu keys. The palette and capture controls show macOS key glyphs.
 
-The Linux regression compares 372 configurations between an actual Rust Core process and the
-existing TypeScript validator; both platforms agree. It also checks unchanged defaults/store and
-bounded rejection of invalid platform/private parameters. The dedicated Rust platform regression
-passes. CI archives `settings-platform.json` with source and tested merge identities. This is shared
-logic evidence; the complete native settings form, command panel, menus and login-start integration
-remain open in #41 and are not accepted from these checks.
-
-Core `settings.commands` resolves platform bindings from the same rules used by validation. The
-regression also compares all 31 resolved bindings for every configuration: 11,532 comparisons with
-the existing TypeScript resolver. The native **Commands** menu reads these results; saved changes
-update its key equivalents and clear colliding fallback menu shortcuts. **Command palette** opens a
-native searchable list with Up/Down, Return and Escape. Closing it restores the originating
-window/responder; closing it cannot close a terminal behind it. Commands are enabled for their
-current window and session context. The palette and shortcut capture show macOS modifier/key glyphs;
-QA searches through the native text editor before executing a filtered command. Native project
-search, file/inspector panes, pane swap, GitHub and zoom remain unavailable and tracked in #41/#17;
-those commands are disabled.
-
-**General → Login startup** reads the OS state without registering on open. Explicit opt-in/out uses
-macOS `SMAppService`; approval-required and failed operations remain visible, and an active
-operation blocks quitting. This system preference applies immediately, separately from the shared
-settings draft. The guarded isolated settings QA simulates approval, success, failure and disable;
-it never registers a CI login item or changes shared settings. Actual OS registration/approval is
-not executed in CI; the user-authorized simulation boundary and final human waiver are explicit.
+**Command palette** provides native search, Up/Down, Return and Escape. Dismissing it restores its
+originating window/responder and cannot close a terminal behind it. Plain navigation keys are
+handled only in the owned visible palette; its event monitor is removed on dismissal and modified
+keys retain normal text editing. Commands follow the current window/session context. Project search,
+file/inspector panes, pane swap, GitHub and zoom remain unavailable in the native client; those
+commands are disabled and remain tracked in #41/#17.
 
 The native QA app opens **Settings → All settings…** or **File → All settings…** for General,
-Appearance, Terminal, Files/Agents and Shortcuts. Changes remain in a draft until **Save settings**;
-**Restore defaults** prepares a draft and requires saving. Closing the window preserves its draft,
-and quitting asks about unsaved changes. Reserved/duplicate shortcuts and invalid numbers show an
-error and retain the draft. Saving checks each changed field against the latest shared settings,
-preserving unrelated peer changes and refusing to overwrite a conflicting field.
+Appearance, Terminal, Files/Agents and Shortcuts. Changes remain drafts until **Save settings**.
+**Restore defaults** prepares a draft and still requires saving. Hiding/reopening retains the draft;
+quit refuses an active operation or asks about unsaved changes. Invalid numbers and reserved or
+duplicate shortcuts show an error without discarding input. Saving checks each changed field against
+the latest store, preserving unrelated peer changes and refusing conflicting overwrites.
 
-The draft/conflict/shortcut/reset form passes on macOS arm64 and Intel at source
-`8f7e89e819b6704a621dcdd61fe0f69c895c765f`, tested merge `123626e23dbbe5a88edffa62c6ce9b783ba71494`,
-in [Native run 42177165267](https://github.com/YondFane/uTerm/actions/runs/42177165267). Both
-`settings-native.json` reports pass with clean source trees and exit 0; four original English/dark
-and Chinese/light narrow-window screenshots have been reviewed. The reports explicitly keep full
-settings feature acceptance incomplete. These results cover that form revision, not subsequent
-theme/effect changes.
+Both clients parse Ghostty themes through Core `settings.theme.import`, retaining existing name/ID,
+UTF-16 length, six-digit color and palette-index rules. Parsing itself does not save settings. Tauri
+saves after a successful selection; native import adds a draft that requires **Save settings**. The
+native chooser reads at most 32 KB and requires UTF-8. Names remove only a final `.conf` or `.txt`,
+ignoring extension case; other extensions remain part of the name and identity.
 
-Both settings clients import Ghostty themes through Core `settings.theme.import`. The import is
-read-only until the draft is saved. It preserves existing color/name/ID rules, validates UTF-16
-limits, palette indices and six-digit colors, and returns bounded errors without source contents.
-The regression compares 96 valid/invalid inputs against the existing TypeScript parser, including
-Chinese names, contextual Greek lowercasing and encoded identifiers; all agree without store writes.
-The native file chooser reads at most 32 KB and requires UTF-8. Both clients remove only `.conf` or
-`.txt` from the imported name, ignoring extension case; other extensions stay in the theme name and
-identity. Native QA uses actual temporary files to check these names, invalid UTF-8 and
-oversized-file rejection without changing the draft or store. Independent settings QA runs after the
-generic window smoke, before the other native workbenches; all other checks remain in CI.
+Native terminals and task logs apply bundled/custom palettes, cursor/selection colors, available
+font fallback/weight, line spacing, cursor shape/blink, scrollback and background opacity. Copy on
+selection copies after mouse selection ends. Interface palette/font, row/window padding, sidebar
+visibility, active icon color, project name sorting and optional background material are connected
+to the workspace. Other preference effects still need completion in #41.
 
-The Tauri real-app harness exercises a rejected theme without saved changes, followed by a
-successful shared import, saved custom colors and removal of the old error. It supplies a DOM File
-event inside the isolated application; it does not claim OS file-chooser interaction. Both scenes
-archive screenshots and source-bound results on Windows and macOS.
+**General → Login startup** reads OS state without registering on open. Explicit opt-in/out uses
+macOS `SMAppService`; approval-required and failed operations stay visible and active operations
+block quitting. This system preference applies immediately, separately from the shared draft.
+Isolated settings QA simulates approval, success, failure and disable without registering a CI login
+item or changing shared settings. Real OS registration/approval is not executed in CI; the
+user-authorized simulation boundary and final human waiver are explicit.
 
-Theme/form/effect source `295a137a40ceea45131c3e044c847228f9d0168f`, tested merge
-`50d94ea3b258dced305336520ed8bc97ab232787`, passes Native
-[run 42179283853](https://github.com/YondFane/uTerm/actions/runs/42179283853) on macOS arm64/Intel
-and Tauri [run 42179283994](https://github.com/YondFane/uTerm/actions/runs/42179283994) on macOS
-arm64/Windows x64. Both native reports pass with exit 0 and both Tauri reports pass 73 scenes with
-no cleanup errors; all source trees are clean. Both platform reports pass the 372 shortcut and 96
-theme comparisons. Ten original theme/form/PTY screenshots have been reviewed; the
-[evidence record](https://github.com/YondFane/uTerm/issues/41#issuecomment-6679773239) links all
-four artifacts, reports and images. These results do not accept subsequent command or login-item
-code.
+#### Validation and limits
 
-Native terminals apply the selected bundled/custom palette, cursor and selection colors, available
-font fallback, weight, line spacing, cursor shape/blink, scrollback and background opacity. Copy on
-selection copies after the mouse selection ends. Interface palette/font, row/window padding, sidebar
-visibility preferences, active icon color, project name sorting and optional background material are
-connected to the workspace. Native task logs use the same theme catalog.
+Source `60e183043988626cddbb4fa14e140ed9c25f17f6`, tested merge
+`f93da46db913e8be48f6bac46cb22f00577d23b8`, passes Native
+[run 42187274886](https://github.com/YondFane/uTerm/actions/runs/42187274886) on macOS 15.8.2 arm64
+and 15.7.9 Intel, and Tauri
+[run 42187274834](https://github.com/YondFane/uTerm/actions/runs/42187274834) on macOS 26.7.2 arm64
+and Windows Server 2025 x64. All four reports record clean source trees. Both native settings
+reports pass with exit 0; Tauri passes 73 scenes per platform with no cleanup errors.
 
-`bash scripts/macos-settings-smoke.sh` runs the real window with a second Core client, numeric
-errors, same-field conflicts, unrelated changes, hide/reopen, actual quit cancellation, native
-shortcut capture and reset. It archives `settings-native.json` plus English/dark and Chinese/light
-narrow window images, plus an actual themed PTY window. Theme rejection must preserve the draft and
-store; accepted imports remain drafts, and the scene asserts actual terminal font, line spacing,
-palette, cursor, opacity and cleanup after explicit close. The command/login-item source remains
-pending its own CI. Its scene also checks the changed native menu shortcut, actual palette
-arrow/Return/Escape input and focus restoration, and archives `native-settings-command-palette.png`.
-Remaining preference effects and unavailable commands still keep #41 open.
+The actual Rust process/TypeScript checks pass 372 shortcut configurations, 11,532 resolved-binding
+comparisons and 96 theme inputs, including Unicode names, contextual lowercasing, encoded IDs,
+leading-zero palette indices and invalid colors. They verify unchanged defaults/store and bounded
+rejection of invalid/private parameters. These logic reports do not replace native window checks.
 
-The first command-window run at source `7feda7e` opened the palette through its saved menu key but
-failed to capture the new window; its report records `SMOKE_CAPTURE`, not a pass. The palette now
-has explicit search/list bounds, and QA waits for its own visible WindowServer entry before capture.
-The original failure remains in
-[run 42181119008](https://github.com/YondFane/uTerm/actions/runs/42181119008). Sidebar toggling is
-available before a session exists; Close is restricted to the focused known window and cannot close
-a background session from an unrelated panel. The corrected source still requires its own runtime
-results.
+`bash scripts/macos-settings-smoke.sh` checks actual menu/shortcut capture, search and
+arrow/Return/Escape input, return focus, explicit reset, actual quit cancellation, invalid drafts,
+conflicting/unrelated peer writes, theme drafts and actual themed PTY effects. It also uses real
+temporary files for theme names, UTF-8 and bounded reads. Settings QA runs after the generic window
+smoke, retaining every other native check. The same origin/return window is verified on both
+architectures; login approval/failure/disable remains explicitly simulated.
 
-Palette key routing handles plain Escape/arrow/Return only for its owned visible window and removes
-the event monitor on dismissal; modified keys retain normal text editing. QA dispatches keys through
-`NSApplication`, checks the returned responder and filters with native text input. Source `574a06f`
-captures the real window successfully but fails Escape focus restoration; that result remains a
-failure while the corrected key-routing source awaits its own runtime evidence.
+Twelve original application screenshots have been reviewed. Native archives include
+`settings-native.json`, logs and `native-settings-command-palette.png`,
+`native-settings-themed-terminal.png`, `native-settings-full-dark-en.png` and
+`native-settings-full-light-zh-narrow.png`. Tauri archives include `settings-platform.json`,
+`tauri-state-qa/report.json`, `initial-theme-invalid.json/.png` and
+`initial-theme-imported.json/.png`. The
+[evidence record](https://github.com/YondFane/uTerm/issues/41#issuecomment-6681066363) links all
+four artifacts, commands, toolchains and captures. Tauri uses DOM File events inside the real
+application; OS file-chooser interaction is not claimed. macOS images use WindowServer and Windows
+uses the owned QA HWND with capture metadata.
 
-The `314c74f` report confirms that Escape hides the palette, but the focus assertion expected the
-settings window while the actual origin was the main workspace after cancelled quit. QA now
-activates the settings window before opening the palette and records both window numbers. This
-corrects the test precondition; it does not treat the earlier failed run as acceptance.
+Earlier window-capture, SSH askpass and focus-assertion failures, plus cancelled superseded runs,
+remain in the Issue records. The focus test now activates the intended settings origin rather than
+expecting it while the main workspace is in front after cancelled quit. These failures are not
+counted as passes. Full settings acceptance remains incomplete: the reports keep
+`nativeSettingsFeatureAcceptanceComplete=false` for remaining effects and unavailable commands.
+Human acceptance is waived by the user; neither that waiver nor these partial results establish
+stable cutover or merge the draft PR.
 
 ### Terminal text selection and rendering
 
