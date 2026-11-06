@@ -370,7 +370,7 @@ impl Core {
                 }
                 settings::catalog()
             }
-            "settings.validate" => {
+            "settings.validate" | "settings.commands" => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]
                 struct Validation {
@@ -383,8 +383,12 @@ impl Core {
                         "Settings and a supported platform are required",
                     )
                 })?;
-                settings::validate(&validation.settings, validation.platform)?;
-                Ok(json!({"valid": true}))
+                if method == "settings.commands" {
+                    settings::commands(&validation.settings, validation.platform)
+                } else {
+                    settings::validate(&validation.settings, validation.platform)?;
+                    Ok(json!({"valid": true}))
+                }
             }
             "settings.theme.import" => {
                 #[derive(Deserialize)]

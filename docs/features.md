@@ -4226,6 +4226,22 @@ passes. CI archives `settings-platform.json` with source and tested merge identi
 logic evidence; the complete native settings form, command panel, menus and login-start integration
 remain open in #41 and are not accepted from these checks.
 
+Core `settings.commands` resolves platform bindings from the same rules used by validation. The
+regression also compares all 31 resolved bindings for every configuration: 11,532 comparisons with
+the existing TypeScript resolver. The native **Commands** menu reads these results; saved changes
+update its key equivalents and clear colliding fallback menu shortcuts. **Command palette** opens a
+native searchable list with Up/Down, Return and Escape. Closing it restores the originating
+window/responder; closing it cannot close a terminal behind it. Commands are enabled for their
+current window and session context. Native project search, file/inspector panes, pane swap, GitHub
+and zoom remain unavailable and tracked in #41/#17; those commands are disabled.
+
+**General → Login startup** reads the OS state without registering on open. Explicit opt-in/out uses
+macOS `SMAppService`; approval-required and failed operations remain visible, and an active
+operation blocks quitting. This system preference applies immediately, separately from the shared
+settings draft. The guarded isolated settings QA simulates approval, success, failure and disable;
+it never registers a CI login item or changes shared settings. Actual OS registration/approval is
+not executed in CI; the user-authorized simulation boundary and final human waiver are explicit.
+
 The native QA app opens **Settings → All settings…** or **File → All settings…** for General,
 Appearance, Terminal, Files/Agents and Shortcuts. Changes remain in a draft until **Save settings**;
 **Restore defaults** prepares a draft and requires saving. Closing the window preserves its draft,
@@ -4266,8 +4282,9 @@ shortcut capture and reset. It archives `settings-native.json` plus English/dark
 narrow window images, plus an actual themed PTY window. Theme rejection must preserve the draft and
 store; accepted imports remain drafts, and the scene asserts actual terminal font, line spacing,
 palette, cursor, opacity and cleanup after explicit close. These new-source runtime results are
-pending CI. Remaining preference effects, dynamic command/menu integration and login startup are
-still incomplete; #41 stays open.
+pending CI. The next command scene also checks the changed native menu shortcut, actual palette
+arrow/Return/Escape input and focus restoration, and archives `native-settings-command-palette.png`.
+Remaining preference effects and unavailable commands still keep #41 open.
 
 ### Terminal text selection and rendering
 

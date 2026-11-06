@@ -15,6 +15,8 @@ final class WorkspaceModel: ObservableObject {
     @Published private(set) var state: CoreViewSnapshot?
     @Published private(set) var environment: JSONValue = .null
     private(set) var settingsCatalog: JSONValue = .null
+    private(set) var commandItems: [JSONValue] = []
+    private var resolvedShortcuts: JSONValue = .null
     @Published private(set) var busy = false
     @Published var error = ""
     @Published private(set) var terminalError = ""
@@ -39,6 +41,7 @@ final class WorkspaceModel: ObservableObject {
     private(set) var terminals: [String: TerminalSession] = [:]
     var languageChanged: (() -> Void)?
     var appearanceChanged: ((String) -> Void)?
+    var commandsChanged: (() -> Void)?
     var deleteWorktreeRequested: ((String, String) -> Void)?
     var openSSHRequested: ((String?) -> Void)?
     var openDatabasesRequested: (() -> Void)?
@@ -177,6 +180,13 @@ final class WorkspaceModel: ObservableObject {
             let language = state.snapshot.document.settings["language"].string ?? "system"
             if NativeLocale.preference != language { NativeLocale.preference = language; languageChanged?() }
             self.state = state
+            if commandItems.isEmpty || resolvedShortcuts != settings["shortcuts"] {
+                let items = try await bridge.call("settings.commands", params: .object(["settings": settings, "platform": .string("macos")])).array
+                guard epoch == loadEpoch else { return }
+                commandItems = items
+                resolvedShortcuts = settings["shortcuts"]
+                commandsChanged?()
+            }
             appearanceChanged?(settings["appearance"].string ?? "system")
             let existing = Set(state.sessions.map { $0.session["id"].string ?? "" })
             agentNotifications.retain(existing)

@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var sshWindow: SSHWindow?
     private var agentsWindow: AgentSettingsWindow?
     private var fullSettingsWindow: NativeSettingsWindow?
+    private var commandPalette: NativeCommandPalette?
     private let model = WorkspaceModel()
     private var terminating = false
     private var preparingQuit = false
@@ -75,6 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openRedisRequested = { [weak self] in self?.openRedis() }
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
         model.openSettingsRequested = { [weak self] in self?.openFullSettings() }
+        model.commandsChanged = { [weak self] in self?.configureMenu() }
         model.prepareSSHTransportReconnect = { [weak self] in
             guard let current = self?.sshWindow else { return true }
             guard await current.model.prepareForQuit() else { return false }
@@ -337,17 +339,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(view, localized("Split down", "向下分屏"), #selector(splitDown), "d", [.command, .shift])
         add(view, localized("Increase font size", "增大字号"), #selector(increaseFont), "=")
         add(view, localized("Decrease font size", "减小字号"), #selector(decreaseFont), "-")
+        let managed: Set<String> = ["settings", "openFullSettings", "openProject", "openFile", "newTerminal", "newAgent", "openAgents", "openGit", "closeSession", "toggleSidebar", "splitRight", "splitDown", "increaseFont", "decreaseFont"]
+        for submenu in main.items.compactMap(\.submenu) {
+            for item in submenu.items where item.action.map(NSStringFromSelector).map(managed.contains) == true { item.keyEquivalent = "" }
+        }
+        let commands = menu(localized("Commands", "命令"))
+        for command in model.commandItems {
+            let item = NSMenuItem(title: localized(command["labels"]["en"].string ?? "", command["labels"]["zh-Hans"].string ?? ""), action: #selector(performSemanticCommand(_:)), keyEquivalent: "")
+            item.target = self; item.representedObject = command["id"].string
+            NativeCommandKey.apply(command["shortcut"].string ?? "", to: item)
+            commands.addItem(item)
+        }
         let windows = menu(localized("Window", "窗口"))
         windows.addItem(withTitle: localized("Minimize", "最小化"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         add(windows, localized("Close window", "关闭窗口"), #selector(hideWindow), "w", [.command, .shift])
         let fullScreen = windows.addItem(withTitle: localized("Enter full screen", "进入全屏"), action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         fullScreen.keyEquivalentModifierMask = [.command, .control]
+        let occupied = Set(commands.items.filter { !$0.keyEquivalent.isEmpty }.map { $0.keyEquivalent + String($0.keyEquivalentModifierMask.rawValue) })
+        for submenu in main.items.compactMap(\.submenu) where submenu !== commands {
+            for item in submenu.items where !item.keyEquivalent.isEmpty && occupied.contains(item.keyEquivalent + String(item.keyEquivalentModifierMask.rawValue)) { item.keyEquivalent = "" }
+        }
         NSApp.mainMenu = main
         NSApp.windowsMenu = windows
     }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return false }
+        if menuItem.action == #selector(performSemanticCommand(_:)) { return (menuItem.representedObject as? String).map(commandAvailable) == true }
         if menuItem.action == #selector(closeSession) {
             if let fullSettingsWindow, fullSettingsWindow.window === NSApp.keyWindow {
                 menuItem.title = localized("Close window", "关闭窗口")
@@ -384,6 +402,83 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     @objc private func toggleSidebar() { model.sidebarVisible.toggle() }
     @objc private func settings() { model.settingsPresented = true }
+    private func commandAvailable(_ id: String) -> Bool {
+        guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, !model.settingsPresented, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
+        if ["search", "files", "toggleInspector", "swapPanes", "github", "zoom"].contains(id) { return false }
+        if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
+        let origin = NSApp.keyWindow === commandPalette?.window ? commandPalette?.returnWindow : NSApp.keyWindow
+        if id == "close" { return origin != nil }
+        if ["fontIncrease", "fontDecrease"].contains(id) { return origin === window || contentWindows.values.contains { $0.window === origin } }
+        guard origin === window else { return false }
+        if ["terminal", "chat"].contains(id) { return true }
+        if ["quick", "git"].contains(id) { return model.workspace["selectedProject"].string != nil }
+        return model.selectedTerminal != nil
+    }
+    @objc private func performSemanticCommand(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        performCommand(id)
+    }
+    private func performCommand(_ id: String) {
+        guard commandAvailable(id) else { NSSound.beep(); return }
+        if NSApp.keyWindow === commandPalette?.window, id != "palette" {
+            commandPalette?.dismiss()
+            if id == "close" { return }
+        }
+        switch id {
+        case "palette":
+            if commandPalette == nil { commandPalette = NativeCommandPalette() }
+            commandPalette?.open(commands: model.commandItems, available: { [weak self] in self?.commandAvailable($0) == true }, perform: { [weak self] in self?.performCommand($0) })
+        case "settings": openFullSettings()
+        case "project": openProject()
+        case "terminal": newTerminal()
+        case "chat": newAgent()
+        case "quick": openFile()
+        case "git": openGit()
+        case "agents": openAgents()
+        case "toggleSidebar": toggleSidebar()
+        case "splitRight": splitRight()
+        case "splitDown": splitDown()
+        case "close": closeSession()
+        case "fontIncrease": increaseFont()
+        case "fontDecrease": decreaseFont()
+        case "ungroup": if let id = model.selectedID { Task { await model.mutate("session.ungroup", ["id": .string(id)]) } }
+        case "link":
+            if let id = model.selectedID?.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")) {
+                NSPasteboard.general.clearContents(); NSPasteboard.general.setString("uterm://session/" + id, forType: .string)
+            }
+        case "terminalSearch":
+            let item = NSMenuItem(); item.tag = Int(NSFindPanelAction.showFindPanel.rawValue)
+            model.selectedTerminal?.view.performFindPanelAction(item)
+        case "next", "previous":
+            let selected = model.sessionEntries.first { $0.sessionID == model.selectedID }
+            let entries = model.sessionEntries.filter { $0.rosterId == selected?.rosterId && $0.session["worktreeId"] == selected?.session["worktreeId"] }
+            if let index = entries.firstIndex(where: { $0.sessionID == model.selectedID }), !entries.isEmpty {
+                let next = entries[(index + (id == "next" ? 1 : -1) + entries.count) % entries.count].sessionID
+                Task { await model.selectSession(next) }
+            }
+        case "nextWorkspace", "previousWorkspace":
+            let groups = model.groupItems
+            if let index = groups.firstIndex(where: { $0.id == model.groupID }), !groups.isEmpty {
+                let next = groups[(index + (id == "nextWorkspace" ? 1 : -1) + groups.count) % groups.count].id
+                Task { await model.mutate("workspace.switch", ["id": .string(next)]) }
+            }
+        case "left", "right", "up", "down": focusPane(id)
+        default: break
+        }
+    }
+    private func focusPane(_ direction: String) {
+        guard let selected = model.selectedTerminal else { return }
+        let origin = selected.view.convert(selected.view.bounds, to: nil)
+        let candidates = model.terminals.values.compactMap { terminal -> (String, CGFloat)? in
+            guard terminal.id != selected.id, terminal.view.window === window, !terminal.view.isHiddenOrHasHiddenAncestor else { return nil }
+            let rect = terminal.view.convert(terminal.view.bounds, to: nil)
+            let dx = rect.midX - origin.midX, dy = rect.midY - origin.midY
+            let primary = direction == "left" ? -dx : direction == "right" ? dx : direction == "up" ? dy : -dy
+            guard primary > 1 else { return nil }
+            return (terminal.id, primary + abs(direction == "left" || direction == "right" ? dy : dx) * 2)
+        }
+        if let next = candidates.min(by: { $0.1 < $1.1 }) { Task { await model.selectSession(next.0) } }
+    }
     @objc private func openFullSettings() {
         if fullSettingsWindow == nil { fullSettingsWindow = NativeSettingsWindow(workspace: model) }
         fullSettingsWindow?.window.appearance = window?.appearance
@@ -398,6 +493,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func hideWindow() {
+        if commandPalette?.window === NSApp.keyWindow { commandPalette?.dismiss(); return }
         if fullSettingsWindow?.window === NSApp.keyWindow { fullSettingsWindow?.window.performClose(nil); return }
         if agentsWindow?.window === NSApp.keyWindow { agentsWindow?.window.performClose(nil); return }
         if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
@@ -759,6 +855,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }
     @objc private func closeSession() {
+        if commandPalette?.window === NSApp.keyWindow { commandPalette?.dismiss(); return }
         if let fullSettingsWindow, fullSettingsWindow.window === NSApp.keyWindow { fullSettingsWindow.window.performClose(nil); return }
         if let agentsWindow, agentsWindow.window === NSApp.keyWindow { agentsWindow.window.performClose(nil); return }
         if let sshWindow, sshWindow.window === NSApp.keyWindow { sshWindow.window?.performClose(nil); return }
@@ -787,7 +884,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        if let fullSettingsWindow, fullSettingsWindow.model.busy {
+        if let fullSettingsWindow, fullSettingsWindow.model.busy || fullSettingsWindow.model.login.busy {
             fullSettingsWindow.model.error = localized("Wait for the settings operation to finish.", "请等待设置操作完成。")
             fullSettingsWindow.window.makeKeyAndOrderFront(nil)
             return .terminateCancel

@@ -155,8 +155,9 @@ tracked in #41.
 Native settings QA: **Settings → All settings…** opens the draft form. Run
 `bash scripts/macos-settings-smoke.sh` after the QA build to check read-only opening, field
 conflicts, invalid drafts, shortcut capture, explicit reset and actual quit cancellation. The script
-records real windows; preference effects, full menu/command integration and login startup remain
-under #41.
+records real windows, theme effects, menu keys and palette focus. Login-item QA uses a guarded
+simulation and never registers a CI login item. Remaining preferences and unavailable commands
+remain under #41.
 
 Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the Pi extension under
 `crates/uterm-core/integrations/`. `bash scripts/macos-agent-smoke.sh` requires a macOS graphical

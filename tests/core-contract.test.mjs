@@ -20,7 +20,13 @@ import { createInterface } from "node:readline";
 import { JSDOM } from "jsdom";
 import { createServer } from "vite";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
-import { commands, defaults, readSettings, validateShortcuts } from "../src/lib/settings.ts";
+import {
+  binding,
+  commands,
+  defaults,
+  readSettings,
+  validateShortcuts,
+} from "../src/lib/settings.ts";
 import { importTheme } from "../src/lib/themes.ts";
 import {
   emptyWorkspace,
@@ -119,6 +125,11 @@ test("native settings catalog preserves defaults and matches both platform short
         }
         const actual = await call("settings.validate", { settings, platform });
         assert.equal(!actual.error, expected, `${platform}/${id}/${shortcut}`);
+        const resolved = await call("settings.commands", { settings, platform });
+        assert.equal(resolved.error, undefined);
+        for (const command of resolved.result) {
+          assert.equal(command.shortcut, binding(settings, command.id, mac));
+        }
       }
     }
   }
@@ -201,6 +212,7 @@ test("native settings catalog preserves defaults and matches both platform short
           architecture: process.arch,
           commands: commands.length,
           differentialCases: commands.length * 12,
+          resolvedBindingComparisons: commands.length * 12 * commands.length,
           themeDifferentialCases: themeCases,
           actualRustProcessAndTypeScript: true,
           defaultsUnchanged: true,

@@ -3,6 +3,10 @@ import UTermBridge
 
 @MainActor
 enum SettingsSmoke {
+    private static func key(_ window: NSWindow, code: UInt16, characters: String) throws {
+        guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code) else { throw BridgeFailure(code: "SETTINGS_QA_EVENT", message: "Could not construct native key input") }
+        window.sendEvent(event)
+    }
     private static func save(_ model: NativeSettingsModel) async throws {
         for _ in 0..<3 {
             await model.save()
@@ -76,6 +80,23 @@ enum SettingsSmoke {
             try await save(model)
             guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_QA_SHORTCUT_SAVE", message: "Captured shortcut could not be saved") }
             report["nativeShortcutCaptureAndSave"] = true
+            guard let paletteMenu = NSApp.mainMenu?.items.compactMap(\.submenu).flatMap(\.items).first(where: { $0.representedObject as? String == "palette" }), paletteMenu.keyEquivalent == "k", paletteMenu.keyEquivalentModifierMask == [.command, .shift], let paletteEvent = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "K", charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40), NSApp.mainMenu?.performKeyEquivalent(with: paletteEvent) == true else { throw BridgeFailure(code: "SETTINGS_QA_MENU_BINDING", message: "Saved semantic shortcut did not update the system menu") }
+            try await TerminalSmoke.wait("Open palette through the actual menu shortcut") { NSApp.keyWindow?.identifier?.rawValue == "native-command-palette" }
+            guard let palette = NSApp.keyWindow else { throw BridgeFailure(code: "SETTINGS_QA_PALETTE", message: "Palette did not open") }
+            let paletteCapture = "native-settings-command-palette.png"
+            try await TerminalSmoke.capture(window: palette, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(paletteCapture))
+            let previousResponder = current.window.firstResponder
+            try key(palette, code: 53, characters: "\u{1b}")
+            try await TerminalSmoke.wait("Restore settings focus after Escape") { !palette.isVisible && current.window.isKeyWindow }
+            guard current.window.firstResponder === previousResponder else { throw BridgeFailure(code: "SETTINGS_QA_FOCUS", message: "Palette cancellation did not restore the previous responder") }
+            guard NSApp.mainMenu?.performKeyEquivalent(with: paletteEvent) == true else { throw BridgeFailure(code: "SETTINGS_QA_REOPEN_PALETTE", message: "Palette shortcut could not reopen") }
+            try await TerminalSmoke.wait("Reopen palette") { palette.isKeyWindow }
+            try key(palette, code: 125, characters: String(UnicodeScalar(NSDownArrowFunctionKey)!))
+            try key(palette, code: 126, characters: String(UnicodeScalar(NSUpArrowFunctionKey)!))
+            try key(palette, code: 125, characters: String(UnicodeScalar(NSDownArrowFunctionKey)!))
+            try key(palette, code: 36, characters: "\r")
+            try await TerminalSmoke.wait("Execute selected settings command with Return") { !palette.isVisible && current.window.isKeyWindow }
+            report["nativeDynamicMenuPaletteKeyboardAndFocusReturn"] = true
             let beforeImport = try Data(contentsOf: snapshotFile), draftBeforeImport = model.values
             await model.importTheme(source: "background=invalid-private-color", name: "QA")
             guard !model.error.isEmpty, model.values == draftBeforeImport, try Data(contentsOf: snapshotFile) == beforeImport else { throw BridgeFailure(code: "SETTINGS_QA_THEME_ERROR", message: "Invalid theme changed settings or the draft") }
@@ -108,7 +129,19 @@ enum SettingsSmoke {
             try await save(model)
             guard model.error.isEmpty, !model.dirty, model.values["fontSize"] == model.catalog["defaults"]["fontSize"], model.values["agentNotifications"] == .bool(false) else { throw BridgeFailure(code: "SETTINGS_QA_RESET", message: "Reset did not restore shared defaults and notification opt-out") }
             report["explicitResetUsesSharedDefaults"] = true
-            var captures: [String] = [terminalCapture]
+            let beforeLogin = try Data(contentsOf: snapshotFile)
+            guard model.login.simulated else { throw BridgeFailure(code: "SETTINGS_QA_LOGIN_GUARD", message: "QA must not register a real login item") }
+            model.login.qaRequireApproval = true; await model.login.setEnabled(true)
+            guard model.login.requiresApproval, !model.login.enabled else { throw BridgeFailure(code: "SETTINGS_QA_LOGIN_APPROVAL", message: "Login approval was not retained") }
+            await model.login.setEnabled(true)
+            guard model.login.enabled, !model.login.requiresApproval else { throw BridgeFailure(code: "SETTINGS_QA_LOGIN_ENABLE", message: "Login opt-in failed") }
+            model.login.qaFailNextRequest = true; await model.login.setEnabled(false)
+            guard model.login.enabled, !model.login.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_QA_LOGIN_FAILURE", message: "Failed login request lost its state or error") }
+            await model.login.setEnabled(false)
+            guard !model.login.enabled, model.login.error.isEmpty, try Data(contentsOf: snapshotFile) == beforeLogin, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_LOGIN_DISABLE", message: "Login cleanup changed shared preferences") }
+            report["simulatedLoginItemOptInApprovalFailureAndDisable"] = true
+            report["actualOSLoginRegistrationExecuted"] = false
+            var captures: [String] = [paletteCapture, terminalCapture]
             current.window.makeKeyAndOrderFront(nil)
             for (language, appearance, width, name) in [("en", "dark", 900.0, "native-settings-full-dark-en.png"), ("zh-Hans", "light", 660.0, "native-settings-full-light-zh-narrow.png")] {
                 model.values["language"] = .string(language); model.values["appearance"] = .string(appearance); model.section = "appearance"
@@ -124,7 +157,7 @@ enum SettingsSmoke {
         } catch { await other.close(); throw error }
         report["manualAcceptance"] = "waived by user"
         report["nativeSettingsFeatureAcceptanceComplete"] = false
-        report["remaining"] = ["Remaining preference effects, command/menu integration and login startup are tracked in #41"]
+        report["remaining"] = ["Remaining preference effects and unavailable native search/files/inspector/GitHub/zoom commands are tracked in #41 and #17; actual OS login approval uses the authorized simulation boundary"]
         current.window.orderOut(nil)
     }
 }

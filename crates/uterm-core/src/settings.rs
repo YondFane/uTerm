@@ -130,12 +130,11 @@ pub fn import_theme(source: &str, name: &str) -> Result<Value> {
     Ok(value)
 }
 
-pub fn validate(value: &Value, platform: Platform) -> Result<()> {
+pub fn commands(value: &Value, platform: Platform) -> Result<Value> {
     state::validate_settings(value)?;
-    let catalog = catalog()?;
+    let mut catalog = catalog()?;
     let shortcuts = value["shortcuts"].as_object().unwrap();
-    let mut used = HashMap::new();
-    for command in catalog["commands"].as_array().unwrap() {
+    for command in catalog["commands"].as_array_mut().unwrap() {
         let id = command["id"].as_str().unwrap();
         let fallback = match (platform, id) {
             (Platform::Windows, "terminalSearch") => "Mod+Shift+KeyF",
@@ -161,6 +160,16 @@ pub fn validate(value: &Value, platform: Platform) -> Result<()> {
         } else {
             fallback
         };
+        let key = key.to_owned();
+        command["shortcut"] = Value::String(key);
+    }
+    Ok(catalog["commands"].take())
+}
+
+pub fn validate(value: &Value, platform: Platform) -> Result<()> {
+    let mut used = HashMap::new();
+    for command in commands(value, platform)?.as_array().unwrap() {
+        let key = command["shortcut"].as_str().unwrap();
         if key.is_empty() {
             continue;
         }
@@ -182,7 +191,7 @@ pub fn validate(value: &Value, platform: Platform) -> Result<()> {
                 "This shortcut belongs to the system or editor",
             ));
         }
-        if used.insert(key.to_owned(), id).is_some() {
+        if used.insert(key.to_owned(), ()).is_some() {
             return Err(CoreError::new(
                 "SHORTCUT_CONFLICT",
                 "Two commands use the same shortcut",

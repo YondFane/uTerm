@@ -5,6 +5,7 @@ import UTermBridge
 @MainActor
 final class NativeSettingsModel: ObservableObject {
     let workspace: WorkspaceModel
+    let login = NativeLoginItems()
     @Published private(set) var catalog: JSONValue = .null
     @Published private(set) var agents: JSONValue = .null
     @Published var values: [String: JSONValue] = [:]
@@ -139,6 +140,7 @@ struct NativeSettingsView: View {
             choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
             choice("defaultShell", "Default shell", "默认 Shell", [("default", "System default", "系统默认"), ("cmd", "Windows Command Prompt", "Windows 命令提示符")])
             Toggle(localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates"))
+            NativeLoginItemsView(model: model.login)
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
             number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）")
             Section(localized("Sidebar", "侧栏")) {
@@ -294,7 +296,7 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool { sender.orderOut(nil); return false }
     func prepareForQuit() async -> Bool {
-        guard !model.busy else { return false }
+        guard !model.busy, !model.login.busy else { return false }
         model.frozen = true
         guard model.dirty else { return true }
         let alert = NSAlert(); alert.messageText = localized("Discard settings changes?", "放弃设置修改？")
