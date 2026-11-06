@@ -5742,25 +5742,37 @@ workflow runs `bash scripts/macos-database-smoke.sh` with an isolated real Postg
 catalog-verified JDBC driver, recording profile save, exact SQL values, hide/reopen/reconnect,
 language/theme/narrow-window behavior and WindowServer images. Runtime results for the new window
 must pass both Swift compilation and the actual window scenes at its actual source head; neither is
-accepted from the Linux checks. Source `54faefb` / tested merge
-`2748886d1257b0b7a6f6ffa1a69358e45c26de3b` passes the entire ARM64 native job, including PostgreSQL
-window scenarios for private-password disconnect/connect, SQL clipboard equality, exact
-bigint/decimal/Unicode values, hide/reopen and active-profile protection. Actual macOS 15.8.2 uses
-PostgreSQL 16.15 and JDBC 42.7.14. Reports and two inspected WindowServer images are in
-[artifact 13450738593](https://github.com/YondFane/uTerm/actions/runs/42103209852/artifacts/13450738593);
-the narrow Chinese/light image now shows the correct Web content after waiting for WebKit paint
-submission and compositor settling. The native manager starts component detection only when Database
-components is first opened and retains the manager when hidden; a focused regression checks no
-unseen probe during profile editing and no duplicate probe on reopening. Intel still needs its own
-latest result. Fixed method names and bounded error codes exclude parameters/vendor text from native
-diagnostics. Windows, other engines/document databases, native picker and manual acceptance remain
-pending.
+accepted from the Linux checks. Source and actual tested commit
+`97f83668f0445dc371fbf1c44f86a7cb5350e04c` pass both complete native jobs through workflow dispatch
+directly on the task branch. macOS 15.8.2 ARM64 and 15.7.9 Intel use Xcode 16.4, Swift 6.1.2, Rust
+1.99.1, PostgreSQL 16.15 and JDBC 42.7.14. Both `database-live.json` reports have `passed=true`, a
+clean source tree and exit code 0, including SQL-input readiness, clipboard equality, exact
+bigint/decimal/Unicode values, private-password reconnect, hide/reopen and active-profile
+protection. The
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42158127557/artifacts/13476455312) and
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42158127557/artifacts/13476426275)
+each contain the report, toolchain, logs, `native-database-sql-dark-en.png` and
+`native-database-sql-light-zh-narrow.png`. All four WindowServer images have been individually
+checked.
+
+The native manager starts component detection only when Database components is first opened and
+retains the manager when hidden; a focused regression checks no unseen probe during profile editing
+and no duplicate probe on reopening. Fixed method names and bounded error codes exclude
+parameters/vendor text from native diagnostics.
 
 Native SQL input QA waits for catalog loading to finish, enabled Disconnect/Execute SQL controls and
 a visible editable CodeMirror before entering SQL, including after reconnecting. A connection handle
 alone does not establish editor readiness. The SQL clipboard equality assertion remains required.
 The delayed-catalog regression and related database/content checks pass all 16 tests on Linux;
-TypeScript checks pass. New macOS ARM64/Intel runtime results for this readiness change are pending.
+TypeScript checks pass. Same-source Tauri CI also passes on macOS 26.6.2 ARM64 and Windows Server
+2025 x64: frontend tests are 419 passed/10 skipped and 418 passed/11 skipped respectively, with 63
+real-app QA scenes and no cleanup errors on each platform. Reports are in the
+[macOS artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476515464)
+and
+[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476251745).
+These Tauri scenes do not establish complete Windows database-workbench acceptance. Windows database
+flows, other engines/document databases, complete component installation/recovery, native picker and
+manual acceptance remain pending; #38 stays open.
 
 ### Database setup and visibility
 

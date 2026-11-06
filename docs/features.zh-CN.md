@@ -3378,13 +3378,24 @@ C ABI 与精确值契约检查。已验收的服务证据对应源码 `ef5c3f4`�
 Linux 检查还覆盖配置 CAS／草稿／密码排除、两端内容 transport 取消后的写入排空、模态窗口冻结／恢复及目标修改后清除临时密码。原生工作流运行
 `bash scripts/macos-database-smoke.sh`，使用隔离的真实 PostgreSQL 服务和目录校验的 JDBC 驱动，记录配置保存、SQL 精确值、隐藏／重开／重连、语言／主题／窄窗口和 WindowServer 截图。新增窗口必须分别通过 Swift 编译和真实窗口场景，Linux 检查不能替代这两项验收，结果须按实际源码 head 核对。
 
-源码 `54faefb`／tested merge `2748886d1257b0b7a6f6ffa1a69358e45c26de3b`
-的整个 ARM64 原生 job 通过，包括 PostgreSQL 窗口的私有密码断开／重连、SQL 剪贴板一致性、bigint／decimal／Unicode 精确值、隐藏／重开及活跃配置保护。实际 macOS
-15.8.2 使用 PostgreSQL 16.15 和 JDBC
-42.7.14。[artifact13450738593](https://github.com/YondFane/uTerm/actions/runs/42103209852/artifacts/13450738593)包含报告及两张已目视核对的 WindowServer 图；等待 WebKit 提交绘制及合成器稳定后，中文／浅色窄窗口图已显示正确 Web 内容。原生管理页仅在首次打开“数据库组件”时启动组件探测，隐藏后保留管理页状态；专项回归检查编辑配置时不发起不可见探测，重复打开也不重复探测。Intel 仍需自身最新结果。原生诊断仅记录固定方法名及有界错误码，不记录参数／厂商文本。Windows、其他引擎／文档数据库、原生选择器及人工验收仍待完成。
+源码与实际测试提交 `97f83668f0445dc371fbf1c44f86a7cb5350e04c`
+通过 workflow_dispatch 直接测试任务分支，两个完整原生 job 均通过。macOS 15.8.2 ARM64 和 15.7.9
+Intel 使用 Xcode 16.4、Swift 6.1.2、Rust 1.99.1、PostgreSQL 16.15 和 JDBC 42.7.14。两份
+`database-live.json` 均为
+`passed=true`、源码干净、退出码 0，覆盖 SQL 输入就绪、剪贴板一致性、bigint／decimal／Unicode 精确值、私有密码重连、隐藏／重开及活跃配置保护。
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42158127557/artifacts/13476455312) 和
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42158127557/artifacts/13476426275)
+各包含报告、工具链、日志、`native-database-sql-dark-en.png` 和
+`native-database-sql-light-zh-narrow.png`，四张 WindowServer 图均已逐张目视核对。
 
-原生 SQL 输入 QA 会等待目录加载结束、“断开”／“执行 SQL”控件启用及 CodeMirror 实际显示且可编辑，再输入 SQL；重连后同样等待。仅获得连接句柄不代表编辑器已就绪，SQL 剪贴板一致性断言继续保留。延迟目录加载回归及相关数据库／内容检查在 Linux 上全部 16 项通过，TypeScript 检查通过；本次就绪条件修改的 macOS
-ARM64／Intel 运行结果仍待验证。
+原生管理页仅在首次打开“数据库组件”时启动组件探测，隐藏后保留管理页状态；专项回归检查编辑配置时不发起不可见探测，重复打开也不重复探测。原生诊断仅记录固定方法名及有界错误码，不记录参数／厂商文本。
+
+原生 SQL 输入 QA 会等待目录加载结束、“断开”／“执行 SQL”控件启用及 CodeMirror 实际显示且可编辑，再输入 SQL；重连后同样等待。仅获得连接句柄不代表编辑器已就绪，SQL 剪贴板一致性断言继续保留。延迟目录加载回归及相关数据库／内容检查在 Linux 上全部 16 项通过，TypeScript 检查通过。同源码 Tauri
+CI 在 macOS 26.6.2 ARM64 与 Windows Server 2025
+x64 也通过：前端分别为 419 通过／10 跳过、418 通过／11 跳过，两平台各有 63 个真实应用 QA 场景通过且清理无错误。报告见
+[macOS artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476515464)
+与
+[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476251745)。这些 Tauri 场景不代表完整 Windows 数据库工作台已验收。Windows 数据库流程、其他引擎／文档数据库、完整组件安装／恢复、原生选择器及人工验收仍待完成，#38 保持开放。
 
 ### 数据库配置与区域显示
 
