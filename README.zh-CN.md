@@ -173,7 +173,7 @@ workflow 执行。程序比较只允许 Tauri 唯一的 NSIS 类型标记变换�
 
 `python3 -B scripts/macos-updates-smoke.py`
 使用分别标识的原生 QA 应用、临时数据、一次性 CryptoKit 密钥及回环更新源运行真实 SDK。脚本下载经过哈希固定的官方签名工具，检查有效／无效签名、平台／渠道／版本拒绝、取消、中断／离线下载及重试。用户决定明确由模拟 SDK 驱动控制；共享设置的开启／关闭验证实际 SDK 调度；独立场景执行真实 SDK 替换／重启、原生编辑器退出保存及保留宿主重连，平台结果仍待 CI。报告、真实窗口原图、HTTP 日志及有效签名测试 ZIP 归档在
-`updates/`，私钥不上传。
+`updates/`，私钥不上传。重启后的截图由原 CI 协调端执行，先匹配源码、应用标识和 WindowServer 的所属 PID／窗口号；权限不足或缺图仍判为验收失败。
 
 `node scripts/windows-updates-smoke.mjs` 要求 Windows／WebView2，构建隔离的0.2.4／0.2.5 QA
 NSIS 包。一次性测试密钥签署更新，私有字面回环服务驱动真实更新器检查／下载／验签／安装／重启；真实设置控件执行手动检查、自动开启／下载、取消及关闭。Core 草稿输入和编辑器脏标志明确使用模拟，持久化、活跃 PTY／宿主及安装器实际执行。`ci-evidence/updates-windows`

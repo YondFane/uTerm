@@ -4752,14 +4752,21 @@ The pinned SDK's `Autoupdate/SUSignatureVerifier.m` uses `SUValidationError` wit
 installation/validation errors still fail. Only a boolean reason is emitted, without private
 descriptions. Bridge negative tests cover unrelated causes.
 
-Intel at source `cdedb12860c5a20c88c1945b21c96c84770173ce`, tested merge
-`adf4eef3be321370ae2d0e97323a743a60c053a7`, passes nine SDK scenarios, including strict bad
-signature and real automatic scheduling. Actual installation reaches the updated process with
-retained host/draft checks, then fails the required own-window capture in
-[run42236559031](https://github.com/YondFane/uTerm/actions/runs/42236559031). The corrected relaunch
-capture waits for its own PID/window number in WindowServer and retries within a fixed bound,
-retaining functional checkpoints even on capture failure. Fresh platform acceptance is pending.
-Transfer/database update-quit combinations and Windows signed updates remain open in #45.
+Intel at source `cb2f1627d07c8110b907fca16f447320cec9c13f`, tested merge
+`9883ff45c3ef00ee821946494528e9605c705be5`, passes nine SDK scenarios. The install case actually
+reaches version2 in a different process with the same host and saved draft, but its own screenshot
+process fails 25 times despite WindowServer listing that exact window. This remains a failed
+acceptance in
+[artifact13521159633](https://github.com/YondFane/uTerm/actions/runs/42249902279/artifacts/13521159633).
+
+Relaunch capture now uses the original CI coordinator's process tree. The updated app requests only
+its own PID/window number; the coordinator checks source/merge/identity and exact filename, then a
+Swift helper independently verifies WindowServer ownership and dimensions before capturing that
+exact window. A bounded acknowledgement, ownership report and original PNG are required. Missing
+permission/image remains failure. Summary fields distinguish actual installation execution from
+complete acceptance, including capture failures. Linux request-boundary negatives pass; the new
+Swift helper and corrected screenshots still require Mac CI. Transfer/database update-quit
+combinations and Windows signed updates remain open in #45.
 
 #### Windows signed updater QA
 

@@ -36,7 +36,15 @@ def configure_app(source, destination, info):
     run("codesign", "--verify", "--deep", "--strict", destination)
 
 
-def exercise(source, folder, evidence, signer, mode, head, tested):
+def validate_capture_request(request, head, tested, identity, original_pid):
+    assert request["sourceHeadSHA"] == head and request["testedMergeSHA"] == tested
+    assert request["bundleIdentifier"] == identity and request["pid"] != original_pid
+    assert type(request["pid"]) is int and request["pid"] > 0
+    assert type(request["windowNumber"]) is int and request["windowNumber"] > 0
+    assert request["screenshot"] == "native-update-install-relaunched.png"
+
+
+def exercise(source, folder, evidence, signer, mode, head, tested, capture_tool):
     root = folder / ("uterm-native-qa-" + mode)
     root.mkdir()
     identity = "sh.uterm.desktop.qa.native.update." + uuid.uuid4().hex
@@ -149,7 +157,26 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
                 code = process.wait(timeout=220)
             if mode == "install":
                 deadline = time.monotonic() + 120
-                while not report.exists() and time.monotonic() < deadline: time.sleep(.1)
+                handled = False
+                while not report.exists() and time.monotonic() < deadline:
+                    request_path = case_dir / "capture-request.json"
+                    if request_path.exists() and not handled:
+                        handled = True
+                        response = {"passed": False}
+                        try:
+                            request = json.loads(request_path.read_text())
+                            validate_capture_request(request, head, tested, identity, process.pid)
+                            ownership = json.loads(run(capture_tool, request["pid"], request["windowNumber"], case_dir / request["screenshot"], timeout=30))
+                            assert ownership["ownerPID"] == request["pid"] and ownership["windowNumber"] == request["windowNumber"]
+                            ownership.update(sourceHeadSHA=head, testedMergeSHA=tested, platform="macOS", architecture=platform.machine())
+                            (case_dir / "capture-ownership.json").write_text(json.dumps(ownership, indent=2)+"\n")
+                            response["passed"] = True
+                        except Exception as error:
+                            response["failure"] = str(error)
+                        temporary = case_dir / "capture-response.tmp"
+                        temporary.write_text(json.dumps(response)+"\n")
+                        temporary.replace(case_dir / "capture-response.json")
+                    time.sleep(.1)
             data = json.loads(report.read_text())
             assert code == 0 and "failure" not in data and "cleanupError" not in data, data.get("failure", data.get("cleanupError", code))
             assert data["sourceHeadSHA"] == head and data["sourceSHA"] == tested
@@ -183,7 +210,7 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
                         updateSignature=signature, publicTestKey=public_key, fixtureMode=mode)
             report.write_text(json.dumps(data, ensure_ascii=False, indent=2)+"\n")
             if mode in ("good", "install"): shutil.copyfile(archive, case_dir / "signed-test-update.zip")
-            return {"mode": mode, "passed": True, "report": mode + "/sdk-native.json"}
+            return {"mode": mode, "passed": True, "report": mode + "/sdk-native.json", "actualInstallOrRelaunchExecuted": mode == "install"}
         finally:
             if process and process.poll() is None: process.kill(); process.wait()
             if mode == "install":
@@ -238,14 +265,24 @@ def main():
         with tarfile.open(toolkit) as archive:
             signer.write_bytes(archive.extractfile("./bin/sign_update").read())
         signer.chmod(0o700)
+        capture_tool = folder / "owned-window-capture"
+        run("xcrun", "swiftc", Path("scripts/macos-owned-window-capture.swift").resolve(), "-o", capture_tool)
         for mode in ("good", "bad-signature", "wrong-arch", "wrong-channel", "old-version", "cancel", "offline", "interrupted", "automatic", "install"):
-            try: results.append(exercise(source, folder, evidence, signer, mode, head, tested))
-            except Exception as error: results.append({"mode": mode, "passed": False, "failure": str(error)})
+            try: results.append(exercise(source, folder, evidence, signer, mode, head, tested, capture_tool))
+            except Exception as error:
+                item = {"mode": mode, "passed": False, "failure": str(error)}
+                case_report = evidence / mode / "sdk-native.json"
+                if case_report.exists():
+                    actual = json.loads(case_report.read_text())
+                    if actual.get("sourceHeadSHA") == head and actual.get("sourceSHA") == tested:
+                        item["actualInstallOrRelaunchExecuted"] = actual.get("actualInstallOrRelaunchExecuted", False)
+                results.append(item)
     result = dict(passed=all(item["passed"] for item in results), sourceHeadSHA=head, testedMergeSHA=tested,
                   sourceTreeDirty=False, platform="macOS", architecture=platform.machine(), system=platform.mac_ver()[0],
                   sdk="2.10.1", toolkitSHA256=TOOLKIT_SHA256, scenarios=results,
                   toolchain=dict(swift=run("xcrun", "swift", "--version").decode().strip(), xcode=run("xcodebuild", "-version").decode().strip(), rust=run("rustc", "--version").decode().strip()),
-                  simulatedUserDriver=True, actualInstallOrRelaunchExecuted=any(item["mode"] == "install" and item["passed"] for item in results), productionFeedChanged=False,
+                  simulatedUserDriver=True, actualInstallOrRelaunchExecuted=any(item.get("actualInstallOrRelaunchExecuted", False) for item in results),
+                  actualInstallationAccepted=any(item["mode"] == "install" and item["passed"] for item in results), productionFeedChanged=False,
                   remaining=["Transfer/database update-quit combinations and Windows signed updates require separate acceptance"])
     (evidence / "sdk-summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2)+"\n")
     print(json.dumps(result, ensure_ascii=False))

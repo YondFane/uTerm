@@ -2754,10 +2754,13 @@ ZIP、独立 QA 标识和临时目录执行十个真实 SDK 场景。生成一�
 固定 SDK 的 `Autoupdate/SUSignatureVerifier.m` 使用 `SUValidationError` 和固定原因
 `EdDSA signature does not match.`。QA 要求有界底层链中准确出现此原因，无关安装／校验错误仍失败；仅输出原因布尔值，不记录私有描述，Bridge 负例覆盖无关错误。
 
-源码 `cdedb12860c5a20c88c1945b21c96c84770173ce`、tested merge
-`adf4eef3be321370ae2d0e97323a743a60c053a7`
-的 Intel 通过九个 SDK 场景，包括严格坏签名和真实自动调度。实际安装进入更新后的进程并通过宿主／草稿保留检查，随后必需的所属窗口截图失败，见
-[run42236559031](https://github.com/YondFane/uTerm/actions/runs/42236559031)。修正的重启截图等待 WindowServer 中自身 PID／窗口号，并在固定时间内重试；失败时仍保留功能检查点，仍待新平台验收。传输／数据库的更新退出组合保护及 Windows 签名更新继续在 #45 开放。
+Intel 源码 `cb2f1627d07c8110b907fca16f447320cec9c13f`、tested merge
+`9883ff45c3ef00ee821946494528e9605c705be5`
+通过九个 SDK 场景。安装实际进入不同的新版本2进程，保留同一宿主和保存后的草稿；但即使 WindowServer 列出准确窗口，自身截图进程仍失败25次，见
+[artifact13521159633](https://github.com/YondFane/uTerm/actions/runs/42249902279/artifacts/13521159633)，验收仍失败。
+
+重启截图现由原 CI 协调进程树执行。新版应用仅请求自身 PID／窗口号，协调端核对源码／merge／标识和准确文件名，Swift 辅助程序再独立核对 WindowServer 所有权和尺寸，才截图该窗口。必须取得有界确认、所有权报告和原始 PNG，权限不足／缺图仍失败。汇总字段区分实际安装已执行和完整验收，截图失败时也保留实际执行事实。Linux 请求边界负例通过，新 Swift 辅助程序和修正截图仍须 Mac
+CI。传输／数据库的更新退出组合及 Windows 签名更新在 #45 保持开放。
 
 #### Windows 签名更新 QA
 

@@ -209,6 +209,9 @@ decisions use an explicitly simulated SDK driver; shared opt-in/opt-out exercise
 scheduler. A separate case performs actual SDK replacement/relaunch, real editor quit autosave and
 retained-host reconnection; its platform results remain pending CI. Reports, original windows, HTTP
 logs and the valid signed test ZIP are archived under `updates/`; private keys are never uploaded.
+The original CI coordinator captures the relaunched process only after matching source, bundle
+identity and WindowServer owner PID/window number; missing permission or images remains a failed
+acceptance.
 
 `node scripts/windows-updates-smoke.mjs` requires Windows/WebView2 and builds isolated 0.2.4/0.2.5
 QA NSIS packages. One-time test keys sign the update, and a private literal-loopback server drives

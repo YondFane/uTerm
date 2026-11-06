@@ -35,26 +35,33 @@ enum UpdateInstallationSmoke {
             window.makeKeyAndOrderFront(nil); window.orderFrontRegardless(); NSApp.activate(ignoringOtherApps: true)
             report["relaunchedWindowFrame"] = NSStringFromRect(window.frame)
             let deadline = Date().addingTimeInterval(8)
-            var captured = false, attempts = 0
+            var listed = false
             while Date() < deadline {
                 let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
-                let listed = windows.contains { item in
+                listed = windows.contains { item in
                     (item[kCGWindowOwnerPID as String] as? Int32) == ProcessInfo.processInfo.processIdentifier &&
                     (item[kCGWindowNumber as String] as? Int) == window.windowNumber
                 }
                 report["relaunchedWindowListedByWindowServer"] = listed
-                if listed {
-                    attempts += 1
-                    do {
-                        try await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(capture))
-                        captured = true; break
-                    } catch { report["lastCaptureFailure"] = error.localizedDescription }
-                }
+                if listed { break }
                 try await Task.sleep(for: .milliseconds(250))
             }
-            report["relaunchCaptureAttempts"] = attempts; report["relaunchedWindowNumber"] = window.windowNumber
-            guard captured else { throw BridgeFailure(code: "UPDATE_RELAUNCH_CAPTURE", message: "Updated app's own WindowServer window could not be captured") }
-            report.removeValue(forKey: "lastCaptureFailure"); report["captures"] = [capture]
+            guard listed else { throw BridgeFailure(code: "UPDATE_RELAUNCH_CAPTURE", message: "Updated app's own window was not listed by WindowServer") }
+            let evidence = URL(fileURLWithPath: reportPath).deletingLastPathComponent()
+            let request: [String: Any] = ["pid": ProcessInfo.processInfo.processIdentifier, "windowNumber": window.windowNumber,
+                "bundleIdentifier": Bundle.main.bundleIdentifier ?? "", "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["sourceSHA"] ?? "", "screenshot": capture]
+            try JSONSerialization.data(withJSONObject: request, options: .sortedKeys).write(to: evidence.appendingPathComponent("capture-request.json"), options: .atomic)
+            let response = evidence.appendingPathComponent("capture-response.json")
+            let captureDeadline = Date().addingTimeInterval(45)
+            while !FileManager.default.fileExists(atPath: response.path), Date() < captureDeadline {
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            guard let bytes = try? Data(contentsOf: response), let result = try? JSONDecoder().decode(JSONValue.self, from: bytes), result["passed"].bool == true else {
+                throw BridgeFailure(code: "UPDATE_RELAUNCH_CAPTURE", message: "Original CI coordinator did not confirm the updated app's owned window capture")
+            }
+            report["relaunchedWindowNumber"] = window.windowNumber
+            report["captureCoordinator"] = "original CI process tree; actual WindowServer owner PID/window number verified"
+            report["captures"] = [capture]
             await model.closeSession(); _ = try await bridge.call("host.shutdownIdle")
             report["explicitFixtureCloseAndIdleHostShutdown"] = true
             return
