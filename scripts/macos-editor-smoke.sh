@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 assert path.exists(), f'{phase}: no report before timeout'
                 report = json.loads(path.read_text())
                 assert 'failure' not in report, report
-                assert report['coreReady'] and not report['productionDataAccess'], report
+                assert report['coreReady'] and report['productionDataAccess'] is False, report
                 assert report['bundleIdentifier'] == 'sh.uterm.desktop.qa.native', report
                 for key in ['nativeFileTabsGroupedAndOrdered', 'nativeFileTabReopenSelectedExisting', 'nativeFileTabSwitchRetainedExactDrafts',
                             'nativeFileTabsMatchConfiguredAppearance']:
@@ -67,6 +67,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     summary = {'passed': True, 'sourceHeadSHA': reports['reopen']['sourceHeadSHA'],
         'testedMergeSHA': reports['reopen']['sourceSHA'], 'sourceTreeDirty': bool(subprocess.check_output(['git', 'status', '--porcelain'])),
         'platform': 'macOS', 'architecture': reports['reopen']['architecture'], 'system': reports['reopen']['system'],
+        'productionDataAccess': False, 'bundleIdentifier': reports['reopen']['bundleIdentifier'],
         'scenario': 'Real isolated native WK editor, durable draft, SIGKILL and relaunch, conflict/close/discard/save',
         'manualKeyboardIMEAcceptance': False, 'reports': ['editor-checkpoint.json', 'editor-reopen.json'],
         'captures': reports['checkpoint']['editorCaptures'] + reports['reopen']['editorCaptures']}

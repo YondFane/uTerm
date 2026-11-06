@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import UTermBridge
 
 @MainActor
@@ -22,9 +23,6 @@ enum UpdateInstallationSmoke {
             terminal.enqueue(Data("printf 'SDK_%s\\n' RELAUNCHED\r".utf8))
             try await TerminalSmoke.wait("Actual retained process output after SDK relaunch") { terminal.text.contains("SDK_RELAUNCHED") }
             let capture = "native-update-install-relaunched.png"
-            window.makeKeyAndOrderFront(nil)
-            try await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(capture))
-            report["captures"] = [capture]
             report["originalAppPID"] = baseline["originalAppPID"].number
             report["relaunchedAppPID"] = ProcessInfo.processInfo.processIdentifier
             report["hostPIDBefore"] = baseline["hostPID"].number; report["hostPIDAfter"] = baseline["hostPID"].number
@@ -33,6 +31,30 @@ enum UpdateInstallationSmoke {
             report["actualInstallOrRelaunchExecuted"] = true; report["actualEditorQuitAutosaveRetainedBytes"] = true
             report["realPTYRetainedGenerationAndHost"] = true; report["productionFeedChanged"] = false
             report["realSparkleSDK"] = "2.10.1"; report["simulatedUserDriver"] = true
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.makeKeyAndOrderFront(nil); window.orderFrontRegardless(); NSApp.activate(ignoringOtherApps: true)
+            report["relaunchedWindowFrame"] = NSStringFromRect(window.frame)
+            let deadline = Date().addingTimeInterval(8)
+            var captured = false, attempts = 0
+            while Date() < deadline {
+                let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+                let listed = windows.contains { item in
+                    (item[kCGWindowOwnerPID as String] as? Int32) == ProcessInfo.processInfo.processIdentifier &&
+                    (item[kCGWindowNumber as String] as? Int) == window.windowNumber
+                }
+                report["relaunchedWindowListedByWindowServer"] = listed
+                if listed {
+                    attempts += 1
+                    do {
+                        try await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(capture))
+                        captured = true; break
+                    } catch { report["lastCaptureFailure"] = error.localizedDescription }
+                }
+                try await Task.sleep(for: .milliseconds(250))
+            }
+            report["relaunchCaptureAttempts"] = attempts; report["relaunchedWindowNumber"] = window.windowNumber
+            guard captured else { throw BridgeFailure(code: "UPDATE_RELAUNCH_CAPTURE", message: "Updated app's own WindowServer window could not be captured") }
+            report.removeValue(forKey: "lastCaptureFailure"); report["captures"] = [capture]
             await model.closeSession(); _ = try await bridge.call("host.shutdownIdle")
             report["explicitFixtureCloseAndIdleHostShutdown"] = true
             return

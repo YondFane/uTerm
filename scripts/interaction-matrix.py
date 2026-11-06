@@ -24,6 +24,11 @@ def image_evidence(directory, names):
     return names
 
 
+def capability(detail, implementation="implemented", automatic="passed", native="passed automated native actions", build="passed"):
+    return {"implementation": implementation, "build": build, "automaticTest": automatic, "nativeAcceptance": native,
+            "manualAcceptance": "waived by user; not represented as executed", "detail": detail}
+
+
 def native_matrix(directory, head, tested):
     names = ["terminal-live", "terminal-reconnect", "settings-native", "inspector-native", "github-native", "editor-live", "agent-native"]
     reports = {name: json.loads((directory / (name + ".json")).read_text(encoding="utf-8")) for name in names}
@@ -51,15 +56,16 @@ def native_matrix(directory, head, tested):
         "platform": "macOS", "architecture": live["architecture"], "system": live["system"],
         "reports": [name + ".json" for name in names], "captures": sorted(set(captures)),
         "capabilities": {
-            "focus": "native automatic controls and responder checks",
-            "clipboard": "real NSPasteboard and native paste into real Vim",
-            "splitAndFullscreen": "real native window/retained terminal views",
-            "fileTabsAndDrafts": "native tabs and actual WK editor guards",
-            "mainTUI": "real /usr/bin/vim; exact saved UTF-8 file",
-            "composition": "simulated NSTextInputClient marked-text sequence; real terminal and PTY",
-            "sleepWake": "simulated OS notifications; real retained PTY output",
-            "displayChangeAndWindowMovement": "simulated display notification and programmatic movement; physical multiple monitors not executed",
-            "sessionTabDragAndPersistentLayout": "outside accepted M3 scope; original implementation gaps remain visible in #17/#13",
+            "focus": capability("native automatic controls and responder checks"),
+            "clipboard": capability("real NSPasteboard and native paste into real Vim"),
+            "splitAndFullscreen": capability("real native window/retained terminal views"),
+            "paneSwapZoomAndDragPayload": capability("actual pane swap/zoom and stale/foreign drag-payload rejection", native="actual toolbar actions; drag payload/drop callback simulated"),
+            "fileTabsAndDrafts": capability("native tabs and actual WK editor guards"),
+            "mainTUI": capability("real /usr/bin/vim; exact saved UTF-8 file"),
+            "composition": capability("simulated NSTextInputClient marked-text sequence; real terminal and PTY", automatic="passed labelled simulation", native="actual terminal/PTY; physical IME not executed"),
+            "sleepWake": capability("simulated OS notifications; real retained PTY output", automatic="passed labelled simulation", native="physical sleep not executed"),
+            "displayChangeAndWindowMovement": capability("simulated display notification and actual programmatic window movement", automatic="passed labelled simulation", native="physical multiple monitors not executed"),
+            "sessionTabDragAndPersistentLayout": capability("original implementation gaps remain in #17/#13", implementation="incomplete", automatic="not executed", native="not executed", build="not applicable to missing implementation"),
         },
         "stableCutoverAccepted": False,
     }
@@ -81,10 +87,11 @@ def tauri_matrix(directory, head, tested):
         "platform": report["platform"], "architecture": report["architecture"], "system": report["system"],
         "reports": ["report.json"], "captures": captures, "sceneCount": len(scenes),
         "capabilities": {
-            "filesSettingsGitAndSessionOwnership": "actual isolated desktop with DOM input, real Core/PTys and native screenshots",
-            "clipboardAndComposition": "DOM clipboard input inside actual app; precise composition failure cases use platform test log",
-            "mainTUI": "terminal/ANSI simulation and renderer recovery; native Vim evidence belongs only to macOS",
-            "physicalIMEAndSleepAndMultipleMonitors": "not executed; final manual acceptance waived by user",
+            "filesSettingsGitAndSessionOwnership": capability("actual isolated desktop with DOM input, real Core/PTys and original screenshots"),
+            "clipboardAndComposition": capability("DOM clipboard inside actual app; precise composition failure cases use platform test log", automatic="passed labelled simulation", native="physical clipboard shortcut/IME not executed"),
+            "mainTUI": capability("terminal/ANSI simulation and renderer recovery; native Vim evidence belongs only to macOS", automatic="passed labelled simulation", native="actual app with simulated output; full Windows TUI not executed"),
+            "splitDragAndFullscreen": capability("shared layout/renderer regressions; native gesture coverage remains distinct", automatic="passed shared layout/renderer tests in platform job", native="gesture/fullscreen actions not executed"),
+            "physicalIMEAndSleepAndMultipleMonitors": capability("physical tests require a hardware session", automatic="labelled protocol/composition simulation only", native="not executed"),
         },
         "stableCutoverAccepted": False,
     }
