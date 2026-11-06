@@ -12,6 +12,8 @@ export UTERM_QA_REDIS_SERVER="$native_redis_prefix/bin/redis-server"
 python3 - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" <<'PY'
 import hashlib, json, os, secrets, socket, subprocess, sys, tempfile, time
 from pathlib import Path
+sys.path.insert(0, 'scripts')
+from redis_qa_service import PAGED_KEY, DELETABLE_KEY, LARGE_KEY, LARGE_MEMBERS, list_value
 app, evidence = map(Path, sys.argv[1:])
 evidence.mkdir(parents=True, exist_ok=True)
 binary = Path(os.environ['UTERM_QA_REDIS_SERVER'])
@@ -57,6 +59,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-redis-') as directory:
         else: raise AssertionError('Isolated Redis startup timed out')
         assert command('SET', 'native:中文', '9223372036854775807 中文🚀', 'EX', '3600') == b'OK'
         assert command('SET', b'\x00\xffkey', b'\xff\x00\x7f') == b'OK'
+        assert command('RPUSH', PAGED_KEY, *(list_value(index) for index in range(401))) == b'401'
+        assert command('EXPIRE', PAGED_KEY, '3600') == b'1'
+        assert command('SET', DELETABLE_KEY, 'DELETABLE_CONTROL') == b'OK'
+        assert command('RPUSH', LARGE_KEY, *(list_value(index) for index in range(LARGE_MEMBERS))) == str(LARGE_MEMBERS).encode()
+        assert command('EXPIRE', LARGE_KEY, '3600') == b'1'
         application_env = dict(os.environ, UTERM_NATIVE_REDIS_PASSWORD=password, UTERM_NATIVE_REDIS_PORT=str(port))
         with (evidence / 'redis-stdout.log').open('w') as out, (evidence / 'redis-stderr.log').open('w') as err:
             process = subprocess.Popen([str(app / 'Contents/MacOS/UTermNativeQA'), '--qa-data-root', str(root), '--redis-smoke-report', str(report_path)], env=application_env, stdout=out, stderr=err)
@@ -66,12 +73,22 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-redis-') as directory:
         assert 'failure' not in report, report.get('failure')
         assert 'cleanupError' not in report, report.get('cleanupError')
         assert report['coreReady'] and not report['productionDataAccess']
-        for key in ['nativeRedisProfileSaveWithoutPasswordPersistence', 'nativeRedisRealConnectionDefaultsReadonly', 'nativeRedisBinaryIdentityAndReadonlyPreview', 'nativeRedisHiddenWindowRetainsDraftAndConnection', 'nativeRedisWritePreservesExactTextTTLAndBinarySibling', 'nativeRedisThemeLanguageAndNarrowLayout', 'nativeRedisTemporaryPasswordSurvivesReconnect']:
+        for key in ['nativeRedisProfileSaveWithoutPasswordPersistence', 'nativeRedisRealConnectionDefaultsReadonly', 'nativeRedisBinaryIdentityAndReadonlyPreview', 'nativeRedisHiddenWindowRetainsDraftAndConnection', 'nativeRedisWritePreservesExactTextTTLAndBinarySibling', 'nativeRedisThemeLanguageAndNarrowLayout', 'nativeRedisTemporaryPasswordSurvivesReconnect', 'nativeRedisPagedListAndProtectedMutations', 'nativeRedisOSCredentialBinding', 'nativeRedisCancelledDisconnectKeepsDraft', 'nativeRedisCancelledApplicationQuitKeepsDraft']:
             assert report[key], key
         assert command('GET', 'native:中文') == 'NATIVE_REDIS_SAVED_9223372036854775807 中文🚀'.encode()
         assert int(command('PTTL', 'native:中文')) > 0
         assert command('GET', b'\x00\xffkey') == b'\xff\x00\x7f'
-        assert len(report['nativeRedisCaptures']) == 3
+        assert command('LLEN', PAGED_KEY) == b'400'
+        assert command('LINDEX', PAGED_KEY, -1) == list_value(399).encode()
+        assert 0 < int(command('PTTL', PAGED_KEY)) <= 1800000
+        assert command('GET', DELETABLE_KEY) is None
+        assert report['nativeRedisLargeListBoundsAndReadOnlyLimit']
+        assert report['nativeRedisLargeListRenderedRows'] == 200
+        assert report['nativeRedisLargeListMembers'] == LARGE_MEMBERS
+        assert command('LLEN', LARGE_KEY) == str(LARGE_MEMBERS).encode()
+        assert command('LINDEX', LARGE_KEY, -1) == list_value(LARGE_MEMBERS - 1).encode()
+        assert int(command('PTTL', LARGE_KEY)) > 0
+        assert len(report['nativeRedisCaptures']) == 6
         for name in report['nativeRedisCaptures']:
             assert (evidence / name).is_file(), name
         report.update(passed=True, testedMergeSHA=report['sourceSHA'], sourceTreeDirty=bool(subprocess.check_output(['git', 'status', '--porcelain'])), processExitCode=code,

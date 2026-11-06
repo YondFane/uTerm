@@ -24,7 +24,13 @@ pub fn access(
                 Err(error) if error.code() == -25300 => Ok(None),
                 Err(error) => Err(error.into()),
             },
-            None => Ok(Some(get_generic_password(service, reference)?)),
+            // Absence is a normal lookup result; preserve actual access errors separately.
+            // 凭据缺失属于正常查询结果，与实际访问错误分别保留。
+            None => match get_generic_password(service, reference) {
+                Ok(bytes) => Ok(Some(bytes)),
+                Err(error) if error.code() == -25300 => Ok(None),
+                Err(error) => Err(error.into()),
+            },
         };
     }
     #[cfg(windows)]
@@ -63,7 +69,11 @@ pub fn access(
                 None => {
                     let mut credential = std::ptr::null_mut();
                     if CredReadW(name.as_ptr(), CRED_TYPE_GENERIC, 0, &mut credential) == 0 {
-                        return Err(std::io::Error::last_os_error().into());
+                        let error = windows_sys::Win32::Foundation::GetLastError();
+                        if error == windows_sys::Win32::Foundation::ERROR_NOT_FOUND {
+                            return Ok(None);
+                        }
+                        return Err(std::io::Error::from_raw_os_error(error as i32).into());
                     }
                     let bytes = if (*credential).CredentialBlobSize == 0 {
                         Vec::new()

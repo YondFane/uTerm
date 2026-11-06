@@ -181,6 +181,9 @@ Redis 连接…**打开工作台，平台验收仍由 #39 跟踪。 `bash script
 时可运行 `node scripts/redis-core-smoke.mjs /绝对路径/临时证据目录` 生成来源绑定报告。共享 Redis
 CI 构建经校验的 Redis 7.4.7 并上传证据。
 
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test credentials`
+在 macOS／Windows 检查真实 OS 凭据查询、二进制替换、相邻条目隔离及删除。它需要访问测试用户的凭据库，仅使用唯一 QA 服务／引用名称并清理自己的记录。Linux 运行零项 OS 场景。Redis 窗口 QA 还检查 20,001 项有界分页、401 项可编辑列表、确认删除／TTL、取消应用退出及保存引用认证；各平台运行结果分别记录。
+
 `uterm-core::{database,database_components,downloads}`
 共享数据库业务、凭据绑定和组件安装／续传规则。客户端提供目录、SSH 确认、选择器和事件；Tauri 的既有数据库命令及退出保护保留。隔离原生应用可从侧栏“数据库”或**文件 → 数据库…**打开共用 SQL／文档表单和工作台，使用 Core 配置 CAS 与应用生命周期内的临时密码；验收按 #38 单独记录。
 `bash scripts/macos-database-smoke.sh` 需要 macOS 图形会话、Homebrew、Python 3、curl 和 Java

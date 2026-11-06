@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-05
+updated: 2026-11-06
 ---
 
 # uTerm feature guide
@@ -67,6 +67,15 @@ controlled delay tests correctness, not performance gains. Windows retains its e
 suite; this Unix load scenario does not run there.
 
 #### Native QA validation
+
+Migration acceptance remains open in [#13](https://github.com/YondFane/uTerm/issues/13): M3 still
+needs persistent layouts, PDF annotations and full Windows run-panel/picker coverage. M4 still needs
+database/Redis acceptance, Agent/settings/menu completion, interaction regression and performance
+evidence; M5 packaging, updates and upgrade/rollback acceptance remain pending.
+
+The expanded Redis paging, deletion, TTL, quit-cancellation and OS-credential checks await their own
+macOS/Windows CI reports and screenshots. Work remains on `feat/native-macos-shared-core` in
+[Draft PR #12](https://github.com/YondFane/uTerm/pull/12), without merging or publishing a release.
 
 Head `4c502ab0c5f39b1d4f43ec4e72f0c7f35b285cca`, tested merge
 `df2690d89433974653ff5426bab07be371f455c7`, passed all four jobs in
@@ -1717,49 +1726,53 @@ configuration key ordering and clearing a password after editing the target. Con
 the native draft guard use secure random UUIDs in custom-scheme contexts without `randomUUID`.
 
 `bash scripts/macos-redis-smoke.sh` requires a macOS graphical session, Homebrew and Python 3. It
-installs Redis if absent, starts only a private temporary loopback server and records actual
-WindowServer binary/draft/narrow-window images, read-only defaults, real protected writes, exact
-text/TTL and a binary sibling value, hide/reopen and temporary-password reconnect. The report
-records the actual Homebrew Redis version and digest separately from the pinned Linux service suite.
-Swift snapshot/view reads retry `WRITER_BUSY` briefly without blocking the UI or replaying
-mutations; persistent contention is still returned. Profile writes retain explicit retry, drafts and
-a specific busy message. The actual macOS 15.8.2 ARM64 Redis window at source `54faefb` / tested
-merge `2748886d1257b0b7a6f6ffa1a69358e45c26de3b` passes all scenes with Homebrew Redis 8.10.3 and
-checks the server again after application exit. The entire ARM native job passes; three WindowServer
-captures have been inspected in
-[artifact 13450738593](https://github.com/YondFane/uTerm/actions/runs/42103209852/artifacts/13450738593).
-Fixture profile initialization uses the application's existing serialized mutation queue after
-settings settle, preserving revision checks without retrying mutations. Its Intel result is still
-pending, as are credential-store, picker and manual acceptance.
+starts an owned temporary loopback Redis server, checks data again after the application exits and
+records six WindowServer images. The Tauri harness records six real Redis scenes. Windows uses the
+portable community redis-windows 8.10.3 Cygwin archive, verified against SHA256
+`8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e`; macOS records its actual
+Homebrew version and binary digest. Neither harness installs a Redis system service.
 
-The isolated Tauri harness now includes four real Redis scenes: profile save/password exclusion,
-read-only binary preview, hidden draft retention, and protected exact-text save/reconnect. It starts
-only an owned temporary loopback service and verifies final text, TTL and binary sibling bytes after
-the app exits. Windows downloads the portable community `redis-windows` 8.10.3 Cygwin build and
-verifies archive SHA256 `8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e`; macOS
-uses Homebrew Redis. Private credentials/configuration stay outside artifacts, and only owned
-processes are stopped. Linux real-service preflight passes authentication refusal, exact
-UTF-8/binary values, TTL preservation and cleanup; platform UI execution for these new scenes is
-pending for the latest source. The first Mac Tauri run at source `c2f84be` / tested merge
-`5a696af052b67dff5568aacb17598bc6c20b9b8e` passes all 61 native-application scenes, including the
-four Redis scenes, with macOS 26.6.2 ARM64 and actual Homebrew Redis 8.10.2. Its four WindowServer
-Redis images have been inspected in
-[artifact 13450722882](https://github.com/YondFane/uTerm/actions/runs/42102010514/artifacts/13450722882).
-The independent service report verifies final text/TTL/binary bytes, stopped owned process and no
-credential leak.
+The source-bound baseline `f38645f32062855403b28bc137f91a401a71fe5f` / tested merge
+`da997a3cd14978b4dba0221ccf0402a9f64c5f2c` passes both native Mac architectures and both Tauri
+platforms. Native execution uses macOS 15.8.2 ARM64 / 15.7.9 Intel; Tauri uses macOS 26.7.2 ARM64 /
+Windows Server 2025 x64. Each Tauri report has 61 successful application scenes, including the four
+original Redis scenes. Independent reports confirm exact text/TTL/binary data, stopped owned
+processes and inspected evidence. Artifacts:
+[native ARM](https://github.com/YondFane/uTerm/actions/runs/42106743175/artifacts/13451284506),
+[native Intel](https://github.com/YondFane/uTerm/actions/runs/42106743175/artifacts/13452369600),
+[Tauri Mac](https://github.com/YondFane/uTerm/actions/runs/42106743169/artifacts/13453127305),
+[Tauri Windows](https://github.com/YondFane/uTerm/actions/runs/42106743169/artifacts/13453800420).
+This baseline does not accept the newly expanded cases below.
 
-Windows x64 / Server 2025 also completes all 61 UI scenes with real Redis, but its wrapper fails
-during evidence inspection because SSH still owns an exclusive log handle; the final Redis service
-report is missing, so the workflow is not accepted. Actual HWND images and the failure are retained
-in
-[artifact 13451531155](https://github.com/YondFane/uTerm/actions/runs/42102010514/artifacts/13451531155).
+The expanded cases browse a real 20,001-member list with 200 rendered and returned rows per page;
+the missing edit snapshot keeps member update/delete controls disabled above the 10,000-member
+limit. Final checks confirm the large list is unchanged. Separate cases use 401 editable list
+members and require 200 rendered rows per full page. They cancel then confirm deletion at index 400,
+verify the remaining last value independently, change TTL to 1,800 seconds, and cancel then confirm
+deletion of a separate key. Final server checks verify the 400 remaining members, expiration and
+unchanged binary sibling. Real disconnect and application quit are cancelled while a draft exists,
+then the connection/draft is checked. Native QA captures the actual quit alert and activates its
+Cancel button; this automated action is separate from #42's manual keyboard/IME acceptance. These
+new platform cases still require their own CI results.
 
-Cleanup now closes SSH before Redis evidence inspection, waits briefly for exclusive handles and
-records a failed report if a file remains unreadable; unreadable files are not waived. Linux real
-Redis/fault checks cover transient denial, persistent denial, secret redaction and owned-process
-cleanup. The key-selection harness explicitly opens Browse keys and requires an on-screen row at
-narrow widths. Both changes need their own platform run; old source results do not accept the latest
-head.
+Tasks without a required human check can close once implementation and source-bound automated
+platform evidence satisfy their acceptance criteria. #39 does not wait for #42's separate human
+interaction checks; missing implementation, reports or screenshots still keep it open.
+
+A platform-only Rust test and the expanded application checks use unique QA credential references in
+macOS Keychain or Windows Credential Manager. They check binary CRUD/replacement without changing a
+neighboring item, authenticate to real Redis using only a saved reference, reject a changed target,
+remove the credential and reject subsequent reuse. An absent item is reported as missing; permission
+and other access errors remain failures. Linux runs no OS credential cases. The new macOS/Windows
+checks are pending and cannot be replaced by the Linux result.
+
+Current Linux checks pass Core/FFI, all 11 real Redis/service regressions, backend (41 passed / two
+ignored), frontend (419 passed / ten skipped), types and QA/desktop builds. Builds sharing `dist`
+run sequentially so one build cannot remove assets while another embeds them. Evidence inspection
+runs after owned SSH/Redis services close; transient exclusive handles are bounded, and persistent
+unreadable files or detected passwords produce a failed report. Key navigation opens the actual
+drawer and requires an on-screen row. Credential/picker and full #39 acceptance remain tracked
+separately from the passing baseline.
 
 ### Redis connection setup
 

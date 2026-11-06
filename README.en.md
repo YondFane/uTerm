@@ -209,6 +209,13 @@ servers. With `redis-cli` also available,
 `node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory` records source-bound
 service reports. The shared Redis CI builds verified Redis 7.4.7 and uploads evidence.
 
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test credentials` checks actual
+OS credential lookup, binary replacement, neighboring-item isolation and deletion on macOS/Windows.
+It requires access to the test user's credential store, uses unique QA service/reference names and
+removes its own records. Linux runs zero OS cases. Redis window QA also checks 20,001-member bounded
+paging, 401-member editable lists, reviewed deletion/TTL, cancelled application quit and
+stored-reference authentication; each platform's runtime result is recorded separately.
+
 `uterm-core::{database,database_components,downloads}` shares database business rules, credential
 binding and verified component installation/resume. Clients provide directories, SSH confirmation,
 pickers and events; existing Tauri database commands and quit guards remain available. The isolated

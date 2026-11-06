@@ -26,6 +26,14 @@ ORIGINAL_TEXT = "9223372036854775807 中文🚀"
 SAVED_TEXT = "TAURI_REDIS_SAVED_9223372036854775807 中文🚀"
 BINARY_KEY = b"\x00\xffkey"
 BINARY_VALUE = b"\xff\x00\x7f"
+PAGED_KEY = "qa:paged"
+DELETABLE_KEY = "qa:delete"
+LARGE_KEY = "qa:large"
+LARGE_MEMBERS = 20001
+
+
+def list_value(index):
+    return f"QA_ROW_{index:04d} 中文"
 
 
 def extract_verified_windows_archive(archive, destination):
@@ -122,9 +130,18 @@ class RedisService:
             raise AssertionError("Private Redis startup timed out")
         assert self.command("SET", TEXT_KEY, ORIGINAL_TEXT, "EX", "3600") == b"OK"
         assert self.command("SET", BINARY_KEY, BINARY_VALUE) == b"OK"
+        assert self.command("RPUSH", PAGED_KEY, *(list_value(index) for index in range(401))) == b"401"
+        assert self.command("EXPIRE", PAGED_KEY, 3600) == b"1"
+        assert self.command("SET", DELETABLE_KEY, "DELETABLE_CONTROL") == b"OK"
+        assert self.command("RPUSH", LARGE_KEY, *(list_value(index) for index in range(LARGE_MEMBERS))) == str(LARGE_MEMBERS).encode()
+        assert self.command("EXPIRE", LARGE_KEY, 3600) == b"1"
         self.context.write_text(json.dumps({"port": self.port, "password": self.password,
                                            "textKey": TEXT_KEY, "originalText": ORIGINAL_TEXT,
-                                           "savedText": SAVED_TEXT}), encoding="utf-8")
+                                           "savedText": SAVED_TEXT, "listKey": PAGED_KEY,
+                                           "deleteKey": DELETABLE_KEY,
+                                           "largeListKey": LARGE_KEY, "largeListMembers": LARGE_MEMBERS,
+                                           "lastOriginalListValue": list_value(400),
+                                           "lastRemainingListValue": list_value(399)}), encoding="utf-8")
         self.context.chmod(0o600)
         self.report["ownedServerPID"] = self.process.pid
         return self
@@ -161,6 +178,13 @@ class RedisService:
         assert self.command("GET", TEXT_KEY) == SAVED_TEXT.encode()
         assert int(self.command("PTTL", TEXT_KEY)) > 0
         assert self.command("GET", BINARY_KEY) == BINARY_VALUE
+        assert self.command("LLEN", PAGED_KEY) == b"400"
+        assert self.command("LINDEX", PAGED_KEY, -1) == list_value(399).encode()
+        assert 0 < int(self.command("PTTL", PAGED_KEY)) <= 1800000
+        assert self.command("GET", DELETABLE_KEY) is None
+        assert self.command("LLEN", LARGE_KEY) == str(LARGE_MEMBERS).encode()
+        assert self.command("LINDEX", LARGE_KEY, -1) == list_value(LARGE_MEMBERS - 1).encode()
+        assert int(self.command("PTTL", LARGE_KEY)) > 0
         self.verified = True
         self.report["realRedisDataVerifiedAfterAppExit"] = True
 

@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-05
+updated: 2026-11-06
 ---
 
 # uTerm 功能说明
@@ -53,6 +53,13 @@ ms 等待，期间执行真实侧栏菜单，实际渲染／确认超过 113
 KB。两 Mac 架构已在下述源码通过；受控等待验证正确性，不代表性能收益。Windows 保留现有回归，此 Unix 负载场景不在 Windows 执行。
 
 #### 原生 QA 验证
+
+迁移验收仍由 [#13](https://github.com/YondFane/uTerm/issues/13)
+跟踪：M3 尚缺持久布局、PDF 标记及完整 Windows 运行面板／选择器覆盖。M4 尚需数据库／Redis 验收、Agent／设置／菜单补齐、交互回归及性能证据；M5 安装包、更新和升级／回退验收仍待完成。
+
+扩展 Redis 分页、删除、TTL、取消退出及系统凭据检查仍需自身 macOS／Windows CI 报告和截图。工作保留在
+`feat/native-macos-shared-core` 分支的
+[Draft PR #12](https://github.com/YondFane/uTerm/pull/12)，尚未合并或发布版本。
 
 head `4c502ab0c5f39b1d4f43ec4e72f0c7f35b285cca`、tested merge
 `df2690d89433974653ff5426bab07be371f455c7`
@@ -1009,27 +1016,28 @@ Linux 管理页回归覆盖配置冲突、密码排除、模态冻结／恢复�
 `randomUUID` 的自定义协议环境使用安全随机 UUID。
 
 `bash scripts/macos-redis-smoke.sh` 需要 macOS 图形会话、Homebrew 和 Python
-3；缺少 Redis 时安装该工具，只启动私有临时回环服务，记录实际 WindowServer 二进制／草稿／窄窗口截图，检查默认只读、真实受保护写入、精确文本／TTL 及二进制相邻值、隐藏／重开和临时密码重连。报告记录实际 Homebrew
-Redis 版本和摘要，与固定版本的 Linux 服务套件分开。Swift 快照／视图读取仅对 `WRITER_BUSY`
-短暂退避，不阻塞界面或重放变更；持续竞争仍返回错误。配置写入保留显式重试、草稿及具体忙碌提示。源码
-`54faefb`／tested merge `2748886d1257b0b7a6f6ffa1a69358e45c26de3b` 的实际 macOS 15.8.2 ARM64
-Redis 窗口使用 Homebrew Redis
-8.10.3，通过全部场景并在应用退出后再次核对服务数据。整个 ARM 原生 job 通过，[artifact13450738593](https://github.com/YondFane/uTerm/actions/runs/42103209852/artifacts/13450738593)内三张 WindowServer 截图已目视检查。测试配置初始化等待设置完成后进入应用既有串行写入队列，保留 revision 检查且不重试变更；自身 Intel 结果、凭据库／选择器及人工验收仍待完成。
+3，仅启动所属临时回环 Redis，应用退出后再次核对数据，记录六张 WindowServer 图。Tauri 验证记录六个真实 Redis 场景。Windows 使用社区 redis-windows
+8.10.3 Cygwin 便携归档，并校验 SHA256
+`8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e`；macOS 记录实际 Homebrew 版本及二进制摘要。两种验证均不安装 Redis 系统服务。
 
-隔离 Tauri 验证新增四个真实 Redis 场景：保存配置／密码排除、只读二进制预览、隐藏后保留草稿、受保护的精确文本保存／重连。仅启动自有临时回环服务，应用退出后再次核对文本、TTL 和二进制相邻值。Windows 下载社区
-`redis-windows` 8.10.3 Cygwin 便携构建并校验归档 SHA256
-`8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e`；macOS 使用 Homebrew
-Redis。私有凭据／配置不进入产物，仅停止所属进程。Linux 真实服务前置检查通过未认证拒绝、精确 UTF-8／二进制值、TTL 保留及清理；最新源码的平台界面执行仍待完成。首次 Mac
-Tauri 运行对应源码 `c2f84be`／tested merge `5a696af052b67dff5568aacb17598bc6c20b9b8e`，在 macOS
-26.6.2 ARM64 和实际 Homebrew Redis
-8.10.2 通过全部 61 个真实应用场景，包括四个 Redis 场景。[artifact13450722882](https://github.com/YondFane/uTerm/actions/runs/42102010514/artifacts/13450722882)内四张 WindowServer
-Redis 截图已目视检查，独立服务报告核对最终文本／TTL／二进制值、所属进程已停止及无凭据泄漏。
+来源绑定基线 `f38645f32062855403b28bc137f91a401a71fe5f`／tested merge
+`da997a3cd14978b4dba0221ccf0402a9f64c5f2c` 的原生 Mac 双架构及 Tauri 双平台均通过。原生使用 macOS
+15.8.2 ARM64／15.7.9 Intel；Tauri 使用 macOS 26.7.2 ARM64／Windows Server 2025
+x64。两份 Tauri 报告均有 61 个成功应用场景，包含原有四个 Redis 场景；独立报告核对精确文本／TTL／二进制数据、所属进程已停止及证据已检查。产物：
+[原生ARM](https://github.com/YondFane/uTerm/actions/runs/42106743175/artifacts/13451284506)、
+[原生Intel](https://github.com/YondFane/uTerm/actions/runs/42106743175/artifacts/13452369600)、
+[Tauri Mac](https://github.com/YondFane/uTerm/actions/runs/42106743169/artifacts/13453127305)、
+[Tauri Windows](https://github.com/YondFane/uTerm/actions/runs/42106743169/artifacts/13453800420)。该基线不代表以下新增场景已验收。
 
-Windows x64／Server
-2025 也使用真实 Redis 完成全部 61 个界面场景，但包装器在证据扫描时因 SSH 独占日志句柄失败，缺少最终 Redis 服务报告，不能接受整个工作流；真实 HWND 图及失败保留在
-[artifact13451531155](https://github.com/YondFane/uTerm/actions/runs/42102010514/artifacts/13451531155)。
+扩展场景浏览含 20,001 个成员的真实列表，每页仅渲染及返回 200 行；超过 10,000 项上限时没有编辑快照，成员修改／删除控件保持禁用。最终核对大列表未改变。另用 401 个可编辑列表成员，每个完整页面必须仅渲染 200 行。先取消再确认删除索引 400，独立核对剩余末项，将 TTL 改为 1800 秒，并先取消再确认删除另一 Key。最终服务检查核对剩余 400 项、过期时间及未改变的二进制相邻值。在有草稿时取消真实断开及应用退出，再检查连接／草稿保留。原生 QA 截取实际退出警告并激活其取消按钮；此自动化操作与 #42 的人工键盘／输入法验收分别记录。新增平台场景仍需自身 CI 结果。
 
-清理现先关闭 SSH，再进行 Redis 证据扫描，短暂等待独占句柄释放；持续不可读时写出失败报告，不豁免文件检查。Linux 真实 Redis／故障检查覆盖暂时拒绝、持续拒绝、秘密脱敏及所属进程清理。Key 选择脚本明确先打开“浏览 Key”，并要求窄窗口目标行实际位于屏幕内。这两项变更仍需自身平台运行，旧源码结果不代表最新 head 已验收。
+无需人工检查的任务在实现及源码绑定的自动平台证据满足验收条件后即可关闭。#39 不等待 #42 单独要求的人工交互检查；缺少实现、报告或截图时仍保持开放。
+
+平台专用 Rust 测试及扩展应用检查仅在 macOS 钥匙串／Windows 凭据管理器中使用唯一 QA 引用，验证二进制读写／替换不改变相邻条目，仅凭已保存引用认证真实 Redis，拒绝目标变化，删除后拒绝再次使用。条目不存在时报告缺失，权限和其他访问错误仍返回失败。Linux 不运行 OS 凭据场景；新增 macOS／Windows 检查尚待完成，不能由 Linux 结果替代。
+
+当前 Linux 通过 Core／FFI、全部 11 项真实 Redis／服务回归、后端（41 通过／2 忽略）、前端（419 通过／10 跳过）、类型及 QA／桌面构建。共用
+`dist`
+的构建串行执行，避免嵌入资源时被另一构建移除。证据扫描在所属 SSH／Redis 服务关闭后执行，对暂时独占句柄有界等待；持续不可读或发现密码时写失败报告。Key 导航先打开实际抽屉，并要求目标行位于屏幕内。凭据／选择器及 #39 完整验收与已通过基线分别跟踪。
 
 ### Redis 连接配置
 

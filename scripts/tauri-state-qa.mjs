@@ -483,16 +483,27 @@ try {
                 "temporaryPasswordNotPersisted",
                 "realAuthenticatedConnection",
                 "defaultReadonly",
+                "osCredentialAuthenticatedBoundAndRemoved",
               ],
               "redis-live-binary": ["binaryReadonlyPreview"],
               "redis-live-draft": [
                 "hiddenWorkbenchRetainedEditor",
                 "hiddenWorkbenchRetainedDraftAndConnection",
+                "cancelledDisconnectRetainedDraftAndConnection",
+                "cancelledApplicationQuitRetainedDraftAndConnection",
               ],
               "redis-live-saved": [
                 "protectedWriteAndServerReread",
                 "temporaryPasswordReconnect",
                 "reconnectDefaultsReadonly",
+              ],
+              "redis-live-pages": ["boundedServerPage", "readonlyAboveSnapshotLimit"],
+              "redis-live-mutations": [
+                "cancelledMemberDeletionPreservedData",
+                "reviewedIndex400Deleted",
+                "cancelledKeyDeletionPreservedData",
+                "reviewedKeyDeleted",
+                "binarySiblingPreserved",
               ],
             }[value.scene];
             assert(checks, `Unexpected Redis acceptance scene: ${value.scene}`);
@@ -500,6 +511,15 @@ try {
             if (value.scene === "redis-live-binary") {
               assert.equal(value.checks.exactBinaryKey, "00ff6b6579");
               assert.equal(value.checks.exactBinaryValue, "ff007f");
+            }
+            if (value.scene === "redis-live-pages") {
+              assert.equal(value.checks.rowsRendered, 200);
+              assert.equal(value.checks.firstIndex, 200);
+              assert.equal(value.checks.totalMembers, 20001);
+            }
+            if (value.scene === "redis-live-mutations") {
+              assert.equal(value.checks.guiTTLSeconds, 1800);
+              assert.equal(value.checks.remainingMembers, 400);
             }
           }
           if (["ssh-terminal", "ssh-reopened"].includes(value.scene)) {
@@ -868,7 +888,7 @@ try {
       );
       const expected =
         phase === "redis"
-          ? 4
+          ? 6
           : phase === "ssh"
             ? 3
             : phase === "ssh-reopen"
