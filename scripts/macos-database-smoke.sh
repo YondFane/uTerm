@@ -49,7 +49,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-database-') as director
         assert 'failure' not in report, report.get('failure')
         assert 'cleanupError' not in report, report.get('cleanupError')
         assert report['coreReady'] and not report['productionDataAccess']
-        for key in ['nativeProfileSaveWithoutPasswordPersistence', 'nativeRealPostgresqlConnection', 'nativeExactBigintDecimalAndUnicode', 'hiddenWindowRetainedConnectionDraftAndResult', 'nativeActiveProfileMutationRefused', 'temporaryPasswordSurvivedWindowHideAndReconnect', 'nativeDatabaseThemeLanguageAndNarrowLayout']:
+        for key in ['nativeProfileSaveWithoutPasswordPersistence', 'nativeRealPostgresqlConnection', 'nativeSQLInputWaitedForReadyControls', 'nativeSQLClipboardMatchesEditedQuery', 'nativeExactBigintDecimalAndUnicode', 'hiddenWindowRetainedConnectionDraftAndResult', 'nativeActiveProfileMutationRefused', 'temporaryPasswordSurvivedWindowHideAndReconnect', 'nativeDatabaseThemeLanguageAndNarrowLayout']:
             assert report[key], key
         assert len(report['nativeDatabaseCaptures']) == 2
         for name in report['nativeDatabaseCaptures']:

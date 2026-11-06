@@ -5756,6 +5756,12 @@ latest result. Fixed method names and bounded error codes exclude parameters/ven
 diagnostics. Windows, other engines/document databases, native picker and manual acceptance remain
 pending.
 
+Native SQL input QA waits for catalog loading to finish, enabled Disconnect/Execute SQL controls and
+a visible editable CodeMirror before entering SQL, including after reconnecting. A connection handle
+alone does not establish editor readiness. The SQL clipboard equality assertion remains required.
+The delayed-catalog regression and related database/content checks pass all 16 tests on Linux;
+TypeScript checks pass. New macOS ARM64/Intel runtime results for this readiness change are pending.
+
 ### Database setup and visibility
 
 The workspace's Databases section supports MySQL, PostgreSQL, Oracle service-name, Elasticsearch and

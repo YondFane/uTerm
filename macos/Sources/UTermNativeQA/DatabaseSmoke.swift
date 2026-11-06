@@ -27,6 +27,20 @@ enum DatabaseSmoke {
             """, arguments: ["selector": selector, "value": value])
         guard accepted else { throw BridgeFailure(code: "DB_INPUT", message: "Native database input is missing") }
     }
+    private static func waitForSQLInput(_ content: ContentWindow) async throws {
+        // A connection handle precedes catalog loading; wait for enabled controls and the painted editor.
+        // 连接句柄早于目录加载返回；等待控件启用且编辑器实际显示后再输入。
+        try await wait(content, """
+            (() => {
+                const disconnect=[...document.querySelectorAll('.database-connection-bar button')].find(b=>b.textContent.trim()==='Disconnect');
+                const execute=document.querySelector('.database-run');
+                const editor=document.querySelector('.database-sql-editor:not([hidden]) .cm-content[contenteditable=true]');
+                if(!disconnect || disconnect.disabled || !execute || execute.disabled || !editor) return false;
+                const bounds=editor.getBoundingClientRect();
+                return bounds.width>0 && bounds.height>0 && getComputedStyle(editor).visibility==='visible';
+            })()
+            """)
+    }
     static func run(model: WorkspaceModel, open: () async throws -> ContentWindow, lookup: () -> ContentWindow?, report: inout [String: Any]) async throws {
         guard model.ready, let bridge = model.sshBridge, let path = WorkspaceModel.argument("--database-smoke-report"),
               let driver = ProcessInfo.processInfo.environment["UTERM_NATIVE_DATABASE_DRIVER"],
@@ -90,8 +104,9 @@ enum DatabaseSmoke {
         report["nativeProfileSaveWithoutPasswordPersistence"] = true
         try await EditorSmoke.click(content, title: "PostgreSQL saved 中文")
         try await EditorSmoke.click(content, title: "Connect")
-        try await wait(content, "!![...document.querySelectorAll('.database-connection-bar button')].find(b=>b.textContent.trim()==='Disconnect')")
+        try await waitForSQLInput(content)
         report["nativeRealPostgresqlConnection"] = true
+        report["nativeSQLInputWaitedForReadyControls"] = true
         let sql = "SELECT 9223372036854775807::bigint AS exact_integer, 12345678901234567890.1234567890::numeric(30,10) AS exact_decimal, 'NATIVE_DATABASE_中文'::text AS text_value"
         try await EditorSmoke.replace(content, text: sql)
         let inputDeadline = Date().addingTimeInterval(5)
@@ -123,7 +138,7 @@ enum DatabaseSmoke {
         try await EditorSmoke.click(content, title: "Disconnect")
         try await wait(content, "!![...document.querySelectorAll('.database-connection-bar button')].find(b=>b.textContent.trim()==='Connect')")
         try await EditorSmoke.click(content, title: "Connect")
-        try await wait(content, "!![...document.querySelectorAll('.database-connection-bar button')].find(b=>b.textContent.trim()==='Disconnect')")
+        try await waitForSQLInput(content)
         report["temporaryPasswordSurvivedWindowHideAndReconnect"] = true
         try await EditorSmoke.click(content, title: "Execute SQL")
         try await wait(content, "document.querySelector('.database-grid-container')?.textContent.includes('9223372036854775807')")

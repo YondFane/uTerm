@@ -3383,6 +3383,9 @@ Linux 检查还覆盖配置 CAS／草稿／密码排除、两端内容 transport
 15.8.2 使用 PostgreSQL 16.15 和 JDBC
 42.7.14。[artifact13450738593](https://github.com/YondFane/uTerm/actions/runs/42103209852/artifacts/13450738593)包含报告及两张已目视核对的 WindowServer 图；等待 WebKit 提交绘制及合成器稳定后，中文／浅色窄窗口图已显示正确 Web 内容。原生管理页仅在首次打开“数据库组件”时启动组件探测，隐藏后保留管理页状态；专项回归检查编辑配置时不发起不可见探测，重复打开也不重复探测。Intel 仍需自身最新结果。原生诊断仅记录固定方法名及有界错误码，不记录参数／厂商文本。Windows、其他引擎／文档数据库、原生选择器及人工验收仍待完成。
 
+原生 SQL 输入 QA 会等待目录加载结束、“断开”／“执行 SQL”控件启用及 CodeMirror 实际显示且可编辑，再输入 SQL；重连后同样等待。仅获得连接句柄不代表编辑器已就绪，SQL 剪贴板一致性断言继续保留。延迟目录加载回归及相关数据库／内容检查在 Linux 上全部 16 项通过，TypeScript 检查通过；本次就绪条件修改的 macOS
+ARM64／Intel 运行结果仍待验证。
+
 ### 数据库配置与区域显示
 
 工作区的“数据库”区域支持 MySQL、PostgreSQL、Oracle 服务名、Elasticsearch 和 MongoDB 连接。点击区域加号添加配置，选择后点击“连接”。SQL 数据库打开 SQL 工作台，Elasticsearch 与 MongoDB 打开文档工作台。
