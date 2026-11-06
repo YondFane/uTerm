@@ -4298,6 +4298,15 @@ pending its own CI. Its scene also checks the changed native menu shortcut, actu
 arrow/Return/Escape input and focus restoration, and archives `native-settings-command-palette.png`.
 Remaining preference effects and unavailable commands still keep #41 open.
 
+The first command-window run at source `7feda7e` opened the palette through its saved menu key but
+failed to capture the new window; its report records `SMOKE_CAPTURE`, not a pass. The palette now
+has explicit search/list bounds, and QA waits for its own visible WindowServer entry before capture.
+The original failure remains in
+[run 42181119008](https://github.com/YondFane/uTerm/actions/runs/42181119008). Sidebar toggling is
+available before a session exists; Close is restricted to the focused known window and cannot close
+a background session from an unrelated panel. The corrected source still requires its own runtime
+results.
+
 ### Terminal text selection and rendering
 
 Visible terminal and Agent panes use GPU rendering when WebGL2 is available. Dragging to select text

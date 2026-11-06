@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import UTermBridge
 
 @MainActor
@@ -83,6 +84,13 @@ enum SettingsSmoke {
             guard let paletteMenu = NSApp.mainMenu?.items.compactMap(\.submenu).flatMap(\.items).first(where: { $0.representedObject as? String == "palette" }), paletteMenu.keyEquivalent == "k", paletteMenu.keyEquivalentModifierMask == [.command, .shift], let paletteEvent = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "K", charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40), NSApp.mainMenu?.performKeyEquivalent(with: paletteEvent) == true else { throw BridgeFailure(code: "SETTINGS_QA_MENU_BINDING", message: "Saved semantic shortcut did not update the system menu") }
             try await TerminalSmoke.wait("Open palette through the actual menu shortcut") { NSApp.keyWindow?.identifier?.rawValue == "native-command-palette" }
             guard let palette = NSApp.keyWindow else { throw BridgeFailure(code: "SETTINGS_QA_PALETTE", message: "Palette did not open") }
+            palette.contentView?.layoutSubtreeIfNeeded()
+            report["paletteWindow"] = ["frame": NSStringFromRect(palette.frame), "number": palette.windowNumber, "visible": palette.isVisible]
+            try await TerminalSmoke.wait("Register the visible palette with WindowServer") {
+                guard let windows = CGWindowListCopyWindowInfo(.optionOnScreenOnly, kCGNullWindowID) as? [[String: Any]] else { return false }
+                return windows.contains { ($0[kCGWindowNumber as String] as? NSNumber)?.intValue == palette.windowNumber }
+            }
+            try await Task.sleep(for: .milliseconds(200))
             let paletteCapture = "native-settings-command-palette.png"
             try await TerminalSmoke.capture(window: palette, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(paletteCapture))
             let previousResponder = current.window.firstResponder

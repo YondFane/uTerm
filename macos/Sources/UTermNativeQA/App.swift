@@ -407,10 +407,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if ["search", "files", "toggleInspector", "swapPanes", "github", "zoom"].contains(id) { return false }
         if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
         let origin = NSApp.keyWindow === commandPalette?.window ? commandPalette?.returnWindow : NSApp.keyWindow
-        if id == "close" { return origin != nil }
+        if id == "close", NSApp.keyWindow === commandPalette?.window { return true }
+        if id == "close" {
+            if origin === window { return model.selectedID != nil }
+            return origin != nil && (origin === commandPalette?.window || origin === fullSettingsWindow?.window || origin === agentsWindow?.window || origin === sshWindow?.window || contentWindows.values.contains { $0.window === origin } || pythonWindows.values.contains { $0.window === origin } || javaWindows.values.contains { $0.window === origin })
+        }
         if ["fontIncrease", "fontDecrease"].contains(id) { return origin === window || contentWindows.values.contains { $0.window === origin } }
         guard origin === window else { return false }
-        if ["terminal", "chat"].contains(id) { return true }
+        if ["terminal", "chat", "toggleSidebar"].contains(id) { return true }
         if ["quick", "git"].contains(id) { return model.workspace["selectedProject"].string != nil }
         return model.selectedTerminal != nil
     }

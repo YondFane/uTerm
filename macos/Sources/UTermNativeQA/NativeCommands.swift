@@ -47,9 +47,13 @@ final class NativeCommandPalette: NSObject, NSWindowDelegate, NSSearchFieldDeleg
         table.headerView = nil; table.rowHeight = 30; table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         table.dataSource = self; table.delegate = self; table.target = self; table.doubleAction = #selector(executeSelection)
         table.identifier = NSUserInterfaceItemIdentifier("native-command-list")
-        let container = NSStackView(views: [search, scroll]); container.orientation = .vertical; container.spacing = 10; container.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 620, height: 420))
+        container.addSubview(search); container.addSubview(scroll)
         search.translatesAutoresizingMaskIntoConstraints = false; scroll.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([search.widthAnchor.constraint(equalTo: container.widthAnchor, constant: -24), scroll.widthAnchor.constraint(equalTo: search.widthAnchor)])
+        NSLayoutConstraint.activate([
+            search.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 12), search.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -12), search.topAnchor.constraint(equalTo: container.topAnchor, constant: 12), search.heightAnchor.constraint(equalToConstant: 24),
+            scroll.leadingAnchor.constraint(equalTo: search.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: search.trailingAnchor), scroll.topAnchor.constraint(equalTo: search.bottomAnchor, constant: 10), scroll.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -12)
+        ])
         window.contentView = container; window.minSize = NSSize(width: 440, height: 300); window.center()
     }
     private func title(_ item: JSONValue) -> String { localized(item["labels"]["en"].string ?? "", item["labels"]["zh-Hans"].string ?? "") }
