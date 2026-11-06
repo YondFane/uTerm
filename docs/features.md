@@ -4358,9 +4358,12 @@ layout, session-tab-drag and PDF gaps explicit; it does not declare stable cutov
 Markdown, shared session links, PR details/diff, visible offline failures/retry, cancellation, draft
 hide/reopen/quit cancellation, literal submission, pending-request quit protection and bilingual
 theme captures. `github-native.json`, the simulated CLI log and four original screenshots are CI
-artifacts. These added checks still require CI execution; no account, real GitHub write, push or
-fork is used. Shared Rust session tests verify stale/malformed link rejection, reopening and split
-metadata; those tests do not establish native visual acceptance.
+artifacts. Draft quit confirmation uses an asynchronous sheet attached to its own window, keeping
+WebKit and main-actor tasks responsive. The QA cancels the actual sheet button. The previous
+synchronous confirmation timed out on both Mac architectures; this correction still needs a fresh CI
+pass. No account, real GitHub write, push or fork is used. Shared Rust session tests verify
+stale/malformed link rejection, reopening and split metadata; those tests do not establish native
+visual acceptance.
 
 Linux checks pass the 422 existing frontend tests (11 skipped), the added GitHub panel regression,
 242 Core/FFI/failure-mode tests (17 ignored), 84 host tests (3 ignored), 18 Tauri backend tests (1
@@ -4659,10 +4662,13 @@ public key/signature in evidence. The simulated user driver accepts/cancels SDK 
 not replace downloading, signature verification, extraction or target validation. Valid,
 bad-signature, wrong-architecture/channel, old-version, cancel, offline and interrupted scenarios
 retain HTTP logs, reports and actual app screenshots; network failures also require a successful
-actual SDK retry. The first SDK scenario build failed on two Swift-imported driver selector names
-before runtime; the corrected driver must still pass a new CI run. This suite explicitly does not
-yet execute installation, relaunch or automatic scheduling, and #45 remains open for those checks
-and Windows signed updates.
+actual SDK retry. Source `8aacbb3b09925fe16f2bda24e66563eed9f27a31` passes seven scenarios on macOS
+arm64. The bad-signature archive is rejected, but the assertion fails because the SDK returns an
+outer installation error. Reports now retain bounded underlying error domain/code chains, without
+private descriptions, and still require the actual signature code; a generic installation error
+alone cannot pass. This correction needs fresh CI evidence. This suite explicitly does not yet
+execute installation, relaunch or automatic scheduling, and #45 remains open for those checks and
+Windows signed updates.
 
 #### Windows/Tauri automatic installation
 

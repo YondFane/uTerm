@@ -89,12 +89,19 @@ enum GitHubSmoke {
         let reopened = try await open(root)
         guard reopened === content else { throw BridgeFailure(code: "GITHUB_QA_REUSE", message: "Reopening replaced the PR draft window") }
         try await ContentSmoke.wait(content, "document.querySelector('dialog[open] textarea')?.value.includes('$(literal)') === true")
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(200)) {
-            var queue = NSApp.modalWindow?.contentView.map { [$0] } ?? []
-            while !queue.isEmpty { let view = queue.removeFirst(); if let button = view as? NSButton, button.title == "Cancel" { button.performClick(nil); return }; queue += view.subviews }
-            NSApp.abortModal()
+        let preparing = Task { @MainActor in try await host.prepareForQuit() }
+        try await TerminalSmoke.wait("Actual GitHub draft confirmation sheet") { window.attachedSheet != nil }
+        var queue = window.attachedSheet?.contentView.map { [$0] } ?? []
+        var cancelledSheet = false
+        while !queue.isEmpty {
+            let view = queue.removeFirst()
+            if let button = view as? NSButton, button.title == "Cancel" {
+                button.performClick(nil); cancelledSheet = true; break
+            }
+            queue += view.subviews
         }
-        guard try await host.prepareForQuit() == false else { throw BridgeFailure(code: "GITHUB_QA_QUIT", message: "Cancel discarded a PR draft") }
+        guard cancelledSheet, try await preparing.value == false else { throw BridgeFailure(code: "GITHUB_QA_QUIT", message: "Cancel discarded a PR draft") }
+        try await TerminalSmoke.wait("GitHub draft confirmation sheet dismissed") { window.attachedSheet == nil }
         guard try await EditorSmoke.evaluate(content, script: "return document.querySelector('dialog[open] input').value===title && document.querySelector('dialog[open] textarea').value===text;", arguments: ["title": literalTitle, "text": literalBody]) else { throw BridgeFailure(code: "GITHUB_QA_DRAFT", message: "Quit cancellation changed the PR draft") }
         try await capture("native-github-pr-draft-dark-en.png"); captures.append("native-github-pr-draft-dark-en.png")
         report["nativeGithubHideReopenAndQuitCancelRetainDraft"] = true

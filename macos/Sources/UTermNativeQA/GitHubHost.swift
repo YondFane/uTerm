@@ -13,6 +13,7 @@ final class GitHubHost: WorkbenchHost {
     var emit: ((String, JSONValue) -> Void)?
     var context: (() async throws -> JSONValue)?
     var sessionAction: ((String, JSONValue) async throws -> Void)?
+    weak var window: NSWindow?
     init(bridge: CoreBridge, directory: String) { self.bridge = bridge; self.directory = directory }
     func settingsChanged(_ settings: JSONValue) {
         guard settings != lastSettings else { return }; lastSettings = settings
@@ -44,11 +45,17 @@ final class GitHubHost: WorkbenchHost {
         if prepared { return true }
         guard pending == 0 else { return false }
         if formActive {
+            guard let window, window.attachedSheet == nil else { return false }
             let alert = NSAlert(); alert.alertStyle = .warning
             alert.messageText = localized("Discard the PR draft and quit?", "放弃 PR 草稿并退出？")
             alert.informativeText = localized("The unsubmitted title, body and branch selections will be lost.", "尚未提交的标题、正文和分支选择将丢失。")
             alert.addButton(withTitle: localized("Cancel", "取消")); alert.addButton(withTitle: localized("Discard and Quit", "放弃并退出"))
-            guard alert.runModal() == .alertSecondButtonReturn, pending == 0 else { return false }
+            // Suspend this task so WebKit and other main-actor work can continue while the sheet is open.
+            // 显示确认表时挂起当前任务，让 WebKit 和其他主执行器任务继续运行。
+            let response = await withCheckedContinuation { continuation in
+                alert.beginSheetModal(for: window) { continuation.resume(returning: $0) }
+            }
+            guard response == .alertSecondButtonReturn, pending == 0 else { return false }
         }
         prepared = true; emit?("github-frozen", .bool(true)); return true
     }

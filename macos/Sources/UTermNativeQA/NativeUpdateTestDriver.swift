@@ -1,5 +1,6 @@
 import AppKit
 import Sparkle
+import UTermBridge
 
 @MainActor
 // Only the user decisions are simulated; the SDK still downloads, verifies and extracts the actual archive.
@@ -26,8 +27,7 @@ final class NativeUpdateTestDriver: NSObject, SPUUserDriver {
     func showUpdateReleaseNotesFailedToDownloadWithError(_ error: Error) {}
     func showUpdateNotFoundWithError(_ error: Error, acknowledgement: @escaping () -> Void) { notFound = true; acknowledgement() }
     func showUpdaterError(_ error: Error, acknowledgement: @escaping () -> Void) {
-        let value = error as NSError
-        errors.append(value.domain + ":" + String(value.code)); acknowledgement()
+        errors.append(contentsOf: updateErrorCodes(error)); acknowledgement()
     }
     func showDownloadInitiated(cancellation: @escaping () -> Void) { cancelDownload = cancellation }
     func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {}

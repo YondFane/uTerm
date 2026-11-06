@@ -101,6 +101,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         window.contentView = webView
         super.init(window: window)
         window.delegate = self
+        (workbenchHost as? GitHubHost)?.window = window
         webView.navigationDelegate = self
         configuration.userContentController.addScriptMessageHandler(self, contentWorld: .page, name: "utermContent")
         workbenchHost?.emit = { [weak self] kind, payload in self?.deliver(kind, payload: payload) }
