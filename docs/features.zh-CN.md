@@ -61,6 +61,8 @@ ZIP 和只读 DMG。脚本核对 App／helper 架构、最低系统、ad-hoc 签
 镜像校验器只对明确的临时占用响应重试，最多五次；每次退出码与诊断保留于报告。损坏镜像及重试耗尽仍失败。Linux三项模拟覆盖占用后有效、无效镜像、持续占用和超时。79872ba
 ARM候选原校验因占用失败，未修改的报告保留于[artifact13543080480](https://github.com/YondFane/uTerm/actions/runs/42295306002/artifacts/13543080480)。真实镜像创建、校验及安装仍需macOS运行。
 
+候选入口禁用Python字节码写入，避免导入镜像校验器时先生成未跟踪的`scripts/__pycache__`，触发源码清洁门禁。源码`6ef8dba`的双Mac升级／回退均通过七个场景，Intel的37项Swift测试及21项真实内容断言也通过；后续候选和交互门禁因生成的缓存正确失败，[原始产物](https://github.com/YondFane/uTerm/actions/runs/42305932312/artifacts/13546679529)保留不变。入口修正需重新执行原生CI；这些部分结果不代表整个原生工作流通过。
+
 Windows 上运行 `./scripts/windows-candidate-package.ps1`，构建当前用户范围的 QA
 NSIS 安装器，内嵌 WebView 内容并关闭生产 deep
 link。脚本安装到所属临时目录，核对 x64 程序与只读资源文件，运行实际安装后的应用、捕获所属 HWND，再执行卸载。仅重定向隔离的

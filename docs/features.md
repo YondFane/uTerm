@@ -82,6 +82,15 @@ Three Linux simulations cover busy-then-valid, invalid images, persistent busy a
 [artifact13543080480](https://github.com/YondFane/uTerm/actions/runs/42295306002/artifacts/13543080480).
 Actual image creation, checksum validation and installation still require the macOS run.
 
+The candidate wrapper disables Python bytecode writes so importing its image verifier cannot create
+an untracked `scripts/__pycache__` before the clean-source gate. At source `6ef8dba`, both Mac
+upgrade/rollback jobs passed all seven scenarios, and Intel passed the 37 Swift tests and 21 real
+content assertions. Its later candidate and interaction gates correctly failed on that generated
+cache;
+[the original artifact](https://github.com/YondFane/uTerm/actions/runs/42305932312/artifacts/13546679529)
+remains unchanged. The wrapper correction requires a fresh native CI run; these partial results do
+not claim that the entire native workflow passed.
+
 On Windows, `./scripts/windows-candidate-package.ps1` builds a current-user QA NSIS installer with
 embedded WebView content and production deep links disabled. It installs into an owned temporary
 directory, checks the x64 executable and read-only resource files, runs the installed real app,
