@@ -23,6 +23,8 @@ const output = resolve("ci-evidence/updates-windows");
 mkdirSync(output, { recursive: true });
 mkdirSync(join(root, "project"));
 mkdirSync(join(root, "data"));
+assert(process.env.UTERM_QA_DATABASE_FIXTURE, "Use the owned database wrapper for updater QA");
+copyFileSync(process.env.UTERM_QA_DATABASE_FIXTURE, join(root, "database-fixture.json"));
 const identity = "sh.uterm.desktop.qa.sharedstate";
 const product = "uTerm Shared State QA";
 const target = resolve(process.env.CARGO_TARGET_DIR ?? "src-tauri/target");
@@ -346,6 +348,12 @@ try {
     seen.has("updates-complete.json"),
     "Updater suite did not complete signed install/relaunch",
   );
+  for (const required of [
+    "transfer-protected",
+    "database-query-protected",
+    "database-transaction-protected",
+  ])
+    assert(seen.has(`updates-${required}.json`), `Missing actual updater guard scene: ${required}`);
   const relaunchedPID = Number(readFileSync(join(root, "updates-current-pid"), "utf8"));
   let running = true;
   for (let attempt = 0; attempt < 200 && running; attempt++) {

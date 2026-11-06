@@ -8,6 +8,7 @@ const qa = JSON.parse(fixtureJSON) as {
   draftText: string;
   editorGuardError: string;
   databaseGuardError: string;
+  transferGuardError: string;
 };
 
 type Context = { project: string; root: string };
@@ -283,6 +284,93 @@ export async function runUpdates(
     simulatedDatabaseDraftGuard: true,
     sameHostPID: (await host()).pid === original.pid,
   });
+  const rejectInstallation = async (expected: string) => {
+    let rejected = false;
+    try {
+      await invoke("update_install");
+    } catch (error) {
+      rejected = String(error) === expected;
+    }
+    assert(rejected, "Actual signed installer bypassed an active operation guard");
+    assert((await host()).pid === original.pid, "Rejected installation changed the host");
+  };
+  const transfer = (action: string) => invoke<{ busy: boolean }>("qa_update_transfer", { action });
+  try {
+    assert((await transfer("start")).busy, "Simulated transfer worker was not registered");
+    await rejectInstallation(qa.transferGuardError);
+    assert((await transfer("cancel")).busy, "Cancellation released an unfinished transfer");
+    await rejectInstallation(qa.transferGuardError);
+    await scene("transfer-protected", {
+      realInstallCommandRejected: true,
+      actualTransferRegistry: true,
+      simulatedTransferWorker: true,
+      cancelledWorkerRemainsProtectedUntilCompletion: true,
+    });
+  } finally {
+    assert(!(await transfer("complete")).busy, "Completed transfer remained busy");
+  }
+  const databaseFixture = await invoke<{ port: number; password: string }>("qa_database_fixture");
+  await invoke("database_components", { action: "install", id: "postgresql" });
+  const database = await invoke<{ handle: string }>("database_connect", {
+    config: {
+      id: crypto.randomUUID(),
+      name: "Updater PostgreSQL QA",
+      kind: "postgresql",
+      host: "127.0.0.1",
+      port: databaseFixture.port,
+      database: "uterm_qa",
+      username: "uterm_qa",
+      tls: false,
+      ca_file: "",
+      credential_id: null,
+    },
+    password: databaseFixture.password,
+  });
+  const databaseRequest = (request: unknown) =>
+    invoke<{ rows: string[][] }>("database_request", { handle: database.handle, request });
+  try {
+    const pending = databaseRequest({ op: "query", sql: "SELECT pg_sleep(8)", offset: 0 });
+    let completed = false;
+    const observed = pending.finally(() => {
+      completed = true;
+    });
+    try {
+      await pause(250);
+      assert(!completed, "Long query completed before the updater guard observation");
+      await rejectInstallation(qa.databaseGuardError);
+      assert(!completed, "Database guard was not observed during the query");
+      await scene("database-query-protected", {
+        realInstallCommandRejected: true,
+        actualPostgreSQLQuery: true,
+      });
+    } finally {
+      await observed;
+    }
+    await databaseRequest({ op: "writable", enabled: true });
+    await databaseRequest({
+      op: "query",
+      sql: "UPDATE qa_exact SET note='UNCOMMITTED_UPDATE_QA' WHERE id=1",
+      offset: 0,
+    });
+    await rejectInstallation(qa.databaseGuardError);
+    await scene("database-transaction-protected", {
+      realInstallCommandRejected: true,
+      actualUncommittedTransaction: true,
+    });
+    await databaseRequest({ op: "rollback" });
+    await databaseRequest({ op: "writable", enabled: false });
+    const result = await databaseRequest({
+      op: "query",
+      sql: "SELECT note FROM qa_exact WHERE id=1",
+      offset: 0,
+    });
+    assert(
+      result.rows[0]?.[0] === "ORIGINAL_DATABASE_TEXT",
+      "Rejected update lost the database rollback",
+    );
+  } finally {
+    await invoke("database_disconnect", { handle: database.handle, discard: true });
+  }
   const settings = await until(
     () => document.querySelector<HTMLButtonElement>('button[aria-label="Settings"]:not(:disabled)'),
     "settings",

@@ -241,6 +241,12 @@ original windows, cleanup and source/workload hashes are archived;
 external database server are excluded. New platform measurements and long-run leak acceptance remain
 pending; no performance improvement is claimed.
 
+For signed Windows updater QA, use `python -B scripts/windows-updates-database.py` with Java 21 and
+PostgreSQL available. The wrapper owns a private cluster and invokes the NSIS updater runner,
+including active-query/transaction guards and a labelled simulated transfer worker. It verifies
+rollback data and service cleanup, scans evidence for temporary credentials and changes no
+production feed. Actual new guard results require Windows CI.
+
 The embedded Java 8 encoding agent includes its Java source and reproducible runtime bytes. After
 changing it, use JDK 21 to run `python3 scripts/java8-encoding-agent.py`, then
 `python3 scripts/java8-encoding-agent.py --check`. Normal Rust/application builds need no Java

@@ -192,6 +192,10 @@ version3 固定真实120×36网格、PTY 输出、字体／回滚、CAS 文件�
 `node scripts/client-performance-report.mjs`
 核对。无法归属的 WebContent／GPU／XPC 及外部数据库服务排除；新平台测量和长期泄漏验收仍待完成，不宣称性能改善。
 
+Windows 签名更新 QA 使用 `python -B scripts/windows-updates-database.py`，需要 Java
+21 和 PostgreSQL。包装脚本管理私有集群并调用 NSIS 更新器流程，检查在途查询／事务保护及明确标注的模拟传输工作任务；核对回滚数据和服务清理，扫描临时凭据，不改生产更新源。新增保护的真实结果须 Windows
+CI。
+
 内嵌 Java 8 编码 Agent 同时提供 Java 源码和可复现的运行时字节。修改后使用 JDK 21 运行
 `python3 scripts/java8-encoding-agent.py`，再执行
 `python3 scripts/java8-encoding-agent.py --check`。正常 Rust／应用构建不需要 Java 编译器；Windows 互操作 CI 核对资产并运行实际所选 JDK。

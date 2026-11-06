@@ -4761,9 +4761,10 @@ still require Mac CI. #45 remains open for the updated results and transfer/data
 
 #### Windows signed updater QA
 
-`node scripts/windows-updates-smoke.mjs` builds and installs private 0.2.4/0.2.5 NSIS packages and
-serves a one-time signed update over literal loopback. Only a compile-gated QA app with its
-validated temporary root and updates phase can enable this source. Endpoints reject remote/DNS
+`python -B scripts/windows-updates-database.py` owns a real private PostgreSQL cluster and invokes
+`node scripts/windows-updates-smoke.mjs`, which builds and installs private 0.2.4/0.2.5 NSIS
+packages and serves a one-time signed update over literal loopback. Only a compile-gated QA app with
+its validated temporary root and updates phase can enable this source. Endpoints reject remote/DNS
 aliases, credentials and query strings; download URLs retain the same origin and owned package path.
 Signed versions remain mandatory. An embedded QA-only root supports argument-free relaunch into the
 same private profile. Production configuration and ordinary QA disabled behavior remain unchanged.

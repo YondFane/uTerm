@@ -300,6 +300,8 @@ fn main() {
         }
     }
     let builder = tauri::Builder::default();
+    #[cfg(feature = "qa")]
+    let builder = builder.manage(qa::UpdateTransferFixture::default());
     #[cfg(not(feature = "qa"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
         if let Some(state) = app.try_state::<std::sync::Arc<control::Control>>() {
@@ -430,6 +432,8 @@ fn main() {
             qa::qa_context,
             #[cfg(feature = "qa")]
             qa::qa_updates,
+            #[cfg(feature = "qa")]
+            qa::qa_update_transfer,
             #[cfg(feature = "qa")]
             qa::qa_ssh_fixture,
             #[cfg(feature = "qa")]

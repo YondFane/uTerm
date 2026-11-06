@@ -4,6 +4,47 @@ use tauri::Manager;
 
 pub const IDENTIFIER: &str = "sh.uterm.desktop.qa.sharedstate";
 
+#[derive(Default)]
+pub struct UpdateTransferFixture(
+    std::sync::Mutex<Option<(String, uterm_core::ssh::files::TransferGuard)>>,
+);
+
+#[tauri::command]
+pub fn qa_update_transfer(app: tauri::AppHandle, action: String) -> Result<Value, String> {
+    if !updates_enabled(&app) {
+        return Err("Unavailable outside isolated update QA".into());
+    }
+    let state = app.state::<UpdateTransferFixture>();
+    let mut fixture = state
+        .0
+        .lock()
+        .map_err(|_| "QA transfer fixture unavailable")?;
+    let files = app.state::<crate::ssh::SshFiles>();
+    match action.as_str() {
+        "start" => {
+            if fixture.is_some() {
+                return Err("QA transfer already exists".into());
+            }
+            let id = uuid::Uuid::new_v4().to_string();
+            let guard = files
+                .begin_transfer(&id)
+                .map_err(|error| error.to_string())?;
+            *fixture = Some((id, guard));
+        }
+        "cancel" => {
+            let (id, _) = fixture.as_ref().ok_or("No QA transfer")?;
+            files.cancel(id).map_err(|error| error.to_string())?;
+        }
+        "complete" => {
+            fixture.take();
+        }
+        _ => return Err("Invalid QA transfer action".into()),
+    }
+    // Simulate only the worker lifetime; use the real transfer registry and cancellation rules.
+    // 仅模拟工作任务生命周期，使用真实传输登记与取消规则。
+    Ok(json!({"busy": files.busy(), "simulatedWorker":true}))
+}
+
 pub fn control_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let root = check(app)?;
     Ok(if argument("--qa-phase")? == "input-viewer" {
@@ -301,7 +342,9 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
 #[tauri::command]
 pub fn qa_database_fixture(app: tauri::AppHandle) -> Result<Value, String> {
     let root = check(&app)?;
-    if !["database", "performance"].contains(&argument("--qa-phase")?.as_str()) {
+    if !["database", "performance"].contains(&argument("--qa-phase")?.as_str())
+        && !updates_enabled(&app)
+    {
         return Err("Database fixture is unavailable in this QA phase".into());
     }
     // Keep private authentication outside screenshot context and production commands.

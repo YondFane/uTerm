@@ -6,6 +6,8 @@ on:
     paths:
       - .github/workflows/windows-updates.yml
       - scripts/windows-updates-smoke.mjs
+      - scripts/windows-updates-database.py
+      - scripts/database_qa_service.py
       - scripts/windows-window-capture.ps1
       - src/qa/**
       - src-tauri/src/qa.rs
@@ -35,6 +37,10 @@ jobs:
         with:
           node-version: 24
       - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
@@ -55,7 +61,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p ci-evidence/updates-windows
-          node scripts/windows-updates-smoke.mjs 2>&1 | tee ci-evidence/updates-windows/command.log
+          python -B scripts/windows-updates-database.py 2>&1 | tee ci-evidence/updates-windows/command.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:

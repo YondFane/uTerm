@@ -1035,7 +1035,13 @@ print(number.uint32Value)
       writeFileSync(join(output, `${phase}.log`), log);
       closedAtPhaseEnd = closed;
       writeFileSync(join(output, `${phase}-process.json`), JSON.stringify(processState(), null, 2));
-      if (sampler) await sampler.stop();
+      if (sampler) {
+        try {
+          await sampler.stop();
+        } catch (error) {
+          cleanupErrors.push(String(error));
+        }
+      }
     }
   }
   if (performanceOnly) {
