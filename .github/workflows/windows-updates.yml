@@ -12,6 +12,12 @@ on:
       - src-tauri/src/updates.rs
       - src-tauri/src/main.rs
       - src/lib/useUpdates.ts
+      - src/lib/shared-state.ts
+      - src/components/TerminalView.tsx
+      - crates/uterm-core/src/terminal.rs
+      - shared/fixtures/windows-updates-qa.json
+      - src-tauri/Cargo.toml
+      - src-tauri/Cargo.lock
   workflow_dispatch:
 
 permissions:

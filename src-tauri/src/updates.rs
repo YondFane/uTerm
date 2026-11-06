@@ -376,6 +376,15 @@ pub async fn update_install(
     if app.state::<crate::ssh::SshFiles>().busy() {
         return Err("文件仍在传输。请等待完成或取消传输。".into());
     }
+    let sessions = app
+        .state::<std::sync::Arc<crate::sessions::Sessions>>()
+        .inner()
+        .clone();
+    // NSIS can exit without lifecycle cleanup; release view leases while retaining the actual host/PTYS.
+    // NSIS 可能跳过退出清理，先释放视图租约，保留真实宿主和 PTY。
+    tauri::async_runtime::spawn_blocking(move || sessions.release_for_update())
+        .await
+        .map_err(|e| e.to_string())??;
     update.install(&bytes).map_err(|e| e.to_string())?;
     app.restart();
 }

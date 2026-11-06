@@ -63,6 +63,7 @@ pub struct Link {
     pub generation: String,
     pub client: Client,
     stopped: AtomicBool,
+    control_changes: Mutex<()>,
     pending: Mutex<Option<u64>>,
     acknowledged: Condvar,
 }
@@ -73,6 +74,12 @@ impl Link {
     }
     pub fn stopped(&self) -> bool {
         self.stopped.load(Ordering::Acquire)
+    }
+    fn release_control(&self) -> Result<(), String> {
+        let _change = self.control_changes.lock().map_err(|e| e.to_string())?;
+        self.client
+            .release_control(&self.session, &self.generation)
+            .map_err(|e| format!("{e:#}"))
     }
 }
 impl Drop for Link {
@@ -101,11 +108,7 @@ struct Worker {
 impl Drop for Worker {
     fn drop(&mut self) {
         self.link.stop();
-        if let Err(error) = self
-            .link
-            .client
-            .release_control(&self.link.session, &self.link.generation)
-        {
+        if let Err(error) = self.link.release_control() {
             eprintln!("Input control cleanup: {error:#}");
         }
         let mut state = self
@@ -159,10 +162,30 @@ impl Links {
         Ok(())
     }
     pub fn detach(&self) {
-        let mut state = self.registry.lock().unwrap_or_else(|e| e.into_inner());
-        for (_, link) in state.links.drain() {
+        let links: Vec<_> = {
+            let mut state = self.registry.lock().unwrap_or_else(|e| e.into_inner());
+            state.links.drain().map(|(_, link)| link).collect()
+        };
+        for link in links {
             link.stop();
+            if let Err(error) = link.release_control() {
+                eprintln!("Input control cleanup: {error}");
+            }
         }
+    }
+    pub fn release_inputs(&self) -> Result<(), String> {
+        let links: Vec<_> = self
+            .registry
+            .lock()
+            .map_err(|e| e.to_string())?
+            .links
+            .values()
+            .cloned()
+            .collect();
+        for link in links {
+            link.release_control()?;
+        }
+        Ok(())
     }
     pub fn stop_session(&self, id: &str) {
         let mut state = self.registry.lock().unwrap_or_else(|e| e.into_inner());
@@ -221,6 +244,7 @@ impl Links {
             generation: generation.clone(),
             client,
             stopped: AtomicBool::new(false),
+            control_changes: Mutex::new(()),
             pending: Mutex::new(None),
             acknowledged: Condvar::new(),
         });
@@ -299,7 +323,11 @@ impl Links {
         if action == "detach" {
             if let Ok(link) = self.get(attachment) {
                 link.stop();
+                // Detach must release input before a new view opens, even while the old sink is blocked.
+                // 即使旧接收端阻塞，分离也须先释放输入权，再让新视图连接。
+                let released = link.release_control();
                 self.remove(attachment, &link)?;
+                released?;
             }
             return Ok(());
         }
@@ -313,6 +341,10 @@ impl Links {
             return Ok(());
         }
         if action == "takeControl" {
+            let _change = link.control_changes.lock().map_err(|e| e.to_string())?;
+            if link.stopped() {
+                return Err("Session is disconnected".into());
+            }
             if !link.client.supports_input_control() {
                 return Err("SESSION_CONTROL_UNSUPPORTED".into());
             }
@@ -332,10 +364,7 @@ impl Links {
             return Ok(());
         }
         if action == "releaseControl" {
-            return link
-                .client
-                .release_control(&link.session, &link.generation)
-                .map_err(|error| format!("{error:#}"));
+            return link.release_control();
         }
         let id = link.session.clone();
         let generation = link.generation.clone();
@@ -442,7 +471,8 @@ fn stream(link: &Link, attachment: &str, sink: &Sink) -> Result<(), String> {
                 .0;
             if !link.stopped() && heartbeat.elapsed() >= Duration::from_secs(5) {
                 drop(pending);
-                if link.client.has_input_control() {
+                let _change = link.control_changes.lock().map_err(|e| e.to_string())?;
+                if !link.stopped() && link.client.has_input_control() {
                     link.client
                         .claim_control(&link.session, &link.generation, false)
                         .map_err(|error| format!("{error:#}"))?;
@@ -616,6 +646,7 @@ mod tests {
                 generation: "generation".into(),
                 client: client.clone(),
                 stopped: AtomicBool::new(false),
+                control_changes: Mutex::new(()),
                 pending: Mutex::new(None),
                 acknowledged: Condvar::new(),
             })

@@ -39,6 +39,9 @@ impl Sessions {
     pub fn detach(&self) {
         self.links.detach();
     }
+    pub fn release_for_update(&self) -> Result<(), String> {
+        self.links.release_inputs()
+    }
 }
 
 #[derive(Deserialize)]

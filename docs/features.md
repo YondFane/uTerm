@@ -140,14 +140,18 @@ replay, a 120-second soak and cleanup, with an inspected original window in
 [artifact13512831299](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13512831299).
 Its repeated full-scrollback translation can distort response timings. Measurement now polls only
 the last eight parsed cursor lines on both clients and scans full output once for order validation;
-those earlier timings are not accepted as a fair comparison. Tauri automation waits for committed
-project selection. Windows capture enumerates only the requested PID's titled QA window, records
-discovery/geometry, and restores an invalid window before capture; it never substitutes a utility or
-another process's window. Windows capture has a 60-second helper limit and a 90-second scene
-acknowledgement deadline. An actual candidate capture took 36 seconds and exceeded the old 30-second
-handshake, preventing ordinary exit; missing captures still fail, and a failure scene is now
-retained before waiting for exit. Windows candidate source `94700bf`, tested merge
-`6ad41493b52684b6dc366a4e3400da6fa1208b53`, passes install/start/capture/exit/uninstall in
+those earlier timings are not accepted as a fair comparison. Windows source949e4c2 completes twenty
+output cycles and file operations, then fails replay input ownership. Explicit detach now releases
+its authenticated view lease before returning, even if the old sink is blocked. A per-link control
+lock prevents late heartbeat/takeover on a stopped view; old cleanup cannot release its replacement.
+The actual-host blocked-sink regression passes locally, with platform replay reruns pending. Tauri
+automation waits for committed project selection. Windows capture enumerates only the requested
+PID's titled QA window, records discovery/geometry, and restores an invalid window before capture;
+it never substitutes a utility or another process's window. Windows capture has a 60-second helper
+limit and a 90-second scene acknowledgement deadline. An actual candidate capture took 36 seconds
+and exceeded the old 30-second handshake, preventing ordinary exit; missing captures still fail, and
+a failure scene is now retained before waiting for exit. Windows candidate source `94700bf`, tested
+merge `6ad41493b52684b6dc366a4e3400da6fa1208b53`, passes install/start/capture/exit/uninstall in
 [run42247067808](https://github.com/YondFane/uTerm/actions/runs/42247067808). The macOS Tauri
 capture helper now uses separately typed WindowServer filtering and area sorting after both
 architectures rejected the combined Swift expression. Fresh performance results remain pending.
@@ -4776,6 +4780,17 @@ transfer/database combinations remain separate. Packages, public signatures, HTT
 metadata and owned native windows are uploaded by Windows signed updater QA; private keys remain
 outside evidence. Linux type/build and strict endpoint negatives are local checks; actual Windows
 results require CI and are not yet accepted.
+
+The first actual Windows run at source56273d1, tested merge446673e43c359d066ed3c25c5a4755356558502c,
+passes old-version/wrong-architecture/bad-signature/offline/interrupted-download checks and the
+actual editor guard. It reaches manual checking and automatic download/confirmation, then durable
+opt-out fails under writer contention. Reports and the inspected manual-settings window remain in
+[artifact13521218962](https://github.com/YondFane/uTerm/actions/runs/42253055854/artifacts/13521218962).
+QA now uses the existing explicit Retry saving settings control, recording the retry count, and a
+simulated database draft additionally exercises the actual install guard. Before an installer that
+may exit directly, Tauri releases input leases without stopping host/PTYS. Failed installer startup
+retains views, which can explicitly take control again; no silent takeover is added. Corrected
+platform results remain pending.
 
 #### Windows/Tauri automatic installation
 

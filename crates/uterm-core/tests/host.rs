@@ -65,6 +65,97 @@ impl Drop for HostCleanup {
 }
 
 #[test]
+fn explicit_detach_releases_input_before_a_blocked_old_sink_returns() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().canonicalize().unwrap();
+    let _cleanup = HostCleanup(root.join("local-daemon-v1"));
+    let first = Core::open(root.join("shared-state-v1")).unwrap();
+    let second = Core::open(root.join("shared-state-v1")).unwrap();
+    for core in [&first, &second] {
+        call(core, "host.configure", json!({"helper":helper()}));
+    }
+    let (started, entered) = mpsc::channel();
+    let (release, blocked) = mpsc::channel();
+    let blocked = std::sync::Mutex::new(blocked);
+    first
+        .set_terminal_sink(Arc::new(move |_, _, frame| {
+            started
+                .send(frame.input_control)
+                .map_err(|e| e.to_string())?;
+            blocked.lock().unwrap().recv().map_err(|e| e.to_string())
+        }))
+        .unwrap();
+    let open = |attachment: &str| json!({"id":"detach-blocked","attachment":attachment,"directory":root,"shell":"default","rows":24,"cols":80});
+    let generation = call(&first, "terminal.open", open("blocked-owner"))["generation"].clone();
+    assert!(
+        entered
+            .recv_timeout(Duration::from_secs(10))
+            .unwrap()
+            .unwrap()
+            .owned
+    );
+    let observer = Client::connect(&root.join("local-daemon-v1")).unwrap();
+    let before = status(&observer);
+    call(
+        &first,
+        "terminal.action",
+        json!({"attachment":"blocked-owner","action":"detach"}),
+    );
+    let (send, receive) = mpsc::channel();
+    second
+        .set_terminal_sink(Arc::new(move |_, _, frame| {
+            send.send(frame).map_err(|e| e.to_string())
+        }))
+        .unwrap();
+    assert_eq!(
+        call(&second, "terminal.open", open("new-owner"))["generation"],
+        generation
+    );
+    let frame = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+    assert!(
+        frame.input_control.unwrap().owned,
+        "Detach returned while the blocked old view still owned input"
+    );
+    call(
+        &second,
+        "terminal.action",
+        json!({"attachment":"new-owner","action":"ack","sequence":frame.sequence.to_string()}),
+    );
+    release.send(()).unwrap();
+    first.close();
+    call(
+        &second,
+        "terminal.action",
+        json!({"attachment":"new-owner","action":"resize","rows":25,"cols":81}),
+    );
+    second
+        .terminal_write(
+            "new-owner",
+            if cfg!(windows) {
+                b"echo DETACH_OK > detach-proof.txt\r"
+            } else {
+                b"echo DETACH_OK > detach-proof.txt\n"
+            },
+        )
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !root.join("detach-proof.txt").exists() {
+        assert!(
+            Instant::now() < deadline,
+            "Late old-view cleanup revoked the retained new owner's actual PTY input"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    assert_eq!(status(&observer).pid, before.pid);
+    call(
+        &second,
+        "terminal.action",
+        json!({"attachment":"new-owner","action":"close"}),
+    );
+    second.close();
+}
+
+#[test]
 fn two_core_clients_handoff_input_without_stopping_replay_or_detached_processes() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().canonicalize().unwrap();

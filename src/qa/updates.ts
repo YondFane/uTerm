@@ -2,6 +2,13 @@ import { Channel, invoke } from "@tauri-apps/api/core";
 import { coreRequest } from "../lib/shared-state";
 import { terminalPerformanceSnapshot } from "../lib/terminal-performance-qa";
 import type { CoreEditorDraftEntry, CoreFileDocument } from "../lib/core-contract.generated";
+import fixtureJSON from "../../shared/fixtures/windows-updates-qa.json?raw";
+
+const qa = JSON.parse(fixtureJSON) as {
+  draftText: string;
+  editorGuardError: string;
+  databaseGuardError: string;
+};
 
 type Context = { project: string; root: string };
 type Host = { pid: number; sessions: { spec: { id: string }; generation: string }[] };
@@ -178,7 +185,7 @@ export async function runUpdates(
     path: "update-draft.txt",
   })) as unknown as CoreFileDocument;
   await coreRequest("editor.drafts.import", {});
-  const text = "Retained Windows update draft 中文 é\r\n";
+  const text = qa.draftText;
   await coreRequest("editor.drafts.putDocument", {
     expectedDraftRevision: null,
     draft: {
@@ -236,7 +243,7 @@ export async function runUpdates(
   try {
     await invoke("update_install");
   } catch (error) {
-    protectedInstall = String(error).includes("文件修改");
+    protectedInstall = String(error) === qa.editorGuardError;
   } finally {
     await invoke("editor_guard", { active: false });
   }
@@ -248,6 +255,24 @@ export async function runUpdates(
     realInstallCommandRejected: true,
     simulatedDirtyEditorGuard: true,
     coreDraftRetained: (await draft(context)).draft.text === text,
+  });
+  await invoke("database_guard", { id: "updates-simulated-sql-draft", dirty: true });
+  let protectedDatabase = false;
+  try {
+    await invoke("update_install");
+  } catch (error) {
+    protectedDatabase = String(error) === qa.databaseGuardError;
+  } finally {
+    await invoke("database_guard", { id: "updates-simulated-sql-draft", dirty: false });
+  }
+  assert(
+    protectedDatabase && (await fixture("context")).version === "0.2.4",
+    "Actual updater bypassed database draft guard",
+  );
+  await scene("database-protected", {
+    realInstallCommandRejected: true,
+    simulatedDatabaseDraftGuard: true,
+    sameHostPID: (await host()).pid === original.pid,
   });
   const settings = await until(
     () => document.querySelector<HTMLButtonElement>('button[aria-label="Settings"]:not(:disabled)'),
@@ -280,12 +305,25 @@ export async function runUpdates(
   );
   await click("Cancel", ".update-install-dialog button");
   automatic.click();
-  await until(
-    async () =>
-      !((await coreRequest("snapshot.read")) as unknown as typeof snapshot).document.settings
-        .automaticUpdates,
-    "durable automatic opt-out",
-  );
+  let automaticOptOutRetries = 0;
+  await until(async () => {
+    const retry = [...document.querySelectorAll<HTMLButtonElement>(".settings-dialog button")].find(
+      (value) => value.textContent?.trim() === "Retry saving settings" && !value.disabled,
+    );
+    if (retry) {
+      assert(automaticOptOutRetries < 3, "Automatic opt-out repeatedly failed to save");
+      retry.click();
+      automaticOptOutRetries++;
+      await pause(200);
+    }
+    try {
+      return !((await coreRequest("snapshot.read")) as unknown as typeof snapshot).document.settings
+        .automaticUpdates;
+    } catch (error) {
+      if ((error as { code?: string }).code === "WRITER_BUSY") return false;
+      throw error;
+    }
+  }, "durable automatic opt-out");
   assert(
     !document.querySelector(".update-install-dialog[open]"),
     "Cancel retained installation confirmation",
@@ -294,6 +332,7 @@ export async function runUpdates(
     realAutomaticDownloadAndConfirmation: true,
     actualCancelButton: true,
     automaticOptOut: true,
+    automaticOptOutRetries,
     coreDraftRetained: (await draft(context)).draft.text === text,
   });
   await click("Install and restart");
