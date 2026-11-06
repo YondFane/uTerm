@@ -1652,6 +1652,58 @@ export async function run(recovery: boolean) {
       assert((await settings()).fileFontSize === 19, "Explicit retry did not persist the draft");
       showFont();
       await scene("retried", { fileFontSize: 19, fontSize: (await settings()).fontSize });
+      const beforeTheme = await settings();
+      const themeInput = document.querySelector<HTMLInputElement>(
+        '.settings-content input[type="file"]',
+      );
+      assert(themeInput, "Theme import input missing");
+      const importThemeFile = (source: string) => {
+        Object.defineProperty(themeInput, "files", {
+          configurable: true,
+          value: [new File([source], "QA Theme.conf", { type: "text/plain" })],
+        });
+        themeInput.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      importThemeFile("background=invalid");
+      const themeError = await until(
+        () => document.querySelector<HTMLElement>(".settings-error"),
+        "theme validation error",
+      );
+      assert(
+        JSON.stringify(await settings()) === JSON.stringify(beforeTheme),
+        "Rejected theme changed saved settings",
+      );
+      themeError.scrollIntoView({ block: "center" });
+      await scene("theme-invalid", {
+        invalidThemeVisible: true,
+        savedSettingsUnchanged: true,
+        fileSelection: "DOM File event in the real application; OS chooser not exercised",
+      });
+      importThemeFile("background=#162334\nforeground=#E1F0FF\npalette=1=#EF476F");
+      await until(
+        () => document.querySelector('option[value="custom-qa%20theme"]'),
+        "saved shared theme publication",
+      );
+      const imported = await settings();
+      assert(
+        imported.darkTheme === "custom-qa%20theme" &&
+          imported.customThemes.some(
+            (theme) =>
+              theme.id === imported.darkTheme &&
+              theme.background === "#162334" &&
+              theme.red === "#EF476F",
+          ),
+        "Actual shared theme import was not saved",
+      );
+      assert(!document.querySelector(".settings-error"), "Successful import retained an old error");
+      document
+        .querySelector('option[value="custom-qa%20theme"]')
+        ?.parentElement?.scrollIntoView({ block: "center" });
+      await scene("theme-imported", {
+        actualCoreImport: true,
+        customThemeSaved: true,
+        invalidErrorCleared: true,
+      });
     } else {
       const saved = await settings();
       assert(

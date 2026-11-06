@@ -11,7 +11,7 @@ struct PythonEnvironment: Identifiable { let id = UUID(); var key = ""; var valu
 final class PythonRunModel: ObservableObject {
     let directory: String
     let bridge: CoreBridge
-    let settings: JSONValue
+    private(set) var settings: JSONValue
     @Published var config: CorePythonRunConfig?
     @Published var arguments: [PythonArgument] = []
     @Published var environment: [PythonEnvironment] = []
@@ -39,6 +39,9 @@ final class PythonRunModel: ObservableObject {
 
     init(directory: String, bridge: CoreBridge, settings: JSONValue) {
         self.directory = directory; self.bridge = bridge; self.settings = settings
+    }
+    func applySettings(_ value: JSONValue, catalog: JSONValue) {
+        settings = value; terminal?.apply(settings: value, catalog: catalog)
     }
     func start() async {
         frames = Task { @MainActor [weak self, bridge] in
@@ -254,7 +257,7 @@ final class PythonRunModel: ObservableObject {
             ])
             let decoded = try JSONDecoder().decode(CoreSessionEntry.self, from: JSONEncoder().encode(entry))
             let log = TerminalSession(entry: decoded, bridge: bridge, taskGeneration: generation)
-            log.apply(settings: settings)
+            log.apply(settings: settings, catalog: try await bridge.call("settings.catalog"))
             log.changed = { [weak self] in self?.objectWillChange.send() }
             terminal = log
             searchSummary = ""

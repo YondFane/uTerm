@@ -53,6 +53,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.appearanceChanged = { [weak self, weak window] appearance in
             let value = appearance == "dark" ? NSAppearance(named: .darkAqua) : appearance == "light" ? NSAppearance(named: .aqua) : nil
             window?.appearance = value; self?.sshWindow?.window?.appearance = value
+            if let self {
+                let opacity = self.model.settings["opacity"].number ?? 1
+                window?.isOpaque = opacity >= 1 && self.model.settings["blur"].bool != true
+                window?.backgroundColor = window?.isOpaque == true ? .windowBackgroundColor : .clear
+                for run in self.pythonWindows.values { run.model.applySettings(self.model.settings, catalog: self.model.settingsCatalog); run.window?.appearance = value }
+                for run in self.javaWindows.values { run.model.applySettings(self.model.settings, catalog: self.model.settingsCatalog); run.window?.appearance = value }
+            }
             self?.agentsWindow?.window.appearance = value
             self?.fullSettingsWindow?.window.appearance = value
             if let self {

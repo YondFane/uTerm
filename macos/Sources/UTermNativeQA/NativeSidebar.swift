@@ -51,6 +51,7 @@ struct NativeSidebar: NSViewRepresentable {
         weak var table: NSTableView?
         weak var model: WorkspaceModel?
         private var rows: [Row] = []
+        private var preferenceSignature: [String] = []
         private var updating = false
         private var request = 0
         private var pending = false
@@ -58,9 +59,14 @@ struct NativeSidebar: NSViewRepresentable {
         func update(_ model: WorkspaceModel) {
             self.model = model
             guard let table else { return }
+            let settings = model.settings
+            let palette = NativePreferences.interfacePalette(settings, catalog: model.settingsCatalog)
+            let signature = [settings["interfaceFont"].string ?? "", String(settings["interfaceSize"].number ?? 13), String(settings["rowPadding"].number ?? 1), settings["interfaceTheme"].string ?? "", String(NativePreferences.light(settings)), settings["activeIconColor"].string ?? ""]
+            table.rowHeight = 26 + CGFloat(settings["rowPadding"].number ?? 1) * 2
+            table.backgroundColor = NativePreferences.color(palette["sidebar"], fallback: .windowBackgroundColor)
             var next = [Row(key: "projects", name: localized("Projects", "项目"), symbol: nil)]
-            next.append(Row(key: "db", name: localized("Databases", "数据库"), symbol: "externaldrive"))
-            next.append(Row(key: "redis", name: localized("Redis connections", "Redis 连接"), symbol: "cylinder"))
+            if settings["showDatabaseConnections"].bool != false { next.append(Row(key: "db", name: localized("Databases", "数据库"), symbol: "externaldrive")) }
+            if settings["showRedisConnections"].bool != false { next.append(Row(key: "redis", name: localized("Redis connections", "Redis 连接"), symbol: "cylinder")) }
             for project in model.projects {
                 let id = project["id"].string ?? ""
                 next.append(Row(key: "p:" + id, name: project["name"].string ?? "", symbol: "folder"))
@@ -70,7 +76,7 @@ struct NativeSidebar: NSViewRepresentable {
                 }
             }
             let connections = model.groups.first { $0["id"].string == model.groupID }?["sshConnections"].array ?? []
-            if !connections.isEmpty {
+            if !connections.isEmpty && settings["showSshConnections"].bool != false {
                 next.append(Row(key: "ssh", name: localized("SSH connections", "SSH 连接"), symbol: nil))
                 next += connections.map { Row(key: "q:" + ($0["id"].string ?? ""), name: $0["name"].string ?? "SSH", symbol: "network") }
             }
@@ -82,7 +88,7 @@ struct NativeSidebar: NSViewRepresentable {
                 }
             updating = true
             defer { updating = false }
-            if next != rows { rows = next; table.reloadData() }
+            if next != rows || preferenceSignature != signature { rows = next; preferenceSignature = signature; table.reloadData() }
             guard !pending else { return }
             let selected = model.selectedID.map { "s:" + $0 } ?? model.workspace["selectedWorktree"].string.map { "w:" + $0 } ?? model.workspace["selectedProject"].string.map { "p:" + $0 }
             let index = rows.firstIndex { $0.key == selected }
@@ -132,8 +138,10 @@ struct NativeSidebar: NSViewRepresentable {
             let item = rows[row]
             let cell = NSTableCellView()
             let text = NSTextField(labelWithString: item.name)
-            text.font = item.symbol == nil ? .boldSystemFont(ofSize: 11) : .systemFont(ofSize: 13)
-            text.textColor = item.symbol == nil ? .secondaryLabelColor : .labelColor
+            let settings = model?.settings ?? .null
+            let palette = NativePreferences.interfacePalette(settings, catalog: model?.settingsCatalog ?? .null)
+            text.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13) - (item.symbol == nil ? 2 : 0), bold: item.symbol == nil)
+            text.textColor = NativePreferences.color(palette[item.symbol == nil ? "muted" : "text"], fallback: item.symbol == nil ? .secondaryLabelColor : .labelColor)
             text.lineBreakMode = .byTruncatingMiddle
             text.translatesAutoresizingMaskIntoConstraints = false
             cell.addSubview(text)
@@ -142,7 +150,7 @@ struct NativeSidebar: NSViewRepresentable {
             var inset: CGFloat = 12
             if let symbol = item.symbol {
                 let icon = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage())
-                icon.contentTintColor = .controlAccentColor
+                icon.contentTintColor = NativePreferences.color(settings["activeIconColor"], fallback: NativePreferences.color(palette["accent"], fallback: .controlAccentColor))
                 icon.translatesAutoresizingMaskIntoConstraints = false
                 cell.addSubview(icon)
                 cell.imageView = icon

@@ -14,6 +14,7 @@ struct NameDraft: Identifiable {
 final class WorkspaceModel: ObservableObject {
     @Published private(set) var state: CoreViewSnapshot?
     @Published private(set) var environment: JSONValue = .null
+    private(set) var settingsCatalog: JSONValue = .null
     @Published private(set) var busy = false
     @Published var error = ""
     @Published private(set) var terminalError = ""
@@ -66,7 +67,10 @@ final class WorkspaceModel: ObservableObject {
     var ready: Bool { state != nil && helperReady && bridge != nil }
     var selectedTerminal: TerminalSession? { selectedID.flatMap { terminals[$0] } }
     var groups: [JSONValue] { workspace["groups"].array }
-    var projects: [JSONValue] { workspace["projects"].array.filter { $0["workspaceId"].string == groupID } }
+    var projects: [JSONValue] {
+        let values = workspace["projects"].array.filter { $0["workspaceId"].string == groupID }
+        return settings["projectOrder"].string == "name" ? values.sorted { ($0["name"].string ?? "").localizedStandardCompare($1["name"].string ?? "") == .orderedAscending } : values
+    }
     var groupItems: [NativeListItem] { groups.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var projectItems: [NativeListItem] { projects.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var sessionEntries: [CoreSessionEntry] { (state?.sessions ?? []).filter { $0.workspaceId == groupID } }
@@ -167,6 +171,7 @@ final class WorkspaceModel: ObservableObject {
         loadEpoch += 1
         let epoch = loadEpoch
         do {
+            if settingsCatalog == .null { settingsCatalog = try await bridge.call("settings.catalog") }
             let state = try await bridge.viewSnapshot()
             guard epoch == loadEpoch else { return }
             let language = state.snapshot.document.settings["language"].string ?? "system"
@@ -188,7 +193,7 @@ final class WorkspaceModel: ObservableObject {
                     terminals[id] = session
                 }
                 terminals[id]?.update(entry: entry)
-                terminals[id]?.apply(settings: settings)
+                terminals[id]?.apply(settings: settings, catalog: settingsCatalog)
                 if let session = terminals[id] { Task { await session.connect() } }
             }
             error = ""

@@ -6,7 +6,7 @@ import DOMPurify from "dompurify";
 import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
-import { flushSharedState } from "../lib/shared-state";
+import { coreRequest, flushSharedState } from "../lib/shared-state";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { interfacePalette, interfaceThemes } from "../lib/interface-themes";
@@ -27,7 +27,8 @@ import {
 import type { Settings, CommandId } from "../lib/settings";
 import type { Updates } from "../lib/useUpdates";
 import type { RuntimeInfo } from "../lib/desktop";
-import { themes, importTheme } from "../lib/themes";
+import { themes } from "../lib/themes";
+import type { Theme } from "../lib/themes";
 import { activeLanguage, languageOptions, translate } from "../lib/i18n";
 import { ToolbarIcon } from "./SidebarIcon";
 const releaseMarkdown = new MarkdownIt({ html: false, linkify: false });
@@ -558,8 +559,12 @@ export function SettingsPanel({
                     }
                     void file
                       .text()
-                      .then((source) => {
-                        const theme = importTheme(source, file.name.replace(/\.(conf|txt)$/i, ""));
+                      .then(async (source) => {
+                        const theme = (await coreRequest("settings.theme.import", {
+                          source,
+                          name: file.name.replace(/\.(conf|txt)$/i, ""),
+                        })) as unknown as Theme;
+                        setMessage("");
                         change({
                           customThemes: [
                             ...settings.customThemes.filter((item) => item.id !== theme.id),
@@ -568,7 +573,13 @@ export function SettingsPanel({
                           darkTheme: theme.id,
                         });
                       })
-                      .catch((reason) => setMessage(String(reason)));
+                      .catch((reason) =>
+                        setMessage(
+                          (reason as { code?: string }).code === "THEME_INVALID"
+                            ? tx("主题名称或内容无效。")
+                            : String(reason),
+                        ),
+                      );
                     event.target.value = "";
                   }}
                 />

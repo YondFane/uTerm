@@ -5,7 +5,10 @@ import UTermBridge
 @MainActor
 final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     let id: String
-    let view: TerminalView
+    let view: NativeTerminalView
+    private var appliedSettings: JSONValue = .null
+    private var appliedCatalog: JSONValue = .null
+    private var appliedLight: Bool?
     private(set) var bridge: CoreBridge
     private(set) var attachment = UUID().uuidString
     private(set) var generation: String?
@@ -55,7 +58,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         self.bridge = bridge
         self.taskGeneration = taskGeneration
         id = entry.session["id"].string ?? ""
-        view = TerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
+        view = NativeTerminalView(frame: NSRect(x: 0, y: 0, width: 800, height: 500))
         super.init()
         view.terminalDelegate = self
         if taskGeneration != nil { view.allowMouseReporting = false }
@@ -78,16 +81,39 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         changed?()
     }
 
-    func apply(settings: JSONValue) {
+    func apply(settings: JSONValue, catalog: JSONValue = .null) {
+        let light = NativePreferences.light(settings)
+        guard settings != appliedSettings || catalog != appliedCatalog || appliedLight != light else { return }
+        appliedSettings = settings; appliedCatalog = catalog; appliedLight = light
         let size = CGFloat(settings["fontSize"].number ?? 14)
-        let weight: NSFont.Weight = settings["fontThicken"].bool == true ? .bold : .regular
-        let font = NSFont.monospacedSystemFont(ofSize: size, weight: weight)
+        let font = NativePreferences.font(settings["fontFamily"].string ?? "monospace", size: size, mono: true, bold: settings["fontThicken"].bool == true)
         if !view.font.isEqual(font) { view.font = font }
+        let spacing = CGFloat(settings["lineHeight"].number ?? 1)
+        if view.lineSpacing != spacing { view.lineSpacing = spacing }
         let scrollback = Int(settings["scrollback"].number ?? 3000)
         if view.getTerminal().options.scrollback != scrollback { view.getTerminal().changeScrollback(scrollback) }
-        let light = settings["appearance"].string == "light"
-        view.nativeBackgroundColor = light ? .white : NSColor(calibratedWhite: 0.06, alpha: 1)
-        view.nativeForegroundColor = light ? .black : NSColor(calibratedWhite: 0.9, alpha: 1)
+        let theme = NativePreferences.terminalTheme(settings, catalog: catalog)
+        view.nativeBackgroundColor = NativePreferences.color(theme["background"], fallback: light ? .white : NSColor(calibratedWhite: 0.06, alpha: 1))
+        view.nativeForegroundColor = NativePreferences.color(theme["foreground"], fallback: light ? .black : NSColor(calibratedWhite: 0.9, alpha: 1))
+        view.caretColor = NativePreferences.color(theme["cursor"], fallback: view.nativeForegroundColor)
+        view.selectedTextBackgroundColor = NativePreferences.color(theme["selectionBackground"], fallback: .selectedTextBackgroundColor)
+        let palette = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "brightBlack", "brightRed", "brightGreen", "brightYellow", "brightBlue", "brightMagenta", "brightCyan", "brightWhite"]
+        if theme != .null {
+            view.installColors(palette.map { key in
+                let color = NativePreferences.color(theme[key]).usingColorSpace(.sRGB)!
+                return SwiftTerm.Color(red8: UInt16((color.redComponent * 255).rounded()), green8: UInt16((color.greenComponent * 255).rounded()), blue8: UInt16((color.blueComponent * 255).rounded()))
+            })
+        }
+        let blink = settings["cursorBlink"].bool == true
+        let style: CursorStyle = switch settings["cursorStyle"].string {
+        case "bar": blink ? .blinkBar : .steadyBar
+        case "underline": blink ? .blinkUnderline : .steadyUnderline
+        default: blink ? .blinkBlock : .steadyBlock
+        }
+        view.getTerminal().options.cursorStyle = style
+        view.cursorStyleChanged(source: view.getTerminal(), newStyle: style)
+        view.copyOnSelect = settings["copyOnSelect"].bool == true
+        view.backgroundOpacity = CGFloat(settings["opacity"].number ?? 1)
     }
 
     func connect(reconnectOnly: Bool = false) async {

@@ -55,6 +55,27 @@ final class NativeSettingsModel: ObservableObject {
         numbers = numberStrings(values); shortcuts = [:]
         error = ""; notice = localized("Defaults are ready. Save to apply them.", "已载入默认值，保存后生效。")
     }
+    func importTheme(source: String, name: String) async {
+        guard !busy, !frozen, let bridge else { return }
+        busy = true; error = ""; notice = ""; defer { busy = false }
+        do {
+            let theme = try await bridge.call("settings.theme.import", params: .object(["source": .string(source), "name": .string(name)]))
+            values["customThemes"] = .array((values["customThemes"]?.array ?? []).filter { $0["id"] != theme["id"] } + [theme])
+            values["darkTheme"] = theme["id"]
+            notice = localized("Theme added to this draft. Save to apply it.", "主题已加入草稿，保存后生效。")
+        } catch { self.error = localized("Could not import the theme. Use a UTF-8 Ghostty theme with valid six-digit colors.", "无法导入主题，请使用颜色为六位十六进制的 UTF-8 Ghostty 主题。") }
+    }
+    func chooseTheme() {
+        guard !busy, !frozen else { return }
+        let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let handle = try FileHandle(forReadingFrom: url); defer { try? handle.close() }
+            let data = try handle.read(upToCount: 32001) ?? Data()
+            guard data.count <= 32000, let source = String(data: data, encoding: .utf8) else { throw BridgeFailure(code: "THEME_INVALID", message: "Invalid theme file") }
+            Task { await importTheme(source: source, name: url.deletingPathExtension().lastPathComponent) }
+        } catch { self.error = localized("Could not read the theme. Select a UTF-8 file up to 32 KB.", "无法读取主题，请选择不超过 32 KB 的 UTF-8 文件。") }
+    }
     func save() async {
         guard !busy, !frozen, let bridge else { return }
         busy = true; error = ""; errorCode = ""; notice = ""; defer { busy = false }
@@ -137,6 +158,7 @@ struct NativeSettingsView: View {
                     ForEach(Array(model.terminalThemes.enumerated()), id: \.offset) { _, item in Text(model.title(item)).tag(item["id"].string ?? "") }
                 }
             }
+            Button(localized("Import Ghostty theme…", "导入 Ghostty 主题…")) { model.chooseTheme() }
             TextField(localized("Interface font", "界面字体"), text: text("interfaceFont"))
             number("interfaceSize", "Interface font size", "界面字号")
             number("rowPadding", "Row padding", "行间留白")

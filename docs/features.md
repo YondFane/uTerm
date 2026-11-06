@@ -4233,12 +4233,41 @@ and quitting asks about unsaved changes. Reserved/duplicate shortcuts and invali
 error and retain the draft. Saving checks each changed field against the latest shared settings,
 preserving unrelated peer changes and refusing to overwrite a conflicting field.
 
+The draft/conflict/shortcut/reset form passes on macOS arm64 and Intel at source
+`8f7e89e819b6704a621dcdd61fe0f69c895c765f`, tested merge `123626e23dbbe5a88edffa62c6ce9b783ba71494`,
+in [Native run 42177165267](https://github.com/YondFane/uTerm/actions/runs/42177165267). Both
+`settings-native.json` reports pass with clean source trees and exit 0; four original English/dark
+and Chinese/light narrow-window screenshots have been reviewed. The reports explicitly keep full
+settings feature acceptance incomplete. These results cover that form revision, not subsequent
+theme/effect changes.
+
+Both settings clients import Ghostty themes through Core `settings.theme.import`. The import is
+read-only until the draft is saved. It preserves existing color/name/ID rules, validates UTF-16
+limits, palette indices and six-digit colors, and returns bounded errors without source contents.
+The regression compares 96 valid/invalid inputs against the existing TypeScript parser, including
+Chinese names, contextual Greek lowercasing and encoded identifiers; all agree without store writes.
+The native file chooser reads at most 32 KB and requires UTF-8.
+
+The Tauri real-app harness exercises a rejected theme without saved changes, followed by a
+successful shared import, saved custom colors and removal of the old error. It supplies a DOM File
+event inside the isolated application; it does not claim OS file-chooser interaction. Both scenes
+archive screenshots and source-bound results on Windows and macOS; new-source results remain pending
+CI.
+
+Native terminals apply the selected bundled/custom palette, cursor and selection colors, available
+font fallback, weight, line spacing, cursor shape/blink, scrollback and background opacity. Copy on
+selection copies after the mouse selection ends. Interface palette/font, row/window padding, sidebar
+visibility preferences, active icon color, project name sorting and optional background material are
+connected to the workspace. Native task logs use the same theme catalog.
+
 `bash scripts/macos-settings-smoke.sh` runs the real window with a second Core client, numeric
 errors, same-field conflicts, unrelated changes, hide/reopen, actual quit cancellation, native
 shortcut capture and reset. It archives `settings-native.json` plus English/dark and Chinese/light
-narrow window images. These new-source runtime results are pending CI. Full preference effects,
-theme import, dynamic command/menu integration and login startup are still incomplete; #41 stays
-open.
+narrow window images, plus an actual themed PTY window. Theme rejection must preserve the draft and
+store; accepted imports remain drafts, and the scene asserts actual terminal font, line spacing,
+palette, cursor, opacity and cleanup after explicit close. These new-source runtime results are
+pending CI. Remaining preference effects, dynamic command/menu integration and login startup are
+still incomplete; #41 stays open.
 
 ### Terminal text selection and rendering
 

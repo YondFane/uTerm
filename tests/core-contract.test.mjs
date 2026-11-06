@@ -21,6 +21,7 @@ import { JSDOM } from "jsdom";
 import { createServer } from "vite";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import { commands, defaults, readSettings, validateShortcuts } from "../src/lib/settings.ts";
+import { importTheme } from "../src/lib/themes.ts";
 import {
   emptyWorkspace,
   createWorkspaceGroup,
@@ -128,6 +129,53 @@ test("native settings catalog preserves defaults and matches both platform short
   });
   assert.equal(rejected.error.code, "SETTINGS_INVALID_PARAMS");
   assert.equal(JSON.stringify(rejected).includes("private-must-not-appear"), false);
+  let themeCases = 0;
+  for (const name of [
+    "  My Theme!  ",
+    "中文 / É",
+    "ΟΣ",
+    "ΟΣΑ",
+    "\uFEFFTheme\uFEFF",
+    "",
+    "x".repeat(81),
+    "😀".repeat(41),
+  ]) {
+    for (const source of [
+      "background = #ABCDEF",
+      "palette = 15 = aabbcc\ncursor-color=123456",
+      "foreground=111111\nforeground=222222",
+      "unknown=ignored\nbackground=012345",
+      "palette=16=123456",
+      "background=#12345g",
+      "palette=0=123456 \n",
+      `palette=${"0".repeat(200)}1=123456`,
+      "background=ignored\u2028line\nforeground=123456",
+      "background\u2028=\u2029#123456",
+      "",
+      "#".repeat(32001),
+    ]) {
+      let expected;
+      try {
+        expected = importTheme(source, name);
+      } catch {}
+      const response = await call("settings.theme.import", { source, name });
+      assert.equal(
+        !response.error,
+        !!expected,
+        `theme/${JSON.stringify(name)}/${source.slice(0, 50)}`,
+      );
+      if (expected) assert.deepEqual(response.result, expected);
+      else assert.equal(response.error.code, "THEME_INVALID");
+      themeCases++;
+    }
+  }
+  const themePrivate = await call("settings.theme.import", {
+    source: "private-must-not-appear",
+    name: "QA",
+    credential: "private-must-not-appear",
+  });
+  assert.equal(themePrivate.error.code, "THEME_INVALID");
+  assert.equal(JSON.stringify(themePrivate).includes("private-must-not-appear"), false);
   assert.deepEqual(
     readdirSync(root),
     before,
@@ -153,6 +201,7 @@ test("native settings catalog preserves defaults and matches both platform short
           architecture: process.arch,
           commands: commands.length,
           differentialCases: commands.length * 12,
+          themeDifferentialCases: themeCases,
           actualRustProcessAndTypeScript: true,
           defaultsUnchanged: true,
           storeUnchanged: true,

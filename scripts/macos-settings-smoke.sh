@@ -19,9 +19,9 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     data = json.loads(report.read_text())
     assert 'failure' not in data, data.get('failure')
     assert data['coreReady'] and not data['productionDataAccess']
-    for key in ['nativeSettingsMenuAndReadonlyOpen', 'invalidNumericDraftRetainedWithoutWrite', 'unrelatedExternalSettingsPreserved', 'sameFieldConflictRetainsDraftAndPeerValue', 'hiddenWindowAndActualQuitCancellationRetainDraft', 'nativeReservedAndDuplicateShortcutErrors', 'nativeShortcutCaptureAndSave', 'explicitResetUsesSharedDefaults']:
+    for key in ['nativeSettingsMenuAndReadonlyOpen', 'invalidNumericDraftRetainedWithoutWrite', 'unrelatedExternalSettingsPreserved', 'sameFieldConflictRetainsDraftAndPeerValue', 'hiddenWindowAndActualQuitCancellationRetainDraft', 'nativeReservedAndDuplicateShortcutErrors', 'nativeShortcutCaptureAndSave', 'nativeThemeImportDraftFailureAndTerminalEffects', 'explicitResetUsesSharedDefaults']:
         assert data[key], key
-    assert len(data['captures']) == 2
+    assert len(data['captures']) == 3
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
     assert not subprocess.check_output(['git', 'status', '--porcelain'])

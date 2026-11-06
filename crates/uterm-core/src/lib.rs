@@ -386,6 +386,18 @@ impl Core {
                 settings::validate(&validation.settings, validation.platform)?;
                 Ok(json!({"valid": true}))
             }
+            "settings.theme.import" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct ThemeImport {
+                    source: String,
+                    name: String,
+                }
+                let request: ThemeImport = serde_json::from_value(params).map_err(|_| {
+                    CoreError::new("THEME_INVALID", "Theme name and source are required")
+                })?;
+                settings::import_theme(&request.source, &request.name)
+            }
             "agent.configure" => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]

@@ -5,6 +5,7 @@ import UTermBridge
 @MainActor
 struct WorkspaceView: View {
     @ObservedObject var model: WorkspaceModel
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
@@ -86,10 +87,26 @@ struct WorkspaceView: View {
                 }
                 .frame(minWidth: 220)
             }
+            .padding(CGFloat(model.settings["windowPadding"].number ?? 10))
         }
+        .font(.custom(NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: CGFloat(model.settings["interfaceSize"].number ?? 13)).fontName, size: CGFloat(model.settings["interfaceSize"].number ?? 13)))
+        .foregroundStyle(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["text"], fallback: .labelColor)))
+        .background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["canvas"], fallback: .windowBackgroundColor)).opacity(model.settings["opacity"].number ?? 1))
+        .background(NativeWindowMaterial(enabled: model.settings["blur"].bool == true))
         .ignoresSafeArea(.container, edges: .top)
+        .onChange(of: colorScheme) { _, _ in if model.settings["appearance"].string == "system" { Task { await model.reload() } } }
         .sheet(isPresented: $model.settingsPresented) { BasicSettingsView(model: model) }
         .sheet(item: $model.nameDraft) { _ in NameEditorView(model: model) }
+    }
+}
+
+@MainActor
+private struct NativeWindowMaterial: NSViewRepresentable {
+    let enabled: Bool
+    func makeNSView(context: Context) -> NSVisualEffectView { NSVisualEffectView() }
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {
+        view.material = .underWindowBackground; view.blendingMode = .behindWindow
+        view.state = enabled ? .active : .inactive; view.isHidden = !enabled
     }
 }
 

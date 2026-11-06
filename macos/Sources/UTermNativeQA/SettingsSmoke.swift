@@ -76,13 +76,40 @@ enum SettingsSmoke {
             try await save(model)
             guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_QA_SHORTCUT_SAVE", message: "Captured shortcut could not be saved") }
             report["nativeShortcutCaptureAndSave"] = true
+            let beforeImport = try Data(contentsOf: snapshotFile), draftBeforeImport = model.values
+            await model.importTheme(source: "background=invalid-private-color", name: "QA")
+            guard !model.error.isEmpty, model.values == draftBeforeImport, try Data(contentsOf: snapshotFile) == beforeImport else { throw BridgeFailure(code: "SETTINGS_QA_THEME_ERROR", message: "Invalid theme changed settings or the draft") }
+            await model.importTheme(source: "background=#162334\nforeground=#E1F0FF\ncursor-color=#FFD166\nselection-background=#354C66\npalette=1=#EF476F", name: "QA 中文")
+            guard model.error.isEmpty, model.dirty, try Data(contentsOf: snapshotFile) == beforeImport else { throw BridgeFailure(code: "SETTINGS_QA_THEME_DRAFT", message: "Theme import did not remain a draft") }
+            model.values["appearance"] = .string("dark"); model.values["fontFamily"] = .string("Menlo, monospace")
+            model.values["cursorStyle"] = .string("bar"); model.values["cursorBlink"] = .bool(false); model.values["copyOnSelect"] = .bool(true)
+            model.values["interfaceTheme"] = .string("ocean")
+            model.numbers["fontSize"] = "18"; model.numbers["lineHeight"] = "1.3"; model.numbers["scrollback"] = "4000"; model.numbers["opacity"] = "0.85"
+            try await save(model)
+            guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_QA_THEME_SAVE", message: "Theme and terminal preferences could not be saved") }
+            let project = root.deletingLastPathComponent()
+            guard await workspace.mutate("project.open", ["id": .string(UUID().uuidString), "name": .string("Settings QA"), "directory": .string(project.path), "workspaceId": .string(workspace.groupID)]) else { throw BridgeFailure(code: "SETTINGS_QA_PROJECT", message: workspace.error) }
+            await workspace.newTerminal()
+            try await TerminalSmoke.wait("Apply preferences to a real terminal") { workspace.selectedTerminal?.generation != nil && (workspace.selectedTerminal?.qaRenderedFrames ?? 0) > 0 }
+            guard let terminal = workspace.selectedTerminal, terminal.error.isEmpty, terminal.view.font.pointSize == 18, terminal.view.font.fontName.contains("Menlo"), terminal.view.lineSpacing == 1.3, terminal.view.backgroundOpacity == 0.85, terminal.view.copyOnSelect, terminal.view.getTerminal().options.scrollback == 4000, String(describing: terminal.view.getTerminal().options.cursorStyle) == "steadyBar", let color = terminal.view.nativeBackgroundColor.usingColorSpace(.sRGB), abs(color.redComponent - 22.0 / 255) < 0.001, let terminalWindow = terminal.view.window else { throw BridgeFailure(code: "SETTINGS_QA_EFFECTS", message: "Saved preferences did not reach the actual terminal") }
+            terminal.enqueue(Data("printf '\\033[31mSETTINGS_%s\\033[0m\\n' '中文'\r".utf8))
+            try await TerminalSmoke.wait("Read themed terminal output") { terminal.text.contains("SETTINGS_中文") }
+            let terminalCapture = "native-settings-themed-terminal.png"
+            terminalWindow.makeKeyAndOrderFront(nil)
+            try await Task.sleep(for: .milliseconds(200))
+            try await TerminalSmoke.capture(window: terminalWindow, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(terminalCapture))
+            report["nativeThemeImportDraftFailureAndTerminalEffects"] = true
+            await workspace.closeSession()
+            guard workspace.state?.sessions.isEmpty == true else { throw BridgeFailure(code: "SETTINGS_QA_CLOSE", message: "Settings QA session was not closed") }
+            _ = try await bridge.call("host.shutdownIdle")
             let resetBefore = try Data(contentsOf: snapshotFile)
             model.resetDraft()
             guard model.dirty, try Data(contentsOf: snapshotFile) == resetBefore else { throw BridgeFailure(code: "SETTINGS_QA_RESET_DRAFT", message: "Reset draft was written without saving") }
             try await save(model)
             guard model.error.isEmpty, !model.dirty, model.values["fontSize"] == model.catalog["defaults"]["fontSize"], model.values["agentNotifications"] == .bool(false) else { throw BridgeFailure(code: "SETTINGS_QA_RESET", message: "Reset did not restore shared defaults and notification opt-out") }
             report["explicitResetUsesSharedDefaults"] = true
-            var captures: [String] = []
+            var captures: [String] = [terminalCapture]
+            current.window.makeKeyAndOrderFront(nil)
             for (language, appearance, width, name) in [("en", "dark", 900.0, "native-settings-full-dark-en.png"), ("zh-Hans", "light", 660.0, "native-settings-full-light-zh-narrow.png")] {
                 model.values["language"] = .string(language); model.values["appearance"] = .string(appearance); model.section = "appearance"
                 try await save(model)
@@ -97,7 +124,7 @@ enum SettingsSmoke {
         } catch { await other.close(); throw error }
         report["manualAcceptance"] = "waived by user"
         report["nativeSettingsFeatureAcceptanceComplete"] = false
-        report["remaining"] = ["Complete preference effects, theme import, command/menu integration and login startup are tracked in #41"]
+        report["remaining"] = ["Remaining preference effects, command/menu integration and login startup are tracked in #41"]
         current.window.orderOut(nil)
     }
 }

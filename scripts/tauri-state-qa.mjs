@@ -979,7 +979,7 @@ try {
                       : phase.startsWith("editor-")
                         ? 5
                         : phase === "initial"
-                          ? 8
+                          ? 10
                           : phase === "reopen"
                             ? 1
                             : 3;
