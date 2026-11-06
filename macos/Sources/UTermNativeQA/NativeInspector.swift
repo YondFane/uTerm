@@ -154,6 +154,7 @@ private struct InspectorRows: NSViewRepresentable {
         var activate: (() -> Void)?
         override func keyDown(with event: NSEvent) { if event.keyCode == 36 { activate?() } else { super.keyDown(with: event) } }
     }
+    @MainActor
     final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         private weak var model: NativeInspectorModel?
         private weak var workspace: WorkspaceModel?

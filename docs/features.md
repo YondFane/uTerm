@@ -4270,7 +4270,9 @@ PTYs to check file navigation, hidden files, symlink boundaries, Unicode search/
 retained editor text, cancellation, quick open, pane swap, zoom, focus and explicit host cleanup. It
 records four original WindowServer captures and `inspector-native.json`, including source head and
 tested merge SHAs. The added inspector checks require macOS CI execution; the older settings
-evidence below does not validate these commands. Manual acceptance remains waived by the user.
+evidence below does not validate these commands. The first inspector CI build exposed missing
+main-actor isolation on its table coordinator; native runtime checks were skipped in that run and
+must pass after correction. Manual acceptance remains waived by the user.
 
 Source `60e183043988626cddbb4fa14e140ed9c25f17f6`, tested merge
 `f93da46db913e8be48f6bac46cb22f00577d23b8`, passes Native

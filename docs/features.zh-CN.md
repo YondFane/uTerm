@@ -2503,7 +2503,7 @@ KB，要求UTF-8；名称仅移除末尾的 `.conf` 或 `.txt`，忽略扩展名
 `bash scripts/macos-inspector-smoke.sh`
 使用隔离原生 QA 应用、临时文件和真实 PTY，检查目录导航、隐藏文件、符号链接边界、中文搜索／行跳转、编辑文字保留、取消、快速打开、窗格交换、放大、焦点及明确宿主清理。脚本记录四张原始 WindowServer 截图及
 `inspector-native.json`，包含源码 head 与 tested merge SHA。新增工具窗格检查仍需在 macOS
-CI 执行；下列旧设置证据不能用于验收这些命令。最终人工验收仍由用户豁免。
+CI 执行；下列旧设置证据不能用于验收这些命令。首次工具窗格 CI 构建发现表格协调器缺少主线程 Actor 隔离，该次原生运行检查跳过，修正后仍须实际通过。最终人工验收仍由用户豁免。
 
 源码 `60e183043988626cddbb4fa14e140ed9c25f17f6`、tested merge
 `f93da46db913e8be48f6bac46cb22f00577d23b8` 通过 Native
