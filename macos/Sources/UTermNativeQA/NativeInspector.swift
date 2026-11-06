@@ -66,6 +66,14 @@ final class NativeInspectorModel: ObservableObject {
         do { try await open(directory, relative, Int(rows[index]["line"].number ?? 0)) }
         catch { self.error = localized("Could not open this file. Check the selected project and retry.", "无法打开此文件，请检查所选项目后重试。") }
     }
+    func activateFromUI(_ index: Int, expected: JSONValue? = nil) {
+        guard !busy, rows.indices.contains(index), expected == nil || rows[index] == expected else { return }
+        let request = generation
+        Task { @MainActor [weak self] in
+            guard let self, request == self.generation, !self.busy else { return }
+            await self.activate(index)
+        }
+    }
 }
 
 @MainActor
@@ -109,7 +117,7 @@ struct NativeInspectorView: View {
                 Button("Git") { workspace.openGitRequested?() }
                 Button("GitHub") { workspace.openGitHubRequested?() }.disabled(workspace.openGitHubRequested == nil)
                 Spacer()
-                Button(localized("Open", "打开")) { Task { await model.activate(model.selected) } }.disabled(!model.rows.indices.contains(model.selected) || model.busy)
+                Button(localized("Open", "打开")) { model.activateFromUI(model.selected) }.disabled(!model.rows.indices.contains(model.selected) || model.busy)
             }
         }.padding(10)
         .task(id: workspace.inspectorContextKey) { await model.reload(); queryFocused = model.mode != .files }
@@ -131,7 +139,11 @@ struct InspectorHost: NSViewRepresentable {
         view.identifier = NSUserInterfaceItemIdentifier("native-inspector-container")
         return view
     }
-    func updateNSView(_ view: InspectorContainer, context: Context) { view.rootView = NativeInspectorView(model: model.inspector, workspace: model) }
+    func updateNSView(_ view: InspectorContainer, context: Context) {
+        // The root observes both models; replacing it on PTY updates restarts focus and reload tasks.
+        // 根视图已监听两个模型，因 PTY 更新替换根视图会重启焦点及重新加载任务。
+        if view.rootView.workspace !== model { view.rootView = NativeInspectorView(model: model.inspector, workspace: model) }
+    }
 }
 
 @MainActor
@@ -144,8 +156,9 @@ private struct InspectorRows: NSViewRepresentable {
         let table = InspectorTable(); table.identifier = NSUserInterfaceItemIdentifier("native-inspector-rows")
         table.addTableColumn(NSTableColumn(identifier: NSUserInterfaceItemIdentifier("file")))
         table.headerView = nil; table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle; table.autoresizingMask = [.width]
-        table.delegate = context.coordinator; table.dataSource = context.coordinator; table.target = context.coordinator; table.doubleAction = #selector(Coordinator.open)
-        table.activate = { [weak model] in guard let model else { return }; Task { await model.activate(model.selected) } }
+        table.delegate = context.coordinator; table.dataSource = context.coordinator; table.target = context.coordinator; table.doubleAction = #selector(Coordinator.open(_:))
+        let coordinator = context.coordinator
+        table.activate = { [weak table, weak coordinator] in guard let table else { return }; coordinator?.activate(row: table.selectedRow) }
         scroll.documentView = table; context.coordinator.update(model, workspace: workspace, table: table)
         return scroll
     }
@@ -190,6 +203,7 @@ private struct InspectorRows: NSViewRepresentable {
             let preview = NSTextField(labelWithString: "\(line): " + (value["text"].string ?? "")); preview.lineBreakMode = .byTruncatingTail; preview.font = .systemFont(ofSize: 11); preview.textColor = .secondaryLabelColor
             let stack = NSStackView(views: [title, preview]); stack.orientation = .vertical; stack.alignment = .leading; return stack
         }
-        @objc func open() { guard let model else { return }; Task { await model.activate(model.selected) } }
+        func activate(row: Int) { guard rows.indices.contains(row) else { return }; model?.activateFromUI(row, expected: rows[row]) }
+        @objc func open(_ table: NSTableView) { activate(row: table.clickedRow) }
     }
 }

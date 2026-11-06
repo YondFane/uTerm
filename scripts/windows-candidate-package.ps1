@@ -82,6 +82,10 @@ try {
     [IO.File]::WriteAllText((Join-Path $candidateEvidence 'SHA256SUMS'), "$($candidateReport.artifact.sha256)  $name`n")
     $candidateReport.authenticode = (Get-AuthenticodeSignature $package).Status.ToString()
     if ($candidateReport.authenticode -ne 'NotSigned') { throw 'Review unexpected candidate signing status' }
+    $candidateBuiltBinary = (Resolve-Path (Join-Path $target 'debug/uterm.exe')).Path
+    $candidateReport.builtBinaryPath = $candidateBuiltBinary
+    $candidateReport.builtBinarySHA256 = (Get-FileHash $candidateBuiltBinary -Algorithm SHA256).Hash.ToLowerInvariant()
+    $candidateReport.builtBinaryBytes = (Get-Item $candidateBuiltBinary).Length
     # NSIS consumes the unquoted remainder after /D; keep this owned path as the final argument.
     # NSIS 将 /D 后未加引号的剩余文本作为目录，所属临时路径必须是最后一个参数。
     $installer = [Diagnostics.ProcessStartInfo]::new($package)
@@ -93,9 +97,17 @@ try {
     $binary = Join-Path $candidateInstall 'uterm.exe'
     if (!(Test-Path $binary)) { throw 'Installed QA executable is missing' }
     $candidateReport.binarySHA256 = (Get-FileHash $binary -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($candidateReport.binarySHA256 -ne (Get-FileHash (Join-Path $target 'debug/uterm.exe') -Algorithm SHA256).Hash.ToLowerInvariant()) { throw 'Installed executable differs from the built QA binary' }
+    $candidateReport.binaryMatchesBuiltSource = $candidateReport.binarySHA256 -eq $candidateReport.builtBinarySHA256
+    $candidateReport.installedBinaryBytes = (Get-Item $binary).Length
+    if (!$candidateReport.binaryMatchesBuiltSource) {
+        $builtBytes = [IO.File]::ReadAllBytes($candidateBuiltBinary); $installedBytes = [IO.File]::ReadAllBytes($binary)
+        $differences = [Collections.Generic.List[int]]::new()
+        for ($offset=0; $offset -lt [Math]::Min(65536, [Math]::Min($builtBytes.Length, $installedBytes.Length)) -and $differences.Count -lt 16; $offset++) { if ($builtBytes[$offset] -ne $installedBytes[$offset]) { $differences.Add($offset) } }
+        $candidateReport.binaryFirstDifferenceOffsets = @($differences)
+    }
     $candidateReport.binaryVersion = (Get-Item $binary).VersionInfo.ProductVersion
     if (!$candidateReport.binaryVersion.StartsWith($candidateVersion)) { throw 'Installed executable version mismatch' }
+    if ((Get-Item $binary).VersionInfo.ProductName -ne $candidateProduct) { throw 'Installed executable is not the isolated QA product' }
     $image = [IO.File]::ReadAllBytes($binary)
     $pe = [BitConverter]::ToInt32($image, 0x3c)
     if ([BitConverter]::ToUInt16($image, $pe + 4) -ne 0x8664) { throw 'Installed QA executable is not x64' }
@@ -141,6 +153,7 @@ try {
     $candidateReport.productionRegistryUnchanged = ((Candidate-RegistryHash) -eq $candidateRegistryBefore)
     if (!$candidateReport.productionRegistryUnchanged) { throw 'Production protocol or uninstall registry changed' }
     $candidateReport.installationScope = 'current-user NSIS into an owned temporary directory'
+    if (!$candidateReport.binaryMatchesBuiltSource) { throw 'Installed executable differs from the built QA binary; compare the archived source, sizes, hashes and difference offsets' }
     $candidateReport.passed = $true
 } catch {
     $candidateReport.failure = $_.ToString()

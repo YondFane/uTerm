@@ -152,6 +152,11 @@ PR、不推送、不创建 Fork。两端复用 `uterm-core::github`。
 App／DMG 或 NSIS 及 SHA256，仅安装到所属临时目录，运行并截图后卸载；报告保存在 CI 产物的
 `candidate/`。原生仅有 ad-hoc 签名，Windows 候选未签名，均无更新签名或公证；不发布或修改生产更新源。
 
+**Candidate Windows QA** workflow 单独重跑安装器范围，也支持
+`gh workflow run candidate-windows.yml --ref <分支>`；完整回归仍由常规 **uTerm** 和 **Native
+migration**
+workflow 执行。程序哈希不一致仍导致安装检查失败，并保留构建／安装后的哈希、大小及差异偏移供诊断。
+
 共享 Agent 规则位于 `uterm-core::{agents,agent_install}`，Pi 扩展位于
 `crates/uterm-core/integrations/`。`bash scripts/macos-agent-smoke.sh`
 需要 macOS 图形会话及 QA 构建；记录真实窗口／Host／已安装报告程序证据，系统通知适配器明确使用模拟，不使用提供方凭据或全局安装 CLI。

@@ -21,7 +21,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-inspector-') as directo
     assert 'cleanupError' not in data, data.get('cleanupError')
     assert data['coreReady'] and not data['productionDataAccess']
     assert data['bundleIdentifier'] == 'sh.uterm.desktop.qa.native'
-    for key in ['nativeFilesHiddenNavigationAndSymlinkBoundary', 'nativeSearchReturnOpenedExactLine',
+    for key in ['nativeFilesHiddenNavigationAndSymlinkBoundary', 'nativeInspectorQueryFocusSurvivesPTYOutput', 'nativeSearchReturnOpenedExactLine',
                 'searchJumpRetainsExistingEditorText', 'cancelledSearchAndFilenameQuickOpen',
                 'paneSwapAndZoomRetainLayoutViewsAndOutput', 'closeFocusedToolsRetainsPTYAndReturnsFocus',
                 'leftToolsRemainVisibleWithoutSidebar', 'explicitFixtureCloseAndIdleHostShutdown']:

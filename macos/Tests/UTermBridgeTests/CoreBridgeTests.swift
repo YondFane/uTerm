@@ -5,6 +5,23 @@ import UTermTestSupport
 @testable import UTermBridge
 
 final class CoreBridgeTests: XCTestCase {
+    func testGithubPrivateArgumentsKeepTypedFailuresAcrossDetachedCABIRequests() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("shared-state-v1")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        let core = try await CoreBridge.open(root: root)
+        let cases: [(String, JSONValue)] = [
+            ("github.repositories", .object(["directory": .string("."), "executable": .string("other")])),
+            ("github.read", .object(["directory": .string("."), "repository": .string("fixture-owner/fixture-repo"), "kind": .string("issue"), "token": .string("not-a-secret")]))
+        ]
+        for (method, params) in cases {
+            do {
+                _ = try await Task.detached { try await core.call(method, params: params) }.value
+                XCTFail("Private GitHub parameters must fail before running a CLI")
+            } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "GITHUB_ARGUMENT") }
+        }
+        await core.close()
+    }
+
     func testSnapshotReadWaitsForShortWriterContentionWithoutRetryingMutations() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("shared-state-v1")
         defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }

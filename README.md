@@ -176,6 +176,11 @@ capture the installed app, then uninstall. Reports live under the CI artifact's 
 directory. Native signing is ad-hoc; Windows candidates are unsigned, with no update signature or
 notarization. These commands do not publish or change production update feeds.
 
+The **Candidate Windows QA** workflow reruns the installer scope separately. It also supports
+`gh workflow run candidate-windows.yml --ref <branch>`; full regression remains in the normal
+**uTerm** and **Native migration** workflows. An executable hash mismatch still fails the installer
+check and retains source/installed hashes, sizes and difference offsets for diagnosis.
+
 Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the Pi extension under
 `crates/uterm-core/integrations/`. `bash scripts/macos-agent-smoke.sh` requires a macOS graphical
 session and the QA build; it records real window/Host/installed-reporter evidence with an explicitly

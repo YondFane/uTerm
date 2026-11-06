@@ -27,12 +27,12 @@ enum GitHubSmoke {
         guard let first = model.selectedTerminal else { throw BridgeFailure(code: "GITHUB_QA_PTY", message: "Missing fixture terminal") }
         let content = try await open(root)
         guard let window = content.window, let host = content.workbenchHost as? GitHubHost else { throw BridgeFailure(code: "GITHUB_QA_HOST", message: "No GitHub workbench") }
-        defer { content.forceClose() }
         try await ContentSmoke.wait(content, "document.querySelectorAll('.github-items button').length === 1")
         let wrongRoot = try await ContentSmoke.request(content, method: "github_repositories", params: ["directory": temporary.path])
         let unknown = try await ContentSmoke.request(content, method: "file_save", params: ["directory": root.path, "path": "notes.txt", "text": "WRONG"])
         let privateArgument = try await ContentSmoke.request(content, method: "github_read", params: ["directory": root.path, "repository": "fixture-owner/fixture-repo", "kind": "issue", "token": "not-a-secret"])
-        guard wrongRoot == "ROOT_DENIED", unknown == "ROOT_DENIED", privateArgument == "GITHUB_ARGUMENT", try Data(contentsOf: root.appendingPathComponent("notes.txt")) == Data("GITHUB_QA\n".utf8) else { throw BridgeFailure(code: "GITHUB_QA_SCOPE", message: "GitHub content crossed its method, parameter or root boundary") }
+        report["githubScopeResponses"] = ["wrongRoot": wrongRoot, "unknownMethod": unknown, "privateArgument": privateArgument]
+        guard wrongRoot == "ROOT_DENIED", unknown == "ROOT_DENIED", privateArgument == "GITHUB_ARGUMENT", try Data(contentsOf: root.appendingPathComponent("notes.txt")) == Data("GITHUB_QA\n".utf8) else { throw BridgeFailure(code: "GITHUB_QA_SCOPE", message: "GitHub boundary responses: root=" + wrongRoot + ", method=" + unknown + ", private=" + privateArgument) }
         report["githubNativeRootMethodAndPrivateParameterBoundaries"] = true
         _ = try await content.webView.evaluateJavaScript("document.querySelector('.github-items button').click()")
         try await ContentSmoke.wait(content, "document.querySelector('.github-detail')?.textContent.includes('BOLD_FIXTURE') === true || document.querySelector('.github-panel')?.textContent.includes('BOLD_FIXTURE') === true")

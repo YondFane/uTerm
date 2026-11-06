@@ -1,0 +1,52 @@
+name: Candidate Windows QA
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [release]
+    paths:
+      - .github/workflows/candidate-windows.yml
+      - scripts/windows-candidate-package.ps1
+      - src-tauri/qa-candidate-installer.nsh
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    env:
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: desktop-windows-latest-${{ runner.arch }}
+          workspaces: |
+            src-tauri -> target
+            crates/utermd-local -> target
+            crates/uterm-core -> target
+            crates/uterm-ffi -> target
+          cache-bin: false
+      - name: Install pinned frontend toolchain
+        shell: pwsh
+        run: |
+          npm install --global pnpm@11.22.0
+          pnpm install --frozen-lockfile
+      - name: Actual isolated NSIS install, launch, screenshot and uninstall
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force ci-evidence | Out-Null
+          ./scripts/windows-candidate-package.ps1 *>&1 | Tee-Object -FilePath ci-evidence/candidate-package-command.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-windows-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ci-evidence/
+          if-no-files-found: error

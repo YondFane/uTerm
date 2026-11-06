@@ -3382,7 +3382,7 @@ export function App() {
                   <div className="welcome-actions">
                     <button
                       className="welcome-action primary"
-                      disabled={!runtime || !workspace}
+                      disabled={!commandAvailable(selected ? "terminal" : "project")}
                       onClick={selected ? () => addSession() : openProjectDialog}
                     >
                       <SidebarIcon name={selected ? "terminal" : "folder"} />

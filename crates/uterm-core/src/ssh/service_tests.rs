@@ -138,6 +138,31 @@ impl Service {
         let port = server_port;
         let config = root.join("server-config");
         std::fs::write(&config, format!("ListenAddress 127.0.0.1\nPort {port}\nHostKey {}\nPidFile {}\nAuthorizedKeysFile {}\nStrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\nUsePAM no\nAllowUsers {user}\nLogLevel VERBOSE\nSubsystem sftp internal-sftp\n", root.join("host").display(), root.join("server.pid").display(), root.join("authorized_keys").display())).unwrap();
+        let effective = sshd_command()
+            .args(["-T", "-f"])
+            .arg(&config)
+            .output()
+            .unwrap();
+        assert!(
+            effective.status.success(),
+            "Invalid isolated sshd configuration: {}",
+            String::from_utf8_lossy(&effective.stderr)
+        );
+        if String::from_utf8_lossy(&effective.stdout)
+            .lines()
+            .any(|line| line.starts_with("persourcepenalties "))
+        {
+            // Deliberate rapid host-key failures must not trigger this fixture server's source penalty.
+            // 测试刻意快速触发主机密钥失败，不应触发隔离服务的来源地址惩罚。
+            writeln!(
+                std::fs::OpenOptions::new()
+                    .append(true)
+                    .open(&config)
+                    .unwrap(),
+                "PerSourcePenalties no"
+            )
+            .unwrap();
+        }
         let mut command = sshd_command();
         command
             .args(["-D", "-e", "-f"])
@@ -522,7 +547,8 @@ async fn authenticated_ssh_transfers_reconnect_host_trust_and_tunnel_ownership()
         error
             .to_string()
             .contains("HOST IDENTIFICATION HAS CHANGED")
-            || error.to_string().contains("Host key verification failed")
+            || error.to_string().contains("Host key verification failed"),
+        "Unexpected host-key mismatch failure: {error}"
     );
     let ca = fixture.directory.path().join("host-ca");
     let host = fixture.directory.path().join("host.pub");

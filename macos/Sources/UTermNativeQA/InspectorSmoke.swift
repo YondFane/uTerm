@@ -54,13 +54,21 @@ enum InspectorSmoke {
         try await Task.sleep(for: .milliseconds(150))
         tools.query = "MATCH_中文"; await tools.reload()
         guard tools.rows.count == 1, tools.rows[0]["path"].string == "nested/notes-中文.txt", tools.rows[0]["line"].number == 2 else { throw BridgeFailure(code: "INSPECTOR_SEARCH", message: "Shared content search did not return the Unicode line") }
+        try await TerminalSmoke.wait("Focus the native project search") { model.inspectorOwnsFocus }
+        let queryResponder = window.firstResponder, queryFrames = first.qaRenderedFrames
+        first.enqueue(Data("printf 'F_%s\\n' OK\r".utf8))
+        try await TerminalSmoke.wait("Render background PTY output while project search has focus") { first.qaRenderedFrames > queryFrames && first.text.contains("F_OK") }
+        guard window.firstResponder === queryResponder, tools.query == "MATCH_中文", !tools.busy else { throw BridgeFailure(code: "INSPECTOR_QUERY_FOCUS", message: "Background PTY output restarted project search or stole keyboard focus") }
+        report["nativeInspectorQueryFocusSurvivesPTYOutput"] = true
         try await TerminalSmoke.wait("Create native search result table") { view(window, id: "native-inspector-rows") is NSTableView }
         guard let table = view(window, id: "native-inspector-rows") as? NSTableView else { throw BridgeFailure(code: "INSPECTOR_TABLE", message: "No native table") }
         table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         guard window.makeFirstResponder(table), model.inspectorOwnsFocus,
               let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36) else { throw BridgeFailure(code: "INSPECTOR_FOCUS", message: "Result table did not own keyboard focus") }
         NSApp.sendEvent(event)
-        try await TerminalSmoke.wait("Open search result through Return") { lookup(root, "nested/notes-中文.txt") != nil }
+        report["searchReturnBefore"] = ["nativeRow": table.selectedRow, "modelRow": tools.selected, "busy": tools.busy] as [String: Any]
+        do { try await TerminalSmoke.wait("Open search result through Return") { lookup(root, "nested/notes-中文.txt") != nil } }
+        catch { report["searchReturnAfter"] = ["nativeRow": table.selectedRow, "modelRow": tools.selected, "busy": tools.busy, "error": tools.error] as [String: Any]; throw error }
         guard let content = lookup(root, "nested/notes-中文.txt") else { throw BridgeFailure(code: "INSPECTOR_OPEN", message: "Search result did not open") }
         try await ContentSmoke.wait(content, "document.querySelector('.editor-status')?.textContent.includes('Line 2') === true")
         report["nativeSearchReturnOpenedExactLine"] = true

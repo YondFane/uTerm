@@ -1057,16 +1057,18 @@ async function runInputControl(context: Context) {
       "visible ownership QA project",
     );
     project.click();
-    const create = await until(() => {
+    await until(() => {
       const value = document.querySelector<HTMLButtonElement>(".welcome-action.primary");
-      return value &&
-        !value.disabled &&
-        value.querySelector("strong")?.textContent === "New terminal" &&
-        value.getBoundingClientRect().width > 0
-        ? value
-        : null;
+      if (
+        !value?.isConnected ||
+        value.disabled ||
+        value.querySelector("strong")?.textContent !== "New terminal" ||
+        value.getBoundingClientRect().width <= 0
+      )
+        return null;
+      value.click();
+      return true;
     }, "new actual terminal button");
-    create.click();
   }
   const section = await until(async () => {
     const value = await selectedVisibleTerminal();

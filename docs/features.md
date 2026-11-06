@@ -86,10 +86,22 @@ WebView2 runtime. Its resource attributes are restored by QA-only install/uninst
 Both checks archive SHA256 sums, exact source head/tested merge SHAs, platform/toolchain evidence,
 installation reports, logs and original window captures under `candidate/`. Native packages are
 ad-hoc signed without Apple Developer signing/notarization; Windows candidates are unsigned, and
-neither carries an update signature. Their new installation checks still require execution in
-macOS/Windows CI. Independent package, inspector and GitHub failures remain failing CI gates even
-when later checks run. Signed updates, upgrade/data rollback and stable cutover remain separate open
-tasks; these commands do not publish or change production update sources.
+neither carries an update signature. Intel candidate installation passes at source
+`b259cfce3000163a2fbf88e23fba316be7fdc44c`, tested merge `2cb7b9b1f69b2bc58dc6b9234ec4f978b66b52c7`,
+on macOS 15.7.9, Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Its
+[actual artifact](https://github.com/YondFane/uTerm/actions/runs/42206471428/artifacts/13497786385)
+includes `candidate-macos.json`, the installed PTY screenshot, App ZIP/DMG and `SHA256SUMS`. Both
+package hashes were independently rechecked and the original screenshot inspected. The report
+records 330 Web resources, matching x86_64 app/helper, read-only mount/resources, successful helper
+output, explicit close/idle shutdown, uninstall and retained private data. Other #41 checks fail in
+that workflow; ARM was blocked by an SSH fixture failure and Windows reports a built/installed
+executable hash mismatch. No other platform or later commit is accepted from this Intel result.
+Windows diagnostics retain both hashes, sizes and initial differing offsets; the mismatch remains a
+failing gate. The **Candidate Windows QA** workflow runs this installer scope independently, while
+full desktop regression remains in the normal workflows. Independent package, inspector and GitHub
+failures remain failing CI gates even when later checks run. Signed updates, upgrade/data rollback
+and stable cutover remain separate open tasks; these commands do not publish or change production
+update sources.
 
 #### Native QA validation
 
@@ -152,9 +164,10 @@ without cleanup errors.
 M0 #14, M1 #15 and tasks #20–#30 are accepted, unmerged. M2 #31/#32 use the user-approved simulation
 scope described below; their source-bound results and acceptance are tracked in the Issues. Real
 provider tasks, manual IME/clipboard/mouse and physical sleep/multiple-display checks remain
-unexecuted. Native SSH/full settings/editing/data workspaces, same-machine performance, macOS 14
-runtime and M3–M5 gates are incomplete. Automatic native actions are not human acceptance; Windows
-and legacy macOS retain the existing full feature set. See
+unexecuted under the authorized simulation/manual-waiver boundaries. Remaining preferences,
+persistent layouts/PDF marks, full Windows run-panel/picker coverage, same-machine performance,
+macOS 14 runtime and M5 gates are incomplete. Automatic native actions are not human acceptance;
+Windows and legacy macOS retain the existing full feature set. See
 [native migration status](native-migration.md) and Issue comments for evidence and unexecuted steps.
 
 The native terminal smoke launches installed `/usr/bin/vim` in the actual PTY. Native key events
@@ -4250,12 +4263,14 @@ and clears colliding fallback menu keys. The palette and capture controls show m
 **Command palette** provides native search, Up/Down, Return and Escape. Dismissing it restores its
 originating window/responder and cannot close a terminal behind it. Plain navigation keys are
 handled only in the owned visible palette; its event monitor is removed on dismissal and modified
-keys retain normal text editing. Commands follow the current window/session context. Native
-**Files**, **Search** and **Quick open** show a tools pane backed by the shared Rust file service.
-Return or double-click opens a file; content search opens the matching line while preserving an
-existing editor's text. Hidden files are optional, partial results are labelled, and outside-root
-symlink targets cannot be opened. Search results from a cancelled request or previous project cannot
-replace the current list.
+keys retain normal text editing. Commands follow the current window/session context. The Tauri
+welcome-page primary action uses the same pending-draft/transition guard as the command menu. Its
+concurrent-input QA clicks a connected button in the same JavaScript turn; the visible real terminal
+remains a required assertion. Native **Files**, **Search** and **Quick open** show a tools pane
+backed by the shared Rust file service. Return or double-click opens a file; content search opens
+the matching line while preserving an existing editor's text. Hidden files are optional, partial
+results are labelled, and outside-root symlink targets cannot be opened. Search results from a
+cancelled request or previous project cannot replace the current list.
 
 **Toggle inspector** hides/restores tools; **Swap panes** saves its left/right position, including
 with the project sidebar hidden. Closing focused tools returns focus to the selected terminal
@@ -4332,6 +4347,16 @@ Java-dependent checks use JDK 21. A real Core process with the isolated CLI also
 repository/read/diff/prepare/create/invalid/offline/retry requests with one exact JSON creation.
 These local results use simulated GitHub responses and do not replace native CI screenshots.
 
+An ARM Core run hit the isolated SSH server's source-address penalty during deliberate host-key
+failures. The fixture now detects support with `sshd -T` and disables that penalty only in its
+temporary server configuration; older OpenSSH keeps its supported configuration. Host-key rejection
+assertions remain required and now include the actual error on failure. Production SSH configuration
+is unchanged. The native inspector retains its observing root view during PTY updates and snapshots
+a row's identity/generation before opening, rather than restarting its focus/reload tasks on every
+update. Intel Return and GitHub boundary failures remain recorded; their reports now include
+selection state and returned boundary codes for the required rerun. Dependency caching on CI failure
+does not turn a failed gate into a passing result.
+
 Source `60e183043988626cddbb4fa14e140ed9c25f17f6`, tested merge
 `f93da46db913e8be48f6bac46cb22f00577d23b8`, passes Native
 [run 42187274886](https://github.com/YondFane/uTerm/actions/runs/42187274886) on macOS 15.8.2 arm64
@@ -4367,9 +4392,9 @@ Earlier window-capture, SSH askpass and focus-assertion failures, plus cancelled
 remain in the Issue records. The focus test now activates the intended settings origin rather than
 expecting it while the main workspace is in front after cancelled quit. These failures are not
 counted as passes. Full settings acceptance remains incomplete: the reports keep
-`nativeSettingsFeatureAcceptanceComplete=false` for remaining effects and unavailable commands.
-Human acceptance is waived by the user; neither that waiver nor these partial results establish
-stable cutover or merge the draft PR.
+`nativeSettingsFeatureAcceptanceComplete=false` for remaining effects and controls awaiting native
+acceptance. Human acceptance is waived by the user; neither that waiver nor these partial results
+establish stable cutover or merge the draft PR.
 
 ### Terminal text selection and rendering
 
