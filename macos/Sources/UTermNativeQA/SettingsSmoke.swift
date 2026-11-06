@@ -81,6 +81,10 @@ enum SettingsSmoke {
             try await save(model)
             guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_QA_SHORTCUT_SAVE", message: "Captured shortcut could not be saved") }
             report["nativeShortcutCaptureAndSave"] = true
+            current.window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            try await TerminalSmoke.wait("Focus settings before opening its command palette") { current.window.isKeyWindow }
+            report["paletteOriginWindow"] = current.window.windowNumber
             guard let paletteMenu = NSApp.mainMenu?.items.compactMap(\.submenu).flatMap(\.items).first(where: { $0.representedObject as? String == "palette" }), paletteMenu.keyEquivalent == "k", paletteMenu.keyEquivalentModifierMask == [.command, .shift], let paletteEvent = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "K", charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40), NSApp.mainMenu?.performKeyEquivalent(with: paletteEvent) == true else { throw BridgeFailure(code: "SETTINGS_QA_MENU_BINDING", message: "Saved semantic shortcut did not update the system menu") }
             try await TerminalSmoke.wait("Open palette through the actual menu shortcut") { NSApp.keyWindow?.identifier?.rawValue == "native-command-palette" }
             guard let palette = NSApp.keyWindow else { throw BridgeFailure(code: "SETTINGS_QA_PALETTE", message: "Palette did not open") }
@@ -96,7 +100,7 @@ enum SettingsSmoke {
             report["nativePaletteWindowCaptured"] = true
             let previousResponder = current.window.firstResponder
             try key(palette, code: 53, characters: "\u{1b}")
-            report["paletteAfterEscape"] = ["visible": palette.isVisible, "settingsKeyWindow": current.window.isKeyWindow]
+            report["paletteAfterEscape"] = ["visible": palette.isVisible, "settingsKeyWindow": current.window.isKeyWindow, "keyWindow": NSApp.keyWindow?.windowNumber ?? -1]
             try await TerminalSmoke.wait("Restore settings focus after Escape") { !palette.isVisible && current.window.isKeyWindow }
             guard current.window.firstResponder === previousResponder else { throw BridgeFailure(code: "SETTINGS_QA_FOCUS", message: "Palette cancellation did not restore the previous responder") }
             report["nativePaletteEscapeRestoredResponder"] = true

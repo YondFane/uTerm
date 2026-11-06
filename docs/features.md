@@ -4317,6 +4317,11 @@ the event monitor on dismissal; modified keys retain normal text editing. QA dis
 captures the real window successfully but fails Escape focus restoration; that result remains a
 failure while the corrected key-routing source awaits its own runtime evidence.
 
+The `314c74f` report confirms that Escape hides the palette, but the focus assertion expected the
+settings window while the actual origin was the main workspace after cancelled quit. QA now
+activates the settings window before opening the palette and records both window numbers. This
+corrects the test precondition; it does not treat the earlier failed run as acceptance.
+
 ### Terminal text selection and rendering
 
 Visible terminal and Agent panes use GPU rendering when WebGL2 is available. Dragging to select text
