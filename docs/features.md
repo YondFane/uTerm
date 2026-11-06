@@ -4264,7 +4264,11 @@ read-only until the draft is saved. It preserves existing color/name/ID rules, v
 limits, palette indices and six-digit colors, and returns bounded errors without source contents.
 The regression compares 96 valid/invalid inputs against the existing TypeScript parser, including
 Chinese names, contextual Greek lowercasing and encoded identifiers; all agree without store writes.
-The native file chooser reads at most 32 KB and requires UTF-8.
+The native file chooser reads at most 32 KB and requires UTF-8. Both clients remove only `.conf` or
+`.txt` from the imported name, ignoring extension case; other extensions stay in the theme name and
+identity. Native QA uses actual temporary files to check these names, invalid UTF-8 and
+oversized-file rejection without changing the draft or store. Independent settings QA runs after the
+generic window smoke, before the other native workbenches; all other checks remain in CI.
 
 The Tauri real-app harness exercises a rejected theme without saved changes, followed by a
 successful shared import, saved custom colors and removal of the old error. It supplies a DOM File

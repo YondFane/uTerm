@@ -97,6 +97,8 @@ jobs:
           node scripts/legacy-host-compat.mjs macos/.build/evidence/legacy-host 2>&1 | tee macos/.build/evidence/legacy-host-command.log
       - name: Real window and graceful exit smoke
         run: bash scripts/macos-native-smoke.sh
+      - name: Real native settings, conflicts, shortcut capture, reset and screenshots
+        run: bash scripts/macos-settings-smoke.sh
       - name: Real native PTY, split, detach and replay smoke
         run: bash scripts/macos-terminal-smoke.sh
       - name: Real concurrent native input and resize ownership
@@ -118,8 +120,6 @@ jobs:
         run: bash scripts/macos-redis-smoke.sh
       - name: Real native Agent settings, installed Hooks and simulated OS notification lifecycle
         run: bash scripts/macos-agent-smoke.sh
-      - name: Real native settings, conflicts, shortcut capture, reset and screenshots
-        run: bash scripts/macos-settings-smoke.sh
       - name: Real native Git, Worktree and open-editor protection
         run: bash scripts/macos-git-smoke.sh
       - name: Real native control and standalone CLI smoke

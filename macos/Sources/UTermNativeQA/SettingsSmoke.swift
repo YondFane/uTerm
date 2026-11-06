@@ -116,6 +116,20 @@ enum SettingsSmoke {
             guard !model.error.isEmpty, model.values == draftBeforeImport, try Data(contentsOf: snapshotFile) == beforeImport else { throw BridgeFailure(code: "SETTINGS_QA_THEME_ERROR", message: "Invalid theme changed settings or the draft") }
             await model.importTheme(source: "background=#162334\nforeground=#E1F0FF\ncursor-color=#FFD166\nselection-background=#354C66\npalette=1=#EF476F", name: "QA 中文")
             guard model.error.isEmpty, model.dirty, try Data(contentsOf: snapshotFile) == beforeImport else { throw BridgeFailure(code: "SETTINGS_QA_THEME_DRAFT", message: "Theme import did not remain a draft") }
+            let source = "background=#162334\nforeground=#E1F0FF\npalette=1=#EF476F"
+            for (file, name) in [("QA Theme.ghostty", "QA Theme.ghostty"), ("QA Theme.CONF", "QA Theme")] {
+                let url = root.appendingPathComponent(file)
+                try Data(source.utf8).write(to: url)
+                await model.importThemeFile(url)
+                guard model.error.isEmpty, model.values["customThemes"]?.array.last?["name"].string == name else { throw BridgeFailure(code: "SETTINGS_QA_THEME_FILENAME", message: "Native theme file name differs from the existing importer") }
+            }
+            let beforeRejectedFile = model.values
+            for (file, bytes) in [("QA Invalid.conf", Data([0xff, 0xfe])), ("QA Oversize.conf", Data(repeating: 65, count: 32001))] {
+                let url = root.appendingPathComponent(file); try bytes.write(to: url)
+                await model.importThemeFile(url)
+                guard !model.error.isEmpty, model.values == beforeRejectedFile, try Data(contentsOf: snapshotFile) == beforeImport else { throw BridgeFailure(code: "SETTINGS_QA_THEME_FILE_REJECT", message: "Rejected theme file changed the draft or store") }
+            }
+            report["nativeThemeFileNamesAndBoundedReads"] = true
             model.values["appearance"] = .string("dark"); model.values["fontFamily"] = .string("Menlo, monospace")
             model.values["cursorStyle"] = .string("bar"); model.values["cursorBlink"] = .bool(false); model.values["copyOnSelect"] = .bool(true)
             model.values["interfaceTheme"] = .string("ocean")

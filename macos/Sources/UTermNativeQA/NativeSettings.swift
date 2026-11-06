@@ -70,11 +70,16 @@ final class NativeSettingsModel: ObservableObject {
         guard !busy, !frozen else { return }
         let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        Task { await importThemeFile(url) }
+    }
+    func importThemeFile(_ url: URL) async {
+        guard !busy, !frozen else { return }
         do {
             let handle = try FileHandle(forReadingFrom: url); defer { try? handle.close() }
             let data = try handle.read(upToCount: 32001) ?? Data()
             guard data.count <= 32000, let source = String(data: data, encoding: .utf8) else { throw BridgeFailure(code: "THEME_INVALID", message: "Invalid theme file") }
-            Task { await importTheme(source: source, name: url.deletingPathExtension().lastPathComponent) }
+            let name = ["conf", "txt"].contains(url.pathExtension.lowercased()) ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
+            await importTheme(source: source, name: name)
         } catch { self.error = localized("Could not read the theme. Select a UTF-8 file up to 32 KB.", "无法读取主题，请选择不超过 32 KB 的 UTF-8 文件。") }
     }
     func save() async {
