@@ -4394,13 +4394,16 @@ were individually inspected. Earlier build/input/focus failures remain in the Is
 results are not reused for later source revisions. Final human acceptance is waived by the user.
 
 `scripts/interaction-matrix.py` audits each client's source head/tested SHA, required reports and
-original PNG captures. Native terminal QA also checks simulated marked text with zero interim PTY
-bytes and one exact Unicode commit, and simulated sleep/wake/display notifications with retained
-views/generations and resumed actual output. Windows reuses actual desktop editor/settings/Git and
-input-ownership scenes plus labelled composition/input tests. Missing/failed/stale evidence fails
-the audit. Physical IME, hardware sleep and multiple monitors are not represented as executed;
-manual acceptance is waived. `interaction-matrix.json` keeps those boundaries and original M3
-layout, session-tab-drag and PDF gaps explicit; it does not declare stable cutover acceptance.
+original PNG captures. Each capability separates implementation, build, automatic checks, native
+actions and waived manual acceptance. Editor summaries carry the isolation flag after both actual
+processes validate their private profiles; missing metadata remains a failing gate. Native terminal
+QA also checks simulated marked text with zero interim PTY bytes and one exact Unicode commit, and
+simulated sleep/wake/display notifications with retained views/generations and resumed actual
+output. Windows reuses actual desktop editor/settings/Git and input-ownership scenes plus labelled
+composition/input tests. Missing/failed/stale evidence fails the audit. Physical IME, hardware sleep
+and multiple monitors are not represented as executed; manual acceptance is waived.
+`interaction-matrix.json` keeps those boundaries and original M3 layout, session-tab-drag and PDF
+gaps explicit; it does not declare stable cutover acceptance.
 
 `bash scripts/macos-github-smoke.sh` runs the real native WebView window with an isolated simulated
 `gh`, temporary Git repository and real PTYs. It checks root/method/type boundaries, sanitized
@@ -4412,9 +4415,12 @@ WebKit and main-actor tasks responsive. Actual ARM CI at source `3719222` passes
 retention, then fails explicit creation: preparation returns extra `branch` metadata that the strict
 Core creation contract rejects. The panel now copies only title/base/head into the form; the
 regression includes extra preparation fields and requires one exact creation payload. The PR draft
-checkbox uses compact inline sizing. Fresh native creation/screenshots remain pending. No account,
-real GitHub write, push or fork is used. Shared session tests retain stale/malformed link, reopening
-and split checks.
+checkbox uses compact inline sizing. Intel source `cdedb12860c5a20c88c1945b21c96c84770173ce` passes
+all GitHub checks with four original captures in
+[artifact13516460493](https://github.com/YondFane/uTerm/actions/runs/42236559031/artifacts/13516460493).
+This is scoped GitHub evidence; that workflow fails the separate SDK installation capture and
+interaction-summary metadata checks. No account, real GitHub write, push or fork is used. Shared
+session tests retain stale/malformed link, reopening and split checks.
 
 Linux checks pass the 422 existing frontend tests (11 skipped), the added GitHub panel regression,
 242 Core/FFI/failure-mode tests (17 ignored), 84 host tests (3 ignored), 18 Tauri backend tests (1
@@ -4718,14 +4724,19 @@ ordinary quit guards. The relaunch validates exact file bytes, produces fresh PT
 explicitly closes the fixture. The server rejects and records requests before automatic opt-in.
 Reports, HTTP logs and actual app screenshots are archived.
 
-Source `3719222ced93c42852f795aae5e4eb6d7ab9c066` passes seven ARM scenarios. The bad-signature
-archive is rejected through errors `4005 → 4005 → 3002`, and the incorrect `3001` assertion fails.
-The pinned SDK's `Autoupdate/SUSignatureVerifier.m` uses `SUValidationError` plus the fixed
-`EdDSA signature does not match.` reason. QA now requires that exact bounded underlying cause;
-generic installation/validation errors still fail. Only a boolean reason is emitted, without private
-descriptions. Bridge negative tests cover unrelated causes. Corrected signature and added automatic
-scheduling scenarios need fresh CI. Actual installation/relaunch and Windows signed updates remain
-pending in #45.
+The pinned SDK's `Autoupdate/SUSignatureVerifier.m` uses `SUValidationError` with the fixed
+`EdDSA signature does not match.` reason. QA requires that exact bounded underlying cause; unrelated
+installation/validation errors still fail. Only a boolean reason is emitted, without private
+descriptions. Bridge negative tests cover unrelated causes.
+
+Intel at source `cdedb12860c5a20c88c1945b21c96c84770173ce`, tested merge
+`adf4eef3be321370ae2d0e97323a743a60c053a7`, passes nine SDK scenarios, including strict bad
+signature and real automatic scheduling. Actual installation reaches the updated process with
+retained host/draft checks, then fails the required own-window capture in
+[run42236559031](https://github.com/YondFane/uTerm/actions/runs/42236559031). The corrected relaunch
+capture waits for its own PID/window number in WindowServer and retries within a fixed bound,
+retaining functional checkpoints even on capture failure. Fresh platform acceptance is pending.
+Transfer/database update-quit combinations and Windows signed updates remain open in #45.
 
 #### Windows/Tauri automatic installation
 
