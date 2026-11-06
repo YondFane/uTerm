@@ -70,12 +70,14 @@ suite; this Unix load scenario does not run there.
 
 Migration acceptance remains open in [#13](https://github.com/YondFane/uTerm/issues/13): M3 still
 needs persistent layouts, PDF annotations and full Windows run-panel/picker coverage. M4 still needs
-database/Redis acceptance, Agent/settings/menu completion, interaction regression and performance
+database acceptance, Agent/settings/menu completion, interaction regression and performance
 evidence; M5 packaging, updates and upgrade/rollback acceptance remain pending.
 
-The expanded Redis paging, deletion, TTL, quit-cancellation and OS-credential checks await their own
-macOS/Windows CI reports and screenshots. Work remains on `feat/native-macos-shared-core` in
-[Draft PR #12](https://github.com/YondFane/uTerm/pull/12), without merging or publishing a release.
+Redis paging, deletion, TTL, quit-cancellation and OS-credential checks are accepted at source
+`940f8d1`, with platform reports and screenshots in
+[#39](https://github.com/YondFane/uTerm/issues/39). Work remains on `feat/native-macos-shared-core`
+in [Draft PR #12](https://github.com/YondFane/uTerm/pull/12), without merging or publishing a
+release.
 
 Head `4c502ab0c5f39b1d4f43ec4e72f0c7f35b285cca`, tested merge
 `df2690d89433974653ff5426bab07be371f455c7`, passed all four jobs in
@@ -1717,8 +1719,8 @@ read-retry/mutation-refusal checks pass on macOS ARM64 and Intel at source `7306
 servers. The normal Core suite runs the other four service checks and the two host-port checks.
 `node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory` records toolchains,
 actual test names, logs, source/merge SHA and source-tree state. Shared Redis CI builds the verified
-7.4.7 source with TLS and uploads those reports. Native Redis and platform credential acceptance
-remain tracked in [#39](https://github.com/YondFane/uTerm/issues/39); service tests do not establish
+7.4.7 source with TLS and uploads those reports. Native Redis and platform credential evidence is
+archived in [#39](https://github.com/YondFane/uTerm/issues/39); service tests alone do not establish
 UI acceptance.
 
 Linux manager regressions cover profile conflicts, password exclusion, modal freeze/resume,
@@ -1732,36 +1734,30 @@ portable community redis-windows 8.10.3 Cygwin archive, verified against SHA256
 `8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e`; macOS records its actual
 Homebrew version and binary digest. Neither harness installs a Redis system service.
 
-The source-bound baseline `f38645f32062855403b28bc137f91a401a71fe5f` / tested merge
-`da997a3cd14978b4dba0221ccf0402a9f64c5f2c` passes both native Mac architectures and both Tauri
-platforms. Native execution uses macOS 15.8.2 ARM64 / 15.7.9 Intel; Tauri uses macOS 26.7.2 ARM64 /
-Windows Server 2025 x64. Each Tauri report has 61 successful application scenes, including the four
-original Redis scenes. Independent reports confirm exact text/TTL/binary data, stopped owned
-processes and inspected evidence. Artifacts:
-[native ARM](https://github.com/YondFane/uTerm/actions/runs/42106743175/artifacts/13451284506),
-[native Intel](https://github.com/YondFane/uTerm/actions/runs/42106743175/artifacts/13452369600),
-[Tauri Mac](https://github.com/YondFane/uTerm/actions/runs/42106743169/artifacts/13453127305),
-[Tauri Windows](https://github.com/YondFane/uTerm/actions/runs/42106743169/artifacts/13453800420).
-This baseline does not accept the newly expanded cases below.
+Redis acceptance uses source and actual tested commit `940f8d130114c366077015d82bb33114e2734fb1`;
+the workflows directly test the branch with `workflow_dispatch`, rather than a synthetic PR merge.
+Native Redis checks pass on macOS 15.8.2 ARM64 / Redis 8.10.3 and macOS 15.7.9 Intel / Redis 8.10.1.
+Each native report records six WindowServer images, exit code 0, a clean source tree and data
+verified again after app exit.
 
-At source `554108e`, native ARM64 application checks complete, but the wrapper fails its clean-tree
-guard after Python imports generate bytecode. That run is not accepted as a successful platform
-result
-([artifact](https://github.com/YondFane/uTerm/actions/runs/42138845602/artifacts/13467781560)). The
-harness uses `python3 -B` to avoid creating bytecode while retaining the clean-tree guard;
-validation of the fix remains pending.
+Tauri passes on macOS 26.7.2 ARM64 and Windows Server 2025 x64, both using Redis 8.10.3. Each report
+contains 63 successful application QA scenes, including six real Redis scenes, with no cleanup
+errors. Independent service reports verify final data, stopped owned processes, readable evidence
+and no leaked credential. All 24 Redis images have been inspected. Artifacts:
+[native ARM](https://github.com/YondFane/uTerm/actions/runs/42143907577/artifacts/13469139024),
+[native Intel](https://github.com/YondFane/uTerm/actions/runs/42143907577/artifacts/13470210542),
+[Tauri Mac](https://github.com/YondFane/uTerm/actions/runs/42143901906/artifacts/13469443317),
+[Tauri Windows](https://github.com/YondFane/uTerm/actions/runs/42143901906/artifacts/13469723539)
+and
+[Linux service tests](https://github.com/YondFane/uTerm/actions/runs/42143911635/artifacts/13468882766).
 
-The Tauri Mac run at `554108e` fails because its QA selector excludes the visible unsaved-change
-dialog, which shares a style class with mutation confirmations
-([artifact](https://github.com/YondFane/uTerm/actions/runs/42138851631/artifacts/13467443807)). The
-harness distinguishes open dialogs by their existing `aria-labelledby` values; corrected
-disconnect/quit cancellation checks still require platform execution.
-
-Native ARM64 at `0b163d8` reaches the TTL action before the busy guard releases after list deletion
-([failure artifact](https://github.com/YondFane/uTerm/actions/runs/42141649922/artifacts/13468308959)).
-Redis QA waits for visible, enabled controls and clicks once; server writes are not retried. The
-Tauri TTL action uses the same readiness requirement. Corrected native/platform results remain
-pending; a previous successful run does not waive this failure.
+The Intel job and Native workflow fail a separate database editor-input check tracked in
+[#38](https://github.com/YondFane/uTerm/issues/38#issuecomment-6674618606); their independent Redis
+and bridge checks pass. Redis acceptance does not establish that the whole PR or migration passes.
+Earlier failures and their corrections remain linked in the
+[#39 completion evidence](https://github.com/YondFane/uTerm/issues/39#issuecomment-6674752428). QA
+waits for visible, enabled controls and clicks once without retrying server writes; Python fixture
+imports use `-B`, retaining the clean-tree guard.
 
 The expanded cases browse a real 20,001-member list with 200 rendered and returned rows per page;
 the missing edit snapshot keeps member update/delete controls disabled above the 10,000-member
@@ -1772,7 +1768,7 @@ deletion of a separate key. Final server checks verify the 400 remaining members
 unchanged binary sibling. Real disconnect and application quit are cancelled while a draft exists,
 then the connection/draft is checked. Native QA captures the actual quit alert and activates its
 Cancel button; this automated action is separate from #42's manual keyboard/IME acceptance. These
-new platform cases still require their own CI results.
+automated platform cases pass at the source above; human #42 acceptance remains unperformed.
 
 Tasks without a required human check can close once implementation and source-bound automated
 platform evidence satisfy their acceptance criteria. #39 does not wait for #42's separate human
@@ -1782,16 +1778,16 @@ A platform-only Rust test and the expanded application checks use unique QA cred
 macOS Keychain or Windows Credential Manager. They check binary CRUD/replacement without changing a
 neighboring item, authenticate to real Redis using only a saved reference, reject a changed target,
 remove the credential and reject subsequent reuse. An absent item is reported as missing; permission
-and other access errors remain failures. Linux runs no OS credential cases. The new macOS/Windows
-checks are pending and cannot be replaced by the Linux result.
+and other access errors remain failures. Linux runs no OS credential cases. The macOS/Windows checks
+pass at the source above; Linux results do not replace OS credential evidence.
 
 Current Linux checks pass Core/FFI, all 11 real Redis/service regressions, backend (41 passed / two
 ignored), frontend (419 passed / ten skipped), types and QA/desktop builds. Builds sharing `dist`
 run sequentially so one build cannot remove assets while another embeds them. Evidence inspection
 runs after owned SSH/Redis services close; transient exclusive handles are bounded, and persistent
 unreadable files or detected passwords produce a failed report. Key navigation opens the actual
-drawer and requires an on-screen row. Credential/picker and full #39 acceptance remain tracked
-separately from the passing baseline.
+drawer and requires an on-screen row. Manual picker, keyboard/IME and the remaining M4/M5 acceptance
+remain pending; automated Redis acceptance does not establish those results.
 
 ### Redis connection setup
 
