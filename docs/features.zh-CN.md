@@ -81,23 +81,28 @@ workflow 独立执行安装器检查。签名更新、升级／数据回退及�
 #### 可复现的客户端测量
 
 Client performance evidence
-workflow 在同一台 Mac 顺序运行原生与 Tauri 客户端，各重复三次；Windows 另记录 Tauri 基线。共用负载为一个真实 PTY、二十轮各1,024条有序 ANSI／Unicode 输出、14pt 字体、5,000行回滚、64KiB
-CAS 文件保存／读取、连接回放和120秒空闲运行。前五轮预热；version2 负载要求真实120×36终端网格。原生 QA 调整真实窗口，Tauri
-QA 通过实际控件隐藏工具并调整真实终端容器，两者沿用普通渲染器至 PTY 的尺寸路径。报告拒绝网格不符，记录实际外部内容区尺寸，并拒绝超出应用窗口被裁剪的 Tauri 网格。修正后的原生布局仍须平台 CI，旧网格不一致结果不作为对比证据。原生通过 NSTextInputClient 输入，Tauri 在真实应用内模拟 DOM 粘贴／回车；响应指标止于输出解析／确认，不等同物理输入或显示延迟。
+workflow 在同一台 Mac 顺序运行原生与 Tauri 客户端，各重复三次；Windows 单独记录 Tauri 基线。
+`shared/fixtures/client-performance.json`
+version3 固定一个真实 PTY、120×36 网格、14pt 字体与5,000行回滚。两端均沿用普通渲染器至 PTY 的尺寸路径；网格不符或被窗口裁剪即使报告失败。二十轮各验证1,024条有序 ANSI／Unicode 输出、64KiB
+CAS 文件保存／读取及真实连接回放，不能更换进程 generation。延迟汇总排除前五轮预热。
 
-原生构建后运行 `node scripts/macos-performance-smoke.mjs`；Tauri 运行
-`UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs`。脚本归档原始进程采样、负载／源码哈希、窗口原图、清理结果及逐轮数据，`scripts/client-performance-report.mjs`
-核对三次运行。CPU／RSS 覆盖应用、其子进程及经认证的宿主进程树；无法归属的 WebContent／GPU／XPC 仍排除。短 CI 运行不证明长期无泄漏；TUI／数据库性能及刻意慢消费对比仍未测量，不宣称改善比例。本地负例通过源码／负载／sequence／输出顺序与进程归属／计数检查；真实平台测量仍待 CI。
+负载还包括二十次合成 alternate-screen
+TUI 重绘、每帧刻意延迟200ms的真实消费者，以及二十次经 Core／JDBC 执行的真实 PostgreSQL 查询。每次核对128行有序文本，每行包含128个 ASCII 字符及 Unicode。初始渲染门控保持真实帧至少50ms；若收到另一帧或提前确认，则慢消费检查失败。释放门控后排空并验证全部1,024条输出。这是可控终端重绘，不是交互 Vim 基准；查询计时包含行序列化，不包含表格绘制。
 
-Windows 自动流程现先选择临时项目及欢迎按钮的嵌套标签。采样写完整条 JSON 后才停止，原来直接终止 PowerShell 会截断末条数据。失败运行和截图保留在
-[artifact13510499531](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13510499531)。性能设置现于共享状态初始化前准备，运行时只读核对。原直接设置 CAS 绕过客户端写队列，令缓存 revision 过期，阻塞后续项目／会话界面写入；不修改队列或冲突规则。#43 因修正后的平台结果和未测量场景保持开放。
+原生构建后运行 `python3 -B scripts/client-performance-database.py`（Windows 使用
+`python`）。包装脚本在全部顺序测量期间管理同一个回环 PostgreSQL 集群，向客户端脚本提供私有凭据并调用
+`scripts/run-client-performance.sh`。它核对原始数据库测试数据不变、连接关闭、自有服务停止，且证据不含凭据。`node scripts/client-performance-report.mjs`
+核对三次结果。内部原生／Tauri 脚本需要包装脚本提供的私有数据库上下文。
 
-首次 Intel 原生运行完成全部二十轮有序输出、文件 CAS、实际回放、120秒运行及清理，窗口原图已查看，见
-[artifact13512831299](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13512831299)。反复转换完整回滚会干扰响应计时；测量现仅轮询两端光标附近末尾八行，输出结束后才完整扫描一次验证顺序，先前计时不作为公平对比。Windows 源码949e4c2实际完成二十轮输出和文件操作，随后因回放输入权失败。明确分离现会在返回前释放已认证视图租约，即使旧接收端阻塞；逐链路控制锁阻止迟到心跳／接管占有已停止视图，旧清理不能释放替代视图。真实宿主阻塞接收端回归在本地通过，平台回放仍须重跑。Tauri 自动流程等待项目选择实际提交；Windows 截图仅枚举指定 PID 下标题准确的 QA 窗口，记录发现／几何信息并恢复无效窗口尺寸，不替用辅助窗口或其他进程窗口。Windows 截图辅助进程上限60秒，场景确认期限90秒。一次真实候选截图耗时36秒，超过旧30秒握手期限，导致未能普通退出；缺图仍失败，等待退出前会归档失败场景。Windows 候选源码
-`94700bf`、tested merge `6ad41493b52684b6dc366a4e3400da6fa1208b53` 在
-[run42247067808](https://github.com/YondFane/uTerm/actions/runs/42247067808)
-通过安装／启动／截图／退出／卸载。macOS
-Tauri 截图辅助程序改为分别标注类型的 WindowServer 筛选与面积排序，修正两架构均拒绝编译的组合 Swift 表达式。新性能结果仍待完成。
+前两次各采样120秒空闲，最后一次采样600秒。原始采样、逐轮指标、源码／负载哈希、真实终端／TUI 窗口原图及清理报告上传为 CI
+artifacts。CPU／RSS 覆盖应用、其子进程与经认证的宿主进程树；无法归属的 WebContent／GPU／XPC 及外部 PostgreSQL 服务仍排除。准备与截图使用独立阶段；资源阶段仍含预热及探针开销，RSS 求和也不等同按比例分摊内存。原生通过 NSTextInputClient 输入，Tauri 在真实应用内模拟 DOM 粘贴／回车；响应止于输出解析／确认，不等同物理输入或显示延迟。十分钟采样不能证明多小时无泄漏。
+
+#### 测量验证
+
+本地报告测试拒绝过期源码／负载、sequence 精度丢失、缺失行／TUI 样本、运行时长不足、缺少慢消费证据及网格不符。实际 version3
+macOS／Windows 测量仍待完成；#43 保持开放，不宣称改善比例。早先 version2 报告不作为新增负载的证据。
+
+明确分离会在返回前释放已认证输入租约，即使旧消费者阻塞；逐链路锁阻止迟到心跳／接管重新占有已停止视图，旧清理不能释放替代视图。真实宿主阻塞消费者回归在本地通过。性能设置在共享状态初始化前准备；QA 对写锁繁忙仅有界重试只读观察，不重试修改。截图仅选择所属 QA 窗口，无法捕获该窗口即失败。这些检查保留实际失败运行，不替换图片，也不把早先计时当作对比结论。
 
 #### 原生 QA 验证
 

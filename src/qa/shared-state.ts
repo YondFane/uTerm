@@ -46,6 +46,7 @@ interface Context {
     | "updates";
   backup?: string;
   ready: boolean;
+  performanceLong?: boolean;
 }
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
 const sentinel = "opaque QA draft backup retained byte-for-byte";

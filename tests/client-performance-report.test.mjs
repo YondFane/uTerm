@@ -3,7 +3,18 @@ import assert from "node:assert/strict";
 import { verifyWorkload, percentile } from "../scripts/client-performance-report.mjs";
 
 test("performance evidence rejects stale sources, incomplete output and numeric u64 sequences", () => {
-  const fixture = { sessions: 1, cycles: 1, recordsPerCycle: 1024, columns: 120, rows: 36 };
+  const fixture = {
+    sessions: 1,
+    cycles: 1,
+    recordsPerCycle: 1024,
+    columns: 120,
+    rows: 36,
+    tuiFrames: 1,
+    slowConsumerMilliseconds: 200,
+    maximumFrameBytes: 1048576,
+    soakSeconds: 120,
+    lastRepetitionSoakSeconds: 600,
+  };
   const report = {
     fixture,
     fixtureSHA256: "hash",
@@ -23,6 +34,19 @@ test("performance evidence rejects stale sources, incomplete output and numeric 
     ],
     fileSaveReadMilliseconds: [1],
     replayMilliseconds: 2,
+    tuiFrameMilliseconds: [1],
+    databaseReadMilliseconds: [1],
+    databasePerformanceMeasured: true,
+    soakSecondsMeasured: 120,
+    slowConsumer: {
+      injectedDelayMilliseconds: 200,
+      oneOutstandingFrame: true,
+      orderedRecords: 1024,
+      milliseconds: 201,
+      largestFrameBytes: 1024,
+      initialGateObserved: true,
+      initialGateMilliseconds: 50,
+    },
   };
   const verify = (value) => verifyWorkload(value, fixture, "hash", "head", "merge");
   verify(report);
@@ -33,7 +57,16 @@ test("performance evidence rejects stale sources, incomplete output and numeric 
     { productionDataAccess: true },
     { viewport: { columns: 119, rows: 36 } },
     { viewport: { columns: 120, rows: 35 } },
+    { tuiFrameMilliseconds: [] },
+    { databasePerformanceMeasured: false },
+    { databaseReadMilliseconds: [] },
+    { soakSecondsMeasured: 1 },
+    { slowConsumer: { ...report.slowConsumer, oneOutstandingFrame: false } },
+    { slowConsumer: { ...report.slowConsumer, initialGateObserved: false } },
+    { slowConsumer: { ...report.slowConsumer, initialGateMilliseconds: 0 } },
+    { slowConsumer: { ...report.slowConsumer, largestFrameBytes: 1048577 } },
     { cycles: [{ ...report.cycles[0], acknowledgedSequence: 18446744073709551615 }] },
+    { cycles: [{ ...report.cycles[0], acknowledgedSequence: "18446744073709551616" }] },
     { cycles: [{ ...report.cycles[0], orderedRecords: 1023 }] },
     { cycles: [{ ...report.cycles[0], bulkMilliseconds: -1 }] },
   ])

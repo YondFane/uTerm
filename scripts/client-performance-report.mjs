@@ -32,11 +32,38 @@ export function verifyWorkload(report, fixture, fixtureSHA, head, tested) {
       "string",
       "Sequence must retain u64 precision",
     );
-    assert(BigInt(sample.acknowledgedSequence) > 0n);
+    assert(
+      BigInt(sample.acknowledgedSequence) > 0n &&
+        BigInt(sample.acknowledgedSequence) <= 18446744073709551615n,
+    );
   }
   assert.equal(report.fileSaveReadMilliseconds.length, fixture.cycles);
   assert(report.fileSaveReadMilliseconds.every((value) => Number.isFinite(value) && value >= 0));
   assert(Number.isFinite(report.replayMilliseconds) && report.replayMilliseconds >= 0);
+  assert.equal(report.tuiFrameMilliseconds.length, fixture.tuiFrames);
+  assert(report.tuiFrameMilliseconds.every((value) => Number.isFinite(value) && value >= 0));
+  assert.equal(report.databaseReadMilliseconds.length, fixture.cycles);
+  assert(report.databaseReadMilliseconds.every((value) => Number.isFinite(value) && value >= 0));
+  assert.equal(report.databasePerformanceMeasured, true);
+  assert.equal(report.slowConsumer.injectedDelayMilliseconds, fixture.slowConsumerMilliseconds);
+  assert.equal(report.slowConsumer.oneOutstandingFrame, true);
+  assert.equal(report.slowConsumer.initialGateObserved, true);
+  assert(
+    Number.isFinite(report.slowConsumer.initialGateMilliseconds) &&
+      report.slowConsumer.initialGateMilliseconds >= 40,
+  );
+  assert.equal(report.slowConsumer.orderedRecords, fixture.recordsPerCycle);
+  assert(
+    Number.isFinite(report.slowConsumer.milliseconds) &&
+      report.slowConsumer.milliseconds >= fixture.slowConsumerMilliseconds,
+  );
+  assert(
+    report.slowConsumer.largestFrameBytes > 0 &&
+      report.slowConsumer.largestFrameBytes <= fixture.maximumFrameBytes,
+  );
+  assert(
+    [fixture.soakSeconds, fixture.lastRepetitionSoakSeconds].includes(report.soakSecondsMeasured),
+  );
 }
 
 export function percentile(values, fraction) {
@@ -53,6 +80,19 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const tested = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
   const head = process.env.PR_HEAD_SHA || tested;
   const summaries = [];
+  const databaseService = JSON.parse(
+    readFileSync(join(directory, "database-service/database-live.json"), "utf8"),
+  );
+  assert(
+    databaseService.passed &&
+      databaseService.readonlyFixtureUnchanged &&
+      databaseService.noRemainingClientConnections &&
+      databaseService.ownedServerStopped &&
+      databaseService.credentialExcludedFromEvidence,
+  );
+  assert.equal(databaseService.sourceHeadSHA, head);
+  assert.equal(databaseService.testedMergeSHA, tested);
+  assert.equal(databaseService.sourceTreeDirty, false);
   for (let repetition = 1; repetition <= 3; repetition++) {
     for (const client of process.platform === "darwin" ? ["native", "tauri"] : ["tauri"]) {
       const base = join(directory, `${client}-${repetition}`);
@@ -75,13 +115,14 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
               ),
             };
       verifyWorkload(report, fixture, fixtureSHA, head, tested);
+      const soak = repetition === 3 ? fixture.lastRepetitionSoakSeconds : fixture.soakSeconds;
+      assert.equal(report.soakSecondsMeasured, soak);
       const resources = JSON.parse(readFileSync(join(base, `resources-${client}.json`), "utf8"));
       assert(!resources.errors.length && resources.sampleCount >= 10);
       const idle = resources.samples.filter((sample) => sample.phase === "idle-soak");
       assert(
         idle.length > 10 &&
-          idle.at(-1).elapsedMilliseconds - idle[0].elapsedMilliseconds >=
-            (fixture.soakSeconds - 2) * 1000,
+          idle.at(-1).elapsedMilliseconds - idle[0].elapsedMilliseconds >= (soak - 2) * 1000,
         "Missing real idle soak",
       );
       const steady = report.cycles.slice(fixture.warmupCycles);
@@ -111,6 +152,28 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
           0.5,
         ),
         replayMilliseconds: report.replayMilliseconds,
+        tuiMedianMilliseconds: percentile(
+          report.tuiFrameMilliseconds.slice(fixture.warmupCycles),
+          0.5,
+        ),
+        tuiP95Milliseconds: percentile(
+          report.tuiFrameMilliseconds.slice(fixture.warmupCycles),
+          0.95,
+        ),
+        databaseMedianMilliseconds: percentile(
+          report.databaseReadMilliseconds.slice(fixture.warmupCycles),
+          0.5,
+        ),
+        databaseP95Milliseconds: percentile(
+          report.databaseReadMilliseconds.slice(fixture.warmupCycles),
+          0.95,
+        ),
+        slowConsumer: report.slowConsumer,
+        idleMeasurementSeconds: soak,
+        idleFirstRSSBytes: resources.phases["idle-soak"].firstRSSBytes,
+        idleLastRSSBytes: resources.phases["idle-soak"].lastRSSBytes,
+        idleRSSChangeBytes:
+          resources.phases["idle-soak"].lastRSSBytes - resources.phases["idle-soak"].firstRSSBytes,
         resources: resources.phases,
         captures: images,
       });
@@ -130,14 +193,17 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       logicalCPUs: cpus().length,
     },
     summaries,
+    databaseService,
     sameMachineSequentialClients: process.platform === "darwin",
     equalViewport: new Set(viewports).size === 1,
     measurementLimits: [
       "Scripted actual client input to parsed/acknowledged output; not physical keyboard/display latency",
       "CPU/RSS cover owned PID trees; unattributed WebContent/GPU/XPC excluded",
       "Three sequential repetitions on a shared CI runner; startup warm-up cycles excluded",
-      "120-second soak does not establish multi-hour leak acceptance",
-      "TUI/database performance and deliberately slow consumption remain unmeasured",
+      "First two repetitions idle for 120 seconds, final repetition for 600; this does not establish multi-hour leak acceptance",
+      "Synthetic deterministic alternate-screen redraw through real PTYs; not an interactive Vim benchmark",
+      "Actual Core/JDBC queries include row serialization, not database table painting or the external PostgreSQL server CPU/RSS",
+      "Screenshot capture uses a separate phase, outside output/database/idle metrics",
       "Unequal viewport grids block direct rendering-speed conclusions",
     ],
     improvementClaim: false,

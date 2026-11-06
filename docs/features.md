@@ -106,56 +106,52 @@ these checks do not publish or change production sources.
 #### Reproducible client measurements
 
 The Client performance evidence workflow runs native and Tauri clients sequentially on the same Mac,
-repeating each three times, and records a separate Windows Tauri baseline. The shared fixture uses
-one real PTY, twenty cycles of 1,024 ordered ANSI/Unicode records, 14pt text, 5,000-line scrollback,
-64KiB CAS file save/read, attachment replay and a 120-second idle soak. The first five cycles are
-warm-up. The version2 fixture requires an actual 120×36 terminal grid. Native QA resizes its real
-window; Tauri QA hides tools through the actual controls and fits the real terminal container. Both
-use ordinary renderer-to-PTY resize paths. The report rejects mismatches, records actual outer
-content sizes, and refuses a Tauri grid clipped outside its app window. These corrected native
-layout checks still require platform CI; earlier unequal-grid results are not comparison evidence.
-Native input uses NSTextInputClient; Tauri uses DOM paste/Enter inside its real app. The response
-metric ends at parsed-output acknowledgement, not physical display/input latency.
+with three repetitions per client, and records a separate Windows Tauri baseline. Version3 of
+`shared/fixtures/client-performance.json` fixes one real PTY, a 120×36 grid, 14pt text and
+5,000-line scrollback. Both clients use their ordinary renderer-to-PTY resize paths; a mismatched or
+clipped grid fails the report. Twenty cycles exercise 1,024 ordered ANSI/Unicode records, 64KiB CAS
+file save/read and actual attachment replay without replacing the process generation. The first five
+cycles are excluded from latency summaries.
 
-After the native build, run `node scripts/macos-performance-smoke.mjs`; run
-`UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs` for Tauri. The runner archives raw
-process samples, exact workload/source hashes, original windows, cleanup results and per-cycle
-metrics; `scripts/client-performance-report.mjs` audits three repetitions. CPU/RSS include the app,
-its descendants and the authenticated host tree. Unattributed WebContent/GPU/XPC processes remain
-excluded. The short CI soak cannot establish long-term leak acceptance. TUI/database performance and
-deliberately slow-consumer comparison remain unmeasured; no improvement percentage is claimed. Local
-negative tests pass source/workload/sequence/order checks and process ownership/accounting; actual
-platform measurements still require CI.
+The workload also includes twenty synthetic alternate-screen TUI redraws, an actual consumer delayed
+by 200ms per frame, and twenty real PostgreSQL queries through Core/JDBC. Each query verifies 128
+rows of ordered text containing 128 ASCII characters and Unicode. An initial render gate holds a
+real frame for at least 50ms; another frame or premature acknowledgement fails the slow-consumer
+check. The gate is released before draining and checking all 1,024 records. These are controlled
+terminal redraws, not an interactive Vim benchmark; query timings include row serialization, not
+table painting.
 
-Windows automation now selects its temporary project and the nested welcome-button label. Sampling
-stops after a complete JSON record; abrupt PowerShell termination had truncated the final sample.
-The original failed run and captures remain in
-[artifact13510499531](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13510499531).
-The performance fixture is now seeded before shared-state initialization and checked read-only at
-runtime. An earlier direct settings CAS bypassed the client write queue, leaving its cached revision
-stale and blocking subsequent project/session UI writes. The queue and conflict rules remain
-unchanged. #43 remains open for corrected platform results and the unmeasured cases.
+After the native build, run `python3 -B scripts/client-performance-database.py` (`python` on
+Windows). The wrapper owns one loopback PostgreSQL cluster across all sequential measurements,
+supplies private credentials to the client runners and invokes `scripts/run-client-performance.sh`.
+It verifies the original database fixture remains unchanged, connections close, the owned server
+stops and evidence contains no credential. `node scripts/client-performance-report.mjs` audits all
+three repetitions. The inner native/Tauri runners require the wrapper's private database context.
 
-The first Intel native repetition completed all twenty ordered-output cycles, file CAS, actual
-replay, a 120-second soak and cleanup, with an inspected original window in
-[artifact13512831299](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13512831299).
-Its repeated full-scrollback translation can distort response timings. Measurement now polls only
-the last eight parsed cursor lines on both clients and scans full output once for order validation;
-those earlier timings are not accepted as a fair comparison. Windows source949e4c2 completes twenty
-output cycles and file operations, then fails replay input ownership. Explicit detach now releases
-its authenticated view lease before returning, even if the old sink is blocked. A per-link control
-lock prevents late heartbeat/takeover on a stopped view; old cleanup cannot release its replacement.
-The actual-host blocked-sink regression passes locally, with platform replay reruns pending. Tauri
-automation waits for committed project selection. Windows capture enumerates only the requested
-PID's titled QA window, records discovery/geometry, and restores an invalid window before capture;
-it never substitutes a utility or another process's window. Windows capture has a 60-second helper
-limit and a 90-second scene acknowledgement deadline. An actual candidate capture took 36 seconds
-and exceeded the old 30-second handshake, preventing ordinary exit; missing captures still fail, and
-a failure scene is now retained before waiting for exit. Windows candidate source `94700bf`, tested
-merge `6ad41493b52684b6dc366a4e3400da6fa1208b53`, passes install/start/capture/exit/uninstall in
-[run42247067808](https://github.com/YondFane/uTerm/actions/runs/42247067808). The macOS Tauri
-capture helper now uses separately typed WindowServer filtering and area sorting after both
-architectures rejected the combined Swift expression. Fresh performance results remain pending.
+Idle sampling lasts 120 seconds in each of the first two repetitions and 600 seconds in the last.
+Raw samples, per-cycle metrics, source/workload hashes, original terminal/TUI windows and cleanup
+reports are archived as CI artifacts. CPU/RSS cover the app, its descendants and the authenticated
+host tree; unattributed WebContent/GPU/XPC processes and the external PostgreSQL server remain
+excluded. Setup and screenshots use separate phases. Resource phases still include warm-up and
+instrumentation costs, and summed RSS is not proportional memory. Native input uses
+NSTextInputClient; Tauri uses DOM paste/Enter in the real app. Response timing ends at parsed-output
+acknowledgement, not physical keyboard/display latency. A ten-minute sample does not establish
+multi-hour leak freedom.
+
+#### Measurement validation
+
+Local report tests reject stale source/workload, imprecise sequence, missing rows/TUI samples,
+insufficient soak, missing slow-consumer evidence and unequal grids. Actual version3 macOS and
+Windows measurements remain pending; #43 stays open and no improvement percentage is claimed.
+Earlier version2 reports are not evidence for the additional workload.
+
+Explicit detach releases its authenticated input lease before returning, including when the old
+consumer is blocked. A per-link lock prevents late heartbeat/takeover from reclaiming a stopped
+view; old cleanup cannot release its replacement. The real-host blocked-consumer regression passes
+locally. Performance settings are seeded before shared-state initialization; QA observers retry
+bounded read-only observations on writer contention, without retrying mutations. Capture selects
+only the owned QA window and fails if that window cannot be captured. These checks preserve actual
+failed runs rather than replacing their images or treating earlier timings as a comparison result.
 
 #### Native QA validation
 

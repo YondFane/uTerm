@@ -293,6 +293,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "head": option_env!("UTERM_QA_HEAD"), "tested": option_env!("UTERM_QA_TESTED"),
         "sourceTreeDirty":option_env!("UTERM_QA_DIRTY"),
         "platform": std::env::consts::OS, "architecture": std::env::consts::ARCH,
+        "performanceLong": std::env::args().any(|argument| argument == "--qa-performance-long"),
         "ready": app.state::<crate::shared_core::Lifecycle>().active.load(std::sync::atomic::Ordering::SeqCst)
     }))
 }
@@ -300,7 +301,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
 #[tauri::command]
 pub fn qa_database_fixture(app: tauri::AppHandle) -> Result<Value, String> {
     let root = check(&app)?;
-    if argument("--qa-phase")? != "database" {
+    if !["database", "performance"].contains(&argument("--qa-phase")?.as_str()) {
         return Err("Database fixture is unavailable in this QA phase".into());
     }
     // Keep private authentication outside screenshot context and production commands.
@@ -387,7 +388,21 @@ pub async fn qa_scene(app: tauri::AppHandle, name: String, value: Value) -> Resu
             .get("phase")
             .and_then(Value::as_str)
             .ok_or("Missing performance phase")?;
-        if !["terminal", "file-service", "replay", "idle-soak", "cleanup"].contains(&measured) {
+        if ![
+            "terminal",
+            "file-service",
+            "file-setup",
+            "replay",
+            "idle-soak",
+            "cleanup",
+            "slow-consumer",
+            "tui",
+            "database",
+            "database-setup",
+            "capture",
+        ]
+        .contains(&measured)
+        {
             return Err("Invalid performance phase".into());
         }
         let status = qa_host_status(app.clone()).await?;

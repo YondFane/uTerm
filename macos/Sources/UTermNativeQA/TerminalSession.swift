@@ -48,9 +48,11 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private(set) var taskLogFollowsOutput = true
     private var applyingTaskLogViewport = false
     var qaRenderDelay: Duration?
+    var qaRenderPaused = false
     private(set) var qaWaitingToRender = false
     private(set) var qaRenderedBytes = 0
     private(set) var qaRenderedFrames = 0
+    private(set) var qaReceivedFrames = 0
     private(set) var qaAcknowledgedFrames = 0
     private(set) var qaLargestFrame = 0
     private(set) var qaLastAcknowledgedSequence = "0"
@@ -161,8 +163,13 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         if let generation, generation != packet.header.generation { return }
         generation = packet.header.generation
         if let message = packet.header.error { error = message; changed?(); return }
+        qaReceivedFrames += 1
         if let delay = qaRenderDelay {
             qaWaitingToRender = true
+            while qaRenderPaused {
+                try? await Task.sleep(for: .milliseconds(25))
+                guard packet.header.attachment == attachment, packet.header.generation == generation else { return }
+            }
             try? await Task.sleep(for: delay)
             qaWaitingToRender = false
             guard packet.header.attachment == attachment, packet.header.generation == generation else { return }

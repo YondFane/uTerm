@@ -184,11 +184,13 @@ NSIS 包。一次性测试密钥签署更新，私有字面回环服务驱动真
 Core `rollback.export` 只读导出带 revision 的规范状态与全部当前编辑器草稿，不改变
 `legacy.export`。旧客户端只有一个草稿槽，多草稿完整归档并要求明确选择，已删除草稿不复活。TS／Swift 生成模型及绑定源码的存储报告验证数据边界，实际旧客户端安装及程序／数据回退仍由 #46 跟踪。
 
-Client performance evidence workflow 在原生构建后运行
-`node scripts/macos-performance-smoke.mjs`，Tauri 使用
-`UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs`。同一台 Mac 顺序交替运行两端，共三次；Windows 单独记录 Tauri 基线。`shared/fixtures/client-performance.json`
-控制 PTY／输出／字体／回滚／文件／回放／短时运行负载。归档原始进程树 CPU／RSS、逐轮响应／顺序、窗口原图、清理及源码／负载哈希，`node scripts/client-performance-report.mjs`
-核对三次结果。明确记录实际网格和排除的未归属 WebContent／GPU／XPC；数据库／TUI 性能和长期泄漏验收仍待完成，不宣称性能改善。
+原生 QA 构建后，运行 `python3 -B scripts/client-performance-database.py`（Windows 使用
+`python`），执行 Client performance evidence
+workflow 的三次顺序测量。它在每台 Mac 的双客户端运行期间管理同一个隔离 PostgreSQL 集群；Windows 单独记录 Tauri 基线。
+`shared/fixtures/client-performance.json`
+version3 固定真实120×36网格、PTY 输出、字体／回滚、CAS 文件、回放、合成 alternate-screen 重绘、慢消费检查及真实 Core／JDBC 查询。空闲采样分别为120／120／600秒。原始进程树 CPU／RSS、逐轮数据、窗口原图、清理及源码／负载哈希归档，由
+`node scripts/client-performance-report.mjs`
+核对。无法归属的 WebContent／GPU／XPC 及外部数据库服务排除；新平台测量和长期泄漏验收仍待完成，不宣称性能改善。
 
 内嵌 Java 8 编码 Agent 同时提供 Java 源码和可复现的运行时字节。修改后使用 JDK 21 运行
 `python3 scripts/java8-encoding-agent.py`，再执行

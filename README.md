@@ -230,15 +230,16 @@ current drafts remain archived and require a deliberate choice, while deleted dr
 Generated TS/Swift models and source-bound storage reports cover this data boundary; actual
 old-client installation and program/data rollback remain tracked in #46.
 
-The Client performance evidence workflow runs `node scripts/macos-performance-smoke.mjs` after the
-native build and `UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs` for Tauri. It
-alternates clients sequentially on the same Mac for three repetitions; Windows records its own Tauri
-baseline. `shared/fixtures/client-performance.json` controls the
-PTY/output/font/scrollback/file/replay/short soak workload. Raw PID-tree CPU/RSS, per-cycle
-response/order data, original windows, cleanup and source/workload hashes are archived.
-`node scripts/client-performance-report.mjs` audits the repetitions. Actual grids and unattributed
-WebContent/GPU/XPC exclusions remain explicit; database/TUI performance and long-run leak acceptance
-are pending. No performance improvement is claimed.
+After the native QA build, `python3 -B scripts/client-performance-database.py` (`python` on Windows)
+executes the Client performance evidence workflow's three sequential repetitions. It owns one
+isolated PostgreSQL cluster across both clients on each Mac; Windows records its own Tauri baseline.
+`shared/fixtures/client-performance.json` version3 fixes the actual 120×36 grid, PTY output,
+font/scrollback, CAS files, replay, synthetic alternate-screen redraws, delayed-consumer checks and
+real Core/JDBC queries. Idle samples last 120/120/600 seconds. Raw PID-tree CPU/RSS, per-cycle data,
+original windows, cleanup and source/workload hashes are archived;
+`node scripts/client-performance-report.mjs` audits them. Unattributed WebContent/GPU/XPC and the
+external database server are excluded. New platform measurements and long-run leak acceptance remain
+pending; no performance improvement is claimed.
 
 The embedded Java 8 encoding agent includes its Java source and reproducible runtime bytes. After
 changing it, use JDK 21 to run `python3 scripts/java8-encoding-agent.py`, then

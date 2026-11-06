@@ -474,6 +474,8 @@ print(number.uint32Value)
     let originalProjectName;
     let reviewedWorkspaceRevision;
     const args = ["--qa-data-root", root, "--qa-phase", phase];
+    if (phase === "performance" && process.env.UTERM_QA_PERFORMANCE_LONG === "1")
+      args.push("--qa-performance-long");
     if (backup) args.push("--qa-backup", backup);
     child = spawn(binary, args, { env, stdio: ["ignore", "pipe", "pipe"] });
     const sampler =
@@ -523,7 +525,7 @@ print(number.uint32Value)
     if (sshPhase) sshApplications.push({ phase, application: child, state: processState });
     const observed = new Set();
     try {
-      const deadline = Date.now() + (phase === "performance" ? 600000 : 180000);
+      const deadline = Date.now() + (phase === "performance" ? 1200000 : 180000);
       while (Date.now() < deadline) {
         for (const file of readdirSync(evidence).filter(
           (p) => p.startsWith(`${phase}-`) && p.endsWith(".json"),

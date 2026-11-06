@@ -26,6 +26,31 @@ const output = resolve("ci-evidence/performance-native");
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 const root = mkdtempSync(join(tmpdir(), "uterm-native-qa-performance-"));
+const project = join(root, "project");
+mkdirSync(project);
+for (const args of [
+  ["init", "--quiet", "--initial-branch=main"],
+  [
+    "-c",
+    "user.name=uTerm QA",
+    "-c",
+    "user.email=uterm-qa@example.invalid",
+    "commit",
+    "--quiet",
+    "--allow-empty",
+    "--no-verify",
+    "--no-gpg-sign",
+    "-m",
+    "Performance fixture",
+  ],
+]) {
+  const result = spawnSync(
+    "git",
+    ["-c", `core.hooksPath=${join(root, "no-hooks")}`, "-C", project, ...args],
+    { encoding: "utf8" },
+  );
+  assert.equal(result.status, 0, "Owned performance Git fixture initialization failed");
+}
 const reportPath = join(output, "native-performance.json");
 const stdout = openSync(join(output, "stdout.log"), "w");
 const stderr = openSync(join(output, "stderr.log"), "w");
@@ -33,7 +58,13 @@ let successful = false;
 const cleanupErrors = [];
 const child = spawn(
   resolve("macos/.build/qa/UTermNativeQA.app/Contents/MacOS/UTermNativeQA"),
-  ["--qa-data-root", root, "--performance-smoke-report", reportPath],
+  [
+    "--qa-data-root",
+    root,
+    "--performance-smoke-report",
+    reportPath,
+    ...(process.env.UTERM_QA_PERFORMANCE_LONG === "1" ? ["--performance-long"] : []),
+  ],
   { stdio: ["ignore", stdout, stderr] },
 );
 closeSync(stdout);
@@ -52,7 +83,7 @@ try {
   const result = await Promise.race([
     exited,
     new Promise((_, reject) => {
-      timeout = setTimeout(() => reject(Error("Native performance app timed out")), 600000);
+      timeout = setTimeout(() => reject(Error("Native performance app timed out")), 1200000);
     }),
   ]);
   assert.equal(result.code, 0, JSON.stringify(result));

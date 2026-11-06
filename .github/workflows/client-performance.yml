@@ -15,7 +15,7 @@ jobs:
       matrix:
         os: [macos-15, macos-15-intel, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 50
+    timeout-minutes: 75
     defaults:
       run:
         shell: bash
@@ -66,18 +66,9 @@ jobs:
           swift --version >> ci-evidence/performance/toolchain.txt
       - name: Run the shared workload sequentially three times
         run: |
-          for round in 1 2 3; do
-            if [[ "$RUNNER_OS" == macOS ]]; then
-              node scripts/macos-performance-smoke.mjs
-              mv ci-evidence/performance-native "ci-evidence/performance/native-$round"
-            fi
-            if [[ "$round" == 1 ]]; then
-              UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs
-            else
-              UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs --skip-build
-            fi
-            mv ci-evidence/tauri-state-qa "ci-evidence/performance/tauri-$round"
-          done
+          performance_python=python3
+          if [[ "$RUNNER_OS" == Windows ]]; then performance_python=python; fi
+          "$performance_python" -B scripts/client-performance-database.py
           node scripts/client-performance-report.mjs ci-evidence/performance
       - name: Archive actual measurements and original windows
         if: always()

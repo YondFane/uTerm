@@ -165,7 +165,12 @@ export function TerminalView({
     resets: 0,
     sequence: "0",
     lastAckMilliseconds: 0,
+    receivedFrames: 0,
+    waitingToRender: false,
+    largestFrameBytes: 0,
   });
+  const performanceRenderDelay = useRef(0);
+  const performanceRenderPaused = useRef(false);
   const renderer = useRef<ReturnType<typeof terminalRendererPool.register> | null>(null);
   const fitLayout = useRef<ReturnType<typeof attachTerminalFit> | null>(null);
   const fitAddon = useRef<FitAddon | null>(null);
@@ -322,9 +327,16 @@ export function TerminalView({
                 columns: term.cols,
                 rows: term.rows,
                 writable: !term.options.disableStdin,
+                alternateScreen: term.buffer.active.type === "alternate",
               };
             },
             reconnect,
+            (milliseconds) => {
+              performanceRenderDelay.current = milliseconds;
+            },
+            (paused) => {
+              performanceRenderPaused.current = paused;
+            },
           )
         : () => {};
     const disposeAccessibility = attachTerminalAccessibilityLimit(container.current, () =>
@@ -583,61 +595,82 @@ export function TerminalView({
       }
       const retainedViewport =
         logView && !followOutput.current ? term.buffer.active.viewportY : null;
-      term.write(data, () => {
+      if (import.meta.env.VITE_UTERM_STATE_QA === "1") {
+        performanceStats.current.receivedFrames++;
+        performanceStats.current.largestFrameBytes = Math.max(
+          performanceStats.current.largestFrameBytes,
+          data.length,
+        );
+      }
+      const render = () => {
         if (current.closed) return;
-        if (import.meta.env.VITE_UTERM_STATE_QA === "1") {
-          performanceStats.current.frames++;
-          performanceStats.current.bytes += data.length;
-          if (event.reset) performanceStats.current.resets++;
-        }
-        if (event.reset) {
-          current.replaying = false;
-          // A resized host buffer can replay logs into scrollback and leave the screen blank.
-          // 宿主缓冲区调整尺寸后，回放可能把日志放入滚动历史并留下空白屏幕。
-          if (existingOnly && (!logView || followOutput.current))
-            current.replayViewport = restoreTaskReplayViewport(term);
-          fitLayout.current?.schedule();
-        } else if (existingOnly && data.length && (!logView || followOutput.current)) {
-          current.replayViewport = followTaskReplayViewport(term, current.replayViewport);
-        }
-        if (gainedControl) fitLayout.current?.schedule();
-        if (retainedViewport !== null) term.scrollToLine(retainedViewport);
-        if (event.exited) {
-          current.exited = true;
-          term.options.disableStdin = true;
-          setStatus("exited");
-          if (!autoCloseAgent(session.agent, event.code))
-            term.writeln(tx("\r\n[会话已退出：{p0}]", { p0: event.code ?? tx("未知") }));
-        }
-        // Acknowledge after xterm consumes the bytes to keep output backpressure bounded.
-        current.ready
-          .then(() => {
-            if (!current.closed)
-              return action(current.id, "ack", {
-                sequence: terminalAcknowledgement(event.sequence),
-              });
-          })
-          .then(() => {
-            if (import.meta.env.VITE_UTERM_STATE_QA === "1" && !current.closed) {
-              performanceStats.current.acknowledgedFrames++;
-              performanceStats.current.sequence = event.sequence.toString();
-              performanceStats.current.lastAckMilliseconds = performance.now();
-            }
-            // Close agent chats only after consuming and acknowledging their final output.
-            // 仅在消费并确认最后的输出后关闭 Agent 聊天。
-            if (
-              event.exited &&
-              autoCloseAgent(session.agent, event.code) &&
-              !event.error &&
-              !current.closed &&
-              connection.current === current
-            )
-              return closeRef.current();
-          })
-          .catch((reason: unknown) => {
-            if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
-          });
-      });
+        if (import.meta.env.VITE_UTERM_STATE_QA === "1")
+          performanceStats.current.waitingToRender = false;
+        term.write(data, () => {
+          if (current.closed) return;
+          if (import.meta.env.VITE_UTERM_STATE_QA === "1") {
+            performanceStats.current.frames++;
+            performanceStats.current.bytes += data.length;
+            if (event.reset) performanceStats.current.resets++;
+          }
+          if (event.reset) {
+            current.replaying = false;
+            // A resized host buffer can replay logs into scrollback and leave the screen blank.
+            // 宿主缓冲区调整尺寸后，回放可能把日志放入滚动历史并留下空白屏幕。
+            if (existingOnly && (!logView || followOutput.current))
+              current.replayViewport = restoreTaskReplayViewport(term);
+            fitLayout.current?.schedule();
+          } else if (existingOnly && data.length && (!logView || followOutput.current)) {
+            current.replayViewport = followTaskReplayViewport(term, current.replayViewport);
+          }
+          if (gainedControl) fitLayout.current?.schedule();
+          if (retainedViewport !== null) term.scrollToLine(retainedViewport);
+          if (event.exited) {
+            current.exited = true;
+            term.options.disableStdin = true;
+            setStatus("exited");
+            if (!autoCloseAgent(session.agent, event.code))
+              term.writeln(tx("\r\n[会话已退出：{p0}]", { p0: event.code ?? tx("未知") }));
+          }
+          // Acknowledge after xterm consumes the bytes to keep output backpressure bounded.
+          current.ready
+            .then(() => {
+              if (!current.closed)
+                return action(current.id, "ack", {
+                  sequence: terminalAcknowledgement(event.sequence),
+                });
+            })
+            .then(() => {
+              if (import.meta.env.VITE_UTERM_STATE_QA === "1" && !current.closed) {
+                performanceStats.current.acknowledgedFrames++;
+                performanceStats.current.sequence = event.sequence.toString();
+                performanceStats.current.lastAckMilliseconds = performance.now();
+              }
+              // Close agent chats only after consuming and acknowledging their final output.
+              // 仅在消费并确认最后的输出后关闭 Agent 聊天。
+              if (
+                event.exited &&
+                autoCloseAgent(session.agent, event.code) &&
+                !event.error &&
+                !current.closed &&
+                connection.current === current
+              )
+                return closeRef.current();
+            })
+            .catch((reason: unknown) => {
+              if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
+            });
+        });
+      };
+      if (import.meta.env.VITE_UTERM_STATE_QA === "1" && performanceRenderDelay.current > 0) {
+        performanceStats.current.waitingToRender = true;
+        const schedule = () => {
+          if (current.closed) return;
+          if (performanceRenderPaused.current) setTimeout(schedule, 25);
+          else setTimeout(render, performanceRenderDelay.current);
+        };
+        schedule();
+      } else render();
     };
     current.ready = invoke<void>("start_session", {
       request: {
