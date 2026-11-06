@@ -178,6 +178,9 @@ capture the installed app, then uninstall. Reports live under the CI artifact's 
 directory. Native signing is ad-hoc; Windows candidates are unsigned, with no update signature or
 notarization. These commands do not publish or change production update feeds.
 
+`python3 -B tests/test_macos_disk_image.py` checks the checksum verifier's bounded busy retries,
+permanent errors and timeouts with labelled simulations; macOS CI still verifies the actual DMG.
+
 The **Candidate Windows QA** workflow reruns the installer scope separately. It also supports
 `gh workflow run candidate-windows.yml --ref <branch>`; full regression remains in the normal
 **uTerm** and **Native migration** workflows. The executable comparison accepts only Tauri's unique

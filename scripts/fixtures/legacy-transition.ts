@@ -54,7 +54,14 @@ export async function runLegacyTransition() {
         ),
       "historical project list",
     );
-    project.click();
+    if (context.replayMarker) {
+      // Re-selecting the project also autosaves; inspect the recovered selection without navigation.
+      // 重选项目也会自动保存；只核对恢复的选择，不进行导航。
+      assert(
+        readWorkspace(localStorage.getItem(workspaceKey)).selectedProject === context.projectID,
+        "Historical project selection was not recovered",
+      );
+    } else project.click();
     if (
       context.phase === "before" &&
       !context.replayMarker &&

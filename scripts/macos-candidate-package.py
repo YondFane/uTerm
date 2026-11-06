@@ -9,6 +9,7 @@ import stat
 import subprocess
 import tempfile
 from pathlib import Path
+from macos_disk_image import verify_disk_image
 
 evidence = Path('macos/.build/evidence/candidate').resolve()
 evidence.mkdir(parents=True, exist_ok=True)
@@ -121,7 +122,8 @@ try:
         run('ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', staged, archive)
         image = evidence / (name + '.dmg'); image.unlink(missing_ok=True)
         run('hdiutil', 'create', '-volname', 'uTerm Native QA Candidate', '-srcfolder', stage, '-format', 'UDZO', image)
-        run('hdiutil', 'verify', image)
+        report['diskImageVerification'] = []
+        verify_disk_image(image, report['diskImageVerification'])
         mount = root / 'mount'; mount.mkdir()
         installed = root / 'Private Applications' / source.name
         attached = False

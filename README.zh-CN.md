@@ -154,6 +154,9 @@ PR、不推送、不创建 Fork。两端复用 `uterm-core::github`。
 App／DMG 或 NSIS 及 SHA256，仅安装到所属临时目录，运行并截图后卸载；报告保存在 CI 产物的
 `candidate/`。原生仅有 ad-hoc 签名，Windows 候选未签名，均无更新签名或公证；不发布或修改生产更新源。
 
+`python3 -B tests/test_macos_disk_image.py`
+以明确模拟检查校验器的有限占用重试、永久错误及超时；macOS CI 仍校验实际 DMG。
+
 **Candidate Windows QA** workflow 单独重跑安装器范围，也支持
 `gh workflow run candidate-windows.yml --ref <分支>`；完整回归仍由常规 **uTerm** 和 **Native
 migration**

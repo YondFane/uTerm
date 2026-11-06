@@ -75,6 +75,13 @@ private temporary Applications directory. The installed app starts its bundled h
 Unicode PTY output, explicitly closes the fixture session and stops the idle host before removal.
 The native QA version remains the bundle's recorded `0.0.1`; this is not a stable release package.
 
+The image checksum verifier retries only explicit temporary-busy responses, up to five attempts;
+each exit code and diagnostic remains in the report. Invalid images and exhausted retries fail.
+Three Linux simulations cover busy-then-valid, invalid images, persistent busy and timeout. The
+79872ba ARM candidate failed its original busy response; the unchanged report remains in
+[artifact13543080480](https://github.com/YondFane/uTerm/actions/runs/42295306002/artifacts/13543080480).
+Actual image creation, checksum validation and installation still require the macOS run.
+
 On Windows, `./scripts/windows-candidate-package.ps1` builds a current-user QA NSIS installer with
 embedded WebView content and production deep links disabled. It installs into an owned temporary
 directory, checks the x64 executable and read-only resource files, runs the installed real app,
@@ -490,11 +497,15 @@ A restored historical editor keeps its unsaved draft visible. Switching to the t
 trigger that version's autosave, so recovery phases check actual retained xterm replay and visible
 CodeMirror text without hiding the editor or rewriting the file. The first old app and both native
 phases still produce fresh PTY output. Reports distinguish fresh DOM input from replay-only checks.
-The packaged native transition identity is restricted to its embedded private temporary data root;
-an argument selecting a different root is rejected, as for the isolated updater fixtures. The
-2f04116 ARM run captured the real old app and verified the signed download, then failed while
-attempting input behind its recovered editor; its original windows and failure remain in
-[artifact13540767507](https://github.com/YondFane/uTerm/actions/runs/42291475489/artifacts/13540767507).
+Recovery also verifies the retained project selection without clicking its row, because that
+navigation triggers the same autosave. A regression executes the actual QA script with real React,
+xterm and DOM state plus a labelled navigation/autosave simulation; both recovery paths must leave
+the original file and stored draft unchanged. The packaged native transition identity is restricted
+to its embedded private temporary data root; an argument selecting a different root is rejected, as
+for the isolated updater fixtures. The 79872ba Intel run captured the real old app and verified the
+signed download, then failed after re-selecting its project had hidden the recovered editor; its
+original windows and failure remain in
+[artifact13542701340](https://github.com/YondFane/uTerm/actions/runs/42295306106/artifacts/13542701340).
 
 The Mac rehearsal downloads a native QA archive from its owned loopback server, verifies a pinned
 one-time Ed25519 manifest and architecture, rejects a bad signature before replacement, and tests
