@@ -26,12 +26,18 @@ enum AgentSmoke {
         await current.model.perform("agent.hooks", params: ["agent": .string("claude"), "enabled": .bool(true)])
         guard current.model.error.isEmpty, String(decoding: try Data(contentsOf: config), as: UTF8.self).contains("other-tool --start") else { throw BridgeFailure(code: "AGENT_HOOKS", message: "Hook installation did not preserve the user's hook") }
         current.model.argumentsText = "[invalid"
-        current.window.performClose(nil)
+        guard let menuItem = NSApp.mainMenu?.items.compactMap(\.submenu).flatMap(\.items).first(where: { $0.action.map(NSStringFromSelector) == "closeSession" }), let action = menuItem.action, NSApp.sendAction(action, to: menuItem.target, from: menuItem) else { throw BridgeFailure(code: "AGENT_CLOSE_MENU", message: "Native Close action is missing") }
         guard !current.window.isVisible, current.model.dirty else { throw BridgeFailure(code: "AGENT_HIDE", message: "Hiding Agent settings lost the command draft") }
         let reopened = open()
         guard reopened === current, current.model.argumentsText == "[invalid" else { throw BridgeFailure(code: "AGENT_REOPEN", message: "Reopening Agent settings lost the command draft") }
         await current.model.save()
         guard !current.model.error.isEmpty, current.model.argumentsText == "[invalid" else { throw BridgeFailure(code: "AGENT_BAD_ARGS", message: "Invalid arguments were not retained with a visible error") }
+        NSApp.terminate(nil)
+        try await TerminalSmoke.wait("Present Agent draft guard during actual application quit") { current.window.attachedSheet != nil }
+        if let sheet = current.window.attachedSheet { current.window.endSheet(sheet, returnCode: .alertSecondButtonReturn) }
+        try await TerminalSmoke.wait("Resume Agent draft after cancelling quit") { !current.model.frozen && current.window.attachedSheet == nil }
+        guard current.model.dirty, current.model.argumentsText == "[invalid" else { throw BridgeFailure(code: "AGENT_QUIT_DRAFT", message: "Cancelled application quit lost the Agent draft") }
+        report["actualApplicationQuitCancellationRetainsDraft"] = true
         current.model.select("claude", force: true); current.model.error = ""
         await current.model.perform("agent.usage", params: ["agent": .string("claude"), "remote": .bool(false), "allowKeychain": .bool(false)])
         guard current.model.error.isEmpty, current.model.usage["records"].number == 1 else { throw BridgeFailure(code: "AGENT_USAGE", message: "Native local usage did not read the isolated fixture") }

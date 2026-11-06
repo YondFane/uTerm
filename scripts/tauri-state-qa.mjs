@@ -51,6 +51,22 @@ mkdirSync(join(root, "project"));
 writeFileSync(join(root, "project", editorFixture.fileName), "\ufeff" + editorFixture.originalText);
 const evidence = join(root, "evidence");
 mkdirSync(evidence);
+const agentHome = join(root, "agent-home/.claude");
+mkdirSync(join(agentHome, "projects/qa"), { recursive: true });
+writeFileSync(
+  join(agentHome, "settings.json"),
+  JSON.stringify({
+    keep: "private QA setting",
+    hooks: { UserPromptSubmit: [{ hooks: [{ type: "command", command: "other-tool --start" }] }] },
+  }),
+);
+writeFileSync(
+  join(agentHome, "projects/qa/usage.jsonl"),
+  JSON.stringify({
+    timestamp: new Date().toISOString(),
+    message: { id: "private-qa-usage", usage: { input_tokens: 17, output_tokens: 8 } },
+  }) + "\n",
+);
 const tested = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
 const head = process.env.PR_HEAD_SHA || tested;
 const sourceTreeDirty = spawnSync("git", ["diff", "--quiet", "HEAD"]).status !== 0;
@@ -480,6 +496,19 @@ try {
           const value = JSON.parse(readFileSync(join(evidence, file), "utf8"));
           assert.equal(value.context.head, head);
           assert.equal(value.context.tested, tested);
+          if (phase === "agents" && value.scene !== "failure") {
+            const checks = {
+              "agent-live-command": [
+                "customCommandSaved",
+                "canonicalEnable",
+                "canonicalNotificationOptOut",
+              ],
+              "agent-live-hooks": ["actualHooksCommand", "privateLocalUsageRead"],
+              "agent-live-errors": ["invalidArgumentErrorVisible", "invalidDraftRetained"],
+            }[value.scene];
+            assert(checks, `Unexpected Agent acceptance scene: ${value.scene}`);
+            for (const key of checks) assert.equal(value.checks[key], true, key);
+          }
           if (phase === "database" && value.scene !== "failure") {
             const checks = {
               "database-live-profiles": [
@@ -932,25 +961,27 @@ try {
         `${phase} did not finish ordinary exit: mainExited=${mainExited}, code=${code}, log=${log.slice(-1000)}`,
       );
       const expected =
-        phase === "database"
-          ? 5
-          : phase === "redis"
-            ? 6
-            : phase === "ssh"
-              ? 3
-              : phase === "ssh-reopen"
-                ? 1
-                : phase === "git"
-                  ? 25
-                  : phase === "editor-checkpoint"
-                    ? 3
-                    : phase.startsWith("editor-")
-                      ? 5
-                      : phase === "initial"
-                        ? 8
-                        : phase === "reopen"
-                          ? 1
-                          : 3;
+        phase === "agents"
+          ? 3
+          : phase === "database"
+            ? 5
+            : phase === "redis"
+              ? 6
+              : phase === "ssh"
+                ? 3
+                : phase === "ssh-reopen"
+                  ? 1
+                  : phase === "git"
+                    ? 25
+                    : phase === "editor-checkpoint"
+                      ? 3
+                      : phase.startsWith("editor-")
+                        ? 5
+                        : phase === "initial"
+                          ? 8
+                          : phase === "reopen"
+                            ? 1
+                            : 3;
       assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       if (phase === "git") writeFileSync(join(root, "project/.git/qa-git-release"), "release\n");
@@ -998,6 +1029,39 @@ try {
   assert.deepEqual(readFileSync(join(store, "legacy-original.json")), original);
   if (process.env.UTERM_QA_REDIS_FIXTURE) await run("redis");
   if (process.env.UTERM_QA_DATABASE_FIXTURE) await run("database");
+  const agentSnapshot = coreFixture("snapshot.read");
+  coreFixture("settings.patch", {
+    expectedRevision: agentSnapshot.revision,
+    patch: { agentNotifications: true },
+  });
+  await run("agents");
+  const retainedAgentConfig = JSON.parse(readFileSync(join(agentHome, "settings.json"), "utf8"));
+  assert.equal(retainedAgentConfig.keep, "private QA setting");
+  assert.equal(
+    retainedAgentConfig.hooks.UserPromptSubmit[0].hooks[0].command,
+    "other-tool --start",
+  );
+  assert(
+    !JSON.stringify(retainedAgentConfig).includes("--agent-report"),
+    "Removing Hooks retained a managed reporter",
+  );
+  writeFileSync(
+    join(output, "agent-live.json"),
+    JSON.stringify(
+      {
+        ...metadata,
+        passed: true,
+        privateHomeOnly: true,
+        unrelatedHooksPreserved: true,
+        managedHooksRemoved: true,
+        providerAuthenticationExecuted: false,
+        notificationPermissionEnablePath:
+          "mocked frontend regressions; real window exercises opt-out only",
+      },
+      null,
+      2,
+    ),
+  );
   if (process.env.UTERM_QA_SSH_FIXTURE) {
     await run("ssh");
     await run("ssh-reopen");

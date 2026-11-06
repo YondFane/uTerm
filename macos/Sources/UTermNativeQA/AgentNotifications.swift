@@ -33,6 +33,7 @@ final class AgentNotifications {
         for id in Array(tasks.keys) where !ids.contains(id) { tasks.removeValue(forKey: id)?.cancel() }
     }
     func consume(_ header: CoreTerminalHeader, session: String) {
+        guard header.agent_activity_error == nil else { gate.cancel(session); return }
         guard let generation = header.generation, !generation.isEmpty else { return }
         guard let ticket = gate.consume(session: session, generation: generation, state: header.agent_state, events: header.agent_events ?? [], replay: header.reset) else { return }
         tasks[session]?.cancel()
@@ -66,6 +67,9 @@ final class AgentNotifications {
         }
     }
     private func allowed(_ ticket: AgentNotificationTicket) -> Bool {
+        #if DEBUG
+        guard simulated else { return false }
+        #endif
         guard gate.current(ticket), enabled, let workspace,
               workspace.state?.sessions.contains(where: { $0.sessionID == ticket.session }) == true else { return false }
         return !(NSApp.isActive && workspace.selectedID == ticket.session)

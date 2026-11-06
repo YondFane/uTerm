@@ -68,6 +68,7 @@ struct WorkspaceView: View {
                     if let session = model.selectedTerminal {
                         HStack {
                             Text(model.state?.sessions.first { $0.sessionID == session.id }?.session["name"].string ?? "")
+                            if !session.activityLabel.isEmpty { Text(session.activityLabel).foregroundStyle(.secondary) }
                             Spacer()
                             if session.exited { Text(localized("Exited", "已退出")).foregroundStyle(.secondary) }
                             if session.inputControl?.owned == false {
@@ -79,6 +80,7 @@ struct WorkspaceView: View {
                                 .disabled(model.busy || model.gitFavoritesRecoveryPresented)
                         }.font(.caption).padding(.horizontal, 10).frame(height: 30)
                         if !session.error.isEmpty { Text(session.error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(6) }
+                        if session.activityUnavailable { Text(localized("Agent activity is unavailable. Reconnect to retry.", "Agent 活动暂不可用，请重新连接后重试。")).font(.caption).foregroundStyle(.red).padding(6) }
                     }
                     TerminalCanvas(model: model).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }

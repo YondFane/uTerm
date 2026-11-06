@@ -183,7 +183,7 @@ final class WorkspaceModel: ObservableObject {
                 if terminals[id] == nil {
                     let session = TerminalSession(entry: entry, bridge: bridge)
                     session.changed = { [weak self] in self?.objectWillChange.send() }
-                    session.activity = { [weak self] header in self?.agentNotifications.consume(header, session: id); self?.objectWillChange.send() }
+                    session.activity = { [weak self] header in self?.agentNotifications.consume(header, session: id) }
                     terminals[id] = session
                 }
                 terminals[id]?.update(entry: entry)

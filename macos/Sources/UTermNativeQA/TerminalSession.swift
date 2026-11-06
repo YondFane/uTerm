@@ -14,6 +14,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     var changed: (() -> Void)?
     var activity: ((CoreTerminalHeader) -> Void)?
     private(set) var agentState: String?
+    private(set) var activityUnavailable = false
     var activityLabel: String {
         switch agentState {
         case "working": localized("Working", "处理中")
@@ -137,7 +138,11 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             guard packet.header.attachment == attachment, packet.header.generation == generation else { return }
         }
         let terminal = view.getTerminal()
-        agentState = packet.header.agent_state
+        if agentState != packet.header.agent_state || activityUnavailable != (packet.header.agent_activity_error != nil) {
+            agentState = packet.header.agent_state
+            activityUnavailable = packet.header.agent_activity_error != nil
+            changed?()
+        }
         activity?(packet.header)
         receivedInitialFrame = true
         let previousControl = inputControl?.owned

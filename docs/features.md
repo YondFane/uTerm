@@ -3956,6 +3956,16 @@ first native build found an optional generation at the adapter boundary; the ada
 missing generations before evaluating notification eligibility. That failed build does not establish
 window acceptance.
 
+The Tauri real-app harness also opens Agent settings, saves/enables/disables/removes a private
+custom command, changes canonical notification opt-out, installs/removes Hooks and retains an
+invalid argument draft with a visible error. Post-exit checks require other tools' Hooks to survive.
+These three additional native-window scenes are pending Windows/macOS CI; notification opt-in
+permissions remain covered by explicitly mocked regressions. Native QA additionally cancels an
+actual app quit with an Agent draft. Activity labels update only when status changes; ordinary
+output does not trigger workspace redraws. Activity failures cancel pending notifications and show a
+reconnect hint. The native Close menu action hides the focused Agent window and retains its draft;
+it never closes the selected terminal behind that window.
+
 ### Installing and removing Hooks
 
 Settings → Agent → Install Hooks configures Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot

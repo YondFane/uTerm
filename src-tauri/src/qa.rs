@@ -120,6 +120,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "ssh-reopen",
         "redis",
         "database",
+        "agents",
         "input-owner",
         "input-viewer",
     ]

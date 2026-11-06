@@ -115,6 +115,9 @@ struct AgentSettingsView: View {
                     Toggle(localized("Notify when tasks finish or need attention", "任务完成或需要处理时通知"), isOn: Binding(
                         get: { workspace.agentNotifications.enabled },
                         set: { enabled in Task { await model.setNotifications(enabled) } }))
+                    #if DEBUG
+                    Text(localized("Development builds do not send system notifications.", "开发构建不发送系统通知。")).font(.caption).foregroundStyle(.secondary)
+                    #endif
                     HStack {
                         Button(localized("Install hooks", "安装 Hooks")) { Task { await model.perform("agent.hooks", params: ["agent": .string(model.selected), "enabled": .bool(true)]) } }
                         Button(localized("Remove hooks", "移除 Hooks")) { Task { await model.perform("agent.hooks", params: ["agent": .string(model.selected), "enabled": .bool(false)]) } }

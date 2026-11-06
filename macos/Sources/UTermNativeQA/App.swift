@@ -322,6 +322,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return false }
         if menuItem.action == #selector(closeSession) {
+            if let agentsWindow, agentsWindow.window === NSApp.keyWindow {
+                menuItem.title = localized("Close window", "关闭窗口")
+                return !agentsWindow.model.frozen
+            }
             if let sshWindow, sshWindow.window === NSApp.keyWindow {
                 menuItem.title = localized("Close window", "关闭窗口")
                 return !sshWindow.model.prepared
@@ -338,7 +342,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             menuItem.title = fileFocused ? localized("Close file", "关闭文件") : localized("Close session", "关闭会话")
             if fileFocused { return true }
         }
-        if contentWindows.values.contains(where: { $0.window === NSApp.keyWindow }), let action = menuItem.action,
+        if contentWindows.values.contains(where: { $0.window === NSApp.keyWindow }) || agentsWindow?.window === NSApp.keyWindow, let action = menuItem.action,
            [#selector(splitRight), #selector(splitDown), #selector(increaseFont), #selector(decreaseFont)].contains(action) { return false }
         if menuItem.action == #selector(quit) || menuItem.action == #selector(hideWindow) { return true }
         if model.nameDraft != nil || model.settingsPresented { return false }
@@ -717,6 +721,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }
     @objc private func closeSession() {
+        if let agentsWindow, agentsWindow.window === NSApp.keyWindow { agentsWindow.window.performClose(nil); return }
         if let sshWindow, sshWindow.window === NSApp.keyWindow { sshWindow.window?.performClose(nil); return }
         if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
