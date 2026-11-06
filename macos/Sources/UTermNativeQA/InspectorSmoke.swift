@@ -25,7 +25,7 @@ enum InspectorSmoke {
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark"), "inspectorPosition": .string("right")])
         guard await model.mutate("project.open", ["id": .string(UUID().uuidString), "name": .string("Inspector QA"), "directory": .string(root.path), "workspaceId": .string(model.groupID)]) else { throw BridgeFailure(code: "INSPECTOR_PROJECT", message: model.error) }
         await model.newTerminal()
-        try await TerminalSmoke.wait("Start inspector fixture PTY") { model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true }
+        try await TerminalSmoke.wait("Start inspector fixture PTY and consume its initial frame") { model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true && model.selectedTerminal?.inputControl?.owned == true && (model.selectedTerminal?.qaRenderedFrames ?? 0) > 0 }
         guard let first = model.selectedTerminal else { throw BridgeFailure(code: "INSPECTOR_PTY", message: "No terminal") }
         first.enqueue(Data("printf 'INSPECTOR_%s\\n' READY\r".utf8))
         try await TerminalSmoke.wait("Render inspector fixture output") { first.text.contains("INSPECTOR_READY") }

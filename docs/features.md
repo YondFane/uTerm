@@ -4282,7 +4282,10 @@ tested merge SHAs. The added inspector checks require macOS CI execution; the ol
 evidence below does not validate these commands. The first inspector CI build exposed missing
 main-actor isolation on its table coordinator and a redundant optional binding in the QA entry. The
 coordinator-only correction still left the entry error; native runtime checks were skipped and must
-pass after both corrections. Manual acceptance remains waived by the user.
+pass after both corrections. The next real ARM run reached the inspector fixture but sent input
+before its first frame was consumed; its original screenshot shows only the shell prompt. The
+fixture now waits for rendered output and owned input control before sending. Manual acceptance
+remains waived by the user.
 
 `bash scripts/macos-github-smoke.sh` runs the real native WebView window with an isolated simulated
 `gh`, temporary Git repository and real PTYs. It checks root/method/type boundaries, sanitized
