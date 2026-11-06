@@ -108,6 +108,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--transition-smoke-report") {
+                var report = baseReport()
+                do { try await TransitionSmoke.run(model: model, window: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report) }
+                catch { report["failure"] = error.localizedDescription }
+                let checkpoint = WorkspaceModel.argument("--transition-smoke-phase") == "checkpoint" && report["failure"] == nil
+                if !checkpoint {
+                    for content in Array(contentWindows.values) { content.forceClose() }
+                    await model.shutdown(); terminating = true
+                }
+                finishReport(report, path: path, keepRunning: checkpoint)
+                return
+            }
             if let path = WorkspaceModel.argument("--performance-smoke-report") {
                 var report = baseReport()
                 do { try await PerformanceSmoke.run(model: model, window: window, report: &report) }

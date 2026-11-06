@@ -17,6 +17,7 @@ WORKFLOWS = {
     "Client performance evidence": 3,
     "Windows signed updater QA": 1,
     "Candidate Windows QA": 1,
+    "Client upgrade and rollback": 2,
 }
 
 

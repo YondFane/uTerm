@@ -1,0 +1,82 @@
+name: Client upgrade and rollback
+
+on:
+  pull_request:
+    branches: [release]
+    paths:
+      - .github/workflows/client-upgrade.yml
+      - scripts/client-upgrade-smoke.py
+      - scripts/legacy_transition_source.py
+      - scripts/fixtures/legacy-transition*
+      - scripts/qa-archive-signature.swift
+      - shared/fixtures/client-upgrade.json
+      - macos/Sources/UTermNativeQA/TransitionSmoke.swift
+      - macos/Sources/UTermNativeQA/App.swift
+      - crates/uterm-core/src/**
+      - tests/test_client_upgrade.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transition:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.number == 12
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 100
+    defaults:
+      run:
+        shell: bash
+    env:
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: client-upgrade-${{ matrix.os }}-${{ runner.arch }}
+          workspaces: |
+            src-tauri -> target
+            crates/utermd-local -> target
+            crates/uterm-core -> target
+            crates/uterm-ffi -> target
+          cache-bin: false
+      - name: Build current native QA and record toolchain
+        run: |
+          npm install --global pnpm@11.22.0
+          pnpm install --frozen-lockfile
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          mkdir -p ci-evidence/client-upgrade
+          {
+            git rev-parse HEAD
+            node --version
+            pnpm --version
+            rustc --version
+            swift --version
+            xcodebuild -version
+          } 2>&1 | tee ci-evidence/client-upgrade/toolchain.txt
+          bash scripts/macos-native-build.sh 2>&1 | tee ci-evidence/client-upgrade/native-build.log
+      - name: Actual historical and native application transition
+        run: |
+          python3 -B -m unittest discover -s tests -p test_client_upgrade.py
+          python3 -B scripts/client-upgrade-smoke.py 2>&1 | tee ci-evidence/client-upgrade/command.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: client-upgrade-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ci-evidence/client-upgrade/
+          if-no-files-found: error

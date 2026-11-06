@@ -433,7 +433,36 @@ arguments, corrupt/unsupported stores, writer contention/retry, idempotence and 
 writes. CI records `rollback-export-core.json`. The actual Swift C ABI case initially failed because
 its draft setup omitted `expectedDraftRevision`; setup now sends explicit null for a new document,
 retaining strict rejection of missing fields. The corrected actual C ABI check passes both Mac
-architectures at source949e4c2. Actual old-application/data replacement remains pending under #46.
+architectures at source949e4c2.
+
+`python3 -B scripts/client-upgrade-smoke.py` prepares a historical Tauri QA client from the fixed
+published `uTerm-v0.2.4` source, with an isolated identity shared only by its native test successor.
+All original source hashes are retained: only the two startup/command entry files and recorded QA
+additions differ. It does not run the unmodified published installer. The historical GUI, readers,
+services, source manifests and lockfiles remain unchanged; initial draft input and credential/hook
+references are labelled fixtures.
+
+The Mac rehearsal downloads a native QA archive from its owned loopback server, verifies a pinned
+one-time Ed25519 manifest and architecture, rejects a bad signature before replacement, and tests
+interruption after moving the old program. After each durable export and window capture, the
+coordinator kills the historical UI without bypassing its quit guard or deleting its draft. The
+actual old app restarts before repeat Core import. The native app restores the old draft, edits
+through its real CodeMirror window, persists changed settings, survives SIGKILL and reopens.
+Explicit rollback restores the old program and applies the latest compatible data into its actual
+WebView; unchanged historical readers must recover that latest draft/settings and the same live
+host/generation. Original files and canonical stores are checked, with complete canonical fixture
+backups archived before each handover. Multiple draft choices remain refused rather than being
+selected automatically.
+
+Client upgrade and rollback runs on both Mac architectures and uploads `upgrade-rollback.json`,
+source/overlay hashes, old/native QA packages, public manifest/signature, canonical backups,
+original application windows and logs. Linux checks pass two interruption/isolation tests plus the
+historical frontend's types/build and historical Rust compilation. Actual Mac execution remains
+pending in #46. This is a private manual package-replacement rehearsal; it does not configure a
+production cross-client feed. Actual credential approval/hook execution and OS deep-link/login
+registration are not represented as tested; references are simulated and production schemes stay
+disabled.
+
 #47 tracks final source-bound evidence and current stage gaps; neither task authorizes merging or
 publishing. The Migration readiness audit runs for updates to migration PR #12 or manual dispatches,
 reading GitHub task/PR/ref state and current-head workflow artifacts. It checks exact

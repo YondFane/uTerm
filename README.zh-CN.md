@@ -196,6 +196,10 @@ Windows 签名更新 QA 使用 `python -B scripts/windows-updates-database.py`�
 21 和 PostgreSQL。包装脚本管理私有集群并调用 NSIS 更新器流程，检查在途查询／事务保护及明确标注的模拟传输工作任务；核对回滚数据和服务清理，扫描临时凭据，不改生产更新源。新增保护的真实结果须 Windows
 CI。
 
+原生 QA 构建后，`python3 -B scripts/client-upgrade-smoke.py`
+演练隔离 Mac 的历史 Tauri／原生／回退流程：获取固定发布源码、记录 QA 注入并构建历史客户端，检查私有签名包下载、程序替换中断、真实编辑器崩溃／恢复及保留宿主的最新数据回退。两个 Mac
+job 归档原始窗口、安装包、规范测试备份及绑定源码的报告。凭据／hook 引用明确模拟；不运行未修改的已发布安装器，不配置生产迁移更新源。真实 Mac 结果仍待完成。
+
 `python3 -B scripts/migration-readiness.py --head SOURCE_SHA`
 使用已认证的 GitHub 读取权限核对当前 head 的证据。Migration readiness audit 在迁移 PR
 #12 更新时或手动触发时上传 JSON 报告；前置任务开放、证据缺失／失败／过期、验收不完整或 tested
