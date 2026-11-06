@@ -48,6 +48,7 @@ def prepare(destination, evidence):
     rust.write_text(text, encoding="utf-8")
     copies = {
         "src/qa-legacy-transition.ts": "scripts/fixtures/legacy-transition.ts",
+        "src/qa-legacy-transition-buffer.ts": "scripts/fixtures/legacy-transition-buffer.ts",
         "src-tauri/src/qa_legacy_transition.rs": "scripts/fixtures/legacy-transition-bridge.rs",
     }
     for target, original in copies.items():

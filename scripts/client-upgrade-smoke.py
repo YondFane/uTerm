@@ -186,6 +186,12 @@ def historical_run(installed, root, evidence, tool, label):
             value["screenshot"] = image
             write(evidence / (label+".json"), value)
             return value
+        except BaseException:
+            if process.poll() is None:
+                try: capture(tool, process.pid, evidence / (label+"-failure.png"))
+                except Exception as error:
+                    write(evidence / (label+"-failure-capture.json"), dict(error=str(error)))
+            raise
         finally:
             if process.poll() is None:
                 process.kill(); process.wait()
@@ -427,7 +433,10 @@ def main():
                     for session in core.call("host.status")["sessions"]:
                         core.call("host.close", dict(id=session["spec"]["id"], generation=session["generation"]))
                     core.call("host.shutdownIdle")
-                    assert not (root / "local-daemon-v1/endpoint.json").exists()
+                    endpoint = root / "local-daemon-v1/endpoint.json"
+                    deadline = time.monotonic()+10
+                    while endpoint.exists() and time.monotonic() < deadline: time.sleep(.05)
+                    assert not endpoint.exists(), "Owned historical host endpoint survived explicit close/shutdown"
                     report["explicitSessionCloseAndIdleHostShutdown"] = True
                 except Exception as error: report["cleanupErrors"].append(str(error))
                 try: core.close()

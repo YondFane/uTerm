@@ -1,3 +1,4 @@
+import { renderedText } from "./qa-legacy-transition-buffer";
 import { invoke } from "@tauri-apps/api/core";
 import { readSettings, settingsKey } from "./lib/settings";
 import { readWorkspace, workspaceKey } from "./lib/workspace";
@@ -101,7 +102,10 @@ export async function runLegacyTransition() {
         }),
       );
     await until(
-      () => section.textContent?.includes("LEGACY_" + marker),
+      () =>
+        renderedText(section)
+          .replace(/\s/g, "")
+          .includes("LEGACY_" + marker),
       "historical rendered actual PTY marker",
     );
     if (context.phase === "before") {
@@ -152,6 +156,7 @@ export async function runLegacyTransition() {
       checks: {
         actualHistoricalApp: true,
         actualDOMInputAndPTY: true,
+        actualHistoricalXtermBufferRead: true,
         simulatedInitialDraftInput: true,
         unchangedHistoricalReaders: true,
         id,

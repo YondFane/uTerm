@@ -470,7 +470,12 @@ Client upgrade and rollback runs on both Mac architectures and uploads `upgrade-
 source/overlay hashes, old/native QA packages, public manifest/signature, canonical backups,
 original application windows and logs. Linux checks pass two interruption/isolation tests plus the
 historical frontend's types/build and historical Rust compilation. Actual Mac execution remains
-pending in #46. This is a private manual package-replacement rehearsal; it does not configure a
+pending in #46. The first ARM run42282798468 built and launched the actual old application but
+failed its marker check because canvas output was read as DOM textContent. The isolated QA now reads
+the unchanged component's real React xterm ref; a real React/xterm regression passes when the DOM
+text is empty and the buffer contains wrapped output. Failed windows are captured, and owned-host
+shutdown waits for endpoint removal. The old failure artifact is retained; corrected Mac execution
+remains pending. This is a private manual package-replacement rehearsal; it does not configure a
 production cross-client feed. Actual credential approval/hook execution and OS deep-link/login
 registration are not represented as tested; references are simulated and production schemes stay
 disabled.
