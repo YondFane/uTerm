@@ -27,6 +27,8 @@ enum SettingsSmoke {
     static func run(workspace: WorkspaceModel, open: () -> NativeSettingsWindow, report: inout [String: Any]) async throws {
         guard workspace.ready, let bridge = workspace.bridge, let path = WorkspaceModel.argument("--settings-smoke-report") else { throw BridgeFailure(code: "SETTINGS_QA_CONTEXT", message: "Missing isolated settings context") }
         let root = try WorkspaceModel.dataRoot()
+        guard !workspace.updates.available, workspace.updates.controller == nil else { throw BridgeFailure(code: "UPDATE_DEFAULT", message: "Unconfigured QA build unexpectedly initialized network updates") }
+        report["unconfiguredNativeUpdatesHaveNoSDKControllerOrNetworkChecks"] = true
         let snapshotFile = root.appendingPathComponent("snapshot-v1.json")
         let before = try Data(contentsOf: snapshotFile)
         guard let menuItem = NSApp.mainMenu?.items.compactMap(\.submenu).flatMap(\.items).first(where: { $0.action.map(NSStringFromSelector) == "openFullSettings" }), let action = menuItem.action, NSApp.sendAction(action, to: menuItem.target, from: menuItem) else { throw BridgeFailure(code: "SETTINGS_QA_MENU", message: "All settings menu action is missing") }

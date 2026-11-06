@@ -71,6 +71,7 @@ final class WorkspaceModel: ObservableObject {
     private var needsReload = false
     lazy var agentNotifications = AgentNotifications(workspace: self)
     lazy var inspector = NativeInspectorModel(workspace: self)
+    lazy var updates = NativeUpdates()
     var inspectorContextKey: String { [groupID, workspace["selectedProject"].string ?? "", workspace["selectedWorktree"].string ?? ""].joined(separator: "\u{0}") }
     var inspectorOwnsFocus: Bool {
         guard inspectorVisible, let responder = NSApp.keyWindow?.firstResponder as? NSView else { return false }
@@ -206,6 +207,7 @@ final class WorkspaceModel: ObservableObject {
                 commandsChanged?()
             }
             appearanceChanged?(settings["appearance"].string ?? "system")
+            updates.apply(settings)
             breakSchedule.configure(enabled: settings["breakReminder"].bool == true, minutes: settings["breakInterval"].number ?? 60, now: ProcessInfo.processInfo.systemUptime)
             breakReminderVisible = breakSchedule.visible
             if breakTimer == nil && settings["breakReminder"].bool == true {

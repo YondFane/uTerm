@@ -51,7 +51,7 @@ export function useUpdates(
         if (disposed) return;
         setAvailable(result);
         if (result.version) setPhase(result.downloaded ? "ready" : "available");
-        else if (result.enabled)
+        else if (result.enabled && automatic)
           timer = setTimeout(() => {
             if (!checked.current) void check();
           }, 15_000);
@@ -63,7 +63,7 @@ export function useUpdates(
       disposed = true;
       clearTimeout(timer);
     };
-  }, [check]);
+  }, [check, automatic]);
   async function download() {
     if (busy.current) return;
     busy.current = true;

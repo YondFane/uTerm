@@ -64,6 +64,7 @@ try:
             target = (content / relative).resolve()
             assert target.is_relative_to(content) and target.is_file() and not target.is_symlink()
         assert (resources / 'Licenses/SwiftTerm.txt').is_file()
+        assert (resources / 'Licenses/Sparkle.txt').is_file()
         assert (resources / 'Licenses/NOTICE.txt').is_file()
         report.update(webResourceEntries=len(manifest), bundledLicensesPresent=True)
         for entry in [*resources.rglob('*'), resources]:
@@ -71,6 +72,29 @@ try:
             entry.chmod(stat.S_IMODE(entry.stat().st_mode) & ~0o222)
         executable = staged / 'Contents/MacOS/UTermNativeQA'
         executable.chmod(stat.S_IMODE(executable.stat().st_mode) & ~0o222)
+        framework = staged / 'Contents/Frameworks/Sparkle.framework'
+        assert framework.is_dir(), 'Sparkle runtime framework is missing'
+        framework_binaries = []
+        for entry in framework.rglob('*'):
+            if entry.is_symlink():
+                assert entry.resolve().is_relative_to(framework.resolve()), 'Framework symlink escapes the bundle'
+                continue
+            if entry.is_file():
+                with entry.open('rb') as stream: magic = stream.read(4)
+                if magic in [bytes.fromhex(value) for value in ['feedface', 'feedfacf', 'cefaedfe', 'cffaedfe', 'cafebabe', 'bebafeca', 'cafebabf', 'bfbafeca']]:
+                    arches = run('lipo', '-archs', entry).decode().strip().split()
+                    assert platform.machine() in arches, f'Sparkle helper lacks {platform.machine()}: {entry.name}'
+                    run('codesign', '--verify', '--strict', entry)
+                    build = run('vtool', '-arch', platform.machine(), '-show-build', entry).decode()
+                    minimum = re.findall(r'\b(?:minos|version)\s+(\d+(?:\.\d+)+)', build)
+                    assert minimum and tuple(map(int, minimum[0].split('.'))) <= (14, 0, 0), 'Sparkle binary raises the minimum OS'
+                    dependencies = run('otool', '-L', entry).decode()
+                    assert '/Users/runner/work/' not in dependencies and '/workspace/' not in dependencies
+                    framework_binaries.append({'path': str(entry.relative_to(staged)), 'architectures': arches, 'minimumOS': minimum[0]})
+            entry.chmod(stat.S_IMODE(entry.stat().st_mode) & ~0o222)
+        framework.chmod(stat.S_IMODE(framework.stat().st_mode) & ~0o222)
+        assert framework_binaries, 'No signed Sparkle runtime binaries found'
+        report.update(sparkleFrameworkBinaries=framework_binaries, sparkleVersion='2.10.1', sparkleSigning='vendor framework signatures; application remains ad-hoc')
         run('codesign', '--verify', '--deep', '--strict', staged)
         architectures = {}; minimums = {}
         for name, relative in [('app', 'Contents/MacOS/UTermNativeQA'), ('helper', 'Contents/Resources/bin/utermd-local')]:
@@ -110,6 +134,8 @@ try:
             installed.parent.mkdir(); run('ditto', mount / source.name, installed)
             run('codesign', '--verify', '--deep', '--strict', installed)
             installed_resources = installed / 'Contents/Resources'
+            installed_framework = installed / 'Contents/Frameworks/Sparkle.framework'
+            assert all(stat.S_IMODE(p.stat().st_mode) & 0o222 == 0 for p in [*installed_framework.rglob('*'), installed_framework] if not p.is_symlink())
             assert all(stat.S_IMODE(p.stat().st_mode) & 0o222 == 0 for p in [*installed_resources.rglob('*'), installed_resources])
             probe = installed_resources / 'candidate-write-probe'
             try: probe.write_bytes(b'probe')

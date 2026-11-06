@@ -4629,6 +4629,29 @@ Markdown previews. Image, PDF and static HTML previews keep their own sizing con
 
 ### Automatic updates and confirmation
 
+#### Native macOS update adapter
+
+The native QA app includes Sparkle 2.10.1 and offers **Check for updates…** in the app menu and
+General settings. An ordinary QA build has no feed/public key, displays an unavailable state and
+does not initialize an updater controller or make network checks. A configured build uses shared
+`automaticUpdates`, off by default; cached SDK preferences cannot re-enable it. Windows/Tauri also
+leaves its delayed startup check disabled when automatic updates are off; explicit checking remains
+available.
+
+Native feed configuration fixes stable/preview and the current arm64/x86_64 architecture. QA sources
+must be literal loopback URLs. Appcast items require matching `uterm:platform`/`uterm:architecture`
+metadata, channel and same-origin ZIP archives before proceeding. SDK package verification remains
+required separately. Sparkle retains its native download/install UI; application termination still
+uses the existing editor, transfer and database guards. No production feed is configured or changed.
+
+The pinned framework, nested helpers and license are bundled and candidate audits check signatures,
+architecture, minimum OS and read-only permissions. Configuration tests and real SDK
+download/signature/version/cancel/retry/install/relaunch acceptance remain pending macOS CI in #45;
+compilation alone does not satisfy them. The focused Tauri hook test passes the opt-out startup,
+manual check and existing installation guard/failure cases.
+
+#### Windows/Tauri automatic installation
+
 Settings → Software update → Automatic updates is off by default and persists across restarts. In
 builds with online updates enabled, turning it on checks immediately and then hourly while running,
 automatically downloads available updates, verifies their signature through the existing updater,

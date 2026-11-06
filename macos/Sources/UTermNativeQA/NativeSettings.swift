@@ -145,6 +145,7 @@ struct NativeSettingsView: View {
             choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
             choice("defaultShell", "Default shell", "默认 Shell", [("default", "System default", "系统默认"), ("cmd", "Windows Command Prompt", "Windows 命令提示符")])
             Toggle(localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates"))
+            NativeUpdateStatus(model: workspace.updates)
             NativeLoginItemsView(model: model.login)
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
             number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）")
@@ -247,6 +248,19 @@ struct NativeSettingsView: View {
         .confirmationDialog(localized("Discard changes and read saved settings?", "放弃修改并读取已保存设置？"), isPresented: $confirmReload) {
             Button(localized("Reload", "重新读取")) { Task { await model.reload() } }
             Button(localized("Cancel", "取消"), role: .cancel) {}
+        }
+    }
+}
+
+@MainActor
+private struct NativeUpdateStatus: View {
+    @ObservedObject var model: NativeUpdates
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Button(localized("Check for updates…", "检查更新…")) { model.check() }.disabled(!model.available)
+            if !model.available { Text(localized("Update checks are unavailable for this build.", "此构建暂不提供更新检查。")).font(.caption).foregroundStyle(.secondary) }
+            if !model.status.isEmpty { Text(model.status).font(.caption) }
+            if !model.error.isEmpty { Text(model.error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
         }
     }
 }

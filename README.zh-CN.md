@@ -167,6 +167,10 @@ workflow 执行。程序比较只允许 Tauri 唯一的 NSIS 类型标记变换�
 `crates/uterm-core/integrations/`。`bash scripts/macos-agent-smoke.sh`
 需要 macOS 图形会话及 QA 构建；记录真实窗口／Host／已安装报告程序证据，系统通知适配器明确使用模拟，不使用提供方凭据或全局安装 CLI。
 
+原生应用通过 SwiftPM 固定 Sparkle 2.10.1（SDK 最低 macOS 12，uTerm 仍要求 macOS 14+）。
+`macos-native-build.sh`
+嵌入签名框架／辅助程序及许可证，使用包内相对运行路径。普通 QA 构建不配置更新源或公钥，不启动更新器；配置的 QA 更新源必须使用字面回环主机。候选检查核对框架／辅助程序架构、最低系统、签名及只读资源。SDK 运行／更新验收在 #45 单独跟踪，不以依赖编译替代。
+
 内嵌 Java 8 编码 Agent 同时提供 Java 源码和可复现的运行时字节。修改后使用 JDK 21 运行
 `python3 scripts/java8-encoding-agent.py`，再执行
 `python3 scripts/java8-encoding-agent.py --check`。正常 Rust／应用构建不需要 Java 编译器；Windows 互操作 CI 核对资产并运行实际所选 JDK。

@@ -9,6 +9,7 @@ public class WindowCapture {
     [StructLayout(LayoutKind.Sequential)] public struct Point { public int X, Y; public Point(int x, int y) { X=x; Y=y; } }
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out Rect r);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint processId);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int n);
     [DllImport("user32.dll", SetLastError=true)] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int w, int height, uint flags);
@@ -20,9 +21,25 @@ public class WindowCapture {
 '@
 [void][WindowCapture]::SetProcessDPIAware()
 $application = Get-Process -Id $TargetProcessId
-$application.Refresh()
-$handle = $application.MainWindowHandle
-if ($handle -eq [IntPtr]::Zero) { throw 'No native QA window' }
+$windowDeadline = [DateTime]::UtcNow.AddSeconds(10)
+$handle = [IntPtr]::Zero
+do {
+    $application.Refresh()
+    if ($application.HasExited) { throw 'Native QA exited before window capture' }
+    $handle = $application.MainWindowHandle
+    if ($handle -ne [IntPtr]::Zero) {
+        $owner = [uint32]0
+        [void][WindowCapture]::GetWindowThreadProcessId($handle, [ref]$owner)
+        if ($owner -ne $TargetProcessId) { throw 'Native QA window ownership changed' }
+        [void][WindowCapture]::ShowWindow($handle, 9)
+        $readyRect = [WindowCapture+Rect]::new()
+        if ([WindowCapture]::GetWindowRect($handle, [ref]$readyRect) -and ($readyRect.Right - $readyRect.Left) -ge 600 -and ($readyRect.Bottom - $readyRect.Top) -ge 400) { break }
+    }
+    # Restoration and WebView startup can temporarily expose a tiny native window.
+    # 窗口恢复及 WebView 启动期间，原生窗口尺寸可能暂时很小。
+    Start-Sleep -Milliseconds 100
+} while ([DateTime]::UtcNow -lt $windowDeadline)
+if ($handle -eq [IntPtr]::Zero -or ($readyRect.Right - $readyRect.Left) -lt 600 -or ($readyRect.Bottom - $readyRect.Top) -lt 400) { throw 'No restored native QA window with valid dimensions' }
 $topmost = ([WindowCapture]::GetWindowLongPtr($handle, -20).ToInt64() -band 8) -ne 0
 try {
     # Raise only the owned QA window; CI consoles must not cover evidence. 仅置顶所属 QA 窗口，CI 控制台不能遮挡证据。

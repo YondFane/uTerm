@@ -194,6 +194,13 @@ Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the P
 session and the QA build; it records real window/Host/installed-reporter evidence with an explicitly
 simulated OS notification adapter, without provider credentials or global CLI installation.
 
+The native app pins Sparkle 2.10.1 through SwiftPM (minimum macOS 12; uTerm remains macOS 14+).
+`macos-native-build.sh` embeds its signed framework/helpers and license with a bundle-relative
+runtime search path. Ordinary QA builds configure no feed or update public key and never start the
+updater; configured QA feeds must use literal loopback hosts. Candidate checks audit
+framework/helper architectures, minimum OS, signatures and read-only resources. SDK runtime/update
+acceptance is tracked separately from dependency compilation in #45.
+
 The embedded Java 8 encoding agent includes its Java source and reproducible runtime bytes. After
 changing it, use JDK 21 to run `python3 scripts/java8-encoding-agent.py`, then
 `python3 scripts/java8-encoding-agent.py --check`. Normal Rust/application builds need no Java

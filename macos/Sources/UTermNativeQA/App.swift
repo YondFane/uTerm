@@ -384,6 +384,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let app = menu("uTerm Native QA")
         add(app, localized("Settings…", "设置…"), #selector(settings), ",")
+        add(app, localized("Check for updates…", "检查更新…"), #selector(checkForUpdates))
         app.addItem(.separator())
         add(app, localized("Quit uTerm Native QA", "退出 uTerm 原生 QA"), #selector(quit), "q")
         let file = menu(localized("File", "文件"))
@@ -479,6 +480,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     @objc private func toggleSidebar() { model.sidebarVisible.toggle() }
     @objc private func settings() { model.settingsPresented = true }
+    @objc private func checkForUpdates() {
+        model.updates.check()
+        if !model.updates.error.isEmpty {
+            let alert = NSAlert(); alert.messageText = localized("Could not check for updates", "无法检查更新")
+            alert.informativeText = model.updates.error
+            alert.addButton(withTitle: localized("OK", "好")); alert.runModal()
+        }
+    }
     private func commandAvailable(_ id: String) -> Bool {
         guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, !model.settingsPresented, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
         if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
