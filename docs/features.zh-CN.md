@@ -3398,7 +3398,7 @@ CI 在 macOS 26.6.2 ARM64 与 Windows Server 2025
 x64 也通过：前端分别为 419 通过／10 跳过、418 通过／11 跳过，两平台各有 63 个真实应用 QA 场景通过且清理无错误。报告见
 [macOS artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476515464)
 与
-[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476251745)。这些 Tauri 场景不代表完整 Windows 数据库工作台已验收。桌面 QA 另外提供私有真实 PostgreSQL 集群，检查五种配置类型、目录校验驱动安装、SQL 精确值、草稿保留、写入确认、事务回滚／提交、服务端已观察到的慢查询取消、重连及退出后数据／连接清理；新增场景的 Windows/macOS 新源码运行结果仍待验证。
+[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476251745)。这些 Tauri 场景不代表完整 Windows 数据库工作台已验收。桌面 QA 另外提供私有真实 PostgreSQL 集群，检查五种配置类型、目录校验驱动安装、SQL 精确值、草稿保留、写入确认、事务回滚／提交、服务端已观察到的慢查询取消、重连及退出后数据／连接清理；新增场景的 Windows/macOS 新源码运行结果仍待验证。SQL 与 Unicode 样本从共享 QA 夹具读取，保留界面文案覆盖检查。
 
 `database-protocol-qa.py`
 分别记录 MySQL／PostgreSQL／Oracle 的 JDBC 模型、固定厂商驱动的 SOCKS 握手及临时 MongoDB 协议模拟。组件与 Elasticsearch

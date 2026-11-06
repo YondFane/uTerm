@@ -1,5 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { databaseKinds, databasePorts, type DatabaseConfig } from "../lib/database";
+import databaseFixtureJSON from "../../shared/fixtures/database-qa.json?raw";
+
+const databaseFixture = JSON.parse(databaseFixtureJSON) as {
+  exactSQL: string;
+  exactInteger: string;
+  exactDecimal: string;
+  textMarker: string;
+};
 
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 function assert(value: unknown, message: string): asserts value {
@@ -169,8 +177,7 @@ export async function runDatabase(
     verifiedDriverInstalled: true,
   });
 
-  const exact =
-    "SELECT 9223372036854775807::bigint AS exact_integer, 12345678901234567890.1234567890::numeric(30,10) AS exact_decimal, 'TAURI_DATABASE_中文'::text AS text_value";
+  const exact = databaseFixture.exactSQL;
   await sql(exact);
   await click("Execute SQL", workspace);
   await until(
@@ -183,7 +190,7 @@ export async function runDatabase(
         ?.textContent?.includes("12345678901234567890.1234567890") &&
       workspace
         .querySelector(".database-grid-container")
-        ?.textContent?.includes("TAURI_DATABASE_中文"),
+        ?.textContent?.includes(databaseFixture.textMarker),
     "exact SQL result",
   );
   await scene("database-live-exact", {

@@ -5781,7 +5781,8 @@ These Tauri scenes do not establish complete Windows database-workbench acceptan
 harness additionally provisions a private real PostgreSQL cluster and checks all five profile types,
 catalog-verified driver installation, exact SQL values, retained drafts, write confirmation,
 rollback/commit, server-observed slow-query cancellation, reconnect and post-exit data/connection
-cleanup. New-source Windows/macOS runtime results for these additional scenes are pending.
+cleanup. New-source Windows/macOS runtime results for these additional scenes are pending. SQL and
+Unicode samples come from a shared QA fixture, preserving UI-translation coverage checks.
 
 `database-protocol-qa.py` records JDBC models for MySQL/PostgreSQL/Oracle, pinned vendor-driver
 SOCKS handshakes and a disposable MongoDB wire fixture. Component and Elasticsearch HTTP simulations

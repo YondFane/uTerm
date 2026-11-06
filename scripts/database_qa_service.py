@@ -12,7 +12,8 @@ import socket
 import subprocess
 
 
-SAVED_TEXT = "TAURI_DATABASE_SAVED_中文"
+SAVED_TEXT = json.loads((Path(__file__).resolve().parent.parent / "shared/fixtures/database-qa.json")
+                        .read_text(encoding="utf-8"))["savedText"]
 
 
 class DatabaseService:
