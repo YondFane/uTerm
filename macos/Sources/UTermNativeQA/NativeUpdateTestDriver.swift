@@ -13,9 +13,10 @@ final class NativeUpdateTestDriver: NSObject, SPUUserDriver {
     private(set) var receivedBytes: UInt64 = 0
     private(set) var errors: [String] = []
     private(set) var foundVersion: String?
+    private(set) var signatureMismatch = false
     private var cancelDownload: (() -> Void)?
     init(mode: String) { self.mode = mode }
-    func resetForRetry() { ready = false; notFound = false; cancelled = false; receivedBytes = 0; errors = []; foundVersion = nil; cancelDownload = nil }
+    func resetForRetry() { ready = false; notFound = false; cancelled = false; receivedBytes = 0; errors = []; signatureMismatch = false; foundVersion = nil; cancelDownload = nil }
     func show(_ request: SPUUpdatePermissionRequest, reply: @escaping (SUUpdatePermissionResponse) -> Void) {
         reply(SUUpdatePermissionResponse(automaticUpdateChecks: false, sendSystemProfile: false))
     }
@@ -27,7 +28,9 @@ final class NativeUpdateTestDriver: NSObject, SPUUserDriver {
     func showUpdateReleaseNotesFailedToDownloadWithError(_ error: Error) {}
     func showUpdateNotFoundWithError(_ error: Error, acknowledgement: @escaping () -> Void) { notFound = true; acknowledgement() }
     func showUpdaterError(_ error: Error, acknowledgement: @escaping () -> Void) {
-        errors.append(contentsOf: updateErrorCodes(error)); acknowledgement()
+        errors.append(contentsOf: updateErrorCodes(error))
+        signatureMismatch = signatureMismatch || updateHasSignatureMismatch(error)
+        acknowledgement()
     }
     func showDownloadInitiated(cancellation: @escaping () -> Void) { cancelDownload = cancellation }
     func showDownloadDidReceiveExpectedContentLength(_ expectedContentLength: UInt64) {}
@@ -39,7 +42,7 @@ final class NativeUpdateTestDriver: NSObject, SPUUserDriver {
     func showExtractionReceivedProgress(_ progress: Double) {}
     func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
         ready = true
-        reply(.dismiss)
+        reply(mode == "install" ? .install : .dismiss)
     }
     func showInstallingUpdate(withApplicationTerminated applicationTerminated: Bool, retryTerminatingApplication: @escaping () -> Void) {}
     func showUpdateInstalledAndRelaunched(_ relaunched: Bool, acknowledgement: @escaping () -> Void) { acknowledgement() }

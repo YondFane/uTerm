@@ -205,9 +205,10 @@ acceptance is tracked separately from dependency compilation in #45.
 apps with temporary data, one-time CryptoKit keys and loopback feeds. It downloads the
 checksum-pinned official signing toolkit and exercises valid/invalid signatures,
 platform/channel/version rejection, cancellation, interrupted/offline download and retry. User
-decisions use an explicitly simulated SDK driver; installing/relaunching and automatic scheduling
-remain separate acceptance. Reports, original windows, HTTP logs and the valid signed test ZIP are
-archived under `updates/`; private keys are never uploaded.
+decisions use an explicitly simulated SDK driver; shared opt-in/opt-out exercises the actual SDK
+scheduler. A separate case performs actual SDK replacement/relaunch, real editor quit autosave and
+retained-host reconnection; its platform results remain pending CI. Reports, original windows, HTTP
+logs and the valid signed test ZIP are archived under `updates/`; private keys are never uploaded.
 
 The Client performance evidence workflow runs `node scripts/macos-performance-smoke.mjs` after the
 native build and `UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs` for Tauri. It

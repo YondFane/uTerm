@@ -68,6 +68,10 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
 
         def do_GET(self):
             retry = (root / "retry-enabled").exists()
+            if mode == "automatic" and not (root / "automatic-opt-in").exists():
+                requests.append({"path": self.path, "beforeOptIn": True})
+                self.send_error(503)
+                return
             if self.path == "/appcast.xml":
                 if mode == "offline" and not retry:
                     self.send_error(503)
@@ -127,6 +131,7 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
         info.update(CFBundleIdentifier=identity, UTermQADataRoot=str(root), UTermUpdateTestMode=mode,
                     UTermUpdateFeedURL=f"http://127.0.0.1:{server.server_port}/appcast.xml",
                     UTermUpdateChannel="stable", SUPublicEDKey=public_key, SUVerifyUpdateBeforeExtraction=True)
+        if mode == "install": info["UTermQAUpdateReport"] = str(case_dir / "sdk-native.json")
         configure_app(source, app, info)
         payload = root / "payload/UTermNativeQA.app"
         payload.parent.mkdir()
@@ -142,25 +147,48 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
             with (case_dir / "stdout.log").open("w") as out, (case_dir / "stderr.log").open("w") as err:
                 process = subprocess.Popen([str(app / "Contents/MacOS/UTermNativeQA"), "--qa-data-root", str(root), "--updates-smoke-report", str(report)], stdout=out, stderr=err)
                 code = process.wait(timeout=220)
+            if mode == "install":
+                deadline = time.monotonic() + 120
+                while not report.exists() and time.monotonic() < deadline: time.sleep(.1)
             data = json.loads(report.read_text())
             assert code == 0 and "failure" not in data and "cleanupError" not in data, data.get("failure", data.get("cleanupError", code))
             assert data["sourceHeadSHA"] == head and data["sourceSHA"] == tested
             assert data["defaultAutomaticUpdatesOff"] and data["realPTYRetainedGenerationAndHost"]
             assert data["realSparkleSDK"] == "2.10.1" and data["simulatedUserDriver"]
-            assert not data["productionDataAccess"] and not data["productionFeedChanged"] and not data["actualInstallOrRelaunchExecuted"]
+            assert not data["productionDataAccess"] and not data["productionFeedChanged"]
+            assert data["actualInstallOrRelaunchExecuted"] == (mode == "install")
+            if mode == "install":
+                assert data["actualEditorQuitAutosaveRetainedBytes"] and data["explicitFixtureCloseAndIdleHostShutdown"]
+                assert data["originalAppPID"] == process.pid and data["relaunchedAppPID"] != process.pid
+                assert data["oldBundleVersion"] == "1" and data["installedBundleVersion"] == "2"
+                assert plistlib.loads((app / "Contents/Info.plist").read_bytes())["CFBundleVersion"] == "2"
+                deadline = time.monotonic() + 20
+                while time.monotonic() < deadline:
+                    if subprocess.run(["ps", "-p", str(data["relaunchedAppPID"]), "-o", "pid="], capture_output=True).returncode != 0: break
+                    time.sleep(.1)
+                else: raise AssertionError("Relaunched QA app did not complete ordinary exit")
+                data["relaunchedProcessExited"] = True
+                data["relaunchedProcessExitCode"] = None
+                assert not (root / "local-daemon-v1/endpoint.json").exists()
             assert all((case_dir / name).stat().st_size > 1000 for name in data["captures"])
             assert requests and all(item["path"] in ("/appcast.xml", "/update.zip") for item in requests)
             if mode in ("old-version", "wrong-channel", "wrong-arch"):
                 assert not any(item["path"] == "/update.zip" for item in requests)
             if mode in ("offline", "interrupted"): assert data["actualSDKRetryReachedReady"]
+            if mode == "automatic":
+                assert data["actualSDKAutomaticSchedulingAndOptOut"]
+                assert not any(item.get("beforeOptIn") for item in requests)
             data.update(passed=True, testedMergeSHA=tested, sourceTreeDirty=False, processExitCode=code,
                         archiveSHA256=hashlib.file_digest(archive.open("rb"), "sha256").hexdigest(),
                         updateSignature=signature, publicTestKey=public_key, fixtureMode=mode)
             report.write_text(json.dumps(data, ensure_ascii=False, indent=2)+"\n")
-            if mode == "good": shutil.copyfile(archive, case_dir / "signed-test-update.zip")
+            if mode in ("good", "install"): shutil.copyfile(archive, case_dir / "signed-test-update.zip")
             return {"mode": mode, "passed": True, "report": mode + "/sdk-native.json"}
         finally:
             if process and process.poll() is None: process.kill(); process.wait()
+            if mode == "install":
+                cleanup = run("swift", "-e", "import AppKit; for app in NSRunningApplication.runningApplications(withBundleIdentifier: CommandLine.arguments[1]) { print(app.processIdentifier); app.forceTerminate() }", identity).decode().strip()
+                (case_dir / "relaunched-app-cleanup.json").write_text(json.dumps({"identity": identity, "forcedRemainingQAProcessIDs": cleanup.splitlines()}))
             if (root / "local-daemon-v1/endpoint.json").exists():
                 target = Path(os.environ.get("CARGO_TARGET_DIR", "crates/uterm-core/target")).resolve()
                 with (case_dir / "host-cleanup.log").open("w") as log:
@@ -210,15 +238,15 @@ def main():
         with tarfile.open(toolkit) as archive:
             signer.write_bytes(archive.extractfile("./bin/sign_update").read())
         signer.chmod(0o700)
-        for mode in ("good", "bad-signature", "wrong-arch", "wrong-channel", "old-version", "cancel", "offline", "interrupted"):
+        for mode in ("good", "bad-signature", "wrong-arch", "wrong-channel", "old-version", "cancel", "offline", "interrupted", "automatic", "install"):
             try: results.append(exercise(source, folder, evidence, signer, mode, head, tested))
             except Exception as error: results.append({"mode": mode, "passed": False, "failure": str(error)})
     result = dict(passed=all(item["passed"] for item in results), sourceHeadSHA=head, testedMergeSHA=tested,
                   sourceTreeDirty=False, platform="macOS", architecture=platform.machine(), system=platform.mac_ver()[0],
                   sdk="2.10.1", toolkitSHA256=TOOLKIT_SHA256, scenarios=results,
                   toolchain=dict(swift=run("xcrun", "swift", "--version").decode().strip(), xcode=run("xcodebuild", "-version").decode().strip(), rust=run("rustc", "--version").decode().strip()),
-                  simulatedUserDriver=True, actualInstallOrRelaunchExecuted=False, productionFeedChanged=False,
-                  remaining=["Automatic scheduling and actual install/relaunch with editor/transfer/database guards require separate acceptance"])
+                  simulatedUserDriver=True, actualInstallOrRelaunchExecuted=any(item["mode"] == "install" and item["passed"] for item in results), productionFeedChanged=False,
+                  remaining=["Transfer/database update-quit combinations and Windows signed updates require separate acceptance"])
     (evidence / "sdk-summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2)+"\n")
     print(json.dumps(result, ensure_ascii=False))
     if not result["passed"]: raise SystemExit(1)

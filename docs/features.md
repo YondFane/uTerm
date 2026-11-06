@@ -4374,11 +4374,13 @@ Markdown, shared session links, PR details/diff, visible offline failures/retry,
 hide/reopen/quit cancellation, literal submission, pending-request quit protection and bilingual
 theme captures. `github-native.json`, the simulated CLI log and four original screenshots are CI
 artifacts. Draft quit confirmation uses an asynchronous sheet attached to its own window, keeping
-WebKit and main-actor tasks responsive. The QA cancels the actual sheet button. The previous
-synchronous confirmation timed out on both Mac architectures; this correction still needs a fresh CI
-pass. No account, real GitHub write, push or fork is used. Shared Rust session tests verify
-stale/malformed link rejection, reopening and split metadata; those tests do not establish native
-visual acceptance.
+WebKit and main-actor tasks responsive. Actual ARM CI at source `3719222` passes Cancel and draft
+retention, then fails explicit creation: preparation returns extra `branch` metadata that the strict
+Core creation contract rejects. The panel now copies only title/base/head into the form; the
+regression includes extra preparation fields and requires one exact creation payload. The PR draft
+checkbox uses compact inline sizing. Fresh native creation/screenshots remain pending. No account,
+real GitHub write, push or fork is used. Shared session tests retain stale/malformed link, reopening
+and split checks.
 
 Linux checks pass the 422 existing frontend tests (11 skipped), the added GitHub panel regression,
 242 Core/FFI/failure-mode tests (17 ignored), 84 host tests (3 ignored), 18 Tauri backend tests (1
@@ -4670,20 +4672,26 @@ download/signature/version/cancel/retry/install/relaunch acceptance remain pendi
 compilation alone does not satisfy them. The focused Tauri hook test passes the opt-out startup,
 manual check and existing installation guard/failure cases.
 
-`python3 -B scripts/macos-updates-smoke.py` runs eight actual SDK checks using private loopback
-feeds, signed App ZIPs and unique QA identifiers with validated temporary roots. It generates
-one-time CryptoKit keys, verifies the official signing toolkit's pinned hash, and retains only the
-public key/signature in evidence. The simulated user driver accepts/cancels SDK callbacks; it does
-not replace downloading, signature verification, extraction or target validation. Valid,
-bad-signature, wrong-architecture/channel, old-version, cancel, offline and interrupted scenarios
-retain HTTP logs, reports and actual app screenshots; network failures also require a successful
-actual SDK retry. Source `8aacbb3b09925fe16f2bda24e66563eed9f27a31` passes seven scenarios on macOS
-arm64. The bad-signature archive is rejected, but the assertion fails because the SDK returns an
-outer installation error. Reports now retain bounded underlying error domain/code chains, without
-private descriptions, and still require the actual signature code; a generic installation error
-alone cannot pass. This correction needs fresh CI evidence. This suite explicitly does not yet
-execute installation, relaunch or automatic scheduling, and #45 remains open for those checks and
-Windows signed updates.
+`python3 -B scripts/macos-updates-smoke.py` runs ten actual SDK scenarios with private loopback
+feeds, signed App ZIPs and unique QA identifiers/temp roots. It creates one-time CryptoKit keys,
+verifies the official signing toolkit's pinned hash, and retains only public keys/signatures. User
+choices are simulated; downloading, verification, extraction, target checks and the SDK scheduler
+remain real. Cases include valid/bad signatures, wrong architecture/channel, old versions, cancel,
+offline/interrupted downloads with actual retries, and automatic checks after shared opt-in then
+opt-out. An installation case lets the actual SDK replace build1 with build2 and relaunch from the
+same private app path, retaining the real host PID/generation and saving a real editor draft through
+ordinary quit guards. The relaunch validates exact file bytes, produces fresh PTY output and
+explicitly closes the fixture. The server rejects and records requests before automatic opt-in.
+Reports, HTTP logs and actual app screenshots are archived.
+
+Source `3719222ced93c42852f795aae5e4eb6d7ab9c066` passes seven ARM scenarios. The bad-signature
+archive is rejected through errors `4005 → 4005 → 3002`, and the incorrect `3001` assertion fails.
+The pinned SDK's `Autoupdate/SUSignatureVerifier.m` uses `SUValidationError` plus the fixed
+`EdDSA signature does not match.` reason. QA now requires that exact bounded underlying cause;
+generic installation/validation errors still fail. Only a boolean reason is emitted, without private
+descriptions. Bridge negative tests cover unrelated causes. Corrected signature and added automatic
+scheduling scenarios need fresh CI. Actual installation/relaunch and Windows signed updates remain
+pending in #45.
 
 #### Windows/Tauri automatic installation
 

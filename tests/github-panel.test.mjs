@@ -40,7 +40,19 @@ test("shared GitHub panel awaits session failures and protects PR forms before s
     if (method === "github_repositories") return ["fixture-owner/fixture-repo"];
     if (method === "github_read") return params.number ? item : [item];
     if (method === "github_prepare_pr")
-      return { title: "Keep `literal` $(literal)", base: "main", head: "qa-feature" };
+      return {
+        title: "Keep `literal` $(literal)",
+        base: "main",
+        head: "qa-feature",
+        branch: "qa-feature",
+      };
+    if (method === "github_create_pr") {
+      assert.deepEqual(
+        Object.keys(params).sort(),
+        ["directory", "repository", "title", "body", "base", "head", "draft"].sort(),
+      );
+      return { number: 99, html_url: "https://github.com/fixture-owner/fixture-repo/pull/99" };
+    }
     throw Error(method);
   };
   const button = (text) =>
@@ -100,6 +112,15 @@ test("shared GitHub panel awaits session failures and protects PR forms before s
     assert.ok(calls.every(({ params }) => params.directory === "/fixture"));
     assert.ok(calls.some(({ method, params }) => method === "github_read" && params.number === 7));
     assert.ok(!calls.some(({ method }) => method === "github_create_pr"));
+    await act(async () => button("New PR").click());
+    await act(async () =>
+      document
+        .querySelector("dialog form")
+        .dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })),
+    );
+    assert.equal(calls.filter(({ method }) => method === "github_create_pr").length, 1);
+    assert.equal(document.querySelector("dialog").open, false);
+    assert.match(document.querySelector('[role="status"]').textContent, /Created PR #99/);
   } finally {
     await act(async () => root.unmount());
     await server.close();

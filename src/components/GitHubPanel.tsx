@@ -203,7 +203,9 @@ export function GitHubPanel({
       });
       await guardForm?.(true);
       setForm({
-        ...value,
+        title: value.title,
+        base: value.base,
+        head: value.head,
         body: tx("## 摘要\n\n\n## 验证\n\n\nRelease Notes:\n\n"),
         draft: true,
       });
@@ -491,7 +493,7 @@ export function GitHubPanel({
                 onChange={(e) => setForm({ ...form, body: e.target.value })}
               />
             </label>
-            <label>
+            <label className="pr-draft-choice">
               <input
                 type="checkbox"
                 disabled={posting}

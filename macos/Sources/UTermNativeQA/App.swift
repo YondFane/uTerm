@@ -121,9 +121,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 await model.shutdown(); terminating = true
                 finishReport(report, path: path); return
             }
-            if let path = WorkspaceModel.argument("--updates-smoke-report") {
+            if let path = WorkspaceModel.argument("--updates-smoke-report") ?? (Bundle.main.bundleIdentifier?.hasPrefix("sh.uterm.desktop.qa.native.update.") == true ? Bundle.main.object(forInfoDictionaryKey: "UTermQAUpdateReport") as? String : nil) {
                 var report = baseReport()
-                do { try await UpdatesSmoke.run(model: model, window: window, report: &report) }
+                do {
+                    if Bundle.main.object(forInfoDictionaryKey: "UTermUpdateTestMode") as? String == "install" {
+                        try await UpdateInstallationSmoke.run(model: model, window: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report)
+                    } else { try await UpdatesSmoke.run(model: model, window: window, report: &report) }
+                }
                 catch { report["failure"] = error.localizedDescription }
                 if let bridge = model.bridge {
                     do {

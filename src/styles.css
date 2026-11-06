@@ -2944,6 +2944,15 @@ select:focus-visible {
   border-radius: 6px;
   padding: 8px;
 }
+.pr-dialog .pr-draft-choice {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.pr-dialog .pr-draft-choice input {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
+}
 .sidebar .row-label,
 .sidebar .workspace-switcher {
   font-size: var(--interface-size, 13px);

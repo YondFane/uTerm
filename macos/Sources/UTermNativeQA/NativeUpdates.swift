@@ -73,6 +73,7 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
         qaEvents.append("target-accepted:" + item.versionString)
     }
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) { status = localized("Update available: ", "发现新版本：") + item.displayVersionString; qaEvents.append("found:" + item.versionString) }
+    func updater(_ updater: SPUUpdater, willScheduleUpdateCheckAfterDelay delay: TimeInterval) { qaEvents.append("scheduled:" + String(delay)) }
     func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
         self.error = localized("Update failed. Check the connection and retry.", "更新失败，请检查连接后重试。")
         let failure = error as NSError; qaLastError = failure.domain + ":" + String(failure.code)
