@@ -9,6 +9,9 @@ import json, os, subprocess, sys, tempfile, time
 from contextlib import ExitStack
 from pathlib import Path
 app=Path(sys.argv[1]); evidence=Path(sys.argv[2]); evidence.mkdir(parents=True,exist_ok=True)
+tested=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+head=os.environ.get('PR_HEAD_SHA',tested)
+assert not subprocess.check_output(['git','status','--porcelain'],text=True).strip(),'Input ownership QA requires clean source'
 with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as temporary, ExitStack() as files:
     root=Path(temporary); processes=[]
     def launch(role):
@@ -27,7 +30,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as temporary, ExitSt
         value=json.loads(report.read_text()); assert value.get('passed') and 'failure' not in value,value
         assert value['coreReady'] and value['windowVisible'] and not value['productionDataAccess'],value
         assert not value['manualKeyboardIMEAcceptance'],value
+        assert value['sourceHeadSHA']==head and value['sourceSHA']==tested,value
+        assert not subprocess.check_output(['git','status','--porcelain'],text=True).strip(),'Input ownership QA changed source'
         for name in value['captures']: assert (evidence/name).stat().st_size>5000,name
+        value.update(testedMergeSHA=tested,sourceTreeDirty=False)
+        report.write_text(json.dumps(value,ensure_ascii=False,indent=2)+'\n')
         return value
     try:
         owner,owner_report=launch('owner')

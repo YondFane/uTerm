@@ -78,10 +78,10 @@ NT10.0.26100 通过候选安装。五份实际包的哈希均已独立复算，�
 workflow 在该候选来源因独立 #41／#45 检查失败，候选成功不代表整体通过；#41在源码949e4c2单独验收；#42／#45在源码ec1a49d验收，模拟及人工豁免范围见完成评论。
 
 原生 App 使用 ad-hoc 签名，Sparkle 框架保留供应商签名，没有 Apple
-Developer 签名或公证。Windows 候选未签名，两端均无更新签名。Windows 候选对 Tauri 唯一的
+Developer 签名或公证。Windows 候选未签名，这些基础候选包没有更新器签名。Windows 候选对 Tauri 唯一的
 `__TAURI_BUNDLE_TYPE_VAR_UNK` → `__TAURI_BUNDLE_TYPE_VAR_NSS`
 变换后逐字节核对程序；标记缺失／重复或其他字节变化均失败。Candidate Windows QA
-workflow 独立执行安装器检查。签名更新、升级／数据回退及稳定切换继续开放；这些检查不发布，也不更改生产更新源。
+workflow 独立执行安装器检查。带源码身份的私有SDK签名更新测试和升级／数据回退证据已在#45／#46验收；稳定切换继续受#47门禁约束。这些检查不发布，也不更改生产更新源。
 
 #### 可复现的客户端测量
 
@@ -197,6 +197,8 @@ fork 继承的描述符继续持有探测锁、阻止替换宿主启动。
 的空闲宿主替换 CI 失败：新增模拟 CLI 测试通过，但 job 在原生窗口冒烟前失败。解锁修复的平台验收须在 #32 核对其自己的源码绑定 CI 证据。
 
 共享 u64 场景也将拥有／只读／无所有者元数据交给真实 Rust 编码器与 Swift／TypeScript 解码器，拒绝无效角色，sequence／ack 数值不发生舍入。
+
+原生输入控制入口在启动前及每个进程结束后检查Git源码清洁状态，核对包内两种源码身份，再为每份报告记录`testedMergeSHA`和`sourceTreeDirty`。c15f1bb的ARM工作流实际场景通过，但两份原始输入控制报告缺少清洁字段，严格准备审计因此拒绝。[原始产物](https://github.com/YondFane/uTerm/actions/runs/42309000560/artifacts/13548990662)保留不变。针对性回归保证缺少字段的报告仍被拒绝；入口修正后的新Mac证据由#47跟踪。
 
 `bash scripts/macos-input-control-smoke.sh`
 操作两个同时运行的隔离原生应用进程，检查原生接管按钮、只读输入／resize 拒绝、输出／ack、观察者正常退出、重新接管和准确关闭，并采集四张 WindowServer 截图。`pnpm qa:shared-state`

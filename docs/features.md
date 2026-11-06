@@ -112,17 +112,18 @@ overall workflow pass. #41 is separately accepted at source949e4c2; #42/#45 are 
 sourceec1a49d, with the simulation/manual-waiver boundaries in their completion comments.
 
 Native Apps are ad-hoc signed, their Sparkle framework retains its vendor signatures, and neither
-Apple Developer signing nor notarization is available. Windows candidates are unsigned; neither
-client has an update signature. Windows candidate identity compares every executable byte after
-Tauri's single expected `__TAURI_BUNDLE_TYPE_VAR_UNK` to `__TAURI_BUNDLE_TYPE_VAR_NSS` transform.
-Missing/duplicate markers or any other change fail. The Candidate Windows QA workflow runs this
-installer scope independently. Signed updates, upgrade/data rollback and stable cutover remain open;
-these checks do not publish or change production sources.
+Apple Developer signing nor notarization is available. Windows candidates are unsigned; these base
+candidates have no updater signature. Windows candidate identity compares every executable byte
+after Tauri's single expected `__TAURI_BUNDLE_TYPE_VAR_UNK` to `__TAURI_BUNDLE_TYPE_VAR_NSS`
+transform. Missing/duplicate markers or any other change fail. The Candidate Windows QA workflow
+runs this installer scope independently. Source-bound signed private SDK fixtures and upgrade/data
+rollback evidence are accepted in #45/#46; stable cutover remains gated by #47. These checks do not
+publish or change production sources.
 
 #### Reproducible client measurements
 
 The Client performance evidence workflow runs native and Tauri clients sequentially on the same Mac,
-with three repetitions per client, and records a separate Windows Tauri baseline. Version3 of
+with three repetitions per client, and records a separate Windows Tauri baseline. Version4 of
 `shared/fixtures/client-performance.json` fixes one real PTY, a 120×30 grid, 14pt text and
 5,000-line scrollback. Both clients use their ordinary renderer-to-PTY resize paths; a mismatched or
 clipped grid fails the report. Twenty cycles exercise 1,024 ordered ANSI/Unicode records, 64KiB CAS
@@ -354,6 +355,14 @@ source-bound CI evidence in #32.
 The shared u64 fixtures also carry owned/passive/unowned metadata through the real Rust encoder and
 Swift/TypeScript decoders; malformed roles are rejected without rounding sequence or acknowledgement
 values.
+
+The native ownership wrapper checks Git source cleanliness before launch and after each process,
+matches both embedded source identities, then records `testedMergeSHA` and `sourceTreeDirty` in each
+report. The c15f1bb ARM workflow passed its actual scenes, but its two raw ownership reports omitted
+the clean-source field; the strict readiness audit rejects that missing metadata.
+[The original artifact](https://github.com/YondFane/uTerm/actions/runs/42309000560/artifacts/13548990662)
+is retained. A focused regression keeps such reports blocked; fresh Mac evidence for the wrapper
+correction is tracked in #47.
 
 `bash scripts/macos-input-control-smoke.sh` drives two concurrent, isolated native app processes,
 the native take-control button, passive input/resize rejection, output/ack, ordinary viewer exit,

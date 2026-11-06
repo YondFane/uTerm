@@ -11,6 +11,18 @@ spec.loader.exec_module(readiness)
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_native_report_without_clean_source_metadata_remains_blocked(self):
+        head, merge = "a" * 40, "b" * 40
+        report = dict(passed=True, sourceHeadSHA=head, sourceSHA=merge, productionDataAccess=False)
+        with tempfile.TemporaryDirectory() as root:
+            archive = Path(root) / "native.zip"
+            with ZipFile(archive, "w") as bundle:
+                bundle.writestr("input-control-owner.json", json.dumps(report))
+            actual = readiness.inspect_evidence(archive, head)
+            self.assertEqual(actual["testedMergeSHAs"], [merge])
+            self.assertEqual(len(actual["reports"]), 1)
+            self.assertTrue(any("Unclean source" in error for error in actual["errors"]))
+
     def test_stale_failed_dirty_and_incomplete_artifacts_remain_blocked(self):
         head, merge = "a" * 40, "b" * 40
         report = dict(passed=True, sourceHeadSHA=head, testedMergeSHA=merge, sourceTreeDirty=False)
