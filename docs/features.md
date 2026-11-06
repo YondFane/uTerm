@@ -5782,7 +5782,10 @@ harness additionally provisions a private real PostgreSQL cluster and checks all
 catalog-verified driver installation, exact SQL values, retained drafts, write confirmation,
 rollback/commit, server-observed slow-query cancellation, reconnect and post-exit data/connection
 cleanup. New-source Windows/macOS runtime results for these additional scenes are pending. SQL and
-Unicode samples come from a shared QA fixture, preserving UI-translation coverage checks.
+Unicode samples come from a shared QA fixture, preserving UI-translation coverage checks. Reopening
+a draft locates its saved endpoint independently of the visible `*` marker and still requires the
+marker, the same editor instance and unchanged SQL. The first Windows/macOS run exposed the old
+exact-text selector; its failed reports are retained rather than counted as acceptance.
 
 `database-protocol-qa.py` records JDBC models for MySQL/PostgreSQL/Oracle, pinned vendor-driver
 SOCKS handshakes and a disposable MongoDB wire fixture. Component and Elasticsearch HTTP simulations

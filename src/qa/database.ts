@@ -125,8 +125,8 @@ export async function runDatabase(
   );
   const config = profiles.find((item) => item.kind === "postgresql")!;
   const profile = () =>
-    [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-      (item) => item.textContent?.trim() === config.name,
+    [...document.querySelectorAll<HTMLButtonElement>("button.row-label")].find(
+      (item) => item.title === `${config.name} — ${config.host}:${config.port}`,
     );
   (await until(profile, "PostgreSQL profile")).click();
   const workspace = await until(() => {
@@ -207,6 +207,7 @@ export async function runDatabase(
   assert(project, "Temporary project missing");
   project.click();
   await until(() => workspace.hidden, "hide workbench");
+  assert(profile()?.textContent?.trim() === `${config.name} *`, "SQL draft marker missing");
   (await until(profile, "retained profile")).click();
   await until(() => !workspace.hidden, "reopen workbench");
   assert((await ready()) === retainedEditor, "Hidden workbench recreated its SQL editor");
