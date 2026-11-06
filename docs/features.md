@@ -5773,75 +5773,66 @@ settings without saving defaults when opening the window.
 
 #### Shared-service validation and limits
 
-Linux x86_64 / Rust 1.99.1 passes 24 database/document/component regressions, five common download
-regressions and two host-port checks covering cross-command draft/exit protection, native picker
-cancellation and cached-engine repair. Full Core/FFI, host, backend (41 passed / two ignored),
-frontend (419 passed / ten skipped), types and production/desktop builds pass. Current checks and
-actual database/dual-client acceptance are tracked in
-[#38](https://github.com/YondFane/uTerm/issues/38); native database-workbench acceptance is still
-pending.
+[#38 is implemented and accepted](https://github.com/YondFane/uTerm/issues/38#issuecomment-6678052308)
+on the task branch, without merging into `release`. Its source head is
+`0c31ec5e002c00c6c4f2d52101a783262a83a79f`; the actual tested PR merge is
+`4017ae8c87f3b154844e15127da27bf0bfc75529`. Every report below records a clean source tree. Later
+Agent commits do not replace these database acceptance identities.
 
-Six additional Linux protocol/contract regressions pass, including late connection completion after
-close, result backpressure, generation mismatch and parameter redaction. An isolated real PostgreSQL
-16.11 server with the catalog-verified JDBC driver passes exact bigint/decimal/binary/null/Unicode
-values, default read-only protection, pending-transaction disconnect/quit protection, rollback,
-concurrent stale-write conflicts and disconnect of an observed slow query. It also checks that
-disconnect and client close release the active server query. The shared database CI workflow
-archives source-bound reports and logs. Swift C ABI and exact-value contract checks are included in
-native CI. The accepted service evidence at source `ef5c3f4` / tested merge `011da302` is available
-in [#38](https://github.com/YondFane/uTerm/issues/38#issuecomment-6664109569); it does not establish
-acceptance of the new database window or other database engines.
+Linux x86_64 / Rust 1.99.1 passes 24 database/document/component regressions, including interrupted
+and cancelled downloads, range errors, size/hash verification, cache repair, archive boundaries,
+versioned document writes and connection cleanup. Asynchronous client checks cover late completion
+after close, backpressure, generation mismatches and parameter redaction. The real isolated
+PostgreSQL 16.11 report passes all 11 scenarios: exact bigint/decimal/binary/null/Unicode, default
+read-only protection, pending-transaction disconnect/quit guards, rollback, stale writes and
+server-observed query cancellation and release. JDBC 42.7.14 is verified against the catalog.
 
-Linux checks also cover profile CAS/draft/password exclusion, cancellation draining on both content
-ports, modal freeze/resume and clearing a temporary password after editing the target. The native
-workflow runs `bash scripts/macos-database-smoke.sh` with an isolated real PostgreSQL server and
-catalog-verified JDBC driver, recording profile save, exact SQL values, hide/reopen/reconnect,
-language/theme/narrow-window behavior and WindowServer images. Runtime results for the new window
-must pass both Swift compilation and the actual window scenes at its actual source head; neither is
-accepted from the Linux checks. Source and actual tested commit
-`97f83668f0445dc371fbf1c44f86a7cb5350e04c` pass both complete native jobs through workflow dispatch
-directly on the task branch. macOS 15.8.2 ARM64 and 15.7.9 Intel use Xcode 16.4, Swift 6.1.2, Rust
-1.99.1, PostgreSQL 16.15 and JDBC 42.7.14. Both `database-live.json` reports have `passed=true`, a
-clean source tree and exit code 0, including SQL-input readiness, clipboard equality, exact
-bigint/decimal/Unicode values, private-password reconnect, hide/reopen and active-profile
-protection. The
-[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42158127557/artifacts/13476455312) and
-[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42158127557/artifacts/13476426275)
+`python3 -B scripts/database-protocol-qa.py <evidence-directory>` records 32 checks: 29 pass, three
+real-MySQL cases are skipped and none fail. MySQL/PostgreSQL/Oracle use JDBC models and pinned
+vendor driver SOCKS handshakes; MongoDB uses its real pinned Java driver against a disposable wire
+fixture; Elasticsearch uses HTTP simulations. These authorized simulations supplement actual
+PostgreSQL acceptance and are explicitly labelled; they do not establish real vendor-cluster or
+account acceptance. Commands, driver versions/hashes, reports and logs are in the
+[Linux artifact](https://github.com/YondFane/uTerm/actions/runs/42166630794/artifacts/13478739772).
+
+`bash scripts/macos-database-smoke.sh` passes in both complete native jobs: macOS 15.8.2 ARM64 and
+15.7.9 Intel, Xcode 16.4, Swift 6.1.2, Rust 1.99.1, JDK 21, PostgreSQL 16.15 and verified JDBC
+42.7.14. Both `database-live.json` reports have `passed=true` and exit code 0, covering profile save
+without password persistence, SQL controls/editor readiness, clipboard equality, exact values,
+hide/reopen/reconnect, active-profile protection and bilingual theme/narrow-window behavior. The
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42166630325/artifacts/13479841334) and
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42166630325/artifacts/13480049468)
 each contain the report, toolchain, logs, `native-database-sql-dark-en.png` and
-`native-database-sql-light-zh-narrow.png`. All four WindowServer images have been individually
-checked.
+`native-database-sql-light-zh-narrow.png`.
 
-The native manager starts component detection only when Database components is first opened and
-retains the manager when hidden; a focused regression checks no unseen probe during profile editing
-and no duplicate probe on reopening. Fixed method names and bounded error codes exclude
-parameters/vendor text from native diagnostics.
-
-Native SQL input QA waits for catalog loading to finish, enabled Disconnect/Execute SQL controls and
-a visible editable CodeMirror before entering SQL, including after reconnecting. A connection handle
-alone does not establish editor readiness. The SQL clipboard equality assertion remains required.
-The delayed-catalog regression and related database/content checks pass all 16 tests on Linux;
-TypeScript checks pass. Same-source Tauri CI also passes on macOS 26.6.2 ARM64 and Windows Server
-2025 x64: frontend tests are 419 passed/10 skipped and 418 passed/11 skipped respectively, with 63
-real-app QA scenes and no cleanup errors on each platform. Reports are in the
-[macOS artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476515464)
+`python scripts/ssh-tauri-qa.py` passes on macOS 26.6.2 ARM64 and Windows Server 2025 x64 with Node
+24.22.2, pnpm 11.22.0, Rust 1.99.1 and JDK 21. Each platform passes 68 real-app scenes, including
+five database scenes against real private PostgreSQL 16.15 / 17.11. They cover all five profile
+types, verified driver installation, exact SQL, retained drafts, write confirmation,
+rollback/commit, server-observed slow-query cancellation and reconnect. `tauri-state-qa/report.json`
+has `passed=true` and `cleanupErrors=[]`; `tauri-database-service/database-live.json` verifies
+committed data after app exit, no remaining client connections, owned-server shutdown and credential
+exclusion. The
+[macOS artifact](https://github.com/YondFane/uTerm/actions/runs/42166630494/artifacts/13480905732)
 and
-[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476251745).
-These Tauri scenes do not establish complete Windows database-workbench acceptance. The desktop QA
-harness additionally provisions a private real PostgreSQL cluster and checks all five profile types,
-catalog-verified driver installation, exact SQL values, retained drafts, write confirmation,
-rollback/commit, server-observed slow-query cancellation, reconnect and post-exit data/connection
-cleanup. New-source Windows/macOS runtime results for these additional scenes are pending. SQL and
-Unicode samples come from a shared QA fixture, preserving UI-translation coverage checks. Reopening
-a draft locates its saved endpoint independently of the visible `*` marker and still requires the
-marker, the same editor instance and unchanged SQL. The first Windows/macOS run exposed the old
-exact-text selector; its failed reports are retained rather than counted as acceptance.
+[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42166630494/artifacts/13480430678)
+each contain
+`tauri-state-qa/database-database-live-{profiles,exact,draft,transactions,recovery}.png` and
+adjacent scenario/capture metadata.
 
-`database-protocol-qa.py` records JDBC models for MySQL/PostgreSQL/Oracle, pinned vendor-driver
-SOCKS handshakes and a disposable MongoDB wire fixture. Component and Elasticsearch HTTP simulations
-run separately from actual PostgreSQL acceptance. Reports identify simulation, real-server and
-skipped cases explicitly; no real MySQL/Oracle/MongoDB/Elasticsearch cluster or manual
-picker/interaction acceptance is claimed. #38 stays open until the new-source automated results and
-artifacts pass.
+All 14 original application screenshots have been individually inspected. Long values clipped by a
+window or result column are checked as exact strings in the reports. SQL/Unicode samples come from
+the shared fixture, preserving translation checks. Draft reopening locates the saved endpoint and
+requires its `*` marker, the same editor instance and unchanged SQL. Component probes start only
+when the manager is opened and are retained when hidden. Input readiness waits for enabled controls
+and a visible editable CodeMirror. Profile CAS, cancellation draining on both content ports, modal
+freeze/resume and temporary-password invalidation remain covered; native diagnostics contain fixed
+methods and bounded error codes rather than private parameters/vendor text.
+
+Final manual interaction/picker acceptance is waived by the user and is not recorded as manually
+passed. Real non-PostgreSQL vendor clusters remain unexecuted under the authorized simulation scope.
+Earlier selector and GitHub DNS failures remain linked in #38; successful reruns are identified by
+their actual source and merge. Other M3/M4/M5 acceptance remains separate.
 
 ### Database setup and visibility
 

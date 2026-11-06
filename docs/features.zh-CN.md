@@ -3398,43 +3398,47 @@ revision 校验，连接使用中或有草稿时拒绝修改。临时密码只�
 
 #### 共享服务验证与限制
 
+[#38 已实现并验收](https://github.com/YondFane/uTerm/issues/38#issuecomment-6678052308)，仍在任务分支，未合入
+`release`。验收源码 head 为 `0c31ec5e002c00c6c4f2d52101a783262a83a79f`，实际测试 PR merge 为
+`4017ae8c87f3b154844e15127da27bf0bfc75529`。下列报告均记录源码干净；后续 Agent 提交不替代数据库验收身份。
+
 Linux x86_64／Rust
-1.99.1 通过 24 项数据库／文档／组件回归、5 项通用下载回归及 2 项平台接口检查，覆盖跨命令草稿／退出保护、取消原生选择及缓存引擎修复。完整 Core／FFI、宿主、后端（41 通过／2 忽略）、前端（419 通过／10 跳过）、类型、生产／桌面构建通过。当前检查及真实数据库／双端入口验收见
-[#38](https://github.com/YondFane/uTerm/issues/38)，尚不宣称原生数据库工作台已验收。
+1.99.1 通过 24 项数据库／文档／组件回归，覆盖下载中断与取消、范围错误、大小／哈希校验、缓存修复、归档边界、文档版本写入及连接清理。异步客户端检查覆盖关闭后延迟完成、背压、代次不匹配及参数脱敏。隔离的真实 PostgreSQL
+16.11 报告通过全部 11 个场景：bigint／decimal／二进制／null／Unicode 精确值、默认只读、待提交事务断开／退出保护、回滚、过期写入及服务端已观察到的查询取消／释放。JDBC
+42.7.14 按目录校验。
 
-另有六项 Linux 协议／契约回归通过，覆盖关闭期间连接完成、结果背压、过期 generation 和请求参数不回显。隔离的真实 PostgreSQL
-16.11 与目录校验的 JDBC 驱动通过 bigint／decimal／二进制／null／Unicode 精确值、默认只读、未提交事务断开／退出保护、回滚、并发过期写入冲突及已观察到的慢查询断开检查，另检查断开与关闭客户端后服务端活动查询确实释放。共享数据库 CI 工作流归档源码绑定报告和日志。原生 CI 包含 Swift
-C ABI 与精确值契约检查。已验收的服务证据对应源码 `ef5c3f4`／tested merge `011da302`，见
-[#38](https://github.com/YondFane/uTerm/issues/38#issuecomment-6664109569)，不代表新增数据库窗口或其他数据库引擎已验收。
+`python3 -B scripts/database-protocol-qa.py <evidence-directory>`
+记录 32 项检查：29 通过、三项真实 MySQL 检查跳过、无失败。MySQL／PostgreSQL／Oracle 使用 JDBC 模型及固定厂商驱动的 SOCKS 握手；MongoDB 使用真实固定 Java 驱动对接临时 wire
+fixture；Elasticsearch 使用 HTTP 模拟。这些经用户授权且明确标注的模拟补充真实 PostgreSQL 验收，不代表真实厂商集群或账户验收。命令、驱动版本／哈希、报告及日志见
+[Linux artifact](https://github.com/YondFane/uTerm/actions/runs/42166630794/artifacts/13478739772)。
 
-Linux 检查还覆盖配置 CAS／草稿／密码排除、两端内容 transport 取消后的写入排空、模态窗口冻结／恢复及目标修改后清除临时密码。原生工作流运行
-`bash scripts/macos-database-smoke.sh`，使用隔离的真实 PostgreSQL 服务和目录校验的 JDBC 驱动，记录配置保存、SQL 精确值、隐藏／重开／重连、语言／主题／窄窗口和 WindowServer 截图。新增窗口必须分别通过 Swift 编译和真实窗口场景，Linux 检查不能替代这两项验收，结果须按实际源码 head 核对。
-
-源码与实际测试提交 `97f83668f0445dc371fbf1c44f86a7cb5350e04c`
-通过 workflow_dispatch 直接测试任务分支，两个完整原生 job 均通过。macOS 15.8.2 ARM64 和 15.7.9
-Intel 使用 Xcode 16.4、Swift 6.1.2、Rust 1.99.1、PostgreSQL 16.15 和 JDBC 42.7.14。两份
+`bash scripts/macos-database-smoke.sh` 在两个完整原生 job 中通过：macOS 15.8.2 ARM64 与 15.7.9
+Intel，Xcode 16.4、Swift 6.1.2、Rust 1.99.1、JDK 21、PostgreSQL 16.15 及校验 JDBC 42.7.14。两份
 `database-live.json` 均为
-`passed=true`、源码干净、退出码 0，覆盖 SQL 输入就绪、剪贴板一致性、bigint／decimal／Unicode 精确值、私有密码重连、隐藏／重开及活跃配置保护。
-[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42158127557/artifacts/13476455312) 和
-[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42158127557/artifacts/13476426275)
-各包含报告、工具链、日志、`native-database-sql-dark-en.png` 和
-`native-database-sql-light-zh-narrow.png`，四张 WindowServer 图均已逐张目视核对。
+`passed=true`、退出0，覆盖配置保存不持久化密码、SQL 控件／编辑器就绪、剪贴板一致性、精确值、隐藏／重开／重连、活跃配置保护及双语／主题／窄窗口。
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42166630325/artifacts/13479841334) 与
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42166630325/artifacts/13480049468)
+各包含报告、工具链、日志、`native-database-sql-dark-en.png` 及
+`native-database-sql-light-zh-narrow.png`。
 
-原生管理页仅在首次打开“数据库组件”时启动组件探测，隐藏后保留管理页状态；专项回归检查编辑配置时不发起不可见探测，重复打开也不重复探测。原生诊断仅记录固定方法名及有界错误码，不记录参数／厂商文本。
+`python scripts/ssh-tauri-qa.py` 在 macOS 26.6.2 ARM64 与 Windows Server 2025 x64 通过，使用 Node
+24.22.2、pnpm 11.22.0、Rust 1.99.1 及 JDK
+21。两平台各通过 68 个真实应用场景，其中五个数据库场景使用私有真实 PostgreSQL
+16.15／17.11，覆盖五类配置、校验驱动安装、SQL 精确值、草稿保留、写入确认、回滚／提交、服务端已观察到的慢查询取消及重连。`tauri-state-qa/report.json`
+为 `passed=true`、`cleanupErrors=[]`；`tauri-database-service/database-live.json`
+核对实际退出后提交的数据、无剩余客户端连接、私有服务器已停止及凭据排除。
+[macOS artifact](https://github.com/YondFane/uTerm/actions/runs/42166630494/artifacts/13480905732)
+和
+[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42166630494/artifacts/13480430678)
+各包含 `tauri-state-qa/database-database-live-{profiles,exact,draft,transactions,recovery}.png`
+及相邻场景／截图元数据。
 
-原生 SQL 输入 QA 会等待目录加载结束、“断开”／“执行 SQL”控件启用及 CodeMirror 实际显示且可编辑，再输入 SQL；重连后同样等待。仅获得连接句柄不代表编辑器已就绪，SQL 剪贴板一致性断言继续保留。延迟目录加载回归及相关数据库／内容检查在 Linux 上全部 16 项通过，TypeScript 检查通过。同源码 Tauri
-CI 在 macOS 26.6.2 ARM64 与 Windows Server 2025
-x64 也通过：前端分别为 419 通过／10 跳过、418 通过／11 跳过，两平台各有 63 个真实应用 QA 场景通过且清理无错误。报告见
-[macOS artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476515464)
-与
-[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476251745)。这些 Tauri 场景不代表完整 Windows 数据库工作台已验收。桌面 QA 另外提供私有真实 PostgreSQL 集群，检查五种配置类型、目录校验驱动安装、SQL 精确值、草稿保留、写入确认、事务回滚／提交、服务端已观察到的慢查询取消、重连及退出后数据／连接清理；新增场景的 Windows/macOS 新源码运行结果仍待验证。SQL 与 Unicode 样本从共享 QA 夹具读取，保留界面文案覆盖检查。
+14 张原始应用截图均已逐张核对。窗口或结果列裁切的长数值由报告中的精确字符串断言核对。SQL／Unicode 样本从共享夹具读取，保留文案检查。草稿重开按保存端点定位，仍要求
+`*`
+标记、同一编辑器及原 SQL。组件管理页仅在打开时启动探测，隐藏后保留。输入就绪检查等待控件启用及 CodeMirror 可见且可编辑。配置 CAS、两端内容 transport 取消后排空、模态冻结／恢复及目标变化后临时密码失效仍有覆盖；原生诊断仅含固定方法名和有界错误码，不包含私有参数／厂商文本。
 
-草稿重开按已保存的端点定位，不受可见 `*`
-标记影响，仍要求标记存在、编辑器实例相同且 SQL 不变。首轮 Windows/macOS 运行暴露了旧的完整文字定位问题；失败报告保留，不计为验收通过。
-
-`database-protocol-qa.py`
-分别记录 MySQL／PostgreSQL／Oracle 的 JDBC 模型、固定厂商驱动的 SOCKS 握手及临时 MongoDB 协议模拟。组件与 Elasticsearch
-HTTP 模拟和真实 PostgreSQL 验收分开运行。报告明确标注模拟、真实服务及跳过项，不宣称真实 MySQL／Oracle／MongoDB／Elasticsearch 集群或人工选择器／交互验收通过。#38 在新源码自动检查及产物核对通过前保持开放。
+最后人工交互／选择器验收由用户豁免，不记录为人工通过。真实非 PostgreSQL 厂商集群按授权模拟范围保持未执行。先前的定位及 GitHub
+DNS 失败仍在 #38 保留链接；成功重跑注明实际源码与 merge。其他 M3／M4／M5 验收保持独立。
 
 ### 数据库配置与区域显示
 
