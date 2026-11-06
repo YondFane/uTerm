@@ -91,8 +91,9 @@ five actual package hashes were independently recomputed and the three original 
 captures inspected. Mac uses Xcode16.4, Swift6.1.2 and Rust1.99.1; Windows uses Node24.22.2,
 pnpm11.22.0, PowerShell7.6.9 and Rust1.99.1. Reports, artifacts and the exact checks are linked in
 [#44](https://github.com/YondFane/uTerm/issues/44#issuecomment-6686879466), now accepted on the task
-branch. The Mac workflow still fails separate #41/#45 checks; candidate success is not an overall
-workflow pass.
+branch. At that candidate source, separate #41/#45 checks failed; candidate success is not an
+overall workflow pass. #41 is now separately accepted at source949e4c2; update acceptance remains
+open.
 
 Native Apps are ad-hoc signed, their Sparkle framework retains its vendor signatures, and neither
 Apple Developer signing nor notarization is available. Windows candidates are unsigned; neither
@@ -160,8 +161,8 @@ architectures rejected the combined Swift expression. Fresh performance results 
 
 Migration acceptance remains open in [#13](https://github.com/YondFane/uTerm/issues/13). M3 #17 was
 closed at the user's direction, retaining persistent-layout/PDF-mark and Windows run-panel/picker
-coverage gaps. Database, Redis and Agent acceptance is recorded in #38–#40. M4 still needs #41
-preference completion, #42 interaction regression and #43 performance evidence. M5 candidate
+coverage gaps. Database, Redis, Agent and settings acceptance is recorded in #38–#41. M4 has four of
+six tasks closed; #42 interaction regression and #43 performance evidence remain open. M5 candidate
 packaging #44 is accepted; updates, upgrade/rollback and final gates remain open in #45–#47.
 
 Redis paging, deletion, TTL, quit-cancellation and OS-credential checks are accepted at source
@@ -4103,7 +4104,9 @@ private Host cleanup. The archives contain `agent-native.json`, `agent-hooks-cor
 [acceptance record](https://github.com/YondFane/uTerm/issues/40#issuecomment-6679048480) links each
 artifact and image. Provider authentication, global package installation and final OS notification
 delivery remain explicitly simulated; final human acceptance is waived by the user. This evidence
-does not accept the incomplete full settings/menu integration in #41 or merge the draft PR.
+does not replace the separate
+[#41 settings/menu acceptance](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106)
+or merge the draft PR.
 
 ### Installing and removing Hooks
 
@@ -4462,13 +4465,15 @@ update. Intel Return and GitHub boundary failures remain recorded; their reports
 selection state and returned boundary codes for the required rerun. Dependency caching on CI failure
 does not turn a failed gate into a passing result.
 
-Source `60e183043988626cddbb4fa14e140ed9c25f17f6`, tested merge
-`f93da46db913e8be48f6bac46cb22f00577d23b8`, passes Native
-[run 42187274886](https://github.com/YondFane/uTerm/actions/runs/42187274886) on macOS 15.8.2 arm64
-and 15.7.9 Intel, and Tauri
-[run 42187274834](https://github.com/YondFane/uTerm/actions/runs/42187274834) on macOS 26.7.2 arm64
-and Windows Server 2025 x64. All four reports record clean source trees. Both native settings
-reports pass with exit 0; Tauri passes 73 scenes per platform with no cleanup errors.
+Settings/menu/command acceptance #41 is complete on source
+`949e4c23dc22d2b01e4823b96a73a26e8c26f60c`, tested merge `b8e96bbb42501213040f0b93bff009ecd24623a7`.
+Native [run42251082940](https://github.com/YondFane/uTerm/actions/runs/42251082940) passes
+settings/inspector/GitHub reports and Core/FFI/Swift tests on macOS15.8.2 arm64 and15.7.9 Intel; its
+overall result still fails the separate #45 SDK capture. Tauri
+[run42251082946](https://github.com/YondFane/uTerm/actions/runs/42251082946) passes both full jobs
+on macOS26.6.2 arm64 and Windows Server2025 x64, each with73 actual-app scenes and no cleanup
+errors. All reports bind clean source/merge identities; this source is not presented as a later
+commit retest.
 
 The actual Rust process/TypeScript checks pass 372 shortcut configurations, 11,532 resolved-binding
 comparisons and 96 theme inputs, including Unicode names, contextual lowercasing, encoded IDs,
@@ -4488,7 +4493,7 @@ Twelve original application screenshots have been reviewed. Native archives incl
 `native-settings-full-light-zh-narrow.png`. Tauri archives include `settings-platform.json`,
 `tauri-state-qa/report.json`, `initial-theme-invalid.json/.png` and
 `initial-theme-imported.json/.png`. The
-[evidence record](https://github.com/YondFane/uTerm/issues/41#issuecomment-6681066363) links all
+[evidence record](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106) links all
 four artifacts, commands, toolchains and captures. Tauri uses DOM File events inside the real
 application; OS file-chooser interaction is not claimed. macOS images use WindowServer and Windows
 uses the owned QA HWND with capture metadata.
@@ -4496,10 +4501,11 @@ uses the owned QA HWND with capture metadata.
 Earlier window-capture, SSH askpass and focus-assertion failures, plus cancelled superseded runs,
 remain in the Issue records. The focus test now activates the intended settings origin rather than
 expecting it while the main workspace is in front after cancelled quit. These failures are not
-counted as passes. Full settings acceptance remains incomplete: the reports keep
-`nativeSettingsFeatureAcceptanceComplete=false` for remaining effects and controls awaiting native
-acceptance. Human acceptance is waived by the user; neither that waiver nor these partial results
-establish stable cutover or merge the draft PR.
+counted as passes. #41 is accepted against its four criteria and the separate
+settings/inspector/GitHub reports. The older `nativeSettingsFeatureAcceptanceComplete=false` summary
+remains visible because its remaining list points at #45 updates and those separate reports; it is
+not rewritten as true. Login approval uses the authorized simulation, final human acceptance is
+waived, and neither establishes stable cutover or merges the draft PR.
 
 ### Terminal text selection and rendering
 

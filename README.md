@@ -149,15 +149,17 @@ and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift b
 `pnpm settings:generate` derives the native command/theme catalog from the existing TypeScript
 settings and translations; `pnpm settings:check` verifies it. Contract generation/checks include
 this catalog. Core `settings.catalog` and `settings.validate` read defaults and validate platform
-shortcuts without saving configuration; complete native settings/menu/login integration remains
-tracked in #41.
+shortcuts without saving configuration. Shared/native settings, menus and guarded login simulations
+are accepted in [#41](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106); actual
+OS registration remains explicitly unexecuted.
 
 Native settings QA: **Settings → All settings…** opens the draft form. Run
 `bash scripts/macos-settings-smoke.sh` after the QA build to check read-only opening, field
 conflicts, invalid drafts, shortcut capture, explicit reset and actual quit cancellation. The script
 records real windows, theme effects, menu keys and palette focus. Login-item QA uses a guarded
-simulation and never registers a CI login item. Remaining preferences and unavailable commands
-remain under #41.
+simulation and never registers a CI login item. Preference/inspector/GitHub acceptance uses
+source949e4c2 and its four platform reports; signed update installation remains tracked separately
+in #45.
 
 `bash scripts/macos-inspector-smoke.sh` checks the native Files/Search/Quick open commands, exact
 line navigation, tools focus, pane swap and zoom with temporary files and real PTYs. It requires the

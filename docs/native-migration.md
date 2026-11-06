@@ -156,14 +156,14 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态                  | Evidence and next work / 证据与下一步                                                                                                                                                       |
-| ------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0           | Accepted, unmerged / 已验收，未合并       | Both native architectures and legacy Tauri jobs passed                                                                                                                                      |
-| M1           | Accepted / 已验收                         | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                                   |
-| M2           | Closed in approved scope / 批准范围内关闭 | All four tasks closed; real Vim/ownership and explicitly simulated Agent/lifecycle checks stay distinct. / 四项关闭，真实Vim／并存与明确模拟的Agent／生命周期分开记录。                     |
-| M3           | Closed by user / 用户指示关闭             | #17 closed not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain. / 阶段按用户指示关闭，原始持久布局／PDF／Windows运行与选择器缺口保留。                |
-| M4           | 3/6 closed / 关闭3/6                      | #38–#40 accepted; #41 settings, #42 interaction and #43 same-load measurements are active with pending automated checks. / 数据库／Redis／Agent已验收，设置／交互／同负载测量继续自动验证。 |
-| M5           | 1/4 closed / 关闭1/4                      | #44 QA candidates accepted at source8aac; #45 updates, #46 upgrade/data rollback and #47 final gates remain open. / QA候选已验收，更新／升级数据回退／最终门禁继续开放。                    |
+| Stage / 阶段 | Current state / 当前状态                  | Evidence and next work / 证据与下一步                                                                                                                                                   |
+| ------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0           | Accepted, unmerged / 已验收，未合并       | Both native architectures and legacy Tauri jobs passed                                                                                                                                  |
+| M1           | Accepted / 已验收                         | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                               |
+| M2           | Closed in approved scope / 批准范围内关闭 | All four tasks closed; real Vim/ownership and explicitly simulated Agent/lifecycle checks stay distinct. / 四项关闭，真实Vim／并存与明确模拟的Agent／生命周期分开记录。                 |
+| M3           | Closed by user / 用户指示关闭             | #17 closed not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain. / 阶段按用户指示关闭，原始持久布局／PDF／Windows运行与选择器缺口保留。            |
+| M4           | 4/6 closed / 关闭4/6                      | #38–#41 accepted, including settings at source949e4c2; #42 interaction and #43 same-load measurements remain active. / 数据库／Redis／Agent／设置已验收，交互／同负载测量继续自动验证。 |
+| M5           | 1/4 closed / 关闭1/4                      | #44 QA candidates accepted at source8aac; #45 updates, #46 upgrade/data rollback and #47 final gates remain open. / QA候选已验收，更新／升级数据回退／最终门禁继续开放。                |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
@@ -262,13 +262,13 @@ Continue branch `feat/native-macos-shared-core` and Draft PR
 [#12](https://github.com/YondFane/uTerm/pull/12). Tracking
 [#13](https://github.com/YondFane/uTerm/issues/13) and all acceptance criteria remain authoritative.
 Do not merge, tag, publish or modify `release`/`main` directly. YondFane is the authenticated
-executor. Preserve accepted M0–M3 scope and #38–#40/#44 evidence. Active work covers #41–#43 and
+executor. Preserve accepted M0–M3 scope and #38–#41/#44 evidence. Active work covers #42–#43 and
 #45–#47 with claims, actual failures and separate source/tested SHAs; no project/status labels are
 invented. Final manual acceptance is waived by the user; missing functionality and automated
 failures remain explicit blockers.
 
 沿用当前分支和 Draft
-PR；总跟踪和原始范围保留。M0–M3 的批准范围及 #38–#40／#44 验收证据保留，当前处理 #41–#43／#45–#47，认领、真实失败及来源／tested
+PR；总跟踪和原始范围保留。M0–M3 的批准范围及 #38–#41／#44 验收证据保留，当前处理 #42–#43／#45–#47，认领、真实失败及来源／tested
 SHA 分开记录，不新建状态标签。最终人工项已由用户豁免；缺失功能和自动失败仍阻止验收，不合并、不发布、不直接修改目标分支。
 
 | Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                                                 |
@@ -277,7 +277,7 @@ SHA 分开记录，不新建状态标签。最终人工项已由用户豁免；�
 | M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                                                     |
 | M2 #16       | #29–#32       | Four tasks closed in approved scope; actual native Vim/ownership and approved Agent/lifecycle simulations have separate evidence. / 四项在批准范围内关闭，真实Vim／并存及模拟Agent／生命周期各自留证。                                            |
 | M3 #17       | #33–#37       | Closed by user, not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain visible. / 按用户指示关闭阶段，原始持久布局／PDF／Windows运行与选择器缺口不改记完成。                                                   |
-| M4 #18       | #38–#43       | 3/6 closed: database/Redis/Agent accepted; settings, interaction and genuine same-machine workload evidence continue. / 数据库／Redis／Agent验收，设置／交互／同机器真实负载证据仍继续。                                                          |
+| M4 #18       | #38–#43       | 4/6 closed: database/Redis/Agent/settings accepted; interaction and genuine same-machine workload evidence continue. / 数据库／Redis／Agent／设置验收，交互／同机器真实负载证据继续。                                                             |
 | M5 #19       | #44–#47       | #44 accepted QA candidate installs, with ad-hoc/unsigned/no-notarization limits. Updates, actual old-client/data rollback and final gates remain open. / QA候选安装验收，临时签名／未签名及无公证限制保留，更新／旧客户端数据回退／最终门禁开放。 |
 
 ### M2 implementation and verification / M2 实现与验证

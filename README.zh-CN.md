@@ -133,10 +133,12 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 
 `pnpm settings:generate` 从现有 TypeScript 设置和文案生成原生命令／主题目录， `pnpm settings:check`
 核对目录；契约生成／检查已包含该目录。Core `settings.catalog` 和 `settings.validate`
-读取默认值并校验平台快捷键，不保存配置；完整原生设置／菜单／开机启动仍在 #41 跟踪。
+读取默认值并校验平台快捷键，不保存配置；共享／原生设置、菜单及受保护的登录模拟已在
+[#41](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106)
+验收，实际 OS 注册明确未执行。
 
 原生设置 QA：**设置 → 全部设置…**打开草稿表单。完成 QA 构建后运行
-`bash scripts/macos-settings-smoke.sh`，检查只读打开、字段冲突、无效草稿、快捷键捕获、明确重置及实际退出取消。脚本记录真实窗口、主题效果、菜单快捷键和面板焦点；登录项 QA 使用受保护的模拟，不注册 CI 登录项。其他偏好及不可用命令仍在 #41 跟踪。
+`bash scripts/macos-settings-smoke.sh`，检查只读打开、字段冲突、无效草稿、快捷键捕获、明确重置及实际退出取消。脚本记录真实窗口、主题效果、菜单快捷键和面板焦点；登录项 QA 使用受保护的模拟，不注册 CI 登录项。偏好／工具窗格／GitHub 使用源码949e4c2及四平台报告验收，签名更新安装仍在 #45 单独跟踪。
 
 `bash scripts/macos-inspector-smoke.sh`
 使用临时文件和真实 PTY，检查原生文件／搜索／快速打开命令、准确行跳转、工具焦点、窗格交换及放大。需要 QA 构建和 macOS 图形会话，保存四张原始截图及含源码／测试 SHA 的

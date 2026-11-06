@@ -70,7 +70,7 @@ SHA、平台／工具链、安装报告、日志及原始窗口截图。源码
 在 macOS ARM64 15.8.2、Intel 15.7.9 和 Windows x64
 NT10.0.26100 通过候选安装。五份实际包的哈希均已独立复算，三张安装后窗口原图已查看。Mac 使用 Xcode16.4、Swift6.1.2、Rust1.99.1；Windows 使用 Node24.22.2、pnpm11.22.0、PowerShell7.6.9、Rust1.99.1。完整报告、产物与准确检查见
 [#44](https://github.com/YondFane/uTerm/issues/44#issuecomment-6686879466)，已在任务分支验收。Mac
-workflow 仍因独立 #41／#45 检查失败，候选成功不代表整体通过。
+workflow 在该候选来源因独立 #41／#45 检查失败，候选成功不代表整体通过；#41现已在源码949e4c2单独验收，更新验收仍开放。
 
 原生 App 使用 ad-hoc 签名，Sparkle 框架保留供应商签名，没有 Apple
 Developer 签名或公证。Windows 候选未签名，两端均无更新签名。Windows 候选对 Tauri 唯一的
@@ -102,7 +102,7 @@ Tauri 截图辅助程序改为分别标注类型的 WindowServer 筛选与面积
 #### 原生 QA 验证
 
 迁移验收仍由 [#13](https://github.com/YondFane/uTerm/issues/13) 跟踪。M3
-#17 已按用户指示关闭，保留持久布局／PDF 标记及 Windows 运行面板／选择器覆盖缺口。数据库、Redis 和 Agent 的验收见 #38–#40。M4 仍需 #41 偏好补齐、#42 交互回归及 #43 性能证据；M5 候选安装包 #44 已验收，更新、升级／回退及最终门禁在 #45–#47 保持开放。
+#17 已按用户指示关闭，保留持久布局／PDF 标记及 Windows 运行面板／选择器覆盖缺口。数据库、Redis、Agent及设置的验收见 #38–#41。M4六项已有四项关闭，#42交互回归及#43性能证据仍开放；M5 候选安装包 #44 已验收，更新、升级／回退及最终门禁在 #45–#47 保持开放。
 
 Redis 分页、删除、TTL、取消退出及系统凭据检查已在源码 `940f8d1` 验收，平台报告和截图见
 [#39](https://github.com/YondFane/uTerm/issues/39)。工作保留在 `feat/native-macos-shared-core`
@@ -2393,7 +2393,8 @@ arm64、15.7.9 Intel）及 Tauri
 arm64、Windows Server 2025
 x64）。四份归档均记录干净源码。原生报告通过、退出0，包含实际退出取消；Tauri 每平台71个场景通过，无清理错误或观察器繁忙读取。强制繁忙写入组件回归在 Linux、macOS 和 Windows 通过。四份实际报告进程结果均通过真实 Host 事件、旧代次拒绝及私有 Host 清理。归档包含
 `agent-native.json`、`agent-hooks-core.json`、Tauri
-`agent-live.json`、日志及10张逐张核对的原始应用截图；[验收记录](https://github.com/YondFane/uTerm/issues/40#issuecomment-6679048480)列出各项产物和文件名。服务商认证、全局软件包安装和最终系统通知送达使用明确模拟；最终人工验收由用户豁免。此证据不代表 #41 尚未完成的完整设置／菜单已验收，也不合并 Draft
+`agent-live.json`、日志及10张逐张核对的原始应用截图；[验收记录](https://github.com/YondFane/uTerm/issues/40#issuecomment-6679048480)列出各项产物和文件名。服务商认证、全局软件包安装和最终系统通知送达使用明确模拟；最终人工验收由用户豁免。此证据不替代独立的
+[#41设置／菜单验收](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106)，也不合并 Draft
 PR。
 
 ### 安装与移除 Hooks
@@ -2589,13 +2590,14 @@ Linux 检查通过现有422项前端测试（跳过11项）、新增 GitHub 面�
 一次 ARM Core 运行在刻意触发主机密钥失败时受到隔离 SSH 服务的来源地址惩罚。测试现通过 `sshd -T`
 检测支持，仅在临时服务配置中禁用该惩罚，旧版 OpenSSH 保留受支持的配置。主机密钥拒绝断言仍必须通过，失败时附带实际错误；不改变生产 SSH 配置。原生工具窗格在 PTY 更新期间保留监听中的根视图，打开前核对行身份及代次，不在每次更新时重启焦点／加载任务。Intel 的 Return 及 GitHub 边界失败保留，报告新增选择状态和实际边界返回码，仍需重跑。CI 失败后保存依赖缓存不改变失败门禁结果。
 
-源码 `60e183043988626cddbb4fa14e140ed9c25f17f6`、tested merge
-`f93da46db913e8be48f6bac46cb22f00577d23b8` 通过 Native
-[run 42187274886](https://github.com/YondFane/uTerm/actions/runs/42187274886)（macOS 15.8.2
-arm64、15.7.9 Intel）和 Tauri
-[run 42187274834](https://github.com/YondFane/uTerm/actions/runs/42187274834)（macOS 26.7.2
-arm64、Windows Server 2025
-x64）。四份报告记录干净源码；两份原生设置报告通过、退出0，Tauri每平台73场景通过、无清理错误。
+#41设置／菜单／命令在源码 `949e4c23dc22d2b01e4823b96a73a26e8c26f60c`、tested merge
+`b8e96bbb42501213040f0b93bff009ecd24623a7`完成验收。Native
+[run42251082940](https://github.com/YondFane/uTerm/actions/runs/42251082940)在macOS15.8.2
+arm64及15.7.9 Intel通过设置／工具窗格／GitHub报告和Core／FFI／Swift测试，整体仍因独立#45
+SDK截图失败。Tauri
+[run42251082946](https://github.com/YondFane/uTerm/actions/runs/42251082946)在macOS26.6.2
+arm64及Windows Server2025
+x64的两个完整job通过，各73个真实应用场景且无清理错误。各报告绑定干净源码／merge，不将此来源写成后续提交重测通过。
 
 真实 Rust 进程／TypeScript 对照通过372组快捷键配置、11,532次实际绑定和96组主题输入，包含Unicode名称、按上下文转小写、编码ID、调色板前导零及无效色值；还验证默认值／存储未改及无效／私有参数的有界拒绝。逻辑报告不替代原生窗口检查。
 
@@ -2606,12 +2608,13 @@ x64）。四份报告记录干净源码；两份原生设置报告通过、退�
 `native-settings-command-palette.png`、`native-settings-themed-terminal.png`、
 `native-settings-full-dark-en.png`、`native-settings-full-light-zh-narrow.png`。Tauri归档包含
 `settings-platform.json`、`tauri-state-qa/report.json`、`initial-theme-invalid.json/.png`及
-`initial-theme-imported.json/.png`。[证据记录](https://github.com/YondFane/uTerm/issues/41#issuecomment-6681066363)列出四份产物、命令、工具链与图片。Tauri在真实应用中使用DOM
+`initial-theme-imported.json/.png`。[证据记录](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106)列出四份产物、命令、工具链与图片。Tauri在真实应用中使用DOM
 File事件，不宣称已操作系统文件选择器；macOS使用WindowServer，Windows使用带捕获元数据的所属QA HWND。
 
 先前窗口截图、SSH
-askpass和焦点断言失败，以及被取消的旧运行，继续保留在Issue记录中。焦点测试现明确激活设置窗口，不在取消退出后主窗口仍在前台时误等设置窗口；失败不改算通过。完整设置仍未验收，报告保留
-`nativeSettingsFeatureAcceptanceComplete=false`，对应其他偏好效果及尚待原生验收的控件。最终人工验收由用户豁免；该豁免和这些子范围结果均不表示稳定切换完成，也不合并Draft
+askpass和焦点断言失败，以及被取消的旧运行，继续保留在Issue记录中。焦点测试现明确激活设置窗口，不在取消退出后主窗口仍在前台时误等设置窗口；失败不改算通过。#41按自身四项标准及独立的设置／工具窗格／GitHub报告完成验收。较早的
+`nativeSettingsFeatureAcceptanceComplete=false`
+汇总仍可见，其剩余清单指向#45更新及这些独立报告，不改写为true。登录批准使用已授权模拟，最后人工验收由用户豁免；这不表示稳定切换完成，也不合并Draft
 PR。
 
 ### 终端文字选择与渲染
