@@ -4307,6 +4307,12 @@ available before a session exists; Close is restricted to the focused known wind
 a background session from an unrelated panel. The corrected source still requires its own runtime
 results.
 
+Palette key routing handles plain Escape/arrow/Return only for its owned visible window and removes
+the event monitor on dismissal; modified keys retain normal text editing. QA dispatches keys through
+`NSApplication`, checks the returned responder and filters with native text input. Source `574a06f`
+captures the real window successfully but fails Escape focus restoration; that result remains a
+failure while the corrected key-routing source awaits its own runtime evidence.
+
 ### Terminal text selection and rendering
 
 Visible terminal and Agent panes use GPU rendering when WebGL2 is available. Dragging to select text

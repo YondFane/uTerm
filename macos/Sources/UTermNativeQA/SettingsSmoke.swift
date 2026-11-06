@@ -6,7 +6,7 @@ import UTermBridge
 enum SettingsSmoke {
     private static func key(_ window: NSWindow, code: UInt16, characters: String) throws {
         guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code) else { throw BridgeFailure(code: "SETTINGS_QA_EVENT", message: "Could not construct native key input") }
-        window.sendEvent(event)
+        NSApp.sendEvent(event)
     }
     private static func save(_ model: NativeSettingsModel) async throws {
         for _ in 0..<3 {
@@ -93,10 +93,13 @@ enum SettingsSmoke {
             try await Task.sleep(for: .milliseconds(200))
             let paletteCapture = "native-settings-command-palette.png"
             try await TerminalSmoke.capture(window: palette, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(paletteCapture))
+            report["nativePaletteWindowCaptured"] = true
             let previousResponder = current.window.firstResponder
             try key(palette, code: 53, characters: "\u{1b}")
+            report["paletteAfterEscape"] = ["visible": palette.isVisible, "settingsKeyWindow": current.window.isKeyWindow]
             try await TerminalSmoke.wait("Restore settings focus after Escape") { !palette.isVisible && current.window.isKeyWindow }
             guard current.window.firstResponder === previousResponder else { throw BridgeFailure(code: "SETTINGS_QA_FOCUS", message: "Palette cancellation did not restore the previous responder") }
+            report["nativePaletteEscapeRestoredResponder"] = true
             guard NSApp.mainMenu?.performKeyEquivalent(with: paletteEvent) == true else { throw BridgeFailure(code: "SETTINGS_QA_REOPEN_PALETTE", message: "Palette shortcut could not reopen") }
             try await TerminalSmoke.wait("Reopen palette") { palette.isKeyWindow }
             try key(palette, code: 125, characters: String(UnicodeScalar(NSDownArrowFunctionKey)!))

@@ -34,6 +34,7 @@ final class NativeCommandPalette: NSObject, NSWindowDelegate, NSSearchFieldDeleg
     private var filtered: [JSONValue] = []
     private var available: (String) -> Bool = { _ in false }
     private var perform: (String) -> Void = { _ in }
+    private var keyMonitor: Any?
     private(set) weak var returnWindow: NSWindow?
     private weak var returnResponder: NSResponder?
     override init() {
@@ -62,6 +63,20 @@ final class NativeCommandPalette: NSObject, NSWindowDelegate, NSSearchFieldDeleg
         self.commands = commands; self.available = available; self.perform = perform
         window.title = localized("Command palette", "命令面板"); search.placeholderString = localized("Search commands", "搜索命令")
         window.appearance = returnWindow?.appearance; search.stringValue = ""; filter()
+        if keyMonitor == nil {
+            // Search fields consume Escape themselves; intercept only plain keys in this palette.
+            // 搜索框会自行消耗 Escape，仅在此面板内接管未带修饰的导航按键。
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self, self.window.isVisible, event.window === self.window, event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty else { return event }
+                switch event.keyCode {
+                case 53: self.dismiss(); return nil
+                case 125: self.move(1); return nil
+                case 126: self.move(-1); return nil
+                case 36: self.executeSelection(); return nil
+                default: return event
+                }
+            }
+        }
         window.makeKeyAndOrderFront(nil); window.makeFirstResponder(search)
     }
     private func filter() {
@@ -105,6 +120,7 @@ final class NativeCommandPalette: NSObject, NSWindowDelegate, NSSearchFieldDeleg
         dismiss(); perform(id)
     }
     func dismiss() {
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor); self.keyMonitor = nil }
         window.orderOut(nil)
         returnWindow?.makeKeyAndOrderFront(nil)
         if let returnResponder { returnWindow?.makeFirstResponder(returnResponder) }
