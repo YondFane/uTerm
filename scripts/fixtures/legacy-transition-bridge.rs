@@ -65,6 +65,8 @@ pub fn qa_legacy_export(
     checks: Value,
 ) -> Result<(), String> {
     let root = root(&window)?;
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())?;
     let input: Value = serde_json::from_slice(
         &std::fs::read(root.join("legacy-input.json")).map_err(|error| error.to_string())?,
     )

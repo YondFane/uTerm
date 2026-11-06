@@ -131,35 +131,20 @@ def wait_report(path, process, timeout=100):
     raise TimeoutError("Owned application did not produce "+str(path))
 
 
-def window_number(pid):
-    script = """
-import CoreGraphics
-import Foundation
-let pid = Int(CommandLine.arguments[1])!
-let rows = CGWindowListCopyWindowInfo([.optionOnScreenOnly,.excludeDesktopElements],kCGNullWindowID) as? [[String:Any]] ?? []
-for row in rows {
-    guard (row[kCGWindowOwnerPID as String] as? Int) == pid,
-          (row[kCGWindowLayer as String] as? Int) == 0,
-          let bounds = row[kCGWindowBounds as String] as? CFDictionary,
-          let rectangle = CGRect(dictionaryRepresentation:bounds), rectangle.width >= 640, rectangle.height >= 420,
-          let number = row[kCGWindowNumber as String] as? Int else { continue }
-    print(number); exit(0)
-}
-exit(1)
-"""
-    for _ in range(50):
-        result = run("swift", "-e", script, pid, check=False)
-        if result.returncode == 0:
-            return int(result.stdout.strip())
-        time.sleep(.1)
-    raise AssertionError("No owned application window was listed")
-
-
 def capture(tool, pid, path):
-    result = run(tool, pid, window_number(pid), path)
-    metadata = json.loads(result.stdout)
-    assert metadata["ownerPID"] == pid and Path(path).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-    write(str(path)+".ownership.json", metadata)
+    for attempt in range(30):
+        result = run(tool, pid, 0, path, check=False)
+        if result.returncode == 0:
+            metadata = json.loads(result.stdout)
+            assert metadata["ownerPID"] == pid and metadata["windowNumber"] > 0
+            assert Path(path).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+            write(str(path)+".ownership.json", metadata)
+            return
+        detail = result.stderr.decode(errors="replace")[:4000]
+        if result.returncode != 4:
+            raise AssertionError("Owned window capture failed: "+str(result.returncode)+" "+detail)
+        time.sleep(.1)
+    raise AssertionError("No unique owned window was ready: "+detail)
 
 
 def historical_run(installed, root, evidence, tool, label):
@@ -177,6 +162,7 @@ def historical_run(installed, root, evidence, tool, label):
         try:
             value = wait_report(report, process)
             assert value["pid"] == process.pid and value["publishedInstallerBinary"] is False
+            write(evidence / (label+"-checkpoint.json"), value)
             image = label+".png"
             capture(tool, process.pid, evidence / image)
             ack.write_text("owned window captured\n")
@@ -187,6 +173,7 @@ def historical_run(installed, root, evidence, tool, label):
             write(evidence / (label+".json"), value)
             return value
         except BaseException:
+            if report.is_file(): shutil.copyfile(report, evidence / (label+"-failed-checkpoint.json"))
             if process.poll() is None:
                 try: capture(tool, process.pid, evidence / (label+"-failure.png"))
                 except Exception as error:
@@ -228,6 +215,7 @@ def native_run(installed, root, evidence, phase, head, tested):
 def main():
     from legacy_transition_source import prepare, verify_originals
     assert platform.system() == "Darwin", "Historical/native application rehearsal requires a real Mac"
+    assert os.environ.get("GITHUB_ACTIONS") == "true", "Historical OS adapters retain fixed development labels; use an owned GitHub Actions Mac"
     assert not run("git", "status", "--porcelain").stdout.strip(), "Use clean committed source"
     tested = run("git", "rev-parse", "HEAD").stdout.decode().strip()
     head = os.environ.get("PR_HEAD_SHA", tested)
@@ -323,6 +311,7 @@ def main():
             first = historical_run(installed, root, evidence, capture_tool, "historical-before")
             expected = {name:first["checks"][name] for name in ["id","generation","hostPID"]}
             report["historicalCheckpoint"] = expected
+            report["scenarios"].append(dict(name="historical-before", passed=True, report="historical-before.json", screenshot=first["screenshot"]))
             run("ditto", native_source, staged)
             native_info = plistlib.loads((staged / "Contents/Info.plist").read_bytes())
             native_info.update(CFBundleIdentifier=identity, CFBundleExecutable=info["CFBundleExecutable"], CFBundleVersion="0.2.5", CFBundleShortVersionString="0.2.5")
@@ -373,6 +362,7 @@ def main():
             assert run(signer, "verify", bad, key, public, root / "manifest.sig", check=False).returncode != 0
             assert tree_digest(installed) == old_hash
             report["badSignatureRejectedBeforeReplacement"] = True
+            report["scenarios"].append(dict(name="verified-private-download-and-invalid-signature-rejection", passed=True, manifest="manifest.json"))
             try: replace_program(installed, staged, previous, interrupt=True)
             except InterruptedError: recover_program(installed, staged, previous)
             assert tree_digest(installed) == old_hash
@@ -380,6 +370,7 @@ def main():
             assert all(second["checks"][name] == value for name, value in expected.items())
             assert second["checks"]["draft"]["text"] == fixture["legacyDraft"]
             report["actualInterruptedProgramRecoveryAndRestart"] = True
+            report["scenarios"].append(dict(name="interrupted-program-recovery", passed=True, report="historical-after-interruption.json", screenshot=second["screenshot"]))
             values = second["values"]
             params = dict(workspace=second["checks"]["workspace"], settings=second["checks"]["settings"], legacy=values)
             snapshot = core.call("migration.import", params)
@@ -388,12 +379,14 @@ def main():
             shutil.copytree(root / "shared-state-v1", root / "canonical-before-native")
             shutil.copytree(root / "shared-state-v1", evidence / "canonical-before-native")
             report["repeatMigrationIdempotent"] = True
+            report["scenarios"].append(dict(name="repeat-import-and-canonical-backup", passed=True, backup="canonical-before-native"))
             replace_program(installed, staged, previous)
             report["nativeProgramSHA256"] = tree_digest(installed)
             native_input = {**fixture, **expected, "project":str(project)}
             write(root / "transition-native-input.json", native_input)
-            native_run(installed, root, evidence, "checkpoint", head, tested)
-            native_run(installed, root, evidence, "reopen", head, tested)
+            for phase in ["checkpoint", "reopen"]:
+                native = native_run(installed, root, evidence, phase, head, tested)
+                report["scenarios"].append(dict(name="native-"+phase, passed=True, report="native-"+phase+".json", screenshots=native["captures"]))
             snapshot = core.call("snapshot.read")
             drafts = core.call("editor.drafts.read")
             archive = core.call("rollback.export", dict(expectedRevision=snapshot["revision"], expectedDraftRevision=drafts["revision"]))
@@ -415,6 +408,7 @@ def main():
                 assert restored["values"][key] == seed[key]
             assert tree_digest(root / "shared-state-v1") == before_store
             assert (project / fixture["fileName"]).read_bytes() == ("\ufeff"+fixture["savedText"]).encode()
+            report["scenarios"].append(dict(name="old-program-and-latest-data-rollback", passed=True, report="historical-rollback.json", screenshot=restored["screenshot"], archive="latest-rollback-archive.json"))
             report.update(passed=True, actualProgramReplacementAndRollback=True, latestDataAppliedInActualHistoricalWebView=True,
                           manualPackageReplacementRehearsal=True, automaticCrossClientFeedConfigured=False,
                           fullCanonicalBackupsRetainedDuringRehearsal=True, sameHostAndGenerationThroughout=True,

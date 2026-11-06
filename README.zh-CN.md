@@ -190,15 +190,15 @@ workflow 的三次顺序测量。它在每台 Mac 的双客户端运行期间管
 `shared/fixtures/client-performance.json`
 version4 固定真实120×30网格、PTY 输出、字体／回滚、CAS 文件、回放、合成 alternate-screen 重绘、慢消费检查及真实 Core／JDBC 查询。空闲采样分别为120／120／600秒。原始进程树 CPU／RSS、逐轮数据、窗口原图、清理及源码／负载哈希归档，由
 `node scripts/client-performance-report.mjs`
-核对。无法归属的 WebContent／GPU／XPC 及外部数据库服务排除；新平台测量和长期泄漏验收仍待完成，不宣称性能改善。
+核对。无法归属的 WebContent／GPU／XPC 及外部数据库服务排除；平台测量按来源记录在#43，不宣称多小时无泄漏或整体性能改善。
 
 Windows 签名更新 QA 使用 `python -B scripts/windows-updates-database.py`，需要 Java
 21 和 PostgreSQL。包装脚本管理私有集群并调用 NSIS 更新器流程，检查在途查询／事务保护及明确标注的模拟传输工作任务；核对回滚数据和服务清理，扫描临时凭据，不改生产更新源。新增保护的真实结果须 Windows
 CI。
 
-原生 QA 构建后，`python3 -B scripts/client-upgrade-smoke.py`
-演练隔离 Mac 的历史 Tauri／原生／回退流程：获取固定发布源码、记录 QA 注入并构建历史客户端，检查私有签名包下载、程序替换中断、真实编辑器崩溃／恢复及保留宿主的最新数据回退。两个 Mac
-job 归档原始窗口、安装包、规范测试备份及绑定源码的报告。凭据／hook 引用明确模拟；不运行未修改的已发布安装器，不配置生产迁移更新源。真实 Mac 结果仍待完成。
+原生 QA 构建后，`python3 -B scripts/client-upgrade-smoke.py`（仅自有GitHub Actions
+Mac）演练隔离 Mac 的历史 Tauri／原生／回退流程：获取固定发布源码、记录 QA 注入并构建历史客户端，检查私有签名包下载、程序替换中断、真实编辑器崩溃／恢复及保留宿主的最新数据回退。两个 Mac
+job 归档原始窗口、安装包、规范测试备份及绑定源码的报告。凭据／hook 引用明确模拟；不运行未修改的已发布安装器，不配置生产迁移更新源。真实Mac结果及验收按来源记录在#46。
 
 `python3 -B scripts/migration-readiness.py --head SOURCE_SHA`
 使用已认证的 GitHub 读取权限核对当前 head 的证据。Migration readiness audit 在迁移 PR

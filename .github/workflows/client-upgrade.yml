@@ -9,6 +9,7 @@ on:
       - scripts/legacy_transition_source.py
       - scripts/fixtures/legacy-transition*
       - scripts/qa-archive-signature.swift
+      - scripts/macos-owned-window-capture.swift
       - shared/fixtures/client-upgrade.json
       - macos/Sources/UTermNativeQA/TransitionSmoke.swift
       - macos/Sources/UTermNativeQA/App.swift

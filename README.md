@@ -240,8 +240,8 @@ font/scrollback, CAS files, replay, synthetic alternate-screen redraws, delayed-
 real Core/JDBC queries. Idle samples last 120/120/600 seconds. Raw PID-tree CPU/RSS, per-cycle data,
 original windows, cleanup and source/workload hashes are archived;
 `node scripts/client-performance-report.mjs` audits them. Unattributed WebContent/GPU/XPC and the
-external database server are excluded. New platform measurements and long-run leak acceptance remain
-pending; no performance improvement is claimed.
+external database server are excluded. Per-source platform measurements are recorded in #43;
+multi-hour leak freedom and whole-app performance improvement are not established.
 
 For signed Windows updater QA, use `python -B scripts/windows-updates-database.py` with Java 21 and
 PostgreSQL available. The wrapper owns a private cluster and invokes the NSIS updater runner,
@@ -249,13 +249,14 @@ including active-query/transaction guards and a labelled simulated transfer work
 rollback data and service cleanup, scans evidence for temporary credentials and changes no
 production feed. Actual new guard results require Windows CI.
 
-After the native QA build, `python3 -B scripts/client-upgrade-smoke.py` runs the isolated Mac
-historical-Tauri/native/rollback rehearsal. It fetches the fixed published source, records its QA
-overlay, builds the historical client and checks signed private-package download, interrupted
-program replacement, actual editor crash/recovery and latest-data rollback with the retained host.
-The two Mac jobs archive original windows, packages, canonical fixture backups and source-bound
-reports. Credential/hook references are simulated; this does not run the unmodified published
-installer or configure production migration feeds. Actual Mac results remain pending.
+After the native QA build, `python3 -B scripts/client-upgrade-smoke.py` (owned GitHub Actions Mac
+only) runs the isolated Mac historical-Tauri/native/rollback rehearsal. It fetches the fixed
+published source, records its QA overlay, builds the historical client and checks signed
+private-package download, interrupted program replacement, actual editor crash/recovery and
+latest-data rollback with the retained host. The two Mac jobs archive original windows, packages,
+canonical fixture backups and source-bound reports. Credential/hook references are simulated; this
+does not run the unmodified published installer or configure production migration feeds. Actual Mac
+results and acceptance are recorded per source in #46.
 
 `python3 -B scripts/migration-readiness.py --head SOURCE_SHA` audits current-head GitHub evidence
 with authenticated read access. The Migration readiness audit runs on updates to migration PR #12 or

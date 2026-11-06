@@ -149,15 +149,15 @@ multi-hour leak freedom.
 #### Measurement validation
 
 Local report tests reject stale source/workload, imprecise sequence, missing rows/TUI samples,
-insufficient soak, missing slow-consumer evidence and unequal grids. Actual version4 macOS and
-Windows measurements remain pending; #43 stays open and no improvement percentage is claimed.
-Earlier workload versions are not accepted as version4 evidence. Native fitting records each actual
-window/view/grid attempt. The ARM CI display remained capped at 684px even after CoreGraphics
-reported a larger mode; those failed runs are retained. Version4 uses the same 120×30 grid on all
-clients, fitting the original CI desktop without changing screen modes, fonts, workload volume or
-clipping checks. Windows receives the real Git Bash path and handles Git's mingw64 layout. SQL
-orders the numeric series through a distinct output alias. Corrected platform measurements remain
-pending.
+insufficient soak, missing slow-consumer evidence and unequal grids. Source-specific version4
+Mac/Windows results and acceptance remain in [#43](https://github.com/YondFane/uTerm/issues/43); no
+improvement percentage is claimed. Earlier workload versions are not accepted as version4 evidence.
+Native fitting records each actual window/view/grid attempt. The ARM CI display remained capped at
+684px even after CoreGraphics reported a larger mode; those failed runs are retained. Version4 uses
+the same 120×30 grid on all clients, fitting the original CI desktop without changing screen modes,
+fonts, workload volume or clipping checks. Windows receives the real Git Bash path and handles Git's
+mingw64 layout. SQL orders the numeric series through a distinct output alias. Corrected platform
+measurements require the exact source-bound reports in #43.
 
 The c24d81a Intel run reaches the real 120×30 grid and completes its first native/Tauri pair; the
 second native workload completes but its coordinator checks the endpoint before asynchronous host
@@ -165,15 +165,15 @@ exit finishes. That failure remains in
 [artifact13538810238](https://github.com/YondFane/uTerm/actions/runs/42282798481/artifacts/13538810238).
 The native coordinator now waits up to ten seconds for both endpoint removal and the authenticated
 fixture PID to exit, without terminating it or relaxing workload checks. A real child-process test
-covers delayed unlink/exit; another checks that timeout never kills a running process. Corrected Mac
-acceptance still requires fresh CI.
+covers delayed unlink/exit; another checks that timeout never kills a running process. Mac
+acceptance uses fresh per-source CI and the limits recorded in #43.
 
-At sourcec24d81a the full Linux frontend regression passes 429 tests with 11 explicit skips. The
+At sourceb904eaf the full Linux frontend regression passes 433 tests with 11 explicit skips. The
 retained partial Intel v3 data shows slower native bulk output and database queries; the latter
 includes the native adapter's asynchronous completion polling. These are recorded regressions, not a
 claim that polling alone explains the difference. Two-minute RSS observations are stable, while the
-complete v4 comparison and longer trend remain pending. Exact old-source numbers and limits are in
-[#43](https://github.com/YondFane/uTerm/issues/43#issuecomment-6694081032).
+current v4 comparison and longer-trend evidence are maintained in #43. Exact old-source numbers and
+limits are in [#43](https://github.com/YondFane/uTerm/issues/43#issuecomment-6694081032).
 
 The Windows contract test now waits for its Core process and streams to close before deleting owned
 data, with bounded retries for released Windows handles. A failed preceding desktop step still
@@ -192,11 +192,16 @@ failed runs rather than replacing their images or treating earlier timings as a 
 
 Migration acceptance remains open in [#13](https://github.com/YondFane/uTerm/issues/13). M3 #17 was
 closed at the user's direction, retaining persistent-layout/PDF-mark and Windows run-panel/picker
-coverage gaps. Database, Redis, Agent and settings acceptance is recorded in #38–#41. M4 has five of
-six tasks closed; #42 interaction recording is accepted with labelled simulations and the user
-waiving final human checks. #43 performance evidence remains open. M5 packaging #44 and updates #45
-are accepted; upgrade/rollback #46 and final gates #47 remain open. Original implementation gaps
-remain visible and prevent a stable-cutover claim.
+coverage gaps. Database, Redis, Agent and settings acceptance is recorded in #38–#41. #42
+interaction recording is accepted with labelled simulations and user-waived final human checks. M4
+source-specific performance results and remaining scope are tracked in
+[#43](https://github.com/YondFane/uTerm/issues/43) and the
+[phase tracker](https://github.com/YondFane/uTerm/issues/18). M5 packaging #44 and updates #45 are
+accepted; actual upgrade/rollback evidence and final gate results are maintained in
+[#46](https://github.com/YondFane/uTerm/issues/46),
+[#47](https://github.com/YondFane/uTerm/issues/47) and their
+[phase tracker](https://github.com/YondFane/uTerm/issues/19). Original implementation gaps remain
+visible and prevent a stable-cutover claim.
 
 Redis paging, deletion, TTL, quit-cancellation and OS-credential checks are accepted at source
 `940f8d1`, with platform reports and screenshots in
@@ -251,9 +256,9 @@ without cleanup errors.
 M0 #14, M1 #15 and tasks #20–#30 are accepted, unmerged. M2 #31/#32 use the user-approved simulation
 scope described below; their source-bound results and acceptance are tracked in the Issues. Real
 provider tasks, manual IME/clipboard/mouse and physical sleep/multiple-display checks remain
-unexecuted under the authorized simulation/manual-waiver boundaries. Remaining preferences,
-persistent layouts/PDF marks, full Windows run-panel/picker coverage, same-machine performance,
-macOS 14 runtime and M5 gates are incomplete. Automatic native actions are not human acceptance;
+unexecuted under the authorized simulation/manual-waiver boundaries. Persistent layouts/PDF marks,
+full Windows run-panel/picker coverage, multi-session/multi-hour performance, macOS 14 runtime and
+stable-cutover conditions remain uncovered. Automatic native actions are not human acceptance;
 Windows and legacy macOS retain the existing full feature set. See
 [native migration status](native-migration.md) and Issue comments for evidence and unexecuted steps.
 
@@ -466,10 +471,11 @@ architectures at source949e4c2.
 
 `python3 -B scripts/client-upgrade-smoke.py` prepares a historical Tauri QA client from the fixed
 published `uTerm-v0.2.4` source, with an isolated identity shared only by its native test successor.
-All original source hashes are retained: only the two startup/command entry files and recorded QA
-additions differ. It does not run the unmodified published installer. The historical GUI, readers,
-services, source manifests and lockfiles remain unchanged; initial draft input and credential/hook
-references are labelled fixtures.
+The full historical rehearsal requires an owned GitHub Actions Mac because unchanged historical OS
+adapters retain fixed development labels. All original source hashes are retained: only the two
+startup/command entry files and recorded QA additions differ. It does not run the unmodified
+published installer. The historical GUI, readers, services, source manifests and lockfiles remain
+unchanged; initial draft input and credential/hook references are labelled fixtures.
 
 The Mac rehearsal downloads a native QA archive from its owned loopback server, verifies a pinned
 one-time Ed25519 manifest and architecture, rejects a bad signature before replacement, and tests
@@ -486,16 +492,23 @@ selected automatically.
 Client upgrade and rollback runs on both Mac architectures and uploads `upgrade-rollback.json`,
 source/overlay hashes, old/native QA packages, public manifest/signature, canonical backups,
 original application windows and logs. Linux checks pass two interruption/isolation tests plus the
-historical frontend's types/build and historical Rust compilation. Actual Mac execution remains
-pending in #46. The first ARM run42282798468 built and launched the actual old application but
-failed its marker check because canvas output was read as DOM textContent. The isolated QA now reads
-the unchanged component's real React xterm ref; a real React/xterm regression passes when the DOM
-text is empty and the buffer contains wrapped output. Failed windows are captured, and owned-host
-shutdown waits for endpoint removal. The old failure artifact is retained; corrected Mac execution
-remains pending. This is a private manual package-replacement rehearsal; it does not configure a
-production cross-client feed. Actual credential approval/hook execution and OS deep-link/login
-registration are not represented as tested; references are simulated and production schemes stay
-disabled.
+historical frontend's types/build and historical Rust compilation. Actual Mac execution and
+acceptance are recorded per source in #46; these local checks alone do not establish them. The first
+ARM run42282798468 built and launched the actual old application but failed its marker check because
+canvas output was read as DOM textContent. The isolated QA now reads the unchanged component's real
+React xterm ref; a real React/xterm regression passes when the DOM text is empty and the buffer
+contains wrapped output. Failed windows are captured, and owned-host shutdown waits for endpoint
+removal. The old failure artifact is retained. A subsequent 8f23169 ARM run verifies the real
+historical PTY marker but fails its separate window probe;
+[artifact13537749822](https://github.com/YondFane/uTerm/actions/runs/42286080719/artifacts/13537749822)
+contains that failure without a successful screenshot. Capture now uses the existing compiled
+owner-checked helper: auto-selection requires exactly one eligible window, private QA explicitly
+shows/focuses it, and failure diagnostics retain only owned window metadata. Historical checkpoints
+are retained before capture, while the top report lists completed scenarios. Corrected outcomes
+remain source-bound in #46. This is a private manual package-replacement rehearsal; it does not
+configure a production cross-client feed. Actual credential approval/hook execution and OS
+deep-link/login registration are not represented as tested; references are simulated and production
+schemes stay disabled.
 
 #47 tracks final source-bound evidence and current stage gaps; neither task authorizes merging or
 publishing. The Migration readiness audit runs for updates to migration PR #12 or manual dispatches,
@@ -513,10 +526,11 @@ conflicts, corruption, recovery, ownership and callback draining on Linux and in
 real-helper C ABI test also blocks a binary callback while another thread unsubscribes or closes,
 verifying that its borrowed context remains valid until delivery drains and that callback reentry is
 rejected. This added check passed on Linux and both native macOS architectures at the validated head
-above. Swift bridge tests run in macOS CI; native Swift migration and interactive recovery
-acceptance remain pending. The Tauri acceptance above is separate. Both legacy platform jobs also
-run shared-core tests and generated-contract drift checks, uploading command logs, source head,
-tested merge SHA and platform/toolchain metadata as `legacy-checks-*` CI artifacts.
+above. Swift bridge tests run in macOS CI; source-specific native Swift migration and recovery
+evidence is maintained separately in #28/#46. The Tauri acceptance above is separate. Both legacy
+platform jobs also run shared-core tests and generated-contract drift checks, uploading command
+logs, source head, tested merge SHA and platform/toolchain metadata as `legacy-checks-*` CI
+artifacts.
 
 #### Shared editor draft storage
 

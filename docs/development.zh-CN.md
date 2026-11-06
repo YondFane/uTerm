@@ -39,7 +39,7 @@ schema 不提交。
 `UTERM_MAVEN_REPOSITORY`。按 README 的命令明确运行默认忽略的宿主测试
 `real_maven_reactor_and_spring_boot_use_shared_task_lifetimes`；`UTERM_MAVEN_CORE_REPORT`
 输出八场景详细报告。独立 Maven CI 运行真实 Windows JDK8／11／17／21 及 macOS ARM／Intel
-JDK21 进程，不掩盖独立的 JDK8 Unicode 启动器失败；此样例不代表 GUI 或人工验收。
+JDK21进程，分别记录所选JDK的字面路径和Unicode启动结果；此样例不代表 GUI 或人工验收。
 
 在 macOS 14 或更新系统上，使用 `bash scripts/macos-native-build.sh` 构建 ad-hoc 签名 QA 应用，使用
 `bash scripts/macos-native-test.sh` 运行连接 Rust 静态库的 Swift 桥接测试。
@@ -53,7 +53,8 @@ JDK21 进程，不掩盖独立的 JDK8 Unicode 启动器失败；此样例不代
   管理自有 PostgreSQL，在同一 Mac 顺序执行原生／Tauri 三轮；Windows 使用 `python`
   记录独立 Tauri 基线。version4要求真实120×30网格、相同14pt字体及完整共享负载，空闲采样120／120／600秒。随后运行
   `node scripts/client-performance-report.mjs`。
-- 原生 QA 构建后，`python3 -B scripts/client-upgrade-smoke.py` 从固定 `uTerm-v0.2.4`
+- 在自有GitHub Actions Mac原生QA构建后，`python3 -B scripts/client-upgrade-smoke.py` 从固定
+  `uTerm-v0.2.4`
   源码及记录的私有QA注入重建旧应用。流程下载签名私有原生ZIP，测试程序替换中断、实际界面崩溃／恢复，以及明确的旧程序与最新兼容数据回退。不运行未修改的已发布安装器，不配置生产跨客户端更新器。历史读取器和服务不改动；旧草稿初始输入、凭据／hook引用及系统边界继续明确使用测试数据。
 - `python3 -B scripts/migration-readiness.py --head SOURCE_SHA`
   需要GitHub读取认证，将实际任务、PR、保护分支及当前来源artifact审计写入
@@ -61,7 +62,7 @@ JDK21 进程，不掩盖独立的 JDK8 Unicode 启动器失败；此样例不代
 
 Client upgrade and rollback及Client performance
 evidence工作流归档真实应用报告、所属窗口原图、工具链及准确head／tested merge
-SHA。模拟、用户豁免的人工项和自动原生动作分开记录。#42及签名更新#45在源码ec1a49d的验收已有证据；#43／#46和最终#47仍等待新结果。源码c24d81a的完整Linux前端回归429项通过、11项明确跳过。
+SHA。模拟、用户豁免的人工项和自动原生动作分开记录。#42及签名更新#45在源码ec1a49d的验收已有证据；按来源记录的性能、历史回退及最终门禁结果和剩余平台范围由#43／#46／#47维护。源码b904eaf的完整Linux前端回归433项通过、11项明确跳过。
 
 Agent 设置可在确认后使用本机 Node.js/npm 安装 OpenCode、Claude、Codex、Gemini、Pi、MiniMax、Qwen
 Code、Copilot CLI 和 iFlow CLI，需要网络及 npm 全局目录写入权限。Hermes 使用官方平台安装脚本。

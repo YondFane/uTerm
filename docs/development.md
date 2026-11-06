@@ -41,8 +41,9 @@ The optional Maven workflow fixture additionally needs Maven 3.9.9 (`UTERM_MAVEN
 access or a populated `UTERM_MAVEN_REPOSITORY`. Run the ignored
 `real_maven_reactor_and_spring_boot_use_shared_task_lifetimes` host test explicitly as documented in
 the README. `UTERM_MAVEN_CORE_REPORT` writes the detailed eight-scenario report. The dedicated Maven
-CI runs actual Windows JDK8/11/17/21 and macOS ARM/Intel JDK21 processes without masking the
-separate JDK8 Unicode launcher failure. This fixture does not establish GUI or manual acceptance.
+CI runs actual Windows JDK8/11/17/21 and macOS ARM/Intel JDK21 processes, recording each selected
+JDK's literal paths and Unicode launcher results. This fixture does not establish GUI or manual
+acceptance.
 
 On macOS 14 or newer, `bash scripts/macos-native-build.sh` builds the ad-hoc-signed QA app and
 `bash scripts/macos-native-test.sh` runs Swift bridge tests against the Rust static library.
@@ -57,12 +58,12 @@ Source-bound desktop checks run on the existing Draft PR rather than publishing 
   native/Tauri repetitions on a Mac; use `python` on Windows for its separate Tauri baseline.
   Version4 requires the real 120×30 grid, unchanged 14pt text and the full shared workload, with
   120/120/600-second idle samples. Run `node scripts/client-performance-report.mjs` afterward.
-- `python3 -B scripts/client-upgrade-smoke.py`, after the native QA build, rebuilds pinned
-  `uTerm-v0.2.4` source with a recorded private QA overlay. It downloads a signed private native
-  ZIP, tests interrupted program replacement, actual UI crashes/recovery and explicit old-program
-  plus latest-compatible-data rollback. This is not the unmodified published installer or a
-  production cross-client updater. Original readers and services stay unchanged; initial legacy
-  draft input, credential/hook references and OS boundaries remain labelled fixtures.
+- `python3 -B scripts/client-upgrade-smoke.py`, after the native QA build on an owned GitHub Actions
+  Mac, rebuilds pinned `uTerm-v0.2.4` source with a recorded private QA overlay. It downloads a
+  signed private native ZIP, tests interrupted program replacement, actual UI crashes/recovery and
+  explicit old-program plus latest-compatible-data rollback. This is not the unmodified published
+  installer or a production cross-client updater. Original readers and services stay unchanged;
+  initial legacy draft input, credential/hook references and OS boundaries remain labelled fixtures.
 - `python3 -B scripts/migration-readiness.py --head SOURCE_SHA` needs GitHub read authentication. It
   audits actual task, PR, protected-branch and current-source artifact status into
   `ci-evidence/readiness/migration-readiness.json`. Missing or failed evidence makes it exit
@@ -71,9 +72,9 @@ Source-bound desktop checks run on the existing Draft PR rather than publishing 
 The Client upgrade and rollback and Client performance evidence workflows archive actual app
 reports, original owned-window images, toolchains and exact head/tested merge SHAs. Simulations and
 user-waived human steps remain distinct from automated native actions. Task #42 and signed updater
-#45 acceptance is documented at sourceec1a49d; #43/#46 and final #47 remain open for their new
-results. The full Linux frontend regression at sourcec24d81a passes 429 tests with 11 explicit
-skips.
+#45 acceptance is documented at sourceec1a49d. Per-source performance, historical rollback and final
+gate results, including remaining platform limits, are maintained in #43/#46/#47. The full Linux
+frontend regression at sourceb904eaf passes 433 tests with 11 explicit skips.
 
 Agent settings can install OpenCode, Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot CLI and
 iFlow CLI after confirmation using the local Node.js/npm installation. This requires internet access

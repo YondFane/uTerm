@@ -156,14 +156,14 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态                  | Evidence and next work / 证据与下一步                                                                                                                                                                |
-| ------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0           | Accepted, unmerged / 已验收，未合并       | Both native architectures and legacy Tauri jobs passed                                                                                                                                               |
-| M1           | Accepted / 已验收                         | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                                            |
-| M2           | Closed in approved scope / 批准范围内关闭 | All four tasks closed; real Vim/ownership and explicitly simulated Agent/lifecycle checks stay distinct. / 四项关闭，真实Vim／并存与明确模拟的Agent／生命周期分开记录。                              |
-| M3           | Closed by user / 用户指示关闭             | #17 closed not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain. / 阶段按用户指示关闭，原始持久布局／PDF／Windows运行与选择器缺口保留。                         |
-| M4 #18       | 5/6 closed / 关闭5/6                      | #38–#42 accepted; #42 uses labelled simulations and waived human steps, #43 actual same-machine measurements remain open. / 前五任务验收，模拟与人工豁免明确，真实同机性能仍开放。                   |
-| M5 #19       | 2/4 closed / 关闭2/4                      | #44 private candidate and #45 real signed updater accepted; #46 historical application/data rollback and #47 final gates remain open. / 私有候选及真实签名更新验收，历史应用数据回退与最终门禁开放。 |
+| Stage / 阶段 | Current state / 当前状态                  | Evidence and next work / 证据与下一步                                                                                                                                                                                              |
+| ------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0           | Accepted, unmerged / 已验收，未合并       | Both native architectures and legacy Tauri jobs passed                                                                                                                                                                             |
+| M1           | Accepted / 已验收                         | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                                                                          |
+| M2           | Closed in approved scope / 批准范围内关闭 | All four tasks closed; real Vim/ownership and explicitly simulated Agent/lifecycle checks stay distinct. / 四项关闭，真实Vim／并存与明确模拟的Agent／生命周期分开记录。                                                            |
+| M3           | Closed by user / 用户指示关闭             | #17 closed not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain. / 阶段按用户指示关闭，原始持久布局／PDF／Windows运行与选择器缺口保留。                                                       |
+| M4 #18       | See phase tracker / 见阶段跟踪            | Database, Redis, Agent, settings and interaction have accepted evidence; see #43 for actual performance/pressure results and limits. / 数据库、Redis、Agent、设置及交互有验收证据，性能／压力结果及边界见#43。                     |
+| M5 #19       | See phase tracker / 见阶段跟踪            | #44 private candidate and #45 signed updater accepted; actual historical application/data rollback and final gate evidence are tracked per source in #46/#47. / 私有候选及签名更新验收，真实历史应用数据回退和最终门禁按来源留证。 |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
@@ -263,23 +263,23 @@ Continue branch `feat/native-macos-shared-core` and Draft PR
 [#12](https://github.com/YondFane/uTerm/pull/12). Tracking
 [#13](https://github.com/YondFane/uTerm/issues/13) and all acceptance criteria remain authoritative.
 Do not merge, tag, publish or modify `release`/`main` directly. YondFane is the authenticated
-executor. Preserve accepted M0–M3 scope and #38–#42/#44/#45 evidence. Active work covers #43 and
-#46–#47 with claims, actual failures and separate source/tested SHAs; no project/status labels are
-invented. Final manual acceptance is waived by the user; missing functionality and automated
-failures remain explicit blockers.
+executor. Preserve accepted M0–M3 scope and #38–#42/#44/#45 evidence. Per-source evidence is
+maintained in #43 and #46–#47 with claims, actual failures and separate source/tested SHAs; no
+project/status labels are invented. Final manual acceptance is waived by the user; missing
+functionality and automated failures remain explicit blockers.
 
 沿用当前分支和 Draft
-PR；总跟踪和原始范围保留。M0–M3 的批准范围及 #38–#42／#44／#45 验收证据保留，当前处理 #43／#46–#47，认领、真实失败及来源／tested
+PR；总跟踪和原始范围保留。M0–M3 的批准范围及 #38–#42／#44／#45 验收证据保留，按来源维护 #43／#46–#47 证据，认领、真实失败及来源／tested
 SHA 分开记录，不新建状态标签。最终人工项已由用户豁免；缺失功能和自动失败仍阻止验收，不合并、不发布、不直接修改目标分支。
 
-| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                      |
-| ------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                    |
-| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                          |
-| M2 #16       | #29–#32       | Four tasks closed in approved scope; actual native Vim/ownership and approved Agent/lifecycle simulations have separate evidence. / 四项在批准范围内关闭，真实Vim／并存及模拟Agent／生命周期各自留证。 |
-| M3 #17       | #33–#37       | Closed by user, not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain visible. / 按用户指示关闭阶段，原始持久布局／PDF／Windows运行与选择器缺口不改记完成。        |
-| M4 #18       | #38–#43       | 5/6 closed; #42 sourceec1a49d matrix/visible recovery accepted, #43 v4 measurements await CI. / 交互矩阵与可见恢复验收，v4性能待CI。                                                                   |
-| M5 #19       | #44–#47       | 2/4 closed; #44/#45 accepted with signing/simulation boundaries, #46/#47 await actual evidence. / 候选及更新验收，签名／模拟边界保留，升级回退及门禁待证据。                                           |
+| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                         |
+| ------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                       |
+| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                             |
+| M2 #16       | #29–#32       | Four tasks closed in approved scope; actual native Vim/ownership and approved Agent/lifecycle simulations have separate evidence. / 四项在批准范围内关闭，真实Vim／并存及模拟Agent／生命周期各自留证。                    |
+| M3 #17       | #33–#37       | Closed by user, not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain visible. / 按用户指示关闭阶段，原始持久布局／PDF／Windows运行与选择器缺口不改记完成。                           |
+| M4 #18       | #38–#43       | #38–#42 accepted; source-specific performance evidence and remaining scope are maintained in #43/#18. / 前五任务验收，性能来源证据及剩余范围由任务／阶段跟踪维护。                                                        |
+| M5 #19       | #44–#47       | #44/#45 accepted; exact upgrade/rollback and final gate reports are maintained in #46/#47/#19, with signing and simulation limits visible. / 候选／更新验收，准确升级回退和门禁结果由任务／阶段维护，签名及模拟限制可见。 |
 
 ### M2 implementation and verification / M2 实现与验证
 
@@ -400,10 +400,10 @@ drafts. An automatic WebView import or tested install-level downgrade is not sup
 test; keep the prior data copy and use the current recovery UI if the snapshot is corrupt. Do not
 overwrite the canonical copy or resume two authoritative clients during recovery. Credential stores
 remain platform-owned and are not part of the JSON export. Actual installation replacement, host
-retention and full data rollback remain #46; native recovery interaction and dependency acceptance
-keep #28 open.
+retention and latest-data rollback are documented per source in #46; original recovery-format and
+dependency acceptance remains recorded in #28.
 
-恢复前保留旧 WebView 数据及整个规范目录，停止客户端写入并导出最新状态；退出只断连宿主。导出先经旧读取器校验，再用于隔离旧 QA。仅替换旧程序不能恢复迁移后的设置或草稿。格式测试未提供自动 WebView 导入或安装级降级验收；保留先前副本，损坏快照使用当前恢复界面，不覆盖规范副本或同时运行两个权威写者。凭据仍由系统管理。实际安装替换、宿主保留和完整回退属于 #46；原生恢复及依赖未验收前 #28 保持开放。
+恢复前保留旧 WebView 数据及整个规范目录，停止客户端写入并导出最新状态；退出只断连宿主。导出先经旧读取器校验，再用于隔离旧 QA。仅替换旧程序不能恢复迁移后的设置或草稿。格式测试未提供自动 WebView 导入或安装级降级验收；保留先前副本，损坏快照使用当前恢复界面，不覆盖规范副本或同时运行两个权威写者。凭据仍由系统管理。实际安装替换、宿主保留及最新数据回退由#46按来源记录；原有恢复格式及依赖验收仍保留在#28。
 
 ### Auxiliary data ownership / 辅助数据归属
 
@@ -454,13 +454,14 @@ This is a recovery preparation procedure; installation/data write-back acceptanc
    两客户端停止时，只把备份的**迁移前配置**恢复到独立旧 QA 安装。这恢复备份时的旧状态，不导入后续规范修改；保留新存储用于返回新客户端。
 
 4. Production has no automatic path into an unmodified historical WebView. The isolated
-   `python3 -B scripts/client-upgrade-smoke.py` rehearses explicit latest-compatible data write-back
-   using a recorded QA entry around unchanged historical readers. It pins uTerm-v0.2.4 source,
-   verifies downloaded private packages, tests interrupted replacement and actual UI crash/reopen,
-   and retains full canonical backups. Initial old draft input and credential/hook references are
-   fixtures; OS URL/login registration is disabled. This is a private manual replacement rehearsal,
-   not production migration acceptance or the original signed installer. Actual both-architecture
-   outcomes remain in #46; do not overwrite existing production profiles.
+   `python3 -B scripts/client-upgrade-smoke.py` on an owned GitHub Actions Mac rehearses explicit
+   latest-compatible data write-back using a recorded QA entry around unchanged historical readers.
+   It pins uTerm-v0.2.4 source, verifies downloaded private packages, tests interrupted replacement
+   and actual UI crash/reopen, and retains full canonical backups. Initial old draft input and
+   credential/hook references are fixtures; OS URL/login registration is disabled. This is a private
+   manual replacement rehearsal, not production migration acceptance or the original signed
+   installer. Actual both-architecture outcomes remain in #46; do not overwrite existing production
+   profiles.
 
    生产没有向未修改历史WebView自动回写的入口。隔离的 `python3 -B scripts/client-upgrade-smoke.py`
    用记录的QA入口调用未改动历史读取器，演练明确的最新兼容数据回写。固定uTerm-v0.2.4源码，验证下载的私有包，测试替换中断及真实界面崩溃／重开，保留完整规范备份。旧草稿初始输入和凭据／hook引用使用测试数据，系统URL／登录注册禁用。此流程是私有手动替换演练，不代表生产迁移或原始签名安装器验收；两架构实际结果仍由#46记录，不覆盖已有生产配置。
@@ -556,14 +557,14 @@ The executable version4 baseline is `shared/fixtures/client-performance.json`: o
 and a gated 200ms slow consumer. Three repetitions use 120/120/600-second idle samples; both clients
 run sequentially on the same Mac. Original windows, exact source/workload/merge hashes, raw PID-tree
 CPU/RSS and cleanup are archived. The five warm-up cycles are excluded from response summaries;
-unattributed GPU/WebContent/XPC and the external database process are excluded. New full Mac runs
-remain pending; Windows is a separate baseline. The wider exploratory cases below remain unmeasured
-unless their own evidence says otherwise; a ten-minute sample does not establish multi-hour leak
-freedom or a performance gain.
+unattributed GPU/WebContent/XPC and the external database process are excluded. Exact Mac reports
+and per-source acceptance are maintained in #43; Windows is a separate baseline. The wider
+exploratory cases below remain unmeasured unless their own evidence says otherwise; a ten-minute
+sample does not establish multi-hour leak freedom or a performance gain.
 
 实际version4负载固定真实PTY与120×30网格、二十轮各1,024条ANSI／Unicode、14pt字体、5,000行回滚、64KiB
 CAS文件、二十次合成备用屏幕重绘、真实Core／JDBC
-PostgreSQL及门控200ms慢消费。三轮空闲采样120／120／600秒，同一Mac顺序运行两客户端。归档原图、源码／负载／merge哈希、原始进程树CPU／RSS及清理。响应摘要排除前五轮预热，资源排除未归属GPU／WebContent／XPC及外部数据库进程。新Mac完整运行仍待完成，Windows单独记录基线；下列更广探索场景没有专项证据就仍按未测记录，十分钟不代表多小时无泄漏或性能提升。
+PostgreSQL及门控200ms慢消费。三轮空闲采样120／120／600秒，同一Mac顺序运行两客户端。归档原图、源码／负载／merge哈希、原始进程树CPU／RSS及清理。响应摘要排除前五轮预热，资源排除未归属GPU／WebContent／XPC及外部数据库进程。Mac准确报告及按来源验收由#43维护，Windows单独记录基线；下列更广探索场景没有专项证据就仍按未测记录，十分钟不代表多小时无泄漏或性能提升。
 
 | Case / 场景                 | Reproducible workload and assertions / 可重复负载与断言                                                                                                                                                                                                     | Current acceptance / 当前验收                                                              |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
