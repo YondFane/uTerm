@@ -49,8 +49,8 @@ async function download() {
   await invoke("update_download", { events });
   assert(bytes > 0, "Actual updater did not report downloaded bytes");
 }
-async function draft(context: Context) {
-  return coreRequest("editor.drafts.document", {
+async function draft(context: Context, observe: typeof coreRequest) {
+  return observe("editor.drafts.document", {
     directory: context.project,
     path: "update-draft.txt",
   }) as unknown as Promise<CoreEditorDraftEntry>;
@@ -82,6 +82,7 @@ function send(id: string, text: string) {
 export async function runUpdates(
   context: Context,
   scene: (name: string, checks: unknown) => Promise<void>,
+  observe: typeof coreRequest,
 ) {
   const state = await fixture("context");
   if (state.version === "0.2.5") {
@@ -98,7 +99,7 @@ export async function runUpdates(
       "Update replaced the live host or session generation",
     );
     assert(
-      (await draft(context)).draft.text === checkpoint.text,
+      (await draft(context, observe)).draft.text === checkpoint.text,
       "Update lost the retained Core draft bytes",
     );
     await until(
@@ -142,7 +143,7 @@ export async function runUpdates(
     return;
   }
   assert(state.version === "0.2.4", "Unexpected initial QA package version");
-  const snapshot = (await coreRequest("snapshot.read")) as unknown as {
+  const snapshot = (await observe("snapshot.read")) as unknown as {
     document: {
       settings: { automaticUpdates: boolean };
       workspace: { selectedProject: string | null };
@@ -164,7 +165,7 @@ export async function runUpdates(
   project.click();
   await until(
     async () =>
-      ((await coreRequest("snapshot.read")) as unknown as typeof snapshot).document.workspace
+      ((await observe("snapshot.read")) as unknown as typeof snapshot).document.workspace
         .selectedProject === "shared-state-qa",
     "committed project selection",
   );
@@ -262,7 +263,7 @@ export async function runUpdates(
   await scene("editor-protected", {
     realInstallCommandRejected: true,
     simulatedDirtyEditorGuard: true,
-    coreDraftRetained: (await draft(context)).draft.text === text,
+    coreDraftRetained: (await draft(context, observe)).draft.text === text,
   });
   await invoke("database_guard", { id: "updates-simulated-sql-draft", dirty: true });
   let protectedDatabase = false;
@@ -325,7 +326,7 @@ export async function runUpdates(
       await pause(200);
     }
     try {
-      return !((await coreRequest("snapshot.read")) as unknown as typeof snapshot).document.settings
+      return !((await observe("snapshot.read")) as unknown as typeof snapshot).document.settings
         .automaticUpdates;
     } catch (error) {
       if ((error as { code?: string }).code === "WRITER_BUSY") return false;
@@ -341,7 +342,7 @@ export async function runUpdates(
     actualCancelButton: true,
     automaticOptOut: true,
     automaticOptOutRetries,
-    coreDraftRetained: (await draft(context)).draft.text === text,
+    coreDraftRetained: (await draft(context, observe)).draft.text === text,
   });
   await click("Install and restart");
   await until(

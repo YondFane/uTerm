@@ -4810,7 +4810,10 @@ now closes the actual terminal control and shuts down only its validated idle Ta
 normal active-session refusal rules. Windows removal retries bounded transient file locks and always
 writes logs/summary, including cleanup failures. The
 [original artifact13522119395](https://github.com/YondFane/uTerm/actions/runs/42256355715/artifacts/13522119395)
-remains a failed acceptance; corrected platform results remain pending.
+remains a failed acceptance; corrected platform results remain pending. Startup and draft
+observation now reuse the existing bounded read-only QA observer for `WRITER_BUSY`, recording
+retries in scene reports. A read race cannot authorize retrying mutations: CAS writes and explicit
+settings retry remain unchanged.
 
 #### Windows/Tauri automatic installation
 

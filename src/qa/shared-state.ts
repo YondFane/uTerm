@@ -1565,11 +1565,11 @@ export async function run(recovery: boolean) {
     }
     await until(async () => (await invoke<Context>("qa_context")).ready, "normal quit listener");
     if (context.phase === "performance") {
-      await runPerformance(context, scene);
+      await runPerformance(context, scene, observeCore);
       return;
     }
     if (context.phase === "updates") {
-      await runUpdates(context, scene);
+      await runUpdates(context, scene, observeCore);
       return;
     }
     if (context.phase === "package") {

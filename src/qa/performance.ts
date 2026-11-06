@@ -50,9 +50,10 @@ async function until<T>(read: () => T | Promise<T>, label: string): Promise<NonN
 export async function runPerformance(
   context: Context,
   scene: (name: string, checks: unknown) => Promise<void>,
+  observe: typeof coreRequest,
 ) {
   assert(!/["'`$;\\\r\n]/u.test(fixture.unicodeText), "Unsafe committed output fixture");
-  const snapshot = (await coreRequest("snapshot.read")) as unknown as {
+  const snapshot = (await observe("snapshot.read")) as unknown as {
     document: { settings: Record<string, unknown> };
   };
   // Seed before shared-state initialization; an out-of-queue CAS write poisons later UI mutations.
@@ -69,7 +70,7 @@ export async function runPerformance(
   project.click();
   await until(async () => {
     try {
-      const selected = (await coreRequest("snapshot.read")) as unknown as {
+      const selected = (await observe("snapshot.read")) as unknown as {
         document: { workspace: { selectedProject: string; selectedWorktree: string | null } };
       };
       return (
