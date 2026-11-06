@@ -144,10 +144,14 @@ Local report tests reject stale source/workload, imprecise sequence, missing row
 insufficient soak, missing slow-consumer evidence and unequal grids. Actual version3 macOS and
 Windows measurements remain pending; #43 stays open and no improvement percentage is claimed.
 Earlier version2 reports are not evidence for the additional workload. Native fitting uses the
-window content rect for setContentSize, avoiding repeated title-bar height in full-size content
-bounds; every attempt records actual window/view/grid geometry. Windows selects Git Bash explicitly,
-not the installed WSL launcher. The first version3 run failed these preparation steps; its original
-logs and reports remain in run42267835513. Corrected platform results are pending.
+window content rect and records every actual window/view/grid attempt. ARM CI revealed that its
+visible desktop caps the window at 684px, preventing 36 rows. In owned GitHub Actions desktops only,
+a public CoreGraphics helper selects a supported mode of at least 1280×900 before both clients and
+restores the original mode in cleanup; unavailable modes fail. It does not change a local Mac's
+screen. Windows receives the actual Git Bash path from the running workflow shell and also handles
+Git's mingw64 layout, without selecting WSL. The SQL output column uses a distinct alias so ORDER BY
+sorts the numeric series, rather than its text projection. The original run42272314429 failures
+remain; corrected platform results are pending.
 
 Explicit detach releases its authenticated input lease before returning, including when the old
 consumer is blocked. A per-link lock prevents late heartbeat/takeover from reclaiming a stopped

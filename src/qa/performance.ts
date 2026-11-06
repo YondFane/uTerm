@@ -398,7 +398,7 @@ export async function runPerformance(
         handle: database.handle,
         request: {
           op: "query",
-          sql: `SELECT i::text, repeat('x',${fixture.databasePayloadColumns}) || ' ${fixture.unicodeText}' FROM generate_series(1,${fixture.databaseRows}) AS i ORDER BY i`,
+          sql: `SELECT i::text AS ordinal, repeat('x',${fixture.databasePayloadColumns}) || ' ${fixture.unicodeText}' FROM generate_series(1,${fixture.databaseRows}) AS i ORDER BY i`,
           offset: 0,
         },
       });

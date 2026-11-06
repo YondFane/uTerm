@@ -67,7 +67,10 @@ jobs:
       - name: Run the shared workload sequentially three times
         run: |
           performance_python=python3
-          if [[ "$RUNNER_OS" == Windows ]]; then performance_python=python; fi
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            performance_python=python
+            export UTERM_QA_GIT_BASH="$(cygpath -w "$BASH")"
+          fi
           "$performance_python" -B scripts/client-performance-database.py
           node scripts/client-performance-report.mjs ci-evidence/performance
       - name: Archive actual measurements and original windows

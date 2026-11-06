@@ -156,7 +156,7 @@ enum PerformanceSmoke {
             for _ in 0..<Int(cycles) {
                 let start = ProcessInfo.processInfo.systemUptime
                 let result = try await database.execute("database_request", params: ["handle": connection["handle"], "request": .object([
-                    "op": .string("query"), "sql": .string("SELECT i::text, repeat('x',\(columns)) || ' \(unicodeText)' FROM generate_series(1,\(rows)) AS i ORDER BY i"), "offset": .number(0)])])
+                    "op": .string("query"), "sql": .string("SELECT i::text AS ordinal, repeat('x',\(columns)) || ' \(unicodeText)' FROM generate_series(1,\(rows)) AS i ORDER BY i"), "offset": .number(0)])])
                 let values = result["rows"].array
                 guard values.count == rows else { throw BridgeFailure(code: "PERFORMANCE_DATABASE", message: "Actual database query returned another row count") }
                 for (index, row) in values.enumerated() {

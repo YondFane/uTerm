@@ -7,19 +7,25 @@ import subprocess
 import tempfile
 import json
 import shutil
+import platform
 from database_qa_service import DatabaseService
 
 
 with tempfile.TemporaryDirectory(prefix="uterm-performance-service-") as directory:
     service = DatabaseService(directory, Path("ci-evidence/performance/database-service"))
+    display = platform.system() == "Darwin" and os.environ.get("GITHUB_ACTIONS") == "true"
     try:
+        if display:
+            subprocess.run(["swift", "scripts/macos-performance-display.swift", "configure", "ci-evidence/performance/display.json"], check=True)
         service.start()
         bash = "/bin/bash"
         if os.name == "nt":
             git = shutil.which("git")
             assert git, "Git for Windows is required"
-            bash = str(Path(git).parent.parent / "bin/bash.exe")
-            assert Path(bash).is_file(), "Git Bash is unavailable; do not use the WSL launcher"
+            candidates = [Path(os.environ["UTERM_QA_GIT_BASH"])] if os.environ.get("UTERM_QA_GIT_BASH") else []
+            candidates.extend(parent / "bin/bash.exe" for parent in Path(git).resolve().parents)
+            bash = next((str(candidate) for candidate in candidates if candidate.is_file()), None)
+            assert bash, "Git Bash is unavailable; do not use the WSL launcher"
         subprocess.run([bash, "scripts/run-client-performance.sh"], check=True,
                        env=dict(os.environ, UTERM_QA_DATABASE_FIXTURE=str(service.context)))
         assert service.sql("SELECT note FROM qa_exact WHERE id=1") == "ORIGINAL_DATABASE_TEXT"
@@ -31,14 +37,18 @@ with tempfile.TemporaryDirectory(prefix="uterm-performance-service-") as directo
         try:
             service.close()
         finally:
-            leaked = []
-            for path in Path("ci-evidence").rglob("*"):
-                if path.is_file() and path.suffix in [".json", ".log", ".txt"]:
-                    content = path.read_bytes()
-                    if service.password.encode() in content:
-                        leaked.append(path.name)
-                        path.write_bytes(content.replace(service.password.encode(), b"<REDACTED_QA_SECRET>"))
-            if leaked:
-                service.report.update(passed=False, credentialExcludedFromEvidence=False, redactedFiles=leaked)
-                (service.evidence / "database-live.json").write_text(json.dumps(service.report, indent=2)+"\n", encoding="utf-8")
-                raise AssertionError("Temporary database credential appeared in evidence: " + ", ".join(leaked))
+            try:
+                if display and Path("ci-evidence/performance/display.json").is_file():
+                    subprocess.run(["swift", "scripts/macos-performance-display.swift", "restore", "ci-evidence/performance/display.json"], check=True)
+            finally:
+                leaked = []
+                for path in Path("ci-evidence").rglob("*"):
+                    if path.is_file() and path.suffix in [".json", ".log", ".txt"]:
+                        content = path.read_bytes()
+                        if service.password.encode() in content:
+                            leaked.append(path.name)
+                            path.write_bytes(content.replace(service.password.encode(), b"<REDACTED_QA_SECRET>"))
+                if leaked:
+                    service.report.update(passed=False, credentialExcludedFromEvidence=False, redactedFiles=leaked)
+                    (service.evidence / "database-live.json").write_text(json.dumps(service.report, indent=2)+"\n", encoding="utf-8")
+                    raise AssertionError("Temporary database credential appeared in evidence: " + ", ".join(leaked))
