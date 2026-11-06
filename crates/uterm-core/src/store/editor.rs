@@ -154,7 +154,7 @@ impl Store {
         }
         Ok(())
     }
-    fn editor_load(&self) -> Result<EditorDraftSnapshot> {
+    pub(super) fn editor_load(&self) -> Result<EditorDraftSnapshot> {
         let path = self.root.join("editor-drafts-v1.json");
         if fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound) {
             self.editor_check_initial_import()?;

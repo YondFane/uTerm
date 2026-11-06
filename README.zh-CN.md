@@ -175,6 +175,9 @@ workflow 执行。程序比较只允许 Tauri 唯一的 NSIS 类型标记变换�
 使用分别标识的原生 QA 应用、临时数据、一次性 CryptoKit 密钥及回环更新源运行真实 SDK。脚本下载经过哈希固定的官方签名工具，检查有效／无效签名、平台／渠道／版本拒绝、取消、中断／离线下载及重试。用户决定明确由模拟 SDK 驱动控制；共享设置的开启／关闭验证实际 SDK 调度；独立场景执行真实 SDK 替换／重启、原生编辑器退出保存及保留宿主重连，平台结果仍待 CI。报告、真实窗口原图、HTTP 日志及有效签名测试 ZIP 归档在
 `updates/`，私钥不上传。
 
+Core `rollback.export` 只读导出带 revision 的规范状态与全部当前编辑器草稿，不改变
+`legacy.export`。旧客户端只有一个草稿槽，多草稿完整归档并要求明确选择，已删除草稿不复活。TS／Swift 生成模型及绑定源码的存储报告验证数据边界，实际旧客户端安装及程序／数据回退仍由 #46 跟踪。
+
 Client performance evidence workflow 在原生构建后运行
 `node scripts/macos-performance-smoke.mjs`，Tauri 使用
 `UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs`。同一台 Mac 顺序交替运行两端，共三次；Windows 单独记录 Tauri 基线。`shared/fixtures/client-performance.json`

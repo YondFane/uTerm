@@ -578,6 +578,12 @@ impl Store {
     }
     pub fn favorites_export(&self, legacy: &mut BTreeMap<String, String>) -> Result<()> {
         let _guard = self.lock()?;
+        self.favorites_export_locked(legacy)
+    }
+    pub(super) fn favorites_export_locked(
+        &self,
+        legacy: &mut BTreeMap<String, String>,
+    ) -> Result<()> {
         for (repository, entry) in self.favorites_load()?.repositories {
             let mut keys = legacy
                 .keys()

@@ -40,6 +40,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "EditorDraftCollection":schemars::schema_for!(uterm_core::store::EditorDraftCollection),
             "EditorDraftDocument":schemars::schema_for!(uterm_core::store::EditorDraftDocument),
             "EditorDraftSnapshot":schemars::schema_for!(uterm_core::store::EditorDraftSnapshot),
+            "RollbackArchive":schemars::schema_for!(uterm_core::store::RollbackArchive),
+            "LegacyDraftCandidate":schemars::schema_for!(uterm_core::store::LegacyDraftCandidate),
             "EditorRecoveryCatalog":schemars::schema_for!(uterm_core::store::EditorRecoveryCatalog),
             "GitChange":schemars::schema_for!(uterm_core::git::Change),
             "GitSnapshot":schemars::schema_for!(uterm_core::git::Snapshot),

@@ -1238,6 +1238,20 @@ impl Core {
                 );
                 Ok(json!({"revision":snapshot.revision,"values":legacy}))
             }
+            "rollback.export" => {
+                #[derive(Deserialize)]
+                #[serde(rename_all = "camelCase", deny_unknown_fields)]
+                struct Arguments {
+                    expected_revision: String,
+                    expected_draft_revision: Option<String>,
+                }
+                let args: Arguments = serde_json::from_value(params)?;
+                serde_json::to_value(self.store.rollback_export(
+                    &args.expected_revision,
+                    args.expected_draft_revision.as_deref(),
+                )?)
+                .map_err(Into::into)
+            }
             "snapshot.replace" => {
                 let revision = string(&params, "expectedRevision")?;
                 self.store

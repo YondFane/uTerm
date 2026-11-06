@@ -210,6 +210,12 @@ scheduler. A separate case performs actual SDK replacement/relaunch, real editor
 retained-host reconnection; its platform results remain pending CI. Reports, original windows, HTTP
 logs and the valid signed test ZIP are archived under `updates/`; private keys are never uploaded.
 
+Core `rollback.export` creates a read-only, revision-bound archive of canonical state and every
+current editor draft without changing `legacy.export`. Old clients have one draft slot: multiple
+current drafts remain archived and require a deliberate choice, while deleted drafts stay deleted.
+Generated TS/Swift models and source-bound storage reports cover this data boundary; actual
+old-client installation and program/data rollback remain tracked in #46.
+
 The Client performance evidence workflow runs `node scripts/macos-performance-smoke.mjs` after the
 native build and `UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs` for Tauri. It
 alternates clients sequentially on the same Mac for three repetitions; Windows records its own Tauri

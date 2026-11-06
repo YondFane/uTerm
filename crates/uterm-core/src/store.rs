@@ -10,6 +10,7 @@ use std::{
 };
 mod editor;
 mod git_favorites;
+mod rollback;
 pub use editor::{
     EditorDraft, EditorDraftCollection, EditorDraftDocument, EditorDraftEntry, EditorDraftSnapshot,
     EditorRecoveryCatalog,
@@ -18,6 +19,7 @@ pub use git_favorites::{
     GitFavoriteDocument, GitFavoriteRecoveryCatalog, GitFavoriteRecoverySnapshot,
     GitFavoriteRepository, GitFavorites,
 };
+pub use rollback::{LegacyDraftCandidate, RollbackArchive};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

@@ -156,14 +156,14 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态            | Evidence and next work / 证据与下一步                                                                                                                                                                                                  |
-| ------------ | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0           | Accepted, unmerged / 已验收，未合并 | Both native architectures and legacy Tauri jobs passed                                                                                                                                                                                 |
-| M1           | Accepted / 已验收                   | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                                                                              |
-| M2           | In progress / 开发中                | #29/#30 accepted; actual native Vim and shared ownership verified on both architectures at 1fd91cf; Agent/manual, GPU capture and lifecycle gaps remain / 原生Vim与并存子范围已验收，阶段仍有缺口。                                    |
-| M3           | In progress / 开发中                | Shared editor/Git/Worktree/Python/Java and native entry points exist; favorite preview contention passes 48 real Windows/macOS scenes at ff60a6b; JDK8/tabs/PDF/SSH/full workflows remain / 共享服务与收藏争用子范围通过，阶段未完成。 |
-| M4           | Pending / 待实现                    | Remaining capabilities, native interaction and measurements                                                                                                                                                                            |
-| M5           | Pending / 待实现                    | Candidate packaging, signed update and rollback exercises                                                                                                                                                                              |
+| Stage / 阶段 | Current state / 当前状态                  | Evidence and next work / 证据与下一步                                                                                                                                                       |
+| ------------ | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0           | Accepted, unmerged / 已验收，未合并       | Both native architectures and legacy Tauri jobs passed                                                                                                                                      |
+| M1           | Accepted / 已验收                         | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                                   |
+| M2           | Closed in approved scope / 批准范围内关闭 | All four tasks closed; real Vim/ownership and explicitly simulated Agent/lifecycle checks stay distinct. / 四项关闭，真实Vim／并存与明确模拟的Agent／生命周期分开记录。                     |
+| M3           | Closed by user / 用户指示关闭             | #17 closed not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain. / 阶段按用户指示关闭，原始持久布局／PDF／Windows运行与选择器缺口保留。                |
+| M4           | 3/6 closed / 关闭3/6                      | #38–#40 accepted; #41 settings, #42 interaction and #43 same-load measurements are active with pending automated checks. / 数据库／Redis／Agent已验收，设置／交互／同负载测量继续自动验证。 |
+| M5           | 1/4 closed / 关闭1/4                      | #44 QA candidates accepted at source8aac; #45 updates, #46 upgrade/data rollback and #47 final gates remain open. / QA候选已验收，更新／升级数据回退／最终门禁继续开放。                    |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
@@ -262,20 +262,23 @@ Continue branch `feat/native-macos-shared-core` and Draft PR
 [#12](https://github.com/YondFane/uTerm/pull/12). Tracking
 [#13](https://github.com/YondFane/uTerm/issues/13) and all acceptance criteria remain authoritative.
 Do not merge, tag, publish or modify `release`/`main` directly. YondFane is the authenticated
-executor. Preserve accepted M0/M1 and #29/#30 evidence; this round advances the already assigned
-#31/#32/#35/#37 scopes. Future work is not bulk claimed, and no project/status labels are invented.
+executor. Preserve accepted M0–M3 scope and #38–#40/#44 evidence. Active work covers #41–#43 and
+#45–#47 with claims, actual failures and separate source/tested SHAs; no project/status labels are
+invented. Final manual acceptance is waived by the user; missing functionality and automated
+failures remain explicit blockers.
 
 沿用当前分支和 Draft
-PR；总跟踪与原验收标准不变。本轮实际推进已分配的 #31／#32／#35／#37，保留已验收工作，不批量认领后续任务，不合并、不发版、不直接修改受保护目标分支。
+PR；总跟踪和原始范围保留。M0–M3 的批准范围及 #38–#40／#44 验收证据保留，当前处理 #41–#43／#45–#47，认领、真实失败及来源／tested
+SHA 分开记录，不新建状态标签。最终人工项已由用户豁免；缺失功能和自动失败仍阻止验收，不合并、不发布、不直接修改目标分支。
 
-| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                                    |
-| ------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                                  |
-| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                                        |
-| M2 #16       | #29–#32       | #29/#30 accepted; actual Vim/ownership passed native ARM/Intel at 1fd91cf; Agent/manual, GPU and lifecycle gaps remain. / 两任务已验收，原生Vim与并存子范围通过，阶段仍开放。                                                        |
-| M3 #17       | #33–#37       | Shared editor/Git/Worktree/Python/Java and native entry points exist; real favorite-preview contention passed both Tauri platforms at ff60a6b; JDK8/tabs/PDF/SSH/full workflows remain. / 共享服务与收藏争用子范围通过，阶段未完成。 |
-| M4 #18       | #38–#43       | Basic native settings are partial groundwork only; full capability, interaction and measurement gates remain. / 基础原生设置仅为部分前置实现，完整功能、交互与测量未完成。                                                           |
-| M5 #19       | #44–#47       | QA App is ad-hoc signed, not a release candidate acceptance. Signed updates, actual upgrade/rollback and formal signing/notarization remain. / QA App 临时签名不等于候选验收，更新、实际升级回退及正式签名公证待完成。               |
+| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                                                 |
+| ------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                                               |
+| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                                                     |
+| M2 #16       | #29–#32       | Four tasks closed in approved scope; actual native Vim/ownership and approved Agent/lifecycle simulations have separate evidence. / 四项在批准范围内关闭，真实Vim／并存及模拟Agent／生命周期各自留证。                                            |
+| M3 #17       | #33–#37       | Closed by user, not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain visible. / 按用户指示关闭阶段，原始持久布局／PDF／Windows运行与选择器缺口不改记完成。                                                   |
+| M4 #18       | #38–#43       | 3/6 closed: database/Redis/Agent accepted; settings, interaction and genuine same-machine workload evidence continue. / 数据库／Redis／Agent验收，设置／交互／同机器真实负载证据仍继续。                                                          |
+| M5 #19       | #44–#47       | #44 accepted QA candidate installs, with ad-hoc/unsigned/no-notarization limits. Updates, actual old-client/data rollback and final gates remain open. / QA候选安装验收，临时签名／未签名及无公证限制保留，更新／旧客户端数据回退／最终门禁开放。 |
 
 ### M2 implementation and verification / M2 实现与验证
 
@@ -374,6 +377,18 @@ updated split/session example.
 
 规范文档 schema 1 包含工作区 schema 7 与设置 schema 1；导出为
 `{revision, values}`，values 保留键名和字符串值，主状态及已接入的 Git 收藏反映当前快照，其他辅助值保持原样。默认值及更新后分屏样例可由测试重复构造，不含用户数据。
+
+`rollback.export` is a separate read-only schema1 archive with required canonical `expectedRevision`
+and optional `expectedDraftRevision`. One writer lease spans canonical state, current editor data
+and Git favorites. Generated Swift/TS models retain every current draft and per-document
+legacy-format candidates. A single current draft fills the legacy slot; cleared drafts remove it;
+multiple drafts require selection and leave the slot empty. The snapshot still retains all original
+auxiliary bytes, and `automaticRestoreAllowed=false` requires a deliberate restore. This does not
+replace a complete directory/profile backup or installation-level downgrade.
+
+`rollback.export` 是独立的只读 schema1 归档，要求规范状态 `expectedRevision`，可选草稿
+`expectedDraftRevision`，一次写租约覆盖规范状态、最新编辑数据及 Git 收藏。生成的 Swift／TS 模型保留全部当前草稿和逐文档旧格式候选；单草稿填旧槽，已清空草稿不复活，多草稿要求选择并留空旧槽，原始辅助字节仍保存在快照中。`automaticRestoreAllowed=false`
+要求明确恢复决定，不替代完整目录／配置备份或安装级降级。
 
 For recovery, keep the original WebView data and the canonical directory (including
 `legacy-original.json`, `snapshot-v1.json` and `snapshot-*.backup`) before attempting a client

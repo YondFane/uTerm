@@ -393,6 +393,24 @@ other auxiliary values retain their first-import bytes. Before replacement, reta
 WebView profile and the complete canonical store as well. Editor/PDF, Git favorites and Agent
 notification migration belong to #34, #35 and #40; full installation rollback remains #46.
 
+For operators preparing rollback, the Core `rollback.export` method accepts the current
+`expectedRevision` and optional `expectedDraftRevision`. It reads canonical state, adopted Git
+favorites and current editor drafts under one writer lease, returning schema1 `RollbackArchive` with
+source revisions, original auxiliary strings, every current draft and per-document old-format
+candidates. A single current draft fills the old slot; cleared drafts remove it; multiple drafts
+leave the slot empty and require an explicit choice while retaining every draft in the archive. The
+existing UI's `legacy.export` keeps its original semantics. Export never installs, restores or
+automatically authorizes a downgrade. Keep the complete data backup and validate the old reader;
+credential stores and live host endpoint files remain outside this archive.
+
+Linux checks pass 33 targeted storage/rollback tests (three existing permission cases ignored), two
+real-process reader tests, generated TS/Swift contract checks and type checking. They cover latest
+Unicode/BOM/CRLF bytes, multiple and deleted drafts, stale state/draft revisions, malformed
+arguments, corrupt/unsupported stores, writer contention/retry, idempotence and no config/source
+writes. CI records `rollback-export-core.json`; an actual C ABI Swift decoding case still awaits Mac
+CI. Platform results and actual application/data replacement remain pending under #46. #47 tracks
+final source-bound evidence and current stage gaps; neither task authorizes merging or publishing.
+
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
 conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI. A
 real-helper C ABI test also blocks a binary callback while another thread unsubscribes or closes,

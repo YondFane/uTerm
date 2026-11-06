@@ -5,6 +5,41 @@ import UTermTestSupport
 @testable import UTermBridge
 
 final class CoreBridgeTests: XCTestCase {
+    func testRollbackArchiveDecodesLatestMultipleDraftsAcrossActualCABI() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("shared-state-v1")
+        defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }
+        let core = try await CoreBridge.open(root: root)
+        let defaults = try await core.call("state.defaults")
+        let snapshot = try await core.call("migration.import", params: .object(["workspace": defaults["workspace"], "settings": defaults["settings"], "legacy": .object([:])]))
+        let initial = try await core.call("rollback.export", params: .object(["expectedRevision": snapshot["revision"]]))
+        let initialArchive = try JSONDecoder().decode(CoreRollbackArchive.self, from: JSONEncoder().encode(initial))
+        XCTAssertNil(initialArchive.editor)
+        XCTAssertFalse(initialArchive.automaticRestoreAllowed)
+        _ = try await core.call("editor.drafts.import", params: .object([:]))
+        for (path, text) in [("a.txt", "LATEST 中文 é\r\n"), ("b.txt", "SECOND 🧪\r\n")] {
+            _ = try await core.call("editor.drafts.putDocument", params: .object(["expectedRevision": .null, "draft": .object([
+                "directory": .string(root.path), "path": .string(path), "kind": .string("text"), "text": .string(text),
+                "saved": .string("saved\r\n"), "version": .string(String(repeating: "a", count: 64)), "line_ending": .string("\r\n"), "bom": .bool(true)
+            ])]))
+        }
+        let drafts = try await core.call("editor.drafts.read")
+        let value = try await core.call("rollback.export", params: .object(["expectedRevision": snapshot["revision"], "expectedDraftRevision": drafts["revision"]]))
+        let archive = try JSONDecoder().decode(CoreRollbackArchive.self, from: JSONEncoder().encode(value))
+        XCTAssertEqual(archive.schemaVersion, 1)
+        XCTAssertEqual(archive.snapshot.revision, snapshot["revision"].string)
+        XCTAssertEqual(archive.editor?.revision, drafts["revision"].string)
+        XCTAssertTrue(archive.legacyRequiresDraftChoice)
+        XCTAssertNil(archive.legacyValues["uterm.desktop.editorDraft.v1"])
+        XCTAssertEqual(archive.legacyDraftCandidates.count, 2)
+        let latest = try JSONDecoder().decode(CoreEditorDraft.self, from: Data(archive.legacyDraftCandidates[0].value.utf8))
+        XCTAssertEqual(latest.text, "LATEST 中文 é\r\n")
+        XCTAssertTrue(latest.bom)
+        do {
+            _ = try await core.call("rollback.export", params: .object(["expectedRevision": snapshot["revision"], "expectedDraftRevision": .string("stale")]))
+            XCTFail("A stale draft archive must fail")
+        } catch let failure as BridgeFailure { XCTAssertEqual(failure.code, "CONFLICT") }
+        await core.close()
+    }
     func testGithubPrivateArgumentsKeepTypedFailuresAcrossDetachedCABIRequests() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("shared-state-v1")
         defer { try? FileManager.default.removeItem(at: root.deletingLastPathComponent()) }

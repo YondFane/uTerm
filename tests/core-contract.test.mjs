@@ -1236,6 +1236,61 @@ test("real Rust validation rejects malformed snapshots and agrees with settings 
   assert.deepEqual(fixture.settings, defaults);
 });
 
+test("rollback archives retain latest multi-document drafts without populating an ambiguous old-client slot", async (t) => {
+  const call = await client(t);
+  const original = JSON.stringify(queueDraft("a.txt", "original"));
+  const snapshot = (
+    await call("migration.import", {
+      workspace: emptyWorkspace(),
+      settings: defaults,
+      legacy: { [draftKey]: original },
+    })
+  ).result;
+  const first = (await call("editor.drafts.import", {})).result;
+  const latest = (
+    await call("editor.drafts.put", {
+      expectedRevision: first.revision,
+      draft: queueDraft("a.txt", "latest 中文 é\r\n"),
+    })
+  ).result;
+  let archive = (
+    await call("rollback.export", {
+      expectedRevision: snapshot.revision,
+      expectedDraftRevision: latest.revision,
+    })
+  ).result;
+  assert.equal(readDraft(archive.legacyValues[draftKey]).text, "latest 中文 é\r\n");
+  assert.deepEqual(
+    readWorkspace(archive.legacyValues["uterm.desktop.workspace.v1"]),
+    readWorkspace(JSON.stringify(snapshot.document.workspace)),
+  );
+  assert.deepEqual(
+    readSettings(archive.legacyValues["uterm.desktop.settings.v1"]),
+    snapshot.document.settings,
+  );
+  assert.equal(archive.snapshot.document.legacy[draftKey], original);
+  const multiple = (
+    await call("editor.drafts.put", {
+      expectedRevision: latest.revision,
+      draft: queueDraft("b.txt", "second 🧪\r\n"),
+    })
+  ).result;
+  archive = (
+    await call("rollback.export", {
+      expectedRevision: snapshot.revision,
+      expectedDraftRevision: multiple.revision,
+    })
+  ).result;
+  assert.equal(archive.legacyRequiresDraftChoice, true);
+  assert.equal(archive.automaticRestoreAllowed, false);
+  assert.equal(archive.legacyValues[draftKey], undefined);
+  assert.deepEqual(
+    archive.legacyDraftCandidates.map((value) => readDraft(value.value).text),
+    ["latest 中文 é\r\n", "second 🧪\r\n"],
+  );
+  assert.equal((await call("legacy.export")).result.values[draftKey], original);
+});
+
 test("legacy export is readable by unchanged release readers and retains opaque recovery keys", async (t) => {
   const call = await client(t);
   const legacy = {

@@ -309,6 +309,12 @@ export interface CoreJavaProjectInfo {
   modules: CoreJavaModule[];
 }
 
+export interface CoreLegacyDraftCandidate {
+  directory: string;
+  path: string;
+  value: string;
+}
+
 export interface CoreProjectContext {
   directory?: string | null;
   projectId?: string | null;
@@ -371,6 +377,16 @@ export interface CoreResponse {
   id: string;
   result?: JSONValue;
   version: number;
+}
+
+export interface CoreRollbackArchive {
+  automaticRestoreAllowed: boolean;
+  editor?: CoreEditorDraftSnapshot | null;
+  legacyDraftCandidates: CoreLegacyDraftCandidate[];
+  legacyRequiresDraftChoice: boolean;
+  legacyValues: Record<string, string>;
+  schemaVersion: number;
+  snapshot: CoreSnapshot;
 }
 
 export interface CoreSessionEntry {

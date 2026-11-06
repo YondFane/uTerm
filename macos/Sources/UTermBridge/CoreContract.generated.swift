@@ -308,6 +308,12 @@ public struct CoreJavaProjectInfo: Codable, Sendable {
     public var modules: [CoreJavaModule]
 }
 
+public struct CoreLegacyDraftCandidate: Codable, Sendable {
+    public var directory: String
+    public var path: String
+    public var value: String
+}
+
 public struct CoreProjectContext: Codable, Sendable {
     public var directory: String?
     public var projectId: String?
@@ -370,6 +376,16 @@ public struct CoreResponse: Codable, Sendable {
     public var id: String
     public var result: JSONValue?
     public var version: UInt32
+}
+
+public struct CoreRollbackArchive: Codable, Sendable {
+    public var automaticRestoreAllowed: Bool
+    public var editor: CoreEditorDraftSnapshot?
+    public var legacyDraftCandidates: [CoreLegacyDraftCandidate]
+    public var legacyRequiresDraftChoice: Bool
+    public var legacyValues: [String: String]
+    public var schemaVersion: UInt32
+    public var snapshot: CoreSnapshot
 }
 
 public struct CoreSessionEntry: Codable, Sendable {
