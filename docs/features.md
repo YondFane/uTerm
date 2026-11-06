@@ -3966,6 +3966,16 @@ output does not trigger workspace redraws. Activity failures cancel pending noti
 reconnect hint. The native Close menu action hides the focused Agent window and retains its draft;
 it never closes the selected terminal behind that window.
 
+Tauri setting scenes wait for the control's save result before reading the canonical store. A
+visible writer-busy failure requires an explicit, bounded retry and is counted in the scene report;
+other errors fail the run. This avoids the observer taking a lock during the write under test. The
+initial lock-failure report is retained in #40. Agent selection uses the application's current brand
+label.
+
+A component regression runs these actions against the actual Agent form with mocked native services,
+forces one busy save and requires an explicit successful retry before the observer runs. It verifies
+three scene outcomes, final definition/enable cleanup and no notification permission request.
+
 ### Installing and removing Hooks
 
 Settings → Agent → Install Hooks configures Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot

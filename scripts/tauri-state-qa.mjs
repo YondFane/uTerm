@@ -502,6 +502,7 @@ try {
                 "customCommandSaved",
                 "canonicalEnable",
                 "canonicalNotificationOptOut",
+                "settingWritesCompletedBeforeObserverRead",
               ],
               "agent-live-hooks": ["actualHooksCommand", "privateLocalUsageRead"],
               "agent-live-errors": ["invalidArgumentErrorVisible", "invalidDraftRetained"],

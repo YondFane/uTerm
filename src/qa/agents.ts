@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { translate } from "../lib/i18n";
+import { agentNames } from "../components/SidebarIcon";
 
 const pause = () => new Promise((done) => setTimeout(done, 100));
 function assert(value: unknown, message: string): asserts value {
@@ -71,16 +72,36 @@ export async function runAgents(
       document: { settings: { enabledAgents: string[]; agentNotifications?: boolean } };
     };
   const before = await invoke<unknown[]>("agent_definitions");
+  let writerBusyRetries = 0;
+  async function changeSwitch(input: HTMLInputElement, checked: boolean) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await until(() => !input.disabled, "Enabled setting control");
+      if (input.checked === checked) return;
+      input.click();
+      await pause();
+      // Observe the persisted UI result before taking the Core's read lock.
+      // 先等待界面确认保存结果，再获取 Core 的读取锁。
+      await until(() => !input.disabled, "Setting write completed");
+      if (input.checked === checked) return;
+      const error = panel.querySelector('[role="alert"]')?.textContent ?? "";
+      assert(
+        error.includes("Another writer owns the canonical store"),
+        "Unexpected setting failure",
+      );
+      writerBusyRetries++;
+      await pause();
+    }
+    throw Error("Setting remained unsaved after explicit busy retries");
+  }
   const notification = await until(
     () => panel.querySelector<HTMLInputElement>(".notification-toggle input"),
     "Notification preference",
   );
   assert(notification.checked, "External canonical opt-in was not loaded");
-  notification.click();
-  await until(
-    async () =>
-      !notification.checked && (await saved()).document.settings.agentNotifications === false,
-    "Canonical notification opt-out",
+  await changeSwitch(notification, false);
+  assert(
+    (await saved()).document.settings.agentNotifications === false,
+    "Canonical notification opt-out was not saved",
   );
   await click(t("添加 Agent"));
   await field(t("标识"), "qa-core-agent");
@@ -94,18 +115,20 @@ export async function runAgents(
       panel.querySelector<HTMLInputElement>('[aria-label="Enable Shared Agent QA"]:not(:disabled)'),
     "Enable custom command",
   );
-  enable.click();
-  await until(
-    async () => (await saved()).document.settings.enabledAgents.includes("qa-core-agent"),
-    "Canonical Agent enable",
+  await changeSwitch(enable, true);
+  assert(
+    (await saved()).document.settings.enabledAgents.includes("qa-core-agent"),
+    "Canonical Agent enable was not saved",
   );
   await scene("agent-live-command", {
     customCommandSaved: true,
     canonicalEnable: true,
     canonicalNotificationOptOut: true,
     osPermissionPromptExecuted: false,
+    settingWritesCompletedBeforeObserverRead: true,
+    writerBusyRetries,
   });
-  await select("Claude Code");
+  await select(agentNames.claude);
   await click(t("安装 Hooks"));
   await until(
     () => panel.querySelector('[role="status"]')?.textContent,
@@ -140,18 +163,15 @@ export async function runAgents(
     invalidDraftRetained: true,
   });
   await click(t("取消"), panel.querySelector("form.agent-editor")!);
-  (
-    await until(
-      () =>
-        panel.querySelector<HTMLInputElement>(
-          '[aria-label="Enable Shared Agent QA"]:not(:disabled)',
-        ),
-      "Disable custom command",
-    )
-  ).click();
-  await until(
-    async () => !(await saved()).document.settings.enabledAgents.includes("qa-core-agent"),
-    "Canonical Agent disable",
+  const disable = await until(
+    () =>
+      panel.querySelector<HTMLInputElement>('[aria-label="Enable Shared Agent QA"]:not(:disabled)'),
+    "Disable custom command",
+  );
+  await changeSwitch(disable, false);
+  assert(
+    !(await saved()).document.settings.enabledAgents.includes("qa-core-agent"),
+    "Canonical Agent disable was not saved",
   );
   await click(t("移除配置"));
   await until(
