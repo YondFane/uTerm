@@ -97,11 +97,15 @@ output, explicit close/idle shutdown, uninstall and retained private data. Other
 that workflow; ARM was blocked by an SSH fixture failure and Windows reports a built/installed
 executable hash mismatch. No other platform or later commit is accepted from this Intel result.
 Windows diagnostics compare blocks across the complete files and retain both hashes, sizes and the
-first differing byte offsets/values; the mismatch remains a failing gate. The **Candidate Windows
-QA** workflow runs this installer scope independently, while full desktop regression remains in the
-normal workflows. Independent package, inspector and GitHub failures remain failing CI gates even
-when later checks run. Signed updates, upgrade/data rollback and stable cutover remain separate open
-tasks; these commands do not publish or change production update sources.
+first differing byte offsets/values. Tauri patches its unique `__TAURI_BUNDLE_TYPE_VAR_UNK` token to
+`__TAURI_BUNDLE_TYPE_VAR_NSS` during NSIS packaging, then restores the build file. Candidate
+identity requires exactly that transform with every other byte unchanged; missing/duplicate tokens,
+another bundle type and any code/resource alteration fail. Two local fixture tests pass; Windows
+rerun is pending. The **Candidate Windows QA** workflow runs this installer scope independently,
+while full desktop regression remains in the normal workflows. Independent package, inspector and
+GitHub failures remain failing CI gates even when later checks run. Signed updates, upgrade/data
+rollback and stable cutover remain separate open tasks; these commands do not publish or change
+production update sources.
 
 #### Native QA validation
 

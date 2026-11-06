@@ -99,6 +99,10 @@ try {
     $candidateReport.binarySHA256 = (Get-FileHash $binary -Algorithm SHA256).Hash.ToLowerInvariant()
     $candidateReport.binaryMatchesBuiltSource = $candidateReport.binarySHA256 -eq $candidateReport.builtBinarySHA256
     $candidateReport.installedBinaryBytes = (Get-Item $binary).Length
+    $identityJSON = & python -B (Join-Path $PSScriptRoot 'windows-candidate-identity.py') $candidateBuiltBinary $binary
+    if ($LASTEXITCODE -ne 0) { throw 'Candidate executable identity comparison failed' }
+    $identity = $identityJSON | ConvertFrom-Json
+    foreach ($property in $identity.PSObject.Properties) { $candidateReport[$property.Name] = $property.Value }
     if (!$candidateReport.binaryMatchesBuiltSource) {
         $builtBytes = [IO.File]::ReadAllBytes($candidateBuiltBinary); $installedBytes = [IO.File]::ReadAllBytes($binary)
         $differences = [Collections.Generic.List[int]]::new()
@@ -164,7 +168,7 @@ try {
     $candidateReport.productionRegistryUnchanged = ((Candidate-RegistryHash) -eq $candidateRegistryBefore)
     if (!$candidateReport.productionRegistryUnchanged) { throw 'Production protocol or uninstall registry changed' }
     $candidateReport.installationScope = 'current-user NSIS into an owned temporary directory'
-    if (!$candidateReport.binaryMatchesBuiltSource) { throw 'Installed executable differs from the built QA binary; compare the archived source, sizes, hashes and difference offsets' }
+    if (!$candidateReport.binaryMatchesExpectedNSIS) { throw 'Installed executable differs from the exact Tauri NSIS marker transform; all other bytes must match the built source' }
     $candidateReport.passed = $true
 } catch {
     $candidateReport.failure = $_.ToString()

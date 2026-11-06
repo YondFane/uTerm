@@ -75,7 +75,10 @@ Intel 候选安装已在源码 `b259cfce3000163a2fbf88e23fba316be7fdc44c`、test
 `SHA256SUMS`；两份包的哈希已独立重算，原图已核对。报告记录330份 Web 资源、匹配的 x86_64
 App／helper、只读挂载／资源、真实 helper 输出、明确关闭／空闲停止、卸载及私有数据保留。
 
-该 workflow 的其他 #41 检查仍失败，ARM 被 SSH 测试阻塞，Windows 报告构建与安装后程序的哈希不一致。此 Intel 结果不用于验收其他平台或后续提交。Windows 诊断逐块比较完整文件，保留两份哈希、大小及最先不同字节的偏移／值，不一致仍导致失败；**Candidate
+该 workflow 的其他 #41 检查仍失败，ARM 被 SSH 测试阻塞，Windows 报告构建与安装后程序的哈希不一致。此 Intel 结果不用于验收其他平台或后续提交。Windows 诊断逐块比较完整文件，保留两份哈希、大小及最先不同字节的偏移／值。
+
+Tauri 在 NSIS 打包时将唯一的 `__TAURI_BUNDLE_TYPE_VAR_UNK` 改为
+`__TAURI_BUNDLE_TYPE_VAR_NSS`，随后还原构建文件。候选身份检查要求恰好这一处变换，其余每个字节必须相同；标记缺失／重复、其他打包类型及任何代码／资源改动均失败。本地两项模拟文件测试通过，Windows 重跑待核对。**Candidate
 Windows QA** workflow 独立执行安装器范围，完整桌面回归保留在常规 workflow。
 
 即使后续检查继续运行，独立的安装包、工具窗格及 GitHub 失败仍导致 CI 失败。签名更新、升级／数据回退及稳定切换是后续开放任务；这些命令不发布，也不更改生产更新源。

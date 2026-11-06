@@ -7,6 +7,8 @@ on:
     paths:
       - .github/workflows/candidate-windows.yml
       - scripts/windows-candidate-package.ps1
+      - scripts/windows-candidate-identity.py
+      - tests/test_windows_candidate_identity.py
       - src-tauri/qa-candidate-installer.nsh
 
 permissions:
@@ -39,6 +41,7 @@ jobs:
         run: |
           npm install --global pnpm@11.22.0
           pnpm install --frozen-lockfile
+          python -B tests/test_windows_candidate_identity.py
       - name: Actual isolated NSIS install, launch, screenshot and uninstall
         shell: pwsh
         run: |
