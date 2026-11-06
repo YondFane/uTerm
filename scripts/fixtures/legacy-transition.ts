@@ -1,4 +1,4 @@
-import { renderedText } from "./qa-legacy-transition-buffer";
+import { renderedText, terminalInputReady } from "./qa-legacy-transition-buffer";
 import { invoke } from "@tauri-apps/api/core";
 import { readSettings, settingsKey } from "./lib/settings";
 import { readWorkspace, workspaceKey } from "./lib/workspace";
@@ -107,6 +107,7 @@ export async function runLegacyTransition() {
         "historical retained real PTY replay",
       );
     } else {
+      await until(() => terminalInputReady(section), "historical attached terminal input");
       const field = await until(
         () => section.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea:not(:disabled)"),
         "historical terminal input",

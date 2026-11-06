@@ -493,19 +493,20 @@ startup/command entry files and recorded QA additions differ. It does not run th
 published installer. The historical GUI, readers, services, source manifests and lockfiles remain
 unchanged; initial draft input and credential/hook references are labelled fixtures.
 
-A restored historical editor keeps its unsaved draft visible. Switching to the terminal would
-trigger that version's autosave, so recovery phases check actual retained xterm replay and visible
-CodeMirror text without hiding the editor or rewriting the file. The first old app and both native
-phases still produce fresh PTY output. Reports distinguish fresh DOM input from replay-only checks.
-Recovery also verifies the retained project selection without clicking its row, because that
-navigation triggers the same autosave. A regression executes the actual QA script with real React,
-xterm and DOM state plus a labelled navigation/autosave simulation; both recovery paths must leave
-the original file and stored draft unchanged. The packaged native transition identity is restricted
-to its embedded private temporary data root; an argument selecting a different root is rejected, as
-for the isolated updater fixtures. The 79872ba Intel run captured the real old app and verified the
-signed download, then failed after re-selecting its project had hidden the recovered editor; its
-original windows and failure remain in
-[artifact13542701340](https://github.com/YondFane/uTerm/actions/runs/42295306106/artifacts/13542701340).
+A restored historical editor keeps its unsaved draft visible. Recovery checks actual retained xterm
+replay and visible CodeMirror text without hiding the editor or re-selecting the project: both
+navigation actions trigger that version's autosave. The first old app and both native phases still
+produce fresh PTY output, with fresh DOM input and replay-only checks recorded separately. Fresh
+input waits for the actual historical xterm's `disableStdin=false`, since its textarea can exist
+before attachment enables input.
+
+Regressions execute the actual QA script with real React, xterm and DOM state plus a labelled
+navigation/autosave simulation. Both recovery paths must preserve the original file and stored
+draft; the real xterm reference is checked in disabled and ready states. The packaged native
+transition identity can use only its embedded private temporary data root, as for isolated updater
+fixtures. The d136d51 ARM run failed its first marker after dispatching before xterm input was
+enabled; its actual idle shell window and original failure remain in
+[artifact13542933861](https://github.com/YondFane/uTerm/actions/runs/42298466365/artifacts/13542933861).
 
 The Mac rehearsal downloads a native QA archive from its owned loopback server, verifies a pinned
 one-time Ed25519 manifest and architecture, rejects a bad signature before replacement, and tests

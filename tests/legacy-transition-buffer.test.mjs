@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { parse } from "@babel/parser";
 import { JSDOM } from "jsdom";
 import React, { act, useRef } from "react";
-import { renderedText } from "../scripts/fixtures/legacy-transition-buffer.ts";
+import { renderedText, terminalInputReady } from "../scripts/fixtures/legacy-transition-buffer.ts";
 import { readSettings, defaults, settingsKey } from "../src/lib/settings.ts";
 import { readWorkspace, workspaceKey } from "../src/lib/workspace.ts";
 import { readDraft, draftKey } from "../src/lib/file-document.ts";
@@ -18,7 +18,7 @@ const { createRoot } = await import("react-dom/client");
 const { Terminal } = createRequire(import.meta.url)("@xterm/xterm");
 
 test("historical QA reads a real React xterm ref when canvas output has no DOM text", async () => {
-  const terminal = new Terminal({ allowProposedApi: true, cols: 20, rows: 3 });
+  const terminal = new Terminal({ allowProposedApi: true, cols: 20, rows: 3, disableStdin: true });
   const marker = "LEGACY_BEFORE_0123456789abcdef0123456789abcdef";
   await new Promise((done) => terminal.write(marker, done));
   function HistoricalView() {
@@ -32,6 +32,9 @@ test("historical QA reads a real React xterm ref when canvas output has no DOM t
     assert.equal(section.textContent, "");
     assert.equal(renderedText(section).replace(/\s/g, ""), marker);
     assert.equal(renderedText(document.createElement("section")), "");
+    assert.equal(terminalInputReady(section), false);
+    terminal.options.disableStdin = false;
+    assert.equal(terminalInputReady(section), true);
     assert(!renderedText(section).includes("LEGACY_ROLLBACK_"));
   } finally {
     await act(() => root.unmount());
@@ -164,7 +167,7 @@ test("recovery QA observes the real xterm and draft without triggering navigatio
       throw Error("Unexpected recovery mutation: " + command);
     };
     const modules = {
-      "./qa-legacy-transition-buffer": { renderedText },
+      "./qa-legacy-transition-buffer": { renderedText, terminalInputReady },
       "@tauri-apps/api/core": { invoke },
       "./lib/settings": { readSettings, settingsKey },
       "./lib/workspace": { readWorkspace, workspaceKey },
