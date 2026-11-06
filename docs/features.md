@@ -120,7 +120,13 @@ its descendants and the authenticated host tree. Unattributed WebContent/GPU/XPC
 excluded. The short CI soak cannot establish long-term leak acceptance. TUI/database performance and
 deliberately slow-consumer comparison remain unmeasured; no improvement percentage is claimed. Local
 negative tests pass source/workload/sequence/order checks and process ownership/accounting; actual
-platform measurements still require CI. #43 remains open for those results and missing cases.
+platform measurements still require CI.
+
+Windows automation now selects its temporary project and the nested welcome-button label. Sampling
+stops after a complete JSON record; abrupt PowerShell termination had truncated the final sample.
+The original failed run and captures remain in
+[artifact13510499531](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13510499531).
+#43 remains open for corrected platform results and the unmeasured cases.
 
 #### Native QA validation
 
