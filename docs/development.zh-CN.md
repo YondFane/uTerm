@@ -3,7 +3,7 @@ title: uTerm 开发指南
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-11-05
+updated: 2026-11-06
 ---
 
 # uTerm 开发指南
@@ -46,6 +46,22 @@ JDK21 进程，不掩盖独立的 JDK8 Unicode 启动器失败；此样例不代
 `bash scripts/macos-native-smoke.sh`
 需要图形登录及 WindowServer，记录真实窗口与退出证据。CI 保留原生 ARM／Intel 产物及旧 Tauri 检查。QA 身份为
 `sh.uterm.desktop.qa.native`，不得替换为生产身份或接管生产宿主。验收缺口及对应源码证据见[迁移状态](native-migration.md)。
+
+来源绑定的桌面检查沿用现有 Draft PR，不发布版本：
+
+- `python3 -B scripts/client-performance-database.py`
+  管理自有 PostgreSQL，在同一 Mac 顺序执行原生／Tauri 三轮；Windows 使用 `python`
+  记录独立 Tauri 基线。version4要求真实120×30网格、相同14pt字体及完整共享负载，空闲采样120／120／600秒。随后运行
+  `node scripts/client-performance-report.mjs`。
+- 原生 QA 构建后，`python3 -B scripts/client-upgrade-smoke.py` 从固定 `uTerm-v0.2.4`
+  源码及记录的私有QA注入重建旧应用。流程下载签名私有原生ZIP，测试程序替换中断、实际界面崩溃／恢复，以及明确的旧程序与最新兼容数据回退。不运行未修改的已发布安装器，不配置生产跨客户端更新器。历史读取器和服务不改动；旧草稿初始输入、凭据／hook引用及系统边界继续明确使用测试数据。
+- `python3 -B scripts/migration-readiness.py --head SOURCE_SHA`
+  需要GitHub读取认证，将实际任务、PR、保护分支及当前来源artifact审计写入
+  `ci-evidence/readiness/migration-readiness.json`。缺失或失败证据使其非零退出；此结果不执行合并、发布或修改生产源。
+
+Client upgrade and rollback及Client performance
+evidence工作流归档真实应用报告、所属窗口原图、工具链及准确head／tested merge
+SHA。模拟、用户豁免的人工项和自动原生动作分开记录。#42及签名更新#45在源码ec1a49d的验收已有证据；#43／#46和最终#47仍等待新结果。源码c24d81a的完整Linux前端回归429项通过、11项明确跳过。
 
 Agent 设置可在确认后使用本机 Node.js/npm 安装 OpenCode、Claude、Codex、Gemini、Pi、MiniMax、Qwen
 Code、Copilot CLI 和 iFlow CLI，需要网络及 npm 全局目录写入权限。Hermes 使用官方平台安装脚本。

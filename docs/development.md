@@ -3,7 +3,7 @@ title: uTerm development guide
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-11-05
+updated: 2026-11-06
 ---
 
 # uTerm development guide
@@ -50,6 +50,30 @@ On macOS 14 or newer, `bash scripts/macos-native-build.sh` builds the ad-hoc-sig
 window/exit evidence. CI retains native ARM/Intel artifacts and old Tauri checks. The QA identity is
 `sh.uterm.desktop.qa.native`; never substitute the production identifier or attach its host. See
 [migration status](native-migration.md) for acceptance gaps and source-bound evidence.
+
+Source-bound desktop checks run on the existing Draft PR rather than publishing a release:
+
+- `python3 -B scripts/client-performance-database.py` owns PostgreSQL and runs three sequential
+  native/Tauri repetitions on a Mac; use `python` on Windows for its separate Tauri baseline.
+  Version4 requires the real 120×30 grid, unchanged 14pt text and the full shared workload, with
+  120/120/600-second idle samples. Run `node scripts/client-performance-report.mjs` afterward.
+- `python3 -B scripts/client-upgrade-smoke.py`, after the native QA build, rebuilds pinned
+  `uTerm-v0.2.4` source with a recorded private QA overlay. It downloads a signed private native
+  ZIP, tests interrupted program replacement, actual UI crashes/recovery and explicit old-program
+  plus latest-compatible-data rollback. This is not the unmodified published installer or a
+  production cross-client updater. Original readers and services stay unchanged; initial legacy
+  draft input, credential/hook references and OS boundaries remain labelled fixtures.
+- `python3 -B scripts/migration-readiness.py --head SOURCE_SHA` needs GitHub read authentication. It
+  audits actual task, PR, protected-branch and current-source artifact status into
+  `ci-evidence/readiness/migration-readiness.json`. Missing or failed evidence makes it exit
+  nonzero; that result does not merge, publish or alter production feeds.
+
+The Client upgrade and rollback and Client performance evidence workflows archive actual app
+reports, original owned-window images, toolchains and exact head/tested merge SHAs. Simulations and
+user-waived human steps remain distinct from automated native actions. Task #42 and signed updater
+#45 acceptance is documented at sourceec1a49d; #43/#46 and final #47 remain open for their new
+results. The full Linux frontend regression at sourcec24d81a passes 429 tests with 11 explicit
+skips.
 
 Agent settings can install OpenCode, Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot CLI and
 iFlow CLI after confirmation using the local Node.js/npm installation. This requires internet access

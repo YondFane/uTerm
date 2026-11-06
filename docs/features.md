@@ -151,6 +151,13 @@ clipping checks. Windows receives the real Git Bash path and handles Git's mingw
 orders the numeric series through a distinct output alias. Corrected platform measurements remain
 pending.
 
+At sourcec24d81a the full Linux frontend regression passes 429 tests with 11 explicit skips. The
+retained partial Intel v3 data shows slower native bulk output and database queries; the latter
+includes the native adapter's asynchronous completion polling. These are recorded regressions, not a
+claim that polling alone explains the difference. Two-minute RSS observations are stable, while the
+complete v4 comparison and longer trend remain pending. Exact old-source numbers and limits are in
+[#43](https://github.com/YondFane/uTerm/issues/43#issuecomment-6694081032).
+
 The Windows contract test now waits for its Core process and streams to close before deleting owned
 data, with bounded retries for released Windows handles. A failed preceding desktop step still
 produces an interaction-matrix failure report instead of losing it to a missing directory. These

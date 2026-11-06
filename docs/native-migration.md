@@ -156,26 +156,27 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 
 ## Stage status and evidence / 阶段状态与证据
 
-| Stage / 阶段 | Current state / 当前状态                  | Evidence and next work / 证据与下一步                                                                                                                                                   |
-| ------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0           | Accepted, unmerged / 已验收，未合并       | Both native architectures and legacy Tauri jobs passed                                                                                                                                  |
-| M1           | Accepted / 已验收                         | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                               |
-| M2           | Closed in approved scope / 批准范围内关闭 | All four tasks closed; real Vim/ownership and explicitly simulated Agent/lifecycle checks stay distinct. / 四项关闭，真实Vim／并存与明确模拟的Agent／生命周期分开记录。                 |
-| M3           | Closed by user / 用户指示关闭             | #17 closed not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain. / 阶段按用户指示关闭，原始持久布局／PDF／Windows运行与选择器缺口保留。            |
-| M4           | 4/6 closed / 关闭4/6                      | #38–#41 accepted, including settings at source949e4c2; #42 interaction and #43 same-load measurements remain active. / 数据库／Redis／Agent／设置已验收，交互／同负载测量继续自动验证。 |
-| M5           | 1/4 closed / 关闭1/4                      | #44 QA candidates accepted at source8aac; #45 updates, #46 upgrade/data rollback and #47 final gates remain open. / QA候选已验收，更新／升级数据回退／最终门禁继续开放。                |
+| Stage / 阶段 | Current state / 当前状态                  | Evidence and next work / 证据与下一步                                                                                                                                                                |
+| ------------ | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| M0           | Accepted, unmerged / 已验收，未合并       | Both native architectures and legacy Tauri jobs passed                                                                                                                                               |
+| M1           | Accepted / 已验收                         | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                                            |
+| M2           | Closed in approved scope / 批准范围内关闭 | All four tasks closed; real Vim/ownership and explicitly simulated Agent/lifecycle checks stay distinct. / 四项关闭，真实Vim／并存与明确模拟的Agent／生命周期分开记录。                              |
+| M3           | Closed by user / 用户指示关闭             | #17 closed not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain. / 阶段按用户指示关闭，原始持久布局／PDF／Windows运行与选择器缺口保留。                         |
+| M4 #18       | 5/6 closed / 关闭5/6                      | #38–#42 accepted; #42 uses labelled simulations and waived human steps, #43 actual same-machine measurements remain open. / 前五任务验收，模拟与人工豁免明确，真实同机性能仍开放。                   |
+| M5 #19       | 2/4 closed / 关闭2/4                      | #44 private candidate and #45 real signed updater accepted; #46 historical application/data rollback and #47 final gates remain open. / 私有候选及真实签名更新验收，历史应用数据回退与最终门禁开放。 |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
 baseline file tree passed 343 frontend tests (ten skipped), 59 host tests (three ignored), 150
 backend tests (ten ignored), production and Linux desktop builds in the previous task. That evidence
 is tied to the baseline tree, not new native code. M0 CI records PR head separately from the tested
 merge SHA, macOS/Xcode/Swift versions, startup logs and the ad-hoc-signed QA App on Apple Silicon
-and Intel. Native interaction and performance have not been measured. A graphical smoke is not human
-acceptance.
+and Intel. This historical M0 result does not cover later interactions or performance. Sourceec1a49d
+now has accepted four-platform interaction recording and signed updater evidence in #42/#45;
+physical human checks were waived, not executed. Full v4 same-machine performance remains pending.
 
 云端不是 macOS。既有检查只证明基线文件树；原生代码必须经过新 CI。CI 区分 PR
 head 与实际测试合并 SHA，并保存工具链、启动结果和 QA
-App。原生交互及性能仍未测量，图形启动冒烟不等同人工验收。
+App。此M0旧结果不覆盖后续交互及性能；源码ec1a49d的四平台交互记录及签名更新现已在#42／#45验收。物理人工检查是豁免而非执行，完整v4同机性能仍待完成。
 
 ### M0 evidence / M0 证据
 
@@ -262,23 +263,23 @@ Continue branch `feat/native-macos-shared-core` and Draft PR
 [#12](https://github.com/YondFane/uTerm/pull/12). Tracking
 [#13](https://github.com/YondFane/uTerm/issues/13) and all acceptance criteria remain authoritative.
 Do not merge, tag, publish or modify `release`/`main` directly. YondFane is the authenticated
-executor. Preserve accepted M0–M3 scope and #38–#41/#44 evidence. Active work covers #42–#43 and
-#45–#47 with claims, actual failures and separate source/tested SHAs; no project/status labels are
+executor. Preserve accepted M0–M3 scope and #38–#42/#44/#45 evidence. Active work covers #43 and
+#46–#47 with claims, actual failures and separate source/tested SHAs; no project/status labels are
 invented. Final manual acceptance is waived by the user; missing functionality and automated
 failures remain explicit blockers.
 
 沿用当前分支和 Draft
-PR；总跟踪和原始范围保留。M0–M3 的批准范围及 #38–#41／#44 验收证据保留，当前处理 #42–#43／#45–#47，认领、真实失败及来源／tested
+PR；总跟踪和原始范围保留。M0–M3 的批准范围及 #38–#42／#44／#45 验收证据保留，当前处理 #43／#46–#47，认领、真实失败及来源／tested
 SHA 分开记录，不新建状态标签。最终人工项已由用户豁免；缺失功能和自动失败仍阻止验收，不合并、不发布、不直接修改目标分支。
 
-| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                                                                 |
-| ------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                                                               |
-| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                                                     |
-| M2 #16       | #29–#32       | Four tasks closed in approved scope; actual native Vim/ownership and approved Agent/lifecycle simulations have separate evidence. / 四项在批准范围内关闭，真实Vim／并存及模拟Agent／生命周期各自留证。                                            |
-| M3 #17       | #33–#37       | Closed by user, not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain visible. / 按用户指示关闭阶段，原始持久布局／PDF／Windows运行与选择器缺口不改记完成。                                                   |
-| M4 #18       | #38–#43       | 4/6 closed: database/Redis/Agent/settings accepted; interaction and genuine same-machine workload evidence continue. / 数据库／Redis／Agent／设置验收，交互／同机器真实负载证据继续。                                                             |
-| M5 #19       | #44–#47       | #44 accepted QA candidate installs, with ad-hoc/unsigned/no-notarization limits. Updates, actual old-client/data rollback and final gates remain open. / QA候选安装验收，临时签名／未签名及无公证限制保留，更新／旧客户端数据回退／最终门禁开放。 |
+| Stage / 阶段 | Issues / 任务 | Existing implementation and gaps / 既有实现与缺口                                                                                                                                                      |
+| ------------ | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| M0 #14       | #20–#23       | Accepted: #20–#23 completed, native screenshots and four CI jobs verified; not merged. / #20–#23 已验收关闭，真实截图及四个平台 CI 已核对，未合并。                                                    |
+| M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                          |
+| M2 #16       | #29–#32       | Four tasks closed in approved scope; actual native Vim/ownership and approved Agent/lifecycle simulations have separate evidence. / 四项在批准范围内关闭，真实Vim／并存及模拟Agent／生命周期各自留证。 |
+| M3 #17       | #33–#37       | Closed by user, not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain visible. / 按用户指示关闭阶段，原始持久布局／PDF／Windows运行与选择器缺口不改记完成。        |
+| M4 #18       | #38–#43       | 5/6 closed; #42 sourceec1a49d matrix/visible recovery accepted, #43 v4 measurements await CI. / 交互矩阵与可见恢复验收，v4性能待CI。                                                                   |
+| M5 #19       | #44–#47       | 2/4 closed; #44/#45 accepted with signing/simulation boundaries, #46/#47 await actual evidence. / 候选及更新验收，签名／模拟边界保留，升级回退及门禁待证据。                                           |
 
 ### M2 implementation and verification / M2 实现与验证
 
@@ -452,12 +453,17 @@ This is a recovery preparation procedure; installation/data write-back acceptanc
 
    两客户端停止时，只把备份的**迁移前配置**恢复到独立旧 QA 安装。这恢复备份时的旧状态，不导入后续规范修改；保留新存储用于返回新客户端。
 
-4. No automatic path writes the latest export into an unmodified old WebView. Actual installation
-   replacement, complete data write-back, live host and credential reference retention must run in
-   #46 before downgrade acceptance. Without an old QA installer/profile, retain backups and leave
-   that gate pending.
+4. Production has no automatic path into an unmodified historical WebView. The isolated
+   `python3 -B scripts/client-upgrade-smoke.py` rehearses explicit latest-compatible data write-back
+   using a recorded QA entry around unchanged historical readers. It pins uTerm-v0.2.4 source,
+   verifies downloaded private packages, tests interrupted replacement and actual UI crash/reopen,
+   and retains full canonical backups. Initial old draft input and credential/hook references are
+   fixtures; OS URL/login registration is disabled. This is a private manual replacement rehearsal,
+   not production migration acceptance or the original signed installer. Actual both-architecture
+   outcomes remain in #46; do not overwrite existing production profiles.
 
-   未提供将最新导出自动写回未修改旧 WebView 的入口。安装替换、完整数据回写、活跃宿主及凭据引用保留须在 #46 实际演练后才能宣称降级验收；缺少旧 QA 安装包／配置时保留备份，该门槛继续待验收。
+   生产没有向未修改历史WebView自动回写的入口。隔离的 `python3 -B scripts/client-upgrade-smoke.py`
+   用记录的QA入口调用未改动历史读取器，演练明确的最新兼容数据回写。固定uTerm-v0.2.4源码，验证下载的私有包，测试替换中断及真实界面崩溃／重开，保留完整规范备份。旧草稿初始输入和凭据／hook引用使用测试数据，系统URL／登录注册禁用。此流程是私有手动替换演练，不代表生产迁移或原始签名安装器验收；两架构实际结果仍由#46记录，不覆盖已有生产配置。
 
 Head `b57954302207490e0125d1e95023fa5edbe3318f` native ARM passed normal window termination, but
 real PTY smoke failed while inspecting Unicode text. The QA text reader used raw cells, including
@@ -536,26 +542,28 @@ SHA、平台／架构／系统、硬件、工具链及依赖版本、命令、�
 ### Same-load comparison / 同负载对比
 
 Compare legacy Tauri and native macOS on the same physical or CI machine, architecture, OS,
-toolchain, selected shell, font (14pt), grid (120 columns × 36 rows), scrollback (3000) and
+toolchain, selected shell, font (14pt), grid (120 columns × 30 rows), scrollback (5000) and
 temporary project. Use separate QA identities/data roots. Run one client at a time, repeat each case
 three times and retain individual results. A Windows run is its own regression record, not a direct
 cross-OS performance comparison. Record shared-runner contention; do not infer a percentage gain
 from build time or a single throughput sample.
 
-在相同机器、架构、系统、工具链、Shell、14pt 字体、120×36 网格、3000 行回滚及临时项目下比较旧 Tauri 与原生 macOS，身份和数据隔离。每次只运行一个客户端，每例重复三次并保留单次结果。Windows 单独回归，不作跨系统性能结论；记录共享 runner 争用，不从构建时间或单次吞吐推断改善比例。
+在相同机器、架构、系统、工具链、Shell、14pt 字体、120×30 网格、5000 行回滚及临时项目下比较旧 Tauri 与原生 macOS，身份和数据隔离。每次只运行一个客户端，每例重复三次并保留单次结果。Windows 单独回归，不作跨系统性能结论；记录共享 runner 争用，不从构建时间或单次吞吐推断改善比例。
 
-The executable baseline uses `shared/fixtures/client-performance.json`: one PTY, twenty cycles of
-1,024 ANSI/Unicode records, 14pt text, 5,000-line scrollback, 64KiB CAS file service and 120-second
-idle soak. This first measurement records actual grids rather than claiming the target 120×36 is
-already enforced. `client-performance.yml` alternates native/Tauri on one Mac three times and
-archives raw CPU/RSS, per-cycle values, replay, screenshots and cleanup. Five warm-up cycles are
-excluded. Grid equality, TUI/database/slow-consumer workloads, longer leak checks and regression
-analysis remain acceptance gaps; no performance gain is inferred. Windows is a separate baseline.
+The executable version4 baseline is `shared/fixtures/client-performance.json`: one actual PTY,
+120×30 real grid, twenty cycles of 1,024 ANSI/Unicode records, 14pt text, 5,000-line scrollback,
+64KiB CAS files, twenty deterministic alternate-screen redraws, real Core/JDBC PostgreSQL queries,
+and a gated 200ms slow consumer. Three repetitions use 120/120/600-second idle samples; both clients
+run sequentially on the same Mac. Original windows, exact source/workload/merge hashes, raw PID-tree
+CPU/RSS and cleanup are archived. The five warm-up cycles are excluded from response summaries;
+unattributed GPU/WebContent/XPC and the external database process are excluded. New full Mac runs
+remain pending; Windows is a separate baseline. The wider exploratory cases below remain unmeasured
+unless their own evidence says otherwise; a ten-minute sample does not establish multi-hour leak
+freedom or a performance gain.
 
-可执行基线使用
-`shared/fixtures/client-performance.json`：一个 PTY、二十轮各1,024条 ANSI／Unicode 输出、14pt 字体、5,000行回滚、64KiB
-CAS 文件服务及120秒空闲运行。首轮测量记录实际网格，不宣称目标120×36已强制一致。`client-performance.yml`
-在同一台 Mac 交替运行两端三次，归档原始 CPU／RSS、逐轮数据、回放、截图及清理，排除前五轮预热。网格一致、TUI／数据库／慢消费负载、长期泄漏及回退分析仍是验收缺口，不推断性能提升；Windows 单独记录基线。
+实际version4负载固定真实PTY与120×30网格、二十轮各1,024条ANSI／Unicode、14pt字体、5,000行回滚、64KiB
+CAS文件、二十次合成备用屏幕重绘、真实Core／JDBC
+PostgreSQL及门控200ms慢消费。三轮空闲采样120／120／600秒，同一Mac顺序运行两客户端。归档原图、源码／负载／merge哈希、原始进程树CPU／RSS及清理。响应摘要排除前五轮预热，资源排除未归属GPU／WebContent／XPC及外部数据库进程。新Mac完整运行仍待完成，Windows单独记录基线；下列更广探索场景没有专项证据就仍按未测记录，十分钟不代表多小时无泄漏或性能提升。
 
 | Case / 场景                 | Reproducible workload and assertions / 可重复负载与断言                                                                                                                                                                                                     | Current acceptance / 当前验收                                                              |
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
