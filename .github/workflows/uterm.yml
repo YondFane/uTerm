@@ -141,6 +141,9 @@ jobs:
         run: pnpm docs:check 2>&1 | tee ci-evidence/docs.log
       - name: Frontend tests
         shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          UTERM_SETTINGS_REPORT: ${{ github.workspace }}/ci-evidence/settings-platform.json
         run: pnpm test 2>&1 | tee ci-evidence/frontend-tests.log
       - name: Backend tests
         shell: bash

@@ -12,6 +12,7 @@ import {
   renameSync,
   existsSync,
   chmodSync,
+  readdirSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -19,7 +20,7 @@ import { createInterface } from "node:readline";
 import { JSDOM } from "jsdom";
 import { createServer } from "vite";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
-import { defaults, readSettings } from "../src/lib/settings.ts";
+import { commands, defaults, readSettings, validateShortcuts } from "../src/lib/settings.ts";
 import {
   emptyWorkspace,
   createWorkspaceGroup,
@@ -75,6 +76,95 @@ async function client(t, existingRoot) {
     return reply;
   };
 }
+
+test("native settings catalog preserves defaults and matches both platform shortcut validators without writes", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "uterm-settings-readonly-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const call = await client(t, root);
+  const before = readdirSync(root);
+  const response = await call("settings.catalog");
+  assert.equal(response.error, undefined);
+  assert.deepEqual(response.result.defaults, defaults);
+  assert.deepEqual(
+    response.result.commands.map((command) => command.id),
+    commands.map(([id]) => id),
+  );
+  assert.deepEqual(
+    new Set(response.result.settingsKeys),
+    new Set([...Object.keys(defaults), "agentNotifications"]),
+  );
+  for (const command of response.result.commands) {
+    assert.ok(command.labels.en && command.labels["zh-Hans"]);
+  }
+  for (const [platform, mac] of [
+    ["macos", true],
+    ["windows", false],
+  ]) {
+    for (const [id] of commands) {
+      for (const shortcut of [
+        "",
+        "Mod+KeyC",
+        "Mod+Alt+KeyF",
+        "Mod+Minus",
+        "Mod+Shift+KeyF",
+        "Mod+Shift+KeyQ",
+      ]) {
+        const settings = { ...defaults, shortcuts: { [id]: shortcut } };
+        let expected = true;
+        try {
+          validateShortcuts(settings, mac);
+        } catch {
+          expected = false;
+        }
+        const actual = await call("settings.validate", { settings, platform });
+        assert.equal(!actual.error, expected, `${platform}/${id}/${shortcut}`);
+      }
+    }
+  }
+  const rejected = await call("settings.validate", {
+    settings: defaults,
+    platform: "unsupported",
+    credential: "private-must-not-appear",
+  });
+  assert.equal(rejected.error.code, "SETTINGS_INVALID_PARAMS");
+  assert.equal(JSON.stringify(rejected).includes("private-must-not-appear"), false);
+  assert.deepEqual(
+    readdirSync(root),
+    before,
+    "Opening and validating settings must not persist defaults",
+  );
+  if (process.env.UTERM_SETTINGS_REPORT) {
+    const tested = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    let dirty = false;
+    try {
+      execFileSync("git", ["diff", "--quiet", "HEAD"]);
+    } catch {
+      dirty = true;
+    }
+    writeFileSync(
+      process.env.UTERM_SETTINGS_REPORT,
+      JSON.stringify(
+        {
+          passed: true,
+          sourceHeadSHA: process.env.PR_HEAD_SHA ?? tested,
+          testedMergeSHA: tested,
+          sourceTreeDirty: dirty,
+          platform: process.platform,
+          architecture: process.arch,
+          commands: commands.length,
+          differentialCases: commands.length * 12,
+          actualRustProcessAndTypeScript: true,
+          defaultsUnchanged: true,
+          storeUnchanged: true,
+          invalidPlatformRejectedWithoutPrivateParameters: true,
+          nativeUiAcceptance: false,
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+  }
+});
 
 function queueDraft(path, text) {
   return {

@@ -4189,6 +4189,19 @@ acknowledged.
 Settings include appearance, color themes, fonts, terminal cursor and scrollback, keyboard
 shortcuts, default shell and Agent. Theme import accepts supported color fields only.
 
+Core `settings.catalog` reads the existing defaults and a generated bilingual catalog of 31
+commands, eight terminal themes and six interface themes from the current TypeScript sources. It
+does not persist defaults. `settings.validate` checks the full settings shape and macOS/Windows
+shortcut conflicts, reserved system/editor keys and optional default bindings without writing
+configuration. Generation is checked by `pnpm settings:check` and the normal contract checks.
+
+The Linux regression compares 372 configurations between an actual Rust Core process and the
+existing TypeScript validator; both platforms agree. It also checks unchanged defaults/store and
+bounded rejection of invalid platform/private parameters. The dedicated Rust platform regression
+passes. CI archives `settings-platform.json` with source and tested merge identities. This is shared
+logic evidence; the complete native settings form, command panel, menus and login-start integration
+remain open in #41 and are not accepted from these checks.
+
 ### Terminal text selection and rendering
 
 Visible terminal and Agent panes use GPU rendering when WebGL2 is available. Dragging to select text

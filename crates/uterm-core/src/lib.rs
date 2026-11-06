@@ -15,6 +15,7 @@ pub mod java;
 pub mod python;
 pub mod redis;
 pub mod session_state;
+pub mod settings;
 pub mod ssh;
 pub mod state;
 pub mod store;
@@ -360,6 +361,31 @@ impl Core {
     }
     fn dispatch(&self, method: &str, params: Value) -> Result<Value> {
         match method {
+            "settings.catalog" => {
+                if !params.is_null() && params.as_object().is_none_or(|p| !p.is_empty()) {
+                    return Err(CoreError::new(
+                        "SETTINGS_INVALID_PARAMS",
+                        "Settings catalog accepts no parameters",
+                    ));
+                }
+                settings::catalog()
+            }
+            "settings.validate" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Validation {
+                    settings: Value,
+                    platform: settings::Platform,
+                }
+                let validation: Validation = serde_json::from_value(params).map_err(|_| {
+                    CoreError::new(
+                        "SETTINGS_INVALID_PARAMS",
+                        "Settings and a supported platform are required",
+                    )
+                })?;
+                settings::validate(&validation.settings, validation.platform)?;
+                Ok(json!({"valid": true}))
+            }
             "agent.configure" => {
                 #[derive(Deserialize)]
                 #[serde(deny_unknown_fields)]

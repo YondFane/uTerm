@@ -146,6 +146,12 @@ platform adapters and generated DTOs keep Swift/TypeScript boundaries aligned. R
 boundary types with `pnpm contracts:generate`. On macOS, run `bash scripts/macos-native-build.sh`
 and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift bridge tests.
 
+`pnpm settings:generate` derives the native command/theme catalog from the existing TypeScript
+settings and translations; `pnpm settings:check` verifies it. Contract generation/checks include
+this catalog. Core `settings.catalog` and `settings.validate` read defaults and validate platform
+shortcuts without saving configuration; complete native settings/menu/login integration remains
+tracked in #41.
+
 Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the Pi extension under
 `crates/uterm-core/integrations/`. `bash scripts/macos-agent-smoke.sh` requires a macOS graphical
 session and the QA build; it records real window/Host/installed-reporter evidence with an explicitly

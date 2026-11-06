@@ -131,6 +131,10 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 `bash scripts/macos-native-build.sh` 和 `bash scripts/macos-native-test.sh`
 构建隔离 QA 应用并运行 Rust／Swift 桥接测试。
 
+`pnpm settings:generate` 从现有 TypeScript 设置和文案生成原生命令／主题目录， `pnpm settings:check`
+核对目录；契约生成／检查已包含该目录。Core `settings.catalog` 和 `settings.validate`
+读取默认值并校验平台快捷键，不保存配置；完整原生设置／菜单／开机启动仍在 #41 跟踪。
+
 共享 Agent 规则位于 `uterm-core::{agents,agent_install}`，Pi 扩展位于
 `crates/uterm-core/integrations/`。`bash scripts/macos-agent-smoke.sh`
 需要 macOS 图形会话及 QA 构建；记录真实窗口／Host／已安装报告程序证据，系统通知适配器明确使用模拟，不使用提供方凭据或全局安装 CLI。
