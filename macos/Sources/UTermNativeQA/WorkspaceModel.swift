@@ -29,6 +29,9 @@ final class WorkspaceModel: ObservableObject {
     @Published var sidebarVisible = true
     @Published var inspectorVisible = false
     @Published var paneZoomed = false
+    @Published private(set) var breakReminderVisible = false
+    private var breakSchedule = BreakReminderSchedule()
+    private var breakTimer: Task<Void, Never>?
     @Published private(set) var focusRevision = 0
     @Published private(set) var toolbarHeight: CGFloat = 0
     @Published var controlStatus: JSONValue = .null
@@ -203,6 +206,16 @@ final class WorkspaceModel: ObservableObject {
                 commandsChanged?()
             }
             appearanceChanged?(settings["appearance"].string ?? "system")
+            breakSchedule.configure(enabled: settings["breakReminder"].bool == true, minutes: settings["breakInterval"].number ?? 60, now: ProcessInfo.processInfo.systemUptime)
+            breakReminderVisible = breakSchedule.visible
+            if breakTimer == nil && settings["breakReminder"].bool == true {
+                breakTimer = Task { @MainActor [weak self] in
+                    while !Task.isCancelled {
+                        do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                        self?.tickBreakReminder(now: ProcessInfo.processInfo.systemUptime)
+                    }
+                }
+            } else if settings["breakReminder"].bool != true { breakTimer?.cancel(); breakTimer = nil }
             let existing = Set(state.sessions.map { $0.session["id"].string ?? "" })
             agentNotifications.retain(existing)
             for (id, terminal) in terminals where !existing.contains(id) {
@@ -429,6 +442,7 @@ final class WorkspaceModel: ObservableObject {
     func shutdown() async {
         if let operation { _ = await operation.value }
         shuttingDown = true
+        breakTimer?.cancel(); breakTimer = nil
         agentNotifications.retain([])
         stopSSHTrust()
         await stopControl()
@@ -441,6 +455,15 @@ final class WorkspaceModel: ObservableObject {
         sshBridge = nil
         await bridge?.close()
         bridge = nil
+    }
+
+    func tickBreakReminder(now: TimeInterval) {
+        breakSchedule.tick(now: now)
+        if breakReminderVisible != breakSchedule.visible { breakReminderVisible = breakSchedule.visible }
+    }
+    func dismissBreakReminder() {
+        breakSchedule.dismiss(now: ProcessInfo.processInfo.systemUptime)
+        breakReminderVisible = false
     }
 
     func reconnectTransport() async {

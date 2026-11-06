@@ -12,10 +12,12 @@ NSIS = b"__TAURI_BUNDLE_TYPE_VAR_NSS"
 def compare(built: bytes, installed: bytes) -> dict:
     # Tauri patches this one token for NSIS and restores the original build afterwards.
     # Tauri 为 NSIS 修改这一处标记，打包完成后还原原始构建文件。
-    unique = built.count(UNKNOWN) == 1 and built.count(NSIS) == 0
+    unique = built.count(UNKNOWN) == 1
     expected = built.replace(UNKNOWN, NSIS, 1) if unique else b""
     return {
         "uniqueBundleTypeMarker": unique,
+        "unknownBundleTypeMarkers": built.count(UNKNOWN),
+        "nsisBundleTypeComparisonConstants": built.count(NSIS),
         "bundleTypeMarkerOffset": built.find(UNKNOWN) if unique else None,
         "expectedNSISBinarySHA256": hashlib.sha256(expected).hexdigest() if unique else None,
         "binaryMatchesExpectedNSIS": unique and installed == expected,

@@ -97,11 +97,39 @@ struct WorkspaceView: View {
         .background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["canvas"], fallback: .windowBackgroundColor)).opacity(model.settings["opacity"].number ?? 1))
         .background(NativeWindowMaterial(enabled: model.settings["blur"].bool == true))
         .ignoresSafeArea(.container, edges: .top)
+        .overlay(alignment: .bottomTrailing) {
+            if model.breakReminderVisible {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(localized("Break reminder", "休息提醒")).font(.headline)
+                    Text(localized("Time for a break. Get up and move around.", "该休息一下了，起来活动活动吧。"))
+                    Text(localized("Closes in 10 seconds. You can keep working.", "10 秒后自动关闭，不影响继续使用。")).font(.caption)
+                    BreakDismissButton(model: model)
+                }.padding(16).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10)).padding(20)
+            }
+        }
         .onChange(of: colorScheme) { _, _ in if model.settings["appearance"].string == "system" { Task { await model.reload() } } }
         .sheet(isPresented: $model.settingsPresented) { BasicSettingsView(model: model) }
         .sheet(item: $model.nameDraft) { _ in NameEditorView(model: model) }
     }
     private var inspector: some View { InspectorHost(model: model).frame(minWidth: 220, idealWidth: 300, maxWidth: 420) }
+}
+
+@MainActor
+private struct BreakDismissButton: NSViewRepresentable {
+    let model: WorkspaceModel
+    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.dismiss))
+        button.bezelStyle = .rounded
+        button.identifier = NSUserInterfaceItemIdentifier("native-break-dismiss")
+        return button
+    }
+    func updateNSView(_ button: NSButton, context: Context) { button.title = localized("Continue working", "继续使用") }
+    @MainActor final class Coordinator: NSObject {
+        let model: WorkspaceModel
+        init(model: WorkspaceModel) { self.model = model }
+        @objc func dismiss() { model.dismissBreakReminder() }
+    }
 }
 
 @MainActor

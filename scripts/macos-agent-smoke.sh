@@ -32,6 +32,8 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-agent-') as directory:
     for key in ['coreReady', 'openingDoesNotWriteDefaults', 'nativeCustomCommandSaveEnableDisableRemove', 'nativeHookPreservationDraftAndLocalUsage', 'actualApplicationQuitCancellationRetainsDraft', 'nativeNotificationOptInDenialDedupAndStaleCancellation', 'realHostAndReporterProcess', 'simulatedOSNotificationPermissionAndDelivery']:
         assert data[key], key
     assert not data['productionDataAccess'] and not data['actualAgentProvider'] and not data['keychainOrProviderAccountAccess']
+    assert data['nativeUsageRefreshRespectsSelectedAgentAndLocalPreference']
+    assert not data['automaticUsageKeychainAccess']
     assert data['bundleIdentifier'] == 'sh.uterm.desktop.qa.native'
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
     assert len(data['captures']) == 2

@@ -15,6 +15,10 @@ func localized(_ english: String, _ chinese: String) -> String {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     private var window: NSWindow?
     private var contentWindows: [UUID: ContentWindow] = [:]
+    private var fileWindowOrder: [UUID] = []
+    private var changingFileTabs = false
+    private var pendingFileTabTrim = false
+    private var previousFileTabLimit = 10
     private var pythonWindows: [String: PythonWindow] = [:]
     private var javaWindows: [String: JavaWindow] = [:]
     private var sshWindow: SSHWindow?
@@ -64,6 +68,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self?.agentsWindow?.window.appearance = value
             self?.fullSettingsWindow?.window.appearance = value
             if let self {
+                let limit = self.model.settings["fileTabLimit"].number.flatMap { Int(exactly: $0) } ?? 10
+                if limit != self.previousFileTabLimit {
+                    self.previousFileTabLimit = limit; self.pendingFileTabTrim = true
+                    Task { await self.trimFileTabs() }
+                }
                 for content in self.contentWindows.values where content.workbenchHost != nil {
                     content.window?.appearance = value
                     content.workbenchHost?.settingsChanged(self.model.settings)
@@ -151,7 +160,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             if let path = WorkspaceModel.argument("--settings-smoke-report") {
                 var report = baseReport()
-                do { try await SettingsSmoke.run(workspace: model, open: { self.openFullSettings(); return self.fullSettingsWindow! }, report: &report) }
+                do {
+                    try await SettingsSmoke.run(workspace: model, open: { self.openFullSettings(); return self.fullSettingsWindow! }, report: &report)
+                    try await PreferencesSmoke.run(workspace: model, parent: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report)
+                }
                 catch {
                     report["failure"] = error.localizedDescription
                     if let current = fullSettingsWindow {
@@ -159,6 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                         await current.model.reload()
                     }
                 }
+                for content in Array(contentWindows.values) { content.forceClose() }
                 await model.shutdown()
                 if report["failure"] != nil { terminating = true }
                 finishReport(report, path: path); return
@@ -564,6 +577,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func openAgents() {
         if agentsWindow == nil { agentsWindow = AgentSettingsWindow(workspace: model) }
         agentsWindow?.window.appearance = window?.appearance
+        agentsWindow?.model.visible = true
         agentsWindow?.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -731,6 +745,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func makeEditableContentWindow(directory: URL, path: String) async throws -> ContentWindow {
+        guard !changingFileTabs else { throw BridgeFailure(code: "CONTENT_BUSY", message: localized("Finish the current file operation first.", "请先完成当前文件操作。")) }
+        changingFileTabs = true; defer { changingFileTabs = false; if pendingFileTabTrim { Task { await self.trimFileTabs() } } }
         guard !mutatingRepository, !model.worktreeDeletionPresented, !model.gitFavoritesRecoveryPresented else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
         if let content = existingContent(directory: directory, path: path, editable: true) {
             content.reveal()
@@ -741,7 +757,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         catch let error as BridgeFailure where error.code == "DRAFTS_NOT_IMPORTED" {
             _ = try await bridge.call("editor.drafts.import", params: .object([:]))
         }
-        return try makeContentWindow(directory: directory, path: path, editable: true)
+        do { _ = try await bridge.call("files.read", params: .object(["directory": .string(directory.path), "path": .string(path)])) }
+        catch {
+            let draft = try await bridge.call("editor.drafts.document", params: .object(["directory": .string(directory.path), "path": .string(path)]))
+            guard draft != .null else { throw error }
+        }
+        let root = directory.standardizedFileURL.resolvingSymlinksInPath()
+        let limit = model.settings["fileTabLimit"].number.flatMap { Int(exactly: $0) } ?? 10
+        let siblings = fileWindowOrder.compactMap { contentWindows[$0] }.filter { $0.editable && !$0.gitMode && $0.directory == root }
+        let excess = Array(siblings.prefix(max(0, siblings.count - limit + 1)))
+        do {
+            for content in excess {
+                guard try await content.prepareForQuit() else { throw BridgeFailure(code: "FILE_TAB_CANCELLED", message: localized("File opening cancelled. Existing tabs are retained.", "已取消打开文件，现有标签已保留。")) }
+            }
+        } catch { excess.forEach { $0.resumeAfterQuit() }; throw error }
+        guard !preparingQuit else { excess.forEach { $0.resumeAfterQuit() }; throw BridgeFailure(code: "QUIT_BUSY", message: localized("The client is preparing to quit.", "客户端正在准备退出。")) }
+        // Construct successfully before removing prepared tabs, so a failed open retains existing editors.
+        // 成功创建后才移除已确认的标签，打开失败时保留现有编辑器。
+        let content: ContentWindow
+        do { content = try makeContentWindow(directory: directory, path: path, editable: true) }
+        catch { excess.forEach { $0.resumeAfterQuit() }; throw error }
+        excess.forEach { $0.forceClose() }
+        return content
+    }
+    private func trimFileTabs() async {
+        guard pendingFileTabTrim, !changingFileTabs, !preparingQuit else { return }
+        pendingFileTabTrim = false; changingFileTabs = true
+        defer { changingFileTabs = false; if pendingFileTabTrim { Task { await self.trimFileTabs() } } }
+        let ordered = fileWindowOrder.compactMap { contentWindows[$0] }.filter { $0.editable && !$0.gitMode }
+        let limit = model.settings["fileTabLimit"].number.flatMap { Int(exactly: $0) } ?? 10
+        var counts: [URL: Int] = [:]
+        let excess = ordered.reversed().filter { content in
+            counts[content.directory, default: 0] += 1
+            return counts[content.directory, default: 0] > limit
+        }.reversed()
+        do {
+            for content in excess {
+                guard try await content.prepareForQuit() else { excess.forEach { $0.resumeAfterQuit() }; return }
+            }
+            guard !preparingQuit, limit == (model.settings["fileTabLimit"].number.flatMap { Int(exactly: $0) } ?? 10) else { excess.forEach { $0.resumeAfterQuit() }; return }
+            excess.forEach { $0.forceClose() }
+        } catch { excess.forEach { $0.resumeAfterQuit() }; model.error = error.localizedDescription }
     }
     private func makeContentWindow(directory: URL, path: String, editable: Bool = false) throws -> ContentWindow {
         guard !preparingQuit else { throw BridgeFailure(code: "QUIT_BUSY", message: localized("The client is preparing to quit.", "客户端正在准备退出。")) }
@@ -762,7 +818,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let id = UUID()
         contentWindows[id] = content
-        content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
+        fileWindowOrder.append(id)
+        content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id); self?.fileWindowOrder.removeAll { $0 == id } }
         content.reveal()
         return content
     }
@@ -1032,7 +1089,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             run.window?.makeKeyAndOrderFront(nil)
             return .terminateCancel
         }
-        if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented || pythonWindows.values.contains(where: { $0.model.busy }) { return .terminateCancel }
+        if preparingQuit || mutatingRepository || changingFileTabs || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented || pythonWindows.values.contains(where: { $0.model.busy }) { return .terminateCancel }
         preparingQuit = true
         Task { @MainActor in
             guard await model.confirmQuit() else { self.preparingQuit = false; return }

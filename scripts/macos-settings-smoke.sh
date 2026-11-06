@@ -22,6 +22,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     for key in ['nativeSettingsMenuAndReadonlyOpen', 'invalidNumericDraftRetainedWithoutWrite', 'unrelatedExternalSettingsPreserved', 'sameFieldConflictRetainsDraftAndPeerValue', 'hiddenWindowAndActualQuitCancellationRetainDraft', 'nativeReservedAndDuplicateShortcutErrors', 'nativeShortcutCaptureAndSave', 'nativeDynamicMenuPaletteKeyboardAndFocusReturn', 'nativeThemeImportDraftFailureAndTerminalEffects', 'explicitResetUsesSharedDefaults', 'simulatedLoginItemOptInApprovalFailureAndDisable']:
         assert data[key], key
     assert data['nativeThemeFileNamesAndBoundedReads']
+    assert data['nativeBreakReminderRenderDismissAndDisable']
+    assert data['nativeFileTabLimitCancelRetainsDraftAndExplicitDiscardEvictsOldest']
+    assert data['nativeLowerFileTabLimitAppliesToExistingTabs']
+    for name in data['preferenceCaptures']: assert (evidence / name).stat().st_size > 1000, name
     assert not data['actualOSLoginRegistrationExecuted']
     assert len(data['captures']) == 4
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name

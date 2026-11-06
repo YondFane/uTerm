@@ -23,7 +23,7 @@ interface Context {
 }
 function Content({ context }: { context: Context }) {
   const state = useFileDocument(
-    10,
+    context.settings.fileTabLimit,
     !context.editable,
     context.editable ? context.directory : undefined,
   );

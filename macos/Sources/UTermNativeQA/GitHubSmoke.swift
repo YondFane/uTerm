@@ -7,7 +7,8 @@ enum GitHubSmoke {
         guard model.ready, let bridge = model.bridge, let path = WorkspaceModel.argument("--github-smoke-report"),
               let fixture = ProcessInfo.processInfo.environment["UTERM_GITHUB_FIXTURE_ROOT"],
               URL(fileURLWithPath: fixture).standardizedFileURL.resolvingSymlinksInPath() == (try WorkspaceModel.dataRoot()).deletingLastPathComponent() else { throw BridgeFailure(code: "GITHUB_QA_CONTEXT", message: "Missing isolated GitHub CLI fixture") }
-        let temporary = URL(fileURLWithPath: fixture), root = temporary.appendingPathComponent("github-project")
+        let temporary = URL(fileURLWithPath: fixture).standardizedFileURL.resolvingSymlinksInPath()
+        let root = temporary.appendingPathComponent("github-project")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         func git(_ arguments: [String]) throws {
             let process = Process(), pipe = Pipe(); process.executableURL = URL(fileURLWithPath: "/usr/bin/git")

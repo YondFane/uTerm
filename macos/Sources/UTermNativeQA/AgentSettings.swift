@@ -16,6 +16,10 @@ final class AgentSettingsModel: ObservableObject {
     @Published var notice = ""
     @Published var error = ""
     @Published var usage: JSONValue = .null
+    @Published var visible = false
+    private(set) var qaUsageReads = 0
+    private(set) var qaUsageLastRemote = false
+    var usageRefreshKey: String { [selected, String(visible), String(frozen), String(workspace.settings["usageRemote"].bool ?? true), String(workspace.settings["usageRefreshInterval"].number ?? 60)].joined(separator: ":") }
     private var original = ""
     private var draftID = "codex"
     var definitions: [JSONValue] { catalog["definitions"].array }
@@ -60,7 +64,8 @@ final class AgentSettingsModel: ObservableObject {
         do {
             let value = try await bridge.call(method, params: .object(params))
             if method == "agent.usage" {
-                usage = value
+                qaUsageReads += 1; qaUsageLastRemote = params["remote"]?.bool == true
+                if params["agent"]?.string == selected { usage = value }
             } else {
                 catalog = try await bridge.call("agent.catalog")
                 if method == "agent.definitions.save" { select(identifiers.contains(identifier) ? identifier : "codex", force: true) }
@@ -69,6 +74,17 @@ final class AgentSettingsModel: ObservableObject {
             }
         } catch {
             self.error = localized("Agent operation failed. Check the command path and configuration, then retry.", "Agent 操作失败，请检查程序路径和配置后重试。")
+        }
+    }
+    func pollUsage() async {
+        guard visible, !frozen, ["codex", "claude", "kimi", "grok"].contains(selected) else { return }
+        while !Task.isCancelled && visible && !frozen {
+            while busy && !Task.isCancelled {
+                do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
+            }
+            guard !Task.isCancelled, visible, !frozen else { return }
+            await perform("agent.usage", params: ["agent": .string(selected), "remote": .bool(workspace.settings["usageRemote"].bool ?? true), "allowKeychain": .bool(false)])
+            do { try await Task.sleep(for: .seconds(workspace.settings["usageRefreshInterval"].number ?? 60)) } catch { return }
         }
     }
     func save() async {
@@ -156,6 +172,7 @@ struct AgentSettingsView: View {
             if !model.notice.isEmpty { Text(model.notice).textSelection(.enabled).padding(.horizontal) }
             HStack { if model.busy { ProgressView().controlSize(.small) }; Spacer(); Button(localized("Reload", "重新读取")) { Task { await model.reload() } }.disabled(model.busy || model.frozen) }.padding()
         }.frame(minWidth: 600, minHeight: 540).task { await model.reload() }
+        .task(id: model.usageRefreshKey) { await model.pollUsage() }
         .confirmationDialog(localized("Install or update the provider's Agent CLI?", "安装或更新提供方的 Agent CLI？"), isPresented: $confirmInstall) {
             Button(localized("Install or update", "安装或更新")) { Task { await model.perform("agent.install", params: ["agent": .string(model.selected)]) } }
             Button(localized("Cancel", "取消"), role: .cancel) {}
@@ -180,7 +197,7 @@ final class AgentSettingsWindow: NSObject, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: AgentSettingsView(model: model, workspace: workspace))
         window.center()
     }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { sender.orderOut(nil); return false }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { model.visible = false; sender.orderOut(nil); return false }
     func prepareForQuit() async -> Bool {
         guard !model.busy else { return false }
         model.frozen = true

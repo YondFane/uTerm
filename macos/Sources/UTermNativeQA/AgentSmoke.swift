@@ -9,8 +9,17 @@ enum AgentSmoke {
         let home = root.appendingPathComponent("agent-home")
         let config = home.appendingPathComponent(".claude/settings.json")
         let original = try Data(contentsOf: config)
+        await model.patchSettings(["usageRemote": .bool(false)])
         let current = open()
         try await TerminalSmoke.wait("Load Agent catalog") { current.model.catalog != .null && !current.model.busy }
+        try await TerminalSmoke.wait("Automatically read local usage on opening") { current.model.qaUsageReads > 0 && !current.model.busy }
+        let usageReads = current.model.qaUsageReads
+        current.model.select("claude")
+        try await TerminalSmoke.wait("Refresh selected Agent usage") { current.model.qaUsageReads > usageReads && !current.model.busy && current.model.usage["records"].number == 1 }
+        guard !current.model.qaUsageLastRemote else { throw BridgeFailure(code: "AGENT_USAGE_PREFERENCE", message: "Local usage preference requested a remote account") }
+        current.model.visible = false
+        report["nativeUsageRefreshRespectsSelectedAgentAndLocalPreference"] = true
+        report["automaticUsageKeychainAccess"] = false
         guard try Data(contentsOf: config) == original, !FileManager.default.fileExists(atPath: root.appendingPathComponent("agents.json").path) else { throw BridgeFailure(code: "AGENT_OPEN_WRITE", message: "Opening Agent settings wrote configuration") }
         report["openingDoesNotWriteDefaults"] = true
         current.model.newDefinition()
@@ -29,6 +38,7 @@ enum AgentSmoke {
         guard let menuItem = NSApp.mainMenu?.items.compactMap(\.submenu).flatMap(\.items).first(where: { $0.action.map(NSStringFromSelector) == "closeSession" }), let action = menuItem.action, NSApp.sendAction(action, to: menuItem.target, from: menuItem) else { throw BridgeFailure(code: "AGENT_CLOSE_MENU", message: "Native Close action is missing") }
         guard !current.window.isVisible, current.model.dirty else { throw BridgeFailure(code: "AGENT_HIDE", message: "Hiding Agent settings lost the command draft") }
         let reopened = open()
+        reopened.model.visible = false
         guard reopened === current, current.model.argumentsText == "[invalid" else { throw BridgeFailure(code: "AGENT_REOPEN", message: "Reopening Agent settings lost the command draft") }
         await current.model.save()
         guard !current.model.error.isEmpty, current.model.argumentsText == "[invalid" else { throw BridgeFailure(code: "AGENT_BAD_ARGS", message: "Invalid arguments were not retained with a visible error") }

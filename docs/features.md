@@ -4308,7 +4308,20 @@ Native terminals and task logs apply bundled/custom palettes, cursor/selection c
 font fallback/weight, line spacing, cursor shape/blink, scrollback and background opacity. Copy on
 selection copies after mouse selection ends. Interface palette/font, row/window padding, sidebar
 visibility, active icon color, project name sorting and optional background material are connected
-to the workspace. Other preference effects still need completion in #41.
+to the workspace.
+
+Native break reminders use the shared enable/interval preferences. A nonmodal notice appears once
+after the interval, closes after ten seconds or **Continue working**, and starts the next interval
+from dismissal without replaying missed reminders after sleep. Changing the interval or disabling
+the preference hides the current notice. The timer stops when the client shuts down.
+
+Native editable file windows enforce the shared per-directory file-tab limit, retaining the newest
+tabs. Opening another file or lowering the limit prepares excess editors before closing them;
+cancelling preserves every existing tab and draft. Existing missing-source recovery still opens
+retained drafts read-only. Agent settings refresh the selected supported Agent's usage while
+visible, using the shared remote/local preference and interval with one request at a time. Automatic
+reads do not request Keychain access; explicit account reads retain their confirmation. Hiding the
+window or preparing to quit stops polling. Native automatic-update effects remain tracked in #45.
 
 **General → Login startup** reads OS state without registering on open. Explicit opt-in/out uses
 macOS `SMAppService`; approval-required and failed operations stay visible and active operations
