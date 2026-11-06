@@ -33,10 +33,17 @@ enum PerformanceSmoke {
         guard let columns = fixture["columns"].number, let rows = fixture["rows"].number else { throw BridgeFailure(code: "PERFORMANCE_FIXTURE", message: "Missing common grid") }
         // Resize the actual window and let SwiftTerm/PTY layout agree before measuring input.
         // 先调整真实窗口并让 SwiftTerm／PTY 布局一致，再测量输入。
-        for _ in 0..<10 {
+        var viewportAttempts: [[String: Any]] = []
+        for attempt in 0..<10 {
             let grid = terminal.view.getTerminal()
+            viewportAttempts.append(["attempt": attempt, "columns": grid.cols, "rows": grid.rows,
+                "windowFrame": NSStringFromRect(window.frame), "contentBounds": NSStringFromRect(window.contentView?.bounds ?? .zero),
+                "terminalFrame": NSStringFromRect(terminal.view.frame)])
+            report["viewportAttempts"] = viewportAttempts
             if grid.cols == Int(columns), grid.rows == Int(rows) { break }
-            let size = window.contentView?.bounds.size ?? .zero
+            // Full-size content bounds include the title bar; setContentSize expects the content rect.
+            // 全尺寸内容区包含标题栏，setContentSize 则接收内容矩形的尺寸。
+            let size = window.contentRect(forFrameRect: window.frame).size
             let cellWidth = Double(terminal.view.bounds.width) / Double(max(1, grid.cols))
             let cellHeight = Double(terminal.view.bounds.height) / Double(max(1, grid.rows))
             let width = grid.cols == Int(columns) ? Double(size.width) : Double(size.width) + (columns - Double(grid.cols) + 0.25) * cellWidth

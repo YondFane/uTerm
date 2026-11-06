@@ -143,7 +143,11 @@ multi-hour leak freedom.
 Local report tests reject stale source/workload, imprecise sequence, missing rows/TUI samples,
 insufficient soak, missing slow-consumer evidence and unequal grids. Actual version3 macOS and
 Windows measurements remain pending; #43 stays open and no improvement percentage is claimed.
-Earlier version2 reports are not evidence for the additional workload.
+Earlier version2 reports are not evidence for the additional workload. Native fitting uses the
+window content rect for setContentSize, avoiding repeated title-bar height in full-size content
+bounds; every attempt records actual window/view/grid geometry. Windows selects Git Bash explicitly,
+not the installed WSL launcher. The first version3 run failed these preparation steps; its original
+logs and reports remain in run42267835513. Corrected platform results are pending.
 
 Explicit detach releases its authenticated input lease before returning, including when the old
 consumer is blocked. A per-link lock prevents late heartbeat/takeover from reclaiming a stopped
