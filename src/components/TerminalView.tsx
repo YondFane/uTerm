@@ -306,11 +306,15 @@ export function TerminalView({
       import.meta.env.VITE_UTERM_STATE_QA === "1"
         ? registerTerminalPerformanceProbe(
             session.id,
-            () => {
+            (tailOnly = false) => {
               const buffer = term.buffer.active;
+              const end = tailOnly
+                ? Math.min(buffer.length, buffer.baseY + buffer.cursorY + 1)
+                : buffer.length;
+              const first = tailOnly ? Math.max(0, end - 8) : 0;
               const lines = Array.from(
-                { length: buffer.length },
-                (_, row) => buffer.getLine(row)?.translateToString(true) ?? "",
+                { length: end - first },
+                (_, row) => buffer.getLine(first + row)?.translateToString(true) ?? "",
               );
               return {
                 ...performanceStats.current,

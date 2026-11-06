@@ -3,6 +3,8 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
 using System;
+using System.Collections.Generic;
+using System.Text;
 using System.Runtime.InteropServices;
 public class WindowCapture {
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
@@ -17,28 +19,53 @@ public class WindowCapture {
     [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(Point point);
     [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr h, uint flags);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
+    public delegate bool WindowCallback(IntPtr h, IntPtr param);
+    [DllImport("user32.dll")] public static extern bool EnumWindows(WindowCallback callback, IntPtr param);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder text, int size);
+    public static string Title(IntPtr h) { var text=new StringBuilder(1024); GetWindowText(h,text,text.Capacity); return text.ToString(); }
+    public static IntPtr[] OwnedWindows(uint pid) {
+        var result=new List<IntPtr>();
+        EnumWindows((h,param)=>{ uint owner; GetWindowThreadProcessId(h,out owner); if(owner==pid) result.Add(h); return true; }, IntPtr.Zero);
+        return result.ToArray();
+    }
 }
 '@
 [void][WindowCapture]::SetProcessDPIAware()
 $application = Get-Process -Id $TargetProcessId
-$windowDeadline = [DateTime]::UtcNow.AddSeconds(10)
+$windowDeadline = [DateTime]::UtcNow.AddSeconds(30)
 $handle = [IntPtr]::Zero
+$discovery = @()
+$resizedWindow = $false
 do {
     $application.Refresh()
     if ($application.HasExited) { throw 'Native QA exited before window capture' }
-    $handle = $application.MainWindowHandle
-    if ($handle -ne [IntPtr]::Zero) {
-        $owner = [uint32]0
-        [void][WindowCapture]::GetWindowThreadProcessId($handle, [ref]$owner)
-        if ($owner -ne $TargetProcessId) { throw 'Native QA window ownership changed' }
-        [void][WindowCapture]::ShowWindow($handle, 9)
+    $handle = [IntPtr]::Zero
+    $discovery = @()
+    foreach ($candidate in [WindowCapture]::OwnedWindows([uint32]$TargetProcessId)) {
+        $title = [WindowCapture]::Title($candidate)
         $readyRect = [WindowCapture+Rect]::new()
-        if ([WindowCapture]::GetWindowRect($handle, [ref]$readyRect) -and ($readyRect.Right - $readyRect.Left) -ge 600 -and ($readyRect.Bottom - $readyRect.Top) -ge 400) { break }
+        [void][WindowCapture]::GetWindowRect($candidate, [ref]$readyRect)
+        $discovery += @{ handle=$candidate.ToInt64(); title=$title; visible=[WindowCapture]::IsWindowVisible($candidate); width=($readyRect.Right - $readyRect.Left); height=($readyRect.Bottom - $readyRect.Top) }
+        if ($title -ne 'uTerm Shared State QA') { continue }
+        $owner = [uint32]0
+        [void][WindowCapture]::GetWindowThreadProcessId($candidate, [ref]$owner)
+        if ($owner -ne $TargetProcessId) { throw 'Native QA window ownership changed' }
+        [void][WindowCapture]::ShowWindow($candidate, 9)
+        [void][WindowCapture]::GetWindowRect($candidate, [ref]$readyRect)
+        if (($readyRect.Right - $readyRect.Left) -lt 600 -or ($readyRect.Bottom - $readyRect.Top) -lt 400) {
+            # Resize only the titled, owned QA window; hidden utility HWNDs are never capture targets.
+            # 仅调整有准确标题且属于 QA 的窗口，隐藏的辅助 HWND 绝不作为截图目标。
+            if ([WindowCapture]::SetWindowPos($candidate, [IntPtr]::Zero, 100, 100, 960, 620, 0x54)) { $resizedWindow = $true }
+        }
+        if ([WindowCapture]::GetWindowRect($candidate, [ref]$readyRect) -and ($readyRect.Right - $readyRect.Left) -ge 600 -and ($readyRect.Bottom - $readyRect.Top) -ge 400) { $handle=$candidate; break }
     }
+    if ($handle -ne [IntPtr]::Zero) { break }
     # Restoration and WebView startup can temporarily expose a tiny native window.
     # 窗口恢复及 WebView 启动期间，原生窗口尺寸可能暂时很小。
     Start-Sleep -Milliseconds 100
 } while ([DateTime]::UtcNow -lt $windowDeadline)
+@{ processId=$TargetProcessId; windows=$discovery } | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 ($Destination + '.window-discovery.json')
 if ($handle -eq [IntPtr]::Zero -or ($readyRect.Right - $readyRect.Left) -lt 600 -or ($readyRect.Bottom - $readyRect.Top) -lt 400) { throw 'No restored native QA window with valid dimensions' }
 $topmost = ([WindowCapture]::GetWindowLongPtr($handle, -20).ToInt64() -band 8) -ne 0
 try {
@@ -74,7 +101,7 @@ try {
             $method = 'CopyFromScreen with sampled occlusion checks'
         }
         $image.Save($Destination, [System.Drawing.Imaging.ImageFormat]::Png)
-        @{ processId=$TargetProcessId; handle=$handle.ToInt64(); title=$application.MainWindowTitle; method=$method; width=$width; height=$height; unobstructed=$unobstructed; samples=$samples } | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 ($Destination + '.capture.json')
+        @{ processId=$TargetProcessId; handle=$handle.ToInt64(); title=[WindowCapture]::Title($handle); method=$method; width=$width; height=$height; unobstructed=$unobstructed; samples=$samples; resizedInvalidQAWindow=$resizedWindow } | ConvertTo-Json -Depth 4 | Set-Content -Encoding UTF8 ($Destination + '.capture.json')
     } finally { $graphics.Dispose(); $image.Dispose() }
 } finally {
     if (!$topmost) { [void][WindowCapture]::SetWindowPos($handle, [IntPtr]::new(-2), 0, 0, 0, 0, 0x13) }

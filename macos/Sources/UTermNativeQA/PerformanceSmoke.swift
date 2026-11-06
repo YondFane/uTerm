@@ -39,13 +39,13 @@ enum PerformanceSmoke {
             let label = String(format: "%02d", cycle)
             let start = ProcessInfo.processInfo.systemUptime
             terminal.view.insertText("printf 'LAT_%s\\n' '\(label)'\r" as NSString, replacementRange: NSRange(location: NSNotFound, length: 0))
-            try await wait("Measure input/output acknowledgement") { terminal.text.contains("LAT_" + label) && terminal.qaAcknowledgedFrames == terminal.qaRenderedFrames }
+            try await wait("Measure input/output acknowledgement") { terminal.qaTailText.contains("LAT_" + label) && terminal.qaAcknowledgedFrames == terminal.qaRenderedFrames }
             let latency = (terminal.qaLastAckUptime - start) * 1000
             guard latency >= 0 else { throw BridgeFailure(code: "PERFORMANCE_STALE", message: "Input marker matched a stale acknowledgement") }
             let bytes = terminal.qaRenderedBytes
             let bulkStart = ProcessInfo.processInfo.systemUptime
             terminal.view.insertText("i=0; while test \"$i\" -lt \(Int(records)); do printf '\\033[32mP\(label)_%04d_\\033[0m\(payload) \(unicodeText)\\n' \"$i\"; i=$((i+1)); done; printf 'END_%s\\n' '\(label)'\r" as NSString, replacementRange: NSRange(location: NSNotFound, length: 0))
-            try await wait("Render the complete common workload") { terminal.text.contains("END_" + label) && terminal.qaAcknowledgedFrames == terminal.qaRenderedFrames }
+            try await wait("Render the complete common workload") { terminal.qaTailText.contains("END_" + label) && terminal.qaAcknowledgedFrames == terminal.qaRenderedFrames }
             let text = terminal.text
             let expression = try NSRegularExpression(pattern: "P" + label + "_([0-9]{4})_")
             let matches = expression.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in Range(match.range(at: 1), in: text).flatMap { Int(text[$0]) } }
@@ -70,7 +70,7 @@ enum PerformanceSmoke {
         let resets = terminal.qaReplayResets
         let replayStart = ProcessInfo.processInfo.systemUptime
         await model.reconnectTransport()
-        try await wait("Replay the retained generation") { terminal.qaReplayResets > resets && terminal.text.contains(String(format: "END_%02d", Int(cycles)-1)) && terminal.inputControl?.owned == true && terminal.qaAcknowledgedFrames == terminal.qaRenderedFrames }
+        try await wait("Replay the retained generation") { terminal.qaReplayResets > resets && terminal.qaTailText.contains(String(format: "END_%02d", Int(cycles)-1)) && terminal.inputControl?.owned == true && terminal.qaAcknowledgedFrames == terminal.qaRenderedFrames }
         guard terminal.generation == generation else { throw BridgeFailure(code: "PERFORMANCE_REPLAY", message: "Replay restarted the PTY") }
         report["replayMilliseconds"] = (terminal.qaLastAckUptime - replayStart) * 1000
         try phase("idle-soak")

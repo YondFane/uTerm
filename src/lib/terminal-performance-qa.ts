@@ -13,12 +13,12 @@ export interface TerminalPerformanceSnapshot {
 
 const probes = new Map<
   string,
-  { read: () => TerminalPerformanceSnapshot; reconnect?: () => Promise<void> }
+  { read: (tailOnly?: boolean) => TerminalPerformanceSnapshot; reconnect?: () => Promise<void> }
 >();
 
 export function registerTerminalPerformanceProbe(
   session: string,
-  read: () => TerminalPerformanceSnapshot,
+  read: (tailOnly?: boolean) => TerminalPerformanceSnapshot,
   reconnect?: () => Promise<void>,
 ) {
   const probe = { read, reconnect };
@@ -30,8 +30,8 @@ export function registerTerminalPerformanceProbe(
   };
 }
 
-export function terminalPerformanceSnapshot(session: string) {
-  return probes.get(session)?.read();
+export function terminalPerformanceSnapshot(session: string, tailOnly = false) {
+  return probes.get(session)?.read(tailOnly);
 }
 
 export async function reconnectTerminalPerformanceProbe(session: string) {

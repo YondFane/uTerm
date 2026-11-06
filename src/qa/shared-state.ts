@@ -1059,6 +1059,15 @@ async function runInputControl(context: Context) {
       "visible ownership QA project",
     );
     project.click();
+    await until(async () => {
+      const snapshot = (await observeCore("snapshot.read")) as unknown as {
+        document: { workspace: { selectedProject: string; selectedWorktree: string | null } };
+      };
+      return (
+        snapshot.document.workspace.selectedProject === "shared-state-qa" &&
+        snapshot.document.workspace.selectedWorktree === null
+      );
+    }, "committed ownership project selection");
     await until(() => {
       const value = document.querySelector<HTMLButtonElement>(".welcome-action.primary");
       if (

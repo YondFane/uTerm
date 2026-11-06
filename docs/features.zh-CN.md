@@ -91,6 +91,9 @@ CAS 文件保存／读取、连接回放和120秒空闲运行。前五轮预热�
 Windows 自动流程现先选择临时项目及欢迎按钮的嵌套标签。采样写完整条 JSON 后才停止，原来直接终止 PowerShell 会截断末条数据。失败运行和截图保留在
 [artifact13510499531](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13510499531)。#43 因修正后的平台结果和未测量场景保持开放。
 
+首次 Intel 原生运行完成全部二十轮有序输出、文件 CAS、实际回放、120秒运行及清理，窗口原图已查看，见
+[artifact13512831299](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13512831299)。反复转换完整回滚会干扰响应计时；测量现仅轮询两端光标附近末尾八行，输出结束后才完整扫描一次验证顺序，先前计时不作为公平对比。Tauri 自动流程等待项目选择实际提交；Windows 截图仅枚举指定 PID 下标题准确的 QA 窗口，记录发现／几何信息并恢复无效窗口尺寸，不替用辅助窗口或其他进程窗口。这些修正仍须各自平台结果。
+
 #### 原生 QA 验证
 
 迁移验收仍由 [#13](https://github.com/YondFane/uTerm/issues/13) 跟踪。M3

@@ -128,6 +128,16 @@ The original failed run and captures remain in
 [artifact13510499531](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13510499531).
 #43 remains open for corrected platform results and the unmeasured cases.
 
+The first Intel native repetition completed all twenty ordered-output cycles, file CAS, actual
+replay, a 120-second soak and cleanup, with an inspected original window in
+[artifact13512831299](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13512831299).
+Its repeated full-scrollback translation can distort response timings. Measurement now polls only
+the last eight parsed cursor lines on both clients and scans full output once for order validation;
+those earlier timings are not accepted as a fair comparison. Tauri automation waits for committed
+project selection. Windows capture enumerates only the requested PID's titled QA window, records
+discovery/geometry, and restores an invalid window before capture; it never substitutes a utility or
+another process's window. These corrections still require their own platform results.
+
 #### Native QA validation
 
 Migration acceptance remains open in [#13](https://github.com/YondFane/uTerm/issues/13). M3 #17 was

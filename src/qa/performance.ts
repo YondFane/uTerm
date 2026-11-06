@@ -60,25 +60,38 @@ export async function runPerformance(
     "temporary performance project",
   );
   project.click();
+  await until(async () => {
+    try {
+      const selected = (await coreRequest("snapshot.read")) as unknown as {
+        document: { workspace: { selectedProject: string; selectedWorktree: string | null } };
+      };
+      return (
+        selected.document.workspace.selectedProject === "shared-state-qa" &&
+        selected.document.workspace.selectedWorktree === null
+      );
+    } catch (error) {
+      if ((error as { code?: string }).code === "WRITER_BUSY") return false;
+      throw error;
+    }
+  }, "committed performance project selection");
   await until(() => {
-    const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
-      (value) =>
-        (value.title === "New terminal" ||
-          value.querySelector("strong")?.textContent === "New terminal" ||
-          value.textContent?.trim() === "New terminal") &&
-        !value.disabled &&
-        value.isConnected,
-    );
-    if (!button) return false;
+    const button = document.querySelector<HTMLButtonElement>(".welcome-action.primary");
+    if (
+      !button?.isConnected ||
+      button.disabled ||
+      button.querySelector("strong")?.textContent !== "New terminal" ||
+      button.getBoundingClientRect().width <= 0
+    )
+      return false;
     button.click();
     return true;
   }, "create measured terminal");
   const section = await until(
-    () => document.querySelector<HTMLElement>(".terminal-view[data-session-id]"),
+    () => document.querySelector<HTMLElement>(".local-session.visible[data-session-id]"),
     "measured terminal view",
   );
   const id = section.dataset.sessionId!;
-  const read = () => terminalPerformanceSnapshot(id);
+  const read = (tailOnly = true) => terminalPerformanceSnapshot(id, tailOnly);
   await until(
     () => read()?.writable && (read()?.frames ?? 0) > 0,
     "first parsed frame and input ownership",
@@ -146,7 +159,7 @@ export async function runPerformance(
       const value = read();
       return value?.text.includes(`END_${label}`) && value.frames === value.acknowledgedFrames;
     }, "common output parsed and acknowledged");
-    const value = read()!;
+    const value = read(false)!;
     const records = [...value.text.matchAll(new RegExp(`P${label}_([0-9]{4})_`, "g"))].map(
       (match) => Number(match[1]),
     );

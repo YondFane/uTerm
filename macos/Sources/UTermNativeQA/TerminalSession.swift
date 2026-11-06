@@ -330,6 +330,22 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         return lines.joined(separator: "\n")
     }
 
+    // Poll only the cursor tail while measuring; repeatedly translating all scrollback distorts latency.
+    // 测量时仅轮询光标附近末尾，重复转换全部回滚会干扰延迟。
+    var qaTailText: String {
+        let terminal = view.getTerminal()
+        let first = terminal.buffer.totalLinesTrimmed
+        var low = first, high = first + terminal.options.scrollback + terminal.rows
+        while low < high {
+            let middle = low + (high-low)/2
+            if terminal.getScrollInvariantLine(row: middle) != nil { low = middle+1 } else { high = middle }
+        }
+        let end = max(first, min(low, low-terminal.rows+terminal.getCursorLocation().y+1))
+        return (max(first, end-8)..<end).compactMap { row in
+            terminal.getScrollInvariantLine(row: row)?.translateToString(trimRight: true, skipNullCellsFollowingWide: true, characterProvider: { terminal.getCharacter(for: $0) })
+        }.joined(separator: "\n")
+    }
+
     func sizeChanged(source: TerminalView, newCols: Int, newRows: Int) {
         guard newCols > 0, newRows > 0, newCols <= 1000, newRows <= 1000 else { return }
         guard !applyingReplay else { return }
