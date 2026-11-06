@@ -431,7 +431,14 @@ its draft setup omitted `expectedDraftRevision`; setup now sends explicit null f
 retaining strict rejection of missing fields. The corrected actual C ABI check passes both Mac
 architectures at source949e4c2. Actual old-application/data replacement remains pending under #46.
 #47 tracks final source-bound evidence and current stage gaps; neither task authorizes merging or
-publishing.
+publishing. The manually dispatched Migration readiness audit reads GitHub task/PR/ref state and
+current-head workflow artifacts. It checks exact source/tested-merge identities, clean reports,
+failures, incomplete acceptance flags and PNG signatures, and publishes migration-readiness.json.
+Open prerequisites, missing/failed CI, stale artifacts or unequal tested merges fail the gate. The
+report inventory does not replace original-window inspection or task acceptance. The audit has
+read-only repository permissions and does not close issues, merge, tag, publish or change feeds. Run
+`python3 -B scripts/migration-readiness.py --head SOURCE_SHA` with authenticated GitHub read access;
+its nonzero result and artifact describe current blockers, not a successful release.
 
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
 conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI. A

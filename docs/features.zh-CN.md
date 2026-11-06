@@ -247,7 +247,12 @@ ARM64 各上传十张真实窗口场景图及成功报告，清理无错误。[W
 Linux 通过33项定向存储／回退测试（忽略3项既有权限案例）、2项真实进程读取器测试、TS／Swift 生成契约和类型检查。覆盖最新 Unicode／BOM／CRLF 字节、多草稿及删除、过期状态／草稿 revision、参数错误、损坏／不支持的存储、写租约争用／重试、幂等及配置／来源不写盘。CI 记录
 `rollback-export-core.json`。真实 Swift C ABI 场景首次因草稿准备遗漏 `expectedDraftRevision`
 而失败，现为新文档显式传入 null，仍严格拒绝缺少字段；源码949e4c2的两种 Mac 架构已通过修正后的真实 C
-ABI 检查。实际旧应用／数据替换仍在 #46 待完成。#47 汇总最终来源一致的证据和当前阶段缺口；两项任务均不授权合并或发布。
+ABI 检查。实际旧应用／数据替换仍在 #46 待完成。#47 汇总最终来源一致的证据和当前阶段缺口；两项任务均不授权合并或发布。手动触发的 Migration
+readiness audit 读取 GitHub 任务／PR／分支状态及当前 head 的 workflow
+artifacts，核对准确源码／tested
+merge、干净报告、失败、不完整验收标志与 PNG 签名，并上传 migration-readiness.json。前置任务开放、CI 缺失／失败、产物过期或 tested
+merge 不一致均使门禁失败。报告清单不替代原图查看或任务验收；审计仅有仓库读取权限，不关闭 Issue、不合并、打标签、发布或改更新源。具备 GitHub 读取认证时，可运行
+`python3 -B scripts/migration-readiness.py --head SOURCE_SHA`，非零结果及 artifact 记录当前阻塞，不代表成功发版。
 
 Linux 及 Windows／macOS
 CI 中的 Rust 存储／FFI 测试和真实进程 TypeScript 兼容测试覆盖重复导入、冲突、损坏恢复、所有权和回调排空。新增真实 helper 的 C

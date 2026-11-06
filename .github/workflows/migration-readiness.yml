@@ -1,0 +1,29 @@
+name: Migration readiness audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Reject stale or incomplete evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B -m unittest discover -s tests -p test_migration_readiness.py
+          python3 -B scripts/migration-readiness.py --head "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: migration-readiness-${{ github.sha }}
+          path: ci-evidence/readiness/
+          if-no-files-found: error
