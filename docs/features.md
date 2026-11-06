@@ -3950,8 +3950,7 @@ Shared Linux regressions pass 18 Agent checks (one resource profile is intention
 installer checks and two platform/real-Hooks checks. An installed reporter child process drains 64
 KiB of input, produces real Host working/done events and rejects stale generations. The installer
 failure/retry test executes private scripts rather than installing a provider globally. Three
-focused frontend notification/Pi suites, TypeScript, localization and the QA backend check pass.
-Native window, bridge and notification-adapter results at the new source remain pending CI. The
+focused frontend notification/Pi suites, TypeScript, localization and the QA backend check pass. The
 first native build found an optional generation at the adapter boundary; the adapter now rejects
 missing generations before evaluating notification eligibility. That failed build does not establish
 window acceptance.
@@ -3959,9 +3958,8 @@ window acceptance.
 The Tauri real-app harness also opens Agent settings, saves/enables/disables/removes a private
 custom command, changes canonical notification opt-out, installs/removes Hooks and retains an
 invalid argument draft with a visible error. Post-exit checks require other tools' Hooks to survive.
-These three additional native-window scenes are pending Windows/macOS CI; notification opt-in
-permissions remain covered by explicitly mocked regressions. Native QA additionally cancels an
-actual app quit with an Agent draft. Activity labels update only when status changes; ordinary
+Notification opt-in permissions remain covered by explicitly mocked regressions. Native QA cancels
+an actual app quit with an Agent draft. Activity labels update only when status changes; ordinary
 output does not trigger workspace redraws. Activity failures cancel pending notifications and show a
 reconnect hint. The native Close menu action hides the focused Agent window and retains its draft;
 it never closes the selected terminal behind that window.
@@ -3975,6 +3973,22 @@ label.
 A component regression runs these actions against the actual Agent form with mocked native services,
 forces one busy save and requires an explicit successful retry before the observer runs. It verifies
 three scene outcomes, final definition/enable cleanup and no notification permission request.
+
+Source `424fd23b55e44d116e51eb4224771ea963352df7`, tested merge
+`950bf24aaaad8e39b7855662d04d7000801f7649`, passes Native
+[run 42173232949](https://github.com/YondFane/uTerm/actions/runs/42173232949) on macOS 15.8.2 arm64
+and 15.7.9 Intel, and Tauri
+[run 42173232927](https://github.com/YondFane/uTerm/actions/runs/42173232927) on macOS 26.7.2 arm64
+and Windows Server 2025 x64. All four archives report a clean source tree. Native reports pass with
+exit 0, including actual quit cancellation; Tauri passes 71 scenes per platform with no cleanup
+errors or observer busy reads. The forced busy-write component regression passes on Linux, macOS and
+Windows. All four installed-reporter reports pass real Host events, stale-generation rejection and
+private Host cleanup. The archives contain `agent-native.json`, `agent-hooks-core.json`, Tauri
+`agent-live.json`, logs and ten reviewed original application screenshots. The
+[acceptance record](https://github.com/YondFane/uTerm/issues/40#issuecomment-6679048480) links each
+artifact and image. Provider authentication, global package installation and final OS notification
+delivery remain explicitly simulated; final human acceptance is waived by the user. This evidence
+does not accept the incomplete full settings/menu integration in #41 or merge the draft PR.
 
 ### Installing and removing Hooks
 
