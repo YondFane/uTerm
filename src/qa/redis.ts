@@ -214,7 +214,8 @@ export async function runRedis(
   await until(() => workspace.querySelector(".redis-dirty"), "unsaved Redis draft");
   await click("Disconnect", workspace);
   const unsaved = await until(
-    () => workspace.querySelector<HTMLDialogElement>("dialog[open]:not(.redis-action-dialog)"),
+    () =>
+      workspace.querySelector<HTMLDialogElement>('dialog[open][aria-labelledby^="redis-unsaved-"]'),
     "unsaved disconnect guard",
   );
   await click("Cancel", unsaved);
@@ -225,7 +226,8 @@ export async function runRedis(
   );
   await invoke("qa_request_exit");
   const quitDialog = await until(
-    () => workspace.querySelector<HTMLDialogElement>("dialog[open]:not(.redis-action-dialog)"),
+    () =>
+      workspace.querySelector<HTMLDialogElement>('dialog[open][aria-labelledby^="redis-unsaved-"]'),
     "actual application quit draft guard",
   );
   await click("Cancel", quitDialog);
@@ -289,7 +291,8 @@ export async function runRedis(
   const page = (first: number, count: number) =>
     rows().length === count && rows()[0]?.cells[0].textContent === String(first);
   const pagination = () => workspace.querySelector(".redis-collection .redis-pagination")!;
-  const dialog = () => workspace.querySelector<HTMLDialogElement>(".redis-action-dialog[open]");
+  const dialog = () =>
+    workspace.querySelector<HTMLDialogElement>('dialog[open][aria-labelledby^="redis-confirm-"]');
   try {
     await key(fixture.largeListKey);
     await until(() => page(0, 200), "bounded large list first page");

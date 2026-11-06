@@ -1751,6 +1751,12 @@ result
 harness uses `python3 -B` to avoid creating bytecode while retaining the clean-tree guard;
 validation of the fix remains pending.
 
+The Tauri Mac run at `554108e` fails because its QA selector excludes the visible unsaved-change
+dialog, which shares a style class with mutation confirmations
+([artifact](https://github.com/YondFane/uTerm/actions/runs/42138851631/artifacts/13467443807)). The
+harness distinguishes open dialogs by their existing `aria-labelledby` values; corrected
+disconnect/quit cancellation checks still require platform execution.
+
 The expanded cases browse a real 20,001-member list with 200 rendered and returned rows per page;
 the missing edit snapshot keeps member update/delete controls disabled above the 10,000-member
 limit. Final checks confirm the large list is unchanged. Separate cases use 401 editable list
