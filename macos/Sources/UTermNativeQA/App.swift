@@ -76,6 +76,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openRedisRequested = { [weak self] in self?.openRedis() }
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
         model.openSettingsRequested = { [weak self] in self?.openFullSettings() }
+        model.openGitRequested = { [weak self] in self?.openGit() }
+        model.openInspectorFile = { [weak self] directory, path, line in
+            guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
+            let root = try await self.selectedProjectDirectory()
+            guard root.path == URL(fileURLWithPath: directory).standardizedFileURL.resolvingSymlinksInPath().path else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Search again.", "项目选择已变化，请重新搜索。")) }
+            guard let bridge = self.model.bridge else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
+            _ = try await bridge.call("files.read", params: .object(["directory": .string(root.path), "path": .string(path)]))
+            guard try await self.selectedProjectDirectory() == root else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Search again.", "项目选择已变化，请重新搜索。")) }
+            let content = try await self.makeEditableContentWindow(directory: root, path: path)
+            if line > 0 { content.focusFileLine(line) }
+        }
         model.commandsChanged = { [weak self] in self?.configureMenu() }
         model.prepareSSHTransportReconnect = { [weak self] in
             guard let current = self?.sshWindow else { return true }
@@ -87,6 +98,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--inspector-smoke-report"), let window {
+                var report = baseReport()
+                do { try await InspectorSmoke.run(model: model, window: window, lookup: { self.existingContent(directory: $0, path: $1, editable: true) }, report: &report) }
+                catch {
+                    report["failure"] = error.localizedDescription
+                    try? await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-inspector-failure.png"))
+                }
+                for content in Array(contentWindows.values) { content.forceClose() }
+                if report["explicitFixtureCloseAndIdleHostShutdown"] as? Bool != true, let bridge = model.bridge {
+                    do {
+                        for session in try await bridge.call("host.status")["sessions"].array { _ = try await bridge.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]])) }
+                        _ = try await bridge.call("host.shutdownIdle")
+                    } catch { report["cleanupError"] = error.localizedDescription }
+                }
+                await model.shutdown(); terminating = true
+                finishReport(report, path: path); return
+            }
             if let path = WorkspaceModel.argument("--settings-smoke-report") {
                 var report = baseReport()
                 do { try await SettingsSmoke.run(workspace: model, open: { self.openFullSettings(); return self.fullSettingsWindow! }, report: &report) }
@@ -388,8 +416,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 return !run.model.busy && !run.model.prepared
             }
             let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow }
-            menuItem.title = fileFocused ? localized("Close file", "关闭文件") : localized("Close session", "关闭会话")
+            menuItem.title = fileFocused ? localized("Close file", "关闭文件") : model.inspectorOwnsFocus ? localized("Close tools", "关闭工具") : localized("Close session", "关闭会话")
             if fileFocused { return true }
+            if model.inspectorOwnsFocus { return true }
         }
         if contentWindows.values.contains(where: { $0.window === NSApp.keyWindow }) || agentsWindow?.window === NSApp.keyWindow || fullSettingsWindow?.window === NSApp.keyWindow, let action = menuItem.action,
            [#selector(splitRight), #selector(splitDown), #selector(increaseFont), #selector(decreaseFont)].contains(action) { return false }
@@ -404,18 +433,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func settings() { model.settingsPresented = true }
     private func commandAvailable(_ id: String) -> Bool {
         guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, !model.settingsPresented, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
-        if ["search", "files", "toggleInspector", "swapPanes", "github", "zoom"].contains(id) { return false }
+        if id == "github" { return false }
         if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
         let origin = NSApp.keyWindow === commandPalette?.window ? commandPalette?.returnWindow : NSApp.keyWindow
         if id == "close", NSApp.keyWindow === commandPalette?.window { return true }
         if id == "close" {
-            if origin === window { return model.selectedID != nil }
+            if origin === window { return model.inspectorOwnsFocus || model.selectedID != nil }
             return origin != nil && (origin === commandPalette?.window || origin === fullSettingsWindow?.window || origin === agentsWindow?.window || origin === sshWindow?.window || contentWindows.values.contains { $0.window === origin } || pythonWindows.values.contains { $0.window === origin } || javaWindows.values.contains { $0.window === origin })
         }
         if ["fontIncrease", "fontDecrease"].contains(id) { return origin === window || contentWindows.values.contains { $0.window === origin } }
         guard origin === window else { return false }
-        if ["terminal", "chat", "toggleSidebar"].contains(id) { return true }
-        if ["quick", "git"].contains(id) { return model.workspace["selectedProject"].string != nil }
+        if ["terminal", "chat", "toggleSidebar", "toggleInspector"].contains(id) { return true }
+        if ["quick", "git", "files", "search"].contains(id) { return model.workspace["selectedProject"].string != nil }
+        if id == "swapPanes" { return model.inspectorVisible }
+        if id == "zoom" { return model.selectedTerminal != nil && (model.paneZoomed || model.state?.layout["kind"].string == "split") }
         return model.selectedTerminal != nil
     }
     @objc private func performSemanticCommand(_ sender: NSMenuItem) {
@@ -436,7 +467,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case "project": openProject()
         case "terminal": newTerminal()
         case "chat": newAgent()
-        case "quick": openFile()
+        case "quick": model.showInspector(.quick)
+        case "files": model.showInspector(.files)
+        case "search": model.showInspector(.search)
+        case "toggleInspector": if model.inspectorVisible { model.hideInspector() } else { model.showInspector(model.inspector.mode) }
+        case "swapPanes": Task { await model.mutate("settings.patch", ["patch": .object(["inspectorPosition": .string(model.settings["inspectorPosition"].string == "left" ? "right" : "left")])]) }
+        case "zoom": model.paneZoomed.toggle()
         case "git": openGit()
         case "agents": openAgents()
         case "toggleSidebar": toggleSidebar()
@@ -866,6 +902,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
+        else if NSApp.keyWindow === window && model.inspectorOwnsFocus { model.hideInspector() }
         else { Task { await model.closeSession() } }
     }
     @objc private func splitRight() { Task { await model.split("horizontal") } }

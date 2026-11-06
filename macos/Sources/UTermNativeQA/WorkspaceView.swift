@@ -27,6 +27,7 @@ struct WorkspaceView: View {
                 Button { Task { await model.split("vertical") } } label: { Label(localized("Split down", "向下分屏"), systemImage: "rectangle.split.1x2") }
                     .disabled(model.selectedID == nil)
                 Button { model.settingsPresented = true } label: { Label(localized("Settings", "设置"), systemImage: "gearshape") }
+                Button { if model.inspectorVisible { model.hideInspector() } else { model.showInspector(.files) } } label: { Label(localized("Toggle tools", "显示或隐藏工具"), systemImage: "sidebar.right") }
             }
             .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
@@ -53,6 +54,7 @@ struct WorkspaceView: View {
                 }
                 .frame(minWidth: 176, idealWidth: 220, maxWidth: 320)
                 }
+                if model.inspectorVisible && model.settings["inspectorPosition"].string == "left" { inspector }
                 VStack(spacing: 0) {
                     if !model.terminalError.isEmpty {
                         HStack { Text(model.terminalError).font(.caption).textSelection(.enabled); Spacer(); Button(localized("Reconnect", "重新连接")) { Task { await model.reconnectTransport() } } }.padding(8)
@@ -86,6 +88,7 @@ struct WorkspaceView: View {
                     TerminalCanvas(model: model).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
                 .frame(minWidth: 220)
+                if model.inspectorVisible && model.settings["inspectorPosition"].string != "left" { inspector }
             }
             .padding(CGFloat(model.settings["windowPadding"].number ?? 10))
         }
@@ -98,6 +101,7 @@ struct WorkspaceView: View {
         .sheet(isPresented: $model.settingsPresented) { BasicSettingsView(model: model) }
         .sheet(item: $model.nameDraft) { _ in NameEditorView(model: model) }
     }
+    private var inspector: some View { InspectorHost(model: model).frame(minWidth: 220, idealWidth: 300, maxWidth: 420) }
 }
 
 @MainActor
@@ -255,7 +259,7 @@ final class CanvasHost: NSView {
     private var splits: [String: SessionSplitView] = [:]
 
     func render(_ model: WorkspaceModel) {
-        let layout = model.state?.layout ?? .null
+        let layout = model.paneZoomed && model.selectedID != nil ? JSONValue.object(["kind": .string("leaf"), "session": .string(model.selectedID!)]) : model.state?.layout ?? .null
         func key(_ node: JSONValue) -> String {
             if node["kind"].string == "leaf" { return node["session"].string ?? "" }
             if node["kind"].string == "split" { return (node["id"].string ?? "") + key(node["first"]) + key(node["second"]) }

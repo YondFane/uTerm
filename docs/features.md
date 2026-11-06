@@ -4224,9 +4224,18 @@ and clears colliding fallback menu keys. The palette and capture controls show m
 **Command palette** provides native search, Up/Down, Return and Escape. Dismissing it restores its
 originating window/responder and cannot close a terminal behind it. Plain navigation keys are
 handled only in the owned visible palette; its event monitor is removed on dismissal and modified
-keys retain normal text editing. Commands follow the current window/session context. Project search,
-file/inspector panes, pane swap, GitHub and zoom remain unavailable in the native client; those
-commands are disabled and remain tracked in #41/#17.
+keys retain normal text editing. Commands follow the current window/session context. Native
+**Files**, **Search** and **Quick open** show a tools pane backed by the shared Rust file service.
+Return or double-click opens a file; content search opens the matching line while preserving an
+existing editor's text. Hidden files are optional, partial results are labelled, and outside-root
+symlink targets cannot be opened. Search results from a cancelled request or previous project cannot
+replace the current list.
+
+**Toggle inspector** hides/restores tools; **Swap panes** saves its left/right position, including
+with the project sidebar hidden. Closing focused tools returns focus to the selected terminal
+without closing its session. **Zoom** shows only the selected split pane, then restores the shared
+layout and cached terminal views; hidden sessions continue receiving output. GitHub remains
+unavailable in the native client and is tracked in #41.
 
 The native QA app opens **Settings → All settings…** or **File → All settings…** for General,
 Appearance, Terminal, Files/Agents and Shortcuts. Changes remain drafts until **Save settings**.
@@ -4255,6 +4264,13 @@ item or changing shared settings. Real OS registration/approval is not executed 
 user-authorized simulation boundary and final human waiver are explicit.
 
 #### Validation and limits
+
+`bash scripts/macos-inspector-smoke.sh` uses the isolated native QA app, temporary files and real
+PTYs to check file navigation, hidden files, symlink boundaries, Unicode search/line navigation,
+retained editor text, cancellation, quick open, pane swap, zoom, focus and explicit host cleanup. It
+records four original WindowServer captures and `inspector-native.json`, including source head and
+tested merge SHAs. The added inspector checks require macOS CI execution; the older settings
+evidence below does not validate these commands. Manual acceptance remains waived by the user.
 
 Source `60e183043988626cddbb4fa14e140ed9c25f17f6`, tested merge
 `f93da46db913e8be48f6bac46cb22f00577d23b8`, passes Native

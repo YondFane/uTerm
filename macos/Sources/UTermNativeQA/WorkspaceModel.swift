@@ -27,6 +27,8 @@ final class WorkspaceModel: ObservableObject {
     @Published var nameDraft: NameDraft?
     @Published var fullScreen = false
     @Published var sidebarVisible = true
+    @Published var inspectorVisible = false
+    @Published var paneZoomed = false
     @Published private(set) var focusRevision = 0
     @Published private(set) var toolbarHeight: CGFloat = 0
     @Published var controlStatus: JSONValue = .null
@@ -48,6 +50,9 @@ final class WorkspaceModel: ObservableObject {
     var openRedisRequested: (() -> Void)?
     var openAgentsRequested: (() -> Void)?
     var openSettingsRequested: (() -> Void)?
+    var openGitRequested: (() -> Void)?
+    var openGitHubRequested: (() -> Void)?
+    var openInspectorFile: ((String, String, Int) async throws -> Void)?
     var prepareSSHTransportReconnect: (() async -> Bool)?
     var sshTrustTask: Task<Void, Never>?
     var sshTrustAlert: NSAlert?
@@ -62,6 +67,16 @@ final class WorkspaceModel: ObservableObject {
     private var helperReady = false
     private var needsReload = false
     lazy var agentNotifications = AgentNotifications(workspace: self)
+    lazy var inspector = NativeInspectorModel(workspace: self)
+    var inspectorContextKey: String { [groupID, workspace["selectedProject"].string ?? "", workspace["selectedWorktree"].string ?? ""].joined(separator: "\u{0}") }
+    var inspectorOwnsFocus: Bool {
+        guard inspectorVisible, let responder = NSApp.keyWindow?.firstResponder as? NSView else { return false }
+        var view: NSView? = (responder as? NSTextView).flatMap { $0.isFieldEditor ? $0.delegate as? NSView : nil } ?? responder
+        while let current = view { if current is InspectorContainer { return true }; view = current.superview }
+        return false
+    }
+    func showInspector(_ mode: NativeInspectorModel.Mode) { inspector.mode = mode; inspectorVisible = true }
+    func hideInspector() { inspectorVisible = false; inspector.invalidate(); focusRevision += 1 }
 
     var workspace: JSONValue { state?.snapshot.document.workspace ?? .null }
     var settings: JSONValue { state?.snapshot.document.settings ?? .null }

@@ -193,29 +193,31 @@ test("content abort and timeout suppress late responses without claiming writes 
   assert.equal(h.cancelled.at(-1).document, "file-slow");
   slow.close();
 });
-test("closing a content document drains subscriptions and rejects its pending deliveries", async () => {
-  const h = harness();
-  const scope = new ContentScope(h.port, "A");
-  const received = [];
-  const stop = await scope.subscribe("editor-close-request", (e) => received.push(e));
-  h.emit({ version: 1, document: "B", kind: "editor-close-request", payload: 1 });
-  h.emit({ version: 2, document: "A", kind: "editor-close-request", payload: 2 });
-  h.emit(null);
-  h.emit({ version: 1, document: "A", kind: "editor-close-request", payload: 3 });
-  assert.deepEqual(received, [3]);
-  const pending = scope.call("file_read");
-  const rejected = assert.rejects(pending, { code: "CLOSED" });
-  await tick();
-  scope.close();
-  await rejected;
-  scope.close();
-  stop();
-  assert.equal(h.stops(), 1);
-  assert.equal(h.cancelled.length, 1);
-  h.emit({ version: 1, document: "A", kind: "editor-close-request", payload: 4 });
-  assert.deepEqual(received, [3]);
-  await assert.rejects(scope.call("file_read"), { code: "CLOSED" });
-});
+for (const eventKind of ["editor-close-request", "file-focus-line"]) {
+  test(`closing a content document drains ${eventKind} and rejects pending deliveries`, async () => {
+    const h = harness();
+    const scope = new ContentScope(h.port, "A");
+    const received = [];
+    const stop = await scope.subscribe(eventKind, (e) => received.push(e));
+    h.emit({ version: 1, document: "B", kind: eventKind, payload: 1 });
+    h.emit({ version: 2, document: "A", kind: eventKind, payload: 2 });
+    h.emit(null);
+    h.emit({ version: 1, document: "A", kind: eventKind, payload: 3 });
+    assert.deepEqual(received, [3]);
+    const pending = scope.call("file_read");
+    const rejected = assert.rejects(pending, { code: "CLOSED" });
+    await tick();
+    scope.close();
+    await rejected;
+    scope.close();
+    stop();
+    assert.equal(h.stops(), 1);
+    assert.equal(h.cancelled.length, 1);
+    h.emit({ version: 1, document: "A", kind: eventKind, payload: 4 });
+    assert.deepEqual(received, [3]);
+    await assert.rejects(scope.call("file_read"), { code: "CLOSED" });
+  });
+}
 test("late content subscription registration is immediately removed after unload", async () => {
   const registration = deferred();
   let stopped = 0;

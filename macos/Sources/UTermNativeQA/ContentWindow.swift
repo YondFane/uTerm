@@ -63,6 +63,12 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     private var preparedDocument: String?
     var isPreparedForQuit: Bool { permitsClose || (workbenchHost?.prepared ?? (preparedDocument == documentID && (gitMode ? !gitMutationInProgress : quitToken != nil))) }
     private(set) var navigationError = ""
+    private var focusLine = 0
+    func focusFileLine(_ line: Int) {
+        guard editable, !gitMode, workbenchHost == nil, line > 0 else { return }
+        focusLine = line
+        deliver("file-focus-line", payload: .number(Double(line)))
+    }
     var closed: (() -> Void)?
     var mutateGit: ((String, JSONValue, CoreBridge) async throws -> JSONValue)?
     var openRepositoryFile: ((String) async throws -> Void)?
@@ -204,7 +210,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         switch request.method {
         case "content_context":
             let state = try await stateBridge.snapshot()
-            return .object(["directory": .string(directory.path), "path": .string(path), "settings": state.document.settings, "editable": .bool(editable), "kind": .string(workbenchHost?.kind ?? (gitMode ? "git" : "file"))])
+            return .object(["directory": .string(directory.path), "path": .string(path), "line": .number(Double(focusLine)), "settings": state.document.settings, "editable": .bool(editable), "kind": .string(workbenchHost?.kind ?? (gitMode ? "git" : "file"))])
         case "content_copy_text":
             guard params.count == 1, let text = params["text"]?.string else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing clipboard text") }
             NSPasteboard.general.clearContents()

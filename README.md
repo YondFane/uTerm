@@ -159,6 +159,11 @@ records real windows, theme effects, menu keys and palette focus. Login-item QA 
 simulation and never registers a CI login item. Remaining preferences and unavailable commands
 remain under #41.
 
+`bash scripts/macos-inspector-smoke.sh` checks the native Files/Search/Quick open commands, exact
+line navigation, tools focus, pane swap and zoom with temporary files and real PTYs. It requires the
+QA build and a macOS graphical session, and saves four original screenshots plus
+`inspector-native.json` with source/tested SHAs. CI must execute these checks before acceptance.
+
 Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the Pi extension under
 `crates/uterm-core/integrations/`. `bash scripts/macos-agent-smoke.sh` requires a macOS graphical
 session and the QA build; it records real window/Host/installed-reporter evidence with an explicitly

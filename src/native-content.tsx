@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FileEditor, UnsavedDialog } from "./components/FileEditor";
 import { SettingsProvider } from "./lib/SettingsContext";
-import { contentInvoke } from "./lib/content-host";
+import { contentInvoke, listenContent } from "./lib/content-host";
 import { activeLanguage, localizeMessage, setUiLanguage, tx } from "./lib/i18n";
 import { readSettings, type Settings } from "./lib/settings";
 import { useFileDocument } from "./lib/useFileDocument";
@@ -16,6 +16,7 @@ interface Context {
   kind?: "file" | "git" | "database" | "redis";
   directory: string;
   path: string;
+  line?: number;
   settings: Settings;
   editable: boolean;
 }
@@ -33,11 +34,54 @@ function Content({ context }: { context: Context }) {
         await contentInvoke<void>("editor_exit");
       }, id),
   };
+  const current = useRef(editor);
+  current.current = editor;
+  const [focusError, setFocusError] = useState("");
+  const [focusRequest, setFocusRequest] = useState({ line: context.line ?? 0, serial: 0 });
+  const appliedFocus = useRef(-1);
   useEffect(() => {
-    void editor.open(context.directory, context.path);
+    void current.current.open(context.directory, context.path, context.line);
+    let disposed = false;
+    let unsubscribe: (() => void) | undefined;
+    void listenContent<number>("file-focus-line", (line) => {
+      if (Number.isSafeInteger(line) && line > 0) {
+        setFocusRequest((previous) => ({ line, serial: previous.serial + 1 }));
+      }
+    })
+      .then(async (remove) => {
+        if (disposed) {
+          remove();
+          return;
+        }
+        unsubscribe = remove;
+        const latest = await contentInvoke<Context>("content_context");
+        if (!disposed && Number.isSafeInteger(latest.line) && latest.line! > 0) {
+          setFocusRequest((previous) => ({ line: latest.line!, serial: previous.serial + 1 }));
+        }
+      })
+      .catch((reason) => {
+        if (!disposed) setFocusError(String(reason));
+      });
+    return () => {
+      disposed = true;
+      unsubscribe?.();
+    };
   }, [context.directory, context.path]);
+  useEffect(() => {
+    if (
+      !editor.document ||
+      editor.pending ||
+      editor.transitioning ||
+      focusRequest.line <= 0 ||
+      appliedFocus.current === focusRequest.serial
+    )
+      return;
+    appliedFocus.current = focusRequest.serial;
+    void current.current.open(context.directory, context.path, focusRequest.line);
+  }, [editor.document?.id, editor.pending, editor.transitioning, focusRequest]);
   return (
     <main className="native-content">
+      {focusError && <p role="alert">{localizeMessage(focusError)}</p>}
       {editor.document ? (
         <FileEditor editor={editor} allowPdfAnnotations={false} />
       ) : (

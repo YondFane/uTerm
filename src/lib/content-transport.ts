@@ -294,6 +294,7 @@ export class ContentScope {
         "editor-prepare-quit",
         "editor-resume",
         "editor-repository-refresh",
+        "file-focus-line",
         "database-component-progress",
         "database-components-changed",
         "database-frozen",
