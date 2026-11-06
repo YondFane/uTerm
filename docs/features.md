@@ -126,7 +126,10 @@ Windows automation now selects its temporary project and the nested welcome-butt
 stops after a complete JSON record; abrupt PowerShell termination had truncated the final sample.
 The original failed run and captures remain in
 [artifact13510499531](https://github.com/YondFane/uTerm/actions/runs/42233559300/artifacts/13510499531).
-#43 remains open for corrected platform results and the unmeasured cases.
+The performance fixture is now seeded before shared-state initialization and checked read-only at
+runtime. An earlier direct settings CAS bypassed the client write queue, leaving its cached revision
+stale and blocking subsequent project/session UI writes. The queue and conflict rules remain
+unchanged. #43 remains open for corrected platform results and the unmeasured cases.
 
 The first Intel native repetition completed all twenty ordered-output cycles, file CAS, actual
 replay, a 120-second soak and cleanup, with an inspected original window in

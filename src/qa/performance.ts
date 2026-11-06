@@ -19,6 +19,17 @@ const fixture = JSON.parse(fixtureJSON) as {
   fontSize: number;
   scrollback: number;
 };
+export function performanceSettings(platform: string) {
+  return {
+    language: "en" as const,
+    appearance: "dark" as const,
+    fontFamily: fixture.fontFamily,
+    fontSize: fixture.fontSize,
+    scrollback: fixture.scrollback,
+    defaultShell: (platform === "windows" ? "cmd" : "default") as "cmd" | "default",
+  };
+}
+
 type Context = { root: string; project: string; platform: string };
 function assert(value: unknown, message: string): asserts value {
   if (!value) throw Error(message);
@@ -39,19 +50,13 @@ export async function runPerformance(
   scene: (name: string, checks: unknown) => Promise<void>,
 ) {
   assert(!/["'`$;\\\r\n]/u.test(fixture.unicodeText), "Unsafe committed output fixture");
-  const snapshot = (await coreRequest("snapshot.read")) as unknown as { revision: string };
-  await coreRequest("settings.patch", {
-    expectedRevision: snapshot.revision,
-    patch: {
-      language: "en",
-      appearance: "dark",
-      fontFamily: fixture.fontFamily,
-      fontSize: fixture.fontSize,
-      scrollback: fixture.scrollback,
-      defaultShell: context.platform === "windows" ? "cmd" : "default",
-    },
-  });
-  await pause(200);
+  const snapshot = (await coreRequest("snapshot.read")) as unknown as {
+    document: { settings: Record<string, unknown> };
+  };
+  // Seed before shared-state initialization; an out-of-queue CAS write poisons later UI mutations.
+  // 在共享状态初始化前准备设置，绕过队列的 CAS 写入会阻塞后续界面修改。
+  for (const [key, value] of Object.entries(performanceSettings(context.platform)))
+    assert(snapshot.document.settings[key] === value, `Performance setting mismatch: ${key}`);
   const project = await until(
     () =>
       document.querySelector<HTMLButtonElement>(

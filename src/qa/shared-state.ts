@@ -13,7 +13,7 @@ import { tauriContentPort } from "../lib/tauri-content";
 import { runRedis } from "./redis";
 import { runDatabase } from "./database";
 import { runAgents } from "./agents";
-import { runPerformance } from "./performance";
+import { performanceSettings, runPerformance } from "./performance";
 import type {
   CoreEditorDraftEntry,
   CoreFileDocument,
@@ -209,7 +209,12 @@ export async function prepare() {
   ) {
     localStorage.setItem(
       settingsKey,
-      JSON.stringify({ ...defaults, language: "en", appearance: "dark" }),
+      JSON.stringify({
+        ...defaults,
+        language: "en",
+        appearance: "dark",
+        ...(context.phase === "performance" ? performanceSettings(context.platform) : {}),
+      }),
     );
     const workspace = emptyWorkspace();
     workspace.projects.push({
