@@ -247,8 +247,9 @@ ARM64 各上传十张真实窗口场景图及成功报告，清理无错误。[W
 Linux 通过33项定向存储／回退测试（忽略3项既有权限案例）、2项真实进程读取器测试、TS／Swift 生成契约和类型检查。覆盖最新 Unicode／BOM／CRLF 字节、多草稿及删除、过期状态／草稿 revision、参数错误、损坏／不支持的存储、写租约争用／重试、幂等及配置／来源不写盘。CI 记录
 `rollback-export-core.json`。真实 Swift C ABI 场景首次因草稿准备遗漏 `expectedDraftRevision`
 而失败，现为新文档显式传入 null，仍严格拒绝缺少字段；源码949e4c2的两种 Mac 架构已通过修正后的真实 C
-ABI 检查。实际旧应用／数据替换仍在 #46 待完成。#47 汇总最终来源一致的证据和当前阶段缺口；两项任务均不授权合并或发布。手动触发的 Migration
-readiness audit 读取 GitHub 任务／PR／分支状态及当前 head 的 workflow
+ABI 检查。实际旧应用／数据替换仍在 #46 待完成。#47 汇总最终来源一致的证据和当前阶段缺口；两项任务均不授权合并或发布。Migration
+readiness audit 在迁移 PR
+#12 更新时或手动触发时读取 GitHub 任务／PR／分支状态及当前 head 的 workflow
 artifacts，核对准确源码／tested
 merge、干净报告、失败、不完整验收标志与 PNG 签名，并上传 migration-readiness.json。前置任务开放、CI 缺失／失败、产物过期或 tested
 merge 不一致均使门禁失败。报告清单不替代原图查看或任务验收；审计仅有仓库读取权限，不关闭 Issue、不合并、打标签、发布或改更新源。具备 GitHub 读取认证时，可运行
@@ -2771,7 +2772,7 @@ ZIP、独立 QA 标识与临时目录执行十个真实 SDK 场景。生成一�
 PID／窗口所有权及尺寸。权限不足／缺图即失败。源码 `3060c62d7712449bac2785a7bcf9c594a4bc936e`、merge
 `cc4c7d76fd7f575ae3437f95a902a1eb7cea83ba`
 的[run42257099719](https://github.com/YondFane/uTerm/actions/runs/42257099719)在两种 Mac 架构通过十个 SDK 场景；但查看重启原图发现终端仍显示缓存的空占位。这些图片证明窗口所有权，不能证明终端可见输出恢复。Canvas 缓存现包含终端视图身份，迟到的恢复视图会替换占位；重启及普通重连检查要求真实终端视图位于窗口内后才截图。修正后的 UI 检查仍须 Mac
-CI；#45 因新结果和传输／数据库组合保持开放。
+CI。安装测试还管理真实 PostgreSQL 集群，在长查询及未提交事务期间调用实际应用退出 delegate，要求拒绝退出、完成回滚且宿主／generation 不变。传输工作任务状态及更新器退出请求明确模拟，实际点击原生“保留窗口”按钮。最终真实 SDK 安装前，须保留四张拒绝窗口原图、原 PTY 的新输出及服务清理结果。新增组合仍待两种 Mac 架构运行；#45 因新平台结果保持开放。
 
 #### Windows 签名更新 QA
 

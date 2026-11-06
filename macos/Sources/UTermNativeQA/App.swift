@@ -125,7 +125,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 var report = baseReport()
                 do {
                     if Bundle.main.object(forInfoDictionaryKey: "UTermUpdateTestMode") as? String == "install" {
-                        try await UpdateInstallationSmoke.run(model: model, window: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report)
+                        try await UpdateInstallationSmoke.run(model: model, window: window,
+                            openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) },
+                            openSSH: { try await self.makeSSHWindow() }, openDatabase: { try await self.makeDatabaseWindow() },
+                            attemptQuit: { _ = self.applicationShouldTerminate(NSApp) }, report: &report)
                     } else { try await UpdatesSmoke.run(model: model, window: window, report: &report) }
                 }
                 catch { report["failure"] = error.localizedDescription }

@@ -197,8 +197,8 @@ Windows 签名更新 QA 使用 `python -B scripts/windows-updates-database.py`�
 CI。
 
 `python3 -B scripts/migration-readiness.py --head SOURCE_SHA`
-使用已认证的 GitHub 读取权限核对当前 head 的证据。仅手动触发的 Migration readiness
-audit 上传 JSON 报告；前置任务开放、证据缺失／失败／过期、验收不完整或 tested
+使用已认证的 GitHub 读取权限核对当前 head 的证据。Migration readiness audit 在迁移 PR
+#12 更新时或手动触发时上传 JSON 报告；前置任务开放、证据缺失／失败／过期、验收不完整或 tested
 merge 不一致均使门禁失败。它不修改 Issue，不执行合并或发版。
 
 内嵌 Java 8 编码 Agent 同时提供 Java 源码和可复现的运行时字节。修改后使用 JDK 21 运行

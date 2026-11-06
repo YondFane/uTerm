@@ -248,9 +248,10 @@ rollback data and service cleanup, scans evidence for temporary credentials and 
 production feed. Actual new guard results require Windows CI.
 
 `python3 -B scripts/migration-readiness.py --head SOURCE_SHA` audits current-head GitHub evidence
-with authenticated read access. The dispatch-only Migration readiness audit uploads its JSON report
-and fails for open prerequisites, missing/failed or stale evidence, incomplete acceptance and
-inconsistent tested merges. It performs no issue, merge or release mutations.
+with authenticated read access. The Migration readiness audit runs on updates to migration PR #12 or
+manual dispatches, uploads its JSON report and fails for open prerequisites, missing/failed or stale
+evidence, incomplete acceptance and inconsistent tested merges. It performs no issue, merge or
+release mutations.
 
 The embedded Java 8 encoding agent includes its Java source and reproducible runtime bytes. After
 changing it, use JDK 21 to run `python3 scripts/java8-encoding-agent.py`, then

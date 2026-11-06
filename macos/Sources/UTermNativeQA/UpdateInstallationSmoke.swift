@@ -4,7 +4,9 @@ import UTermBridge
 
 @MainActor
 enum UpdateInstallationSmoke {
-    static func run(model: WorkspaceModel, window: NSWindow, openFile: (URL, String) async throws -> ContentWindow, report: inout [String: Any]) async throws {
+    static func run(model: WorkspaceModel, window: NSWindow, openFile: (URL, String) async throws -> ContentWindow,
+                    openSSH: () async throws -> SSHWindow, openDatabase: () async throws -> ContentWindow,
+                    attemptQuit: () -> Void, report: inout [String: Any]) async throws {
         guard model.ready, let bridge = model.bridge, model.updates.configuration?.qa == true,
               let reportPath = Bundle.main.object(forInfoDictionaryKey: "UTermQAUpdateReport") as? String else { throw BridgeFailure(code: "UPDATE_INSTALL_CONTEXT", message: "Missing isolated install fixture") }
         let root = try WorkspaceModel.dataRoot().deletingLastPathComponent()
@@ -68,7 +70,10 @@ enum UpdateInstallationSmoke {
             }
             report["relaunchedWindowNumber"] = window.windowNumber
             report["captureCoordinator"] = "original CI process tree; actual WindowServer owner PID/window number verified"
-            report["captures"] = [capture]
+            guard baseline["quitGuards"]["actualPostgreSQLQueryQuitRefused"].bool == true,
+                  baseline["quitGuards"]["actualTransactionQuitRefused"].bool == true else { throw BridgeFailure(code: "UPDATE_INSTALL_GUARDS", message: "Pre-install guard evidence is missing") }
+            report["quitGuards"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(baseline["quitGuards"]))
+            report["captures"] = [capture] + baseline["quitGuards"]["captures"].array.compactMap(\.string)
             await model.closeSession(); _ = try await bridge.call("host.shutdownIdle")
             report["explicitFixtureCloseAndIdleHostShutdown"] = true
             return
@@ -79,6 +84,8 @@ enum UpdateInstallationSmoke {
         await model.newTerminal()
         try await TerminalSmoke.wait("Start retained installation PTY") { model.selectedTerminal?.generation != nil && (model.selectedTerminal?.qaRenderedFrames ?? 0) > 0 }
         guard let terminal = model.selectedTerminal, let generation = terminal.generation else { throw BridgeFailure(code: "UPDATE_INSTALL_PTY", message: "Missing installation PTY") }
+        let guards = try await UpdateQuitGuardSmoke.run(model: model, window: window, openSSH: openSSH,
+            openDatabase: openDatabase, attemptQuit: attemptQuit, evidence: URL(fileURLWithPath: reportPath).deletingLastPathComponent())
         try Data("BEFORE_INSTALL\n".utf8).write(to: root.appendingPathComponent("upgrade.txt"))
         let content = try await openFile(root, "upgrade.txt")
         try await ContentSmoke.wait(content, "document.querySelector('.cm-content[contenteditable=true]') !== null")
@@ -87,7 +94,7 @@ enum UpdateInstallationSmoke {
         guard try String(contentsOf: root.appendingPathComponent("upgrade.txt"), encoding: .utf8) == "BEFORE_INSTALL\n" else { throw BridgeFailure(code: "UPDATE_INSTALL_DRAFT", message: "Fixture did not retain a real unsaved editor draft") }
         let status = try await bridge.call("host.status")
         guard let hostPID = status["pid"].number, hostPID > 0 else { throw BridgeFailure(code: "UPDATE_INSTALL_HOST", message: "Missing retained host PID") }
-        try JSONSerialization.data(withJSONObject: ["oldVersion": "1", "originalAppPID": ProcessInfo.processInfo.processIdentifier, "hostPID": hostPID, "sessionID": terminal.id, "generation": generation], options: .sortedKeys).write(to: checkpoint, options: .atomic)
+        try JSONSerialization.data(withJSONObject: ["oldVersion": "1", "originalAppPID": ProcessInfo.processInfo.processIdentifier, "hostPID": hostPID, "sessionID": terminal.id, "generation": generation, "quitGuards": guards], options: .sortedKeys).write(to: checkpoint, options: .atomic)
         let driver = NativeUpdateTestDriver(mode: "install")
         try model.updates.configureTestDriver(driver)
         model.updates.check()

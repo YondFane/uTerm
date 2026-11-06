@@ -44,7 +44,7 @@ def validate_capture_request(request, head, tested, identity, original_pid):
     assert request["screenshot"] == "native-update-install-relaunched.png"
 
 
-def exercise(source, folder, evidence, signer, mode, head, tested, capture_tool):
+def exercise(source, folder, evidence, signer, mode, head, tested, capture_tool, database_fixture=None):
     root = folder / ("uterm-native-qa-" + mode)
     root.mkdir()
     identity = "sh.uterm.desktop.qa.native.update." + uuid.uuid4().hex
@@ -153,8 +153,11 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
         process = None
         try:
             with (case_dir / "stdout.log").open("w") as out, (case_dir / "stderr.log").open("w") as err:
-                process = subprocess.Popen([str(app / "Contents/MacOS/UTermNativeQA"), "--qa-data-root", str(root), "--updates-smoke-report", str(report)], stdout=out, stderr=err)
-                code = process.wait(timeout=220)
+                environment = dict(os.environ)
+                if database_fixture:
+                    environment["UTERM_QA_DATABASE_FIXTURE"] = str(database_fixture)
+                process = subprocess.Popen([str(app / "Contents/MacOS/UTermNativeQA"), "--qa-data-root", str(root), "--updates-smoke-report", str(report)], stdout=out, stderr=err, env=environment)
+                code = process.wait(timeout=300 if mode == "install" else 220)
             if mode == "install":
                 deadline = time.monotonic() + 120
                 handled = False
@@ -184,6 +187,12 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
             assert data["realSparkleSDK"] == "2.10.1" and data["simulatedUserDriver"]
             assert not data["productionDataAccess"] and not data["productionFeedChanged"]
             assert data["actualInstallOrRelaunchExecuted"] == (mode == "install")
+            if mode == "install":
+                assert data["retainedTerminalVisibleInRelaunchedWindow"] is True
+                for field in ["actualPostgreSQLQueryQuitRefused", "actualTransactionQuitRefused", "rollbackRetainedOriginalData",
+                              "simulatedTransferWorkerState", "actualKeepWindowOpenButton", "actualApplicationTerminationDelegate",
+                              "updateTerminationRequestSimulated", "sameHostAndGeneration"]:
+                    assert data["quitGuards"][field] is True, field
             if mode == "install":
                 assert data["actualEditorQuitAutosaveRetainedBytes"] and data["explicitFixtureCloseAndIdleHostShutdown"]
                 assert data["originalAppPID"] == process.pid and data["relaunchedAppPID"] != process.pid
@@ -244,6 +253,7 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
 
 
 def main():
+    from database_qa_service import DatabaseService
     assert platform.system() == "Darwin"
     source = Path("macos/.build/qa/UTermNativeQA.app").resolve()
     evidence = Path("macos/.build/evidence/updates").resolve(); evidence.mkdir(parents=True, exist_ok=True)
@@ -268,7 +278,22 @@ def main():
         capture_tool = folder / "owned-window-capture"
         run("xcrun", "swiftc", Path("scripts/macos-owned-window-capture.swift").resolve(), "-o", capture_tool)
         for mode in ("good", "bad-signature", "wrong-arch", "wrong-channel", "old-version", "cancel", "offline", "interrupted", "automatic", "install"):
-            try: results.append(exercise(source, folder, evidence, signer, mode, head, tested, capture_tool))
+            try:
+                if mode == "install":
+                    service = DatabaseService(folder, evidence / "database-service")
+                    try:
+                        service.start()
+                        result = exercise(source, folder, evidence, signer, mode, head, tested, capture_tool, service.context)
+                        assert service.sql("SELECT note FROM qa_exact WHERE id=1") == "ORIGINAL_DATABASE_TEXT"
+                        assert service.sql("SELECT count(*) FROM pg_stat_activity WHERE usename='uterm_qa' "
+                                           "AND pid<>pg_backend_pid() AND backend_type='client backend'") == "0"
+                        service.verified = result["passed"]
+                        service.report.update(rollbackRetainedOriginalData=True, noRemainingClientConnections=True)
+                    finally:
+                        service.close()
+                    results.append(result)
+                else:
+                    results.append(exercise(source, folder, evidence, signer, mode, head, tested, capture_tool))
             except Exception as error:
                 item = {"mode": mode, "passed": False, "failure": str(error)}
                 case_report = evidence / mode / "sdk-native.json"
@@ -283,7 +308,7 @@ def main():
                   toolchain=dict(swift=run("xcrun", "swift", "--version").decode().strip(), xcode=run("xcodebuild", "-version").decode().strip(), rust=run("rustc", "--version").decode().strip()),
                   simulatedUserDriver=True, actualInstallOrRelaunchExecuted=any(item.get("actualInstallOrRelaunchExecuted", False) for item in results),
                   actualInstallationAccepted=any(item["mode"] == "install" and item["passed"] for item in results), productionFeedChanged=False,
-                  remaining=["Transfer/database update-quit combinations and Windows signed updates require separate acceptance"])
+                  remaining=["Transfer worker states and requests to the actual application termination delegate are explicitly simulated; PostgreSQL and final SDK installation are real"])
     (evidence / "sdk-summary.json").write_text(json.dumps(result, ensure_ascii=False, indent=2)+"\n")
     print(json.dumps(result, ensure_ascii=False))
     if not result["passed"]: raise SystemExit(1)

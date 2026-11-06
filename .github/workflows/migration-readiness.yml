@@ -1,6 +1,8 @@
 name: Migration readiness audit
 
 on:
+  pull_request:
+    branches: [release]
   workflow_dispatch:
 
 permissions:
@@ -11,6 +13,7 @@ permissions:
 
 jobs:
   audit:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.number == 12
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -18,12 +21,13 @@ jobs:
       - name: Reject stale or incomplete evidence
         env:
           GH_TOKEN: ${{ github.token }}
+          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           python3 -B -m unittest discover -s tests -p test_migration_readiness.py
-          python3 -B scripts/migration-readiness.py --head "$GITHUB_SHA"
+          python3 -B scripts/migration-readiness.py --head "$SOURCE_HEAD"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: migration-readiness-${{ github.sha }}
+          name: migration-readiness-${{ github.event.pull_request.head.sha || github.sha }}
           path: ci-evidence/readiness/
           if-no-files-found: error
