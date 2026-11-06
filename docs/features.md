@@ -1744,6 +1744,13 @@ processes and inspected evidence. Artifacts:
 [Tauri Windows](https://github.com/YondFane/uTerm/actions/runs/42106743169/artifacts/13453800420).
 This baseline does not accept the newly expanded cases below.
 
+At source `554108e`, native ARM64 application checks complete, but the wrapper fails its clean-tree
+guard after Python imports generate bytecode. That run is not accepted as a successful platform
+result
+([artifact](https://github.com/YondFane/uTerm/actions/runs/42138845602/artifacts/13467781560)). The
+harness uses `python3 -B` to avoid creating bytecode while retaining the clean-tree guard;
+validation of the fix remains pending.
+
 The expanded cases browse a real 20,001-member list with 200 rendered and returned rows per page;
 the missing edit snapshot keeps member update/delete controls disabled above the 10,000-member
 limit. Final checks confirm the large list is unchanged. Separate cases use 401 editable list

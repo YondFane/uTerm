@@ -9,7 +9,7 @@ if [ ! -x "$native_redis_prefix/bin/redis-server" ]; then
   HOMEBREW_NO_AUTO_UPDATE=1 brew install redis
 fi
 export UTERM_QA_REDIS_SERVER="$native_redis_prefix/bin/redis-server"
-python3 - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" <<'PY'
+python3 -B - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" <<'PY'
 import hashlib, json, os, secrets, socket, subprocess, sys, tempfile, time
 from pathlib import Path
 sys.path.insert(0, 'scripts')
@@ -94,7 +94,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-redis-') as directory:
         report.update(passed=True, testedMergeSHA=report['sourceSHA'], sourceTreeDirty=bool(subprocess.check_output(['git', 'status', '--porcelain'])), processExitCode=code,
                       redisVersion=subprocess.check_output([str(binary), '--version'], text=True).strip(),
                       redisBinarySHA256=hashlib.sha256(binary.read_bytes()).hexdigest(), realRedisDataVerifiedAfterAppExit=True)
-        assert not report['sourceTreeDirty']
+        assert not report['sourceTreeDirty'], subprocess.check_output(['git', 'status', '--porcelain'], text=True)
         assert report['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', report['sourceHeadSHA'])
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n')
     finally:
