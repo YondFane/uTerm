@@ -99,15 +99,19 @@ final class WorkspaceModel: ObservableObject {
     func measureToolbar(_ height: CGFloat) { if abs(toolbarHeight - height) > 0.1 { toolbarHeight = height } }
 
     static func dataRoot() throws -> URL {
-        guard Bundle.main.bundleIdentifier == "sh.uterm.desktop.qa.native" else {
+        let identifier = Bundle.main.bundleIdentifier ?? ""
+        let updateFixture = identifier.hasPrefix("sh.uterm.desktop.qa.native.update.")
+        let embeddedRoot = Bundle.main.object(forInfoDictionaryKey: "UTermQADataRoot") as? String
+        guard identifier == "sh.uterm.desktop.qa.native" || (updateFixture && embeddedRoot != nil) else {
             throw BridgeFailure(code: "QA_IDENTITY", message: "Native QA requires its isolated bundle identity")
         }
-        if let path = argument("--qa-data-root") {
+        if let path = argument("--qa-data-root") ?? (updateFixture ? embeddedRoot : nil) {
             let root = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
             let temporary = FileManager.default.temporaryDirectory.standardizedFileURL.resolvingSymlinksInPath()
             guard root.path.hasPrefix(temporary.path + "/"), root.lastPathComponent.hasPrefix("uterm-native-qa-") else {
                 throw BridgeFailure(code: "QA_DIRECTORY", message: "QA override must be a private temporary test directory")
             }
+            if updateFixture, let embeddedRoot, root != URL(fileURLWithPath: embeddedRoot).standardizedFileURL.resolvingSymlinksInPath() { throw BridgeFailure(code: "QA_DIRECTORY", message: "Update fixture cannot select another data root") }
             return root.appendingPathComponent("shared-state-v1", isDirectory: true)
         }
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)

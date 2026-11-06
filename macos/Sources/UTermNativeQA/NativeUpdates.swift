@@ -8,11 +8,14 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
     @Published private(set) var status = ""
     private(set) var configuration: NativeUpdateConfiguration?
     private(set) var controller: SPUStandardUpdaterController?
+    private var testUpdater: SPUUpdater?
+    var updater: SPUUpdater? { testUpdater ?? controller?.updater }
     private var started = false
     private var automatic = false
     private var appliedAutomatic: Bool?
     private(set) var qaEvents: [String] = []
     private(set) var qaLastError = ""
+    private(set) var qaPolicyRejected = ""
     var available: Bool { configuration != nil }
 
     override init() {
@@ -30,13 +33,13 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
     }
     func apply(_ settings: JSONValue) {
         automatic = settings["automaticUpdates"].bool == true
-        guard available, automatic || controller != nil else { return }
+        guard available, automatic || updater != nil else { return }
         do { try start() } catch { self.error = error.localizedDescription }
     }
     private func start() throws {
         guard configuration != nil else { throw BridgeFailure(code: "UPDATES_UNAVAILABLE", message: localized("Update checks are unavailable for this build.", "此构建暂不提供更新检查。")) }
-        if controller == nil { controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil) }
-        guard let updater = controller?.updater else { return }
+        if updater == nil { controller = SPUStandardUpdaterController(startingUpdater: false, updaterDelegate: self, userDriverDelegate: nil) }
+        guard let updater else { return }
         if appliedAutomatic != automatic {
             // Shared settings are canonical; Sparkle must not revive a cached automatic opt-in.
             // 共享设置是唯一来源，Sparkle 不能恢复缓存中的自动更新授权。
@@ -49,17 +52,24 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
     func check() {
         do {
             try start()
-            guard let controller, controller.updater.canCheckForUpdates else { return }
-            error = ""; status = localized("Checking for updates…", "正在检查更新…")
-            controller.checkForUpdates(nil)
+            guard let updater, updater.canCheckForUpdates else { return }
+            error = ""; qaLastError = ""; status = localized("Checking for updates…", "正在检查更新…")
+            updater.checkForUpdates()
         } catch { self.error = error.localizedDescription }
+    }
+    func configureTestDriver(_ driver: any SPUUserDriver) throws {
+        guard Bundle.main.bundleIdentifier?.hasPrefix("sh.uterm.desktop.qa.native.update.") == true,
+              configuration?.qa == true, updater == nil, !started else { throw BridgeFailure(code: "UPDATE_QA_CONTEXT", message: "SDK test driver requires a fresh isolated update application") }
+        _ = try WorkspaceModel.dataRoot()
+        testUpdater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: self)
     }
     func feedURLString(for updater: SPUUpdater) -> String? { configuration?.feed.absoluteString }
     func allowedChannels(for updater: SPUUpdater) -> Set<String> { Set(configuration.map { [$0.channel] } ?? []) }
     func updaterShouldPromptForPermissionToCheck(for updater: SPUUpdater) -> Bool { false }
     func updater(_ updater: SPUUpdater, shouldProceedWithUpdate item: SUAppcastItem, updateCheck: SPUUpdateCheck) throws {
         guard let configuration, let url = item.fileURL else { throw BridgeFailure(code: "UPDATE_TARGET", message: "Missing update archive") }
-        try configuration.validateArchive(url, platform: item.propertiesDictionary["uterm:platform"] as? String, architecture: item.propertiesDictionary["uterm:architecture"] as? String, channel: item.channel)
+        do { try configuration.validateArchive(url, platform: item.propertiesDictionary["uterm:platform"] as? String, architecture: item.propertiesDictionary["uterm:architecture"] as? String, channel: item.channel) }
+        catch let failure as BridgeFailure { qaPolicyRejected = failure.code; throw failure }
         qaEvents.append("target-accepted:" + item.versionString)
     }
     func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) { status = localized("Update available: ", "发现新版本：") + item.displayVersionString; qaEvents.append("found:" + item.versionString) }

@@ -108,6 +108,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--updates-smoke-report") {
+                var report = baseReport()
+                do { try await UpdatesSmoke.run(model: model, window: window, report: &report) }
+                catch { report["failure"] = error.localizedDescription }
+                if let bridge = model.bridge {
+                    do {
+                        for session in try await bridge.call("host.status")["sessions"].array { _ = try await bridge.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]])) }
+                        _ = try await bridge.call("host.shutdownIdle")
+                    } catch { report["cleanupError"] = error.localizedDescription }
+                }
+                await model.shutdown(); terminating = true
+                finishReport(report, path: path); return
+            }
             if let path = WorkspaceModel.argument("--candidate-smoke-report") {
                 var report = baseReport()
                 do { try await CandidateSmoke.run(model: model, window: window, report: &report) }

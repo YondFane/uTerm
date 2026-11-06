@@ -171,6 +171,10 @@ workflow 执行。程序比较只允许 Tauri 唯一的 NSIS 类型标记变换�
 `macos-native-build.sh`
 嵌入签名框架／辅助程序及许可证，使用包内相对运行路径。普通 QA 构建不配置更新源或公钥，不启动更新器；配置的 QA 更新源必须使用字面回环主机。候选检查核对框架／辅助程序架构、最低系统、签名及只读资源。SDK 运行／更新验收在 #45 单独跟踪，不以依赖编译替代。
 
+`python3 -B scripts/macos-updates-smoke.py`
+使用分别标识的原生 QA 应用、临时数据、一次性 CryptoKit 密钥及回环更新源运行真实 SDK。脚本下载经过哈希固定的官方签名工具，检查有效／无效签名、平台／渠道／版本拒绝、取消、中断／离线下载及重试。用户决定明确由模拟 SDK 驱动控制；安装／重启及自动调度仍须单独验收。报告、真实窗口原图、HTTP 日志及有效签名测试 ZIP 归档在
+`updates/`，私钥不上传。
+
 内嵌 Java 8 编码 Agent 同时提供 Java 源码和可复现的运行时字节。修改后使用 JDK 21 运行
 `python3 scripts/java8-encoding-agent.py`，再执行
 `python3 scripts/java8-encoding-agent.py --check`。正常 Rust／应用构建不需要 Java 编译器；Windows 互操作 CI 核对资产并运行实际所选 JDK。

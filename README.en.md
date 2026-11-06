@@ -201,6 +201,14 @@ updater; configured QA feeds must use literal loopback hosts. Candidate checks a
 framework/helper architectures, minimum OS, signatures and read-only resources. SDK runtime/update
 acceptance is tracked separately from dependency compilation in #45.
 
+`python3 -B scripts/macos-updates-smoke.py` runs the actual SDK in separately identified native QA
+apps with temporary data, one-time CryptoKit keys and loopback feeds. It downloads the
+checksum-pinned official signing toolkit and exercises valid/invalid signatures,
+platform/channel/version rejection, cancellation, interrupted/offline download and retry. User
+decisions use an explicitly simulated SDK driver; installing/relaunching and automatic scheduling
+remain separate acceptance. Reports, original windows, HTTP logs and the valid signed test ZIP are
+archived under `updates/`; private keys are never uploaded.
+
 The embedded Java 8 encoding agent includes its Java source and reproducible runtime bytes. After
 changing it, use JDK 21 to run `python3 scripts/java8-encoding-agent.py`, then
 `python3 scripts/java8-encoding-agent.py --check`. Normal Rust/application builds need no Java

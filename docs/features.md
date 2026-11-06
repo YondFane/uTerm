@@ -4652,6 +4652,17 @@ download/signature/version/cancel/retry/install/relaunch acceptance remain pendi
 compilation alone does not satisfy them. The focused Tauri hook test passes the opt-out startup,
 manual check and existing installation guard/failure cases.
 
+`python3 -B scripts/macos-updates-smoke.py` runs eight actual SDK checks using private loopback
+feeds, signed App ZIPs and unique QA identifiers with validated temporary roots. It generates
+one-time CryptoKit keys, verifies the official signing toolkit's pinned hash, and retains only the
+public key/signature in evidence. The simulated user driver accepts/cancels SDK callbacks; it does
+not replace downloading, signature verification, extraction or target validation. Valid,
+bad-signature, wrong-architecture/channel, old-version, cancel, offline and interrupted scenarios
+retain HTTP logs, reports and actual app screenshots; network failures also require a successful
+actual SDK retry. The first SDK scenario CI run is pending. This suite explicitly does not yet
+execute installation, relaunch or automatic scheduling, and #45 remains open for those checks and
+Windows signed updates.
+
 #### Windows/Tauri automatic installation
 
 Settings → Software update → Automatic updates is off by default and persists across restarts. In

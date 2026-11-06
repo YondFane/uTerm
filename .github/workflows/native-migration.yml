@@ -106,6 +106,10 @@ jobs:
         id: settings-preferences
         continue-on-error: true
         run: bash scripts/macos-settings-smoke.sh
+      - name: Real Sparkle SDK with loopback signed archives and simulated user choices
+        id: sdk-updates
+        continue-on-error: true
+        run: python3 -B scripts/macos-updates-smoke.py 2>&1 | tee macos/.build/evidence/updates-command.log
       - name: Real native files, search, pane swap, zoom and focus screenshots
         id: inspector-controls
         continue-on-error: true
@@ -140,9 +144,9 @@ jobs:
       - name: Real native control and standalone CLI smoke
         run: bash scripts/macos-control-smoke.sh
       - name: Preserve independent candidate and controls failures
-        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure') }}
+        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure') }}
         run: |
-          echo "Candidate, settings, inspector or GitHub checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
+          echo "Candidate, settings, SDK, inspector or GitHub checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
           exit 1
       - name: Audit source-bound native interaction matrix
         if: ${{ always() && steps.native_build.outcome == 'success' }}

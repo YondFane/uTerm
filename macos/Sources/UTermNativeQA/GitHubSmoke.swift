@@ -52,7 +52,7 @@ enum GitHubSmoke {
         try await ContentSmoke.wait(content, "document.querySelector('[role=alert]')?.textContent.includes('fixture is offline') === true", allowAlert: true)
         try FileManager.default.removeItem(at: temporary.appendingPathComponent("github-offline"))
         try await EditorSmoke.click(content, title: "Issues")
-        try await ContentSmoke.wait(content, "document.querySelector('.github-items button')?.textContent.includes('#7') === true && !document.querySelector('[role=alert]')")
+        try await ContentSmoke.wait(content, "document.querySelector('.github-items button')?.textContent.includes('#7') === true && !document.querySelector('[role=alert]')", allowAlert: true)
         report["nativeGithubOfflineFailureVisibleAndRetryRecovered"] = true
         try await EditorSmoke.click(content, title: "Pull Requests")
         try await ContentSmoke.wait(content, "document.querySelector('.github-items button')?.textContent.includes('#8') === true")
