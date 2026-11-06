@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "sessions": 1,
   "cycles": 20,
   "warmupCycles": 5,
@@ -20,6 +20,6 @@
   "windowWidth": 1200,
   "windowHeight": 720,
   "columns": 120,
-  "rows": 36,
+  "rows": 30,
   "unicodeText": "中文 é"
 }

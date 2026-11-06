@@ -92,8 +92,8 @@ captures inspected. Mac uses Xcode16.4, Swift6.1.2 and Rust1.99.1; Windows uses 
 pnpm11.22.0, PowerShell7.6.9 and Rust1.99.1. Reports, artifacts and the exact checks are linked in
 [#44](https://github.com/YondFane/uTerm/issues/44#issuecomment-6686879466), now accepted on the task
 branch. At that candidate source, separate #41/#45 checks failed; candidate success is not an
-overall workflow pass. #41 is now separately accepted at source949e4c2; update acceptance remains
-open.
+overall workflow pass. #41 is separately accepted at source949e4c2; #42/#45 are accepted at
+sourceec1a49d, with the simulation/manual-waiver boundaries in their completion comments.
 
 Native Apps are ad-hoc signed, their Sparkle framework retains its vendor signatures, and neither
 Apple Developer signing nor notarization is available. Windows candidates are unsigned; neither
@@ -107,7 +107,7 @@ these checks do not publish or change production sources.
 
 The Client performance evidence workflow runs native and Tauri clients sequentially on the same Mac,
 with three repetitions per client, and records a separate Windows Tauri baseline. Version3 of
-`shared/fixtures/client-performance.json` fixes one real PTY, a 120×36 grid, 14pt text and
+`shared/fixtures/client-performance.json` fixes one real PTY, a 120×30 grid, 14pt text and
 5,000-line scrollback. Both clients use their ordinary renderer-to-PTY resize paths; a mismatched or
 clipped grid fails the report. Twenty cycles exercise 1,024 ordered ANSI/Unicode records, 64KiB CAS
 file save/read and actual attachment replay without replacing the process generation. The first five
@@ -141,17 +141,20 @@ multi-hour leak freedom.
 #### Measurement validation
 
 Local report tests reject stale source/workload, imprecise sequence, missing rows/TUI samples,
-insufficient soak, missing slow-consumer evidence and unequal grids. Actual version3 macOS and
+insufficient soak, missing slow-consumer evidence and unequal grids. Actual version4 macOS and
 Windows measurements remain pending; #43 stays open and no improvement percentage is claimed.
-Earlier version2 reports are not evidence for the additional workload. Native fitting uses the
-window content rect and records every actual window/view/grid attempt. ARM CI revealed that its
-visible desktop caps the window at 684px, preventing 36 rows. In owned GitHub Actions desktops only,
-a public CoreGraphics helper selects a supported mode of at least 1280×900 before both clients and
-restores the original mode in cleanup; unavailable modes fail. It does not change a local Mac's
-screen. Windows receives the actual Git Bash path from the running workflow shell and also handles
-Git's mingw64 layout, without selecting WSL. The SQL output column uses a distinct alias so ORDER BY
-sorts the numeric series, rather than its text projection. The original run42272314429 failures
-remain; corrected platform results are pending.
+Earlier workload versions are not accepted as version4 evidence. Native fitting records each actual
+window/view/grid attempt. The ARM CI display remained capped at 684px even after CoreGraphics
+reported a larger mode; those failed runs are retained. Version4 uses the same 120×30 grid on all
+clients, fitting the original CI desktop without changing screen modes, fonts, workload volume or
+clipping checks. Windows receives the real Git Bash path and handles Git's mingw64 layout. SQL
+orders the numeric series through a distinct output alias. Corrected platform measurements remain
+pending.
+
+The Windows contract test now waits for its Core process and streams to close before deleting owned
+data, with bounded retries for released Windows handles. A failed preceding desktop step still
+produces an interaction-matrix failure report instead of losing it to a missing directory. These
+failures remain failures; retrying cleanup does not convert skipped scenes to passes.
 
 Explicit detach releases its authenticated input lease before returning, including when the old
 consumer is blocked. A per-link lock prevents late heartbeat/takeover from reclaiming a stopped
@@ -165,9 +168,11 @@ failed runs rather than replacing their images or treating earlier timings as a 
 
 Migration acceptance remains open in [#13](https://github.com/YondFane/uTerm/issues/13). M3 #17 was
 closed at the user's direction, retaining persistent-layout/PDF-mark and Windows run-panel/picker
-coverage gaps. Database, Redis, Agent and settings acceptance is recorded in #38–#41. M4 has four of
-six tasks closed; #42 interaction regression and #43 performance evidence remain open. M5 candidate
-packaging #44 is accepted; updates, upgrade/rollback and final gates remain open in #45–#47.
+coverage gaps. Database, Redis, Agent and settings acceptance is recorded in #38–#41. M4 has five of
+six tasks closed; #42 interaction recording is accepted with labelled simulations and the user
+waiving final human checks. #43 performance evidence remains open. M5 packaging #44 and updates #45
+are accepted; upgrade/rollback #46 and final gates #47 remain open. Original implementation gaps
+remain visible and prevent a stable-cutover claim.
 
 Redis paging, deletion, TTL, quit-cancellation and OS-credential checks are accepted at source
 `940f8d1`, with platform reports and screenshots in
@@ -4792,23 +4797,24 @@ records and rejects requests before opt-in. Bad-signature acceptance requires th
 bounded `SUValidationError` cause `EdDSA signature does not match.`; unrelated errors fail. Bridge
 negative tests cover that boundary.
 
-Relaunch capture uses the original CI coordinator's process tree. Source/merge/identity and fixed
-filename are checked, and a Swift helper independently verifies exact WindowServer PID/window
-ownership and dimensions. Missing permission/image fails. At source
-`3060c62d7712449bac2785a7bcf9c594a4bc936e`, merge `cc4c7d76fd7f575ae3437f95a902a1eb7cea83ba`, both
-Mac architectures pass the ten SDK cases in
-[run42257099719](https://github.com/YondFane/uTerm/actions/runs/42257099719). Inspection of their
-original relaunch images nevertheless reveals a cached empty terminal placeholder. Those images
-prove capture ownership, not restored visible terminal output. Canvas caching now includes terminal
-view identity so a late restored view replaces its placeholder; relaunch and ordinary reconnect
-checks require the actual terminal view inside the window before capture. These corrected UI checks
-still require Mac CI. The install fixture additionally owns a real PostgreSQL cluster, invokes the
-actual application termination delegate during a long query and an uncommitted transaction, and
-requires refusal, rollback and unchanged host/generation. Transfer worker states and the updater's
-termination requests are explicitly simulated; the native Keep window open button is actually
-clicked. Four original refusal windows, the retained PTY's fresh output and service cleanup are
-required before the final real SDK installation. These added combinations await both Mac
-architectures. #45 remains open for the updated platform results.
+Relaunch capture uses the original CI coordinator's process tree and verifies exact source, bundle
+identity, owner PID/window number and dimensions. Missing permission/image fails. Canvas caching
+includes the actual terminal view identity, and both ordinary reconnect and update relaunch require
+that view inside the visible window. The install fixture owns a real PostgreSQL cluster and invokes
+the actual termination delegate during a long query and an uncommitted transaction. Refusal,
+rollback, unchanged host/generation and database cleanup are required. Transfer worker states and
+updater termination requests are labelled simulations; the native Keep window open button is real.
+
+At source `ec1a49df9fe7eb0ed75a2f23efcb9883dd36fb21`, tested merge
+`cfd088ed91d8038dcae8e686a67b1812e87d7181`, both complete jobs in
+[run42272314439](https://github.com/YondFane/uTerm/actions/runs/42272314439) pass all ten SDK cases
+on macOS15.8.2 ARM64 and15.7.9 Intel with Xcode16.4/Swift6.1.2/Rust1.99.1. The
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42272314439/artifacts/13533506603) and
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42272314439/artifacts/13533773218)
+contain updates/sdk-summary.json, install/sdk-native.json, four protection-window images and
+native-update-install-relaunched.png. Original ARM relaunch and Intel query-refusal images were
+inspected; retained output and QUIT_REFUSED are visible. #45 is accepted on the task branch. Old
+empty-placeholder captures remain failed restoration evidence; they are not reused as passes.
 
 #### Windows signed updater QA
 
@@ -4824,28 +4830,30 @@ The suite covers the real startup opt-out interval, old versions, wrong architec
 signatures, offline/retry, interrupted Range resume, editor/database draft guards, manual checking,
 automatic download/confirmation, Cancel and durable opt-out. Installation uses the real updater,
 then verifies a different app PID, retained host/generation, exact Core draft bytes and fresh PTY
-input. Draft input and dirty guard flags are explicitly simulated. Transfer/full database
-combinations remain separate. Input leases are released before an installer can exit directly;
-host/PTYS remain alive. QA closes its actual terminal and stops only its owned idle host. Cleanup
-failures retain logs and reports. Only bounded read-only observations retry writer contention;
-writes retain their existing conflicts and the explicit Retry saving settings control.
+input. Draft input and dirty guard flags are explicitly simulated. The real transfer registry uses a
+labelled simulated worker; cancellation remains protected until completion. Real PostgreSQL queries
+and uncommitted transactions reject installation, with original data retained after rollback and all
+connections closed. Input leases are released before an installer can exit directly; host/PTYS
+remain alive. QA closes its actual terminal and stops only its owned idle host. Cleanup failures
+retain logs and reports. Only bounded read-only observations retry writer contention; writes retain
+their existing conflicts and the explicit Retry saving settings control.
 
-Windows source `ffc5ade4638981577895cbd92c65779f3837ed81`, merge
-`31e7e6e57170e783c8719934541a20a29aeff0db`, completes all eleven scenes, signed installation, normal
-exit and uninstall with no cleanup errors in
-[run42260767189](https://github.com/YondFane/uTerm/actions/runs/42260767189). The original installed
-window was inspected. Packages, public signatures, HTTP logs, source/merge metadata and windows are
-in
-[artifact13524947434](https://github.com/YondFane/uTerm/actions/runs/42260767189/artifacts/13524947434).
-Private keys remain outside evidence; packages have updater signatures, not Authenticode signatures.
+Windows uses the same source/merge above. All fourteen scenes, actual signed 0.2.4→0.2.5
+installation, normal exit and uninstall pass in
+[run42272314528](https://github.com/YondFane/uTerm/actions/runs/42272314528), with cleanupErrors=[]
+on WindowsServer2025 x64/PostgreSQL17.11/Java21/Node24.22.2/pnpm11.22/Rust1.99.1.
+[Artifact13531895866](https://github.com/YondFane/uTerm/actions/runs/42272314528/artifacts/13531895866)
+contains sdk-summary.json, fourteen updates-*.json/png scenes, database cleanup, packages and public
+signatures. Both package hashes were independently recomputed, and the original relaunch window was
+inspected with fresh SDK_UPDATED output. Protection RPC/report checks prove database and transfer
+refusal; an ordinary window capture is not a SQL-interface screenshot. Private keys stay outside
+artifacts; updater signatures do not provide Authenticode.
 
-A newer source `b353cc2` fails automatic download with a busy status-read error in
-[run42261801613](https://github.com/YondFane/uTerm/actions/runs/42261801613). Toggling the automatic
-preference had reread startup status while the real download held the updater lock. Startup status
-is now observed once; later preference changes use the existing automatic flow. The focused
-regression reproduces the old failure and passes the correction, preserving default opt-out,
-explicit retry, Cancel and installation guards. Fresh Windows evidence is required; the earlier pass
-is not assigned to the newer commit.
+Startup status is observed once so later automatic-preference changes cannot race an in-progress
+download's lock. The focused regression fails the old implementation and passes the correction; the
+source-bound Windows run above also passes the actual automatic flow. Default opt-out, explicit
+retry, Cancel and installation guards remain intact. #45 is completed under the documented
+simulation/manual-waiver scope; no production update feed or release is changed.
 
 #### Windows/Tauri automatic installation
 

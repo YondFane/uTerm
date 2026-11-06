@@ -209,11 +209,11 @@ checksum-pinned official signing toolkit and exercises valid/invalid signatures,
 platform/channel/version rejection, cancellation, interrupted/offline download and retry. User
 decisions use an explicitly simulated SDK driver; shared opt-in/opt-out exercises the actual SDK
 scheduler. A separate case performs actual SDK replacement/relaunch, real editor quit autosave and
-retained-host reconnection; its platform results remain pending CI. Reports, original windows, HTTP
-logs and the valid signed test ZIP are archived under `updates/`; private keys are never uploaded.
-The original CI coordinator captures the relaunched process only after matching source, bundle
-identity and WindowServer owner PID/window number; missing permission or images remains a failed
-acceptance.
+retained-host reconnection; both Mac architectures pass at sourceec1a49d. Reports, original windows,
+HTTP logs and the valid signed test ZIP are archived under `updates/`; private keys are never
+uploaded. The original CI coordinator captures the relaunched process only after matching source,
+bundle identity and WindowServer owner PID/window number; missing permission or images remains a
+failed acceptance.
 
 `node scripts/windows-updates-smoke.mjs` requires Windows/WebView2 and builds isolated 0.2.4/0.2.5
 QA NSIS packages. One-time test keys sign the update, and a private literal-loopback server drives
@@ -221,8 +221,10 @@ actual updater check/download/verification/install/relaunch. Real settings contr
 checking, automatic opt-in/download, cancellation and opt-out. Core draft input and the editor dirty
 flag are explicitly simulated; persistence, the live PTY/host and installer remain real. Evidence
 under `ci-evidence/updates-windows` includes public signatures, packages, HTTP logs, source/merge
-metadata and actual QA windows. Private keys stay outside artifacts. CI results and
-transfer/database guards remain separate acceptance requirements in #45.
+metadata and actual QA windows. Private keys stay outside artifacts. At sourceec1a49d, Windows
+passes fourteen scenes including real PostgreSQL query/transaction protection and a real transfer
+registry with a simulated worker. #45 records exact head/merge, artifacts and simulation boundaries;
+it is accepted on the task branch, without a production update or release.
 
 Core `rollback.export` creates a read-only, revision-bound archive of canonical state and every
 current editor draft without changing `legacy.export`. Old clients have one draft slot: multiple
@@ -233,7 +235,7 @@ old-client installation and program/data rollback remain tracked in #46.
 After the native QA build, `python3 -B scripts/client-performance-database.py` (`python` on Windows)
 executes the Client performance evidence workflow's three sequential repetitions. It owns one
 isolated PostgreSQL cluster across both clients on each Mac; Windows records its own Tauri baseline.
-`shared/fixtures/client-performance.json` version3 fixes the actual 120×36 grid, PTY output,
+`shared/fixtures/client-performance.json` version4 fixes the actual 120×30 grid, PTY output,
 font/scrollback, CAS files, replay, synthetic alternate-screen redraws, delayed-consumer checks and
 real Core/JDBC queries. Idle samples last 120/120/600 seconds. Raw PID-tree CPU/RSS, per-cycle data,
 original windows, cleanup and source/workload hashes are archived;

@@ -174,12 +174,12 @@ workflow 执行。程序比较只允许 Tauri 唯一的 NSIS 类型标记变换�
 嵌入签名框架／辅助程序及许可证，使用包内相对运行路径。普通 QA 构建不配置更新源或公钥，不启动更新器；配置的 QA 更新源必须使用字面回环主机。候选检查核对框架／辅助程序架构、最低系统、签名及只读资源。SDK 运行／更新验收在 #45 单独跟踪，不以依赖编译替代。
 
 `python3 -B scripts/macos-updates-smoke.py`
-使用分别标识的原生 QA 应用、临时数据、一次性 CryptoKit 密钥及回环更新源运行真实 SDK。脚本下载经过哈希固定的官方签名工具，检查有效／无效签名、平台／渠道／版本拒绝、取消、中断／离线下载及重试。用户决定明确由模拟 SDK 驱动控制；共享设置的开启／关闭验证实际 SDK 调度；独立场景执行真实 SDK 替换／重启、原生编辑器退出保存及保留宿主重连，平台结果仍待 CI。报告、真实窗口原图、HTTP 日志及有效签名测试 ZIP 归档在
+使用分别标识的原生 QA 应用、临时数据、一次性 CryptoKit 密钥及回环更新源运行真实 SDK。脚本下载经过哈希固定的官方签名工具，检查有效／无效签名、平台／渠道／版本拒绝、取消、中断／离线下载及重试。用户决定明确由模拟 SDK 驱动控制；共享设置的开启／关闭验证实际 SDK 调度；独立场景执行真实 SDK 替换／重启、原生编辑器退出保存及保留宿主重连，两种Mac架构已在源码ec1a49d通过。报告、真实窗口原图、HTTP 日志及有效签名测试 ZIP 归档在
 `updates/`，私钥不上传。重启后的截图由原 CI 协调端执行，先匹配源码、应用标识和 WindowServer 的所属 PID／窗口号；权限不足或缺图仍判为验收失败。
 
 `node scripts/windows-updates-smoke.mjs` 要求 Windows／WebView2，构建隔离的0.2.4／0.2.5 QA
 NSIS 包。一次性测试密钥签署更新，私有字面回环服务驱动真实更新器检查／下载／验签／安装／重启；真实设置控件执行手动检查、自动开启／下载、取消及关闭。Core 草稿输入和编辑器脏标志明确使用模拟，持久化、活跃 PTY／宿主及安装器实际执行。`ci-evidence/updates-windows`
-归档公钥签名、安装包、HTTP 日志、源码／merge 元数据及真实 QA 窗口；私钥不进入 artifacts。CI 结果及传输／数据库保护在 #45 独立验收。
+归档公钥签名、安装包、HTTP 日志、源码／merge 元数据及真实 QA 窗口；私钥不进入 artifacts。源码ec1a49d在Windows通过十四场景，含真实PostgreSQL查询／事务保护，以及真实传输登记和模拟worker。#45记录准确head／merge、artifacts及模拟边界，已在任务分支验收，未更新生产或发布。
 
 Core `rollback.export` 只读导出带 revision 的规范状态与全部当前编辑器草稿，不改变
 `legacy.export`。旧客户端只有一个草稿槽，多草稿完整归档并要求明确选择，已删除草稿不复活。TS／Swift 生成模型及绑定源码的存储报告验证数据边界，实际旧客户端安装及程序／数据回退仍由 #46 跟踪。
@@ -188,7 +188,7 @@ Core `rollback.export` 只读导出带 revision 的规范状态与全部当前�
 `python`），执行 Client performance evidence
 workflow 的三次顺序测量。它在每台 Mac 的双客户端运行期间管理同一个隔离 PostgreSQL 集群；Windows 单独记录 Tauri 基线。
 `shared/fixtures/client-performance.json`
-version3 固定真实120×36网格、PTY 输出、字体／回滚、CAS 文件、回放、合成 alternate-screen 重绘、慢消费检查及真实 Core／JDBC 查询。空闲采样分别为120／120／600秒。原始进程树 CPU／RSS、逐轮数据、窗口原图、清理及源码／负载哈希归档，由
+version4 固定真实120×30网格、PTY 输出、字体／回滚、CAS 文件、回放、合成 alternate-screen 重绘、慢消费检查及真实 Core／JDBC 查询。空闲采样分别为120／120／600秒。原始进程树 CPU／RSS、逐轮数据、窗口原图、清理及源码／负载哈希归档，由
 `node scripts/client-performance-report.mjs`
 核对。无法归属的 WebContent／GPU／XPC 及外部数据库服务排除；新平台测量和长期泄漏验收仍待完成，不宣称性能改善。
 

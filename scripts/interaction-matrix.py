@@ -100,6 +100,7 @@ def tauri_matrix(directory, head, tested):
 if __name__ == "__main__":
     mode, path = sys.argv[1:]
     directory = Path(path).resolve()
+    directory.mkdir(parents=True, exist_ok=True)
     tested = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     head = os.environ.get("PR_HEAD_SHA", tested)
     dirty = bool(subprocess.check_output(["git", "status", "--porcelain"]))

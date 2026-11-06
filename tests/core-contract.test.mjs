@@ -70,9 +70,17 @@ async function client(t, existingRoot) {
     { stdio: ["pipe", "pipe", "inherit"] },
   );
   const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
-  t.after(() => {
-    child.kill();
-    if (!existingRoot) rmSync(root, { recursive: true, force: true });
+  t.after(async () => {
+    const closed = new Promise((resolve) => child.once("close", resolve));
+    child.stdin.end();
+    const deadline = setTimeout(() => child.kill(), 5000);
+    try {
+      await closed;
+    } finally {
+      clearTimeout(deadline);
+    }
+    if (!existingRoot)
+      rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 });
   });
   return async (method, params = null, id = crypto.randomUUID()) => {
     child.stdin.write(JSON.stringify({ version: 1, id, method, params }) + "\n");
@@ -447,7 +455,7 @@ test("shared Python runs a real task with literal arguments, exit status and gen
     directory = join(root, "project"),
     call = await client(t, join(root, "shared-state-v1"));
   mkdirSync(directory);
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.after(() => rmSync(root, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 }));
   const interpreter = execFileSync(
     process.platform === "win32" ? "python" : "python3",
     ["-I", "-c", "import sys; print(sys.executable)"],

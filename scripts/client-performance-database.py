@@ -7,16 +7,12 @@ import subprocess
 import tempfile
 import json
 import shutil
-import platform
 from database_qa_service import DatabaseService
 
 
 with tempfile.TemporaryDirectory(prefix="uterm-performance-service-") as directory:
     service = DatabaseService(directory, Path("ci-evidence/performance/database-service"))
-    display = platform.system() == "Darwin" and os.environ.get("GITHUB_ACTIONS") == "true"
     try:
-        if display:
-            subprocess.run(["swift", "scripts/macos-performance-display.swift", "configure", "ci-evidence/performance/display.json"], check=True)
         service.start()
         bash = "/bin/bash"
         if os.name == "nt":
@@ -37,18 +33,14 @@ with tempfile.TemporaryDirectory(prefix="uterm-performance-service-") as directo
         try:
             service.close()
         finally:
-            try:
-                if display and Path("ci-evidence/performance/display.json").is_file():
-                    subprocess.run(["swift", "scripts/macos-performance-display.swift", "restore", "ci-evidence/performance/display.json"], check=True)
-            finally:
-                leaked = []
-                for path in Path("ci-evidence").rglob("*"):
-                    if path.is_file() and path.suffix in [".json", ".log", ".txt"]:
-                        content = path.read_bytes()
-                        if service.password.encode() in content:
-                            leaked.append(path.name)
-                            path.write_bytes(content.replace(service.password.encode(), b"<REDACTED_QA_SECRET>"))
-                if leaked:
-                    service.report.update(passed=False, credentialExcludedFromEvidence=False, redactedFiles=leaked)
-                    (service.evidence / "database-live.json").write_text(json.dumps(service.report, indent=2)+"\n", encoding="utf-8")
-                    raise AssertionError("Temporary database credential appeared in evidence: " + ", ".join(leaked))
+            leaked = []
+            for path in Path("ci-evidence").rglob("*"):
+                if path.is_file() and path.suffix in [".json", ".log", ".txt"]:
+                    content = path.read_bytes()
+                    if service.password.encode() in content:
+                        leaked.append(path.name)
+                        path.write_bytes(content.replace(service.password.encode(), b"<REDACTED_QA_SECRET>"))
+            if leaked:
+                service.report.update(passed=False, credentialExcludedFromEvidence=False, redactedFiles=leaked)
+                (service.evidence / "database-live.json").write_text(json.dumps(service.report, indent=2)+"\n", encoding="utf-8")
+                raise AssertionError("Temporary database credential appeared in evidence: " + ", ".join(leaked))
