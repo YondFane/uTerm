@@ -26,9 +26,32 @@ enum TransitionSmoke {
         guard try Data(contentsOf: project.appendingPathComponent(file)) == expectedBytes else { throw BridgeFailure(code: "TRANSITION_SOURCE", message: "Transition changed original file bytes") }
         let content = try await openFile(project, file)
         let expected = phase == "checkpoint" ? legacyText : nativeText
-        try await ContentSmoke.wait(content, "document.querySelector('.cm-content[contenteditable=true]') !== null")
-        let visible = try await EditorSmoke.evaluate(content, script: "return document.querySelector('.cm-content')?.textContent.includes(text) === true", arguments: ["text": expected.trimmingCharacters(in: .whitespacesAndNewlines)])
-        guard visible else { throw BridgeFailure(code: "TRANSITION_EDITOR", message: "Native editor did not restore the historical/latest draft") }
+        report["phase"] = phase
+        let initial = try await bridge.call("editor.drafts.document", params: .object(["directory": .string(projectPath), "path": .string(file)]))
+        let initialText = initial["draft"]["text"].string ?? ""
+        report["initialCoreDraftUTF8"] = Array(initialText.utf8)
+        guard Data(initialText.utf8) == Data(expected.utf8) else { throw BridgeFailure(code: "TRANSITION_CORE_DRAFT", message: "Native client could not read the exact imported/latest draft bytes") }
+        let quoted = String(data: try JSONEncoder().encode(expected.trimmingCharacters(in: .whitespacesAndNewlines)), encoding: .utf8)!
+        do {
+            // CodeMirror mounts before its asynchronous draft is restored; wait for the actual text.
+            // CodeMirror 挂载早于异步草稿恢复；等待实际文本就绪。
+            try await ContentSmoke.wait(content, "document.querySelector('.cm-content[contenteditable=true]')?.textContent.includes(\(quoted)) === true")
+        } catch {
+            report["restoreFailureDOMText"] = (try? await content.webView.evaluateJavaScript("document.querySelector('.cm-content')?.innerText || ''")) as? String ?? ""
+            let directory = URL(fileURLWithPath: reportPath).deletingLastPathComponent()
+            do {
+                let main = "transition-native-" + phase + "-failure.png"
+                try await TerminalSmoke.capture(window: window, path: directory.appendingPathComponent(main))
+                var images = [main]
+                if let editor = content.window {
+                    let image = "transition-native-editor-" + phase + "-failure.png"
+                    try await TerminalSmoke.capture(window: editor, path: directory.appendingPathComponent(image))
+                    images.append(image)
+                }
+                report["failureCaptures"] = images
+            } catch { report["failureCaptureError"] = error.localizedDescription }
+            throw error
+        }
         if phase == "checkpoint" {
             try await EditorSmoke.replace(content, text: nativeText)
             await model.patchSettings(["fontSize": input["rollbackFontSize"]])

@@ -145,12 +145,14 @@ workload and bounded observation, while stable cutover remains a separate gate.
 
 macOS may report a zero-RSS descendant while the owned app and host remain resident. The analyzer
 retains and counts those records, requires nonnegative per-process RSS and a positive aggregate, and
-still rejects empty/all-zero samples. The b904eaf run completed all three workloads on both Macs but
-failed its original strict per-process RSS assertion; the unchanged raw
-[ARM](https://github.com/YondFane/uTerm/actions/runs/42287509622/artifacts/13540867406) and
-[Intel](https://github.com/YondFane/uTerm/actions/runs/42287509622/artifacts/13539264515) artifacts
-retain that failure. Corrected local analysis validates those exact old-source workload and trend
-records; it does not relabel their workflow or establish a newer app-source pass.
+still rejects empty/all-zero samples. Source `79872babd29afe81815bf29ee7ec103bda6e955e`, tested
+merge `a540065570287b0d7bf6798612fc56405dad1382`, passes all 15 workloads across ARM, Intel and
+Windows; raw trends, cleanup and original windows were inspected.
+[#43 acceptance](https://github.com/YondFane/uTerm/issues/43#issuecomment-6696979756) records
+commands, machines, artifacts and scope. Native bulk, replay and database regressions remain
+explicit
+[#13 profiling follow-ups](https://github.com/YondFane/uTerm/issues/13#issuecomment-6696879766),
+with no whole-app improvement or multi-hour leak claim. Newer source runs keep their own provenance.
 
 Idle sampling lasts 120 seconds in each of the first two repetitions and 600 seconds in the last.
 Raw samples, per-cycle metrics, source/workload hashes, original terminal/TUI windows and cleanup
@@ -504,9 +506,14 @@ Regressions execute the actual QA script with real React, xterm and DOM state pl
 navigation/autosave simulation. Both recovery paths must preserve the original file and stored
 draft; the real xterm reference is checked in disabled and ready states. The packaged native
 transition identity can use only its embedded private temporary data root, as for isolated updater
-fixtures. The d136d51 ARM run failed its first marker after dispatching before xterm input was
-enabled; its actual idle shell window and original failure remain in
-[artifact13542933861](https://github.com/YondFane/uTerm/actions/runs/42298466365/artifacts/13542933861).
+fixtures. The 5e4a6b8 ARM run passed historical input, signed download, interrupted recovery and
+repeat import, then failed the one-shot native editor text check. Its canonical backup contains the
+exact legacy draft bytes;
+[artifact13544656366](https://github.com/YondFane/uTerm/actions/runs/42300066346/artifacts/13544656366)
+retains reports and original historical windows. Native verification now checks the exact Core UTF-8
+before waiting for asynchronously restored visible text, and records DOM text and native failure
+windows if restoration fails. Complete program/latest-data rollback remains subject to its actual
+Mac run.
 
 The Mac rehearsal downloads a native QA archive from its owned loopback server, verifies a pinned
 one-time Ed25519 manifest and architecture, rejects a bad signature before replacement, and tests
