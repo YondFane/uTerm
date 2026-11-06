@@ -94,7 +94,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         self.gitProjectID = gitProjectID
         self.workbenchHost = workbenchHost
         let window = NSWindow(contentRect: webView.frame, styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = workbenchHost != nil ? (workbenchHost?.kind == "redis" ? localized("Redis connections", "Redis 连接") : localized("Databases", "数据库")) : gitMode ? "Git — " + self.directory.lastPathComponent : path
+        window.title = workbenchHost.map { nativeWorkbenchTitle($0.kind) } ?? (gitMode ? "Git — " + self.directory.lastPathComponent : path)
         window.tabbingMode = editable && !gitMode ? .preferred : .disallowed
         window.tabbingIdentifier = "uterm-file:" + self.directory.path
         window.minSize = NSSize(width: gitMode ? 640 : 540, height: gitMode ? 420 : 360)

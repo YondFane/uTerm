@@ -10,6 +10,29 @@ body,
 .native-database {
   flex-direction: column;
 }
+.native-github {
+  flex-direction: column;
+}
+.native-github > fieldset {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.native-github .github-panel {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+}
+.native-github .inspector-header > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .native-database-toolbar {
   display: flex;
   align-items: center;

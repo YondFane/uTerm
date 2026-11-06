@@ -142,6 +142,10 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 使用临时文件和真实 PTY，检查原生文件／搜索／快速打开命令、准确行跳转、工具焦点、窗格交换及放大。需要 QA 构建和 macOS 图形会话，保存四张原始截图及含源码／测试 SHA 的
 `inspector-native.json`；须在 CI 实际执行后验收。
 
+`bash scripts/macos-github-smoke.sh`
+使用隔离模拟 CLI 和临时仓库运行原生 GitHub 窗口，检查共享会话关联、PR 草稿、字面 JSON 创建、取消及退出保护，保存报告、CLI 日志和四张截图。不创建真实 GitHub
+PR、不推送、不创建 Fork。两端复用 `uterm-core::github`。
+
 共享 Agent 规则位于 `uterm-core::{agents,agent_install}`，Pi 扩展位于
 `crates/uterm-core/integrations/`。`bash scripts/macos-agent-smoke.sh`
 需要 macOS 图形会话及 QA 构建；记录真实窗口／Host／已安装报告程序证据，系统通知适配器明确使用模拟，不使用提供方凭据或全局安装 CLI。

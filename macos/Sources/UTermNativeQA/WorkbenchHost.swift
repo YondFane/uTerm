@@ -1,6 +1,15 @@
 import UTermBridge
 
 @MainActor
+func nativeWorkbenchTitle(_ kind: String) -> String {
+    switch kind {
+    case "github": return "GitHub"
+    case "redis": return localized("Redis connections", "Redis 连接")
+    default: return localized("Databases", "数据库")
+    }
+}
+
+@MainActor
 protocol WorkbenchHost: AnyObject {
     var kind: String { get }
     var prepared: Bool { get }

@@ -45,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self?.agentsWindow?.model.objectWillChange.send()
             self?.fullSettingsWindow?.window.title = localized("Settings", "设置")
             self?.fullSettingsWindow?.model.objectWillChange.send()
-            self?.contentWindows.values.filter { $0.workbenchHost != nil }.forEach { $0.window?.title = $0.workbenchHost?.kind == "redis" ? localized("Redis connections", "Redis 连接") : localized("Databases", "数据库") }
+            self?.contentWindows.values.filter { $0.workbenchHost != nil }.forEach { $0.window?.title = nativeWorkbenchTitle($0.workbenchHost!.kind) }
         }
         model.requestActivation = { [weak window] in
             window?.makeKeyAndOrderFront(nil)
@@ -77,6 +77,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
         model.openSettingsRequested = { [weak self] in self?.openFullSettings() }
         model.openGitRequested = { [weak self] in self?.openGit() }
+        model.openGitHubRequested = { [weak self] in self?.openGitHub() }
         model.openInspectorFile = { [weak self] directory, path, line in
             guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
             let root = try await self.selectedProjectDirectory()
@@ -98,7 +99,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
-            if let path = WorkspaceModel.argument("--inspector-smoke-report"), let window {
+            if let path = WorkspaceModel.argument("--github-smoke-report") {
+                var report = baseReport()
+                do { try await GitHubSmoke.run(model: model, parent: window, open: { try await self.makeGitHubContentWindow(directory: $0) }, report: &report) }
+                catch {
+                    report["failure"] = error.localizedDescription
+                    if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "github" })?.window { try? await TerminalSmoke.capture(window: current, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-github-failure.png")) }
+                }
+                for content in Array(contentWindows.values) { content.forceClose() }
+                if report["explicitFixtureCloseAndIdleHostShutdown"] as? Bool != true, let bridge = model.bridge {
+                    do {
+                        for session in try await bridge.call("host.status")["sessions"].array { _ = try await bridge.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]])) }
+                        _ = try await bridge.call("host.shutdownIdle")
+                    } catch { report["cleanupError"] = error.localizedDescription }
+                }
+                await model.shutdown(); terminating = true
+                finishReport(report, path: path); return
+            }
+            if let path = WorkspaceModel.argument("--inspector-smoke-report") {
                 var report = baseReport()
                 do { try await InspectorSmoke.run(model: model, window: window, lookup: { self.existingContent(directory: $0, path: $1, editable: true) }, report: &report) }
                 catch {
@@ -433,7 +451,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func settings() { model.settingsPresented = true }
     private func commandAvailable(_ id: String) -> Bool {
         guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, !model.settingsPresented, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
-        if id == "github" { return false }
         if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
         let origin = NSApp.keyWindow === commandPalette?.window ? commandPalette?.returnWindow : NSApp.keyWindow
         if id == "close", NSApp.keyWindow === commandPalette?.window { return true }
@@ -442,9 +459,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return origin != nil && (origin === commandPalette?.window || origin === fullSettingsWindow?.window || origin === agentsWindow?.window || origin === sshWindow?.window || contentWindows.values.contains { $0.window === origin } || pythonWindows.values.contains { $0.window === origin } || javaWindows.values.contains { $0.window === origin })
         }
         if ["fontIncrease", "fontDecrease"].contains(id) { return origin === window || contentWindows.values.contains { $0.window === origin } }
+        if id == "git", contentWindows.values.contains(where: { $0.gitMode && $0.window === origin }) { return true }
+        if id == "github", contentWindows.values.contains(where: { $0.workbenchHost?.kind == "github" && $0.window === origin }) { return true }
         guard origin === window else { return false }
         if ["terminal", "chat", "toggleSidebar", "toggleInspector"].contains(id) { return true }
-        if ["quick", "git", "files", "search"].contains(id) { return model.workspace["selectedProject"].string != nil }
+        if ["quick", "git", "github", "files", "search"].contains(id) { return model.workspace["selectedProject"].string != nil }
         if id == "swapPanes" { return model.inspectorVisible }
         if id == "zoom" { return model.selectedTerminal != nil && (model.paneZoomed || model.state?.layout["kind"].string == "split") }
         return model.selectedTerminal != nil
@@ -468,12 +487,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case "terminal": newTerminal()
         case "chat": newAgent()
         case "quick": model.showInspector(.quick)
-        case "files": model.showInspector(.files)
+        case "files": if model.inspectorVisible && model.inspector.mode == .files { model.hideInspector() } else { model.showInspector(.files) }
         case "search": model.showInspector(.search)
         case "toggleInspector": if model.inspectorVisible { model.hideInspector() } else { model.showInspector(model.inspector.mode) }
         case "swapPanes": Task { await model.mutate("settings.patch", ["patch": .object(["inspectorPosition": .string(model.settings["inspectorPosition"].string == "left" ? "right" : "left")])]) }
         case "zoom": model.paneZoomed.toggle()
-        case "git": openGit()
+        case "git": if let current = contentWindows.values.first(where: { $0.gitMode && $0.window === NSApp.keyWindow }) { current.window?.orderOut(nil) } else { openGit() }
+        case "github": if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "github" && $0.window === NSApp.keyWindow }) { current.window?.orderOut(nil) } else { openGitHub() }
         case "agents": openAgents()
         case "toggleSidebar": toggleSidebar()
         case "splitRight": splitRight()
@@ -734,6 +754,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private func existingContent(directory: URL, path: String, editable: Bool) -> ContentWindow? {
         let root = directory.standardizedFileURL.resolvingSymlinksInPath()
         return contentWindows.values.first { !$0.gitMode && $0.workbenchHost == nil && $0.directory == root && $0.path == path && $0.editable == editable }
+    }
+    private func openGitHub() {
+        Task { @MainActor in
+            do { let directory = try await selectedProjectDirectory(); _ = try await makeGitHubContentWindow(directory: directory) }
+            catch { model.error = error.localizedDescription }
+        }
+    }
+    private func makeGitHubContentWindow(directory: URL) async throws -> ContentWindow {
+        guard !preparingQuit, !mutatingRepository, let bridge = model.bridge, let state = model.state else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current client operation first.", "请先完成当前客户端操作。")) }
+        let root = directory.standardizedFileURL.resolvingSymlinksInPath()
+        let selected = try await bridge.projectContext(expectedRevision: state.snapshot.revision)
+        guard let projectID = selected.projectId, let path = selected.directory, URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath() == root else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+        if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "github" && $0.directory == root && $0.gitProjectID == projectID }) {
+            current.workbenchHost?.emit?("github-context-changed", .null); current.reveal(); return current
+        }
+        let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
+        do {
+            let host = GitHubHost(bridge: worker, directory: root.path)
+            host.context = { [weak self] in
+                guard let self, self.model.workspace["selectedProject"].string == projectID else { return .object(["canAssociate": .bool(false), "canInsert": .bool(false)]) }
+                let active = self.model.state?.sessions.first { $0.sessionID == self.model.selectedID }
+                return .object(["canAssociate": .bool(active != nil), "canInsert": .bool(active?.session["agent"].string != nil)])
+            }
+            host.sessionAction = { [weak self] action, item in
+                guard let self, !self.preparingQuit, !self.mutatingRepository, self.model.workspace["selectedProject"].string == projectID, try await self.selectedProjectDirectory() == root else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+                guard case .object(let fields) = item, fields.count == 2, let url = item["url"].string, let title = item["title"].string,
+                      url.utf8.count <= 2000, title.utf8.count <= 1000,
+                      url.range(of: "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(issues|pull)/[0-9]+$", options: .regularExpression) != nil else { throw BridgeFailure(code: "GITHUB_ARGUMENT", message: localized("Invalid GitHub issue or PR link.", "GitHub 议题或 PR 链接无效。")) }
+                switch action {
+                case "associate":
+                    guard let id = self.model.selectedID, await self.model.mutate("session.issue", ["id": .string(id), "issue": item]) else { throw BridgeFailure(code: "CONFLICT", message: self.model.error.isEmpty ? localized("Select a session first.", "请先选择会话。") : self.model.error) }
+                case "create":
+                    let name = "#" + (url.split(separator: "/").last.map(String.init) ?? "") + " " + title
+                    guard await self.model.mutate("session.create", ["id": .string(UUID().uuidString), "name": .string(String(name.prefix(100))), "issue": item]) else { throw BridgeFailure(code: "CONFLICT", message: self.model.error) }
+                case "insert":
+                    guard let terminal = self.model.selectedTerminal, self.model.state?.sessions.first(where: { $0.sessionID == terminal.id })?.session["agent"].string != nil,
+                          terminal.inputControl?.owned == true else { throw BridgeFailure(code: "READ_ONLY", message: localized("Select an Agent session with input control first.", "请先选择拥有输入控制权的 Agent 会话。")) }
+                    terminal.enqueue(Data(url.utf8))
+                    await terminal.drainInput()
+                    guard terminal.error.isEmpty else { throw BridgeFailure(code: "GITHUB_INPUT", message: terminal.error) }
+                default: throw BridgeFailure(code: "METHOD_DENIED", message: "Unknown GitHub session action")
+                }
+            }
+            let content = try ContentWindow(bridge: worker, directory: root, path: "", gitProjectID: projectID, stateBridge: bridge, ownsBridge: true, workbenchHost: host)
+            content.window?.appearance = window?.appearance
+            let id = UUID(); contentWindows[id] = content
+            content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
+            content.reveal(); return content
+        } catch { await worker.close(); throw error }
     }
     private func makeGitContentWindow(directory: URL) async throws -> ContentWindow {
         guard !preparingQuit, !mutatingRepository, let stateBridge = model.bridge else {

@@ -101,6 +101,8 @@ jobs:
         run: bash scripts/macos-settings-smoke.sh
       - name: Real native files, search, pane swap, zoom and focus screenshots
         run: bash scripts/macos-inspector-smoke.sh
+      - name: Real native GitHub window with isolated CLI simulation and draft guards
+        run: bash scripts/macos-github-smoke.sh
       - name: Real native PTY, split, detach and replay smoke
         run: bash scripts/macos-terminal-smoke.sh
       - name: Real concurrent native input and resize ownership

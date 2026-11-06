@@ -189,7 +189,7 @@ enum SettingsSmoke {
         } catch { await other.close(); throw error }
         report["manualAcceptance"] = "waived by user"
         report["nativeSettingsFeatureAcceptanceComplete"] = false
-        report["remaining"] = ["Remaining preference effects and the unavailable native GitHub command are tracked in #41; file/search/inspector/swap/zoom have a separate inspector report; actual OS login approval uses the authorized simulation boundary"]
+        report["remaining"] = ["Remaining preference effects are tracked in #41; file/search/inspector/swap/zoom and GitHub have separate reports; actual OS login approval uses the authorized simulation boundary"]
         current.window.orderOut(nil)
     }
 }

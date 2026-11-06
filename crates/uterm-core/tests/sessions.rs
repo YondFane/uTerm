@@ -26,6 +26,54 @@ fn initialize(core: &Core) {
 }
 
 #[test]
+fn github_links_preserve_revisions_sessions_and_reject_stale_or_malformed_updates() {
+    let root = tempfile::tempdir().unwrap();
+    let core = Core::open(root.path().to_path_buf()).unwrap();
+    initialize(&core);
+    let link = json!({"url":"https://github.com/fixture-owner/fixture-repo/issues/7","title":"中文 `literal` $(literal)"});
+    mutate(
+        &core,
+        "session.create",
+        json!({"id":"linked","name":"Linked","directory":root.path(),"issue":link}),
+    );
+    let original = call(&core, "snapshot.read", Value::Null);
+    let next = json!({"url":"https://github.com/fixture-owner/fixture-repo/pull/8","title":"PR"});
+    mutate(&core, "session.issue", json!({"id":"linked","issue":next}));
+    let saved = call(&core, "snapshot.view", Value::Null);
+    assert_eq!(saved["sessions"][0]["session"]["issue"], next);
+    let stale = execute(
+        &core,
+        "session.issue",
+        json!({"expectedRevision":original["revision"],"id":"linked","issue":link}),
+    );
+    assert_eq!(stale.error.unwrap().code, "CONFLICT");
+    for url in [
+        "javascript:alert(1)",
+        "https://github.com.evil/owner/repo/issues/1",
+        "https://github.com/owner/repo/issues/1\n",
+    ] {
+        let result = execute(
+            &core,
+            "session.issue",
+            json!({"expectedRevision":saved["snapshot"]["revision"],"id":"linked","issue":{"url":url,"title":"Invalid"}}),
+        );
+        assert!(result.error.is_some(), "{url}");
+        assert_eq!(call(&core, "snapshot.view", Value::Null), saved);
+    }
+    core.close();
+    let reopened = Core::open(root.path().to_path_buf()).unwrap();
+    assert_eq!(call(&reopened, "snapshot.view", Value::Null), saved);
+    mutate(
+        &reopened,
+        "session.split",
+        json!({"anchor":"linked","id":"peer","name":"Peer","splitId":"split","axis":"horizontal"}),
+    );
+    let view = call(&reopened, "snapshot.view", Value::Null);
+    assert_eq!(view["sessions"][0]["session"]["issue"], next);
+    assert!(view["sessions"][1]["session"].get("issue").is_none());
+}
+
+#[test]
 fn split_selection_resize_removal_and_reopen_share_one_revision_checked_document() {
     let root = tempfile::tempdir().unwrap();
     let core = Core::open(root.path().to_path_buf()).unwrap();

@@ -164,6 +164,11 @@ line navigation, tools focus, pane swap and zoom with temporary files and real P
 QA build and a macOS graphical session, and saves four original screenshots plus
 `inspector-native.json` with source/tested SHAs. CI must execute these checks before acceptance.
 
+`bash scripts/macos-github-smoke.sh` runs the native GitHub window against an isolated simulated CLI
+and temporary repository. It checks shared session links, PR drafts, literal JSON creation,
+cancellation and quit protection, and saves a report, CLI log and four screenshots. It creates no
+real GitHub PR, push or fork. Both clients reuse `uterm-core::github`.
+
 Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the Pi extension under
 `crates/uterm-core/integrations/`. `bash scripts/macos-agent-smoke.sh` requires a macOS graphical
 session and the QA build; it records real window/Host/installed-reporter evidence with an explicitly

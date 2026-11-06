@@ -242,6 +242,9 @@ pub fn transition(w: &mut Value, settings: &Value, method: &str, p: &Value) -> R
             .ok_or_else(|| CoreError::new("INVALID_WORKSPACE", "Session roster does not exist"))?;
             let mut session =
                 json!({"id":id,"name":name,"shell":settings["defaultShell"],"pinned":false});
+            if let Some(issue) = p.get("issue") {
+                session["issue"] = issue.clone();
+            }
             if let Some(connection) = ssh {
                 if !agent.is_null() {
                     return Err(CoreError::new(
@@ -287,6 +290,18 @@ pub fn transition(w: &mut Value, settings: &Value, method: &str, p: &Value) -> R
             if let Some(r) = owner(w, &id) {
                 select(w, &r, &id);
             }
+        }
+        "session.issue" => {
+            let id = string(p, "id")?;
+            let issue = p
+                .get("issue")
+                .filter(|value| value.is_object())
+                .ok_or_else(|| CoreError::new("INVALID_ARGUMENT", "An issue link is required"))?;
+            let r = owner(w, &id)
+                .ok_or_else(|| CoreError::new("SESSION_MISSING", "Session no longer exists"))?;
+            let mut items = sessions(w, &r).to_vec();
+            items.iter_mut().find(|item| item["id"] == id).unwrap()["issue"] = issue.clone();
+            assign(w, &r.sessions, json!(items));
         }
         "session.rename" => {
             let id = string(p, "id")?;

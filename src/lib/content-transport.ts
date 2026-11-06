@@ -1,6 +1,9 @@
 import type { JSONValue } from "./core-contract.generated.ts";
 
 export const contentWriteMethods = new Set([
+  "github_create_pr",
+  "github_form_guard",
+  "github_session_action",
   "redis_connect",
   "redis_reconnect",
   "redis_request",
@@ -79,6 +82,13 @@ export const gitFavoriteMethods: Record<string, string> = {
   git_favorites_write: "git.favorites.write",
 };
 const contentMethods = new Set([
+  "github_repositories",
+  "github_read",
+  "github_prepare_pr",
+  "github_create_pr",
+  "github_form_guard",
+  "github_session_action",
+  "github_context",
   "redis_profiles",
   "redis_profile_save",
   "redis_profile_remove",
@@ -295,6 +305,9 @@ export class ContentScope {
         "editor-resume",
         "editor-repository-refresh",
         "file-focus-line",
+        "github-frozen",
+        "github-context-changed",
+        "github-settings-changed",
         "database-component-progress",
         "database-components-changed",
         "database-frozen",

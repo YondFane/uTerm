@@ -10,6 +10,7 @@ pub mod database_components;
 pub mod downloads;
 pub mod files;
 pub mod git;
+pub mod github;
 pub mod host;
 pub mod java;
 pub mod python;
@@ -560,6 +561,7 @@ impl Core {
                 Ok(Value::Null)
             }
             method if method.starts_with("files.") => files::request(method, params),
+            method if method.starts_with("github.") => github::request(method, params),
             method if method.starts_with("git.favorites.recovery.") => {
                 #[derive(Deserialize)]
                 #[serde(rename_all = "camelCase", deny_unknown_fields)]

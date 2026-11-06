@@ -11,9 +11,10 @@ import "./native-content.css";
 import { NativeGit } from "./native-git";
 import { NativeDatabase } from "./native-database";
 import { NativeRedis } from "./native-redis";
+import { NativeGitHub } from "./native-github";
 
 interface Context {
-  kind?: "file" | "git" | "database" | "redis";
+  kind?: "file" | "git" | "github" | "database" | "redis";
   directory: string;
   path: string;
   line?: number;
@@ -139,6 +140,8 @@ async function start() {
             <NativeDatabase />
           ) : context.kind === "redis" ? (
             <NativeRedis />
+          ) : context.kind === "github" ? (
+            <NativeGitHub directory={context.directory} />
           ) : context.kind === "git" ? (
             <NativeGit directory={context.directory} />
           ) : (

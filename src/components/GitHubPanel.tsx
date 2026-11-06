@@ -8,10 +8,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
+import type { ContentInvoker } from "../lib/content-host";
 const markdown = new MarkdownIt({ html: false, linkify: false });
 markdown.renderer.rules.image = (tokens, index) =>
   tx("[图片：{p0}]", { p0: markdown.utils.escapeHtml(tokens[index].content) });
-interface Item {
+export interface GitHubItem {
   number: number;
   title: string;
   url: string;
@@ -33,6 +34,7 @@ interface Item {
     status?: string;
   }[];
 }
+type Item = GitHubItem;
 export function GitHubPanel({
   resizeHandle,
   headerActions,
@@ -42,15 +44,19 @@ export function GitHubPanel({
   insert,
   canInsert,
   createSession,
+  port = invoke,
+  guardForm,
 }: {
   resizeHandle: ReactNode;
   headerActions: ReactNode;
   directory: string;
-  associate: (item: Item) => void;
+  associate: (item: Item) => void | Promise<void>;
   canAssociate: boolean;
   insert: (url: string) => Promise<void>;
   canInsert: boolean;
-  createSession: (item: Item) => void;
+  createSession: (item: Item) => void | Promise<void>;
+  port?: ContentInvoker;
+  guardForm?: (active: boolean) => Promise<void>;
 }) {
   const uiLanguage = useUiLanguage();
 
@@ -81,7 +87,7 @@ export function GitHubPanel({
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     let disposed = false;
-    void invoke<string[]>("github_repositories", { directory })
+    void port<string[]>("github_repositories", { directory })
       .then((value) => {
         if (!disposed) {
           setError("");
@@ -116,7 +122,7 @@ export function GitHubPanel({
     setLoading(true);
     setError("");
     const timer = setTimeout(() => {
-      void invoke<Item[]>("github_read", { directory, repository, kind, state, query, limit })
+      void port<Item[]>("github_read", { directory, repository, kind, state, query, limit })
         .then((value) => {
           if (!disposed) setItems(value);
         })
@@ -140,7 +146,7 @@ export function GitHubPanel({
     setShowDiff(false);
     setLoading(true);
     setError("");
-    void invoke<Item>("github_read", { directory, repository, kind, number: selected })
+    void port<Item>("github_read", { directory, repository, kind, number: selected })
       .then((value) => {
         if (!disposed) setDetail(value);
       })
@@ -157,7 +163,7 @@ export function GitHubPanel({
   useEffect(() => {
     if (!showDiff || !selected || kind !== "pr") return;
     let disposed = false;
-    void invoke<{ text: string }>("github_read", {
+    void port<{ text: string }>("github_read", {
       directory,
       repository,
       kind,
@@ -188,12 +194,14 @@ export function GitHubPanel({
   );
   async function prepare() {
     setFormError("");
+    setError("");
     setLoading(true);
     try {
-      const value = await invoke<{ base: string; head: string; title: string }>(
-        "github_prepare_pr",
-        { directory, repository },
-      );
+      const value = await port<{ base: string; head: string; title: string }>("github_prepare_pr", {
+        directory,
+        repository,
+      });
+      await guardForm?.(true);
       setForm({
         ...value,
         body: tx("## 摘要\n\n\n## 验证\n\n\nRelease Notes:\n\n"),
@@ -205,8 +213,12 @@ export function GitHubPanel({
       setLoading(false);
     }
   }
+  function closeForm() {
+    setForm(null);
+    void guardForm?.(false).catch((reason) => setError(String(reason)));
+  }
   function open(url: string) {
-    void invoke("open_external", { url }).catch((reason) => setError(String(reason)));
+    void port("open_external", { url }).catch((reason) => setError(String(reason)));
   }
   return (
     <aside className="git-panel github-panel" aria-label={tx("GitHub 面板")}>
@@ -321,8 +333,13 @@ export function GitHubPanel({
                 <button
                   disabled={!canAssociate}
                   onClick={() => {
-                    associate(detail);
-                    setNotice(tx("已关联当前会话。"));
+                    void Promise.resolve()
+                      .then(() => associate(detail))
+                      .then(() => {
+                        setError("");
+                        setNotice(tx("已关联当前会话。"));
+                      })
+                      .catch((reason) => setError(String(reason)));
                   }}
                 >
                   {tx("关联当前会话")}
@@ -337,7 +354,15 @@ export function GitHubPanel({
                 >
                   {tx("插入 Agent 输入")}
                 </button>
-                <button onClick={() => createSession(detail)}>{tx("新建关联会话")}</button>
+                <button
+                  onClick={() =>
+                    void Promise.resolve()
+                      .then(() => createSession(detail))
+                      .catch((reason) => setError(String(reason)))
+                  }
+                >
+                  {tx("新建关联会话")}
+                </button>
               </div>
               {kind === "pr" && (
                 <>
@@ -413,7 +438,7 @@ export function GitHubPanel({
         aria-label={tx("新建 Pull Request")}
         onCancel={(event) => {
           if (posting) event.preventDefault();
-          else setForm(null);
+          else closeForm();
         }}
       >
         {form && (
@@ -422,13 +447,13 @@ export function GitHubPanel({
               event.preventDefault();
               setPosting(true);
               setFormError("");
-              void invoke<{ html_url: string; number: number }>("github_create_pr", {
+              void port<{ html_url: string; number: number }>("github_create_pr", {
                 directory,
                 repository,
                 ...form,
               })
                 .then((value) => {
-                  setForm(null);
+                  closeForm();
                   setSelected(value.number);
                   refresh((v) => v + 1);
                   setNotice(tx("已创建 PR #{p0}", { p0: value.number }));
@@ -476,7 +501,7 @@ export function GitHubPanel({
               {tx("创建草稿")}
             </label>
             <div>
-              <button type="button" disabled={posting} onClick={() => setForm(null)}>
+              <button type="button" disabled={posting} onClick={closeForm}>
                 {tx("取消")}
               </button>
               <button disabled={posting}>{posting ? tx("正在创建…") : tx("在 GitHub 创建")}</button>

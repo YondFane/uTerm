@@ -4234,8 +4234,17 @@ replace the current list.
 **Toggle inspector** hides/restores tools; **Swap panes** saves its left/right position, including
 with the project sidebar hidden. Closing focused tools returns focus to the selected terminal
 without closing its session. **Zoom** shows only the selected split pane, then restores the shared
-layout and cached terminal views; hidden sessions continue receiving output. GitHub remains
-unavailable in the native client and is tracked in #41.
+layout and cached terminal views; hidden sessions continue receiving output.
+
+**GitHub** opens the existing shared panel in a native window. Both clients use Rust
+`github.repositories/read/prepare/create` for GitHub CLI access, repository/fork discovery, issue/PR
+details, diff and explicit PR creation. Native tools preserve the selected root and refuse other
+methods or private CLI arguments. Session association uses revision-checked shared state; linked
+sessions keep the issue URL and title. Inserting a URL requires a selected Agent session with input
+control and does not send Return. Closing the window preserves its PR form. Quitting refuses active
+requests or asks before discarding a form; cancellation cannot release an already dispatched CLI
+operation before its actual result. PR creation uses literal JSON input and never pushes a branch or
+creates a fork implicitly.
 
 The native QA app opens **Settings → All settings…** or **File → All settings…** for General,
 Appearance, Terminal, Files/Agents and Shortcuts. Changes remain drafts until **Save settings**.
@@ -4271,8 +4280,25 @@ retained editor text, cancellation, quick open, pane swap, zoom, focus and expli
 records four original WindowServer captures and `inspector-native.json`, including source head and
 tested merge SHAs. The added inspector checks require macOS CI execution; the older settings
 evidence below does not validate these commands. The first inspector CI build exposed missing
-main-actor isolation on its table coordinator; native runtime checks were skipped in that run and
-must pass after correction. Manual acceptance remains waived by the user.
+main-actor isolation on its table coordinator and a redundant optional binding in the QA entry. The
+coordinator-only correction still left the entry error; native runtime checks were skipped and must
+pass after both corrections. Manual acceptance remains waived by the user.
+
+`bash scripts/macos-github-smoke.sh` runs the real native WebView window with an isolated simulated
+`gh`, temporary Git repository and real PTYs. It checks root/method/type boundaries, sanitized
+Markdown, shared session links, PR details/diff, visible offline failures/retry, cancellation, draft
+hide/reopen/quit cancellation, literal submission, pending-request quit protection and bilingual
+theme captures. `github-native.json`, the simulated CLI log and four original screenshots are CI
+artifacts. These added checks still require CI execution; no account, real GitHub write, push or
+fork is used. Shared Rust session tests verify stale/malformed link rejection, reopening and split
+metadata; those tests do not establish native visual acceptance.
+
+Linux checks pass the 422 existing frontend tests (11 skipped), the added GitHub panel regression,
+242 Core/FFI/failure-mode tests (17 ignored), 84 host tests (3 ignored), 18 Tauri backend tests (1
+ignored), type checking, production/desktop builds, contract/localization checks and formatting.
+Java-dependent checks use JDK 21. A real Core process with the isolated CLI also passes eight
+repository/read/diff/prepare/create/invalid/offline/retry requests with one exact JSON creation.
+These local results use simulated GitHub responses and do not replace native CI screenshots.
 
 Source `60e183043988626cddbb4fa14e140ed9c25f17f6`, tested merge
 `f93da46db913e8be48f6bac46cb22f00577d23b8`, passes Native
