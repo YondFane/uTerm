@@ -14,6 +14,7 @@ import { runRedis } from "./redis";
 import { runDatabase } from "./database";
 import { runAgents } from "./agents";
 import { performanceSettings, runPerformance } from "./performance";
+import { runUpdates } from "./updates";
 import type {
   CoreEditorDraftEntry,
   CoreFileDocument,
@@ -41,7 +42,8 @@ interface Context {
     | "input-owner"
     | "input-viewer"
     | "package"
-    | "performance";
+    | "performance"
+    | "updates";
   backup?: string;
   ready: boolean;
 }
@@ -204,7 +206,7 @@ export async function prepare() {
       localStorage.setItem(key, '[\r\n "refs/heads/main"\r\n]');
   }
   if (
-    ["initial", "editor-checkpoint", "performance"].includes(context.phase) &&
+    ["initial", "editor-checkpoint", "performance", "updates"].includes(context.phase) &&
     localStorage.getItem(settingsKey) === null
   ) {
     localStorage.setItem(
@@ -214,6 +216,7 @@ export async function prepare() {
         language: "en",
         appearance: "dark",
         ...(context.phase === "performance" ? performanceSettings(context.platform) : {}),
+        ...(context.phase === "updates" ? { defaultShell: "cmd" } : {}),
       }),
     );
     const workspace = emptyWorkspace();
@@ -1563,6 +1566,10 @@ export async function run(recovery: boolean) {
     await until(async () => (await invoke<Context>("qa_context")).ready, "normal quit listener");
     if (context.phase === "performance") {
       await runPerformance(context, scene);
+      return;
+    }
+    if (context.phase === "updates") {
+      await runUpdates(context, scene);
       return;
     }
     if (context.phase === "package") {

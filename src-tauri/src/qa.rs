@@ -48,7 +48,163 @@ fn argument(name: &str) -> Result<String, String> {
         .windows(2)
         .find(|pair| pair[0] == name)
         .map(|pair| pair[1].clone())
+        // The real NSIS updater relaunches without QA arguments; only this compiled fixture has a fallback.
+        // 真实 NSIS 更新器重启时不带 QA 参数，仅专门编译的测试包提供此回退。
+        .or_else(|| match (name, option_env!("UTERM_QA_UPDATES_ROOT")) {
+            ("--qa-data-root", Some(root)) => Some(root.into()),
+            ("--qa-phase", Some(_)) => Some("updates".into()),
+            _ => None,
+        })
         .ok_or_else(|| format!("Missing {name}"))
+}
+
+pub fn updates_enabled(app: &tauri::AppHandle) -> bool {
+    cfg!(windows)
+        && argument("--qa-phase").as_deref() == Ok("updates")
+        && check(app).is_ok()
+        && app
+            .config()
+            .plugins
+            .0
+            .get("updater")
+            .is_some_and(updates_config_allowed)
+}
+
+fn updates_config_allowed(value: &Value) -> bool {
+    let Some(endpoints) = value["endpoints"].as_array() else {
+        return false;
+    };
+    value["requireSignedVersion"] == true
+        && value["dangerousAcceptInvalidCerts"].as_bool() != Some(true)
+        && value["dangerousAcceptInvalidHostnames"].as_bool() != Some(true)
+        && value["allowDowngrades"].as_bool() != Some(true)
+        && value["pubkey"].as_str().is_some_and(|key| !key.is_empty())
+        && endpoints.len() == 1
+        && endpoints[0].as_str().is_some_and(|endpoint| {
+            if !endpoint.starts_with("http://127.0.0.1:") {
+                return false;
+            }
+            tauri::Url::parse(endpoint).is_ok_and(|url| {
+                url.scheme() == "http"
+                    && url.host_str() == Some("127.0.0.1")
+                    && url.port().is_some_and(|port| port != 0)
+                    && url.username().is_empty()
+                    && url.password().is_none()
+                    && url.path() == "/manifest.json"
+                    && url.query().is_none()
+                    && url.fragment().is_none()
+            })
+        })
+}
+
+#[cfg(test)]
+mod update_tests {
+    use super::*;
+
+    #[test]
+    fn updater_qa_requires_literal_loopback_and_strict_signed_versions() {
+        let good = json!({"endpoints":["http://127.0.0.1:48371/manifest.json"],
+            "pubkey":"public-test-key", "requireSignedVersion":true});
+        assert!(updates_config_allowed(&good));
+        assert!(updates_url_allowed(
+            &good,
+            &tauri::Url::parse("http://127.0.0.1:48371/update.exe?case=good").unwrap()
+        ));
+        for download in [
+            "https://example.com/update.exe",
+            "http://127.0.0.1:48372/update.exe",
+            "http://127.0.0.1:48371/other.exe",
+            "http://user@127.0.0.1:48371/update.exe",
+        ] {
+            assert!(
+                !updates_url_allowed(&good, &tauri::Url::parse(download).unwrap()),
+                "{download}"
+            );
+        }
+        for endpoint in [
+            "https://example.com/manifest.json",
+            "http://localhost:48371/manifest.json",
+            "http://2130706433:48371/manifest.json",
+            "http://127.0.0.1:48371/other",
+            "http://user@127.0.0.1:48371/manifest.json",
+            "http://127.0.0.1:48371/manifest.json?q=1",
+        ] {
+            let mut bad = good.clone();
+            bad["endpoints"] = json!([endpoint]);
+            assert!(!updates_config_allowed(&bad), "{endpoint}");
+        }
+        for (key, value) in [
+            ("requireSignedVersion", false),
+            ("dangerousAcceptInvalidCerts", true),
+            ("dangerousAcceptInvalidHostnames", true),
+            ("allowDowngrades", true),
+        ] {
+            let mut bad = good.clone();
+            bad[key] = json!(value);
+            assert!(!updates_config_allowed(&bad), "{key}");
+        }
+        let mut bad = good;
+        bad["endpoints"] = json!([]);
+        assert!(!updates_config_allowed(&bad));
+    }
+}
+
+pub fn updates_download_allowed(app: &tauri::AppHandle, download: &tauri::Url) -> bool {
+    if !updates_enabled(app) {
+        return false;
+    }
+    updates_url_allowed(&app.config().plugins.0["updater"], download)
+}
+
+fn updates_url_allowed(config: &Value, download: &tauri::Url) -> bool {
+    let Some(endpoint) = config["endpoints"][0].as_str() else {
+        return false;
+    };
+    tauri::Url::parse(endpoint).is_ok_and(|endpoint| {
+        download.origin() == endpoint.origin()
+            && download.path() == "/update.exe"
+            && download.username().is_empty()
+            && download.password().is_none()
+            && download.fragment().is_none()
+    })
+}
+
+#[tauri::command]
+pub fn qa_updates(
+    app: tauri::AppHandle,
+    mode: String,
+    checkpoint: Option<Value>,
+) -> Result<Value, String> {
+    let root = check(&app)?;
+    if !updates_enabled(&app) {
+        return Err("Updates fixture is unavailable".into());
+    }
+    std::fs::write(
+        root.join("updates-current-pid"),
+        std::process::id().to_string(),
+    )
+    .map_err(|e| e.to_string())?;
+    match mode.as_str() {
+        "context" => {}
+        "checkpoint" => {
+            let bytes = serde_json::to_vec(&checkpoint.ok_or("Missing update checkpoint")?)
+                .map_err(|e| e.to_string())?;
+            if bytes.len() > 16_384 {
+                return Err("Oversized update checkpoint".into());
+            }
+            std::fs::write(root.join("updates-checkpoint.json"), bytes)
+                .map_err(|e| e.to_string())?;
+        }
+        "good" | "bad-signature" | "wrong-arch" | "old-version" | "offline" | "interrupted"
+        | "automatic" => {
+            std::fs::write(root.join("updates-mode"), &mode).map_err(|e| e.to_string())?;
+        }
+        _ => return Err("Unknown updates fixture mode".into()),
+    }
+    Ok(
+        json!({"version":app.package_info().version.to_string(), "pid":std::process::id(),
+        "checkpoint":std::fs::read(root.join("updates-checkpoint.json")).ok().and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())}),
+    )
 }
 
 pub fn root() -> Result<PathBuf, String> {
@@ -125,6 +281,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "input-viewer",
         "package",
         "performance",
+        "updates",
     ]
     .contains(&phase.as_str())
     {

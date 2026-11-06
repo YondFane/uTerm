@@ -210,6 +210,15 @@ scheduler. A separate case performs actual SDK replacement/relaunch, real editor
 retained-host reconnection; its platform results remain pending CI. Reports, original windows, HTTP
 logs and the valid signed test ZIP are archived under `updates/`; private keys are never uploaded.
 
+`node scripts/windows-updates-smoke.mjs` requires Windows/WebView2 and builds isolated 0.2.4/0.2.5
+QA NSIS packages. One-time test keys sign the update, and a private literal-loopback server drives
+actual updater check/download/verification/install/relaunch. Real settings controls exercise manual
+checking, automatic opt-in/download, cancellation and opt-out. Core draft input and the editor dirty
+flag are explicitly simulated; persistence, the live PTY/host and installer remain real. Evidence
+under `ci-evidence/updates-windows` includes public signatures, packages, HTTP logs, source/merge
+metadata and actual QA windows. Private keys stay outside artifacts. CI results and
+transfer/database guards remain separate acceptance requirements in #45.
+
 Core `rollback.export` creates a read-only, revision-bound archive of canonical state and every
 current editor draft without changing `legacy.export`. Old clients have one draft slot: multiple
 current drafts remain archived and require a deliberate choice, while deleted drafts stay deleted.

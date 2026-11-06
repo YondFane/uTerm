@@ -429,6 +429,8 @@ fn main() {
             #[cfg(feature = "qa")]
             qa::qa_context,
             #[cfg(feature = "qa")]
+            qa::qa_updates,
+            #[cfg(feature = "qa")]
             qa::qa_ssh_fixture,
             #[cfg(feature = "qa")]
             qa::qa_redis_fixture,

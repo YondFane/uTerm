@@ -4753,6 +4753,26 @@ capture waits for its own PID/window number in WindowServer and retries within a
 retaining functional checkpoints even on capture failure. Fresh platform acceptance is pending.
 Transfer/database update-quit combinations and Windows signed updates remain open in #45.
 
+#### Windows signed updater QA
+
+`node scripts/windows-updates-smoke.mjs` builds and installs private 0.2.4/0.2.5 NSIS packages and
+serves a one-time signed update over literal loopback. Only a compile-gated QA app with its
+validated temporary root and updates phase can enable this test updater. Endpoints reject remote/DNS
+aliases, credentials and query strings; download URLs must retain the endpoint origin and owned
+package path. Signed versions remain mandatory. An embedded QA-only root lets the updater's
+argument-free relaunch return to the same private profile. Production configuration and ordinary QA
+disabled behavior remain unchanged.
+
+The suite checks the real fifteen-second startup opt-out interval, old versions, wrong architecture,
+bad cryptographic signatures, offline/retry, interrupted Range resume, the actual editor install
+guard, manual checking, automatic download/confirmation, Cancel and durable opt-out. It installs
+through the real updater and verifies a different app PID, retained host/generation, exact Core
+draft bytes and fresh PTY input. Draft input and the editor dirty flag are explicitly simulated;
+transfer/database combinations remain separate. Packages, public signatures, HTTP logs, source/merge
+metadata and owned native windows are uploaded by Windows signed updater QA; private keys remain
+outside evidence. Linux type/build and strict endpoint negatives are local checks; actual Windows
+results require CI and are not yet accepted.
+
 #### Windows/Tauri automatic installation
 
 Settings → Software update → Automatic updates is off by default and persists across restarts. In

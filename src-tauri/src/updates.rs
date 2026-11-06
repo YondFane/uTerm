@@ -160,6 +160,10 @@ pub struct Progress {
     total: Option<u64>,
 }
 fn enabled(app: &tauri::AppHandle) -> bool {
+    #[cfg(feature = "qa")]
+    if crate::qa::updates_enabled(app) {
+        return true;
+    }
     !cfg!(debug_assertions)
         && app.config().identifier == "sh.uterm.desktop"
         && app.config().plugins.0.contains_key("updater")
@@ -224,6 +228,10 @@ pub async fn update_check(
         }
     }
     if let Some(update) = &mut update {
+        #[cfg(feature = "qa")]
+        if !crate::qa::updates_download_allowed(&app, &update.download_url) {
+            return Err("DOWNLOAD_METADATA".into());
+        }
         update.timeout = Some(std::time::Duration::from_secs(600));
     }
     pending.update = update;
