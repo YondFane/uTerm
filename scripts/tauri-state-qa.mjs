@@ -307,7 +307,29 @@ try {
     const swift = join(root, "window.swift");
     writeFileSync(
       swift,
-      `import Cocoa\nimport CoreGraphics\nlet pid = Int32(CommandLine.arguments[1])!\nif let app = NSRunningApplication(processIdentifier: pid) { app.activate(options: [.activateIgnoringOtherApps]) }\nThread.sleep(forTimeInterval: 0.3)\nlet windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String:Any]] ?? []\nlet found = windows.filter { ($0[kCGWindowOwnerPID as String] as? Int32) == pid && ($0[kCGWindowLayer as String] as? Int) == 0 }.sorted { a,b in\nlet x = a[kCGWindowBounds as String] as? [String:CGFloat] ?? [:]; let y = b[kCGWindowBounds as String] as? [String:CGFloat] ?? [:]\nreturn (x["Width"] ?? 0) * (x["Height"] ?? 0) > (y["Width"] ?? 0) * (y["Height"] ?? 0)\n}\nguard let id = found.first?[kCGWindowNumber as String] as? UInt32 else { exit(2) }\nprint(id)\n`,
+      `import Cocoa
+import CoreGraphics
+let pid = Int32(CommandLine.arguments[1])!
+NSRunningApplication(processIdentifier: pid)?.activate(options: [])
+Thread.sleep(forTimeInterval: 0.3)
+let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+func area(_ window: [String: Any]) -> Double {
+    let bounds = window[kCGWindowBounds as String] as? [String: NSNumber] ?? [:]
+    let width = bounds["Width"]?.doubleValue ?? 0
+    let height = bounds["Height"]?.doubleValue ?? 0
+    return width * height
+}
+let owned: [[String: Any]] = windows.filter { window in
+    let owner = window[kCGWindowOwnerPID as String] as? NSNumber
+    let layer = window[kCGWindowLayer as String] as? NSNumber
+    return owner?.int32Value == pid && layer?.intValue == 0
+}
+let ordered: [[String: Any]] = owned.sorted { area($0) > area($1) }
+guard let window = ordered.first,
+      let number = window[kCGWindowNumber as String] as? NSNumber else { exit(2) }
+print(number.uint32Value)
+`,
     );
     execute("swiftc", [swift, "-o", join(root, "window-id")]);
   }

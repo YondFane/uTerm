@@ -139,7 +139,11 @@ discovery/geometry, and restores an invalid window before capture; it never subs
 another process's window. Windows capture has a 60-second helper limit and a 90-second scene
 acknowledgement deadline. An actual candidate capture took 36 seconds and exceeded the old 30-second
 handshake, preventing ordinary exit; missing captures still fail, and a failure scene is now
-retained before waiting for exit. These corrections require fresh platform evidence.
+retained before waiting for exit. Windows candidate source `94700bf`, tested merge
+`6ad41493b52684b6dc366a4e3400da6fa1208b53`, passes install/start/capture/exit/uninstall in
+[run42247067808](https://github.com/YondFane/uTerm/actions/runs/42247067808). The macOS Tauri
+capture helper now uses separately typed WindowServer filtering and area sorting after both
+architectures rejected the combined Swift expression. Fresh performance results remain pending.
 
 #### Native QA validation
 
@@ -410,9 +414,11 @@ Linux checks pass 33 targeted storage/rollback tests (three existing permission 
 real-process reader tests, generated TS/Swift contract checks and type checking. They cover latest
 Unicode/BOM/CRLF bytes, multiple and deleted drafts, stale state/draft revisions, malformed
 arguments, corrupt/unsupported stores, writer contention/retry, idempotence and no config/source
-writes. CI records `rollback-export-core.json`; an actual C ABI Swift decoding case still awaits Mac
-CI. Platform results and actual application/data replacement remain pending under #46. #47 tracks
-final source-bound evidence and current stage gaps; neither task authorizes merging or publishing.
+writes. CI records `rollback-export-core.json`. The actual Swift C ABI case initially failed because
+its draft setup omitted `expectedDraftRevision`; setup now sends explicit null for a new document,
+retaining strict rejection of missing fields. A fresh Mac run is required. Platform results and
+actual application/data replacement remain pending under #46. #47 tracks final source-bound evidence
+and current stage gaps; neither task authorizes merging or publishing.
 
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
 conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI. A

@@ -17,7 +17,7 @@ final class CoreBridgeTests: XCTestCase {
         XCTAssertFalse(initialArchive.automaticRestoreAllowed)
         _ = try await core.call("editor.drafts.import", params: .object([:]))
         for (path, text) in [("a.txt", "LATEST 中文 é\r\n"), ("b.txt", "SECOND 🧪\r\n")] {
-            _ = try await core.call("editor.drafts.putDocument", params: .object(["expectedRevision": .null, "draft": .object([
+            _ = try await core.call("editor.drafts.putDocument", params: .object(["expectedDraftRevision": .null, "draft": .object([
                 "directory": .string(root.path), "path": .string(path), "kind": .string("text"), "text": .string(text),
                 "saved": .string("saved\r\n"), "version": .string(String(repeating: "a", count: 64)), "line_ending": .string("\r\n"), "bom": .bool(true)
             ])]))
