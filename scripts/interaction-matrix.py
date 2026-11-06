@@ -45,7 +45,7 @@ def native_matrix(directory, head, tested):
     assert live["fullScreenEnteredAndExited"] and live["viewIdentityRetained"]
     assert reports["terminal-reconnect"]["explicitCloseStoppedProcesses"] and reports["terminal-reconnect"]["idleHostShutdown"]
     assert reports["inspector-native"]["closeFocusedToolsRetainsPTYAndReturnsFocus"]
-    assert reports["settings-native"]["nativeFileTabLimitCancelRetainsDraftAndExplicitDiscardEvictsOldest"]
+    assert reports["settings-native"]["nativeFileTabLimitConflictRetainsDraftAndExplicitCloseAllowsRetry"]
     assert reports["github-native"]["nativeGithubHideReopenAndQuitCancelRetainDraft"]
     return {
         "platform": "macOS", "architecture": live["architecture"], "system": live["system"],

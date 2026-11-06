@@ -4316,12 +4316,14 @@ from dismissal without replaying missed reminders after sleep. Changing the inte
 the preference hides the current notice. The timer stops when the client shuts down.
 
 Native editable file windows enforce the shared per-directory file-tab limit, retaining the newest
-tabs. Opening another file or lowering the limit prepares excess editors before closing them;
-cancelling preserves every existing tab and draft. Existing missing-source recovery still opens
-retained drafts read-only. Agent settings refresh the selected supported Agent's usage while
-visible, using the shared remote/local preference and interval with one request at a time. Automatic
-reads do not request Keychain access; explicit account reads retain their confirmation. Hiding the
-window or preparing to quit stops polling. Native automatic-update effects remain tracked in #45.
+tabs. Opening another file or lowering the limit prepares excess editors before closing them; clean
+saves use the existing save path, while a conflicting write refuses the new opening and retains
+existing tabs/drafts. The existing Close action offers Keep editing or explicit discard before
+retrying. Existing missing-source recovery still opens retained drafts read-only. Agent settings
+refresh the selected supported Agent's usage while visible, using the shared remote/local preference
+and interval with one request at a time. Automatic reads do not request Keychain access; explicit
+account reads retain their confirmation. Hiding the window or preparing to quit stops polling.
+Native automatic-update effects remain tracked in #45.
 
 **General → Login startup** reads OS state without registering on open. Explicit opt-in/out uses
 macOS `SMAppService`; approval-required and failed operations stay visible and active operations

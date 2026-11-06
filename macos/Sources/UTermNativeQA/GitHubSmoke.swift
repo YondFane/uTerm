@@ -52,11 +52,11 @@ enum GitHubSmoke {
         try await ContentSmoke.wait(content, "document.querySelector('[role=alert]')?.textContent.includes('fixture is offline') === true", allowAlert: true)
         try FileManager.default.removeItem(at: temporary.appendingPathComponent("github-offline"))
         try await EditorSmoke.click(content, title: "Issues")
-        try await ContentSmoke.wait(content, "document.querySelectorAll('.github-items button').length === 1 && !document.querySelector('[role=alert]')")
+        try await ContentSmoke.wait(content, "document.querySelector('.github-items button')?.textContent.includes('#7') === true && !document.querySelector('[role=alert]')")
         report["nativeGithubOfflineFailureVisibleAndRetryRecovered"] = true
         try await EditorSmoke.click(content, title: "Pull Requests")
-        try await ContentSmoke.wait(content, "document.querySelectorAll('.github-items button').length === 1")
-        _ = try await content.webView.evaluateJavaScript("document.querySelector('.github-items button').click()")
+        try await ContentSmoke.wait(content, "document.querySelector('.github-items button')?.textContent.includes('#8') === true")
+        guard try await EditorSmoke.evaluate(content, script: "const item=document.querySelector('.github-items button'); if(!item?.textContent.includes('#8'))return false; item.click();return true;", arguments: [:]) else { throw BridgeFailure(code: "GITHUB_QA_PR_LIST", message: "Current PR fixture was not rendered") }
         try await EditorSmoke.click(content, title: "View diff")
         try await ContentSmoke.wait(content, "document.querySelector('.github-panel')?.textContent.includes('GITHUB_FIXTURE_DIFF') === true")
         try await capture("native-github-pr-diff-dark-en.png"); captures.append("native-github-pr-diff-dark-en.png")

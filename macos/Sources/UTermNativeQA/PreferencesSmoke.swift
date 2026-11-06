@@ -41,27 +41,31 @@ enum PreferencesSmoke {
         try await ContentSmoke.wait(second, "document.querySelector('.cm-content[contenteditable=true]') !== null")
         report["preferenceFileStep"] = "Edit the first native tab"
         try await EditorSmoke.replace(first, text: "UNSAVED_TAB_LIMIT 中文")
-        try await ContentSmoke.wait(first, "document.querySelector('.cm-content')?.textContent.includes('UNSAVED_TAB_LIMIT 中文') === true")
-        let cancelledOpen = Task { @MainActor in try await openFile(root, "c.txt") }
+        try await ContentSmoke.wait(first, "document.querySelector('.editor-save-state')?.textContent === 'Unsaved'")
+        let external = "EXTERNAL_TAB_LIMIT\n"
+        try Data(external.utf8).write(to: root.appendingPathComponent("a.txt"))
         report["preferenceFileStep"] = "Wait for the tab eviction guard"
+        do { _ = try await openFile(root, "c.txt"); throw BridgeFailure(code: "PREFERENCE_TAB_CANCEL", message: "Conflicted tab eviction still opened a file") }
+        catch let error as BridgeFailure where error.code == "FILE_TAB_CANCELLED" {}
+        try await ContentSmoke.wait(first, "document.querySelector('.cm-content[contenteditable=true]') !== null", allowAlert: true)
+        first.window?.performClose(nil)
         try await ContentSmoke.wait(first, "document.querySelector('dialog[open]') !== null", allowAlert: true)
         try await EditorSmoke.click(first, title: "Keep editing")
-        do { _ = try await cancelledOpen.value; throw BridgeFailure(code: "PREFERENCE_TAB_CANCEL", message: "Cancelled tab eviction still opened a file") }
-        catch let error as BridgeFailure where error.code == "FILE_TAB_CANCELLED" {}
         guard first.window?.isVisible == true, first.window?.tabbedWindows?.contains(where: { $0 === second.window }) == true,
               try await EditorSmoke.evaluate(first, script: "return document.querySelector('.cm-content').textContent.includes('UNSAVED_TAB_LIMIT 中文');", arguments: [:]) else { throw BridgeFailure(code: "PREFERENCE_TAB_DRAFT", message: "Cancelling the tab limit lost an existing editor or draft") }
-        let acceptedOpen = Task { @MainActor in try await openFile(root, "c.txt") }
         report["preferenceFileStep"] = "Explicitly discard the oldest tab"
+        first.window?.performClose(nil)
         try await ContentSmoke.wait(first, "document.querySelector('dialog[open]') !== null", allowAlert: true)
         try await EditorSmoke.click(first, title: "Discard changes and continue")
-        let third = try await acceptedOpen.value
+        try await TerminalSmoke.wait("Close the explicitly discarded tab") { first.window?.isVisible == false }
+        let third = try await openFile(root, "c.txt")
         try await ContentSmoke.wait(third, "document.querySelector('.cm-content')?.textContent.includes('c.txt') === true")
         guard first.window?.isVisible == false, second.window?.tabbedWindows?.count == 2,
-              try String(contentsOf: root.appendingPathComponent("a.txt"), encoding: .utf8) == "a.txt\n" else { throw BridgeFailure(code: "PREFERENCE_TAB_LIMIT", message: "Tab eviction changed the disk file or exceeded the directory limit") }
+              try String(contentsOf: root.appendingPathComponent("a.txt"), encoding: .utf8) == external else { throw BridgeFailure(code: "PREFERENCE_TAB_LIMIT", message: "Tab eviction changed the disk file or exceeded the directory limit") }
         await workspace.patchSettings(["fileTabLimit": .number(1)])
         report["preferenceFileStep"] = "Trim existing tabs after lowering the limit"
         try await TerminalSmoke.wait("Apply a lower saved limit to existing native tabs") { second.window?.isVisible == false && third.window?.isVisible == true }
-        report["nativeFileTabLimitCancelRetainsDraftAndExplicitDiscardEvictsOldest"] = true
+        report["nativeFileTabLimitConflictRetainsDraftAndExplicitCloseAllowsRetry"] = true
         report["nativeLowerFileTabLimitAppliesToExistingTabs"] = true
         third.forceClose()
     }
