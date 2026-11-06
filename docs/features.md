@@ -136,6 +136,15 @@ native slowdowns above 10% and 1ms as explicit #13 profiling follow-ups; they ar
 an aggregate improvement claim. `performanceAcceptanceComplete` applies only to this fixed one-PTY
 workload and bounded observation, while stable cutover remains a separate gate.
 
+macOS may report a zero-RSS descendant while the owned app and host remain resident. The analyzer
+retains and counts those records, requires nonnegative per-process RSS and a positive aggregate, and
+still rejects empty/all-zero samples. The b904eaf run completed all three workloads on both Macs but
+failed its original strict per-process RSS assertion; the unchanged raw
+[ARM](https://github.com/YondFane/uTerm/actions/runs/42287509622/artifacts/13540867406) and
+[Intel](https://github.com/YondFane/uTerm/actions/runs/42287509622/artifacts/13539264515) artifacts
+retain that failure. Corrected local analysis validates those exact old-source workload and trend
+records; it does not relabel their workflow or establish a newer app-source pass.
+
 Idle sampling lasts 120 seconds in each of the first two repetitions and 600 seconds in the last.
 Raw samples, per-cycle metrics, source/workload hashes, original terminal/TUI windows and cleanup
 reports are archived as CI artifacts. CPU/RSS cover the app, its descendants and the authenticated
@@ -476,6 +485,16 @@ adapters retain fixed development labels. All original source hashes are retaine
 startup/command entry files and recorded QA additions differ. It does not run the unmodified
 published installer. The historical GUI, readers, services, source manifests and lockfiles remain
 unchanged; initial draft input and credential/hook references are labelled fixtures.
+
+A restored historical editor keeps its unsaved draft visible. Switching to the terminal would
+trigger that version's autosave, so recovery phases check actual retained xterm replay and visible
+CodeMirror text without hiding the editor or rewriting the file. The first old app and both native
+phases still produce fresh PTY output. Reports distinguish fresh DOM input from replay-only checks.
+The packaged native transition identity is restricted to its embedded private temporary data root;
+an argument selecting a different root is rejected, as for the isolated updater fixtures. The
+2f04116 ARM run captured the real old app and verified the signed download, then failed while
+attempting input behind its recovered editor; its original windows and failure remain in
+[artifact13540767507](https://github.com/YondFane/uTerm/actions/runs/42291475489/artifacts/13540767507).
 
 The Mac rehearsal downloads a native QA archive from its owned loopback server, verifies a pinned
 one-time Ed25519 manifest and architecture, rejects a bad signature before replacement, and tests

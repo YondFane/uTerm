@@ -12,6 +12,7 @@ type Context = {
   fileName: string;
   draftText: string;
   markerSuffix: string;
+  replayMarker?: string;
   seed: Record<string, string>;
   expected?: { id: string; generation: string; hostPID: number; fontSize: number };
 };
@@ -56,6 +57,7 @@ export async function runLegacyTransition() {
     project.click();
     if (
       context.phase === "before" &&
+      !context.replayMarker &&
       readWorkspace(localStorage.getItem(workspaceKey)).selectedSession === null
     ) {
       const button = await until(
@@ -78,37 +80,62 @@ export async function runLegacyTransition() {
       }
     }, "historical hosted session");
     const session = host.sessions.find((value) => value.spec.id === id)!;
-    const field = await until(
-      () => section.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea:not(:disabled)"),
-      "historical terminal input",
-    );
-    field.focus();
-    const data = new DataTransfer();
-    const marker = context.phase.toUpperCase() + "_" + context.markerSuffix;
-    assert(/^(BEFORE|ROLLBACK)_[a-f0-9]{32}$/u.test(marker), "Invalid committed QA output marker");
-    data.setData("text/plain", `printf 'LEGACY_%s\n' '${marker}'`);
-    field.dispatchEvent(
-      new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }),
-    );
-    for (const type of ["keydown", "keyup"])
-      field.dispatchEvent(
-        new KeyboardEvent(type, {
-          key: "Enter",
-          code: "Enter",
-          keyCode: 13,
-          which: 13,
-          bubbles: true,
-          cancelable: true,
-        }),
+    let renderedCheckpoint = context.replayMarker;
+    if (renderedCheckpoint) {
+      assert(
+        /^(LEGACY_BEFORE_[a-f0-9]{32}|TRANSITION_REOPEN)$/u.test(renderedCheckpoint),
+        "Invalid retained checkpoint",
       );
-    await until(
-      () =>
-        renderedText(section)
-          .replace(/\s/g, "")
-          .includes("LEGACY_" + marker),
-      "historical rendered actual PTY marker",
-    );
-    if (context.phase === "before") {
+      // Switching away from a recovered editor autosaves; observe real replay without changing the file.
+      // 切离恢复编辑器会自动保存；观察真实回放，同时保留原文件。
+      await until(
+        () =>
+          document
+            .querySelector(".cm-content[contenteditable=true]")
+            ?.textContent?.includes(context.draftText.trim()),
+        "historical visible recovered editor",
+      );
+      await until(
+        () => renderedText(section).replace(/\s/g, "").includes(renderedCheckpoint!),
+        "historical retained real PTY replay",
+      );
+    } else {
+      const field = await until(
+        () => section.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea:not(:disabled)"),
+        "historical terminal input",
+      );
+      field.focus();
+      const data = new DataTransfer();
+      const marker = context.phase.toUpperCase() + "_" + context.markerSuffix;
+      assert(
+        /^(BEFORE|ROLLBACK)_[a-f0-9]{32}$/u.test(marker),
+        "Invalid committed QA output marker",
+      );
+      data.setData("text/plain", `printf 'LEGACY_%s\n' '${marker}'`);
+      field.dispatchEvent(
+        new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }),
+      );
+      for (const type of ["keydown", "keyup"])
+        field.dispatchEvent(
+          new KeyboardEvent(type, {
+            key: "Enter",
+            code: "Enter",
+            keyCode: 13,
+            which: 13,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      await until(
+        () =>
+          renderedText(section)
+            .replace(/\s/g, "")
+            .includes("LEGACY_" + marker),
+        "historical rendered actual PTY marker",
+      );
+      renderedCheckpoint = "LEGACY_" + marker;
+    }
+    if (context.phase === "before" && !context.replayMarker) {
       const file = await invoke<{
         text: string;
         version: string;
@@ -127,7 +154,7 @@ export async function runLegacyTransition() {
       };
       readDraft(JSON.stringify(draft));
       localStorage.setItem(draftKey, JSON.stringify(draft));
-    } else {
+    } else if (context.phase === "rollback") {
       assert(
         context.expected &&
           id === context.expected.id &&
@@ -143,6 +170,11 @@ export async function runLegacyTransition() {
         readDraft(localStorage.getItem(draftKey)!).text === context.draftText,
         "Rollback lost the latest native draft",
       );
+    } else {
+      assert(
+        readDraft(localStorage.getItem(draftKey)!).text === context.draftText,
+        "Interrupted restart lost the durable legacy draft",
+      );
     }
     const values = Object.fromEntries(
       Object.keys(localStorage)
@@ -155,9 +187,11 @@ export async function runLegacyTransition() {
       values,
       checks: {
         actualHistoricalApp: true,
-        actualDOMInputAndPTY: true,
+        actualDOMInputAndPTY: !context.replayMarker,
+        actualPTYReplayWithRecoveredEditor: Boolean(context.replayMarker),
+        renderedCheckpoint,
         actualHistoricalXtermBufferRead: true,
-        simulatedInitialDraftInput: true,
+        simulatedInitialDraftInput: context.phase === "before" && !context.replayMarker,
         unchangedHistoricalReaders: true,
         id,
         generation: session.generation,

@@ -100,18 +100,18 @@ final class WorkspaceModel: ObservableObject {
 
     static func dataRoot() throws -> URL {
         let identifier = Bundle.main.bundleIdentifier ?? ""
-        let updateFixture = identifier.hasPrefix("sh.uterm.desktop.qa.native.update.")
+        let packagedFixture = identifier.hasPrefix("sh.uterm.desktop.qa.native.update.") || identifier.hasPrefix("sh.uterm.desktop.qa.native.transition.")
         let embeddedRoot = Bundle.main.object(forInfoDictionaryKey: "UTermQADataRoot") as? String
-        guard identifier == "sh.uterm.desktop.qa.native" || (updateFixture && embeddedRoot != nil) else {
+        guard identifier == "sh.uterm.desktop.qa.native" || (packagedFixture && embeddedRoot != nil) else {
             throw BridgeFailure(code: "QA_IDENTITY", message: "Native QA requires its isolated bundle identity")
         }
-        if let path = argument("--qa-data-root") ?? (updateFixture ? embeddedRoot : nil) {
+        if let path = argument("--qa-data-root") ?? (packagedFixture ? embeddedRoot : nil) {
             let root = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
             let temporary = FileManager.default.temporaryDirectory.standardizedFileURL.resolvingSymlinksInPath()
             guard root.path.hasPrefix(temporary.path + "/"), root.lastPathComponent.hasPrefix("uterm-native-qa-") else {
                 throw BridgeFailure(code: "QA_DIRECTORY", message: "QA override must be a private temporary test directory")
             }
-            if updateFixture, let embeddedRoot, root != URL(fileURLWithPath: embeddedRoot).standardizedFileURL.resolvingSymlinksInPath() { throw BridgeFailure(code: "QA_DIRECTORY", message: "Update fixture cannot select another data root") }
+            if packagedFixture, let embeddedRoot, root != URL(fileURLWithPath: embeddedRoot).standardizedFileURL.resolvingSymlinksInPath() { throw BridgeFailure(code: "QA_DIRECTORY", message: "Packaged fixture cannot select another data root") }
             return root.appendingPathComponent("shared-state-v1", isDirectory: true)
         }
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)

@@ -97,4 +97,12 @@ test("idle trend rejects continued growth without confusing a one-time allocatio
   const nonmonotonic = thirds(100, 100, 100);
   nonmonotonic[20].elapsedMilliseconds = nonmonotonic[19].elapsedMilliseconds;
   assert.throws(() => assessIdleGrowth(nonmonotonic));
+  const zeroDescendant = thirds(100, 100, 100);
+  zeroDescendant[20].processes.push({ rssBytes: 0 });
+  const observed = assessIdleGrowth(zeroDescendant);
+  assert.equal(observed.sustainedGrowthDetected, false);
+  assert.equal(observed.zeroRSSProcessRecords, 1);
+  const allZero = thirds(100, 100, 100);
+  allZero[20].processes = [{ rssBytes: 0 }];
+  assert.throws(() => assessIdleGrowth(allZero), /no resident/);
 });

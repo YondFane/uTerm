@@ -84,9 +84,10 @@ export function assessIdleGrowth(samples) {
     assert(sample.elapsedMilliseconds > previous && sample.processes.length > 0);
     previous = sample.elapsedMilliseconds;
     const rss = sample.processes.reduce((sum, process) => {
-      assert(Number.isFinite(process.rssBytes) && process.rssBytes > 0);
+      assert(Number.isFinite(process.rssBytes) && process.rssBytes >= 0);
       return sum + process.rssBytes;
     }, 0);
+    assert(rss > 0, "Idle sample has no resident application or host memory");
     thirds[Math.min(2, Math.floor(((sample.elapsedMilliseconds - start) / duration) * 3))].push(
       rss,
     );
@@ -100,6 +101,11 @@ export function assessIdleGrowth(samples) {
   return {
     durationMilliseconds: duration,
     windowMedianRSSBytes: medians,
+    zeroRSSProcessRecords: idle.reduce(
+      (count, sample) =>
+        count + sample.processes.filter((process) => process.rssBytes === 0).length,
+      0,
+    ),
     growthBudgetBytes: budget,
     sustainedGrowthDetected: medians[1] - medians[0] > budget && medians[2] - medians[1] > budget,
     method:

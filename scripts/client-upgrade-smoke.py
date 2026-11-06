@@ -314,7 +314,7 @@ def main():
             report["scenarios"].append(dict(name="historical-before", passed=True, report="historical-before.json", screenshot=first["screenshot"]))
             run("ditto", native_source, staged)
             native_info = plistlib.loads((staged / "Contents/Info.plist").read_bytes())
-            native_info.update(CFBundleIdentifier=identity, CFBundleExecutable=info["CFBundleExecutable"], CFBundleVersion="0.2.5", CFBundleShortVersionString="0.2.5")
+            native_info.update(CFBundleIdentifier=identity, CFBundleExecutable=info["CFBundleExecutable"], CFBundleVersion="0.2.5", CFBundleShortVersionString="0.2.5", UTermQADataRoot=str(root))
             assert not any("uterm" in item.get("CFBundleURLSchemes", []) for item in native_info.get("CFBundleURLTypes", []))
             (staged / "Contents/MacOS/UTermNativeQA").rename(staged / "Contents/MacOS" / info["CFBundleExecutable"])
             (staged / "Contents/Info.plist").write_bytes(plistlib.dumps(native_info))
@@ -366,6 +366,9 @@ def main():
             try: replace_program(installed, staged, previous, interrupt=True)
             except InterruptedError: recover_program(installed, staged, previous)
             assert tree_digest(installed) == old_hash
+            recovery_input = json.loads((root / "legacy-input.json").read_text())
+            recovery_input["replayMarker"] = first["checks"]["renderedCheckpoint"]
+            write(root / "legacy-input.json", recovery_input)
             second = historical_run(installed, root, evidence, capture_tool, "historical-after-interruption")
             assert all(second["checks"][name] == value for name, value in expected.items())
             assert second["checks"]["draft"]["text"] == fixture["legacyDraft"]
@@ -401,6 +404,7 @@ def main():
             installed.rename(retained_native); previous.rename(installed)
             assert tree_digest(installed) == old_hash
             write(root / "legacy-input.json", {**old_input, "phase":"rollback", "draftText":fixture["nativeDraft"],
+                                               "replayMarker":"TRANSITION_REOPEN",
                                                "seed":archive["legacyValues"], "expected":{**expected,"fontSize":fixture["rollbackFontSize"]}})
             restored = historical_run(installed, root, evidence, capture_tool, "historical-rollback")
             assert restored["checks"]["draft"]["text"].encode() == fixture["nativeDraft"].encode()
