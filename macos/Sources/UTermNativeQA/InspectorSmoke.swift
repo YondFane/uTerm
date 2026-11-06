@@ -94,8 +94,16 @@ enum InspectorSmoke {
         try await TerminalSmoke.wait("Reattach native inspector after swapping") { view(window, id: "native-inspector-container") != nil }
         try command("zoom")
         try await TerminalSmoke.wait("Zoom selected terminal only") { model.paneZoomed && second.view.window === window && first.view.window == nil }
-        first.enqueue(Data("printf 'HIDDEN_ZOOM_%s\\n' RETAINED\r".utf8))
-        try await TerminalSmoke.wait("Continue hidden terminal output while zoomed") { first.text.contains("HIDDEN_ZOOM_RETAINED") }
+        let renderedBefore = first.qaRenderedFrames, acknowledgedBefore = first.qaAcknowledgedFrames
+        func hiddenDiagnostics() -> [String: Any] { ["id": first.id, "generation": first.generation ?? "", "columns": first.view.getTerminal().cols, "rows": first.view.getTerminal().rows, "ownedInput": first.inputControl?.owned == true, "error": first.error, "renderedFrames": first.qaRenderedFrames, "acknowledgedFrames": first.qaAcknowledgedFrames, "text": String(first.text.suffix(3000))] }
+        report["hiddenZoomBefore"] = hiddenDiagnostics()
+        // Keep the marker within a narrow pane; soft wrapping must not hide a successful output/ack check.
+        // 标记须适合窄窗格，避免软换行掩盖已成功的输出与确认检查。
+        first.enqueue(Data("printf '\\033[32mZ中%s\\033[0m\\n' OK\r".utf8))
+        do {
+            try await TerminalSmoke.wait("Continue hidden terminal output and acknowledgements while zoomed") { first.text.contains("Z中OK") && first.qaRenderedFrames > renderedBefore && first.qaAcknowledgedFrames > acknowledgedBefore }
+        } catch { report["hiddenZoomAfter"] = hiddenDiagnostics(); throw error }
+        report["hiddenZoomAfter"] = hiddenDiagnostics()
         try await capture("native-inspector-zoom-dark-en.png"); captures.append("native-inspector-zoom-dark-en.png")
         try command("zoom")
         try await TerminalSmoke.wait("Restore original split views") { !model.paneZoomed && first.view.window === window && second.view.window === window }
