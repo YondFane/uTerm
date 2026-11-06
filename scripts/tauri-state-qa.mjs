@@ -319,17 +319,21 @@ try {
       const id = execute(join(root, "window-id"), [String(target.pid)]).trim();
       execute("/usr/sbin/screencapture", ["-x", "-o", "-l", id, path]);
     } else if (process.platform === "win32") {
-      execute("powershell.exe", [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        join(root, "capture.ps1"),
-        "-TargetProcessId",
-        String(target.pid),
-        "-Destination",
-        path,
-      ]);
+      execute(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          join(root, "capture.ps1"),
+          "-TargetProcessId",
+          String(target.pid),
+          "-Destination",
+          path,
+        ],
+        { timeout: 60000 },
+      );
     } else execute("import", ["-window", "root", path]);
     assert(readFileSync(path).length > 5000, "Screenshot was not captured");
   }

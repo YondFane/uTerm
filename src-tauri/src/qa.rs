@@ -261,7 +261,9 @@ pub async fn qa_scene(app: tauri::AppHandle, name: String, value: Value) -> Resu
         std::fs::rename(temporary, evidence.join(format!("{stem}.json")))
             .map_err(|e| e.to_string())?;
         let ack = evidence.join(format!("{stem}.ack"));
-        for _ in 0..300 {
+        // Native window discovery/capture can take over 30 seconds on Windows CI.
+        // Windows CI 的原生窗口发现及截图可能超过30秒。
+        for _ in 0..900 {
             if ack.exists() {
                 return Ok(());
             }

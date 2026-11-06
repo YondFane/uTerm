@@ -152,9 +152,13 @@ try {
     $capture = Join-Path $candidateEvidence 'candidate-installed-windows-window.png'
     & (Join-Path $PSScriptRoot 'windows-window-capture.ps1') -TargetProcessId $candidateProcess.Id -Destination $capture
     if ((Get-Item $capture).Length -lt 1000) { throw 'Installed QA screenshot is missing' }
+    if (Test-Path $failurePath) { Copy-Item $failurePath $candidateEvidence; throw 'Installed QA failed while waiting for its actual capture acknowledgement' }
     Copy-Item $scenePath $candidateEvidence
     New-Item -ItemType File (Join-Path $candidateRoot 'evidence/package-installed-start.ack') | Out-Null
-    if (!$candidateProcess.WaitForExit(30000) -or $candidateProcess.ExitCode -ne 0) { throw 'Installed QA failed ordinary exit' }
+    $exitObserved = $candidateProcess.WaitForExit(30000)
+    $candidateReport.exitWaitCompleted = $exitObserved
+    if ($exitObserved) { $candidateReport.observedExitCode = $candidateProcess.ExitCode }
+    if (!$exitObserved -or $candidateProcess.ExitCode -ne 0) { throw 'Installed QA failed ordinary exit' }
     $candidateReport.installedStartPassed = $true; $candidateReport.processExitCode = $candidateProcess.ExitCode
     $candidateReport.screenshot = 'candidate-installed-windows-window.png'; $candidateProcess = $null
     if (!(Test-Path (Join-Path $candidateData 'shared-state-v1/snapshot-v1.json'))) { throw 'Private QA snapshot is missing' }

@@ -136,7 +136,10 @@ the last eight parsed cursor lines on both clients and scans full output once fo
 those earlier timings are not accepted as a fair comparison. Tauri automation waits for committed
 project selection. Windows capture enumerates only the requested PID's titled QA window, records
 discovery/geometry, and restores an invalid window before capture; it never substitutes a utility or
-another process's window. These corrections still require their own platform results.
+another process's window. Windows capture has a 60-second helper limit and a 90-second scene
+acknowledgement deadline. An actual candidate capture took 36 seconds and exceeded the old 30-second
+handshake, preventing ordinary exit; missing captures still fail, and a failure scene is now
+retained before waiting for exit. These corrections require fresh platform evidence.
 
 #### Native QA validation
 
@@ -1286,7 +1289,10 @@ acceptance remains pending.
 Background local-session discovery retries every two seconds after each attempt. Connection timeouts
 do not show an error banner; other synchronization failures remain visible.
 
-A timeout does not clear saved sessions.
+A timeout does not clear saved sessions. Discovery results are reconciled against the latest state
+inside the write queue, so a poll cannot replace sessions or selection created while it was pending.
+A real Core-process regression holds a session-creation write, queues discovery of an older closed
+session, then verifies that the new session and selection survive and unchanged polls do not write.
 
 #### Validation and limits
 

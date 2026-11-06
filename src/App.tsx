@@ -122,8 +122,7 @@ import {
   selectSession,
   groupableSessions,
   reconcileWorktrees,
-  reconcileLocalSessionSnapshot,
-  reconcileSshSessions,
+  syncDiscoveredSessions,
   groupSessions,
   ungroupSession,
   neighborPane,
@@ -867,11 +866,7 @@ export function App() {
         setSessionSyncError("");
         const current = currentWorkspace.current;
         if (current) {
-          const next = reconcileSshSessions(
-            reconcileLocalSessionSnapshot(current, snapshot),
-            sshSnapshot,
-          );
-          if (next !== current) await update(() => next);
+          await syncDiscoveredSessions(current, snapshot, sshSnapshot, update);
         }
       } catch (reason) {
         if (!cancelled) setSessionSyncError(sessionSyncErrorMessage(reason));

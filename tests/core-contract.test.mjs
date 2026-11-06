@@ -1120,6 +1120,83 @@ test("real Rust core preserves legacy defaults and normalized workspace/project 
   }
 });
 
+test("session discovery reconciles the latest queued Core state without deleting a newly created session", async (t) => {
+  const call = await client(t);
+  const workspace = {
+    ...emptyWorkspace(),
+    projects: [
+      {
+        id: "p",
+        name: "Fixture",
+        directory: "/temporary/project",
+        workspaceId: "local",
+        sessions: [{ id: "retired", name: "Old", shell: "default" }],
+      },
+    ],
+    selectedProject: "p",
+    selectedSession: "retired",
+  };
+  assert.equal(
+    (await call("migration.import", { workspace, settings: defaults, legacy: {} })).error,
+    undefined,
+  );
+  const dom = new JSDOM("", { url: "http://localhost/" });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: dom.window });
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    value: dom.window.localStorage,
+  });
+  const server = await createServer({
+    configFile: false,
+    server: { middlewareMode: true, hmr: false, watch: null },
+    appType: "custom",
+  });
+  t.after(async () => {
+    clearMocks();
+    await server.close();
+    dom.window.close();
+  });
+  const started = Promise.withResolvers(),
+    gate = Promise.withResolvers();
+  let writes = 0;
+  mockIPC(async (command, args) => {
+    assert.equal(command, "shared_core_request");
+    const request = JSON.parse(args.request);
+    if (request.method === "snapshot.replace" && ++writes === 1) {
+      started.resolve();
+      await gate.promise;
+    }
+    return JSON.stringify(await call(request.method, request.params, request.id));
+  });
+  const state = await server.ssrLoadModule("/src/lib/shared-state.ts");
+  const { syncDiscoveredSessions } = await server.ssrLoadModule("/src/lib/workspace.ts");
+  await state.initializeSharedState();
+  const observed = state.sharedWorkspace();
+  const creation = state.persistWorkspace((latest) => ({
+    ...latest,
+    selectedSession: "created-during-poll",
+    projects: latest.projects.map((project) => ({
+      ...project,
+      sessions: [...project.sessions, { id: "created-during-poll", name: "New", shell: "default" }],
+    })),
+  }));
+  await started.promise;
+  const local = { closed: ["retired"], sessions: [] },
+    ssh = { closed: [], sessions: [] };
+  const discovery = syncDiscoveredSessions(observed, local, ssh, state.persistWorkspace);
+  gate.resolve();
+  await Promise.all([creation, discovery]);
+  const actual = (await call("snapshot.read")).result.document.workspace;
+  assert.deepEqual(
+    actual.projects[0].sessions.map((session) => session.id),
+    ["created-during-poll"],
+  );
+  assert.equal(actual.selectedSession, "created-during-poll");
+  const written = writes;
+  await syncDiscoveredSessions(state.sharedWorkspace(), local, ssh, state.persistWorkspace);
+  assert.equal(writes, written, "Unchanged discovery must not write a snapshot");
+});
+
 test("Tauri adoption serializes real core writes, preserves source keys and blocks stale queues", async (t) => {
   const call = await client(t);
   const dom = new JSDOM("", { url: "http://localhost/" });
