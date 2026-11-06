@@ -74,3 +74,27 @@ test("performance evidence rejects stale sources, incomplete output and numeric 
   assert.equal(percentile([4, 1, 3, 2], 0.5), 2);
   assert.equal(percentile([4, 1, 3, 2], 0.95), 4);
 });
+
+test("idle trend rejects continued growth without confusing a one-time allocation with a leak", async () => {
+  const { assessIdleGrowth } = await import("../scripts/client-performance-report.mjs");
+  const mib = 1024 * 1024;
+  const samples = (values) =>
+    values.map((rss, index) => ({
+      phase: "idle-soak",
+      elapsedMilliseconds: index * 1000,
+      processes: [{ rssBytes: rss * mib }],
+    }));
+  const thirds = (a, b, c) =>
+    samples([...Array(20).fill(a), ...Array(20).fill(b), ...Array(20).fill(c)]);
+  assert.equal(assessIdleGrowth(thirds(100, 100, 100)).sustainedGrowthDetected, false);
+  assert.equal(assessIdleGrowth(thirds(100, 150, 150)).sustainedGrowthDetected, false);
+  assert.equal(assessIdleGrowth(thirds(180, 150, 100)).sustainedGrowthDetected, false);
+  assert.equal(assessIdleGrowth(thirds(100, 140, 180)).sustainedGrowthDetected, true);
+  assert.throws(() => assessIdleGrowth(samples([100, 140])), /Too few idle/);
+  const incomplete = thirds(100, 100, 100);
+  incomplete[20].processes = [];
+  assert.throws(() => assessIdleGrowth(incomplete));
+  const nonmonotonic = thirds(100, 100, 100);
+  nonmonotonic[20].elapsedMilliseconds = nonmonotonic[19].elapsedMilliseconds;
+  assert.throws(() => assessIdleGrowth(nonmonotonic));
+});

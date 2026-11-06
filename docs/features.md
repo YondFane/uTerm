@@ -128,6 +128,14 @@ It verifies the original database fixture remains unchanged, connections close, 
 stops and evidence contains no credential. `node scripts/client-performance-report.mjs` audits all
 three repetitions. The inner native/Tauri runners require the wrapper's private database context.
 
+The comparison report records a clean-source check and three equal elapsed-time idle windows. Both
+consecutive median RSS increases above the larger of 16MiB or 3% of initial RSS flag growth and fail
+the measured-scope acceptance. Sparse/empty or nonmonotonic samples fail analysis. This detector
+does not establish multi-hour leak freedom. Per-metric medians across three repetitions record
+native slowdowns above 10% and 1ms as explicit #13 profiling follow-ups; they are not hidden behind
+an aggregate improvement claim. `performanceAcceptanceComplete` applies only to this fixed one-PTY
+workload and bounded observation, while stable cutover remains a separate gate.
+
 Idle sampling lasts 120 seconds in each of the first two repetitions and 600 seconds in the last.
 Raw samples, per-cycle metrics, source/workload hashes, original terminal/TUI windows and cleanup
 reports are archived as CI artifacts. CPU/RSS cover the app, its descendants and the authenticated
