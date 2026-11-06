@@ -232,7 +232,9 @@ fn wait_for_install(
             .read_to_end(&mut bytes)
             .map_err(|error| error.to_string())?;
         let output = String::from_utf8_lossy(&bytes);
-        return Err(format!("{}\n{}", install_error(&output), output));
+        // Installer output may contain registry credentials; expose only a bounded error code.
+        // 安装器输出可能包含仓库凭据，因此仅返回有界错误码。
+        return Err(install_error(&output).to_string());
     }
     Ok(())
 }
@@ -298,7 +300,7 @@ mod tests {
             let log = tempfile::tempfile().unwrap();
             use std::io::Write;
             (&log)
-                .write_all(b"ENOSPC simulated installer failure\n")
+                .write_all(b"ENOSPC simulated-password-must-not-be-returned\n")
                 .unwrap();
             let mut command = script_install_command("trae", &path).unwrap();
             command
@@ -310,7 +312,7 @@ mod tests {
             if status == 0 {
                 assert!(result.is_ok());
             } else {
-                assert!(result.unwrap_err().contains("ENOSPC"));
+                assert_eq!(result.unwrap_err(), "DOWNLOAD_STORAGE");
             }
             assert_eq!(
                 std::fs::read(&configuration).unwrap(),

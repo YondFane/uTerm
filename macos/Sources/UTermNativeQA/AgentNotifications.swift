@@ -33,7 +33,8 @@ final class AgentNotifications {
         for id in Array(tasks.keys) where !ids.contains(id) { tasks.removeValue(forKey: id)?.cancel() }
     }
     func consume(_ header: CoreTerminalHeader, session: String) {
-        guard let ticket = gate.consume(session: session, generation: header.generation, state: header.agent_state, events: header.agent_events ?? [], replay: header.reset) else { return }
+        guard let generation = header.generation, !generation.isEmpty else { return }
+        guard let ticket = gate.consume(session: session, generation: generation, state: header.agent_state, events: header.agent_events ?? [], replay: header.reset) else { return }
         tasks[session]?.cancel()
         guard allowed(ticket) else { return }
         tasks[session] = Task { @MainActor [weak self] in

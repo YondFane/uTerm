@@ -290,8 +290,8 @@ export const messages: Record<string, string> = {
     "The Agent installation directory is not writable. Check npm global directory permissions or follow the official installation instructions.",
   "Node.js 版本不满足此 Agent 的要求，请按官方说明更新后重试。":
     "The Node.js version does not meet this Agent's requirements. Update it following the official instructions and retry.",
-  "Agent 安装失败，请查看安装输出或按官方说明安装。":
-    "Agent installation failed. Check the installation output or follow the official instructions.",
+  "Agent 安装失败，请重试或按官方说明安装。":
+    "Agent installation failed. Retry or follow the official installation instructions.",
   手动下载安装包: "Download installer manually",
   手动下载: "Download manually",
   未连接: "Disconnected",

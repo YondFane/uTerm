@@ -3942,12 +3942,19 @@ commands and Swift uses Core JSON calls. The Pi extension is embedded from
 without changing `HOME`, `CODEX_HOME` or the user's account selectors. Reporter updates use a staged
 replacement, preserving the prior executable if the new copy fails.
 
+Failed installers return a classified error code without their output, which can contain registry
+credentials. The retry message remains bilingual; private installer output is not included in UI or
+CI diagnostics.
+
 Shared Linux regressions pass 18 Agent checks (one resource profile is intentionally ignored), five
 installer checks and two platform/real-Hooks checks. An installed reporter child process drains 64
 KiB of input, produces real Host working/done events and rejects stale generations. The installer
 failure/retry test executes private scripts rather than installing a provider globally. Three
 focused frontend notification/Pi suites, TypeScript, localization and the QA backend check pass.
-Native window, bridge and notification-adapter results at the new source remain pending CI.
+Native window, bridge and notification-adapter results at the new source remain pending CI. The
+first native build found an optional generation at the adapter boundary; the adapter now rejects
+missing generations before evaluating notification eligibility. That failed build does not establish
+window acceptance.
 
 ### Installing and removing Hooks
 
