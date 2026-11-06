@@ -374,6 +374,22 @@ pub async fn qa_external_settings(app: tauri::AppHandle) -> Result<Value, String
 }
 
 #[tauri::command]
+pub fn qa_performance_window(app: tauri::AppHandle, width: u32, height: u32) -> Result<(), String> {
+    check(&app)?;
+    if argument("--qa-phase")? != "performance"
+        || !(640..=1600).contains(&width)
+        || !(420..=1200).contains(&height)
+    {
+        return Err("Invalid isolated performance window size".into());
+    }
+    let window = app.get_webview_window("main").ok_or("Missing QA window")?;
+    window.unmaximize().map_err(|error| error.to_string())?;
+    window
+        .set_size(tauri::LogicalSize::new(width, height))
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 pub async fn qa_scene(app: tauri::AppHandle, name: String, value: Value) -> Result<(), String> {
     let root = check(&app)?;
     if name.is_empty()

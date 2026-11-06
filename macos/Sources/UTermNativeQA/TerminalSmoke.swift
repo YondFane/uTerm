@@ -18,6 +18,10 @@ enum TerminalSmoke {
             guard model.state?.sessions.count == 2 else { throw BridgeFailure(code: "SMOKE_REPLAY", message: "Persisted split sessions were not restored") }
             try await wait("Reattach both retained processes") { model.terminals.count == 2 && model.terminals.values.allSatisfy { $0.generation != nil && $0.error.isEmpty } }
             try await wait("Replay retained Unicode output") { model.terminals.values.contains { $0.text.contains("UTERM_中文 é") } }
+            try await wait("Display both restored native terminal views") {
+                model.terminals.values.allSatisfy { $0.view.window === window && $0.view.visibleRect.width > 0 && $0.view.visibleRect.height > 0 }
+            }
+            report["restoredTerminalViewsVisible"] = true
             report["replayed"] = true
             report["sessions"] = model.terminals.values.map { ["id": $0.id, "generation": $0.generation ?? ""] }
             let ids = model.state?.sessions.map(\.sessionID) ?? []

@@ -289,7 +289,11 @@ final class CanvasHost: NSView {
     func render(_ model: WorkspaceModel) {
         let layout = model.paneZoomed && model.selectedID != nil ? JSONValue.object(["kind": .string("leaf"), "session": .string(model.selectedID!)]) : model.state?.layout ?? .null
         func key(_ node: JSONValue) -> String {
-            if node["kind"].string == "leaf" { return node["session"].string ?? "" }
+            if node["kind"].string == "leaf", let id = node["session"].string {
+                // An initially missing view must invalidate the cached placeholder when it arrives.
+                // 初始缺失的视图到达时必须使缓存的占位内容失效。
+                return id + (model.terminals[id].map { ":" + String(describing: ObjectIdentifier($0.view)) } ?? ":pending")
+            }
             if node["kind"].string == "split" { return (node["id"].string ?? "") + key(node["first"]) + key(node["second"]) }
             return "empty"
         }

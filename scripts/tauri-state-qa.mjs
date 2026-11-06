@@ -1002,7 +1002,7 @@ print(number.uint32Value)
       );
       const expected =
         phase === "performance"
-          ? 1
+          ? 2
           : phase === "agents"
             ? 3
             : phase === "database"

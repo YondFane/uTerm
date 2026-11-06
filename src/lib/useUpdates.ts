@@ -25,6 +25,8 @@ export function useUpdates(
   const autoPrompt = useRef(false);
   const busy = useRef(false);
   const checked = useRef(false);
+  const automaticPreference = useRef(automatic);
+  automaticPreference.current = automatic;
   const check = useCallback(async () => {
     if (busy.current) return;
     busy.current = true;
@@ -51,7 +53,7 @@ export function useUpdates(
         if (disposed) return;
         setAvailable(result);
         if (result.version) setPhase(result.downloaded ? "ready" : "available");
-        else if (result.enabled && automatic)
+        else if (result.enabled && automaticPreference.current)
           timer = setTimeout(() => {
             if (!checked.current) void check();
           }, 15_000);
@@ -63,7 +65,7 @@ export function useUpdates(
       disposed = true;
       clearTimeout(timer);
     };
-  }, [check, automatic]);
+  }, [check]);
   async function download() {
     if (busy.current) return;
     busy.current = true;

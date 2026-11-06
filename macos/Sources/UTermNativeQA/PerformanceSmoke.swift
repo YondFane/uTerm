@@ -29,6 +29,7 @@ enum PerformanceSmoke {
         await model.newTerminal()
         try await wait("Start the measured PTY") { model.selectedTerminal?.generation != nil && (model.selectedTerminal?.qaRenderedFrames ?? 0) > 0 && model.selectedTerminal?.inputControl?.owned == true }
         guard let terminal = model.selectedTerminal, let generation = terminal.generation else { throw BridgeFailure(code: "PERFORMANCE_PTY", message: "No measured terminal") }
+        try await wait("Mount the actual measured terminal") { terminal.view.window === window && terminal.view.visibleRect.width > 100 && terminal.view.visibleRect.height > 100 }
         guard let columns = fixture["columns"].number, let rows = fixture["rows"].number else { throw BridgeFailure(code: "PERFORMANCE_FIXTURE", message: "Missing common grid") }
         // Resize the actual window and let SwiftTerm/PTY layout agree before measuring input.
         // 先调整真实窗口并让 SwiftTerm／PTY 布局一致，再测量输入。

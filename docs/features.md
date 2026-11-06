@@ -424,9 +424,10 @@ Unicode/BOM/CRLF bytes, multiple and deleted drafts, stale state/draft revisions
 arguments, corrupt/unsupported stores, writer contention/retry, idempotence and no config/source
 writes. CI records `rollback-export-core.json`. The actual Swift C ABI case initially failed because
 its draft setup omitted `expectedDraftRevision`; setup now sends explicit null for a new document,
-retaining strict rejection of missing fields. A fresh Mac run is required. Platform results and
-actual application/data replacement remain pending under #46. #47 tracks final source-bound evidence
-and current stage gaps; neither task authorizes merging or publishing.
+retaining strict rejection of missing fields. The corrected actual C ABI check passes both Mac
+architectures at source949e4c2. Actual old-application/data replacement remains pending under #46.
+#47 tracks final source-bound evidence and current stage gaps; neither task authorizes merging or
+publishing.
 
 Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
 conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI. A
@@ -4731,85 +4732,68 @@ metadata, channel and same-origin ZIP archives before proceeding. SDK package ve
 required separately. Sparkle retains its native download/install UI; application termination still
 uses the existing editor, transfer and database guards. No production feed is configured or changed.
 
-The pinned framework, nested helpers and license are bundled and candidate audits check signatures,
-architecture, minimum OS and read-only permissions. Configuration tests and real SDK
-download/signature/version/cancel/retry/install/relaunch acceptance remain pending macOS CI in #45;
-compilation alone does not satisfy them. The focused Tauri hook test passes the opt-out startup,
-manual check and existing installation guard/failure cases.
+The pinned framework, nested helpers and license are bundled. Candidate audits check signatures,
+architecture, minimum OS and read-only permissions. `python3 -B scripts/macos-updates-smoke.py` runs
+ten actual SDK scenarios using private loopback feeds, signed App ZIPs and unique QA
+identifiers/temp roots. It creates one-time CryptoKit keys, verifies the official signing toolkit's
+pinned hash and retains only public keys/signatures. User choices are simulated; SDK downloading,
+verification, extraction, target checks and scheduling remain real.
 
-`python3 -B scripts/macos-updates-smoke.py` runs ten actual SDK scenarios with private loopback
-feeds, signed App ZIPs and unique QA identifiers/temp roots. It creates one-time CryptoKit keys,
-verifies the official signing toolkit's pinned hash, and retains only public keys/signatures. User
-choices are simulated; downloading, verification, extraction, target checks and the SDK scheduler
-remain real. Cases include valid/bad signatures, wrong architecture/channel, old versions, cancel,
-offline/interrupted downloads with actual retries, and automatic checks after shared opt-in then
-opt-out. An installation case lets the actual SDK replace build1 with build2 and relaunch from the
-same private app path, retaining the real host PID/generation and saving a real editor draft through
-ordinary quit guards. The relaunch validates exact file bytes, produces fresh PTY output and
-explicitly closes the fixture. The server rejects and records requests before automatic opt-in.
-Reports, HTTP logs and actual app screenshots are archived.
+Cases include valid/bad signatures, wrong architecture/channel, old versions, cancel, actual retries
+after offline/interrupted downloads, shared automatic opt-in/opt-out and build1→build2 installation.
+The latter uses the same private app path, saves a real editor draft through ordinary quit guards,
+retains host PID/generation, checks exact saved bytes and produces fresh PTY output. The server
+records and rejects requests before opt-in. Bad-signature acceptance requires the pinned SDK's exact
+bounded `SUValidationError` cause `EdDSA signature does not match.`; unrelated errors fail. Bridge
+negative tests cover that boundary.
 
-The pinned SDK's `Autoupdate/SUSignatureVerifier.m` uses `SUValidationError` with the fixed
-`EdDSA signature does not match.` reason. QA requires that exact bounded underlying cause; unrelated
-installation/validation errors still fail. Only a boolean reason is emitted, without private
-descriptions. Bridge negative tests cover unrelated causes.
-
-Intel at source `cb2f1627d07c8110b907fca16f447320cec9c13f`, tested merge
-`9883ff45c3ef00ee821946494528e9605c705be5`, passes nine SDK scenarios. The install case actually
-reaches version2 in a different process with the same host and saved draft, but its own screenshot
-process fails 25 times despite WindowServer listing that exact window. This remains a failed
-acceptance in
-[artifact13521159633](https://github.com/YondFane/uTerm/actions/runs/42249902279/artifacts/13521159633).
-
-Relaunch capture now uses the original CI coordinator's process tree. The updated app requests only
-its own PID/window number; the coordinator checks source/merge/identity and exact filename, then a
-Swift helper independently verifies WindowServer ownership and dimensions before capturing that
-exact window. A bounded acknowledgement, ownership report and original PNG are required. Missing
-permission/image remains failure. Summary fields distinguish actual installation execution from
-complete acceptance, including capture failures. Linux request-boundary negatives pass; the new
-Swift helper and corrected screenshots still require Mac CI. Transfer/database update-quit
-combinations and Windows signed updates remain open in #45.
+Relaunch capture uses the original CI coordinator's process tree. Source/merge/identity and fixed
+filename are checked, and a Swift helper independently verifies exact WindowServer PID/window
+ownership and dimensions. Missing permission/image fails. At source
+`3060c62d7712449bac2785a7bcf9c594a4bc936e`, merge `cc4c7d76fd7f575ae3437f95a902a1eb7cea83ba`, both
+Mac architectures pass the ten SDK cases in
+[run42257099719](https://github.com/YondFane/uTerm/actions/runs/42257099719). Inspection of their
+original relaunch images nevertheless reveals a cached empty terminal placeholder. Those images
+prove capture ownership, not restored visible terminal output. Canvas caching now includes terminal
+view identity so a late restored view replaces its placeholder; relaunch and ordinary reconnect
+checks require the actual terminal view inside the window before capture. These corrected UI checks
+still require Mac CI. #45 remains open for the updated results and transfer/database combinations.
 
 #### Windows signed updater QA
 
 `node scripts/windows-updates-smoke.mjs` builds and installs private 0.2.4/0.2.5 NSIS packages and
 serves a one-time signed update over literal loopback. Only a compile-gated QA app with its
-validated temporary root and updates phase can enable this test updater. Endpoints reject remote/DNS
-aliases, credentials and query strings; download URLs must retain the endpoint origin and owned
-package path. Signed versions remain mandatory. An embedded QA-only root lets the updater's
-argument-free relaunch return to the same private profile. Production configuration and ordinary QA
-disabled behavior remain unchanged.
+validated temporary root and updates phase can enable this source. Endpoints reject remote/DNS
+aliases, credentials and query strings; download URLs retain the same origin and owned package path.
+Signed versions remain mandatory. An embedded QA-only root supports argument-free relaunch into the
+same private profile. Production configuration and ordinary QA disabled behavior remain unchanged.
 
-The suite checks the real fifteen-second startup opt-out interval, old versions, wrong architecture,
-bad cryptographic signatures, offline/retry, interrupted Range resume, the actual editor install
-guard, manual checking, automatic download/confirmation, Cancel and durable opt-out. It installs
-through the real updater and verifies a different app PID, retained host/generation, exact Core
-draft bytes and fresh PTY input. Draft input and the editor dirty flag are explicitly simulated;
-transfer/database combinations remain separate. Packages, public signatures, HTTP logs, source/merge
-metadata and owned native windows are uploaded by Windows signed updater QA; private keys remain
-outside evidence. Linux type/build and strict endpoint negatives are local checks; actual Windows
-results require CI and are not yet accepted.
+The suite covers the real startup opt-out interval, old versions, wrong architecture, bad
+signatures, offline/retry, interrupted Range resume, editor/database draft guards, manual checking,
+automatic download/confirmation, Cancel and durable opt-out. Installation uses the real updater,
+then verifies a different app PID, retained host/generation, exact Core draft bytes and fresh PTY
+input. Draft input and dirty guard flags are explicitly simulated. Transfer/full database
+combinations remain separate. Input leases are released before an installer can exit directly;
+host/PTYS remain alive. QA closes its actual terminal and stops only its owned idle host. Cleanup
+failures retain logs and reports. Only bounded read-only observations retry writer contention;
+writes retain their existing conflicts and the explicit Retry saving settings control.
 
-The first actual Windows run at source56273d1, tested merge446673e43c359d066ed3c25c5a4755356558502c,
-passes old-version/wrong-architecture/bad-signature/offline/interrupted-download checks and the
-actual editor guard. It reaches manual checking and automatic download/confirmation, then durable
-opt-out fails under writer contention. Reports and the inspected manual-settings window remain in
-[artifact13521218962](https://github.com/YondFane/uTerm/actions/runs/42253055854/artifacts/13521218962).
-QA now uses the existing explicit Retry saving settings control, recording the retry count, and a
-simulated database draft additionally exercises the actual install guard. Before an installer that
-may exit directly, Tauri releases input leases without stopping host/PTYS. Failed installer startup
-retains views, which can explicitly take control again; no silent takeover is added. Windows
-sourcea5da831 / merge4632afa8124e16fdbf9fafe52c679e0244ef284c subsequently completes signed
-0.2.4→0.2.5 installation, different PID, same host/generation, retained draft and fresh PTY input.
-It then fails fixture shutdown because the Tauri bridge has no standalone Core helper configured. QA
-now closes the actual terminal control and shuts down only its validated idle Tauri host, retaining
-normal active-session refusal rules. Windows removal retries bounded transient file locks and always
-writes logs/summary, including cleanup failures. The
-[original artifact13522119395](https://github.com/YondFane/uTerm/actions/runs/42256355715/artifacts/13522119395)
-remains a failed acceptance; corrected platform results remain pending. Startup and draft
-observation now reuse the existing bounded read-only QA observer for `WRITER_BUSY`, recording
-retries in scene reports. A read race cannot authorize retrying mutations: CAS writes and explicit
-settings retry remain unchanged.
+Windows source `ffc5ade4638981577895cbd92c65779f3837ed81`, merge
+`31e7e6e57170e783c8719934541a20a29aeff0db`, completes all eleven scenes, signed installation, normal
+exit and uninstall with no cleanup errors in
+[run42260767189](https://github.com/YondFane/uTerm/actions/runs/42260767189). The original installed
+window was inspected. Packages, public signatures, HTTP logs, source/merge metadata and windows are
+in
+[artifact13524947434](https://github.com/YondFane/uTerm/actions/runs/42260767189/artifacts/13524947434).
+Private keys remain outside evidence; packages have updater signatures, not Authenticode signatures.
+
+A newer source `b353cc2` fails automatic download with a busy status-read error in
+[run42261801613](https://github.com/YondFane/uTerm/actions/runs/42261801613). Toggling the automatic
+preference had reread startup status while the real download held the updater lock. Startup status
+is now observed once; later preference changes use the existing automatic flow. The focused
+regression reproduces the old failure and passes the correction, preserving default opt-out,
+explicit retry, Cancel and installation guards. Fresh Windows evidence is required; the earlier pass
+is not assigned to the newer commit.
 
 #### Windows/Tauri automatic installation
 

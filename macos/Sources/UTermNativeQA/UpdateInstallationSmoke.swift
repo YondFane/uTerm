@@ -22,6 +22,12 @@ enum UpdateInstallationSmoke {
                   try String(contentsOf: root.appendingPathComponent("upgrade.txt"), encoding: .utf8) == text else { throw BridgeFailure(code: "UPDATE_INSTALL_DATA", message: "SDK installation replaced the host or bypassed saving the actual editor draft") }
             terminal.enqueue(Data("printf 'SDK_%s\\n' RELAUNCHED\r".utf8))
             try await TerminalSmoke.wait("Actual retained process output after SDK relaunch") { terminal.text.contains("SDK_RELAUNCHED") }
+            try await TerminalSmoke.wait("Display the updated process's retained terminal") {
+                terminal.view.window === window && terminal.view.visibleRect.width > 100 && terminal.view.visibleRect.height > 100
+            }
+            window.contentView?.layoutSubtreeIfNeeded()
+            terminal.view.needsDisplay = true
+            window.displayIfNeeded()
             let capture = "native-update-install-relaunched.png"
             report["originalAppPID"] = baseline["originalAppPID"].number
             report["relaunchedAppPID"] = ProcessInfo.processInfo.processIdentifier
@@ -30,6 +36,7 @@ enum UpdateInstallationSmoke {
             report["defaultAutomaticUpdatesOff"] = model.settings["automaticUpdates"].bool == false
             report["actualInstallOrRelaunchExecuted"] = true; report["actualEditorQuitAutosaveRetainedBytes"] = true
             report["realPTYRetainedGenerationAndHost"] = true; report["productionFeedChanged"] = false
+            report["retainedTerminalVisibleInRelaunchedWindow"] = true
             report["realSparkleSDK"] = "2.10.1"; report["simulatedUserDriver"] = true
             if window.isMiniaturized { window.deminiaturize(nil) }
             window.makeKeyAndOrderFront(nil); window.orderFrontRegardless(); NSApp.activate(ignoringOtherApps: true)

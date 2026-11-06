@@ -443,6 +443,8 @@ fn main() {
             #[cfg(feature = "qa")]
             qa::qa_scene,
             #[cfg(feature = "qa")]
+            qa::qa_performance_window,
+            #[cfg(feature = "qa")]
             qa::qa_request_exit,
             #[cfg(feature = "qa")]
             qa::qa_shutdown_idle,

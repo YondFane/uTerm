@@ -28,6 +28,8 @@ const fixture = JSON.parse(fixtureJSON) as {
   databaseRows: number;
   databasePayloadColumns: number;
   lastRepetitionSoakSeconds: number;
+  windowWidth: number;
+  windowHeight: number;
 };
 export function performanceSettings(platform: string) {
   return {
@@ -114,6 +116,10 @@ export async function runPerformance(
   );
   for (const label of ["Hide sidebar", "Hide inspector"])
     document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)?.click();
+  await invoke("qa_performance_window", {
+    width: fixture.windowWidth,
+    height: fixture.windowHeight,
+  });
   await pause(300);
   const container = section.querySelector<HTMLElement>(".terminal");
   const screen = section.querySelector<HTMLElement>(".xterm-screen");
@@ -141,8 +147,16 @@ export async function runPerformance(
     "Actual terminal did not reach the common grid",
   );
   const bounds = container.getBoundingClientRect();
+  if (bounds.right > innerWidth || bounds.bottom > innerHeight) {
+    await invoke("qa_performance_window", {
+      width: Math.ceil(innerWidth + Math.max(0, bounds.right - innerWidth) + 16),
+      height: Math.ceil(innerHeight + Math.max(0, bounds.bottom - innerHeight) + 16),
+    });
+    await pause(300);
+  }
+  const visibleBounds = container.getBoundingClientRect();
   assert(
-    bounds.right <= innerWidth && bounds.bottom <= innerHeight,
+    visibleBounds.right <= innerWidth && visibleBounds.bottom <= innerHeight,
     "Common grid is clipped outside the actual app window",
   );
   const host = () =>

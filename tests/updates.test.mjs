@@ -39,6 +39,8 @@ test("automatic updates download and install once, preserve file guards and stop
     let announced = false;
     mockIPC((command) => {
       calls.push(command);
+      if (command === "update_status" && calls.filter((item) => item === command).length > 1)
+        throw new Error("update operation is in progress");
       if (command === "update_status" || command === "update_check")
         return { enabled: true, version: announced ? "2.0.0" : "", notes: null, downloaded: false };
       if (command === "update_install" && corruptCache) throw new Error("DOWNLOAD_VERIFY");
@@ -68,6 +70,8 @@ test("automatic updates download and install once, preserve file guards and stop
     automatic = true;
     await act(async () => root.render(React.createElement(Harness)));
     assert.equal(updates.phase, "ready");
+    assert.equal(updates.error, "");
+    assert.equal(calls.filter((item) => item === "update_status").length, 1);
     assert.equal(updates.confirmation, 10);
     assert.equal(calls.filter((item) => item === "prepare").length, 0);
     assert.ok(document.querySelector("dialog").open);
