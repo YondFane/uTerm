@@ -15,7 +15,7 @@ final class NativeUpdateTestDriver: NSObject, SPUUserDriver {
     private var cancelDownload: (() -> Void)?
     init(mode: String) { self.mode = mode }
     func resetForRetry() { ready = false; notFound = false; cancelled = false; receivedBytes = 0; errors = []; foundVersion = nil; cancelDownload = nil }
-    func showUpdatePermissionRequest(_ request: SPUUpdatePermissionRequest, reply: @escaping (SUUpdatePermissionResponse) -> Void) {
+    func show(_ request: SPUUpdatePermissionRequest, reply: @escaping (SUUpdatePermissionResponse) -> Void) {
         reply(SUUpdatePermissionResponse(automaticUpdateChecks: false, sendSystemProfile: false))
     }
     func showUserInitiatedUpdateCheck(cancellation: @escaping () -> Void) {}
@@ -37,7 +37,7 @@ final class NativeUpdateTestDriver: NSObject, SPUUserDriver {
     }
     func showDownloadDidStartExtractingUpdate() {}
     func showExtractionReceivedProgress(_ progress: Double) {}
-    func showReadyToInstallAndRelaunch(_ reply: @escaping (SPUUserUpdateChoice) -> Void) {
+    func showReady(toInstallAndRelaunch reply: @escaping (SPUUserUpdateChoice) -> Void) {
         ready = true
         reply(.dismiss)
     }

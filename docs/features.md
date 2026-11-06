@@ -4659,9 +4659,10 @@ public key/signature in evidence. The simulated user driver accepts/cancels SDK 
 not replace downloading, signature verification, extraction or target validation. Valid,
 bad-signature, wrong-architecture/channel, old-version, cancel, offline and interrupted scenarios
 retain HTTP logs, reports and actual app screenshots; network failures also require a successful
-actual SDK retry. The first SDK scenario CI run is pending. This suite explicitly does not yet
-execute installation, relaunch or automatic scheduling, and #45 remains open for those checks and
-Windows signed updates.
+actual SDK retry. The first SDK scenario build failed on two Swift-imported driver selector names
+before runtime; the corrected driver must still pass a new CI run. This suite explicitly does not
+yet execute installation, relaunch or automatic scheduling, and #45 remains open for those checks
+and Windows signed updates.
 
 #### Windows/Tauri automatic installation
 
