@@ -433,6 +433,8 @@ fn main() {
             #[cfg(feature = "qa")]
             qa::qa_redis_fixture,
             #[cfg(feature = "qa")]
+            qa::qa_database_fixture,
+            #[cfg(feature = "qa")]
             qa::qa_host_status,
             #[cfg(feature = "qa")]
             qa::qa_external_settings,

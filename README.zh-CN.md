@@ -204,6 +204,11 @@ QA 提供该服务，增加配置／SFTP／远程终端截图及实际退出／�
 8.10.3 Cygwin 便携归档，macOS 使用 Homebrew
 Redis。报告和原生截图与私有凭据／配置分开上传，不安装 Redis 系统服务。两条命令均不将私有夹具数据放入产物，创建账户要求使用一次性 CI。
 
+同一 Tauri 包装器还会启动私有 PostgreSQL 集群，验证数据库配置、精确值、事务、取消及重连，退出后核对已提交数据和自有连接清理。Windows 使用已安装的 PostgreSQL 程序（`PGBIN`
+或 Program Files）；macOS 在需要时安装 Homebrew PostgreSQL 16，不启停已有数据库服务。
+`python3 -B scripts/database-protocol-qa.py EVIDENCE_DIRECTORY`
+下载目录校验的驱动，将 JDBC／MongoDB 协议模拟与真实 PostgreSQL 检查分开记录。这些自动检查不宣称人工选择器或交互验收通过。
+
 `uterm-core::{files,git,worktrees}`
 管理本地文件及 Git／Worktree 规则和回归，Tauri 命令委派相同函数。新增 `git.*`
 契约及生成 DTO 供隔离原生 QA 应用的**文件 →

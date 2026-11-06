@@ -5777,9 +5777,18 @@ real-app QA scenes and no cleanup errors on each platform. Reports are in the
 [macOS artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476515464)
 and
 [Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42158261626/artifacts/13476251745).
-These Tauri scenes do not establish complete Windows database-workbench acceptance. Windows database
-flows, other engines/document databases, complete component installation/recovery, native picker and
-manual acceptance remain pending; #38 stays open.
+These Tauri scenes do not establish complete Windows database-workbench acceptance. The desktop QA
+harness additionally provisions a private real PostgreSQL cluster and checks all five profile types,
+catalog-verified driver installation, exact SQL values, retained drafts, write confirmation,
+rollback/commit, server-observed slow-query cancellation, reconnect and post-exit data/connection
+cleanup. New-source Windows/macOS runtime results for these additional scenes are pending.
+
+`database-protocol-qa.py` records JDBC models for MySQL/PostgreSQL/Oracle, pinned vendor-driver
+SOCKS handshakes and a disposable MongoDB wire fixture. Component and Elasticsearch HTTP simulations
+run separately from actual PostgreSQL acceptance. Reports identify simulation, real-server and
+skipped cases explicitly; no real MySQL/Oracle/MongoDB/Elasticsearch cluster or manual
+picker/interaction acceptance is claimed. #38 stays open until the new-source automated results and
+artifacts pass.
 
 ### Database setup and visibility
 

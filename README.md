@@ -248,6 +248,14 @@ Homebrew Redis. Reports and native screenshots are uploaded separately from priv
 configuration; no Redis system service is installed. Both commands keep private fixture data outside
 artifacts and require disposable CI for account creation.
 
+The same Tauri wrapper starts a private PostgreSQL cluster for database profile, exact-value,
+transaction, cancellation and reconnect scenes, then verifies committed data and releases owned
+connections. Windows uses installed PostgreSQL binaries (`PGBIN` or Program Files); macOS installs
+Homebrew PostgreSQL 16 if needed. It never starts or stops an installed database service.
+`python3 -B scripts/database-protocol-qa.py EVIDENCE_DIRECTORY` downloads catalog-verified drivers
+and records JDBC/MongoDB protocol simulations separately from real PostgreSQL checks. Manual picker
+and interaction acceptance is not claimed by these automated checks.
+
 `uterm-core::{files,git,worktrees}` owns local file and Git/Worktree rules and their regression
 tests; Tauri commands delegate to the same functions. The new `git.*` contract and generated DTOs
 are used by **File → Git…** in the isolated native QA app. Core now reconciles registered project

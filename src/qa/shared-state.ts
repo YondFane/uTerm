@@ -11,6 +11,7 @@ import { editorDraftReceiptKey } from "../lib/editor-draft-handoff";
 import { ContentScope } from "../lib/content-transport";
 import { tauriContentPort } from "../lib/tauri-content";
 import { runRedis } from "./redis";
+import { runDatabase } from "./database";
 import type {
   CoreEditorDraftEntry,
   CoreFileDocument,
@@ -32,6 +33,7 @@ interface Context {
     | "ssh"
     | "ssh-reopen"
     | "redis"
+    | "database"
     | "input-owner"
     | "input-viewer";
   backup?: string;
@@ -1556,6 +1558,10 @@ export async function run(recovery: boolean) {
     }
     if (context.phase === "redis") {
       await runRedis(scene, () => observeCore("snapshot.read"));
+      return;
+    }
+    if (context.phase === "database") {
+      await runDatabase(scene, () => observeCore("snapshot.read"));
       return;
     }
     if (context.phase === "initial") {

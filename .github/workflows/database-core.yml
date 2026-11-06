@@ -22,13 +22,20 @@ jobs:
         ports:
           - 5432/tcp
         options: >-
-          --health-cmd "pg_isready -U uterm_qa -d uterm_qa"
-          --health-interval 5s --health-timeout 5s --health-retries 10
+          --health-cmd "pg_isready -U uterm_qa -d uterm_qa" --health-interval 5s --health-timeout 5s
+          --health-retries 10
     env:
       PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       UTERM_DATABASE_TEST_PASSWORD: isolated-ci-fixture-only
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install pinned protocol-test dependencies
+        run: |
+          npm install --global pnpm@11.22.0
+          pnpm install --frozen-lockfile
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -70,6 +77,12 @@ jobs:
         run: |
           set -o pipefail
           cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test database_client 2>&1 | tee "$RUNNER_TEMP/uterm-database/database-client-tests.log"
+      - name: Component recovery and document protocol simulations
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib database 2>&1 | tee "$RUNNER_TEMP/uterm-database/database-components-tests.log"
+          python3 -B scripts/database-protocol-qa.py "$RUNNER_TEMP/uterm-database"
       - name: Real PostgreSQL values, transactions, conflicts and cancellation
         env:
           UTERM_DATABASE_TEST_PORT: ${{ job.services.postgres.ports['5432'] }}

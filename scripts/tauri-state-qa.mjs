@@ -43,6 +43,10 @@ if (process.env.UTERM_QA_REDIS_FIXTURE) {
   copyFileSync(process.env.UTERM_QA_REDIS_FIXTURE, join(root, "redis-fixture.json"));
   chmodSync(join(root, "redis-fixture.json"), 0o600);
 }
+if (process.env.UTERM_QA_DATABASE_FIXTURE) {
+  copyFileSync(process.env.UTERM_QA_DATABASE_FIXTURE, join(root, "database-fixture.json"));
+  chmodSync(join(root, "database-fixture.json"), 0o600);
+}
 mkdirSync(join(root, "project"));
 writeFileSync(join(root, "project", editorFixture.fileName), "\ufeff" + editorFixture.originalText);
 const evidence = join(root, "evidence");
@@ -476,6 +480,47 @@ try {
           const value = JSON.parse(readFileSync(join(evidence, file), "utf8"));
           assert.equal(value.context.head, head);
           assert.equal(value.context.tested, tested);
+          if (phase === "database" && value.scene !== "failure") {
+            const checks = {
+              "database-live-profiles": [
+                "profileSavedInCore",
+                "temporaryPasswordNotPersisted",
+                "defaultReadonly",
+                "verifiedDriverInstalled",
+              ],
+              "database-live-exact": ["actualSQLExecuted", "unicodeRetained"],
+              "database-live-draft": [
+                "hiddenWorkbenchRetainedEditor",
+                "cancelledApplicationQuitRetainedDraftAndConnection",
+              ],
+              "database-live-transactions": [
+                "readonlyWriteRefused",
+                "cancelledWriteDidNotOpenTransaction",
+                "cancelledPendingDisconnectRetainedConnection",
+                "rollbackAndCommitCompleted",
+              ],
+              "database-live-recovery": [
+                "serverObservedSlowQueryCancelled",
+                "temporaryPasswordReconnect",
+                "reconnectDefaultsReadonly",
+                "committedDataReread",
+              ],
+            }[value.scene];
+            assert(checks, `Unexpected database acceptance scene: ${value.scene}`);
+            for (const key of checks) assert.equal(value.checks[key], true, key);
+            if (value.scene === "database-live-exact") {
+              assert.equal(value.checks.exactInteger, "9223372036854775807");
+              assert.equal(value.checks.exactDecimal, "12345678901234567890.1234567890");
+            }
+            if (value.scene === "database-live-profiles")
+              assert.deepEqual(value.checks.supportedKinds, [
+                "mysql",
+                "postgresql",
+                "oracle",
+                "elasticsearch",
+                "mongodb",
+              ]);
+          }
           if (phase === "redis" && value.scene !== "failure") {
             const checks = {
               "redis-live-profile": [
@@ -887,23 +932,25 @@ try {
         `${phase} did not finish ordinary exit: mainExited=${mainExited}, code=${code}, log=${log.slice(-1000)}`,
       );
       const expected =
-        phase === "redis"
-          ? 6
-          : phase === "ssh"
-            ? 3
-            : phase === "ssh-reopen"
-              ? 1
-              : phase === "git"
-                ? 25
-                : phase === "editor-checkpoint"
-                  ? 3
-                  : phase.startsWith("editor-")
-                    ? 5
-                    : phase === "initial"
-                      ? 8
-                      : phase === "reopen"
-                        ? 1
-                        : 3;
+        phase === "database"
+          ? 5
+          : phase === "redis"
+            ? 6
+            : phase === "ssh"
+              ? 3
+              : phase === "ssh-reopen"
+                ? 1
+                : phase === "git"
+                  ? 25
+                  : phase === "editor-checkpoint"
+                    ? 3
+                    : phase.startsWith("editor-")
+                      ? 5
+                      : phase === "initial"
+                        ? 8
+                        : phase === "reopen"
+                          ? 1
+                          : 3;
       assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       if (phase === "git") writeFileSync(join(root, "project/.git/qa-git-release"), "release\n");
@@ -950,6 +997,7 @@ try {
   assert.deepEqual(readFileSync(join(store, `snapshot-${digest}.damaged`)), damaged);
   assert.deepEqual(readFileSync(join(store, "legacy-original.json")), original);
   if (process.env.UTERM_QA_REDIS_FIXTURE) await run("redis");
+  if (process.env.UTERM_QA_DATABASE_FIXTURE) await run("database");
   if (process.env.UTERM_QA_SSH_FIXTURE) {
     await run("ssh");
     await run("ssh-reopen");

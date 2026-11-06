@@ -119,6 +119,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "ssh",
         "ssh-reopen",
         "redis",
+        "database",
         "input-owner",
         "input-viewer",
     ]
@@ -133,6 +134,20 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "platform": std::env::consts::OS, "architecture": std::env::consts::ARCH,
         "ready": app.state::<crate::shared_core::Lifecycle>().active.load(std::sync::atomic::Ordering::SeqCst)
     }))
+}
+
+#[tauri::command]
+pub fn qa_database_fixture(app: tauri::AppHandle) -> Result<Value, String> {
+    let root = check(&app)?;
+    if argument("--qa-phase")? != "database" {
+        return Err("Database fixture is unavailable in this QA phase".into());
+    }
+    // Keep private authentication outside screenshot context and production commands.
+    // 私有认证不进入截图上下文或生产命令。
+    serde_json::from_slice(
+        &std::fs::read(root.join("database-fixture.json")).map_err(|error| error.to_string())?,
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
