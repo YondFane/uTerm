@@ -96,12 +96,12 @@ records 330 Web resources, matching x86_64 app/helper, read-only mount/resources
 output, explicit close/idle shutdown, uninstall and retained private data. Other #41 checks fail in
 that workflow; ARM was blocked by an SSH fixture failure and Windows reports a built/installed
 executable hash mismatch. No other platform or later commit is accepted from this Intel result.
-Windows diagnostics retain both hashes, sizes and initial differing offsets; the mismatch remains a
-failing gate. The **Candidate Windows QA** workflow runs this installer scope independently, while
-full desktop regression remains in the normal workflows. Independent package, inspector and GitHub
-failures remain failing CI gates even when later checks run. Signed updates, upgrade/data rollback
-and stable cutover remain separate open tasks; these commands do not publish or change production
-update sources.
+Windows diagnostics compare blocks across the complete files and retain both hashes, sizes and the
+first differing byte offsets/values; the mismatch remains a failing gate. The **Candidate Windows
+QA** workflow runs this installer scope independently, while full desktop regression remains in the
+normal workflows. Independent package, inspector and GitHub failures remain failing CI gates even
+when later checks run. Signed updates, upgrade/data rollback and stable cutover remain separate open
+tasks; these commands do not publish or change production update sources.
 
 #### Native QA validation
 

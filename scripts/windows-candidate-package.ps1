@@ -102,8 +102,19 @@ try {
     if (!$candidateReport.binaryMatchesBuiltSource) {
         $builtBytes = [IO.File]::ReadAllBytes($candidateBuiltBinary); $installedBytes = [IO.File]::ReadAllBytes($binary)
         $differences = [Collections.Generic.List[int]]::new()
-        for ($offset=0; $offset -lt [Math]::Min(65536, [Math]::Min($builtBytes.Length, $installedBytes.Length)) -and $differences.Count -lt 16; $offset++) { if ($builtBytes[$offset] -ne $installedBytes[$offset]) { $differences.Add($offset) } }
+        # Compare every block; a matching PE header does not prove that code or embedded resources match.
+        # 比较所有数据块；PE 头相同不能证明代码或内嵌资源相同。
+        $digest = [Security.Cryptography.SHA256]::Create()
+        try {
+            $commonLength = [Math]::Min($builtBytes.Length, $installedBytes.Length)
+            for ($block=0; $block -lt $commonLength -and $differences.Count -lt 16; $block+=65536) {
+                $count = [Math]::Min(65536, $commonLength-$block)
+                if ([Convert]::ToHexString($digest.ComputeHash($builtBytes, $block, $count)) -eq [Convert]::ToHexString($digest.ComputeHash($installedBytes, $block, $count))) { continue }
+                for ($offset=$block; $offset -lt $block+$count -and $differences.Count -lt 16; $offset++) { if ($builtBytes[$offset] -ne $installedBytes[$offset]) { $differences.Add($offset) } }
+            }
+        } finally { $digest.Dispose() }
         $candidateReport.binaryFirstDifferenceOffsets = @($differences)
+        $candidateReport.binaryFirstDifferences = @($differences | ForEach-Object { @{ offset=$_; built=$builtBytes[$_]; installed=$installedBytes[$_] } })
     }
     $candidateReport.binaryVersion = (Get-Item $binary).VersionInfo.ProductVersion
     if (!$candidateReport.binaryVersion.StartsWith($candidateVersion)) { throw 'Installed executable version mismatch' }
