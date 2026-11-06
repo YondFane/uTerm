@@ -229,7 +229,11 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         case "file_read", "files_list", "files_search":
             guard params["directory"] == .string(documentDirectory) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Content cannot select a different project root") }
             let methods = ["file_read": "files.read", "files_list": "files.list", "files_search": "files.search"]
-            return try await bridge.call(methods[request.method!]!, params: .object(params))
+            // Keep file operations on the captured root even if the logical alias is retargeted.
+            // 即使逻辑别名改指向，文件操作仍固定在打开时的根目录。
+            var scoped = params
+            scoped["directory"] = .string(directory.path)
+            return try await bridge.call(methods[request.method!]!, params: .object(scoped))
         case "editor_drafts_list", "editor_drafts_document":
             guard params["directory"] == .string(documentDirectory) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Draft cannot select another project root") }
             let method = request.method == "editor_drafts_list" ? "editor.drafts.list" : "editor.drafts.document"
@@ -249,7 +253,9 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             guard params["directory"] == .string(documentDirectory), params["path"] == .string(path) else {
                 throw BridgeFailure(code: "ROOT_DENIED", message: "Editor cannot save another file or project root")
             }
-            return try await bridge.call("files.save", params: .object(params))
+            var scoped = params
+            scoped["directory"] = .string(directory.path)
+            return try await bridge.call("files.save", params: .object(scoped))
         case "file_copy", "file_mutate":
             throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。"))
         case "editor_guard":

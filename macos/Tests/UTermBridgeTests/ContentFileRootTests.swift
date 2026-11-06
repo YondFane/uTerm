@@ -72,6 +72,16 @@ final class ContentFileRootTests: XCTestCase {
             let rewritten = try await core.call("editor.drafts.document", params: .object(["directory": .string(root.resolvedDirectory.path), "path": .string("a.txt")]))
             XCTAssertEqual(rewritten, .null)
             XCTAssertEqual(try Data(contentsOf: file), original)
+            let replacement = base.appendingPathComponent("replacement")
+            try FileManager.default.createDirectory(at: replacement, withIntermediateDirectories: true)
+            let external = Data("EXTERNAL\r\n".utf8)
+            try external.write(to: replacement.appendingPathComponent("a.txt"))
+            try FileManager.default.removeItem(at: alias)
+            try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: replacement)
+            let pinned = try await core.call("files.read", params: .object(["directory": .string(root.resolvedDirectory.path), "path": .string("a.txt")]))
+            XCTAssertEqual(pinned["text"], disk["text"])
+            XCTAssertNil(root.relativePath(for: alias.appendingPathComponent("a.txt")))
+            XCTAssertEqual(try Data(contentsOf: replacement.appendingPathComponent("a.txt")), external)
             await core.close()
         } catch { await core.close(); throw error }
     }

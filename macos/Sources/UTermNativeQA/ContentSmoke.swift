@@ -143,6 +143,33 @@ enum ContentSmoke {
             try await TerminalSmoke.wait("Close file through its native menu and document transport") { !window.isVisible }
         }
         report["closedThroughNativeMenu"] = true
+        let alias = root.deletingLastPathComponent().appendingPathComponent("content-alias")
+        let replacement = root.deletingLastPathComponent().appendingPathComponent("content-alias-replacement")
+        try FileManager.default.createDirectory(at: replacement, withIntermediateDirectories: true)
+        let external = Data("EXTERNAL_ALIAS_TARGET\n".utf8)
+        try external.write(to: replacement.appendingPathComponent("中文.txt"))
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: root)
+        let aliased = try open(alias, "中文.txt")
+        defer { aliased.forceClose() }
+        try await wait(aliased, "document.querySelector('.cm-content[contenteditable=false]')?.textContent.includes('UTERM_CONTENT_中文') === true")
+        try FileManager.default.removeItem(at: alias)
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: replacement)
+        let pinned = try await EditorSmoke.evaluate(aliased, script: """
+            const reply = await window.webkit.messageHandlers.utermContent.postMessage({kind:'request',version:1,id:operationID,document:window.utermContentDocument,method:'file_read',params:{directory,path}});
+            return !reply.error && reply.result.text === expected;
+            """, arguments: ["directory": alias.path, "path": "中文.txt", "expected": String(decoding: original, as: UTF8.self), "operationID": UUID().uuidString])
+        let denied = try await request(aliased, method: "file_read", params: ["directory": replacement.path, "path": "中文.txt"]) == "ROOT_DENIED"
+        guard pinned, denied, try Data(contentsOf: replacement.appendingPathComponent("中文.txt")) == external else { throw BridgeFailure(code: "CONTENT_ROOT", message: "Retargeting a selected alias changed the native window filesystem scope") }
+        report["logicalAliasRetainsPinnedFilesystemRoot"] = true
+        report["retargetedAliasCannotSelectAnotherRoot"] = true
+        guard let aliasWindow = aliased.window else { throw BridgeFailure(code: "CONTENT_WINDOW", message: "Alias content window is missing") }
+        aliasWindow.makeKeyAndOrderFront(nil)
+        let aliasImage = "native-content-alias-root.png"
+        try await TerminalSmoke.capture(window: aliasWindow, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(aliasImage))
+        captures.append(aliasImage)
+        aliasWindow.performClose(nil)
+        try await TerminalSmoke.wait("Close the readonly alias preview after its scoped read") { !aliasWindow.isVisible }
+        report["aliasRootScenario"] = "Real filesystem retarget and fresh WebKit read; alternate root denied; normal readonly window close"
         let loading = try open(root, "中文.txt")
         defer { loading.forceClose() }
         report["loadingAtCloseRequest"] = loading.webView.isLoading

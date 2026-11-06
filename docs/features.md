@@ -514,7 +514,10 @@ retains both real native failure windows, DOM text and UTF-8 diagnostics, plus t
 recovery evidence. The fix separates logical draft identity from resolved filesystem boundaries.
 Three Swift regressions cover a real alias/sibling/escape, macOS temporary aliases and recovery
 through the actual Core ABI with original file bytes retained; their execution and complete rollback
-still require the new Mac CI source. No native pass is inferred from Linux checks.
+still require the new Mac CI source. The native content smoke also makes a fresh WebKit read after
+actually retargeting a selected alias, rejects the alternate root and records
+`native-content-alias-root.png`; its 21 checks and four original windows require actual Mac
+execution. No native pass is inferred from Linux checks.
 
 The Mac rehearsal downloads a native QA archive from its owned loopback server, verifies a pinned
 one-time Ed25519 manifest and architecture, rejects a bad signature before replacement, and tests
@@ -594,7 +597,8 @@ Native file windows retain the selected project path spelling as the Core draft 
 grouping; picker targets outside the root, including symlink escapes, are rejected. File opening
 from the project menu, inspector, recovery and Git retains that logical root. Existing windows are
 reused only for the same logical root and relative file, so distinct stored aliases are not silently
-merged. The draft format and revision/byte checks are unchanged.
+merged. The draft format and revision/byte checks are unchanged. Reads and saves use the resolved
+root pinned when the window opens; retargeting an alias cannot redirect them.
 
 The queue coalesces waiting text, bounds pending data and keeps flush/retry failures visible,
 including initialization with no waiting writes. Different documents advance independently; stale
