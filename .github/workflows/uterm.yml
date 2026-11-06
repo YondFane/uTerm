@@ -157,6 +157,12 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PYTHONDONTWRITEBYTECODE: "1"
         run: python scripts/ssh-tauri-qa.py 2>&1 | tee ci-evidence/tauri-state-qa-run.log
+      - name: Isolated Windows candidate installer, actual launch and uninstall
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: ./scripts/windows-candidate-package.ps1 *>&1 | Tee-Object -FilePath ci-evidence/candidate-package-command.log
       - name: Preserve shared Core failure
         if: ${{ always() && steps.shared-core.outcome == 'failure' }}
         shell: bash

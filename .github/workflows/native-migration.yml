@@ -97,11 +97,19 @@ jobs:
           node scripts/legacy-host-compat.mjs macos/.build/evidence/legacy-host 2>&1 | tee macos/.build/evidence/legacy-host-command.log
       - name: Real window and graceful exit smoke
         run: bash scripts/macos-native-smoke.sh
+      - name: Isolated candidate DMG install, launch, uninstall and signature audit
+        id: candidate-package
+        continue-on-error: true
+        run: bash scripts/macos-candidate-package.sh 2>&1 | tee macos/.build/evidence/candidate-package-command.log
       - name: Real native settings, conflicts, shortcut capture, reset and screenshots
         run: bash scripts/macos-settings-smoke.sh
       - name: Real native files, search, pane swap, zoom and focus screenshots
+        id: inspector-controls
+        continue-on-error: true
         run: bash scripts/macos-inspector-smoke.sh
       - name: Real native GitHub window with isolated CLI simulation and draft guards
+        id: github-workbench
+        continue-on-error: true
         run: bash scripts/macos-github-smoke.sh
       - name: Real native PTY, split, detach and replay smoke
         run: bash scripts/macos-terminal-smoke.sh
@@ -128,6 +136,11 @@ jobs:
         run: bash scripts/macos-git-smoke.sh
       - name: Real native control and standalone CLI smoke
         run: bash scripts/macos-control-smoke.sh
+      - name: Preserve independent candidate and controls failures
+        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure') }}
+        run: |
+          echo "Candidate, inspector or GitHub checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
+          exit 1
       - name: Record resolved native dependencies
         if: always()
         run: if [ -f macos/Package.resolved ]; then cp macos/Package.resolved macos/.build/evidence/Package.resolved; fi

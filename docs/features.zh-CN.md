@@ -52,10 +52,27 @@ MiB 原始历史后，明确 reset 到有界保留屏幕，不承诺无限原始
 ms 等待，期间执行真实侧栏菜单，实际渲染／确认超过 113
 KB。两 Mac 架构已在下述源码通过；受控等待验证正确性，不代表性能收益。Windows 保留现有回归，此 Unix 负载场景不在 Windows 执行。
 
+#### 隔离候选安装包
+
+完成原生 QA 构建后，`bash scripts/macos-candidate-package.sh` 创建按架构区分的 App
+ZIP 和只读 DMG。脚本核对 App／helper 架构、最低系统、ad-hoc 签名、依赖与只读资源，再挂载镜像并安装到临时私有 Applications 目录。安装后的应用启动包内 helper，渲染真实中文 PTY 输出，明确关闭测试会话并停止空闲宿主后卸载。原生 QA 版本仍为包内记录的
+`0.0.1`，不是稳定发布包。
+
+Windows 上运行 `./scripts/windows-candidate-package.ps1`，构建当前用户范围的 QA
+NSIS 安装器，内嵌 WebView 内容并关闭生产 deep
+link。脚本安装到所属临时目录，核对 x64 程序与只读资源文件，运行实际安装后的应用、捕获所属 HWND，再执行卸载。仅重定向隔离的
+`sh.uterm.desktop.qa.sharedstate`
+配置；私有数据保留到测试清理，生产协议／卸载注册表指纹须保持一致。QA 安装器要求 CI 镜像已有 WebView2；仅供 QA 的安装／卸载钩子负责还原资源属性。
+
+两端在 `candidate/` 归档 SHA256、准确源码 head／tested merge
+SHA、平台／工具链证据、安装报告、日志及原始窗口截图。原生包使用 ad-hoc 签名，没有 Apple
+Developer 签名／公证；Windows 候选未签名，两端均无更新签名。新增安装检查仍需在 macOS／Windows
+CI 执行。即使后续检查继续运行，独立的安装包、工具窗格及 GitHub 失败仍导致 CI 失败。签名更新、升级／数据回退及稳定切换是后续开放任务；这些命令不发布，也不更改生产更新源。
+
 #### 原生 QA 验证
 
-迁移验收仍由 [#13](https://github.com/YondFane/uTerm/issues/13)
-跟踪：M3 尚缺持久布局、PDF 标记及完整 Windows 运行面板／选择器覆盖。M4 尚需数据库验收、Agent／设置／菜单补齐、交互回归及性能证据；M5 安装包、更新和升级／回退验收仍待完成。
+迁移验收仍由 [#13](https://github.com/YondFane/uTerm/issues/13) 跟踪。M3
+#17 已按用户指示关闭，保留持久布局／PDF 标记及 Windows 运行面板／选择器覆盖缺口。数据库、Redis 和 Agent 的验收见 #38–#40。M4 仍需 #41 偏好补齐、#42 交互回归及 #43 性能证据；M5 候选安装包、更新、升级／回退及最终门禁在 #44–#47 保持开放。
 
 Redis 分页、删除、TTL、取消退出及系统凭据检查已在源码 `940f8d1` 验收，平台报告和截图见
 [#39](https://github.com/YondFane/uTerm/issues/39)。工作保留在 `feat/native-macos-shared-core`

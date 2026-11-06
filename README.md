@@ -169,6 +169,13 @@ and temporary repository. It checks shared session links, PR drafts, literal JSO
 cancellation and quit protection, and saves a report, CLI log and four screenshots. It creates no
 real GitHub PR, push or fork. Both clients reuse `uterm-core::github`.
 
+Isolated candidate installation QA: run `bash scripts/macos-candidate-package.sh` after the native
+build, or `./scripts/windows-candidate-package.ps1` on Windows with WebView2 installed. They create
+QA App/DMG or NSIS artifacts and SHA256 sums, install only into owned temporary directories, run and
+capture the installed app, then uninstall. Reports live under the CI artifact's `candidate/`
+directory. Native signing is ad-hoc; Windows candidates are unsigned, with no update signature or
+notarization. These commands do not publish or change production update feeds.
+
 Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the Pi extension under
 `crates/uterm-core/integrations/`. `bash scripts/macos-agent-smoke.sh` requires a macOS graphical
 session and the QA build; it records real window/Host/installed-reporter evidence with an explicitly

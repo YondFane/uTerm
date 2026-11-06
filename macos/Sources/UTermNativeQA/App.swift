@@ -99,6 +99,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--candidate-smoke-report") {
+                var report = baseReport()
+                do { try await CandidateSmoke.run(model: model, window: window, report: &report) }
+                catch {
+                    report["failure"] = error.localizedDescription
+                    try? await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("candidate-installed-native-failure.png"))
+                }
+                if report["explicitFixtureCloseAndIdleHostShutdown"] as? Bool != true, let bridge = model.bridge {
+                    do {
+                        for session in try await bridge.call("host.status")["sessions"].array { _ = try await bridge.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]])) }
+                        _ = try await bridge.call("host.shutdownIdle")
+                    } catch { report["cleanupError"] = error.localizedDescription }
+                }
+                await model.shutdown(); terminating = true
+                finishReport(report, path: path); return
+            }
             if let path = WorkspaceModel.argument("--github-smoke-report") {
                 var report = baseReport()
                 do { try await GitHubSmoke.run(model: model, parent: window, open: { try await self.makeGitHubContentWindow(directory: $0) }, report: &report) }

@@ -146,6 +146,12 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 使用隔离模拟 CLI 和临时仓库运行原生 GitHub 窗口，检查共享会话关联、PR 草稿、字面 JSON 创建、取消及退出保护，保存报告、CLI 日志和四张截图。不创建真实 GitHub
 PR、不推送、不创建 Fork。两端复用 `uterm-core::github`。
 
+隔离候选安装 QA：原生构建后运行
+`bash scripts/macos-candidate-package.sh`；已有 WebView2 的 Windows 上运行
+`./scripts/windows-candidate-package.ps1`。命令生成 QA
+App／DMG 或 NSIS 及 SHA256，仅安装到所属临时目录，运行并截图后卸载；报告保存在 CI 产物的
+`candidate/`。原生仅有 ad-hoc 签名，Windows 候选未签名，均无更新签名或公证；不发布或修改生产更新源。
+
 共享 Agent 规则位于 `uterm-core::{agents,agent_install}`，Pi 扩展位于
 `crates/uterm-core/integrations/`。`bash scripts/macos-agent-smoke.sh`
 需要 macOS 图形会话及 QA 构建；记录真实窗口／Host／已安装报告程序证据，系统通知适配器明确使用模拟，不使用提供方凭据或全局安装 CLI。

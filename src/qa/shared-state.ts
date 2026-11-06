@@ -24,6 +24,7 @@ interface Context {
   root: string;
   project: string;
   platform: string;
+  identifier: string;
   phase:
     | "initial"
     | "reopen"
@@ -37,7 +38,8 @@ interface Context {
     | "database"
     | "agents"
     | "input-owner"
-    | "input-viewer";
+    | "input-viewer"
+    | "package";
   backup?: string;
   ready: boolean;
 }
@@ -1541,6 +1543,38 @@ export async function run(recovery: boolean) {
       return;
     }
     await until(async () => (await invoke<Context>("qa_context")).ready, "normal quit listener");
+    if (context.phase === "package") {
+      const snapshot = (await observeCore("snapshot.read")) as unknown as {
+        document: { settings: typeof defaults; workspace: { projects: unknown[] } };
+      };
+      assert(
+        context.identifier === "sh.uterm.desktop.qa.sharedstate",
+        "Candidate identity is not isolated",
+      );
+      assert(
+        snapshot.document.settings.automaticUpdates === false,
+        "Candidate enabled automatic updates",
+      );
+      assert(
+        snapshot.document.workspace.projects.length === 0,
+        "Candidate opened non-fixture projects",
+      );
+      await until(
+        () => document.querySelector("[data-sidebar-style]"),
+        "installed application window",
+      );
+      assert(!document.querySelector('[role="alert"]'), "Candidate startup error is visible");
+      await scene("installed-start", {
+        installedApplicationStarted: true,
+        coreReady: true,
+        automaticUpdates: false,
+        productionDataAccess: false,
+        productionDeepLinkRegistered: false,
+        identifier: context.identifier,
+      });
+      await invoke("qa_request_exit");
+      return;
+    }
     assert(localStorage.getItem(backupKey) === sentinel, "Auxiliary backup was changed");
     if (context.phase === "input-owner" || context.phase === "input-viewer") {
       await runInputControl(context);

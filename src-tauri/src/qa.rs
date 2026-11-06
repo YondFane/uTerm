@@ -123,12 +123,14 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "agents",
         "input-owner",
         "input-viewer",
+        "package",
     ]
     .contains(&phase.as_str())
     {
         return Err("Invalid QA phase".into());
     }
     Ok(json!({
+        "identifier": app.config().identifier,
         "phase": phase, "root": root, "project":root.join("project"), "backup": argument("--qa-backup").ok(),
         "head": option_env!("UTERM_QA_HEAD"), "tested": option_env!("UTERM_QA_TESTED"),
         "sourceTreeDirty":option_env!("UTERM_QA_DIRTY"),

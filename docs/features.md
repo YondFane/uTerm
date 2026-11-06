@@ -66,12 +66,38 @@ acknowledges over 113 KB. These cases passed on both Mac architectures at the so
 controlled delay tests correctness, not performance gains. Windows retains its existing regression
 suite; this Unix load scenario does not run there.
 
+#### Isolated candidate packages
+
+After the native QA build, `bash scripts/macos-candidate-package.sh` creates an
+architecture-specific App ZIP and read-only DMG. It audits the app/helper architectures, minimum OS,
+ad-hoc signatures, dependencies and read-only resources, then mounts the image and installs into a
+private temporary Applications directory. The installed app starts its bundled helper, renders real
+Unicode PTY output, explicitly closes the fixture session and stops the idle host before removal.
+The native QA version remains the bundle's recorded `0.0.1`; this is not a stable release package.
+
+On Windows, `./scripts/windows-candidate-package.ps1` builds a current-user QA NSIS installer with
+embedded WebView content and production deep links disabled. It installs into an owned temporary
+directory, checks the x64 executable and read-only resource files, runs the installed real app,
+captures its owned HWND, and uninstalls. Only the isolated `sh.uterm.desktop.qa.sharedstate` profile
+is redirected; private data remains until fixture cleanup, and production protocol/uninstall
+registry fingerprints must stay unchanged. The QA installer requires the CI image's existing
+WebView2 runtime. Its resource attributes are restored by QA-only install/uninstall hooks.
+
+Both checks archive SHA256 sums, exact source head/tested merge SHAs, platform/toolchain evidence,
+installation reports, logs and original window captures under `candidate/`. Native packages are
+ad-hoc signed without Apple Developer signing/notarization; Windows candidates are unsigned, and
+neither carries an update signature. Their new installation checks still require execution in
+macOS/Windows CI. Independent package, inspector and GitHub failures remain failing CI gates even
+when later checks run. Signed updates, upgrade/data rollback and stable cutover remain separate open
+tasks; these commands do not publish or change production update sources.
+
 #### Native QA validation
 
-Migration acceptance remains open in [#13](https://github.com/YondFane/uTerm/issues/13): M3 still
-needs persistent layouts, PDF annotations and full Windows run-panel/picker coverage. M4 still needs
-database acceptance, Agent/settings/menu completion, interaction regression and performance
-evidence; M5 packaging, updates and upgrade/rollback acceptance remain pending.
+Migration acceptance remains open in [#13](https://github.com/YondFane/uTerm/issues/13). M3 #17 was
+closed at the user's direction, retaining persistent-layout/PDF-mark and Windows run-panel/picker
+coverage gaps. Database, Redis and Agent acceptance is recorded in #38–#40. M4 still needs #41
+preference completion, #42 interaction regression and #43 performance evidence. M5 candidate
+packaging, updates, upgrade/rollback and final gates remain open in #44–#47.
 
 Redis paging, deletion, TTL, quit-cancellation and OS-credential checks are accepted at source
 `940f8d1`, with platform reports and screenshots in
