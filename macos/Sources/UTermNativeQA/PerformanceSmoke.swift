@@ -27,6 +27,22 @@ enum PerformanceSmoke {
         await model.newTerminal()
         try await wait("Start the measured PTY") { model.selectedTerminal?.generation != nil && (model.selectedTerminal?.qaRenderedFrames ?? 0) > 0 && model.selectedTerminal?.inputControl?.owned == true }
         guard let terminal = model.selectedTerminal, let generation = terminal.generation else { throw BridgeFailure(code: "PERFORMANCE_PTY", message: "No measured terminal") }
+        guard let columns = fixture["columns"].number, let rows = fixture["rows"].number else { throw BridgeFailure(code: "PERFORMANCE_FIXTURE", message: "Missing common grid") }
+        // Resize the actual window and let SwiftTerm/PTY layout agree before measuring input.
+        // 先调整真实窗口并让 SwiftTerm／PTY 布局一致，再测量输入。
+        for _ in 0..<10 {
+            let grid = terminal.view.getTerminal()
+            if grid.cols == Int(columns), grid.rows == Int(rows) { break }
+            let size = window.contentView?.bounds.size ?? .zero
+            let cellWidth = Double(terminal.view.bounds.width) / Double(max(1, grid.cols))
+            let cellHeight = Double(terminal.view.bounds.height) / Double(max(1, grid.rows))
+            let width = grid.cols == Int(columns) ? Double(size.width) : Double(size.width) + (columns - Double(grid.cols) + 0.25) * cellWidth
+            let height = grid.rows == Int(rows) ? Double(size.height) : Double(size.height) + (rows - Double(grid.rows) + 0.25) * cellHeight
+            window.setContentSize(NSSize(width: CGFloat(width), height: CGFloat(height)))
+            window.contentView?.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(300))
+        }
+        guard terminal.view.getTerminal().cols == Int(columns), terminal.view.getTerminal().rows == Int(rows) else { throw BridgeFailure(code: "PERFORMANCE_VIEWPORT", message: "Actual terminal did not reach the common grid") }
         let status = try await bridge.call("host.status")
         guard let hostPID = status["pid"].number, hostPID > 0 else { throw BridgeFailure(code: "PERFORMANCE_HOST", message: "Missing owned host PID") }
         func phase(_ value: String, cycle: Int = -1) throws {
@@ -83,6 +99,7 @@ enum PerformanceSmoke {
         report["fixture"] = try JSONSerialization.jsonObject(with: fixtureBytes)
         report["client"] = "native"; report["hostPID"] = hostPID; report["sessionCountMeasured"] = 1
         report["viewport"] = ["columns": terminal.view.getTerminal().cols, "rows": terminal.view.getTerminal().rows]
+        report["measurementWindowContent"] = ["width": window.contentView?.bounds.width ?? 0, "height": window.contentView?.bounds.height ?? 0]
         report["measurement"] = "Native NSTextInputClient to parsed/acknowledged actual PTY output; Core C ABI file service; actual reconnect/replay; short CI idle soak"
         report["manualInputAcceptance"] = false; report["databasePerformanceMeasured"] = false
         try phase("cleanup")

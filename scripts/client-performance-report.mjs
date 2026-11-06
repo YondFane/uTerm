@@ -14,6 +14,11 @@ export function verifyWorkload(report, fixture, fixtureSHA, head, tested) {
   assert.equal(report.testedMergeSHA ?? report.tested ?? report.sourceSHA, tested, "Stale merge");
   assert(!report.failure && !report.sourceTreeDirty && report.productionDataAccess === false);
   assert.equal(report.cycles.length, fixture.cycles);
+  assert.deepEqual(
+    report.viewport,
+    { columns: fixture.columns, rows: fixture.rows },
+    "Actual client grid differs from the common workload",
+  );
   for (const [index, sample] of report.cycles.entries()) {
     assert.equal(sample.cycle, index);
     assert.equal(sample.orderedRecords, fixture.recordsPerCycle);

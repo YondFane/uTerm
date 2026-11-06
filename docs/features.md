@@ -108,9 +108,13 @@ The Client performance evidence workflow runs native and Tauri clients sequentia
 repeating each three times, and records a separate Windows Tauri baseline. The shared fixture uses
 one real PTY, twenty cycles of 1,024 ordered ANSI/Unicode records, 14pt text, 5,000-line scrollback,
 64KiB CAS file save/read, attachment replay and a 120-second idle soak. The first five cycles are
-warm-up. Actual terminal grids are recorded; unequal grids prevent direct rendering-speed
-conclusions. Native input uses NSTextInputClient; Tauri uses DOM paste/Enter inside its real app.
-The response metric ends at parsed-output acknowledgement, not physical display/input latency.
+warm-up. The version2 fixture requires an actual 120×36 terminal grid. Native QA resizes its real
+window; Tauri QA hides tools through the actual controls and fits the real terminal container. Both
+use ordinary renderer-to-PTY resize paths. The report rejects mismatches, records actual outer
+content sizes, and refuses a Tauri grid clipped outside its app window. These corrected native
+layout checks still require platform CI; earlier unequal-grid results are not comparison evidence.
+Native input uses NSTextInputClient; Tauri uses DOM paste/Enter inside its real app. The response
+metric ends at parsed-output acknowledgement, not physical display/input latency.
 
 After the native build, run `node scripts/macos-performance-smoke.mjs`; run
 `UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs` for Tauri. The runner archives raw

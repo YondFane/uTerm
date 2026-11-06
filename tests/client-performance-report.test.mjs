@@ -3,11 +3,12 @@ import assert from "node:assert/strict";
 import { verifyWorkload, percentile } from "../scripts/client-performance-report.mjs";
 
 test("performance evidence rejects stale sources, incomplete output and numeric u64 sequences", () => {
-  const fixture = { sessions: 1, cycles: 1, recordsPerCycle: 1024 };
+  const fixture = { sessions: 1, cycles: 1, recordsPerCycle: 1024, columns: 120, rows: 36 };
   const report = {
     fixture,
     fixtureSHA256: "hash",
     sessionCountMeasured: 1,
+    viewport: { columns: 120, rows: 36 },
     head: "head",
     tested: "merge",
     productionDataAccess: false,
@@ -30,6 +31,8 @@ test("performance evidence rejects stale sources, incomplete output and numeric 
     { tested: "old" },
     { fixtureSHA256: "different" },
     { productionDataAccess: true },
+    { viewport: { columns: 119, rows: 36 } },
+    { viewport: { columns: 120, rows: 35 } },
     { cycles: [{ ...report.cycles[0], acknowledgedSequence: 18446744073709551615 }] },
     { cycles: [{ ...report.cycles[0], orderedRecords: 1023 }] },
     { cycles: [{ ...report.cycles[0], bulkMilliseconds: -1 }] },

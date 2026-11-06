@@ -18,6 +18,8 @@ const fixture = JSON.parse(fixtureJSON) as {
   fontFamily: string;
   fontSize: number;
   scrollback: number;
+  columns: number;
+  rows: number;
 };
 export function performanceSettings(platform: string) {
   return {
@@ -100,6 +102,39 @@ export async function runPerformance(
   await until(
     () => read()?.writable && (read()?.frames ?? 0) > 0,
     "first parsed frame and input ownership",
+  );
+  for (const label of ["Hide sidebar", "Hide inspector"])
+    document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)?.click();
+  await pause(300);
+  const container = section.querySelector<HTMLElement>(".terminal");
+  const screen = section.querySelector<HTMLElement>(".xterm-screen");
+  assert(container && screen, "Missing actual terminal geometry");
+  const initialBounds = container.getBoundingClientRect();
+  container.style.width = `${initialBounds.width}px`;
+  container.style.height = `${initialBounds.height}px`;
+  container.style.flex = "0 0 auto";
+  // Fit the real view rather than changing only reported dimensions or the host's PTY size.
+  // 调整真实视图，不能只修改报告尺寸或宿主 PTY 大小。
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const current = read()!;
+    if (current.columns === fixture.columns && current.rows === fixture.rows) break;
+    const cellWidth = screen.getBoundingClientRect().width / current.columns;
+    const cellHeight = screen.getBoundingClientRect().height / current.rows;
+    const bounds = container.getBoundingClientRect();
+    if (current.columns !== fixture.columns)
+      container.style.width = `${bounds.width + (fixture.columns - current.columns + 0.25) * cellWidth}px`;
+    if (current.rows !== fixture.rows)
+      container.style.height = `${bounds.height + (fixture.rows - current.rows + 0.25) * cellHeight}px`;
+    await pause(300);
+  }
+  assert(
+    read()!.columns === fixture.columns && read()!.rows === fixture.rows,
+    "Actual terminal did not reach the common grid",
+  );
+  const bounds = container.getBoundingClientRect();
+  assert(
+    bounds.right <= innerWidth && bounds.bottom <= innerHeight,
+    "Common grid is clipped outside the actual app window",
   );
   const host = () =>
     invoke<{
@@ -263,6 +298,7 @@ export async function runPerformance(
     fileSaveReadMilliseconds: fileSamples,
     replayMilliseconds,
     viewport: { columns: read()!.columns, rows: read()!.rows },
+    measurementWindowContent: { width: innerWidth, height: innerHeight },
     measurement:
       "Actual xterm DOM paste/Enter to parsed/acknowledged PTY output; Core IPC file service; actual attachment reconnect/replay; short CI idle soak",
     manualInputAcceptance: false,

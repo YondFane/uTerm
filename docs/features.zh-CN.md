@@ -82,7 +82,8 @@ workflow 独立执行安装器检查。签名更新、升级／数据回退及�
 
 Client performance evidence
 workflow 在同一台 Mac 顺序运行原生与 Tauri 客户端，各重复三次；Windows 另记录 Tauri 基线。共用负载为一个真实 PTY、二十轮各1,024条有序 ANSI／Unicode 输出、14pt 字体、5,000行回滚、64KiB
-CAS 文件保存／读取、连接回放和120秒空闲运行。前五轮预热；记录实际终端网格，网格不同时不作直接渲染速度结论。原生通过 NSTextInputClient 输入，Tauri 在真实应用内模拟 DOM 粘贴／回车；响应指标止于输出解析／确认，不等同物理输入或显示延迟。
+CAS 文件保存／读取、连接回放和120秒空闲运行。前五轮预热；version2 负载要求真实120×36终端网格。原生 QA 调整真实窗口，Tauri
+QA 通过实际控件隐藏工具并调整真实终端容器，两者沿用普通渲染器至 PTY 的尺寸路径。报告拒绝网格不符，记录实际外部内容区尺寸，并拒绝超出应用窗口被裁剪的 Tauri 网格。修正后的原生布局仍须平台 CI，旧网格不一致结果不作为对比证据。原生通过 NSTextInputClient 输入，Tauri 在真实应用内模拟 DOM 粘贴／回车；响应指标止于输出解析／确认，不等同物理输入或显示延迟。
 
 原生构建后运行 `node scripts/macos-performance-smoke.mjs`；Tauri 运行
 `UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs`。脚本归档原始进程采样、负载／源码哈希、窗口原图、清理结果及逐轮数据，`scripts/client-performance-report.mjs`
