@@ -4232,8 +4232,10 @@ the existing TypeScript resolver. The native **Commands** menu reads these resul
 update its key equivalents and clear colliding fallback menu shortcuts. **Command palette** opens a
 native searchable list with Up/Down, Return and Escape. Closing it restores the originating
 window/responder; closing it cannot close a terminal behind it. Commands are enabled for their
-current window and session context. Native project search, file/inspector panes, pane swap, GitHub
-and zoom remain unavailable and tracked in #41/#17; those commands are disabled.
+current window and session context. The palette and shortcut capture show macOS modifier/key glyphs;
+QA searches through the native text editor before executing a filtered command. Native project
+search, file/inspector panes, pane swap, GitHub and zoom remain unavailable and tracked in #41/#17;
+those commands are disabled.
 
 **General → Login startup** reads the OS state without registering on open. Explicit opt-in/out uses
 macOS `SMAppService`; approval-required and failed operations remain visible, and an active
@@ -4267,8 +4269,18 @@ The native file chooser reads at most 32 KB and requires UTF-8.
 The Tauri real-app harness exercises a rejected theme without saved changes, followed by a
 successful shared import, saved custom colors and removal of the old error. It supplies a DOM File
 event inside the isolated application; it does not claim OS file-chooser interaction. Both scenes
-archive screenshots and source-bound results on Windows and macOS; new-source results remain pending
-CI.
+archive screenshots and source-bound results on Windows and macOS.
+
+Theme/form/effect source `295a137a40ceea45131c3e044c847228f9d0168f`, tested merge
+`50d94ea3b258dced305336520ed8bc97ab232787`, passes Native
+[run 42179283853](https://github.com/YondFane/uTerm/actions/runs/42179283853) on macOS arm64/Intel
+and Tauri [run 42179283994](https://github.com/YondFane/uTerm/actions/runs/42179283994) on macOS
+arm64/Windows x64. Both native reports pass with exit 0 and both Tauri reports pass 73 scenes with
+no cleanup errors; all source trees are clean. Both platform reports pass the 372 shortcut and 96
+theme comparisons. Ten original theme/form/PTY screenshots have been reviewed; the
+[evidence record](https://github.com/YondFane/uTerm/issues/41#issuecomment-6679773239) links all
+four artifacts, reports and images. These results do not accept subsequent command or login-item
+code.
 
 Native terminals apply the selected bundled/custom palette, cursor and selection colors, available
 font fallback, weight, line spacing, cursor shape/blink, scrollback and background opacity. Copy on
@@ -4281,8 +4293,8 @@ errors, same-field conflicts, unrelated changes, hide/reopen, actual quit cancel
 shortcut capture and reset. It archives `settings-native.json` plus English/dark and Chinese/light
 narrow window images, plus an actual themed PTY window. Theme rejection must preserve the draft and
 store; accepted imports remain drafts, and the scene asserts actual terminal font, line spacing,
-palette, cursor, opacity and cleanup after explicit close. These new-source runtime results are
-pending CI. The next command scene also checks the changed native menu shortcut, actual palette
+palette, cursor, opacity and cleanup after explicit close. The command/login-item source remains
+pending its own CI. Its scene also checks the changed native menu shortcut, actual palette
 arrow/Return/Escape input and focus restoration, and archives `native-settings-command-palette.png`.
 Remaining preference effects and unavailable commands still keep #41 open.
 

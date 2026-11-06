@@ -14,11 +14,11 @@ enum SettingsSmoke {
             try await Task.sleep(for: .milliseconds(100))
         }
     }
-    private static func button(_ window: NSWindow, id: String) -> NSButton? {
+    private static func view(_ window: NSWindow, id: String) -> NSView? {
         var queue = window.contentView.map { [$0] } ?? []
         while !queue.isEmpty {
             let view = queue.removeFirst()
-            if let button = view as? NSButton, button.identifier?.rawValue == id { return button }
+            if view.identifier?.rawValue == id { return view }
             queue += view.subviews
         }
         return nil
@@ -72,8 +72,8 @@ enum SettingsSmoke {
             guard model.errorCode == "SHORTCUT_CONFLICT" else { throw BridgeFailure(code: "SETTINGS_QA_DUPLICATE", message: "Native settings accepted a duplicate shortcut") }
             report["nativeReservedAndDuplicateShortcutErrors"] = true
             model.shortcuts["palette"] = nil; model.section = "keyboard"
-            try await TerminalSmoke.wait("Render native shortcut capture") { button(current.window, id: "native-shortcut-palette") != nil }
-            guard let capture = button(current.window, id: "native-shortcut-palette") else { throw BridgeFailure(code: "SETTINGS_QA_CAPTURE", message: "Shortcut capture control is missing") }
+            try await TerminalSmoke.wait("Render native shortcut capture") { view(current.window, id: "native-shortcut-palette") != nil }
+            guard let capture = view(current.window, id: "native-shortcut-palette") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_CAPTURE", message: "Shortcut capture control is missing") }
             capture.performClick(nil)
             guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "K", charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40), current.window.performKeyEquivalent(with: event) else { throw BridgeFailure(code: "SETTINGS_QA_KEY", message: "Native shortcut event was not captured") }
             guard model.shortcuts["palette"] == "Mod+Shift+KeyK" else { throw BridgeFailure(code: "SETTINGS_QA_CHORD", message: "Native shortcut did not preserve its semantic chord") }
@@ -94,6 +94,9 @@ enum SettingsSmoke {
             try key(palette, code: 125, characters: String(UnicodeScalar(NSDownArrowFunctionKey)!))
             try key(palette, code: 126, characters: String(UnicodeScalar(NSUpArrowFunctionKey)!))
             try key(palette, code: 125, characters: String(UnicodeScalar(NSDownArrowFunctionKey)!))
+            guard let table = view(palette, id: "native-command-list") as? NSTableView, table.selectedRow == 1, let editor = palette.firstResponder as? NSTextView else { throw BridgeFailure(code: "SETTINGS_QA_PALETTE_ARROWS", message: "Native arrow keys did not select the settings command") }
+            editor.insertText("settings", replacementRange: NSRange(location: NSNotFound, length: 0))
+            try await TerminalSmoke.wait("Filter commands through native text input") { table.numberOfRows == 1 && table.selectedRow == 0 }
             try key(palette, code: 36, characters: "\r")
             try await TerminalSmoke.wait("Execute selected settings command with Return") { !palette.isVisible && current.window.isKeyWindow }
             report["nativeDynamicMenuPaletteKeyboardAndFocusReturn"] = true

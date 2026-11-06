@@ -3,6 +3,13 @@ import UTermBridge
 
 @MainActor
 enum NativeCommandKey {
+    static func label(_ chord: String) -> String {
+        let item = NSMenuItem(); apply(chord, to: item)
+        guard !item.keyEquivalent.isEmpty else { return "" }
+        let arrows = ["ArrowLeft": "←", "ArrowRight": "→", "ArrowUp": "↑", "ArrowDown": "↓", "Enter": "↩"]
+        let code = chord.split(separator: "+").last.map(String.init) ?? ""
+        return (item.keyEquivalentModifierMask.contains(.control) ? "⌃" : "") + (item.keyEquivalentModifierMask.contains(.option) ? "⌥" : "") + (item.keyEquivalentModifierMask.contains(.shift) ? "⇧" : "") + "⌘" + (arrows[code] ?? item.keyEquivalent.uppercased())
+    }
     static func apply(_ chord: String, to item: NSMenuItem) {
         let parts = chord.split(separator: "+").map(String.init)
         guard parts.first == "Mod", let code = parts.last else { item.keyEquivalent = ""; return }
@@ -66,8 +73,9 @@ final class NativeCommandPalette: NSObject, NSWindowDelegate, NSSearchFieldDeleg
         guard filtered.indices.contains(row) else { return nil }
         let item = filtered[row], enabled = available(item["id"].string ?? "")
         let label = NSTextField(labelWithString: title(item)); label.textColor = enabled ? .labelColor : .disabledControlTextColor
-        let shortcut = NSTextField(labelWithString: item["shortcut"].string ?? ""); shortcut.textColor = .secondaryLabelColor
+        let shortcut = NSTextField(labelWithString: NativeCommandKey.label(item["shortcut"].string ?? "")); shortcut.textColor = .secondaryLabelColor
         let stack = NSStackView(views: [label, NSView(), shortcut]); stack.spacing = 12
+        if !enabled { stack.toolTip = localized("Unavailable", "不可用") }
         return stack
     }
     func controlTextDidChange(_ obj: Notification) { filter() }

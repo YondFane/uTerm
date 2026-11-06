@@ -264,7 +264,7 @@ private struct NativeShortcutCapture: NSViewRepresentable {
         required init?(coder: NSCoder) { fatalError("Not supported") }
         func refresh() {
             if recording { title = localized("Press shortcut…", "按下快捷键…"); return }
-            title = value.isEmpty ? localized("Unassigned", "未设置") : value.replacingOccurrences(of: "Mod+", with: "⌘").replacingOccurrences(of: "Alt+", with: "⌥").replacingOccurrences(of: "Shift+", with: "⇧").replacingOccurrences(of: "Key", with: "").replacingOccurrences(of: "Digit", with: "")
+            title = value.isEmpty ? localized("Unassigned", "未设置") : NativeCommandKey.label(value)
         }
         @objc private func beginCapture() { recording = true; window?.makeFirstResponder(self); refresh() }
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
