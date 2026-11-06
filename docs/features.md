@@ -1757,6 +1757,12 @@ dialog, which shares a style class with mutation confirmations
 harness distinguishes open dialogs by their existing `aria-labelledby` values; corrected
 disconnect/quit cancellation checks still require platform execution.
 
+Native ARM64 at `0b163d8` reaches the TTL action before the busy guard releases after list deletion
+([failure artifact](https://github.com/YondFane/uTerm/actions/runs/42141649922/artifacts/13468308959)).
+Redis QA waits for visible, enabled controls and clicks once; server writes are not retried. The
+Tauri TTL action uses the same readiness requirement. Corrected native/platform results remain
+pending; a previous successful run does not waive this failure.
+
 The expanded cases browse a real 20,001-member list with 200 rendered and returned rows per page;
 the missing edit snapshot keeps member update/delete controls disabled above the 10,000-member
 limit. Final checks confirm the large list is unchanged. Separate cases use 401 editable list

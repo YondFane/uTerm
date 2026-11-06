@@ -69,6 +69,21 @@ enum RedisSmoke {
             """, arguments: ["selector": selector, "text": text])
         guard found else { throw BridgeFailure(code: "REDIS_INPUT", message: "Redis input is unavailable") }
     }
+    private static func click(_ content: ContentWindow, title: String, selector: String = "button", prefix: Bool = false) async throws {
+        // Rows can repaint before the operation releases its busy guard; click once after readiness.
+        // 列表可能先于操作释放忙碌保护重绘；等待控件就绪后只点击一次。
+        let label = String(decoding: try JSONEncoder().encode(title), as: UTF8.self)
+        let query = String(decoding: try JSONEncoder().encode(selector), as: UTF8.self)
+        let comparison = prefix ? "text.startsWith(\(label))" : "text===\(label)"
+        try await wait(content, """
+            (()=>{const b=[...document.querySelectorAll(\(query))].find(b=>{
+            const text=b.textContent.trim(),r=b.getBoundingClientRect();
+            return \(comparison)&&!b.disabled&&r.width>0&&r.height>0&&getComputedStyle(b).visibility==='visible';});
+            if(!b)return false;b.scrollIntoView({block:'nearest'});const r=b.getBoundingClientRect();
+            if(r.top<0||r.bottom>innerHeight||r.left<0||r.right>innerWidth)return false;
+            b.click();return true;})()
+            """)
+    }
     private static func selectKey(_ content: ContentWindow, _ title: String) async throws {
         let encoded = String(decoding: try JSONEncoder().encode(title), as: UTF8.self)
         try await wait(content, """
@@ -83,11 +98,7 @@ enum RedisSmoke {
             """)
     }
     private static func modalClick(_ content: ContentWindow, _ title: String) async throws {
-        let found = try await EditorSmoke.evaluate(content, script: """
-            const b=[...document.querySelectorAll('dialog[open] button')].find(b=>b.textContent.trim()===title&&!b.disabled);
-            if(!b)return false;b.click();return true;
-            """, arguments: ["title": title])
-        guard found else { throw BridgeFailure(code: "REDIS_MODAL", message: "Redis confirmation action is unavailable") }
+        try await click(content, title: title, selector: "dialog[open] button")
     }
     static func run(model: WorkspaceModel, open: () async throws -> ContentWindow, lookup: () -> ContentWindow?, report: inout [String: Any]) async throws {
         guard model.ready, let bridge = model.sshBridge, let path = WorkspaceModel.argument("--redis-smoke-report"),
@@ -137,14 +148,14 @@ enum RedisSmoke {
         try await wait(content, "!!document.querySelector('dialog[open] input[type=password]')")
         try await input(content, selector: "dialog[open] input[type=password]", text: password)
         try await input(content, selector: "dialog[open] input", text: "Redis saved 中文")
-        try await EditorSmoke.click(content, title: "Save connection")
+        try await click(content, title: "Save connection")
         try await wait(content, "!document.querySelector('dialog[open]') && document.querySelector('.native-database-profile-name')?.textContent==='Redis saved 中文'")
         let saved = try await bridge.snapshot()
         let bytes = try JSONEncoder().encode(saved)
         guard !String(decoding: bytes, as: UTF8.self).contains(password) else { throw BridgeFailure(code: "REDIS_PERSISTENCE", message: "Temporary Redis password was persisted") }
         report["nativeRedisProfileSaveWithoutPasswordPersistence"] = true
-        try await EditorSmoke.click(content, title: "Redis saved 中文")
-        try await EditorSmoke.click(content, title: "Connect")
+        try await click(content, title: "Redis saved 中文")
+        try await click(content, title: "Connect")
         try await wait(content, "!!document.querySelector('.redis-toolbar input[aria-label=\"Allow editing\"]') && !!document.querySelector('.redis-key')")
         try await wait(content, "document.querySelector('.redis-toolbar input[aria-label=\"Allow editing\"]').checked===false")
         report["nativeRedisRealConnectionDefaultsReadonly"] = true
@@ -187,7 +198,7 @@ enum RedisSmoke {
         let edited = "NATIVE_REDIS_SAVED_9223372036854775807 中文🚀"
         try await EditorSmoke.replace(content, text: edited)
         try await wait(content, "!!document.querySelector('.redis-dirty')")
-        try await EditorSmoke.click(content, title: "Disconnect")
+        try await click(content, title: "Disconnect")
         try await wait(content, "!!document.querySelector('dialog[open]')")
         try await modalClick(content, "Cancel")
         try await wait(content, "!document.querySelector('dialog[open]') && document.querySelector('.redis-detail .cm-content')?.textContent==='NATIVE_REDIS_SAVED_9223372036854775807 中文🚀' && document.querySelector('.redis-toolbar input[aria-label=\"Allow editing\"]')?.checked===true")
@@ -216,7 +227,7 @@ enum RedisSmoke {
         guard reopened === content else { throw BridgeFailure(code: "REDIS_DETACH", message: "Redis window was recreated") }
         try await wait(content, "document.querySelector('.redis-detail .cm-content')?.textContent==='NATIVE_REDIS_SAVED_9223372036854775807 中文🚀'")
         report["nativeRedisHiddenWindowRetainsDraftAndConnection"] = true
-        try await EditorSmoke.click(content, title: "Save")
+        try await click(content, title: "Save")
         try await wait(content, "!document.querySelector('.redis-dirty')")
         config["name"] = .string("Redis saved 中文")
         let probe = try await operation(.object(["kind": .string("connect"), "config": .object(config), "password": .string(password)]))
@@ -234,7 +245,7 @@ enum RedisSmoke {
         }
         try await selectKey(content, "qa:large")
         try await wait(content, "document.querySelectorAll('.redis-members tbody tr').length===200 && document.querySelector('.redis-members tbody td')?.textContent==='0'")
-        try await EditorSmoke.click(content, title: "Next page")
+        try await click(content, title: "Next page")
         try await wait(content, "document.querySelectorAll('.redis-members tbody tr').length===200 && document.querySelector('.redis-members tbody td')?.textContent==='200'")
         let large = try await list(200, key: "qa:large")
         guard large["size"] == .number(20001), large["items"].array.count == 200, large["version"] == .null else { throw BridgeFailure(code: "REDIS_PAGING", message: "Large list page exceeded its bounds or edit limit") }
@@ -245,25 +256,25 @@ enum RedisSmoke {
         try await capture("native-redis-list-pages.png")
         try await selectKey(content, "qa:paged")
         try await wait(content, "document.querySelectorAll('.redis-members tbody tr').length===200 && document.querySelector('.redis-members tbody td')?.textContent==='0'")
-        try await EditorSmoke.click(content, title: "Next page")
+        try await click(content, title: "Next page")
         try await wait(content, "document.querySelectorAll('.redis-members tbody tr').length===200 && document.querySelector('.redis-members tbody td')?.textContent==='200'")
         let paged = try await list(200)
         guard paged["size"] == .number(401) else { throw BridgeFailure(code: "REDIS_PAGING", message: "List fixture size differs") }
-        try await EditorSmoke.click(content, title: "Next page")
+        try await click(content, title: "Next page")
         try await wait(content, "document.querySelectorAll('.redis-members tbody tr').length===1 && document.querySelector('.redis-members tbody td')?.textContent==='400'")
-        try await EditorSmoke.click(content, title: "Delete member")
+        try await click(content, title: "Delete member")
         try await wait(content, "!!document.querySelector('.redis-action-dialog[open]')")
         try await modalClick(content, "Cancel")
         try await wait(content, "!document.querySelector('dialog[open]')")
         let retained = try await list(400)
         guard retained["size"] == .number(401), retained["items"].array.first?["text"] == .string("QA_ROW_0400 中文") else { throw BridgeFailure(code: "REDIS_CANCEL", message: "Cancelled list deletion changed server data") }
-        try await EditorSmoke.click(content, title: "Delete member")
+        try await click(content, title: "Delete member")
         try await wait(content, "!!document.querySelector('.redis-action-dialog[open]')")
         try await modalClick(content, "Confirm")
         try await wait(content, "!document.querySelector('dialog[open]') && document.querySelectorAll('.redis-members tbody tr').length===200 && document.querySelector('.redis-members tbody td')?.textContent==='200'")
         let shortened = try await list(200)
         guard shortened["size"] == .number(400), shortened["items"].array.last?["text"] == .string("QA_ROW_0399 中文") else { throw BridgeFailure(code: "REDIS_DELETE", message: "List deletion changed the wrong position") }
-        guard try await EditorSmoke.evaluate(content, script: "const b=[...document.querySelectorAll('.redis-value-heading button')].find(b=>b.textContent.trim().startsWith('TTL'));if(!b||b.disabled)return false;b.click();return true;", arguments: [:]) else { throw BridgeFailure(code: "REDIS_TTL", message: "List TTL action is missing") }
+        try await click(content, title: "TTL", selector: ".redis-value-heading button", prefix: true)
         try await wait(content, "!!document.querySelector('.redis-action-dialog[open]')")
         try await input(content, selector: ".redis-action-dialog[open] input[aria-label=\"TTL (seconds)\"]", text: "1800")
         try await Task.sleep(for: .milliseconds(100))
@@ -274,7 +285,7 @@ enum RedisSmoke {
         try await selectKey(content, "qa:delete")
         func reviewDelete() async throws {
             guard try await EditorSmoke.evaluate(content, script: "const s=document.querySelector('.redis-value-heading details summary');if(!s)return false;s.click();return true;", arguments: [:]) else { throw BridgeFailure(code: "REDIS_DELETE", message: "Key action menu is missing") }
-            try await EditorSmoke.click(content, title: "Delete key")
+            try await click(content, title: "Delete key")
             try await wait(content, "!!document.querySelector('.redis-action-dialog[open]')")
         }
         try await reviewDelete(); try await modalClick(content, "Cancel")
@@ -287,7 +298,7 @@ enum RedisSmoke {
         guard removed["result"] == .number(0) else { throw BridgeFailure(code: "REDIS_DELETE", message: "Reviewed key was not deleted") }
         try await selectKey(content, "qa:paged")
         try await wait(content, "document.querySelectorAll('.redis-members tbody tr').length===200 && document.querySelector('.redis-members tbody td')?.textContent==='0'")
-        try await EditorSmoke.click(content, title: "Next page")
+        try await click(content, title: "Next page")
         try await wait(content, "document.querySelectorAll('.redis-members tbody tr').length===200 && document.querySelector('.redis-members tbody td')?.textContent==='200'")
         try await capture("native-redis-protected-mutations.png")
         report["nativeRedisPagedListAndProtectedMutations"] = true
@@ -299,10 +310,10 @@ enum RedisSmoke {
         report["nativeRedisThemeLanguageAndNarrowLayout"] = true
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         try await wait(content, "document.documentElement.lang==='en'")
-        try await EditorSmoke.click(content, title: "Reconnect")
+        try await click(content, title: "Reconnect")
         try await wait(content, "document.querySelector('.redis-toolbar input[aria-label=\"Allow editing\"]')?.checked===false && !!document.querySelector('.redis-key')")
         report["nativeRedisTemporaryPasswordSurvivesReconnect"] = true
-        try await EditorSmoke.click(content, title: "Disconnect")
+        try await click(content, title: "Disconnect")
         report["nativeRedisCaptures"] = captures
         report["nativeRedisManualPickerAcceptance"] = false
         report["nativeRedisManualInteractionAcceptance"] = false

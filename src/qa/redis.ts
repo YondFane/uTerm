@@ -347,10 +347,12 @@ export async function runRedis(
       changed.size === 400 && changed.items.at(-1)?.text === fixture.lastRemainingListValue,
       "List deletion changed the wrong position",
     );
-    const ttl = [
-      ...workspace.querySelectorAll<HTMLButtonElement>(".redis-value-heading button"),
-    ].find((item) => item.textContent?.trim().startsWith("TTL"));
-    assert(ttl && !ttl.disabled, "Editable list TTL action is unavailable");
+    const ttl = await until(() => {
+      const control = [
+        ...workspace.querySelectorAll<HTMLButtonElement>(".redis-value-heading button"),
+      ].find((item) => item.textContent?.trim().startsWith("TTL"));
+      return control && !control.disabled ? control : undefined;
+    }, "editable list TTL action readiness");
     ttl.click();
     const ttlDialog = await until(dialog, "TTL confirmation");
     const seconds = ttlDialog.querySelector<HTMLInputElement>('input[aria-label="TTL (seconds)"]');
