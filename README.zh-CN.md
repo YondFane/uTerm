@@ -129,7 +129,7 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 管理共用运行配置及任务规则，Tauri 提供平台适配，生成的 DTO 保持 Swift／TypeScript 边界一致。执行
 `pnpm contracts:generate` 重新生成 TS／Swift 边界类型。macOS 上使用
 `bash scripts/macos-native-build.sh` 和 `bash scripts/macos-native-test.sh`
-构建隔离 QA 应用并运行 Rust／Swift 桥接测试。
+构建隔离QA应用并运行Rust／Swift桥接测试；桥接测试包含逻辑文件根路径别名恢复及解析后的文件选择边界回归。
 
 `pnpm settings:generate` 从现有 TypeScript 设置和文案生成原生命令／主题目录， `pnpm settings:check`
 核对目录；契约生成／检查已包含该目录。Core `settings.catalog` 和 `settings.validate`

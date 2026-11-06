@@ -27,6 +27,9 @@ enum TransitionSmoke {
         let content = try await openFile(project, file)
         let expected = phase == "checkpoint" ? legacyText : nativeText
         report["phase"] = phase
+        report["nativeDocumentDirectory"] = content.documentDirectory
+        report["resolvedNativeDirectory"] = content.directory.path
+        guard content.documentDirectory == projectPath else { throw BridgeFailure(code: "TRANSITION_ROOT", message: "Native editor rewrote the historical draft root identity") }
         let initial = try await bridge.call("editor.drafts.document", params: .object(["directory": .string(projectPath), "path": .string(file)]))
         let initialText = initial["draft"]["text"].string ?? ""
         report["initialCoreDraftUTF8"] = Array(initialText.utf8)

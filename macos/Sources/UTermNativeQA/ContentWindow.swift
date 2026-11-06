@@ -46,6 +46,7 @@ private struct ContentMessage: Decodable {
 final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandlerWithReply {
     let webView: WKWebView
     let directory: URL
+    let documentDirectory: String
     let path: String
     let editable: Bool
     let gitMode: Bool
@@ -87,7 +88,9 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         self.bridge = bridge
         self.stateBridge = stateBridge ?? bridge
         self.ownsBridge = ownsBridge
-        self.directory = directory.standardizedFileURL.resolvingSymlinksInPath()
+        let fileRoot = try ContentFileRoot(directory: directory)
+        self.directory = fileRoot.resolvedDirectory
+        documentDirectory = !gitMode && workbenchHost == nil ? fileRoot.protocolDirectory : fileRoot.resolvedDirectory.path
         self.path = path
         self.editable = editable
         self.gitMode = gitMode
@@ -211,7 +214,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         switch request.method {
         case "content_context":
             let state = try await stateBridge.snapshot()
-            return .object(["directory": .string(directory.path), "path": .string(path), "line": .number(Double(focusLine)), "settings": state.document.settings, "editable": .bool(editable), "kind": .string(workbenchHost?.kind ?? (gitMode ? "git" : "file"))])
+            return .object(["directory": .string(documentDirectory), "path": .string(path), "line": .number(Double(focusLine)), "settings": state.document.settings, "editable": .bool(editable), "kind": .string(workbenchHost?.kind ?? (gitMode ? "git" : "file"))])
         case "content_copy_text":
             guard params.count == 1, let text = params["text"]?.string else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing clipboard text") }
             NSPasteboard.general.clearContents()
@@ -224,17 +227,17 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             try await openRepositoryFile(path)
             return .null
         case "file_read", "files_list", "files_search":
-            guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Content cannot select a different project root") }
+            guard params["directory"] == .string(documentDirectory) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Content cannot select a different project root") }
             let methods = ["file_read": "files.read", "files_list": "files.list", "files_search": "files.search"]
             return try await bridge.call(methods[request.method!]!, params: .object(params))
         case "editor_drafts_list", "editor_drafts_document":
-            guard params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Draft cannot select another project root") }
+            guard params["directory"] == .string(documentDirectory) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Draft cannot select another project root") }
             let method = request.method == "editor_drafts_list" ? "editor.drafts.list" : "editor.drafts.document"
             return try await bridge.call(method, params: .object(params))
         case "editor_drafts_put", "editor_drafts_remove":
             guard editable else { throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。")) }
             let draft: JSONValue = request.method == "editor_drafts_put" ? (params["draft"] ?? .null) : .object(params)
-            guard draft["directory"] == .string(directory.path), draft["path"] == .string(path) else {
+            guard draft["directory"] == .string(documentDirectory), draft["path"] == .string(path) else {
                 throw BridgeFailure(code: "ROOT_DENIED", message: "Draft cannot select another file or project root")
             }
             let method = request.method == "editor_drafts_put" ? "editor.drafts.putDocument" : "editor.drafts.removeDocument"
@@ -243,7 +246,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。"))
         case "file_save":
             guard editable else { throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。")) }
-            guard params["directory"] == .string(directory.path), params["path"] == .string(path) else {
+            guard params["directory"] == .string(documentDirectory), params["path"] == .string(path) else {
                 throw BridgeFailure(code: "ROOT_DENIED", message: "Editor cannot save another file or project root")
             }
             return try await bridge.call("files.save", params: .object(params))

@@ -506,14 +506,15 @@ Regressions execute the actual QA script with real React, xterm and DOM state pl
 navigation/autosave simulation. Both recovery paths must preserve the original file and stored
 draft; the real xterm reference is checked in disabled and ready states. The packaged native
 transition identity can use only its embedded private temporary data root, as for isolated updater
-fixtures. The 5e4a6b8 ARM run passed historical input, signed download, interrupted recovery and
-repeat import, then failed the one-shot native editor text check. Its canonical backup contains the
-exact legacy draft bytes;
-[artifact13544656366](https://github.com/YondFane/uTerm/actions/runs/42300066346/artifacts/13544656366)
-retains reports and original historical windows. Native verification now checks the exact Core UTF-8
-before waiting for asynchronously restored visible text, and records DOM text and native failure
-windows if restoration fails. Complete program/latest-data rollback remains subject to its actual
-Mac run.
+fixtures. The bdb56fc ARM run confirms the exact legacy Core draft bytes, but its actual native
+window still shows disk text because Foundation changed the document root from `/private/var` to
+`/var`.
+[Artifact13544688991](https://github.com/YondFane/uTerm/actions/runs/42302307767/artifacts/13544688991)
+retains both real native failure windows, DOM text and UTF-8 diagnostics, plus the preceding old-app
+recovery evidence. The fix separates logical draft identity from resolved filesystem boundaries.
+Three Swift regressions cover a real alias/sibling/escape, macOS temporary aliases and recovery
+through the actual Core ABI with original file bytes retained; their execution and complete rollback
+still require the new Mac CI source. No native pass is inferred from Linux checks.
 
 The Mac rehearsal downloads a native QA archive from its owned loopback server, verifies a pinned
 one-time Ed25519 manifest and architecture, rejects a bad signature before replacement, and tests
@@ -588,6 +589,13 @@ waits for dispatched writes and preserves another writer's newer draft. Content 
 selected file and cannot import old sources. If its source disappears or becomes unreadable,
 retained text opens readonly with a notice and survives close.
 
+Native file windows retain the selected project path spelling as the Core draft identity, including
+`/private/var` aliases. Resolved paths remain separate for file-picker boundaries and window
+grouping; picker targets outside the root, including symlink escapes, are rejected. File opening
+from the project menu, inspector, recovery and Git retains that logical root. Existing windows are
+reused only for the same logical root and relative file, so distinct stored aliases are not silently
+merged. The draft format and revision/byte checks are unchanged.
+
 The queue coalesces waiting text, bounds pending data and keeps flush/retry failures visible,
 including initialization with no waiting writes. Different documents advance independently; stale
 writes/removals for the same document fail. Lost replies require checking durable data. Close stops
@@ -632,8 +640,9 @@ was inspected and its tab chrome matches the dark editor.
 [ARM artifacts](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13395713575)
 and
 [Intel artifacts](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13396400420)
-include editor-live.json, both phase reports and system/toolchain data. Persisted tab order/window
-geometry, PDF marks and full manual keyboard/IME/focus acceptance remain open in #34.
+include editor-live.json, both phase reports and system/toolchain data. #34 is closed in the
+user-approved scope. Persistent layout/window geometry and shared PDF marks remain explicit #13
+implementation gaps; final human keyboard/IME/focus checks were waived, not executed.
 
 #### Tauri editor draft handoff
 
@@ -2342,12 +2351,14 @@ apply before delivery. Timeout, cancellation, unload and document changes suppre
 and remove subscriptions. A dispatched write retains the caller's guard until Rust finishes;
 cancellation does not roll it back. Shared editor/preview components do not call Tauri directly.
 
-In native QA, **File → Open file…** opens a read-only shared CodeMirror/HTML/PDF window for the
-selected local project. Its ephemeral WKWebView loads manifest-listed bundle resources and accepts
-only main-document messages. The host rejects stale document IDs, another root and writes from the
+In native QA, **File → Open file…** opens shared CodeMirror/HTML/PDF content for the selected local
+project. Text editing and recovery use the protected editable window; preview windows retain their
+read-only mode. Its ephemeral WKWebView loads manifest-listed bundle resources and accepts only
+main-document messages. The host rejects stale document IDs, another root and writes from the
 readonly preview. Fonts use revision-checked shared settings; static HTML cannot run scripts or load
-external resources. This preview does not offer PDF annotation controls. Writable-editor and manual
-focus/IME acceptance remain tracked separately in #34/#42.
+external resources. This preview does not offer PDF annotation controls. Writable-editor and
+interaction evidence is recorded separately in the closed #34/#42 tasks, with their original gaps
+and user-approved human waiver still visible in #13.
 
 At source `8a72b00754c5580150546ea2ae104f5166e04a39` / tested merge
 `ea3895ab1d8db65ad59159fc45f3deff7326baf6`,
@@ -2372,8 +2383,9 @@ success is suppressed. Protocol checks cover mismatched/reordered replies, late 
 failed writes, immediate read cancellation, unload, bounds and custom-scheme IDs. Windows ran 407
 frontend checks with 11 skipped; macOS ran 408 with 10 skipped. Harness checks, real app actions and
 unexecuted human IME/focus checks remain distinct. This accepts #33 without a simulation exemption;
-#34–#37 and M3 remain open. Earlier PDF, workspace/path and input-control failures remain linked in
-the Issue's source-bound history.
+#34–#37 are now closed in their recorded scope; M3 #17 was closed not_planned by the user. Original
+layout/PDF/Windows panel gaps remain in #13. Earlier PDF, workspace/path and input-control failures
+retain their source-bound reports.
 
 ### Shared local file service
 
@@ -2386,9 +2398,10 @@ editable.
 Thirteen existing file-service tests now run in the core. Seven real-process contract tests passed
 on Linux x86_64, including file CAS, original-byte preservation, invalid parameters and root/link
 escape. These checks do not establish native file-editor interaction. Native file previews are
-read-only while shared draft recovery and editing remain incomplete; existing WebView drafts retain
-their owner and path. [Native](https://github.com/YondFane/uTerm/actions/runs/41425620871) and
-[legacy](https://github.com/YondFane/uTerm/actions/runs/41425620777) platform CI passed the
+read-only; separate writable windows and shared recovery have their own #34/#42 evidence, while
+historical-client root compatibility and full rollback remain #46. Existing WebView draft sources
+retain their owner and path. [Native](https://github.com/YondFane/uTerm/actions/runs/41425620871)
+and [legacy](https://github.com/YondFane/uTerm/actions/runs/41425620777) platform CI passed the
 extraction at head `2f777f1824f203cba9d4654b3ec3f70c43c9fb74`; this pass does not validate later
 content changes.
 
@@ -3438,8 +3451,9 @@ exact properties/arguments.
 [Run41984445509](https://github.com/YondFane/uTerm/actions/runs/41984445509) retains
 [JDK8 artifact13395571787](https://github.com/YondFane/uTerm/actions/runs/41984445509/artifacts/13395571787)
 and the corresponding 11/17/21 artifacts. The explicit Unicode Java8 application-data cache
-limitation and stock-JDK supplementary-directory failures remain recorded; full #37 and manual
-acceptance are open. Original failures and the scoped fix are retained in Issue #37.
+limitation and stock-JDK supplementary-directory failures remain recorded. #37 is closed in the
+user-approved scope, with final human checks waived rather than executed. Uncovered Windows
+run-panel/picker behavior remains in #13, and original failures retain their evidence in #37.
 
 The optional real Maven fixture uses Maven 3.9.9 and Spring Boot 2.7.18 with a disposable
 three-project reactor. It exercises Package/Test/Install, module preparation, development and

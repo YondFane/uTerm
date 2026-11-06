@@ -90,7 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openInspectorFile = { [weak self] directory, path, line in
             guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
             let root = try await self.selectedProjectDirectory()
-            guard root.path == URL(fileURLWithPath: directory).standardizedFileURL.resolvingSymlinksInPath().path else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Search again.", "项目选择已变化，请重新搜索。")) }
+            guard root.standardizedFileURL.resolvingSymlinksInPath() == URL(fileURLWithPath: directory).standardizedFileURL.resolvingSymlinksInPath() else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Search again.", "项目选择已变化，请重新搜索。")) }
             guard let bridge = self.model.bridge else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
             _ = try await bridge.call("files.read", params: .object(["directory": .string(root.path), "path": .string(path)]))
             guard try await self.selectedProjectDirectory() == root else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Search again.", "项目选择已变化，请重新搜索。")) }
@@ -773,7 +773,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard let bridge = model.bridge, let state = model.state else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
         let context = try await bridge.projectContext(expectedRevision: state.snapshot.revision)
         guard let path = context.directory, path.hasPrefix("/") else { throw BridgeFailure(code: "LOCAL_PROJECT", message: localized("Select a local project or Worktree first.", "请先选择本地项目或 Worktree。")) }
-        return URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+        return URL(fileURLWithPath: path)
     }
     @objc private func openFile() {
         Task { @MainActor in
@@ -790,9 +790,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         panel.directoryURL = root
         panel.beginSheetModal(for: window) { [weak self] response in
             guard response == .OK, let self, let file = panel.url else { return }
-            let prefix = root.path.hasSuffix("/") ? root.path : root.path + "/"
-            guard file.standardizedFileURL.path.hasPrefix(prefix) else { self.model.error = localized("Choose a file inside the selected project.", "请选择所选项目中的文件。") ; return }
-            let path = String(file.standardizedFileURL.path.dropFirst(prefix.count))
+            guard let fileRoot = try? ContentFileRoot(directory: root), let path = fileRoot.relativePath(for: file) else { self.model.error = localized("Choose a file inside the selected project.", "请选择所选项目中的文件。") ; return }
             Task { @MainActor in
                 do { _ = try await self.makeEditableContentWindow(directory: root, path: path) }
                 catch { self.model.error = error.localizedDescription }
@@ -881,7 +879,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     private func existingContent(directory: URL, path: String, editable: Bool) -> ContentWindow? {
         let root = directory.standardizedFileURL.resolvingSymlinksInPath()
-        return contentWindows.values.first { !$0.gitMode && $0.workbenchHost == nil && $0.directory == root && $0.path == path && $0.editable == editable }
+        return contentWindows.values.first { !$0.gitMode && $0.workbenchHost == nil && $0.directory == root && $0.documentDirectory == directory.path && $0.path == path && $0.editable == editable }
     }
     private func openGitHub() {
         Task { @MainActor in
@@ -906,7 +904,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 return .object(["canAssociate": .bool(active != nil), "canInsert": .bool(active?.session["agent"].string != nil)])
             }
             host.sessionAction = { [weak self] action, item in
-                guard let self, !self.preparingQuit, !self.mutatingRepository, self.model.workspace["selectedProject"].string == projectID, try await self.selectedProjectDirectory() == root else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+                guard let self, !self.preparingQuit, !self.mutatingRepository, self.model.workspace["selectedProject"].string == projectID, try await self.selectedProjectDirectory().standardizedFileURL.resolvingSymlinksInPath() == root else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
                 guard case .object(let fields) = item, fields.count == 2, let url = item["url"].string, let title = item["title"].string,
                       url.utf8.count <= 2000, title.utf8.count <= 1000,
                       url.range(of: "^https://github\\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(issues|pull)/[0-9]+$", options: .regularExpression) != nil else { throw BridgeFailure(code: "GITHUB_ARGUMENT", message: localized("Invalid GitHub issue or PR link.", "GitHub 议题或 PR 链接无效。")) }
@@ -941,6 +939,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let snapshot = try await worker.call("git.snapshot", params: .object(["directory": .string(directory.path)]))
             guard let path = snapshot["root"].string else { throw BridgeFailure(code: "GIT_ROOT", message: "Git did not return its repository root") }
             let root = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+            let fileDirectory = directory.standardizedFileURL.resolvingSymlinksInPath() == root ? directory : root
             guard !preparingQuit, !mutatingRepository else { throw BridgeFailure(code: "GIT_BUSY", message: "Client is preparing another operation") }
             guard let state = model.state else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
             let context = try await stateBridge.projectContext(expectedRevision: state.snapshot.revision)
@@ -961,7 +960,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             content.openRepositoryFile = { [weak self] path in
                 guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
-                _ = try await self.makeEditableContentWindow(directory: root, path: path)
+                _ = try await self.makeEditableContentWindow(directory: fileDirectory, path: path)
             }
             content.recoverGitFavorites = { [weak self] in
                 guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }

@@ -162,7 +162,7 @@ ABI 明确所有权与回调线程，Rust panic 不跨语言，Swift 在主线�
 | M1           | Accepted / 已验收                         | Shared validation/storage/FFI, Tauri save/recovery and export evidence accepted at 56ce724; task branch only / 核心、保存恢复及导出证据已验收，尚未合入。                                                                          |
 | M2           | Closed in approved scope / 批准范围内关闭 | All four tasks closed; real Vim/ownership and explicitly simulated Agent/lifecycle checks stay distinct. / 四项关闭，真实Vim／并存与明确模拟的Agent／生命周期分开记录。                                                            |
 | M3           | Closed by user / 用户指示关闭             | #17 closed not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain. / 阶段按用户指示关闭，原始持久布局／PDF／Windows运行与选择器缺口保留。                                                       |
-| M4 #18       | See phase tracker / 见阶段跟踪            | Database, Redis, Agent, settings and interaction have accepted evidence; see #43 for actual performance/pressure results and limits. / 数据库、Redis、Agent、设置及交互有验收证据，性能／压力结果及边界见#43。                     |
+| M4 #18       | Accepted, unmerged / 已验收，未合并       | All six tasks accepted; 15 v4 workloads at source79872ba, with regressions retained in #13. / 六项验收，15轮v4负载通过，性能优化待办保留。                                                                                         |
 | M5 #19       | See phase tracker / 见阶段跟踪            | #44 private candidate and #45 signed updater accepted; actual historical application/data rollback and final gate evidence are tracked per source in #46/#47. / 私有候选及签名更新验收，真实历史应用数据回退和最终门禁按来源留证。 |
 
 Linux cloud has Node 26.13.0 and Rust 1.99.1, and has no Swift/Xcode or interactive Mac. The
@@ -172,11 +172,14 @@ is tied to the baseline tree, not new native code. M0 CI records PR head separat
 merge SHA, macOS/Xcode/Swift versions, startup logs and the ad-hoc-signed QA App on Apple Silicon
 and Intel. This historical M0 result does not cover later interactions or performance. Sourceec1a49d
 now has accepted four-platform interaction recording and signed updater evidence in #42/#45;
-physical human checks were waived, not executed. Full v4 same-machine performance remains pending.
+physical human checks were waived, not executed. Source79872ba / tested mergea540065 passes all 15
+v4 workloads on three platforms; #43 and M4 #18 are accepted, with native performance regressions
+retained as #13 profiling follow-ups.
 
 云端不是 macOS。既有检查只证明基线文件树；原生代码必须经过新 CI。CI 区分 PR
 head 与实际测试合并 SHA，并保存工具链、启动结果和 QA
-App。此M0旧结果不覆盖后续交互及性能；源码ec1a49d的四平台交互记录及签名更新现已在#42／#45验收。物理人工检查是豁免而非执行，完整v4同机性能仍待完成。
+App。此M0旧结果不覆盖后续交互及性能；源码ec1a49d的四平台交互记录及签名更新现已在#42／#45验收。物理人工检查是豁免而非执行。源码79872ba／tested
+mergea540065在三平台通过15轮v4负载；#43及M4 #18已验收，原生性能回退保留为#13剖析待办。
 
 ### M0 evidence / M0 证据
 
@@ -278,7 +281,7 @@ SHA 分开记录，不新建状态标签。最终人工项已由用户豁免；�
 | M1 #15       | #24–#28       | Accepted: contract/store/FFI, Tauri save/recovery and export boundaries at 56ce724; all five tasks and stage closed. / 五项任务及阶段已验收，未合入 release。                                                             |
 | M2 #16       | #29–#32       | Four tasks closed in approved scope; actual native Vim/ownership and approved Agent/lifecycle simulations have separate evidence. / 四项在批准范围内关闭，真实Vim／并存及模拟Agent／生命周期各自留证。                    |
 | M3 #17       | #33–#37       | Closed by user, not_planned; persistent layout, shared PDF marks and Windows run-panel/picker gaps remain visible. / 按用户指示关闭阶段，原始持久布局／PDF／Windows运行与选择器缺口不改记完成。                           |
-| M4 #18       | #38–#43       | #38–#42 accepted; source-specific performance evidence and remaining scope are maintained in #43/#18. / 前五任务验收，性能来源证据及剩余范围由任务／阶段跟踪维护。                                                        |
+| M4 #18       | #38–#43       | All six accepted; #43 completed with source79872ba / mergea540065, explicit performance follow-ups in #13; stage closed, unmerged. / 六项及阶段关闭，性能回退保留待办，尚未合入。                                         |
 | M5 #19       | #44–#47       | #44/#45 accepted; exact upgrade/rollback and final gate reports are maintained in #46/#47/#19, with signing and simulation limits visible. / 候选／更新验收，准确升级回退和门禁结果由任务／阶段维护，签名及模拟限制可见。 |
 
 ### M2 implementation and verification / M2 实现与验证
@@ -636,6 +639,12 @@ incomplete rasterization if permissions fail. The new image method awaits actual
 上述 ARM 自动化通过并上传报告／11 张 PNG，但目视发现 NSView 缓存漏掉合成图层，浅色背景和文字不完整，不能作为通过截图。改用系统工具按 QA 窗口 ID 采集，失败不回退残缺图片，仍待新 CI 和检查。
 
 ## Current accepted baseline / 当前已验收基线
+
+The following source-bound implementation records retain their original failures and pending states
+at each recorded SHA. They do not describe current Issue status; the stage tables above and #13
+remain authoritative. No old-source pass establishes a newer-head acceptance.
+
+以下绑定源码的实现记录保留各SHA当时的失败与待处理状态，不代表当前Issue状态；当前状态以上方阶段表和#13为准，不用旧源码通过证明较新head验收。
 
 Verified head `c475567da41e6840dc76f1197f8b5ea183bb0865`, tested merge
 `c5c63cb41a2843cb70e0bc95fbb19511c535ff65`, passed all four jobs in

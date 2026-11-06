@@ -428,13 +428,13 @@ def main():
             if server: server.shutdown(); server.server_close(); server_thread.join(timeout=5)
             if core:
                 try:
-                    for session in core.call("host.status")["sessions"]:
+                    status = core.call("host.status")
+                    for session in status["sessions"]:
                         core.call("host.close", dict(id=session["spec"]["id"], generation=session["generation"]))
                     core.call("host.shutdownIdle")
                     endpoint = root / "local-daemon-v1/endpoint.json"
-                    deadline = time.monotonic()+10
-                    while endpoint.exists() and time.monotonic() < deadline: time.sleep(.05)
-                    assert not endpoint.exists(), "Owned historical host endpoint survived explicit close/shutdown"
+                    script = "import {waitForOwnedHostExit} from './scripts/owned-host-exit.mjs'; console.log(JSON.stringify(await waitForOwnedHostExit(process.argv[1], Number(process.argv[2]))));"
+                    report["hostExit"] = json.loads(run("node", "--input-type=module", "-e", script, endpoint, status["pid"]).stdout)
                     report["explicitSessionCloseAndIdleHostShutdown"] = True
                 except Exception as error: report["cleanupErrors"].append(str(error))
                 try: core.close()

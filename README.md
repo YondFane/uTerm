@@ -144,7 +144,9 @@ JDK 21 (`JAVA_HOME` and its `bin` on `PATH`); application builds still do not bu
 JDK. `uterm-core::{java,python}` owns shared run configuration and task rules; Tauri provides
 platform adapters and generated DTOs keep Swift/TypeScript boundaries aligned. Regenerate TS/Swift
 boundary types with `pnpm contracts:generate`. On macOS, run `bash scripts/macos-native-build.sh`
-and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift bridge tests.
+and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift bridge tests. The
+bridge suite includes logical file-root alias recovery and resolved file-picker boundary
+regressions.
 
 `pnpm settings:generate` derives the native command/theme catalog from the existing TypeScript
 settings and translations; `pnpm settings:check` verifies it. Contract generation/checks include
