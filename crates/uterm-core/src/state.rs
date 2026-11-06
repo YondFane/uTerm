@@ -447,8 +447,13 @@ pub fn validate_settings(value: &Value) -> Result<()> {
     let baseline = defaults();
     let expected = baseline["settings"].as_object().unwrap();
     if value["version"] != 1
-        || object.keys().any(|k| !expected.contains_key(k))
+        || object
+            .keys()
+            .any(|k| !expected.contains_key(k) && k != "agentNotifications")
         || expected.keys().any(|k| !object.contains_key(k))
+        || object
+            .get("agentNotifications")
+            .is_some_and(|v| !v.is_boolean())
     {
         return Err(error());
     }

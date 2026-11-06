@@ -584,6 +584,10 @@ export function App() {
   const [detectedAgents, setDetectedAgents] = useState<Record<string, string>>({});
   const agentStateValues = useRef<Record<string, string>>({});
   const pendingAgentNotifications = useRef(new Map<string, symbol>());
+  const agentNotificationSetting = useRef(settings.agentNotifications);
+  agentNotificationSetting.current = settings.agentNotifications;
+  const notificationsEnabled = () =>
+    agentNotificationSetting.current ?? localStorage.getItem(notificationKey) === "true";
   const seenAgentEvents = useRef(new Map<string, Set<string>>());
   const lastAgentEvent = useRef(new Map<string, string>());
 
@@ -592,7 +596,7 @@ export function App() {
     if (
       !runtime ||
       runtime.debug ||
-      localStorage.getItem(notificationKey) !== "true" ||
+      !notificationsEnabled() ||
       !current ||
       (document.hasFocus() && current.selectedSession === id)
     )
@@ -605,7 +609,7 @@ export function App() {
         if (
           !granted ||
           pendingAgentNotifications.current.get(id) !== request ||
-          localStorage.getItem(notificationKey) !== "true" ||
+          !notificationsEnabled() ||
           !current ||
           (document.hasFocus() && current.selectedSession === id)
         )
@@ -3534,7 +3538,7 @@ export function App() {
                     !eventDriven &&
                     !runtime.debug &&
                     ["waiting", "done"].includes(state) &&
-                    localStorage.getItem(notificationKey) === "true" &&
+                    notificationsEnabled() &&
                     (!document.hasFocus() || selectedSession !== id)
                   ) {
                     notifyAgentActivity(

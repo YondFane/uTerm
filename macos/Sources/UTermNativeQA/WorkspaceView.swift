@@ -174,6 +174,10 @@ struct BasicSettingsView: View {
                     }
                 }
                 Section(localized("Agents", "Agent")) {
+                    Button(localized("Manage Agent commands and hooks…", "管理 Agent 命令与 Hooks…")) {
+                        model.settingsPresented = false
+                        model.openAgentsRequested?()
+                    }
                     ForEach(model.environment["agents"].array.compactMap(\.string), id: \.self) { agent in
                         Toggle(agent, isOn: Binding(get: { model.settings["enabledAgents"].array.contains(.string(agent)) }, set: { enabled in Task { await model.mutate("settings.agent.toggle", ["agent": .string(agent), "enabled": .bool(enabled)]) } }))
                     }

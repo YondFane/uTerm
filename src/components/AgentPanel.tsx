@@ -81,9 +81,10 @@ export function AgentSettings({
   const [busy, setBusy] = useState(false);
   const [installing, setInstalling] = useState<string | null>(null);
   const [installTarget, setInstallTarget] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState(
+  const [legacyNotifications, setNotifications] = useState(
     () => localStorage.getItem(notificationKey) === "true",
   );
+  const notifications = settings.agentNotifications ?? legacyNotifications;
   const ids = [
     ...new Set([
       "claude",
@@ -475,6 +476,10 @@ export function AgentSettings({
                 (await invoke<string>("plugin:notification|request_permission")) !== "granted"
               )
                 throw new Error(tx("通知权限未开启，请在系统设置中允许通知。"));
+              await saveSettings(
+                { ...settings, agentNotifications: checked },
+                runtime.platform === "macos",
+              );
               localStorage.setItem(notificationKey, String(checked));
               setNotifications(checked);
             });

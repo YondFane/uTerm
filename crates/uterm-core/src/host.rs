@@ -22,6 +22,9 @@ pub struct HostBroker {
     lifecycle: Mutex<()>,
 }
 impl HostBroker {
+    pub fn helper_source(&self) -> &std::path::Path {
+        &self.source
+    }
     pub fn new(root: PathBuf, source: PathBuf) -> Self {
         Self {
             root,

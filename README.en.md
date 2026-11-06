@@ -146,6 +146,11 @@ platform adapters and generated DTOs keep Swift/TypeScript boundaries aligned. R
 boundary types with `pnpm contracts:generate`. On macOS, run `bash scripts/macos-native-build.sh`
 and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift bridge tests.
 
+Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the Pi extension under
+`crates/uterm-core/integrations/`. `bash scripts/macos-agent-smoke.sh` requires a macOS graphical
+session and the QA build; it records real window/Host/installed-reporter evidence with an explicitly
+simulated OS notification adapter, without provider credentials or global CLI installation.
+
 The embedded Java 8 encoding agent includes its Java source and reproducible runtime bytes. After
 changing it, use JDK 21 to run `python3 scripts/java8-encoding-agent.py`, then
 `python3 scripts/java8-encoding-agent.py --check`. Normal Rust/application builds need no Java

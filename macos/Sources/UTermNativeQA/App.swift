@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var pythonWindows: [String: PythonWindow] = [:]
     private var javaWindows: [String: JavaWindow] = [:]
     private var sshWindow: SSHWindow?
+    private var agentsWindow: AgentSettingsWindow?
     private let model = WorkspaceModel()
     private var terminating = false
     private var preparingQuit = false
@@ -38,6 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self?.configureMenu()
             self?.sshWindow?.window?.title = localized("SSH connections", "SSH 连接")
             self?.sshWindow?.model.objectWillChange.send()
+            self?.agentsWindow?.window.title = localized("Agent settings", "Agent 设置")
+            self?.agentsWindow?.model.objectWillChange.send()
             self?.contentWindows.values.filter { $0.workbenchHost != nil }.forEach { $0.window?.title = $0.workbenchHost?.kind == "redis" ? localized("Redis connections", "Redis 连接") : localized("Databases", "数据库") }
         }
         model.requestActivation = { [weak window] in
@@ -47,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.appearanceChanged = { [weak self, weak window] appearance in
             let value = appearance == "dark" ? NSAppearance(named: .darkAqua) : appearance == "light" ? NSAppearance(named: .aqua) : nil
             window?.appearance = value; self?.sshWindow?.window?.appearance = value
+            self?.agentsWindow?.window.appearance = value
             if let self {
                 for content in self.contentWindows.values where content.workbenchHost != nil {
                     content.window?.appearance = value
@@ -58,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openSSHRequested = { [weak self] id in Task { @MainActor in try? await self?.makeSSHWindow(selected: id) } }
         model.openDatabasesRequested = { [weak self] in self?.openDatabases() }
         model.openRedisRequested = { [weak self] in self?.openRedis() }
+        model.openAgentsRequested = { [weak self] in self?.openAgents() }
         model.prepareSSHTransportReconnect = { [weak self] in
             guard let current = self?.sshWindow else { return true }
             guard await current.model.prepareForQuit() else { return false }
@@ -68,6 +73,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--agent-smoke-report") {
+                var report = baseReport()
+                do { try await AgentSmoke.run(model: model, open: { self.openAgents(); return self.agentsWindow! }, report: &report) }
+                catch {
+                    report["failure"] = error.localizedDescription
+                    if let current = agentsWindow?.window {
+                        try? await TerminalSmoke.capture(window: current, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-agent-failure.png"))
+                    }
+                }
+                if let bridge = model.bridge {
+                    do {
+                        for session in try await bridge.call("host.status")["sessions"].array {
+                            _ = try await bridge.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]]))
+                        }
+                        _ = try await bridge.call("host.shutdownIdle")
+                    } catch { report["cleanupError"] = error.localizedDescription }
+                }
+                await model.shutdown()
+                finishReport(report, path: path)
+                return
+            }
             if let path = WorkspaceModel.argument("--redis-smoke-report") {
                 var report = baseReport()
                 do { try await RedisSmoke.run(model: model, open: { try await self.makeRedisWindow() }, lookup: { self.contentWindows.values.first { $0.workbenchHost?.kind == "redis" } }, report: &report) }
@@ -271,6 +297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(file, localized("New workspace…", "新建工作区…"), #selector(newWorkspace), "n", [.command, .shift])
         add(file, localized("New terminal", "新建终端"), #selector(newTerminal), "t")
         add(file, localized("New Agent session", "新建 Agent 会话"), #selector(newAgent), "n")
+        add(file, localized("Agent settings…", "Agent 设置…"), #selector(openAgents))
         file.addItem(.separator())
         add(file, localized("Close session", "关闭会话"), #selector(closeSession), "w")
         let edit = menu(localized("Edit", "编辑"))
@@ -322,8 +349,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     @objc private func toggleSidebar() { model.sidebarVisible.toggle() }
     @objc private func settings() { model.settingsPresented = true }
+    @objc private func openAgents() {
+        if agentsWindow == nil { agentsWindow = AgentSettingsWindow(workspace: model) }
+        agentsWindow?.window.appearance = window?.appearance
+        agentsWindow?.window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func hideWindow() {
+        if agentsWindow?.window === NSApp.keyWindow { agentsWindow?.window.performClose(nil); return }
         if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
@@ -709,6 +743,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if let agentsWindow, agentsWindow.model.busy {
+            agentsWindow.model.error = localized("Wait for the Agent operation to finish.", "请等待 Agent 操作完成。")
+            agentsWindow.window.makeKeyAndOrderFront(nil)
+            return .terminateCancel
+        }
         if terminating { return .terminateNow }
         if model.sshTrustPresented { return .terminateCancel }
         if let run = javaWindows.values.first(where: { $0.model.busy }) {
@@ -729,6 +768,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let runs = Array(self.pythonWindows.values)
             let javaRuns = Array(self.javaWindows.values)
             do {
+                if let agentsWindow = self.agentsWindow, !(await agentsWindow.prepareForQuit()) {
+                    throw BridgeFailure(code: "AGENT_QUIT_REFUSED", message: localized("Resolve Agent configuration changes before quitting.", "退出前请处理 Agent 配置修改。"))
+                }
                 if let current = self.sshWindow, !(await current.model.prepareForQuit()) { throw BridgeFailure(code: "SSH_QUIT_REFUSED", message: localized("Finish the SSH operation before quitting.", "退出前请完成 SSH 操作。")) }
                 for run in runs {
                     guard await run.prepareForQuit() else { throw BridgeFailure(code: "PYTHON_QUIT_REFUSED", message: localized("Resolve Python configuration changes before quitting.", "退出前请处理 Python 配置修改。")) }
@@ -749,6 +791,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     throw BridgeFailure(code: "CONTENT_CHANGED", message: localized("A file window changed while preparing to quit. Try again.", "准备退出时文件窗口已变化，请重试。"))
                 }
             } catch {
+                self.agentsWindow?.resumeAfterQuit()
                 await self.sshWindow?.model.resumeAfterQuit()
                 for content in contents { content.resumeAfterQuit() }
                 for run in runs { run.resumeAfterQuit() }
@@ -760,6 +803,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 return
             }
             for content in contents { content.forceClose() }
+            self.agentsWindow?.window.orderOut(nil)
             await self.sshWindow?.forceClose()
             for run in runs { await run.forceClose() }
             for run in javaRuns { await run.forceClose() }

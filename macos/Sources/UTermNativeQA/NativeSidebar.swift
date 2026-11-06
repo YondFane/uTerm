@@ -75,7 +75,11 @@ struct NativeSidebar: NSViewRepresentable {
                 next += connections.map { Row(key: "q:" + ($0["id"].string ?? ""), name: $0["name"].string ?? "SSH", symbol: "network") }
             }
             next += [Row(key: "sessions", name: localized("Sessions", "会话"), symbol: nil)]
-                + model.sessionEntries.map { Row(key: "s:" + $0.sessionID, name: $0.session["name"].string ?? "", symbol: $0.session["agent"].string == nil ? "terminal" : "sparkle") }
+                + model.sessionEntries.map { entry in
+                    let activity = model.terminals[entry.sessionID]?.activityLabel ?? ""
+                    let name = (entry.session["name"].string ?? "") + (activity.isEmpty ? "" : " · " + activity)
+                    return Row(key: "s:" + entry.sessionID, name: name, symbol: entry.session["agent"].string == nil ? "terminal" : "sparkle")
+                }
             updating = true
             defer { updating = false }
             if next != rows { rows = next; table.reloadData() }

@@ -12,6 +12,18 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private(set) var error = ""
     private(set) var exited = false
     var changed: (() -> Void)?
+    var activity: ((CoreTerminalHeader) -> Void)?
+    private(set) var agentState: String?
+    var activityLabel: String {
+        switch agentState {
+        case "working": localized("Working", "处理中")
+        case "waiting": localized("Needs attention", "需要处理")
+        case "done": localized("Completed", "已完成")
+        case "notice": localized("Reminder", "提醒")
+        case "error": localized("Failed", "失败")
+        default: ""
+        }
+    }
     private var connecting: Task<Void, Never>?
     private var inputTask: Task<Void, Never>?
     private var input = Data()
@@ -125,6 +137,8 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             guard packet.header.attachment == attachment, packet.header.generation == generation else { return }
         }
         let terminal = view.getTerminal()
+        agentState = packet.header.agent_state
+        activity?(packet.header)
         receivedInitialFrame = true
         let previousControl = inputControl?.owned
         inputControl = packet.header.input_control

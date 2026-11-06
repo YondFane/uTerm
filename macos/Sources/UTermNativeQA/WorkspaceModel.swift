@@ -42,6 +42,7 @@ final class WorkspaceModel: ObservableObject {
     var openSSHRequested: ((String?) -> Void)?
     var openDatabasesRequested: (() -> Void)?
     var openRedisRequested: (() -> Void)?
+    var openAgentsRequested: (() -> Void)?
     var prepareSSHTransportReconnect: (() async -> Bool)?
     var sshTrustTask: Task<Void, Never>?
     var sshTrustAlert: NSAlert?
@@ -55,6 +56,7 @@ final class WorkspaceModel: ObservableObject {
     private var shuttingDown = false
     private var helperReady = false
     private var needsReload = false
+    lazy var agentNotifications = AgentNotifications(workspace: self)
 
     var workspace: JSONValue { state?.snapshot.document.workspace ?? .null }
     var settings: JSONValue { state?.snapshot.document.settings ?? .null }
@@ -104,11 +106,19 @@ final class WorkspaceModel: ObservableObject {
             guard let resources = Bundle.main.resourceURL else { throw BridgeFailure(code: "HELPER", message: "Application resources are missing") }
             let helper = resources.appendingPathComponent("bin/utermd-local")
             _ = try await bridge.call("host.configure", params: .object(["helper": .string(helper.path)]))
+            if Self.argument("--qa-data-root") != nil {
+                let home = try Self.dataRoot().deletingLastPathComponent().appendingPathComponent("agent-home").path
+                _ = try await bridge.call("agent.configure", params: .object(["home": .string(home)]))
+            }
             helperReady = true
             if sshBridge == nil {
                 let ssh = try await CoreBridge.open(root: Self.dataRoot())
                 do {
                     _ = try await ssh.call("host.configure", params: .object(["helper": .string(helper.path)]))
+                    if Self.argument("--qa-data-root") != nil {
+                        let home = try Self.dataRoot().deletingLastPathComponent().appendingPathComponent("agent-home").path
+                        _ = try await ssh.call("agent.configure", params: .object(["home": .string(home)]))
+                    }
                     _ = try await ssh.call("ssh.configure", params: .object(["credentialService": .string((Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native") + ".ssh")]))
                     _ = try await ssh.call("database.configure", params: .object(["identifier": .string(Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native")]))
                     _ = try await ssh.call("redis.configure", params: .object(["identifier": .string(Bundle.main.bundleIdentifier ?? "sh.uterm.desktop.qa.native")]))
@@ -163,6 +173,7 @@ final class WorkspaceModel: ObservableObject {
             self.state = state
             appearanceChanged?(settings["appearance"].string ?? "system")
             let existing = Set(state.sessions.map { $0.session["id"].string ?? "" })
+            agentNotifications.retain(existing)
             for (id, terminal) in terminals where !existing.contains(id) {
                 _ = try await bridge.call("terminal.action", params: .object(["attachment": .string(terminal.attachment), "action": .string("detach")]))
             }
@@ -172,6 +183,7 @@ final class WorkspaceModel: ObservableObject {
                 if terminals[id] == nil {
                     let session = TerminalSession(entry: entry, bridge: bridge)
                     session.changed = { [weak self] in self?.objectWillChange.send() }
+                    session.activity = { [weak self] header in self?.agentNotifications.consume(header, session: id); self?.objectWillChange.send() }
                     terminals[id] = session
                 }
                 terminals[id]?.update(entry: entry)
@@ -335,6 +347,11 @@ final class WorkspaceModel: ObservableObject {
         if let operation { _ = await operation.value }
         await mutate("settings.patch", ["patch": .object(patch)])
     }
+    func refreshAgentEnvironment() async {
+        guard let bridge else { return }
+        do { environment = try await bridge.call("host.environment") }
+        catch { self.error = localized("Could not refresh Agent availability.", "无法刷新 Agent 可用状态。") }
+    }
 
     func renameWorkspace() {
         guard let state else { return }
@@ -381,6 +398,7 @@ final class WorkspaceModel: ObservableObject {
     func shutdown() async {
         if let operation { _ = await operation.value }
         shuttingDown = true
+        agentNotifications.retain([])
         stopSSHTrust()
         await stopControl()
         for terminal in terminals.values { terminal.cancelConnection() }

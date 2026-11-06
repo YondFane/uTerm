@@ -3930,6 +3930,25 @@ guides or defaults, including identifiers such as `constructor`.
 Provider credentials and permissions determine availability. Terminal input and process I/O are
 handled independently of UI rendering.
 
+The native QA client opens **File → Agent settings…** for custom commands, enable/disable,
+installation, Hooks and usage. Commands use an executable and JSON string array; argument errors
+retain the draft. Hiding the window retains it, switching commands confirms unsaved changes and
+quitting refuses an active operation or asks about an unsaved command. Local usage reads no account
+credentials; reading account quota requires an explicit action and may request Keychain access.
+
+`uterm-core::{agents,agent_install}` owns the existing provider rules; Tauri delegates its unchanged
+commands and Swift uses Core JSON calls. The Pi extension is embedded from
+`crates/uterm-core/integrations/pi-activity.js`. QA passes explicit private provider directories
+without changing `HOME`, `CODEX_HOME` or the user's account selectors. Reporter updates use a staged
+replacement, preserving the prior executable if the new copy fails.
+
+Shared Linux regressions pass 18 Agent checks (one resource profile is intentionally ignored), five
+installer checks and two platform/real-Hooks checks. An installed reporter child process drains 64
+KiB of input, produces real Host working/done events and rejects stale generations. The installer
+failure/retry test executes private scripts rather than installing a provider globally. Three
+focused frontend notification/Pi suites, TypeScript, localization and the QA backend check pass.
+Native window, bridge and notification-adapter results at the new source remain pending CI.
+
 ### Installing and removing Hooks
 
 Settings → Agent → Install Hooks configures Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot
@@ -4090,6 +4109,19 @@ acknowledged.
 - Pending permission results are ignored after a newer Agent state, session closure or view unmount;
   dispatch also rechecks the current notification setting, focus and selected session. Native
   dispatch failures remain visible.
+
+- Native Agent settings use the same optional canonical `agentNotifications` preference as Tauri;
+  absent values retain the imported legacy preference and otherwise default to off. Opening settings
+  does not write a default or request permission. Native activity comes from accepted terminal
+  frames; no quiet-time completion is fabricated. The native gate uses `UInt64` event sequences,
+  bounded event-ID retention and generation/session checks. Swift regressions cover adjacent values
+  above JavaScript's safe-integer limit, `UInt64.max`, replay and invalidation of pending notices.
+
+- `bash scripts/macos-agent-smoke.sh` uses a real isolated native window, private commands/usage,
+  installed reporter processes and actual Host frames. Its OS permission and delivery adapter is
+  explicitly simulated; provider sign-in and actual system notification presentation are not
+  claimed. It archives source-bound reports and English/dark and Chinese/light narrow-window
+  screenshots. The user has waived final manual acceptance; automated failures still require fixes.
 
 #### Hook and notification automated checks
 

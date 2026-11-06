@@ -40,6 +40,7 @@ export const commands = [
 ] as const;
 export type CommandId = (typeof commands)[number][0];
 export interface Settings {
+  agentNotifications?: boolean;
   automaticUpdates: boolean;
   fileTabLimit: number;
   breakReminder: boolean;
@@ -229,6 +230,7 @@ export function readSettings(raw: string | null): Settings {
     !v ||
     v.version !== 1 ||
     typeof v.automaticUpdates !== "boolean" ||
+    (v.agentNotifications !== undefined && typeof v.agentNotifications !== "boolean") ||
     typeof v.showSshConnections !== "boolean" ||
     typeof v.showRedisConnections !== "boolean" ||
     typeof v.showDatabaseConnections !== "boolean" ||
@@ -304,6 +306,7 @@ export function readSettings(raw: string | null): Settings {
   }
   return {
     ...(Object.fromEntries(Object.keys(defaults).map((key) => [key, v[key]])) as Settings),
+    ...(v.agentNotifications === undefined ? {} : { agentNotifications: v.agentNotifications }),
     shortcuts: { ...v.shortcuts },
   };
 }

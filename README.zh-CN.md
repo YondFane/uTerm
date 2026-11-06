@@ -131,6 +131,10 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 `bash scripts/macos-native-build.sh` 和 `bash scripts/macos-native-test.sh`
 构建隔离 QA 应用并运行 Rust／Swift 桥接测试。
 
+共享 Agent 规则位于 `uterm-core::{agents,agent_install}`，Pi 扩展位于
+`crates/uterm-core/integrations/`。`bash scripts/macos-agent-smoke.sh`
+需要 macOS 图形会话及 QA 构建；记录真实窗口／Host／已安装报告程序证据，系统通知适配器明确使用模拟，不使用提供方凭据或全局安装 CLI。
+
 内嵌 Java 8 编码 Agent 同时提供 Java 源码和可复现的运行时字节。修改后使用 JDK 21 运行
 `python3 scripts/java8-encoding-agent.py`，再执行
 `python3 scripts/java8-encoding-agent.py --check`。正常 Rust／应用构建不需要 Java 编译器；Windows 互操作 CI 核对资产并运行实际所选 JDK。

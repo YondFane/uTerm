@@ -1,3 +1,5 @@
+pub mod agent_install;
+pub mod agents;
 pub mod archives;
 mod configuration;
 mod connections;
@@ -104,6 +106,7 @@ pub struct Core {
     ssh: Mutex<Option<Arc<ssh::service::Service>>>,
     database: Mutex<Option<Arc<database::service::Service>>>,
     redis: Mutex<Option<Arc<redis::service::Service>>>,
+    agent: Mutex<Option<agents::Host>>,
 }
 impl Core {
     pub fn open(root: PathBuf) -> Result<Self> {
@@ -116,6 +119,7 @@ impl Core {
             ssh: Mutex::new(None),
             database: Mutex::new(None),
             redis: Mutex::new(None),
+            agent: Mutex::new(None),
         })
     }
     pub fn set_terminal_sink(&self, sink: terminal::Sink) -> Result<()> {
@@ -356,6 +360,84 @@ impl Core {
     }
     fn dispatch(&self, method: &str, params: Value) -> Result<Value> {
         match method {
+            "agent.configure" => {
+                #[derive(Deserialize)]
+                #[serde(deny_unknown_fields)]
+                struct Configuration {
+                    home: PathBuf,
+                }
+                let configuration: Configuration =
+                    serde_json::from_value(params).map_err(|_| {
+                        CoreError::new(
+                            "AGENT_INVALID_PARAMS",
+                            "Agent home must be an absolute platform directory",
+                        )
+                    })?;
+                if !configuration.home.is_absolute() {
+                    return Err(CoreError::new(
+                        "AGENT_INVALID_PARAMS",
+                        "Agent home must be an absolute platform directory",
+                    ));
+                }
+                let broker = self.host.get().ok_or_else(|| {
+                    CoreError::new("HOST_CONFIG", "Configure the bundled reporter first")
+                })?;
+                let mut current = self.agent.lock().map_err(|_| {
+                    CoreError::new(
+                        "AGENT_CONFIGURATION",
+                        "Agent platform configuration is unavailable",
+                    )
+                })?;
+                if current.is_some() {
+                    return Err(CoreError::new(
+                        "AGENT_ALREADY_CONFIGURED",
+                        "Agent platform directories are already configured",
+                    ));
+                }
+                // Explicit platform roots let QA avoid changing HOME or provider credential selectors.
+                // 显式平台目录使 QA 无需修改 HOME 或提供方凭据选择变量。
+                *current = Some(agents::Host {
+                    data: self.data_root()?.to_path_buf(),
+                    home: configuration.home,
+                    reporter: broker.helper_source().to_path_buf(),
+                    agent_homes: Default::default(),
+                });
+                Ok(json!({"configured":true}))
+            }
+            method if method.starts_with("agent.") => {
+                let broker = self.host.get().ok_or_else(|| {
+                    CoreError::new("HOST_CONFIG", "Configure the bundled reporter first")
+                })?;
+                let configured = self
+                    .agent
+                    .lock()
+                    .map_err(|_| {
+                        CoreError::new(
+                            "AGENT_CONFIGURATION",
+                            "Agent platform configuration is unavailable",
+                        )
+                    })?
+                    .clone();
+                let host = match configured {
+                    Some(host) => host,
+                    None => agents::Host::from_environment(
+                        self.data_root()?.to_path_buf(),
+                        broker.helper_source().to_path_buf(),
+                    )
+                    .map_err(|error| CoreError::new("AGENT_CONFIGURATION", error))?,
+                };
+                agents::request(host, method, params).map_err(|error| {
+                    if error.starts_with("AGENT_")
+                        && error
+                            .bytes()
+                            .all(|byte| byte.is_ascii_uppercase() || byte == b'_')
+                    {
+                        CoreError::new(&error, &error)
+                    } else {
+                        CoreError::new("AGENT_OPERATION_FAILED", error)
+                    }
+                })
+            }
             "ssh.info" => {
                 if !params.is_null() && params.as_object().is_none_or(|value| !value.is_empty()) {
                     return Err(CoreError::new(

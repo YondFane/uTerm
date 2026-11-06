@@ -78,6 +78,7 @@ jobs:
           UTERM_SSH_SERVICE_REPORT: ${{ github.workspace }}/macos/.build/evidence/ssh-service-core.json
           UTERM_GIT_CORE_REPORT: ${{ github.workspace }}/macos/.build/evidence/git-operations-core.json
           UTERM_TASK_OUTPUT_AUTH_REPORT: ${{ github.workspace }}/macos/.build/evidence/task-output-auth.json
+          UTERM_AGENT_CORE_REPORT: ${{ github.workspace }}/macos/.build/evidence/agent-hooks-core.json
         run: |
           cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local
           cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib task_output::tests 2>&1 | tee macos/.build/evidence/task-output-auth-tests.log
@@ -115,6 +116,8 @@ jobs:
       - name: Real native Redis, binary identity, protected write and window lifetime
         if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
         run: bash scripts/macos-redis-smoke.sh
+      - name: Real native Agent settings, installed Hooks and simulated OS notification lifecycle
+        run: bash scripts/macos-agent-smoke.sh
       - name: Real native Git, Worktree and open-editor protection
         run: bash scripts/macos-git-smoke.sh
       - name: Real native control and standalone CLI smoke

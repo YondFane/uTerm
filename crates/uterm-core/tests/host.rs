@@ -7,6 +7,8 @@ use std::{
 use uterm_core::Core;
 use utermd_local::daemon::{Client, Operation, Reply};
 
+#[path = "host/agents.rs"]
+mod agents;
 #[path = "host/java_encoding.rs"]
 mod java_encoding;
 #[path = "host/m2_simulation.rs"]
