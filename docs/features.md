@@ -4212,6 +4212,20 @@ passes. CI archives `settings-platform.json` with source and tested merge identi
 logic evidence; the complete native settings form, command panel, menus and login-start integration
 remain open in #41 and are not accepted from these checks.
 
+The native QA app opens **Settings → All settings…** or **File → All settings…** for General,
+Appearance, Terminal, Files/Agents and Shortcuts. Changes remain in a draft until **Save settings**;
+**Restore defaults** prepares a draft and requires saving. Closing the window preserves its draft,
+and quitting asks about unsaved changes. Reserved/duplicate shortcuts and invalid numbers show an
+error and retain the draft. Saving checks each changed field against the latest shared settings,
+preserving unrelated peer changes and refusing to overwrite a conflicting field.
+
+`bash scripts/macos-settings-smoke.sh` runs the real window with a second Core client, numeric
+errors, same-field conflicts, unrelated changes, hide/reopen, actual quit cancellation, native
+shortcut capture and reset. It archives `settings-native.json` plus English/dark and Chinese/light
+narrow window images. These new-source runtime results are pending CI. Full preference effects,
+theme import, dynamic command/menu integration and login startup are still incomplete; #41 stays
+open.
+
 ### Terminal text selection and rendering
 
 Visible terminal and Agent panes use GPU rendering when WebGL2 is available. Dragging to select text

@@ -43,6 +43,7 @@ final class WorkspaceModel: ObservableObject {
     var openDatabasesRequested: (() -> Void)?
     var openRedisRequested: (() -> Void)?
     var openAgentsRequested: (() -> Void)?
+    var openSettingsRequested: (() -> Void)?
     var prepareSSHTransportReconnect: (() async -> Bool)?
     var sshTrustTask: Task<Void, Never>?
     var sshTrustAlert: NSAlert?

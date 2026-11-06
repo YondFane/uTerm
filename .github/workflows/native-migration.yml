@@ -118,6 +118,8 @@ jobs:
         run: bash scripts/macos-redis-smoke.sh
       - name: Real native Agent settings, installed Hooks and simulated OS notification lifecycle
         run: bash scripts/macos-agent-smoke.sh
+      - name: Real native settings, conflicts, shortcut capture, reset and screenshots
+        run: bash scripts/macos-settings-smoke.sh
       - name: Real native Git, Worktree and open-editor protection
         run: bash scripts/macos-git-smoke.sh
       - name: Real native control and standalone CLI smoke

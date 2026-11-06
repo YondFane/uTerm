@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var javaWindows: [String: JavaWindow] = [:]
     private var sshWindow: SSHWindow?
     private var agentsWindow: AgentSettingsWindow?
+    private var fullSettingsWindow: NativeSettingsWindow?
     private let model = WorkspaceModel()
     private var terminating = false
     private var preparingQuit = false
@@ -41,6 +42,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self?.sshWindow?.model.objectWillChange.send()
             self?.agentsWindow?.window.title = localized("Agent settings", "Agent 设置")
             self?.agentsWindow?.model.objectWillChange.send()
+            self?.fullSettingsWindow?.window.title = localized("Settings", "设置")
+            self?.fullSettingsWindow?.model.objectWillChange.send()
             self?.contentWindows.values.filter { $0.workbenchHost != nil }.forEach { $0.window?.title = $0.workbenchHost?.kind == "redis" ? localized("Redis connections", "Redis 连接") : localized("Databases", "数据库") }
         }
         model.requestActivation = { [weak window] in
@@ -51,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let value = appearance == "dark" ? NSAppearance(named: .darkAqua) : appearance == "light" ? NSAppearance(named: .aqua) : nil
             window?.appearance = value; self?.sshWindow?.window?.appearance = value
             self?.agentsWindow?.window.appearance = value
+            self?.fullSettingsWindow?.window.appearance = value
             if let self {
                 for content in self.contentWindows.values where content.workbenchHost != nil {
                     content.window?.appearance = value
@@ -63,6 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openDatabasesRequested = { [weak self] in self?.openDatabases() }
         model.openRedisRequested = { [weak self] in self?.openRedis() }
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
+        model.openSettingsRequested = { [weak self] in self?.openFullSettings() }
         model.prepareSSHTransportReconnect = { [weak self] in
             guard let current = self?.sshWindow else { return true }
             guard await current.model.prepareForQuit() else { return false }
@@ -73,6 +78,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = WorkspaceModel.argument("--settings-smoke-report") {
+                var report = baseReport()
+                do { try await SettingsSmoke.run(workspace: model, open: { self.openFullSettings(); return self.fullSettingsWindow! }, report: &report) }
+                catch {
+                    report["failure"] = error.localizedDescription
+                    if let current = fullSettingsWindow {
+                        try? await TerminalSmoke.capture(window: current.window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-settings-full-failure.png"))
+                        await current.model.reload()
+                    }
+                }
+                await model.shutdown()
+                if report["failure"] != nil { terminating = true }
+                finishReport(report, path: path); return
+            }
             if let path = WorkspaceModel.argument("--agent-smoke-report") {
                 var report = baseReport()
                 do { try await AgentSmoke.run(model: model, open: { self.openAgents(); return self.agentsWindow! }, report: &report) }
@@ -298,6 +317,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         add(file, localized("New terminal", "新建终端"), #selector(newTerminal), "t")
         add(file, localized("New Agent session", "新建 Agent 会话"), #selector(newAgent), "n")
         add(file, localized("Agent settings…", "Agent 设置…"), #selector(openAgents))
+        add(file, localized("All settings…", "全部设置…"), #selector(openFullSettings))
         file.addItem(.separator())
         add(file, localized("Close session", "关闭会话"), #selector(closeSession), "w")
         let edit = menu(localized("Edit", "编辑"))
@@ -322,6 +342,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return false }
         if menuItem.action == #selector(closeSession) {
+            if let fullSettingsWindow, fullSettingsWindow.window === NSApp.keyWindow {
+                menuItem.title = localized("Close window", "关闭窗口")
+                return !fullSettingsWindow.model.frozen
+            }
             if let agentsWindow, agentsWindow.window === NSApp.keyWindow {
                 menuItem.title = localized("Close window", "关闭窗口")
                 return !agentsWindow.model.frozen
@@ -342,7 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             menuItem.title = fileFocused ? localized("Close file", "关闭文件") : localized("Close session", "关闭会话")
             if fileFocused { return true }
         }
-        if contentWindows.values.contains(where: { $0.window === NSApp.keyWindow }) || agentsWindow?.window === NSApp.keyWindow, let action = menuItem.action,
+        if contentWindows.values.contains(where: { $0.window === NSApp.keyWindow }) || agentsWindow?.window === NSApp.keyWindow || fullSettingsWindow?.window === NSApp.keyWindow, let action = menuItem.action,
            [#selector(splitRight), #selector(splitDown), #selector(increaseFont), #selector(decreaseFont)].contains(action) { return false }
         if menuItem.action == #selector(quit) || menuItem.action == #selector(hideWindow) { return true }
         if model.nameDraft != nil || model.settingsPresented { return false }
@@ -353,6 +377,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     @objc private func toggleSidebar() { model.sidebarVisible.toggle() }
     @objc private func settings() { model.settingsPresented = true }
+    @objc private func openFullSettings() {
+        if fullSettingsWindow == nil { fullSettingsWindow = NativeSettingsWindow(workspace: model) }
+        fullSettingsWindow?.window.appearance = window?.appearance
+        fullSettingsWindow?.window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
     @objc private func openAgents() {
         if agentsWindow == nil { agentsWindow = AgentSettingsWindow(workspace: model) }
         agentsWindow?.window.appearance = window?.appearance
@@ -361,6 +391,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc private func quit() { NSApp.terminate(nil) }
     @objc private func hideWindow() {
+        if fullSettingsWindow?.window === NSApp.keyWindow { fullSettingsWindow?.window.performClose(nil); return }
         if agentsWindow?.window === NSApp.keyWindow { agentsWindow?.window.performClose(nil); return }
         if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
@@ -721,6 +752,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }
     @objc private func closeSession() {
+        if let fullSettingsWindow, fullSettingsWindow.window === NSApp.keyWindow { fullSettingsWindow.window.performClose(nil); return }
         if let agentsWindow, agentsWindow.window === NSApp.keyWindow { agentsWindow.window.performClose(nil); return }
         if let sshWindow, sshWindow.window === NSApp.keyWindow { sshWindow.window?.performClose(nil); return }
         if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
@@ -748,6 +780,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if let fullSettingsWindow, fullSettingsWindow.model.busy {
+            fullSettingsWindow.model.error = localized("Wait for the settings operation to finish.", "请等待设置操作完成。")
+            fullSettingsWindow.window.makeKeyAndOrderFront(nil)
+            return .terminateCancel
+        }
         if let agentsWindow, agentsWindow.model.busy {
             agentsWindow.model.error = localized("Wait for the Agent operation to finish.", "请等待 Agent 操作完成。")
             agentsWindow.window.makeKeyAndOrderFront(nil)
@@ -773,6 +810,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let runs = Array(self.pythonWindows.values)
             let javaRuns = Array(self.javaWindows.values)
             do {
+                if let fullSettingsWindow = self.fullSettingsWindow, !(await fullSettingsWindow.prepareForQuit()) {
+                    throw BridgeFailure(code: "SETTINGS_QUIT_REFUSED", message: localized("Resolve settings changes before quitting.", "退出前请处理设置修改。"))
+                }
                 if let agentsWindow = self.agentsWindow, !(await agentsWindow.prepareForQuit()) {
                     throw BridgeFailure(code: "AGENT_QUIT_REFUSED", message: localized("Resolve Agent configuration changes before quitting.", "退出前请处理 Agent 配置修改。"))
                 }
@@ -797,6 +837,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 }
             } catch {
                 self.agentsWindow?.resumeAfterQuit()
+                self.fullSettingsWindow?.resumeAfterQuit()
                 await self.sshWindow?.model.resumeAfterQuit()
                 for content in contents { content.resumeAfterQuit() }
                 for run in runs { run.resumeAfterQuit() }
@@ -809,6 +850,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             for content in contents { content.forceClose() }
             self.agentsWindow?.window.orderOut(nil)
+            self.fullSettingsWindow?.window.orderOut(nil)
             await self.sshWindow?.forceClose()
             for run in runs { await run.forceClose() }
             for run in javaRuns { await run.forceClose() }

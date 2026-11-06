@@ -150,6 +150,10 @@ struct BasicSettingsView: View {
     var body: some View {
         VStack {
             Form {
+                Button(localized("All settings…", "全部设置…")) {
+                    model.settingsPresented = false
+                    model.openSettingsRequested?()
+                }
                 Picker(localized("Language", "语言"), selection: Binding(get: { model.settings["language"].string ?? "system" }, set: { value in Task { await model.patchSettings(["language": .string(value)]) } })) {
                     Text(localized("System default", "系统默认")).tag("system")
                     Text("简体中文").tag("zh-Hans")

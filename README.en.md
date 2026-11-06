@@ -152,6 +152,12 @@ this catalog. Core `settings.catalog` and `settings.validate` read defaults and 
 shortcuts without saving configuration; complete native settings/menu/login integration remains
 tracked in #41.
 
+Native settings QA: **Settings → All settings…** opens the draft form. Run
+`bash scripts/macos-settings-smoke.sh` after the QA build to check read-only opening, field
+conflicts, invalid drafts, shortcut capture, explicit reset and actual quit cancellation. The script
+records real windows; preference effects, full menu/command integration and login startup remain
+under #41.
+
 Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the Pi extension under
 `crates/uterm-core/integrations/`. `bash scripts/macos-agent-smoke.sh` requires a macOS graphical
 session and the QA build; it records real window/Host/installed-reporter evidence with an explicitly

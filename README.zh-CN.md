@@ -135,6 +135,9 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 核对目录；契约生成／检查已包含该目录。Core `settings.catalog` 和 `settings.validate`
 读取默认值并校验平台快捷键，不保存配置；完整原生设置／菜单／开机启动仍在 #41 跟踪。
 
+原生设置 QA：**设置 → 全部设置…**打开草稿表单。完成 QA 构建后运行
+`bash scripts/macos-settings-smoke.sh`，检查只读打开、字段冲突、无效草稿、快捷键捕获、明确重置及实际退出取消。脚本记录真实窗口；偏好效果、完整菜单／命令与开机启动仍在 #41 跟踪。
+
 共享 Agent 规则位于 `uterm-core::{agents,agent_install}`，Pi 扩展位于
 `crates/uterm-core/integrations/`。`bash scripts/macos-agent-smoke.sh`
 需要 macOS 图形会话及 QA 构建；记录真实窗口／Host／已安装报告程序证据，系统通知适配器明确使用模拟，不使用提供方凭据或全局安装 CLI。
