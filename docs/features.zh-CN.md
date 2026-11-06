@@ -86,7 +86,7 @@ CAS 文件保存／读取、连接回放和120秒空闲运行。前五轮预热�
 
 原生构建后运行 `node scripts/macos-performance-smoke.mjs`；Tauri 运行
 `UTERM_QA_PERFORMANCE_ONLY=1 node scripts/tauri-state-qa.mjs`。脚本归档原始进程采样、负载／源码哈希、窗口原图、清理结果及逐轮数据，`scripts/client-performance-report.mjs`
-核对三次运行。CPU／RSS 覆盖应用、其子进程及经认证的宿主进程树；无法归属的 WebContent／GPU／XPC 仍排除。短 CI 运行不证明长期无泄漏；TUI／数据库性能及刻意慢消费对比仍未测量，不宣称改善比例。本地负例通过源码／负载／sequence／输出顺序与进程归属／计数检查；真实平台测量仍待 CI，#43 因结果和缺失场景保持开放。
+核对三次运行。CPU／RSS 覆盖应用、其子进程及经认证的宿主进程树；无法归属的 WebContent／GPU／XPC 仍排除。短 CI 运行不证明长期无泄漏；TUI／数据库性能及刻意慢消费对比仍未测量，不宣称改善比例。本地负例通过源码／负载／sequence／输出顺序与进程归属／计数检查；真实平台测量仍待 CI。首次 Windows 运行因欢迎按钮的嵌套标签未匹配，在打开终端前超时；现先选择临时项目并匹配实际标签。PowerShell 采样改为写完整条 JSON 后协作停止，原来直接终止会截断末条数据；两项失败保留在原始产物。#43 因修正后的平台结果和缺失场景保持开放。
 
 #### 原生 QA 验证
 

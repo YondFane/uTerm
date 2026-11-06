@@ -52,10 +52,20 @@ export async function runPerformance(
     },
   });
   await pause(200);
+  const project = await until(
+    () =>
+      document.querySelector<HTMLButtonElement>(
+        '.folder-row[data-project-id="shared-state-qa"] > .row-label',
+      ),
+    "temporary performance project",
+  );
+  project.click();
   await until(() => {
     const button = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
       (value) =>
-        (value.title === "New terminal" || value.textContent?.trim() === "New terminal") &&
+        (value.title === "New terminal" ||
+          value.querySelector("strong")?.textContent === "New terminal" ||
+          value.textContent?.trim() === "New terminal") &&
         !value.disabled &&
         value.isConnected,
     );

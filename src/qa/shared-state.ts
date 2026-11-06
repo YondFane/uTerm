@@ -204,7 +204,7 @@ export async function prepare() {
       localStorage.setItem(key, '[\r\n "refs/heads/main"\r\n]');
   }
   if (
-    ["initial", "editor-checkpoint"].includes(context.phase) &&
+    ["initial", "editor-checkpoint", "performance"].includes(context.phase) &&
     localStorage.getItem(settingsKey) === null
   ) {
     localStorage.setItem(

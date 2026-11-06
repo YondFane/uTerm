@@ -1,7 +1,7 @@
 import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 import { createInterface } from "node:readline";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs";
 const execute = promisify(execFile);
 
 export function cpuSeconds(text) {
@@ -74,6 +74,7 @@ export function startResourceSampler(appPID, phasePath, outputPath) {
   let pending = false;
   let sensor;
   let sensorExit;
+  const stopPath = outputPath + ".sampler-stop";
   const accept = (processes) => {
     let phase = { phase: "startup", cycle: -1 };
     try {
@@ -101,7 +102,7 @@ export function startResourceSampler(appPID, phasePath, outputPath) {
         "-Command",
         `
       [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
-      while (Get-Process -Id ${appPID} -ErrorAction SilentlyContinue) {
+      while ((Get-Process -Id ${appPID} -ErrorAction SilentlyContinue) -and -not (Test-Path -LiteralPath '${stopPath.replace(/'/g, "''")}')) {
         $qaParents = @{}
         Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId | ForEach-Object { $qaParents[[int]$_.ProcessId]=[int]$_.ParentProcessId }
         $qaRows = @(Get-Process | ForEach-Object { try { @{pid=$_.Id;parent=$qaParents[$_.Id];rssBytes=$_.WorkingSet64;cpuSeconds=$_.CPU} } catch {} })
@@ -140,8 +141,26 @@ export function startResourceSampler(appPID, phasePath, outputPath) {
       clearInterval(timer);
       await running;
       if (sensor) {
-        if (sensor.exitCode === null && sensor.signalCode === null) sensor.kill();
-        await sensorExit;
+        // Finish the current JSON record before stopping; killing PowerShell truncates its last line.
+        // 停止前写完当前 JSON 记录，直接终止 PowerShell 会截断最后一行。
+        writeFileSync(stopPath, "stop", { flag: "wx" });
+        let deadline;
+        try {
+          await Promise.race([
+            sensorExit,
+            new Promise((done) => {
+              deadline = setTimeout(() => {
+                errors.push("Sampler did not stop gracefully");
+                sensor.kill();
+                done();
+              }, 10000);
+            }),
+          ]);
+          await sensorExit;
+        } finally {
+          clearTimeout(deadline);
+          unlinkSync(stopPath);
+        }
       }
       const result = {
         appPID,
