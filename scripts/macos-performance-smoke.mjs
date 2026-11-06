@@ -13,6 +13,7 @@ import { tmpdir, release, arch } from "node:os";
 import { resolve, join } from "node:path";
 import assert from "node:assert/strict";
 import { startResourceSampler } from "./client-resource-sampler.mjs";
+import { waitForOwnedHostExit } from "./owned-host-exit.mjs";
 
 assert.equal(process.platform, "darwin", "This check needs an actual Mac desktop");
 assert.equal(spawnSync("launchctl", ["print", `gui/${process.getuid()}`]).status, 0);
@@ -93,9 +94,9 @@ try {
     report.explicitCloseAndIdleHostShutdown && report.coreReady && !report.productionDataAccess,
   );
   assert.equal(report.bundleIdentifier, "sh.uterm.desktop.qa.native");
-  assert(
-    !existsSync(join(root, "local-daemon-v1/endpoint.json")),
-    "Fixture host endpoint survived explicit close",
+  const hostExit = await waitForOwnedHostExit(
+    join(root, "local-daemon-v1/endpoint.json"),
+    report.hostPID,
   );
   const tested = spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
   assert.equal(report.sourceSHA, tested);
@@ -107,6 +108,7 @@ try {
         .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])),
     );
   Object.assign(report, {
+    hostExit,
     passed: true,
     testedMergeSHA: tested,
     sourceTreeDirty: false,

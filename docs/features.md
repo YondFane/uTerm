@@ -159,6 +159,15 @@ clipping checks. Windows receives the real Git Bash path and handles Git's mingw
 orders the numeric series through a distinct output alias. Corrected platform measurements remain
 pending.
 
+The c24d81a Intel run reaches the real 120×30 grid and completes its first native/Tauri pair; the
+second native workload completes but its coordinator checks the endpoint before asynchronous host
+exit finishes. That failure remains in
+[artifact13538810238](https://github.com/YondFane/uTerm/actions/runs/42282798481/artifacts/13538810238).
+The native coordinator now waits up to ten seconds for both endpoint removal and the authenticated
+fixture PID to exit, without terminating it or relaxing workload checks. A real child-process test
+covers delayed unlink/exit; another checks that timeout never kills a running process. Corrected Mac
+acceptance still requires fresh CI.
+
 At sourcec24d81a the full Linux frontend regression passes 429 tests with 11 explicit skips. The
 retained partial Intel v3 data shows slower native bulk output and database queries; the latter
 includes the native adapter's asynchronous completion polling. These are recorded regressions, not a
