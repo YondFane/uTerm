@@ -2541,8 +2541,14 @@ KB，要求UTF-8；名称仅移除末尾的 `.conf` 或 `.txt`，忽略扩展名
 
 `bash scripts/macos-inspector-smoke.sh`
 使用隔离原生 QA 应用、临时文件和真实 PTY，检查目录导航、隐藏文件、符号链接边界、中文搜索／行跳转、编辑文字保留、取消、快速打开、窗格交换、放大、焦点及明确宿主清理。脚本记录四张原始 WindowServer 截图及
-`inspector-native.json`，包含源码 head 与 tested merge SHA。新增工具窗格检查仍需在 macOS
-CI 执行；下列旧设置证据不能用于验收这些命令。首次工具窗格 CI 构建发现表格协调器缺少主线程 Actor 隔离，以及 QA 入口重复的可选绑定。仅修正协调器后入口错误仍存在，原生运行检查跳过；两处修正后仍须实际通过。后续真实 ARM 运行进入工具窗格测试，但在首帧消费前发送输入，原始截图仅有 Shell 提示符。测试现等待渲染输出及输入控制权后再发送。再一次 ARM 运行通过目录导航、中文搜索／行打开及编辑文字保留，随后在放大后的隐藏输出检查超时。检查现使用适合窄窗格的标记，同时要求渲染帧及确认推进并记录终端诊断，仍须原生重跑通过。最终人工验收仍由用户豁免。
+`inspector-native.json`，包含源码 head 与 tested merge SHA。源码
+`52eb2bb440175b44895bd58882d0485c98ada144`、tested merge `2d21a040c4e9e33c2dd52ec5eada4c2cde11db92`
+在 [run42214355682](https://github.com/YondFane/uTerm/actions/runs/42214355682) 的 macOS
+arm64／Intel 均通过这些检查，四张 ARM 原图已逐张查看。先前编译／输入／焦点失败保留在 Issue 证据中，不用于验收后续源码；最终人工验收由用户豁免。
+
+`scripts/interaction-matrix.py` 核对各客户端源码 head／tested
+SHA、必要报告与原始 PNG 截图。原生终端 QA 还模拟组合文字，要求中间态 PTY 字节为零、Unicode 只准确提交一次；模拟休眠／唤醒／显示器通知后，视图／代次保留且真实输出继续。Windows 复用真实桌面编辑器／设置／Git 和输入所有权场景，并运行明确标注的组合输入测试。缺失／失败／过期证据导致核对失败。物理输入法、硬件休眠和多屏不标为已执行；人工验收由用户豁免。`interaction-matrix.json`
+明确保留这些边界及原 M3 布局、会话标签拖动和 PDF 缺口，不宣称稳定切换已验收。
 
 `bash scripts/macos-github-smoke.sh` 在真实原生 WebView 窗口中使用隔离模拟
 `gh`、临时 Git 仓库和真实 PTY，检查根目录／方法／类型边界、安全 Markdown、共享会话关联、PR 详情／Diff、可见离线错误与重试、取消、草稿隐藏／重开／退出取消、字面提交、请求中的退出保护及双语主题截图。`github-native.json`、模拟 CLI 日志和四张原始截图归档为 CI 产物。新增检查仍需实际执行；不使用账户、真实 GitHub 写入、推送或 Fork。共享 Rust 会话测试验证过期／无效关联拒绝、重开及分屏元数据，不代表原生视觉验收。

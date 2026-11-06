@@ -15,8 +15,8 @@ enum ContentSmoke {
             if let value = try? await content.webView.evaluateJavaScript(script), value as? Bool == true { return }
             try await Task.sleep(for: .milliseconds(50))
         }
-        let state = (try? await content.webView.evaluateJavaScript("document.documentElement.outerHTML")) as? String ?? "No DOM"
-        throw BridgeFailure(code: "CONTENT_TIMEOUT", message: String(state.prefix(6000)))
+        let state = (try? await content.webView.evaluateJavaScript("JSON.stringify({title:document.title,text:document.body.innerText,body:document.body.innerHTML.slice(-6000)})")) as? String ?? "No DOM"
+        throw BridgeFailure(code: "CONTENT_TIMEOUT", message: script + ": " + String(state.prefix(8000)))
     }
     static func request(_ content: ContentWindow, method: String, params: [String: Any], wrongDocument: Bool = false, document: String? = nil) async throws -> String {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in

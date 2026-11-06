@@ -170,6 +170,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                         try? await TerminalSmoke.capture(window: current.window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-settings-full-failure.png"))
                         await current.model.reload()
                     }
+                    if let current = NSApp.keyWindow { try? await TerminalSmoke.capture(window: current, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-settings-active-failure.png")) }
                 }
                 for content in Array(contentWindows.values) { content.forceClose() }
                 await model.shutdown()

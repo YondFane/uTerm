@@ -178,8 +178,16 @@ notarization. These commands do not publish or change production update feeds.
 
 The **Candidate Windows QA** workflow reruns the installer scope separately. It also supports
 `gh workflow run candidate-windows.yml --ref <branch>`; full regression remains in the normal
-**uTerm** and **Native migration** workflows. An executable hash mismatch still fails the installer
-check and retains source/installed hashes, sizes and difference offsets for diagnosis.
+**uTerm** and **Native migration** workflows. The executable comparison accepts only Tauri's unique
+NSIS marker transform with all other bytes unchanged, retaining both hashes and difference offsets.
+
+After the native or desktop QA commands, run
+`python3 -B scripts/interaction-matrix.py native macos/.build/evidence` or
+`python -B scripts/interaction-matrix.py tauri ci-evidence/tauri-state-qa`. The source-bound matrix
+validates reports and original screenshots, separates actual native input from authorized
+simulations and keeps physical IME/sleep/multiscreen limits explicit. The two normal workflows
+archive `interaction-matrix.json`; `python3 -B tests/test_interaction_matrix.py` checks stale-SHA,
+failed-run and missing/image-path evidence rejection.
 
 Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the Pi extension under
 `crates/uterm-core/integrations/`. `bash scripts/macos-agent-smoke.sh` requires a macOS graphical

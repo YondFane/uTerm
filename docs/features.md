@@ -4336,17 +4336,20 @@ user-authorized simulation boundary and final human waiver are explicit.
 PTYs to check file navigation, hidden files, symlink boundaries, Unicode search/line navigation,
 retained editor text, cancellation, quick open, pane swap, zoom, focus and explicit host cleanup. It
 records four original WindowServer captures and `inspector-native.json`, including source head and
-tested merge SHAs. The added inspector checks require macOS CI execution; the older settings
-evidence below does not validate these commands. The first inspector CI build exposed missing
-main-actor isolation on its table coordinator and a redundant optional binding in the QA entry. The
-coordinator-only correction still left the entry error; native runtime checks were skipped and must
-pass after both corrections. The next real ARM run reached the inspector fixture but sent input
-before its first frame was consumed; its original screenshot shows only the shell prompt. The
-fixture now waits for rendered output and owned input control before sending. A later ARM run passes
-file navigation, Unicode search/line opening and retained editor text, then times out on hidden
-output after zoom. That check now uses a marker that fits a narrow pane, requires both
-rendered-frame and acknowledgement progress, and records terminal diagnostics; it still requires a
-successful native rerun. Manual acceptance remains waived by the user.
+tested merge SHAs. Source `52eb2bb440175b44895bd58882d0485c98ada144`, tested merge
+`2d21a040c4e9e33c2dd52ec5eada4c2cde11db92`, passes these checks on macOS arm64 and Intel in
+[run42214355682](https://github.com/YondFane/uTerm/actions/runs/42214355682). The four ARM originals
+were individually inspected. Earlier build/input/focus failures remain in the Issue evidence; those
+results are not reused for later source revisions. Final human acceptance is waived by the user.
+
+`scripts/interaction-matrix.py` audits each client's source head/tested SHA, required reports and
+original PNG captures. Native terminal QA also checks simulated marked text with zero interim PTY
+bytes and one exact Unicode commit, and simulated sleep/wake/display notifications with retained
+views/generations and resumed actual output. Windows reuses actual desktop editor/settings/Git and
+input-ownership scenes plus labelled composition/input tests. Missing/failed/stale evidence fails
+the audit. Physical IME, hardware sleep and multiple monitors are not represented as executed;
+manual acceptance is waived. `interaction-matrix.json` keeps those boundaries and original M3
+layout, session-tab-drag and PDF gaps explicit; it does not declare stable cutover acceptance.
 
 `bash scripts/macos-github-smoke.sh` runs the real native WebView window with an isolated simulated
 `gh`, temporary Git repository and real PTYs. It checks root/method/type boundaries, sanitized

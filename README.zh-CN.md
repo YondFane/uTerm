@@ -155,7 +155,13 @@ App／DMG 或 NSIS 及 SHA256，仅安装到所属临时目录，运行并截图
 **Candidate Windows QA** workflow 单独重跑安装器范围，也支持
 `gh workflow run candidate-windows.yml --ref <分支>`；完整回归仍由常规 **uTerm** 和 **Native
 migration**
-workflow 执行。程序哈希不一致仍导致安装检查失败，并保留构建／安装后的哈希、大小及差异偏移供诊断。
+workflow 执行。程序比较只允许 Tauri 唯一的 NSIS 类型标记变换，其余每个字节必须相同，并保留两份哈希及差异偏移。
+
+原生或桌面 QA 命令完成后，运行
+`python3 -B scripts/interaction-matrix.py native macos/.build/evidence` 或
+`python -B scripts/interaction-matrix.py tauri ci-evidence/tauri-state-qa`。矩阵绑定源码并核对报告及原始截图，区分真实原生输入与授权模拟，明确保留物理输入法／休眠／多屏限制。两个常规 workflow 归档
+`interaction-matrix.json`；`python3 -B tests/test_interaction_matrix.py`
+检查旧 SHA、失败运行及截图缺失／越界路径的拒绝。
 
 共享 Agent 规则位于 `uterm-core::{agents,agent_install}`，Pi 扩展位于
 `crates/uterm-core/integrations/`。`bash scripts/macos-agent-smoke.sh`

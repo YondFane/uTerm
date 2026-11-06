@@ -33,13 +33,17 @@ enum PreferencesSmoke {
         report["breakReminderClock"] = "Simulated elapsed uptime; actual native window/button, no sleep or human acceptance claim"
         report["preferenceCaptures"] = [image]
 
+        report["preferenceFileStep"] = "Open and render the first editor"
         let first = try await openFile(root, "a.txt")
-        let second = try await openFile(root, "b.txt")
         try await ContentSmoke.wait(first, "document.querySelector('.cm-content[contenteditable=true]') !== null")
+        report["preferenceFileStep"] = "Open and render the second editor"
+        let second = try await openFile(root, "b.txt")
         try await ContentSmoke.wait(second, "document.querySelector('.cm-content[contenteditable=true]') !== null")
+        report["preferenceFileStep"] = "Edit the first native tab"
         try await EditorSmoke.replace(first, text: "UNSAVED_TAB_LIMIT 中文")
         try await ContentSmoke.wait(first, "document.querySelector('.cm-content')?.textContent.includes('UNSAVED_TAB_LIMIT 中文') === true")
         let cancelledOpen = Task { @MainActor in try await openFile(root, "c.txt") }
+        report["preferenceFileStep"] = "Wait for the tab eviction guard"
         try await ContentSmoke.wait(first, "document.querySelector('dialog[open]') !== null", allowAlert: true)
         try await EditorSmoke.click(first, title: "Keep editing")
         do { _ = try await cancelledOpen.value; throw BridgeFailure(code: "PREFERENCE_TAB_CANCEL", message: "Cancelled tab eviction still opened a file") }
@@ -47,6 +51,7 @@ enum PreferencesSmoke {
         guard first.window?.isVisible == true, first.window?.tabbedWindows?.contains(where: { $0 === second.window }) == true,
               try await EditorSmoke.evaluate(first, script: "return document.querySelector('.cm-content').textContent.includes('UNSAVED_TAB_LIMIT 中文');", arguments: [:]) else { throw BridgeFailure(code: "PREFERENCE_TAB_DRAFT", message: "Cancelling the tab limit lost an existing editor or draft") }
         let acceptedOpen = Task { @MainActor in try await openFile(root, "c.txt") }
+        report["preferenceFileStep"] = "Explicitly discard the oldest tab"
         try await ContentSmoke.wait(first, "document.querySelector('dialog[open]') !== null", allowAlert: true)
         try await EditorSmoke.click(first, title: "Discard changes and continue")
         let third = try await acceptedOpen.value
@@ -54,6 +59,7 @@ enum PreferencesSmoke {
         guard first.window?.isVisible == false, second.window?.tabbedWindows?.count == 2,
               try String(contentsOf: root.appendingPathComponent("a.txt"), encoding: .utf8) == "a.txt\n" else { throw BridgeFailure(code: "PREFERENCE_TAB_LIMIT", message: "Tab eviction changed the disk file or exceeded the directory limit") }
         await workspace.patchSettings(["fileTabLimit": .number(1)])
+        report["preferenceFileStep"] = "Trim existing tabs after lowering the limit"
         try await TerminalSmoke.wait("Apply a lower saved limit to existing native tabs") { second.window?.isVisible == false && third.window?.isVisible == true }
         report["nativeFileTabLimitCancelRetainsDraftAndExplicitDiscardEvictsOldest"] = true
         report["nativeLowerFileTabLimitAppliesToExistingTabs"] = true

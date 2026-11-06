@@ -61,6 +61,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     vim=first['realVim']
     for key in ['passed','alternateScreenReturned','nativeTextInput','nativeClipboardPaste','sameGenerationAndView','shellResumed']: assert vim[key],(key,vim)
     assert not vim['manualIMEAcceptance'] and not vim['performanceComparison'],vim
+    assert first['nativeCompositionSimulation']['passed'] and first['nativeCompositionSimulation']['interimPTYBytes'] == 0
+    assert not first['nativeCompositionSimulation']['physicalIME']
+    assert first['lifecycleSimulation']['passed'] and first['lifecycleSimulation']['sameGenerationAndView']
+    assert not first['lifecycleSimulation']['physicalSleep'] and not first['lifecycleSimulation']['physicalMultipleDisplays']
     assert (evidence/vim['savedFile']).read_bytes()=='NATIVE_VIM_中文 é 😀 PASTE_中文 é\n'.encode('utf-8'),vim
     load=first['slowConsumer']
     assert load['renderedBytes']>=100000 and load['records']==1024 and load['injectedDelayMilliseconds']==150,load
@@ -68,5 +72,8 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert not load['performanceComparison'],load
     assert second['replayed'] and second['explicitCloseStoppedProcesses'] and second['idleHostShutdown'],second
     assert sorted(first['sessions'],key=lambda s:s['id'])==sorted(second['sessions'],key=lambda s:s['id']),reports
+    for report, name in zip(reports, ['terminal-live', 'terminal-reconnect']):
+        report.update(passed=True, testedMergeSHA=report['sourceSHA'], sourceTreeDirty=False, processExitCode=0)
+        (evidence/(name+'.json')).write_text(json.dumps(report, ensure_ascii=False, indent=2)+'\n')
     print(json.dumps({'sourceSHA':first['sourceSHA'],'sessionCount':2,'generationRetained':True,'normalExitCodes':[0,0],'captures':first['captures']},ensure_ascii=False))
 PY

@@ -170,6 +170,15 @@ jobs:
         run: |
           echo "Shared Core tests failed; see core-ffi-tests.log. Independent QA does not waive this failure." | tee ci-evidence/core-failure.txt
           exit 1
+      - name: Audit source-bound desktop interaction matrix
+        if: always()
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          python -B tests/test_interaction_matrix.py
+          node --test tests/terminal-composition.test.mjs tests/terminal-input.test.mjs 2>&1 | tee ci-evidence/input-simulation-tests.log
+          python -B scripts/interaction-matrix.py tauri ci-evidence/tauri-state-qa
       - uses: actions/upload-artifact@v4
         if: always()
         with:

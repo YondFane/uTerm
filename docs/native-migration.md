@@ -3,7 +3,7 @@ title: Native clients and shared core / 原生客户端与共享核心
 status: active
 type: reference
 created: 2026-11-02
-updated: 2026-11-04
+updated: 2026-11-06
 ---
 
 # Native clients and shared core / 原生客户端与共享核心
@@ -12,10 +12,11 @@ updated: 2026-11-04
 
 The migration branch starts at release `4f10848868ac09a3667e140938c345b265f9dd58`. Main
 `0c6a7fee2eef238e72c9ecf34db99634f205d04c` has the same file tree and an additional merge commit. No
-main-only code is imported. Application version stays 0.2.3; the existing macOS minimum is 14.0.
-This work does not publish releases or modify stable updater feeds.
+main-only code is imported. The current application version is 0.2.4 after integrating the release
+fix; the existing macOS minimum is 14.0. This work does not publish releases or modify stable
+updater feeds.
 
-迁移分支基于上述 release 提交。main 仅多出合并历史，文件内容一致；未挑选其他代码。应用版本保持 0.2.3，macOS 最低版本保持 14.0。本任务不发布版本或修改稳定更新清单。
+迁移分支基于上述 release 提交。main 当时仅多出合并历史，文件内容一致；未挑选其他代码。合入 release 修复后当前应用版本为 0.2.4，macOS 最低版本保持 14.0。本任务不发布版本或修改稳定更新清单。
 
 ```mermaid
 flowchart TD
@@ -38,6 +39,37 @@ lockfile independent; no top-level workspace migration is intended.
 manifest 与 lockfile 继续隔离。
 
 ## Capability ownership / 能力归属
+
+### Interaction evidence / 交互证据
+
+`scripts/interaction-matrix.py` audits the native and Tauri artifacts against the current source
+head and tested commit. Missing, stale or failed reports and missing/escaped/non-PNG captures fail
+the audit. `interaction-matrix.json` names each original capture and its actual platform; build
+success alone does not produce acceptance.
+
+`scripts/interaction-matrix.py`
+将原生与 Tauri 产物对照当前源码 head 和实际测试提交。缺失、过期或失败报告，以及截图缺失／越界／非 PNG 均导致核对失败。`interaction-matrix.json`
+列出原图及其真实平台，构建通过不能单独形成验收。
+
+Native checks drive actual AppKit controls, real PTYs, retained split views, full screen and Vim
+with native clipboard input. The marked-text sequence uses `NSTextInputClient` simulation, verifies
+zero interim PTY input and exactly one committed UTF-8 payload. Posted sleep/wake/display
+notifications and programmatic window movement exercise retained generations and resumed real
+output; they are not physical suspend or multiple-monitor tests. Windows uses its actual isolated
+application, DOM input and existing ownership/editor/Git/settings scenarios, plus labelled
+composition tests.
+
+原生检查操作真实 AppKit 控件、PTY、保留的分屏视图、全屏及带原生剪贴板输入的 Vim。组合文字使用
+`NSTextInputClient`
+模拟，要求中间态不进入 PTY，最终 UTF-8 输入只提交一次。投递休眠／唤醒／显示器通知及程序移动窗口，检查代次保留和真实输出继续；这不是物理休眠或多屏测试。Windows 使用真实隔离应用、DOM 输入及已有所有权／编辑器／Git／设置场景，并保留明确标注的组合输入测试。
+
+Final human acceptance is waived by the user. Hardware limits and the original M3 persistent-layout,
+session-tab-drag and PDF-annotation gaps remain visible; this matrix does not declare a stable
+cutover, merge or release ready. Each task's functional and automatic failures remain open gates.
+
+用户豁免最后人工验收。硬件限制及原 M3 持久布局、会话标签拖动和 PDF 标记缺口继续可见；矩阵不宣称稳定切换、合入或发布已准备完成。各任务的功能及自动检查失败仍是开放门禁。
+
+### Service boundaries / 服务边界
 
 | Capability / 能力                    | Existing owner / 现有归属                       | Migration boundary / 迁移边界                                     |
 | ------------------------------------ | ----------------------------------------------- | ----------------------------------------------------------------- |

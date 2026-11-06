@@ -124,6 +124,18 @@ enum TerminalSmoke {
         window.toggleFullScreen(nil)
         try await wait("Exit actual full screen") { !model.fullScreen }
         report["fullScreenEnteredAndExited"] = true
+        let lifecycleIdentities = model.terminals.values.map { $0.id + ":" + ($0.generation ?? "") }.sorted()
+        let originalFrame = window.frame
+        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.willSleepNotification, object: NSWorkspace.shared)
+        window.setFrameOrigin(NSPoint(x: originalFrame.origin.x + 40, y: originalFrame.origin.y - 30))
+        NotificationCenter.default.post(name: NSApplication.didChangeScreenParametersNotification, object: NSApp)
+        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.didWakeNotification, object: NSWorkspace.shared)
+        window.setFrame(originalFrame, display: true)
+        guard let resumed = model.selectedTerminal else { throw BridgeFailure(code: "SMOKE_WAKE", message: "Selected terminal disappeared after lifecycle notifications") }
+        resumed.enqueue(Data("printf 'WAKE_%s\\n' OK\r".utf8))
+        try await wait("Continue real output after simulated sleep/display notifications") { resumed.text.contains("WAKE_OK") }
+        guard lifecycleIdentities == model.terminals.values.map({ $0.id + ":" + ($0.generation ?? "") }).sorted(), ObjectIdentifier(first.view) == firstView else { throw BridgeFailure(code: "SMOKE_WAKE_IDENTITY", message: "Lifecycle notifications replaced a session or view") }
+        report["lifecycleSimulation"] = ["passed": true, "driver": "Posted NSWorkspace sleep/wake and display-parameter notifications; programmatic window movement", "physicalSleep": false, "physicalMultipleDisplays": false, "availableDisplays": NSScreen.screens.count, "sameGenerationAndView": true, "realPTYOutputAfterWake": true] as [String: Any]
         report["sidebarHiddenAndRestored"] = model.sidebarVisible
         report["captures"] = captures
         report["viewIdentityRetained"] = true
@@ -153,8 +165,14 @@ enum TerminalSmoke {
         try postKey(window: window, code: 34, characters: "i")
         try await wait("Enter Vim insertion through the native key event") { terminal.text.contains("-- INSERT --") }
         let typed = "NATIVE_VIM_中文 é 😀"
+        let inputBeforeComposition = terminal.qaUserInputBytes
+        terminal.view.setMarkedText("zhong" as NSString, selectedRange: NSRange(location: 5, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        terminal.view.setMarkedText("中文" as NSString, selectedRange: NSRange(location: 2, length: 0), replacementRange: NSRange(location: NSNotFound, length: 0))
+        guard terminal.view.hasMarkedText(), terminal.qaUserInputBytes == inputBeforeComposition else { throw BridgeFailure(code: "SMOKE_COMPOSITION", message: "Uncommitted marked text leaked into the real PTY") }
         terminal.view.insertText(typed as NSString, replacementRange: NSRange(location: NSNotFound, length: 0))
         try await wait("Render actual Vim Unicode input") { terminal.text.contains(typed) }
+        guard !terminal.view.hasMarkedText(), terminal.qaUserInputBytes - inputBeforeComposition == typed.utf8.count else { throw BridgeFailure(code: "SMOKE_COMPOSITION_COMMIT", message: "Composition committed duplicate or altered UTF-8 input") }
+        report["nativeCompositionSimulation"] = ["passed": true, "driver": "NSTextInputClient setMarkedText/insertText on actual SwiftTerm and Vim", "interimPTYBytes": 0, "committedUTF8Bytes": typed.utf8.count, "physicalIME": false] as [String: Any]
         let clipboard = NSPasteboard.general
         let previous = clipboard.string(forType: .string)
         defer { clipboard.clearContents(); if let previous { clipboard.setString(previous, forType: .string) } }

@@ -42,6 +42,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     private var applyingReplay = false
     private var feedingHostOutput = false
     private(set) var qaSuppressedReplyBytes = 0
+    private(set) var qaUserInputBytes = 0
     private var entry: CoreSessionEntry
     private let taskGeneration: String?
     private(set) var taskLogFollowsOutput = true
@@ -341,6 +342,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         // The shared host owns terminal negotiation, including while no view is attached.
         // 共享宿主负责终端协商，包括没有视图连接时；避免渲染器重复回复污染 TUI 输入。
         guard !feedingHostOutput else { qaSuppressedReplyBytes += data.count; return }
+        qaUserInputBytes += data.count
         enqueue(Data(data))
     }
     func setTerminalTitle(source: TerminalView, title: String) {}
