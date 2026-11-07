@@ -766,7 +766,7 @@ export function Sidebar({
           onPointerUp={
             worktree
               ? undefined
-              : (event) => {
+              : async (event) => {
                   const drag = draggedProject.current;
                   const target = drag?.moved
                     ? projectTarget(drag.id, event.clientX, event.clientY)
@@ -779,7 +779,10 @@ export function Sidebar({
                   try {
                     // Preserve the visible order when switching from alphabetical to manual sorting.
                     if (settings.projectOrder !== "manual")
-                      save({ ...settings, projectOrder: "manual" }, runtime?.platform === "macos");
+                      await save(
+                        { ...settings, projectOrder: "manual" },
+                        runtime?.platform === "macos",
+                      );
                     update((previous) => {
                       const visibleIds = projects.map((item) => item.id);
                       const current = new Map(previous.projects.map((item) => [item.id, item]));

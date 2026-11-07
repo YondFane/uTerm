@@ -21,7 +21,6 @@ export function downloadError(reason: unknown): string | undefined {
     return tx("Agent 安装目录不可写，请检查 npm 全局目录权限或按官方说明安装。");
   if (/AGENT_NODE_VERSION/.test(code))
     return tx("Node.js 版本不满足此 Agent 的要求，请按官方说明更新后重试。");
-  if (/AGENT_INSTALL_FAILED/.test(code))
-    return tx("Agent 安装失败，请查看安装输出或按官方说明安装。");
+  if (/AGENT_INSTALL_FAILED/.test(code)) return tx("Agent 安装失败，请重试或按官方说明安装。");
   return undefined;
 }

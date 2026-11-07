@@ -36,6 +36,8 @@ pub struct SessionSpec {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Frame {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_control: Option<crate::session_control::Status>,
     #[serde(default)]
     pub agent_activity_error: Option<String>,
     #[serde(default)]
@@ -56,6 +58,15 @@ pub struct Frame {
 
 #[derive(Serialize, Deserialize)]
 pub enum Operation {
+    ClaimControl {
+        id: String,
+        generation: String,
+        takeover: bool,
+    },
+    ReleaseControl {
+        id: String,
+        generation: String,
+    },
     Ping,
     ListSessions,
     SessionSnapshot,
@@ -161,6 +172,7 @@ pub struct TaskSession {
 }
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Reply {
+    Control(crate::session_control::Grant),
     Tasks(Vec<TaskSession>),
     TaskLaunch(crate::tasks::Launch),
     Sessions(Vec<SessionSpec>),
@@ -184,6 +196,8 @@ pub enum Reply {
 struct Request {
     version: u32,
     token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    view: Option<crate::session_control::View>,
     operation: Operation,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -196,6 +210,11 @@ struct Endpoint {
 #[derive(Clone)]
 pub struct Client {
     endpoint: Endpoint,
+    view: Option<Arc<ViewState>>,
+}
+struct ViewState {
+    value: Mutex<crate::session_control::View>,
+    claims: Mutex<()>,
 }
 impl Client {
     pub fn require_task_support(&self) -> Result<()> {
@@ -218,11 +237,21 @@ impl Client {
         if endpoint.version != VERSION {
             bail!("Local session host version is incompatible");
         }
-        let client = Self { endpoint };
+        let client = Self {
+            endpoint,
+            view: None,
+        };
         match client.request(Operation::Ping)? {
             Reply::Ready { .. } => Ok(client),
             _ => bail!("Invalid response from local session host"),
         }
+    }
+    pub fn require_java_utf8_support(&self) -> Result<()> {
+        if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == crate::java_utf8::CAPABILITY))
+        {
+            return Ok(());
+        }
+        bail!("JAVA_UTF8_HOST_UPGRADE_REQUIRED");
     }
     pub fn require_agent_support(&self) -> Result<()> {
         if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "agent-reports-v1"))
@@ -253,21 +282,138 @@ impl Client {
         bail!("SSH_HOST_UPGRADE_REQUIRED");
     }
     pub fn request(&self, operation: Operation) -> Result<Reply> {
+        self.request_with_timeout(operation, Duration::from_secs(10))
+    }
+    pub fn for_view(&self, label: &str) -> Result<Self> {
+        let Reply::Ready { capabilities, .. } = self.request(Operation::Ping)? else {
+            bail!("Invalid host capabilities")
+        };
+        let view = if capabilities
+            .iter()
+            .any(|value| value == crate::session_control::CAPABILITY)
+        {
+            Some(Arc::new(ViewState {
+                value: Mutex::new(crate::session_control::View::new(label)?),
+                claims: Mutex::new(()),
+            }))
+        } else {
+            None
+        };
+        Ok(Self {
+            endpoint: self.endpoint.clone(),
+            view,
+        })
+    }
+    pub fn supports_input_control(&self) -> bool {
+        self.view.is_some()
+    }
+    pub fn has_input_control(&self) -> bool {
+        self.view
+            .as_ref()
+            .is_some_and(|view| lock(&view.value).lease.is_some())
+    }
+    pub fn claim_control(
+        &self,
+        id: &str,
+        generation: &str,
+        takeover: bool,
+    ) -> Result<Option<crate::session_control::Status>> {
+        let Some(view) = &self.view else {
+            return Ok(None);
+        };
+        let _claim = lock(&view.claims);
+        let Reply::Control(grant) = self.request(Operation::ClaimControl {
+            id: id.into(),
+            generation: generation.into(),
+            takeover,
+        })?
+        else {
+            bail!("Invalid control grant")
+        };
+        lock(&view.value).lease = grant.lease;
+        Ok(Some(grant.status))
+    }
+    pub fn release_control(&self, id: &str, generation: &str) -> Result<()> {
+        let Some(view) = &self.view else {
+            return Ok(());
+        };
+        let _claim = lock(&view.claims);
+        if lock(&view.value).lease.is_none() {
+            return Ok(());
+        }
+        let result = self.request_with_timeout(
+            Operation::ReleaseControl {
+                id: id.into(),
+                generation: generation.into(),
+            },
+            Duration::from_millis(250),
+        );
+        lock(&view.value).lease = None;
+        result.map(|_| ())
+    }
+    fn request_with_timeout(&self, operation: Operation, timeout: Duration) -> Result<Reply> {
+        self.request_current_view(operation, timeout, 2)
+    }
+    fn request_current_view(
+        &self,
+        operation: Operation,
+        timeout: Duration,
+        retries: u8,
+    ) -> Result<Reply> {
+        let repeat = if let Operation::Read {
+            id,
+            generation,
+            after,
+        } = &operation
+        {
+            Some(Operation::Read {
+                id: id.clone(),
+                generation: generation.clone(),
+                after: *after,
+            })
+        } else {
+            None
+        };
         let address = SocketAddr::from(([127, 0, 0, 1], self.endpoint.port));
-        let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))?;
-        stream.set_read_timeout(Some(Duration::from_secs(10)))?;
-        stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+        let mut stream = TcpStream::connect_timeout(&address, timeout.min(Duration::from_secs(2)))?;
+        stream.set_read_timeout(Some(timeout))?;
+        stream.set_write_timeout(Some(timeout.min(Duration::from_secs(5))))?;
+        let sent_view = self.view.as_ref().map(|view| lock(&view.value).clone());
         send(
             &mut stream,
             &Request {
                 version: VERSION,
                 token: self.endpoint.token.clone(),
+                view: sent_view.clone(),
                 operation,
             },
         )?;
         match receive(&mut stream)? {
             Reply::Error(error) => bail!("{error}"),
-            reply => Ok(reply),
+            reply => {
+                if let (Reply::Frame(frame), Some(view), Some(sent), Some(repeat)) =
+                    (&reply, &self.view, sent_view, repeat)
+                {
+                    let mut current = lock(&view.value);
+                    if current.lease != sent.lease {
+                        drop(current);
+                        // Reread the same cursor after a concurrent claim; never replay a write or deliver stale control state.
+                        // 并发控制权变更后重读同一游标，不重放写入，也不交付过期控制状态。
+                        if retries == 0 {
+                            bail!("SESSION_CONTROL_CHANGED");
+                        }
+                        return self.request_current_view(repeat, timeout, retries - 1);
+                    }
+                    if frame
+                        .input_control
+                        .as_ref()
+                        .is_some_and(|status| !status.owned)
+                    {
+                        current.lease = None;
+                    }
+                }
+                Ok(reply)
+            }
         }
     }
 }
@@ -682,6 +828,7 @@ impl Output {
             data
         };
         Frame {
+            input_control: None,
             agent_activity_error: self.activity_error.clone(),
             agent_events: Some(if reset {
                 vec![]
@@ -741,6 +888,7 @@ impl Output {
     }
 }
 struct Entry {
+    input_control: Mutex<crate::session_control::Control>,
     task: Option<crate::tasks::TaskInfo>,
     spec: SessionSpec,
     generation: String,
@@ -1036,6 +1184,7 @@ impl Host {
             }
         });
         let entry = Arc::new(Entry {
+            input_control: Mutex::new(crate::session_control::Control::default()),
             task: task_info,
             activity_stopped: AtomicBool::new(false),
             activity: Mutex::new(None),
@@ -1093,8 +1242,73 @@ impl Host {
         Ok(entry)
     }
 
+    fn with_input_control<T>(
+        &self,
+        entry: &Entry,
+        apply: impl FnOnce(&mut crate::session_control::Control, Instant) -> Result<T>,
+    ) -> Result<T> {
+        let mut control = lock(&entry.input_control);
+        let now = Instant::now();
+        let changed = |before: Option<String>, control: &crate::session_control::Control| {
+            if before.as_deref() != control.revision() {
+                let mut output = lock(&entry.output.0);
+                output.sequence += 1;
+                entry.output.1.notify_all();
+            }
+        };
+        let before = control.revision().map(str::to_owned);
+        control.expire(now);
+        changed(before, &control);
+        let before = control.revision().map(str::to_owned);
+        let result = apply(&mut control, now);
+        changed(before, &control);
+        result
+    }
+
+    #[cfg(test)]
     fn dispatch(&self, operation: Operation) -> Result<Reply> {
+        self.dispatch_for_view(operation, None)
+    }
+
+    fn dispatch_for_view(
+        &self,
+        operation: Operation,
+        view: Option<&crate::session_control::View>,
+    ) -> Result<Reply> {
+        if let Some(view) = view {
+            view.validate()?;
+        }
         match operation {
+            Operation::ClaimControl {
+                id,
+                generation,
+                takeover,
+            } => {
+                let view = view.context("SESSION_CONTROL_INVALID")?;
+                let entry = self.entry(&id, &generation)?;
+                if entry.task.is_some() {
+                    bail!("JAVA_TASK_INVALID")
+                }
+                self.with_input_control(&entry, |control, now| {
+                    Ok(Reply::Control(control.claim(view, takeover, now)))
+                })
+            }
+            Operation::ReleaseControl { id, generation } => {
+                let view = view.context("SESSION_CONTROL_INVALID")?;
+                // Cleanup of a closed/replaced generation is a no-op and cannot release the new process.
+                // 清理已关闭或替换的 generation 时不执行操作，不能释放新进程的控制权。
+                let Some(entry) = lock(&self.sessions)
+                    .get(&id)
+                    .cloned()
+                    .filter(|entry| entry.generation == generation)
+                else {
+                    return Ok(Reply::Done);
+                };
+                self.with_input_control(&entry, |control, now| {
+                    control.release(view, now);
+                    Ok(Reply::Done)
+                })
+            }
             Operation::ClaimTask { id } => Ok(Reply::TaskLaunch(crate::tasks::take(&id)?)),
             Operation::TaskSnapshot => Ok(Reply::Tasks(
                 lock(&self.sessions)
@@ -1193,8 +1407,13 @@ impl Host {
                         "local-session-snapshot-v1".into(),
                         "local-host-management-v1".into(),
                         "java-tasks-v1".into(),
+                        crate::session_control::CAPABILITY.into(),
                         "task-pipe-output-v1".into(),
                     ];
+                    if cfg!(windows) {
+                        values.push(crate::java_utf8::CAPABILITY.into());
+                        values.push(crate::java_utf8::LEGACY_CAPABILITY.into());
+                    }
                     if std::env::current_exe()?
                         .file_stem()
                         .is_some_and(|name| name == "uterm-session-host")
@@ -1336,15 +1555,30 @@ impl Host {
                 };
                 let mut output = output;
                 output.flush_notice();
-                Ok(Reply::Frame(output.frame(after)))
+                drop(output);
+                self.with_input_control(&entry, |control, now| {
+                    let status = view.map(|view| {
+                        if view.lease.is_some() {
+                            control.claim(view, false, now);
+                        }
+                        control.status(view, now)
+                    });
+                    let mut frame = lock(&entry.output.0).frame(after);
+                    frame.input_control = status;
+                    Ok(Reply::Frame(frame))
+                })
             }
             Operation::Write {
                 id,
                 generation,
                 data,
             } => {
-                self.entry(&id, &generation)?.session.write(data)?;
-                Ok(Reply::Done)
+                let entry = self.entry(&id, &generation)?;
+                self.with_input_control(&entry, |control, now| {
+                    control.authorize(view, now)?;
+                    entry.session.write(data)?;
+                    Ok(Reply::Done)
+                })
             }
             Operation::Resize {
                 id,
@@ -1354,14 +1588,19 @@ impl Host {
             } => {
                 let entry = self.entry(&id, &generation)?;
                 crate::size(rows, cols)?;
-                if !lock(&entry.output.0).exited {
-                    entry.session.resize(rows, cols)?;
-                    lock(&entry.output.0)
-                        .parser
-                        .screen_mut()
-                        .set_size(rows, cols);
-                }
-                Ok(Reply::Done)
+                self.with_input_control(&entry, |control, now| {
+                    control.authorize(view, now)?;
+                    if !lock(&entry.output.0).exited {
+                        entry.session.resize(rows, cols)?;
+                        let mut output = lock(&entry.output.0);
+                        if output.parser.screen().size() != (rows, cols) {
+                            output.parser.screen_mut().set_size(rows, cols);
+                            output.sequence += 1;
+                            entry.output.1.notify_all();
+                        }
+                    }
+                    Ok(Reply::Done)
+                })
             }
             Operation::Close { id, generation } => {
                 let mut sessions = lock(&self.sessions);
@@ -1440,7 +1679,7 @@ pub fn serve(directory: &Path) -> Result<()> {
                             bail!("Local session authentication failed");
                         }
                         let reply = host
-                            .dispatch(request.operation)
+                            .dispatch_for_view(request.operation, request.view.as_ref())
                             .unwrap_or_else(|error| Reply::Error(format!("{error:#}")));
                         send(&mut stream, &reply)
                     })();
@@ -1489,6 +1728,58 @@ mod tests {
     use super::*;
 
     #[test]
+    fn java_utf8_upgrade_probe_preserves_legacy_tasks_and_requires_the_repaired_helper() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let endpoint = Endpoint {
+            version: VERSION,
+            port: listener.local_addr().unwrap().port(),
+            token: uuid::Uuid::new_v4().to_string(),
+        };
+        std::fs::write(
+            directory.path().join("endpoint.json"),
+            serde_json::to_vec(&endpoint).unwrap(),
+        )
+        .unwrap();
+        let peer = std::thread::spawn(move || {
+            for probe in 0..5 {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let request: Request = receive(&mut stream).unwrap();
+                assert_eq!(request.version, VERSION);
+                assert_eq!(request.token, endpoint.token);
+                assert!(matches!(request.operation, Operation::Ping));
+                let mut capabilities = vec![
+                    "java-tasks-v1".into(),
+                    crate::java_utf8::LEGACY_CAPABILITY.into(),
+                ];
+                if probe == 4 {
+                    capabilities.push(crate::java_utf8::CAPABILITY.into());
+                }
+                send(
+                    &mut stream,
+                    &Reply::Ready {
+                        pid: 1,
+                        capabilities,
+                    },
+                )
+                .unwrap();
+            }
+        });
+        let client = Client::connect(directory.path()).unwrap();
+        client.require_task_support().unwrap();
+        assert_eq!(
+            client.require_java_utf8_support().unwrap_err().to_string(),
+            "JAVA_UTF8_HOST_UPGRADE_REQUIRED"
+        );
+        client.require_task_support().unwrap();
+        client.require_java_utf8_support().unwrap();
+        peer.join().unwrap();
+    }
+
+    #[test]
     fn slow_agent_startup_keeps_host_requests_responsive() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("target/startup-test")
@@ -1498,8 +1789,29 @@ mod tests {
         let ready = root.join("ready");
         #[cfg(windows)]
         let program = {
-            let path = root.join("codex.cmd");
-            std::fs::write(&path, "@echo off\r\nif \"%1\"==\"--help\" (\r\n echo ready>\"%~dp0ready\"\r\n ping -n 6 127.0.0.1 >nul\r\n)\r\nexit /b 0\r\n").unwrap();
+            // A native fixture reaches the slow section before the probe deadline, without PowerShell startup variance.
+            // 原生样例在探测期限前进入慢操作，避免 PowerShell 启动时间干扰测试同步。
+            let source = root.join("probe.rs");
+            let path = root.join("codex.exe");
+            std::fs::write(&source, r#"fn main() {
+                if std::env::args().any(|arg| arg == "--help") {
+                    let directory = std::env::current_exe().unwrap().parent().unwrap().to_path_buf();
+                    std::fs::write(directory.join("ready"), b"ready").unwrap();
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                }
+            }"#).unwrap();
+            let built = std::process::Command::new("rustc")
+                .arg("--edition=2021")
+                .arg(&source)
+                .arg("-o")
+                .arg(&path)
+                .output()
+                .unwrap();
+            assert!(
+                built.status.success(),
+                "{}",
+                String::from_utf8_lossy(&built.stderr)
+            );
             path
         };
         #[cfg(unix)]

@@ -1,0 +1,171 @@
+name: Native migration
+
+on:
+  pull_request:
+    branches: [release]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-qa:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    env:
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install pinned frontend toolchain
+        run: |
+          npm install --global pnpm@11.22.0
+          pnpm install --frozen-lockfile
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: native-${{ matrix.os }}-${{ runner.arch }}
+          workspaces: |
+            crates/utermd-local -> target
+            crates/uterm-core -> target
+            crates/uterm-ffi -> target
+          cache-bin: false
+      - name: Select Xcode 16.4
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+      - name: Record source and toolchain
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          mkdir -p macos/.build/evidence
+          cp docs/native-migration.md macos/.build/evidence/
+          cp shared/contracts/tauri-baseline.json macos/.build/evidence/
+          {
+            echo "pr_head=$PR_HEAD_SHA"
+            echo "tested_commit=$(git rev-parse HEAD)"
+            sw_vers
+            xcodebuild -version
+            swift --version
+            rustc --version
+            cargo --version
+            java -version
+            javac -version
+          } 2>&1 | tee macos/.build/evidence/toolchain.txt
+      - name: Build isolated native application
+        id: native_build
+        run: bash scripts/macos-native-build.sh 2>&1 | tee macos/.build/evidence/native-build.log
+      - name: Shared core, FFI and Swift bridge tests
+        env:
+          UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/macos/.build/evidence/terminal-load-core.json
+          UTERM_JAVA_CORE_REPORT: ${{ github.workspace }}/macos/.build/evidence/java-live-core.json
+          UTERM_INPUT_CONTROL_REPORT: ${{ github.workspace }}/macos/.build/evidence/input-control-host.json
+          UTERM_INPUT_CONTROL_CORE_REPORT: ${{ github.workspace }}/macos/.build/evidence/input-control-core.json
+          UTERM_INPUT_REACQUIRE_REPORT: ${{ github.workspace }}/macos/.build/evidence/input-reacquire-core.json
+          UTERM_M2_SIMULATION_REPORT: ${{ github.workspace }}/macos/.build/evidence/m2-simulation-core.json
+          UTERM_SSH_CONFIGURATION_REPORT: ${{ github.workspace }}/macos/.build/evidence/ssh-configuration-core.json
+          UTERM_SSH_SERVICE_REPORT: ${{ github.workspace }}/macos/.build/evidence/ssh-service-core.json
+          UTERM_GIT_CORE_REPORT: ${{ github.workspace }}/macos/.build/evidence/git-operations-core.json
+          UTERM_TASK_OUTPUT_AUTH_REPORT: ${{ github.workspace }}/macos/.build/evidence/task-output-auth.json
+          UTERM_AGENT_CORE_REPORT: ${{ github.workspace }}/macos/.build/evidence/agent-hooks-core.json
+          UTERM_ROLLBACK_EXPORT_REPORT: ${{ github.workspace }}/macos/.build/evidence/rollback-export-core.json
+        run: |
+          cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local
+          cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib task_output::tests 2>&1 | tee macos/.build/evidence/task-output-auth-tests.log
+          cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib session_control::tests 2>&1 | tee macos/.build/evidence/session-control-policy-tests.log
+          cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --test daemon session_control_rejects_old_writers_and_sizes_while_both_real_clients_keep_reading 2>&1 | tee macos/.build/evidence/session-control-host-tests.log
+          cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --test daemon delayed_read_cannot_publish_readonly_state_after_the_same_client_takes_control 2>&1 | tee macos/.build/evidence/session-control-race-tests.log
+          cargo test --locked --manifest-path crates/uterm-core/Cargo.toml 2>&1 | tee macos/.build/evidence/core-tests.log
+          cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test persistence filesystem_failure_preserves_snapshot_and_allows_retry -- --include-ignored 2>&1 | tee macos/.build/evidence/core-io-test.log
+          cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test editor_drafts filesystem_failure_preserves_editor_drafts_and_allows_retry -- --include-ignored 2>&1 | tee macos/.build/evidence/editor-io-test.log
+          cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test worktrees metadata_failure_after_git_removal_retains_snapshot_and_allows_explicit_refresh -- --include-ignored 2>&1 | tee macos/.build/evidence/worktree-io-test.log
+          cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test git_favorites filesystem_failure_preserves_git_favorites_and_allows_explicit_retry -- --include-ignored 2>&1 | tee macos/.build/evidence/git-favorites-io-test.log
+          cargo test --locked --manifest-path crates/uterm-ffi/Cargo.toml 2>&1 | tee macos/.build/evidence/ffi-tests.log
+          bash scripts/macos-native-test.sh 2>&1 | tee macos/.build/evidence/swift-tests.log
+      - name: Immutable release helper compatibility
+        run: |
+          node scripts/legacy-host-compat.mjs macos/.build/evidence/legacy-host 2>&1 | tee macos/.build/evidence/legacy-host-command.log
+      - name: Real window and graceful exit smoke
+        run: bash scripts/macos-native-smoke.sh
+      - name: Isolated candidate DMG install, launch, uninstall and signature audit
+        id: candidate-package
+        continue-on-error: true
+        run: |
+          python3 -B tests/test_macos_disk_image.py 2>&1 | tee macos/.build/evidence/disk-image-tests.log
+          bash scripts/macos-candidate-package.sh 2>&1 | tee macos/.build/evidence/candidate-package-command.log
+      - name: Real native settings, conflicts, shortcut capture, reset and screenshots
+        id: settings-preferences
+        continue-on-error: true
+        run: bash scripts/macos-settings-smoke.sh
+      - name: Real Sparkle SDK with loopback signed archives and simulated user choices
+        id: sdk-updates
+        continue-on-error: true
+        run: |
+          python3 -B tests/test_macos_update_capture.py
+          python3 -B scripts/macos-updates-smoke.py 2>&1 | tee macos/.build/evidence/updates-command.log
+      - name: Real native files, search, pane swap, zoom and focus screenshots
+        id: inspector-controls
+        continue-on-error: true
+        run: bash scripts/macos-inspector-smoke.sh
+      - name: Real native GitHub window with isolated CLI simulation and draft guards
+        id: github-workbench
+        continue-on-error: true
+        run: bash scripts/macos-github-smoke.sh
+      - name: Real native PTY, split, detach and replay smoke
+        run: bash scripts/macos-terminal-smoke.sh
+      - name: Real concurrent native input and resize ownership
+        run: bash scripts/macos-input-control-smoke.sh
+      - name: Real native content and resource boundary smoke
+        run: bash scripts/macos-content-smoke.sh
+      - name: Real native editor save, conflict and forced-exit recovery
+        run: bash scripts/macos-editor-smoke.sh
+      - name: Real native Java configuration, output and task lifetime
+        run: bash scripts/macos-java-smoke.sh
+      - name: Real native Python configuration, output and task lifetime
+        run: bash scripts/macos-python-smoke.sh
+      - name: Real native SSH, SFTP, transfer and host-trust workflows
+        run: bash scripts/macos-ssh-smoke.sh
+      - name: Real native database profile, PostgreSQL, window lifetime and screenshots
+        run: bash scripts/macos-database-smoke.sh
+      - name: Real native Redis, binary identity, protected write and window lifetime
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        run: bash scripts/macos-redis-smoke.sh
+      - name: Real native Agent settings, installed Hooks and simulated OS notification lifecycle
+        run: bash scripts/macos-agent-smoke.sh
+      - name: Real native Git, Worktree and open-editor protection
+        run: bash scripts/macos-git-smoke.sh
+      - name: Real native control and standalone CLI smoke
+        run: bash scripts/macos-control-smoke.sh
+      - name: Preserve independent candidate and controls failures
+        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure') }}
+        run: |
+          echo "Candidate, settings, SDK, inspector or GitHub checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
+          exit 1
+      - name: Audit source-bound native interaction matrix
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        run: |
+          python3 -B tests/test_interaction_matrix.py
+          python3 -B scripts/interaction-matrix.py native macos/.build/evidence
+      - name: Record resolved native dependencies
+        if: always()
+        run: if [ -f macos/Package.resolved ]; then cp macos/Package.resolved macos/.build/evidence/Package.resolved; fi
+      - name: Archive QA application
+        run: ditto -c -k --sequesterRsrc --keepParent macos/.build/qa/UTermNativeQA.app macos/.build/evidence/UTermNativeQA.zip
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-qa-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: macos/.build/evidence/
+          if-no-files-found: error

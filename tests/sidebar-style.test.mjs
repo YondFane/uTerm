@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 
 test("sidebar navigation filters existing lists without changing sessions, profiles or selection", async () => {
@@ -195,7 +195,7 @@ test("sidebar navigation filters existing lists without changing sessions, profi
     dom.window.Storage.prototype.setItem = () => {
       throw Error("Storage denied");
     };
-    assert.throws(
+    await assert.rejects(
       () => context.save({ ...context.settings, showRedisConnections: true }, false),
       /Storage denied/,
     );

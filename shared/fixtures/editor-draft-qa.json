@@ -1,0 +1,7 @@
+{
+  "fileName": "editor-中文.txt",
+  "originalText": "ORIGINAL_TAURI_DISK 中文\r\n",
+  "oldText": "OLD_DRAFT 中文 é\r\n",
+  "durableText": "DURABLE_TAURI_DRAFT 中文 é\r\n",
+  "savedText": "EXPLICIT_TAURI_SAVE 中文 é\r\n"
+}

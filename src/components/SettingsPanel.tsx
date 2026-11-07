@@ -6,6 +6,7 @@ import DOMPurify from "dompurify";
 import { localizeMessage } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
+import { coreRequest, flushSharedState } from "../lib/shared-state";
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { interfacePalette, interfaceThemes } from "../lib/interface-themes";
@@ -26,7 +27,8 @@ import {
 import type { Settings, CommandId } from "../lib/settings";
 import type { Updates } from "../lib/useUpdates";
 import type { RuntimeInfo } from "../lib/desktop";
-import { themes, importTheme } from "../lib/themes";
+import { themes } from "../lib/themes";
+import type { Theme } from "../lib/themes";
 import { activeLanguage, languageOptions, translate } from "../lib/i18n";
 import { ToolbarIcon } from "./SidebarIcon";
 const releaseMarkdown = new MarkdownIt({ html: false, linkify: false });
@@ -114,7 +116,20 @@ export function SettingsPanel({
 }) {
   useUiLanguage();
 
-  const { settings, light, error, save, reset } = useSettings();
+  const {
+    settings: committedSettings,
+    light,
+    error,
+    save,
+    reset,
+    failedSettings,
+    reload,
+    discardFailed,
+  } = useSettings();
+  const settings = committedSettings;
+  function draft<K extends keyof Settings>(key: K): Settings[K] {
+    return failedSettings[key] ?? settings[key];
+  }
   const enabledAgents = availableAgents(settings, runtime.agents);
   const [workspaceEdit, setWorkspaceEdit] = useState<{ id: string | null; name: string } | null>(
     null,
@@ -196,9 +211,9 @@ export function SettingsPanel({
       .then(setControl)
       .catch((reason) => setMessage(String(reason)));
   }, []);
-  function change(patch: Partial<Settings>, report = setMessage) {
+  async function change(patch: Partial<Settings>, report = setMessage) {
     try {
-      save({ ...settings, ...patch }, mac);
+      await save({ ...committedSettings, ...patch }, mac, committedSettings);
       report("");
     } catch (reason) {
       report(String(reason));
@@ -263,6 +278,33 @@ export function SettingsPanel({
               {localizeMessage(error || message)}
             </p>
           ) : null}
+          {Object.keys(failedSettings).length > 0 && (
+            <div role="group" aria-label={tx("未保存的设置")}>
+              <p>{tx("请重试或放弃未保存的设置。")}</p>
+              <button
+                onClick={() =>
+                  void reload()
+                    .then(() => setMessage(""))
+                    .catch((e) => setMessage(String(e)))
+                }
+              >
+                {tx("重新读取设置")}
+              </button>
+              <button onClick={() => void change(failedSettings)}>{tx("重试保存设置")}</button>
+              <button
+                onClick={() =>
+                  void reload()
+                    .then(() => {
+                      discardFailed();
+                      setMessage("");
+                    })
+                    .catch((e) => setMessage(String(e)))
+                }
+              >
+                {tx("放弃未保存的设置")}
+              </button>
+            </div>
+          )}
           {tab === "通用" && (
             <>
               <label>
@@ -307,7 +349,7 @@ export function SettingsPanel({
                   min={1}
                   step={1}
                   key={settings.fileTabLimit}
-                  defaultValue={settings.fileTabLimit}
+                  defaultValue={draft("fileTabLimit")}
                   onBlur={(event) => {
                     const value = event.target.valueAsNumber;
                     if (Number.isSafeInteger(value) && value >= 1) change({ fileTabLimit: value });
@@ -339,7 +381,7 @@ export function SettingsPanel({
                     max={1440}
                     step={1}
                     disabled={!settings.breakReminder}
-                    defaultValue={settings.breakInterval}
+                    defaultValue={draft("breakInterval")}
                     key={settings.breakInterval}
                     onBlur={(event) => {
                       const value = event.target.valueAsNumber;
@@ -355,9 +397,26 @@ export function SettingsPanel({
               </div>
               <footer>
                 <button
-                  onClick={() => {
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
                     try {
-                      reset();
+                      await flushSharedState();
+                      if (await invoke<boolean>("shared_core_export"))
+                        setMessage(tx("旧版兼容数据已导出。"));
+                    } catch (reason) {
+                      setMessage(String(reason));
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  {tx("导出旧版兼容数据")}
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await reset();
                       setMessage(tx("已恢复默认设置。原设置已备份。"));
                     } catch (reason) {
                       setMessage(String(reason));
@@ -443,7 +502,7 @@ export function SettingsPanel({
                     <input
                       aria-label={t("高亮颜色值")}
                       key={settings.activeIconColor}
-                      defaultValue={settings.activeIconColor}
+                      defaultValue={draft("activeIconColor")}
                       maxLength={7}
                       spellCheck={false}
                       onKeyDown={(event) => {
@@ -500,8 +559,12 @@ export function SettingsPanel({
                     }
                     void file
                       .text()
-                      .then((source) => {
-                        const theme = importTheme(source, file.name.replace(/\.(conf|txt)$/i, ""));
+                      .then(async (source) => {
+                        const theme = (await coreRequest("settings.theme.import", {
+                          source,
+                          name: file.name.replace(/\.(conf|txt)$/i, ""),
+                        })) as unknown as Theme;
+                        setMessage("");
                         change({
                           customThemes: [
                             ...settings.customThemes.filter((item) => item.id !== theme.id),
@@ -510,7 +573,13 @@ export function SettingsPanel({
                           darkTheme: theme.id,
                         });
                       })
-                      .catch((reason) => setMessage(String(reason)));
+                      .catch((reason) =>
+                        setMessage(
+                          (reason as { code?: string }).code === "THEME_INVALID"
+                            ? tx("主题名称或内容无效。")
+                            : String(reason),
+                        ),
+                      );
                     event.target.value = "";
                   }}
                 />
@@ -537,7 +606,7 @@ export function SettingsPanel({
                     min={min}
                     max={max}
                     key={settings[key]}
-                    defaultValue={settings[key]}
+                    defaultValue={draft(key)}
                     onBlur={(event) => change({ [key]: Number(event.target.value) })}
                   />
                 </label>
@@ -587,7 +656,7 @@ export function SettingsPanel({
                   min="10"
                   max="32"
                   key={settings.fontSize}
-                  defaultValue={settings.fontSize}
+                  defaultValue={draft("fontSize")}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
@@ -602,7 +671,7 @@ export function SettingsPanel({
                   max="2"
                   step="0.1"
                   key={settings.lineHeight}
-                  defaultValue={settings.lineHeight}
+                  defaultValue={draft("lineHeight")}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
@@ -624,7 +693,7 @@ export function SettingsPanel({
                     max="32"
                     step="1"
                     key={settings[key]}
-                    defaultValue={settings[key]}
+                    defaultValue={draft(key)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") event.currentTarget.blur();
                     }}
@@ -670,7 +739,7 @@ export function SettingsPanel({
                   max="100000"
                   step="100"
                   key={settings.scrollback}
-                  defaultValue={settings.scrollback}
+                  defaultValue={draft("scrollback")}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
@@ -891,7 +960,7 @@ export function SettingsPanel({
                   min={10}
                   max={3600}
                   step={1}
-                  defaultValue={settings.usageRefreshInterval}
+                  defaultValue={draft("usageRefreshInterval")}
                   key={settings.usageRefreshInterval}
                   onBlur={(event) => {
                     const value = event.target.valueAsNumber;

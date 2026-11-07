@@ -121,6 +121,69 @@ export function collect(tag, target, bundle, output) {
     ),
   );
 }
+export function collectPersonal(tag, sourceSHA, directory, output) {
+  const version = releaseVersion(tag);
+  if (!/^[a-f0-9]{40}$/.test(sourceSHA))
+    throw new Error("Personal packages require the exact release commit.");
+  const reports = files(directory).filter((path) => basename(path) === "personal-package.json");
+  if (reports.length !== 2) throw new Error("Expected two personal package reports.");
+  const seen = new Set();
+  const packages = [];
+  for (const file of reports) {
+    const report = JSON.parse(readFileSync(file, "utf8"));
+    const target = { arm64: "darwin-aarch64", x86_64: "darwin-x86_64" }[report.architecture];
+    if (
+      !target ||
+      seen.has(target) ||
+      !report.passed ||
+      report.sourceTreeDirty !== false ||
+      report.sourceHeadSHA !== sourceSHA ||
+      report.testedMergeSHA !== sourceSHA ||
+      report.version !== version ||
+      report.bundleIdentifier !== "sh.uterm.desktop.personal" ||
+      report.buildConfiguration !== "release" ||
+      report.manualUpdates !== true ||
+      !report.smoke?.realWindow ||
+      !report.smoke?.manualAppReplacement ||
+      report.smoke.productionDataAccess !== false
+    )
+      throw new Error(
+        "Personal package evidence does not match the release commit, version or actual installation.",
+      );
+    seen.add(target);
+    const entries = Object.entries(report.packages ?? {});
+    if (entries.length !== 2) throw new Error("Expected a personal DMG and ZIP.");
+    const extensions = new Set();
+    for (const [name, hash] of entries) {
+      const extension = name.endsWith(".dmg") ? ".dmg" : name.endsWith(".zip") ? ".zip" : null;
+      const source = join(resolve(file, ".."), name);
+      if (
+        !extension ||
+        extensions.has(extension) ||
+        basename(name) !== name ||
+        !name.startsWith(
+          `uTerm-Personal-${version}-macos-${report.architecture}-${sourceSHA.slice(0, 8)}`,
+        ) ||
+        !/^[a-f0-9]{64}$/.test(hash) ||
+        sha256(source) !== hash
+      )
+        throw new Error("Personal archive name or checksum does not match its report.");
+      extensions.add(extension);
+      packages.push({
+        source,
+        filename: `uTerm-${version}-personal-${target}${extension}`,
+        sha256: hash,
+      });
+    }
+  }
+  mkdirSync(output, { recursive: true });
+  for (const item of packages) copyFileSync(item.source, join(output, item.filename));
+  writeFileSync(
+    join(output, `uTerm-${version}-personal-SHA256SUMS.txt`),
+    packages.map((item) => `${item.sha256}  ${item.filename}\n`).join(""),
+  );
+  return packages;
+}
 export function manifest(tag, directory, previous, selectedTargets = targets) {
   if (
     !selectedTargets.length ||
@@ -192,6 +255,7 @@ async function main() {
       ),
     );
   } else if (command === "collect") collect(tag, first, second, third);
+  else if (command === "collect-personal") collectPersonal(tag, first, second, third);
   else if (command === "manifest") {
     const previous =
       second && second !== "-" ? JSON.parse(readFileSync(second, "utf8")) : undefined;
@@ -222,7 +286,7 @@ async function main() {
     }
   } else
     throw new Error(
-      "Usage: release.mjs configure TAG CONFIG | collect TAG TARGET BUNDLE OUTPUT | manifest TAG OUTPUT [PREVIOUS|-] [TARGET] | verify TAG OUTPUT [TARGET]",
+      "Usage: release.mjs configure TAG CONFIG | collect TAG TARGET BUNDLE OUTPUT | collect-personal TAG SOURCE_SHA INPUT OUTPUT | manifest TAG OUTPUT [PREVIOUS|-] [TARGET] | verify TAG OUTPUT [TARGET]",
     );
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {

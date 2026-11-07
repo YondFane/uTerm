@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 
@@ -60,6 +60,8 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
   let failQuery = false;
   let suspend = false;
   let rejectPending;
+  let releaseCatalog;
+  let holdCatalog = true;
   let cellReads = 0;
   const binaryCell = {
     get binary() {
@@ -83,11 +85,17 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
       if (args.request.op === "query" && failQuery) throw new Error(String(failQuery));
       if (args.request.op === "query")
         return { columns: [{ name: "value", type: "BINARY" }], rows: [[binaryCell]] };
-      if (args.request.op === "browse" && args.request.view === "catalogs")
-        return {
+      if (args.request.op === "browse" && args.request.view === "catalogs") {
+        const catalogs = {
           columns: [{ name: "TABLE_CAT", type: "VARCHAR" }],
           rows: [["metadata_db"], ["information_schema"]],
         };
+        if (holdCatalog)
+          return new Promise((resolve) => {
+            releaseCatalog = () => resolve(catalogs);
+          });
+        return catalogs;
+      }
       if (args.request.op === "browse" && args.request.view === "table")
         return {
           columns: [{ name: "preview", type: "VARCHAR" }],
@@ -117,7 +125,11 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
         React.createElement(
           SettingsProvider,
           null,
-          React.createElement(DatabaseWorkspace, { config, active, password: "" }),
+          React.createElement(DatabaseWorkspace, {
+            config,
+            active,
+            password: "TEMPORARY_QA_PASSWORD",
+          }),
         ),
       ),
     );
@@ -135,6 +147,21 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
     while (!globalThis.databaseEditorProps && Date.now() < editorDeadline)
       await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
     assert.ok(globalThis.databaseEditorProps, "The lazy SQL editor must finish loading");
+    assert.equal(button("Disconnect").disabled, true);
+    assert.equal(button("Execute SQL").disabled, true);
+    assert.equal(button("Copy SQL").disabled, true);
+    assert.equal(
+      globalThis.databaseEditorProps.blocked,
+      true,
+      "The handle must not make SQL editable before catalog loading completes",
+    );
+    assert.equal(calls.filter((call) => call.args?.request?.op === "query").length, 0);
+    holdCatalog = false;
+    await act(async () => releaseCatalog());
+    assert.equal(button("Disconnect").disabled, false);
+    assert.equal(button("Execute SQL").disabled, false);
+    assert.equal(button("Copy SQL").disabled, false);
+    assert.equal(globalThis.databaseEditorProps.blocked, false);
     await click("Execute SQL");
     const reads = cellReads;
     assert.ok(reads > 0);
@@ -248,6 +275,10 @@ test("database workbench confirms writes, retains failed SQL and keeps hidden co
     assert.equal(document.querySelector(".database-results td"), null);
     suspend = false;
     await click("Connect");
+    assert.equal(
+      calls.filter((call) => call.command === "database_connect").at(-1).args.password,
+      "TEMPORARY_QA_PASSWORD",
+    );
     failQuery = "DB_TIMEOUT";
     await click("Execute SQL");
     assert.ok(button("Connect"));

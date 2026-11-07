@@ -3,5 +3,10 @@
   "identifier": "main",
   "description": "Basic desktop window permissions. No shell or filesystem access.",
   "windows": ["main"],
-  "permissions": ["core:default", "core:window:allow-start-dragging", "notification:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "notification:default",
+    "clipboard-manager:allow-write-text"
+  ]
 }

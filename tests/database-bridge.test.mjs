@@ -2,10 +2,52 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createInterface } from "node:readline";
-import { resolve, delimiter } from "node:path";
+import { resolve, delimiter, join } from "node:path";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { createConnection, createServer } from "node:net";
+
+test(
+  "bundled engine preserves three SQL dialect contracts with a JDBC simulation",
+  {
+    skip: !process.env.UTERM_DATABASE_JAVA_TEST,
+  },
+  () => {
+    const classes = mkdtempSync(join(tmpdir(), "uterm-jdbc-simulation-"));
+    try {
+      // DriverManager requires the fixture driver to be visible to the bundled engine's loader.
+      // DriverManager 要求内置引擎的类加载器能够看到测试驱动。
+      execFileSync(
+        process.env.UTERM_DATABASE_JAVAC || "javac",
+        [
+          "-encoding",
+          "UTF-8",
+          "-d",
+          classes,
+          resolve("tests/fixtures/DatabaseJdbcSimulation.java"),
+        ],
+        { timeout: 30000 },
+      );
+      const output = execFileSync(
+        process.env.UTERM_DATABASE_JAVA || "java",
+        [
+          "-cp",
+          [resolve("components/database/engine.jar"), classes].join(delimiter),
+          "DatabaseJdbcSimulation",
+        ],
+        { timeout: 30000 },
+      ).toString("utf8");
+      assert.match(
+        output,
+        /MySQL PostgreSQL Oracle JDBC simulations: exact values, endpoint configuration, read-only and transactions passed/,
+      );
+    } finally {
+      rmSync(classes, { recursive: true, force: true });
+    }
+  },
+);
 
 test(
   "backend SQL guards reject unsafe statements independently of the frontend",

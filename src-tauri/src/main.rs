@@ -4,6 +4,7 @@ use serde::Serialize;
 use tauri::{Emitter, Manager};
 mod agent_install;
 mod agents;
+mod content_operations;
 mod control;
 mod database;
 mod database_components;
@@ -15,9 +16,11 @@ mod java;
 mod java_components;
 mod projects;
 mod python;
+#[cfg(feature = "qa")]
+mod qa;
 mod redis;
-mod redis_credentials;
 mod sessions;
+mod shared_core;
 mod ssh;
 mod ssh_auth;
 mod ssh_tunnels;
@@ -194,6 +197,17 @@ fn main() {
     }
     let mut arguments = std::env::args_os().skip(1);
     let mode = arguments.next();
+    #[cfg(windows)]
+    if mode.as_deref() == Some(std::ffi::OsStr::new("--local-java-utf8")) {
+        std::process::exit(match utermd_local::java_utf8::run() {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("Java UTF-8 launcher: {error:#}");
+                1
+            }
+        });
+    }
+
     if mode.as_deref() == Some(std::ffi::OsStr::new("--local-task")) {
         let result = (|| {
             let directory = arguments
@@ -266,7 +280,17 @@ fn main() {
         }
         return;
     }
+    #[cfg(feature = "qa")]
+    if mode.as_deref() == Some(std::ffi::OsStr::new("--qa-cleanup")) {
+        qa::cleanup().expect("Isolated QA host cleanup failed");
+        return;
+    }
     let mut context = tauri::generate_context!();
+    #[cfg(feature = "qa")]
+    {
+        qa::root().expect("QA requires a private temporary data root");
+        assert_eq!(context.config().identifier, qa::IDENTIFIER);
+    }
     if starts_in_background(std::env::args_os().skip(1)) {
         for window in &mut context.config_mut().app.windows {
             if window.label == "main" {
@@ -275,26 +299,32 @@ fn main() {
             }
         }
     }
-    let result = tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
-            if let Some(state) = app.try_state::<std::sync::Arc<control::Control>>() {
-                for value in arguments
-                    .iter()
-                    .filter(|value| value.starts_with("uterm://"))
-                {
-                    if let Err(error) = state.open_link(value) {
-                        eprintln!("Session link: {error}");
-                    }
+    let builder = tauri::Builder::default();
+    #[cfg(feature = "qa")]
+    let builder = builder.manage(qa::UpdateTransferFixture::default());
+    #[cfg(not(feature = "qa"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, arguments, _| {
+        if let Some(state) = app.try_state::<std::sync::Arc<control::Control>>() {
+            for value in arguments
+                .iter()
+                .filter(|value| value.starts_with("uterm://"))
+            {
+                if let Err(error) = state.open_link(value) {
+                    eprintln!("Session link: {error}");
                 }
             }
-            if !starts_in_background(arguments.iter().skip(1)) {
-                if let Err(error) = show_main_window(app) {
-                    eprintln!("Show desktop: {error}");
-                }
+        }
+        if !starts_in_background(arguments.iter().skip(1)) {
+            if let Err(error) = show_main_window(app) {
+                eprintln!("Show desktop: {error}");
             }
-        }))
+        }
+    }));
+    let result = builder
         .plugin(tauri_plugin_deep_link::init())
         .manage(updates::Updates::default())
+        .manage(shared_core::Lifecycle::default())
+        .manage(content_operations::ContentOperations::default())
         .manage(taskbar::Taskbar::default())
         .setup(|app| {
             use tauri_plugin_deep_link::DeepLinkExt;
@@ -323,7 +353,13 @@ fn main() {
             }
             #[cfg(any(windows, target_os = "macos"))]
             taskbar::install(app)?;
-            let state = control::Control::start(app.handle()).map_err(std::io::Error::other)?;
+            #[cfg(feature = "qa")]
+            let control_directory =
+                qa::control_directory(app.handle()).map_err(std::io::Error::other)?;
+            #[cfg(not(feature = "qa"))]
+            let control_directory = app.path().app_data_dir()?;
+            let state =
+                control::Control::start(&control_directory).map_err(std::io::Error::other)?;
             app.manage(state.clone());
             #[cfg(any(windows, target_os = "linux"))]
             app.deep_link().register_all()?;
@@ -368,6 +404,7 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin({
             let builder = tauri_plugin_autostart::Builder::new()
                 .app_name(if cfg!(debug_assertions) {
@@ -391,6 +428,34 @@ fn main() {
         .manage(database_components::Components::default())
         .manage(java_components::Components::default())
         .invoke_handler(tauri::generate_handler![
+            #[cfg(feature = "qa")]
+            qa::qa_context,
+            #[cfg(feature = "qa")]
+            qa::qa_updates,
+            #[cfg(feature = "qa")]
+            qa::qa_update_transfer,
+            #[cfg(feature = "qa")]
+            qa::qa_ssh_fixture,
+            #[cfg(feature = "qa")]
+            qa::qa_redis_fixture,
+            #[cfg(feature = "qa")]
+            qa::qa_database_fixture,
+            #[cfg(feature = "qa")]
+            qa::qa_host_status,
+            #[cfg(feature = "qa")]
+            qa::qa_external_settings,
+            #[cfg(feature = "qa")]
+            qa::qa_scene,
+            #[cfg(feature = "qa")]
+            qa::qa_performance_window,
+            #[cfg(feature = "qa")]
+            qa::qa_request_exit,
+            #[cfg(feature = "qa")]
+            qa::qa_shutdown_idle,
+            shared_core::shared_core_request,
+            shared_core::shared_core_ready,
+            shared_core::shared_core_exit,
+            shared_core::shared_core_export,
             sessions::project_run_summary,
             sessions::project_run_list,
             python::python_configuration,
@@ -512,6 +577,10 @@ fn main() {
         .build(context);
     match result {
         Ok(app) => app.run(|handle, event| {
+            #[cfg(feature = "qa")]
+            if matches!(event, tauri::RunEvent::ExitRequested { .. }) {
+                eprintln!("QA lifecycle: ExitRequested");
+            }
             match &event {
                 tauri::RunEvent::WindowEvent {
                     event: tauri::WindowEvent::CloseRequested { api, .. },
@@ -525,9 +594,23 @@ fn main() {
                     }
                 }
                 tauri::RunEvent::ExitRequested { api, .. }
+                    if handle
+                        .state::<shared_core::Lifecycle>()
+                        .active
+                        .load(std::sync::atomic::Ordering::SeqCst)
+                        && !handle
+                            .state::<shared_core::Lifecycle>()
+                            .permit_exit
+                            .swap(false, std::sync::atomic::Ordering::SeqCst) =>
+                {
+                    api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-request", ());
+                }
+                tauri::RunEvent::ExitRequested { api, .. }
                     if handle.state::<ssh::SshFiles>().busy() =>
                 {
                     api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
                     if let Err(error) = show_main_window(handle) {
                         eprintln!("Show transfer guard: {error}");
                     }
@@ -544,6 +627,7 @@ fn main() {
                             .load(std::sync::atomic::Ordering::SeqCst) =>
                 {
                     api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
                     let _ = show_main_window(handle);
                     let _ = handle.emit("database-close-request", ());
                 }
@@ -551,6 +635,7 @@ fn main() {
                     if handle.state::<redis::RedisState>().busy() =>
                 {
                     api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
                     if let Err(error) = show_main_window(handle) {
                         eprintln!("Show Redis operation: {error}");
                     }
@@ -562,6 +647,7 @@ fn main() {
                     if handle.state::<redis::RedisState>().dirty() =>
                 {
                     api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
                     if let Err(error) = show_main_window(handle) {
                         eprintln!("Show Redis guard: {error}");
                     }
@@ -579,9 +665,20 @@ fn main() {
                         .load(std::sync::atomic::Ordering::SeqCst) =>
                 {
                     api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
                     if let Err(error) = handle.emit("editor-close-request", ()) {
                         eprintln!("Editor close request: {error}");
                     }
+                }
+                tauri::RunEvent::ExitRequested { api, .. }
+                    if !handle
+                        .state::<content_operations::ContentOperations>()
+                        .prepare_exit() =>
+                {
+                    api.prevent_exit();
+                    let _ = handle.emit("shared-state-exit-deferred", ());
+                    let _ = show_main_window(handle);
+                    let _ = handle.emit("content-operation-exit-request", ());
                 }
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Reopen {
@@ -595,12 +692,20 @@ fn main() {
                 _ => {}
             }
             if matches!(event, tauri::RunEvent::Exit) {
+                #[cfg(feature = "qa")]
+                eprintln!("QA lifecycle: Exit cleanup begin");
+                handle.state::<ssh::SshFiles>().stop();
+                #[cfg(feature = "qa")]
+                eprintln!("QA lifecycle: SFTP stopped");
+                handle.state::<ssh_auth::SshAuth>().clear();
                 handle.state::<ssh_tunnels::SshTunnels>().stop();
                 handle.state::<redis::RedisState>().stop();
                 handle.state::<database::DatabaseState>().stop();
                 handle
                     .state::<std::sync::Arc<sessions::Sessions>>()
                     .detach();
+                #[cfg(feature = "qa")]
+                eprintln!("QA lifecycle: Exit cleanup complete");
             }
         }),
         Err(error) => {

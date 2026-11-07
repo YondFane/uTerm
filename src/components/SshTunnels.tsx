@@ -15,7 +15,7 @@ export function SshTunnels({
 }: {
   rules: SshForward[];
   statuses: SshTunnelStatus[];
-  save: (rules: SshForward[]) => boolean;
+  save: (rules: SshForward[]) => boolean | Promise<boolean>;
   start: (rule: SshForward) => Promise<void>;
   stop: (id: string) => Promise<void>;
   error?: string;
@@ -75,8 +75,8 @@ export function SshTunnels({
                 </button>
                 <button
                   disabled={active || pending.includes(rule.id) || !!listError}
-                  onClick={() => {
-                    if (!save(rules.filter((item) => item.id !== rule.id)))
+                  onClick={async () => {
+                    if (!(await save(rules.filter((item) => item.id !== rule.id))))
                       setError(tx("无法保存端口转发配置。"));
                     else void change(rule.id, () => stop(rule.id));
                   }}
@@ -91,7 +91,7 @@ export function SshTunnels({
       </div>
       <form
         className="ssh-forward-form"
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
           const rule = {
             id: crypto.randomUUID(),
@@ -107,7 +107,7 @@ export function SshTunnels({
             setError(tx("端口转发配置无效或本地端口重复。每个连接最多 16 条规则。"));
             return;
           }
-          if (save([...rules, rule])) {
+          if (await save([...rules, rule])) {
             setLocalPort("");
             setRemotePort("");
             setError("");

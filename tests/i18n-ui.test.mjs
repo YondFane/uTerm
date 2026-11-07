@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
@@ -43,6 +43,7 @@ test("real settings tabs, commands and panels render in both languages without u
         name: "test-rendering-adapters",
         enforce: "pre",
         resolveId(id) {
+          if (id === "pdfjs-dist/legacy/build/pdf.mjs") return "\0test:pdfjs-dist";
           if (
             [
               "@xterm/xterm",

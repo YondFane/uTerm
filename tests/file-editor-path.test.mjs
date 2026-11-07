@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 
 test("file viewer headers omit Windows extended prefixes without changing file identities", async () => {
   const dom = new JSDOM("", { url: "http://localhost/" });

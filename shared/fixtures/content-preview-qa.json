@@ -1,0 +1,7 @@
+{
+  "htmlFile": "qa-preview.html",
+  "pdfFile": "qa-preview.pdf",
+  "htmlText": "UTERM_HTML_PREVIEW",
+  "pdfText": "UTERM_PDF_PREVIEW",
+  "escapeMessage": "UTERM_PREVIEW_HOST_ESCAPE"
+}

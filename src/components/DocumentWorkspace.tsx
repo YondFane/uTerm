@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke } from "../lib/content-host";
 import { databaseError, databaseNames, databaseStatus, type DatabaseConfig } from "../lib/database";
 import {
   documentQuery,

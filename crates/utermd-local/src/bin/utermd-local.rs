@@ -8,6 +8,28 @@ fn main() -> anyhow::Result<()> {
     }
     let mut arguments = std::env::args_os().skip(1);
     let mode = arguments.next();
+    #[cfg(windows)]
+    if mode.as_deref() == Some(std::ffi::OsStr::new("--local-java-utf8")) {
+        std::process::exit(match utermd_local::java_utf8::run() {
+            Ok(code) => code,
+            Err(error) => {
+                eprintln!("Java UTF-8 launcher: {error:#}");
+                1
+            }
+        });
+    }
+
+    if mode.as_deref() == Some(std::ffi::OsStr::new("--control")) {
+        let args = arguments
+            .map(|v| {
+                v.into_string()
+                    .map_err(|_| anyhow::anyhow!("Invalid UTF-8 control argument"))
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        let reply = utermd_local::control::cli(args).map_err(anyhow::Error::msg)?;
+        println!("{}", serde_json::to_string(&reply)?);
+        return Ok(());
+    }
     if mode.as_deref() == Some(std::ffi::OsStr::new("--local-task")) {
         let directory = arguments
             .next()

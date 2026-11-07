@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "baselineRelease": "bbabf05d3130e2315fb90f9dcd7bdf82a77122aa",
+  "baselineTag": "uTerm-v0.2.4",
+  "projectName": "Legacy transition QA",
+  "fileName": "upgrade.txt",
+  "savedText": "ORIGINAL_BEFORE_TRANSITION\r\n",
+  "legacyDraft": "LEGACY_DRAFT 中文 é\r\n",
+  "nativeDraft": "NATIVE_LATEST_DRAFT 中文 é\r\n",
+  "credentialReference": "qa-reference-only-no-credential",
+  "rollbackFontSize": 18
+}

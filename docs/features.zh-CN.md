@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-05
+updated: 2026-11-07
 ---
 
 # uTerm 功能说明
@@ -32,6 +32,464 @@ updated: 2026-11-05
 uTerm 是 Windows 和 macOS 桌面终端。本地终端和 Agent 进程在本机运行，SSH 远程 Shell 在服务器运行。
 
 界面支持简体中文和英文。
+
+### macOS 个人应用
+
+实验性 **uTerm Personal** 在 macOS
+14+ 使用 Swift／AppKit 与共享 Rust 核心／helper 的 Release 构建，采用免费的个人自用 ad-hoc 签名，不需要付费 Apple
+Developer 账户或上架 App
+Store，也没有 Apple 公证。个人构建即使读取到启用自动更新的设置，也不会启动 Sparkle；界面显示手动更新说明，不显示网络更新控件。
+
+从按版本保存的[GitHub Release](https://github.com/YondFane/uTerm/releases)下载额外的 **Personal**
+Apple Silicon 或 Intel
+DMG／ZIP。已发布的Release附件不设置自动过期，可不登录GitHub下载。核对个人版SHA256SUMS文件，打开DMG，将
+**uTerm Personal.app**
+拖入Applications。如果macOS阻止未认证开发者，请在**系统设置 → 隐私与安全**中允许此已知构建。
+
+**macOS personal packages**
+Actions 工作流另保留90天验证产物，下载这些临时artifact需要登录GitHub。正式发布工作流从不可变版本标签构建同一套个人应用，校验两个架构的源码／版本／安装报告和包哈希后，将四个归档及校验和作为额外Release附件发布。已有Tauri安装包继续提供自动更新通道，个人版仍为独立配置、手动更新的客户端。
+
+个人身份为 `sh.uterm.desktop.personal`，配置目录为
+`~/Library/Application Support/sh.uterm.desktop.personal/`，不会导入或覆盖已有 Tauri／QA 配置。将存储重定向至其他配置的符号链接会被拒绝。手动更新时保留上一份下载包，停止任务、关闭会话并退出应用，备份个人配置目录，再仅替换 App。不要向仍有应用／宿主运行的目录恢复旧配置；仅退出应用会分离会话。共享核心继续保留快照冲突检查、草稿恢复和显式回退导出；此打包入口不会自动恢复数据，也不执行稳定版的 Tauri 至原生客户端切换。
+
+在已安装文档所列 Node／pnpm、Rust 和 Xcode 依赖的 Mac 上，先运行
+`bash scripts/macos-native-build.sh personal`，再在图形会话运行
+`bash scripts/macos-native-test.sh personal` 和
+`python3 -B scripts/macos-personal-package.py --smoke`。产物位于
+`macos/.build/personal-packages/`，不需要签名证书或发布凭据。默认构建命令仍生成隔离 QA 应用。个人程序禁用 QA 命令参数；CI 以独立身份和包内固定的临时配置，安全执行同一 Release 程序。
+
+#### 个人应用验证
+
+发布收集器拒绝过期源码／版本报告、重复架构、缺失真实安装证据及被修改的归档。镜像创建只对明确占用最多重试五次，保留诊断并拒绝已有输出。QA终端创建等待项目选择已渲染且按钮可交互，30秒等待期限不变。Linux已通过7项发布测试、6项镜像模拟、4项个人包测试、类型检查及完整前端回归（435通过、11跳过）。
+
+源码 `790dbf1bb1d028f70f3e43d0cef0a786eee5a1e0`、PR测试合成提交
+`221ebd650cd2e73ed73fea7fcce14b48edd15a9b`
+已通过[Windows与macOS真实应用QA](https://github.com/YondFane/uTerm/actions/runs/42341263310)。两端产物均包含输入控制方／查看方报告及原始窗口截图；控制方能够先创建可见真实终端，再移交输入控制。原生包、性能及发布检查分别保留绑定源码的报告；此结果不代表最终标签已发布或原生稳定切换已完成。
+
+源码 `5903045b8d1b899cfc98400dfb10c786536b1433`、PR测试合成提交
+`6635aee9229c633ab5db839efc04f0eeda0fdbcd` 已在 ARM64 macOS 15.8.2 和 Intel macOS
+15.7.9 通过[个人包工作流](https://github.com/YondFane/uTerm/actions/runs/42337113604)。两端使用 Xcode
+16.4、Swift 6.1.2 和 Rust 1.99.1；各执行43项Release
+Swift测试及4项打包拒绝测试，构建并核对实际ad-hoc应用，挂载只读DMG，以包内helper执行真实中文PTY输出。
+
+[ARM64产物](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560770121)和
+[Intel产物](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560586632)包含DMG／ZIP、校验和、
+`personal-package.json`、两个启动报告和两个回退导出、工具链／构建／测试日志及各六张原始窗口截图。四个包的哈希和包内源码／架构身份均已独立核对。十二张截图已逐张查看：真实英文深色与中文浅色设置、正确本地化的手动更新／登录项文案，以及同源码App替换前后的终端输出。一致性导出保留两个精确NFD／CRLF草稿并拒绝过期修订，原文件不变，测试宿主实际退出。保存的自动更新授权及注入的feed元数据均不能初始化更新器；发行身份中的QA参数不能重定向数据或写入冒烟报告。
+
+配置测试覆盖首次／已有目录、身份、临时测试边界及符号链接重定向。Linux打包／镜像模拟、Shell语法、格式和双语文档检查也通过。真实系统覆盖为macOS
+15.x，声明最低版本仍为14.0。这些检查验证同源码App替换，不代表跨版本稳定切换或Apple签名／公证；已有Tauri迁移及剩余验收继续单独由
+[#47](https://github.com/YondFane/uTerm/issues/47)跟踪。
+
+### macOS 原生 QA 客户端
+
+实验性 SwiftUI／AppKit 原生 QA 应用与现有 Tauri 客户端分别构建，最低要求仍为 macOS
+14.0，使用隔离身份
+`sh.uterm.desktop.qa.native`。开发实现将共享工作区／会话操作连接到原生列表、可隐藏侧栏、40pt 工具栏、基础语言／外观／字号设置及缓存的 SwiftTerm 终端视图。包内独立 Rust
+helper 管理真实 PTY；退出只断开连接，**关闭会话**核对 generation 后终止所选进程；generation 过期或缺失时，需重连再关闭。分屏和选择会话保留各自终端视图，重连以原进程 generation 回放保留输出。
+
+SwiftTerm 固定为兼容 Xcode 16.4 的 1.20.0。输出以二进制帧跨越 C
+ABI，每条链路最多一帧未确认，Swift 队列有界。Swift 将 sequence 及活动 sequence 解码为
+`UInt64`，发送确认时不经过 `Double`。TypeScript 使用生成的 `bigint`
+sequence 字段，在 JSON 舍入前保留整数字面量。确认使用兼容旧版的安全整数或精确十进制字符串，Rust 校验至 u64::MAX。宿主二进制帧格式不变，边界测试验证实际数值而非仅类型名称。此精度改动的原生及旧客户端平台 CI 已在 head
+`d3dcd09a69bcdd66798e2f4aaa4b67b99187cf77`、tested merge `3a012173e7f27639c7dbe40188354b8348c1affa`
+通过（[原生](https://github.com/YondFane/uTerm/actions/runs/41422419793)、[旧客户端](https://github.com/YondFane/uTerm/actions/runs/41422419819)）。
+
+Unix 慢消费回归保持一帧真实 PTY 输出未确认，拒绝错误 ack，再逐条核对 1,000 条中文组合字符记录；旧 attachment 不能确认新连接。90,000 行超过宿主 1
+MiB 原始历史后，明确 reset 到有界保留屏幕，不承诺无限原始历史。原生 QA 在 SwiftTerm 消费前注入 150
+ms 等待，期间执行真实侧栏菜单，实际渲染／确认超过 113
+KB。两 Mac 架构已在下述源码通过；受控等待验证正确性，不代表性能收益。Windows 保留现有回归，此 Unix 负载场景不在 Windows 执行。
+
+#### 隔离候选安装包
+
+完成原生 QA 构建后，`bash scripts/macos-candidate-package.sh` 创建按架构区分的 App
+ZIP 和只读 DMG。脚本核对 App／helper 架构、最低系统、ad-hoc 签名、依赖与只读资源，再挂载镜像并安装到临时私有 Applications 目录。安装后的应用启动包内 helper，渲染真实中文 PTY 输出，明确关闭测试会话并停止空闲宿主后卸载。原生 QA 版本仍为包内记录的
+`0.0.1`，不是稳定发布包。
+
+镜像校验器只对明确的临时占用响应重试，最多五次；每次退出码与诊断保留于报告。损坏镜像及重试耗尽仍失败。Linux三项模拟覆盖占用后有效、无效镜像、持续占用和超时。79872ba
+ARM候选原校验因占用失败，未修改的报告保留于[artifact13543080480](https://github.com/YondFane/uTerm/actions/runs/42295306002/artifacts/13543080480)。真实镜像创建、校验及安装仍需macOS运行。
+
+候选入口禁用Python字节码写入，避免导入镜像校验器时先生成未跟踪的`scripts/__pycache__`，触发源码清洁门禁。源码`6ef8dba`的双Mac升级／回退均通过七个场景，Intel的37项Swift测试及21项真实内容断言也通过；后续候选和交互门禁因生成的缓存正确失败，[原始产物](https://github.com/YondFane/uTerm/actions/runs/42305932312/artifacts/13546679529)保留不变。入口修正需重新执行原生CI；这些部分结果不代表整个原生工作流通过。
+
+Windows 上运行 `./scripts/windows-candidate-package.ps1`，构建当前用户范围的 QA
+NSIS 安装器，内嵌 WebView 内容并关闭生产 deep
+link。脚本安装到所属临时目录，核对 x64 程序与只读资源文件，运行实际安装后的应用、捕获所属 HWND，再执行卸载。仅重定向隔离的
+`sh.uterm.desktop.qa.sharedstate`
+配置；私有数据保留到测试清理，生产协议／卸载注册表指纹须保持一致。QA 安装器要求 CI 镜像已有 WebView2；仅供 QA 的安装／卸载钩子负责还原资源属性。
+
+两端在 `candidate/` 归档 SHA256、准确源码 head／tested merge
+SHA、平台／工具链、安装报告、日志及原始窗口截图。源码
+`8aacbb3b09925fe16f2bda24e66563eed9f27a31`、tested merge `0e9a3aa9c1d10b4ecad0127e922df760fcf195cc`
+在 macOS ARM64 15.8.2、Intel 15.7.9 和 Windows x64
+NT10.0.26100 通过候选安装。五份实际包的哈希均已独立复算，三张安装后窗口原图已查看。Mac 使用 Xcode16.4、Swift6.1.2、Rust1.99.1；Windows 使用 Node24.22.2、pnpm11.22.0、PowerShell7.6.9、Rust1.99.1。完整报告、产物与准确检查见
+[#44](https://github.com/YondFane/uTerm/issues/44#issuecomment-6686879466)，已在任务分支验收。Mac
+workflow 在该候选来源因独立 #41／#45 检查失败，候选成功不代表整体通过；#41在源码949e4c2单独验收；#42／#45在源码ec1a49d验收，模拟及人工豁免范围见完成评论。
+
+原生 App 使用 ad-hoc 签名，Sparkle 框架保留供应商签名，没有 Apple
+Developer 签名或公证。Windows 候选未签名，这些基础候选包没有更新器签名。Windows 候选对 Tauri 唯一的
+`__TAURI_BUNDLE_TYPE_VAR_UNK` → `__TAURI_BUNDLE_TYPE_VAR_NSS`
+变换后逐字节核对程序；标记缺失／重复或其他字节变化均失败。Candidate Windows QA
+workflow 独立执行安装器检查。带源码身份的私有SDK签名更新测试和升级／数据回退证据已在#45／#46验收；稳定切换继续受#47门禁约束。这些检查不发布，也不更改生产更新源。
+
+#### 可复现的客户端测量
+
+Client performance evidence
+workflow 在同一台 Mac 顺序运行原生与 Tauri 客户端，各重复三次；Windows 单独记录 Tauri 基线。
+`shared/fixtures/client-performance.json`
+version4 固定一个真实 PTY、120×30 网格、14pt 字体与5,000行回滚。两端均沿用普通渲染器至 PTY 的尺寸路径；网格不符或被窗口裁剪即使报告失败。二十轮各验证1,024条有序 ANSI／Unicode 输出、64KiB
+CAS 文件保存／读取及真实连接回放，不能更换进程 generation。延迟汇总排除前五轮预热。
+
+负载还包括二十次合成 alternate-screen
+TUI 重绘、每帧刻意延迟200ms的真实消费者，以及二十次经 Core／JDBC 执行的真实 PostgreSQL 查询。每次核对128行有序文本，每行包含128个 ASCII 字符及 Unicode。初始渲染门控保持真实帧至少50ms；若收到另一帧或提前确认，则慢消费检查失败。释放门控后排空并验证全部1,024条输出。这是可控终端重绘，不是交互 Vim 基准；查询计时包含行序列化，不包含表格绘制。
+
+原生构建后运行 `python3 -B scripts/client-performance-database.py`（Windows 使用
+`python`）。包装脚本在全部顺序测量期间管理同一个回环 PostgreSQL 集群，向客户端脚本提供私有凭据并调用
+`scripts/run-client-performance.sh`。它核对原始数据库测试数据不变、连接关闭、自有服务停止，且证据不含凭据。`node scripts/client-performance-report.mjs`
+核对三次结果。内部原生／Tauri 脚本需要包装脚本提供的私有数据库上下文。
+
+比较报告核对源码干净，并将空闲采样按实际经过时间分成三窗。连续两段RSS中位数增幅均超过16MiB和初始RSS的3%两者较大值时，标记增长并使测量范围验收失败；稀疏、空进程或时间不递增的采样也失败。此检测不证明多小时无泄漏。各指标对三轮中位数比较，原生慢于Tauri超过10%且1ms时，明确记录为#13剖析待处理项，不用汇总改善声明掩盖回退。`performanceAcceptanceComplete`仅适用于固定单PTY负载和有界观察，稳定切换仍有独立门禁。
+
+macOS可能记录RSS为零的子进程，同时所属应用和宿主仍驻留内存。分析器保留并计数这些记录，要求单进程RSS非负、总量为正，仍拒绝空进程或全零采样。源码`79872babd29afe81815bf29ee7ec103bda6e955e`、tested
+merge
+`a540065570287b0d7bf6798612fc56405dad1382`在ARM、Intel和Windows通过全部15轮负载；原始趋势、清理及窗口原图已核对。[#43验收](https://github.com/YondFane/uTerm/issues/43#issuecomment-6696979756)记录命令、机器、产物与范围。原生大输出、回放和数据库回退继续保留为明确的[#13剖析待办](https://github.com/YondFane/uTerm/issues/13#issuecomment-6696879766)，不宣称整体改善或多小时无泄漏。较新来源的运行保留各自出处。
+
+前两次各采样120秒空闲，最后一次采样600秒。原始采样、逐轮指标、源码／负载哈希、真实终端／TUI 窗口原图及清理报告上传为 CI
+artifacts。CPU／RSS 覆盖应用、其子进程与经认证的宿主进程树；无法归属的 WebContent／GPU／XPC 及外部 PostgreSQL 服务仍排除。准备与截图使用独立阶段；资源阶段仍含预热及探针开销，RSS 求和也不等同按比例分摊内存。原生通过 NSTextInputClient 输入，Tauri 在真实应用内模拟 DOM 粘贴／回车；响应止于输出解析／确认，不等同物理输入或显示延迟。十分钟采样不能证明多小时无泄漏。
+
+#### 测量验证
+
+本地报告测试拒绝过期源码／负载、sequence 精度丢失、缺失行／TUI 样本、运行时长不足、缺少慢消费证据及网格不符。按来源记录的version4
+Mac／Windows结果及验收见[#43](https://github.com/YondFane/uTerm/issues/43)，不宣称改善比例。旧负载版本不作为 version4 证据。原生记录每次真实窗口／视图／网格几何。ARM
+CI 在 CoreGraphics 报告更大模式后仍把窗口限制为684px，保留这些失败运行。version4 对所有客户端使用相同的120×30网格，容纳于原始 CI 桌面，不改屏幕模式、字体、负载总量或裁剪检查。Windows 接收真实 Git
+Bash 路径并兼容 mingw64 目录。SQL 通过独立输出别名按数值序列排序。修正后的平台测量以#43准确来源绑定的报告为准。
+
+c24d81a的Intel运行达到真实120×30网格，完成首组原生／Tauri负载；第二次原生负载完成，但协调器在异步宿主退出结束前检查端点，失败保留于[artifact13538810238](https://github.com/YondFane/uTerm/actions/runs/42282798481/artifacts/13538810238)。原生协调器现最多等待十秒，要求端点删除且已认证测试宿主PID实际退出，不终止它或放宽负载检查。真实子进程回归覆盖延迟删除／退出；另一回归核对超时不会杀死运行进程。Mac验收依据新来源的CI及#43记录的边界。
+
+源码b904eaf完整Linux前端回归433项通过、11项明确跳过。保留的部分Intel
+v3数据表明原生大输出和数据库查询较慢，后者计时包含原生适配器异步完成轮询。这些回退已记录，不武断认为全部差值仅由轮询导致。两分钟RSS观察稳定，当前v4比较及更长趋势证据由#43维护。准确旧来源数值和边界见[#43](https://github.com/YondFane/uTerm/issues/43#issuecomment-6694081032)。
+
+Windows 契约测试等待 Core 进程及流关闭后再删除自有数据，并对释放中的 Windows 句柄有界重试。先前桌面步骤失败时仍写出交互矩阵失败报告，避免目录缺失丢失报告。这些失败仍按失败记录；清理重试不会将跳过的场景改为通过。
+
+明确分离会在返回前释放已认证输入租约，即使旧消费者阻塞；逐链路锁阻止迟到心跳／接管重新占有已停止视图，旧清理不能释放替代视图。真实宿主阻塞消费者回归在本地通过。性能设置在共享状态初始化前准备；QA 对写锁繁忙仅有界重试只读观察，不重试修改。共用网格超出内容区时，QA 还会在限定尺寸内调整真实应用窗口，不豁免裁剪检查。截图仅选择所属 QA 窗口，无法捕获该窗口即失败。这些检查保留实际失败运行，不替换图片，也不把早先计时当作对比结论。
+
+#### 原生 QA 验证
+
+迁移验收仍由 [#13](https://github.com/YondFane/uTerm/issues/13) 跟踪。M3
+#17 已按用户指示关闭，保留持久布局／PDF 标记及 Windows 运行面板／选择器覆盖缺口。数据库、Redis、Agent及设置的验收见 #38–#41。#42交互记录按明确模拟及用户豁免末项人工的范围验收。M4按来源记录的性能结果及剩余范围见[#43](https://github.com/YondFane/uTerm/issues/43)与[阶段跟踪](https://github.com/YondFane/uTerm/issues/18)。M5安装包#44及更新#45已验收；实际升级／回退证据及最终门禁结果由[#46](https://github.com/YondFane/uTerm/issues/46)、[#47](https://github.com/YondFane/uTerm/issues/47)及[所属阶段](https://github.com/YondFane/uTerm/issues/19)维护。原始实现缺口继续可见，阻止宣称稳定切换。
+
+Redis 分页、删除、TTL、取消退出及系统凭据检查已在源码 `940f8d1` 验收，平台报告和截图见
+[#39](https://github.com/YondFane/uTerm/issues/39)。工作保留在 `feat/native-macos-shared-core`
+分支的 [Draft PR #12](https://github.com/YondFane/uTerm/pull/12)，尚未合并或发布版本。
+
+head `4c502ab0c5f39b1d4f43ec4e72f0c7f35b285cca`、tested merge
+`df2690d89433974653ff5426bab07be371f455c7`
+的[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41468220264)与[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41468220189)四 job 全通过。原生实际运行于 macOS
+15.8.2 ARM64／15.7.9 Intel，Xcode 16.4、Swift 6.1.2、Rust 1.99.1；Windows Server 2025 x64 与旧 macOS
+ARM64 的前端、核心／FFI／契约、宿主、后端、格式／文档及桌面检查也通过。原生 QA 使用
+`sh.uterm.desktop.qa.native` 及临时项目／数据／宿主，Tauri QA 使用
+`sh.uterm.desktop.qa.sharedstate`。
+
+真实原生检查覆盖中文组合字符／ANSI／alternate
+screen、分屏视图保留、侧栏方向键焦点、原生设置菜单／Return、宽窄窗口、中英文／深浅主题、隐藏侧栏、全屏、正常退出重开后同 generation 回放及明确匹配 generation 关闭。顶栏实测 40pt。早先 NSView 缓存图遗漏合成图层，不计入验收；当前使用 WindowServer 截图。
+
+原生设置的**允许本地 CLI 控制**使用正常 AppKit 复选框并显示明确数据目录。共享认证回环服务通过包内真实 CLI 状态／列表／创建／聚焦／输入／关闭、对话框写入拒绝及队列排空。接入连接明确切回带超时的阻塞模式；事务结束明确解锁，不让 PTY 创建时复制的描述符保留占用；Windows 规范文件身份比较避免未变化的空闲宿主重复重启。表格选择／焦点延后执行避免 NSTableView
+delegate 重入，当前 smoke 会拒绝该告警。
+
+`pnpm test:legacy-host` 用记录 release `4f10848868ac09a3667e140938c345b265f9dd58`
+的未修改源码、原锁文件和独立目标目录编译历史 helper；四 job 验证二进制回放／确认、字面输入、活跃 PID／generation 保留、断开保活及明确关闭后才空闲升级，源码与二进制摘要不变。另用明确标注的不兼容端点测试数据验证拒绝且保留宿主／端点，不冒充历史不兼容二进制。原生 helper 与 QA
+App 使用 ad-hoc 签名，并执行
+`codesign --verify --deep --strict`；正式签名／公证及安装器升级／回退仍未验收。
+
+产物见
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41468220264/artifacts/13154462292)、[Intel](https://github.com/YondFane/uTerm/actions/runs/41468220264/artifacts/13153229460)、[Windows](https://github.com/YondFane/uTerm/actions/runs/41468220189/artifacts/13154148989)和[旧 Mac](https://github.com/YondFane/uTerm/actions/runs/41468220189/artifacts/13154152640)，包含 head／tested
+merge、平台／系统／架构／工具链、报告、日志、真实系统窗口截图及原生 QA
+App。图片包括空窗口、八个语言／主题／宽度场景、隐藏侧栏／全屏／设置、
+`native-terminal-slow-consumer.png` 和两张
+`native-control-*.png`。已目视检查 ARM 负载／窄窗／全屏／控制、Intel 窄窗／控制及 Windows
+Tauri 控制图；Tauri 的 12 场景保存／恢复／控制报告通过，清理无错误。
+
+M0 #14、M1 #15 及任务 #20–#30 已验收，尚未合入 release。M2
+#31／#32 使用下述用户批准的模拟范围，源码绑定结果与验收状态记录在对应 Issue。真实服务任务、人工输入法／剪贴板／鼠标及实际休眠／多屏检查仍未执行，保留授权的模拟／人工豁免边界。持久布局／PDF标记、完整Windows运行面板／选择器覆盖、多会话／多小时性能、macOS14实际运行及稳定切换条件仍未覆盖。自动原生操作不代表人工验收；Windows 与旧 macOS 保持现有完整功能。证据和未执行步骤见[原生迁移状态](native-migration.md)及 Issue 评论。
+
+原生终端冒烟在实际 PTY 中启动已安装的
+`/usr/bin/vim`。原生按键进入／退出插入模式，`NSTextInputClient.insertText`
+输入中文／组合字符／emoji，原生 `paste:` 使用系统剪贴板及实际 bracketed
+paste。渲染器将自动终端协商回复交由共享宿主，键盘、粘贴与 CLI 输入仍独立处理。[Native CI 41834172198](https://github.com/YondFane/uTerm/actions/runs/41834172198)
+在 source `1fd91cf7422b34546440e21ddadd4d69361db457`／tested merge
+`dde20cbbf9d35c3dd0885148ad5ad1edf90b0276` 通过 macOS 15.8.2 ARM64 和 15.7.9
+Intel。两者均核对准确 44 字节 UTF-8 保存文件、alternate
+screen 返回、相同视图／generation 与原 Shell 恢复，各抑制 35 字节渲染器自动回复。产物含
+`vim-toolchain.txt`、`native-vim-edit.png`、`native-vim-saved.txt` 和
+`terminal-live.json.realVim`，两张真实 Vim 图均已目视。[报告与保留的首轮失败](https://github.com/YondFane/uTerm/issues/31#issuecomment-6631702456)
+区分脚本原生输入与尚未执行的人工输入法、实际 Agent CLI 及性能验收。
+
+### 共享输入与尺寸控制
+
+其他当前客户端拥有会话时，终端显示**只读连接**与**接管输入**按钮，仍可读取、选择和复制。明确点击按钮才把输入与窗口尺寸控制权交给此视图；聚焦窗口不会接管。只读视图跟随宿主网格，不调整宿主尺寸。失去控制权会丢弃排队输入（包括剪贴板内容），避免之后接管时发送旧输入。两个客户端均等待首个宿主帧后再启用输入或提交尺寸，避免新只读连接在初始控制元数据到达前发生竞态。任务日志保持只读，不显示接管控件。
+
+开发中的宿主／Core 按活动会话 generation 分配唯一输入／resize 租约，其他连接继续读取并确认输出。明确接管会撤销旧输入与尺寸写入；迟到释放不能撤销新所有者或替换后的 generation。释放或关闭客户端仅分离控制权，不停止进程。停止续期后，租约在 30 秒到期；即使等待渲染确认，流也每五秒续期。
+
+并发接管时，待完成读取使用原游标和当前控制状态进行有界重读，不重放输入。明确检测当前宿主能力；未修改的旧宿主保留原行为，不会自动获得仲裁。Rust 生成 Swift／TypeScript 可选控制元数据，原始终端字节及 u64
+sequence／ack 精度保持。
+
+Linux 检查使用真实隔离宿主、独立 TCP／Core 客户端与 PTY，覆盖接管、旧输入／resize 拒绝、只读输出／ack、迟到释放、过期 generation、分离／退出、同进程／generation 重连和准确关闭。TCP
+gate 将旧只读请求延迟到接管后，验证其响应不能覆盖新控制状态。时钟驱动的规则测试覆盖到期／续期及旧客户端回退，不等待实际租约时长。`input-control-host.json`、`input-control-core.json`
+及日志保留源码／平台信息；CI 先运行宿主检查，再运行独立的 Java 任务检查。PR
+CI 在 Core 测试失败后继续执行独立契约、构建和真实应用检查，随后明确使 job 失败，保留原失败日志及后续 artifacts。直接分支检查仍在 Core 失败步骤停止。原生 CLI 发送使用当前应用连接及其已有租约，不会隐式接管其他客户端。真实宿主回归检查 CLI 输入接受、接管后旧输入拒绝及过期 generation 拒绝。
+
+明确确认的空闲 helper 升级会等待端点移除及旧进程系统锁释放后，再启动替换程序。确定性的系统锁回归覆盖这两个事件之间的间隙，以及有界超时且不抢占活动锁。成功探测后会在返回前显式解锁，避免并发 PTY
+fork 继承的描述符继续持有探测锁、阻止替换宿主启动。
+
+重复描述符回归复现了原有持锁问题，在 Linux 显式解锁后与全部三项退出锁检查、十项宿主集成测试一起通过。保留 Intel
+`3990ebf`
+的空闲宿主替换 CI 失败：新增模拟 CLI 测试通过，但 job 在原生窗口冒烟前失败。解锁修复的平台验收须在 #32 核对其自己的源码绑定 CI 证据。
+
+共享 u64 场景也将拥有／只读／无所有者元数据交给真实 Rust 编码器与 Swift／TypeScript 解码器，拒绝无效角色，sequence／ack 数值不发生舍入。
+
+原生输入控制入口在启动前及每个进程结束后检查Git源码清洁状态，核对包内两种源码身份，再为每份报告记录`testedMergeSHA`和`sourceTreeDirty`。c15f1bb的ARM工作流实际场景通过，但两份原始输入控制报告缺少清洁字段，严格准备审计因此拒绝。[原始产物](https://github.com/YondFane/uTerm/actions/runs/42309000560/artifacts/13548990662)保留不变。针对性回归保证缺少字段的报告仍被拒绝；入口修正后的新Mac证据由#47跟踪。
+
+`bash scripts/macos-input-control-smoke.sh`
+操作两个同时运行的隔离原生应用进程，检查原生接管按钮、只读输入／resize 拒绝、输出／ack、观察者正常退出、重新接管和准确关闭，并采集四张 WindowServer 截图。`pnpm qa:shared-state`
+包含两个同时运行的真实 Tauri 进程，通过实际终端输入和接管按钮执行六个场景。QA 首条命令等待实际 xterm 输入框可写且已解析终端行显示 Shell 提示符，接管后也等待输入可写；报告保留首次就绪证据。命令只发送一次，不修改应用 Shell，不重放输入。隔离 QA 构建允许并存应用进程，为观察者分配单独的临时 CLI 控制端点，但两个进程仍连接同一共享存储、宿主和会话。Windows 样例通过真实 PowerShell 终端输入明确写出 UTF-8 标记文件，与文本读取器匹配，不更改应用 Shell。编译隔离的观察器读取 Tauri 实际会话宿主，失败清理只关闭临时 QA 根目录内准确 generation 的会话，再停止空闲宿主。真实原生并存检查已在 macOS
+ARM／Intel 通过，对应 source `670f421354150e112f71d0ac3c94f29681296993`／tested merge
+`c5e4c54dfa4acbe381c64a81b113b4d5c659a97b`（Native run
+41818643260），包含每架构四张 WindowServer 截图及独立 CLI 回归。Tauri source
+`b7a5e60f6252aab6b829a8e0659a35c8e5509637`／tested merge `3029133cd9dd7433a06d31cb1ea76db885df94aa`
+在 Windows 和过渡 macOS 通过 46 场景，含六个并存场景，cleanupErrors=[]。Windows 输出可见，但目视发现 macOS 终端区域为空白。`1fd91cf`
+又确认实际 xterm 无障碍行含预期 Shell 标记、终端／画布尺寸非零，其 macOS
+GPU 截图仍为空白。输入文件副作用与已解析文字不代表 GPU 显示验收。[对应源码报告与产物](https://github.com/YondFane/uTerm/issues/32#issuecomment-6631153924)
+保留此缺口。人工键盘、输入法与系统剪贴板仍未执行。
+
+Tauri 并存 QA 保留原始 GPU 截图，再通过 `WEBGL_lose_context`
+令实际 WebGL 上下文丢失，要求 xterm 现有 DOM 回退显示相同 Shell 标记。两个应用进程在恢复、接管和输出期间保持同一会话／generation。
+
+source `1a30d7d90b08fedf9e16c0b695658a963b575037`／tested merge
+`321cce8300f8abc8e95b07e731baf40259b54885` 在 Windows Server 2025 x64 和 macOS 26.6.2
+ARM64 各通过全部 50 个真实应用场景，dirty=false、cleanupErrors=[]。两份报告均保留实际输入可写／Shell 提示符就绪、WebGL2 丢失及 DOM 恢复证据，对应 Mac 原拥有者返回与 Windows 观察者接管截图显示真实 Shell 输出。
+[报告、截图与保留的前次失败](https://github.com/YondFane/uTerm/issues/32#issuecomment-6646250139)
+均绑定对应源码。DOM 输出不代表 GPU 捕获／显示验收；该缺口及人工键盘、输入法、剪贴板、休眠／多屏和完整生命周期验收仍保持开放。
+
+共享流在没有新输出字节推进游标时，也交付输入角色变化。正在完成的读取可能在接管回复更新本地租约前，就以新所有者的 sequence 报告只读状态；此前仅按 sequence 去重会丢弃之后的拥有状态，使界面一直只读。共享流现在同时比较控制元数据，字节 sequence、确认规则与原始输出保持不变。
+
+真实 Core／宿主／PTY 回归复现修复前超时，检查四次查看端退出后通过原连接明确重新接管、角色更新有序、拒绝旧输入、宿主 PID／generation／网格不变、每次退出后实际写文件及准确关闭。`input-reacquire-core.json`
+记录 source／merge／平台及观察到的同游标纯控制变化。Linux 专项、完整 Core／FFI／Host／后端、408 项前端（十项跳过）、类型／生产及桌面构建、格式和文档检查通过；最终工作树还通过全部 53 个真实应用场景（dirty=true、cleanupErrors=[]）。
+
+source `29516c6dd78399d305099611cddebac7f825d46c`／tested merge
+`dcb2332a60bc712c0fb86ba6aa32bd946b88964a`
+的四份干净 Core／PTY 报告均通过，两原生架构各实际观察到一次没有新字节游标的纯控制变化；两原生应用接管／Vim／慢消费报告通过，macOS
+Tauri 通过 53 场景。Windows 应用 QA 更早停在短／长路径比较，UI 验收尚未完成。真实应用 QA 在失败时保留接管点击／只读诊断；平台报告在 #32 中绑定其实际 source／merge。Agent 认证／任务、人工输入法／剪贴板／鼠标及休眠／多屏仍待验收。
+
+M2 模拟使用自定义 Python Agent CLI 样例，通过正常 Agent 定义由真实宿主／Core
+PTY 启动。样例输出 alternate-screen、颜色及 bracketed-paste 序列；检查覆盖两轮字面参数／Unicode 字节、可恢复模拟错误与取消、客户端分离／重连、旧输出回放、拒绝旧输入、回调清理、退出码 7 及准确关闭。`m2-simulation-core.json`
+明确记录
+`mockAgentCLI=true`、`actualAgentProvider=false`、`actualOSPowerSleep=false`、`guiAcceptance=false`。客户端暂停由分离模拟，时钟驱动的租约检查模拟到期／续期；这是用户批准的 #31／#32 模拟范围，不代表真实服务认证或系统电源休眠测试。
+
+Linux 样例通过实际进程并核对保存的 UTF-8 文件。原生 SwiftTerm 解析／鼠标模式与前端 composition／剪贴板／渲染器模拟，与真实原生 Vim 和 Windows 窗口证据分开。可选的已安装 Codex
+0.163.0＋回环模型活动测试仍报
+`thread/read: list_turns is not supported yet`，保留失败，不计为模拟 CLI 测试通过；M3–M5 验收要求不变。
+
+### 共享保存状态
+
+开发客户端首次启动时，通过原有 WebView 导出工作区和设置。Rust 校验并保留原始导出后，在应用数据目录的
+`shared-state-v1`
+中管理规范存储。后续保存使用原子快照和 revision 检查；工作区与设置共用串行队列。原工作区／设置键保留供恢复，不再写入。编辑器草稿随后初始化独立共享存储，其他 WebView 偏好继续由原有模块管理。
+
+设置修改以发起视图为基线，旧视图不会还原其他已提交字段。退出会等待先前保存期间新增的写入，明确重载也使用同一队列。保存失败的设置作为草稿保留，关闭再打开设置也不丢失。**重新读取设置**读取外部修改并保留草稿，包括同字段冲突；**重试保存设置**明确写入草稿；**放弃未保存的设置**先重载再放弃。失败草稿未处理时仍阻止退出。这些草稿保存在内存中，不提供崩溃恢复存储。
+
+Linux
+x86_64 的十项真实 Rust 进程契约测试通过，覆盖同字段冲突草稿保留、提交后发布及重载后退出保护。真实隔离 Tauri／X11 运行验证了保存／冲突／重载／重试、正常退出重开、快照损坏恢复及原始／损坏字节保留。Windows／macOS
+job 新增运行该 QA 应用，保存平台窗口截图和 head／merge 记录；保存／恢复已在 head
+`56ce724043d0ea4ebdf8a929aef76ecbc9c9e313`、tested merge `e98be01cd195e6427c9824727a0221e596ea1132`
+验收通过（[旧客户端 CI](https://github.com/YondFane/uTerm/actions/runs/41448284276)、[原生 CI](https://github.com/YondFane/uTerm/actions/runs/41448284447)）。Windows
+Server 2025 x64 与 macOS
+ARM64 各上传十张真实窗口场景图及成功报告，清理无错误。[Windows 产物](https://github.com/YondFane/uTerm/actions/runs/41448284276/artifacts/13142824964)与[macOS 产物](https://github.com/YondFane/uTerm/actions/runs/41448284276/artifacts/13143776890)包含原始／损坏字节保留结果及源码元数据。QA 清理失败会使运行失败，并在保留已有场景图片的报告中记录。
+
+快照无法读取时进入恢复界面，不重置数据。**查看恢复副本**列出有效快照；明确选择恢复后，损坏字节仍保留。存储保留最多八份先前快照和原始导出。已有恢复副本必须与预期字节一致；摘要错误或备份路径被占用时，保存失败且不替换快照。恢复列表只列出文件名摘要与实际内容相符的副本。**设置 → 通用 → 导出旧版兼容数据**将当前工作区／设置和原始辅助数据保存为 JSON。此导出用于恢复。真实 Rust 进程测试使用与 release 一致、未修改的旧读取器读取工作区／设置，验证分屏／会话 ID 以及重复导入后的草稿／备份原始字节。尚未验证自动导入未修改旧客户端 WebView 存储的回退过程。导出刷新工作区／设置及已接入的 Git 收藏，其他辅助值仍为首次导入字节；替换前还需备份最新旧 WebView 配置及整个规范存储。编辑器／PDF、Git 收藏及 Agent 通知分别由 #34、#35、#40 迁移，完整安装回退仍由 #46 验证。
+
+操作人员准备回退时，可调用 Core `rollback.export`，传入当前 `expectedRevision` 和可选的
+`expectedDraftRevision`。方法在同一写入租约下读取规范状态、已接入的 Git 收藏及最新编辑器草稿，返回 schema1
+`RollbackArchive`，包含来源 revision、原始辅助字符串、所有当前草稿及逐文档旧格式候选。仅一个当前草稿时填入旧槽，草稿已清空时移除旧槽；多个草稿时留空并要求明确选择，全部草稿仍在归档中。现有界面的
+`legacy.export`
+保持原语义。导出不执行安装、恢复或自动批准降级；仍须保留完整数据备份并验证旧读取器，系统凭据存储及活跃宿主 endpoint 文件不属于此归档。
+
+Linux 通过33项定向存储／回退测试（忽略3项既有权限案例）、2项真实进程读取器测试、TS／Swift 生成契约和类型检查。覆盖最新 Unicode／BOM／CRLF 字节、多草稿及删除、过期状态／草稿 revision、参数错误、损坏／不支持的存储、写租约争用／重试、幂等及配置／来源不写盘。CI 记录
+`rollback-export-core.json`。真实 Swift C ABI 场景首次因草稿准备遗漏 `expectedDraftRevision`
+而失败，现为新文档显式传入 null，仍严格拒绝缺少字段；源码949e4c2的两种 Mac 架构已通过修正后的真实 C
+ABI 检查。
+
+`python3 -B scripts/client-upgrade-smoke.py` 从固定的已发布 `uTerm-v0.2.4` 源码准备历史 Tauri
+QA 客户端，使用仅与原生测试后继客户端共享的隔离标识。完整历史演练要求自有GitHub Actions
+Mac，因为未改动的历史系统适配器保留固定开发标签。保留全部原始源码哈希：仅两处启动／命令入口及明确记录的 QA 文件不同；不运行未修改的已发布安装器。历史 GUI、读取器、服务、源码清单与锁文件不改动；初始草稿输入及凭据／hook 引用明确使用测试数据。
+
+恢复的历史编辑器保持未保存草稿可见。恢复阶段只读核对真实xterm回放和可见CodeMirror文本，不隐藏编辑器或重选项目，因为两种导航都会触发该版本的自动保存。首次旧应用及两次原生阶段仍产生新PTY输出，报告分别记录新DOM输入和只读回放。首次输入等待真实历史xterm的`disableStdin=false`，因为textarea可能在连接启用输入前已创建。
+
+回归执行实际QA脚本及真实React、xterm和DOM状态，导航／保存副作用明确模拟。两种恢复路径须保留原文件和已存草稿；真实xterm引用核对禁用和就绪两种状态。原生交接测试包只能使用包内指定的私有临时数据目录，与隔离更新测试包相同。bdb56fc
+ARM确认Core旧草稿字节准确，但Foundation把文档根从`/private/var`改为`/var`，实际原生窗口仍显示磁盘文本。[Artifact13544688991](https://github.com/YondFane/uTerm/actions/runs/42302307767/artifacts/13544688991)保留两张真实原生失败窗口、DOM文本和UTF-8诊断，以及此前旧应用恢复证据。修正将逻辑草稿身份与已解析文件边界分开。三项Swift回归覆盖真实别名／同名前缀兄弟目录／越界、macOS临时目录别名，以及通过实际Core
+ABI恢复草稿并保留原文件字节；执行及完整回退仍需新来源Mac
+CI。原生内容冒烟也实际改指向所选别名，再经WebKit发起新读取、拒绝替代根目录，并记录`native-content-alias-root.png`；其21项检查和四张原始窗口须实际Mac执行，不由Linux检查推断原生通过。
+
+Mac 演练从自有回环服务下载原生 QA 包，校验固定一次性 Ed25519 清单和架构，替换前拒绝错误签名，并测试移走旧程序后的中断恢复。每次持久导出及窗口截图后，协调器杀死历史界面，不绕过其正常退出保护或删除草稿。真实旧应用重启后，再重复执行 Core 导入。原生应用恢复旧草稿，经真实 CodeMirror 窗口编辑并持久保存新设置，随后实际 SIGKILL、重开。明确回退旧程序，并把最新兼容数据写入其真实 WebView；未改动的历史读取器须恢复最新草稿／设置，保留同一活动宿主／generation。核对原文件及规范存储，归档每次交接前完整的规范测试数据备份；多草稿需要选择时拒绝自动选择。
+
+Client upgrade and rollback 在两种 Mac 架构运行，上传
+`upgrade-rollback.json`、源码／注入哈希、旧版／原生 QA 包、公钥清单／签名、规范备份、真实应用窗口原图及日志。Linux 通过两项中断／隔离测试、历史前端类型／构建及历史 Rust 编译；真实Mac执行及验收按来源记录在#46；这些本地检查本身不构成Mac验收。首次ARM
+run42282798468已构建并启动实际旧应用，但误将画布输出作为DOM
+textContent读取，标记检查失败。隔离QA现读取未改动组件的真实React
+xterm引用；实际React／xterm回归在DOM为空、缓冲区含换行输出时通过。失败窗口会截图，自有宿主退出等待端点删除。旧失败artifact保留。后续8f23169
+ARM运行验证真实历史PTY标记，但独立窗口探测失败；[artifact13537749822](https://github.com/YondFane/uTerm/actions/runs/42286080719/artifacts/13537749822)保留失败，没有成功截图。截图现复用编译后的所属窗口工具：自动选择须只有一个合格窗口，私有QA明确显示／聚焦窗口，失败诊断仅保留所属窗口元数据。截图前保留历史检查点，总报告列出已完成场景；修正结果继续按来源记录在#46。本流程仅演练私有手动包替换，不配置生产跨客户端更新源。实际凭据批准／hook 执行及系统 deep-link／登录项注册未作为已测项目；引用明确模拟，生产协议保持禁用。
+
+#47 汇总最终来源一致的证据和当前阶段缺口；两项任务均不授权合并或发布。Migration readiness
+audit 在迁移 PR #12 更新时或手动触发时读取 GitHub 任务／PR／分支状态及当前 head 的 workflow
+artifacts，核对准确源码／tested
+merge、干净报告、失败、不完整验收标志与 PNG 签名，并上传 migration-readiness.json。前置任务开放、CI 缺失／失败、产物过期或 tested
+merge 不一致均使门禁失败。报告清单不替代原图查看或任务验收；审计仅有仓库读取权限，不关闭 Issue、不合并、打标签、发布或改更新源。具备 GitHub 读取认证时，可运行
+`python3 -B scripts/migration-readiness.py --head SOURCE_SHA`，非零结果及 artifact 记录当前阻塞，不代表成功发版。
+
+Linux 及 Windows／macOS
+CI 中的 Rust 存储／FFI 测试和真实进程 TypeScript 兼容测试覆盖重复导入、冲突、损坏恢复、所有权和回调排空。新增真实 helper 的 C
+ABI 测试：阻塞二进制回调，同时从另一线程取消订阅或关闭，验证回调排空前借用上下文仍有效，且回调内重入被拒绝。此检查已在 Linux 及上述统一 head 的 macOS 双架构通过。Swift 桥接测试交由 macOS
+CI；Swift原生迁移及恢复交互的来源证据由#28／#46分别维护，与上述Tauri验收区分。
+
+两个旧客户端平台的 CI 也执行共享核心测试和生成契约的漂移检查，并将命令日志、源码 head、实际测试 merge
+SHA 和平台／工具链元数据上传为 `legacy-checks-*` CI artifacts。
+
+#### 共享编辑器草稿存储
+
+开发核心管理独立于工作区／设置的
+`editor-drafts-v1.json`，最多保存 100 个核对 revision 的文档。旧导入先保留准确原始字节，同来源可重复导入，不同来源不能覆盖更新草稿。文本及已保存文本限制与 JavaScript 的 2
+Mi
+UTF-16 码元一致，保留 BOM／换行。保留最多八份有效前序快照、16 份原始来源及无效恢复字节；来源满后拒绝新导入，相对路径拒绝绝对路径及父目录跳转。
+
+原生 QA 客户端通过**文件 → 打开文件…**使用共用 CodeMirror 和按项目恢复。已确认的未保存文本重开时恢复，恢复文本须明确保存后才恢复自动保存。保存保留根目录／链接、预期版本、BOM／换行检查，并等待草稿交付。编辑窗口没有只读强制关闭计时器；明确放弃等待已分发写入，保留其他写入者较新的草稿。内容只能保存所选文件，不能导入旧来源。源文件消失或不可读时，保留文本以只读方式显示并提示原因，关闭后仍在。
+
+原生文件窗口保留选定项目路径的写法作为Core草稿身份，包括`/private/var`别名。解析后的路径独立用于文件选择边界和窗口分组；选择器拒绝根目录外的目标及符号链接越界。从项目菜单、工具窗格、恢复和Git打开文件都保留该逻辑根路径。仅相同逻辑根目录及相对文件复用现有窗口，不静默合并不同别名下的已有草稿。草稿格式及revision／字节检查不变。读写使用窗口打开时固定的解析根目录，别名改指向不能重定向这些操作。
+
+队列合并等待文本、限制积压，保留 flush／重试错误，包括没有等待写入时的初始化失败。不同文档独立推进，同文档旧写入／删除拒绝；丢失回复须核对持久化数据。关闭停止交付，不承诺宿主写入回滚。Escape 经共用文档关闭保护后关闭原生文件窗口。原生退出冻结并确认全部内容文档，拒绝／超时／重载／过期回复时保留应用，取消退出则恢复已准备的文档；退出错误显示主窗口。
+
+恢复交付失败时，**重试恢复草稿**明确重试保留队列，不保存文件。文本留在编辑器，写入不自动重放，文件自动保存暂停至明确保存。Tauri 与原生内容编辑器共用该控件，重试失败仍保留错误和文本。
+
+主草稿快照缺失但已有备份／损坏文件时阻止自动导入。开发 API `editor.drafts.recovery.preview` 与
+`editor.drafts.recovery.restoreMissing` 提供校验备份预览及明确的缺失恢复。后者要求
+`expectedMissing: true` 并无覆盖安装，保留旧恢复／null 语义，以及损坏字节、原始来源和无效副本。
+
+**文件 → 恢复编辑器草稿…**预览保留文本，可复制完整文本而不写文件，或打开最新草稿；文件已打开时聚焦现有窗口。项目位置无法访问或路径拼写不同的草稿仍可复制。
+
+**文件 → 恢复编辑器备份副本…**预览校验过的备份，明确恢复所选副本并保留损坏字节。快照已变化时拒绝恢复，缺失快照使用无覆盖安装，取消不修改恢复数据。已打开编辑器保留当前文本，重新打开文件后读取恢复草稿。
+
+同一规范项目的原生可编辑文件按打开顺序组成 AppKit 窗口标签，重复打开文件会选中原标签。不同项目、只读预览及 Git 窗口不进入该可编辑分组。每个标签保留独立的文档桥接、恢复队列和关闭保护；冲突关闭后选择继续编辑，保留两份草稿与外部文件；关闭一个标签仍只保护并确认其自身文档。
+
+真实编辑器冒烟在原生标签组中编辑两份恢复文件，保持两个标签打开供 SIGKILL，重启后明确重开并检查准确草稿、标签顺序／复用、其他项目／预览隔离、冲突／继续编辑／放弃及剩余文件保存。Source
+`e06168dbe9491c3c862977dc931c6b7ad098a4ee`／merge `e48ce2f886987f92b17f77a42637f6b692bf6da2`
+的 ARM／Intel 两份报告均通过这些检查及深色窗口栏检查，保存
+`native-editor-tabs-checkpoint.png`、`native-editor-tabs-reopen.png`、`native-editor-tabs-conflict-640.png`。已查看本源码的重开图，原生标签栏与深色编辑器一致。[ARM 产物](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13395713575)与[Intel 产物](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13396400420)包含 editor-live.json、两阶段报告、系统／工具链及实际 WindowServer 图。#34已在用户批准范围内关闭；跨重启持久布局／窗口位置和共享PDF标记仍是#13明确记录的实现缺口，最后人工键盘／输入法／焦点检查已豁免，未宣称执行。
+
+#### Tauri 编辑器草稿迁移
+
+开发 Tauri 客户端在打开工作区前初始化共享草稿。旧草稿键保留不变，先校验带版本的 WebView 备份，Core 保留准确原始来源。带版本的确认记录将冻结字节与共享来源绑定，重启不会用旧草稿覆盖更新的共享文本；后续编辑、保存和放弃使用与原生编辑器相同的 revision 队列。
+
+旧来源不同时显示**恢复编辑器草稿**。**复制旧草稿原文**复制完整原始 JSON；**继续使用共享草稿**要求旧来源已归档，并保留共享文档。旧来源已变化时要求重新加载；存储／配额、备份或确认写入失败时保留旧字节并阻止迁移。共享快照损坏／缺失时可预览校验过的副本并明确恢复，过期选择不能替换较新的字节，不使用空数据回退。
+
+旧草稿文件仍有保留文档时，重新打开会加载最新共享草稿；恢复文本必须明确保存后才自动保存，其他保留文件在打开时恢复。旧键及带版本副本是恢复数据，不实时镜像后续共享编辑，完整安装版本回退仍由 #46 验收。
+
+#### 共享草稿验证
+
+head `c475567da41e6840dc76f1197f8b5ea183bb0865`、tested merge
+`c5c63cb41a2843cb70e0bc95fbb19511c535ff65` 的
+[原生 ARM／Intel CI](https://github.com/YondFane/uTerm/actions/runs/41566088010) 与
+[旧 Windows／macOS CI](https://github.com/YondFane/uTerm/actions/runs/41566088020)
+四 job 全通过。原生报告验证 NFD／中文／CRLF／BOM 准确字节、持久草稿、SIGKILL／重启、外部冲突、关闭保护、放弃、保存、640px 控件、经保护的 Escape 窗口关闭及源文件缺失只读保留。十二张
+`native-editor-*.png`
+还展示恢复选择、准确复制、取消、窗口复用、过期恢复拒绝、损坏字节保留和缺失快照恢复，已目视检查英文／深色、中文／浅色及备份预览图片；报告记录源码／merge／平台／工具链。产物：[ARM](https://github.com/YondFane/uTerm/actions/runs/41566088010/artifacts/13198977763)、
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41566088010/artifacts/13199306983)、
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41566088020/artifacts/13199842022)、
+[旧 macOS](https://github.com/YondFane/uTerm/actions/runs/41566088020/artifacts/13199777170)。
+
+两原生 job 的十三项 Swift 检查通过，包含经 C
+ABI 的备份预览及缺失恢复。两个 Tauri 状态 QA 报告通过且清理无错误；这些检查不代表 Windows 编辑器草稿 UI 接入已验收。Linux 前端 378 项通过、十项跳过，后端 129 项通过、十项忽略，核心／FFI、文件失败／重试、契约漂移、类型及桌面编译通过。二十一项真实 Rust 进程契约覆盖源文件缺失、无覆盖缺失快照恢复、预览及不变的 null 语义。真实原生应用的 DOM 输入与人工键盘／输入法／焦点验收分开记录。
+
+两原生架构的上述恢复控件均通过。两个 Tauri 客户端的十六个真实应用场景通过，包括旧来源导入、冻结旧键／版本备份、持久未保存文本、SIGKILL、重开准确较新草稿及明确 BOM／CRLF 保存。进程报告记录强制信号和重开正常退出，原始／草稿字节检查与四张编辑器截图在各旧端产物；已检查 Windows 恢复与 macOS 保存图片。Tauri 启动冲突／损坏恢复界面有真实 Rust／React 契约，仍需对应平台截图；标签／窗口、PDF 标注及完整人工编辑／焦点仍开放。
+
+### 共享 Git 与 Worktree 服务
+
+开发核心的 `git` 与 `worktrees`
+模块管理状态、差异、提交历史、分支／引用和 Worktree 规则。相同的十五个 Git 与四个 Worktree 操作使用
+`git.*` 请求及 Rust 生成的 TypeScript／Swift DTO。Tauri 保留原命令名和 Git 界面，委派相同函数。
+
+选择本地项目或 Worktree 后，原生 QA 应用的**文件 →
+Git…**在独立窗口打开共用 Git 面板。Core 按当前工作区 revision 解析选择，Git 请求绑定该仓库和项目，文件窗口不能调用 Git。差异／名称复制使用系统剪贴板；独立桥接避免仓库操作占用终端桥接。
+
+两个客户端支持相同的既有操作集合：
+
+| 操作                                         | 原生 macOS 入口                  | Windows 入口                   | 共享服务                                                                                       |
+| -------------------------------------------- | -------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------- |
+| 状态、工作区／暂存差异、提交详情／历史及对比 | 文件 → Git…                      | Git 检查器                     | `git.snapshot`、`fileStatus`、`diff`、`history`、`files`、`workingComparison`                  |
+| 分支目录、切换与远程发现                     | Git 树／右键菜单                 | Git 树与分支选择器             | `git.branch`、`branches`、`references`、`remoteBranches`、`switchBranch`、`switchRemoteBranch` |
+| 创建／重命名、上游、获取、拉取／更新及推送   | Git 右键菜单                     | 相同的共用 Git 右键菜单        | `git.referenceAction`、`branchAction`                                                          |
+| 回退选定文件                                 | Git 变更菜单                     | 相同的共用变更菜单             | `git.rollbackFile`                                                                             |
+| 建议／创建／列出 Worktree                    | Git 右键菜单与项目侧栏           | Git 右键菜单与项目侧栏         | `git.worktrees.suggestion`、`create`、`list`                                                   |
+| 确认／移除已登记 Worktree                    | 原生侧栏菜单及默认取消的 NSAlert | 侧栏菜单及默认取消的应用对话框 | `project.worktrees.delete` 及共享 Git 删除规则                                                 |
+
+创建提交／暂存不属于既有面板操作，提交行显示详情／历史。原生内容不能直接调用原始 Worktree 删除或全局恢复，由可信 AppKit 控件执行；Windows 使用应用对话框执行相同的受保护操作。
+
+写入前，已打开的可编辑文件窗口保存并冻结直到操作结束。文件冲突阻止 Git，保留文件和恢复草稿；Git 窗口在写入期间拒绝关闭。干净编辑器重新读取仓库变化，脏／忙碌编辑器保留文本。取消或超时不代表已分发写入回滚，重试前应检查仓库。Tauri 与 WebKit 均保留调用方忙碌／编辑器保护至实际已分发写入结束，再报告取消／超时／关闭错误，不交付迟到成功。仅收到原生取消确认不会解除保护；只读取消仍立即返回。
+
+`project.worktrees.refresh`
+按已保存项目发现仓库，带预期 revision 原子更新 Worktree 列表。两端对已登记项目使用相同规则：保留 ID／自定义名称、更新随分支命名的名称、保留有会话的缺失 Worktree、移除未被会话引用且不再发现的项目并保留有效选择。过期 revision 或 Git 发现失败保留已存状态；子目录项目不会把主仓库根目录列为子 Worktree。
+
+Tauri 后端独立于 WebView 状态保留排队／执行中的 Git、Worktree、本地文件写入及共享存储修改请求；执行期间正常退出明确提示拒绝。最终退出与新操作的准入共用一把锁，批准退出后不能再开始写入。已知只读查询不占用写保护，后台收藏／快照回复不会误拒绝最后一次退出。新增或未知方法仍受保护，批准后连新读取也拒绝。真实 Core 快照回复及已提交设置写入验证两种生命周期；新策略仍需自己的平台 CI。
+
+原生侧栏在项目下显示 Worktree，选择行后使用其目录；右键项目或 Worktree 选**刷新 Worktree**重新发现。Git 写操作在报告成功前同步绑定项目列表；若 Git 已完成而列表保存失败，错误会明确说明，应刷新项目而非盲目重复 Git 写入。规范存储下的 Tauri 项目 Worktree 更新也走同一 Core 操作，浏览器夹具保留兼容路径。
+
+保留字面目录末尾和 Unicode 分支空白，包括自动创建 Worktree 的来源分支。Windows 扩展驱动器／UNC 目标会转换为 Git 可用路径，无法保留点／空格末尾的扩展路径明确拒绝。真实 Windows 创建／脏目录拒删／删除回归已在 CI 通过。原生差异使用主题文本／画布颜色，中文浅色窄窗图片已检查。
+
+右键原生 Worktree 选择**删除 Worktree…**。原生确认默认取消；确认后保存并冻结可编辑窗口，以捕获的 revision 调用
+`project.worktrees.delete`。Tauri 应用内确认显示项目与 Worktree 目录，默认取消，并固定预览的快照，不采用队列随后更新的 revision；本客户端排队写入或外部数据变化后拒绝删除。**重新读取工作区**经编辑器保存／关闭保护读取已保存数据，再重新确认。删除错误保持到明确重试／重新读取；正常退出等待已分发删除。取消不保存或删除。两端委派同一服务。Core 按已存 ID 推导路径，拒绝过期状态、已保存会话引用、从目录内启动且仍运行的宿主会话／任务和 Git 脏数据。检查宿主不启动／重启它；无法读取端点则阻止删除。原生 Web 内容不能直接删除。如果 Git 已移除目录但元数据保存失败，错误要求明确**刷新 Worktree**。保护范围是已保存引用和宿主启动目录，不追踪 Shell 后来的
+`cd`，也尚未仲裁所有旧宿主客户端；完整所有权／取消验收仍待完成。
+
+草稿列表／文档读取仅对 `WRITER_BUSY`
+最多重试六次，共退避 620ms；关闭取消等待，写入和冲突不自动重试，首次打开失败可再次尝试。真实操作系统锁回归使用独立 Rust 进程，修正错误码前失败，修正后通过。QA 观察读取在既有三十秒期限内等待同一锁，并记录
+`observerBusyReads`，不会重试写入。
+
+#### 共享 Git 收藏
+
+两端分支右键菜单使用规范存储中的
+`git-favorites-v1.json`。收藏按真实 Git 公共目录识别，主仓库和 Worktree 共用。写入核对该仓库 revision；迟到读取不能覆盖更新的选择。分支重命名在 Git 完成后更新已读取的收藏，偏好保存失败保持可见。
+
+Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
+键、校验后的带版本 WebView 备份和 Core 来源归档。回执绑定旧字节与共享来源，重开不把旧选择重放到更新的共享收藏。不同来源在归档后提供**复制旧 Git 收藏来源**和**继续使用共享 Git 收藏**。旧来源无效且尚无共享条目时，须明确选择**保留旧来源并建立空共享收藏**。旧键并发变化要求重新加载；备份／配额／回执失败保留数据并阻止编辑。原生窗口只导入 Core 中冻结的规范旧来源，不能提交任意旧 WebView 来源；其文件窗口不能读写收藏。
+
+存储保留最多八份先前快照和十六份原始来源内容，最多一千个仓库、每仓库一千引用。无效／损坏／缺失数据及占用的恢复路径阻止替换，恢复文件保留。**重新读取 Git 收藏**在失败后明确恢复。只读等锁有界且关闭时取消，写入不自动重试。旧版导出按规范目录及原客户端路径键反映当前共享收藏，并保留原始归档字节，不执行已安装客户端降级。
+
+分支工具栏的**恢复 Git 收藏…**打开校验后的快照与原始来源预览，原生客户端也提供**文件 → 恢复 Git 收藏…**。默认动作为取消；显示截断时仍复制完整预览。原始来源可复制，不能直接替换收藏。**恢复所有仓库收藏**替换全局收藏快照，保留损坏字节和紧邻恢复前的有效副本。当前文件变化则拒绝写入并要求重新读取副本，缺失安装不覆盖新建数据。恢复成功后已打开的 Git 视图重新读取。Tauri 共用内容使用原生 clipboard-manager 插件，只给主窗口写文本权限，失败保持可见；纯浏览器示例保留 Web 剪贴板路径。复制失败不修改恢复数据。 应用开始退出后拒绝新恢复，已分发恢复的退出保护保持到确认。全局恢复位于可信应用，限定范围的内容可以请求原生对话框，不能读取或恢复其他仓库数据。
+
+#### Git 与编辑器并发验证
+
+已验收的 Git／Worktree 实现为 source `e06168dbe9491c3c862977dc931c6b7ad098a4ee`／实际 CI merge
+`e48ce2f886987f92b17f77a42637f6b692bf6da2`，父提交已核对为本源码与 release
+`ca65aa9ca76abcc510124427398789ba01635c4d`；这是 CI 临时测试合并，不代表 PR 已合入。[两个原生 job](https://github.com/YondFane/uTerm/actions/runs/41984445494)和[两个 Tauri job](https://github.com/YondFane/uTerm/actions/runs/41984445471)均以干净源码报告通过，[Java 矩阵](https://github.com/YondFane/uTerm/actions/runs/41984445509)及[Maven 六组合](https://github.com/YondFane/uTerm/actions/runs/41984445498)也通过。
+
+各平台 `git-operations-core.json` 记录真实 Git 进程、全部 19 个 Core
+JSON 方法、选中仓库／Worktree 隔离、工作区／暂存差异、过期引用／分支拒绝、检出冲突、定向回退、上游／推送及脏／干净删除。原生 macOS
+15.8.2 ARM64 与 15.7.9 Intel 各通过 35 项 Git／窗口断言，保存 16 张真实 WindowServer 图。Windows
+Server2025 x64 与过渡 macOS 26.6.2
+ARM64 各通过 53 个真实隔离应用场景，cleanupErrors 为空。source、merge、系统、架构与工具链均在报告中。
+
+产物：[原生 ARM13395713575](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13395713575)、[原生 Intel13396400420](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13396400420)、[Windows13396047301](https://github.com/YondFane/uTerm/actions/runs/41984445471/artifacts/13396047301)、[Tauri Mac13396081499](https://github.com/YondFane/uTerm/actions/runs/41984445471/artifacts/13396081499)。原生
+`git-live.json`、`git-operations-core.json`、Tauri `tauri-state-qa/report.json`
+及测试日志索引各场景。`native-git-favorites-writer-busy.png`
+证明独立 Rust 进程真实持锁、读取争用可见及释放后一次明确重读；独立的
+`native-git-bootstrap-writer-busy.png`
+证明启动错误遵循缓存应用语言并显示紧凑重试按钮，请求期间禁用、再次失败后仍可重试。两个自有持锁进程均退出 0，收藏字节保持不变。
+
+`native-git-cancel-frozen-editor.png`、`native-git-editor-conflict.png`
+与 Worktree 确认／拒绝图展示写入／编辑器保护；Windows
+`git-git-worktree-delete-dirty.png`、`git-git-write-quit-blocked.png`
+展示脏数据保留及实际在途 IPC 退出拒绝。依赖真实 Core 的 Tauri／WebKit
+abort／timeout／close 回归暂停真实 Git
+hook，保护保持至实际结束。已检查本源码的原生与 Windows 图片。旧失败及原产物保存在 #35，不当作通过结果。
+
+专项契约命令为
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test git_operations`，前端／传输检查为
+`pnpm test`，macOS 窗口流程为
+`bash scripts/macos-git-smoke.sh`。自动化使用真实 AppKit 控件和真实应用 DOM 事件，不宣称人工键盘／输入法验收。M3 文件／布局／PDF、已认证 SSH、完整运行面板及人工验收缺口仍按原标准保留，不宣称整个改造或发版完成。
 
 ## 项目官网
 
@@ -402,7 +860,7 @@ Ctrl+W）优先关闭当前文件标签，并通过现有冲突／草稿保护�
 
 后台本机会话发现会在每次尝试结束两秒后重试。连接超时不显示错误横幅，其他同步失败仍会显示。
 
-超时不会清除已保存的会话。
+超时不会清除已保存的会话。发现结果在写入队列内按最新状态合并，不能用轮询前的工作区覆盖期间新建的会话或选中项。真实 Core 进程回归挂起一次会话创建写入，再排队处理旧会话关闭发现，验证新会话及选中项保留，且无变化的轮询不写盘。
 
 #### 验证与限制
 
@@ -474,6 +932,93 @@ macOS 和 Windows 的普通 Shell 会话会识别子进程中的 Claude/Codex �
 - 认证支持 OpenSSH 自动选择、私钥文件/ssh-agent，以及在连接窗口输入密码。需要系统已安装 OpenSSH；Windows 可安装 OpenSSH 客户端可选功能。
 
 - 这些连接选项不捆绑 SSH 可执行文件、JVM 或新增运行时依赖。
+
+### 共享 SSH 配置服务
+
+开发客户端通过 `uterm-core::ssh`
+共用 OpenSSH 配置发现与解析。既有 Tauri 命令调用同一服务；`ssh.info` 与 `ssh.resolve`
+也提供只读 Core／FFI 结果及生成的 Swift／TypeScript 类型。发现每文件最多读取 1
+MiB，最多 128 个文件、16 层 Include，不执行 Match 规则；明确解析保留系统客户端 `ssh -G`
+行为、15 秒超时和输出大小限制。结果只包含端点元数据，拒绝密码／私钥内容字段。
+
+`uterm-core::ssh::paths`
+同时管理既有 SFTP 词法路径规则，Tauri 直接导入相同函数：POSIX／Windows 服务端根规范化、相对路径校验、组件包含及拼接。服务端规则与本地系统无关；保留盘符／斜线处理、Unix 字面反斜线、Unicode 名称、4,096 字节相对路径上限及原错误码。传输层仍在包含检查前校验根并解析服务端符号链接；这些辅助函数不授权连接，也不解析文件系统链接。
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh::paths::tests` 在 Linux
+x86_64／Rust1.99.1 通过两项检查，包括迁移的边界样例与准确 UTF-8 字节上限。`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh::files::tests -- --nocapture`
+通过四项实际 OpenSSH `sftp-server`
+子进程检查：冲突安全保存、符号链接／原文件保留、流式取消与明确覆盖、递归删除及根目录拒绝。这些通过管道使用真实 SFTP 子系统，不验证 SSH 认证、主机信任或网络重连。平台 CI 按实际源码保存 Core／后端日志，不宣称新增 FFI 或 JSON 路径端点。
+
+共享 `ssh::auth`
+服务管理密码引用绑定、临时凭据、记住／忘记和有界的一次性 askpass 服务。两端可以提供主机信任确认回调和凭据存储接口。共享系统适配保留 macOS 钥匙串、Windows 凭据管理器的服务名与引用；Tauri 继续提供既有应用标识和原生对话框。Redis／数据库凭据调用复用相同系统适配，不改变各自命名空间。凭据仍绑定连接与 OpenSSH 生效端点：重命名不使其失效，端点变化则拒绝复用；损坏凭据返回固定错误，不暴露原内容。
+
+两项 Linux `ssh_auth`
+集成检查使用内存凭据接口、真实 OpenSSH 配置解析和回环 askpass，覆盖目标变化、保留方式转换、忘记、损坏存储及代理密码拒绝。平台专属检查使用唯一 QA 引用，在创建前、写入后及删除后验证系统凭据；重复删除安全。SSH 接口仅将系统“未找到”映射为空，其他错误可见，Redis／数据库旧适配保持原行为。真实登录及平台证据见下方服务和原生验证。
+
+共享 `ssh::files` 与 `ssh::tunnels`
+服务管理远程根、串行安全写入、流式传输、取消／退出保护、监听就绪和所属 OpenSSH 进程。Tauri 的既有命令委派这些服务，保留原生选择器和进度通道。带代次的取消／停止拒绝过期请求，既有 Tauri 命令签名保持兼容；取消等待中的隧道也释放认证 future。退出等待取消时阻止新传输；放弃退出等待会释放临时阻止，让客户端继续使用。
+
+客户端最终关闭时，即使待处理读取仍持有远端根，也会停止所属 SFTP 进程，并拒绝迟到创建；不停止其他客户端的 SFTP 进程或已由宿主运行的 SSH 终端。Tauri 退出回调采用该清理，原有退出保护仍先执行。
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture`
+在 Linux 通过 21 项检查。真实隔离
+`sshd`／internal-sftp 覆盖 Unicode 传输、取消／断线后原文件保留、明确重连、主机密钥／CA、兄弟隧道与过期停止，以及持有远端根时的所属进程关闭。Unix 夹具需要
+`/usr/sbin/sshd` 和
+`ssh-keygen`；macOS 需非交互 sudo 启动隔离服务。断线可能留下隐藏上传临时文件，原目标保持不变，重试需明确执行；不宣称自动清理远端遗留文件。 TCP 代理和隧道回显夹具在接受连接后显式恢复阻塞模式，并保留读超时，避免 macOS 继承非阻塞标志造成提前 EOF。
+
+`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY`
+通过公开 Core 客户端驱动真实服务。源码 `721fd5ae84ac1c80694cea78b6eb9b72d26d5362`／tested merge
+`5e4f2fc737a07b850408d16bfcdbff1d2d1b085f` 的 Windows AMD64／macOS ARM64 报告在
+[CI 42022428501](https://github.com/YondFane/uTerm/actions/runs/42022428501)
+通过，dirty=false、cleanup=true。报告为 `ssh-core-live.json`，artifact 分别为
+`legacy-checks-windows-latest-721fd5ae84ac1c80694cea78b6eb9b72d26d5362` 和
+`legacy-checks-macos-latest-721fd5ae84ac1c80694cea78b6eb9b72d26d5362`；只代表服务验收，该次整体界面流程失败。
+
+服务报告的 13 项检查通过：真实密码／系统凭据、过期保存、Unicode 字节一致、真实密钥 ProxyJump、主机密钥变更拒绝、正确／错误 CA、带代次取消、断线覆盖／重连、兄弟隧道、退出、首次主机拒绝及批准后实际认证、一次性响应和秘密排除。服务报告不代替窗口截图验收。
+
+Windows 夹具下载固定版本且校验摘要的 Win32
+OpenSSH，以所属 SYSTEM 任务运行，创建临时账户并设置生成密钥的明确 ACL；仅在一次性 GitHub
+CI 用户配置前加入唯一别名，退出恢复原字节。macOS 使用短期账户和主目录，并仅在既有 SSH 访问组加入／移除自身账户。不更改生产 SSH 服务。测试日志在服务关闭后检查秘密排除，避免 Windows 独占日志句柄。
+
+`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py`
+在真实隔离 Tauri 应用运行保存配置、已认证 SFTP 列表／预览、远程终端和实际退出／重开四项 SSH 场景，并保留既有所有权／恢复检查。终端必须是共享快照选中的可见面板；等待附着确认运行后才读取宿主端点，再确认 SSH 主机／连接身份；重开验证相同会话、代次、宿主 PID 和回放。隐藏本地终端的输出不计为远程验收。 所有权夹具通过项目主页已启用的可见按钮创建终端，等待运行时就绪，不点击关闭的侧栏弹出控件。
+
+SSH 输出截图实际触发应用已有的 WebGL 上下文丢失回退，要求 DOM 渲染行可见且包含远端返回值，再等待绘制；报告记录原始渲染器、触发方式及回退结果。这验证真实应用的 DOM 回退输出，不代表默认 GPU 画面已通过。空白画布、隐藏的无障碍文本或单独运行报告不能充当可见输出证据。
+
+截图携带源码／平台元数据；Windows 助手通过 Win32
+PrintWindow 捕获实际所属 QA 窗口，逐图记录方法、尺寸和可见采样，屏幕复制回退必须未被遮挡，并恢复置顶标记。SSH 阶段以应用主进程正常退出为准，随后实际重开并核对保留宿主；测试最终停止所属宿主后还要求日志管道自然关闭，未关闭则失败。进程报告分别记录阶段结束和宿主清理后的状态。各源码的完整平台报告、有效图片和剩余项见
+[#36](https://github.com/YondFane/uTerm/issues/36)。人工选择器／输入法未执行；Unicode 样例位于
+`shared/fixtures/ssh-qa.json`。
+
+### 原生 SSH 工作区
+
+隔离原生 QA 应用的**文件 →
+SSH 连接…**打开连接窗口；侧栏的 SSH 连接行也可进入。选择所属工作区的已有配置，或添加主机地址／OpenSSH 别名，填写端口、用户名、认证、远端系统与文件根。别名模式端口留空时继承系统配置；**显示生效配置**只解析，不建立登录。
+
+先**保存连接**，再选择**新建 SSH 终端**或**连接文件**。保存使用版本检查，冲突保留当前表单；新凭据写入后若配置保存失败，会尝试清理新引用并显示失败。恢复已有 SSH 终端只重新附着，不自动授权新登录；新建或分屏是明确的登录操作。
+
+文件区域支持目录浏览、隐藏项、只读文本预览、上传、明确确认的覆盖、下载和取消；其他预览类型需下载打开。选择本地文件期间也保护窗口关闭。后台操作有代次，过期取消／停止被拒绝；进度字节通过十进制字符串跨 Rust／Swift／TypeScript 传递，避免 64 位精度丢失。端口转发只绑定本机回环，规则需明确启动，可单独停止。开始传输会清除旧反馈；选择另一配置或新建草稿会清除上一配置的传输状态。
+
+密码保留为应用本次运行期间有效的内存引用，或存入 QA 应用自身的系统凭据命名空间。原生 SSH
+Core 客户端跨终端传输重建继续保留，临时凭据不丢失；退出应用时关闭该客户端并清除这些引用。未知主机的密码认证由真实原生指纹确认框处理，取消拒绝连接；私钥／自动认证保留 OpenSSH 的严格已知主机策略。关闭 SSH 窗口或退出前处理配置草稿、传输和转发，已由独立宿主运行的 SSH 终端继续保留。
+
+#### 原生 SSH 验证与限制
+
+Linux 客户端契约覆盖配置 CAS、已有会话／依赖保留、秘密排除、明确恢复及一次性信任。共同的
+`shared/contracts/ssh-progress-v1.json` 在 Rust／Swift／TypeScript 实际 JSON 边界检查 `2^53` 以上及
+`u64::MAX` 的十进制字符串，避免只验证类型名称。
+
+`bash scripts/macos-ssh-smoke.sh`
+使用隔离原生 QA 应用、临时账户／密钥／known_hosts 及真实 OpenSSH。源码
+`721fd5ae84ac1c80694cea78b6eb9b72d26d5362`／tested merge `5e4f2fc737a07b850408d16bfcdbff1d2d1b085f`
+在 [CI 42022428571](https://github.com/YondFane/uTerm/actions/runs/42022428571)
+的 ARM64 和 Intel 均通过，dirty=false、cleanup=true。
+
+两份 `native-qa-macos-15[-intel]-721fd5ae84ac1c80694cea78b6eb9b72d26d5362` artifact 包含
+`ssh-live.json`、`ssh-service-core.json`、工具链／测试日志和十张真实 WindowServer 截图。场景覆盖配置冲突保留、SFTP 上传下载、可见传输进度／取消、实际转发、密钥及密码远程 PTY、退出附着／回放／独立关闭、中英文／深浅主题和 760px 窗口。真实 NSAlert 分别拒绝和批准主机，并在批准后成功认证；记住／临时转换、旧凭据删除和终端传输重建后的临时密码重连也通过。
+
+目视检查确认密码终端输出及原生信任批准后的连接窗口。新源码仍需各自的 CI 验证，不能沿用旧 SHA 的通过。人工选择器、输入法及 macOS
+14 交互未执行；不以最低部署目标或构建代替验收。#36 按源码记录实际验收，与合入／发布状态分开。
 
 ### 快速连接与主机搜索
 
@@ -584,28 +1129,85 @@ ACL。冲突检查采用乐观校验，不能阻止其他服务端程序并发�
 
 #### SSH 与 SFTP 检查
 
-- Windows 自动化检查：17 项前端专项测试通过，覆盖快速地址校验、临时连接清理／保存、主机筛选、跳板机与规则存储、Redis 配置引用、转发保存失败与显式启停，以及既有 SSH／SFTP 保护。全部 102 项常规后端测试和 26 项本地服务测试通过；六项可选后端测试仍忽略。进程模拟覆盖监听就绪、启动退出、超时、取消与清理，不代表真实 SSH 转发连接验收。
+配置解析、路径、认证／凭据和实际服务的命令及来源绑定报告见上方共享 SSH 服务；Swift 原生窗口、截图及未执行项见原生 SSH 工作区。服务报告与真实界面报告分别验收，不以模拟进程或构建代替已认证连接。
 
-- Windows 全量前端运行通过，241 项通过、11 项跳过。修改文件格式、TypeScript、国际化、文档检查及隔离桌面构建通过。
+`pnpm test`、`pnpm test:backend`
+及 Core 检查覆盖快速地址校验、临时连接保存／清理、配置升级、工作区／会话隔离、远端草稿身份、恢复时仅附着、凭据目标绑定与失败保存清理。进程夹具覆盖监听就绪、启动失败、超时、取消及所属清理；真实服务另覆盖认证、证书、路径边界、冲突保存、流式传输、取消覆盖、断线重连和兄弟隧道保留。
 
-- 隔离 Windows 应用（`sh.uterm.desktop.qa.sshredesign`）验证了原生连接表单、默认自动认证、“仅保存”返回零会话概览、生效 OpenSSH 地址、按需连接前保持未连接的远程文件面板，以及独立的 SFTP 连接进度和失败反馈。检查使用回环地址配置，没有连接已成功认证的远程服务。真实 Windows
-  SSH/SFTP 认证、Credential Manager 及重设计界面的 macOS/Linux 验收仍待完成。
-
-- 隔离 Windows 应用（`sh.uterm.desktop.qa.sshp1`）针对不可用的回环端点，检查了快速连接创建、临时标记、保存连接、显式启动转发和独立失败反馈。重开后保留规则且没有自动启动，并目视检查了 640×420 下的连接标题、转发规则和可滚动的跳板机表单。成功转发、真实跳板机、密码转发及重设计界面的 macOS/Linux 运行仍待验收。
-
-- 验证：macOS 自动化测试覆盖数据升级、连接/会话隔离、分组、目标校验、远程草稿身份、恢复时仅附着已有会话、排除本地工具及限制进度更新频率。真实系统 SFTP 服务测试覆盖中文名称、安全保存、冲突、根目录越界/链接拒绝、文件操作、流式上传下载、取消覆盖及临时文件清理。
-
-- 隔离原生应用（`sh.uterm.desktop.qa.ssh`）连接了回环地址上的 OpenSSH 服务，验证主机指纹确认、远程 Shell 输出、退出重开后的附着与回放、独立关闭分屏、文件编辑、冲突保留、上传/下载字节一致、文件通道重连、传输进度、取消清理及传输退出保护。
-
-- 连接与密码验证另包括：macOS 上 187 项前端及构建工具测试、32 项本地服务测试、56 项常规后端测试和六项 Redis 专项测试通过，覆盖旧选项序列化、版本 6 数据升级、无效字段/明文凭据拒绝、端口/用户/密钥参数分离、凭据目标绑定、保存失败清理、Redis 隧道完整配置，以及需认证的一次性 askpass、消息上限、指纹批准/拒绝和意外提示拒绝。
-
-- 隔离原生 QA（`sh.uterm.desktop.qa.sshauth`）使用真实系统 OpenSSH 和可丢弃的回环密码服务，验证指定端口/用户名、别名继承/HostKeyAlias、密码 SFTP 读取及中文文本保存、终端输出/重连附着、Redis 隧道 PING 和数据读取、重开应用后的 Keychain 保存/读取、凭据移除、临时密码重启失效，以及原生主机指纹窗口的批准/取消。
-
-- Windows 客户端/服务端、Credential Manager 和 Linux 运行仍未验证；密码模式不支持跳板机及 OTP。
+系统凭据使用唯一 QA 命名空间，检查创建前／保存后／删除后读取和重复删除。密码只经有界、需认证的一次性 askpass 交付；不写入工作区导出、状态摘要或测试日志。密码模式不支持跳板机及 OTP。Linux 原生图形界面、人工选择器／输入法及最低 macOS 版本交互尚未验收。
 
 当前 SSH 认证选项只增加代码，不增加运行时依赖。当前发布安装包体积尚未测量；隔离 debug 应用构建仅用于验证，不作为安装包体积估算。
 
 ## Redis 连接与工作台
+
+### 共享 Redis 服务
+
+`uterm-core::redis`
+管理连接／凭据绑定、TLS／SSH 传输、二进制 Key／成员身份、有界查询和只读／写入／TTL／冲突规则。Tauri 提供应用标识和既有 SSH 认证适配，保留原生 CA 选择器与应用退出。克隆的状态共用连接、正在连接及草稿保护；关闭后拒绝迟完成握手，取消认证会释放连接名额和套接字。既有凭据命名空间及连接配置兼容。
+
+Core
+JSON 接口返回操作编号／generation，不让调用方阻塞等待 Redis 读写；最多接收八个运行中或未读取的业务结果，断开、写入开关及草稿／退出控制使用独立容量。结果列表不含值或参数，读取校验 generation，已完成结果仅可消费一次。
+
+配置保存／移除采用 revision 校验，拒绝活跃或有草稿的配置。退出时冻结新操作，恢复后保留隐藏草稿保护。关闭客户端会排空已取消异步任务并释放所属套接字及 SSH 进程，不重试结果不确定的写入。
+
+隔离原生应用从侧栏“Redis 连接”或**文件 →
+Redis 连接…**打开工作台，通过文档作用域 transport 复用连接表单及工作台。临时密码绑定规范化配置值，修改未连接目标后重建工作台，不沿用旧密码；配置冲突保留输入。
+
+共享 Redis 错误处理显式保留结构化错误码，不改变通用错误字符串格式；即使配置冲突消息不重复错误码，表单仍保留输入并提示重新读取。
+
+关闭窗口仅隐藏并保留连接／草稿；退出时冻结界面、检查进行中的操作并确认是否放弃草稿，取消退出后恢复界面及草稿保护。CA 选择使用 AppKit，不接受内容页提供选择器路径。语言／主题跟随共享设置，打开窗口不保存默认值。
+
+#### 共享服务验证与限制
+
+Linux x86_64／Rust 1.99.1 使用真实 Redis
+7.4.7／TLS 和 OpenSSL，通过全部 11 项 Redis 服务回归，覆盖二进制值、TTL、过期快照、只读保护、TLS 名称／CA 拒绝及不重试不确定写入。两项公开平台端口回归覆盖关闭后迟完成认证及取消认证。完整 Core／FFI、宿主、Tauri 后端（41 通过／2 忽略）、前端（419 通过／10 跳过）、类型、生产／桌面构建及契约检查通过。
+
+另有五项异步／契约回归通过，覆盖结果背压时仍可断开、generation／单次消费及参数不回显、隐藏草稿退出／恢复、认证中关闭、配置 CAS／密码拒绝及精确文本／二进制 JSON。关闭时排空已取消任务后，认证／关闭竞态连续 20 次通过。TypeScript 契约数据检查通过；源码
+`7306f74`／tested merge `5bc1ec99a1e61007dc75687a644087011556bc69` 的 macOS
+ARM64 和 Intel 均通过 Swift 精确值、实际 C ABI 保护以及真实写锁的读取退避／变更立即拒绝检查。
+
+`pnpm test:redis`
+明确启用七项真实服务检查，分别使用临时回环服务；普通 Core 套件运行其余四项服务及两项平台端口检查。`node scripts/redis-core-smoke.mjs /绝对路径/临时证据目录`
+记录工具链、实际测试名称、日志、源码／merge SHA 及工作区状态；共享 Redis
+CI 构建经校验的 7.4.7 源码及 TLS 并上传报告。原生 Redis 和平台凭据证据归档于
+[#39](https://github.com/YondFane/uTerm/issues/39)，单独的服务测试不代表界面已验收。
+
+Linux 管理页回归覆盖配置冲突、密码排除、模态冻结／恢复、配置键顺序及目标修改后清除旧密码；连接表单与原生草稿保护在缺少
+`randomUUID` 的自定义协议环境使用安全随机 UUID。
+
+`bash scripts/macos-redis-smoke.sh` 需要 macOS 图形会话、Homebrew 和 Python
+3，仅启动所属临时回环 Redis，应用退出后再次核对数据，记录六张 WindowServer 图。Tauri 验证记录六个真实 Redis 场景。Windows 使用社区 redis-windows
+8.10.3 Cygwin 便携归档，并校验 SHA256
+`8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e`；macOS 记录实际 Homebrew 版本及二进制摘要。两种验证均不安装 Redis 系统服务。
+
+Redis 验收使用源码及实际测试提交 `940f8d130114c366077015d82bb33114e2734fb1`；工作流通过
+`workflow_dispatch` 直接测试任务分支，并非 PR 合成 merge。原生 Redis 检查在 macOS 15.8.2
+ARM64／Redis 8.10.3 和 macOS 15.7.9 Intel／Redis
+8.10.1 通过。两份原生报告各记录六张 WindowServer 图、退出码 0、干净源码工作区及应用退出后再次核对的数据。
+
+Tauri 在 macOS 26.7.2 ARM64 与 Windows Server 2025 x64 通过，均使用 Redis
+8.10.3。每份报告包含 63 个成功应用 QA 场景，其中六个使用真实 Redis，清理错误为空。独立服务报告核对最终数据、所属进程已停止、证据可读及凭据未泄露。24 张 Redis 图均已目视核对。产物：
+[原生ARM](https://github.com/YondFane/uTerm/actions/runs/42143907577/artifacts/13469139024)、
+[原生Intel](https://github.com/YondFane/uTerm/actions/runs/42143907577/artifacts/13470210542)、
+[Tauri Mac](https://github.com/YondFane/uTerm/actions/runs/42143901906/artifacts/13469443317)、
+[Tauri Windows](https://github.com/YondFane/uTerm/actions/runs/42143901906/artifacts/13469723539)及
+[Linux服务测试](https://github.com/YondFane/uTerm/actions/runs/42143911635/artifacts/13468882766)。
+
+Intel 整个 job 和 Native 工作流因单独的数据库编辑器输入检查失败，该问题由
+[#38](https://github.com/YondFane/uTerm/issues/38#issuecomment-6674618606)
+继续跟踪；其独立 Redis 及桥接检查通过。Redis 验收不代表整个 PR 或迁移通过。先前失败及修正保留在
+[#39完成证据](https://github.com/YondFane/uTerm/issues/39#issuecomment-6674752428)。QA 等待控件可见、可用后只点击一次，不重试服务端写入；Python 辅助模块以
+`-B` 导入，保留干净工作区检查。
+
+扩展场景浏览含 20,001 个成员的真实列表，每页仅渲染及返回 200 行；超过 10,000 项上限时没有编辑快照，成员修改／删除控件保持禁用。最终核对大列表未改变。另用 401 个可编辑列表成员，每个完整页面必须仅渲染 200 行。先取消再确认删除索引 400，独立核对剩余末项，将 TTL 改为 1800 秒，并先取消再确认删除另一 Key。最终服务检查核对剩余 400 项、过期时间及未改变的二进制相邻值。在有草稿时取消真实断开及应用退出，再检查连接／草稿保留。原生 QA 截取实际退出警告并激活其取消按钮；此自动化操作与 #42 的人工键盘／输入法验收分别记录。上述源码的这些自动平台场景已通过；#42 人工验收未执行。
+
+无需人工检查的任务在实现及源码绑定的自动平台证据满足验收条件后即可关闭。#39 不等待 #42 单独要求的人工交互检查；缺少实现、报告或截图时仍保持开放。
+
+平台专用 Rust 测试及扩展应用检查仅在 macOS 钥匙串／Windows 凭据管理器中使用唯一 QA 引用，验证二进制读写／替换不改变相邻条目，仅凭已保存引用认证真实 Redis，拒绝目标变化，删除后拒绝再次使用。条目不存在时报告缺失，权限和其他访问错误仍返回失败。Linux 不运行 OS 凭据场景；macOS／Windows 检查已在上述源码通过，Linux 结果不能替代 OS 凭据证据。
+
+当前 Linux 通过 Core／FFI、全部 11 项真实 Redis／服务回归、后端（41 通过／2 忽略）、前端（419 通过／10 跳过）、类型及 QA／桌面构建。共用
+`dist`
+的构建串行执行，避免嵌入资源时被另一构建移除。证据扫描在所属 SSH／Redis 服务关闭后执行，对暂时独占句柄有界等待；持续不可读或发现密码时写失败报告。Key 导航先打开实际抽屉，并要求目标行位于屏幕内。人工选择器、键盘／输入法及其余 M4／M5 验收仍待完成，不能由自动 Redis 验收替代。
 
 ### Redis 连接配置
 
@@ -782,6 +1384,44 @@ Redis 值及编辑草稿不写入本地存储。切换所编辑的值、DB，或
 - 最终原生检查另验证了重开后的凭据读取、重连只读重置、TLS 经 SSH 隧道的连接测试及对话框按钮布局。Windows/x64 及签名安装包体积未测量。
 
 ## 文件与版本控制
+
+### 共用内容调用
+
+文件组件通过 Tauri 与 WebKit 适配使用同一内容契约。每个请求持有参数、文档 ID 和操作 ID；方法／事件允许列表和 32
+MiB
+UTF-8 上限在交付前检查。超时、取消、卸载及文档变化会抑制迟到交付并移除订阅。已分发的写入保留调用方保护，直到 Rust 完成；取消不会回滚写入。共用编辑器／预览组件不直接调用 Tauri。
+
+在原生QA中，选择本地项目后，通过**文件 → 打开文件…**打开共用CodeMirror／HTML／PDF内容；文本编辑和恢复使用受保护的可编辑窗口，预览窗口保留只读模式。临时 WKWebView 只加载清单内包资源、接受主文档消息；宿主拒绝过期文档身份、其他根目录及只读预览写入。字号使用核对 revision 的共用设置；静态 HTML 不能执行脚本或加载外部资源，此预览不提供 PDF 标注控件。可写编辑器和交互证据分别记录在已关闭的#34／#42；原始缺口和用户批准的人工豁免继续在#13可见。
+
+source `8a72b00754c5580150546ea2ae104f5166e04a39`／tested merge
+`ea3895ab1d8db65ad59159fc45f3deff7326baf6` 的
+[Native CI](https://github.com/YondFane/uTerm/actions/runs/41966239836) 在 macOS 15.8.2
+ARM64 和 15.7.9 Intel 通过，使用 Xcode 16.4、Swift 6.1.2 和 Rust 1.99.1。
+`bash scripts/macos-content-smoke.sh`
+的 19 项内容／生命周期断言全部通过：真实 CodeMirror／HTML／PDF 渲染、准确拒绝码、作用域草稿、字号持久化、文档重载、原生菜单／加载中关闭、迟到退出回复与超时保护。Swift 资源与退出保护检查也通过，应用包包含前端资源及许可声明。
+
+[Tauri CI](https://github.com/YondFane/uTerm/actions/runs/41966239844) 在 Windows Server 2025
+x64 与 macOS 26.7.2
+ARM64 各通过 53 个真实应用场景，源码干净且清理无错误。实际文件树打开临时 HTML／PDF、绘制 PDF 画布、关闭预览并恢复编辑器。
+`preview-resource-isolation.json`
+记录自有回环 HTTP 观察器的禁止请求为零、清理成功。已目视原生内容与 Windows
+HTML／PDF 截图，报告、图片文件名和 artifact 链接见
+[#33 验收](https://github.com/YondFane/uTerm/issues/33#issuecomment-6650215412)。
+
+`pnpm test` 中，两适配还通过真实 Rust／Git checkout
+hook 的取消／超时／关闭检查：写入结束前调用方持续受保护，核对最终分支／文件字节并抑制迟到成功。协议检查覆盖错配／乱序回复、迟到订阅、写入失败、立即取消读取、卸载、上限及自定义协议 ID。Windows 前端 407 项通过、11 项跳过，macOS
+408 项通过、10 项跳过。测试环境、真实应用操作与未执行的人工输入法／焦点检查分开记录。#33 未使用模拟豁免即完成验收；#34–#37现已按记录范围关闭，M3
+#17由用户以not_planned关闭；原始布局／PDF／Windows面板缺口仍在#13。早先PDF、工作区／路径及输入控制失败保留准确源码报告。
+
+### 共用本地文件服务
+
+本地列表、读取、保存、复制、文件操作和搜索共用 `uterm-core`
+中的 Rust 服务；Tauri 保留现有命令名及系统显示文件／退出适配。根目录限制、UTF-8／BOM／换行、摘要冲突、原子保存和有界预览语义保留。强制保存只覆盖版本冲突，不能让只读的混合换行文件或 PDF 变为可编辑。
+
+原有十三项文件服务测试改由核心执行。Linux
+x86_64 的七项真实进程契约测试通过，含文件 CAS、原字节保留、错误参数和根目录／链接越界；这些检查不等于原生编辑器交互验收。原生文件预览保持只读；独立可编辑窗口和共享恢复有各自#34／#42证据，历史客户端根路径兼容及完整回退仍由#46验证。已有WebView草稿来源保留原所有者及路径。抽离提交 head
+`2f777f1824f203cba9d4654b3ec3f70c43c9fb74`
+的[原生](https://github.com/YondFane/uTerm/actions/runs/41425620871)及[旧客户端](https://github.com/YondFane/uTerm/actions/runs/41425620777)平台 CI 已通过，不代表后续内容改动也已验证。
 
 ### 文件树中的 Git 变更颜色
 
@@ -1339,6 +1979,81 @@ Silicon 原生 Java 8 使用 Zulu 外，其余采用 Temurin。归档版本、�
 `node scripts/java-components.mjs`，通过 curl 与厂商元数据刷新清单；脚本先对照 Apache
 SHA-512 校验 Maven，再记录 SHA-256。
 
+### 共享 Java 服务验证
+
+开发中的 `uterm-core::java`
+负责既有 Java／Maven 配置、JDK 注册与检测、有界 POM／主类扫描、Wrapper 解析和任务启动规则。版本化
+`java.*` Core／FFI 调用及生成的 TypeScript／Swift
+DTO 共用该服务。Tauri 保留 IPC、原生选择器、变更通知和应用目录／helper 适配。
+
+在原生 QA 应用选择本地项目或 Worktree，再通过**文件 →
+Java 构建与运行…**打开窗口，编辑模块／JDK、全局／项目 Maven 配置、profiles 及字面 JVM／应用参数；临时环境变量不保存。窗口提供打包／测试／安装／运行、任务历史、只读搜索／复制／跟随日志、停止／强制停止及有序重新运行。保存固定已读取 revision，冲突时保留草稿。关闭会提示未保存配置并分离任务；正常退出会拒绝忙碌运行操作。选择器可选 JDK／Maven 路径或项目内 JAR。
+
+Spring
+Boot 开发模式按插件的 Plexus 规则引用参数，保留内嵌单／双引号及字面反斜杠。插件会丢弃空／纯空白参数，并替换换行／制表符；共享服务在启动宿主或解析 Maven 前拒绝这些值。两个客户端显示一致的本地化**请使用 JAR 模式**提示并保留配置值；JAR 模式仍直接传递应用参数，包括空字符串。
+
+Windows 开发运行的 Maven 进程使用 `-Djdk.lang.Process.allowAmbiguousCommands=false`，让 Spring
+Boot 派生的 Java 进程保留内嵌引号及结尾反斜杠。此选项限定在开发运行目标。
+
+`java-build-v1`
+配置／注册表格式、默认值及根目录键保持。更新后的客户端在配置 CAS 或注册表替换前获取系统写锁；争用需明确重试，过期或损坏数据保留。只读查询不创建配置、不启动宿主，也不占用写入退出保护。停止同时校验任务族和 generation。保存、注册及任务准备继续受保护。
+
+Windows
+Java 步骤的程序、工作目录或参数包含非 ASCII 字符时，新宿主启动隔离 UTF-8 子进程，委托所选 JDK 自身的
+`jli.dll` 启动器执行，宿主进程不加载 JVM。JDK
+8 需要独立启动目录布局：执行器通过文件硬链接（跨卷时复制）将所选已安装 JDK 镜像到任务专属缓存，在这些准确运行文件旁启动带 manifest 的子进程，不安装／下载 JDK，也不修改所选安装。镜像上限为 32,768 项、2
+GiB 和 32 层目录，拒绝 reparse
+points。父／子进程共用读锁保护活动缓存；正常结束移除缓存，之后启动会清理超过一分钟且已释放的孤立缓存。Windows 回归检查活动所有者保护、孤立清理、深度拒绝及原文件保留。JDK
+8 子进程在用户 Agent 与主类前加载小型内嵌兼容 Agent，在 Java 8 提前按区域设置解码后恢复原始 UTF-8
+VM 属性和所选 JDK 的系统 URL
+classpath，再为启动器参数选择 UTF-8。修复后的搜索路径按启动器顺序保留用户 Agent
+JAR，使后续 premain 类仍可加载。运行时 Agent 不保存用户参数，版本化输入只在进程内存传递。启动路径必须有 ASCII 相对或已有短路径表示，否则 helper 报告
+`JAVA_UTF8_AGENT_PATH_UNSUPPORTED`；需要修复 classpath 的非 URL 自定义系统加载器也会明确拒绝。应用文件编码仍可配置。有界匿名 stdin 管道传递字面参数，不增加参数／环境文件或 Shell 插值。子进程保留任务控制台和进程树生命周期，返回实际 JVM 退出码。ASCII 步骤继续直接启动 Java。Java
+8 要求应用数据缓存路径为 ASCII：JVM 在 premain 能修复区域解码路径前就加载原生 ZIP 支持。缓存路径包含 Unicode 时，在启动前明确报告
+`JAVA_UTF8_JDK8_CACHE_PATH_UNSUPPORTED`
+并移除自建镜像，保留所选 JDK。相对启动库路径未解决真实 Windows 失败。此限制针对应用数据，所选项目目录仍可包含中文。新 Windows
+Java 任务要求
+`java-utf8-launch-v2`，旧活动 helper 提示升级，不终止已有会话／任务；新 helper 同时声明 v1 以兼容旧客户端。本地回环协议回归验证 v1 单独存在时拒绝 Unicode 路由，普通任务能力探测仍可使用。Unicode 路由要求 Windows 支持进程级 UTF-8，且 JDK 与子进程架构匹配。
+
+`bash scripts/macos-java-smoke.sh` 使用 JDK
+21 编译临时 JAR，操作真实原生菜单／窗口。原生 ARM／Intel 的配置、冲突、输出、搜索／复制／跟随、重连、停止／重新运行、开发模式不支持参数的可见拒绝和清理证据记录在对应源码的报告和每架构五张 WindowServer 截图中；已验收基线与 artifact 链接见 Issue
+#37。人工系统选择器、键盘及输入法验收仍未执行。
+
+真实 Core／宿主样例检查 Unicode
+JAR 文件名、Unicode／emoji／引号／通配符／结尾反斜线及空参数、临时环境／JVM 属性、两路最终输出、退出码 7、同 generation 回放／ack、过期／跨任务族停止拒绝、强制停止与宿主清理。无效的离线 Wrapper 证明运行已有 JAR 会绕过 Maven 解析。`jar cfe`
+先创建 ASCII 归档，再重命名为原 Unicode 文件名，使同一样例可用于 JDK
+8／11／17／21。两个 Rust 进程检查全局／项目 CAS、实际写锁争用、明确重试、注册表锁及损坏原文保留。
+
+Java 互操作 workflow 另外通过所选真实 Core／宿主／JVM 启动 ASCII 与 Unicode JAR 路径，收集
+`java-encoding-diagnostics.json`，记录 JDK
+8／11／17／21 的实际属性、字面参数、启动器跟踪及退出码。采集属于诊断，不代表 Unicode 任务验收。此前 Java
+8 报告确认应用参数正确，但 VM 属性和 classpath 损坏，仅覆盖编码属性不足以修复。
+
+严格任务检查保留准确参数／属性、最终输出、退出码 7、回放及代次安全停止，还使用中文项目目录，验证用户 premain
+Agent 在主类前读到原始 Unicode／emoji 属性。应用数据与中文项目分开存放，与两个桌面客户端一致；可丢弃用户 Agent
+JAR 使用 ASCII 路径。独立的原版 JDK 诊断记录 BMP 与补充字符目录结果，不经过 uTerm 宿主；本地 JDK
+21 在不带 Agent 的 emoji 目录运行也在 Java
+URL 解码内失败，此上游限制不计为桥接成功。Windows 桥接自身资产路径含补充字符时，要求已有 ASCII 短路径。此修复的平台验收须在 #37 核对其自身严格 CI 结果，源码／资产可复现检查不能代替实际运行。
+
+运行 `pnpm test:core` 和前端检查时，将 `JAVA_HOME` 指向 JDK 21，并把其 `bin` 加入
+`PATH`。Java 互操作 workflow 在 JDK 8／11／17／21 上运行实际 Windows 宿主，上传
+`java-live-core.json`、源码／工具链信息及专项日志。Source
+`e06168dbe9491c3c862977dc931c6b7ad098a4ee`／tested merge `e48ce2f886987f92b17f77a42637f6b692bf6da2`
+在 Temurin
+8u504、11.0.32.1+1、17.0.20.1+1 和 21.0.13+9 上通过严格 Windows 矩阵。每份干净源码报告核对中文项目／JAR 路径、用户 premain 属性、准确 Unicode／emoji 及空参数、最终 stdout／stderr、退出 7、回放／ack、过期／跨任务族停止拒绝、强制清理及缓存释放。四套 ASCII／中文编码诊断也均准确保留属性／参数并退出 7。[Run41984445509](https://github.com/YondFane/uTerm/actions/runs/41984445509)保存[JDK8 artifact13395571787](https://github.com/YondFane/uTerm/actions/runs/41984445509/artifacts/13395571787)及对应 11／17／21 产物。Java8
+Unicode应用数据缓存的明确限制及原版JDK补充字符目录失败仍保留记录。#37已在用户批准范围内关闭，最后人工检查为豁免而非执行；未覆盖的Windows运行面板／选择器行为仍在#13，原失败证据保留于#37。
+
+可选真实 Maven 样例使用 Maven 3.9.9 和 Spring Boot
+2.7.18，创建临时三项目 reactor，经 Core 和独立宿主执行打包／测试／安装、模块准备、开发运行及打包后 JAR 运行。真实检查核对所选 settings.xml、Maven／Spring
+profiles、`.mvn/jvm.config`、含两种引号及结尾反斜杠的环境／JVM／应用字面值、最终 stdout／stderr 和 JAR 空参数。故意失败的 JUnit 检查必须使任务失败，明确重试后取得新 generation 并通过。分离／回放保留宿主及 generation，拒绝过期停止，优雅停止保留真实 shutdown
+hook 输出。Linux x86_64／JDK21 已通过全部八个场景并清理宿主；这些是真实 Maven／Spring
+Boot 进程，不是模拟构建或 GUI 验收。独立 Maven 互操作 workflow 在 Windows
+JDK8／11／17／21 与原生 macOS ARM／Intel JDK21 运行，上传
+`maven-live-core.json`、工具链及命令日志；对应源码的平台结果记录在 Issue
+#37。其 ASCII 路径／参数不代表另行失败的 Windows JDK8 Unicode 已验收。
+
+QA Maven 安装及依赖缓存均位于 runner 临时目录，不进入应用包。
+
 ### 任务生命周期与验证
 
 每个项目根目录同一时间运行一个任务。“停止”请求中断，“强制停止”终止整个进程树。“重新运行”先停止旧任务并等待退出。进程状态与退出码单独显示，不将进程启动成功视为 Web 服务已就绪。
@@ -1357,6 +2072,23 @@ Java 和 Python 日志区域的文字与不透明背景共同使用选定的终�
 终端尺寸变化使宿主快照以空白屏幕结尾时，任务日志回放会定位到最近保留的日志文本。重新打开面板或切换任务历史后，无需等待新增输出即可看到已有日志；后续文本跟随日志末尾，避免跳过补齐的空行。手动滚动会取消自动跟随。该处理只调整视口，保留接收字节、确认顺序、会话身份和运行进程；普通交互终端及备用屏幕应用保留原有视口行为。
 
 退出应用只分离宿主；重新打开同一项目的 Java 面板，可恢复任务与有序终端回放。任务不会进入普通终端发现列表；宿主在本次运行期间保留有界的已完成任务输出。旧宿主不支持任务时明确报错，不终止已有会话。
+
+私有回环输出通道在对端五秒写入期限内，跨 250
+ms 套接字轮询保留未完整的 32 字节认证令牌，仍拒绝错误令牌。关闭会中断未完成的认证等待，已经到达的已认证输出继续排空。线协议令牌及任务／错误格式保持不变。
+
+Linux 七项输出检查覆盖可控超时／分片序列、跨越轮询期限的真实回环连接、准确最终字节、错误令牌拒绝、到期及关闭。专项命令为
+`cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib task_output::tests`。
+`task-output-auth.json`
+记录 source／merge、平台及受控对端结果，不记录令牌值；实际任务子进程另行检查。完整 Host／Core／FFI 及 Linux 真实 Maven／Spring
+Boot 八场景通过。source `14596527f8c0642a68fc194f4e505903fc928040`／tested merge
+`c48d62c2a0ddce10ffaa92adce6887f91fb40f44`
+的四份干净 Windows／macOS 认证报告及六组真实 Maven 矩阵均通过。这些结果不代表独立失败的 Windows JDK8
+Unicode 检查或 Windows 预览 QA 已验收。
+
+source `8491bae96401829e5cc5c3420d5aaccb58494356`／tested merge
+`f25eef9b077d0b9be88ed35f311db52868d17f88` 的 Windows JDK11 Maven 报
+`JAVA_TASK_OUTPUT_FAILED`，其余五份 Maven 报告通过；后续源码的六组 Maven 通过不能证明认证是原失败的唯一原因，也不代表长期可靠性。样例现在在传输错误或超时后保留任务 ID、generation 及最多 64
+KiB 输出尾部，原失败继续保留在 #37。
 
 - Windows 原生宿主回归确认：普通“停止”在子进程清理期间保持任务运行，保留最终 stdout／stderr，并阻止后续任务步骤启动；清理期间仍可强制停止。真实 Java 与 Python 进程均在退出前完成两秒关闭清理。Agent 启用、通知及数据库 App 回归使用有效的运行摘要 IPC 夹具后通过。宿主套件 51 项通过、三项可选检查忽略；后端 144 项通过、十项忽略。这些检查不代表 macOS／Linux 运行验收。
 - Windows
@@ -1442,6 +2174,39 @@ MiB 输出，宿主合计保留最多 32 个已完成任务。历史有界且仅
 普通“停止”允许中断清理完成，并保留进程的收尾日志。清理期间任务保持运行状态，仍可使用“强制停止”。
 
 退出 uTerm 只分离后台任务；重新打开同一项目的 Python 面板，可重新附加原任务并回放日志。普通终端发现不包含这些任务。旧宿主缺少任务／管道支持时显示升级错误，保留已有会话继续运行。脚本和工作目录的选择不能越出所选根目录；解释器可以安装在其他目录。
+
+#### 共享 Python 服务验证
+
+开发中的 `uterm-core::python`
+管理既有解释器探测、源码扫描、五种启动模式、配置及宿主任务规则。Tauri 只保留 IPC、文件选择和平台应用数据／helper 适配。版本化
+`python.*` Core／FFI 调用使用同一服务，Rust
+DTO 生成 TypeScript／Swift 类型。原生 QA 应用选择本地项目或 Worktree 后，通过**文件 →
+Python 运行…**打开原生窗口。它编辑共享配置、选择探测到的解释器／入口、逐行填写字面参数及临时环境变量对，并显示只读任务输出／历史。保存固定已读取修订；明确重新读取及关闭会在放弃配置修改前确认。运行先保存配置再启动，停止／强制停止使用捕获的任务 generation；关闭窗口只分离，不停止任务。
+
+日志工具栏使用固定终端库的字面前后搜索及匹配计数，带原生自动跟随复选框。向上滚动暂停跟随；输出仍持续消费／确认，视口按缓冲区行锚点保留。重新勾选跟随回到末尾。**重新运行**先保存配置，仅正常停止本根目录的 Python 任务，等退出后才启动新 generation；停止超过五秒须明确强制停止。普通停止保留收尾输出，原生复制失败明确提示。
+
+原生“选择…”按钮可选择解释器、脚本（脚本／Django 模式）或工作目录。两端通过共享 Rust 路径规则校验选择结果。解释器保留虚拟环境的符号链接路径写法；脚本／目录不能越出项目。取消选择不修改草稿，无效选择显示错误并保留原值。重新读取对话框的“保存”选项须成功保存后才采用保存值。
+
+Core 和真实进程契约检查覆盖字面选择、符号链接、项目越界与无效类型。原生冒烟还通过绑定表单／Core 调用检查取消结果、解释器写法及项目内选择结果，不操作系统选择器。Linux
+Core／FFI、后端专项及 401 项前端检查通过（十项跳过），TypeScript／生产构建、契约、格式、国际化和文档检查通过。新增控件仍需自己的 macOS
+CI 和人工对话框／键盘／IME 验收。完整设置／菜单集成仍待完成；Java 原生窗口有独立实现和验收记录。
+
+`python-run-v1/configuration.json`
+格式和项目根目录键不变。更新后的客户端在修订校验和原子替换前使用操作系统写锁；忙碌须明确重试。读取默认值／任务不创建配置或宿主；损坏字节和过期版本拒绝替换。此锁不能改造旧的已安装二进制。停止先核对任务 generation 及 Python 任务族，再请求宿主终止。
+
+Linux 检查实际运行 Python 脚本及隔离 Rust 宿主，覆盖 Unicode／Shell 字面参数、临时环境、非零退出、原始收尾输出、消费 ack、分离／回放和有界清理。过期 generation 及实际其他任务族不能被 Python 请求终止。独立 Rust 进程验证配置 CAS、真实操作系统写锁、明确重试和损坏文件保留。原有模式／路径／扫描测试随实现迁入，没有添加另一套 Swift 启动计划器。Core／FFI、前端及后端回归在本地通过。Python 服务在
+`692cd6c` 的 macOS／Windows CI 通过；下方旧 Windows 框架证据不用于此次抽取。
+`bash scripts/macos-python-smoke.sh`
+新增真实原生菜单／窗口检查，覆盖配置冲突、实际脚本输出／非零退出、相同 generation 分离／回放、过期停止拒绝及强制停止，另查搜索、暂停时消费并保留视口、恢复跟随、相同宿主 PID、正常停止的收尾输出／复制及重新运行顺序。保存四张截图，含英文深色、暂停输出及中文浅色窄窗。[Native CI 41771783432](https://github.com/YondFane/uTerm/actions/runs/41771783432)
+在 macOS ARM／Intel 通过，对应源码 `ee0b1ac`、tested merge
+`e213eaa61e119c307566a50329acd85985432032`。ARM artifact
+`native-qa-macos-15-ee0b1ac38fe42db2ad772bb68a8ae144268c47be` 包含 `python-live.json` 和四张
+`native-python-*.png`
+截图，包括暂停输出。此 Linux 环境没有 AppKit／Swift 工具链。人工输入／IME 及完整设置／菜单集成仍未验收；这些 Python 证据不覆盖后续 Java 迁移。
+
+原始任务回放检查为完整操作及每次接收共用十秒期限；失败报告最后 sequence 及实际宿主任务状态。修正后的检查在源码
+`692cd6c` 的 CI
+41770931806 通过 Windows／macOS；之前的内层两秒接收在声明的整体期限前失败。未跳过测试或必要平台。
 
 #### Python 控件布局 Linux 验证
 
@@ -1699,6 +2464,42 @@ Agent 定义指定程序及参数列表。结构化事件及原生终端提醒�
 
 可用性取决于服务商凭证和权限。终端输入及进程 I/O 与界面渲染分开处理。
 
+原生 QA 客户端通过**文件 →
+Agent 设置…**管理自定义命令、启用／禁用、安装、Hooks 和用量。命令由程序路径及 JSON 字符串数组组成；参数错误时保留草稿。隐藏窗口保留草稿，切换命令时确认未保存修改；退出时拒绝仍在执行的操作，或询问未保存命令。本地用量不读取账户凭据；读取账户额度需明确操作，可能请求钥匙串权限。
+
+`uterm-core::{agents,agent_install}` 管理现有提供方规则；Tauri 原有命令委托 Core，Swift 使用 Core
+JSON 调用。Pi 扩展嵌入自
+`crates/uterm-core/integrations/pi-activity.js`。QA 显式传入私有提供方目录，不修改
+`HOME`、`CODEX_HOME` 或用户账户选择变量。报告程序先暂存再替换；新文件复制失败时保留旧程序。
+
+安装失败时只返回分类错误码，不返回可能包含仓库凭据的安装器输出。重试提示保持中英文一致；界面及 CI 诊断不包含私有安装器输出。
+
+共享 Linux 回归通过 18 项 Agent 检查（另有一项资源分析按原约定忽略）、五项安装器检查及两项平台／真实 Hooks 检查。安装后的报告子进程消耗 64
+KiB 输入，产生真实 Host
+working／done 事件并拒绝过期 generation。安装失败／重试检查执行私有脚本，不全局安装提供方 CLI。三组前端通知／Pi 专项测试、TypeScript、文案及 QA 后端检查通过。
+
+首轮原生构建发现适配边界的 generation 为可选值；适配器现会先拒绝缺失代次，再判断通知条件。该次失败构建不作为窗口验收通过证据。
+
+Tauri 真实应用验证也打开 Agent 设置，保存／启用／禁用／移除私有自定义命令，关闭规范状态通知偏好，安装／移除 Hooks，并检查参数无效时显示错误且保留草稿。退出后要求其他工具的 Hooks 保留。开启通知的系统权限仍由明确模拟的回归覆盖。原生 QA 在 Agent 草稿存在时取消实际应用退出。活动标签仅在状态变化时更新，普通输出不触发工作区重绘；活动失败时取消待发送通知并显示重连提示。
+
+原生“关闭”菜单在 Agent 窗口获得焦点时隐藏该窗口并保留草稿，不会关闭其背后选中的终端。
+
+Tauri 设置场景先等待控件确认保存，再读取规范存储。可见的写锁繁忙错误需要明确、有界重试，并在场景报告中计数；其他错误直接使运行失败，避免观察器在被测写入期间占锁。首轮锁失败报告保留在 #40。Agent 选择复用应用当前品牌名称。
+
+组件回归使用实际 Agent 表单及模拟原生服务执行这些操作，强制一次繁忙保存，要求明确重试成功后观察器才可读取；核对三个场景结果、最终定义／启用清理及没有请求通知权限。
+
+源码 `424fd23b55e44d116e51eb4224771ea963352df7`、tested merge
+`950bf24aaaad8e39b7855662d04d7000801f7649` 通过 Native
+[run 42173232949](https://github.com/YondFane/uTerm/actions/runs/42173232949)（macOS 15.8.2
+arm64、15.7.9 Intel）及 Tauri
+[run 42173232927](https://github.com/YondFane/uTerm/actions/runs/42173232927)（macOS 26.7.2
+arm64、Windows Server 2025
+x64）。四份归档均记录干净源码。原生报告通过、退出0，包含实际退出取消；Tauri 每平台71个场景通过，无清理错误或观察器繁忙读取。强制繁忙写入组件回归在 Linux、macOS 和 Windows 通过。四份实际报告进程结果均通过真实 Host 事件、旧代次拒绝及私有 Host 清理。归档包含
+`agent-native.json`、`agent-hooks-core.json`、Tauri
+`agent-live.json`、日志及10张逐张核对的原始应用截图；[验收记录](https://github.com/YondFane/uTerm/issues/40#issuecomment-6679048480)列出各项产物和文件名。服务商认证、全局软件包安装和最终系统通知送达使用明确模拟；最终人工验收由用户豁免。此证据不替代独立的
+[#41设置／菜单验收](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106)，也不合并 Draft
+PR。
+
 ### 安装与移除 Hooks
 
 设置 → Agent → 安装 Hooks 支持 Claude、Codex、Gemini、Pi、MiniMax、Qwen Code、Copilot CLI 和 iFlow
@@ -1791,6 +2592,14 @@ CLI
 
 ### Agent 状态与通知
 
+原生 Agent 设置与 Tauri 共用可选的规范状态
+`agentNotifications`；缺失时沿用导入的旧偏好，否则默认关闭。打开设置不写默认值、不请求权限。原生活动来自已接受的终端帧，不按静默时间伪造完成。原生通知门禁使用
+`UInt64`
+事件序号、有界事件 ID 记录及 generation／会话检查。Swift 回归覆盖超过 JavaScript 安全整数范围的相邻值、`UInt64.max`、回放及待发送通知失效。
+
+`bash scripts/macos-agent-smoke.sh`
+使用真实隔离原生窗口、私有命令／用量、安装后的报告进程及实际 Host 帧；系统通知权限与投递适配器明确使用模拟，不宣称提供方登录或实际系统通知展示通过。产物包含绑定源码的报告及英文／深色、中文／浅色窄窗口截图。用户已免除最后的人工验收；自动检查失败仍需修复。
+
 侧栏与 Agent 窗格标题栏显示同一份空闲、工作中、需要处理或已完成状态，并提供独立的通用提醒状态。尚未查看的完成状态会高亮侧栏图标，确认后清除。
 
 - 设置 → Agent
@@ -1826,7 +2635,90 @@ CLI
 
 ### 外观与终端偏好
 
-设置包含外观、配色主题、字体、终端光标和滚动行数、快捷键、默认 Shell 与 Agent。主题导入仅接受支持的颜色字段。
+设置包含外观、配色主题、字体、终端光标和滚动行数、快捷键、默认 Shell 与 Agent。Core
+`settings.catalog`
+读取现有默认值，并从当前 TypeScript 来源生成含31个命令、八个终端主题及六个界面主题的双语目录。打开目录不保存默认值；`pnpm settings:check`
+和常规契约检查核对生成结果。
+
+Core `settings.validate`
+不写配置，校验完整结构、平台快捷键冲突、系统／编辑器保留键及可让出的默认绑定；`settings.commands`
+使用同一规则解析绑定。原生**命令**菜单在保存后更新按键，并让冲突的菜单后备快捷键让位；面板和捕获控件显示 macOS 按键符号。
+
+**命令面板**提供原生搜索、上下方向键、Return 和 Escape。关闭后恢复原窗口／响应者，不会关闭背后的终端。仅为所属可见面板处理未带修饰的导航按键，关闭后移除监听；带修饰键仍用于正常文本编辑。命令按当前窗口／会话上下文启用。Tauri 欢迎页主操作与命令菜单共用待处理草稿／转换保护；并发输入 QA 在同一 JavaScript 轮次内点击已连接按钮，仍须通过真实终端可见断言。原生**文件**、**搜索**和**快速打开**在工具窗格中使用共享 Rust 文件服务。Return 或双击打开文件；内容搜索跳转到命中行，并保留现有编辑器文字。可选择显示隐藏文件，结果不完整时显示提示，不能打开项目根目录之外的符号链接目标。已取消请求或前一项目的搜索结果不能替换当前列表。
+
+**显示或隐藏工具面板**保留工具模式；**交换窗格**保存左右位置，项目侧栏隐藏时仍生效。关闭已聚焦的工具面板后，焦点返回所选终端，不关闭会话。**放大**只显示所选分屏，再次执行恢复共享布局及缓存终端视图；隐藏会话继续接收输出。
+
+**GitHub**在原生窗口中打开现有共享面板。两端通过 Rust `github.repositories/read/prepare/create`
+访问 GitHub
+CLI、发现仓库／Fork、读取议题／PR 详情与 Diff，以及明确创建 PR。原生窗口固定项目根目录，拒绝其他方法或私有 CLI 参数。会话关联使用带修订校验的共享状态，新建关联会话保留议题 URL 和标题。插入 URL 要求所选 Agent 会话拥有输入控制权，不发送 Return。关闭窗口保留 PR 表单；退出时拒绝进行中的请求，或在放弃表单前询问。取消不能在 CLI 实际返回前解除已分发操作的保护。创建 PR 使用字面 JSON 输入，不隐式推送分支或创建 Fork。
+
+原生 QA 应用通过**设置 → 全部设置…**或**文件 → 全部设置…**打开通用、外观、终端、文件／Agent 和快捷键页面。修改保留为草稿，点击**保存设置**后生效；**恢复默认值**先准备草稿，仍需保存。隐藏／重开保留草稿，退出时拒绝进行中的操作或询问未保存修改。无效数值、保留键或重复快捷键显示错误并保留输入。保存时逐项比较最新存储，保留其他客户端的无关修改，拒绝覆盖冲突字段。
+
+两端通过 Core `settings.theme.import`
+解析 Ghostty 主题，保留现有名称／ID、UTF-16长度、六位颜色及调色板序号规则；解析本身不保存设置。Tauri 选择成功后保存，原生导入先加入草稿，须点击**保存设置**。原生选择器最多读取32
+KB，要求UTF-8；名称仅移除末尾的 `.conf` 或 `.txt`，忽略扩展名大小写，其他扩展名保留在名称及标识中。
+
+原生终端和任务日志应用内置／自定义调色板、光标／选区颜色、可用字体回退／粗细、行距、光标形状／闪烁、滚动行数及背景透明度。选中文本复制在鼠标选区结束后执行。界面配色／字体、行／窗口留白、侧栏显示、活动图标颜色、项目名称排序及可选背景材质已接入工作区。
+
+原生休息提醒使用共享开关／间隔偏好。间隔结束后只显示一次非模态提示，十秒后或点击**继续使用**关闭，从关闭时重新计时，不补发休眠期间错过的提醒。修改间隔或关闭偏好会隐藏当前提示；客户端关闭时停止计时。
+
+原生可编辑文件窗口按目录执行共享文件标签上限，保留最新标签。打开更多文件或降低上限时，先确认超额编辑器是否可以关闭；正常保存沿用现有路径，写入冲突则拒绝新打开并保留标签／草稿。重试前可使用既有关闭操作选择继续编辑或明确放弃。原有源文件缺失时，仍以只读方式打开保留草稿。Agent 设置可见时按共享远程／本地偏好及间隔刷新所选受支持 Agent 的用量，每次只执行一个请求。自动读取不请求钥匙串权限，明确读取账户仍保留确认。隐藏窗口或准备退出时停止轮询。原生自动更新效果仍在 #45 跟踪。
+
+**通用 → 开机启动**只读取系统状态，打开页面不注册。明确开启／关闭通过 macOS `SMAppService`
+执行；需批准或失败时保留可见提示，进行中的操作阻止退出。此系统偏好立即生效，独立于共享草稿。隔离设置 QA 模拟批准、成功、失败及关闭，不注册 CI 登录项、不修改共享设置。CI 未执行真实系统注册／批准，明确记录用户授权的模拟边界与最终人工豁免。
+
+#### 验证与限制
+
+`bash scripts/macos-inspector-smoke.sh`
+使用隔离原生 QA 应用、临时文件和真实 PTY，检查目录导航、隐藏文件、符号链接边界、中文搜索／行跳转、编辑文字保留、取消、快速打开、窗格交换、放大、焦点及明确宿主清理。脚本记录四张原始 WindowServer 截图及
+`inspector-native.json`，包含源码 head 与 tested merge SHA。源码
+`52eb2bb440175b44895bd58882d0485c98ada144`、tested merge `2d21a040c4e9e33c2dd52ec5eada4c2cde11db92`
+在 [run42214355682](https://github.com/YondFane/uTerm/actions/runs/42214355682) 的 macOS
+arm64／Intel 均通过这些检查，四张 ARM 原图已逐张查看。先前编译／输入／焦点失败保留在 Issue 证据中，不用于验收后续源码；最终人工验收由用户豁免。
+
+`scripts/interaction-matrix.py` 核对各客户端源码 head／tested
+SHA、必要报告与原始 PNG 截图。每项能力分开记录实现、构建、自动检查、原生操作及豁免的人工验收。编辑器汇总仅在两个实际进程都通过私有配置检查后记录隔离标志，缺少元数据仍使门禁失败。原生终端 QA 还模拟组合文字，要求中间态 PTY 字节为零、Unicode 只准确提交一次；模拟休眠／唤醒／显示器通知后，视图／代次保留且真实输出继续。Windows 复用真实桌面编辑器／设置／Git 和输入所有权场景，并运行明确标注的组合输入测试。缺失／失败／过期证据导致核对失败。物理输入法、硬件休眠和多屏不标为已执行；人工验收由用户豁免。`interaction-matrix.json`
+明确保留这些边界及原 M3 布局、会话标签拖动和 PDF 缺口，不宣称稳定切换已验收。
+
+`bash scripts/macos-github-smoke.sh` 在真实原生 WebView 窗口中使用隔离模拟
+`gh`、临时 Git 仓库和真实 PTY，检查根目录／方法／类型边界、安全 Markdown、共享会话关联、PR 详情／Diff、可见离线错误与重试、取消、草稿隐藏／重开／退出取消、字面提交、请求中的退出保护及双语主题截图。`github-native.json`、模拟 CLI 日志和四张原始截图归档为 CI 产物。草稿退出确认使用附着于自身窗口的异步表单，保持 WebKit 与主执行器响应。源码
+`3719222` 的真实 ARM CI 已通过取消及草稿保留，随后明确创建失败：准备接口额外返回的 `branch`
+元数据被严格 Core 创建契约拒绝。面板现仅复制 title／base／head，回归包含额外准备字段并要求一次准确创建载荷。PR 草稿勾选框改为紧凑内联尺寸。Intel 源码
+`cdedb12860c5a20c88c1945b21c96c84770173ce` 已通过全部 GitHub 检查，四张原始截图见
+[artifact13516460493](https://github.com/YondFane/uTerm/actions/runs/42236559031/artifacts/13516460493)。这是 GitHub 子范围证据；该 workflow 仍因独立 SDK 安装截图及交互汇总元数据检查失败。不使用账户、真实 GitHub 写入、推送或 Fork。共享会话测试继续覆盖过期／无效关联、重开及分屏。
+
+Linux 检查通过现有422项前端测试（跳过11项）、新增 GitHub 面板回归、242项 Core／FFI／故障测试（忽略17项）、84项宿主测试（忽略3项）、18项 Tauri 后端测试（忽略1项）、类型检查、生产／桌面构建、契约／文案覆盖及格式检查。依赖 Java 的检查使用 JDK
+21。真实 Core 进程配合隔离 CLI 还通过八次仓库／读取／Diff／准备／创建／无效参数／离线／重试请求，只有一次准确 JSON 创建。本地使用模拟 GitHub 响应，不代替原生 CI 截图。
+
+一次 ARM Core 运行在刻意触发主机密钥失败时受到隔离 SSH 服务的来源地址惩罚。测试现通过 `sshd -T`
+检测支持，仅在临时服务配置中禁用该惩罚，旧版 OpenSSH 保留受支持的配置。主机密钥拒绝断言仍必须通过，失败时附带实际错误；不改变生产 SSH 配置。原生工具窗格在 PTY 更新期间保留监听中的根视图，打开前核对行身份及代次，不在每次更新时重启焦点／加载任务。Intel 的 Return 及 GitHub 边界失败保留，报告新增选择状态和实际边界返回码，仍需重跑。CI 失败后保存依赖缓存不改变失败门禁结果。
+
+#41设置／菜单／命令在源码 `949e4c23dc22d2b01e4823b96a73a26e8c26f60c`、tested merge
+`b8e96bbb42501213040f0b93bff009ecd24623a7`完成验收。Native
+[run42251082940](https://github.com/YondFane/uTerm/actions/runs/42251082940)在macOS15.8.2
+arm64及15.7.9 Intel通过设置／工具窗格／GitHub报告和Core／FFI／Swift测试，整体仍因独立#45
+SDK截图失败。Tauri
+[run42251082946](https://github.com/YondFane/uTerm/actions/runs/42251082946)在macOS26.6.2
+arm64及Windows Server2025
+x64的两个完整job通过，各73个真实应用场景且无清理错误。各报告绑定干净源码／merge，不将此来源写成后续提交重测通过。
+
+真实 Rust 进程／TypeScript 对照通过372组快捷键配置、11,532次实际绑定和96组主题输入，包含Unicode名称、按上下文转小写、编码ID、调色板前导零及无效色值；还验证默认值／存储未改及无效／私有参数的有界拒绝。逻辑报告不替代原生窗口检查。
+
+`bash scripts/macos-settings-smoke.sh`
+检查实际菜单／快捷键捕获、搜索、方向键／Return／Escape输入、焦点返回、明确重置、实际退出取消、无效草稿、冲突／无关字段保存、主题草稿和真实配色PTY效果。检查还使用实际临时文件验证名称、UTF-8及有界读取；设置QA在通用窗口冒烟后执行，保留其他全部原生检查。两架构均核对原窗口与返回窗口一致，登录项批准／失败／关闭仍明确使用模拟。
+
+12张原始应用截图已逐张核对。原生归档包含 `settings-native.json`、日志及
+`native-settings-command-palette.png`、`native-settings-themed-terminal.png`、
+`native-settings-full-dark-en.png`、`native-settings-full-light-zh-narrow.png`。Tauri归档包含
+`settings-platform.json`、`tauri-state-qa/report.json`、`initial-theme-invalid.json/.png`及
+`initial-theme-imported.json/.png`。[证据记录](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106)列出四份产物、命令、工具链与图片。Tauri在真实应用中使用DOM
+File事件，不宣称已操作系统文件选择器；macOS使用WindowServer，Windows使用带捕获元数据的所属QA HWND。
+
+先前窗口截图、SSH
+askpass和焦点断言失败，以及被取消的旧运行，继续保留在Issue记录中。焦点测试现明确激活设置窗口，不在取消退出后主窗口仍在前台时误等设置窗口；失败不改算通过。#41按自身四项标准及独立的设置／工具窗格／GitHub报告完成验收。较早的
+`nativeSettingsFeatureAcceptanceComplete=false`
+汇总仍可见，其剩余清单指向#45更新及这些独立报告，不改写为true。登录批准使用已授权模拟，最后人工验收由用户豁免；这不表示稳定切换完成，也不合并Draft
+PR。
 
 ### 终端文字选择与渲染
 
@@ -1948,6 +2840,49 @@ px 调整共用的文件字号并立即保存，到达上下限时禁用对应�
 - 展开的统一 Git 差异已在上述内容快捷键检查中完成视觉验证；其他 Git 对比布局及 macOS／Linux 运行验收仍待完成。
 
 ### 自动更新与安装确认
+
+#### 原生 macOS 更新适配
+
+原生 QA 应用包含 Sparkle
+2.10.1，在应用菜单和通用设置提供**检查更新…**。普通 QA 构建没有更新源／公钥，显示不可用状态，不初始化更新控制器或发出网络检查。配置后的构建使用共享
+`automaticUpdates`，默认关闭；SDK 缓存偏好不能重新开启授权。Windows／Tauri 在自动更新关闭时也不执行延迟的启动检查，仍可明确手动检查。
+
+原生更新源配置固定 stable／preview 和当前 arm64／x86_64 架构。QA 更新源必须是字面回环 URL。Appcast 项在继续前须具备匹配的
+`uterm:platform`／`uterm:architecture`
+元数据、渠道及同源 ZIP；SDK 包验签仍须另外执行。Sparkle 保留原生下载／安装界面，应用退出仍经过既有编辑器、传输和数据库保护。不配置或更改生产更新源。
+
+固定版本的框架、嵌套辅助程序及许可证进入应用包，候选核对签名、架构、最低系统及只读权限。`python3 -B scripts/macos-updates-smoke.py`
+使用私有回环源、签名 App
+ZIP、独立 QA 标识与临时目录执行十个真实 SDK 场景。生成一次性 CryptoKit 密钥，核对官方签名工具的固定哈希，证据仅保留公钥／签名。用户决定模拟；SDK 下载、验签、解压、目标检查与调度均实际执行。
+
+覆盖有效／错误签名、错误架构／渠道、旧版本、取消、离线／中断后的真实重试、共享设置自动开启／关闭，以及 build1→build2 安装。安装沿用同一私有应用路径，经正常退出保护保存真实编辑器草稿，保留宿主 PID／generation，核对准确文件字节并生成新 PTY 输出。服务端记录并拒绝授权前的请求。坏签名必须匹配固定 SDK 的准确有界
+`SUValidationError` 原因 `EdDSA signature does not match.`，无关错误仍失败；Bridge 负例覆盖此边界。
+
+重启截图由原 CI 协调器执行，核对准确源码、包标识、所属 PID／窗口号及尺寸；权限不足／缺图即失败。Canvas 缓存包含真实终端视图身份，普通重连及更新重启都要求视图实际位于可见窗口。安装测试管理真实 PostgreSQL 集群，在长查询及未提交事务期间调用实际退出 delegate，要求拒绝、回滚、保留宿主／generation并清理数据库。传输任务状态及更新退出请求明确模拟，“保留窗口”按钮实际点击。
+
+源码`ec1a49df9fe7eb0ed75a2f23efcb9883dd36fb21`、tested merge
+`cfd088ed91d8038dcae8e686a67b1812e87d7181`的
+[run42272314439](https://github.com/YondFane/uTerm/actions/runs/42272314439)两完整job通过全部十个SDK场景。平台为macOS15.8.2
+ARM64／15.7.9 Intel，工具链Xcode16.4／Swift6.1.2／Rust1.99.1。
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42272314439/artifacts/13533506603)及
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42272314439/artifacts/13533773218)包含updates/sdk-summary.json、install/sdk-native.json、四张保护窗口及native-update-install-relaunched.png。已查看ARM重启及Intel查询拒绝原图，可见保留输出和QUIT_REFUSED。#45已在任务分支验收；旧空占位图继续作为恢复失败证据，不复用为通过。
+
+#### Windows 签名更新 QA
+
+`python -B scripts/windows-updates-database.py` 管理真实私有 PostgreSQL 集群并调用
+`node scripts/windows-updates-smoke.mjs`，后者构建并安装私有0.2.4／0.2.5
+NSIS 包，通过字面回环地址提供一次性签名更新。只有编译期开启 QA、临时根已验证且处于 updates 阶段的应用可启用此源。端点拒绝远程／DNS 别名、凭据及查询字符串，下载 URL 保持同源和所属包路径，始终要求签名版本。仅 QA 的内嵌根目录支持无参数重启后回到同一私有配置；生产配置及普通 QA 禁用行为不变。
+
+流程覆盖真实启动关闭区间、旧版本、错架构、坏签名、离线／重试、中断 Range 续传、编辑器／数据库草稿保护、手动检查、自动下载／确认、取消与持久关闭。实际更新器安装后，核对不同应用 PID、同一宿主／generation、Core 草稿准确字节及新 PTY 输入。草稿输入及脏状态标志明确模拟，新增检查通过明确模拟的工作任务持有真实传输登记，要求取消后至实际结束前仍拒绝安装；真实 PostgreSQL 查询及未提交事务期间也须拒绝安装。回滚须保留原数据并关闭全部连接，包装脚本只停止自有服务，拒绝证据中的凭据。这些组合的真实平台结果见下文，模拟范围保留。安装器可能直接退出前先释放输入租约，保留宿主及 PTY。QA 经真实终端控件关闭会话，仅停止自有空闲宿主；清理失败也保留日志／报告。写锁争用仅对只读观察有界重试；写入沿用冲突规则及实际“重试保存设置”控件。
+
+Windows采用上述同一源码／merge。
+[run42272314528](https://github.com/YondFane/uTerm/actions/runs/42272314528)通过十四场景、实际签名0.2.4→0.2.5安装、正常退出及卸载，cleanupErrors=[]。平台为WindowsServer2025
+x64／PostgreSQL17.11／Java21／Node24.22.2／pnpm11.22／Rust1.99.1。
+[artifact13531895866](https://github.com/YondFane/uTerm/actions/runs/42272314528/artifacts/13531895866)包含sdk-summary.json、十四组updates-*.json/png、数据库清理、安装包及公钥签名。两个包哈希已独立复算，安装后原图已查看并显示新SDK_UPDATED输出。保护RPC／报告证明数据库及传输拒绝，普通窗口图不冒充SQL界面。私钥不进入证据；更新签名不等于Authenticode。
+
+启动状态只观察一次，后续自动偏好切换不会与进行中的下载锁争用。专项回归在旧实现失败、修正后通过；上述Windows来源绑定运行也通过真实自动流程。保留默认关闭、明确重试、取消及安装保护。#45按记录的模拟／人工豁免范围completed关闭，未修改生产更新源或发布。
+
+#### Windows／Tauri 自动安装
 
 设置 → 软件更新 → 自动更新默认关闭，设置跨重启保留。启用在线更新的构建开启后立即检查，运行期间每小时检查一次；发现更新后自动下载，通过现有更新器校验签名，再弹窗确认安装并重启。
 
@@ -2320,6 +3255,9 @@ Cmd+B；工具面板使用 Ctrl+Alt+B 或 Cmd+Option+B。两项均出现在设�
 
 #### macOS 面板拖动检查
 
+App 回归在挂载前冻结定期计时器，避免后台刷新被计为指针触发的渲染。仍检查明确的任务活动更新和定时收起提示。该专项回归在 Linux 通过；修正后的计时边界仍需自己的 macOS
+CI。
+
 - App 回归覆盖按帧合并指针移动且不重渲染会话、拖动期间任务状态更新、松手的最终位置、取消、卸载清理、收起提示、图标栏重新展开及工具面板位于左右两侧。60 次移动的回归在原实现中触发 60 次额外会话渲染，当前实现在指针移动期间不触发会话渲染；按下、松手和任务状态变化仍正常渲染。
 
 - 完整前端／构建工具套件通过（274 项通过，10 项可选／平台检查跳过），全仓格式、国际化、TypeScript／生产构建、文档检查、锁定依赖安装、本地会话服务／后端测试及桌面编译通过，隔离桌面构建也通过。保留 Vite 既有 WebSocket 端口及大代码包警告。
@@ -2535,6 +3473,14 @@ React 组件位于 `src/components/`，状态和纯逻辑位于 `src/lib/`，Tau
 
 ## 验证与限制
 
+### 前端测试资源隔离
+
+组件测试通过共享的 Vite SSR 测试服务加载真实模块，关闭文件监听、HMR 和 WebSocket 监听。`pnpm test`
+保留四个测试文件并发。渲染检查可与 Cargo 编译同时执行，不监听正在使用的可执行文件／调试符号，也不共享
+`24678` 端口。
+
+资源回归实际占用回环端口，同时加载两个 SSR 服务，核对插件转换，并修改隔离的 Cargo 输出测试文件而不添加监听器。Linux已通过此回归、Java／菜单／Maven场景及完整前端套件（436项通过，11项可选／平台检查跳过）。Windows验收须以实际CI报告及源码／测试SHA为准，这些Linux结果不代表Windows通过。
+
 ### Windows 自动化检查
 
 - 全仓 `pnpm format:check` 通过，包含 Prettier 和两个 Cargo 工作区。`.gitattributes`
@@ -2738,6 +3684,70 @@ React 组件位于 `src/components/`，状态和纯逻辑位于 `src/lib/`，Tau
 文档元数据、生成索引、Markdown 格式、标题层级和本地导航链接检查通过。这些检查仅验证文档，不改变各功能已记录的运行验收状态。
 
 ## 数据库连接与可选组件
+
+### 共享数据库服务
+
+`uterm-core::{database,database_components,downloads}`
+管理连接、SQL／文档请求、只读／事务／取消保护、系统凭据绑定及组件校验／安装。现有 Tauri 命令委派同一服务，应用目录、SSH 认证确认、原生文件选择器和事件由客户端提供；导出选择器与实际退出仍由平台处理。
+
+连接／草稿与组件状态在各命令间共享，取消选择组件文件会释放安装保护，不写入默认配置。内置 Java 引擎仅原子恢复到应用缓存，不修改安装包；驱动、运行时和续传数据保持既有应用数据目录、目录版本与 SHA-256 规则。既有凭据服务名和 JSON 配置格式保持。
+
+Core
+JSON 接口异步启动数据库操作，返回不透明操作编号与 generation，客户端仅轮询或消费匹配结果，同时仍可断开连接或取消组件下载。最多接收八个运行中或未读取的业务结果，控制操作使用独立容量；进度事件合并并设数量上限。操作列表不包含查询结果或请求参数。关闭客户端会停止其数据库工作进程，迟完成的连接不能重新登记句柄。
+
+断开和关闭客户端时，先通过既有 JDBC 协议发送语句取消请求并限时等待，再终止所属工作进程；不会重试结果不确定的写入。
+
+隔离的 macOS
+QA 应用可从原生侧栏“数据库”或**文件 → 数据库…**打开工作台，通过相同的文档作用域 transport 复用 SQL／文档工作台、组件和连接表单。配置保存／移除使用 Core
+revision 校验，连接使用中或有草稿时拒绝修改。临时密码只留在应用内存，绑定规范化后的配置值；修改目标后重建未连接的工作台，不沿用旧密码。连接成功清空可见密码框，但工作台私有内存保留临时密码供断开后再次连接使用；密码属性变更或清空时替换这份内存。
+
+数据库处理逻辑按文本分类错误时显式保留结构化错误码，通用错误字符串保持原格式。即使宿主消息没有重复错误码，配置冲突仍保留表单并提示重新读取，忙碌／待处理事务仍显示对应指引。
+
+关闭窗口会隐藏并保留连接、草稿和结果。退出应用时拒绝运行中的操作或未处理事务，并确认是否放弃草稿；其他窗口取消退出后，数据库界面及草稿保护恢复。组件选择使用 AppKit，不接受内容页提供的选择器路径；导出使用原生保存对话框。共享设置的语言／主题变化会同步到工作台，打开窗口不保存默认设置。
+
+#### 共享服务验证与限制
+
+[#38 已实现并验收](https://github.com/YondFane/uTerm/issues/38#issuecomment-6678052308)，仍在任务分支，未合入
+`release`。验收源码 head 为 `0c31ec5e002c00c6c4f2d52101a783262a83a79f`，实际测试 PR merge 为
+`4017ae8c87f3b154844e15127da27bf0bfc75529`。下列报告均记录源码干净；后续 Agent 提交不替代数据库验收身份。
+
+Linux x86_64／Rust
+1.99.1 通过 24 项数据库／文档／组件回归，覆盖下载中断与取消、范围错误、大小／哈希校验、缓存修复、归档边界、文档版本写入及连接清理。异步客户端检查覆盖关闭后延迟完成、背压、代次不匹配及参数脱敏。隔离的真实 PostgreSQL
+16.11 报告通过全部 11 个场景：bigint／decimal／二进制／null／Unicode 精确值、默认只读、待提交事务断开／退出保护、回滚、过期写入及服务端已观察到的查询取消／释放。JDBC
+42.7.14 按目录校验。
+
+`python3 -B scripts/database-protocol-qa.py <evidence-directory>`
+记录 32 项检查：29 通过、三项真实 MySQL 检查跳过、无失败。MySQL／PostgreSQL／Oracle 使用 JDBC 模型及固定厂商驱动的 SOCKS 握手；MongoDB 使用真实固定 Java 驱动对接临时 wire
+fixture；Elasticsearch 使用 HTTP 模拟。这些经用户授权且明确标注的模拟补充真实 PostgreSQL 验收，不代表真实厂商集群或账户验收。命令、驱动版本／哈希、报告及日志见
+[Linux artifact](https://github.com/YondFane/uTerm/actions/runs/42166630794/artifacts/13478739772)。
+
+`bash scripts/macos-database-smoke.sh` 在两个完整原生 job 中通过：macOS 15.8.2 ARM64 与 15.7.9
+Intel，Xcode 16.4、Swift 6.1.2、Rust 1.99.1、JDK 21、PostgreSQL 16.15 及校验 JDBC 42.7.14。两份
+`database-live.json` 均为
+`passed=true`、退出0，覆盖配置保存不持久化密码、SQL 控件／编辑器就绪、剪贴板一致性、精确值、隐藏／重开／重连、活跃配置保护及双语／主题／窄窗口。
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42166630325/artifacts/13479841334) 与
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42166630325/artifacts/13480049468)
+各包含报告、工具链、日志、`native-database-sql-dark-en.png` 及
+`native-database-sql-light-zh-narrow.png`。
+
+`python scripts/ssh-tauri-qa.py` 在 macOS 26.6.2 ARM64 与 Windows Server 2025 x64 通过，使用 Node
+24.22.2、pnpm 11.22.0、Rust 1.99.1 及 JDK
+21。两平台各通过 68 个真实应用场景，其中五个数据库场景使用私有真实 PostgreSQL
+16.15／17.11，覆盖五类配置、校验驱动安装、SQL 精确值、草稿保留、写入确认、回滚／提交、服务端已观察到的慢查询取消及重连。`tauri-state-qa/report.json`
+为 `passed=true`、`cleanupErrors=[]`；`tauri-database-service/database-live.json`
+核对实际退出后提交的数据、无剩余客户端连接、私有服务器已停止及凭据排除。
+[macOS artifact](https://github.com/YondFane/uTerm/actions/runs/42166630494/artifacts/13480905732)
+和
+[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42166630494/artifacts/13480430678)
+各包含 `tauri-state-qa/database-database-live-{profiles,exact,draft,transactions,recovery}.png`
+及相邻场景／截图元数据。
+
+14 张原始应用截图均已逐张核对。窗口或结果列裁切的长数值由报告中的精确字符串断言核对。SQL／Unicode 样本从共享夹具读取，保留文案检查。草稿重开按保存端点定位，仍要求
+`*`
+标记、同一编辑器及原 SQL。组件管理页仅在打开时启动探测，隐藏后保留。输入就绪检查等待控件启用及 CodeMirror 可见且可编辑。配置 CAS、两端内容 transport 取消后排空、模态冻结／恢复及目标变化后临时密码失效仍有覆盖；原生诊断仅含固定方法名和有界错误码，不包含私有参数／厂商文本。
+
+最后人工交互／选择器验收由用户豁免，不记录为人工通过。真实非 PostgreSQL 厂商集群按授权模拟范围保持未执行。先前的定位及 GitHub
+DNS 失败仍在 #38 保留链接；成功重跑注明实际源码与 merge。其他 M3／M4／M5 验收保持独立。
 
 ### 数据库配置与区域显示
 

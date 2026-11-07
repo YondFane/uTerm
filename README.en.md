@@ -134,3 +134,330 @@ retain their licenses.
 
 [Report a bug or request a feature](https://github.com/YondFane/uTerm/issues/new). Include your OS,
 uTerm version and steps to reproduce the issue.
+
+Native macOS development is isolated from stable releases. See
+[native migration](docs/native-migration.md) for the QA app, platform checks and staged feature
+status.
+
+For the free, manually updated personal Mac app, run `bash scripts/macos-native-build.sh personal`
+then `bash scripts/macos-native-test.sh personal` and
+`python3 -B scripts/macos-personal-package.py --smoke` on macOS 14+ with a graphical session. The
+release workflow publishes additional Personal ARM64/X64 DMG and ZIP attachments on
+[GitHub Releases](https://github.com/YondFane/uTerm/releases), with no automatic expiry or download
+sign-in requirement. The **macOS personal packages** workflow keeps separate CI artifacts for 90
+days; those require GitHub sign-in. The app is ad-hoc signed, has no Apple notarization, uses the
+separate `sh.uterm.desktop.personal` profile, and disables network updates and QA arguments. See
+[personal installation and update steps](docs/features.md#personal-macos-app). Existing Tauri/QA
+profiles and the stable release workflow remain separate.
+
+Shared core checks: `pnpm test:core` and `pnpm contracts:check`. The shared Java task checks require
+JDK 21 (`JAVA_HOME` and its `bin` on `PATH`); application builds still do not bundle or require a
+JDK. `uterm-core::{java,python}` owns shared run configuration and task rules; Tauri provides
+platform adapters and generated DTOs keep Swift/TypeScript boundaries aligned. Regenerate TS/Swift
+boundary types with `pnpm contracts:generate`. On macOS, run `bash scripts/macos-native-build.sh`
+and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift bridge tests. The
+bridge suite includes logical file-root alias recovery and resolved file-picker boundary
+regressions.
+
+`pnpm settings:generate` derives the native command/theme catalog from the existing TypeScript
+settings and translations; `pnpm settings:check` verifies it. Contract generation/checks include
+this catalog. Core `settings.catalog` and `settings.validate` read defaults and validate platform
+shortcuts without saving configuration. Shared/native settings, menus and guarded login simulations
+are accepted in [#41](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106); actual
+OS registration remains explicitly unexecuted.
+
+Native settings QA: **Settings → All settings…** opens the draft form. Run
+`bash scripts/macos-settings-smoke.sh` after the QA build to check read-only opening, field
+conflicts, invalid drafts, shortcut capture, explicit reset and actual quit cancellation. The script
+records real windows, theme effects, menu keys and palette focus. Login-item QA uses a guarded
+simulation and never registers a CI login item. Preference/inspector/GitHub acceptance uses
+source949e4c2 and its four platform reports; signed update installation remains tracked separately
+in #45.
+
+`bash scripts/macos-inspector-smoke.sh` checks the native Files/Search/Quick open commands, exact
+line navigation, tools focus, pane swap and zoom with temporary files and real PTYs. It requires the
+QA build and a macOS graphical session, and saves four original screenshots plus
+`inspector-native.json` with source/tested SHAs. CI must execute these checks before acceptance.
+
+`bash scripts/macos-github-smoke.sh` runs the native GitHub window against an isolated simulated CLI
+and temporary repository. It checks shared session links, PR drafts, literal JSON creation,
+cancellation and quit protection, and saves a report, CLI log and four screenshots. It creates no
+real GitHub PR, push or fork. Both clients reuse `uterm-core::github`.
+
+Isolated candidate installation QA: run `bash scripts/macos-candidate-package.sh` after the native
+build, or `./scripts/windows-candidate-package.ps1` on Windows with WebView2 installed. They create
+QA App/DMG or NSIS artifacts and SHA256 sums, install only into owned temporary directories, run and
+capture the installed app, then uninstall. Reports live under the CI artifact's `candidate/`
+directory. Native signing is ad-hoc; Windows candidates are unsigned, with no update signature or
+notarization. These commands do not publish or change production update feeds.
+
+`python3 -B tests/test_macos_disk_image.py` checks the checksum verifier's bounded busy retries,
+permanent errors and timeouts with labelled simulations; macOS CI still verifies the actual DMG.
+
+The **Candidate Windows QA** workflow reruns the installer scope separately. It also supports
+`gh workflow run candidate-windows.yml --ref <branch>`; full regression remains in the normal
+**uTerm** and **Native migration** workflows. The executable comparison accepts only Tauri's unique
+NSIS marker transform with all other bytes unchanged, retaining both hashes and difference offsets.
+
+After the native or desktop QA commands, run
+`python3 -B scripts/interaction-matrix.py native macos/.build/evidence` or
+`python -B scripts/interaction-matrix.py tauri ci-evidence/tauri-state-qa`. The source-bound matrix
+validates reports and original screenshots, separates actual native input from authorized
+simulations and keeps physical IME/sleep/multiscreen limits explicit. The two normal workflows
+archive `interaction-matrix.json`; `python3 -B tests/test_interaction_matrix.py` checks stale-SHA,
+failed-run and missing/image-path evidence rejection.
+
+Shared Agent rules live in `uterm-core::{agents,agent_install}`, including the Pi extension under
+`crates/uterm-core/integrations/`. `bash scripts/macos-agent-smoke.sh` requires a macOS graphical
+session and the QA build; it records real window/Host/installed-reporter evidence with an explicitly
+simulated OS notification adapter, without provider credentials or global CLI installation.
+
+The native app pins Sparkle 2.10.1 through SwiftPM (minimum macOS 12; uTerm remains macOS 14+).
+`macos-native-build.sh` embeds its signed framework/helpers and license with a bundle-relative
+runtime search path. Ordinary QA builds configure no feed or update public key and never start the
+updater; configured QA feeds must use literal loopback hosts. Candidate checks audit
+framework/helper architectures, minimum OS, signatures and read-only resources. SDK runtime/update
+acceptance is tracked separately from dependency compilation in #45.
+
+`python3 -B scripts/macos-updates-smoke.py` runs the actual SDK in separately identified native QA
+apps with temporary data, one-time CryptoKit keys and loopback feeds. It downloads the
+checksum-pinned official signing toolkit and exercises valid/invalid signatures,
+platform/channel/version rejection, cancellation, interrupted/offline download and retry. User
+decisions use an explicitly simulated SDK driver; shared opt-in/opt-out exercises the actual SDK
+scheduler. A separate case performs actual SDK replacement/relaunch, real editor quit autosave and
+retained-host reconnection; both Mac architectures pass at sourceec1a49d. Reports, original windows,
+HTTP logs and the valid signed test ZIP are archived under `updates/`; private keys are never
+uploaded. The original CI coordinator captures the relaunched process only after matching source,
+bundle identity and WindowServer owner PID/window number; missing permission or images remains a
+failed acceptance.
+
+`node scripts/windows-updates-smoke.mjs` requires Windows/WebView2 and builds isolated 0.2.4/0.2.5
+QA NSIS packages. One-time test keys sign the update, and a private literal-loopback server drives
+actual updater check/download/verification/install/relaunch. Real settings controls exercise manual
+checking, automatic opt-in/download, cancellation and opt-out. Core draft input and the editor dirty
+flag are explicitly simulated; persistence, the live PTY/host and installer remain real. Evidence
+under `ci-evidence/updates-windows` includes public signatures, packages, HTTP logs, source/merge
+metadata and actual QA windows. Private keys stay outside artifacts. At sourceec1a49d, Windows
+passes fourteen scenes including real PostgreSQL query/transaction protection and a real transfer
+registry with a simulated worker. #45 records exact head/merge, artifacts and simulation boundaries;
+it is accepted on the task branch, without a production update or release.
+
+Core `rollback.export` creates a read-only, revision-bound archive of canonical state and every
+current editor draft without changing `legacy.export`. Old clients have one draft slot: multiple
+current drafts remain archived and require a deliberate choice, while deleted drafts stay deleted.
+Generated TS/Swift models and source-bound storage reports cover this data boundary; actual
+old-client installation and program/data rollback remain tracked in #46.
+
+After the native QA build, `python3 -B scripts/client-performance-database.py` (`python` on Windows)
+executes the Client performance evidence workflow's three sequential repetitions. It owns one
+isolated PostgreSQL cluster across both clients on each Mac; Windows records its own Tauri baseline.
+`shared/fixtures/client-performance.json` version4 fixes the actual 120×30 grid, PTY output,
+font/scrollback, CAS files, replay, synthetic alternate-screen redraws, delayed-consumer checks and
+real Core/JDBC queries. Idle samples last 120/120/600 seconds. Raw PID-tree CPU/RSS, per-cycle data,
+original windows, cleanup and source/workload hashes are archived;
+`node scripts/client-performance-report.mjs` audits them. Unattributed WebContent/GPU/XPC and the
+external database server are excluded. Per-source platform measurements are recorded in #43;
+multi-hour leak freedom and whole-app performance improvement are not established.
+
+For signed Windows updater QA, use `python -B scripts/windows-updates-database.py` with Java 21 and
+PostgreSQL available. The wrapper owns a private cluster and invokes the NSIS updater runner,
+including active-query/transaction guards and a labelled simulated transfer worker. It verifies
+rollback data and service cleanup, scans evidence for temporary credentials and changes no
+production feed. Actual new guard results require Windows CI.
+
+After the native QA build, `python3 -B scripts/client-upgrade-smoke.py` (owned GitHub Actions Mac
+only) runs the isolated Mac historical-Tauri/native/rollback rehearsal. It fetches the fixed
+published source, records its QA overlay, builds the historical client and checks signed
+private-package download, interrupted program replacement, actual editor crash/recovery and
+latest-data rollback with the retained host. The two Mac jobs archive original windows, packages,
+canonical fixture backups and source-bound reports. Credential/hook references are simulated; this
+does not run the unmodified published installer or configure production migration feeds. Actual Mac
+results and acceptance are recorded per source in #46.
+
+`python3 -B scripts/migration-readiness.py --head SOURCE_SHA` audits current-head GitHub evidence
+with authenticated read access. The Migration readiness audit runs on updates to migration PR #12 or
+manual dispatches, uploads its JSON report and fails for open prerequisites, missing/failed or stale
+evidence, incomplete acceptance and inconsistent tested merges. It performs no issue, merge or
+release mutations.
+
+The embedded Java 8 encoding agent includes its Java source and reproducible runtime bytes. After
+changing it, use JDK 21 to run `python3 scripts/java8-encoding-agent.py`, then
+`python3 scripts/java8-encoding-agent.py --check`. Normal Rust/application builds need no Java
+compiler; Windows interoperability CI checks the asset and runs the actual selected JDK.
+
+Native terminal QA: `bash scripts/macos-terminal-smoke.sh` runs two real app processes with
+temporary data, a bundled standalone helper and language/theme/width screenshot artifacts. It also
+launches system Vim, enters and pastes Unicode through native terminal actions, verifies the saved
+UTF-8 file and records the actual TUI window. This does not replace manual IME acceptance. SwiftPM
+resolves the pinned SwiftTerm 1.20.0 dependency; it does not change the legacy terminal renderer.
+
+Concurrent native ownership QA: `bash scripts/macos-input-control-smoke.sh` runs two isolated native
+app processes against the same session, exercises the take-control button and passive input/resize
+safeguards, and records source-bound reports and four real window screenshots. Manual keyboard, IME
+and system-clipboard acceptance remain separate.
+
+Native Java QA: choose **File → Java build and run…** for the shared Maven/JDK configuration,
+build/run actions and task logs. `bash scripts/macos-java-smoke.sh` requires JDK 21 and a macOS
+graphical session; it compiles an isolated JAR and records real configuration/task/window evidence.
+Picker/keyboard acceptance and full Maven workflows remain separate from the scripted smoke. Windows
+launcher interop CI exercises the actual shared host with JDK 8/11/17/21. The host and Tauri
+executable share `shared/windows/application.manifest` for per-process UTF-8; Unicode Java steps use
+the selected JDK's own launcher in a child process. Platform results remain separate from
+compilation and full Maven/manual acceptance.
+
+Optional real Maven QA uses Maven 3.9.9 and Spring Boot 2.7.18 in temporary projects. Set
+`JAVA_HOME`, `UTERM_MAVEN_HOME` and optionally `UTERM_MAVEN_REPOSITORY`, then run:
+
+```sh
+cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test host \
+  real_maven_reactor_and_spring_boot_use_shared_task_lifetimes -- --ignored --nocapture
+```
+
+This explicit test downloads Maven Central dependencies unless the selected repository is warm. Set
+`UTERM_MAVEN_CORE_REPORT` to save its source/platform report. The Maven interoperability CI runs
+Windows JDK8/11/17/21 and native macOS ARM/Intel JDK21, separately from Unicode launcher and GUI
+acceptance. The default test suite does not download Maven dependencies.
+
+Native Python QA: choose **File → Python run…** after selecting a local project or Worktree. The
+native form uses the shared Rust Python service and raw task-output channel. Run
+`bash scripts/macos-python-smoke.sh` in a macOS graphical session for isolated configuration,
+conflict, real-process output, detach/replay, search/follow, stop and run-again checks with
+screenshots. This requires an existing Python 3; it does not install Python or packages. Platform
+execution remains separately recorded in the feature guides.
+
+The shared-core command explicitly runs the filesystem-failure case. Unix tests require an
+unprivileged user so directory permissions enforce the failure; Windows uses a held file lease.
+
+macOS bridge tests use `macos/Tests/UTermTestSupport` for actual native file-lock checks; this C
+helper is linked only into tests.
+
+`uterm-core::redis` shares connection/credential, TLS/SSH, binary data, TTL and protected-write
+rules. Tauri commands retain their existing interface and native CA picker. The Core JSON bridge
+provides asynchronous operations, bounded results, profile CAS and quit/resume guards. The isolated
+native app opens **Redis connections** from its sidebar or **File → Redis connections…**; platform
+acceptance remains tracked in #39. `bash scripts/macos-redis-smoke.sh` requires a macOS graphical
+session, Homebrew and Python 3; it installs Redis if absent and uses a private temporary loopback
+server for actual window/write checks and screenshots without installing a system service. Run
+`pnpm test:redis` with TLS-enabled `redis-server` and `openssl` on PATH; it uses temporary loopback
+servers. With `redis-cli` also available,
+`node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory` records source-bound
+service reports. The shared Redis CI builds verified Redis 7.4.7 and uploads evidence.
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test credentials` checks actual
+OS credential lookup, binary replacement, neighboring-item isolation and deletion on macOS/Windows.
+It requires access to the test user's credential store, uses unique QA service/reference names and
+removes its own records. Linux runs zero OS cases. Redis window QA also checks 20,001-member bounded
+paging, 401-member editable lists, reviewed deletion/TTL, cancelled application quit and
+stored-reference authentication; each platform's runtime result is recorded separately.
+
+`uterm-core::{database,database_components,downloads}` shares database business rules, credential
+binding and verified component installation/resume. Clients provide directories, SSH confirmation,
+pickers and events; existing Tauri database commands and quit guards remain available. The isolated
+native app opens **Databases** from its sidebar or **File → Databases…**, reusing SQL/document forms
+and workbenches with Core profile CAS and application-lived temporary passwords. Acceptance is
+tracked separately in #38. `bash scripts/macos-database-smoke.sh` requires a macOS graphical
+session, Homebrew, Python 3, curl and Java 17+; it installs PostgreSQL 16 if absent, downloads the
+catalog-verified JDBC driver, and uses private temporary data/credentials for a real SQL window
+check and screenshots. It does not install a PostgreSQL system service or access production
+databases.
+
+`uterm-core::ssh` owns OpenSSH configuration/path rules, credential binding/system adapters,
+SFTP/transfer services and owned tunnel lifetimes. Tauri delegates to those same services while
+retaining its commands, pickers and trust dialogs. The isolated native app offers **File → SSH
+connections…** for saved profiles, remote terminals, SFTP and forwarding; new native/platform
+acceptance is tracked separately.
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture`
+includes Unix authenticated-service tests requiring `/usr/sbin/sshd` and `ssh-keygen`; they use
+temporary keys, known_hosts and data without changing `~/.ssh` or the system SSH service. Core CI
+artifacts include `ssh-service-core.json`; Windows real-service and native UI acceptance are tracked
+separately. `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY`
+runs the public Core real-service checks. Platform CI uses Python 3.12 and adds isolated temporary
+password accounts; Windows downloads a checksum-verified pinned OpenSSH server and restores the CI
+user's temporary SSH aliases. `PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` wraps the
+real Tauri QA with this service and adds profile/SFTP/remote-terminal screenshots plus actual
+quit/reopen replay verification. The Tauri wrapper also starts a private real Redis service for
+profile/binary/draft/save/reconnect scenes and verifies final text, TTL and binary bytes after exit.
+Windows uses the checksum-pinned community redis-windows 8.10.3 Cygwin portable archive; macOS uses
+Homebrew Redis. Reports and native screenshots are uploaded separately from private credentials and
+configuration; no Redis system service is installed. Both commands keep private fixture data outside
+artifacts and require disposable CI for account creation.
+
+The same Tauri wrapper starts a private PostgreSQL cluster for database profile, exact-value,
+transaction, cancellation and reconnect scenes, then verifies committed data and releases owned
+connections. Windows uses installed PostgreSQL binaries (`PGBIN` or Program Files); macOS installs
+Homebrew PostgreSQL 16 if needed. It never starts or stops an installed database service.
+`python3 -B scripts/database-protocol-qa.py EVIDENCE_DIRECTORY` downloads catalog-verified drivers
+and records JDBC/MongoDB protocol simulations separately from real PostgreSQL checks. Manual picker
+and interaction acceptance is not claimed by these automated checks.
+
+`uterm-core::{files,git,worktrees}` owns local file and Git/Worktree rules and their regression
+tests; Tauri commands delegate to the same functions. The new `git.*` contract and generated DTOs
+are used by **File → Git…** in the isolated native QA app. Core now reconciles registered project
+Worktrees for both clients; the native sidebar supports selection, refresh and confirmed deletion.
+Core refuses saved/live session use, dirty files and stale writes; metadata failure after Git
+removal requires explicit refresh. Both clients use the Core Git favorite store with revision
+checks, exact old-source archives and explicit conflict handoff; favorite recovery interfaces have
+platform evidence; full manual acceptance remains pending. `bash scripts/macos-git-smoke.sh` runs
+real-window diff/history/copy, branch creation, editor conflict protection and real Worktree menu
+confirmation/cancel/refusal/removal and favorite persistence and in-flight cancellation protection
+checks, including deterministic contention with an independent Rust writer, one explicit reload and
+unchanged favorite bytes, with temporary repositories and system screenshots. This requires a macOS
+GUI session; platform acceptance is recorded separately.
+
+The core's locked dependencies include the existing base64 decoder and ignore-aware file walker.
+Native file/content UI acceptance is tracked separately in the migration guide.
+
+The native QA build also runs `pnpm build` and bundles shared Web content and license notices;
+install frozen pnpm dependencies first. `bash scripts/macos-content-smoke.sh` checks readonly
+CodeMirror/HTML/PDF and resource boundaries. With a local project selected, **File → Open file…**
+now uses the shared editor and Rust draft queue for editable text.
+`bash scripts/macos-editor-smoke.sh` checks actual native editing, a durable draft followed by
+SIGKILL/relaunch, conflict/close/discard/save, reports and system screenshots. It requires a macOS
+GUI session and an isolated QA App; it uses temporary files and does not establish manual
+keyboard/IME acceptance. Recovery selection and copy/restore checks also run in this script.
+
+`pnpm qa:shared-state` builds a compile-gated, isolated Tauri QA app
+(`sh.uterm.desktop.qa.sharedstate`) and runs Git/diff/history/branch/Worktree registration, editor
+import/durable draft/SIGKILL/reopen/exact-save plus state save/conflict/reload/quit/recovery
+scenarios in its real WebView. Windows/macOS CI captures native windows and uploads reports and
+images under `legacy-checks-*/tauri-state-qa/`. It requires a desktop session and refuses existing
+QA profiles. Dedicated profile links redirect QA data into a temporary directory; no home-directory
+override or production profile is used. This automation does not establish manual keyboard/IME
+acceptance. Windows capture uses Win32 PrintWindow on the actual QA window with per-image metadata;
+screen-copy fallback requires unobstructed samples. `scripts/windows-window-capture.ps1` restores
+its previous topmost flag afterwards.
+
+The QA also exercises an actual writer-lock rejection and explicit recovery-draft retry, plus Git
+favorite preview/copy/stale/missing recovery. Shared Tauri content copies through the locked native
+clipboard-manager plugin with write-text permission for the main window; it does not depend on
+WebView clipboard permission. Windows/macOS QA verifies full original source bytes against the OS
+clipboard. The native client uses scoped NSPasteboard calls. Keep the JS and Rust clipboard plugins
+on the same major/minor release; the Tauri CLI checks this pair.
+
+The core's `store/editor.rs` owns revision-checked multi-document drafts, exact legacy-source copies
+and explicit recovery. Native and Tauri editing adopt this API through the bounded queue in
+`src/lib/editor-drafts.ts`. Tauri initializes exact versioned old-source backups and an explicit
+handoff before App, freezes the old draft key and offers conflict/corrupt-copy recovery choices.
+Editable native files now group into project-scoped AppKit tabs and reuse an existing file tab;
+real-window tab checks pass on macOS ARM/Intel. Persisted tab/window order and complete editing
+acceptance remain pending. Content writes are restricted to the selected file. `pnpm test:core`
+explicitly runs filesystem failure/retry checks for workspace/draft snapshots and metadata saving
+after Worktree removal, plus Git favorite save/restore/retry.
+
+The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
+operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this
+service. `pnpm test:host` includes the real standalone CLI/socket regression; `pnpm test:core`
+checks bridge ownership and close. Native control dispatch uses the shared Rust rules; further
+native features remain under development.
+
+`pnpm test:legacy-host` builds an unchanged helper from the recorded release SHA in an isolated
+source/target directory, then checks real PTY replay, active-process preservation and idle upgrade.
+Reports, source/binary hashes and logs go to `ci-evidence/legacy-host/`; Windows/macOS CI uploads
+them. It fetches that commit if absent and uses locked dependencies. This checks a source-built
+historical helper, not a published installer upgrade.
+
+On macOS, `bash scripts/macos-control-smoke.sh` checks native control with the actual bundled Rust
+CLI, two PTYs, modal guards and native screenshots. Enable **Allow local CLI control** in native
+Settings and pass its displayed data directory explicitly with `--control --data-dir PATH`; the
+helper's default profile remains the legacy client profile. Rust allocates CLI session UUIDs with
+its locked UUID dependency. This QA requires WindowServer and does not change URI registration.

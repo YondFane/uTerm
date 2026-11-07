@@ -600,6 +600,14 @@ h1 {
 .terminal .xterm {
   height: 100%;
 }
+.terminal-readonly {
+  overflow-x: auto;
+}
+.terminal-control-state {
+  font-size: 11px;
+  white-space: nowrap;
+  color: var(--ui-muted);
+}
 
 [role="alert"] {
   color: #f5b5aa;
@@ -863,6 +871,28 @@ select:focus-visible {
 }
 .name-dialog {
   color: inherit;
+}
+.worktree-delete-dialog {
+  width: min(500px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+.worktree-delete-dialog code {
+  display: block;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.worktree-delete-dialog button,
+.workspace-reload {
+  width: auto;
+  min-height: 28px;
+  padding: 4px 10px;
+}
+.workspace-reload {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  margin: 0 12px 8px;
 }
 
 .terminal-workspace {
@@ -2913,6 +2943,15 @@ select:focus-visible {
   border: 1px solid var(--ui-border);
   border-radius: 6px;
   padding: 8px;
+}
+.pr-dialog .pr-draft-choice {
+  justify-content: flex-start;
+  gap: 8px;
+}
+.pr-dialog .pr-draft-choice input {
+  flex: 0 0 auto;
+  width: auto;
+  margin: 0;
 }
 .sidebar .row-label,
 .sidebar .workspace-switcher {
@@ -6318,4 +6357,74 @@ button:hover:not(:disabled) > .close-icon > circle {
     align-items: center;
     justify-content: center;
   }
+}
+
+.editor-draft-recovery {
+  max-width: 880px;
+  margin: 32px auto;
+  padding: 20px;
+  overflow-wrap: anywhere;
+}
+.editor-draft-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.editor-draft-recovery pre {
+  white-space: pre-wrap;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.git-favorite-recovery-dialog {
+  box-sizing: border-box;
+  width: min(720px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 20px;
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+}
+.git-favorite-recovery-dialog::backdrop {
+  background: #0008;
+}
+.git-favorite-recovery-dialog h2 {
+  margin: 0 0 12px;
+}
+.git-favorite-recovery-dialog > label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+}
+.git-favorite-recovery-dialog select,
+.git-favorite-recovery-dialog textarea {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.git-favorite-recovery-dialog textarea {
+  box-sizing: border-box;
+  height: min(240px, 30vh);
+  min-height: 140px;
+  padding: 8px;
+  resize: vertical;
+  font:
+    12px/1.4 ui-monospace,
+    monospace;
+}
+.git-favorite-recovery-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.git-favorite-recovery-actions button {
+  flex: 0 0 auto;
+  width: auto;
+  min-height: 28px;
+  padding: 4px 10px;
 }

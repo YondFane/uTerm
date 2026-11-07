@@ -1,0 +1,722 @@
+{
+  "version": 1,
+  "settingsKeys": [
+    "automaticUpdates",
+    "fileTabLimit",
+    "breakReminder",
+    "breakInterval",
+    "inspectorPosition",
+    "interfaceTheme",
+    "activeIconColor",
+    "sidebarStyle",
+    "darkTheme",
+    "lightTheme",
+    "customThemes",
+    "interfaceFont",
+    "interfaceSize",
+    "rowPadding",
+    "windowPadding",
+    "opacity",
+    "blur",
+    "language",
+    "version",
+    "appearance",
+    "fontFamily",
+    "fontThicken",
+    "fontSize",
+    "fileFontSize",
+    "gitDiffFontSize",
+    "lineHeight",
+    "cursorStyle",
+    "cursorBlink",
+    "scrollback",
+    "copyOnSelect",
+    "defaultShell",
+    "defaultAgent",
+    "enabledAgents",
+    "projectOrder",
+    "showSshConnections",
+    "showRedisConnections",
+    "showDatabaseConnections",
+    "usageRemote",
+    "usageRefreshInterval",
+    "shortcuts",
+    "agentNotifications"
+  ],
+  "commands": [
+    {
+      "id": "palette",
+      "labels": {
+        "en": "Command palette",
+        "zh-Hans": "命令面板"
+      },
+      "defaultShortcut": "Mod+Shift+KeyP"
+    },
+    {
+      "id": "settings",
+      "labels": {
+        "en": "Settings",
+        "zh-Hans": "设置"
+      },
+      "defaultShortcut": "Mod+Comma"
+    },
+    {
+      "id": "project",
+      "labels": {
+        "en": "Add project",
+        "zh-Hans": "添加项目"
+      },
+      "defaultShortcut": "Mod+KeyO"
+    },
+    {
+      "id": "terminal",
+      "labels": {
+        "en": "New terminal",
+        "zh-Hans": "新建终端"
+      },
+      "defaultShortcut": "Mod+KeyT"
+    },
+    {
+      "id": "chat",
+      "labels": {
+        "en": "New chat",
+        "zh-Hans": "新建聊天"
+      },
+      "defaultShortcut": "Mod+KeyN"
+    },
+    {
+      "id": "quick",
+      "labels": {
+        "en": "Quick open file",
+        "zh-Hans": "快速打开文件"
+      },
+      "defaultShortcut": "Mod+KeyP"
+    },
+    {
+      "id": "search",
+      "labels": {
+        "en": "Search project",
+        "zh-Hans": "搜索项目"
+      },
+      "defaultShortcut": "Mod+Shift+KeyF"
+    },
+    {
+      "id": "files",
+      "labels": {
+        "en": "Toggle files",
+        "zh-Hans": "显示或隐藏文件"
+      },
+      "defaultShortcut": ""
+    },
+    {
+      "id": "toggleSidebar",
+      "labels": {
+        "en": "Toggle left sidebar",
+        "zh-Hans": "显示或隐藏左侧栏"
+      },
+      "defaultShortcut": "Mod+KeyB"
+    },
+    {
+      "id": "toggleInspector",
+      "labels": {
+        "en": "Toggle inspector",
+        "zh-Hans": "显示或隐藏工具面板"
+      },
+      "defaultShortcut": "Mod+Alt+KeyB"
+    },
+    {
+      "id": "swapPanes",
+      "labels": {
+        "en": "Swap left and right panes",
+        "zh-Hans": "交换左右窗格"
+      },
+      "defaultShortcut": ""
+    },
+    {
+      "id": "git",
+      "labels": {
+        "en": "Toggle Git",
+        "zh-Hans": "显示或隐藏 Git"
+      },
+      "defaultShortcut": ""
+    },
+    {
+      "id": "github",
+      "labels": {
+        "en": "Toggle GitHub",
+        "zh-Hans": "显示或隐藏 GitHub"
+      },
+      "defaultShortcut": ""
+    },
+    {
+      "id": "agents",
+      "labels": {
+        "en": "Agent",
+        "zh-Hans": "Agent"
+      },
+      "defaultShortcut": ""
+    },
+    {
+      "id": "splitRight",
+      "labels": {
+        "en": "Split right",
+        "zh-Hans": "向右分屏"
+      },
+      "defaultShortcut": "Mod+KeyD"
+    },
+    {
+      "id": "splitDown",
+      "labels": {
+        "en": "Split down",
+        "zh-Hans": "向下分屏"
+      },
+      "defaultShortcut": "Mod+Shift+KeyD"
+    },
+    {
+      "id": "zoom",
+      "labels": {
+        "en": "Zoom or restore pane",
+        "zh-Hans": "放大或还原窗格"
+      },
+      "defaultShortcut": "Mod+Shift+Enter"
+    },
+    {
+      "id": "ungroup",
+      "labels": {
+        "en": "Ungroup",
+        "zh-Hans": "取消分组"
+      },
+      "defaultShortcut": ""
+    },
+    {
+      "id": "left",
+      "labels": {
+        "en": "Focus left pane",
+        "zh-Hans": "聚焦左侧窗格"
+      },
+      "defaultShortcut": "Mod+Alt+ArrowLeft"
+    },
+    {
+      "id": "right",
+      "labels": {
+        "en": "Focus right pane",
+        "zh-Hans": "聚焦右侧窗格"
+      },
+      "defaultShortcut": "Mod+Alt+ArrowRight"
+    },
+    {
+      "id": "up",
+      "labels": {
+        "en": "Focus pane above",
+        "zh-Hans": "聚焦上方窗格"
+      },
+      "defaultShortcut": "Mod+Alt+ArrowUp"
+    },
+    {
+      "id": "down",
+      "labels": {
+        "en": "Focus pane below",
+        "zh-Hans": "聚焦下方窗格"
+      },
+      "defaultShortcut": "Mod+Alt+ArrowDown"
+    },
+    {
+      "id": "next",
+      "labels": {
+        "en": "Next session",
+        "zh-Hans": "下一个会话"
+      },
+      "defaultShortcut": "Mod+Shift+BracketRight"
+    },
+    {
+      "id": "previous",
+      "labels": {
+        "en": "Previous session",
+        "zh-Hans": "上一个会话"
+      },
+      "defaultShortcut": "Mod+Shift+BracketLeft"
+    },
+    {
+      "id": "nextWorkspace",
+      "labels": {
+        "en": "Next workspace",
+        "zh-Hans": "下一个工作区"
+      },
+      "defaultShortcut": "Mod+Alt+BracketRight"
+    },
+    {
+      "id": "previousWorkspace",
+      "labels": {
+        "en": "Previous workspace",
+        "zh-Hans": "上一个工作区"
+      },
+      "defaultShortcut": "Mod+Alt+BracketLeft"
+    },
+    {
+      "id": "close",
+      "labels": {
+        "en": "Close Session",
+        "zh-Hans": "关闭会话"
+      },
+      "defaultShortcut": "Mod+KeyW"
+    },
+    {
+      "id": "link",
+      "labels": {
+        "en": "Copy session link",
+        "zh-Hans": "复制会话链接"
+      },
+      "defaultShortcut": ""
+    },
+    {
+      "id": "terminalSearch",
+      "labels": {
+        "en": "Search terminal output",
+        "zh-Hans": "搜索终端输出"
+      },
+      "defaultShortcut": "Mod+KeyF"
+    },
+    {
+      "id": "fontDecrease",
+      "labels": {
+        "en": "Decrease content font size",
+        "zh-Hans": "减小内容字号"
+      },
+      "defaultShortcut": "Mod+Minus"
+    },
+    {
+      "id": "fontIncrease",
+      "labels": {
+        "en": "Increase content font size",
+        "zh-Hans": "增大内容字号"
+      },
+      "defaultShortcut": "Mod+Equal"
+    }
+  ],
+  "themes": [
+    {
+      "id": "default-dark",
+      "name": "uTerm Dark",
+      "background": "#211f1d",
+      "foreground": "#f0ebe3",
+      "selectionBackground": "#584a37",
+      "cursor": "#d9b987",
+      "black": "#282a36",
+      "red": "#ff5555",
+      "green": "#50fa7b",
+      "yellow": "#f1fa8c",
+      "blue": "#6272a4",
+      "magenta": "#ff79c6",
+      "cyan": "#8be9fd",
+      "white": "#f8f8f2",
+      "brightBlack": "#6272a4",
+      "brightRed": "#ff6e6e",
+      "brightGreen": "#69ff94",
+      "brightYellow": "#ffffa5",
+      "brightBlue": "#d6acff",
+      "brightMagenta": "#ff92df",
+      "brightCyan": "#a4ffff",
+      "brightWhite": "#ffffff",
+      "labels": {
+        "en": "uTerm Dark",
+        "zh-Hans": "uTerm Dark"
+      }
+    },
+    {
+      "id": "default-light",
+      "name": "uTerm Light",
+      "background": "#faf8f5",
+      "foreground": "#302b25",
+      "selectionBackground": "#e2d5bd",
+      "cursor": "#866126",
+      "black": "#282a36",
+      "red": "#ba2525",
+      "green": "#26702a",
+      "yellow": "#855f00",
+      "blue": "#275cad",
+      "magenta": "#913398",
+      "cyan": "#117b88",
+      "white": "#555555",
+      "brightBlack": "#6272a4",
+      "brightRed": "#ff6e6e",
+      "brightGreen": "#69ff94",
+      "brightYellow": "#ffffa5",
+      "brightBlue": "#d6acff",
+      "brightMagenta": "#ff92df",
+      "brightCyan": "#a4ffff",
+      "brightWhite": "#ffffff",
+      "labels": {
+        "en": "uTerm Light",
+        "zh-Hans": "uTerm Light"
+      }
+    },
+    {
+      "id": "dracula",
+      "name": "Dracula",
+      "background": "#282a36",
+      "foreground": "#f8f8f2",
+      "selectionBackground": "#44475a",
+      "cursor": "#f8f8f2",
+      "black": "#282a36",
+      "red": "#ff5555",
+      "green": "#50fa7b",
+      "yellow": "#f1fa8c",
+      "blue": "#6272a4",
+      "magenta": "#ff79c6",
+      "cyan": "#8be9fd",
+      "white": "#f8f8f2",
+      "brightBlack": "#6272a4",
+      "brightRed": "#ff6e6e",
+      "brightGreen": "#69ff94",
+      "brightYellow": "#ffffa5",
+      "brightBlue": "#d6acff",
+      "brightMagenta": "#ff92df",
+      "brightCyan": "#a4ffff",
+      "brightWhite": "#ffffff",
+      "labels": {
+        "en": "Dracula",
+        "zh-Hans": "Dracula"
+      }
+    },
+    {
+      "id": "nord",
+      "name": "Nord",
+      "background": "#2e3440",
+      "foreground": "#d8dee9",
+      "selectionBackground": "#434c5e",
+      "cursor": "#d8dee9",
+      "black": "#282a36",
+      "red": "#bf616a",
+      "green": "#a3be8c",
+      "yellow": "#ebcb8b",
+      "blue": "#81a1c1",
+      "magenta": "#b48ead",
+      "cyan": "#88c0d0",
+      "white": "#f8f8f2",
+      "brightBlack": "#6272a4",
+      "brightRed": "#ff6e6e",
+      "brightGreen": "#69ff94",
+      "brightYellow": "#ffffa5",
+      "brightBlue": "#d6acff",
+      "brightMagenta": "#ff92df",
+      "brightCyan": "#a4ffff",
+      "brightWhite": "#ffffff",
+      "labels": {
+        "en": "Nord",
+        "zh-Hans": "Nord"
+      }
+    },
+    {
+      "id": "solarized-dark",
+      "name": "Solarized Dark",
+      "background": "#002b36",
+      "foreground": "#839496",
+      "selectionBackground": "#073642",
+      "cursor": "#93a1a1",
+      "black": "#073642",
+      "red": "#dc322f",
+      "green": "#859900",
+      "yellow": "#b58900",
+      "blue": "#268bd2",
+      "magenta": "#d33682",
+      "cyan": "#2aa198",
+      "white": "#eee8d5",
+      "brightBlack": "#6272a4",
+      "brightRed": "#ff6e6e",
+      "brightGreen": "#69ff94",
+      "brightYellow": "#ffffa5",
+      "brightBlue": "#d6acff",
+      "brightMagenta": "#ff92df",
+      "brightCyan": "#a4ffff",
+      "brightWhite": "#ffffff",
+      "labels": {
+        "en": "Solarized Dark",
+        "zh-Hans": "Solarized Dark"
+      }
+    },
+    {
+      "id": "solarized-light",
+      "name": "Solarized Light",
+      "background": "#fdf6e3",
+      "foreground": "#657b83",
+      "selectionBackground": "#eee8d5",
+      "cursor": "#586e75",
+      "black": "#282a36",
+      "red": "#dc322f",
+      "green": "#668000",
+      "yellow": "#946f00",
+      "blue": "#268bd2",
+      "magenta": "#d33682",
+      "cyan": "#19877e",
+      "white": "#f8f8f2",
+      "brightBlack": "#6272a4",
+      "brightRed": "#ff6e6e",
+      "brightGreen": "#69ff94",
+      "brightYellow": "#ffffa5",
+      "brightBlue": "#d6acff",
+      "brightMagenta": "#ff92df",
+      "brightCyan": "#a4ffff",
+      "brightWhite": "#ffffff",
+      "labels": {
+        "en": "Solarized Light",
+        "zh-Hans": "Solarized Light"
+      }
+    },
+    {
+      "id": "gruvbox",
+      "name": "Gruvbox Dark",
+      "background": "#282828",
+      "foreground": "#ebdbb2",
+      "selectionBackground": "#504945",
+      "cursor": "#ebdbb2",
+      "black": "#282a36",
+      "red": "#cc241d",
+      "green": "#98971a",
+      "yellow": "#d79921",
+      "blue": "#458588",
+      "magenta": "#b16286",
+      "cyan": "#689d6a",
+      "white": "#f8f8f2",
+      "brightBlack": "#6272a4",
+      "brightRed": "#ff6e6e",
+      "brightGreen": "#69ff94",
+      "brightYellow": "#ffffa5",
+      "brightBlue": "#d6acff",
+      "brightMagenta": "#ff92df",
+      "brightCyan": "#a4ffff",
+      "brightWhite": "#ffffff",
+      "labels": {
+        "en": "Gruvbox Dark",
+        "zh-Hans": "Gruvbox Dark"
+      }
+    },
+    {
+      "id": "tokyo-night",
+      "name": "Tokyo Night",
+      "background": "#1a1b26",
+      "foreground": "#c0caf5",
+      "selectionBackground": "#33467c",
+      "cursor": "#c0caf5",
+      "black": "#282a36",
+      "red": "#f7768e",
+      "green": "#9ece6a",
+      "yellow": "#e0af68",
+      "blue": "#7aa2f7",
+      "magenta": "#bb9af7",
+      "cyan": "#7dcfff",
+      "white": "#f8f8f2",
+      "brightBlack": "#6272a4",
+      "brightRed": "#ff6e6e",
+      "brightGreen": "#69ff94",
+      "brightYellow": "#ffffa5",
+      "brightBlue": "#d6acff",
+      "brightMagenta": "#ff92df",
+      "brightCyan": "#a4ffff",
+      "brightWhite": "#ffffff",
+      "labels": {
+        "en": "Tokyo Night",
+        "zh-Hans": "Tokyo Night"
+      }
+    }
+  ],
+  "interfaceThemes": [
+    {
+      "id": "black",
+      "name": "暗黑",
+      "description": "纯黑与银灰，简洁沉浸。",
+      "dark": {
+        "canvas": "#101010",
+        "sidebar": "#090909",
+        "surface": "#191919",
+        "hover": "#272727",
+        "border": "#363636",
+        "text": "#f2f2f2",
+        "muted": "#c4c4c4",
+        "accent": "#d4d4d4"
+      },
+      "light": {
+        "canvas": "#f7f7f7",
+        "sidebar": "#ededed",
+        "surface": "#ffffff",
+        "hover": "#e0e0e0",
+        "border": "#cccccc",
+        "text": "#202020",
+        "muted": "#4e4e4e",
+        "accent": "#404040"
+      },
+      "labels": {
+        "en": "Black",
+        "zh-Hans": "暗黑"
+      },
+      "descriptions": {
+        "en": "Pure black and silver. Minimal and immersive.",
+        "zh-Hans": "纯黑与银灰，简洁沉浸。"
+      }
+    },
+    {
+      "id": "sand",
+      "name": "砂岩",
+      "description": "暖灰与砂金，安静专注。",
+      "dark": {
+        "canvas": "#211f1d",
+        "sidebar": "#1b1918",
+        "surface": "#2a2724",
+        "hover": "#35312d",
+        "border": "#403b35",
+        "text": "#f0ebe3",
+        "muted": "#c4bbb0",
+        "accent": "#d9b987"
+      },
+      "light": {
+        "canvas": "#faf8f5",
+        "sidebar": "#f0ede7",
+        "surface": "#ffffff",
+        "hover": "#e8e2d8",
+        "border": "#d9d2c7",
+        "text": "#302b25",
+        "muted": "#554c42",
+        "accent": "#866126"
+      },
+      "labels": {
+        "en": "Sandstone",
+        "zh-Hans": "砂岩"
+      },
+      "descriptions": {
+        "en": "Warm charcoal and sand.",
+        "zh-Hans": "暖灰与砂金，安静专注。"
+      }
+    },
+    {
+      "id": "ocean",
+      "name": "深海",
+      "description": "深蓝与冰蓝，清晰利落。",
+      "dark": {
+        "canvas": "#111923",
+        "sidebar": "#0c131c",
+        "surface": "#1a2635",
+        "hover": "#253448",
+        "border": "#34465d",
+        "text": "#e5edf7",
+        "muted": "#b9c8dd",
+        "accent": "#8dbfff"
+      },
+      "light": {
+        "canvas": "#f4f7fc",
+        "sidebar": "#e8eef7",
+        "surface": "#ffffff",
+        "hover": "#dae5f4",
+        "border": "#c6d3e5",
+        "text": "#203047",
+        "muted": "#3b4f67",
+        "accent": "#245f9e"
+      },
+      "labels": {
+        "en": "Ocean",
+        "zh-Hans": "深海"
+      },
+      "descriptions": {
+        "en": "Deep navy and ice blue.",
+        "zh-Hans": "深蓝与冰蓝，清晰利落。"
+      }
+    },
+    {
+      "id": "moss",
+      "name": "青苔",
+      "description": "墨绿与薄荷，柔和沉静。",
+      "dark": {
+        "canvas": "#141d19",
+        "sidebar": "#101713",
+        "surface": "#1e2b24",
+        "hover": "#2b3c32",
+        "border": "#3c5144",
+        "text": "#e6efe8",
+        "muted": "#bfd0c4",
+        "accent": "#91ceb0"
+      },
+      "light": {
+        "canvas": "#f5f8f4",
+        "sidebar": "#e8efe5",
+        "surface": "#ffffff",
+        "hover": "#dce8d8",
+        "border": "#c8d6c3",
+        "text": "#27382c",
+        "muted": "#3e5242",
+        "accent": "#326c4d"
+      },
+      "labels": {
+        "en": "Moss",
+        "zh-Hans": "青苔"
+      },
+      "descriptions": {
+        "en": "Forest green and mint.",
+        "zh-Hans": "墨绿与薄荷，柔和沉静。"
+      }
+    },
+    {
+      "id": "paper",
+      "name": "纸白",
+      "description": "暖白与陶棕，温润清爽。",
+      "dark": {
+        "canvas": "#fcfaf5",
+        "sidebar": "#f1ece1",
+        "surface": "#fffefb",
+        "hover": "#e8e0d1",
+        "border": "#d7cbb8",
+        "text": "#322d25",
+        "muted": "#574b3c",
+        "accent": "#87502f"
+      },
+      "light": {
+        "canvas": "#fcfaf5",
+        "sidebar": "#f1ece1",
+        "surface": "#fffefb",
+        "hover": "#e8e0d1",
+        "border": "#d7cbb8",
+        "text": "#322d25",
+        "muted": "#574b3c",
+        "accent": "#87502f"
+      },
+      "labels": {
+        "en": "Paper",
+        "zh-Hans": "纸白"
+      },
+      "descriptions": {
+        "en": "Warm white and terracotta. Soft and fresh.",
+        "zh-Hans": "暖白与陶棕，温润清爽。"
+      }
+    },
+    {
+      "id": "sky",
+      "name": "晴空",
+      "description": "冷白与天蓝，明亮通透。",
+      "dark": {
+        "canvas": "#f5faff",
+        "sidebar": "#e8f1fa",
+        "surface": "#ffffff",
+        "hover": "#d8e8f5",
+        "border": "#bdd1e3",
+        "text": "#22364b",
+        "muted": "#3c5165",
+        "accent": "#22628e"
+      },
+      "light": {
+        "canvas": "#f5faff",
+        "sidebar": "#e8f1fa",
+        "surface": "#ffffff",
+        "hover": "#d8e8f5",
+        "border": "#bdd1e3",
+        "text": "#22364b",
+        "muted": "#3c5165",
+        "accent": "#22628e"
+      },
+      "labels": {
+        "en": "Clear Sky",
+        "zh-Hans": "晴空"
+      },
+      "descriptions": {
+        "en": "Cool white and sky blue. Bright and clear.",
+        "zh-Hans": "冷白与天蓝，明亮通透。"
+      }
+    }
+  ]
+}

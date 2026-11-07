@@ -1,0 +1,4 @@
+module UTermFFI {
+    header "../../crates/uterm-ffi/include/uterm_ffi.h"
+    export *
+}

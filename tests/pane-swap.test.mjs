@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 
@@ -210,6 +210,9 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
           }),
         ),
       );
+    // Freeze periodic refreshes before mounting so wall time cannot pollute drag render counts.
+    // 挂载前冻结定期刷新，避免实际耗时污染拖动渲染计数。
+    t.mock.timers.enable({ apis: ["setTimeout", "setInterval"] });
     await render();
     assert.ok(swap());
     assert.equal(swap().title, "Swap left and right panes");
@@ -460,7 +463,6 @@ test("App swaps mounted panes, keeps drafts and tree state, persists position an
     await pointer(divider, "pointerup", 770);
     assert.equal(shell().style.getPropertyValue("--sidebar-width"), "218px");
     assert.equal(document.querySelector(".sidebar-main").hidden, false);
-    t.mock.timers.enable({ apis: ["setTimeout"] });
     const hint = (selector) =>
       document.querySelector(selector)?.hasAttribute("data-collapse-hint") ?? false;
     const drag = async (selector, end, finish = "pointerup", back) => {
