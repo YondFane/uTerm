@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 
 test("sidebar navigation filters existing lists without changing sessions, profiles or selection", async () => {

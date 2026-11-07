@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { databaseObjects, databaseSelect, databaseClipboard } from "../src/lib/database.ts";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 
 test("database metadata retains namespaces and quotes names without interpolating SQL", () => {

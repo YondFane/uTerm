@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import React, { act } from "react";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 
 test("Python panel protects drafts and pending runs, preserves history, and exposes force stop after errors", async () => {

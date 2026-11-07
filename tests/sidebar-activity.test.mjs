@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 
 test("active project trees move between sections without duplicating pinned children", async () => {

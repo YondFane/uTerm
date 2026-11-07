@@ -3473,6 +3473,14 @@ React 组件位于 `src/components/`，状态和纯逻辑位于 `src/lib/`，Tau
 
 ## 验证与限制
 
+### 前端测试资源隔离
+
+组件测试通过共享的 Vite SSR 测试服务加载真实模块，关闭文件监听、HMR 和 WebSocket 监听。`pnpm test`
+保留四个测试文件并发。渲染检查可与 Cargo 编译同时执行，不监听正在使用的可执行文件／调试符号，也不共享
+`24678` 端口。
+
+资源回归实际占用回环端口，同时加载两个 SSR 服务，核对插件转换，并修改隔离的 Cargo 输出测试文件而不添加监听器。Linux已通过此回归、Java／菜单／Maven场景及完整前端套件（436项通过，11项可选／平台检查跳过）。Windows验收须以实际CI报告及源码／测试SHA为准，这些Linux结果不代表Windows通过。
+
 ### Windows 自动化检查
 
 - 全仓 `pnpm format:check` 通过，包含 Prettier 和两个 Cargo 工作区。`.gitattributes`

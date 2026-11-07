@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 
 test("sidebar folding and add actions retain active data regardless of legacy visibility settings", async () => {

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 
 test("global run indicators survive project changes, serialize slow reads and retain failed snapshots", async () => {

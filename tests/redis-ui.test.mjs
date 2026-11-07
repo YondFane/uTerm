@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import React, { act } from "react";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 
 test("Java component cancellation retains busy state, ignores old status and stops callbacks after unmount", async () => {
