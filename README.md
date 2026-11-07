@@ -139,6 +139,14 @@ Native macOS development is isolated from stable releases. See
 [native migration](docs/native-migration.md) for the QA app, platform checks and staged feature
 status.
 
+For the free, manually updated personal Mac app, run `bash scripts/macos-native-build.sh personal`
+and `python3 -B scripts/macos-personal-package.py --smoke` on macOS 14+ with a graphical session.
+The **macOS personal packages** workflow provides separate ARM64/X64 DMG and ZIP artifacts for 14
+days; sign in to GitHub to download them. The app is ad-hoc signed, has no Apple notarization, uses
+the separate `sh.uterm.desktop.personal` profile, and disables network updates and QA arguments. See
+[personal installation and update steps](docs/features.md#personal-macos-app). Existing Tauri/QA
+profiles and the stable release workflow remain separate.
+
 Shared core checks: `pnpm test:core` and `pnpm contracts:check`. The shared Java task checks require
 JDK 21 (`JAVA_HOME` and its `bin` on `PATH`); application builds still do not bundle or require a
 JDK. `uterm-core::{java,python}` owns shared run configuration and task rules; Tauri provides

@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-06
+updated: 2026-11-07
 ---
 
 # uTerm feature guide
@@ -34,6 +34,47 @@ uTerm is a Windows and macOS desktop terminal. Local terminal and Agent processe
 remote shells run on their servers.
 
 The interface supports Simplified Chinese and English.
+
+### Personal macOS app
+
+The experimental **uTerm Personal** app uses Release builds of Swift/AppKit and the shared Rust
+core/helper on macOS 14+. It is ad-hoc signed for free personal use; it does not require a paid
+Apple Developer account or an App Store listing. It has no Apple notarization. The personal build
+never starts Sparkle, even when saved settings enable automatic updates; install updates manually.
+
+The **macOS personal packages** Actions workflow builds Apple Silicon and Intel separately. Open a
+successful run and download the matching `uTerm-Personal-ARM64-<head>` or
+`uTerm-Personal-X64-<head>` artifact while it remains available (14 days). GitHub requires sign-in
+to download Actions artifacts. Unzip the artifact, verify `SHA256SUMS.txt`, open the DMG and drag
+**uTerm Personal.app** into Applications. If macOS blocks the unsigned developer, allow this known
+build in **System Settings → Privacy & Security**. The source and these packages are public on
+GitHub; this workflow does not publish a Release or an update feed.
+
+The personal identity is `sh.uterm.desktop.personal`; its profile is
+`~/Library/Application Support/sh.uterm.desktop.personal/`. It neither imports nor overwrites the
+existing Tauri or QA profiles. Symlinks that redirect its store into another profile are rejected.
+For a manual update, keep the previous downloaded package, stop tasks and close sessions, quit the
+app, back up the personal profile, and replace only the app bundle. Do not restore an older profile
+over an active app/host. Quitting alone detaches sessions. The shared core retains snapshot conflict
+checks, draft recovery and explicit rollback export; this packaging path does not automatically
+restore data or perform the stable Tauri-to-native cutover.
+
+To build locally on a Mac with the documented Node/pnpm, Rust and Xcode dependencies, run
+`bash scripts/macos-native-build.sh personal`, then
+`python3 -B scripts/macos-personal-package.py --smoke` in a graphical session. Output goes to
+`macos/.build/personal-packages/`; no signing certificate or publishing credential is needed. The
+default build command still creates the isolated QA app. QA command arguments are disabled in the
+personal executable; CI uses a separately identified, embedded temporary profile to exercise the
+same Release binary safely.
+
+#### Personal app validation
+
+Linux passed the three packaging rejection tests, three existing disk-image simulations, shell
+syntax, TypeScript checking and the frontend production build. The new profile tests cover identity,
+path overrides, symlink redirection and fixture confinement. Actual macOS Release building, signing,
+DMG mounting, real English/Chinese light/dark settings and PTY windows, same-source app replacement,
+exact dual-draft retention and stale rollback export rejection await the new platform workflow.
+These checks do not establish Apple signing/notarization, a version upgrade or stable cutover.
 
 ### Native macOS QA client
 

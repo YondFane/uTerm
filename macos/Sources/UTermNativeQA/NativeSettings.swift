@@ -144,7 +144,7 @@ struct NativeSettingsView: View {
             choice("appearance", "Appearance", "外观", [("system", "System default", "系统默认"), ("dark", "Dark", "深色"), ("light", "Light", "浅色")])
             choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
             choice("defaultShell", "Default shell", "默认 Shell", [("default", "System default", "系统默认"), ("cmd", "Windows Command Prompt", "Windows 命令提示符")])
-            Toggle(localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates"))
+            Toggle(localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates")).disabled(!workspace.updates.available)
             NativeUpdateStatus(model: workspace.updates)
             NativeLoginItemsView(model: model.login)
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
@@ -258,7 +258,7 @@ private struct NativeUpdateStatus: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button(localized("Check for updates…", "检查更新…")) { model.check() }.disabled(!model.available)
-            if !model.available { Text(localized("Update checks are unavailable for this build.", "此构建暂不提供更新检查。")).font(.caption).foregroundStyle(.secondary) }
+            if !model.available { Text(WorkspaceModel.applicationProfile.mode == .personal ? localized("Install updates manually by replacing the app. Your personal profile stays on this Mac.", "请替换应用以手动更新；个人配置保留在此 Mac。") : localized("Update checks are unavailable for this build.", "此构建暂不提供更新检查。")).font(.caption).foregroundStyle(.secondary) }
             if !model.status.isEmpty { Text(model.status).font(.caption) }
             if !model.error.isEmpty { Text(model.error).font(.caption).foregroundStyle(.red).textSelection(.enabled) }
         }

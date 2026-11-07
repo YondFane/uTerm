@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        window.title = "uTerm Native QA"
+        window.title = WorkspaceModel.applicationProfile.displayName
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
@@ -108,6 +108,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            #if UTERM_PERSONAL
+            if WorkspaceModel.applicationProfile.personalFixture {
+                await PersonalSmoke.run(model: model, window: window)
+                terminating = true
+                NSApp.terminate(nil)
+            }
+            #else
             if let path = WorkspaceModel.argument("--transition-smoke-report") {
                 var report = baseReport()
                 do { try await TransitionSmoke.run(model: model, window: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report) }
@@ -409,6 +416,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 }
                 finishReport(result, path: path)
             }
+            #endif
         }
     }
 
@@ -427,11 +435,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             item.target = self
             menu.addItem(item)
         }
-        let app = menu("uTerm Native QA")
+        let app = menu(WorkspaceModel.applicationProfile.displayName)
         add(app, localized("Settings…", "设置…"), #selector(settings), ",")
         add(app, localized("Check for updates…", "检查更新…"), #selector(checkForUpdates))
         app.addItem(.separator())
-        add(app, localized("Quit uTerm Native QA", "退出 uTerm 原生 QA"), #selector(quit), "q")
+        add(app, localized("Quit ", "退出 ") + WorkspaceModel.applicationProfile.displayName, #selector(quit), "q")
         let file = menu(localized("File", "文件"))
         add(file, localized("Open project…", "打开项目…"), #selector(openProject), "o")
         add(file, localized("Open file…", "打开文件…"), #selector(openFile), "o", [.command, .shift])

@@ -124,6 +124,13 @@ uTerm 按 [PolyForm Noncommercial License 1.0.0](LICENSE)
 
 macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和分阶段功能状态见[原生迁移说明](docs/native-migration.md)。
 
+免费的手动更新 Mac 个人应用：在 macOS 14+ 图形会话运行
+`bash scripts/macos-native-build.sh personal`，再运行
+`python3 -B scripts/macos-personal-package.py --smoke`。**macOS personal packages**
+工作流提供分别适用 ARM64／X64 的 DMG 和 ZIP
+artifact，保留 14 天，需要登录 GitHub 下载。App 使用 ad-hoc 签名，没有 Apple 公证，配置身份独立为
+`sh.uterm.desktop.personal`，禁用网络更新和 QA 参数。详见[个人安装与更新步骤](docs/features.zh-CN.md#macos-个人应用)。已有 Tauri／QA 配置和稳定发布工作流保持独立。
+
 共享核心检查使用 `pnpm test:core` 和 `pnpm contracts:check`。共享 Java 任务检查需要 JDK 21（设置
 `JAVA_HOME` 并将其 `bin` 加入 `PATH`）；应用构建仍不要求或捆绑 JDK。`uterm-core::{java,python}`
 管理共用运行配置及任务规则，Tauri 提供平台适配，生成的 DTO 保持 Swift／TypeScript 边界一致。执行

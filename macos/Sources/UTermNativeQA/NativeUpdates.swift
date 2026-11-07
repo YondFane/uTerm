@@ -20,6 +20,7 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
 
     override init() {
         super.init()
+        guard WorkspaceModel.applicationProfile.networkUpdatesAllowed else { return }
         guard let text = Bundle.main.object(forInfoDictionaryKey: "UTermUpdateFeedURL") as? String else { return }
         do {
             #if arch(arm64)

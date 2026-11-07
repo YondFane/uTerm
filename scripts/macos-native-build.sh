@@ -2,24 +2,43 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 test "$(uname -s)" = Darwin
-pnpm build
-cargo build --locked --manifest-path crates/uterm-ffi/Cargo.toml
-cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local
-native_rust_target="${CARGO_TARGET_DIR:-$PWD/crates/uterm-ffi/target}"
-swift build --force-resolved-versions --package-path macos --configuration debug -Xlinker "$native_rust_target/debug/libuterm_ffi.a" -Xlinker -framework -Xlinker Security -Xlinker -framework -Xlinker SystemConfiguration -Xlinker -rpath -Xlinker '@executable_path/../Frameworks'
-native_bin=$(swift build --package-path macos --configuration debug --show-bin-path)
+native_flavor="${1:-qa}"
+native_configuration=debug
+native_cargo_profile=dev
+native_swift_flags=(--scratch-path "$PWD/macos/.build")
+native_executable=UTermNativeQA
 native_app="$PWD/macos/.build/qa/UTermNativeQA.app"
+native_swift_root="$PWD/macos/.build"
+case "$native_flavor" in
+  qa) ;;
+  personal)
+    native_configuration=release
+    native_cargo_profile=release
+    native_swift_root="$PWD/macos/.build/personal-build"
+    native_swift_flags=(--scratch-path "$native_swift_root" -Xswiftc -DUTERM_PERSONAL)
+    native_executable=uTerm
+    native_app="$PWD/macos/.build/personal/uTerm Personal.app"
+    ;;
+  *) printf 'Usage: %s [qa|personal]\n' "$0" >&2; exit 2 ;;
+esac
+pnpm build
+cargo build --locked --manifest-path crates/uterm-ffi/Cargo.toml --profile "$native_cargo_profile"
+cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local --profile "$native_cargo_profile"
+native_rust_target="${CARGO_TARGET_DIR:-$PWD/crates/uterm-ffi/target}"
+swift build --force-resolved-versions --package-path macos --configuration "$native_configuration" "${native_swift_flags[@]}" -Xlinker "$native_rust_target/$native_configuration/libuterm_ffi.a" -Xlinker -framework -Xlinker Security -Xlinker -framework -Xlinker SystemConfiguration -Xlinker -rpath -Xlinker '@executable_path/../Frameworks'
+native_bin=$(swift build --package-path macos --configuration "$native_configuration" "${native_swift_flags[@]}" --show-bin-path)
+rm -rf "$native_app"
 mkdir -p "$native_app/Contents/MacOS"
 mkdir -p "$native_app/Contents/Resources/bin" "$native_app/Contents/Resources/Licenses"
-cp "$native_bin/UTermNativeQA" "$native_app/Contents/MacOS/UTermNativeQA"
+cp "$native_bin/UTermNativeQA" "$native_app/Contents/MacOS/$native_executable"
 cp shared/fixtures/client-performance.json "$native_app/Contents/Resources/client-performance.json"
-native_sparkle=$(find macos/.build/artifacts -type d -name Sparkle.framework -print)
+native_sparkle=$(find "$native_swift_root/artifacts" -type d -name Sparkle.framework -print)
 test -n "$native_sparkle" && test "$(printf '%s\n' "$native_sparkle" | wc -l | tr -d ' ')" = 1
 mkdir -p "$native_app/Contents/Frameworks"
 ditto "$native_sparkle" "$native_app/Contents/Frameworks/Sparkle.framework"
 codesign --verify --deep --strict "$native_app/Contents/Frameworks/Sparkle.framework"
 native_host_target="${CARGO_TARGET_DIR:-$PWD/crates/utermd-local/target}"
-cp "$native_host_target/debug/utermd-local" "$native_app/Contents/Resources/bin/utermd-local"
+cp "$native_host_target/$native_configuration/utermd-local" "$native_app/Contents/Resources/bin/utermd-local"
 codesign --force --sign - "$native_app/Contents/Resources/bin/utermd-local"
 python3 - "$native_app/Contents/Resources/content" <<'PYCONTENT'
 import json, shutil, sys
@@ -48,11 +67,11 @@ for metadata in packages:
 PYLICENSE
 cp LICENSE "$native_app/Contents/Resources/Licenses/uTerm.txt"
 cp NOTICE "$native_app/Contents/Resources/Licenses/NOTICE.txt"
-find macos/.build/checkouts -maxdepth 2 -iname 'LICENSE*' -ipath '*swiftterm*' -exec cp '{}' "$native_app/Contents/Resources/Licenses/SwiftTerm.txt" \;
+find "$native_swift_root/checkouts" -maxdepth 2 -iname 'LICENSE*' -ipath '*swiftterm*' -exec cp '{}' "$native_app/Contents/Resources/Licenses/SwiftTerm.txt" \;
 test -s "$native_app/Contents/Resources/Licenses/SwiftTerm.txt"
-find macos/.build/checkouts -maxdepth 2 -iname 'LICENSE*' -ipath '*sparkle*' -exec cp '{}' "$native_app/Contents/Resources/Licenses/Sparkle.txt" \;
+find "$native_swift_root/checkouts" -maxdepth 2 -iname 'LICENSE*' -ipath '*sparkle*' -exec cp '{}' "$native_app/Contents/Resources/Licenses/Sparkle.txt" \;
 test -s "$native_app/Contents/Resources/Licenses/Sparkle.txt"
-python3 - "$native_app" "$(git rev-parse HEAD)" <<'PY'
+python3 - "$native_app" "$(git rev-parse HEAD)" "$native_flavor" "$native_executable" <<'PY'
 import json, os, plistlib, sys
 from pathlib import Path
 app=Path(sys.argv[1])
@@ -62,6 +81,14 @@ plist={'CFBundleIdentifier':'sh.uterm.desktop.qa.native','CFBundleName':'uTerm N
        'CFBundleDisplayName':'uTerm Native QA','CFBundleExecutable':'UTermNativeQA',
        'CFBundlePackageType':'APPL','CFBundleShortVersionString':'0.0.1','CFBundleVersion':'1',
        'LSMinimumSystemVersion':minimum,'NSHighResolutionCapable':True,'UTermSourceSHA':sys.argv[2], 'UTermSourceHeadSHA':os.environ.get('PR_HEAD_SHA',sys.argv[2])}
+if sys.argv[3]=='personal':
+    version=json.loads(Path('package.json').read_text())['version']
+    plist.update(CFBundleIdentifier='sh.uterm.desktop.personal', CFBundleName='uTerm Personal',
+                 CFBundleDisplayName='uTerm Personal', CFBundleExecutable=sys.argv[4],
+                 CFBundleShortVersionString=version, CFBundleVersion=os.environ.get('GITHUB_RUN_NUMBER','1'),
+                 CFBundleIconFile='uTerm.icns', UTermBuildFlavor='personal', UTermUpdateMode='manual')
+    import shutil
+    shutil.copyfile('src-tauri/icons/icon.icns',app/'Contents/Resources/uTerm.icns')
 plist.update(SUEnableAutomaticChecks=False, SUAutomaticallyUpdate=False, SUAllowsAutomaticUpdates=False)
 with (app/'Contents/Info.plist').open('wb') as f: plistlib.dump(plist,f)
 PY

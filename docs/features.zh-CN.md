@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-06
+updated: 2026-11-07
 ---
 
 # uTerm 功能说明
@@ -32,6 +32,31 @@ updated: 2026-11-06
 uTerm 是 Windows 和 macOS 桌面终端。本地终端和 Agent 进程在本机运行，SSH 远程 Shell 在服务器运行。
 
 界面支持简体中文和英文。
+
+### macOS 个人应用
+
+实验性 **uTerm Personal** 在 macOS
+14+ 使用 Swift／AppKit 与共享 Rust 核心／helper 的 Release 构建，采用免费的个人自用 ad-hoc 签名，不需要付费 Apple
+Developer 账户或上架 App
+Store，也没有 Apple 公证。个人构建即使读取到启用自动更新的设置，也不会启动 Sparkle；请手动安装更新。
+
+**macOS personal packages** Actions 工作流分别构建 Apple Silicon 和 Intel。在成功运行中下载对应的
+`uTerm-Personal-ARM64-<head>` 或 `uTerm-Personal-X64-<head>` artifact，保留期为 14 天。下载 Actions
+artifact 需要登录 GitHub。解压产物，核对 `SHA256SUMS.txt`，打开 DMG，将 **uTerm Personal.app**
+拖入 Applications。如果 macOS 阻止未认证开发者，请在**系统设置 → 隐私与安全**中允许此已知构建。源码和这些安装包在 GitHub 公开；此工作流不发布 Release 或更新源。
+
+个人身份为 `sh.uterm.desktop.personal`，配置目录为
+`~/Library/Application Support/sh.uterm.desktop.personal/`，不会导入或覆盖已有 Tauri／QA 配置。将存储重定向至其他配置的符号链接会被拒绝。手动更新时保留上一份下载包，停止任务、关闭会话并退出应用，备份个人配置目录，再仅替换 App。不要向仍有应用／宿主运行的目录恢复旧配置；仅退出应用会分离会话。共享核心继续保留快照冲突检查、草稿恢复和显式回退导出；此打包入口不会自动恢复数据，也不执行稳定版的 Tauri 至原生客户端切换。
+
+在已安装文档所列 Node／pnpm、Rust 和 Xcode 依赖的 Mac 上，先运行
+`bash scripts/macos-native-build.sh personal`，再在图形会话运行
+`python3 -B scripts/macos-personal-package.py --smoke`。产物位于
+`macos/.build/personal-packages/`，不需要签名证书或发布凭据。默认构建命令仍生成隔离 QA 应用。个人程序禁用 QA 命令参数；CI 以独立身份和包内固定的临时配置，安全执行同一 Release 程序。
+
+#### 个人应用验证
+
+Linux 已通过三项打包拒绝测试、三项现有镜像模拟、Shell 语法、TypeScript 检查及前端生产构建。新增配置测试覆盖身份、目录覆盖、符号链接重定向和临时测试边界。实际 macOS
+Release 构建、签名、DMG 挂载、真实中英文／深浅色设置与 PTY 窗口、同源码 App 替换、精确双草稿保留及过期回退导出拒绝，等待新增平台工作流执行。这些检查不代表 Apple 签名／公证、跨版本升级或稳定切换验收。
 
 ### macOS 原生 QA 客户端
 

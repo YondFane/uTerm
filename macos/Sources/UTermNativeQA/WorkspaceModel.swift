@@ -98,34 +98,31 @@ final class WorkspaceModel: ObservableObject {
     var sessionEntries: [CoreSessionEntry] { (state?.sessions ?? []).filter { $0.workspaceId == groupID } }
     func measureToolbar(_ height: CGFloat) { if abs(toolbarHeight - height) > 0.1 { toolbarHeight = height } }
 
+    static var applicationProfile: NativeApplicationProfile {
+        NativeApplicationProfile(mode: NativeApplicationProfile.compiledMode, identifier: Bundle.main.bundleIdentifier ?? "", embeddedQARoot: Bundle.main.object(forInfoDictionaryKey: "UTermQADataRoot") as? String)
+    }
+
     static func dataRoot() throws -> URL {
-        let identifier = Bundle.main.bundleIdentifier ?? ""
-        let packagedFixture = identifier.hasPrefix("sh.uterm.desktop.qa.native.update.") || identifier.hasPrefix("sh.uterm.desktop.qa.native.transition.")
-        let embeddedRoot = Bundle.main.object(forInfoDictionaryKey: "UTermQADataRoot") as? String
-        guard identifier == "sh.uterm.desktop.qa.native" || (packagedFixture && embeddedRoot != nil) else {
-            throw BridgeFailure(code: "QA_IDENTITY", message: "Native QA requires its isolated bundle identity")
-        }
-        if let path = argument("--qa-data-root") ?? (packagedFixture ? embeddedRoot : nil) {
-            let root = URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
-            let temporary = FileManager.default.temporaryDirectory.standardizedFileURL.resolvingSymlinksInPath()
-            guard root.path.hasPrefix(temporary.path + "/"), root.lastPathComponent.hasPrefix("uterm-native-qa-") else {
-                throw BridgeFailure(code: "QA_DIRECTORY", message: "QA override must be a private temporary test directory")
-            }
-            if packagedFixture, let embeddedRoot, root != URL(fileURLWithPath: embeddedRoot).standardizedFileURL.resolvingSymlinksInPath() { throw BridgeFailure(code: "QA_DIRECTORY", message: "Packaged fixture cannot select another data root") }
-            return root.appendingPathComponent("shared-state-v1", isDirectory: true)
-        }
         let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-        return support.appendingPathComponent("sh.uterm.desktop.qa.native/shared-state-v1", isDirectory: true)
+        return try applicationProfile.dataRoot(applicationSupport: support, temporaryDirectory: FileManager.default.temporaryDirectory, qaOverride: argument("--qa-data-root"))
     }
 
     static func argument(_ name: String) -> String? {
+        #if UTERM_PERSONAL
+        return nil
+        #else
         guard let index = CommandLine.arguments.firstIndex(of: name), index + 1 < CommandLine.arguments.count else { return nil }
         return CommandLine.arguments[index + 1]
+        #endif
     }
 
     func start() async {
         do {
-            let bridge = try await CoreBridge.open(root: Self.dataRoot())
+            let root = try Self.dataRoot()
+            if Self.applicationProfile.mode == .personal {
+                try FileManager.default.createDirectory(at: root.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            }
+            let bridge = try await CoreBridge.open(root: root)
             self.bridge = bridge
             do { _ = try await bridge.snapshot() }
             catch let failure as BridgeFailure where failure.code == "NOT_IMPORTED" {
@@ -137,7 +134,7 @@ final class WorkspaceModel: ObservableObject {
             guard let resources = Bundle.main.resourceURL else { throw BridgeFailure(code: "HELPER", message: "Application resources are missing") }
             let helper = resources.appendingPathComponent("bin/utermd-local")
             _ = try await bridge.call("host.configure", params: .object(["helper": .string(helper.path)]))
-            if Self.argument("--qa-data-root") != nil {
+            if Self.argument("--qa-data-root") != nil || Self.applicationProfile.personalFixture {
                 let home = try Self.dataRoot().deletingLastPathComponent().appendingPathComponent("agent-home").path
                 _ = try await bridge.call("agent.configure", params: .object(["home": .string(home)]))
             }
@@ -146,7 +143,7 @@ final class WorkspaceModel: ObservableObject {
                 let ssh = try await CoreBridge.open(root: Self.dataRoot())
                 do {
                     _ = try await ssh.call("host.configure", params: .object(["helper": .string(helper.path)]))
-                    if Self.argument("--qa-data-root") != nil {
+                    if Self.argument("--qa-data-root") != nil || Self.applicationProfile.personalFixture {
                         let home = try Self.dataRoot().deletingLastPathComponent().appendingPathComponent("agent-home").path
                         _ = try await ssh.call("agent.configure", params: .object(["home": .string(home)]))
                     }
