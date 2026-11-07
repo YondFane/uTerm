@@ -1080,8 +1080,10 @@ async function runInputControl(context: Context) {
     await until(() => {
       const value = document.querySelector<HTMLButtonElement>(".welcome-action.primary");
       if (
+        !document.querySelector('.folder-row.selected[data-project-id="shared-state-qa"]') ||
         !value?.isConnected ||
         value.disabled ||
+        value.closest('[inert], [hidden], [aria-hidden="true"]') ||
         value.querySelector("strong")?.textContent !== "New terminal" ||
         value.getBoundingClientRect().width <= 0
       )

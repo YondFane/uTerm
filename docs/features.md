@@ -43,13 +43,18 @@ Apple Developer account or an App Store listing. It has no Apple notarization. T
 never starts Sparkle, even when saved settings enable automatic updates; it shows manual-update
 guidance instead of network-update controls.
 
-The **macOS personal packages** Actions workflow builds Apple Silicon and Intel separately. Open a
-successful run and download the matching `uTerm-Personal-ARM64-<head>` or
-`uTerm-Personal-X64-<head>` artifact while it remains available (14 days). GitHub requires sign-in
-to download Actions artifacts. Unzip the artifact, verify `SHA256SUMS.txt`, open the DMG and drag
-**uTerm Personal.app** into Applications. If macOS blocks the unsigned developer, allow this known
-build in **System Settings → Privacy & Security**. The source and these packages are public on
-GitHub; this workflow does not publish a Release or an update feed.
+Download the additional **Personal** Apple Silicon or Intel DMG/ZIP from the versioned
+[GitHub Release](https://github.com/YondFane/uTerm/releases). Published release attachments have no
+automatic expiry and can be downloaded without GitHub sign-in. Verify the personal SHA256SUMS file,
+open the DMG and drag **uTerm Personal.app** into Applications. If macOS blocks the unsigned
+developer, allow this known build in **System Settings → Privacy & Security**.
+
+The **macOS personal packages** Actions workflow also keeps verification artifacts for 90 days;
+GitHub requires sign-in for those temporary artifacts. The stable release workflow builds the same
+personal app from its immutable version tag, checks both architectures' source/version/install
+reports and package hashes, and publishes the four archives plus checksums as additional Release
+attachments. Existing Tauri installers continue to supply the automatic update channels. The
+personal app remains a separate, manually updated client.
 
 The personal identity is `sh.uterm.desktop.personal`; its profile is
 `~/Library/Application Support/sh.uterm.desktop.personal/`. It neither imports nor overwrites the
@@ -69,6 +74,13 @@ personal executable; CI uses a separately identified, embedded temporary profile
 same Release binary safely.
 
 #### Personal app validation
+
+Release collection rejects stale source/version reports, duplicate architectures, missing
+real-install evidence and modified archives. Disk-image creation retries only explicit busy
+responses up to five attempts, retaining diagnostics and refusing existing output. QA terminal
+creation waits for rendered project selection and an interactive button; the 30-second deadline is
+unchanged. Current release-wiring tests and new platform CI results are recorded separately from the
+package source below.
 
 Source `5903045b8d1b899cfc98400dfb10c786536b1433`, tested PR merge
 `6635aee9229c633ab5db839efc04f0eeda0fdbcd`, passed the

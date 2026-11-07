@@ -3,10 +3,12 @@ import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   collect,
+  collectPersonal,
   manifest,
   releaseBase,
   releaseConfig,
@@ -60,6 +62,7 @@ test("release workflow accepts only version tags on the release branch", () => {
   assert.ok(block, "source validation step is required");
   const script = block
     .split("        run: |\n")[1]
+    .split("\n      - uses:")[0]
     .split("\n  build:")[0]
     .split("\n")
     .map((line) => line.slice(10))
@@ -76,7 +79,7 @@ test("release workflow accepts only version tags on the release branch", () => {
     execFileSync(bash, ["-e", "-c", script], {
       cwd: root,
       stdio: "pipe",
-      env: { ...process.env, RELEASE_TAG: tag },
+      env: { ...process.env, RELEASE_TAG: tag, GITHUB_OUTPUT: join(root, "outputs") },
     });
   try {
     git("init", "-b", "release");
@@ -241,6 +244,65 @@ test("macOS artifacts and feeds remain separate from Windows and other architect
     assert.throws(() => manifest("uTerm-v1.2.3", output));
     assert.throws(() => feedFilename("linux-x86_64"));
     assert.throws(() => manifest("uTerm-v1.2.3", output, undefined, []));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("personal release collection rejects stale source, simulated install and modified archives", () => {
+  const root = mkdtempSync(join(tmpdir(), "uterm-personal-release-"));
+  const sha = "a".repeat(40);
+  const input = join(root, "input");
+  const output = join(root, "output");
+  const reports = [];
+  try {
+    for (const architecture of ["arm64", "x86_64"]) {
+      const folder = join(input, architecture);
+      mkdirSync(folder, { recursive: true });
+      const packages = {};
+      for (const extension of ["zip", "dmg"]) {
+        const name = `uTerm-Personal-1.2.3-macos-${architecture}-${sha.slice(0, 8)}.${extension}`;
+        const bytes = Buffer.from(`fixture ${architecture} ${extension}`);
+        writeFileSync(join(folder, name), bytes);
+        packages[name] = createHash("sha256").update(bytes).digest("hex");
+      }
+      const report = {
+        architecture,
+        passed: true,
+        sourceTreeDirty: false,
+        sourceHeadSHA: sha,
+        testedMergeSHA: sha,
+        version: "1.2.3",
+        bundleIdentifier: "sh.uterm.desktop.personal",
+        buildConfiguration: "release",
+        manualUpdates: true,
+        smoke: { realWindow: true, manualAppReplacement: true, productionDataAccess: false },
+        packages,
+      };
+      const file = join(folder, "personal-package.json");
+      writeFileSync(file, JSON.stringify(report));
+      reports.push({ report, file, folder });
+    }
+    assert.equal(collectPersonal("uTerm-v1.2.3", sha, input, output).length, 4);
+    assert.match(
+      readFileSync(join(output, "uTerm-1.2.3-personal-SHA256SUMS.txt"), "utf8"),
+      /personal-darwin-aarch64.dmg/,
+    );
+    const { report, file, folder } = reports[0];
+    for (const patch of [
+      { sourceHeadSHA: "b".repeat(40) },
+      { testedMergeSHA: "b".repeat(40) },
+      { version: "1.2.2" },
+      { sourceTreeDirty: true },
+      { smoke: { ...report.smoke, realWindow: false } },
+      { architecture: "x86_64" },
+    ]) {
+      writeFileSync(file, JSON.stringify({ ...report, ...patch }));
+      assert.throws(() => collectPersonal("uTerm-v1.2.3", sha, input, output), /evidence|checksum/);
+    }
+    writeFileSync(file, JSON.stringify(report));
+    writeFileSync(join(folder, Object.keys(report.packages)[0]), "modified after testing");
+    assert.throws(() => collectPersonal("uTerm-v1.2.3", sha, input, output), /checksum/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

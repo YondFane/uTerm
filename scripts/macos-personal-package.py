@@ -12,7 +12,7 @@ import time
 import uuid
 from pathlib import Path
 
-from macos_disk_image import verify_disk_image
+from macos_disk_image import create_disk_image, verify_disk_image
 
 IDENTIFIER = "sh.uterm.desktop.personal"
 
@@ -157,7 +157,8 @@ def main():
             archive, dmg = output / (stem + ".zip"), output / (stem + ".dmg")
             assert not archive.exists() and not dmg.exists(), "Refusing to overwrite existing packages"
             run("ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", staged, archive)
-            run("hdiutil", "create", "-quiet", "-volname", "uTerm Personal", "-srcfolder", image, "-format", "UDZO", dmg)
+            report["diskImageCreation"] = []
+            create_disk_image(image, dmg, "uTerm Personal", report["diskImageCreation"])
             report["diskImageVerification"] = []
             verify_disk_image(dmg, report["diskImageVerification"])
             mount = root / "mount"

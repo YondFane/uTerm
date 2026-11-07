@@ -40,10 +40,14 @@ uTerm 是 Windows 和 macOS 桌面终端。本地终端和 Agent 进程在本机
 Developer 账户或上架 App
 Store，也没有 Apple 公证。个人构建即使读取到启用自动更新的设置，也不会启动 Sparkle；界面显示手动更新说明，不显示网络更新控件。
 
-**macOS personal packages** Actions 工作流分别构建 Apple Silicon 和 Intel。在成功运行中下载对应的
-`uTerm-Personal-ARM64-<head>` 或 `uTerm-Personal-X64-<head>` artifact，保留期为 14 天。下载 Actions
-artifact 需要登录 GitHub。解压产物，核对 `SHA256SUMS.txt`，打开 DMG，将 **uTerm Personal.app**
-拖入 Applications。如果 macOS 阻止未认证开发者，请在**系统设置 → 隐私与安全**中允许此已知构建。源码和这些安装包在 GitHub 公开；此工作流不发布 Release 或更新源。
+从按版本保存的[GitHub Release](https://github.com/YondFane/uTerm/releases)下载额外的 **Personal**
+Apple Silicon 或 Intel
+DMG／ZIP。已发布的Release附件不设置自动过期，可不登录GitHub下载。核对个人版SHA256SUMS文件，打开DMG，将
+**uTerm Personal.app**
+拖入Applications。如果macOS阻止未认证开发者，请在**系统设置 → 隐私与安全**中允许此已知构建。
+
+**macOS personal packages**
+Actions 工作流另保留90天验证产物，下载这些临时artifact需要登录GitHub。正式发布工作流从不可变版本标签构建同一套个人应用，校验两个架构的源码／版本／安装报告和包哈希后，将四个归档及校验和作为额外Release附件发布。已有Tauri安装包继续提供自动更新通道，个人版仍为独立配置、手动更新的客户端。
 
 个人身份为 `sh.uterm.desktop.personal`，配置目录为
 `~/Library/Application Support/sh.uterm.desktop.personal/`，不会导入或覆盖已有 Tauri／QA 配置。将存储重定向至其他配置的符号链接会被拒绝。手动更新时保留上一份下载包，停止任务、关闭会话并退出应用，备份个人配置目录，再仅替换 App。不要向仍有应用／宿主运行的目录恢复旧配置；仅退出应用会分离会话。共享核心继续保留快照冲突检查、草稿恢复和显式回退导出；此打包入口不会自动恢复数据，也不执行稳定版的 Tauri 至原生客户端切换。
@@ -55,6 +59,8 @@ artifact 需要登录 GitHub。解压产物，核对 `SHA256SUMS.txt`，打开 D
 `macos/.build/personal-packages/`，不需要签名证书或发布凭据。默认构建命令仍生成隔离 QA 应用。个人程序禁用 QA 命令参数；CI 以独立身份和包内固定的临时配置，安全执行同一 Release 程序。
 
 #### 个人应用验证
+
+发布收集器拒绝过期源码／版本报告、重复架构、缺失真实安装证据及被修改的归档。镜像创建只对明确占用最多重试五次，保留诊断并拒绝已有输出。QA终端创建等待项目选择已渲染且按钮可交互，30秒等待期限不变。Linux已通过7项发布测试、6项镜像模拟、4项个人包测试、类型检查及完整前端回归（435通过、11跳过）。发布接线的新平台结果尚待执行，与下述安装包源码分别记录。
 
 源码 `5903045b8d1b899cfc98400dfb10c786536b1433`、PR测试合成提交
 `6635aee9229c633ab5db839efc04f0eeda0fdbcd` 已在 ARM64 macOS 15.8.2 和 Intel macOS

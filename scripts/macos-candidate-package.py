@@ -9,7 +9,7 @@ import stat
 import subprocess
 import tempfile
 from pathlib import Path
-from macos_disk_image import verify_disk_image
+from macos_disk_image import create_disk_image, verify_disk_image
 
 evidence = Path('macos/.build/evidence/candidate').resolve()
 evidence.mkdir(parents=True, exist_ok=True)
@@ -121,7 +121,8 @@ try:
         archive = evidence / (name + '.zip'); archive.unlink(missing_ok=True)
         run('ditto', '-c', '-k', '--sequesterRsrc', '--keepParent', staged, archive)
         image = evidence / (name + '.dmg'); image.unlink(missing_ok=True)
-        run('hdiutil', 'create', '-volname', 'uTerm Native QA Candidate', '-srcfolder', stage, '-format', 'UDZO', image)
+        report['diskImageCreation'] = []
+        create_disk_image(stage, image, 'uTerm Native QA Candidate', report['diskImageCreation'])
         report['diskImageVerification'] = []
         verify_disk_image(image, report['diskImageVerification'])
         mount = root / 'mount'; mount.mkdir()

@@ -126,9 +126,10 @@ macOS 原生客户端开发与稳定发布隔离。QA 应用、平台检查和�
 
 免费的手动更新 Mac 个人应用：在 macOS 14+ 图形会话运行
 `bash scripts/macos-native-build.sh personal`，再运行 `bash scripts/macos-native-test.sh personal`
-和 `python3 -B scripts/macos-personal-package.py --smoke`。**macOS personal packages**
-工作流提供分别适用 ARM64／X64 的 DMG 和 ZIP
-artifact，保留 14 天，需要登录 GitHub 下载。App 使用 ad-hoc 签名，没有 Apple 公证，配置身份独立为
+和
+`python3 -B scripts/macos-personal-package.py --smoke`。正式发布工作流在[GitHub Releases](https://github.com/YondFane/uTerm/releases)提供额外的Personal
+ARM64／X64 DMG和ZIP附件，不设置自动过期、下载无需登录。 **macOS personal packages**
+工作流另保留90天CI验证产物，下载这些artifact需登录GitHub。App 使用 ad-hoc 签名，没有 Apple 公证，配置身份独立为
 `sh.uterm.desktop.personal`，禁用网络更新和 QA 参数。详见[个人安装与更新步骤](docs/features.zh-CN.md#macos-个人应用)。已有 Tauri／QA 配置和稳定发布工作流保持独立。
 
 共享核心检查使用 `pnpm test:core` 和 `pnpm contracts:check`。共享 Java 任务检查需要 JDK 21（设置

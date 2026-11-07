@@ -17,6 +17,14 @@ on:
       - pnpm-lock.yaml
       - .github/workflows/macos-personal.yml
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        default: ""
+      source_sha:
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -33,9 +41,11 @@ jobs:
       run:
         shell: bash
     env:
-      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      PR_HEAD_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -91,9 +101,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name:
-            uTerm-Personal-${{ runner.arch }}-${{ github.event.pull_request.head.sha || github.sha
-            }}
+          name: uTerm-Personal-${{ runner.arch }}-${{ env.PR_HEAD_SHA }}
           path: macos/.build/personal-packages/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 90
