@@ -6058,6 +6058,19 @@ use separate Cargo manifests and lockfiles.
 
 ## Validation and limits
 
+### Frontend test resource isolation
+
+Component tests load real modules through a shared Vite SSR test server with file watching, HMR and
+WebSocket listening disabled. `pnpm test` retains four concurrent test files. Rendering checks can
+run alongside Cargo compilation without monitoring its active executables/debug symbols or sharing
+port `24678`.
+
+The resource regression reserves a real loopback port, loads two SSR servers concurrently, checks
+their plugin transforms and modifies owned Cargo-style outputs without adding watchers. Linux
+validation passed this regression, the Java/menu/Maven scenarios and the complete frontend suite
+(436 passed, 11 optional/platform skips). Windows acceptance requires its actual CI reports and
+source/tested SHAs; these Linux results do not establish it.
+
 ### Windows automated checks
 
 - Repository-wide `pnpm format:check` passes, including Prettier and both Cargo workspaces.

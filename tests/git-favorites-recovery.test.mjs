@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { createInterface } from "node:readline";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 

@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React, { act } from "react";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 
 async function setup(t) {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });

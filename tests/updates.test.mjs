@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React, { act } from "react";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 
 test("automatic updates download and install once, preserve file guards and stop after failure", async (t) => {

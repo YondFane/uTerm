@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
 import React, { act } from "react";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 
 test("shared GitHub panel awaits session failures and protects PR forms before showing them", async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost/" });

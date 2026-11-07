@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JSDOM } from "jsdom";
-import { createServer } from "vite";
+import { createServer } from "./vite-server.mjs";
 import React, { act, useState } from "react";
 
 test("forwarding rules require explicit start, retain failures and protect active rules", async () => {
