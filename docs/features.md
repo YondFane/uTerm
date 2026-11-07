@@ -70,18 +70,32 @@ same Release binary safely.
 
 #### Personal app validation
 
-Linux passed the four packaging rejection tests, three existing disk-image simulations, shell
-syntax, TypeScript checking, the frontend production build, contracts and rollback-export checks.
-The full frontend suite passed 434 tests with 11 explicit skips. The profile regressions cover
-identity, cold/existing directories, path overrides, symlink redirection and fixture confinement.
+Source `5903045b8d1b899cfc98400dfb10c786536b1433`, tested PR merge
+`6635aee9229c633ab5db839efc04f0eeda0fdbcd`, passed the
+[personal package workflow](https://github.com/YondFane/uTerm/actions/runs/42337113604) on ARM64
+macOS 15.8.2 and Intel macOS 15.7.9. Both used Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Each ran 43
+Release Swift tests and four package-rejection tests, built and audited the actual ad-hoc app,
+mounted its read-only DMG, and launched its bundled helper with real Unicode PTY output.
 
-At source `c076167`, Apple Silicon passed 43 Release Swift tests, actual DMG/ZIP packaging,
-installed Unicode PTY output, same-source replacement, exact dual-draft retention and stale
-rollback-export rejection. The six original captures show actual dark English and light Chinese
-windows. Review also found stale English update/login captions after a language switch. Those child
-views now refresh for the selected language while retaining their models and draft; new platform
-captures are required for this correction. These results do not establish Apple
-signing/notarization, a version upgrade or stable cutover.
+The
+[ARM64 artifact](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560770121)
+and
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560586632)
+contain DMG/ZIP, checksums, `personal-package.json`, two startup reports and two rollback exports,
+toolchain/build/test logs and six original window captures each. All four package hashes and
+embedded source/architecture identities were independently checked. All twelve captures were
+inspected: actual English dark and Chinese light settings, localized manual-update/login captions,
+and terminal output before/after same-source app replacement. The coherent exports retain both exact
+NFD/CRLF drafts and reject a stale revision; the original file is unchanged, and the fixture host
+exits. Saved automatic opt-in and injected feed metadata cannot initialize the updater, and QA
+arguments cannot redirect data or write a smoke report in the shipped identity.
+
+The profile tests cover first/existing directories, identity, temporary-fixture confinement and
+symlink redirects. Linux packaging/disk-image simulations, shell syntax, formatting and bilingual
+documentation checks also pass. Runtime coverage is macOS 15.x; the declared minimum is 14.0. These
+checks establish same-source app replacement, not a cross-version stable cutover or Apple
+signing/notarization. Existing Tauri migration and remaining acceptance stay separately tracked in
+[#47](https://github.com/YondFane/uTerm/issues/47).
 
 ### Native macOS QA client
 

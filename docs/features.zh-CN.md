@@ -56,10 +56,19 @@ artifact 需要登录 GitHub。解压产物，核对 `SHA256SUMS.txt`，打开 D
 
 #### 个人应用验证
 
-Linux 已通过四项打包拒绝测试、三项现有镜像模拟、Shell 语法、TypeScript 检查、前端生产构建、契约及回退导出检查。完整前端回归434项通过、11项明确跳过。配置回归覆盖身份、首次／已有目录、目录覆盖、符号链接重定向和临时测试边界。
+源码 `5903045b8d1b899cfc98400dfb10c786536b1433`、PR测试合成提交
+`6635aee9229c633ab5db839efc04f0eeda0fdbcd` 已在 ARM64 macOS 15.8.2 和 Intel macOS
+15.7.9 通过[个人包工作流](https://github.com/YondFane/uTerm/actions/runs/42337113604)。两端使用 Xcode
+16.4、Swift 6.1.2 和 Rust 1.99.1；各执行43项Release
+Swift测试及4项打包拒绝测试，构建并核对实际ad-hoc应用，挂载只读DMG，以包内helper执行真实中文PTY输出。
 
-源码 `c076167` 的 Apple Silicon 已通过43项Release
-Swift测试、真实DMG／ZIP打包、安装后的中文PTY输出、同源码替换、精确双草稿保留及过期回退导出拒绝。六张原始截图已确认英文深色与中文浅色窗口。复核同时发现切换语言后更新／登录项文案仍保留英文；这两个子视图现随语言刷新，并保留原有模型和草稿，修正需新的平台截图。这些结果不代表 Apple 签名／公证、跨版本升级或稳定切换验收。
+[ARM64产物](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560770121)和
+[Intel产物](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560586632)包含DMG／ZIP、校验和、
+`personal-package.json`、两个启动报告和两个回退导出、工具链／构建／测试日志及各六张原始窗口截图。四个包的哈希和包内源码／架构身份均已独立核对。十二张截图已逐张查看：真实英文深色与中文浅色设置、正确本地化的手动更新／登录项文案，以及同源码App替换前后的终端输出。一致性导出保留两个精确NFD／CRLF草稿并拒绝过期修订，原文件不变，测试宿主实际退出。保存的自动更新授权及注入的feed元数据均不能初始化更新器；发行身份中的QA参数不能重定向数据或写入冒烟报告。
+
+配置测试覆盖首次／已有目录、身份、临时测试边界及符号链接重定向。Linux打包／镜像模拟、Shell语法、格式和双语文档检查也通过。真实系统覆盖为macOS
+15.x，声明最低版本仍为14.0。这些检查验证同源码App替换，不代表跨版本稳定切换或Apple签名／公证；已有Tauri迁移及剩余验收继续单独由
+[#47](https://github.com/YondFane/uTerm/issues/47)跟踪。
 
 ### macOS 原生 QA 客户端
 
