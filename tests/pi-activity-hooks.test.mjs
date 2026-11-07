@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 test("Pi activity waits for final settlement, closes reporter input and preserves literal arguments", async () => {
   const source = readFileSync(
-    new URL("../src-tauri/integrations/pi-activity.js", import.meta.url),
+    new URL("../crates/uterm-core/integrations/pi-activity.js", import.meta.url),
     "utf8",
   );
   const reporter = "C:\\用户 files\\$literal'&\\integration\\uterm-report.exe";

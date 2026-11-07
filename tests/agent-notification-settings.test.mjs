@@ -54,8 +54,11 @@ test("Agent notification opt-in uses native permissions and preserves preference
     const { SettingsProvider } = await server.ssrLoadModule("/src/lib/SettingsContext.tsx");
     const { defaults, settingsKey } = await server.ssrLoadModule("/src/lib/settings.ts");
     let key = 0;
-    const mount = async (language = "en") => {
-      localStorage.setItem(settingsKey, JSON.stringify({ ...defaults, language }));
+    const mount = async (language = "en", agentNotifications) => {
+      localStorage.setItem(
+        settingsKey,
+        JSON.stringify({ ...defaults, language, agentNotifications }),
+      );
       await act(async () =>
         root.render(
           React.createElement(
@@ -77,6 +80,7 @@ test("Agent notification opt-in uses native permissions and preserves preference
     await click();
     assert.equal(toggle().checked, true);
     assert.equal(localStorage.getItem(notificationKey), "true");
+    assert.equal(JSON.parse(localStorage.getItem(settingsKey)).agentNotifications, true);
     assert.deepEqual(calls, ["plugin:notification|is_permission_granted"]);
     assert.equal(alert(), null);
     await mount();
@@ -85,6 +89,7 @@ test("Agent notification opt-in uses native permissions and preserves preference
     await click();
     assert.equal(toggle().checked, false);
     assert.equal(localStorage.getItem(notificationKey), "false");
+    assert.equal(JSON.parse(localStorage.getItem(settingsKey)).agentNotifications, false);
     assert.deepEqual(calls, []);
     for (const nativePermission of [false, null]) {
       permission = nativePermission;
@@ -132,6 +137,15 @@ test("Agent notification opt-in uses native permissions and preserves preference
     assert.equal(toggle().checked, true);
     assert.equal(alert(), null);
     assert.equal(localStorage.getItem(notificationKey), "true");
+    calls.length = 0;
+    await mount("en", false);
+    assert.equal(toggle().checked, false, "Canonical opt-out must override a stale legacy opt-in");
+    assert.equal(
+      localStorage.getItem(notificationKey),
+      "true",
+      "Opening settings must not rewrite legacy preferences",
+    );
+    assert.deepEqual(calls, [], "Opening settings must not request permission");
   } finally {
     dom.window.Storage.prototype.setItem = setItem;
     await act(async () => root.unmount());

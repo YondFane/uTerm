@@ -1,4 +1,5 @@
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke } from "./content-host.ts";
+import { contentErrorText } from "./content-transport.ts";
 import { tx } from "./i18n.ts";
 import {
   validSshHost,
@@ -22,6 +23,15 @@ export interface RedisConfig {
   ssh_host: string;
   ssh_target?: SshTarget;
   credential_id: string | null;
+}
+export function redisConfigFingerprint(config: RedisConfig): string {
+  return JSON.stringify(config, (_key, value) =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? Object.fromEntries(
+          Object.entries(value).sort(([left], [right]) => left.localeCompare(right)),
+        )
+      : value,
+  );
 }
 export function resolveRedisSsh(
   config: RedisConfig,
@@ -131,7 +141,7 @@ export function validRedisConfig(value: unknown): value is RedisConfig {
   );
 }
 export function redisError(error: unknown): string {
-  const value = String(error);
+  const value = contentErrorText(error);
   const errors: Record<string, () => string> = {
     REDIS_CONFLICT: () => tx("Redis 数据已变化，编辑内容已保留。请重新读取后再修改。"),
     REDIS_READ_ONLY: () => tx("Redis 连接处于只读模式。"),

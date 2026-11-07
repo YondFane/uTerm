@@ -243,6 +243,19 @@ export function reconcileLocalSessionSnapshot(
   );
 }
 
+export async function syncDiscoveredSessions(
+  current: Workspace,
+  local: LocalSessionSnapshot,
+  ssh: LocalSessionSnapshot,
+  commit: (change: (workspace: Workspace) => Workspace) => Promise<unknown>,
+) {
+  // Apply discovery to the queued write's latest state, preserving sessions created while the poll was pending.
+  // 将发现结果应用于队列提交时的最新状态，保留轮询期间新建的会话。
+  const reconcile = (latest: Workspace) =>
+    reconcileSshSessions(reconcileLocalSessionSnapshot(latest, local), ssh);
+  if (reconcile(current) !== current) await commit(reconcile);
+}
+
 function localPathKey(path: string): string {
   const normalized = path
     .replace(/^\\\\\?\\UNC\\/i, "//")

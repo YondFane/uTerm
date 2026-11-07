@@ -1,0 +1,13 @@
+{
+  "id": "redis-qa-operation",
+  "generation": "redis-qa-generation",
+  "kind": "request",
+  "state": "completed",
+  "result": {
+    "binary": { "data": "AP9/", "text": null, "size": 3, "truncated": false },
+    "text": "9223372036854775807 中文🚀",
+    "key": "AP9/",
+    "member": "/wA="
+  },
+  "error": null
+}

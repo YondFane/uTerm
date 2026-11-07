@@ -48,5 +48,8 @@ export default defineConfig({
     strictPort: true,
     watch: { ignored: ["**/src-tauri/**", "**/crates/**"] },
   },
-  build: { target: "es2022" },
+  build: {
+    target: "es2022",
+    rolldownOptions: { input: { app: "index.html", content: "native-content.html" } },
+  },
 });

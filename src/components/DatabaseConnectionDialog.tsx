@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke } from "../lib/content-host";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
+import { randomUUID } from "../lib/uuid";
 import { useDialogBackdrop } from "../lib/useDialogBackdrop";
 import {
   databaseError,
@@ -27,7 +28,7 @@ export function DatabaseConnectionDialog({
   connection?: DatabaseConfig;
   ssh: SshConnection[];
   workspaceId: string;
-  save: (config: DatabaseConfig, password: string) => boolean;
+  save: (config: DatabaseConfig, password: string) => boolean | Promise<boolean>;
   close: () => void;
   report: (message: string) => void;
 }) {
@@ -35,7 +36,7 @@ export function DatabaseConnectionDialog({
   ssh = ssh.filter((item) => !item.temporary);
   const [config, setConfig] = useState<DatabaseConfig>(
     connection ?? {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       name: "",
       kind: "mysql",
       host: "127.0.0.1",
@@ -140,7 +141,7 @@ export function DatabaseConnectionDialog({
         if (reference !== connection?.credential_id) created = reference;
         next = { ...next, credential_id: reference };
       } else next = { ...next, credential_id: null };
-      saved = save(next, remember ? "" : password);
+      saved = await save(next, remember ? "" : password);
       if (!saved) throw new Error("DB_STORAGE");
       if (connection?.credential_id && connection.credential_id !== next.credential_id)
         await invoke("database_credential", { config: connection, password: null, remove: true });

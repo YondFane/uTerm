@@ -160,6 +160,10 @@ pub struct Progress {
     total: Option<u64>,
 }
 fn enabled(app: &tauri::AppHandle) -> bool {
+    #[cfg(feature = "qa")]
+    if crate::qa::updates_enabled(app) {
+        return true;
+    }
     !cfg!(debug_assertions)
         && app.config().identifier == "sh.uterm.desktop"
         && app.config().plugins.0.contains_key("updater")
@@ -224,6 +228,10 @@ pub async fn update_check(
         }
     }
     if let Some(update) = &mut update {
+        #[cfg(feature = "qa")]
+        if !crate::qa::updates_download_allowed(&app, &update.download_url) {
+            return Err("DOWNLOAD_METADATA".into());
+        }
         update.timeout = Some(std::time::Duration::from_secs(600));
     }
     pending.update = update;
@@ -368,6 +376,15 @@ pub async fn update_install(
     if app.state::<crate::ssh::SshFiles>().busy() {
         return Err("文件仍在传输。请等待完成或取消传输。".into());
     }
+    let sessions = app
+        .state::<std::sync::Arc<crate::sessions::Sessions>>()
+        .inner()
+        .clone();
+    // NSIS can exit without lifecycle cleanup; release view leases while retaining the actual host/PTYS.
+    // NSIS 可能跳过退出清理，先释放视图租约，保留真实宿主和 PTY。
+    tauri::async_runtime::spawn_blocking(move || sessions.release_for_update())
+        .await
+        .map_err(|e| e.to_string())??;
     update.install(&bytes).map_err(|e| e.to_string())?;
     app.restart();
 }

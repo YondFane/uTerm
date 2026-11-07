@@ -16,7 +16,7 @@ export function SshConnectionDialog({
 }: {
   connection?: SshConnection;
   workspaceId: string;
-  save: (connection: SshConnection) => boolean;
+  save: (connection: SshConnection) => boolean | Promise<boolean>;
   close: () => void;
   connect?: (connection: SshConnection) => void;
 }) {
@@ -129,7 +129,7 @@ export function SshConnectionDialog({
         remember: authentication === "password" && remember,
       });
       value.credential_id = reference;
-      if (!save(value)) throw new Error(tx("无法保存连接，请检查工作区存储后重试。"));
+      if (!(await save(value))) throw new Error(tx("无法保存连接，请检查工作区存储后重试。"));
       saved = true;
       if (connection?.credential_id && connection.credential_id !== reference) {
         await invoke("ssh_forget_auth", {

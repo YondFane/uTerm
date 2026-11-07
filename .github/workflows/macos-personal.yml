@@ -1,0 +1,107 @@
+name: macOS personal packages
+
+on:
+  pull_request:
+    branches: [release]
+    paths:
+      - macos/**
+      - crates/**
+      - src/**
+      - shared/**
+      - scripts/macos-native-test.sh
+      - scripts/macos-native-build.sh
+      - scripts/macos-personal-*
+      - scripts/macos_disk_image.py
+      - tests/test_macos_personal.py
+      - package.json
+      - pnpm-lock.yaml
+      - .github/workflows/macos-personal.yml
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        default: ""
+      source_sha:
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  personal:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 50
+    defaults:
+      run:
+        shell: bash
+    env:
+      PR_HEAD_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Install pinned frontend dependencies
+        run: |
+          npm install --global pnpm@11.22.0
+          pnpm install --frozen-lockfile
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: personal-${{ matrix.os }}-${{ runner.arch }}
+          workspaces: |
+            crates/utermd-local -> target
+            crates/uterm-core -> target
+            crates/uterm-ffi -> target
+          cache-bin: false
+      - name: Select Xcode and record exact source
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          mkdir -p macos/.build/personal-packages
+          {
+            echo "source_head=$PR_HEAD_SHA"
+            echo "tested_commit=$(git rev-parse HEAD)"
+            sw_vers
+            uname -m
+            xcodebuild -version
+            swift --version
+            rustc --version
+            pnpm --version
+          } 2>&1 | tee macos/.build/personal-packages/toolchain.txt
+      - name: Verify package rejection rules and shell syntax
+        run: |
+          bash -n scripts/macos-native-build.sh
+          python3 -B -m unittest discover -s tests -p test_macos_personal.py
+      - name: Build personal Swift and Rust Release app with ad-hoc signature
+        run:
+          bash scripts/macos-native-build.sh personal 2>&1 | tee
+          macos/.build/personal-packages/build.log
+      - name: Existing bridge and personal profile boundary regressions
+        run:
+          bash scripts/macos-native-test.sh personal 2>&1 | tee
+          macos/.build/personal-packages/swift-tests.log
+      - name: Audit DMG and ZIP, run isolated real window and same-source app replacement
+        run:
+          python3 -B scripts/macos-personal-package.py --smoke 2>&1 | tee
+          macos/.build/personal-packages/package-command.log
+      - name: Downloadable personal packages, exact reports and original screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: uTerm-Personal-${{ runner.arch }}-${{ env.PR_HEAD_SHA }}
+          path: macos/.build/personal-packages/
+          if-no-files-found: error
+          retention-days: 90

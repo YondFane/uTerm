@@ -14,17 +14,19 @@ import {
   terminalPunctuationKey,
 } from "../lib/terminal-input";
 import { autoCloseAgent, closeAttachedSession } from "../lib/session-lifecycle";
-import { decodeTerminalFrame } from "../lib/terminal-frame";
+import { decodeTerminalFrame, terminalAcknowledgement } from "../lib/terminal-frame";
 import {
   followTaskReplayViewport,
   restoreTaskReplayViewport,
   taskLogText,
 } from "../lib/terminal-replay";
 import type { AgentActivityEvent } from "../lib/terminal-frame";
+import type { CoreInputControl } from "../lib/core-contract.generated";
 import { attachTerminalScrollInput } from "../lib/terminal-scroll";
 import { attachTerminalFit, createTerminalResizeQueue } from "../lib/terminal-resize";
 import { terminalRendererPool } from "../lib/terminal-renderer";
 import { attachTerminalAccessibilityLimit } from "../lib/terminal-accessibility";
+import { registerTerminalPerformanceProbe } from "../lib/terminal-performance-qa";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import type { DragEventHandler, PointerEventHandler } from "react";
@@ -45,6 +47,9 @@ type Connection = {
   replayViewport: number | null;
   queue: Promise<void>;
   bytes: number;
+  inputControl?: CoreInputControl | null;
+  controlRevision: number;
+  receivedInitialFrame: boolean;
   resize: ReturnType<typeof createTerminalResizeQueue>;
 };
 const action = (id: string, action: string, values = {}) =>
@@ -101,6 +106,8 @@ export function TerminalView({
 }) {
   const uiLanguage = useUiLanguage();
   const [autoFollow, setAutoFollow] = useState(true);
+  const [inputControl, setInputControl] = useState<CoreInputControl | null>();
+  const [takingControl, setTakingControl] = useState(false);
   const followOutput = useRef(true);
   function followLogs(value: boolean) {
     followOutput.current = value;
@@ -127,9 +134,9 @@ export function TerminalView({
   const sessionDirectory = session.ssh
     ? `${session.ssh.host}${session.ssh.root ? `:${displayLocalPath(session.ssh.root)}` : ""}`
     : displayDirectory(directory);
-  function adjustFontSize(delta: number) {
+  async function adjustFontSize(delta: number) {
     try {
-      resizeFont("fontSize", delta, navigator.platform.startsWith("Mac"));
+      await resizeFont("fontSize", delta, navigator.platform.startsWith("Mac"));
       setFontError("");
     } catch (reason) {
       setFontError(tx("无法保存字号：{p0}", { p0: String(reason) }));
@@ -151,8 +158,22 @@ export function TerminalView({
   activeRef.current = active;
   const container = useRef<HTMLDivElement>(null);
   const terminal = useRef<Terminal | null>(null);
+  const performanceStats = useRef({
+    frames: 0,
+    bytes: 0,
+    acknowledgedFrames: 0,
+    resets: 0,
+    sequence: "0",
+    lastAckMilliseconds: 0,
+    receivedFrames: 0,
+    waitingToRender: false,
+    largestFrameBytes: 0,
+  });
+  const performanceRenderDelay = useRef(0);
+  const performanceRenderPaused = useRef(false);
   const renderer = useRef<ReturnType<typeof terminalRendererPool.register> | null>(null);
   const fitLayout = useRef<ReturnType<typeof attachTerminalFit> | null>(null);
+  const fitAddon = useRef<FitAddon | null>(null);
   const connection = useRef<Connection | null>(null);
   const closeRef = useRef(close);
   closeRef.current = close;
@@ -216,6 +237,7 @@ export function TerminalView({
       theme: { background: "#212121", foreground: "#c8cdd3" },
     });
     const fit = new FitAddon();
+    fitAddon.current = fit;
     term.loadAddon(fit);
     const searchAddon = new SearchAddon();
     term.loadAddon(searchAddon);
@@ -285,6 +307,38 @@ export function TerminalView({
     });
     term.open(container.current);
     terminal.current = term;
+    const disposePerformanceProbe =
+      import.meta.env.VITE_UTERM_STATE_QA === "1"
+        ? registerTerminalPerformanceProbe(
+            session.id,
+            (tailOnly = false) => {
+              const buffer = term.buffer.active;
+              const end = tailOnly
+                ? Math.min(buffer.length, buffer.baseY + buffer.cursorY + 1)
+                : buffer.length;
+              const first = tailOnly ? Math.max(0, end - 8) : 0;
+              const lines = Array.from(
+                { length: end - first },
+                (_, row) => buffer.getLine(first + row)?.translateToString(true) ?? "",
+              );
+              return {
+                ...performanceStats.current,
+                text: lines.join("\n"),
+                columns: term.cols,
+                rows: term.rows,
+                writable: !term.options.disableStdin,
+                alternateScreen: term.buffer.active.type === "alternate",
+              };
+            },
+            reconnect,
+            (milliseconds) => {
+              performanceRenderDelay.current = milliseconds;
+            },
+            (paused) => {
+              performanceRenderPaused.current = paused;
+            },
+          )
+        : () => {};
     const disposeAccessibility = attachTerminalAccessibilityLimit(container.current, () =>
       tx("输出过多，请移动到各行以读取。"),
     );
@@ -298,22 +352,28 @@ export function TerminalView({
     const send = (data: Uint8Array) => {
       if (logView) return;
       const current = connection.current;
-      if (!current || current.closed || current.replaying) return;
+      if (!current || current.closed || current.replaying || term.options.disableStdin) return;
       if (current.bytes + data.length > 1024 * 1024) {
         setError(tx("输入过长，请分段粘贴。"));
         return;
       }
       current.bytes += data.length;
+      const revision = current.controlRevision;
       current.queue = current.queue
         .then(async () => {
           await current.ready;
-          for (let offset = 0; offset < data.length && !current.closed; offset += 16384)
+          for (
+            let offset = 0;
+            offset < data.length && !current.closed && current.controlRevision === revision;
+            offset += 16384
+          )
             await action(current.id, "write", {
               data: Array.from(data.subarray(offset, offset + 16384)),
             });
         })
         .catch((reason: unknown) => {
-          if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
+          if (!current.closed && current.controlRevision === revision)
+            setError(session.ssh ? sshError(reason) : String(reason));
         })
         .finally(() => {
           current.bytes -= data.length;
@@ -343,14 +403,20 @@ export function TerminalView({
     const disposeScrollInput = attachTerminalScrollInput(term, send);
     const resize = term.onResize(({ rows, cols }) => {
       const current = connection.current;
-      if (!current || current.replaying) return;
+      if (
+        !current ||
+        !current.receivedInitialFrame ||
+        current.replaying ||
+        current.inputControl?.owned === false
+      )
+        return;
       current.resize.request({ rows, cols });
     });
     const layout = attachTerminalFit(
       term,
       container.current,
       () => fit.fit(),
-      () => !connection.current?.replaying,
+      () => !connection.current?.replaying && connection.current?.inputControl?.owned !== false,
       (reason) => setError(String(reason)),
       () => {
         const current = connection.current;
@@ -370,6 +436,7 @@ export function TerminalView({
       }
       layout.dispose();
       fitLayout.current = null;
+      fitAddon.current = null;
       searchListener.dispose();
       search.current = null;
       queryHandlers.forEach((handler) => handler.dispose());
@@ -378,6 +445,7 @@ export function TerminalView({
       resize.dispose();
       disposePunctuation();
       disposeAccessibility();
+      disposePerformanceProbe();
       renderer.current?.dispose();
       renderer.current = null;
       term.dispose();
@@ -441,8 +509,10 @@ export function TerminalView({
     if (!term || connection.current) return;
     detectedAgentRef.current(null);
     setError("");
+    setInputControl(undefined);
     setStatus("starting");
     term.reset();
+    term.options.disableStdin = true;
     const events = new Channel<ArrayBuffer>();
     const current: Connection = {
       id: crypto.randomUUID(),
@@ -453,11 +523,15 @@ export function TerminalView({
       ready: Promise.resolve(),
       queue: Promise.resolve(),
       bytes: 0,
+      controlRevision: 0,
+      receivedInitialFrame: false,
       resize: createTerminalResizeQueue(
         async ({ rows, cols }) => {
           await current.ready;
           if (
             !current.closed &&
+            current.receivedInitialFrame &&
+            current.inputControl?.owned !== false &&
             (!logView || !current.exited) &&
             !current.replaying &&
             connection.current === current &&
@@ -486,6 +560,13 @@ export function TerminalView({
         return;
       }
       const { data, ...event } = decoded;
+      current.receivedInitialFrame = true;
+      if (current.inputControl?.owned !== event.input_control?.owned) current.controlRevision++;
+      const gainedControl =
+        current.inputControl?.owned === false && event.input_control?.owned === true;
+      current.inputControl = event.input_control;
+      setInputControl(event.input_control);
+      term.options.disableStdin = logView || current.exited || event.input_control?.owned === false;
       setActivityError(event.agent_activity_error ?? "");
       if (event.agent_state)
         agentStateRef.current(event.agent_state, event.reset, Array.isArray(event.agent_events));
@@ -494,7 +575,7 @@ export function TerminalView({
       if (event.foreground_agent !== undefined) detectedAgentRef.current(event.foreground_agent);
       if (event.error) {
         setError(event.error);
-        if (!data.length && event.sequence === 0) {
+        if (!data.length && event.sequence === 0n) {
           setStatus("disconnected");
           term.options.disableStdin = true;
           return;
@@ -507,50 +588,89 @@ export function TerminalView({
         fitLayout.current?.cancel();
         term.reset();
         term.resize(event.cols, event.rows);
+      } else if (event.input_control?.owned === false) {
+        fitLayout.current?.cancel();
+        if (term.cols !== event.cols || term.rows !== event.rows)
+          term.resize(event.cols, event.rows);
       }
       const retainedViewport =
         logView && !followOutput.current ? term.buffer.active.viewportY : null;
-      term.write(data, () => {
+      if (import.meta.env.VITE_UTERM_STATE_QA === "1") {
+        performanceStats.current.receivedFrames++;
+        performanceStats.current.largestFrameBytes = Math.max(
+          performanceStats.current.largestFrameBytes,
+          data.length,
+        );
+      }
+      const render = () => {
         if (current.closed) return;
-        if (event.reset) {
-          current.replaying = false;
-          // A resized host buffer can replay logs into scrollback and leave the screen blank.
-          // 宿主缓冲区调整尺寸后，回放可能把日志放入滚动历史并留下空白屏幕。
-          if (existingOnly && (!logView || followOutput.current))
-            current.replayViewport = restoreTaskReplayViewport(term);
-          fitLayout.current?.schedule();
-        } else if (existingOnly && data.length && (!logView || followOutput.current)) {
-          current.replayViewport = followTaskReplayViewport(term, current.replayViewport);
-        }
-        if (retainedViewport !== null) term.scrollToLine(retainedViewport);
-        if (event.exited) {
-          current.exited = true;
-          term.options.disableStdin = true;
-          setStatus("exited");
-          if (!autoCloseAgent(session.agent, event.code))
-            term.writeln(tx("\r\n[会话已退出：{p0}]", { p0: event.code ?? tx("未知") }));
-        }
-        // Acknowledge after xterm consumes the bytes to keep output backpressure bounded.
-        current.ready
-          .then(() => {
-            if (!current.closed) return action(current.id, "ack", { sequence: event.sequence });
-          })
-          .then(() => {
-            // Close agent chats only after consuming and acknowledging their final output.
-            // 仅在消费并确认最后的输出后关闭 Agent 聊天。
-            if (
-              event.exited &&
-              autoCloseAgent(session.agent, event.code) &&
-              !event.error &&
-              !current.closed &&
-              connection.current === current
-            )
-              return closeRef.current();
-          })
-          .catch((reason: unknown) => {
-            if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
-          });
-      });
+        if (import.meta.env.VITE_UTERM_STATE_QA === "1")
+          performanceStats.current.waitingToRender = false;
+        term.write(data, () => {
+          if (current.closed) return;
+          if (import.meta.env.VITE_UTERM_STATE_QA === "1") {
+            performanceStats.current.frames++;
+            performanceStats.current.bytes += data.length;
+            if (event.reset) performanceStats.current.resets++;
+          }
+          if (event.reset) {
+            current.replaying = false;
+            // A resized host buffer can replay logs into scrollback and leave the screen blank.
+            // 宿主缓冲区调整尺寸后，回放可能把日志放入滚动历史并留下空白屏幕。
+            if (existingOnly && (!logView || followOutput.current))
+              current.replayViewport = restoreTaskReplayViewport(term);
+            fitLayout.current?.schedule();
+          } else if (existingOnly && data.length && (!logView || followOutput.current)) {
+            current.replayViewport = followTaskReplayViewport(term, current.replayViewport);
+          }
+          if (gainedControl) fitLayout.current?.schedule();
+          if (retainedViewport !== null) term.scrollToLine(retainedViewport);
+          if (event.exited) {
+            current.exited = true;
+            term.options.disableStdin = true;
+            setStatus("exited");
+            if (!autoCloseAgent(session.agent, event.code))
+              term.writeln(tx("\r\n[会话已退出：{p0}]", { p0: event.code ?? tx("未知") }));
+          }
+          // Acknowledge after xterm consumes the bytes to keep output backpressure bounded.
+          current.ready
+            .then(() => {
+              if (!current.closed)
+                return action(current.id, "ack", {
+                  sequence: terminalAcknowledgement(event.sequence),
+                });
+            })
+            .then(() => {
+              if (import.meta.env.VITE_UTERM_STATE_QA === "1" && !current.closed) {
+                performanceStats.current.acknowledgedFrames++;
+                performanceStats.current.sequence = event.sequence.toString();
+                performanceStats.current.lastAckMilliseconds = performance.now();
+              }
+              // Close agent chats only after consuming and acknowledging their final output.
+              // 仅在消费并确认最后的输出后关闭 Agent 聊天。
+              if (
+                event.exited &&
+                autoCloseAgent(session.agent, event.code) &&
+                !event.error &&
+                !current.closed &&
+                connection.current === current
+              )
+                return closeRef.current();
+            })
+            .catch((reason: unknown) => {
+              if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
+            });
+        });
+      };
+      if (import.meta.env.VITE_UTERM_STATE_QA === "1" && performanceRenderDelay.current > 0) {
+        performanceStats.current.waitingToRender = true;
+        const schedule = () => {
+          if (current.closed) return;
+          if (performanceRenderPaused.current) setTimeout(schedule, 25);
+          else setTimeout(render, performanceRenderDelay.current);
+        };
+        schedule();
+      } else render();
     };
     current.ready = invoke<void>("start_session", {
       request: {
@@ -570,7 +690,11 @@ export function TerminalView({
     try {
       await current.ready;
       if (!current.closed) {
-        term.options.disableStdin = logView || current.exited;
+        term.options.disableStdin =
+          logView ||
+          !current.receivedInitialFrame ||
+          current.exited ||
+          current.inputControl?.owned === false;
         setStatus((value) => (value === "starting" ? "running" : value));
         if (activeRef.current) term.focus();
       }
@@ -645,6 +769,26 @@ export function TerminalView({
     await start();
   }
 
+  async function takeInputControl() {
+    const current = connection.current;
+    if (!current || current.closed || current.exited || takingControl || logView) return;
+    setTakingControl(true);
+    try {
+      await current.ready;
+      if (current.closed || connection.current !== current) return;
+      const size = fitAddon.current?.proposeDimensions();
+      await action(current.id, "takeControl", size ?? {});
+      if (!current.closed && connection.current === current) {
+        setError("");
+        terminal.current?.focus();
+      }
+    } catch (reason) {
+      if (!current.closed) setError(session.ssh ? sshError(reason) : String(reason));
+    } finally {
+      setTakingControl(false);
+    }
+  }
+
   return (
     <section
       data-session-id={session.id}
@@ -697,6 +841,21 @@ export function TerminalView({
         <span className="session-working-directory" title={sessionDirectory}>
           {logView ? session.name : sessionDirectory}
         </span>
+        {!logView && inputControl?.owned === false && (
+          <>
+            <span className="terminal-control-state" role="status">
+              {tx("只读连接")}
+            </span>
+            <button
+              type="button"
+              data-terminal-take-control
+              disabled={takingControl || status !== "running"}
+              onClick={() => void takeInputControl()}
+            >
+              {tx("接管输入")}
+            </button>
+          </>
+        )}
         {logView && (
           <>
             <label className="python-log-follow">
@@ -879,7 +1038,11 @@ export function TerminalView({
       {(fontError || error || activityError) && (
         <p role="alert">{localizeMessage(fontError || error || activityError)}</p>
       )}
-      <div ref={container} className="terminal" aria-label={tx("本地终端")} />
+      <div
+        ref={container}
+        className={`terminal${inputControl?.owned === false ? " terminal-readonly" : ""}`}
+        aria-label={tx("本地终端")}
+      />
     </section>
   );
 }

@@ -1,37 +1,24 @@
 import { tx, localizeMessage } from "./i18n.ts";
 import { parseJavaArguments, formatJavaArguments, parseJavaEnvironment } from "./java-build.ts";
 import type { JavaTask } from "./java-build.ts";
+import type {
+  CorePythonRunConfig,
+  CorePythonConfiguration,
+  CorePythonInterpreter,
+  CorePythonCandidate,
+  CorePythonProjectInfo,
+} from "./core-contract.generated";
 
 export type PythonMode = "script" | "module" | "fastapi" | "flask" | "django";
-export interface PythonRunConfig {
-  interpreter: string;
-  mode: PythonMode;
-  target: string;
-  working_directory: string;
-  arguments: string[];
-  host: string;
-  port: number;
-  reload: boolean;
-}
-export interface PythonConfiguration {
-  revision: string;
-  configured: boolean;
+export type PythonRunConfig = Omit<Required<CorePythonRunConfig>, "mode"> & { mode: PythonMode };
+export type PythonConfiguration = Omit<CorePythonConfiguration, "project"> & {
   project: PythonRunConfig;
-}
-export interface PythonInterpreter {
-  path: string;
-  version: string;
-  virtual_environment: boolean;
-}
-export interface PythonCandidate {
-  mode: PythonMode;
-  target: string;
-  working_directory: string;
-}
-export interface PythonProject {
+};
+export type PythonInterpreter = CorePythonInterpreter;
+export type PythonCandidate = Omit<CorePythonCandidate, "mode"> & { mode: PythonMode };
+export type PythonProject = Omit<CorePythonProjectInfo, "candidates"> & {
   candidates: PythonCandidate[];
-  truncated: boolean;
-}
+};
 export type PythonTask = JavaTask;
 export const formatPythonArguments = formatJavaArguments;
 export function parsePythonArguments(value: string) {
@@ -105,6 +92,10 @@ export function pythonError(reason: unknown): string {
     PYTHON_CONFIG_INVALID: tx("Python 运行配置无效，原配置已保留。"),
     PYTHON_CONFIG_CONFLICT: tx("配置已被其他窗口修改，请重新读取后再保存。"),
     PYTHON_CONFIG_SAVE: tx("无法保存运行配置，原配置已保留。"),
+    PYTHON_CONFIG_BUSY: tx("其他窗口正在保存 Python 配置，请稍后明确重试。"),
+    PYTHON_TASK_MISSING: tx("任务已不存在，请重新读取运行状态。"),
+    PYTHON_TASK_REPLACED: tx("任务已被替换，停止请求已取消，请重新读取运行状态。"),
+    PYTHON_TASK_INVALID: tx("此任务不属于 Python 运行，停止请求已取消。"),
     PYTHON_PROJECT_INVALID: tx("工作目录和脚本必须位于所选项目根目录内。"),
     PYTHON_INTERPRETER_REQUIRED: tx("请选择可用的 Python 3 解释器，或重新检测本机环境。"),
     PYTHON_DEPENDENCY_MISSING: tx("所选 Python 环境缺少框架依赖，请在该环境中安装后重试。"),

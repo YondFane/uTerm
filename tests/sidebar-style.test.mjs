@@ -195,7 +195,7 @@ test("sidebar navigation filters existing lists without changing sessions, profi
     dom.window.Storage.prototype.setItem = () => {
       throw Error("Storage denied");
     };
-    assert.throws(
+    await assert.rejects(
       () => context.save({ ...context.settings, showRedisConnections: true }, false),
       /Storage denied/,
     );

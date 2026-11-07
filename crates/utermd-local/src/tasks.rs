@@ -59,6 +59,8 @@ pub struct Step {
     pub environment: HashMap<String, String>,
     pub label: String,
     #[serde(default)]
+    pub windows_java_utf8: bool,
+    #[serde(default)]
     pub jar_directory: Option<PathBuf>,
 }
 
@@ -88,6 +90,16 @@ impl Step {
         if !self.program.is_absolute()
             || !self.program.is_file()
             || !self.directory.canonicalize()?.starts_with(root)
+        {
+            bail!("JAVA_TASK_INVALID");
+        }
+        if self.windows_java_utf8
+            && (!cfg!(windows)
+                || !self
+                    .program
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .is_some_and(|name| name.eq_ignore_ascii_case("java.exe")))
         {
             bail!("JAVA_TASK_INVALID");
         }
@@ -207,9 +219,17 @@ pub(crate) fn command(directory: &Path, launch: Launch) -> Result<CommandBuilder
     Ok(command)
 }
 
-fn step_command(step: &Step) -> Command {
-    let mut command = Command::new(&step.program);
-    command.args(&step.arguments);
+fn step_command(step: &Step, root: &Path) -> Result<(Command, Option<crate::java_utf8::Prepared>)> {
+    let prepared = crate::java_utf8::prepare(step, root)?;
+    let mut command = if let Some(prepared) = &prepared {
+        let mut command = Command::new(&prepared.executable);
+        command.arg("--local-java-utf8");
+        command
+    } else {
+        let mut command = Command::new(&step.program);
+        command.args(&step.arguments);
+        command
+    };
     for key in [
         "UTERM_TASK_EXECUTABLE",
         "UTERM_TASK_ROOT",
@@ -219,7 +239,28 @@ fn step_command(step: &Step) -> Command {
     ] {
         command.env_remove(key);
     }
-    command
+    Ok((command, prepared))
+}
+
+fn launch_step(mut command: Command, payload: Option<&[u8]>) -> Result<std::process::Child> {
+    use std::io::Write;
+    if payload.is_some() {
+        command.stdin(Stdio::piped());
+    }
+    let mut child = command.spawn()?;
+    if let Some(bytes) = payload {
+        let result = child
+            .stdin
+            .take()
+            .context("JAVA_UTF8_ARGUMENTS_INVALID")
+            .and_then(|mut input| input.write_all(bytes).map_err(anyhow::Error::from));
+        if let Err(error) = result {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error).context("JAVA_UTF8_ARGUMENTS_INVALID");
+        }
+    }
+    Ok(child)
 }
 
 fn java_path(path: &Path) -> Result<String> {
@@ -343,7 +384,14 @@ fn run_steps(
         }
         step.resolve_jar(&launch.root)?;
         writeln!(crate::lock(&output), "\r\n> {}\r", step.label)?;
-        let mut command = step_command(&step);
+        let preparation = step_command(&step, directory);
+        if INTERRUPTED.load(Ordering::Acquire) {
+            return Ok(130);
+        }
+        let (mut command, prepared) = preparation?;
+        let payload = prepared
+            .as_ref()
+            .map(|prepared| prepared.payload.as_slice());
         command
             .current_dir(&step.directory)
             .envs(&step.environment)
@@ -351,10 +399,8 @@ fn run_steps(
         // Capture process bytes before ConPTY wraps or redraws them during a panel resize.
         // 在 ConPTY 随面板尺寸换行或重绘之前采集进程字节。
         let status = if captured {
-            let mut child = command
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()?;
+            command.stdout(Stdio::piped()).stderr(Stdio::piped());
+            let mut child = launch_step(command, payload)?;
             let stdout = child.stdout.take().context("JAVA_TASK_OUTPUT_FAILED")?;
             let stderr = child.stderr.take().context("JAVA_TASK_OUTPUT_FAILED")?;
             let forward = |mut reader: Box<dyn std::io::Read + Send>| {
@@ -390,10 +436,8 @@ fn run_steps(
             stderr?;
             status
         } else {
-            command
-                .stdout(Stdio::inherit())
-                .stderr(Stdio::inherit())
-                .status()?
+            command.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+            launch_step(command, payload)?.wait()?
         };
         if !status.success() {
             let code = status.code().unwrap_or(1);
@@ -432,6 +476,7 @@ mod tests {
                 directory: root,
                 environment: HashMap::new(),
                 label: "Maven test".into(),
+                windows_java_utf8: false,
                 jar_directory: None,
             }],
         };
@@ -473,6 +518,7 @@ mod tests {
             directory: root.clone(),
             environment: HashMap::new(),
             label: "JAR run".into(),
+            windows_java_utf8: false,
             jar_directory: Some(target.clone()),
         };
         assert!(step.resolve_jar(&root).is_err());

@@ -9,6 +9,352 @@ struct RunningHost {
 }
 
 #[test]
+fn delayed_read_cannot_publish_readonly_state_after_the_same_client_takes_control() {
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        mpsc, Arc, Mutex,
+    };
+    fn message(stream: &mut TcpStream) -> Vec<u8> {
+        let mut prefix = [0; 4];
+        stream.read_exact(&mut prefix).unwrap();
+        let length = u32::from_be_bytes(prefix) as usize;
+        assert!(length > 0 && length <= 16 * 1024 * 1024);
+        let mut bytes = vec![0; 4 + length];
+        bytes[..4].copy_from_slice(&prefix);
+        stream.read_exact(&mut bytes[4..]).unwrap();
+        bytes
+    }
+    struct Proxy {
+        stopped: Arc<AtomicBool>,
+        worker: Option<std::thread::JoinHandle<()>>,
+    }
+    impl Drop for Proxy {
+        fn drop(&mut self) {
+            self.stopped.store(true, Ordering::Release);
+            self.worker.take().unwrap().join().unwrap();
+        }
+    }
+    let mut host = RunningHost::new();
+    let generation = host.open("control-race");
+    let owner = host.client.for_view("Original").unwrap();
+    assert!(
+        owner
+            .claim_control("control-race", &generation, false)
+            .unwrap()
+            .unwrap()
+            .owned
+    );
+    let mut endpoint: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(host.directory.join("endpoint.json")).unwrap())
+            .unwrap();
+    let upstream = endpoint["port"].as_u64().unwrap() as u16;
+    let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    endpoint["port"] = serde_json::json!(listener.local_addr().unwrap().port());
+    let root = host.directory.join("gated-client");
+    std::fs::create_dir(&root).unwrap();
+    std::fs::write(
+        root.join("endpoint.json"),
+        serde_json::to_vec(&endpoint).unwrap(),
+    )
+    .unwrap();
+    let armed = Arc::new(AtomicBool::new(false));
+    let stopped = Arc::new(AtomicBool::new(false));
+    let (captured, ready) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let released = Arc::new(Mutex::new(released));
+    let worker_stop = stopped.clone();
+    let worker_arm = armed.clone();
+    let worker = std::thread::spawn(move || {
+        let mut connections = Vec::new();
+        while !worker_stop.load(Ordering::Acquire) {
+            match listener.accept() {
+                Ok((mut downstream, _)) => {
+                    downstream.set_nonblocking(false).unwrap();
+                    downstream
+                        .set_read_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    downstream
+                        .set_write_timeout(Some(Duration::from_secs(5)))
+                        .unwrap();
+                    let armed = worker_arm.clone();
+                    let captured = captured.clone();
+                    let released = released.clone();
+                    connections.push(std::thread::spawn(move || {
+                        let request = message(&mut downstream);
+                        let parsed: serde_json::Value =
+                            serde_json::from_slice(&request[4..]).unwrap();
+                        if parsed["operation"].get("Read").is_some()
+                            && armed.swap(false, Ordering::AcqRel)
+                        {
+                            assert!(parsed["view"]["lease"].is_null());
+                            captured.send(()).unwrap();
+                            released
+                                .lock()
+                                .unwrap()
+                                .recv_timeout(Duration::from_secs(5))
+                                .unwrap();
+                        }
+                        let mut upstream = TcpStream::connect(("127.0.0.1", upstream)).unwrap();
+                        upstream
+                            .set_read_timeout(Some(Duration::from_secs(5)))
+                            .unwrap();
+                        upstream
+                            .set_write_timeout(Some(Duration::from_secs(5)))
+                            .unwrap();
+                        upstream.write_all(&request).unwrap();
+                        downstream.write_all(&message(&mut upstream)).unwrap();
+                    }));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(5))
+                }
+                Err(error) => panic!("QA proxy: {error}"),
+            }
+        }
+        for connection in connections {
+            connection.join().unwrap();
+        }
+    });
+    let _proxy = Proxy {
+        stopped,
+        worker: Some(worker),
+    };
+    let client = Client::connect(&root)
+        .unwrap()
+        .for_view("Taking control")
+        .unwrap();
+    assert!(
+        !client
+            .claim_control("control-race", &generation, false)
+            .unwrap()
+            .unwrap()
+            .owned
+    );
+    armed.store(true, Ordering::Release);
+    std::thread::scope(|scope| {
+        let pending = scope.spawn(|| {
+            client.request(Operation::Read {
+                id: "control-race".into(),
+                generation: generation.clone(),
+                after: None,
+            })
+        });
+        ready.recv_timeout(Duration::from_secs(5)).unwrap();
+        assert!(
+            client
+                .claim_control("control-race", &generation, true)
+                .unwrap()
+                .unwrap()
+                .owned
+        );
+        release.send(()).unwrap();
+        let Reply::Frame(frame) = pending.join().unwrap().unwrap() else {
+            panic!("Expected real frame")
+        };
+        assert!(
+            frame.input_control.unwrap().owned,
+            "A delayed pre-claim read published stale readonly state"
+        );
+        assert!(client.has_input_control());
+    });
+    client
+        .request(Operation::Resize {
+            id: "control-race".into(),
+            generation: generation.clone(),
+            rows: 31,
+            cols: 107,
+        })
+        .unwrap();
+    let frame = host.read("control-race", &generation, None);
+    assert_eq!((frame.rows, frame.cols), (31, 107));
+    client.release_control("control-race", &generation).unwrap();
+}
+
+#[test]
+fn session_control_rejects_old_writers_and_sizes_while_both_real_clients_keep_reading() {
+    let mut host = RunningHost::new();
+    let generation = host.open("controlled");
+    let other = host.open("unrelated");
+    let first = host.client.for_view("First QA client").unwrap();
+    let second = Client::connect(&host.directory)
+        .unwrap()
+        .for_view("Second QA client")
+        .unwrap();
+    assert!(first.supports_input_control() && second.supports_input_control());
+    assert!(
+        first
+            .claim_control("controlled", &generation, false)
+            .unwrap()
+            .unwrap()
+            .owned
+    );
+    assert!(
+        !second
+            .claim_control("controlled", &generation, false)
+            .unwrap()
+            .unwrap()
+            .owned
+    );
+    let resize = |client: &Client, rows, cols| {
+        client.request(Operation::Resize {
+            id: "controlled".into(),
+            generation: generation.clone(),
+            rows,
+            cols,
+        })
+    };
+    let write = |client: &Client, command: &str| {
+        client.request(Operation::Write {
+            id: "controlled".into(),
+            generation: generation.clone(),
+            data: format!("{command}{}", if cfg!(windows) { "\r" } else { "\n" }).into_bytes(),
+        })
+    };
+    let read = |client: &Client| match client
+        .request(Operation::Read {
+            id: "controlled".into(),
+            generation: generation.clone(),
+            after: None,
+        })
+        .unwrap()
+    {
+        Reply::Frame(frame) => frame,
+        _ => panic!("Expected real output"),
+    };
+    let file_text = |name: &str| {
+        let bytes = std::fs::read(host.directory.join(name)).unwrap_or_default();
+        if bytes.starts_with(&[0xff, 0xfe]) {
+            String::from_utf16_lossy(
+                &bytes[2..]
+                    .chunks_exact(2)
+                    .map(|part| u16::from_le_bytes([part[0], part[1]]))
+                    .collect::<Vec<_>>(),
+            )
+        } else {
+            String::from_utf8_lossy(&bytes).into_owned()
+        }
+    };
+    let wait_file = |name: &str, marker: &str| {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !file_text(name).contains(marker) {
+            assert!(
+                Instant::now() < deadline,
+                "PTY did not execute {name}: {:?}",
+                read(&host.client)
+            );
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    };
+    resize(&first, 32, 101).unwrap();
+    assert!(resize(&second, 44, 144)
+        .unwrap_err()
+        .to_string()
+        .contains("SESSION_CONTROL_REQUIRED"));
+    assert!(write(&second, "echo DENIED > denied.txt").is_err());
+    write(&first, "echo FIRST_ACCEPTED > first.txt").unwrap();
+    wait_file("first.txt", "FIRST_ACCEPTED");
+    let a = read(&first);
+    let b = read(&second);
+    assert_eq!((a.rows, a.cols), (32, 101));
+    assert_eq!((b.rows, b.cols), (32, 101));
+    assert!(a.input_control.unwrap().owned);
+    assert!(!b.input_control.unwrap().owned);
+    assert!(
+        second
+            .claim_control("controlled", &generation, true)
+            .unwrap()
+            .unwrap()
+            .owned
+    );
+    assert!(write(&first, "echo STALE > stale.txt").is_err());
+    assert!(resize(&first, 55, 155).is_err());
+    first.release_control("controlled", &generation).unwrap();
+    assert!(host
+        .client
+        .request(Operation::Resize {
+            id: "controlled".into(),
+            generation: generation.clone(),
+            rows: 66,
+            cols: 166
+        })
+        .is_err());
+    resize(&second, 36, 112).unwrap();
+    write(&second, "echo SECOND_ACCEPTED > second.txt").unwrap();
+    wait_file("second.txt", "SECOND_ACCEPTED");
+    assert!(!host.directory.join("denied.txt").exists());
+    assert!(!host.directory.join("stale.txt").exists());
+    let frame = read(&first);
+    assert_eq!((frame.rows, frame.cols), (36, 112));
+    assert!(!frame.input_control.unwrap().owned);
+    assert!(second
+        .request(Operation::Write {
+            id: "controlled".into(),
+            generation: "stale-generation".into(),
+            data: b"echo STALE_GENERATION\n".to_vec()
+        })
+        .is_err());
+    assert!(read(&second).input_control.unwrap().owned);
+    second.release_control("controlled", &generation).unwrap();
+    host.write(
+        "controlled",
+        &generation,
+        if cfg!(windows) {
+            "echo LEGACY_RESUMED > legacy.txt\r"
+        } else {
+            "echo LEGACY_RESUMED > legacy.txt\n"
+        },
+    );
+    wait_file("legacy.txt", "LEGACY_RESUMED");
+    host.client
+        .request(Operation::Close {
+            id: "controlled".into(),
+            generation: generation.clone(),
+        })
+        .unwrap();
+    host.sessions.retain(|(id, _)| id != "controlled");
+    assert!(!host.read("unrelated", &other, None).exited);
+    host.client
+        .request(Operation::Close {
+            id: "unrelated".into(),
+            generation: other,
+        })
+        .unwrap();
+    host.sessions.clear();
+    host.client.request(Operation::ShutdownIfEmpty).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while host.directory.join("endpoint.json").exists() {
+        assert!(
+            Instant::now() < deadline,
+            "Control QA host did not clean up"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    if let Some(path) = std::env::var_os("UTERM_INPUT_CONTROL_REPORT") {
+        let git = |args: &[&str]| {
+            let output = std::process::Command::new("git")
+                .args(args)
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            String::from_utf8(output.stdout).unwrap().trim().to_owned()
+        };
+        let tested = git(&["rev-parse", "HEAD"]);
+        std::fs::write(path, serde_json::to_vec_pretty(&serde_json::json!({
+            "passed":true,"platform":std::env::consts::OS,"architecture":std::env::consts::ARCH,
+            "sourceHeadSHA":std::env::var("PR_HEAD_SHA").unwrap_or_else(|_|tested.clone()),"testedMergeSHA":tested,
+            "sourceTreeDirty":!git(&["status","--porcelain","--untracked-files=no"]).is_empty(),
+            "generation":generation,"realPTYFileWrites":true,"passiveReadsContinued":true,"passiveWriteAndResizeRejected":true,
+            "takeoverRevokedOldWriteAndResize":true,"lateReleasePreservedNewOwner":true,"staleGenerationRejected":true,
+            "acceptedSize":[36,112],"legacyResumedAfterRelease":true,"closePreservedUnrelatedProcess":true,"hostCleanedUp":true
+        })).unwrap()).unwrap();
+    }
+}
+
+#[test]
 fn normal_stop_waits_for_child_cleanup_and_force_stop_remains_available() {
     use utermd_local::tasks::{Launch, Step, TaskInfo};
     let mut host = RunningHost::new();
@@ -40,6 +386,7 @@ fn normal_stop_waits_for_child_cleanup_and_force_stop_remains_available() {
                 ),
             ]),
             label: "Task cleanup".into(),
+            windows_java_utf8: false,
             jar_directory: None,
         };
         let next_step = Step {
@@ -282,6 +629,7 @@ fn python_tasks_stream_reconnect_and_terminate_web_reload_children() {
                             ("PYTHONUNBUFFERED".into(), "1".into()),
                         ]),
                         label: format!("Python {mode}"),
+                        windows_java_utf8: false,
                         jar_directory: None,
                     }],
                 },
@@ -428,6 +776,7 @@ fn completed_task_drains_both_streams_before_publishing_exit() {
                     directory: root,
                     environment: Default::default(),
                     label: "Final output".into(),
+                    windows_java_utf8: false,
                     jar_directory: None,
                 }],
             },
@@ -509,6 +858,7 @@ fn structured_tasks_reconnect_keep_output_and_stay_out_of_shell_discovery() {
             directory: root,
             environment: Default::default(),
             label: "Task fixture".into(),
+            windows_java_utf8: false,
             jar_directory: None,
         }],
     };
@@ -740,8 +1090,10 @@ impl Drop for RunningHost {
                 eprintln!("test cleanup: {error}");
             }
         }
-        if let Err(error) = self.client.request(Operation::ShutdownIfEmpty) {
-            eprintln!("test shutdown: {error}");
+        if self.directory.join("endpoint.json").exists() {
+            if let Err(error) = self.client.request(Operation::ShutdownIfEmpty) {
+                eprintln!("test shutdown: {error}");
+            }
         }
         std::thread::sleep(Duration::from_millis(100));
         if let Err(error) = std::fs::remove_dir_all(&self.directory) {

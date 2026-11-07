@@ -3,7 +3,7 @@ title: uTerm development guide
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-10-21
+updated: 2026-11-06
 ---
 
 # uTerm development guide
@@ -24,6 +24,57 @@ see the [feature guide](features.md).
 - [Repository](#repository)
 
 ## Development
+
+### Shared core and native QA
+
+`crates/uterm-core` contains UI-independent state validation and canonical storage.
+`crates/uterm-ffi` exposes C ABI 1; manifests and lockfiles remain independent from the desktop and
+host. Run `pnpm test:core`, `pnpm contracts:generate` and `pnpm contracts:check` after DTO changes.
+Generated boundary types are committed; intermediate JSON schemas are not.
+
+Shared Java task/configuration checks require an existing JDK 21 with `JAVA_HOME` set and its `bin`
+on `PATH`. They compile a disposable JAR and use the isolated host; setting `UTERM_JAVA_CORE_REPORT`
+writes a structured source/platform/behavior report. CI uploads it as `java-live-core.json`.
+Building the application does not require or bundle Java.
+
+The optional Maven workflow fixture additionally needs Maven 3.9.9 (`UTERM_MAVEN_HOME`) and network
+access or a populated `UTERM_MAVEN_REPOSITORY`. Run the ignored
+`real_maven_reactor_and_spring_boot_use_shared_task_lifetimes` host test explicitly as documented in
+the README. `UTERM_MAVEN_CORE_REPORT` writes the detailed eight-scenario report. The dedicated Maven
+CI runs actual Windows JDK8/11/17/21 and macOS ARM/Intel JDK21 processes, recording each selected
+JDK's literal paths and Unicode launcher results. This fixture does not establish GUI or manual
+acceptance.
+
+On macOS 14 or newer, `bash scripts/macos-native-build.sh` builds the ad-hoc-signed QA app and
+`bash scripts/macos-native-test.sh` runs Swift bridge tests against the Rust static library.
+`bash scripts/macos-native-smoke.sh` requires a graphical login and WindowServer and records actual
+window/exit evidence. CI retains native ARM/Intel artifacts and old Tauri checks. The QA identity is
+`sh.uterm.desktop.qa.native`; never substitute the production identifier or attach its host. See
+[migration status](native-migration.md) for acceptance gaps and source-bound evidence.
+
+Source-bound desktop checks run on the existing Draft PR rather than publishing a release:
+
+- `python3 -B scripts/client-performance-database.py` owns PostgreSQL and runs three sequential
+  native/Tauri repetitions on a Mac; use `python` on Windows for its separate Tauri baseline.
+  Version4 requires the real 120×30 grid, unchanged 14pt text and the full shared workload, with
+  120/120/600-second idle samples. Run `node scripts/client-performance-report.mjs` afterward.
+- `python3 -B scripts/client-upgrade-smoke.py`, after the native QA build on an owned GitHub Actions
+  Mac, rebuilds pinned `uTerm-v0.2.4` source with a recorded private QA overlay. It downloads a
+  signed private native ZIP, tests interrupted program replacement, actual UI crashes/recovery and
+  explicit old-program plus latest-compatible-data rollback. This is not the unmodified published
+  installer or a production cross-client updater. Original readers and services stay unchanged;
+  initial legacy draft input, credential/hook references and OS boundaries remain labelled fixtures.
+- `python3 -B scripts/migration-readiness.py --head SOURCE_SHA` needs GitHub read authentication. It
+  audits actual task, PR, protected-branch and current-source artifact status into
+  `ci-evidence/readiness/migration-readiness.json`. Missing or failed evidence makes it exit
+  nonzero; that result does not merge, publish or alter production feeds.
+
+The Client upgrade and rollback and Client performance evidence workflows archive actual app
+reports, original owned-window images, toolchains and exact head/tested merge SHAs. Simulations and
+user-waived human steps remain distinct from automated native actions. Task #42 and signed updater
+#45 acceptance is documented at sourceec1a49d. Per-source performance, historical rollback and final
+gate results, including remaining platform limits, are maintained in #43/#46/#47. The full Linux
+frontend regression at sourceb904eaf passes 433 tests with 11 explicit skips.
 
 Agent settings can install OpenCode, Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot CLI and
 iFlow CLI after confirmation using the local Node.js/npm installation. This requires internet access
@@ -215,13 +266,18 @@ tests using development-only `jsdom`; desktop APIs and canvas renderers are mock
 For an isolated settings preview, run `pnpm dev --port 1422` and open `/tests/i18n-preview.html`. It
 uses mock desktop data and separate browser-origin settings, not live sessions.
 
-Run Redis integration tests separately with `pnpm test:redis`; they require TLS-enabled
+Run shared Redis regressions separately with `pnpm test:redis`; they require TLS-enabled
 `redis-server` and `openssl` on PATH. Tests start temporary loopback servers and do not access
-existing databases.
+existing databases. The command runs all 11 service checks, including seven real-server checks.
 
-Ordinary `pnpm test:backend` marks four real-server tests ignored and runs the Redis-independent
-budget/timeout tests; complete validation requires both commands. The app does not require these
-test programs.
+Ordinary `pnpm test:core` runs the four Redis protocol/bounds checks and two host-port close/cancel
+checks, leaving the seven real-server checks ignored. `pnpm test:backend` tests the remaining Tauri
+backend. Complete validation includes both layers and `pnpm test:redis`. To generate source-bound
+service logs and a JSON report, place `redis-cli` on PATH as well and run
+`node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory`. The shared Redis CI
+workflow builds SHA-256-verified Redis 7.4.7 with TLS and uploads these reports. This service
+evidence does not establish native Redis UI acceptance. The app does not require these test
+programs.
 
 The Redis client disables default optional features, TLS reuses rustls/ring, and credential access
 uses native system APIs.

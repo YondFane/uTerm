@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-05
+updated: 2026-11-07
 ---
 
 # uTerm feature guide
@@ -34,6 +34,940 @@ uTerm is a Windows and macOS desktop terminal. Local terminal and Agent processe
 remote shells run on their servers.
 
 The interface supports Simplified Chinese and English.
+
+### Personal macOS app
+
+The experimental **uTerm Personal** app uses Release builds of Swift/AppKit and the shared Rust
+core/helper on macOS 14+. It is ad-hoc signed for free personal use; it does not require a paid
+Apple Developer account or an App Store listing. It has no Apple notarization. The personal build
+never starts Sparkle, even when saved settings enable automatic updates; it shows manual-update
+guidance instead of network-update controls.
+
+Download the additional **Personal** Apple Silicon or Intel DMG/ZIP from the versioned
+[GitHub Release](https://github.com/YondFane/uTerm/releases). Published release attachments have no
+automatic expiry and can be downloaded without GitHub sign-in. Verify the personal SHA256SUMS file,
+open the DMG and drag **uTerm Personal.app** into Applications. If macOS blocks the unsigned
+developer, allow this known build in **System Settings → Privacy & Security**.
+
+The **macOS personal packages** Actions workflow also keeps verification artifacts for 90 days;
+GitHub requires sign-in for those temporary artifacts. The stable release workflow builds the same
+personal app from its immutable version tag, checks both architectures' source/version/install
+reports and package hashes, and publishes the four archives plus checksums as additional Release
+attachments. Existing Tauri installers continue to supply the automatic update channels. The
+personal app remains a separate, manually updated client.
+
+The personal identity is `sh.uterm.desktop.personal`; its profile is
+`~/Library/Application Support/sh.uterm.desktop.personal/`. It neither imports nor overwrites the
+existing Tauri or QA profiles. Symlinks that redirect its store into another profile are rejected.
+For a manual update, keep the previous downloaded package, stop tasks and close sessions, quit the
+app, back up the personal profile, and replace only the app bundle. Do not restore an older profile
+over an active app/host. Quitting alone detaches sessions. The shared core retains snapshot conflict
+checks, draft recovery and explicit rollback export; this packaging path does not automatically
+restore data or perform the stable Tauri-to-native cutover.
+
+To build locally on a Mac with the documented Node/pnpm, Rust and Xcode dependencies, run
+`bash scripts/macos-native-build.sh personal`, then `bash scripts/macos-native-test.sh personal` and
+`python3 -B scripts/macos-personal-package.py --smoke` in a graphical session. Output goes to
+`macos/.build/personal-packages/`; no signing certificate or publishing credential is needed. The
+default build command still creates the isolated QA app. QA command arguments are disabled in the
+personal executable; CI uses a separately identified, embedded temporary profile to exercise the
+same Release binary safely.
+
+#### Personal app validation
+
+Release collection rejects stale source/version reports, duplicate architectures, missing
+real-install evidence and modified archives. Disk-image creation retries only explicit busy
+responses up to five attempts, retaining diagnostics and refusing existing output. QA terminal
+creation waits for rendered project selection and an interactive button; the 30-second deadline is
+unchanged. Linux checks passed seven release tests, six disk-image simulations, four
+personal-package tests, type checking and the full frontend suite (435 passed, 11 skipped).
+
+Source `790dbf1bb1d028f70f3e43d0cef0a786eee5a1e0`, tested PR merge
+`221ebd650cd2e73ed73fea7fcce14b48edd15a9b`, passed the
+[Windows and macOS real-app QA](https://github.com/YondFane/uTerm/actions/runs/42341263310). Both
+artifacts include input-owner/viewer reports and original window captures; the owner now creates a
+visible real terminal before transferring input control. Native package, performance and release
+checks retain their own source-bound reports; this result does not establish the final tag's
+publication or stable native cutover.
+
+Source `5903045b8d1b899cfc98400dfb10c786536b1433`, tested PR merge
+`6635aee9229c633ab5db839efc04f0eeda0fdbcd`, passed the
+[personal package workflow](https://github.com/YondFane/uTerm/actions/runs/42337113604) on ARM64
+macOS 15.8.2 and Intel macOS 15.7.9. Both used Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Each ran 43
+Release Swift tests and four package-rejection tests, built and audited the actual ad-hoc app,
+mounted its read-only DMG, and launched its bundled helper with real Unicode PTY output.
+
+The
+[ARM64 artifact](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560770121)
+and
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560586632)
+contain DMG/ZIP, checksums, `personal-package.json`, two startup reports and two rollback exports,
+toolchain/build/test logs and six original window captures each. All four package hashes and
+embedded source/architecture identities were independently checked. All twelve captures were
+inspected: actual English dark and Chinese light settings, localized manual-update/login captions,
+and terminal output before/after same-source app replacement. The coherent exports retain both exact
+NFD/CRLF drafts and reject a stale revision; the original file is unchanged, and the fixture host
+exits. Saved automatic opt-in and injected feed metadata cannot initialize the updater, and QA
+arguments cannot redirect data or write a smoke report in the shipped identity.
+
+The profile tests cover first/existing directories, identity, temporary-fixture confinement and
+symlink redirects. Linux packaging/disk-image simulations, shell syntax, formatting and bilingual
+documentation checks also pass. Runtime coverage is macOS 15.x; the declared minimum is 14.0. These
+checks establish same-source app replacement, not a cross-version stable cutover or Apple
+signing/notarization. Existing Tauri migration and remaining acceptance stay separately tracked in
+[#47](https://github.com/YondFane/uTerm/issues/47).
+
+### Native macOS QA client
+
+An experimental native SwiftUI/AppKit QA application is built separately from the shipping Tauri
+client. It requires macOS 14.0 and uses the isolated identity `sh.uterm.desktop.qa.native`. The
+development implementation connects the shared workspace/session operations to native lists, a
+hideable sidebar, a 40pt toolbar, basic language/appearance/font settings and cached SwiftTerm
+terminal views. A bundled standalone Rust helper owns real PTYs; quitting detaches, whereas **Close
+session** matches the selected generation before terminating it; a missing or stale generation
+requires reconnecting before close. Splitting and selecting sessions preserve each terminal view.
+Reconnecting replays retained output with the existing process generation.
+
+SwiftTerm 1.20.0 is pinned for Xcode 16.4 compatibility. Output crosses the C ABI as binary frames,
+with one unacknowledged frame per attachment and a bounded Swift queue. Swift decodes sequence and
+activity sequence as `UInt64` and encodes acknowledgements without passing through `Double`.
+TypeScript uses generated `bigint` sequence fields and preserves integer tokens before JSON can
+round them. Acknowledgements use legacy safe numbers or exact decimal strings, both validated by
+Rust up to u64::MAX. The host binary frame format is unchanged. Boundary tests cover actual values,
+not only type names. Native and legacy platform CI passed this precision change at head
+`d3dcd09a69bcdd66798e2f4aaa4b67b99187cf77`, tested merge `3a012173e7f27639c7dbe40188354b8348c1affa`
+([native](https://github.com/YondFane/uTerm/actions/runs/41422419793),
+[legacy](https://github.com/YondFane/uTerm/actions/runs/41422419819)).
+
+The Unix slow-consumer regression holds one unacknowledged real PTY frame, rejects an incorrect ack,
+then checks 1,000 Unicode records in order. A detached attachment cannot ack its replacement. After
+90,000 rows exceed the host's 1 MiB raw history, recovery explicitly resets to the bounded retained
+screen; it does not promise unlimited raw history. Native QA additionally injects 150 ms before
+SwiftTerm consumption, executes the native sidebar menu while output waits and renders and
+acknowledges over 113 KB. These cases passed on both Mac architectures at the source below. The
+controlled delay tests correctness, not performance gains. Windows retains its existing regression
+suite; this Unix load scenario does not run there.
+
+#### Isolated candidate packages
+
+After the native QA build, `bash scripts/macos-candidate-package.sh` creates an
+architecture-specific App ZIP and read-only DMG. It audits the app/helper architectures, minimum OS,
+ad-hoc signatures, dependencies and read-only resources, then mounts the image and installs into a
+private temporary Applications directory. The installed app starts its bundled helper, renders real
+Unicode PTY output, explicitly closes the fixture session and stops the idle host before removal.
+The native QA version remains the bundle's recorded `0.0.1`; this is not a stable release package.
+
+The image checksum verifier retries only explicit temporary-busy responses, up to five attempts;
+each exit code and diagnostic remains in the report. Invalid images and exhausted retries fail.
+Three Linux simulations cover busy-then-valid, invalid images, persistent busy and timeout. The
+79872ba ARM candidate failed its original busy response; the unchanged report remains in
+[artifact13543080480](https://github.com/YondFane/uTerm/actions/runs/42295306002/artifacts/13543080480).
+Actual image creation, checksum validation and installation still require the macOS run.
+
+The candidate wrapper disables Python bytecode writes so importing its image verifier cannot create
+an untracked `scripts/__pycache__` before the clean-source gate. At source `6ef8dba`, both Mac
+upgrade/rollback jobs passed all seven scenarios, and Intel passed the 37 Swift tests and 21 real
+content assertions. Its later candidate and interaction gates correctly failed on that generated
+cache;
+[the original artifact](https://github.com/YondFane/uTerm/actions/runs/42305932312/artifacts/13546679529)
+remains unchanged. The wrapper correction requires a fresh native CI run; these partial results do
+not claim that the entire native workflow passed.
+
+On Windows, `./scripts/windows-candidate-package.ps1` builds a current-user QA NSIS installer with
+embedded WebView content and production deep links disabled. It installs into an owned temporary
+directory, checks the x64 executable and read-only resource files, runs the installed real app,
+captures its owned HWND, and uninstalls. Only the isolated `sh.uterm.desktop.qa.sharedstate` profile
+is redirected; private data remains until fixture cleanup, and production protocol/uninstall
+registry fingerprints must stay unchanged. The QA installer requires the CI image's existing
+WebView2 runtime. Its resource attributes are restored by QA-only install/uninstall hooks.
+
+Both checks archive SHA256 sums, exact source head/tested merge SHAs, platform/toolchain evidence,
+installation reports, logs and original window captures under `candidate/`. Source
+`8aacbb3b09925fe16f2bda24e66563eed9f27a31`, tested merge `0e9a3aa9c1d10b4ecad0127e922df760fcf195cc`,
+passes candidate installation on macOS arm64 15.8.2, Intel 15.7.9 and Windows x64 NT10.0.26100. All
+five actual package hashes were independently recomputed and the three original installed-window
+captures inspected. Mac uses Xcode16.4, Swift6.1.2 and Rust1.99.1; Windows uses Node24.22.2,
+pnpm11.22.0, PowerShell7.6.9 and Rust1.99.1. Reports, artifacts and the exact checks are linked in
+[#44](https://github.com/YondFane/uTerm/issues/44#issuecomment-6686879466), now accepted on the task
+branch. At that candidate source, separate #41/#45 checks failed; candidate success is not an
+overall workflow pass. #41 is separately accepted at source949e4c2; #42/#45 are accepted at
+sourceec1a49d, with the simulation/manual-waiver boundaries in their completion comments.
+
+Native Apps are ad-hoc signed, their Sparkle framework retains its vendor signatures, and neither
+Apple Developer signing nor notarization is available. Windows candidates are unsigned; these base
+candidates have no updater signature. Windows candidate identity compares every executable byte
+after Tauri's single expected `__TAURI_BUNDLE_TYPE_VAR_UNK` to `__TAURI_BUNDLE_TYPE_VAR_NSS`
+transform. Missing/duplicate markers or any other change fail. The Candidate Windows QA workflow
+runs this installer scope independently. Source-bound signed private SDK fixtures and upgrade/data
+rollback evidence are accepted in #45/#46; stable cutover remains gated by #47. These checks do not
+publish or change production sources.
+
+#### Reproducible client measurements
+
+The Client performance evidence workflow runs native and Tauri clients sequentially on the same Mac,
+with three repetitions per client, and records a separate Windows Tauri baseline. Version4 of
+`shared/fixtures/client-performance.json` fixes one real PTY, a 120×30 grid, 14pt text and
+5,000-line scrollback. Both clients use their ordinary renderer-to-PTY resize paths; a mismatched or
+clipped grid fails the report. Twenty cycles exercise 1,024 ordered ANSI/Unicode records, 64KiB CAS
+file save/read and actual attachment replay without replacing the process generation. The first five
+cycles are excluded from latency summaries.
+
+The workload also includes twenty synthetic alternate-screen TUI redraws, an actual consumer delayed
+by 200ms per frame, and twenty real PostgreSQL queries through Core/JDBC. Each query verifies 128
+rows of ordered text containing 128 ASCII characters and Unicode. An initial render gate holds a
+real frame for at least 50ms; another frame or premature acknowledgement fails the slow-consumer
+check. The gate is released before draining and checking all 1,024 records. These are controlled
+terminal redraws, not an interactive Vim benchmark; query timings include row serialization, not
+table painting.
+
+After the native build, run `python3 -B scripts/client-performance-database.py` (`python` on
+Windows). The wrapper owns one loopback PostgreSQL cluster across all sequential measurements,
+supplies private credentials to the client runners and invokes `scripts/run-client-performance.sh`.
+It verifies the original database fixture remains unchanged, connections close, the owned server
+stops and evidence contains no credential. `node scripts/client-performance-report.mjs` audits all
+three repetitions. The inner native/Tauri runners require the wrapper's private database context.
+
+The comparison report records a clean-source check and three equal elapsed-time idle windows. Both
+consecutive median RSS increases above the larger of 16MiB or 3% of initial RSS flag growth and fail
+the measured-scope acceptance. Sparse/empty or nonmonotonic samples fail analysis. This detector
+does not establish multi-hour leak freedom. Per-metric medians across three repetitions record
+native slowdowns above 10% and 1ms as explicit #13 profiling follow-ups; they are not hidden behind
+an aggregate improvement claim. `performanceAcceptanceComplete` applies only to this fixed one-PTY
+workload and bounded observation, while stable cutover remains a separate gate.
+
+macOS may report a zero-RSS descendant while the owned app and host remain resident. The analyzer
+retains and counts those records, requires nonnegative per-process RSS and a positive aggregate, and
+still rejects empty/all-zero samples. Source `79872babd29afe81815bf29ee7ec103bda6e955e`, tested
+merge `a540065570287b0d7bf6798612fc56405dad1382`, passes all 15 workloads across ARM, Intel and
+Windows; raw trends, cleanup and original windows were inspected.
+[#43 acceptance](https://github.com/YondFane/uTerm/issues/43#issuecomment-6696979756) records
+commands, machines, artifacts and scope. Native bulk, replay and database regressions remain
+explicit
+[#13 profiling follow-ups](https://github.com/YondFane/uTerm/issues/13#issuecomment-6696879766),
+with no whole-app improvement or multi-hour leak claim. Newer source runs keep their own provenance.
+
+Idle sampling lasts 120 seconds in each of the first two repetitions and 600 seconds in the last.
+Raw samples, per-cycle metrics, source/workload hashes, original terminal/TUI windows and cleanup
+reports are archived as CI artifacts. CPU/RSS cover the app, its descendants and the authenticated
+host tree; unattributed WebContent/GPU/XPC processes and the external PostgreSQL server remain
+excluded. Setup and screenshots use separate phases. Resource phases still include warm-up and
+instrumentation costs, and summed RSS is not proportional memory. Native input uses
+NSTextInputClient; Tauri uses DOM paste/Enter in the real app. Response timing ends at parsed-output
+acknowledgement, not physical keyboard/display latency. A ten-minute sample does not establish
+multi-hour leak freedom.
+
+#### Measurement validation
+
+Local report tests reject stale source/workload, imprecise sequence, missing rows/TUI samples,
+insufficient soak, missing slow-consumer evidence and unequal grids. Source-specific version4
+Mac/Windows results and acceptance remain in [#43](https://github.com/YondFane/uTerm/issues/43); no
+improvement percentage is claimed. Earlier workload versions are not accepted as version4 evidence.
+Native fitting records each actual window/view/grid attempt. The ARM CI display remained capped at
+684px even after CoreGraphics reported a larger mode; those failed runs are retained. Version4 uses
+the same 120×30 grid on all clients, fitting the original CI desktop without changing screen modes,
+fonts, workload volume or clipping checks. Windows receives the real Git Bash path and handles Git's
+mingw64 layout. SQL orders the numeric series through a distinct output alias. Corrected platform
+measurements require the exact source-bound reports in #43.
+
+The c24d81a Intel run reaches the real 120×30 grid and completes its first native/Tauri pair; the
+second native workload completes but its coordinator checks the endpoint before asynchronous host
+exit finishes. That failure remains in
+[artifact13538810238](https://github.com/YondFane/uTerm/actions/runs/42282798481/artifacts/13538810238).
+The native coordinator now waits up to ten seconds for both endpoint removal and the authenticated
+fixture PID to exit, without terminating it or relaxing workload checks. A real child-process test
+covers delayed unlink/exit; another checks that timeout never kills a running process. Mac
+acceptance uses fresh per-source CI and the limits recorded in #43.
+
+At sourceb904eaf the full Linux frontend regression passes 433 tests with 11 explicit skips. The
+retained partial Intel v3 data shows slower native bulk output and database queries; the latter
+includes the native adapter's asynchronous completion polling. These are recorded regressions, not a
+claim that polling alone explains the difference. Two-minute RSS observations are stable, while the
+current v4 comparison and longer-trend evidence are maintained in #43. Exact old-source numbers and
+limits are in [#43](https://github.com/YondFane/uTerm/issues/43#issuecomment-6694081032).
+
+The Windows contract test now waits for its Core process and streams to close before deleting owned
+data, with bounded retries for released Windows handles. A failed preceding desktop step still
+produces an interaction-matrix failure report instead of losing it to a missing directory. These
+failures remain failures; retrying cleanup does not convert skipped scenes to passes.
+
+Explicit detach releases its authenticated input lease before returning, including when the old
+consumer is blocked. A per-link lock prevents late heartbeat/takeover from reclaiming a stopped
+view; old cleanup cannot release its replacement. The real-host blocked-consumer regression passes
+locally. Performance settings are seeded before shared-state initialization; QA observers retry
+bounded read-only observations on writer contention, without retrying mutations. Capture selects
+only the owned QA window and fails if that window cannot be captured. These checks preserve actual
+failed runs rather than replacing their images or treating earlier timings as a comparison result.
+
+#### Native QA validation
+
+Migration acceptance remains open in [#13](https://github.com/YondFane/uTerm/issues/13). M3 #17 was
+closed at the user's direction, retaining persistent-layout/PDF-mark and Windows run-panel/picker
+coverage gaps. Database, Redis, Agent and settings acceptance is recorded in #38–#41. #42
+interaction recording is accepted with labelled simulations and user-waived final human checks. M4
+source-specific performance results and remaining scope are tracked in
+[#43](https://github.com/YondFane/uTerm/issues/43) and the
+[phase tracker](https://github.com/YondFane/uTerm/issues/18). M5 packaging #44 and updates #45 are
+accepted; actual upgrade/rollback evidence and final gate results are maintained in
+[#46](https://github.com/YondFane/uTerm/issues/46),
+[#47](https://github.com/YondFane/uTerm/issues/47) and their
+[phase tracker](https://github.com/YondFane/uTerm/issues/19). Original implementation gaps remain
+visible and prevent a stable-cutover claim.
+
+Redis paging, deletion, TTL, quit-cancellation and OS-credential checks are accepted at source
+`940f8d1`, with platform reports and screenshots in
+[#39](https://github.com/YondFane/uTerm/issues/39). Work remains on `feat/native-macos-shared-core`
+in [Draft PR #12](https://github.com/YondFane/uTerm/pull/12), without merging or publishing a
+release.
+
+Head `4c502ab0c5f39b1d4f43ec4e72f0c7f35b285cca`, tested merge
+`df2690d89433974653ff5426bab07be371f455c7`, passed all four jobs in
+[native CI](https://github.com/YondFane/uTerm/actions/runs/41468220264) and
+[legacy CI](https://github.com/YondFane/uTerm/actions/runs/41468220189). Native execution used macOS
+15.8.2 ARM64 / 15.7.9 Intel, Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Windows Server 2025 x64 and
+legacy macOS ARM64 passed frontend, core/FFI/contracts, host, backend, format/docs and desktop
+checks. Native QA uses temporary projects/data/hosts and `sh.uterm.desktop.qa.native`; Tauri QA uses
+`sh.uterm.desktop.qa.sharedstate`.
+
+Real native checks cover Unicode/ANSI/alternate screen, retained split views, sidebar arrow-key
+focus, native Settings menu/Return, wide/narrow windows, language/theme changes, sidebar hide, full
+screen, ordinary quit/relaunch with retained generation/replay and generation-matched close. The
+toolbar measures 40pt. Original NSView cache images omitted compositor layers and are excluded;
+current screenshots use WindowServer.
+
+Native Settings offers **Allow local CLI control** through a normal AppKit checkbox and displays the
+explicit data directory. The shared authenticated loopback service passes bundled CLI status/list/
+new/focus/send/close, modal-write rejection and queue draining. Accepted connections explicitly use
+blocking mode with bounded timeouts; completed storage transactions unlock even if a copied
+descriptor survives PTY creation. Canonical Windows file identity avoids restarting an unchanged
+idle host. Table selection/focus deferral avoids NSTableView delegate reentrancy; current smoke
+rejects that warning.
+
+`pnpm test:legacy-host` compiles the unchanged recorded release
+`4f10848868ac09a3667e140938c345b265f9dd58` helper with its lockfile and a separate target. All four
+jobs verify binary replay/ack, literal input, active PID/generation preservation, detach and idle
+upgrade only after explicit close. Source and binary digests stay unchanged. A separately labelled
+incompatible endpoint fixture verifies refusal without replacing the host or endpoint; it is not a
+historical incompatible binary. The native helper and QA App are ad-hoc signed and checked with
+`codesign --verify --deep --strict`. Formal signing/notarization and installer upgrade/rollback are
+separate, unaccepted gates.
+
+Artifacts are
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41468220264/artifacts/13154462292),
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41468220264/artifacts/13153229460),
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41468220189/artifacts/13154148989) and
+[legacy Mac](https://github.com/YondFane/uTerm/actions/runs/41468220189/artifacts/13154152640). They
+contain head/tested merge, platform/OS/architecture/toolchain, reports, logs, actual system window
+screenshots and the native QA App. Images include the empty window, eight language/theme/ width
+scenes, sidebar hidden/full-screen/settings, `native-terminal-slow-consumer.png` and two
+`native-control-*.png` files. ARM load/narrow/full-screen/control, Intel narrow/control and Windows
+Tauri control images were visually inspected. Tauri's 12-scene save/recovery/control report passed
+without cleanup errors.
+
+M0 #14, M1 #15 and tasks #20–#30 are accepted, unmerged. M2 #31/#32 use the user-approved simulation
+scope described below; their source-bound results and acceptance are tracked in the Issues. Real
+provider tasks, manual IME/clipboard/mouse and physical sleep/multiple-display checks remain
+unexecuted under the authorized simulation/manual-waiver boundaries. Persistent layouts/PDF marks,
+full Windows run-panel/picker coverage, multi-session/multi-hour performance, macOS 14 runtime and
+stable-cutover conditions remain uncovered. Automatic native actions are not human acceptance;
+Windows and legacy macOS retain the existing full feature set. See
+[native migration status](native-migration.md) and Issue comments for evidence and unexecuted steps.
+
+The native terminal smoke launches installed `/usr/bin/vim` in the actual PTY. Native key events
+enter/leave insertion, `NSTextInputClient.insertText` supplies Chinese/combining characters/emoji
+and the native `paste:` action uses the system clipboard with actual bracketed paste. The renderer
+leaves automatic terminal negotiation replies to the shared host; keyboard, paste and CLI input
+remain distinct. [Native CI 41834172198](https://github.com/YondFane/uTerm/actions/runs/41834172198)
+passed both macOS 15.8.2 ARM64 and 15.7.9 Intel at source `1fd91cf7422b34546440e21ddadd4d69361db457`
+/ tested merge `dde20cbbf9d35c3dd0885148ad5ad1edf90b0276`. Each run verifies the exact 44 saved
+UTF-8 bytes, alternate-screen return, same view/generation and resumed shell; 35 renderer-reply
+bytes are suppressed. Artifacts contain `vim-toolchain.txt`, `native-vim-edit.png`,
+`native-vim-saved.txt` and `terminal-live.json.realVim`; both real Vim captures were inspected.
+[Reports and the retained initial failure](https://github.com/YondFane/uTerm/issues/31#issuecomment-6631702456)
+distinguish scripted native input from unexecuted manual IME, actual Agent CLI and performance
+acceptance.
+
+### Shared input and size control
+
+When another current client owns a session, its terminal shows **Read-only attachment** and a **Take
+input control** button. Reading, selection and copying remain available. Explicitly press this
+button to move input and window-size control to this view; focusing a window never takes control.
+Passive views follow the host grid without resizing it. Losing control discards queued input,
+including clipboard data, so it cannot be sent after a later takeover. Both clients wait for the
+first host frame before enabling input or sending size changes, so a new passive attachment cannot
+race its initial control metadata. Task logs remain readonly and do not show takeover controls.
+
+The development host/Core assigns one input/resize lease per live session generation. Other
+attachments keep reading and acknowledging output. Explicit takeover revokes previous writes and
+resizes; a late release cannot revoke the new owner or a replacement generation. Releasing or
+closing a client detaches its control without stopping the process. A 30-second lease expires if
+renewal stops; the stream renews every five seconds even while waiting for rendering
+acknowledgement.
+
+A concurrent claim causes a pending read to reread its original cursor with current control state,
+with a bounded retry count. Input is never replayed. Current host support is detected explicitly;
+unmodified old hosts keep their existing behavior and do not gain control arbitration retroactively.
+Rust generates the optional control metadata for Swift/TypeScript; raw terminal bytes and exact u64
+sequence/ack representations remain intact.
+
+Linux checks use a real isolated host, independent TCP/Core clients and a PTY. They cover takeover,
+rejected old input/resize, passive output/ack, late release, stale generation, detach/quit, same
+process/generation reattachment and exact close. A TCP gate delays an old readonly request until
+after takeover and verifies that its response cannot overwrite the new control state. Clock-driven
+policy checks cover expiry/renewal and legacy fallback without waiting for the lease in real time.
+`input-control-host.json`, `input-control-core.json` and test logs retain source/platform metadata;
+CI runs host checks before unrelated Java task checks. Pull-request CI continues independent
+contract, build and real-app checks after a Core test failure, then explicitly fails the job; the
+original failing log and additional artifacts are both retained. Direct branch checks still stop at
+the failed Core step. Native CLI sending uses the current app attachment and its existing lease; it
+cannot implicitly take over another client's control. A real host regression checks accepted CLI
+input, rejected input after takeover and stale-generation refusal.
+
+An explicitly confirmed idle helper upgrade waits for both endpoint removal and release of the old
+process's OS lock before starting its replacement. Deterministic OS-lock regressions cover the gap
+between those events and a bounded timeout without stealing a live lock. A successful probe
+explicitly unlocks before returning, so a descriptor inherited by a concurrent PTY fork cannot
+retain the probe's lock and block the replacement host.
+
+The duplicate-descriptor regression reproduces the former retained lock and passes with explicit
+unlock on Linux, together with all three shutdown-lock checks and ten host integration tests. The
+Intel `3990ebf` CI failure in idle-host replacement is retained: its new mock CLI test passed, but
+the job failed before native window smoke. Platform acceptance of the unlock fix requires its own
+source-bound CI evidence in #32.
+
+The shared u64 fixtures also carry owned/passive/unowned metadata through the real Rust encoder and
+Swift/TypeScript decoders; malformed roles are rejected without rounding sequence or acknowledgement
+values.
+
+The native ownership wrapper checks Git source cleanliness before launch and after each process,
+matches both embedded source identities, then records `testedMergeSHA` and `sourceTreeDirty` in each
+report. The c15f1bb ARM workflow passed its actual scenes, but its two raw ownership reports omitted
+the clean-source field; the strict readiness audit rejects that missing metadata.
+[The original artifact](https://github.com/YondFane/uTerm/actions/runs/42309000560/artifacts/13548990662)
+is retained. A focused regression keeps such reports blocked; fresh Mac evidence for the wrapper
+correction is tracked in #47.
+
+`bash scripts/macos-input-control-smoke.sh` drives two concurrent, isolated native app processes,
+the native take-control button, passive input/resize rejection, output/ack, ordinary viewer exit,
+reacquisition and exact close, with four WindowServer captures. `pnpm qa:shared-state` includes two
+concurrent real Tauri processes and six ownership scenes using actual terminal input and takeover
+buttons. Before its first command, QA waits for the actual xterm input field to become writable and
+the shell prompt to appear in parsed terminal rows; takeovers also wait for writable input. The
+report retains that initial readiness evidence. Commands are sent once, without changing the
+application shell or replaying input. The isolated QA build permits concurrent app processes and
+gives the viewer a separate temporary CLI-control endpoint while both processes retain the same
+shared store, host and session. The Windows fixture explicitly writes UTF-8 marker files through
+actual PowerShell terminal input, matching the text reader without changing the application shell.
+Its compile-gated observer reads the actual Tauri session host, and failure cleanup closes only the
+disposable QA root's exact session generations before idle shutdown. Real native ownership checks
+passed on macOS ARM/Intel at source `670f421354150e112f71d0ac3c94f29681296993` / tested merge
+`c5e4c54dfa4acbe381c64a81b113b4d5c659a97b` (Native run 41818643260), including four WindowServer
+captures per architecture and the standalone CLI regression. Tauri source
+`b7a5e60f6252aab6b829a8e0659a35c8e5509637` / tested merge `3029133cd9dd7433a06d31cb1ea76db885df94aa`
+passed 46 scenes on Windows and transitional macOS, including six ownership scenes and
+cleanupErrors=[]. Windows output was visible, but visual inspection found blank macOS terminal
+areas. Source `1fd91cf` additionally confirms actual xterm accessibility rows contain the expected
+shell markers with nonzero terminal/canvas dimensions; its macOS GPU captures remain blank. Input
+side effects and parsed text do not establish GPU display acceptance.
+[Source-bound reports/artifacts](https://github.com/YondFane/uTerm/issues/32#issuecomment-6631153924)
+retain this gap. Manual keyboard, IME and system-clipboard acceptance remain unexecuted.
+
+Tauri ownership QA retains baseline GPU captures before explicitly losing the actual WebGL context
+through `WEBGL_lose_context`, then requires xterm's existing DOM fallback to display the same shell
+marker. Both app processes retain the same session/generation through recovery, takeover and output.
+
+Source `1a30d7d90b08fedf9e16c0b695658a963b575037` / tested merge
+`321cce8300f8abc8e95b07e731baf40259b54885` passed all 50 actual application scenes on Windows Server
+2025 x64 and macOS 26.6.2 ARM64, dirty=false and cleanupErrors=[]. Both reports retain the actual
+writable-input/shell-prompt readiness, WebGL2 loss and DOM recovery. The corresponding Mac
+owner-returned and Windows viewer-owned captures show real shell output.
+[Reports, screenshots and preserved earlier failure](https://github.com/YondFane/uTerm/issues/32#issuecomment-6646250139)
+remain source-bound. DOM output does not establish GPU capture/display acceptance; that gap and
+manual keyboard, IME, clipboard, sleep/display and full lifecycle acceptance remain open.
+
+The shared stream also forwards control-role changes when no new output bytes have advanced the
+cursor. An in-flight read can report passive state at the new owner's sequence before the claim
+reply updates its local lease. Deduplicating that later owned frame solely by sequence used to leave
+the view read-only; the stream now compares control metadata as well. Byte sequences,
+acknowledgement rules and raw output remain unchanged.
+
+A real Core/host/PTY regression reproduces the previous timeout and checks four peer exits with
+explicit reacquisition through the original attachment, ordered role updates, rejected stale input,
+unchanged host PID/generation/grid, a real file write after each exit and exact close.
+`input-reacquire-core.json` records source/merge/platform and any observed control-only changes at
+the same cursor. Linux passed the targeted regression, full Core/FFI/Host/backend checks, 408
+frontend tests (10 skipped), types/production and desktop builds, formatting and documentation. The
+final working tree also passed all 53 real application scenes (dirty=true, cleanupErrors=[]).
+
+At source `29516c6dd78399d305099611cddebac7f825d46c` / tested merge
+`dcb2332a60bc712c0fb86ba6aa32bd946b88964a`, all four clean Core/PTY reports passed, and each native
+architecture observed one control-only change without a new byte cursor. Both native application
+handoff/Vim/slow-consumer reports passed; macOS Tauri passed 53 scenes. Windows application QA
+stopped earlier at its short/long path comparison, so its UI acceptance is still incomplete. The
+real-app QA retains control-click/read-only diagnostics on failure. Platform reports remain bound to
+their own source/merge in Issue #32. Agent authentication/tasks, manual IME/clipboard/mouse and
+sleep/display acceptance remain open.
+
+M2 simulation uses a custom Python Agent CLI fixture launched by the real host/Core PTY through
+normal Agent definitions. The fixture emits alternate-screen, color and bracketed-paste sequences;
+checks preserve literal arguments and Unicode bytes over two turns, a recoverable mock error and
+cancel, client detachment/reconnection, prior-output replay, stale-input refusal, callback cleanup,
+exit code 7 and exact close. `m2-simulation-core.json` explicitly records `mockAgentCLI=true`,
+`actualAgentProvider=false`, `actualOSPowerSleep=false` and `guiAcceptance=false`. Client suspension
+is modeled by detachment; clock-driven lease checks model expiry/renewal. These checks are the
+user-approved simulation scope for #31/#32, not real provider authentication or OS power testing.
+
+The Linux fixture passes through actual processes and validates the saved UTF-8 files. Native
+SwiftTerm parser/mouse-mode and frontend composition/clipboard/renderer simulations remain separate
+from the actual native Vim and Windows window evidence. The optional installed Codex 0.163.0 plus
+loopback-model activity test still fails with `thread/read: list_turns is not supported yet`; that
+failure is retained and is not counted as passing the mock CLI test. M3–M5 acceptance is unchanged.
+
+### Shared saved state
+
+The development client imports workspace and settings data through its existing WebView on first
+launch. Rust validates and retains the original export, then owns `shared-state-v1` in the app-data
+directory. Subsequent saves use an atomic snapshot and revision checks; workspace and settings
+changes share a serialized queue. The old workspace/settings keys are retained for recovery and are
+no longer written. Editor drafts then initialize a separate shared store; other WebView preferences
+retain their existing owners.
+
+Settings changes use the initiating view's baseline, so an older view cannot revert unrelated
+committed fields. Quit drains writes added during an earlier save. Explicit reloads use the same
+queue. Failed settings remain as drafts when Settings is closed and reopened. **Reload saved
+settings** reads external changes while retaining the draft, including a conflict on the same field;
+**Retry saving settings** explicitly writes it, and **Discard unsaved settings** reloads before
+discarding. Quit remains blocked while a failed draft needs handling. These drafts are held in
+memory; they are not crash-recovery storage.
+
+Ten real Rust-process contract tests passed on Linux x86_64, including retained same-field conflict
+drafts, publication after commit and quit protection after reload. Real isolated Tauri runs checked
+save/conflict/reload/retry, normal quit and reopen, corrupt snapshot recovery and retained
+original/damaged bytes. Save/recovery acceptance passed at head
+`56ce724043d0ea4ebdf8a929aef76ecbc9c9e313`, tested merge `e98be01cd195e6427c9824727a0221e596ea1132`
+([legacy CI](https://github.com/YondFane/uTerm/actions/runs/41448284276),
+[native CI](https://github.com/YondFane/uTerm/actions/runs/41448284447)). Windows Server 2025 x64
+and macOS ARM64 each uploaded ten actual window scenes and a successful report without cleanup
+errors. The
+[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/41448284276/artifacts/13142824964)
+and
+[macOS artifact](https://github.com/YondFane/uTerm/actions/runs/41448284276/artifacts/13143776890)
+include original/damaged-byte retention results and source metadata. QA cleanup errors fail the run
+and remain in its report without hiding earlier scenario images.
+
+An unreadable snapshot opens a recovery view without resetting data. **View recovery copies** lists
+valid saved snapshots; an explicit restore retains the damaged bytes. Up to eight previous snapshots
+and the original import are retained. Existing recovery copies must match their expected bytes;
+wrong checksums or occupied backup paths stop a save without replacing the snapshot. The recovery
+list includes only copies whose filename digest matches their actual content. **Settings → General →
+Export legacy-compatible data** saves the current workspace/settings and original auxiliary values
+as JSON. This export is a recovery artifact. A real Rust-process test reads the exported
+workspace/settings with unchanged release readers, preserving split/session IDs and opaque
+draft/backup bytes after repeated import. Automatic downgrade into an unmodified old client's
+WebView storage is not verified. Export refreshes workspace/settings and adopted Git favorites;
+other auxiliary values retain their first-import bytes. Before replacement, retain a fresh old
+WebView profile and the complete canonical store as well. Editor/PDF, Git favorites and Agent
+notification migration belong to #34, #35 and #40; full installation rollback remains #46.
+
+For operators preparing rollback, the Core `rollback.export` method accepts the current
+`expectedRevision` and optional `expectedDraftRevision`. It reads canonical state, adopted Git
+favorites and current editor drafts under one writer lease, returning schema1 `RollbackArchive` with
+source revisions, original auxiliary strings, every current draft and per-document old-format
+candidates. A single current draft fills the old slot; cleared drafts remove it; multiple drafts
+leave the slot empty and require an explicit choice while retaining every draft in the archive. The
+existing UI's `legacy.export` keeps its original semantics. Export never installs, restores or
+automatically authorizes a downgrade. Keep the complete data backup and validate the old reader;
+credential stores and live host endpoint files remain outside this archive.
+
+Linux checks pass 33 targeted storage/rollback tests (three existing permission cases ignored), two
+real-process reader tests, generated TS/Swift contract checks and type checking. They cover latest
+Unicode/BOM/CRLF bytes, multiple and deleted drafts, stale state/draft revisions, malformed
+arguments, corrupt/unsupported stores, writer contention/retry, idempotence and no config/source
+writes. CI records `rollback-export-core.json`. The actual Swift C ABI case initially failed because
+its draft setup omitted `expectedDraftRevision`; setup now sends explicit null for a new document,
+retaining strict rejection of missing fields. The corrected actual C ABI check passes both Mac
+architectures at source949e4c2.
+
+`python3 -B scripts/client-upgrade-smoke.py` prepares a historical Tauri QA client from the fixed
+published `uTerm-v0.2.4` source, with an isolated identity shared only by its native test successor.
+The full historical rehearsal requires an owned GitHub Actions Mac because unchanged historical OS
+adapters retain fixed development labels. All original source hashes are retained: only the two
+startup/command entry files and recorded QA additions differ. It does not run the unmodified
+published installer. The historical GUI, readers, services, source manifests and lockfiles remain
+unchanged; initial draft input and credential/hook references are labelled fixtures.
+
+A restored historical editor keeps its unsaved draft visible. Recovery checks actual retained xterm
+replay and visible CodeMirror text without hiding the editor or re-selecting the project: both
+navigation actions trigger that version's autosave. The first old app and both native phases still
+produce fresh PTY output, with fresh DOM input and replay-only checks recorded separately. Fresh
+input waits for the actual historical xterm's `disableStdin=false`, since its textarea can exist
+before attachment enables input.
+
+Regressions execute the actual QA script with real React, xterm and DOM state plus a labelled
+navigation/autosave simulation. Both recovery paths must preserve the original file and stored
+draft; the real xterm reference is checked in disabled and ready states. The packaged native
+transition identity can use only its embedded private temporary data root, as for isolated updater
+fixtures. The bdb56fc ARM run confirms the exact legacy Core draft bytes, but its actual native
+window still shows disk text because Foundation changed the document root from `/private/var` to
+`/var`.
+[Artifact13544688991](https://github.com/YondFane/uTerm/actions/runs/42302307767/artifacts/13544688991)
+retains both real native failure windows, DOM text and UTF-8 diagnostics, plus the preceding old-app
+recovery evidence. The fix separates logical draft identity from resolved filesystem boundaries.
+Three Swift regressions cover a real alias/sibling/escape, macOS temporary aliases and recovery
+through the actual Core ABI with original file bytes retained; their execution and complete rollback
+still require the new Mac CI source. The native content smoke also makes a fresh WebKit read after
+actually retargeting a selected alias, rejects the alternate root and records
+`native-content-alias-root.png`; its 21 checks and four original windows require actual Mac
+execution. No native pass is inferred from Linux checks.
+
+The Mac rehearsal downloads a native QA archive from its owned loopback server, verifies a pinned
+one-time Ed25519 manifest and architecture, rejects a bad signature before replacement, and tests
+interruption after moving the old program. After each durable export and window capture, the
+coordinator kills the historical UI without bypassing its quit guard or deleting its draft. The
+actual old app restarts before repeat Core import. The native app restores the old draft, edits
+through its real CodeMirror window, persists changed settings, survives SIGKILL and reopens.
+Explicit rollback restores the old program and applies the latest compatible data into its actual
+WebView; unchanged historical readers must recover that latest draft/settings and the same live
+host/generation. Original files and canonical stores are checked, with complete canonical fixture
+backups archived before each handover. Multiple draft choices remain refused rather than being
+selected automatically.
+
+Client upgrade and rollback runs on both Mac architectures and uploads `upgrade-rollback.json`,
+source/overlay hashes, old/native QA packages, public manifest/signature, canonical backups,
+original application windows and logs. Linux checks pass two interruption/isolation tests plus the
+historical frontend's types/build and historical Rust compilation. Actual Mac execution and
+acceptance are recorded per source in #46; these local checks alone do not establish them. The first
+ARM run42282798468 built and launched the actual old application but failed its marker check because
+canvas output was read as DOM textContent. The isolated QA now reads the unchanged component's real
+React xterm ref; a real React/xterm regression passes when the DOM text is empty and the buffer
+contains wrapped output. Failed windows are captured, and owned-host shutdown waits for endpoint
+removal. The old failure artifact is retained. A subsequent 8f23169 ARM run verifies the real
+historical PTY marker but fails its separate window probe;
+[artifact13537749822](https://github.com/YondFane/uTerm/actions/runs/42286080719/artifacts/13537749822)
+contains that failure without a successful screenshot. Capture now uses the existing compiled
+owner-checked helper: auto-selection requires exactly one eligible window, private QA explicitly
+shows/focuses it, and failure diagnostics retain only owned window metadata. Historical checkpoints
+are retained before capture, while the top report lists completed scenarios. Corrected outcomes
+remain source-bound in #46. This is a private manual package-replacement rehearsal; it does not
+configure a production cross-client feed. Actual credential approval/hook execution and OS
+deep-link/login registration are not represented as tested; references are simulated and production
+schemes stay disabled.
+
+#47 tracks final source-bound evidence and current stage gaps; neither task authorizes merging or
+publishing. The Migration readiness audit runs for updates to migration PR #12 or manual dispatches,
+reading GitHub task/PR/ref state and current-head workflow artifacts. It checks exact
+source/tested-merge identities, clean reports, failures, incomplete acceptance flags and PNG
+signatures, and publishes migration-readiness.json. Open prerequisites, missing/failed CI, stale
+artifacts or unequal tested merges fail the gate. The report inventory does not replace
+original-window inspection or task acceptance. The audit has read-only repository permissions and
+does not close issues, merge, tag, publish or change feeds. Run
+`python3 -B scripts/migration-readiness.py --head SOURCE_SHA` with authenticated GitHub read access;
+its nonzero result and artifact describe current blockers, not a successful release.
+
+Rust storage/FFI tests and real-process TypeScript compatibility tests cover repeat import,
+conflicts, corruption, recovery, ownership and callback draining on Linux and in Windows/macOS CI. A
+real-helper C ABI test also blocks a binary callback while another thread unsubscribes or closes,
+verifying that its borrowed context remains valid until delivery drains and that callback reentry is
+rejected. This added check passed on Linux and both native macOS architectures at the validated head
+above. Swift bridge tests run in macOS CI; source-specific native Swift migration and recovery
+evidence is maintained separately in #28/#46. The Tauri acceptance above is separate. Both legacy
+platform jobs also run shared-core tests and generated-contract drift checks, uploading command
+logs, source head, tested merge SHA and platform/toolchain metadata as `legacy-checks-*` CI
+artifacts.
+
+#### Shared editor draft storage
+
+The development core owns `editor-drafts-v1.json`, separately from workspace/settings, with up to
+100 revision-checked documents. Legacy import retains exact source bytes before parsing, accepts
+repeat imports of the same source and refuses to replace newer drafts from a different source. Text
+and saved-text limits match JavaScript's 2 Mi UTF-16 code units; BOM/line endings survive. Up to
+eight valid prior snapshots and 16 original sources remain. Invalid recovery bytes are retained; a
+full source collection rejects another import. Relative paths reject absolute paths and parent
+traversal.
+
+The native QA client's **File → Open file…** uses the shared CodeMirror editor and project-scoped
+recovery. Acknowledged unsaved text restores when reopening its file; recovered text needs explicit
+Save before autosave resumes. Saves retain root/link, expected-version, BOM and line-ending checks
+and wait for draft delivery. Editable windows have no readonly force-close timer. Explicit discard
+waits for dispatched writes and preserves another writer's newer draft. Content may save only its
+selected file and cannot import old sources. If its source disappears or becomes unreadable,
+retained text opens readonly with a notice and survives close.
+
+Native file windows retain the selected project path spelling as the Core draft identity, including
+`/private/var` aliases. Resolved paths remain separate for file-picker boundaries and window
+grouping; picker targets outside the root, including symlink escapes, are rejected. File opening
+from the project menu, inspector, recovery and Git retains that logical root. Existing windows are
+reused only for the same logical root and relative file, so distinct stored aliases are not silently
+merged. The draft format and revision/byte checks are unchanged. Reads and saves use the resolved
+root pinned when the window opens; retargeting an alias cannot redirect them.
+
+The queue coalesces waiting text, bounds pending data and keeps flush/retry failures visible,
+including initialization with no waiting writes. Different documents advance independently; stale
+writes/removals for the same document fail. Lost replies require checking durable data. Close stops
+delivery without promising host rollback. Escape closes the native file window after the shared
+document-close guard. Native quit freezes and confirms all content documents, retains the app on
+refusal/timeout/reload/stale replies and resumes prepared documents after cancellation. Quit errors
+reveal the main window.
+
+If recovery delivery fails, **Retry recovery draft** explicitly retries the retained queue without
+saving the file. Text stays in the editor, writes do not replay automatically, and file autosave
+remains paused until explicit Save. The same control is available in the Tauri and native content
+editors. A failed retry retains the error and text.
+
+A missing draft snapshot with existing backup/damaged files now blocks automatic import. The
+development APIs `editor.drafts.recovery.preview` and `editor.drafts.recovery.restoreMissing` expose
+verified backups and explicit absent-file restoration. The latter requires `expectedMissing: true`
+and installs without overwriting a newly created snapshot. Existing restore/null behavior is
+preserved; damaged bytes, originals and invalid copies remain.
+
+**File → Recover editor drafts…** previews retained text, copies the full text without writing files
+or opens its latest draft. Reopening an existing file focuses its current window. Drafts with
+unavailable or differently spelled project locations can still be copied.
+
+**File → Restore editor recovery copy…** previews verified backups and explicitly restores the
+selected copy, retaining damaged bytes. A changed snapshot rejects the restore; an absent snapshot
+uses non-overwriting installation. Cancel does not change recovery data. Open editors retain their
+current text; reopen files to load restored drafts.
+
+Editable native files from the same canonical project open as AppKit window tabs in opening order.
+Opening an existing file selects its existing tab. Different projects, read-only previews and Git
+windows stay outside that editable group. Each tab keeps its own document-scoped bridge, recovery
+queue and close guard; cancelling a conflicted close retains both drafts and the external file.
+Closing one tab continues to guard and acknowledge only its own document.
+
+The real editor smoke edits two recovered files in native tabs, leaves both open for SIGKILL, then
+explicitly reopens and checks exact drafts, order/reuse, project/preview isolation, conflict/Keep
+editing/discard and sibling Save. Source `e06168dbe9491c3c862977dc931c6b7ad098a4ee` / merge
+`e48ce2f886987f92b17f77a42637f6b692bf6da2` passes both ARM/Intel flows and the configured dark
+native chrome check. Actual WindowServer captures are `native-editor-tabs-checkpoint.png`,
+`native-editor-tabs-reopen.png` and `native-editor-tabs-conflict-640.png`; the current reopen image
+was inspected and its tab chrome matches the dark editor.
+[ARM artifacts](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13395713575)
+and
+[Intel artifacts](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13396400420)
+include editor-live.json, both phase reports and system/toolchain data. #34 is closed in the
+user-approved scope. Persistent layout/window geometry and shared PDF marks remain explicit #13
+implementation gaps; final human keyboard/IME/focus checks were waived, not executed.
+
+#### Tauri editor draft handoff
+
+The development Tauri client initializes shared drafts before opening its workspace. It keeps the
+old draft key unchanged, verifies a versioned WebView backup and retains exact source bytes in Core.
+A versioned acknowledgement binds those frozen bytes to the shared source, so restarting does not
+reimport an old draft over newer shared text. Subsequent editing, save and discard use the same
+revision-checked queue as the native editor.
+
+A different old source opens **Recover editor drafts**. **Copy old draft source** retains its full
+original JSON; **Continue with shared drafts** requires the old source to have been archived and
+keeps the shared documents. A changed old source requires a reload. Storage/quota, backup and
+acknowledgement failures keep the old bytes and block handoff. Corrupt/missing shared snapshots can
+be previewed and explicitly restored from verified recovery copies; a stale selection cannot replace
+newer bytes. There is no empty-data fallback.
+
+The old draft's file reopens with the latest shared draft when that document is still retained.
+Recovered text requires explicit Save before autosave. Other retained files restore when opened. The
+old key and versioned copies remain recovery data; they are not live mirrors of later shared edits.
+Full installed-version downgrade still requires #46 acceptance.
+
+#### Shared draft validation
+
+Head `c475567da41e6840dc76f1197f8b5ea183bb0865`, tested merge
+`c5c63cb41a2843cb70e0bc95fbb19511c535ff65`, passed all four jobs in
+[native ARM/Intel CI](https://github.com/YondFane/uTerm/actions/runs/41566088010) and
+[legacy Windows/macOS CI](https://github.com/YondFane/uTerm/actions/runs/41566088020). The native
+reports verify exact NFD/Chinese/CRLF/BOM bytes, durable drafts, SIGKILL/relaunch, external
+conflict, close protection, discard, save, 640px controls, guarded Escape window close and
+missing-source readonly retention. Twelve `native-editor-*.png` images include these scenes plus
+recovery selection, accurate copy, cancel, window reuse, stale restore refusal, damaged-byte
+retention and absent-store restore. English/dark, Chinese/light and backup preview images were
+inspected. Reports record source/merge/platform/toolchains. Artifacts:
+[ARM](https://github.com/YondFane/uTerm/actions/runs/41566088010/artifacts/13198977763),
+[Intel](https://github.com/YondFane/uTerm/actions/runs/41566088010/artifacts/13199306983),
+[Windows](https://github.com/YondFane/uTerm/actions/runs/41566088020/artifacts/13199842022),
+[old macOS](https://github.com/YondFane/uTerm/actions/runs/41566088020/artifacts/13199777170).
+
+Both native jobs passed 13 Swift checks, including backup preview/missing restore through the C ABI.
+Both Tauri state QA reports passed without cleanup errors; those checks do not establish Windows
+editor draft UI parity. Linux checks pass 378 frontend tests (ten skipped), 129 backend (ten
+ignored), core/FFI and filesystem failure/retry, contract drift, types and desktop compilation.
+Twenty-one real Rust-process contracts cover missing sources, non-overwriting missing-store restore,
+preview and unchanged null semantics. DOM input in the real native app is separate from manual
+keyboard/IME/focus acceptance.
+
+Both native architectures passed the real recovery controls above. Both Tauri clients passed 16
+actual application scenes, including old-source import, frozen keys/versioned backups, durable
+unsaved text, forced SIGKILL, reopen with the exact newer draft and explicit BOM/CRLF save. Process
+reports record the forced signal and normal reopen exit; original/draft-byte checks and four editor
+screenshots are in each legacy artifact. Windows recovery and macOS saved images were inspected.
+Tauri's boot conflict/damaged recovery UI has real Rust/React contracts but still needs
+corresponding platform screenshots. Tabs/window order, PDF marks and full manual editing/focus
+remain open.
+
+### Shared Git and Worktree service
+
+The development core's `git` and `worktrees` modules own status, diff, commit history,
+branches/references and Worktree rules. The same 15 Git and four Worktree operations use `git.*`
+requests and Rust-generated TypeScript/Swift DTOs. Tauri keeps its existing command names and Git
+interface and delegates to the same functions.
+
+With a local project or Worktree selected, the native QA application's **File → Git…** opens the
+shared Git panel in a separate window. Core resolves the selection against the current workspace
+revision. Git requests bind to that repository and project; file windows cannot invoke Git.
+Diff/name copying uses the system pasteboard. A separate bridge keeps repository work off the
+terminal bridge.
+
+Both clients support the same existing operation set:
+
+| Operation                                                           | Native macOS entry                             | Windows entry                                      | Shared service                                                                                 |
+| ------------------------------------------------------------------- | ---------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Status, working/staged diff, commit details/history and comparisons | File → Git…                                    | Git inspector                                      | `git.snapshot`, `fileStatus`, `diff`, `history`, `files`, `workingComparison`                  |
+| Branch catalog, switch and remote discovery                         | Git tree/context menu                          | Git tree and branch picker                         | `git.branch`, `branches`, `references`, `remoteBranches`, `switchBranch`, `switchRemoteBranch` |
+| Create/rename, upstream, fetch, pull/update and push                | Git context menu                               | Same shared Git context menu                       | `git.referenceAction`, `branchAction`                                                          |
+| Revert a selected file                                              | Git change menu                                | Same shared change menu                            | `git.rollbackFile`                                                                             |
+| Suggest/create/list Worktrees                                       | Git context menu and project sidebar           | Git context menu and project sidebar               | `git.worktrees.suggestion`, `create`, `list`                                                   |
+| Confirm/remove a registered Worktree                                | Native sidebar menu and default-Cancel NSAlert | Sidebar menu and default-Cancel application dialog | `project.worktrees.delete` plus shared Git deletion rules                                      |
+
+Commit creation/staging is not an existing panel action; commit rows show details/history. Native
+content cannot directly call raw Worktree deletion or global recovery; trusted AppKit controls
+perform those operations. Windows uses its application dialogs for the same guarded actions.
+
+Before a write, open editable file windows save and freeze until completion. A file conflict blocks
+Git and retains both file and recovery draft. The Git window refuses to close during a write. Clean
+editors reload repository changes; dirty or busy editors retain their text. Cancelling or timing out
+a dispatched write does not establish rollback; inspect the repository before retrying. Both Tauri
+and WebKit retain the caller's busy/editor protection until the actual dispatched write finishes,
+then report the cancel/timeout/closed error without delivering a late success. A native cancel
+acknowledgement alone does not release this protection. Read cancellation remains immediate. Native
+favorites use the shared recovery controls described below.
+
+The Tauri backend independently retains queued/running Git, Worktree and local-file writes, plus
+mutating shared-store requests. Normal quit visibly refuses while they run, even if WebView state is
+lost. Final exit and new-operation admission share one lock, preventing a write from starting after
+exit has been approved. Known read-only queries do not hold the write guard, so a background
+favorite/snapshot reply cannot spuriously refuse the final quit. New or unknown methods remain
+guarded, and approval rejects new requests including reads. A real Core snapshot reply and a
+committed settings write check these distinct lifetimes; the new policy requires its own platform
+CI.
+
+`project.worktrees.refresh` discovers the stored project's repository and atomically updates its
+Worktree list with an expected revision. Both clients use these rules for registered projects: keep
+IDs/custom names, update branch-derived names, retain missing Worktrees with sessions, drop
+unreferenced entries no longer discovered and preserve valid selection. A stale revision or Git
+discovery failure retains saved state. A subdirectory project excludes its own main root from child
+Worktrees.
+
+The native sidebar displays Worktrees below projects. Select a row to use its directory; right-click
+the project or Worktree and choose **Refresh Worktrees** to rescan. Git mutations synchronize the
+bound project's list before publishing success. If Git completed but list storage failed, the error
+says so; refresh the project instead of blindly repeating the Git write. Canonical Tauri project
+Worktree updates use the same Core operation; browser fixtures retain their compatibility path.
+
+Literal directory endings and Unicode branch whitespace are preserved, including the source branch
+for automatic Worktree creation. Windows extended drive/UNC destinations are translated for Git;
+extended paths whose dot/space endings cannot be preserved are rejected visibly. A real Windows
+creation/dirty-refusal/deletion regression passed in CI. Native diff colors use theme text/canvas
+colors; the Chinese/light narrow screenshot was inspected.
+
+Right-click a native Worktree and choose **Delete Worktree…**. The native confirmation defaults to
+Cancel; confirmation freezes/saves editable windows and calls `project.worktrees.delete` with the
+captured revision. Tauri's application confirmation shows the project and Worktree directories and
+defaults to Cancel. It pins the reviewed snapshot instead of adopting a revision updated later by
+the queue; changed queued or external data refuses deletion. **Reload workspace** reads saved data
+through the editor save/close guard before a new confirmation. Deletion errors remain visible until
+explicit retry/reload, and normal quit waits for dispatched deletion. Cancel does not save or
+delete. Both clients delegate to the same service. Core derives the path from saved IDs, rejects
+stale state, saved session references, live host sessions/tasks launched inside the folder and dirty
+Git data. Host inspection neither starts nor restarts it; an unreadable endpoint blocks deletion.
+Raw Web content cannot invoke native deletion. If Git removes the folder but metadata saving fails,
+the error requires explicit **Refresh Worktrees**. These guards use saved references and host launch
+directories; they do not track a shell's later `cd` or arbitrate every legacy host client. Complete
+ownership/cancellation acceptance remains pending.
+
+Draft list/document reads retry only `WRITER_BUSY`, at most six times over 620 ms. Close cancels
+backoff; writes and conflicts do not retry automatically. A failed initial open can be retried.
+Actual OS-lock regression uses a separate Rust process; it failed before the error-code correction
+and passes afterward. QA observation reads also wait for that lock within their existing 30-second
+deadline and record `observerBusyReads`; they never retry writes.
+
+#### Shared Git favorites
+
+Both clients' branch context menus use `git-favorites-v1.json` in the canonical store. Favorites
+belong to the real Git common directory, so the main repository and its Worktrees share them. Writes
+check that repository's revision; stale replies cannot replace newer selections. Rename updates a
+loaded favorite after the Git operation; a preference failure stays visible.
+
+Tauri retains the exact old `uterm.git.favorites:*` key, a verified versioned WebView backup and a
+Core source archive before handoff. A receipt binds the old bytes to the shared source; reopening
+cannot replay old choices over newer shared favorites. A different source offers **Copy old Git
+favorite source** and **Continue with shared Git favorites** after archival. With an invalid old
+source and no shared entry, **Keep old source and create empty shared favorites** requires an
+explicit choice. A concurrently changed old key requires reload; backup/quota/receipt failures
+retain data and block editing. The native window imports only Core's frozen canonical legacy source
+and cannot submit arbitrary old WebView sources. Its file windows cannot read or write favorites.
+
+The store retains up to eight prior snapshots and 16 original source contents, with at most 1,000
+repositories and 1,000 references per repository. Invalid/corrupt/missing data and occupied recovery
+paths block replacement; recovery files stay intact. **Reload Git favorites** explicitly resumes
+after a failure. Read-only lock waits are bounded and cancelled on close; writes do not retry
+automatically. Legacy export overlays current shared favorites under canonical and original client
+path keys while retaining archived bytes; it does not perform an installed client downgrade.
+
+The branch toolbar's **Recover Git favorites…** action opens verified snapshot and original-source
+previews. The native client also provides **File → Recover Git favorites…**. Cancel is the default;
+copy keeps the complete preview even when the displayed text is truncated. Original sources can be
+copied but cannot directly replace favorites. **Restore all repository favorites** replaces the
+global favorite snapshot, retaining damaged bytes and the immediately preceding valid copy. A
+changed current file rejects the write and requires a fresh catalog; a missing file is installed
+without overwriting newly created data. Open Git views reload after successful restoration. Tauri
+shared content uses the native clipboard-manager plugin with write-text permission for the main
+window; failures remain visible. Browser-only fixtures retain the Web clipboard path. Copy failure
+never changes recovery data. Once application quit begins, new restores are refused; a dispatched
+restore retains its quit guard until acknowledgement. Global recovery stays in the trusted
+application; scoped content can request its native dialog but cannot read or restore other
+repositories' recovery data.
+
+#### Git and editor concurrency validation
+
+The accepted Git/Worktree implementation is source `e06168dbe9491c3c862977dc931c6b7ad098a4ee` /
+actual CI merge `e48ce2f886987f92b17f77a42637f6b692bf6da2`. Merge parents were verified as this
+source and release `ca65aa9ca76abcc510124427398789ba01635c4d`; this is a CI test merge, not a merged
+PR. Both [native jobs](https://github.com/YondFane/uTerm/actions/runs/41984445494) and both
+[Tauri jobs](https://github.com/YondFane/uTerm/actions/runs/41984445471) pass with clean-source
+reports. The [Java matrix](https://github.com/YondFane/uTerm/actions/runs/41984445509) and
+[six-job Maven matrix](https://github.com/YondFane/uTerm/actions/runs/41984445498) also pass.
+
+Each platform's `git-operations-core.json` records actual Git processes, all 19 Core JSON methods,
+selected repository/Worktree isolation, distinct staged/working diffs, stale-reference/branch
+refusal, checkout conflicts, targeted rollback, upstream/push and dirty/clean deletion. Native macOS
+15.8.2 ARM64 and 15.7.9 Intel each pass 35 Git/window assertions and save 16 real WindowServer
+captures. Windows Server 2025 x64 and transitional macOS 26.6.2 ARM64 each pass 53 real isolated app
+scenes with no cleanup errors. Source, merge, OS, architecture and toolchains are in the reports.
+
+Artifacts:
+[native ARM13395713575](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13395713575),
+[native Intel13396400420](https://github.com/YondFane/uTerm/actions/runs/41984445494/artifacts/13396400420),
+[Windows13396047301](https://github.com/YondFane/uTerm/actions/runs/41984445471/artifacts/13396047301),
+[Tauri Mac13396081499](https://github.com/YondFane/uTerm/actions/runs/41984445471/artifacts/13396081499).
+Native `git-live.json`, `git-operations-core.json`, Tauri `tauri-state-qa/report.json` and test logs
+index each scenario. `native-git-favorites-writer-busy.png` proves a real independent Rust writer,
+visible read contention and one explicit reload after release. The separate
+`native-git-bootstrap-writer-busy.png` proves the startup error uses the cached application language
+and a compact Retry button; retry remains disabled while pending and can recover after another
+failure. Both owned writers exit 0 and favorite bytes remain unchanged.
+
+`native-git-cancel-frozen-editor.png`, `native-git-editor-conflict.png` and Worktree confirmation/
+refusal captures show write/editor protection. Windows `git-git-worktree-delete-dirty.png` and
+`git-git-write-quit-blocked.png` show retained dirty data and an actual in-flight IPC quit refusal.
+The Core-backed Tauri/WebKit abort/timeout/close tests use a paused real Git hook and keep the
+caller protected until completion. Native and Windows current-source images were inspected. Earlier
+failures and their original artifacts remain in Issue #35; they are not treated as passing runs.
+
+Run the focused contract with
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test git_operations`,
+frontend/transport checks with `pnpm test`, and the macOS window flow with
+`bash scripts/macos-git-smoke.sh`. Automation uses actual AppKit controls and DOM events in the real
+applications, not manual keyboard/IME acceptance. The full M3 file/layout/PDF, authenticated SSH,
+runtime-panel and manual acceptance gaps remain tracked separately without claiming the whole
+migration or release is complete.
 
 ## Project website
 
@@ -614,7 +1548,10 @@ acceptance remains pending.
 Background local-session discovery retries every two seconds after each attempt. Connection timeouts
 do not show an error banner; other synchronization failures remain visible.
 
-A timeout does not clear saved sessions.
+A timeout does not clear saved sessions. Discovery results are reconciled against the latest state
+inside the write queue, so a poll cannot replace sessions or selection created while it was pending.
+A real Core-process regression holds a session-creation write, queues discovery of an older closed
+session, then verifies that the new session and selection survive and unchanged polls do not write.
 
 #### Validation and limits
 
@@ -721,6 +1658,169 @@ address, port (default 22), username, remote system (Linux/macOS or Windows) and
 
 - System OpenSSH must be installed; Windows users can install the OpenSSH Client optional feature.
   No SSH executable, JVM or new runtime dependency is bundled for these connection options.
+
+### Shared SSH configuration service
+
+The development clients share OpenSSH configuration discovery and resolution through
+`uterm-core::ssh`. Existing Tauri commands use the same service; `ssh.info` and `ssh.resolve` also
+expose read-only Core/FFI results with generated Swift/TypeScript types. Discovery reads at most 1
+MiB per file, 128 files and 16 Include levels, and does not execute Match rules. Explicit resolution
+retains the system client's `ssh -G` behavior, a 15-second timeout and bounded output. The results
+contain endpoint metadata; password/private-key content fields are rejected.
+
+`uterm-core::ssh::paths` also owns the existing SFTP lexical path rules. Tauri imports the same
+functions: POSIX/Windows server-root normalization, validated relative paths, component containment
+and joining. Server rules are independent of the local OS. Drive/slash handling, literal Unix
+backslashes, Unicode names, the 4,096-byte relative-path limit and existing error codes stay
+unchanged. The transport still validates roots and resolves server symlinks before containment;
+these helpers do not authorize a connection or resolve filesystem links.
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh::paths::tests` passes
+two Linux x86_64/Rust1.99.1 checks, including the migrated boundary cases and exact UTF-8 byte
+limits.
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh::files::tests -- --nocapture`
+passes four actual OpenSSH `sftp-server` subprocess checks: conflict-safe save, symlink/original
+retention, streaming cancellation and confirmed overwrite, recursive deletion and root refusal.
+These use the real SFTP subsystem over pipes; they do not test SSH authentication, host trust or
+network reconnection. Platform CI retains the Core/backend test logs for the actual source. No new
+FFI or JSON path endpoint is claimed.
+
+The shared `ssh::auth` service owns password-reference binding, temporary credentials,
+remember/forget and bounded one-use askpass servers. Both clients can supply a host-trust
+confirmation callback and a credential-store port. The shared system adapter retains macOS Keychain
+and Windows Credential Manager service/reference names; Tauri still supplies its existing
+application identifier and native dialog. Redis/database credential callers reuse that same system
+adapter without changing their namespaces. Credentials remain bound to the connection and effective
+OpenSSH endpoint; renaming a connection does not invalidate them, while an endpoint change refuses
+reuse. Corrupt credential data returns a fixed error without exposing its contents.
+
+The two Linux `ssh_auth` integration checks use an in-memory credential port, real OpenSSH
+configuration resolution and loopback askpass. They cover changed targets, retention conversion,
+forgetting, malformed storage and proxy-password refusal. Platform checks use unique QA references
+before creation, after writing and after deletion; repeated deletion is safe. The SSH port maps only
+OS not-found to an absent reference, leaving other errors visible and the legacy Redis/database
+adapter unchanged. Actual login and platform evidence appear below.
+
+The shared `ssh::files` and `ssh::tunnels` services own remote roots, serialized safe writes,
+streaming transfers, cancellation/quit protection, listener readiness and owned OpenSSH processes.
+Tauri delegates its existing commands to them and retains native pickers and progress channels.
+Generation-aware cancellation/stop refuses stale requests; the existing Tauri command signatures
+remain compatible. Cancelling a pending tunnel also releases its authentication future. Quit blocks
+new transfers while waiting for active cancellation; abandoning that wait releases the temporary
+block so the client can continue.
+
+Final client shutdown stops its owned SFTP processes even when a pending reader retains the remote
+root. It refuses late spawns without stopping another client's SFTP processes or hosted SSH
+terminals. The Tauri exit callback uses this cleanup; ordinary quit guards still run first.
+
+`cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --lib ssh:: -- --nocapture` passes
+21 Linux checks. Real isolated `sshd`/internal-sftp cases cover Unicode transfers, originals
+retained after cancellation/interruption, explicit reconnect, host keys/CAs, sibling tunnels/stale
+stops and owned-process shutdown while a reader retains its remote root. Unix fixtures require
+`/usr/sbin/sshd` and `ssh-keygen`; macOS requires noninteractive sudo for the isolated server. An
+interrupted upload may leave a hidden temporary file; the original stays intact and retry is
+explicit. Automatic remote orphan cleanup is not claimed. The TCP proxy and tunnel-echo fixtures
+explicitly restore blocking mode on accepted connections, retaining read timeouts so macOS
+nonblocking inheritance cannot cause premature EOF.
+
+`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-core-qa.py CORE_BINARY EVIDENCE_DIRECTORY` drives the
+public Core client against a real service. Windows AMD64/macOS ARM64 reports pass at source
+`721fd5ae84ac1c80694cea78b6eb9b72d26d5362` / tested merge `5e4f2fc737a07b850408d16bfcdbff1d2d1b085f`
+in [CI 42022428501](https://github.com/YondFane/uTerm/actions/runs/42022428501), dirty=false and
+cleanup=true. The reports are `ssh-core-live.json`, in artifacts
+`legacy-checks-windows-latest-721fd5ae84ac1c80694cea78b6eb9b72d26d5362` and
+`legacy-checks-macos-latest-721fd5ae84ac1c80694cea78b6eb9b72d26d5362`. These accept the service
+only; that overall GUI run failed.
+
+All 13 service checks pass: actual password/OS-store authentication, stale saves, exact Unicode
+bytes, real key-authenticated ProxyJump, changed-key refusal, correct/wrong CAs, generation
+cancellation, interrupted overwrite/reconnect, sibling tunnels, quit, actual first-host
+rejection/approval followed by authentication, single-use responses and secret exclusion. Service
+reports do not replace actual-window screenshot acceptance.
+
+The Windows fixture downloads a pinned, checksum-verified Win32 OpenSSH server, runs an owned SYSTEM
+task and creates a temporary account with explicit generated-key ACLs. It prepends unique aliases
+only to the disposable GitHub CI user's configuration and restores the original bytes. macOS uses a
+short-lived account/home and adds/removes only that account in an existing SSH access group.
+Production SSH services are untouched. Secret-exclusion checks read server logs after shutdown to
+avoid Windows exclusive log handles.
+
+`PYTHONDONTWRITEBYTECODE=1 python scripts/ssh-tauri-qa.py` runs saved-profile, authenticated SFTP
+listing/preview, remote-terminal and actual quit/reopen scenes in the isolated real Tauri app,
+retaining existing ownership/recovery checks. The terminal must be the visible panel selected by the
+shared snapshot. It waits for a running attachment before reading the host endpoint and confirming
+SSH host/connection identity. Reopening verifies the same session, generation, host PID and replay.
+Output from a hidden local terminal cannot satisfy remote acceptance. The ownership fixture creates
+its terminal through the enabled, visible project-home action after runtime readiness, avoiding
+closed sidebar popovers.
+
+SSH-output captures exercise the application's shipped fallback through actual WebGL context loss.
+They require a visible DOM-rendered row containing the remote result, then wait for painting.
+Reports record the initial renderer, injected loss and recovered renderer. This checks real-app DOM
+fallback output; it does not accept default GPU capture. Blank canvases, hidden accessibility text
+or a runtime report alone cannot establish visible output.
+
+Screenshots carry source/platform metadata. The Windows helper uses Win32 PrintWindow on the actual
+owned QA HWND, recording each image’s method, dimensions and visibility samples. Screen-copy
+fallback requires unobstructed samples and restores the topmost flag. Process reports distinguish
+main-process exit from output-handle closure. Source-specific platform reports, valid images and
+remaining checks are tracked in [#36](https://github.com/YondFane/uTerm/issues/36). Manual
+picker/IME checks are unexecuted; Unicode samples live in `shared/fixtures/ssh-qa.json`.
+
+### Native SSH workspace
+
+In the isolated native QA app, **File → SSH connections…** opens the connection window; SSH sidebar
+rows open it too. Select a profile from the current workspace or add a host address/OpenSSH alias,
+port, username, authentication, remote system and file root. A blank alias port inherits system
+configuration. **Show effective configuration** resolves metadata without starting a login.
+
+**Save connection** before **New SSH terminal** or **Connect files**. Revision conflicts retain the
+form; failed profile storage attempts to remove a newly created credential reference and reports
+cleanup errors. Restoring an existing SSH terminal only reattaches; new terminals and splits are
+explicit login actions.
+
+The file area offers directory/hidden-entry browsing, read-only text preview, uploads, confirmed
+replacement, downloads and cancellation; download other preview types to open them. Window-close
+protection also covers local file selection. Background operations carry generations, rejecting
+stale cancel/stop requests. Transfer byte counts cross Rust/Swift/TypeScript as decimal strings to
+preserve u64 precision. Forwarding binds only to loopback; rules require explicit start and can be
+stopped independently. Starting a transfer clears earlier feedback; selecting another profile or a
+new draft clears the previous profile's transfer status.
+
+Passwords use in-memory references valid for the application lifetime or the QA app's own
+system-credential namespace. The native SSH Core client stays alive across terminal transport
+reopening, preserving temporary credentials; quitting the app closes it and clears those references.
+Password connections to unknown hosts use a real native fingerprint confirmation sheet; declining
+rejects the connection. Key/automatic authentication retains OpenSSH's strict known-host policy.
+Closing the SSH window or quitting resolves configuration drafts, transfers and forwarding while
+hosted SSH terminals remain running.
+
+#### Native SSH validation and limits
+
+Linux client contracts cover profile CAS, preserved sessions/dependencies, secret exclusion,
+explicit resume and one-use trust. The common `shared/contracts/ssh-progress-v1.json` exercises
+actual Rust/Swift/TypeScript JSON boundary values above `2^53` and at `u64::MAX` as decimal strings,
+checking precision rather than only type names.
+
+`bash scripts/macos-ssh-smoke.sh` uses the isolated native QA app, temporary
+accounts/keys/known_hosts and real OpenSSH. Source `721fd5ae84ac1c80694cea78b6eb9b72d26d5362` /
+tested merge `5e4f2fc737a07b850408d16bfcdbff1d2d1b085f` passes on ARM64 and Intel in
+[CI 42022428571](https://github.com/YondFane/uTerm/actions/runs/42022428571), dirty=false and
+cleanup=true.
+
+The two `native-qa-macos-15[-intel]-721fd5ae84ac1c80694cea78b6eb9b72d26d5362` artifacts contain
+`ssh-live.json`, `ssh-service-core.json`, toolchain/test logs and ten real WindowServer captures.
+Scenarios cover retained conflict drafts, SFTP uploads/downloads, visible transfer
+progress/cancellation, actual forwarding, key/password remote PTYs, detach/replay/independent close,
+English/Chinese, dark/light and a 760px window. Real NSAlert rejection and approval followed by
+authentication pass, as do remembered/temporary conversions, obsolete-reference deletion and
+authenticated temporary-password reconnect after terminal transport reopening.
+
+Visual review confirms password-terminal output and the connection window after native trust
+approval. New source still requires its own CI evidence; previous SHAs cannot accept it. Manual
+pickers, IME and macOS 14 interaction are unexecuted; minimum deployment targets/builds do not
+replace acceptance. Issue #36 records source-specific acceptance separately from merge/release
+status.
 
 ### Quick connections and host search
 
@@ -902,62 +2002,150 @@ completion, errors and cancellation.
 
 #### SSH and SFTP checks
 
-- Windows automated checks: 17 focused frontend tests pass, including quick-address validation,
-  temporary connection cleanup/promotion, host filtering, jump/rule persistence, Redis profile
-  resolution, forwarding save failures and explicit start/stop, plus the existing SSH/SFTP guards.
-  All 102 regular backend tests and 26 local-service tests pass; six optional backend tests remain
-  ignored. Process fixtures cover listener readiness, startup exit, timeout, cancellation and
-  cleanup; they do not establish a real SSH forwarding connection.
+Commands and source-bound reports for configuration resolution, paths, authentication/credentials
+and real services appear in Shared SSH services above. Native SSH workspace records Swift windows,
+screenshots and unexecuted checks. Service and actual-window reports are accepted separately;
+process fixtures/builds do not establish authenticated login.
 
-- The full Windows frontend run passes with 241 passed and 11 skipped. Changed-file formatting,
-  TypeScript, localization, documentation checks and the isolated desktop build pass.
+`pnpm test`, `pnpm test:backend` and Core checks cover quick-address validation, temporary-profile
+promotion/cleanup, configuration upgrades, workspace/session isolation, remote draft identity,
+attach-only restoration, credential target binding and failed-save cleanup. Process fixtures cover
+readiness, startup failure, timeout, cancellation and owned cleanup. Real-service checks separately
+cover authentication, certificates, path boundaries, stale saves, streaming transfers, cancelled
+overwrite, network reconnection and preserved sibling tunnels.
 
-- An isolated Windows application (`sh.uterm.desktop.qa.sshredesign`) verified the native connection
-  form, default automatic authentication, Save only returning to an overview with zero sessions,
-  effective OpenSSH endpoint display, a remote file panel that stays disconnected until requested,
-  and independent SFTP connection progress and failure feedback. These checks used a loopback
-  profile, not a successfully authenticated remote service. Real Windows SSH/SFTP authentication,
-  Credential Manager and macOS/Linux acceptance of the redesigned interface remain pending.
-
-- An isolated Windows application (`sh.uterm.desktop.qa.sshp1`) checked quick connection creation,
-  the Temporary marker, saving a connection, explicit forwarding startup and separate failure
-  feedback against an unavailable loopback endpoint. Reopening retained saved rules without starting
-  them. At 640×420, the connection header, forwarding rules and scrollable jump-host form were
-  visually inspected. Successful forwarding, a real jump server, password forwarding and the
-  redesigned macOS/Linux runtime remain pending acceptance.
-
-- Validation: macOS automated tests exercise migration, connection/session isolation, grouping,
-  target validation, remote draft identity, attach-only restoration, exclusion of local tools and
-  bounded progress updates. Real system SFTP-server tests cover Chinese names, safe saves,
-  conflicts, root escape/link rejection, file mutations, streamed upload/download, cancelled
-  overwrite and temporary-file cleanup.
-
-- An isolated native app (`sh.uterm.desktop.qa.ssh`) connected to a loopback OpenSSH server and
-  verified fingerprint confirmation, remote shell output, detach/relaunch attachment and replay,
-  independent split closing, file editing, conflict retention, upload/download with matching bytes,
-  file-channel reconnection, transfer progress, cancellation cleanup and the transfer exit guard.
-  Additional password/connection validation: 187 frontend/build-helper tests, 32 host tests, 56
-  regular backend tests and all six Redis-specific tests pass on macOS.
-
-- Coverage includes legacy option serialization, schema 6 upgrades, invalid/secret-field rejection,
-  distinct port/user/key arguments, credential target binding, failed-save cleanup, full Redis
-  tunnel snapshots and authenticated one-use askpass with bounded messages, fingerprint
-  approval/rejection and unexpected-prompt rejection.
-
-- Isolated native QA (`sh.uterm.desktop.qa.sshauth`) uses real system OpenSSH with a disposable
-  loopback password server to verify explicit port/username, alias inheritance/HostKeyAlias,
-  password SFTP reading and Chinese-text saving, terminal output/reattachment, Redis tunnel PING and
-  value reads, Keychain save/read after app restart, credential removal, temporary-password expiry
-  on restart, and approving/cancelling the native host-fingerprint sheet.
-
-- Windows client/server, Credential Manager and Linux runtime remain unverified; password-mode jump
-  hosts and OTP are unsupported.
+System-credential checks use unique QA namespaces and verify reads before creation, after writing
+and after deletion, including repeated deletion. Passwords pass only through bounded, authenticated
+one-use askpass; workspace exports, status summaries and test logs exclude them. Password-mode jump
+hosts and OTP are unsupported. Linux native GUI, manual pickers/IME and interaction on the minimum
+macOS version remain unaccepted.
 
 Current SSH authentication options add code without new runtime dependencies. Current release
 installer sizes have not been measured; the isolated debug application build is validation evidence,
 not an installer-size estimate.
 
 ## Redis connections and workbench
+
+### Shared Redis services
+
+`uterm-core::redis` owns connection/credential binding, TLS/SSH transports, binary key/member
+identity, bounded queries and read-only/write/TTL/conflict rules. Tauri supplies its application
+identifier and existing SSH authentication adapter, retaining native CA selection and application
+exit. State clones share connection, opening and draft protection. Shutdown rejects late handshakes;
+cancelling authentication releases its opening slot and socket. Existing credential namespaces and
+connection configuration remain compatible.
+
+The Core JSON interface returns operation IDs/generations without blocking the caller on Redis I/O.
+At most eight running or unread business results are admitted, with separate capacity for
+disconnect, write-permission and draft/quit controls. Result lists omit values and parameters. Reads
+check the generation and consume a completed result only once. Profile save/removal uses
+revision-checked storage and refuses active/dirty profiles. Quit freezes new work; resume retains
+hidden draft protection. Client close drains cancelled async tasks as well as owned sockets and SSH
+processes; it does not retry writes with an uncertain outcome.
+
+The isolated native app opens **Redis connections** from its sidebar or **File → Redis
+connections…** and reuses the connection form and workbench through the scoped content transport.
+Temporary passwords match canonical configuration values; changing an inactive target recreates its
+workbench without the previous password. Profile conflicts retain input.
+
+Redis handlers explicitly include structured error codes without changing generic error-string
+formatting. Profile conflict messages do not need to repeat the code for the form to retain input
+and request a reload.
+
+Closing the window hides it while retaining its connection/draft; quitting freezes the view, checks
+pending operations and confirms draft loss. Cancelling quit resumes it with draft protection. CA
+selection uses AppKit; content cannot choose a picker path. Language/theme updates use shared
+settings without saving defaults.
+
+#### Shared-service validation and limits
+
+Linux x86_64 / Rust 1.99.1 passes all 11 Redis service regressions with real Redis 7.4.7/TLS and
+OpenSSL, including binary values, TTL, stale snapshots, read-only enforcement, TLS name/CA rejection
+and uncertain writes without retry. Two public host-port regressions cover late authentication after
+shutdown and cancelled authentication. Full Core/FFI, host, Tauri backend (41 passed / two ignored),
+frontend (419 passed / ten skipped), types, production/desktop builds and contracts pass.
+
+Five additional async/contract regressions pass: unread-result backpressure with disconnect still
+available, generation/single-consumption checks and parameter exclusion, quit/resume with hidden
+drafts, closing during authentication, profile CAS/secret rejection and exact text/binary JSON. The
+authentication/close race passes 20 repeated runs after draining cancelled tasks on close.
+TypeScript fixture checks pass. Swift exact-value, actual C ABI guards and the real writer-lock
+read-retry/mutation-refusal checks pass on macOS ARM64 and Intel at source `7306f74` / tested merge
+`5bc1ec99a1e61007dc75687a644087011556bc69`.
+
+`pnpm test:redis` explicitly enables the seven real-server checks, each using temporary loopback
+servers. The normal Core suite runs the other four service checks and the two host-port checks.
+`node scripts/redis-core-smoke.mjs /absolute/temporary/evidence-directory` records toolchains,
+actual test names, logs, source/merge SHA and source-tree state. Shared Redis CI builds the verified
+7.4.7 source with TLS and uploads those reports. Native Redis and platform credential evidence is
+archived in [#39](https://github.com/YondFane/uTerm/issues/39); service tests alone do not establish
+UI acceptance.
+
+Linux manager regressions cover profile conflicts, password exclusion, modal freeze/resume,
+configuration key ordering and clearing a password after editing the target. Connection forms and
+the native draft guard use secure random UUIDs in custom-scheme contexts without `randomUUID`.
+
+`bash scripts/macos-redis-smoke.sh` requires a macOS graphical session, Homebrew and Python 3. It
+starts an owned temporary loopback Redis server, checks data again after the application exits and
+records six WindowServer images. The Tauri harness records six real Redis scenes. Windows uses the
+portable community redis-windows 8.10.3 Cygwin archive, verified against SHA256
+`8000848c48668c8cd32f21386ce951d0e02c1aefae39443ab9d3de11ff8ebf9e`; macOS records its actual
+Homebrew version and binary digest. Neither harness installs a Redis system service.
+
+Redis acceptance uses source and actual tested commit `940f8d130114c366077015d82bb33114e2734fb1`;
+the workflows directly test the branch with `workflow_dispatch`, rather than a synthetic PR merge.
+Native Redis checks pass on macOS 15.8.2 ARM64 / Redis 8.10.3 and macOS 15.7.9 Intel / Redis 8.10.1.
+Each native report records six WindowServer images, exit code 0, a clean source tree and data
+verified again after app exit.
+
+Tauri passes on macOS 26.7.2 ARM64 and Windows Server 2025 x64, both using Redis 8.10.3. Each report
+contains 63 successful application QA scenes, including six real Redis scenes, with no cleanup
+errors. Independent service reports verify final data, stopped owned processes, readable evidence
+and no leaked credential. All 24 Redis images have been inspected. Artifacts:
+[native ARM](https://github.com/YondFane/uTerm/actions/runs/42143907577/artifacts/13469139024),
+[native Intel](https://github.com/YondFane/uTerm/actions/runs/42143907577/artifacts/13470210542),
+[Tauri Mac](https://github.com/YondFane/uTerm/actions/runs/42143901906/artifacts/13469443317),
+[Tauri Windows](https://github.com/YondFane/uTerm/actions/runs/42143901906/artifacts/13469723539)
+and
+[Linux service tests](https://github.com/YondFane/uTerm/actions/runs/42143911635/artifacts/13468882766).
+
+The Intel job and Native workflow fail a separate database editor-input check tracked in
+[#38](https://github.com/YondFane/uTerm/issues/38#issuecomment-6674618606); their independent Redis
+and bridge checks pass. Redis acceptance does not establish that the whole PR or migration passes.
+Earlier failures and their corrections remain linked in the
+[#39 completion evidence](https://github.com/YondFane/uTerm/issues/39#issuecomment-6674752428). QA
+waits for visible, enabled controls and clicks once without retrying server writes; Python fixture
+imports use `-B`, retaining the clean-tree guard.
+
+The expanded cases browse a real 20,001-member list with 200 rendered and returned rows per page;
+the missing edit snapshot keeps member update/delete controls disabled above the 10,000-member
+limit. Final checks confirm the large list is unchanged. Separate cases use 401 editable list
+members and require 200 rendered rows per full page. They cancel then confirm deletion at index 400,
+verify the remaining last value independently, change TTL to 1,800 seconds, and cancel then confirm
+deletion of a separate key. Final server checks verify the 400 remaining members, expiration and
+unchanged binary sibling. Real disconnect and application quit are cancelled while a draft exists,
+then the connection/draft is checked. Native QA captures the actual quit alert and activates its
+Cancel button; this automated action is separate from #42's manual keyboard/IME acceptance. These
+automated platform cases pass at the source above; human #42 acceptance remains unperformed.
+
+Tasks without a required human check can close once implementation and source-bound automated
+platform evidence satisfy their acceptance criteria. #39 does not wait for #42's separate human
+interaction checks; missing implementation, reports or screenshots still keep it open.
+
+A platform-only Rust test and the expanded application checks use unique QA credential references in
+macOS Keychain or Windows Credential Manager. They check binary CRUD/replacement without changing a
+neighboring item, authenticate to real Redis using only a saved reference, reject a changed target,
+remove the credential and reject subsequent reuse. An absent item is reported as missing; permission
+and other access errors remain failures. Linux runs no OS credential cases. The macOS/Windows checks
+pass at the source above; Linux results do not replace OS credential evidence.
+
+Current Linux checks pass Core/FFI, all 11 real Redis/service regressions, backend (41 passed / two
+ignored), frontend (419 passed / ten skipped), types and QA/desktop builds. Builds sharing `dist`
+run sequentially so one build cannot remove assets while another embeds them. Evidence inspection
+runs after owned SSH/Redis services close; transient exclusive handles are bounded, and persistent
+unreadable files or detected passwords produce a failed report. Key navigation opens the actual
+drawer and requires an on-screen row. Manual picker, keyboard/IME and the remaining M4/M5 acceptance
+remain pending; automated Redis acceptance does not establish those results.
 
 ### Redis connection setup
 
@@ -1258,6 +2446,68 @@ Connected, busy or dirty profiles cannot be edited or removed.
 - Windows/x64 and signed installer sizes are unmeasured.
 
 ## Files and source control
+
+### Shared content calls
+
+File components use the same content contract through Tauri and WebKit adapters. Each request owns
+its arguments, document ID and operation ID; the method/event allowlists and 32 MiB UTF-8 limit
+apply before delivery. Timeout, cancellation, unload and document changes suppress stale delivery
+and remove subscriptions. A dispatched write retains the caller's guard until Rust finishes;
+cancellation does not roll it back. Shared editor/preview components do not call Tauri directly.
+
+In native QA, **File → Open file…** opens shared CodeMirror/HTML/PDF content for the selected local
+project. Text editing and recovery use the protected editable window; preview windows retain their
+read-only mode. Its ephemeral WKWebView loads manifest-listed bundle resources and accepts only
+main-document messages. The host rejects stale document IDs, another root and writes from the
+readonly preview. Fonts use revision-checked shared settings; static HTML cannot run scripts or load
+external resources. This preview does not offer PDF annotation controls. Writable-editor and
+interaction evidence is recorded separately in the closed #34/#42 tasks, with their original gaps
+and user-approved human waiver still visible in #13.
+
+At source `8a72b00754c5580150546ea2ae104f5166e04a39` / tested merge
+`ea3895ab1d8db65ad59159fc45f3deff7326baf6`,
+[Native CI](https://github.com/YondFane/uTerm/actions/runs/41966239836) passed on macOS 15.8.2 ARM64
+and 15.7.9 Intel with Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. `bash scripts/macos-content-smoke.sh`
+passed all 19 content/lifecycle assertions: actual CodeMirror, HTML and PDF rendering, exact denial
+codes, scoped drafts, font persistence, document reload, native-menu/early close, stale quit replies
+and timeout protection. Swift resource and quit-gate checks also passed. The bundle includes
+frontend resources and license notices.
+
+[Tauri CI](https://github.com/YondFane/uTerm/actions/runs/41966239844) passed 53 actual application
+scenes on Windows Server 2025 x64 and macOS 26.7.2 ARM64, with clean source trees and no cleanup
+errors. The actual file tree opens temporary HTML/PDF, renders the PDF canvas, closes previews and
+restores the editor. `preview-resource-isolation.json` records zero forbidden requests to an owned
+loopback HTTP observer and successful cleanup. Native content and Windows HTML/PDF captures were
+visually inspected; reports, screenshot filenames and artifact links are in
+[#33 acceptance](https://github.com/YondFane/uTerm/issues/33#issuecomment-6650215412).
+
+`pnpm test` also passed both adapters' abort/timeout/close cases against real Rust/Git checkout
+hooks: the caller stays protected until the write ends, final branch/file bytes are checked and late
+success is suppressed. Protocol checks cover mismatched/reordered replies, late subscriptions,
+failed writes, immediate read cancellation, unload, bounds and custom-scheme IDs. Windows ran 407
+frontend checks with 11 skipped; macOS ran 408 with 10 skipped. Harness checks, real app actions and
+unexecuted human IME/focus checks remain distinct. This accepts #33 without a simulation exemption;
+#34–#37 are now closed in their recorded scope; M3 #17 was closed not_planned by the user. Original
+layout/PDF/Windows panel gaps remain in #13. Earlier PDF, workspace/path and input-control failures
+retain their source-bound reports.
+
+### Shared local file service
+
+Local listing, reading, saving, copying, mutations and search use the same Rust service in
+`uterm-core`. Tauri keeps its existing command names and platform reveal/quit adapters. Root checks,
+UTF-8/BOM/line endings, digest conflicts, atomic saves and bounded previews are retained. A force
+save overrides a version conflict only; it cannot make a read-only mixed-line-ending file or PDF
+editable.
+
+Thirteen existing file-service tests now run in the core. Seven real-process contract tests passed
+on Linux x86_64, including file CAS, original-byte preservation, invalid parameters and root/link
+escape. These checks do not establish native file-editor interaction. Native file previews are
+read-only; separate writable windows and shared recovery have their own #34/#42 evidence, while
+historical-client root compatibility and full rollback remain #46. Existing WebView draft sources
+retain their owner and path. [Native](https://github.com/YondFane/uTerm/actions/runs/41425620871)
+and [legacy](https://github.com/YondFane/uTerm/actions/runs/41425620777) platform CI passed the
+extraction at head `2f777f1824f203cba9d4654b3ec3f70c43c9fb74`; this pass does not validate later
+content changes.
 
 ### Git change colors in the file tree
 
@@ -2199,6 +3449,133 @@ Main application builds still need no JDK. Maintainers refresh the catalog with
 `node scripts/java-components.mjs` using curl and vendor metadata; the helper checks Maven against
 Apache's SHA-512 before recording SHA-256.
 
+### Shared Java service validation
+
+The development `uterm-core::java` service owns the existing Java/Maven configuration, JDK registry
+and probing, bounded POM/main-class discovery, Wrapper resolution and task launch rules. Versioned
+`java.*` Core/FFI calls and generated TypeScript/Swift DTOs share this service. Tauri retains IPC,
+native pickers, change notifications and app-data/helper adapters.
+
+Select a local project or Worktree in the native QA app, then choose **File → Java build and run…**.
+The native window edits module/JDK, global/project Maven settings, profiles and literal
+JVM/application arguments; temporary environment values are never saved. It offers Package/Test/
+Install/Run, task history, readonly search/copy/follow logs, Stop/Force stop and ordered Run again.
+Saving pins the loaded revision and retains conflicting drafts. Closing prompts for unsaved
+configuration and detaches tasks; normal quit refuses busy run operations. Pickers select JDK/Maven
+paths or a JAR inside the project.
+
+Spring Boot development mode quotes arguments for the plugin's Plexus parser, preserving embedded
+single/double quotes and literal backslashes. That plugin discards empty/whitespace-only tokens and
+replaces line breaks/tabs; the shared service rejects these values before starting a host or
+resolving Maven. Both clients show the same localized **Use JAR mode** instruction and retain the
+configured values. JAR mode continues to pass application arguments directly, including empty
+strings.
+
+On Windows, the development Maven process uses `-Djdk.lang.Process.allowAmbiguousCommands=false` so
+Spring Boot's forked Java process preserves embedded quotes and trailing backslashes. This option
+applies to the development run goal.
+
+The `java-build-v1` configuration/registry formats, defaults and root keys stay unchanged. Updated
+clients acquire an OS writer lock before configuration CAS or registry replacement; contention
+requires explicit retry. Stale or damaged data is retained. Read-only queries do not create
+configuration, start a host or occupy the write quit guard. Stop verifies both the task family and
+generation. Saves, registration and task preparation remain protected operations.
+
+For Windows Java steps containing a non-ASCII executable, working directory or argument, the new
+host starts an isolated UTF-8 child and delegates to the selected JDK's own `jli.dll` launcher. The
+host process never loads a JVM. JDK 8 needs a private launcher layout: the runner mirrors the
+selected installed JDK into a task-owned cache using file hardlinks (copies across volumes), then
+runs the manifested child beside those exact runtime files. It does not install/download a JDK or
+modify the selected installation. The mirror is bounded to 32,768 entries, 2 GiB and 32 directory
+levels and rejects reparse points. Parent/child shared locks protect live caches; normal completion
+removes the cache, and a later launch reclaims released orphan caches older than one minute. Windows
+regressions check live-owner exclusion, orphan cleanup, depth rejection and source retention. The
+JDK 8 child loads a small embedded compatibility agent before user agents and the main class. It
+restores original UTF-8 VM properties and the selected JDK's system URL classpath after Java 8's
+early locale decoding, then selects UTF-8 for launcher arguments. The repaired search path retains
+user-agent JARs in launcher order, so later premain classes remain loadable. The runtime agent
+stores no user arguments; its versioned input stays in process memory. Its launcher path must have
+an ASCII relative or existing short representation; otherwise the helper reports
+`JAVA_UTF8_AGENT_PATH_UNSUPPORTED`. A non-URL custom system loader that needs classpath repair is
+explicitly refused. Application file encoding remains configurable. A bounded anonymous stdin pipe
+carries literal arguments; no argument/environment file or shell interpolation is introduced. The
+child retains the task console and process-tree lifetime, then returns the actual JVM exit code.
+ASCII steps retain direct Java launching. Java 8 requires an ASCII application-data cache path: its
+JVM loads native ZIP support before premain can repair locale-decoded paths. A Unicode cache path
+reports `JAVA_UTF8_JDK8_CACHE_PATH_UNSUPPORTED` before launch and removes the owned mirror,
+retaining the selected JDK. Relative bootstrap paths did not resolve the real Windows failure. This
+limitation concerns application data; selected project directories can contain Chinese. New Windows
+Java tasks require `java-utf8-launch-v2`; an older active helper reports an upgrade requirement
+without killing its existing sessions/tasks. Updated helpers also advertise v1 for older clients. A
+loopback protocol regression verifies that v1 alone is refused for the Unicode route while ordinary
+task capability probes remain usable. The Unicode route needs Windows per-process UTF-8 support and
+a JDK matching the child architecture.
+
+`bash scripts/macos-java-smoke.sh` uses JDK 21 to build a disposable JAR and operate the actual
+native menu/window. Native ARM/Intel configuration, conflict, output, search/copy/follow,
+reattachment, stop/rerun, visible unsupported-development-argument rejection and cleanup are
+recorded with source-bound reports and five WindowServer screenshots per architecture; accepted
+baselines and artifact links are in Issue #37. Manual system-picker, keyboard and IME acceptance
+remain unexecuted.
+
+The real Core/host fixture checks a Unicode JAR filename, Unicode/emoji/quotes/wildcard/trailing
+backslash and empty arguments, temporary environment/JVM properties, both final streams, exit code
+7, same-generation replay/ack, stale/cross-family stop refusal, force stop and host cleanup. An
+invalid offline Wrapper proves existing-JAR execution bypasses Maven resolution. `jar cfe` creates
+an ASCII archive before renaming it to the original Unicode filename, allowing the same fixture to
+run on JDK 8/11/17/21. Two Rust processes check global/project CAS, actual writer contention,
+explicit retry, registry locking and damaged-byte retention.
+
+The Java interoperability workflow separately collects `java-encoding-diagnostics.json` by launching
+ASCII and Unicode JAR paths through the selected real Core/host/JVM. It records actual properties,
+literal arguments, launcher traces and exit codes on JDK 8/11/17/21. Collection is diagnostic, not
+Unicode task acceptance. The earlier Java 8 report confirms correct application arguments but
+corrupted VM properties and classpath; the encoding property override alone was insufficient.
+
+The strict task test retains exact arguments/properties, final output, exit code 7, replay and
+generation-safe stop. It additionally uses a Chinese project directory and verifies that a user
+premain agent sees the original Unicode/emoji property before main. Application data lives
+separately from the Chinese project, as in both desktop clients; the disposable user-agent JAR has
+an ASCII path. Separate stock-JDK diagnostics retain BMP and supplementary-character directory
+results without using the uTerm host. Local JDK 21 also fails from an emoji directory without an
+agent, inside Java's URL decoding; that upstream limitation is not counted as a successful bridge
+result. The Windows bridge requires an existing ASCII short path when its own asset path contains
+supplementary characters. Platform acceptance of this fix requires its own strict CI result in #37;
+source/asset reproducibility does not replace execution.
+
+Run `pnpm test:core` and frontend checks with `JAVA_HOME` pointing to JDK 21 and its `bin` on
+`PATH`. The Java interoperability workflow runs the actual Windows host on JDK 8/11/17/21 and
+uploads `java-live-core.json`, source/toolchain data and targeted logs. Source
+`e06168dbe9491c3c862977dc931c6b7ad098a4ee` / tested merge `e48ce2f886987f92b17f77a42637f6b692bf6da2`
+passes the strict Windows matrix on Temurin 8u504, 11.0.32.1+1, 17.0.20.1+1 and 21.0.13+9. Each
+clean-source report verifies Chinese project/JAR paths, the user's premain property, exact
+Unicode/emoji and empty arguments, final stdout/stderr, exit 7, replay/ack, stale/cross-family stop,
+forced cleanup and released caches. All four ASCII/Chinese encoding diagnostics also exit 7 with
+exact properties/arguments.
+[Run41984445509](https://github.com/YondFane/uTerm/actions/runs/41984445509) retains
+[JDK8 artifact13395571787](https://github.com/YondFane/uTerm/actions/runs/41984445509/artifacts/13395571787)
+and the corresponding 11/17/21 artifacts. The explicit Unicode Java8 application-data cache
+limitation and stock-JDK supplementary-directory failures remain recorded. #37 is closed in the
+user-approved scope, with final human checks waived rather than executed. Uncovered Windows
+run-panel/picker behavior remains in #13, and original failures retain their evidence in #37.
+
+The optional real Maven fixture uses Maven 3.9.9 and Spring Boot 2.7.18 with a disposable
+three-project reactor. It exercises Package/Test/Install, module preparation, development and
+package-then-JAR runs through Core and the independent host. Actual tests verify selected
+settings.xml, Maven/Spring profiles, `.mvn/jvm.config`, environment/JVM/application literals with
+both quote styles and trailing backslashes, final stdout/stderr and empty JAR arguments. A
+deliberately failing JUnit check must fail the task; an explicit retry gets a new generation and
+passes. Detach/replay retains the host and generation, stale Stop is refused, and graceful stop
+preserves the real shutdown hook output. Linux x86_64/JDK21 passes all eight scenarios and cleans up
+the host. These are real Maven/Spring Boot processes, not a simulated build or GUI acceptance. The
+independent Maven interoperability workflow runs Windows JDK8/11/17/21 and native macOS ARM/Intel
+JDK21, uploading `maven-live-core.json`, toolchain and command logs; source-bound platform results
+are recorded in Issue #37. Its ASCII paths/arguments do not accept the separate Windows JDK8 Unicode
+failure.
+
+The QA Maven installation and dependency cache stay in the runner temporary directory; neither is
+bundled with the application.
+
 ### Task lifetime and validation
 
 Each project root runs one task at a time. Stop requests interruption; Force stop terminates its
@@ -2234,6 +3611,29 @@ Quitting detaches from the host. Reopen the same project's Java panel to restore
 ordered terminal replay. Tasks stay separate from ordinary terminal discovery; the host retains a
 bounded history of completed task output for its current lifetime. An older host without task
 support is reported without stopping existing sessions.
+
+The private loopback output channel retains partial 32-byte authentication tokens across its 250 ms
+socket polls, within the peer's five-second write budget. Wrong tokens remain rejected. Shutdown
+interrupts an incomplete authentication wait while queued authenticated output still drains. The
+wire token and task/error formats stay unchanged.
+
+Seven Linux output checks cover controlled timeout/fragment sequences, actual loopback sockets
+delayed beyond a poll, exact final bytes, wrong-token refusal, expiry and close. The targeted
+command is
+`cargo test --locked --manifest-path crates/utermd-local/Cargo.toml --lib task_output::tests`.
+`task-output-auth.json` records source/merge, platform and controlled-peer results without token
+values; real task subprocesses are checked separately. Full Host/Core/FFI checks and the eight real
+Linux Maven/Spring Boot scenarios pass. At source `14596527f8c0642a68fc194f4e505903fc928040` /
+tested merge `c48d62c2a0ddce10ffaa92adce6887f91fb40f44`, four clean Windows/macOS authentication
+reports passed, as did all six real Maven matrix jobs. These results do not accept the separate
+failing Windows JDK8 Unicode check or the Windows preview QA failure.
+
+At source `8491bae96401829e5cc5c3420d5aaccb58494356` / tested merge
+`f25eef9b077d0b9be88ed35f311db52868d17f88`, Windows JDK11 Maven failed with
+`JAVA_TASK_OUTPUT_FAILED` while five other Maven reports passed. The next source's six passing Maven
+jobs do not prove that authentication was the original failure's sole cause or establish long-term
+reliability. The fixture now retains task ID, generation and at most 64 KiB of output tail on
+transport failure or timeout; its original failure remains in Issue #37.
 
 - Windows native-host regression verifies that ordinary Stop keeps a task running throughout child
   cleanup, retains final stdout/stderr and prevents later task steps from starting. It also verifies
@@ -2423,6 +3823,71 @@ terminal discovery excludes these tasks.
 Older hosts without task/pipe support report an upgrade error while existing sessions remain
 running. Script and working-directory selection cannot escape the selected root; the interpreter may
 be installed elsewhere.
+
+#### Shared Python service validation
+
+The development `uterm-core::python` service owns existing interpreter detection, source scanning,
+five launch modes, configuration and host-task rules. Tauri retains only IPC, file pickers and
+platform app-data/helper adapters. Versioned `python.*` Core/FFI calls use the same service;
+generated Rust DTOs supply TypeScript and Swift types. In the native QA app, select a local project
+or Worktree and choose **File → Python run…**. Its native window edits the shared configuration,
+selects detected interpreters/entries, accepts one literal argument per row and temporary
+environment pairs, and shows readonly task output/history. Saving pins the loaded revision; explicit
+reload and closing prompt before discarding edited configuration. Run saves configuration before
+starting; Stop/Force stop use the captured task generation. Closing the window detaches without
+stopping its task.
+
+The log toolbar uses the pinned terminal library's literal next/previous search and match counter,
+with a native Auto follow checkbox. Scrolling up pauses follow; output continues to be consumed and
+acknowledged while the viewport keeps its buffer-line anchor. Rechecking follow returns to the end.
+**Run again** saves configuration, normally stops only this root's Python task, waits for its exit,
+and starts a new generation; a task still stopping after five seconds requires explicit Force stop.
+Normal stop retains final cleanup output, and copy reports native clipboard failures visibly.
+
+Native Choose buttons select an interpreter, script (Script/Django modes) or working directory. Both
+clients validate selection results through the shared Rust path rules. Interpreter symlink spelling
+is preserved for virtual environments; script/directory selections cannot escape the project.
+Cancelling leaves the draft unchanged and invalid selections show an error without replacing it.
+Reload's Save choice saves successfully before adopting saved values.
+
+Core and real-process contract checks cover literal selections, symlinks, project escape and invalid
+kinds. The native smoke also checks cancellation-result handling, interpreter spelling and
+project-bound selection results through the bound form/Core calls; it does not operate the system
+picker. Linux Core/FFI and focused backend checks pass, as do 401 frontend checks (ten skipped),
+TypeScript/production build, contracts, formatting, localization and documentation. The new picker
+controls still need their own macOS CI and manual dialog/keyboard/IME acceptance. Full settings/menu
+integration remains pending; Java's native window has separate implementation and acceptance
+records.
+
+The `python-run-v1/configuration.json` format and project-root keys remain unchanged. An OS writer
+lock serializes updated clients before revision checks and atomic replacement; a busy writer
+requires explicit retry. Reading defaults/tasks creates neither configuration nor a host. Damaged
+bytes and stale revisions refuse replacement. This lock does not retrofit old installed binaries.
+Stop checks the task generation and Python task family before asking the host to terminate it.
+
+Linux checks run a real Python script and isolated Rust host, preserving literal Unicode/Shell
+arguments and temporary environment values, nonzero exit, last raw output, consumption ack,
+detach/replay and bounded cleanup. Stale generations and an actual other-family task cannot be
+stopped by Python requests. Separate Rust processes verify configuration CAS, an actual OS writer
+lock, explicit retry and damaged-file preservation. Existing Python mode/path/scanning tests moved
+with the implementation; no separate Swift launch planner was added. Core/FFI, frontend and backend
+regressions pass locally. The Python service passed macOS/Windows CI at `692cd6c`; older Windows
+framework evidence below is not reused for the extraction. `bash scripts/macos-python-smoke.sh` adds
+actual native menu/window checks for configuration conflict, real script output/nonzero exit,
+detach/replay with the same generation, stale stop refusal and force stop, plus search, paused
+viewport consumption, follow resumption, same-host PID, normal-stop final output/copy and run-again
+ordering. Four screenshots include English/dark, paused output and Chinese/light narrow windows.
+[Native CI 41771783432](https://github.com/YondFane/uTerm/actions/runs/41771783432) passes on macOS
+ARM/Intel for source `ee0b1ac` and tested merge `e213eaa61e119c307566a50329acd85985432032`. The ARM
+artifact `native-qa-macos-15-ee0b1ac38fe42db2ad772bb68a8ae144268c47be` includes `python-live.json`
+and the four `native-python-*.png` screenshots, including paused output. This Linux environment has
+no AppKit/Swift toolchain. Manual input/IME and full settings/menu integration remain unaccepted;
+the later Java migration is not covered by this Python evidence.
+
+The raw-task replay check uses one ten-second deadline for the complete operation, including each
+receive, and reports the last sequence and actual host task state on failure. The corrected check
+passes on Windows/macOS in CI 41770931806 for source `692cd6c`; an earlier inner two-second receive
+failed before the declared operation deadline. No test or required platform is skipped.
 
 #### Python control layout validation on Linux
 
@@ -2827,6 +4292,68 @@ guides or defaults, including identifiers such as `constructor`.
 Provider credentials and permissions determine availability. Terminal input and process I/O are
 handled independently of UI rendering.
 
+The native QA client opens **File → Agent settings…** for custom commands, enable/disable,
+installation, Hooks and usage. Commands use an executable and JSON string array; argument errors
+retain the draft. Hiding the window retains it, switching commands confirms unsaved changes and
+quitting refuses an active operation or asks about an unsaved command. Local usage reads no account
+credentials; reading account quota requires an explicit action and may request Keychain access.
+
+`uterm-core::{agents,agent_install}` owns the existing provider rules; Tauri delegates its unchanged
+commands and Swift uses Core JSON calls. The Pi extension is embedded from
+`crates/uterm-core/integrations/pi-activity.js`. QA passes explicit private provider directories
+without changing `HOME`, `CODEX_HOME` or the user's account selectors. Reporter updates use a staged
+replacement, preserving the prior executable if the new copy fails.
+
+Failed installers return a classified error code without their output, which can contain registry
+credentials. The retry message remains bilingual; private installer output is not included in UI or
+CI diagnostics.
+
+Shared Linux regressions pass 18 Agent checks (one resource profile is intentionally ignored), five
+installer checks and two platform/real-Hooks checks. An installed reporter child process drains 64
+KiB of input, produces real Host working/done events and rejects stale generations. The installer
+failure/retry test executes private scripts rather than installing a provider globally. Three
+focused frontend notification/Pi suites, TypeScript, localization and the QA backend check pass. The
+first native build found an optional generation at the adapter boundary; the adapter now rejects
+missing generations before evaluating notification eligibility. That failed build does not establish
+window acceptance.
+
+The Tauri real-app harness also opens Agent settings, saves/enables/disables/removes a private
+custom command, changes canonical notification opt-out, installs/removes Hooks and retains an
+invalid argument draft with a visible error. Post-exit checks require other tools' Hooks to survive.
+Notification opt-in permissions remain covered by explicitly mocked regressions. Native QA cancels
+an actual app quit with an Agent draft. Activity labels update only when status changes; ordinary
+output does not trigger workspace redraws. Activity failures cancel pending notifications and show a
+reconnect hint. The native Close menu action hides the focused Agent window and retains its draft;
+it never closes the selected terminal behind that window.
+
+Tauri setting scenes wait for the control's save result before reading the canonical store. A
+visible writer-busy failure requires an explicit, bounded retry and is counted in the scene report;
+other errors fail the run. This avoids the observer taking a lock during the write under test. The
+initial lock-failure report is retained in #40. Agent selection uses the application's current brand
+label.
+
+A component regression runs these actions against the actual Agent form with mocked native services,
+forces one busy save and requires an explicit successful retry before the observer runs. It verifies
+three scene outcomes, final definition/enable cleanup and no notification permission request.
+
+Source `424fd23b55e44d116e51eb4224771ea963352df7`, tested merge
+`950bf24aaaad8e39b7855662d04d7000801f7649`, passes Native
+[run 42173232949](https://github.com/YondFane/uTerm/actions/runs/42173232949) on macOS 15.8.2 arm64
+and 15.7.9 Intel, and Tauri
+[run 42173232927](https://github.com/YondFane/uTerm/actions/runs/42173232927) on macOS 26.7.2 arm64
+and Windows Server 2025 x64. All four archives report a clean source tree. Native reports pass with
+exit 0, including actual quit cancellation; Tauri passes 71 scenes per platform with no cleanup
+errors or observer busy reads. The forced busy-write component regression passes on Linux, macOS and
+Windows. All four installed-reporter reports pass real Host events, stale-generation rejection and
+private Host cleanup. The archives contain `agent-native.json`, `agent-hooks-core.json`, Tauri
+`agent-live.json`, logs and ten reviewed original application screenshots. The
+[acceptance record](https://github.com/YondFane/uTerm/issues/40#issuecomment-6679048480) links each
+artifact and image. Provider authentication, global package installation and final OS notification
+delivery remain explicitly simulated; final human acceptance is waived by the user. This evidence
+does not replace the separate
+[#41 settings/menu acceptance](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106)
+or merge the draft PR.
+
 ### Installing and removing Hooks
 
 Settings → Agent → Install Hooks configures Claude, Codex, Gemini, Pi, MiniMax, Qwen Code, Copilot
@@ -2988,6 +4515,19 @@ acknowledged.
   dispatch also rechecks the current notification setting, focus and selected session. Native
   dispatch failures remain visible.
 
+- Native Agent settings use the same optional canonical `agentNotifications` preference as Tauri;
+  absent values retain the imported legacy preference and otherwise default to off. Opening settings
+  does not write a default or request permission. Native activity comes from accepted terminal
+  frames; no quiet-time completion is fabricated. The native gate uses `UInt64` event sequences,
+  bounded event-ID retention and generation/session checks. Swift regressions cover adjacent values
+  above JavaScript's safe-integer limit, `UInt64.max`, replay and invalidation of pending notices.
+
+- `bash scripts/macos-agent-smoke.sh` uses a real isolated native window, private commands/usage,
+  installed reporter processes and actual Host frames. Its OS permission and delivery adapter is
+  explicitly simulated; provider sign-in and actual system notification presentation are not
+  claimed. It archives source-bound reports and English/dark and Chinese/light narrow-window
+  screenshots. The user has waived final manual acceptance; automated failures still require fixes.
+
 #### Hook and notification automated checks
 
 - Hook regressions cover idempotent installation, old/encoded paths, mixed groups, removal,
@@ -3035,7 +4575,183 @@ acknowledged.
 ### Appearance and terminal preferences
 
 Settings include appearance, color themes, fonts, terminal cursor and scrollback, keyboard
-shortcuts, default shell and Agent. Theme import accepts supported color fields only.
+shortcuts, default shell and Agent. Core `settings.catalog` reads the existing defaults and a
+generated bilingual catalog of 31 commands, eight terminal themes and six interface themes from the
+current TypeScript sources. Opening the catalog does not save defaults. `pnpm settings:check` and
+the normal contract checks verify generation.
+
+Core `settings.validate` checks the full settings shape, platform shortcut conflicts, reserved
+system/editor keys and optional default bindings without writing configuration. `settings.commands`
+resolves bindings from the same rules. The native **Commands** menu updates its keys after saving
+and clears colliding fallback menu keys. The palette and capture controls show macOS key glyphs.
+
+**Command palette** provides native search, Up/Down, Return and Escape. Dismissing it restores its
+originating window/responder and cannot close a terminal behind it. Plain navigation keys are
+handled only in the owned visible palette; its event monitor is removed on dismissal and modified
+keys retain normal text editing. Commands follow the current window/session context. The Tauri
+welcome-page primary action uses the same pending-draft/transition guard as the command menu. Its
+concurrent-input QA clicks a connected button in the same JavaScript turn; the visible real terminal
+remains a required assertion. Native **Files**, **Search** and **Quick open** show a tools pane
+backed by the shared Rust file service. Return or double-click opens a file; content search opens
+the matching line while preserving an existing editor's text. Hidden files are optional, partial
+results are labelled, and outside-root symlink targets cannot be opened. Search results from a
+cancelled request or previous project cannot replace the current list.
+
+**Toggle inspector** hides/restores tools; **Swap panes** saves its left/right position, including
+with the project sidebar hidden. Closing focused tools returns focus to the selected terminal
+without closing its session. **Zoom** shows only the selected split pane, then restores the shared
+layout and cached terminal views; hidden sessions continue receiving output.
+
+**GitHub** opens the existing shared panel in a native window. Both clients use Rust
+`github.repositories/read/prepare/create` for GitHub CLI access, repository/fork discovery, issue/PR
+details, diff and explicit PR creation. Native tools preserve the selected root and refuse other
+methods or private CLI arguments. Session association uses revision-checked shared state; linked
+sessions keep the issue URL and title. Inserting a URL requires a selected Agent session with input
+control and does not send Return. Closing the window preserves its PR form. Quitting refuses active
+requests or asks before discarding a form; cancellation cannot release an already dispatched CLI
+operation before its actual result. PR creation uses literal JSON input and never pushes a branch or
+creates a fork implicitly.
+
+The native QA app opens **Settings → All settings…** or **File → All settings…** for General,
+Appearance, Terminal, Files/Agents and Shortcuts. Changes remain drafts until **Save settings**.
+**Restore defaults** prepares a draft and still requires saving. Hiding/reopening retains the draft;
+quit refuses an active operation or asks about unsaved changes. Invalid numbers and reserved or
+duplicate shortcuts show an error without discarding input. Saving checks each changed field against
+the latest store, preserving unrelated peer changes and refusing conflicting overwrites.
+
+Both clients parse Ghostty themes through Core `settings.theme.import`, retaining existing name/ID,
+UTF-16 length, six-digit color and palette-index rules. Parsing itself does not save settings. Tauri
+saves after a successful selection; native import adds a draft that requires **Save settings**. The
+native chooser reads at most 32 KB and requires UTF-8. Names remove only a final `.conf` or `.txt`,
+ignoring extension case; other extensions remain part of the name and identity.
+
+Native terminals and task logs apply bundled/custom palettes, cursor/selection colors, available
+font fallback/weight, line spacing, cursor shape/blink, scrollback and background opacity. Copy on
+selection copies after mouse selection ends. Interface palette/font, row/window padding, sidebar
+visibility, active icon color, project name sorting and optional background material are connected
+to the workspace.
+
+Native break reminders use the shared enable/interval preferences. A nonmodal notice appears once
+after the interval, closes after ten seconds or **Continue working**, and starts the next interval
+from dismissal without replaying missed reminders after sleep. Changing the interval or disabling
+the preference hides the current notice. The timer stops when the client shuts down.
+
+Native editable file windows enforce the shared per-directory file-tab limit, retaining the newest
+tabs. Opening another file or lowering the limit prepares excess editors before closing them; clean
+saves use the existing save path, while a conflicting write refuses the new opening and retains
+existing tabs/drafts. The existing Close action offers Keep editing or explicit discard before
+retrying. Existing missing-source recovery still opens retained drafts read-only. Agent settings
+refresh the selected supported Agent's usage while visible, using the shared remote/local preference
+and interval with one request at a time. Automatic reads do not request Keychain access; explicit
+account reads retain their confirmation. Hiding the window or preparing to quit stops polling.
+Native automatic-update effects remain tracked in #45.
+
+**General → Login startup** reads OS state without registering on open. Explicit opt-in/out uses
+macOS `SMAppService`; approval-required and failed operations stay visible and active operations
+block quitting. This system preference applies immediately, separately from the shared draft.
+Isolated settings QA simulates approval, success, failure and disable without registering a CI login
+item or changing shared settings. Real OS registration/approval is not executed in CI; the
+user-authorized simulation boundary and final human waiver are explicit.
+
+#### Validation and limits
+
+`bash scripts/macos-inspector-smoke.sh` uses the isolated native QA app, temporary files and real
+PTYs to check file navigation, hidden files, symlink boundaries, Unicode search/line navigation,
+retained editor text, cancellation, quick open, pane swap, zoom, focus and explicit host cleanup. It
+records four original WindowServer captures and `inspector-native.json`, including source head and
+tested merge SHAs. Source `52eb2bb440175b44895bd58882d0485c98ada144`, tested merge
+`2d21a040c4e9e33c2dd52ec5eada4c2cde11db92`, passes these checks on macOS arm64 and Intel in
+[run42214355682](https://github.com/YondFane/uTerm/actions/runs/42214355682). The four ARM originals
+were individually inspected. Earlier build/input/focus failures remain in the Issue evidence; those
+results are not reused for later source revisions. Final human acceptance is waived by the user.
+
+`scripts/interaction-matrix.py` audits each client's source head/tested SHA, required reports and
+original PNG captures. Each capability separates implementation, build, automatic checks, native
+actions and waived manual acceptance. Editor summaries carry the isolation flag after both actual
+processes validate their private profiles; missing metadata remains a failing gate. Native terminal
+QA also checks simulated marked text with zero interim PTY bytes and one exact Unicode commit, and
+simulated sleep/wake/display notifications with retained views/generations and resumed actual
+output. Windows reuses actual desktop editor/settings/Git and input-ownership scenes plus labelled
+composition/input tests. Missing/failed/stale evidence fails the audit. Physical IME, hardware sleep
+and multiple monitors are not represented as executed; manual acceptance is waived.
+`interaction-matrix.json` keeps those boundaries and original M3 layout, session-tab-drag and PDF
+gaps explicit; it does not declare stable cutover acceptance.
+
+`bash scripts/macos-github-smoke.sh` runs the real native WebView window with an isolated simulated
+`gh`, temporary Git repository and real PTYs. It checks root/method/type boundaries, sanitized
+Markdown, shared session links, PR details/diff, visible offline failures/retry, cancellation, draft
+hide/reopen/quit cancellation, literal submission, pending-request quit protection and bilingual
+theme captures. `github-native.json`, the simulated CLI log and four original screenshots are CI
+artifacts. Draft quit confirmation uses an asynchronous sheet attached to its own window, keeping
+WebKit and main-actor tasks responsive. Actual ARM CI at source `3719222` passes Cancel and draft
+retention, then fails explicit creation: preparation returns extra `branch` metadata that the strict
+Core creation contract rejects. The panel now copies only title/base/head into the form; the
+regression includes extra preparation fields and requires one exact creation payload. The PR draft
+checkbox uses compact inline sizing. Intel source `cdedb12860c5a20c88c1945b21c96c84770173ce` passes
+all GitHub checks with four original captures in
+[artifact13516460493](https://github.com/YondFane/uTerm/actions/runs/42236559031/artifacts/13516460493).
+This is scoped GitHub evidence; that workflow fails the separate SDK installation capture and
+interaction-summary metadata checks. No account, real GitHub write, push or fork is used. Shared
+session tests retain stale/malformed link, reopening and split checks.
+
+Linux checks pass the 422 existing frontend tests (11 skipped), the added GitHub panel regression,
+242 Core/FFI/failure-mode tests (17 ignored), 84 host tests (3 ignored), 18 Tauri backend tests (1
+ignored), type checking, production/desktop builds, contract/localization checks and formatting.
+Java-dependent checks use JDK 21. A real Core process with the isolated CLI also passes eight
+repository/read/diff/prepare/create/invalid/offline/retry requests with one exact JSON creation.
+These local results use simulated GitHub responses and do not replace native CI screenshots.
+
+An ARM Core run hit the isolated SSH server's source-address penalty during deliberate host-key
+failures. The fixture now detects support with `sshd -T` and disables that penalty only in its
+temporary server configuration; older OpenSSH keeps its supported configuration. Host-key rejection
+assertions remain required and now include the actual error on failure. Production SSH configuration
+is unchanged. The native inspector retains its observing root view during PTY updates and snapshots
+a row's identity/generation before opening, rather than restarting its focus/reload tasks on every
+update. Intel Return and GitHub boundary failures remain recorded; their reports now include
+selection state and returned boundary codes for the required rerun. Dependency caching on CI failure
+does not turn a failed gate into a passing result.
+
+Settings/menu/command acceptance #41 is complete on source
+`949e4c23dc22d2b01e4823b96a73a26e8c26f60c`, tested merge `b8e96bbb42501213040f0b93bff009ecd24623a7`.
+Native [run42251082940](https://github.com/YondFane/uTerm/actions/runs/42251082940) passes
+settings/inspector/GitHub reports and Core/FFI/Swift tests on macOS15.8.2 arm64 and15.7.9 Intel; its
+overall result still fails the separate #45 SDK capture. Tauri
+[run42251082946](https://github.com/YondFane/uTerm/actions/runs/42251082946) passes both full jobs
+on macOS26.6.2 arm64 and Windows Server2025 x64, each with73 actual-app scenes and no cleanup
+errors. All reports bind clean source/merge identities; this source is not presented as a later
+commit retest.
+
+The actual Rust process/TypeScript checks pass 372 shortcut configurations, 11,532 resolved-binding
+comparisons and 96 theme inputs, including Unicode names, contextual lowercasing, encoded IDs,
+leading-zero palette indices and invalid colors. They verify unchanged defaults/store and bounded
+rejection of invalid/private parameters. These logic reports do not replace native window checks.
+
+`bash scripts/macos-settings-smoke.sh` checks actual menu/shortcut capture, search and
+arrow/Return/Escape input, return focus, explicit reset, actual quit cancellation, invalid drafts,
+conflicting/unrelated peer writes, theme drafts and actual themed PTY effects. It also uses real
+temporary files for theme names, UTF-8 and bounded reads. Settings QA runs after the generic window
+smoke, retaining every other native check. The same origin/return window is verified on both
+architectures; login approval/failure/disable remains explicitly simulated.
+
+Twelve original application screenshots have been reviewed. Native archives include
+`settings-native.json`, logs and `native-settings-command-palette.png`,
+`native-settings-themed-terminal.png`, `native-settings-full-dark-en.png` and
+`native-settings-full-light-zh-narrow.png`. Tauri archives include `settings-platform.json`,
+`tauri-state-qa/report.json`, `initial-theme-invalid.json/.png` and
+`initial-theme-imported.json/.png`. The
+[evidence record](https://github.com/YondFane/uTerm/issues/41#issuecomment-6690738106) links all
+four artifacts, commands, toolchains and captures. Tauri uses DOM File events inside the real
+application; OS file-chooser interaction is not claimed. macOS images use WindowServer and Windows
+uses the owned QA HWND with capture metadata.
+
+Earlier window-capture, SSH askpass and focus-assertion failures, plus cancelled superseded runs,
+remain in the Issue records. The focus test now activates the intended settings origin rather than
+expecting it while the main workspace is in front after cancelled quit. These failures are not
+counted as passes. #41 is accepted against its four criteria and the separate
+settings/inspector/GitHub reports. The older `nativeSettingsFeatureAcceptanceComplete=false` summary
+remains visible because its remaining list points at #45 updates and those separate reports; it is
+not rewritten as true. Login approval uses the authorized simulation, final human acceptance is
+waived, and neither establishes stable cutover or merges the draft PR.
 
 ### Terminal text selection and rendering
 
@@ -3249,6 +4965,96 @@ Markdown previews. Image, PDF and static HTML previews keep their own sizing con
   diff layouts and macOS/Linux runtime acceptance remain pending.
 
 ### Automatic updates and confirmation
+
+#### Native macOS update adapter
+
+The native QA app includes Sparkle 2.10.1 and offers **Check for updates…** in the app menu and
+General settings. An ordinary QA build has no feed/public key, displays an unavailable state and
+does not initialize an updater controller or make network checks. A configured build uses shared
+`automaticUpdates`, off by default; cached SDK preferences cannot re-enable it. Windows/Tauri also
+leaves its delayed startup check disabled when automatic updates are off; explicit checking remains
+available.
+
+Native feed configuration fixes stable/preview and the current arm64/x86_64 architecture. QA sources
+must be literal loopback URLs. Appcast items require matching `uterm:platform`/`uterm:architecture`
+metadata, channel and same-origin ZIP archives before proceeding. SDK package verification remains
+required separately. Sparkle retains its native download/install UI; application termination still
+uses the existing editor, transfer and database guards. No production feed is configured or changed.
+
+The pinned framework, nested helpers and license are bundled. Candidate audits check signatures,
+architecture, minimum OS and read-only permissions. `python3 -B scripts/macos-updates-smoke.py` runs
+ten actual SDK scenarios using private loopback feeds, signed App ZIPs and unique QA
+identifiers/temp roots. It creates one-time CryptoKit keys, verifies the official signing toolkit's
+pinned hash and retains only public keys/signatures. User choices are simulated; SDK downloading,
+verification, extraction, target checks and scheduling remain real.
+
+Cases include valid/bad signatures, wrong architecture/channel, old versions, cancel, actual retries
+after offline/interrupted downloads, shared automatic opt-in/opt-out and build1→build2 installation.
+The latter uses the same private app path, saves a real editor draft through ordinary quit guards,
+retains host PID/generation, checks exact saved bytes and produces fresh PTY output. The server
+records and rejects requests before opt-in. Bad-signature acceptance requires the pinned SDK's exact
+bounded `SUValidationError` cause `EdDSA signature does not match.`; unrelated errors fail. Bridge
+negative tests cover that boundary.
+
+Relaunch capture uses the original CI coordinator's process tree and verifies exact source, bundle
+identity, owner PID/window number and dimensions. Missing permission/image fails. Canvas caching
+includes the actual terminal view identity, and both ordinary reconnect and update relaunch require
+that view inside the visible window. The install fixture owns a real PostgreSQL cluster and invokes
+the actual termination delegate during a long query and an uncommitted transaction. Refusal,
+rollback, unchanged host/generation and database cleanup are required. Transfer worker states and
+updater termination requests are labelled simulations; the native Keep window open button is real.
+
+At source `ec1a49df9fe7eb0ed75a2f23efcb9883dd36fb21`, tested merge
+`cfd088ed91d8038dcae8e686a67b1812e87d7181`, both complete jobs in
+[run42272314439](https://github.com/YondFane/uTerm/actions/runs/42272314439) pass all ten SDK cases
+on macOS15.8.2 ARM64 and15.7.9 Intel with Xcode16.4/Swift6.1.2/Rust1.99.1. The
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42272314439/artifacts/13533506603) and
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42272314439/artifacts/13533773218)
+contain updates/sdk-summary.json, install/sdk-native.json, four protection-window images and
+native-update-install-relaunched.png. Original ARM relaunch and Intel query-refusal images were
+inspected; retained output and QUIT_REFUSED are visible. #45 is accepted on the task branch. Old
+empty-placeholder captures remain failed restoration evidence; they are not reused as passes.
+
+#### Windows signed updater QA
+
+`python -B scripts/windows-updates-database.py` owns a real private PostgreSQL cluster and invokes
+`node scripts/windows-updates-smoke.mjs`, which builds and installs private 0.2.4/0.2.5 NSIS
+packages and serves a one-time signed update over literal loopback. Only a compile-gated QA app with
+its validated temporary root and updates phase can enable this source. Endpoints reject remote/DNS
+aliases, credentials and query strings; download URLs retain the same origin and owned package path.
+Signed versions remain mandatory. An embedded QA-only root supports argument-free relaunch into the
+same private profile. Production configuration and ordinary QA disabled behavior remain unchanged.
+
+The suite covers the real startup opt-out interval, old versions, wrong architecture, bad
+signatures, offline/retry, interrupted Range resume, editor/database draft guards, manual checking,
+automatic download/confirmation, Cancel and durable opt-out. Installation uses the real updater,
+then verifies a different app PID, retained host/generation, exact Core draft bytes and fresh PTY
+input. Draft input and dirty guard flags are explicitly simulated. The real transfer registry uses a
+labelled simulated worker; cancellation remains protected until completion. Real PostgreSQL queries
+and uncommitted transactions reject installation, with original data retained after rollback and all
+connections closed. Input leases are released before an installer can exit directly; host/PTYS
+remain alive. QA closes its actual terminal and stops only its owned idle host. Cleanup failures
+retain logs and reports. Only bounded read-only observations retry writer contention; writes retain
+their existing conflicts and the explicit Retry saving settings control.
+
+Windows uses the same source/merge above. All fourteen scenes, actual signed 0.2.4→0.2.5
+installation, normal exit and uninstall pass in
+[run42272314528](https://github.com/YondFane/uTerm/actions/runs/42272314528), with cleanupErrors=[]
+on WindowsServer2025 x64/PostgreSQL17.11/Java21/Node24.22.2/pnpm11.22/Rust1.99.1.
+[Artifact13531895866](https://github.com/YondFane/uTerm/actions/runs/42272314528/artifacts/13531895866)
+contains sdk-summary.json, fourteen updates-*.json/png scenes, database cleanup, packages and public
+signatures. Both package hashes were independently recomputed, and the original relaunch window was
+inspected with fresh SDK_UPDATED output. Protection RPC/report checks prove database and transfer
+refusal; an ordinary window capture is not a SQL-interface screenshot. Private keys stay outside
+artifacts; updater signatures do not provide Authenticode.
+
+Startup status is observed once so later automatic-preference changes cannot race an in-progress
+download's lock. The focused regression fails the old implementation and passes the correction; the
+source-bound Windows run above also passes the actual automatic flow. Default opt-out, explicit
+retry, Cancel and installation guards remain intact. #45 is completed under the documented
+simulation/manual-waiver scope; no production update feed or release is changed.
+
+#### Windows/Tauri automatic installation
 
 Settings → Software update → Automatic updates is off by default and persists across restarts. In
 builds with online updates enabled, turning it on checks immediately and then hourly while running,
@@ -3906,6 +5712,10 @@ session keeps its saved dimensions until replay completes; closing or reconnecti
 resizes for the old attachment. Resize errors remain visible in the session.
 
 #### Panel-drag checks on macOS
+
+The App regression freezes periodic timers before mounting so background refreshes cannot count as
+pointer-driven renders. Explicit task-activity updates and timed collapse hints remain checked. The
+focused regression passes on Linux; the corrected timing boundary still needs its own macOS CI.
 
 - App regressions cover frame coalescing without session rerenders on pointer movement, task-state
   updates during a drag, the final release position, cancellation, unmount cleanup, collapse hints,
@@ -4571,6 +6381,112 @@ navigation links pass their checks. These checks validate documentation only and
 runtime acceptance recorded for each feature.
 
 ## Database connections and optional components
+
+### Shared database services
+
+`uterm-core::{database,database_components,downloads}` owns connections, SQL/document requests,
+read-only/transaction/cancellation guards, system-credential binding and verified component
+installation. Existing Tauri commands delegate to those services. Clients supply application
+directories, SSH authentication confirmation, native file selection and events; export pickers and
+actual application exit remain platform operations.
+
+Commands share connection/draft and component state. Cancelling file selection releases installation
+protection without writing default configuration. The bundled Java engine is restored atomically
+into the application cache, keeping the installed bundle unchanged. Drivers, runtimes and resumable
+data retain their application-data paths, catalog versions and SHA-256 rules. Existing credential
+service names and JSON configuration remain compatible.
+
+The Core JSON interface starts database work asynchronously and returns an opaque operation ID and
+generation. Clients poll or consume the matching result while disconnect and component cancellation
+remain available. Admission reserves capacity for at most eight running or unread business results;
+control operations have separate capacity. Progress events are coalesced and bounded. Operation
+lists omit query results and request parameters. Closing the client stops owned database workers and
+prevents a connection that finishes late from registering a new handle. Disconnect and client close
+send the existing JDBC statement-cancel request with a bounded wait before terminating the owned
+worker. They do not retry writes with an uncertain outcome.
+
+The isolated macOS QA app opens **Databases** from its native sidebar or **File → Databases…**. It
+reuses the SQL/document workbenches and component/connection forms through the same scoped content
+transport. Profile save/removal uses revision-checked Core storage and refuses active or dirty
+profiles. Temporary passwords stay in application memory and match canonical configuration values;
+changing a profile's target recreates its inactive workbench without carrying the old password. A
+successful connection clears the visible password field but keeps the temporary password in private
+workbench memory for a later disconnect/connect; a changed or cleared password prop replaces that
+memory.
+
+Database handlers explicitly include structured error codes when classifying messages, while generic
+error strings keep their existing format. Revision conflicts keep the connection form open and
+request a reload; busy/pending errors retain their specific guidance even when the host message does
+not repeat the code.
+
+Closing this window hides it while retaining connections, drafts and results. Application quit
+refuses active work or pending transactions and confirms draft loss. If another window cancels quit,
+the database view resumes with its draft protection. Component selection uses AppKit; content cannot
+supply a picker path. Export uses a native save panel. Language/theme changes propagate from shared
+settings without saving defaults when opening the window.
+
+#### Shared-service validation and limits
+
+[#38 is implemented and accepted](https://github.com/YondFane/uTerm/issues/38#issuecomment-6678052308)
+on the task branch, without merging into `release`. Its source head is
+`0c31ec5e002c00c6c4f2d52101a783262a83a79f`; the actual tested PR merge is
+`4017ae8c87f3b154844e15127da27bf0bfc75529`. Every report below records a clean source tree. Later
+Agent commits do not replace these database acceptance identities.
+
+Linux x86_64 / Rust 1.99.1 passes 24 database/document/component regressions, including interrupted
+and cancelled downloads, range errors, size/hash verification, cache repair, archive boundaries,
+versioned document writes and connection cleanup. Asynchronous client checks cover late completion
+after close, backpressure, generation mismatches and parameter redaction. The real isolated
+PostgreSQL 16.11 report passes all 11 scenarios: exact bigint/decimal/binary/null/Unicode, default
+read-only protection, pending-transaction disconnect/quit guards, rollback, stale writes and
+server-observed query cancellation and release. JDBC 42.7.14 is verified against the catalog.
+
+`python3 -B scripts/database-protocol-qa.py <evidence-directory>` records 32 checks: 29 pass, three
+real-MySQL cases are skipped and none fail. MySQL/PostgreSQL/Oracle use JDBC models and pinned
+vendor driver SOCKS handshakes; MongoDB uses its real pinned Java driver against a disposable wire
+fixture; Elasticsearch uses HTTP simulations. These authorized simulations supplement actual
+PostgreSQL acceptance and are explicitly labelled; they do not establish real vendor-cluster or
+account acceptance. Commands, driver versions/hashes, reports and logs are in the
+[Linux artifact](https://github.com/YondFane/uTerm/actions/runs/42166630794/artifacts/13478739772).
+
+`bash scripts/macos-database-smoke.sh` passes in both complete native jobs: macOS 15.8.2 ARM64 and
+15.7.9 Intel, Xcode 16.4, Swift 6.1.2, Rust 1.99.1, JDK 21, PostgreSQL 16.15 and verified JDBC
+42.7.14. Both `database-live.json` reports have `passed=true` and exit code 0, covering profile save
+without password persistence, SQL controls/editor readiness, clipboard equality, exact values,
+hide/reopen/reconnect, active-profile protection and bilingual theme/narrow-window behavior. The
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/42166630325/artifacts/13479841334) and
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42166630325/artifacts/13480049468)
+each contain the report, toolchain, logs, `native-database-sql-dark-en.png` and
+`native-database-sql-light-zh-narrow.png`.
+
+`python scripts/ssh-tauri-qa.py` passes on macOS 26.6.2 ARM64 and Windows Server 2025 x64 with Node
+24.22.2, pnpm 11.22.0, Rust 1.99.1 and JDK 21. Each platform passes 68 real-app scenes, including
+five database scenes against real private PostgreSQL 16.15 / 17.11. They cover all five profile
+types, verified driver installation, exact SQL, retained drafts, write confirmation,
+rollback/commit, server-observed slow-query cancellation and reconnect. `tauri-state-qa/report.json`
+has `passed=true` and `cleanupErrors=[]`; `tauri-database-service/database-live.json` verifies
+committed data after app exit, no remaining client connections, owned-server shutdown and credential
+exclusion. The
+[macOS artifact](https://github.com/YondFane/uTerm/actions/runs/42166630494/artifacts/13480905732)
+and
+[Windows artifact](https://github.com/YondFane/uTerm/actions/runs/42166630494/artifacts/13480430678)
+each contain
+`tauri-state-qa/database-database-live-{profiles,exact,draft,transactions,recovery}.png` and
+adjacent scenario/capture metadata.
+
+All 14 original application screenshots have been individually inspected. Long values clipped by a
+window or result column are checked as exact strings in the reports. SQL/Unicode samples come from
+the shared fixture, preserving translation checks. Draft reopening locates the saved endpoint and
+requires its `*` marker, the same editor instance and unchanged SQL. Component probes start only
+when the manager is opened and are retained when hidden. Input readiness waits for enabled controls
+and a visible editable CodeMirror. Profile CAS, cancellation draining on both content ports, modal
+freeze/resume and temporary-password invalidation remain covered; native diagnostics contain fixed
+methods and bounded error codes rather than private parameters/vendor text.
+
+Final manual interaction/picker acceptance is waived by the user and is not recorded as manually
+passed. Real non-PostgreSQL vendor clusters remain unexecuted under the authorized simulation scope.
+Earlier selector and GitHub DNS failures remain linked in #38; successful reruns are identified by
+their actual source and merge. Other M3/M4/M5 acceptance remains separate.
 
 ### Database setup and visibility
 

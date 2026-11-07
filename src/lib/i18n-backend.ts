@@ -1,4 +1,49 @@
 export const backendMessages: Record<string, string> = {
+  "Git 收藏恢复版本无效。": "Invalid Git favorite recovery revision",
+  "Git 收藏恢复副本校验和不同，未替换数据。":
+    "Git favorite recovery checksum differs; no data was replaced",
+  "Git 收藏来源版本无效。": "Invalid Git favorite source revision",
+  "Git 收藏来源校验和不同，原始数据已保留。":
+    "Git favorite source checksum differs; original data was retained",
+  "Git 收藏来源不是有效 UTF-8，原始数据已保留。":
+    "Git favorite source is not valid UTF-8; original data was retained",
+  "恢复 Git 收藏需要预期版本或明确确认快照缺失。":
+    "Git favorite restore requires an expected revision or explicit missing-store acknowledgement",
+  "Git 收藏在预览后发生变化，请重新选择恢复副本。":
+    "Git favorites changed after preview; choose the recovery copy again",
+  "Git 收藏在安装恢复副本前发生变化。": "Git favorites changed before recovery installation",
+  "Git 收藏在安装恢复副本前已被创建。": "Git favorites were created before recovery installation",
+  "列出 Git 收藏恢复副本不接受参数。": "Git favorite recovery listing takes no arguments",
+  "请先导入旧 Git 收藏，再修改。": "Import old Git favorites before changing them",
+  "Git 收藏无效，原始数据已保留。": "Git favorites are invalid; original data was retained",
+  "Git 收藏已保留供恢复：{p0}": "Git favorites retained for recovery: {p0}",
+  "不支持此 Git 收藏格式。": "Git favorites schema is unsupported",
+  "Git 收藏的仓库数量已达上限。": "Git favorite repository limit reached",
+  "Git 收藏的仓库标识无效。": "Git favorite identity is invalid",
+  "Git 收藏快照缺失，请保留并恢复副本后继续。":
+    "Git favorites snapshot is missing; retain and restore a recovery copy before continuing",
+  "Git 收藏超过存储上限。": "Git favorites exceed the storage limit",
+  "Git 收藏在备份前发生变化，请明确重新读取。":
+    "Git favorites changed before backup; reload explicitly",
+  "Git 收藏恢复来源已满，未移除原始数据。":
+    "Git favorite recovery sources are full; no original data was removed",
+  "多个旧 Git 收藏来源匹配此仓库，原始数据已保留。":
+    "Multiple old Git favorite sources match this repository; originals were retained",
+  "旧 Git 收藏已保留但无法读取：{p0}": "Old Git favorites were retained but cannot be read: {p0}",
+  "旧 Git 收藏与共享收藏不同，请明确选择恢复数据。":
+    "Old Git favorites differ from shared favorites; choose recovery data explicitly",
+  "请先保留准确的旧 Git 收藏来源，再继续。":
+    "Retain the exact old Git favorite source before continuing",
+  "Git 收藏已变化，请重新读取后重试。": "Git favorites changed; reload before retrying",
+  "Git 收藏已关闭。": "Git favorites are closed",
+  "旧 Git 收藏已变化，请重新加载后选择恢复数据。":
+    "Old Git favorites changed. Reload before choosing recovery data.",
+  "旧 Git 收藏备份不同，原始数据已保留。":
+    "The old Git favorite backup differs; original data was retained.",
+  "无法确认旧 Git 收藏备份。": "The old Git favorite backup could not be verified.",
+  "无法确认 Git 收藏交接。": "The Git favorite handoff could not be verified.",
+  "请先归档旧 Git 收藏，再继续。": "Archive old Git favorites before continuing",
+  "请先完成 Git 收藏读取或保存。": "Finish loading or saving Git favorites first.",
   "请选择现有引用。": "Select an existing reference.",
   "引用列表过大，请在终端中查看。": "Too many references. View them in the terminal.",
   "目标引用已改变，请刷新后重试。": "The target reference has changed. Refresh and try again.",
@@ -68,6 +113,23 @@ export const backendMessages: Record<string, string> = {
   "Git 未能移除 Worktree 目录。": "Git could not remove the worktree directory.",
   "Git 状态格式无效。": "Invalid Git status format.",
   "Git 路径包含无法显示的字符。": "The Git path contains unrepresentable characters.",
+  "此 Worktree 路径无法准确传给 Git，请使用普通 Windows 绝对路径。":
+    "Git cannot preserve this Worktree path. Use a regular absolute Windows path.",
+  "项目已不存在。": "Project no longer exists",
+  "Worktree 已不存在。": "Worktree no longer exists",
+  "请先关闭此 Worktree 的会话，再删除。": "Close this Worktree's sessions before deleting it",
+  "请先停止或关闭此 Worktree 中的会话和运行任务，再删除。":
+    "Stop or close sessions and running tasks in this Worktree before deleting it",
+  "会话宿主不可用，无法确认 Worktree 占用，未移除文件：{p0}":
+    "Cannot verify Worktree use because the session host is unavailable; no files were removed: {p0}",
+  "宿主返回无效响应，无法确认 Worktree 占用。":
+    "Cannot verify Worktree use; the host returned an invalid response",
+  "无法读取 Worktree，请刷新项目：{p0}": "Cannot read Worktree; refresh the project: {p0}",
+  "Worktree 已移除，但项目列表无法保存，请刷新 Worktree：{p0}":
+    "The Worktree was removed, but its project list could not be saved; refresh Worktrees: {p0}",
+  "工作区已变化，请重新刷新 Worktree。": "Workspace changed; refresh Worktrees again",
+  "刷新 Worktree 仅接受项目 ID 和预期 revision。":
+    "Worktree refresh requires only a project ID and expected revision",
   "Git 返回了无法显示的当前分支名：{error}": "Git returned an unrepresentable branch name: {error}",
   "GitHub 响应超过 2 MB，请在浏览器中查看。": "GitHub response exceeds 2 MB. View it in a browser.",
   "Grok 登录凭据格式无效。": "Invalid Grok credential format.",

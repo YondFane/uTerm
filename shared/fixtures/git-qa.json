@@ -1,0 +1,7 @@
+{
+  "fileName": "git-中文.txt",
+  "originalText": "BEFORE_GIT 中文 é\n",
+  "changedText": "TAURI_GIT_DIFF 中文 é\n",
+  "commitSubject": "Isolated Tauri Git fixture 中文",
+  "worktreeName": "git-worktree-中文"
+}

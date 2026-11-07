@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke } from "../lib/content-host";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
+import { randomUUID } from "../lib/uuid";
 import { useDialogBackdrop } from "../lib/useDialogBackdrop";
 import { redisError, validRedisConfig, resolveRedisSsh, type RedisConfig } from "../lib/redis";
 import { sshTargetFor, type SshConnection } from "../lib/workspace";
@@ -16,7 +17,7 @@ export function RedisConnectionDialog({
   connection?: RedisConfig;
   ssh: SshConnection[];
   workspaceId: string;
-  save: (connection: RedisConfig, password: string) => boolean;
+  save: (connection: RedisConfig, password: string) => boolean | Promise<boolean>;
   close: () => void;
 }) {
   useUiLanguage();
@@ -25,7 +26,7 @@ export function RedisConnectionDialog({
     connection
       ? resolveRedisSsh(connection, ssh, workspaceId)
       : {
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           name: "",
           host: "127.0.0.1",
           port: 6379,
@@ -119,7 +120,7 @@ export function RedisConnectionDialog({
         });
         value.credential_id = created;
       }
-      if (!save(value, remember ? "" : password)) {
+      if (!(await save(value, remember ? "" : password))) {
         if (created)
           await invoke("redis_credential", {
             config: { ...value, credential_id: created },

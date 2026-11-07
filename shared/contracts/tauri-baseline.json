@@ -1,0 +1,624 @@
+{
+  "baseline_release": "4f10848868ac09a3667e140938c345b265f9dd58",
+  "baseline_main": "0c6a7fee2eef238e72c9ecf34db99634f205d04c",
+  "minimum_macos": "14.0",
+  "storage_declarations": [
+    {
+      "source": "src/components/AgentPanel.tsx",
+      "line": 11,
+      "declaration": "export const notificationKey = \"uterm.desktop.agentNotifications\";"
+    },
+    {
+      "source": "src/components/GitBranchTree.tsx",
+      "line": 156,
+      "declaration": "window.localStorage.getItem(`uterm.git.favorites:${repository}`) ?? \"[]\","
+    },
+    {
+      "source": "src/components/GitBranchTree.tsx",
+      "line": 377,
+      "declaration": "window.localStorage.setItem(`uterm.git.favorites:${repository}`, JSON.stringify([...next]));"
+    },
+    {
+      "source": "src/components/PdfReader.tsx",
+      "line": 108,
+      "declaration": "const key = `uterm.pdf.marks:${document.directory}/${document.path}:${document.version}`;"
+    },
+    {
+      "source": "src/lib/file-document.ts",
+      "line": 46,
+      "declaration": "export const draftKey = \"uterm.desktop.editorDraft.v1\";"
+    },
+    {
+      "source": "src/lib/settings.ts",
+      "line": 7,
+      "declaration": "export const settingsKey = \"uterm.desktop.settings.v1\";"
+    },
+    {
+      "source": "src/lib/workspace.ts",
+      "line": 215,
+      "declaration": "export const workspaceKey = \"uterm.desktop.workspace.v1\";"
+    }
+  ],
+  "tauri_commands": [
+    {
+      "name": "install_agent",
+      "source": "src-tauri/src/agent_install.rs",
+      "line": 274
+    },
+    {
+      "name": "agent_definitions",
+      "source": "src-tauri/src/agents.rs",
+      "line": 108
+    },
+    {
+      "name": "save_agents",
+      "source": "src-tauri/src/agents.rs",
+      "line": 112
+    },
+    {
+      "name": "agent_hooks",
+      "source": "src-tauri/src/agents.rs",
+      "line": 438
+    },
+    {
+      "name": "agent_usage",
+      "source": "src-tauri/src/agents.rs",
+      "line": 961
+    },
+    {
+      "name": "control_wait",
+      "source": "src-tauri/src/control.rs",
+      "line": 290
+    },
+    {
+      "name": "control_status",
+      "source": "src-tauri/src/control.rs",
+      "line": 294
+    },
+    {
+      "name": "control_configure",
+      "source": "src-tauri/src/control.rs",
+      "line": 298
+    },
+    {
+      "name": "control_poll",
+      "source": "src-tauri/src/control.rs",
+      "line": 319
+    },
+    {
+      "name": "control_reply",
+      "source": "src-tauri/src/control.rs",
+      "line": 329
+    },
+    {
+      "name": "control_focus",
+      "source": "src-tauri/src/control.rs",
+      "line": 343
+    },
+    {
+      "name": "control_install",
+      "source": "src-tauri/src/control.rs",
+      "line": 347
+    },
+    {
+      "name": "database_connect",
+      "source": "src-tauri/src/database.rs",
+      "line": 448
+    },
+    {
+      "name": "database_request",
+      "source": "src-tauri/src/database.rs",
+      "line": 589
+    },
+    {
+      "name": "database_disconnect",
+      "source": "src-tauri/src/database.rs",
+      "line": 760
+    },
+    {
+      "name": "database_guard",
+      "source": "src-tauri/src/database.rs",
+      "line": 793
+    },
+    {
+      "name": "database_exit",
+      "source": "src-tauri/src/database.rs",
+      "line": 804
+    },
+    {
+      "name": "database_export_sql",
+      "source": "src-tauri/src/database.rs",
+      "line": 823
+    },
+    {
+      "name": "database_export_result",
+      "source": "src-tauri/src/database.rs",
+      "line": 834
+    },
+    {
+      "name": "database_credential",
+      "source": "src-tauri/src/database.rs",
+      "line": 887
+    },
+    {
+      "name": "database_components",
+      "source": "src-tauri/src/database_components.rs",
+      "line": 789
+    },
+    {
+      "name": "editor_guard",
+      "source": "src-tauri/src/files.rs",
+      "line": 20
+    },
+    {
+      "name": "editor_exit",
+      "source": "src-tauri/src/files.rs",
+      "line": 24
+    },
+    {
+      "name": "file_copy",
+      "source": "src-tauri/src/files.rs",
+      "line": 199
+    },
+    {
+      "name": "file_mutate",
+      "source": "src-tauri/src/files.rs",
+      "line": 298
+    },
+    {
+      "name": "file_reveal",
+      "source": "src-tauri/src/files.rs",
+      "line": 310
+    },
+    {
+      "name": "files_list",
+      "source": "src-tauri/src/files.rs",
+      "line": 708
+    },
+    {
+      "name": "file_read",
+      "source": "src-tauri/src/files.rs",
+      "line": 714
+    },
+    {
+      "name": "file_save",
+      "source": "src-tauri/src/files.rs",
+      "line": 720
+    },
+    {
+      "name": "files_search",
+      "source": "src-tauri/src/files.rs",
+      "line": 732
+    },
+    {
+      "name": "git_branch",
+      "source": "src-tauri/src/git.rs",
+      "line": 380
+    },
+    {
+      "name": "git_branches",
+      "source": "src-tauri/src/git.rs",
+      "line": 452
+    },
+    {
+      "name": "git_switch_branch",
+      "source": "src-tauri/src/git.rs",
+      "line": 458
+    },
+    {
+      "name": "git_rollback_file",
+      "source": "src-tauri/src/git.rs",
+      "line": 579
+    },
+    {
+      "name": "git_remote_branches",
+      "source": "src-tauri/src/git.rs",
+      "line": 844
+    },
+    {
+      "name": "git_switch_remote_branch",
+      "source": "src-tauri/src/git.rs",
+      "line": 850
+    },
+    {
+      "name": "git_branch_action",
+      "source": "src-tauri/src/git.rs",
+      "line": 864
+    },
+    {
+      "name": "git_file_status",
+      "source": "src-tauri/src/git.rs",
+      "line": 878
+    },
+    {
+      "name": "git_snapshot",
+      "source": "src-tauri/src/git.rs",
+      "line": 884
+    },
+    {
+      "name": "git_diff",
+      "source": "src-tauri/src/git.rs",
+      "line": 890
+    },
+    {
+      "name": "git_history",
+      "source": "src-tauri/src/git.rs",
+      "line": 903
+    },
+    {
+      "name": "git_files",
+      "source": "src-tauri/src/git.rs",
+      "line": 960
+    },
+    {
+      "name": "git_references",
+      "source": "src-tauri/src/git.rs",
+      "line": 1130
+    },
+    {
+      "name": "git_reference_action",
+      "source": "src-tauri/src/git.rs",
+      "line": 1399
+    },
+    {
+      "name": "git_working_comparison",
+      "source": "src-tauri/src/git.rs",
+      "line": 1448
+    },
+    {
+      "name": "github_repositories",
+      "source": "src-tauri/src/github.rs",
+      "line": 79
+    },
+    {
+      "name": "github_prepare_pr",
+      "source": "src-tauri/src/github.rs",
+      "line": 110
+    },
+    {
+      "name": "github_create_pr",
+      "source": "src-tauri/src/github.rs",
+      "line": 144
+    },
+    {
+      "name": "java_detect_jdks",
+      "source": "src-tauri/src/java.rs",
+      "line": 1181
+    },
+    {
+      "name": "java_register_jdk",
+      "source": "src-tauri/src/java.rs",
+      "line": 1189
+    },
+    {
+      "name": "java_select_path",
+      "source": "src-tauri/src/java.rs",
+      "line": 1221
+    },
+    {
+      "name": "java_configuration",
+      "source": "src-tauri/src/java.rs",
+      "line": 1261
+    },
+    {
+      "name": "java_save_configuration",
+      "source": "src-tauri/src/java.rs",
+      "line": 1271
+    },
+    {
+      "name": "java_project",
+      "source": "src-tauri/src/java.rs",
+      "line": 1295
+    },
+    {
+      "name": "java_tasks",
+      "source": "src-tauri/src/java.rs",
+      "line": 1302
+    },
+    {
+      "name": "java_start",
+      "source": "src-tauri/src/java.rs",
+      "line": 1327
+    },
+    {
+      "name": "java_stop",
+      "source": "src-tauri/src/java.rs",
+      "line": 1371
+    },
+    {
+      "name": "java_components",
+      "source": "src-tauri/src/java_components.rs",
+      "line": 257
+    },
+    {
+      "name": "autostart_configure",
+      "source": "src-tauri/src/main.rs",
+      "line": 27
+    },
+    {
+      "name": "runtime_info",
+      "source": "src-tauri/src/main.rs",
+      "line": 60
+    },
+    {
+      "name": "select_project_directory",
+      "source": "src-tauri/src/main.rs",
+      "line": 98
+    },
+    {
+      "name": "open_external",
+      "source": "src-tauri/src/main.rs",
+      "line": 134
+    },
+    {
+      "name": "window_appearance",
+      "source": "src-tauri/src/main.rs",
+      "line": 146
+    },
+    {
+      "name": "project_worktrees",
+      "source": "src-tauri/src/projects.rs",
+      "line": 78
+    },
+    {
+      "name": "create_worktree",
+      "source": "src-tauri/src/projects.rs",
+      "line": 84
+    },
+    {
+      "name": "delete_worktree",
+      "source": "src-tauri/src/projects.rs",
+      "line": 107
+    },
+    {
+      "name": "worktree_suggestion",
+      "source": "src-tauri/src/projects.rs",
+      "line": 127
+    },
+    {
+      "name": "directory_tools",
+      "source": "src-tauri/src/projects.rs",
+      "line": 574
+    },
+    {
+      "name": "directory_open",
+      "source": "src-tauri/src/projects.rs",
+      "line": 649
+    },
+    {
+      "name": "python_configuration",
+      "source": "src-tauri/src/python.rs",
+      "line": 577
+    },
+    {
+      "name": "python_save_configuration",
+      "source": "src-tauri/src/python.rs",
+      "line": 584
+    },
+    {
+      "name": "python_detect_interpreters",
+      "source": "src-tauri/src/python.rs",
+      "line": 594
+    },
+    {
+      "name": "python_project",
+      "source": "src-tauri/src/python.rs",
+      "line": 601
+    },
+    {
+      "name": "python_select_path",
+      "source": "src-tauri/src/python.rs",
+      "line": 605
+    },
+    {
+      "name": "python_tasks",
+      "source": "src-tauri/src/python.rs",
+      "line": 642
+    },
+    {
+      "name": "python_start",
+      "source": "src-tauri/src/python.rs",
+      "line": 665
+    },
+    {
+      "name": "python_stop",
+      "source": "src-tauri/src/python.rs",
+      "line": 728
+    },
+    {
+      "name": "redis_credential",
+      "source": "src-tauri/src/redis.rs",
+      "line": 1289
+    },
+    {
+      "name": "redis_connect",
+      "source": "src-tauri/src/redis.rs",
+      "line": 1330
+    },
+    {
+      "name": "redis_reconnect",
+      "source": "src-tauri/src/redis.rs",
+      "line": 1382
+    },
+    {
+      "name": "redis_request",
+      "source": "src-tauri/src/redis.rs",
+      "line": 1418
+    },
+    {
+      "name": "redis_writable",
+      "source": "src-tauri/src/redis.rs",
+      "line": 1434
+    },
+    {
+      "name": "redis_disconnect",
+      "source": "src-tauri/src/redis.rs",
+      "line": 1451
+    },
+    {
+      "name": "redis_guard",
+      "source": "src-tauri/src/redis.rs",
+      "line": 1463
+    },
+    {
+      "name": "redis_exit",
+      "source": "src-tauri/src/redis.rs",
+      "line": 1475
+    },
+    {
+      "name": "redis_pick_ca",
+      "source": "src-tauri/src/redis.rs",
+      "line": 1480
+    },
+    {
+      "name": "project_run_list",
+      "source": "src-tauri/src/sessions.rs",
+      "line": 210
+    },
+    {
+      "name": "project_run_summary",
+      "source": "src-tauri/src/sessions.rs",
+      "line": 219
+    },
+    {
+      "name": "local_session_list",
+      "source": "src-tauri/src/sessions.rs",
+      "line": 226
+    },
+    {
+      "name": "ssh_session_list",
+      "source": "src-tauri/src/sessions.rs",
+      "line": 248
+    },
+    {
+      "name": "start_session",
+      "source": "src-tauri/src/sessions.rs",
+      "line": 274
+    },
+    {
+      "name": "session_action",
+      "source": "src-tauri/src/sessions.rs",
+      "line": 504
+    },
+    {
+      "name": "project_directory",
+      "source": "src-tauri/src/sessions.rs",
+      "line": 569
+    },
+    {
+      "name": "control_session",
+      "source": "src-tauri/src/sessions.rs",
+      "line": 586
+    },
+    {
+      "name": "ssh_resolve",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 693
+    },
+    {
+      "name": "ssh_info",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 703
+    },
+    {
+      "name": "ssh_files_open",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 726
+    },
+    {
+      "name": "ssh_files_disconnect",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 747
+    },
+    {
+      "name": "ssh_files_list",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 775
+    },
+    {
+      "name": "ssh_file_read",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 846
+    },
+    {
+      "name": "ssh_file_save",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 872
+    },
+    {
+      "name": "ssh_file_mutate",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 988
+    },
+    {
+      "name": "ssh_transfer",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 1321
+    },
+    {
+      "name": "ssh_transfer_cancel",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 1425
+    },
+    {
+      "name": "ssh_transfer_cancel_all",
+      "source": "src-tauri/src/ssh.rs",
+      "line": 1432
+    },
+    {
+      "name": "ssh_configure_auth",
+      "source": "src-tauri/src/ssh_auth.rs",
+      "line": 128
+    },
+    {
+      "name": "ssh_forget_auth",
+      "source": "src-tauri/src/ssh_auth.rs",
+      "line": 184
+    },
+    {
+      "name": "ssh_pick_identity",
+      "source": "src-tauri/src/ssh_auth.rs",
+      "line": 209
+    },
+    {
+      "name": "ssh_tunnel_start",
+      "source": "src-tauri/src/ssh_tunnels.rs",
+      "line": 161
+    },
+    {
+      "name": "ssh_tunnel_list",
+      "source": "src-tauri/src/ssh_tunnels.rs",
+      "line": 309
+    },
+    {
+      "name": "ssh_tunnel_stop",
+      "source": "src-tauri/src/ssh_tunnels.rs",
+      "line": 336
+    },
+    {
+      "name": "taskbar_sync",
+      "source": "src-tauri/src/taskbar.rs",
+      "line": 503
+    },
+    {
+      "name": "update_status",
+      "source": "src-tauri/src/updates.rs",
+      "line": 185
+    },
+    {
+      "name": "update_check",
+      "source": "src-tauri/src/updates.rs",
+      "line": 193
+    },
+    {
+      "name": "update_download",
+      "source": "src-tauri/src/updates.rs",
+      "line": 233
+    },
+    {
+      "name": "update_install",
+      "source": "src-tauri/src/updates.rs",
+      "line": 297
+    }
+  ]
+}

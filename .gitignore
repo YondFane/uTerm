@@ -5,3 +5,6 @@ dist/
 src-tauri/gen/
 *.local
 releases/
+macos/.build/
+macos/.swiftpm/
+ci-evidence/

@@ -133,6 +133,8 @@ export const javaMessages: Record<string, string> = {
     "Build task parameters are invalid. Check arguments and environment variables.",
   "参数中的引号未闭合，或包含无效字符。":
     "An argument has an unclosed quote or an invalid character.",
+  "Spring Boot 开发模式无法保留空参数、纯空白参数、换行或制表符，请使用 JAR 模式。":
+    "Spring Boot development mode cannot preserve empty or whitespace-only arguments, line breaks or tabs. Use JAR mode.",
   "环境变量须逐行填写 KEY=value，名称不可重复或以 UTERM_ 开头。":
     "Enter one KEY=value per line. Names must be unique and must not start with UTERM_.",
   "找不到所选开发组件。": "The selected development component was not found.",

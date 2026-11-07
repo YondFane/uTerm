@@ -1,0 +1,51 @@
+name: Shared Redis services
+
+on:
+  pull_request:
+    branches: [release]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  redis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      UTERM_REDIS_SOURCE_SHA256: c97e57b0df330a9e091cacff012bebe763c275398cf36ff44cdba876814b595b
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: redis-core-linux
+          workspaces: crates/uterm-core -> target
+          cache-bin: false
+      - name: Install pinned package manager
+        run: npm install --global pnpm@11.22.0
+      - name: Build verified Redis with TLS for isolated tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/uterm-redis/evidence" "$RUNNER_TEMP/uterm-redis/tools"
+          curl --fail --location --retry 3 --silent --show-error https://download.redis.io/releases/redis-7.4.7.tar.gz -o "$RUNNER_TEMP/uterm-redis/redis.tar.gz"
+          echo "$UTERM_REDIS_SOURCE_SHA256  $RUNNER_TEMP/uterm-redis/redis.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/uterm-redis/redis.tar.gz" -C "$RUNNER_TEMP/uterm-redis/tools"
+          make -C "$RUNNER_TEMP/uterm-redis/tools/redis-7.4.7" -j2 BUILD_TLS=yes MALLOC=libc redis-server 2>&1 | tee "$RUNNER_TEMP/uterm-redis/evidence/redis-build.log"
+          make -C "$RUNNER_TEMP/uterm-redis/tools/redis-7.4.7" BUILD_TLS=yes MALLOC=libc redis-cli 2>&1 | tee -a "$RUNNER_TEMP/uterm-redis/evidence/redis-build.log"
+          echo "$RUNNER_TEMP/uterm-redis/tools/redis-7.4.7/src" >> "$GITHUB_PATH"
+      - name: Real Redis, TLS, binary, conflict, cancellation and close-race regressions
+        run: node scripts/redis-core-smoke.mjs "$RUNNER_TEMP/uterm-redis/evidence"
+      - name: Upload source-bound Redis reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: redis-core-linux-${{ env.PR_HEAD_SHA }}
+          path: ${{ runner.temp }}/uterm-redis/evidence/
+          if-no-files-found: error
+          retention-days: 30

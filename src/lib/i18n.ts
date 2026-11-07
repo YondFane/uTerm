@@ -42,6 +42,21 @@ const strings: Partial<Record<SupportedLanguage, Record<string, string>>> = {
     ...javaMessages,
     ...pythonMessages,
     打开文件: "Open file",
+    恢复编辑器草稿: "Recover editor drafts",
+    "旧草稿和共享草稿分别保留。选择共享草稿不会覆盖另一来源。":
+      "Old and shared drafts are retained separately. Choosing shared drafts does not overwrite the other source.",
+    继续使用共享草稿: "Continue with shared drafts",
+    复制旧草稿原文: "Copy old draft source",
+    旧草稿原文预览: "Old draft source preview",
+    编辑器恢复副本: "Editor recovery copies",
+    "预览后明确恢复所选副本。此操作只替换恢复数据，不写入文件。":
+      "Preview and explicitly restore the selected copy. This replaces recovery data without writing files.",
+    预览副本: "Preview copy",
+    恢复所选草稿副本: "Restore selected draft copy",
+    "无法读取文件，显示保留的恢复草稿：{p0}":
+      "Could not read the file; showing retained recovery text: {p0}",
+    "文件操作尚未完成，请稍后重试退出。":
+      "A file operation is still running. Try quitting again shortly.",
     回滚文件: "Roll back file",
     确认回滚: "Confirm rollback",
     "Git 文件操作": "Git file actions",

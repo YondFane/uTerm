@@ -13,7 +13,7 @@ import {
   PLSQL,
   type SQLNamespace,
 } from "@codemirror/lang-sql";
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke, copyContentText } from "../lib/content-host";
 import { tx } from "../lib/i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import {
@@ -105,6 +105,7 @@ function SqlDatabaseWorkspace({
   const current = useRef<string | null>(null);
   const mounted = useRef(true);
   const [password, setPassword] = useState(initialPassword);
+  const connectionPassword = useRef(initialPassword);
   const initialSql = config.kind === "oracle" ? "SELECT 1 FROM DUAL" : "SELECT 1";
   const [queries, setQueries] = useState<QueryTab[]>(() => [emptyQuery(1, initialSql)]);
   const [queryId, setQueryId] = useState(1);
@@ -203,7 +204,8 @@ function SqlDatabaseWorkspace({
     [config.kind, config.database, completion],
   );
   useEffect(() => {
-    if (initialPassword) setPassword(initialPassword);
+    connectionPassword.current = initialPassword;
+    setPassword(initialPassword);
   }, [initialPassword]);
   useEffect(() => {
     let disposed = false;
@@ -309,9 +311,10 @@ function SqlDatabaseWorkspace({
     }
   }
   async function connect() {
+    const temporaryPassword = password || connectionPassword.current;
     const result = await invoke<{ handle: string; info: { version: string } }>("database_connect", {
       config,
-      password: password || null,
+      password: temporaryPassword || null,
     });
     if (!mounted.current) {
       await invoke("database_disconnect", { handle: result.handle, discard: true });
@@ -320,6 +323,7 @@ function SqlDatabaseWorkspace({
     current.current = result.handle;
     setHandle(result.handle);
     setInfo(result.info.version);
+    connectionPassword.current = temporaryPassword;
     setPassword("");
     setWritable(false);
     setPending(false);
@@ -999,9 +1003,7 @@ function SqlDatabaseWorkspace({
               <button
                 disabled={busy}
                 onClick={() => {
-                  void navigator.clipboard
-                    .writeText(sql)
-                    .catch(() => setError(tx("无法复制 SQL。")));
+                  void copyContentText(sql).catch(() => setError(tx("无法复制 SQL。")));
                 }}
               >
                 {tx("复制 SQL")}

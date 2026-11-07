@@ -5,7 +5,7 @@ import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSettings } from "../lib/SettingsContext";
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke } from "../lib/content-host";
 import { basicSetup } from "codemirror";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
@@ -201,14 +201,20 @@ export function CodeEditor({
     </>
   );
 }
-export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocument> }) {
+export function FileEditor({
+  editor,
+  allowPdfAnnotations = true,
+}: {
+  editor: ReturnType<typeof useFileDocument>;
+  allowPdfAnnotations?: boolean;
+}) {
   const uiLanguage = useUiLanguage();
   const { settings, resizeFont: adjustFontSize } = useSettings();
   const [fontError, setFontError] = useState("");
 
-  function resizeFont(delta: number) {
+  async function resizeFont(delta: number) {
     try {
-      adjustFontSize("fileFontSize", delta, navigator.platform.startsWith("Mac"));
+      await adjustFontSize("fileFontSize", delta, navigator.platform.startsWith("Mac"));
       setFontError("");
     } catch (reason) {
       setFontError(tx("无法保存字号：{p0}", { p0: String(reason) }));
@@ -338,6 +344,14 @@ export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocume
       {editor.error && (
         <div className="editor-error" role="alert">
           {localizeMessage(editor.error)}
+          {editor.recoveryFailed && (
+            <button
+              disabled={editor.saving || editor.transitioning}
+              onClick={() => void editor.retryRecovery()}
+            >
+              {tx("重试恢复草稿")}
+            </button>
+          )}
           {editor.conflict && (
             <button disabled={editor.saving} onClick={() => void editor.save(true)}>
               {tx("覆盖磁盘版本")}
@@ -356,7 +370,11 @@ export function FileEditor({ editor }: { editor: ReturnType<typeof useFileDocume
         </div>
       ) : document.kind === "pdf" ? (
         <Suspense fallback={<p>{tx("正在加载 PDF 阅读器…")}</p>}>
-          <PdfReader key={document.id} document={document} />
+          <PdfReader
+            key={document.id}
+            document={document}
+            annotationsEnabled={allowPdfAnnotations}
+          />
         </Suspense>
       ) : (
         <>

@@ -142,6 +142,22 @@ test("grid supports keyboard range copying, row selection, resizing and literal 
     fail = true;
     await click("Copy selection");
     assert.match(errors.at(-1), /Could not copy/);
+    const nativeCopies = [];
+    window.utermContentDocument = "database-grid-copy";
+    window.webkit = {
+      messageHandlers: {
+        utermContent: {
+          async postMessage(message) {
+            nativeCopies.push(message);
+            return { version: 1, document: message.document, id: message.id, result: null };
+          },
+        },
+      },
+    };
+    await click("Copy selection");
+    assert.equal(nativeCopies.at(-1).method, "content_copy_text");
+    assert.equal(nativeCopies.at(-1).params.text, "3\t");
+    assert.equal(nativeCopies.at(-1).document, "database-grid-copy");
     await act(async () =>
       root.render(
         React.createElement(DatabaseGrid, { result: { columns: [], rows: [] }, report: () => {} }),

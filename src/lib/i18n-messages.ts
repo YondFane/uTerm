@@ -1,4 +1,60 @@
 export const messages: Record<string, string> = {
+  "配置正在由其他窗口保存，请稍后重试。":
+    "Another window is saving the configuration. Please retry shortly.",
+  "选择或添加 Redis 连接后打开工作台。": "Select or add a Redis connection to open its workbench.",
+  移除: "Remove",
+  "选择或添加数据库连接后打开工作台。":
+    "Select or add a database connection to open its workbench.",
+  只读连接: "Read-only attachment",
+  接管输入: "Take input control",
+  "收藏恢复预览无效。": "Invalid Git favorite recovery preview.",
+  "恢复 Git 收藏": "Recover Git favorites",
+  "恢复 Git 收藏…": "Recover Git favorites…",
+  "恢复会替换所有仓库的收藏，并保留损坏字节及恢复前副本。":
+    "Restore replaces favorites for all repositories and retains damaged bytes and the previous snapshot.",
+  收藏恢复副本或原始来源: "Favorite recovery copy or original source",
+  没有校验通过的收藏恢复数据: "No verified favorite recovery data",
+  收藏副本: "Favorite snapshot",
+  原始来源: "Original source",
+  没有收藏: "No favorites",
+  收藏恢复预览: "Favorite recovery preview",
+  "正在读取收藏恢复数据…": "Loading favorite recovery data…",
+  "预览已截断，复制会保留全部内容。": "Preview is truncated. Copy retains the full contents.",
+  "原始来源只能预览和复制，不会直接替换共享收藏。":
+    "Original sources can be previewed and copied; they do not directly replace shared favorites.",
+  "已复制完整预览。": "Copied the full preview.",
+  重新读取恢复副本: "Reload recovery copies",
+  复制完整预览: "Copy full preview",
+  恢复所有仓库收藏: "Restore all repository favorites",
+  "其他窗口正在保存配置，请稍后明确重试。":
+    "Another window is saving configuration. Retry explicitly after it finishes.",
+  "此任务不属于 Java 构建运行，停止请求已取消。":
+    "This is not a Java build/run task. Stop was cancelled.",
+  "请先完成收藏恢复。": "Finish recovering favorites first.",
+  "其他窗口正在保存 Python 配置，请稍后明确重试。":
+    "Another window is saving Python configuration. Retry explicitly after it finishes.",
+  "任务已不存在，请重新读取运行状态。": "The task no longer exists. Reload its status.",
+  "任务已被替换，停止请求已取消，请重新读取运行状态。":
+    "The task was replaced. Stop was cancelled; reload its status.",
+  "此任务不属于 Python 运行，停止请求已取消。": "This is not a Python task. Stop was cancelled.",
+  "请先完成 Worktree 删除。": "Finish deleting the worktree first.",
+  "请等待当前操作完成后再退出。": "Wait for the current operation to finish before quitting.",
+  "正在退出应用，请稍后重试删除。": "The app is quitting. Retry deletion later.",
+  "工作区在删除预览后发生变化，请重新读取并确认。":
+    "Shared workspace changed after deletion preview. Reload and review again.",
+  重新读取工作区: "Reload workspace",
+  "正在退出应用，请等待或稍后重试恢复。": "The app is quitting. Wait or retry recovery later.",
+  未保存的设置: "Unsaved settings",
+  "请重试或放弃未保存的设置。": "Retry or discard unsaved settings.",
+  重新读取设置: "Reload saved settings",
+  重试保存设置: "Retry saving settings",
+  放弃未保存的设置: "Discard unsaved settings",
+  导出旧版兼容数据: "Export legacy-compatible data",
+  "旧版兼容数据已导出。": "Legacy-compatible data exported.",
+  查看恢复副本: "View recovery copies",
+  从副本恢复: "Restore from copy",
+  重试: "Retry",
+  "原始数据已保留。": "Original data was retained.",
   "Worktree 已创建，但项目树保存失败。请刷新项目。":
     "The Worktree was created, but the project tree could not be saved. Refresh the project.",
   "操作已完成：{p0}": "Completed: {p0}",
@@ -19,6 +75,11 @@ export const messages: Record<string, string> = {
   获取此分支: "Fetch this branch",
   取消收藏: "Unfavorite",
   收藏分支: "Favorite branch",
+  "请先重新读取 Git 收藏。": "Reload Git favorites first.",
+  "重新读取 Git 收藏": "Reload Git favorites",
+  "复制旧 Git 收藏来源": "Copy old Git favorite source",
+  "继续使用共享 Git 收藏": "Continue with shared Git favorites",
+  保留旧来源并建立空共享收藏: "Keep old source and create empty shared favorites",
   复制名称: "Copy name",
   分支树: "Branch tree",
   展开分支树: "Expand branch tree",
@@ -229,8 +290,8 @@ export const messages: Record<string, string> = {
     "The Agent installation directory is not writable. Check npm global directory permissions or follow the official installation instructions.",
   "Node.js 版本不满足此 Agent 的要求，请按官方说明更新后重试。":
     "The Node.js version does not meet this Agent's requirements. Update it following the official instructions and retry.",
-  "Agent 安装失败，请查看安装输出或按官方说明安装。":
-    "Agent installation failed. Check the installation output or follow the official instructions.",
+  "Agent 安装失败，请重试或按官方说明安装。":
+    "Agent installation failed. Retry or follow the official installation instructions.",
   手动下载安装包: "Download installer manually",
   手动下载: "Download manually",
   未连接: "Disconnected",
@@ -1336,8 +1397,9 @@ export const messages: Record<string, string> = {
   "主题调色板序号无效。": "Invalid theme palette index.",
   "主题颜色应为六位十六进制。": "Theme colors must be six-digit hexadecimal values.",
   "没有找到 Ghostty 主题颜色。": "No Ghostty theme colors found.",
-  "无法保存恢复草稿，请手动保存文件：{p0}":
-    "Could not save recovery draft. Save the file manually: {p0}",
+  "无法保存恢复草稿，请重试或手动保存文件：{p0}":
+    "Could not save recovery draft. Retry or save the file manually: {p0}",
+  重试恢复草稿: "Retry recovery draft",
   "请先保存或放弃文件修改，再安装更新。": "Save or discard file changes before installing updates.",
   "工作区数据无效，原数据已保留。": "Workspace data is invalid. Original data was preserved.",
   "工作区列表无效，原数据已保留。": "Workspace list is invalid. Original data was preserved.",

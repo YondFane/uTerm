@@ -1,5 +1,5 @@
 import { tx } from "./i18n.ts";
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { applyContentWindowAppearance } from "./content-host";
 import { themes } from "./themes";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
@@ -7,28 +7,76 @@ import { defaults, readSettings, settingsKey, validateShortcuts } from "./settin
 import type { Settings } from "./settings";
 import { activeLanguage, setUiLanguage } from "./i18n";
 import { interfacePalette, isLightInterfaceTheme } from "./interface-themes";
+import {
+  canonicalStateActive,
+  initializeSharedState,
+  persistSettings,
+  sharedSettings,
+} from "./shared-state";
 const Context = createContext<{
   settings: Settings;
   light: boolean;
   error: string;
-  save: (value: Settings, mac: boolean) => void;
+  save: (value: Settings, mac: boolean, baseline?: Settings) => Promise<void>;
   resizeFont: (
     key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
     delta: number,
     mac: boolean,
-  ) => void;
-  reset: () => void;
+  ) => Promise<void>;
+  reset: () => Promise<void>;
+  failedSettings: Partial<Settings>;
+  reload: () => Promise<void>;
+  discardFailed: () => void;
+  assertSaved: () => void;
 } | null>(null);
-export function SettingsProvider({ children }: { children: ReactNode }) {
+export interface ContentSettingsAdapter {
+  settings: Settings;
+  read: () => Promise<Settings>;
+  update: (patch: Partial<Settings>) => Promise<Settings>;
+  adjust: (
+    key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
+    delta: number,
+  ) => Promise<Settings>;
+}
+export function SettingsProvider({
+  children,
+  content,
+}: {
+  children: ReactNode;
+  content?: ContentSettingsAdapter;
+}) {
   const [initial] = useState(() => {
     try {
-      return { settings: readSettings(localStorage.getItem(settingsKey)), error: "" };
+      return {
+        settings:
+          content?.settings ?? sharedSettings() ?? readSettings(localStorage.getItem(settingsKey)),
+        error: "",
+      };
     } catch (reason) {
       return { settings: defaults, error: String(reason) };
     }
   });
   const [settings, setSettings] = useState(initial.settings);
   const currentSettings = useRef(settings);
+  const failed = useRef<Partial<Settings>>({});
+  const latest = useRef(new Map<string, symbol>());
+  const [failedSettings, setFailedSettings] = useState<Partial<Settings>>({});
+  function discardFailed() {
+    failed.current = {};
+    setFailedSettings({});
+  }
+  function assertSaved() {
+    if (Object.keys(failed.current).length) throw Error(tx("请重试或放弃未保存的设置。"));
+  }
+  async function reload() {
+    if (!content && canonicalStateActive()) await initializeSharedState();
+    const saved = content
+      ? await content.read()
+      : (sharedSettings() ?? readSettings(localStorage.getItem(settingsKey)));
+    currentSettings.current = saved;
+    setSettings(saved);
+    setError("");
+  }
   useEffect(() => {
     setUiLanguage(activeLanguage(settings.language));
   }, [settings.language]);
@@ -75,39 +123,103 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     root.style.setProperty("--window-padding", `${settings.windowPadding}px`);
   }, [settings, light]);
   useEffect(() => {
-    if (isTauri())
-      void invoke("window_appearance", { blur: settings.blur })
-        .then(() => setAppearanceError(""))
-        .catch((reason) => setAppearanceError(tx("背景效果未应用：{p0}", { p0: String(reason) })));
+    void applyContentWindowAppearance(settings.blur)
+      .then(() => setAppearanceError(""))
+      .catch((reason) => setAppearanceError(tx("背景效果未应用：{p0}", { p0: String(reason) })));
   }, [settings.blur]);
-  function save(value: Settings, mac: boolean) {
+  async function save(value: Settings, mac: boolean, baseline = currentSettings.current) {
     if (error) throw new Error(error);
     const checked = readSettings(JSON.stringify(value));
     validateShortcuts(checked, mac);
-    localStorage.setItem(settingsKey, JSON.stringify(checked));
-    currentSettings.current = checked;
-    setSettings(checked);
+    const previous = baseline;
+    const patch = Object.fromEntries(
+      Object.entries(checked).filter(
+        ([key, value]) => JSON.stringify(value) !== JSON.stringify(previous[key as keyof Settings]),
+      ),
+    );
+    const token = Symbol();
+    for (const key of Object.keys(patch)) latest.current.set(key, token);
+    try {
+      const saved = content
+        ? await content.update(patch)
+        : canonicalStateActive()
+          ? await persistSettings((current) => {
+              const next = readSettings(JSON.stringify({ ...current, ...patch }));
+              validateShortcuts(next, mac);
+              return next;
+            })
+          : checked;
+      if (!content && !canonicalStateActive())
+        localStorage.setItem(settingsKey, JSON.stringify(saved));
+      currentSettings.current = saved;
+      setSettings(saved);
+      for (const key of Object.keys(patch))
+        if (latest.current.get(key) === token) delete failed.current[key as keyof Settings];
+      setFailedSettings({ ...failed.current });
+    } catch (reason) {
+      for (const [key, value] of Object.entries(patch))
+        if (latest.current.get(key) === token) Object.assign(failed.current, { [key]: value });
+      setFailedSettings({ ...failed.current });
+      throw reason;
+    }
   }
-  function reset() {
-    const old = localStorage.getItem(settingsKey);
+  async function reset() {
+    if (content) {
+      const saved = await content.update({ ...defaults, shortcuts: {} });
+      currentSettings.current = saved;
+      setSettings(saved);
+      setError("");
+      discardFailed();
+      return;
+    }
+    const old = canonicalStateActive() ? null : localStorage.getItem(settingsKey);
     if (old) localStorage.setItem(`${settingsKey}.backup`, old);
-    localStorage.setItem(settingsKey, JSON.stringify(defaults));
+    if (canonicalStateActive()) await persistSettings(() => ({ ...defaults, shortcuts: {} }));
+    else localStorage.setItem(settingsKey, JSON.stringify(defaults));
     const checked = { ...defaults, shortcuts: {} };
     currentSettings.current = checked;
     setSettings(checked);
     setError("");
+    discardFailed();
   }
-  function resizeFont(
+  async function resizeFont(
     key: "fontSize" | "fileFontSize" | "gitDiffFontSize",
     delta: number,
     mac: boolean,
   ) {
+    if (content) {
+      const saved = await content.adjust(key, delta);
+      currentSettings.current = saved;
+      setSettings(saved);
+      return;
+    }
+    if (canonicalStateActive()) {
+      const saved = await persistSettings((current) => {
+        const next = { ...current, [key]: Math.max(10, Math.min(32, current[key] + delta)) };
+        validateShortcuts(next, mac);
+        return next;
+      });
+      currentSettings.current = saved;
+      setSettings(saved);
+      return;
+    }
     const current = currentSettings.current;
-    save({ ...current, [key]: Math.max(10, Math.min(32, current[key] + delta)) }, mac);
+    await save({ ...current, [key]: Math.max(10, Math.min(32, current[key] + delta)) }, mac);
   }
   return (
     <Context.Provider
-      value={{ settings, light, error: error || appearanceError, save, resizeFont, reset }}
+      value={{
+        settings,
+        light,
+        error: error || appearanceError,
+        save,
+        resizeFont,
+        reset,
+        failedSettings,
+        reload,
+        discardFailed,
+        assertSaved,
+      }}
     >
       {children}
     </Context.Provider>

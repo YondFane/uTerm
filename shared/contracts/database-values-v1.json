@@ -1,0 +1,18 @@
+{
+  "id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "generation": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+  "kind": "request",
+  "state": "completed",
+  "result": {
+    "rows": [
+      [
+        "9223372036854775807",
+        "12345678901234567890.1234567890",
+        { "binary": "AP9/", "truncated": false },
+        null,
+        "中文🚀"
+      ]
+    ]
+  },
+  "error": null
+}

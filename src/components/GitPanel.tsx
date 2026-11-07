@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { HistoryPager, commitGraph, formatCommitTimestamp } from "../lib/git-history";
 import { createPortal } from "react-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke, copyContentText } from "../lib/content-host";
 import { ToolbarIcon } from "./SidebarIcon";
 import { hasCurrentWorkingDiff, isStaleWorkingDiffError, sideBySideDiff } from "../lib/git-diff";
 import { gitFilePath, gitReadError, sameGitSnapshot } from "../lib/git-snapshot";
@@ -37,6 +37,7 @@ export function GitPanel({
   refreshRevision = 0,
   onBusyChange,
   onWorktreeCreated,
+  allowFavorites = true,
 }: {
   resizeHandle: ReactNode;
   headerActions: ReactNode;
@@ -52,6 +53,7 @@ export function GitPanel({
   refreshRevision?: number;
   onBusyChange?: (busy: boolean) => void;
   onWorktreeCreated?: (root: string) => Promise<void>;
+  allowFavorites?: boolean;
 }) {
   useUiLanguage();
 
@@ -466,9 +468,7 @@ export function GitPanel({
             disabled={!diff}
             onClick={() => {
               if (diff)
-                void navigator.clipboard
-                  .writeText(diff.text)
-                  .catch((reason) => setError(gitReadError(reason)));
+                void copyContentText(diff.text).catch((reason) => setError(gitReadError(reason)));
             }}
           >
             {tx("复制 Diff")}
@@ -626,6 +626,7 @@ export function GitPanel({
           beforeMutation={beforeMutation}
           onChanged={onChanged}
           onWorktreeCreated={onWorktreeCreated}
+          allowFavorites={allowFavorites}
           onPreview={previewReference}
           onCompare={(reference) => {
             setWorkingReference(reference);

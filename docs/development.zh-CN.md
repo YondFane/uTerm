@@ -3,7 +3,7 @@ title: uTerm 开发指南
 status: active
 type: reference
 created: 2026-10-17
-updated: 2026-10-21
+updated: 2026-11-06
 ---
 
 # uTerm 开发指南
@@ -23,6 +23,46 @@ updated: 2026-10-21
 - [目录](#目录)
 
 ## 开发
+
+### 共享核心与原生 QA
+
+`crates/uterm-core` 提供不依赖 UI 的状态校验与规范存储，`crates/uterm-ffi` 暴露 C ABI
+1；manifest 和 lockfile 继续与桌面及宿主隔离。修改 DTO 后执行 `pnpm test:core`、
+`pnpm contracts:generate` 和 `pnpm contracts:check`。生成的边界类型需要提交，中间 JSON
+schema 不提交。
+
+共享 Java 任务／配置检查需要已有 JDK 21，设置 `JAVA_HOME` 并将其 `bin` 加入
+`PATH`。检查编译临时 JAR 并使用隔离宿主；设置 `UTERM_JAVA_CORE_REPORT`
+可输出源码／平台／行为结构化报告，CI 以 `java-live-core.json` 上传。应用构建不要求或捆绑 Java。
+
+可选 Maven 工作流样例另需 Maven 3.9.9（`UTERM_MAVEN_HOME`）和网络，或已有缓存的
+`UTERM_MAVEN_REPOSITORY`。按 README 的命令明确运行默认忽略的宿主测试
+`real_maven_reactor_and_spring_boot_use_shared_task_lifetimes`；`UTERM_MAVEN_CORE_REPORT`
+输出八场景详细报告。独立 Maven CI 运行真实 Windows JDK8／11／17／21 及 macOS ARM／Intel
+JDK21进程，分别记录所选JDK的字面路径和Unicode启动结果；此样例不代表 GUI 或人工验收。
+
+在 macOS 14 或更新系统上，使用 `bash scripts/macos-native-build.sh` 构建 ad-hoc 签名 QA 应用，使用
+`bash scripts/macos-native-test.sh` 运行连接 Rust 静态库的 Swift 桥接测试。
+`bash scripts/macos-native-smoke.sh`
+需要图形登录及 WindowServer，记录真实窗口与退出证据。CI 保留原生 ARM／Intel 产物及旧 Tauri 检查。QA 身份为
+`sh.uterm.desktop.qa.native`，不得替换为生产身份或接管生产宿主。验收缺口及对应源码证据见[迁移状态](native-migration.md)。
+
+来源绑定的桌面检查沿用现有 Draft PR，不发布版本：
+
+- `python3 -B scripts/client-performance-database.py`
+  管理自有 PostgreSQL，在同一 Mac 顺序执行原生／Tauri 三轮；Windows 使用 `python`
+  记录独立 Tauri 基线。version4要求真实120×30网格、相同14pt字体及完整共享负载，空闲采样120／120／600秒。随后运行
+  `node scripts/client-performance-report.mjs`。
+- 在自有GitHub Actions Mac原生QA构建后，`python3 -B scripts/client-upgrade-smoke.py` 从固定
+  `uTerm-v0.2.4`
+  源码及记录的私有QA注入重建旧应用。流程下载签名私有原生ZIP，测试程序替换中断、实际界面崩溃／恢复，以及明确的旧程序与最新兼容数据回退。不运行未修改的已发布安装器，不配置生产跨客户端更新器。历史读取器和服务不改动；旧草稿初始输入、凭据／hook引用及系统边界继续明确使用测试数据。
+- `python3 -B scripts/migration-readiness.py --head SOURCE_SHA`
+  需要GitHub读取认证，将实际任务、PR、保护分支及当前来源artifact审计写入
+  `ci-evidence/readiness/migration-readiness.json`。缺失或失败证据使其非零退出；此结果不执行合并、发布或修改生产源。
+
+Client upgrade and rollback及Client performance
+evidence工作流归档真实应用报告、所属窗口原图、工具链及准确head／tested merge
+SHA。模拟、用户豁免的人工项和自动原生动作分开记录。#42及签名更新#45在源码ec1a49d的验收已有证据；按来源记录的性能、历史回退及最终门禁结果和剩余平台范围由#43／#46／#47维护。源码b904eaf的完整Linux前端回归433项通过、11项明确跳过。
 
 Agent 设置可在确认后使用本机 Node.js/npm 安装 OpenCode、Claude、Codex、Gemini、Pi、MiniMax、Qwen
 Code、Copilot CLI 和 iFlow CLI，需要网络及 npm 全局目录写入权限。Hermes 使用官方平台安装脚本。
@@ -180,11 +220,16 @@ pnpm desktop:check
 独立设置预览可运行 `pnpm dev --port 1422`，然后打开
 `/tests/i18n-preview.html`；它使用模拟桌面数据和独立浏览器来源设置，不连接真实会话。
 
-Redis 集成测试单独运行 `pnpm test:redis`，需要 PATH 中有支持 TLS 的 `redis-server` 和
-`openssl`。它启动临时回环服务，不访问已有数据库。
+共享 Redis 回归单独运行 `pnpm test:redis`，需要 PATH 中有支持 TLS 的 `redis-server` 和
+`openssl`。它启动临时回环服务，不访问已有数据库；命令运行全部 11 项服务检查，其中七项使用真实服务。
 
-普通 `pnpm test:backend`
-将四项真实服务测试标为忽略，并运行不依赖 Redis 的协议预算/超时测试；完整验证需要同时运行两个命令。运行应用本身不需要这些测试程序。
+普通 `pnpm test:core`
+运行四项 Redis 协议／边界检查和两项平台端口关闭／取消检查，七项真实服务检查保持忽略。
+`pnpm test:backend` 检查其余 Tauri 后端，完整验证需覆盖这两层并运行
+`pnpm test:redis`。生成来源绑定的服务日志和 JSON 报告时，PATH 中还需有 `redis-cli`，再运行
+`node scripts/redis-core-smoke.mjs /绝对路径/临时证据目录`。共享 Redis
+CI 工作流构建经 SHA-256 校验的 Redis
+7.4.7／TLS 并上传报告；这些服务证据不代表原生 Redis 界面已验收。运行应用本身不需要这些测试程序。
 
 Redis 客户端关闭默认可选功能，TLS 复用现有 rustls/ring，凭据访问使用系统原生 API。
 

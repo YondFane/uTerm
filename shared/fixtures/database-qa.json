@@ -1,0 +1,7 @@
+{
+  "exactSQL": "SELECT 9223372036854775807::bigint AS exact_integer, 12345678901234567890.1234567890::numeric(30,10) AS exact_decimal, 'TAURI_DATABASE_中文'::text AS text_value",
+  "exactInteger": "9223372036854775807",
+  "exactDecimal": "12345678901234567890.1234567890",
+  "textMarker": "TAURI_DATABASE_中文",
+  "savedText": "TAURI_DATABASE_SAVED_中文"
+}

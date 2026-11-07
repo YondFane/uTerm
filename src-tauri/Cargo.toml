@@ -1,10 +1,13 @@
 [package]
 name = "uterm"
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 publish = false
 description = "uTerm cross-platform desktop client"
 license = "PolyForm-Noncommercial-1.0.0"
+
+[features]
+qa = []
 
 [[bin]]
 name = "uterm"
@@ -14,10 +17,6 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-redis = { version = "1.7.1", default-features = false, features = ["tokio-comp"] }
-tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
-rustls-native-certs = "0.8"
-russh-sftp = { version = "3.0.1", default-features = false }
 tokio = { version = "1", features = ["fs", "io-util", "sync", "time", "rt"] }
 glob = "0.3"
 quick-xml = "0.38"
@@ -25,6 +24,7 @@ anyhow = "1"
 tauri = { version = "2", features = ["macos-private-api", "tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 utermd-local = { path = "../crates/utermd-local" }
+uterm-core = { path = "../crates/uterm-core" }
 serde_json = { version = "1.0.151", features = ["arbitrary_precision"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
@@ -50,9 +50,4 @@ tauri-plugin-single-instance = "2"
 uuid = { version = "1.26.1", features = ["v4"] }
 tauri-plugin-updater = "2"
 tauri-plugin-autostart = "=2.5.1"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-security-framework = "3.7"
-
-[target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Security_Credentials", "Win32_Foundation"] }
+tauri-plugin-clipboard-manager = "~2.3.3"

@@ -3,7 +3,10 @@
 pub mod activity;
 mod activity_bridge;
 pub mod agents;
+pub mod control;
 pub mod daemon;
+pub mod java_utf8;
+pub mod session_control;
 pub mod ssh;
 pub mod ssh_askpass;
 mod task_output;

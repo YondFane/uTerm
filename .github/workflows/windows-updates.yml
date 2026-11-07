@@ -1,0 +1,70 @@
+name: Windows signed updater QA
+
+on:
+  pull_request:
+    branches: [release]
+    paths:
+      - .github/workflows/windows-updates.yml
+      - scripts/windows-updates-smoke.mjs
+      - scripts/windows-updates-database.py
+      - scripts/database_qa_service.py
+      - scripts/windows-window-capture.ps1
+      - src/qa/**
+      - src-tauri/src/qa.rs
+      - src-tauri/src/updates.rs
+      - src-tauri/src/main.rs
+      - src/lib/useUpdates.ts
+      - src/lib/shared-state.ts
+      - src/components/TerminalView.tsx
+      - crates/uterm-core/src/terminal.rs
+      - shared/fixtures/windows-updates-qa.json
+      - src-tauri/Cargo.toml
+      - src-tauri/Cargo.lock
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  updater:
+    runs-on: windows-latest
+    timeout-minutes: 50
+    env:
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          shared-key: desktop-windows-latest-${{ runner.arch }}
+          workspaces: |
+            src-tauri -> target
+            crates/utermd-local -> target
+            crates/uterm-core -> target
+            crates/uterm-ffi -> target
+          cache-bin: false
+      - name: Install pinned frontend tools
+        shell: bash
+        run: |
+          npm install --global pnpm@11.22.0
+          pnpm install --frozen-lockfile
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --features qa update_tests
+      - name: Real signed NSIS update through the isolated application
+        shell: bash
+        run: |
+          mkdir -p ci-evidence/updates-windows
+          python -B scripts/windows-updates-database.py 2>&1 | tee ci-evidence/updates-windows/command.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-signed-updater-${{ github.event.pull_request.head.sha || github.sha }}
+          path: ci-evidence/updates-windows/
+          if-no-files-found: error
