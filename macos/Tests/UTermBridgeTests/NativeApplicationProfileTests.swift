@@ -20,6 +20,20 @@ final class NativeApplicationProfileTests: XCTestCase {
         }
         XCTAssertThrowsError(try NativeApplicationProfile(mode: .qa, identifier: NativeApplicationProfile.personalIdentifier).dataRoot(applicationSupport: support, temporaryDirectory: temporary))
     }
+    func testColdStartAndExistingDirectoriesHaveTheSamePersonalPath() throws {
+        let folder = temporary.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let profile = NativeApplicationProfile(mode: .personal, identifier: NativeApplicationProfile.personalIdentifier)
+        let cold = try profile.dataRoot(applicationSupport: folder, temporaryDirectory: temporary)
+        try FileManager.default.createDirectory(at: cold, withIntermediateDirectories: true)
+        XCTAssertEqual(try profile.dataRoot(applicationSupport: folder, temporaryDirectory: temporary).path, cold.path)
+        try FileManager.default.removeItem(at: cold)
+        let other = folder.appendingPathComponent("other")
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: cold, withDestinationURL: other)
+        XCTAssertThrowsError(try profile.dataRoot(applicationSupport: folder, temporaryDirectory: temporary))
+    }
     func testPersonalProfileCannotFollowSymlinksIntoStableData() throws {
         let folder = temporary.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)

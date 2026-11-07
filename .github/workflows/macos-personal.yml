@@ -8,6 +8,7 @@ on:
       - crates/**
       - src/**
       - shared/**
+      - scripts/macos-native-test.sh
       - scripts/macos-native-build.sh
       - scripts/macos-personal-*
       - scripts/macos_disk_image.py
@@ -49,6 +50,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
+          cache-on-failure: true
           shared-key: personal-${{ matrix.os }}-${{ runner.arch }}
           workspaces: |
             crates/utermd-local -> target
@@ -79,7 +81,7 @@ jobs:
           macos/.build/personal-packages/build.log
       - name: Existing bridge and personal profile boundary regressions
         run:
-          bash scripts/macos-native-test.sh 2>&1 | tee
+          bash scripts/macos-native-test.sh personal 2>&1 | tee
           macos/.build/personal-packages/swift-tests.log
       - name: Audit DMG and ZIP, run isolated real window and same-source app replacement
         run:

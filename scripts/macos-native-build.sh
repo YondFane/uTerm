@@ -12,6 +12,7 @@ native_swift_root="$PWD/macos/.build"
 case "$native_flavor" in
   qa) ;;
   personal)
+    export MACOSX_DEPLOYMENT_TARGET=14.0
     native_configuration=release
     native_cargo_profile=release
     native_swift_root="$PWD/macos/.build/personal-build"

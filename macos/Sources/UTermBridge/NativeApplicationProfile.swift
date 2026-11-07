@@ -27,7 +27,7 @@ public struct NativeApplicationProfile: Sendable {
             let parent = applicationSupport.standardizedFileURL.resolvingSymlinksInPath()
             let profile = parent.appendingPathComponent(identifier, isDirectory: true)
             let store = profile.appendingPathComponent("shared-state-v1", isDirectory: true)
-            guard profile.resolvingSymlinksInPath() == profile, store.resolvingSymlinksInPath() == store else {
+            guard profile.resolvingSymlinksInPath().path == profile.path, store.resolvingSymlinksInPath().path == store.path else {
                 throw BridgeFailure(code: "PERSONAL_DIRECTORY", message: "Personal data cannot redirect into another profile")
             }
             return store

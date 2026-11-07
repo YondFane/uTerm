@@ -50,12 +50,13 @@ artifact 需要登录 GitHub。解压产物，核对 `SHA256SUMS.txt`，打开 D
 
 在已安装文档所列 Node／pnpm、Rust 和 Xcode 依赖的 Mac 上，先运行
 `bash scripts/macos-native-build.sh personal`，再在图形会话运行
+`bash scripts/macos-native-test.sh personal` 和
 `python3 -B scripts/macos-personal-package.py --smoke`。产物位于
 `macos/.build/personal-packages/`，不需要签名证书或发布凭据。默认构建命令仍生成隔离 QA 应用。个人程序禁用 QA 命令参数；CI 以独立身份和包内固定的临时配置，安全执行同一 Release 程序。
 
 #### 个人应用验证
 
-Linux 已通过三项打包拒绝测试、三项现有镜像模拟、Shell 语法、TypeScript 检查及前端生产构建。新增配置测试覆盖身份、目录覆盖、符号链接重定向和临时测试边界。实际 macOS
+Linux 已通过三项打包拒绝测试、三项现有镜像模拟、Shell 语法、TypeScript 检查及前端生产构建。完整前端回归434项通过、11项明确跳过，契约及回退导出检查也通过。配置测试覆盖身份、首次／已有目录、目录覆盖、符号链接重定向和临时测试边界。一次macOS运行通过41／42项Swift测试，暴露不存在的个人目录在URL目录标记比较上的差异；已修正为路径比较，需重新执行。实际 macOS
 Release 构建、签名、DMG 挂载、真实中英文／深浅色设置与 PTY 窗口、同源码 App 替换、精确双草稿保留及过期回退导出拒绝，等待新增平台工作流执行。这些检查不代表 Apple 签名／公证、跨版本升级或稳定切换验收。
 
 ### macOS 原生 QA 客户端

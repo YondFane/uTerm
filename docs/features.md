@@ -60,7 +60,7 @@ checks, draft recovery and explicit rollback export; this packaging path does no
 restore data or perform the stable Tauri-to-native cutover.
 
 To build locally on a Mac with the documented Node/pnpm, Rust and Xcode dependencies, run
-`bash scripts/macos-native-build.sh personal`, then
+`bash scripts/macos-native-build.sh personal`, then `bash scripts/macos-native-test.sh personal` and
 `python3 -B scripts/macos-personal-package.py --smoke` in a graphical session. Output goes to
 `macos/.build/personal-packages/`; no signing certificate or publishing credential is needed. The
 default build command still creates the isolated QA app. QA command arguments are disabled in the
@@ -70,11 +70,15 @@ same Release binary safely.
 #### Personal app validation
 
 Linux passed the three packaging rejection tests, three existing disk-image simulations, shell
-syntax, TypeScript checking and the frontend production build. The new profile tests cover identity,
-path overrides, symlink redirection and fixture confinement. Actual macOS Release building, signing,
-DMG mounting, real English/Chinese light/dark settings and PTY windows, same-source app replacement,
-exact dual-draft retention and stale rollback export rejection await the new platform workflow.
-These checks do not establish Apple signing/notarization, a version upgrade or stable cutover.
+syntax, TypeScript checking and the frontend production build. The full frontend suite passed 434
+tests with 11 explicit skips; contracts and rollback-export checks also passed. Profile tests cover
+identity, cold/existing directories, path overrides, symlink redirection and fixture confinement. A
+macOS run passed 41 of 42 Swift tests and exposed a URL directory-hint mismatch for a nonexistent
+personal directory; the path comparison is corrected and requires a fresh run. Actual macOS Release
+building, signing, DMG mounting, real English/Chinese light/dark settings and PTY windows,
+same-source app replacement, exact dual-draft retention and stale rollback export rejection await
+the new platform workflow. These checks do not establish Apple signing/notarization, a version
+upgrade or stable cutover.
 
 ### Native macOS QA client
 
