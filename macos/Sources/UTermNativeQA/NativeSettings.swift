@@ -147,8 +147,8 @@ struct NativeSettingsView: View {
             if WorkspaceModel.applicationProfile.networkUpdatesAllowed {
                 Toggle(localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates"))
             }
-            NativeUpdateStatus(model: workspace.updates)
-            NativeLoginItemsView(model: model.login)
+            NativeUpdateStatus(model: workspace.updates).id(NativeLocale.preference)
+            NativeLoginItemsView(model: model.login).id(NativeLocale.preference)
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
             number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）")
             Section(localized("Sidebar", "侧栏")) {

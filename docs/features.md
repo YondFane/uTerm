@@ -75,12 +75,13 @@ syntax, TypeScript checking, the frontend production build, contracts and rollba
 The full frontend suite passed 434 tests with 11 explicit skips. The profile regressions cover
 identity, cold/existing directories, path overrides, symlink redirection and fixture confinement.
 
-At source `65ae860`, Apple Silicon passed 43 Swift tests, actual packaging, installed Unicode PTY
-output, same-source replacement, exact dual-draft retention and stale rollback-export rejection. Its
-screenshot review found that the smoke's independently created English settings window did not
-inherit dark appearance. The smoke now uses the application's normal settings action and asserts
-actual window appearance before capture; both architectures require a fresh run. These results do
-not establish Apple signing/notarization, a version upgrade or stable cutover.
+At source `c076167`, Apple Silicon passed 43 Release Swift tests, actual DMG/ZIP packaging,
+installed Unicode PTY output, same-source replacement, exact dual-draft retention and stale
+rollback-export rejection. The six original captures show actual dark English and light Chinese
+windows. Review also found stale English update/login captions after a language switch. Those child
+views now refresh for the selected language while retaining their models and draft; new platform
+captures are required for this correction. These results do not establish Apple
+signing/notarization, a version upgrade or stable cutover.
 
 ### Native macOS QA client
 
