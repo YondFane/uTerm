@@ -12,8 +12,8 @@
 - Add a native personal macOS app. Download the Personal installer and open a project to use native
   terminals; its profile is separate from the existing client and updates are installed manually.
   Packages remain available as this release's attachments.
-- Share workspace, session and settings storage. Processes keep running when the window quits, and
-  reopening restores output; use Close Session to terminate a process.
+- Split native terminals and reconnect after quitting. Processes keep running when the window quits,
+  and reopening restores output; use Close Session to terminate a process.
 - Recover multiple unsaved file drafts and report save conflicts in the native editor. Git/Worktree
   operations protect projects with ongoing edits or tasks.
 - Access SSH/SFTP, Java/Python runs and database/Redis workbenches in the native client. Open a

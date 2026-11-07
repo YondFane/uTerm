@@ -79,8 +79,16 @@ Release collection rejects stale source/version reports, duplicate architectures
 real-install evidence and modified archives. Disk-image creation retries only explicit busy
 responses up to five attempts, retaining diagnostics and refusing existing output. QA terminal
 creation waits for rendered project selection and an interactive button; the 30-second deadline is
-unchanged. Current release-wiring tests and new platform CI results are recorded separately from the
-package source below.
+unchanged. Linux checks passed seven release tests, six disk-image simulations, four
+personal-package tests, type checking and the full frontend suite (435 passed, 11 skipped).
+
+Source `790dbf1bb1d028f70f3e43d0cef0a786eee5a1e0`, tested PR merge
+`221ebd650cd2e73ed73fea7fcce14b48edd15a9b`, passed the
+[Windows and macOS real-app QA](https://github.com/YondFane/uTerm/actions/runs/42341263310). Both
+artifacts include input-owner/viewer reports and original window captures; the owner now creates a
+visible real terminal before transferring input control. Native package, performance and release
+checks retain their own source-bound reports; this result does not establish the final tag's
+publication or stable native cutover.
 
 Source `5903045b8d1b899cfc98400dfb10c786536b1433`, tested PR merge
 `6635aee9229c633ab5db839efc04f0eeda0fdbcd`, passed the
