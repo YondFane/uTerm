@@ -40,6 +40,14 @@ def validate_info(info, head, tested):
     assert all(info.get(key) is False for key in ["SUEnableAutomaticChecks", "SUAutomaticallyUpdate", "SUAllowsAutomaticUpdates"])
 
 
+
+def validate_smoke_report(report, head, tested, phase):
+    assert report["passed"] and report["automaticOptInCannotStartUpdater"] and report["explicitCloseAndIdleHostShutdown"], report
+    assert report["sourceHeadSHA"] == head and report["testedMergeSHA"] == tested
+    assert report["settingsWindowAppearances"] == {"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"}
+    if phase == "replacement":
+        assert report["profileRetainedAfterAppReplacement"]
+
 def audit_app(app, architecture, head, tested):
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     validate_info(info, head, tested)
@@ -89,10 +97,7 @@ def smoke(installed, source, root, evidence, head, tested):
         assert not (root / "ignored").exists() and not (root / "must-not-exist.json").exists()
         path = root / f"personal-{phase}.json"
         report = json.loads(path.read_text())
-        assert report["passed"] and report["automaticOptInCannotStartUpdater"] and report["explicitCloseAndIdleHostShutdown"], report
-        assert report["sourceHeadSHA"] == head and report["testedMergeSHA"] == tested
-        if phase == "replacement":
-            assert report["profileRetainedAfterAppReplacement"]
+        validate_smoke_report(report, head, tested, phase)
         shutil.copyfile(path, evidence / path.name)
         rollback = root / f"personal-{phase}-rollback.json"
         shutil.copyfile(rollback, evidence / rollback.name)

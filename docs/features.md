@@ -40,7 +40,8 @@ The interface supports Simplified Chinese and English.
 The experimental **uTerm Personal** app uses Release builds of Swift/AppKit and the shared Rust
 core/helper on macOS 14+. It is ad-hoc signed for free personal use; it does not require a paid
 Apple Developer account or an App Store listing. It has no Apple notarization. The personal build
-never starts Sparkle, even when saved settings enable automatic updates; install updates manually.
+never starts Sparkle, even when saved settings enable automatic updates; it shows manual-update
+guidance instead of network-update controls.
 
 The **macOS personal packages** Actions workflow builds Apple Silicon and Intel separately. Open a
 successful run and download the matching `uTerm-Personal-ARM64-<head>` or
@@ -69,16 +70,17 @@ same Release binary safely.
 
 #### Personal app validation
 
-Linux passed the three packaging rejection tests, three existing disk-image simulations, shell
-syntax, TypeScript checking and the frontend production build. The full frontend suite passed 434
-tests with 11 explicit skips; contracts and rollback-export checks also passed. Profile tests cover
-identity, cold/existing directories, path overrides, symlink redirection and fixture confinement. A
-macOS run passed 41 of 42 Swift tests and exposed a URL directory-hint mismatch for a nonexistent
-personal directory; the path comparison is corrected and requires a fresh run. Actual macOS Release
-building, signing, DMG mounting, real English/Chinese light/dark settings and PTY windows,
-same-source app replacement, exact dual-draft retention and stale rollback export rejection await
-the new platform workflow. These checks do not establish Apple signing/notarization, a version
-upgrade or stable cutover.
+Linux passed the four packaging rejection tests, three existing disk-image simulations, shell
+syntax, TypeScript checking, the frontend production build, contracts and rollback-export checks.
+The full frontend suite passed 434 tests with 11 explicit skips. The profile regressions cover
+identity, cold/existing directories, path overrides, symlink redirection and fixture confinement.
+
+At source `65ae860`, Apple Silicon passed 43 Swift tests, actual packaging, installed Unicode PTY
+output, same-source replacement, exact dual-draft retention and stale rollback-export rejection. Its
+screenshot review found that the smoke's independently created English settings window did not
+inherit dark appearance. The smoke now uses the application's normal settings action and asserts
+actual window appearance before capture; both architectures require a fresh run. These results do
+not establish Apple signing/notarization, a version upgrade or stable cutover.
 
 ### Native macOS QA client
 

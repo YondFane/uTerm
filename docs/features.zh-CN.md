@@ -38,7 +38,7 @@ uTerm 是 Windows 和 macOS 桌面终端。本地终端和 Agent 进程在本机
 实验性 **uTerm Personal** 在 macOS
 14+ 使用 Swift／AppKit 与共享 Rust 核心／helper 的 Release 构建，采用免费的个人自用 ad-hoc 签名，不需要付费 Apple
 Developer 账户或上架 App
-Store，也没有 Apple 公证。个人构建即使读取到启用自动更新的设置，也不会启动 Sparkle；请手动安装更新。
+Store，也没有 Apple 公证。个人构建即使读取到启用自动更新的设置，也不会启动 Sparkle；界面显示手动更新说明，不显示网络更新控件。
 
 **macOS personal packages** Actions 工作流分别构建 Apple Silicon 和 Intel。在成功运行中下载对应的
 `uTerm-Personal-ARM64-<head>` 或 `uTerm-Personal-X64-<head>` artifact，保留期为 14 天。下载 Actions
@@ -56,8 +56,10 @@ artifact 需要登录 GitHub。解压产物，核对 `SHA256SUMS.txt`，打开 D
 
 #### 个人应用验证
 
-Linux 已通过三项打包拒绝测试、三项现有镜像模拟、Shell 语法、TypeScript 检查及前端生产构建。完整前端回归434项通过、11项明确跳过，契约及回退导出检查也通过。配置测试覆盖身份、首次／已有目录、目录覆盖、符号链接重定向和临时测试边界。一次macOS运行通过41／42项Swift测试，暴露不存在的个人目录在URL目录标记比较上的差异；已修正为路径比较，需重新执行。实际 macOS
-Release 构建、签名、DMG 挂载、真实中英文／深浅色设置与 PTY 窗口、同源码 App 替换、精确双草稿保留及过期回退导出拒绝，等待新增平台工作流执行。这些检查不代表 Apple 签名／公证、跨版本升级或稳定切换验收。
+Linux 已通过四项打包拒绝测试、三项现有镜像模拟、Shell 语法、TypeScript 检查、前端生产构建、契约及回退导出检查。完整前端回归434项通过、11项明确跳过。配置回归覆盖身份、首次／已有目录、目录覆盖、符号链接重定向和临时测试边界。
+
+源码 `65ae860` 的 Apple
+Silicon 已通过43项Swift测试、真实打包、安装后的中文PTY输出、同源码替换、精确双草稿保留及过期回退导出拒绝。截图复核发现，冒烟独立新建的英文设置窗没有继承深色外观。冒烟现改为调用应用正常设置入口，并在截图前核对实际窗口外观；两种架构均需重新执行。这些结果不代表 Apple 签名／公证、跨版本升级或稳定切换验收。
 
 ### macOS 原生 QA 客户端
 

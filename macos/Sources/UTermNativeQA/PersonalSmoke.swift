@@ -3,7 +3,7 @@ import UTermBridge
 
 @MainActor
 enum PersonalSmoke {
-    static func run(model: WorkspaceModel, window: NSWindow) async {
+    static func run(model: WorkspaceModel, window: NSWindow, openSettings: () -> NativeSettingsWindow) async {
         guard WorkspaceModel.applicationProfile.personalFixture, let store = try? WorkspaceModel.dataRoot() else { return }
         let root = store.deletingLastPathComponent()
         let phase = Bundle.main.object(forInfoDictionaryKey: "UTermPersonalQAPhase") as? String ?? "initial"
@@ -58,12 +58,16 @@ enum PersonalSmoke {
             terminal.enqueue(Data("printf 'PERSONAL_%s 中文\\n' READY\r".utf8))
             try await TerminalSmoke.wait("Personal Release renders Unicode PTY output") { terminal.text.contains("PERSONAL_READY 中文") && terminal.view.window === window }
             var captures: [String] = []
+            var appearances: [String: String] = [:]
             for (language, appearance) in [("en", "dark"), ("zh-Hans", "light")] {
                 await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
-                let settings = NativeSettingsWindow(workspace: model)
-                settings.window.makeKeyAndOrderFront(nil)
+                let settings = openSettings()
                 await settings.model.reload()
                 try await Task.sleep(for: .milliseconds(250))
+                let expected: NSAppearance.Name = appearance == "dark" ? .darkAqua : .aqua
+                let actual = settings.window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
+                guard actual == expected else { throw BridgeFailure(code: "PERSONAL_APPEARANCE", message: "Settings window did not apply the selected appearance") }
+                appearances[language + "-" + appearance] = actual?.rawValue
                 let name = "personal-\(phase)-settings-\(language)-\(appearance).png"
                 try await TerminalSmoke.capture(window: settings.window, path: root.appendingPathComponent(name))
                 captures.append(name)
@@ -73,6 +77,7 @@ enum PersonalSmoke {
             let capture = "personal-\(phase)-terminal.png"
             try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(capture))
             captures.append(capture)
+            report["settingsWindowAppearances"] = appearances
             report["captures"] = captures; report["realBundledHelperUnicodePTY"] = true
             report["profileRetainedAfterAppReplacement"] = phase != "initial"
             await model.closeSession()

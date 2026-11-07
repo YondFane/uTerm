@@ -34,6 +34,16 @@ class PersonalPackageTests(unittest.TestCase):
                 with self.subTest(key=key, value=value), self.assertRaises(AssertionError):
                     package.validate_info({**self.info, key: value}, "a" * 40, "b" * 40)
 
+    def test_selected_dark_setting_does_not_replace_actual_window_appearance_evidence(self):
+        report = dict(passed=True, automaticOptInCannotStartUpdater=True, explicitCloseAndIdleHostShutdown=True,
+                      sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, profileRetainedAfterAppReplacement=True,
+                      settingsWindowAppearances={"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"})
+        package.validate_smoke_report(report, "a" * 40, "b" * 40, "replacement")
+        report["settingsWindowAppearances"]["en-dark"] = "NSAppearanceNameAqua"
+        report["storedAppearance"] = "dark"
+        with self.assertRaises(AssertionError):
+            package.validate_smoke_report(report, "a" * 40, "b" * 40, "replacement")
+
     def test_shipping_metadata_cannot_have_candidate_version_or_raised_minimum(self):
         for key, value in [("CFBundleShortVersionString", "0.0.1 QA"), ("LSMinimumSystemVersion", "15.0")]:
             with self.subTest(key=key), self.assertRaises(AssertionError):

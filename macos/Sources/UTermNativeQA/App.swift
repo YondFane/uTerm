@@ -110,7 +110,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             await model.start()
             #if UTERM_PERSONAL
             if WorkspaceModel.applicationProfile.personalFixture {
-                await PersonalSmoke.run(model: model, window: window)
+                await PersonalSmoke.run(model: model, window: window, openSettings: { self.openFullSettings(); return self.fullSettingsWindow! })
                 terminating = true
                 NSApp.terminate(nil)
             }
@@ -437,7 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let app = menu(WorkspaceModel.applicationProfile.displayName)
         add(app, localized("Settings…", "设置…"), #selector(settings), ",")
-        add(app, localized("Check for updates…", "检查更新…"), #selector(checkForUpdates))
+        if WorkspaceModel.applicationProfile.networkUpdatesAllowed { add(app, localized("Check for updates…", "检查更新…"), #selector(checkForUpdates)) }
         app.addItem(.separator())
         add(app, localized("Quit ", "退出 ") + WorkspaceModel.applicationProfile.displayName, #selector(quit), "q")
         let file = menu(localized("File", "文件"))
