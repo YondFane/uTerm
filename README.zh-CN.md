@@ -114,6 +114,10 @@ macOS 脚本安装至
 和[文档编写规范](docs/writing-rules.md)，使用项目的Prettier/rustfmt，提交前运行 `pnpm format` 与
 `pnpm format:check`。
 
+CI 通过 `node scripts/tauri-build.mjs` 构建发版及 Windows
+QA 安装器，遇到 NSIS 工具临时下载错误时最多尝试三次。隔离 Windows
+SSH 测试会重试下载，并在启动前核对固定 SHA-256。
+
 ## 许可与反馈
 
 uTerm 按 [PolyForm Noncommercial License 1.0.0](LICENSE)

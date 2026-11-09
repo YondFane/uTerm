@@ -234,8 +234,7 @@ try {
     const result = spawnSync(
       process.execPath,
       [
-        cli,
-        "build",
+        "scripts/tauri-build.mjs",
         "--debug",
         "--features",
         "qa",

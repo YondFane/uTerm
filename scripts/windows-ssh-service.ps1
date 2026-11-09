@@ -32,7 +32,8 @@ if (Test-Path $manifest) { throw 'SSH fixture already exists' }
 $settings = Get-Content -Raw (Join-Path $Root 'server-settings.json') | ConvertFrom-Json
 $version = '10.4.0.0p1-Preview'
 $archive = Join-Path $Root 'openssh.zip'
-Invoke-WebRequest -Uri "https://github.com/PowerShell/Win32-OpenSSH/releases/download/$version/OpenSSH-Win64.zip" -OutFile $archive
+& curl.exe --fail --location --silent --show-error --retry 3 --retry-all-errors --retry-delay 5 --max-time 120 --output $archive "https://github.com/PowerShell/Win32-OpenSSH/releases/download/$version/OpenSSH-Win64.zip"
+if ($LASTEXITCODE -ne 0) { throw 'OpenSSH fixture download failed after bounded retries' }
 if ((Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant() -ne 'b67ff8becd203502190ec42ac7787c24c2cd3325ed7700485fe7a1c83d2a7957') { throw 'OpenSSH fixture checksum mismatch' }
 Expand-Archive $archive (Join-Path $Root 'server')
 $server = Join-Path $Root 'server/OpenSSH-Win64/sshd.exe'

@@ -110,28 +110,30 @@ simulated; SDK downloads, signature verification and app replacement are real.
 
 Current Linux checks passed 11 signing/release tests and 13 macOS packaging/capture policy tests.
 Windows-drive regression coverage checks a checkout on D: with key storage on C:, while still
-rejecting checkout descendants. The full Linux suite passed 440 tests with 11 platform skips.
+rejecting checkout descendants. The full Linux suite passed 443 tests with 11 platform skips.
 
-Native source and tested commit `6c34d9efc84cc7e90527cecb0031d306025d04bd` passed 43 Release Swift
-tests, app packaging and exact English/Chinese no-update status checks on both ARM64 macOS 15.8.2
-and Intel macOS 15.7.9 using Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. The
-[release verification](https://github.com/YondFane/uTerm/actions/runs/42573243084) passed all 10
-actual SDK scenarios on ARM64 and nine on Intel. Intel's automatic case observed prepared
-installation and cycle completion before the subsequent scheduling callback; its premature assertion
-failed and remains recorded as failed.
+Native source head `1b521d2ed7c239a4e9df7601d9085f6289852f86`, tested at PR merge
+`88ffbf210636843649a11def1b4933afd02f3320`, passed 43 Release Swift tests, app packaging and exact
+English/Chinese no-update status checks on both ARM64 macOS 15.8.2 and Intel macOS 15.7.9 using
+Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. The
+[native verification](https://github.com/YondFane/uTerm/actions/runs/42579926464) passed all 10
+actual SDK scenarios on each architecture, including actual automatic install-on-quit and
+installation with profile, drafts and terminal session retention.
 
-[ARM64 evidence](https://github.com/YondFane/uTerm/actions/runs/42573243084/artifacts/13655540299)
+[ARM64 evidence](https://github.com/YondFane/uTerm/actions/runs/42579926464/artifacts/13656229968)
 and
-[Intel evidence](https://github.com/YondFane/uTerm/actions/runs/42573243084/artifacts/13655597459)
+[Intel evidence](https://github.com/YondFane/uTerm/actions/runs/42579926464/artifacts/13657153123)
 contain `personal-package.json`, `updates/sdk-summary.json`, per-case reports and original captures.
-The shipped archive hashes, identity, public key and source were independently checked on ARM64; its
-settings and retained-session relaunch images were inspected.
+`personal-initial-settings-zh-Hans-light.png` shows the Chinese automatic-update setting and current
+status; `personal-initial-settings-en-dark.png` covers English and dark appearance. The ARM64
+package hashes and source identity were independently checked, and its settings screenshot was
+inspected.
 
 The automatic smoke case waits for cycle completion, an idle updater and the actual scheduling
 callback before checking opt-out. Prepared installation alone cannot complete this wait, and the
 90-second deadline is unchanged. Reports record `completedSDKCycleAndSchedulingBeforeOptOut`; the
-Python verifier requires it alongside actual scheduler and opt-out evidence. Native validation of
-this waiting correction is pending. The minimum remains macOS 14.0; runtime coverage is 15.x. Apple
+Python verifier requires it alongside actual scheduler and opt-out evidence. Both native runs passed
+this correction. The minimum remains macOS 14.0; runtime coverage is 15.x. Apple
 signing/notarization and the full stable native cutover remain separate.
 
 ### Native macOS QA client
@@ -1111,6 +1113,17 @@ source/tag validation, signing or public-download/update-feed checks. A missing 
 falls back to a normal build; first runs and compiler changes can still require cold compilation.
 
 #### Stable-release checks
+
+Release and Windows candidate installer builds run through `node scripts/tauri-build.mjs`. Only NSIS
+tool downloads followed by HTTP 429/502/503/504 bundler errors retry, with at most three attempts
+separated by five seconds. Compiler, signing, permanent HTTP and other errors retain their exit
+status. Every attempt still uses Tauri's tool verification and installer signing.
+
+The isolated Windows SSH fixture uses `curl.exe` with three download retries and a 120-second
+per-attempt timeout, then checks the pinned OpenSSH SHA-256 before extraction. New child-process
+regressions passed all three tests, covering recovery after HTTP 504, exhausted attempts, literal
+arguments and errors that must not retry. The full Linux suite passed 443 tests with 11 platform
+skips; current Windows execution remains pending.
 
 - Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
   formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).

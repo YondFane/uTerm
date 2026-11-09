@@ -76,19 +76,23 @@ Ed25519 种子，公开变量为 base64 的 32 字节公钥，与已有 Tauri �
 `python3 -B scripts/macos-updates-smoke.py --personal`
 可通过回环更新源执行真实个人版 SDK，以 Sparkle 官方签名工具核对 Node 生成的签名，覆盖正确／错误签名、架构／通道／版本拒绝、取消、离线／中断重试、自动检查／下载、安装及配置／会话保留。用户决定为模拟，SDK 下载、验签及应用替换为真实执行。
 
-当前 Linux 已通过 11 项签名／发布测试及 13 项 macOS 打包／截图策略测试。Windows 跨盘回归覆盖仓库位于 D 盘、密钥位于 C 盘的情况，并继续拒绝仓库内的密钥目录。完整 Linux 回归通过 440 项，11 项按平台跳过。
+当前 Linux 已通过 11 项签名／发布测试及 13 项 macOS 打包／截图策略测试。Windows 跨盘回归覆盖仓库位于 D 盘、密钥位于 C 盘的情况，并继续拒绝仓库内的密钥目录。完整 Linux 回归通过 443 项，11 项按平台跳过。
 
-原生源码和实际测试提交 `6c34d9efc84cc7e90527cecb0031d306025d04bd` 已在 ARM64 macOS 15.8.2 和 Intel
-macOS 15.7.9 通过各 43 项 Release Swift 测试、应用打包及精确中英文无更新状态检查。工具链为 Xcode
+原生源码 head `1b521d2ed7c239a4e9df7601d9085f6289852f86`，实际测试的 PR merge 提交
+`88ffbf210636843649a11def1b4933afd02f3320`，已在 ARM64 macOS 15.8.2 和 Intel macOS
+15.7.9 通过各 43 项 Release Swift 测试、应用打包及精确中英文无更新状态检查。工具链为 Xcode
 16.4、Swift 6.1.2 和 Rust 1.99.1。
-[发布验证](https://github.com/YondFane/uTerm/actions/runs/42573243084)在 ARM64 通过全部 10 类真实 SDK 场景，Intel 通过 9 类。Intel 自动场景先收到安装准备和周期结束回调，后续调度回调尚未到达时就进行了断言；该失败仍按失败记录。
+[原生验证](https://github.com/YondFane/uTerm/actions/runs/42579926464)在两种架构均通过全部 10 类真实 SDK 场景，包括真实自动退出安装，以及安装后配置、草稿和终端会话保留。
 
-[ARM64 证据](https://github.com/YondFane/uTerm/actions/runs/42573243084/artifacts/13655540299)和
-[Intel 证据](https://github.com/YondFane/uTerm/actions/runs/42573243084/artifacts/13655597459) 包含
-`personal-package.json`、`updates/sdk-summary.json`、各场景报告和原始截图。已独立核对 ARM64 发行包哈希、身份、公钥和源码，并查看其设置及保留会话的重启原图。
+[ARM64 证据](https://github.com/YondFane/uTerm/actions/runs/42579926464/artifacts/13656229968)和
+[Intel 证据](https://github.com/YondFane/uTerm/actions/runs/42579926464/artifacts/13657153123) 包含
+`personal-package.json`、`updates/sdk-summary.json`、各场景报告和原始截图。
+`personal-initial-settings-zh-Hans-light.png` 展示中文自动更新设置与当前状态，
+`personal-initial-settings-en-dark.png`
+覆盖英文与深色外观。已独立核对 ARM64 包哈希和源码身份，并查看其设置原图。
 
 自动更新冒烟会等待周期结束、更新器空闲及真实调度回调，再检查关闭授权的行为；仅完成安装准备不能结束等待，90 秒期限不变。报告记录
-`completedSDKCycleAndSchedulingBeforeOptOut`，Python 验证器同时要求该字段以及真实调度和关闭授权的证据。此等待修正的原生验证待执行。最低版本仍为 macOS
+`completedSDKCycleAndSchedulingBeforeOptOut`，Python 验证器同时要求该字段以及真实调度和关闭授权的证据；本次两种架构均通过此修正。最低版本仍为 macOS
 14.0，实际运行覆盖为 15.x；Apple 签名／公证及完整原生稳定切换继续单独处理。
 
 ### macOS 原生 QA 客户端
@@ -589,6 +593,13 @@ ARM64、macOS Intel 和 Windows x64 上编译测试目标及发布版桌面应�
 缓存命中不会跳过锁定依赖安装、格式、文档、测试、源码／标签验证、签名或公开下载／更新清单检查。缓存缺失或过期时正常构建；首次运行和编译器变化仍可能需要完整编译。
 
 #### 稳定版本检查
+
+发版及 Windows 候选安装器通过 `node scripts/tauri-build.mjs` 构建。仅当 NSIS 工具下载后出现 HTTP
+429／502／503／504 打包错误时重试，每次间隔五秒，最多尝试三次。编译、签名、永久 HTTP 及其他错误保留实际退出状态；每次仍由 Tauri 校验工具并签名安装器。
+
+隔离 Windows SSH 测试通过 `curl.exe` 下载，最多重试三次，每次限时 120 秒，解压前核对固定的 OpenSSH
+SHA-256。三项新增子进程回归全部通过，覆盖 HTTP
+504 后恢复、重试耗尽、字面参数及不可重试错误；完整 Linux 回归通过 443 项，11 项按平台跳过。本次 Windows 执行仍待验证。
 
 - macOS 上的缓存配置验证通过 actionlint、工作流／Markdown 与全仓格式、文档元数据／索引检查及 284 项前端／构建工具测试（10 项跳过）。解析工作流后比对确认，现有 CI／发布检查、触发条件及权限保持不变，预热使用相同缓存配置与发布平台。远端缓存恢复／保存和耗时改善仍待工作流运行验证；未在本地执行 Windows 缓存路径检查。
 

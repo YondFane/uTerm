@@ -161,7 +161,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.DESKTOP_UPDATER_KEY_PASSWORD }}
         run: |
           test -n "$TAURI_SIGNING_PRIVATE_KEY"
-          node node_modules/@tauri-apps/cli/tauri.js build --ci --target '${{ matrix.rust }}' --bundles '${{ matrix.bundles }}' --config "$RUNNER_TEMP/desktop-release.json" -- --locked
+          node scripts/tauri-build.mjs --ci --target '${{ matrix.rust }}' --bundles '${{ matrix.bundles }}' --config "$RUNNER_TEMP/desktop-release.json" -- --locked
           node scripts/release.mjs collect "$RELEASE_TAG" '${{ matrix.platform }}' 'src-tauri/target/${{ matrix.rust }}/release/bundle' "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@v4
         with:

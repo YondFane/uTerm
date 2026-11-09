@@ -125,6 +125,10 @@ validation and releases. Follow [AGENTS.md](AGENTS.md) and the
 [documentation writing rules](docs/writing-rules.md) when contributing. Use the project's
 Prettier/rustfmt and run `pnpm format` and `pnpm format:check` before committing.
 
+CI uses `node scripts/tauri-build.mjs` for release and Windows QA installers, with up to three
+attempts for transient NSIS tool download errors. The isolated Windows SSH fixture retries its
+download and verifies the pinned SHA-256 before starting.
+
 ## License and feedback
 
 uTerm is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE), free for its
