@@ -5,6 +5,10 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
+const nsisTools = [
+  /^https:\/\/github\.com\/tauri-apps\/binary-releases\/releases\/download\/nsis-[\d.]+\/nsis-[\d.]+\.zip$/,
+  /^https:\/\/github\.com\/tauri-apps\/nsis-tauri-utils\/releases\/download\/nsis_tauri_utils-v[\d.]+\/nsis_tauri_utils\.dll$/,
+];
 
 export async function buildTauri(args, options = {}) {
   const cli =
@@ -38,10 +42,7 @@ export async function buildTauri(args, options = {}) {
     // 仅重试 NSIS 工具的临时下载错误；每次仍由 Tauri 执行校验与打包。
     const log = stripVTControlCharacters(tail);
     const download = [...log.matchAll(/Downloading (https:\/\/\S+)/g)].at(-1)?.[1];
-    const nsis =
-      /^https:\/\/github\.com\/tauri-apps\/binary-releases\/releases\/download\/nsis-[\d.]+\/nsis-[\d.]+\.zip$/.test(
-        download ?? "",
-      );
+    const nsis = nsisTools.some((pattern) => pattern.test(download ?? ""));
     const transient = /failed to bundle project: `http status: (?:429|502|503|504)`\s*$/.test(log);
     if (attempt === 3 || !nsis || !transient) return code;
     output(

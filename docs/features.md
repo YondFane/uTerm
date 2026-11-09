@@ -110,7 +110,7 @@ simulated; SDK downloads, signature verification and app replacement are real.
 
 Current Linux checks passed 11 signing/release tests and 13 macOS packaging/capture policy tests.
 Windows-drive regression coverage checks a checkout on D: with key storage on C:, while still
-rejecting checkout descendants. The full Linux suite passed 443 tests with 11 platform skips.
+rejecting checkout descendants. The full Linux suite passed 444 tests with 11 platform skips.
 
 Native source head `1b521d2ed7c239a4e9df7601d9085f6289852f86`, tested at PR merge
 `88ffbf210636843649a11def1b4933afd02f3320`, passed 43 Release Swift tests, app packaging and exact
@@ -1114,16 +1114,17 @@ falls back to a normal build; first runs and compiler changes can still require 
 
 #### Stable-release checks
 
-Release and Windows candidate installer builds run through `node scripts/tauri-build.mjs`. Only NSIS
-tool downloads followed by HTTP 429/502/503/504 bundler errors retry, with at most three attempts
-separated by five seconds. Compiler, signing, permanent HTTP and other errors retain their exit
-status. Every attempt still uses Tauri's tool verification and installer signing.
+Release and Windows candidate installer builds run through `node scripts/tauri-build.mjs`. Only the
+official NSIS archive and Tauri NSIS plugin downloads followed by HTTP 429/502/503/504 bundler
+errors retry, with at most three attempts separated by five seconds. Compiler, signing, permanent
+HTTP and other errors retain their exit status. Every attempt still uses Tauri's tool verification
+and installer signing.
 
 The isolated Windows SSH fixture uses `curl.exe` with three download retries and a 120-second
 per-attempt timeout, then checks the pinned OpenSSH SHA-256 before extraction. New child-process
-regressions passed all three tests, covering recovery after HTTP 504, exhausted attempts, literal
-arguments and errors that must not retry. The full Linux suite passed 443 tests with 11 platform
-skips; current Windows execution remains pending.
+regressions passed all four tests, covering archive/plugin recovery after HTTP 504, exhausted
+attempts, literal arguments and errors that must not retry. The full Linux suite passed 444 tests
+with 11 platform skips; current Windows execution remains pending.
 
 - Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
   formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).

@@ -63,10 +63,28 @@ test("repeated NSIS gateway failures stop after three attempts with the actual f
   assert.deepEqual(result.delays, [5000, 5000]);
 });
 
+test("official NSIS plugin gateway failure retries after the verified archive download", async () => {
+  const log = [
+    download,
+    "Info validating hash",
+    "Info extracting NSIS",
+    "Downloading https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll",
+    failure,
+  ].join("\n");
+  const result = await exercise([
+    { code: 1, log },
+    { code: 0, log: "Signed package ready" },
+  ]);
+  assert.equal(result.code, 0);
+  assert.equal(result.calls.length, 2);
+  assert.deepEqual(result.delays, [5000]);
+});
+
 test("compiler, signing, permanent HTTP and unrelated download failures do not retry", async () => {
   for (const log of [
     download + "\nerror: compiler failed",
     download + "\nError failed to bundle project: invalid signing key",
+    download + "\nError failed to bundle project: hash mismatch",
     download + "\nError failed to bundle project: `http status: 404`",
     download + "\nDownloading https://example.invalid/unrelated.zip\n" + failure,
     download + "\n" + failure + "\nError invalid signing key",
