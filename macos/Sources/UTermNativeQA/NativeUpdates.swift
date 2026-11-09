@@ -5,7 +5,18 @@ import UTermBridge
 @MainActor
 final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdaterDelegate {
     @Published private(set) var error = ""
-    @Published private(set) var status = ""
+    private enum Phase { case idle, checking, available(String), current, prepared, finished }
+    @Published private var phase: Phase = .idle
+    var status: String {
+        switch phase {
+        case .idle: return ""
+        case .checking: return localized("Checking for updates…", "正在检查更新…")
+        case .available(let version): return localized("Update available: ", "发现新版本：") + version
+        case .current: return localized("You’re up to date.", "当前已是最新版本。")
+        case .prepared: return localized("Update downloaded. It will be installed when you quit.", "更新已下载，将在退出应用时安装。")
+        case .finished: return localized("Update check finished.", "更新检查已完成。")
+        }
+    }
     private(set) var configuration: NativeUpdateConfiguration?
     private(set) var controller: SPUStandardUpdaterController?
     private var testUpdater: SPUUpdater?
@@ -13,14 +24,18 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
     private var started = false
     private var automatic = false
     private var appliedAutomatic: Bool?
+    private var preparedForQuit = false
     private(set) var qaEvents: [String] = []
     private(set) var qaLastError = ""
     private(set) var qaPolicyRejected = ""
     var available: Bool { configuration != nil }
+    var controlsVisible: Bool { available || WorkspaceModel.applicationProfile.mode == .qa }
+    private var personal: Bool { WorkspaceModel.applicationProfile.mode == .personal }
 
     override init() {
         super.init()
         guard WorkspaceModel.applicationProfile.networkUpdatesAllowed else { return }
+        guard !personal || Bundle.main.object(forInfoDictionaryKey: "UTermUpdateMode") as? String == "automatic" else { return }
         guard let text = Bundle.main.object(forInfoDictionaryKey: "UTermUpdateFeedURL") as? String else { return }
         do {
             #if arch(arm64)
@@ -45,7 +60,7 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
             // Shared settings are canonical; Sparkle must not revive a cached automatic opt-in.
             // 共享设置是唯一来源，Sparkle 不能恢复缓存中的自动更新授权。
             updater.automaticallyChecksForUpdates = automatic
-            updater.automaticallyDownloadsUpdates = false
+            updater.automaticallyDownloadsUpdates = automatic && personal
             appliedAutomatic = automatic
         }
         if !started { try updater.start(); started = true }
@@ -54,12 +69,12 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
         do {
             try start()
             guard let updater, updater.canCheckForUpdates else { return }
-            error = ""; qaLastError = ""; status = localized("Checking for updates…", "正在检查更新…")
+            error = ""; qaLastError = ""; phase = .checking
             updater.checkForUpdates()
         } catch { self.error = error.localizedDescription }
     }
     func configureTestDriver(_ driver: any SPUUserDriver) throws {
-        guard Bundle.main.bundleIdentifier?.hasPrefix("sh.uterm.desktop.qa.native.update.") == true,
+        guard (Bundle.main.bundleIdentifier?.hasPrefix("sh.uterm.desktop.qa.native.update.") == true || WorkspaceModel.applicationProfile.personalFixture),
               configuration?.qa == true, updater == nil, !started else { throw BridgeFailure(code: "UPDATE_QA_CONTEXT", message: "SDK test driver requires a fresh isolated update application") }
         _ = try WorkspaceModel.dataRoot()
         testUpdater = SPUUpdater(hostBundle: .main, applicationBundle: .main, userDriver: driver, delegate: self)
@@ -73,15 +88,25 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
         catch let failure as BridgeFailure { qaPolicyRejected = failure.code; throw failure }
         qaEvents.append("target-accepted:" + item.versionString)
     }
-    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) { status = localized("Update available: ", "发现新版本：") + item.displayVersionString; qaEvents.append("found:" + item.versionString) }
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) { phase = .available(item.displayVersionString); qaEvents.append("found:" + item.versionString) }
+    func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
+        self.error = ""; phase = .current
+    }
     func updater(_ updater: SPUUpdater, willScheduleUpdateCheckAfterDelay delay: TimeInterval) { qaEvents.append("scheduled:" + String(delay)) }
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock: @escaping () -> Void) -> Bool {
+        preparedForQuit = true
+        phase = .prepared
+        qaEvents.append("install-on-quit:" + item.versionString)
+        return false
+    }
     func updater(_ updater: SPUUpdater, didAbortWithError error: Error) {
-        self.error = localized("Update failed. Check the connection and retry.", "更新失败，请检查连接后重试。")
         let failure = error as NSError; qaLastError = failure.domain + ":" + String(failure.code)
+        if failure.domain == SUSparkleErrorDomain && failure.code == SUError.noUpdateError.rawValue { self.error = "" }
+        else { self.error = localized("Update failed. Check the connection and retry.", "更新失败，请检查连接后重试。") }
         qaEvents.append("abort:" + qaLastError)
     }
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
-        if error == nil { self.error = ""; status = localized("Update check finished.", "更新检查已完成。") }
+        if error == nil { self.error = ""; if !preparedForQuit { phase = .finished } }
         qaEvents.append("cycle-finished")
     }
 }

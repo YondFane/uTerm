@@ -144,8 +144,8 @@ struct NativeSettingsView: View {
             choice("appearance", "Appearance", "外观", [("system", "System default", "系统默认"), ("dark", "Dark", "深色"), ("light", "Light", "浅色")])
             choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
             choice("defaultShell", "Default shell", "默认 Shell", [("default", "System default", "系统默认"), ("cmd", "Windows Command Prompt", "Windows 命令提示符")])
-            if WorkspaceModel.applicationProfile.networkUpdatesAllowed {
-                Toggle(localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates"))
+            if workspace.updates.controlsVisible {
+                Toggle(WorkspaceModel.applicationProfile.mode == .personal ? localized("Automatically check and download updates", "自动检查并下载更新") : localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates"))
             }
             NativeUpdateStatus(model: workspace.updates).id(NativeLocale.preference)
             NativeLoginItemsView(model: model.login).id(NativeLocale.preference)
@@ -259,7 +259,7 @@ private struct NativeUpdateStatus: View {
     @ObservedObject var model: NativeUpdates
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if WorkspaceModel.applicationProfile.networkUpdatesAllowed {
+            if model.controlsVisible {
                 Button(localized("Check for updates…", "检查更新…")) { model.check() }.disabled(!model.available)
                 if !model.available { Text(localized("Update checks are unavailable for this build.", "此构建暂不提供更新检查。")).font(.caption).foregroundStyle(.secondary) }
             } else {

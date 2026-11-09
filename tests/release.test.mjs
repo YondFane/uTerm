@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import test from "node:test";
-import { createHash } from "node:crypto";
+import { createHash, generateKeyPairSync } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import {
@@ -17,7 +17,9 @@ import {
   targets,
   supportedTargets,
   feedFilename,
+  writePersonalFeeds,
 } from "../scripts/release.mjs";
+import { personalFeed } from "../scripts/personal-updates.mjs";
 
 process.env.GITHUB_REPOSITORY = "test-owner/uterm";
 
@@ -301,6 +303,49 @@ test("personal release collection rejects stale source, simulated install and mo
       assert.throws(() => collectPersonal("uTerm-v1.2.3", sha, input, output), /evidence|checksum/);
     }
     writeFileSync(file, JSON.stringify(report));
+    const pair = generateKeyPairSync("ed25519");
+    const privateKey = pair.privateKey
+      .export({ type: "pkcs8", format: "der" })
+      .subarray(-32)
+      .toString("base64");
+    const publicKey = pair.publicKey
+      .export({ type: "spki", format: "der" })
+      .subarray(-32)
+      .toString("base64");
+    assert.throws(
+      () => writePersonalFeeds("uTerm-v1.2.3", sha, input, output, privateKey, publicKey),
+      /evidence/,
+    );
+    for (const item of reports) {
+      writeFileSync(
+        item.file,
+        JSON.stringify({
+          ...item.report,
+          manualUpdates: false,
+          updateMode: "automatic",
+          updatePublicKey: publicKey,
+          updateFeed: personalFeed(item.report.architecture),
+        }),
+      );
+    }
+    writePersonalFeeds("uTerm-v1.2.3", sha, input, output, privateKey, publicKey);
+    for (const architecture of ["arm64", "x86_64"])
+      assert.match(
+        readFileSync(join(output, `personal-stable-${architecture}.xml`), "utf8"),
+        /sparkle:edSignature="[A-Za-z0-9+/]+=*"/,
+      );
+    const automatic = JSON.parse(readFileSync(file, "utf8"));
+    for (const patch of [
+      { updatePublicKey: Buffer.alloc(32).toString("base64") },
+      { updateFeed: personalFeed("x86_64") },
+    ]) {
+      writeFileSync(file, JSON.stringify({ ...automatic, ...patch }));
+      assert.throws(
+        () => writePersonalFeeds("uTerm-v1.2.3", sha, input, output, privateKey, publicKey),
+        /public key or feed/,
+      );
+    }
+    for (const item of reports) writeFileSync(item.file, JSON.stringify(item.report));
     writeFileSync(join(folder, Object.keys(report.packages)[0]), "modified after testing");
     assert.throws(() => collectPersonal("uTerm-v1.2.3", sha, input, output), /checksum/);
   } finally {

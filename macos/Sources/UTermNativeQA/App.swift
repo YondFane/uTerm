@@ -108,6 +108,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSApp.activate(ignoringOtherApps: true)
         Task { @MainActor in
             await model.start()
+            if let path = UpdatesSmoke.reportPath {
+                var report = baseReport()
+                do {
+                    if Bundle.main.object(forInfoDictionaryKey: "UTermUpdateTestMode") as? String == "install" {
+                        try await UpdateInstallationSmoke.run(model: model, window: window,
+                            openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) },
+                            openSSH: { try await self.makeSSHWindow() }, openDatabase: { try await self.makeDatabaseWindow() },
+                            attemptQuit: { _ = self.applicationShouldTerminate(NSApp) }, report: &report)
+                    } else { try await UpdatesSmoke.run(model: model, window: window, report: &report) }
+                }
+                catch { report["failure"] = error.localizedDescription }
+                if let bridge = model.bridge {
+                    do {
+                        for session in try await bridge.call("host.status")["sessions"].array { _ = try await bridge.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]])) }
+                        _ = try await bridge.call("host.shutdownIdle")
+                    } catch { report["cleanupError"] = error.localizedDescription }
+                }
+                await model.shutdown(); terminating = true
+                finishReport(report, path: path); return
+            }
             #if UTERM_PERSONAL
             if WorkspaceModel.applicationProfile.personalFixture {
                 await PersonalSmoke.run(model: model, window: window, openSettings: { self.openFullSettings(); return self.fullSettingsWindow! })
@@ -132,26 +152,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 do { try await PerformanceSmoke.run(model: model, window: window, report: &report) }
                 catch { report["failure"] = error.localizedDescription }
                 if report["explicitCloseAndIdleHostShutdown"] as? Bool != true, let bridge = model.bridge {
-                    do {
-                        for session in try await bridge.call("host.status")["sessions"].array { _ = try await bridge.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]])) }
-                        _ = try await bridge.call("host.shutdownIdle")
-                    } catch { report["cleanupError"] = error.localizedDescription }
-                }
-                await model.shutdown(); terminating = true
-                finishReport(report, path: path); return
-            }
-            if let path = WorkspaceModel.argument("--updates-smoke-report") ?? (Bundle.main.bundleIdentifier?.hasPrefix("sh.uterm.desktop.qa.native.update.") == true ? Bundle.main.object(forInfoDictionaryKey: "UTermQAUpdateReport") as? String : nil) {
-                var report = baseReport()
-                do {
-                    if Bundle.main.object(forInfoDictionaryKey: "UTermUpdateTestMode") as? String == "install" {
-                        try await UpdateInstallationSmoke.run(model: model, window: window,
-                            openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) },
-                            openSSH: { try await self.makeSSHWindow() }, openDatabase: { try await self.makeDatabaseWindow() },
-                            attemptQuit: { _ = self.applicationShouldTerminate(NSApp) }, report: &report)
-                    } else { try await UpdatesSmoke.run(model: model, window: window, report: &report) }
-                }
-                catch { report["failure"] = error.localizedDescription }
-                if let bridge = model.bridge {
                     do {
                         for session in try await bridge.call("host.status")["sessions"].array { _ = try await bridge.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]])) }
                         _ = try await bridge.call("host.shutdownIdle")
@@ -437,7 +437,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let app = menu(WorkspaceModel.applicationProfile.displayName)
         add(app, localized("Settings…", "设置…"), #selector(settings), ",")
-        if WorkspaceModel.applicationProfile.networkUpdatesAllowed { add(app, localized("Check for updates…", "检查更新…"), #selector(checkForUpdates)) }
+        if model.updates.controlsVisible { add(app, localized("Check for updates…", "检查更新…"), #selector(checkForUpdates)) }
         app.addItem(.separator())
         add(app, localized("Quit ", "退出 ") + WorkspaceModel.applicationProfile.displayName, #selector(quit), "q")
         let file = menu(localized("File", "文件"))

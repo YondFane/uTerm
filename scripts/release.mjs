@@ -9,6 +9,12 @@ import {
 import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import {
+  personalAppcast,
+  personalFeed,
+  publicKeyBytes,
+  signPersonalArchive,
+} from "./personal-updates.mjs";
 
 export function releaseBase(repository = process.env.GITHUB_REPOSITORY) {
   if (!/^[A-Za-z0-9-]+\/[A-Za-z0-9_.-]+$/.test(repository ?? ""))
@@ -121,7 +127,7 @@ export function collect(tag, target, bundle, output) {
     ),
   );
 }
-export function collectPersonal(tag, sourceSHA, directory, output) {
+export function collectPersonal(tag, sourceSHA, directory, output, publicKey) {
   const version = releaseVersion(tag);
   if (!/^[a-f0-9]{40}$/.test(sourceSHA))
     throw new Error("Personal packages require the exact release commit.");
@@ -142,7 +148,9 @@ export function collectPersonal(tag, sourceSHA, directory, output) {
       report.version !== version ||
       report.bundleIdentifier !== "sh.uterm.desktop.personal" ||
       report.buildConfiguration !== "release" ||
-      report.manualUpdates !== true ||
+      (publicKey
+        ? report.updateMode !== "automatic" || report.manualUpdates !== false
+        : report.manualUpdates !== true) ||
       !report.smoke?.realWindow ||
       !report.smoke?.manualAppReplacement ||
       report.smoke.productionDataAccess !== false
@@ -151,6 +159,14 @@ export function collectPersonal(tag, sourceSHA, directory, output) {
         "Personal package evidence does not match the release commit, version or actual installation.",
       );
     seen.add(target);
+    if (publicKey) {
+      publicKeyBytes(publicKey);
+      if (
+        report.updatePublicKey !== publicKey.trim() ||
+        report.updateFeed !== personalFeed(report.architecture)
+      )
+        throw new Error("Personal package has a different updater public key or feed.");
+    }
     const entries = Object.entries(report.packages ?? {});
     if (entries.length !== 2) throw new Error("Expected a personal DMG and ZIP.");
     const extensions = new Set();
@@ -183,6 +199,26 @@ export function collectPersonal(tag, sourceSHA, directory, output) {
     packages.map((item) => `${item.sha256}  ${item.filename}\n`).join(""),
   );
   return packages;
+}
+export function writePersonalFeeds(tag, sourceSHA, directory, output, privateKey, publicKey) {
+  publicKeyBytes(publicKey);
+  collectPersonal(tag, sourceSHA, directory, output, publicKey);
+  const version = releaseVersion(tag);
+  for (const architecture of ["arm64", "x86_64"]) {
+    const target = architecture === "arm64" ? "darwin-aarch64" : "darwin-x86_64";
+    const archive = readFileSync(join(output, `uTerm-${version}-personal-${target}.zip`));
+    const signature = signPersonalArchive(archive, privateKey, publicKey);
+    writeFileSync(
+      join(output, `personal-stable-${architecture}.xml`),
+      personalAppcast({
+        version,
+        architecture,
+        archive,
+        signature,
+        repository: process.env.GITHUB_REPOSITORY,
+      }),
+    );
+  }
 }
 export function manifest(tag, directory, previous, selectedTargets = targets) {
   if (
@@ -255,7 +291,17 @@ async function main() {
       ),
     );
   } else if (command === "collect") collect(tag, first, second, third);
-  else if (command === "collect-personal") collectPersonal(tag, first, second, third);
+  else if (command === "collect-personal")
+    collectPersonal(tag, first, second, third, process.env.PERSONAL_UPDATER_PUBLIC_KEY);
+  else if (command === "personal-feeds")
+    writePersonalFeeds(
+      tag,
+      first,
+      second,
+      third,
+      process.env.PERSONAL_UPDATER_PRIVATE_KEY,
+      process.env.PERSONAL_UPDATER_PUBLIC_KEY,
+    );
   else if (command === "manifest") {
     const previous =
       second && second !== "-" ? JSON.parse(readFileSync(second, "utf8")) : undefined;

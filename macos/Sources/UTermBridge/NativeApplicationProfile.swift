@@ -14,7 +14,7 @@ public struct NativeApplicationProfile: Sendable {
     public let identifier: String
     public let embeddedQARoot: String?
     public var personalFixture: Bool { mode == .personal && identifier.hasPrefix("sh.uterm.desktop.qa.native.personal.") && embeddedQARoot != nil }
-    public var networkUpdatesAllowed: Bool { mode == .qa }
+    public var networkUpdatesAllowed: Bool { mode == .qa || identifier == Self.personalIdentifier || personalFixture }
     public var displayName: String { mode == .personal ? "uTerm Personal" : "uTerm Native QA" }
 
     public init(mode: Mode, identifier: String, embeddedQARoot: String? = nil) {
