@@ -108,7 +108,7 @@ covers good/bad signatures, architecture/channel/version rejection, cancel, offl
 retry, automatic checks/downloads, installation and profile/session retention. User decisions are
 simulated; SDK downloads, signature verification and app replacement are real.
 
-Current Linux checks passed 11 signing/release tests and 13 macOS packaging/capture policy tests.
+Current Linux checks passed 11 signing/release tests and 14 macOS packaging/capture policy tests.
 Windows-drive regression coverage checks a checkout on D: with key storage on C:, while still
 rejecting checkout descendants. The full Linux suite passed 444 tests with 11 platform skips.
 
@@ -135,6 +135,13 @@ callback before checking opt-out. Prepared installation alone cannot complete th
 Python verifier requires it alongside actual scheduler and opt-out evidence. Both native runs passed
 this correction. The minimum remains macOS 14.0; runtime coverage is 15.x. Apple
 signing/notarization and the full stable native cutover remain separate.
+
+DMG creation records full tool output and retries explicit DiskImages busy responses or silent exit
+code 1, with at most five attempts and the existing 120-second timeout. Only this attempt's partial
+image may be removed. Invalid arguments, timeouts and checksum verification errors remain failures;
+verification does not retry silent errors. The new regression covers silent creation recovery,
+exhaustion and non-retryable verification. The personal workflow runs all 14 macOS Python policy
+tests. Native execution of this creation correction is pending.
 
 ### Native macOS QA client
 
@@ -1133,8 +1140,19 @@ PR merge `6d260c22b9914c0e6f2e5b945d76867a62137f4d`,
 [Windows candidate verification](https://github.com/YondFane/uTerm/actions/runs/42583766437) passed
 actual isolated NSIS installation, launch, screenshot and uninstall.
 [Candidate evidence](https://github.com/YondFane/uTerm/actions/runs/42583766437/artifacts/13658212771)
-contains `candidate-windows.json` and `candidate-installed-windows-window.png`. The new SSH API
-fallback still requires Windows execution.
+contains `candidate-windows.json` and `candidate-installed-windows-window.png`.
+
+Windows source and tested commit `2fb5ef8e68d7a90b8741da8354d554d8da362fc3` passed the
+[complete desktop verification](https://github.com/YondFane/uTerm/actions/runs/42587567055),
+including real SSH, frontend/backend tests, all 73 native scenes, input control and
+installer/uninstaller checks.
+[Windows evidence](https://github.com/YondFane/uTerm/actions/runs/42587567055/artifacts/13660962048)
+contains `tauri-state-qa/report.json`, `candidate/candidate-windows.json` and original captures,
+including `input-owner-input-owner-ready.png`. An earlier PR-merge attempt at
+`302588271bffbd0189449f0c977448d5ec96fb7d` timed out waiting for the terminal window; its failure
+remains available in run `42584992744`, and the same-source repeat passed without changing the UI or
+acceptance. Windows SSH execution passed; the API fallback was independently downloaded on Linux and
+was not forcibly selected on Windows.
 
 - Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
   formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).

@@ -15,6 +15,7 @@ on:
       - scripts/macos-updates-smoke.py
       - scripts/personal-updates.mjs
       - tests/test_macos_personal.py
+      - tests/test_macos_disk_image.py
       - package.json
       - pnpm-lock.yaml
       - .github/workflows/macos-personal.yml
@@ -89,7 +90,7 @@ jobs:
       - name: Verify package rejection rules and shell syntax
         run: |
           bash -n scripts/macos-native-build.sh
-          python3 -B -m unittest discover -s tests -p test_macos_personal.py
+          python3 -B -m unittest discover -s tests -p 'test_macos_*.py'
       - name: Configure public updater identity or isolated CI test key
         env:
           RELEASE_PUBLIC_KEY: ${{ inputs.updater_public_key }}

@@ -76,7 +76,7 @@ Ed25519 种子，公开变量为 base64 的 32 字节公钥，与已有 Tauri �
 `python3 -B scripts/macos-updates-smoke.py --personal`
 可通过回环更新源执行真实个人版 SDK，以 Sparkle 官方签名工具核对 Node 生成的签名，覆盖正确／错误签名、架构／通道／版本拒绝、取消、离线／中断重试、自动检查／下载、安装及配置／会话保留。用户决定为模拟，SDK 下载、验签及应用替换为真实执行。
 
-当前 Linux 已通过 11 项签名／发布测试及 13 项 macOS 打包／截图策略测试。Windows 跨盘回归覆盖仓库位于 D 盘、密钥位于 C 盘的情况，并继续拒绝仓库内的密钥目录。完整 Linux 回归通过 444 项，11 项按平台跳过。
+当前 Linux 已通过 11 项签名／发布测试及 14 项 macOS 打包／截图策略测试。Windows 跨盘回归覆盖仓库位于 D 盘、密钥位于 C 盘的情况，并继续拒绝仓库内的密钥目录。完整 Linux 回归通过 444 项，11 项按平台跳过。
 
 原生源码 head `1b521d2ed7c239a4e9df7601d9085f6289852f86`，实际测试的 PR merge 提交
 `88ffbf210636843649a11def1b4933afd02f3320`，已在 ARM64 macOS 15.8.2 和 Intel macOS
@@ -94,6 +94,9 @@ Ed25519 种子，公开变量为 base64 的 32 字节公钥，与已有 Tauri �
 自动更新冒烟会等待周期结束、更新器空闲及真实调度回调，再检查关闭授权的行为；仅完成安装准备不能结束等待，90 秒期限不变。报告记录
 `completedSDKCycleAndSchedulingBeforeOptOut`，Python 验证器同时要求该字段以及真实调度和关闭授权的证据；本次两种架构均通过此修正。最低版本仍为 macOS
 14.0，实际运行覆盖为 15.x；Apple 签名／公证及完整原生稳定切换继续单独处理。
+
+DMG 创建会记录完整工具输出，对明确的 DiskImages 占用响应或无输出的退出码 1 最多尝试五次，保留原有 120 秒超时。只清理本次创建所属的部分镜像；参数错误、超时及校验和错误仍按失败处理，镜像校验不会重试无输出错误。新增回归覆盖无输出创建恢复、重试耗尽及不可重试校验；个人版工作流执行全部 14 项 macOS
+Python 策略测试。本次创建修正的原生执行仍待验证。
 
 ### macOS 原生 QA 客户端
 
@@ -608,8 +611,16 @@ SHA-256；哈希不符直接失败，不执行回退。Linux 匿名 API 下载�
 `6d260c22b9914c0e6f2e5b945d76867a62137f4d` 的
 [Windows 候选验收](https://github.com/YondFane/uTerm/actions/runs/42583766437)已通过真实隔离 NSIS 安装、启动、截图及卸载。
 [候选证据](https://github.com/YondFane/uTerm/actions/runs/42583766437/artifacts/13658212771)包含
-`candidate-windows.json` 和 `candidate-installed-windows-window.png`。新增 SSH
-API 回退仍待 Windows 执行。
+`candidate-windows.json` 和 `candidate-installed-windows-window.png`。
+
+Windows 源码和实际测试提交 `2fb5ef8e68d7a90b8741da8354d554d8da362fc3` 已通过
+[完整桌面验证](https://github.com/YondFane/uTerm/actions/runs/42587567055)，包括真实 SSH、前后端测试、全部 73 个原生场景、输入控制及安装／卸载检查。
+[Windows 证据](https://github.com/YondFane/uTerm/actions/runs/42587567055/artifacts/13660962048)包含
+`tauri-state-qa/report.json`、`candidate/candidate-windows.json` 和原始截图，如
+`input-owner-input-owner-ready.png`。此前 PR merge 提交 `302588271bffbd0189449f0c977448d5ec96fb7d`
+曾等待终端窗口超时，失败保留在 run
+`42584992744`；同源码重验在未修改界面及验收条件的情况下通过。Windows
+SSH 实际执行已通过；备用 API 已在 Linux 独立下载验证，未在 Windows 强制选择该路径。
 
 - macOS 上的缓存配置验证通过 actionlint、工作流／Markdown 与全仓格式、文档元数据／索引检查及 284 项前端／构建工具测试（10 项跳过）。解析工作流后比对确认，现有 CI／发布检查、触发条件及权限保持不变，预热使用相同缓存配置与发布平台。远端缓存恢复／保存和耗时改善仍待工作流运行验证；未在本地执行 Windows 缓存路径检查。
 
