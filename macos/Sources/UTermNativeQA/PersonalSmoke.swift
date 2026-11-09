@@ -50,8 +50,20 @@ enum PersonalSmoke {
                 _ = try await bridge.call("rollback.export", params: .object(["expectedRevision": .string(String(repeating: "0", count: 64))]))
                 throw BridgeFailure(code: "PERSONAL_STALE_EXPORT", message: "Stale backup request was accepted")
             } catch let failure as BridgeFailure where failure.code == "CONFLICT" { report["staleBackupRejected"] = true }
-            guard model.updates.controller == nil, model.updates.updater == nil, !model.updates.available else { throw BridgeFailure(code: "PERSONAL_UPDATES", message: "Personal build initialized network updates") }
-            report["automaticOptInCannotStartUpdater"] = true
+            let automatic = Bundle.main.object(forInfoDictionaryKey: "UTermUpdateMode") as? String == "automatic"
+            report["updateMode"] = automatic ? "automatic" : "manual"
+            if automatic {
+                guard model.updates.available, model.updates.updater?.automaticallyChecksForUpdates == true,
+                      model.updates.updater?.automaticallyDownloadsUpdates == true else { throw BridgeFailure(code: "PERSONAL_UPDATES", message: "Personal opt-in did not enable checks and downloads") }
+                await model.patchSettings(["automaticUpdates": .bool(false)])
+                guard model.updates.updater?.automaticallyChecksForUpdates == false,
+                      model.updates.updater?.automaticallyDownloadsUpdates == false else { throw BridgeFailure(code: "PERSONAL_UPDATES", message: "Personal opt-out left checks or downloads enabled") }
+                await model.patchSettings(["automaticUpdates": .bool(true)])
+                report["automaticOptInAndOutVerified"] = true
+            } else {
+                guard model.updates.controller == nil, model.updates.updater == nil, !model.updates.available else { throw BridgeFailure(code: "PERSONAL_UPDATES", message: "Manual build initialized network updates") }
+                report["automaticOptInCannotStartUpdater"] = true
+            }
             await model.newTerminal()
             try await TerminalSmoke.wait("Personal Release helper starts a real PTY") { model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true && (model.selectedTerminal?.qaRenderedFrames ?? 0) > 0 }
             guard let terminal = model.selectedTerminal else { throw BridgeFailure(code: "PERSONAL_PTY", message: "Personal terminal is missing") }

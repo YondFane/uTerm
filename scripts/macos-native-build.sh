@@ -72,7 +72,11 @@ find "$native_swift_root/checkouts" -maxdepth 2 -iname 'LICENSE*' -ipath '*swift
 test -s "$native_app/Contents/Resources/Licenses/SwiftTerm.txt"
 find "$native_swift_root/checkouts" -maxdepth 2 -iname 'LICENSE*' -ipath '*sparkle*' -exec cp '{}' "$native_app/Contents/Resources/Licenses/Sparkle.txt" \;
 test -s "$native_app/Contents/Resources/Licenses/Sparkle.txt"
-python3 - "$native_app" "$(git rev-parse HEAD)" "$native_flavor" "$native_executable" <<'PY'
+native_update_config='{}'
+if [ "$native_flavor" = personal ]; then
+    native_update_config=$(node scripts/personal-updates.mjs config "$(uname -m)")
+fi
+python3 - "$native_app" "$(git rev-parse HEAD)" "$native_flavor" "$native_executable" "$native_update_config" <<'PY'
 import json, os, plistlib, sys
 from pathlib import Path
 app=Path(sys.argv[1])
@@ -86,11 +90,12 @@ if sys.argv[3]=='personal':
     version=json.loads(Path('package.json').read_text())['version']
     plist.update(CFBundleIdentifier='sh.uterm.desktop.personal', CFBundleName='uTerm Personal',
                  CFBundleDisplayName='uTerm Personal', CFBundleExecutable=sys.argv[4],
-                 CFBundleShortVersionString=version, CFBundleVersion=os.environ.get('GITHUB_RUN_NUMBER','1'),
+                 CFBundleShortVersionString=version, CFBundleVersion=version,
                  CFBundleIconFile='uTerm.icns', UTermBuildFlavor='personal', UTermUpdateMode='manual')
     import shutil
     shutil.copyfile('src-tauri/icons/icon.icns',app/'Contents/Resources/uTerm.icns')
 plist.update(SUEnableAutomaticChecks=False, SUAutomaticallyUpdate=False, SUAllowsAutomaticUpdates=False)
+plist.update(json.loads(sys.argv[5]))
 with (app/'Contents/Info.plist').open('wb') as f: plistlib.dump(plist,f)
 PY
 codesign --force --sign - "$native_app"

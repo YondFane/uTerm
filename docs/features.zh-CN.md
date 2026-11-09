@@ -3,7 +3,7 @@ title: uTerm 功能说明
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-07
+updated: 2026-11-09
 ---
 
 # uTerm 功能说明
@@ -36,49 +36,49 @@ uTerm 是 Windows 和 macOS 桌面终端。本地终端和 Agent 进程在本机
 ### macOS 个人应用
 
 实验性 **uTerm Personal** 在 macOS
-14+ 使用 Swift／AppKit 与共享 Rust 核心／helper 的 Release 构建，采用免费的个人自用 ad-hoc 签名，不需要付费 Apple
-Developer 账户或上架 App
-Store，也没有 Apple 公证。个人构建即使读取到启用自动更新的设置，也不会启动 Sparkle；界面显示手动更新说明，不显示网络更新控件。
+14+ 使用 Swift／AppKit 与共享 Rust 核心／helper，采用免费的 ad-hoc 签名，不需要付费 Apple
+Developer 账户或上架 App Store，也没有 Apple 公证。
 
-从按版本保存的[GitHub Release](https://github.com/YondFane/uTerm/releases)下载额外的 **Personal**
-Apple Silicon 或 Intel
-DMG／ZIP。已发布的Release附件不设置自动过期，可不登录GitHub下载。核对个人版SHA256SUMS文件，打开DMG，将
-**uTerm Personal.app**
-拖入Applications。如果macOS阻止未认证开发者，请在**系统设置 → 隐私与安全**中允许此已知构建。
+从按版本保存的[GitHub Release](https://github.com/YondFane/uTerm/releases)下载 **Personal** Apple
+Silicon 或 Intel DMG／ZIP，核对个人版 SHA256SUMS 文件，再将 **uTerm Personal.app**
+拖入 Applications。已发布附件不设置自动过期，下载无需登录 GitHub。首次启动可能需要在**系统设置 → 隐私与安全**中批准。0.2.6 没有更新器，需要先手动安装一次支持更新的新版。
+
+支持更新的构建在**设置 → 通用 → 自动检查并下载更新**中开启 Sparkle 检查与签名下载，默认关闭。应用菜单和设置也提供**检查更新…**。后台下载完成的更新可在退出应用时安装；立即安装并重启前由 Sparkle 请求确认，仍经过已有编辑器、传输和数据库退出保护。关闭开关会停止后续自动检查／下载，已准备好的更新仍可在退出时安装。更新失败会显示错误，可以手动重试。
+
+个人版使用独立 HTTPS `personal-stable-arm64.xml`、`personal-stable-x86_64.xml`
+更新源及 Ed25519 签名 ZIP。SDK 在解压前验签，下载前核对平台、架构、通道及归档来源，并排除旧版本。已有 Tauri 安装包及 JSON 更新源保持独立。更新包验签不需要付费 Apple 签名证书。
+
+身份 `sh.uterm.desktop.personal` 将配置保存在
+`~/Library/Application Support/sh.uterm.desktop.personal/`，不导入 Tauri／QA 数据，并拒绝指向其他配置的符号链接。更新只替换 App，保留配置和已分离会话。手动替换或回退前保留上一份下载包，停止任务、关闭会话、退出应用并备份该目录。不要向仍有应用／宿主运行的目录恢复旧数据。共享核心保留冲突检查、草稿恢复和显式回退导出；安装应用不会自动恢复旧数据，也不执行 Tauri 至原生客户端切换。
+
+#### 配置个人版更新签名
+
+在本地检出目录运行以下命令，密钥放在仓库外的新目录，并离线备份私钥。不要把私钥粘贴到 Issue、日志或聊天中；丢失或更换私钥后，信任旧密钥的客户端需要手动安装一次新版。
+
+```sh
+node scripts/personal-updates.mjs keygen "$HOME/uterm-personal-update-key"
+gh secret set PERSONAL_UPDATER_PRIVATE_KEY --repo YondFane/uTerm < "$HOME/uterm-personal-update-key/private-key.txt"
+gh variable set PERSONAL_UPDATER_PUBLIC_KEY --repo YondFane/uTerm < "$HOME/uterm-personal-update-key/public-key.txt"
+```
+
+私钥为 base64
+Ed25519 种子，公开变量为 base64 的 32 字节公钥，与已有 Tauri 签名凭据分开。发布流水线在构建前核对密钥配对，只将公钥嵌入应用，核对两个架构的精确源码及打包证据，对 ZIP 签名，验证公开归档后才更新个人版更新源。缺失或不匹配的签名配置会使发版失败，不会发布无法使用的个人更新源。本次代码修改本身不配置凭据，也不发布版本。
+
+#### 构建与验证
+
+在已安装文档所列 Node／pnpm、Rust 和 Xcode 工具的 Mac 图形会话运行
+`bash scripts/macos-native-build.sh personal`、`bash scripts/macos-native-test.sh personal` 和
+`python3 -B scripts/macos-personal-package.py --smoke`。未设置 `PERSONAL_UPDATER_PUBLIC_KEY`
+时，本地构建仍为手动更新，即使注入更新源元数据也不能初始化 Sparkle；设置此公钥后构建支持更新的 App。个人程序仍禁用 QA 命令参数，测试通过独立临时身份和包内固定配置执行。
 
 **macOS personal packages**
-Actions 工作流另保留90天验证产物，下载这些临时artifact需要登录GitHub。正式发布工作流从不可变版本标签构建同一套个人应用，校验两个架构的源码／版本／安装报告和包哈希后，将四个归档及校验和作为额外Release附件发布。已有Tauri安装包继续提供自动更新通道，个人版仍为独立配置、手动更新的客户端。
+工作流对 PR 使用临时测试密钥，对发版使用配置的公钥，保留报告、原始窗口截图和验证包 90 天，下载这些 artifact 需要登录 GitHub。PR 包使用测试密钥，仅用于验证，不接入生产更新通道。运行
+`python3 -B scripts/macos-updates-smoke.py --personal`
+可通过回环更新源执行真实个人版 SDK，以 Sparkle 官方签名工具核对 Node 生成的签名，覆盖正确／错误签名、架构／通道／版本拒绝、取消、离线／中断重试、自动检查／下载、安装及配置／会话保留。用户决定为模拟，SDK 下载、验签及应用替换为真实执行。
 
-个人身份为 `sh.uterm.desktop.personal`，配置目录为
-`~/Library/Application Support/sh.uterm.desktop.personal/`，不会导入或覆盖已有 Tauri／QA 配置。将存储重定向至其他配置的符号链接会被拒绝。手动更新时保留上一份下载包，停止任务、关闭会话并退出应用，备份个人配置目录，再仅替换 App。不要向仍有应用／宿主运行的目录恢复旧配置；仅退出应用会分离会话。共享核心继续保留快照冲突检查、草稿恢复和显式回退导出；此打包入口不会自动恢复数据，也不执行稳定版的 Tauri 至原生客户端切换。
-
-在已安装文档所列 Node／pnpm、Rust 和 Xcode 依赖的 Mac 上，先运行
-`bash scripts/macos-native-build.sh personal`，再在图形会话运行
-`bash scripts/macos-native-test.sh personal` 和
-`python3 -B scripts/macos-personal-package.py --smoke`。产物位于
-`macos/.build/personal-packages/`，不需要签名证书或发布凭据。默认构建命令仍生成隔离 QA 应用。个人程序禁用 QA 命令参数；CI 以独立身份和包内固定的临时配置，安全执行同一 Release 程序。
-
-#### 个人应用验证
-
-发布收集器拒绝过期源码／版本报告、重复架构、缺失真实安装证据及被修改的归档。镜像创建只对明确占用最多重试五次，保留诊断并拒绝已有输出。QA终端创建等待项目选择已渲染且按钮可交互，30秒等待期限不变。Linux已通过7项发布测试、6项镜像模拟、4项个人包测试、类型检查及完整前端回归（435通过、11跳过）。
-
-源码 `790dbf1bb1d028f70f3e43d0cef0a786eee5a1e0`、PR测试合成提交
-`221ebd650cd2e73ed73fea7fcce14b48edd15a9b`
-已通过[Windows与macOS真实应用QA](https://github.com/YondFane/uTerm/actions/runs/42341263310)。两端产物均包含输入控制方／查看方报告及原始窗口截图；控制方能够先创建可见真实终端，再移交输入控制。原生包、性能及发布检查分别保留绑定源码的报告；此结果不代表最终标签已发布或原生稳定切换已完成。
-
-源码 `5903045b8d1b899cfc98400dfb10c786536b1433`、PR测试合成提交
-`6635aee9229c633ab5db839efc04f0eeda0fdbcd` 已在 ARM64 macOS 15.8.2 和 Intel macOS
-15.7.9 通过[个人包工作流](https://github.com/YondFane/uTerm/actions/runs/42337113604)。两端使用 Xcode
-16.4、Swift 6.1.2 和 Rust 1.99.1；各执行43项Release
-Swift测试及4项打包拒绝测试，构建并核对实际ad-hoc应用，挂载只读DMG，以包内helper执行真实中文PTY输出。
-
-[ARM64产物](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560770121)和
-[Intel产物](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560586632)包含DMG／ZIP、校验和、
-`personal-package.json`、两个启动报告和两个回退导出、工具链／构建／测试日志及各六张原始窗口截图。四个包的哈希和包内源码／架构身份均已独立核对。十二张截图已逐张查看：真实英文深色与中文浅色设置、正确本地化的手动更新／登录项文案，以及同源码App替换前后的终端输出。一致性导出保留两个精确NFD／CRLF草稿并拒绝过期修订，原文件不变，测试宿主实际退出。保存的自动更新授权及注入的feed元数据均不能初始化更新器；发行身份中的QA参数不能重定向数据或写入冒烟报告。
-
-配置测试覆盖首次／已有目录、身份、临时测试边界及符号链接重定向。Linux打包／镜像模拟、Shell语法、格式和双语文档检查也通过。真实系统覆盖为macOS
-15.x，声明最低版本仍为14.0。这些检查验证同源码App替换，不代表跨版本稳定切换或Apple签名／公证；已有Tauri迁移及剩余验收继续单独由
-[#47](https://github.com/YondFane/uTerm/issues/47)跟踪。
+当前 Linux 已通过 10 项签名／发布测试及 5 项打包策略测试。本次源码的 macOS
+ARM64／Intel 构建、真实更新／安装及新设置截图待执行，旧的手动构建证据不能作为更新器验收结果。生产凭据及首个支持更新的版本尚未配置或发布。最低版本仍为 macOS
+14.0；Apple 签名／公证及完整原生稳定切换继续单独处理。
 
 ### macOS 原生 QA 客户端
 

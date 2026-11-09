@@ -1,4 +1,5 @@
 import importlib.util
+import base64
 import sys
 import unittest
 from pathlib import Path
@@ -48,6 +49,19 @@ class PersonalPackageTests(unittest.TestCase):
         for key, value in [("CFBundleShortVersionString", "0.0.1 QA"), ("LSMinimumSystemVersion", "15.0")]:
             with self.subTest(key=key), self.assertRaises(AssertionError):
                 package.validate_info({**self.info, key: value}, "a" * 40, "b" * 40)
+
+    def test_automatic_packages_require_a_real_key_and_the_dedicated_feed(self):
+        info = {**self.info, "UTermUpdateMode": "automatic", "SUAllowsAutomaticUpdates": True,
+                "SUPublicEDKey": base64.b64encode(bytes(range(32))).decode(), "SUVerifyUpdateBeforeExtraction": True,
+                "UTermUpdateFeedURL": "https://github.com/YondFane/uTerm/releases/download/uTerm-updates/personal-stable-arm64.xml",
+                "UTermUpdateChannel": "stable", "CFBundleVersion": self.info["CFBundleShortVersionString"]}
+        package.validate_info(info, "a" * 40, "b" * 40)
+        for key, value in [("SUPublicEDKey", base64.b64encode(bytes(31)).decode()), ("SUAllowsAutomaticUpdates", False),
+                           ("UTermUpdateFeedURL", "http://127.0.0.1/appcast.xml"), ("UTermUpdateChannel", "preview"),
+                           ("CFBundleVersion", "123"), ("UTermQAUpdateReport", "qa.json"),
+                           ("UTermUpdateFeedURL", "https://github.com/other/repo/releases/download/uTerm-updates/personal-stable-arm64.xml")]:
+            with self.subTest(key=key), self.assertRaises(AssertionError):
+                package.validate_info({**info, key: value}, "a" * 40, "b" * 40)
 
 
 if __name__ == "__main__":
