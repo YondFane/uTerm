@@ -108,31 +108,41 @@ covers good/bad signatures, architecture/channel/version rejection, cancel, offl
 retry, automatic checks/downloads, installation and profile/session retention. User decisions are
 simulated; SDK downloads, signature verification and app replacement are real.
 
-Current Linux checks passed 11 signing/release tests and 13 macOS packaging/capture policy tests.
+Current Linux checks passed 11 signing/release tests and 14 macOS packaging/capture policy tests.
 Windows-drive regression coverage checks a checkout on D: with key storage on C:, while still
-rejecting checkout descendants. The full Linux suite passed 440 tests with 11 platform skips.
+rejecting checkout descendants. The full Linux suite passed 444 tests with 11 platform skips.
 
-Updater implementation `a40c8b85a9a90f06dd0572059cb42c04ce0f1335`, tested merge
-`c7ebc4a015333e6916d6e3d5f54e0f575ceb715c`, passed the
-[personal Mac workflow](https://github.com/YondFane/uTerm/actions/runs/42561722731) on ARM64 macOS
-15.8.2 and Intel macOS 15.7.9. Each ran 43 Release Swift tests and all 10 actual SDK scenarios,
-including signed automatic download/install on quit and replacement/relaunch retaining drafts, PTY
-host and generation. Xcode 16.4, Swift 6.1.2 and Rust 1.99.1 were used.
+Native source head `647b3d77d9c3b23bdd2ec0dd04dd9b9cb9795596`, tested at PR merge
+`d783fab0b707f77ae8f0998a1453d1787e545c52`, passed 43 Release Swift tests, app packaging and exact
+English/Chinese no-update status checks on both ARM64 macOS 15.8.2 and Intel macOS 15.7.9 using
+Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. The
+[native verification](https://github.com/YondFane/uTerm/actions/runs/42591096958) passed all 10
+actual SDK scenarios on each architecture, including actual automatic install-on-quit and
+installation with profile, drafts and terminal session retention.
 
-[ARM64 evidence](https://github.com/YondFane/uTerm/actions/runs/42561722731/artifacts/13649823444)
+[ARM64 evidence](https://github.com/YondFane/uTerm/actions/runs/42591096958/artifacts/13663280744)
 and
-[Intel evidence](https://github.com/YondFane/uTerm/actions/runs/42561722731/artifacts/13650810282)
-contain `personal-package.json`, `updates/sdk-summary.json`, per-case reports, logs and 20 original
-captures each. Package hashes were independently checked; settings and relaunch captures were
-inspected. `updates/automatic/sdk-native.json` records actual automatic install on quit, and
-`updates/install/native-update-install-relaunched.png` shows output from the retained session.
+[Intel evidence](https://github.com/YondFane/uTerm/actions/runs/42591096958/artifacts/13662381794)
+contain `personal-package.json`, `updates/sdk-summary.json`, per-case reports and original captures.
+`personal-initial-settings-zh-Hans-light.png` shows the Chinese automatic-update setting and current
+status; `personal-initial-settings-en-dark.png` covers English and dark appearance. The ARM64
+package hashes and source identity were independently checked, and its settings screenshot was
+inspected.
 
-The status-language correction in `2f10dcfdd873c89b0c02ec4647113e6b92466443` adds exact
-English/Chinese no-update status checks before accepting captures. Its
-[native CI](https://github.com/YondFane/uTerm/actions/runs/42564318468) is still waiting for
-runners; the earlier images do not establish acceptance of this correction. Windows frontend/backend
-tests and the desktop build passed for this source. The minimum remains macOS 14.0; runtime coverage
-is 15.x. Apple signing/notarization and the full stable native cutover remain separate.
+The automatic smoke case waits for cycle completion, an idle updater and the actual scheduling
+callback before checking opt-out. Prepared installation alone cannot complete this wait, and the
+90-second deadline is unchanged. Reports record `completedSDKCycleAndSchedulingBeforeOptOut`; the
+Python verifier requires it alongside actual scheduler and opt-out evidence. Both native runs passed
+this correction. The minimum remains macOS 14.0; runtime coverage is 15.x. Apple
+signing/notarization and the full stable native cutover remain separate.
+
+DMG creation records full tool output and retries explicit DiskImages busy responses or silent exit
+code 1, with at most five attempts and the existing 120-second timeout. Only this attempt's partial
+image may be removed. Invalid arguments, timeouts and checksum verification errors remain failures;
+verification does not retry silent errors. The new regression covers silent creation recovery,
+exhaustion and non-retryable verification. The personal workflow runs all 14 macOS Python policy
+tests. The corrected creation, image verification, real-window checks and all ten SDK scenarios
+passed on both native architectures at the source and tested merge listed above.
 
 ### Native macOS QA client
 
@@ -1111,6 +1121,48 @@ source/tag validation, signing or public-download/update-feed checks. A missing 
 falls back to a normal build; first runs and compiler changes can still require cold compilation.
 
 #### Stable-release checks
+
+Release and Windows candidate installer builds run through `node scripts/tauri-build.mjs`. Only the
+official NSIS archive and Tauri NSIS plugin downloads followed by HTTP 429/502/503/504 bundler
+errors retry, with at most three attempts separated by five seconds. Compiler, signing, permanent
+HTTP and other errors retain their exit status. Every attempt still uses Tauri's tool verification
+and installer signing.
+
+The isolated Windows SSH fixture uses `curl.exe` against the official release URL, falling back to
+GitHub's official asset API for the same pinned archive if transport retries fail. Each endpoint has
+three retries, a 120-second retry budget and a 120-second per-attempt timeout. Both routes must pass
+the same OpenSSH SHA-256 before extraction; a checksum mismatch fails without fallback. An anonymous
+Linux download through the API matched the pinned digest and published 6,021,393-byte asset.
+
+All four child-process regressions passed, covering NSIS archive/plugin recovery after HTTP 504,
+exhausted attempts, literal arguments and errors that must not retry. The full Linux suite passed
+444 tests with 11 platform skips. At source head `8264545a8d3f439fd5f301591206843e5c5d4a7f`, tested
+PR merge `6d260c22b9914c0e6f2e5b945d76867a62137f4d`,
+[Windows candidate verification](https://github.com/YondFane/uTerm/actions/runs/42583766437) passed
+actual isolated NSIS installation, launch, screenshot and uninstall.
+[Candidate evidence](https://github.com/YondFane/uTerm/actions/runs/42583766437/artifacts/13658212771)
+contains `candidate-windows.json` and `candidate-installed-windows-window.png`.
+
+Windows source and tested commit `2fb5ef8e68d7a90b8741da8354d554d8da362fc3` passed the
+[complete desktop verification](https://github.com/YondFane/uTerm/actions/runs/42587567055),
+including real SSH, frontend/backend tests, all 73 native scenes, input control and
+installer/uninstaller checks.
+[Windows evidence](https://github.com/YondFane/uTerm/actions/runs/42587567055/artifacts/13660962048)
+contains `tauri-state-qa/report.json`, `candidate/candidate-windows.json` and original captures,
+including `input-owner-input-owner-ready.png`. An earlier PR-merge attempt at
+`302588271bffbd0189449f0c977448d5ec96fb7d` timed out waiting for the terminal window; its failure
+remains available in run `42584992744`, and the same-source repeat passed without changing the UI or
+acceptance. Windows SSH execution passed; the API fallback was independently downloaded on Linux and
+was not forcibly selected on Windows.
+
+The input-ownership QA waits for queued project-selection writes and two rendered frames before
+activating New terminal, then drains the resulting write before checking the actual selected view.
+Its 30-second terminal deadline and all running-session, input-control and rendering assertions are
+unchanged. Failures include the observed workspace/project/session IDs, prior session IDs and view
+geometry. Five existing real-Core queue/flush regressions, type checks, the full 444-pass Linux
+suite and production build passed for this sequence;
+[PR #50](https://github.com/YondFane/uTerm/pull/50) records its current native execution and exact
+source evidence.
 
 - Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
   formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).

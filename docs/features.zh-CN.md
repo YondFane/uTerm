@@ -76,22 +76,27 @@ Ed25519 种子，公开变量为 base64 的 32 字节公钥，与已有 Tauri �
 `python3 -B scripts/macos-updates-smoke.py --personal`
 可通过回环更新源执行真实个人版 SDK，以 Sparkle 官方签名工具核对 Node 生成的签名，覆盖正确／错误签名、架构／通道／版本拒绝、取消、离线／中断重试、自动检查／下载、安装及配置／会话保留。用户决定为模拟，SDK 下载、验签及应用替换为真实执行。
 
-当前 Linux 已通过 11 项签名／发布测试及 13 项 macOS 打包／截图策略测试。Windows 跨盘回归覆盖仓库位于 D 盘、密钥位于 C 盘的情况，并继续拒绝仓库内的密钥目录。完整 Linux 回归通过 440 项，11 项按平台跳过。
+当前 Linux 已通过 11 项签名／发布测试及 14 项 macOS 打包／截图策略测试。Windows 跨盘回归覆盖仓库位于 D 盘、密钥位于 C 盘的情况，并继续拒绝仓库内的密钥目录。完整 Linux 回归通过 444 项，11 项按平台跳过。
 
-更新器实现 `a40c8b85a9a90f06dd0572059cb42c04ce0f1335`、实际测试 merge
-`c7ebc4a015333e6916d6e3d5f54e0f575ceb715c` 已在 ARM64 macOS 15.8.2 和 Intel macOS
-15.7.9 通过[个人版 Mac 工作流](https://github.com/YondFane/uTerm/actions/runs/42561722731)。各运行 43 项 Release
-Swift 测试及全部 10 类真实 SDK 场景，包括签名自动下载／退出安装，以及保留草稿、PTY 宿主和 generation 的应用替换／重启。工具链为 Xcode
+原生源码 head `647b3d77d9c3b23bdd2ec0dd04dd9b9cb9795596`，实际测试的 PR merge 提交
+`d783fab0b707f77ae8f0998a1453d1787e545c52`，已在 ARM64 macOS 15.8.2 和 Intel macOS
+15.7.9 通过各 43 项 Release Swift 测试、应用打包及精确中英文无更新状态检查。工具链为 Xcode
 16.4、Swift 6.1.2 和 Rust 1.99.1。
+[原生验证](https://github.com/YondFane/uTerm/actions/runs/42591096958)在两种架构均通过全部 10 类真实 SDK 场景，包括真实自动退出安装，以及安装后配置、草稿和终端会话保留。
 
-[ARM64 证据](https://github.com/YondFane/uTerm/actions/runs/42561722731/artifacts/13649823444)和
-[Intel 证据](https://github.com/YondFane/uTerm/actions/runs/42561722731/artifacts/13650810282) 包含
-`personal-package.json`、`updates/sdk-summary.json`、各场景报告、日志及各 20 张原始截图。已独立核对包哈希，并查看设置及重启截图。`updates/automatic/sdk-native.json`
-记录实际退出自动安装， `updates/install/native-update-install-relaunched.png` 展示保留会话的新输出。
+[ARM64 证据](https://github.com/YondFane/uTerm/actions/runs/42591096958/artifacts/13663280744)和
+[Intel 证据](https://github.com/YondFane/uTerm/actions/runs/42591096958/artifacts/13662381794) 包含
+`personal-package.json`、`updates/sdk-summary.json`、各场景报告和原始截图。
+`personal-initial-settings-zh-Hans-light.png` 展示中文自动更新设置与当前状态，
+`personal-initial-settings-en-dark.png`
+覆盖英文与深色外观。已独立核对 ARM64 包哈希和源码身份，并查看其设置原图。
 
-状态语言修正 `2f10dcfdd873c89b0c02ec4647113e6b92466443`
-增加英文／中文无更新状态核对，检查后才接受截图。其[原生 CI](https://github.com/YondFane/uTerm/actions/runs/42564318468)仍在等待 runner，旧图不能作为此修正的验收。该源码的 Windows 前端／后端测试及桌面构建已通过。最低版本仍为 macOS
+自动更新冒烟会等待周期结束、更新器空闲及真实调度回调，再检查关闭授权的行为；仅完成安装准备不能结束等待，90 秒期限不变。报告记录
+`completedSDKCycleAndSchedulingBeforeOptOut`，Python 验证器同时要求该字段以及真实调度和关闭授权的证据；本次两种架构均通过此修正。最低版本仍为 macOS
 14.0，实际运行覆盖为 15.x；Apple 签名／公证及完整原生稳定切换继续单独处理。
+
+DMG 创建会记录完整工具输出，对明确的 DiskImages 占用响应或无输出的退出码 1 最多尝试五次，保留原有 120 秒超时。只清理本次创建所属的部分镜像；参数错误、超时及校验和错误仍按失败处理，镜像校验不会重试无输出错误。新增回归覆盖无输出创建恢复、重试耗尽及不可重试校验；个人版工作流执行全部 14 项 macOS
+Python 策略测试。上述源码及实际测试 merge 已在两种原生架构通过修正后的镜像创建、校验、真实窗口检查及全部 10 类 SDK 场景。
 
 ### macOS 原生 QA 客户端
 
@@ -591,6 +596,34 @@ ARM64、macOS Intel 和 Windows x64 上编译测试目标及发布版桌面应�
 缓存命中不会跳过锁定依赖安装、格式、文档、测试、源码／标签验证、签名或公开下载／更新清单检查。缓存缺失或过期时正常构建；首次运行和编译器变化仍可能需要完整编译。
 
 #### 稳定版本检查
+
+发版及 Windows 候选安装器通过 `node scripts/tauri-build.mjs` 构建。仅当官方 NSIS 主包或 Tauri
+NSIS 插件下载后出现 HTTP
+429／502／503／504 打包错误时重试，每次间隔五秒，最多尝试三次。编译、签名、永久 HTTP 及其他错误保留实际退出状态；每次仍由 Tauri 校验工具并签名安装器。
+
+隔离 Windows SSH 测试通过 `curl.exe`
+访问官方下载地址，传输重试失败后通过 GitHub 官方资产 API 下载同一固定归档。每个地址最多重试三次，重试时间预算与单次超时均为 120 秒。两条路径在解压前均须通过同一 OpenSSH
+SHA-256；哈希不符直接失败，不执行回退。Linux 匿名 API 下载已匹配固定哈希及官方资产的 6,021,393 字节大小。
+
+四项子进程回归全部通过，覆盖 NSIS 主包／插件 HTTP
+504 后恢复、重试耗尽、字面参数及不可重试错误；完整 Linux 回归通过 444 项，11 项按平台跳过。源码 head
+`8264545a8d3f439fd5f301591206843e5c5d4a7f`、实际测试 PR merge
+`6d260c22b9914c0e6f2e5b945d76867a62137f4d` 的
+[Windows 候选验收](https://github.com/YondFane/uTerm/actions/runs/42583766437)已通过真实隔离 NSIS 安装、启动、截图及卸载。
+[候选证据](https://github.com/YondFane/uTerm/actions/runs/42583766437/artifacts/13658212771)包含
+`candidate-windows.json` 和 `candidate-installed-windows-window.png`。
+
+Windows 源码和实际测试提交 `2fb5ef8e68d7a90b8741da8354d554d8da362fc3` 已通过
+[完整桌面验证](https://github.com/YondFane/uTerm/actions/runs/42587567055)，包括真实 SSH、前后端测试、全部 73 个原生场景、输入控制及安装／卸载检查。
+[Windows 证据](https://github.com/YondFane/uTerm/actions/runs/42587567055/artifacts/13660962048)包含
+`tauri-state-qa/report.json`、`candidate/candidate-windows.json` 和原始截图，如
+`input-owner-input-owner-ready.png`。此前 PR merge 提交 `302588271bffbd0189449f0c977448d5ec96fb7d`
+曾等待终端窗口超时，失败保留在 run
+`42584992744`；同源码重验在未修改界面及验收条件的情况下通过。Windows
+SSH 实际执行已通过；备用 API 已在 Linux 独立下载验证，未在 Windows 强制选择该路径。
+
+输入所有权 QA 会等待排队的项目选择写入及两帧界面提交，再激活“新建终端”，并在检查实际选中视图前排空该操作的写入。原有 30 秒终端期限以及会话运行、输入控制和渲染断言保持不变；失败报告记录实际工作区／项目／会话 ID、之前的会话 ID 及视图尺寸。此顺序已通过五项现有真实 Core 队列／排空回归、类型检查、完整 Linux 回归（444 项通过）及生产构建；
+[PR #50](https://github.com/YondFane/uTerm/pull/50)记录其当前的原生执行和准确源码证据。
 
 - macOS 上的缓存配置验证通过 actionlint、工作流／Markdown 与全仓格式、文档元数据／索引检查及 284 项前端／构建工具测试（10 项跳过）。解析工作流后比对确认，现有 CI／发布检查、触发条件及权限保持不变，预热使用相同缓存配置与发布平台。远端缓存恢复／保存和耗时改善仍待工作流运行验证；未在本地执行 Windows 缓存路径检查。
 

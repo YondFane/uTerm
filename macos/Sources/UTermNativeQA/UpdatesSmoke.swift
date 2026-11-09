@@ -37,11 +37,14 @@ enum UpdatesSmoke {
         func waitForCycle(after count: Int) async throws {
             let deadline = Date().addingTimeInterval(90)
             while Date() < deadline {
-                if mode == "automatic", updates.qaEvents.contains(where: { $0.hasPrefix("install-on-quit:") }) { return }
-                if updates.qaEvents.filter({ $0 == "cycle-finished" }).count > count, updates.updater?.sessionInProgress == false { return }
+                // Preparing installation precedes both cycle completion and the next scheduling callback.
+                // 准备安装发生在周期结束及下一次调度回调之前。
+                let finished = updates.qaEvents.filter({ $0 == "cycle-finished" }).count > count && updates.updater?.sessionInProgress == false
+                let scheduled = mode != "automatic" || updates.qaEvents.contains(where: { $0.hasPrefix("scheduled:") })
+                if finished && scheduled { return }
                 try await Task.sleep(for: .milliseconds(100))
             }
-            throw BridgeFailure(code: "UPDATE_QA_TIMEOUT", message: "SDK update cycle did not finish")
+            throw BridgeFailure(code: "UPDATE_QA_TIMEOUT", message: "SDK update cycle or required scheduling callback did not finish")
         }
         try await waitForCycle(after: 0)
         report["sdkEvents"] = updates.qaEvents
@@ -62,6 +65,7 @@ enum UpdatesSmoke {
         }
         if mode == "automatic" {
             guard updates.qaEvents.contains(where: { $0.hasPrefix("scheduled:") }) else { throw BridgeFailure(code: "UPDATE_QA_SCHEDULER", message: "No actual SDK scheduling callback was observed") }
+            report["completedSDKCycleAndSchedulingBeforeOptOut"] = true
             await model.patchSettings(["automaticUpdates": .bool(false)])
             guard updates.updater?.automaticallyChecksForUpdates == false else { throw BridgeFailure(code: "UPDATE_QA_OPT_OUT", message: "Shared opt-out left the SDK scheduler enabled") }
             guard updates.updater?.automaticallyDownloadsUpdates == false else { throw BridgeFailure(code: "UPDATE_QA_OPT_OUT", message: "Shared opt-out left background downloads enabled") }

@@ -71,7 +71,7 @@ try {
     $env:UTERM_QA_HEAD = $candidateReport.sourceHeadSHA
     $env:UTERM_QA_TESTED = $candidateHead
     $env:UTERM_QA_DIRTY = 'false'
-    Candidate-Run 'node' @('node_modules/@tauri-apps/cli/tauri.js', 'build', '--debug', '--features', 'qa', '--bundles', 'nsis', '--config', $overlayPath, '--', '--locked')
+    Candidate-Run 'node' @('scripts/tauri-build.mjs', '--debug', '--features', 'qa', '--bundles', 'nsis', '--config', $overlayPath, '--', '--locked')
     $target = if ($env:CARGO_TARGET_DIR) { $env:CARGO_TARGET_DIR } else { 'src-tauri/target' }
     $installers = @(Get-ChildItem (Join-Path $target 'debug/bundle/nsis') -Filter "$candidateProduct*-setup.exe")
     if ($installers.Count -ne 1) { throw 'Expected exactly one Windows QA NSIS package' }
