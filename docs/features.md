@@ -1120,11 +1120,21 @@ errors retry, with at most three attempts separated by five seconds. Compiler, s
 HTTP and other errors retain their exit status. Every attempt still uses Tauri's tool verification
 and installer signing.
 
-The isolated Windows SSH fixture uses `curl.exe` with three download retries and a 120-second
-per-attempt timeout, then checks the pinned OpenSSH SHA-256 before extraction. New child-process
-regressions passed all four tests, covering archive/plugin recovery after HTTP 504, exhausted
-attempts, literal arguments and errors that must not retry. The full Linux suite passed 444 tests
-with 11 platform skips; current Windows execution remains pending.
+The isolated Windows SSH fixture uses `curl.exe` against the official release URL, falling back to
+GitHub's official asset API for the same pinned archive if transport retries fail. Each endpoint has
+three retries, a 120-second retry budget and a 120-second per-attempt timeout. Both routes must pass
+the same OpenSSH SHA-256 before extraction; a checksum mismatch fails without fallback. An anonymous
+Linux download through the API matched the pinned digest and published 6,021,393-byte asset.
+
+All four child-process regressions passed, covering NSIS archive/plugin recovery after HTTP 504,
+exhausted attempts, literal arguments and errors that must not retry. The full Linux suite passed
+444 tests with 11 platform skips. At source head `8264545a8d3f439fd5f301591206843e5c5d4a7f`, tested
+PR merge `6d260c22b9914c0e6f2e5b945d76867a62137f4d`,
+[Windows candidate verification](https://github.com/YondFane/uTerm/actions/runs/42583766437) passed
+actual isolated NSIS installation, launch, screenshot and uninstall.
+[Candidate evidence](https://github.com/YondFane/uTerm/actions/runs/42583766437/artifacts/13658212771)
+contains `candidate-windows.json` and `candidate-installed-windows-window.png`. The new SSH API
+fallback still requires Windows execution.
 
 - Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
   formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).

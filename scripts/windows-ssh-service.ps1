@@ -32,8 +32,15 @@ if (Test-Path $manifest) { throw 'SSH fixture already exists' }
 $settings = Get-Content -Raw (Join-Path $Root 'server-settings.json') | ConvertFrom-Json
 $version = '10.4.0.0p1-Preview'
 $archive = Join-Path $Root 'openssh.zip'
-& curl.exe --fail --location --silent --show-error --retry 3 --retry-all-errors --retry-delay 5 --max-time 120 --output $archive "https://github.com/PowerShell/Win32-OpenSSH/releases/download/$version/OpenSSH-Win64.zip"
-if ($LASTEXITCODE -ne 0) { throw 'OpenSSH fixture download failed after bounded retries' }
+$sshDownloadArguments = @('--fail', '--location', '--silent', '--show-error', '--retry', '3', '--retry-all-errors', '--retry-delay', '5', '--retry-max-time', '120', '--max-time', '120', '--output', $archive)
+& curl.exe @sshDownloadArguments "https://github.com/PowerShell/Win32-OpenSSH/releases/download/$version/OpenSSH-Win64.zip"
+if ($LASTEXITCODE -ne 0) {
+    # The official asset API is a second route to the same pinned archive, verified below.
+    # 官方资产 API 提供同一固定归档的另一条下载路径，仍须通过下方校验。
+    Write-Host 'Retrying the pinned OpenSSH archive through the official GitHub asset API.'
+    & curl.exe @sshDownloadArguments --header 'Accept: application/octet-stream' 'https://api.github.com/repos/PowerShell/Win32-OpenSSH/releases/assets/645185877'
+    if ($LASTEXITCODE -ne 0) { throw 'OpenSSH fixture download failed after bounded retries on both official endpoints' }
+}
 if ((Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant() -ne 'b67ff8becd203502190ec42ac7787c24c2cd3325ed7700485fe7a1c83d2a7957') { throw 'OpenSSH fixture checksum mismatch' }
 Expand-Archive $archive (Join-Path $Root 'server')
 $server = Join-Path $Root 'server/OpenSSH-Win64/sshd.exe'

@@ -598,9 +598,18 @@ ARM64、macOS Intel 和 Windows x64 上编译测试目标及发布版桌面应�
 NSIS 插件下载后出现 HTTP
 429／502／503／504 打包错误时重试，每次间隔五秒，最多尝试三次。编译、签名、永久 HTTP 及其他错误保留实际退出状态；每次仍由 Tauri 校验工具并签名安装器。
 
-隔离 Windows SSH 测试通过 `curl.exe` 下载，最多重试三次，每次限时 120 秒，解压前核对固定的 OpenSSH
-SHA-256。三项新增子进程回归全部通过，覆盖 HTTP
-504 后恢复、重试耗尽、字面参数及不可重试错误；完整 Linux 回归通过 444 项，11 项按平台跳过。本次 Windows 执行仍待验证。
+隔离 Windows SSH 测试通过 `curl.exe`
+访问官方下载地址，传输重试失败后通过 GitHub 官方资产 API 下载同一固定归档。每个地址最多重试三次，重试时间预算与单次超时均为 120 秒。两条路径在解压前均须通过同一 OpenSSH
+SHA-256；哈希不符直接失败，不执行回退。Linux 匿名 API 下载已匹配固定哈希及官方资产的 6,021,393 字节大小。
+
+四项子进程回归全部通过，覆盖 NSIS 主包／插件 HTTP
+504 后恢复、重试耗尽、字面参数及不可重试错误；完整 Linux 回归通过 444 项，11 项按平台跳过。源码 head
+`8264545a8d3f439fd5f301591206843e5c5d4a7f`、实际测试 PR merge
+`6d260c22b9914c0e6f2e5b945d76867a62137f4d` 的
+[Windows 候选验收](https://github.com/YondFane/uTerm/actions/runs/42583766437)已通过真实隔离 NSIS 安装、启动、截图及卸载。
+[候选证据](https://github.com/YondFane/uTerm/actions/runs/42583766437/artifacts/13658212771)包含
+`candidate-windows.json` 和 `candidate-installed-windows-window.png`。新增 SSH
+API 回退仍待 Windows 执行。
 
 - macOS 上的缓存配置验证通过 actionlint、工作流／Markdown 与全仓格式、文档元数据／索引检查及 284 项前端／构建工具测试（10 项跳过）。解析工作流后比对确认，现有 CI／发布检查、触发条件及权限保持不变，预热使用相同缓存配置与发布平台。远端缓存恢复／保存和耗时改善仍待工作流运行验证；未在本地执行 Windows 缓存路径检查。
 
