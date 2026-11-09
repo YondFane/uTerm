@@ -112,17 +112,17 @@ Current Linux checks passed 11 signing/release tests and 14 macOS packaging/capt
 Windows-drive regression coverage checks a checkout on D: with key storage on C:, while still
 rejecting checkout descendants. The full Linux suite passed 444 tests with 11 platform skips.
 
-Native source head `1b521d2ed7c239a4e9df7601d9085f6289852f86`, tested at PR merge
-`88ffbf210636843649a11def1b4933afd02f3320`, passed 43 Release Swift tests, app packaging and exact
+Native source head `647b3d77d9c3b23bdd2ec0dd04dd9b9cb9795596`, tested at PR merge
+`d783fab0b707f77ae8f0998a1453d1787e545c52`, passed 43 Release Swift tests, app packaging and exact
 English/Chinese no-update status checks on both ARM64 macOS 15.8.2 and Intel macOS 15.7.9 using
 Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. The
-[native verification](https://github.com/YondFane/uTerm/actions/runs/42579926464) passed all 10
+[native verification](https://github.com/YondFane/uTerm/actions/runs/42591096958) passed all 10
 actual SDK scenarios on each architecture, including actual automatic install-on-quit and
 installation with profile, drafts and terminal session retention.
 
-[ARM64 evidence](https://github.com/YondFane/uTerm/actions/runs/42579926464/artifacts/13656229968)
+[ARM64 evidence](https://github.com/YondFane/uTerm/actions/runs/42591096958/artifacts/13663280744)
 and
-[Intel evidence](https://github.com/YondFane/uTerm/actions/runs/42579926464/artifacts/13657153123)
+[Intel evidence](https://github.com/YondFane/uTerm/actions/runs/42591096958/artifacts/13662381794)
 contain `personal-package.json`, `updates/sdk-summary.json`, per-case reports and original captures.
 `personal-initial-settings-zh-Hans-light.png` shows the Chinese automatic-update setting and current
 status; `personal-initial-settings-en-dark.png` covers English and dark appearance. The ARM64
@@ -141,7 +141,8 @@ code 1, with at most five attempts and the existing 120-second timeout. Only thi
 image may be removed. Invalid arguments, timeouts and checksum verification errors remain failures;
 verification does not retry silent errors. The new regression covers silent creation recovery,
 exhaustion and non-retryable verification. The personal workflow runs all 14 macOS Python policy
-tests. Native execution of this creation correction is pending.
+tests. The corrected creation, image verification, real-window checks and all ten SDK scenarios
+passed on both native architectures at the source and tested merge listed above.
 
 ### Native macOS QA client
 
@@ -1153,6 +1154,15 @@ including `input-owner-input-owner-ready.png`. An earlier PR-merge attempt at
 remains available in run `42584992744`, and the same-source repeat passed without changing the UI or
 acceptance. Windows SSH execution passed; the API fallback was independently downloaded on Linux and
 was not forcibly selected on Windows.
+
+The input-ownership QA waits for queued project-selection writes and two rendered frames before
+activating New terminal, then drains the resulting write before checking the actual selected view.
+Its 30-second terminal deadline and all running-session, input-control and rendering assertions are
+unchanged. Failures include the observed workspace/project/session IDs, prior session IDs and view
+geometry. Five existing real-Core queue/flush regressions, type checks, the full 444-pass Linux
+suite and production build passed for this sequence;
+[PR #50](https://github.com/YondFane/uTerm/pull/50) records its current native execution and exact
+source evidence.
 
 - Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
   formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).

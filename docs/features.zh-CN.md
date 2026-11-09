@@ -78,14 +78,14 @@ Ed25519 种子，公开变量为 base64 的 32 字节公钥，与已有 Tauri �
 
 当前 Linux 已通过 11 项签名／发布测试及 14 项 macOS 打包／截图策略测试。Windows 跨盘回归覆盖仓库位于 D 盘、密钥位于 C 盘的情况，并继续拒绝仓库内的密钥目录。完整 Linux 回归通过 444 项，11 项按平台跳过。
 
-原生源码 head `1b521d2ed7c239a4e9df7601d9085f6289852f86`，实际测试的 PR merge 提交
-`88ffbf210636843649a11def1b4933afd02f3320`，已在 ARM64 macOS 15.8.2 和 Intel macOS
+原生源码 head `647b3d77d9c3b23bdd2ec0dd04dd9b9cb9795596`，实际测试的 PR merge 提交
+`d783fab0b707f77ae8f0998a1453d1787e545c52`，已在 ARM64 macOS 15.8.2 和 Intel macOS
 15.7.9 通过各 43 项 Release Swift 测试、应用打包及精确中英文无更新状态检查。工具链为 Xcode
 16.4、Swift 6.1.2 和 Rust 1.99.1。
-[原生验证](https://github.com/YondFane/uTerm/actions/runs/42579926464)在两种架构均通过全部 10 类真实 SDK 场景，包括真实自动退出安装，以及安装后配置、草稿和终端会话保留。
+[原生验证](https://github.com/YondFane/uTerm/actions/runs/42591096958)在两种架构均通过全部 10 类真实 SDK 场景，包括真实自动退出安装，以及安装后配置、草稿和终端会话保留。
 
-[ARM64 证据](https://github.com/YondFane/uTerm/actions/runs/42579926464/artifacts/13656229968)和
-[Intel 证据](https://github.com/YondFane/uTerm/actions/runs/42579926464/artifacts/13657153123) 包含
+[ARM64 证据](https://github.com/YondFane/uTerm/actions/runs/42591096958/artifacts/13663280744)和
+[Intel 证据](https://github.com/YondFane/uTerm/actions/runs/42591096958/artifacts/13662381794) 包含
 `personal-package.json`、`updates/sdk-summary.json`、各场景报告和原始截图。
 `personal-initial-settings-zh-Hans-light.png` 展示中文自动更新设置与当前状态，
 `personal-initial-settings-en-dark.png`
@@ -96,7 +96,7 @@ Ed25519 种子，公开变量为 base64 的 32 字节公钥，与已有 Tauri �
 14.0，实际运行覆盖为 15.x；Apple 签名／公证及完整原生稳定切换继续单独处理。
 
 DMG 创建会记录完整工具输出，对明确的 DiskImages 占用响应或无输出的退出码 1 最多尝试五次，保留原有 120 秒超时。只清理本次创建所属的部分镜像；参数错误、超时及校验和错误仍按失败处理，镜像校验不会重试无输出错误。新增回归覆盖无输出创建恢复、重试耗尽及不可重试校验；个人版工作流执行全部 14 项 macOS
-Python 策略测试。本次创建修正的原生执行仍待验证。
+Python 策略测试。上述源码及实际测试 merge 已在两种原生架构通过修正后的镜像创建、校验、真实窗口检查及全部 10 类 SDK 场景。
 
 ### macOS 原生 QA 客户端
 
@@ -621,6 +621,9 @@ Windows 源码和实际测试提交 `2fb5ef8e68d7a90b8741da8354d554d8da362fc3` �
 曾等待终端窗口超时，失败保留在 run
 `42584992744`；同源码重验在未修改界面及验收条件的情况下通过。Windows
 SSH 实际执行已通过；备用 API 已在 Linux 独立下载验证，未在 Windows 强制选择该路径。
+
+输入所有权 QA 会等待排队的项目选择写入及两帧界面提交，再激活“新建终端”，并在检查实际选中视图前排空该操作的写入。原有 30 秒终端期限以及会话运行、输入控制和渲染断言保持不变；失败报告记录实际工作区／项目／会话 ID、之前的会话 ID 及视图尺寸。此顺序已通过五项现有真实 Core 队列／排空回归、类型检查、完整 Linux 回归（444 项通过）及生产构建；
+[PR #50](https://github.com/YondFane/uTerm/pull/50)记录其当前的原生执行和准确源码证据。
 
 - macOS 上的缓存配置验证通过 actionlint、工作流／Markdown 与全仓格式、文档元数据／索引检查及 284 项前端／构建工具测试（10 项跳过）。解析工作流后比对确认，现有 CI／发布检查、触发条件及权限保持不变，预热使用相同缓存配置与发布平台。远端缓存恢复／保存和耗时改善仍待工作流运行验证；未在本地执行 Windows 缓存路径检查。
 
