@@ -1,5 +1,6 @@
 """Exercise the actual Sparkle SDK against private loopback feeds. 使用私有回环源执行真实 Sparkle SDK。"""
 
+import argparse
 import base64
 import hashlib
 import http.server
@@ -47,7 +48,9 @@ def validate_capture_request(request, head, tested, identity, original_pid):
 def exercise(source, folder, evidence, signer, mode, head, tested, capture_tool, database_fixture=None):
     root = folder / ("uterm-native-qa-" + mode)
     root.mkdir()
-    identity = "sh.uterm.desktop.qa.native.update." + uuid.uuid4().hex
+    source_info = plistlib.loads((source / "Contents/Info.plist").read_bytes())
+    personal = source_info.get("UTermBuildFlavor") == "personal"
+    identity = ("sh.uterm.desktop.qa.native.personal.update." if personal else "sh.uterm.desktop.qa.native.update.") + uuid.uuid4().hex
     # Refuse an existing SDK profile; cleanup is limited to this newly generated identity.
     # 拒绝已有 SDK 配置，清理仅限本次新建标识。
     cache = Path.home() / "Library/Caches" / identity
@@ -133,20 +136,23 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
     try:
-        app = root / "Private Applications/UTermNativeQA.app"
+        app = root / "Private Applications" / source.name
         app.parent.mkdir()
-        info = plistlib.loads((source / "Contents/Info.plist").read_bytes())
+        info = source_info.copy()
         info.update(CFBundleIdentifier=identity, UTermQADataRoot=str(root), UTermUpdateTestMode=mode,
+                    CFBundleVersion="1", CFBundleShortVersionString="0.0.1",
                     UTermUpdateFeedURL=f"http://127.0.0.1:{server.server_port}/appcast.xml",
                     UTermUpdateChannel="stable", SUPublicEDKey=public_key, SUVerifyUpdateBeforeExtraction=True)
-        if mode == "install": info["UTermQAUpdateReport"] = str(case_dir / "sdk-native.json")
+        if mode == "install" or personal: info["UTermQAUpdateReport"] = str(case_dir / "sdk-native.json")
+        if personal:
+            info.update(UTermUpdateMode="automatic", SUAllowsAutomaticUpdates=True)
         configure_app(source, app, info)
-        payload = root / "payload/UTermNativeQA.app"
+        payload = root / "payload" / source.name
         payload.parent.mkdir()
         updated = {**info, "CFBundleVersion": "2", "CFBundleShortVersionString": "0.0.2"}
         configure_app(source, payload, updated)
         run("ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", payload, archive)
-        signature = run(signer, "--ed-key-file", key, "-p", archive).decode().strip()
+        signature = run("env", f"PERSONAL_UPDATER_PUBLIC_KEY={public_key}", "node", "scripts/personal-updates.mjs", "sign", archive, key).decode().strip()
         assert len(base64.b64decode(signature, validate=True)) == 64
         run(signer, "--verify", "--ed-key-file", key, archive, signature)
         report = case_dir / "sdk-native.json"
@@ -156,7 +162,7 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
                 environment = dict(os.environ)
                 if database_fixture:
                     environment["UTERM_QA_DATABASE_FIXTURE"] = str(database_fixture)
-                process = subprocess.Popen([str(app / "Contents/MacOS/UTermNativeQA"), "--qa-data-root", str(root), "--updates-smoke-report", str(report)], stdout=out, stderr=err, env=environment)
+                process = subprocess.Popen([str(app / "Contents/MacOS" / info["CFBundleExecutable"]), "--qa-data-root", str(root), "--updates-smoke-report", str(report)], stdout=out, stderr=err, env=environment)
                 code = process.wait(timeout=300 if mode == "install" else 220)
             if mode == "install":
                 deadline = time.monotonic() + 120
@@ -187,6 +193,17 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
             assert data["realSparkleSDK"] == "2.10.1" and data["simulatedUserDriver"]
             assert not data["productionDataAccess"] and not data["productionFeedChanged"]
             assert data["actualInstallOrRelaunchExecuted"] == (mode == "install")
+            if mode == "automatic" and personal:
+                assert data["personalAutomaticDownloadsEnabled"] and data["backgroundUpdatePreparedForQuit"]
+                deadline = time.monotonic() + 60
+                while time.monotonic() < deadline:
+                    if plistlib.loads((app / "Contents/Info.plist").read_bytes())["CFBundleVersion"] == "2":
+                        break
+                    time.sleep(.1)
+                else:
+                    raise AssertionError("Automatic download did not install the verified update on ordinary exit")
+                data["actualAutomaticInstallOnQuitExecuted"] = True
+                data["actualInstallOrRelaunchExecuted"] = True
             if mode == "install":
                 assert data["retainedTerminalVisibleInRelaunchedWindow"] is True
                 for field in ["actualPostgreSQLQueryQuitRefused", "actualTransactionQuitRefused", "rollbackRetainedOriginalData",
@@ -213,13 +230,17 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
             if mode in ("offline", "interrupted"): assert data["actualSDKRetryReachedReady"]
             if mode == "automatic":
                 assert data["actualSDKAutomaticSchedulingAndOptOut"]
+                assert data["completedSDKCycleAndSchedulingBeforeOptOut"]
                 assert not any(item.get("beforeOptIn") for item in requests)
             data.update(passed=True, testedMergeSHA=tested, sourceTreeDirty=False, processExitCode=code,
                         archiveSHA256=hashlib.file_digest(archive.open("rb"), "sha256").hexdigest(),
-                        updateSignature=signature, publicTestKey=public_key, fixtureMode=mode)
+                        updateSignature=signature, publicTestKey=public_key, fixtureMode=mode,
+                        packageFlavor="personal" if personal else "qa", nodeSignatureVerifiedByOfficialSparkleTool=True)
             report.write_text(json.dumps(data, ensure_ascii=False, indent=2)+"\n")
             if mode in ("good", "install"): shutil.copyfile(archive, case_dir / "signed-test-update.zip")
-            return {"mode": mode, "passed": True, "report": mode + "/sdk-native.json", "actualInstallOrRelaunchExecuted": mode == "install"}
+            return {"mode": mode, "passed": True, "report": mode + "/sdk-native.json",
+                    "actualInstallOrRelaunchExecuted": data["actualInstallOrRelaunchExecuted"],
+                    "actualAutomaticInstallOnQuitExecuted": data.get("actualAutomaticInstallOnQuitExecuted", False)}
         finally:
             if process and process.poll() is None: process.kill(); process.wait()
             if mode == "install":
@@ -254,9 +275,12 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
 
 def main():
     from database_qa_service import DatabaseService
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--personal", action="store_true")
+    args = parser.parse_args()
     assert platform.system() == "Darwin"
-    source = Path("macos/.build/qa/UTermNativeQA.app").resolve()
-    evidence = Path("macos/.build/evidence/updates").resolve(); evidence.mkdir(parents=True, exist_ok=True)
+    source = Path("macos/.build/personal/uTerm Personal.app" if args.personal else "macos/.build/qa/UTermNativeQA.app").resolve()
+    evidence = Path("macos/.build/personal-packages/updates" if args.personal else "macos/.build/evidence/updates").resolve(); evidence.mkdir(parents=True, exist_ok=True)
     tested = run("git", "rev-parse", "HEAD").decode().strip()
     head = os.environ.get("PR_HEAD_SHA", tested)
     assert not run("git", "status", "--porcelain").strip()
@@ -264,12 +288,19 @@ def main():
     with tempfile.TemporaryDirectory(prefix="uterm-native-qa-updates-") as temporary:
         folder = Path(temporary).resolve()
         toolkit = folder / "sparkle.tar.xz"
-        with urllib.request.urlopen(TOOLKIT_URL, timeout=60) as response, toolkit.open("wb") as stream:
-            total = 0
-            while chunk := response.read(1024 * 1024):
-                total += len(chunk)
-                assert total <= 64 * 1024 * 1024, "Unexpected SDK toolkit size"
-                stream.write(chunk)
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(TOOLKIT_URL, timeout=60) as response, toolkit.open("wb") as stream:
+                    total = 0
+                    while chunk := response.read(1024 * 1024):
+                        total += len(chunk)
+                        assert total <= 64 * 1024 * 1024, "Unexpected SDK toolkit size"
+                        stream.write(chunk)
+                break
+            except (OSError, urllib.error.URLError):
+                if attempt == 2:
+                    raise
+                time.sleep(attempt + 1)
         assert hashlib.file_digest(toolkit.open("rb"), "sha256").hexdigest() == TOOLKIT_SHA256
         signer = folder / "sign_update"
         with tarfile.open(toolkit) as archive:
@@ -304,7 +335,7 @@ def main():
                 results.append(item)
     result = dict(passed=all(item["passed"] for item in results), sourceHeadSHA=head, testedMergeSHA=tested,
                   sourceTreeDirty=False, platform="macOS", architecture=platform.machine(), system=platform.mac_ver()[0],
-                  sdk="2.10.1", toolkitSHA256=TOOLKIT_SHA256, scenarios=results,
+                  sdk="2.10.1", toolkitSHA256=TOOLKIT_SHA256, scenarios=results, packageFlavor="personal" if args.personal else "qa",
                   toolchain=dict(swift=run("xcrun", "swift", "--version").decode().strip(), xcode=run("xcodebuild", "-version").decode().strip(), rust=run("rustc", "--version").decode().strip()),
                   simulatedUserDriver=True, actualInstallOrRelaunchExecuted=any(item.get("actualInstallOrRelaunchExecuted", False) for item in results),
                   actualInstallationAccepted=any(item["mode"] == "install" and item["passed"] for item in results), productionFeedChanged=False,

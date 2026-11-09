@@ -125,6 +125,10 @@ validation and releases. Follow [AGENTS.md](AGENTS.md) and the
 [documentation writing rules](docs/writing-rules.md) when contributing. Use the project's
 Prettier/rustfmt and run `pnpm format` and `pnpm format:check` before committing.
 
+CI uses `node scripts/tauri-build.mjs` for release and Windows QA installers, with up to three
+attempts for transient NSIS tool download errors. The isolated Windows SSH fixture retries its
+download and verifies the pinned SHA-256 before starting.
+
 ## License and feedback
 
 uTerm is source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE), free for its
@@ -139,15 +143,18 @@ Native macOS development is isolated from stable releases. See
 [native migration](docs/native-migration.md) for the QA app, platform checks and staged feature
 status.
 
-For the free, manually updated personal Mac app, run `bash scripts/macos-native-build.sh personal`
-then `bash scripts/macos-native-test.sh personal` and
+For the free personal Mac app, run `bash scripts/macos-native-build.sh personal` then
+`bash scripts/macos-native-test.sh personal` and
 `python3 -B scripts/macos-personal-package.py --smoke` on macOS 14+ with a graphical session. The
 release workflow publishes additional Personal ARM64/X64 DMG and ZIP attachments on
 [GitHub Releases](https://github.com/YondFane/uTerm/releases), with no automatic expiry or download
 sign-in requirement. The **macOS personal packages** workflow keeps separate CI artifacts for 90
 days; those require GitHub sign-in. The app is ad-hoc signed, has no Apple notarization, uses the
-separate `sh.uterm.desktop.personal` profile, and disables network updates and QA arguments. See
-[personal installation and update steps](docs/features.md#personal-macos-app). Existing Tauri/QA
+separate `sh.uterm.desktop.personal` profile, and disables QA arguments. Set
+`PERSONAL_UPDATER_PUBLIC_KEY` to enable signed personal updates; without it, local builds remain
+manual. Configure the separate private signing secret before a release, following the linked guide.
+Run `python3 -B scripts/macos-updates-smoke.py --personal` for actual SDK update checks on a Mac.
+See [personal installation and update steps](docs/features.md#personal-macos-app). Existing Tauri/QA
 profiles and the stable release workflow remain separate.
 
 Shared core checks: `pnpm test:core` and `pnpm contracts:check`. The shared Java task checks require

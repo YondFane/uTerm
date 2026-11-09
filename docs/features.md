@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-07
+updated: 2026-11-09
 ---
 
 # uTerm feature guide
@@ -37,85 +37,112 @@ The interface supports Simplified Chinese and English.
 
 ### Personal macOS app
 
-The experimental **uTerm Personal** app uses Release builds of Swift/AppKit and the shared Rust
-core/helper on macOS 14+. It is ad-hoc signed for free personal use; it does not require a paid
-Apple Developer account or an App Store listing. It has no Apple notarization. The personal build
-never starts Sparkle, even when saved settings enable automatic updates; it shows manual-update
-guidance instead of network-update controls.
+The experimental **uTerm Personal** app uses Swift/AppKit and the shared Rust core/helper on macOS
+14+. It is ad-hoc signed for free personal use, without a paid Apple Developer account, App Store
+listing or Apple notarization.
 
-Download the additional **Personal** Apple Silicon or Intel DMG/ZIP from the versioned
-[GitHub Release](https://github.com/YondFane/uTerm/releases). Published release attachments have no
-automatic expiry and can be downloaded without GitHub sign-in. Verify the personal SHA256SUMS file,
-open the DMG and drag **uTerm Personal.app** into Applications. If macOS blocks the unsigned
-developer, allow this known build in **System Settings → Privacy & Security**.
+Download the **Personal** Apple Silicon or Intel DMG/ZIP from the versioned
+[GitHub Release](https://github.com/YondFane/uTerm/releases), verify its personal SHA256SUMS file,
+and drag **uTerm Personal.app** into Applications. Published attachments have no automatic expiry or
+GitHub sign-in requirement. First launch may require approval in **System Settings → Privacy &
+Security**. Version 0.2.6 has no updater: install an updater-enabled release manually once.
 
-The **macOS personal packages** Actions workflow also keeps verification artifacts for 90 days;
-GitHub requires sign-in for those temporary artifacts. The stable release workflow builds the same
-personal app from its immutable version tag, checks both architectures' source/version/install
-reports and package hashes, and publishes the four archives plus checksums as additional Release
-attachments. Existing Tauri installers continue to supply the automatic update channels. The
-personal app remains a separate, manually updated client.
+In an updater-enabled build, **Settings → General → Automatically check and download updates**
+enables Sparkle checks and signed downloads after **Save settings**. It is off by default. The app
+menu and settings also provide **Check for updates…**. Background downloads can install when the app
+quits; Sparkle asks before an immediate install/relaunch. Existing editor, transfer and database
+quit guards still apply. Turning the option off stops future automatic checks/downloads; an already
+prepared update can still install on quit. Update failures remain visible and can be retried
+manually. Update status text follows language changes immediately, including the no-update result.
 
-The personal identity is `sh.uterm.desktop.personal`; its profile is
-`~/Library/Application Support/sh.uterm.desktop.personal/`. It neither imports nor overwrites the
-existing Tauri or QA profiles. Symlinks that redirect its store into another profile are rejected.
-For a manual update, keep the previous downloaded package, stop tasks and close sessions, quit the
-app, back up the personal profile, and replace only the app bundle. Do not restore an older profile
-over an active app/host. Quitting alone detaches sessions. The shared core retains snapshot conflict
-checks, draft recovery and explicit rollback export; this packaging path does not automatically
-restore data or perform the stable Tauri-to-native cutover.
+The personal client uses separate HTTPS `personal-stable-arm64.xml` and `personal-stable-x86_64.xml`
+feeds and Ed25519-signed ZIPs. The SDK verifies signatures before extraction; platform,
+architecture, channel and archive origin are checked before download, and older versions are
+excluded. Existing Tauri installers and JSON feeds remain separate. No paid Apple signing
+certificate is needed for these updater signatures.
 
-To build locally on a Mac with the documented Node/pnpm, Rust and Xcode dependencies, run
-`bash scripts/macos-native-build.sh personal`, then `bash scripts/macos-native-test.sh personal` and
-`python3 -B scripts/macos-personal-package.py --smoke` in a graphical session. Output goes to
-`macos/.build/personal-packages/`; no signing certificate or publishing credential is needed. The
-default build command still creates the isolated QA app. QA command arguments are disabled in the
-personal executable; CI uses a separately identified, embedded temporary profile to exercise the
-same Release binary safely.
+The identity `sh.uterm.desktop.personal` keeps its profile in
+`~/Library/Application Support/sh.uterm.desktop.personal/`, without importing Tauri/QA data. Symlink
+redirects into another profile are rejected. Updates replace the app, retaining the profile and
+detached sessions. Before a manual replacement or rollback, keep the previous package, stop tasks,
+close sessions, quit and back up this directory. Never restore old data over an active app/host. The
+shared core retains conflict checks, draft recovery and explicit rollback exports; installing the
+app does not automatically restore old data or perform the Tauri-to-native cutover.
 
-#### Personal app validation
+#### Configure personal updater signing
 
-Release collection rejects stale source/version reports, duplicate architectures, missing
-real-install evidence and modified archives. Disk-image creation retries only explicit busy
-responses up to five attempts, retaining diagnostics and refusing existing output. QA terminal
-creation waits for rendered project selection and an interactive button; the 30-second deadline is
-unchanged. Linux checks passed seven release tests, six disk-image simulations, four
-personal-package tests, type checking and the full frontend suite (435 passed, 11 skipped).
+Run these commands locally from the checkout, using a new key directory outside the repository. Keep
+an offline backup of the private key. Do not paste it into issues, logs or chat; losing or replacing
+it requires a manual bootstrap installation for clients that trust the previous key.
 
-Source `790dbf1bb1d028f70f3e43d0cef0a786eee5a1e0`, tested PR merge
-`221ebd650cd2e73ed73fea7fcce14b48edd15a9b`, passed the
-[Windows and macOS real-app QA](https://github.com/YondFane/uTerm/actions/runs/42341263310). Both
-artifacts include input-owner/viewer reports and original window captures; the owner now creates a
-visible real terminal before transferring input control. Native package, performance and release
-checks retain their own source-bound reports; this result does not establish the final tag's
-publication or stable native cutover.
+```sh
+node scripts/personal-updates.mjs keygen "$HOME/uterm-personal-update-key"
+gh secret set PERSONAL_UPDATER_PRIVATE_KEY --repo YondFane/uTerm < "$HOME/uterm-personal-update-key/private-key.txt"
+gh variable set PERSONAL_UPDATER_PUBLIC_KEY --repo YondFane/uTerm < "$HOME/uterm-personal-update-key/public-key.txt"
+```
 
-Source `5903045b8d1b899cfc98400dfb10c786536b1433`, tested PR merge
-`6635aee9229c633ab5db839efc04f0eeda0fdbcd`, passed the
-[personal package workflow](https://github.com/YondFane/uTerm/actions/runs/42337113604) on ARM64
-macOS 15.8.2 and Intel macOS 15.7.9. Both used Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. Each ran 43
-Release Swift tests and four package-rejection tests, built and audited the actual ad-hoc app,
-mounted its read-only DMG, and launched its bundled helper with real Unicode PTY output.
+The private key is a base64 Ed25519 seed, and the public variable is a base64 32-byte public key.
+They are separate from the existing Tauri signing credentials. The release workflow checks the pair
+before building, embeds only the public key, verifies both architectures' exact source and package
+evidence, signs their ZIPs, and updates the personal feeds only after public archive verification.
+Missing or mismatched signing configuration fails the release instead of publishing an unusable
+personal feed. Production releases require this configuration; PR verification packages use
+temporary test keys.
 
-The
-[ARM64 artifact](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560770121)
+#### Build and validation
+
+On a Mac with the documented Node/pnpm, Rust and Xcode tools, run
+`bash scripts/macos-native-build.sh personal`, `bash scripts/macos-native-test.sh personal`, and
+`python3 -B scripts/macos-personal-package.py --smoke` in a graphical session. Without
+`PERSONAL_UPDATER_PUBLIC_KEY`, local builds retain manual updates and cannot initialize Sparkle,
+even with injected feed metadata. Set this public key to build an updater-enabled app. QA command
+arguments remain disabled in personal executables; tests use an owned temporary embedded profile.
+
+The **macOS personal packages** workflow uses an ephemeral test key for PRs and the configured
+public key for release builds. It retains reports, original window captures and verification
+packages for 90 days; these artifacts require GitHub sign-in. PR packages use a test key and are for
+verification, not the production update channel. Run
+`python3 -B scripts/macos-updates-smoke.py --personal` to exercise the actual personal SDK with
+loopback feeds. It verifies Node-generated signatures with Sparkle's official signing tool and
+covers good/bad signatures, architecture/channel/version rejection, cancel, offline/interrupted
+retry, automatic checks/downloads, installation and profile/session retention. User decisions are
+simulated; SDK downloads, signature verification and app replacement are real.
+
+Current Linux checks passed 11 signing/release tests and 14 macOS packaging/capture policy tests.
+Windows-drive regression coverage checks a checkout on D: with key storage on C:, while still
+rejecting checkout descendants. The full Linux suite passed 444 tests with 11 platform skips.
+
+Native source head `647b3d77d9c3b23bdd2ec0dd04dd9b9cb9795596`, tested at PR merge
+`d783fab0b707f77ae8f0998a1453d1787e545c52`, passed 43 Release Swift tests, app packaging and exact
+English/Chinese no-update status checks on both ARM64 macOS 15.8.2 and Intel macOS 15.7.9 using
+Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. The
+[native verification](https://github.com/YondFane/uTerm/actions/runs/42591096958) passed all 10
+actual SDK scenarios on each architecture, including actual automatic install-on-quit and
+installation with profile, drafts and terminal session retention.
+
+[ARM64 evidence](https://github.com/YondFane/uTerm/actions/runs/42591096958/artifacts/13663280744)
 and
-[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/42337113604/artifacts/13560586632)
-contain DMG/ZIP, checksums, `personal-package.json`, two startup reports and two rollback exports,
-toolchain/build/test logs and six original window captures each. All four package hashes and
-embedded source/architecture identities were independently checked. All twelve captures were
-inspected: actual English dark and Chinese light settings, localized manual-update/login captions,
-and terminal output before/after same-source app replacement. The coherent exports retain both exact
-NFD/CRLF drafts and reject a stale revision; the original file is unchanged, and the fixture host
-exits. Saved automatic opt-in and injected feed metadata cannot initialize the updater, and QA
-arguments cannot redirect data or write a smoke report in the shipped identity.
+[Intel evidence](https://github.com/YondFane/uTerm/actions/runs/42591096958/artifacts/13662381794)
+contain `personal-package.json`, `updates/sdk-summary.json`, per-case reports and original captures.
+`personal-initial-settings-zh-Hans-light.png` shows the Chinese automatic-update setting and current
+status; `personal-initial-settings-en-dark.png` covers English and dark appearance. The ARM64
+package hashes and source identity were independently checked, and its settings screenshot was
+inspected.
 
-The profile tests cover first/existing directories, identity, temporary-fixture confinement and
-symlink redirects. Linux packaging/disk-image simulations, shell syntax, formatting and bilingual
-documentation checks also pass. Runtime coverage is macOS 15.x; the declared minimum is 14.0. These
-checks establish same-source app replacement, not a cross-version stable cutover or Apple
-signing/notarization. Existing Tauri migration and remaining acceptance stay separately tracked in
-[#47](https://github.com/YondFane/uTerm/issues/47).
+The automatic smoke case waits for cycle completion, an idle updater and the actual scheduling
+callback before checking opt-out. Prepared installation alone cannot complete this wait, and the
+90-second deadline is unchanged. Reports record `completedSDKCycleAndSchedulingBeforeOptOut`; the
+Python verifier requires it alongside actual scheduler and opt-out evidence. Both native runs passed
+this correction. The minimum remains macOS 14.0; runtime coverage is 15.x. Apple
+signing/notarization and the full stable native cutover remain separate.
+
+DMG creation records full tool output and retries explicit DiskImages busy responses or silent exit
+code 1, with at most five attempts and the existing 120-second timeout. Only this attempt's partial
+image may be removed. Invalid arguments, timeouts and checksum verification errors remain failures;
+verification does not retry silent errors. The new regression covers silent creation recovery,
+exhaustion and non-retryable verification. The personal workflow runs all 14 macOS Python policy
+tests. The corrected creation, image verification, real-window checks and all ten SDK scenarios
+passed on both native architectures at the source and tested merge listed above.
 
 ### Native macOS QA client
 
@@ -1094,6 +1121,48 @@ source/tag validation, signing or public-download/update-feed checks. A missing 
 falls back to a normal build; first runs and compiler changes can still require cold compilation.
 
 #### Stable-release checks
+
+Release and Windows candidate installer builds run through `node scripts/tauri-build.mjs`. Only the
+official NSIS archive and Tauri NSIS plugin downloads followed by HTTP 429/502/503/504 bundler
+errors retry, with at most three attempts separated by five seconds. Compiler, signing, permanent
+HTTP and other errors retain their exit status. Every attempt still uses Tauri's tool verification
+and installer signing.
+
+The isolated Windows SSH fixture uses `curl.exe` against the official release URL, falling back to
+GitHub's official asset API for the same pinned archive if transport retries fail. Each endpoint has
+three retries, a 120-second retry budget and a 120-second per-attempt timeout. Both routes must pass
+the same OpenSSH SHA-256 before extraction; a checksum mismatch fails without fallback. An anonymous
+Linux download through the API matched the pinned digest and published 6,021,393-byte asset.
+
+All four child-process regressions passed, covering NSIS archive/plugin recovery after HTTP 504,
+exhausted attempts, literal arguments and errors that must not retry. The full Linux suite passed
+444 tests with 11 platform skips. At source head `8264545a8d3f439fd5f301591206843e5c5d4a7f`, tested
+PR merge `6d260c22b9914c0e6f2e5b945d76867a62137f4d`,
+[Windows candidate verification](https://github.com/YondFane/uTerm/actions/runs/42583766437) passed
+actual isolated NSIS installation, launch, screenshot and uninstall.
+[Candidate evidence](https://github.com/YondFane/uTerm/actions/runs/42583766437/artifacts/13658212771)
+contains `candidate-windows.json` and `candidate-installed-windows-window.png`.
+
+Windows source and tested commit `2fb5ef8e68d7a90b8741da8354d554d8da362fc3` passed the
+[complete desktop verification](https://github.com/YondFane/uTerm/actions/runs/42587567055),
+including real SSH, frontend/backend tests, all 73 native scenes, input control and
+installer/uninstaller checks.
+[Windows evidence](https://github.com/YondFane/uTerm/actions/runs/42587567055/artifacts/13660962048)
+contains `tauri-state-qa/report.json`, `candidate/candidate-windows.json` and original captures,
+including `input-owner-input-owner-ready.png`. An earlier PR-merge attempt at
+`302588271bffbd0189449f0c977448d5ec96fb7d` timed out waiting for the terminal window; its failure
+remains available in run `42584992744`, and the same-source repeat passed without changing the UI or
+acceptance. Windows SSH execution passed; the API fallback was independently downloaded on Linux and
+was not forcibly selected on Windows.
+
+The input-ownership QA waits for queued project-selection writes and two rendered frames before
+activating New terminal, then drains the resulting write before checking the actual selected view.
+Its 30-second terminal deadline and all running-session, input-control and rendering assertions are
+unchanged. Failures include the observed workspace/project/session IDs, prior session IDs and view
+geometry. Five existing real-Core queue/flush regressions, type checks, the full 444-pass Linux
+suite and production build passed for this sequence;
+[PR #50](https://github.com/YondFane/uTerm/pull/50) records its current native execution and exact
+source evidence.
 
 - Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
   formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).
@@ -4979,14 +5048,16 @@ Native feed configuration fixes stable/preview and the current arm64/x86_64 arch
 must be literal loopback URLs. Appcast items require matching `uterm:platform`/`uterm:architecture`
 metadata, channel and same-origin ZIP archives before proceeding. SDK package verification remains
 required separately. Sparkle retains its native download/install UI; application termination still
-uses the existing editor, transfer and database guards. No production feed is configured or changed.
+uses the existing editor, transfer and database guards. These QA fixtures never change production
+feeds. The [personal app](#personal-macos-app) configures its own signed release feed.
 
 The pinned framework, nested helpers and license are bundled. Candidate audits check signatures,
 architecture, minimum OS and read-only permissions. `python3 -B scripts/macos-updates-smoke.py` runs
 ten actual SDK scenarios using private loopback feeds, signed App ZIPs and unique QA
-identifiers/temp roots. It creates one-time CryptoKit keys, verifies the official signing toolkit's
-pinned hash and retains only public keys/signatures. User choices are simulated; SDK downloading,
-verification, extraction, target checks and scheduling remain real.
+identifiers/temp roots. It creates one-time CryptoKit keys, signs with the Node release helper,
+verifies with the official signing toolkit after checking its pinned hash, and retains only public
+keys/signatures. User choices are simulated; SDK downloading, verification, extraction, target
+checks and scheduling remain real.
 
 Cases include valid/bad signatures, wrong architecture/channel, old versions, cancel, actual retries
 after offline/interrupted downloads, shared automatic opt-in/opt-out and build1→build2 installation.

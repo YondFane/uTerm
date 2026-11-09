@@ -53,6 +53,45 @@ class ImageVerificationTests(unittest.TestCase):
 
 
 class ImageCreationTests(unittest.TestCase):
+    def test_silent_creation_retries_owned_output_but_remains_bounded(self):
+        with tempfile.TemporaryDirectory() as folder:
+            image = Path(folder) / 'silent.dmg'
+            calls = []
+            def command(arguments, **kwargs):
+                calls.append(arguments)
+                self.assertNotIn('-quiet', arguments)
+                self.assertFalse(image.exists())
+                image.write_bytes(b'partial' if len(calls) == 1 else b'complete')
+                return subprocess.CompletedProcess(arguments, 1 if len(calls) == 1 else 0, b'', b'')
+            attempts = []
+            with patch.object(disk.subprocess, 'run', side_effect=command), patch.object(disk.time, 'sleep'):
+                disk.create_disk_image(folder, image, 'QA', attempts)
+            self.assertEqual(image.read_bytes(), b'complete')
+            self.assertEqual([item['passed'] for item in attempts], [False, True])
+            image.unlink()
+            attempts = []
+            silent = subprocess.CompletedProcess([], 1, b'', b'')
+            with patch.object(disk.subprocess, 'run', return_value=silent) as run, patch.object(disk.time, 'sleep'):
+                with self.assertRaisesRegex(RuntimeError, 'create failed'):
+                    disk.create_disk_image(folder, image, 'QA', attempts)
+                self.assertEqual(run.call_count, 5)
+            self.assertEqual(len(attempts), 5)
+            self.assertTrue(all(not item['passed'] for item in attempts))
+            with patch.object(disk.subprocess, 'run', return_value=silent) as run:
+                with self.assertRaisesRegex(RuntimeError, 'verify failed'):
+                    disk.verify_disk_image(image, [])
+                self.assertEqual(run.call_count, 1)
+            permanent = subprocess.CompletedProcess([], 2, b'', b'')
+            with patch.object(disk.subprocess, 'run', return_value=permanent) as run:
+                with self.assertRaisesRegex(RuntimeError, 'create failed'):
+                    disk.create_disk_image(folder, image, 'QA', [])
+                self.assertEqual(run.call_count, 1)
+            diagnostic = subprocess.CompletedProcess([], 1, b'not enough free space', b'')
+            with patch.object(disk.subprocess, 'run', return_value=diagnostic) as run:
+                with self.assertRaisesRegex(RuntimeError, 'not enough free space'):
+                    disk.create_disk_image(folder, image, 'QA', [])
+                self.assertEqual(run.call_count, 1)
+
     def test_busy_creation_discards_only_its_partial_output_and_retries(self):
         with tempfile.TemporaryDirectory() as folder:
             image = Path(folder) / 'personal 中文.dmg'

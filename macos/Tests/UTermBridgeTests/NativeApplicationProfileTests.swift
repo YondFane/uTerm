@@ -5,10 +5,10 @@ import XCTest
 final class NativeApplicationProfileTests: XCTestCase {
     private let support = URL(fileURLWithPath: "/Users/test/Library/Application Support")
     private let temporary = FileManager.default.temporaryDirectory
-    func testPersonalIdentityHasSeparateStoreAndNoNetworkUpdates() throws {
+    func testPersonalIdentityAllowsConfiguredUpdatesWithASeparateStore() throws {
         let profile = NativeApplicationProfile(mode: .personal, identifier: NativeApplicationProfile.personalIdentifier)
         XCTAssertEqual(try profile.dataRoot(applicationSupport: support, temporaryDirectory: temporary).path, support.appendingPathComponent("sh.uterm.desktop.personal/shared-state-v1").path)
-        XCTAssertFalse(profile.networkUpdatesAllowed)
+        XCTAssertTrue(profile.networkUpdatesAllowed)
         XCTAssertFalse(profile.personalFixture)
         XCTAssertThrowsError(try profile.dataRoot(applicationSupport: support, temporaryDirectory: temporary, qaOverride: temporary.appendingPathComponent("uterm-native-qa-wrong").path))
         let poisoned = NativeApplicationProfile(mode: .personal, identifier: NativeApplicationProfile.personalIdentifier, embeddedQARoot: "/tmp/uterm-native-qa-wrong")
@@ -16,6 +16,7 @@ final class NativeApplicationProfileTests: XCTestCase {
     }
     func testCannotTurnPersonalExecutableIntoOrdinaryQAOrStableClient() {
         for identifier in ["sh.uterm.desktop", "sh.uterm.desktop.qa.native", "unknown"] {
+            XCTAssertFalse(NativeApplicationProfile(mode: .personal, identifier: identifier).networkUpdatesAllowed)
             XCTAssertThrowsError(try NativeApplicationProfile(mode: .personal, identifier: identifier).dataRoot(applicationSupport: support, temporaryDirectory: temporary))
         }
         XCTAssertThrowsError(try NativeApplicationProfile(mode: .qa, identifier: NativeApplicationProfile.personalIdentifier).dataRoot(applicationSupport: support, temporaryDirectory: temporary))

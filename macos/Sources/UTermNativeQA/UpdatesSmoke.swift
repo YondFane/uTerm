@@ -3,8 +3,13 @@ import UTermBridge
 
 @MainActor
 enum UpdatesSmoke {
+    static var reportPath: String? {
+        if let path = WorkspaceModel.argument("--updates-smoke-report") { return path }
+        guard Bundle.main.bundleIdentifier?.hasPrefix("sh.uterm.desktop.qa.native.update.") == true || WorkspaceModel.applicationProfile.personalFixture else { return nil }
+        return Bundle.main.object(forInfoDictionaryKey: "UTermQAUpdateReport") as? String
+    }
     static func run(model: WorkspaceModel, window: NSWindow, report: inout [String: Any]) async throws {
-        guard model.ready, let bridge = model.bridge, let path = WorkspaceModel.argument("--updates-smoke-report"),
+        guard model.ready, let bridge = model.bridge, let path = reportPath,
               let mode = Bundle.main.object(forInfoDictionaryKey: "UTermUpdateTestMode") as? String,
               model.updates.configuration?.qa == true else { throw BridgeFailure(code: "UPDATE_QA_CONTEXT", message: "Missing isolated SDK update context") }
         let root = try WorkspaceModel.dataRoot().deletingLastPathComponent()
@@ -23,15 +28,23 @@ enum UpdatesSmoke {
             try Data().write(to: root.appendingPathComponent("automatic-opt-in"))
             await model.patchSettings(["automaticUpdates": .bool(true)])
             guard updates.updater?.automaticallyChecksForUpdates == true else { throw BridgeFailure(code: "UPDATE_QA_OPT_IN", message: "Shared opt-in did not start the SDK scheduler") }
+            if WorkspaceModel.applicationProfile.mode == .personal {
+                guard updates.updater?.automaticallyDownloadsUpdates == true else { throw BridgeFailure(code: "UPDATE_QA_OPT_IN", message: "Personal opt-in did not enable automatic downloads") }
+                report["personalAutomaticDownloadsEnabled"] = true
+            }
         } else { updates.check() }
         guard updates.error.isEmpty else { throw BridgeFailure(code: "UPDATE_QA_START", message: updates.error) }
         func waitForCycle(after count: Int) async throws {
             let deadline = Date().addingTimeInterval(90)
             while Date() < deadline {
-                if updates.qaEvents.filter({ $0 == "cycle-finished" }).count > count, updates.updater?.sessionInProgress == false { return }
+                // Preparing installation precedes both cycle completion and the next scheduling callback.
+                // 准备安装发生在周期结束及下一次调度回调之前。
+                let finished = updates.qaEvents.filter({ $0 == "cycle-finished" }).count > count && updates.updater?.sessionInProgress == false
+                let scheduled = mode != "automatic" || updates.qaEvents.contains(where: { $0.hasPrefix("scheduled:") })
+                if finished && scheduled { return }
                 try await Task.sleep(for: .milliseconds(100))
             }
-            throw BridgeFailure(code: "UPDATE_QA_TIMEOUT", message: "SDK update cycle did not finish")
+            throw BridgeFailure(code: "UPDATE_QA_TIMEOUT", message: "SDK update cycle or required scheduling callback did not finish")
         }
         try await waitForCycle(after: 0)
         report["sdkEvents"] = updates.qaEvents
@@ -42,7 +55,7 @@ enum UpdatesSmoke {
         report["downloadedBytes"] = String(driver.receivedBytes)
         report["readyToInstall"] = driver.ready; report["foundVersion"] = driver.foundVersion ?? ""
         switch mode {
-        case "good", "automatic": guard driver.ready && driver.errors.isEmpty && updates.qaPolicyRejected.isEmpty else { throw BridgeFailure(code: "UPDATE_QA_VALID", message: "Valid signed SDK update did not reach ready state") }
+        case "good", "automatic": guard (driver.ready || updates.qaEvents.contains(where: { $0.hasPrefix("install-on-quit:") })) && driver.errors.isEmpty && updates.qaPolicyRejected.isEmpty else { throw BridgeFailure(code: "UPDATE_QA_VALID", message: "Valid signed SDK update did not reach ready state") }
         case "bad-signature": guard !driver.ready && driver.signatureMismatch else { throw BridgeFailure(code: "UPDATE_QA_SIGNATURE", message: "Bad signature was not rejected by the SDK Ed25519 verifier") }
         case "wrong-arch": guard !driver.ready && updates.qaPolicyRejected == "UPDATE_TARGET" else { throw BridgeFailure(code: "UPDATE_QA_ARCH", message: "Wrong architecture was not rejected before download") }
         case "old-version", "wrong-channel": guard driver.notFound && !driver.ready && driver.receivedBytes == 0 else { throw BridgeFailure(code: "UPDATE_QA_VERSION_CHANNEL", message: "Old or wrong-channel update proceeded") }
@@ -52,9 +65,12 @@ enum UpdatesSmoke {
         }
         if mode == "automatic" {
             guard updates.qaEvents.contains(where: { $0.hasPrefix("scheduled:") }) else { throw BridgeFailure(code: "UPDATE_QA_SCHEDULER", message: "No actual SDK scheduling callback was observed") }
+            report["completedSDKCycleAndSchedulingBeforeOptOut"] = true
             await model.patchSettings(["automaticUpdates": .bool(false)])
             guard updates.updater?.automaticallyChecksForUpdates == false else { throw BridgeFailure(code: "UPDATE_QA_OPT_OUT", message: "Shared opt-out left the SDK scheduler enabled") }
+            guard updates.updater?.automaticallyDownloadsUpdates == false else { throw BridgeFailure(code: "UPDATE_QA_OPT_OUT", message: "Shared opt-out left background downloads enabled") }
             report["actualSDKAutomaticSchedulingAndOptOut"] = true
+            report["backgroundUpdatePreparedForQuit"] = updates.qaEvents.contains(where: { $0.hasPrefix("install-on-quit:") })
         }
         if ["offline", "interrupted"].contains(mode) {
             let cycles = updates.qaEvents.filter { $0 == "cycle-finished" }.count

@@ -1,5 +1,7 @@
 import argparse
+import base64
 import hashlib
+import http.server
 import json
 import os
 import platform
@@ -8,6 +10,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -32,17 +35,32 @@ def digest(path):
 def validate_info(info, head, tested):
     assert info["CFBundleIdentifier"] == IDENTIFIER
     assert info["CFBundleExecutable"] == "uTerm" and info["UTermBuildFlavor"] == "personal"
-    assert info["UTermUpdateMode"] == "manual"
     assert info["UTermSourceHeadSHA"] == head and info["UTermSourceSHA"] == tested
     assert re.fullmatch(r"\d+\.\d+\.\d+", info["CFBundleShortVersionString"])
     assert info["LSMinimumSystemVersion"] == "14.0"
-    assert not any(key in info for key in ["UTermQADataRoot", "UTermUpdateFeedURL", "SUFeedURL", "SUPublicEDKey", "CFBundleURLTypes"])
-    assert all(info.get(key) is False for key in ["SUEnableAutomaticChecks", "SUAutomaticallyUpdate", "SUAllowsAutomaticUpdates"])
+    assert not any(key.startswith(("UTermQA", "UTermPersonalQA")) for key in info)
+    assert "SUFeedURL" not in info and "CFBundleURLTypes" not in info
+    assert all(info.get(key) is False for key in ["SUEnableAutomaticChecks", "SUAutomaticallyUpdate"])
+    if info["UTermUpdateMode"] == "automatic":
+        repository = os.environ.get("GITHUB_REPOSITORY", "YondFane/uTerm")
+        assert re.fullmatch(r"[A-Za-z0-9-]+/[A-Za-z0-9_.-]+", repository)
+        assert info.get("UTermUpdateFeedURL") in [f"https://github.com/{repository}/releases/download/uTerm-updates/personal-stable-{arch}.xml" for arch in ["arm64", "x86_64"]]
+        key = base64.b64decode(info.get("SUPublicEDKey", ""), validate=True)
+        assert len(key) == 32 and base64.b64encode(key).decode() == info["SUPublicEDKey"]
+        assert info.get("UTermUpdateChannel") == "stable" and info.get("SUAllowsAutomaticUpdates") is True
+        assert info.get("SUVerifyUpdateBeforeExtraction") is True
+        assert info.get("CFBundleVersion") == info["CFBundleShortVersionString"]
+    else:
+        assert info["UTermUpdateMode"] == "manual" and info.get("SUAllowsAutomaticUpdates") is False
+        assert not any(key in info for key in ["UTermUpdateFeedURL", "SUPublicEDKey"])
 
 
 
 def validate_smoke_report(report, head, tested, phase):
-    assert report["passed"] and report["automaticOptInCannotStartUpdater"] and report["explicitCloseAndIdleHostShutdown"], report
+    assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
+    assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
+    if report.get("updateMode") == "automatic" and phase == "initial":
+        assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}
     assert report["sourceHeadSHA"] == head and report["testedMergeSHA"] == tested
     assert report["settingsWindowAppearances"] == {"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"}
     if phase == "replacement":
@@ -51,6 +69,8 @@ def validate_smoke_report(report, head, tested, phase):
 def audit_app(app, architecture, head, tested):
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
     validate_info(info, head, tested)
+    if info["UTermUpdateMode"] == "automatic":
+        assert info["UTermUpdateFeedURL"].endswith(f"/personal-stable-{architecture}.xml")
     run("codesign", "--verify", "--deep", "--strict", app)
     signature = subprocess.run(
         ["codesign", "-d", "--verbose=4", str(app)], capture_output=True, check=True).stderr
@@ -75,14 +95,41 @@ def audit_app(app, architecture, head, tested):
 
 
 def smoke(installed, source, root, evidence, head, tested):
+    class EmptyFeed(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def do_GET(self):
+            body = b'<?xml version="1.0"?><rss version="2.0"><channel><title>Personal QA</title></channel></rss>'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/rss+xml")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), EmptyFeed)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        return run_smoke(installed, source, root, evidence, head, tested, f"http://127.0.0.1:{server.server_port}/appcast.xml")
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def run_smoke(installed, source, root, evidence, head, tested, feed):
     captures = []
     reports = []
     identity = "sh.uterm.desktop.qa.native.personal." + uuid.uuid4().hex
     for phase in ["initial", "replacement"]:
         info_path = installed / "Contents/Info.plist"
         info = plistlib.loads(info_path.read_bytes())
-        info.update(CFBundleIdentifier=identity, UTermQADataRoot=str(root), UTermPersonalQAPhase=phase,
-                    UTermUpdateFeedURL="https://example.invalid/never-requested.xml", SUPublicEDKey="invalid-on-purpose")
+        info.update(CFBundleIdentifier=identity, UTermQADataRoot=str(root), UTermPersonalQAPhase=phase)
+        if info["UTermUpdateMode"] == "automatic":
+            info["UTermUpdateFeedURL"] = feed
+        else:
+            info.update(UTermUpdateFeedURL="https://example.invalid/never-requested.xml", SUPublicEDKey="invalid-on-purpose")
         info_path.write_bytes(plistlib.dumps(info))
         run("codesign", "--force", "--sign", "-", installed)
         with (evidence / f"personal-{phase}-stdout.log").open("wb") as out, (evidence / f"personal-{phase}-stderr.log").open("wb") as err:
@@ -144,7 +191,9 @@ def main():
     report = dict(platform="macOS", architecture=architecture, system=platform.mac_ver()[0], sourceHeadSHA=head,
                   testedMergeSHA=tested, sourceTreeDirty=False, bundleIdentifier=IDENTIFIER, version=info["CFBundleShortVersionString"],
                   buildConfiguration="release", codeSigning="ad-hoc", appleDeveloperSigned=False, notarized=False,
-                  manualUpdates=True, productionFeedChanged=False, stableCutoverAccepted=False, passed=False)
+                  manualUpdates=info["UTermUpdateMode"] == "manual", updateMode=info["UTermUpdateMode"],
+                  updateFeed=info.get("UTermUpdateFeedURL"), updatePublicKey=info.get("SUPublicEDKey"),
+                  productionFeedChanged=False, stableCutoverAccepted=False, passed=False)
     report_path = output / "personal-package.json"
     try:
         with tempfile.TemporaryDirectory(prefix="uterm-native-qa-personal-") as folder:

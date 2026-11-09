@@ -3,9 +3,9 @@ import gitFixtureJSON from "../../shared/fixtures/git-qa.json?raw";
 import previewFixtureJSON from "../../shared/fixtures/content-preview-qa.json?raw";
 import sshFixtureJSON from "../../shared/fixtures/ssh-qa.json?raw";
 import { invoke } from "@tauri-apps/api/core";
-import { coreRequest } from "../lib/shared-state";
+import { coreRequest, flushSharedState } from "../lib/shared-state";
 import { defaults, settingsKey } from "../lib/settings";
-import { emptyWorkspace, workspaceKey } from "../lib/workspace";
+import { emptyWorkspace, workspaceKey, type Workspace } from "../lib/workspace";
 import { clipboardPath, draftKey } from "../lib/file-document";
 import { editorDraftReceiptKey } from "../lib/editor-draft-handoff";
 import { ContentScope } from "../lib/content-transport";
@@ -1077,6 +1077,12 @@ async function runInputControl(context: Context) {
         snapshot.document.workspace.selectedWorktree === null
       );
     }, "committed ownership project selection");
+    // Finish queued project changes and the React commit before activating the next control.
+    // 激活下一个控件前，先完成排队的项目变更与 React 界面提交。
+    await flushSharedState();
+    await new Promise<void>((done) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => done())),
+    );
     await until(() => {
       const value = document.querySelector<HTMLButtonElement>(".welcome-action.primary");
       if (
@@ -1091,11 +1097,45 @@ async function runInputControl(context: Context) {
       value.click();
       return true;
     }, "new actual terminal button");
+    await flushSharedState();
   }
-  const section = await until(async () => {
-    const value = await selectedVisibleTerminal();
-    return value && (!owner || !previous.has(value.dataset.sessionId)) ? value : null;
-  }, "visible real terminal");
+  let section: HTMLElement;
+  try {
+    section = await until(async () => {
+      const value = await selectedVisibleTerminal();
+      return value && (!owner || !previous.has(value.dataset.sessionId)) ? value : null;
+    }, "visible real terminal");
+  } catch (reason) {
+    let selection: unknown;
+    try {
+      const snapshot = (await observeCore("snapshot.read")) as unknown as {
+        document: { workspace: Workspace };
+      };
+      const state = snapshot.document.workspace;
+      selection = {
+        workspace: state.selectedWorkspace ?? null,
+        project: state.selectedProject,
+        worktree: state.selectedWorktree ?? null,
+        session: state.selectedSession,
+        projectSessions: state.projects
+          .find((project) => project.id === "shared-state-qa")
+          ?.sessions.map((session) => session.id),
+      };
+    } catch (error) {
+      selection = { error: String(error) };
+    }
+    const views = [
+      ...document.querySelectorAll<HTMLElement>(".local-session[data-session-id]"),
+    ].map((view) => ({
+      id: view.dataset.sessionId,
+      visible: view.classList.contains("visible"),
+      width: view.getBoundingClientRect().width,
+      height: view.getBoundingClientRect().height,
+    }));
+    throw Error(
+      `${String(reason)}; terminal selection: ${JSON.stringify({ selection, previous: [...previous], views })}`,
+    );
+  }
   await until(
     () => section.querySelector('.terminal-status[aria-label="Running"]'),
     "real terminal running",

@@ -50,8 +50,20 @@ enum PersonalSmoke {
                 _ = try await bridge.call("rollback.export", params: .object(["expectedRevision": .string(String(repeating: "0", count: 64))]))
                 throw BridgeFailure(code: "PERSONAL_STALE_EXPORT", message: "Stale backup request was accepted")
             } catch let failure as BridgeFailure where failure.code == "CONFLICT" { report["staleBackupRejected"] = true }
-            guard model.updates.controller == nil, model.updates.updater == nil, !model.updates.available else { throw BridgeFailure(code: "PERSONAL_UPDATES", message: "Personal build initialized network updates") }
-            report["automaticOptInCannotStartUpdater"] = true
+            let automatic = Bundle.main.object(forInfoDictionaryKey: "UTermUpdateMode") as? String == "automatic"
+            report["updateMode"] = automatic ? "automatic" : "manual"
+            if automatic {
+                guard model.updates.available, model.updates.updater?.automaticallyChecksForUpdates == true,
+                      model.updates.updater?.automaticallyDownloadsUpdates == true else { throw BridgeFailure(code: "PERSONAL_UPDATES", message: "Personal opt-in did not enable checks and downloads") }
+                await model.patchSettings(["automaticUpdates": .bool(false)])
+                guard model.updates.updater?.automaticallyChecksForUpdates == false,
+                      model.updates.updater?.automaticallyDownloadsUpdates == false else { throw BridgeFailure(code: "PERSONAL_UPDATES", message: "Personal opt-out left checks or downloads enabled") }
+                await model.patchSettings(["automaticUpdates": .bool(true)])
+                report["automaticOptInAndOutVerified"] = true
+            } else {
+                guard model.updates.controller == nil, model.updates.updater == nil, !model.updates.available else { throw BridgeFailure(code: "PERSONAL_UPDATES", message: "Manual build initialized network updates") }
+                report["automaticOptInCannotStartUpdater"] = true
+            }
             await model.newTerminal()
             try await TerminalSmoke.wait("Personal Release helper starts a real PTY") { model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true && (model.selectedTerminal?.qaRenderedFrames ?? 0) > 0 }
             guard let terminal = model.selectedTerminal else { throw BridgeFailure(code: "PERSONAL_PTY", message: "Personal terminal is missing") }
@@ -59,6 +71,10 @@ enum PersonalSmoke {
             try await TerminalSmoke.wait("Personal Release renders Unicode PTY output") { terminal.text.contains("PERSONAL_READY 中文") && terminal.view.window === window }
             var captures: [String] = []
             var appearances: [String: String] = [:]
+            var updateStatuses: [String: String] = [:]
+            if automatic, phase == "initial" {
+                try await TerminalSmoke.wait("Personal automatic no-update cycle completes") { model.updates.qaEvents.contains("cycle-finished") }
+            }
             for (language, appearance) in [("en", "dark"), ("zh-Hans", "light")] {
                 await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
                 let settings = openSettings()
@@ -67,6 +83,11 @@ enum PersonalSmoke {
                 let expected: NSAppearance.Name = appearance == "dark" ? .darkAqua : .aqua
                 let actual = settings.window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
                 guard actual == expected else { throw BridgeFailure(code: "PERSONAL_APPEARANCE", message: "Settings window did not apply the selected appearance") }
+                if automatic, phase == "initial" {
+                    let expectedStatus = language == "en" ? "You’re up to date." : "当前已是最新版本。"
+                    guard model.updates.status == expectedStatus, model.updates.error.isEmpty else { throw BridgeFailure(code: "PERSONAL_UPDATE_LOCALE", message: "Update status did not follow the selected language") }
+                    updateStatuses[language] = model.updates.status
+                }
                 appearances[language + "-" + appearance] = actual?.rawValue
                 let name = "personal-\(phase)-settings-\(language)-\(appearance).png"
                 try await TerminalSmoke.capture(window: settings.window, path: root.appendingPathComponent(name))
@@ -78,6 +99,7 @@ enum PersonalSmoke {
             try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(capture))
             captures.append(capture)
             report["settingsWindowAppearances"] = appearances
+            report["localizedUpdateStatuses"] = updateStatuses
             report["captures"] = captures; report["realBundledHelperUnicodePTY"] = true
             report["profileRetainedAfterAppReplacement"] = phase != "initial"
             await model.closeSession()
