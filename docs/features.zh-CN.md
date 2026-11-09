@@ -78,19 +78,17 @@ Ed25519 种子，公开变量为 base64 的 32 字节公钥，与已有 Tauri �
 
 当前 Linux 已通过 11 项签名／发布测试及 13 项 macOS 打包／截图策略测试。Windows 跨盘回归覆盖仓库位于 D 盘、密钥位于 C 盘的情况，并继续拒绝仓库内的密钥目录。完整 Linux 回归通过 440 项，11 项按平台跳过。
 
-更新器实现 `a40c8b85a9a90f06dd0572059cb42c04ce0f1335`、实际测试 merge
-`c7ebc4a015333e6916d6e3d5f54e0f575ceb715c` 已在 ARM64 macOS 15.8.2 和 Intel macOS
-15.7.9 通过[个人版 Mac 工作流](https://github.com/YondFane/uTerm/actions/runs/42561722731)。各运行 43 项 Release
-Swift 测试及全部 10 类真实 SDK 场景，包括签名自动下载／退出安装，以及保留草稿、PTY 宿主和 generation 的应用替换／重启。工具链为 Xcode
+原生源码和实际测试提交 `6c34d9efc84cc7e90527cecb0031d306025d04bd` 已在 ARM64 macOS 15.8.2 和 Intel
+macOS 15.7.9 通过各 43 项 Release Swift 测试、应用打包及精确中英文无更新状态检查。工具链为 Xcode
 16.4、Swift 6.1.2 和 Rust 1.99.1。
+[发布验证](https://github.com/YondFane/uTerm/actions/runs/42573243084)在 ARM64 通过全部 10 类真实 SDK 场景，Intel 通过 9 类。Intel 自动场景先收到安装准备和周期结束回调，后续调度回调尚未到达时就进行了断言；该失败仍按失败记录。
 
-[ARM64 证据](https://github.com/YondFane/uTerm/actions/runs/42561722731/artifacts/13649823444)和
-[Intel 证据](https://github.com/YondFane/uTerm/actions/runs/42561722731/artifacts/13650810282) 包含
-`personal-package.json`、`updates/sdk-summary.json`、各场景报告、日志及各 20 张原始截图。已独立核对包哈希，并查看设置及重启截图。`updates/automatic/sdk-native.json`
-记录实际退出自动安装， `updates/install/native-update-install-relaunched.png` 展示保留会话的新输出。
+[ARM64 证据](https://github.com/YondFane/uTerm/actions/runs/42573243084/artifacts/13655540299)和
+[Intel 证据](https://github.com/YondFane/uTerm/actions/runs/42573243084/artifacts/13655597459) 包含
+`personal-package.json`、`updates/sdk-summary.json`、各场景报告和原始截图。已独立核对 ARM64 发行包哈希、身份、公钥和源码，并查看其设置及保留会话的重启原图。
 
-状态语言修正 `2f10dcfdd873c89b0c02ec4647113e6b92466443`
-增加英文／中文无更新状态核对，检查后才接受截图。其[原生 CI](https://github.com/YondFane/uTerm/actions/runs/42564318468)仍在等待 runner，旧图不能作为此修正的验收。该源码的 Windows 前端／后端测试及桌面构建已通过。最低版本仍为 macOS
+自动更新冒烟会等待周期结束、更新器空闲及真实调度回调，再检查关闭授权的行为；仅完成安装准备不能结束等待，90 秒期限不变。报告记录
+`completedSDKCycleAndSchedulingBeforeOptOut`，Python 验证器同时要求该字段以及真实调度和关闭授权的证据。此等待修正的原生验证待执行。最低版本仍为 macOS
 14.0，实际运行覆盖为 15.x；Apple 签名／公证及完整原生稳定切换继续单独处理。
 
 ### macOS 原生 QA 客户端

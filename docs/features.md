@@ -112,27 +112,27 @@ Current Linux checks passed 11 signing/release tests and 13 macOS packaging/capt
 Windows-drive regression coverage checks a checkout on D: with key storage on C:, while still
 rejecting checkout descendants. The full Linux suite passed 440 tests with 11 platform skips.
 
-Updater implementation `a40c8b85a9a90f06dd0572059cb42c04ce0f1335`, tested merge
-`c7ebc4a015333e6916d6e3d5f54e0f575ceb715c`, passed the
-[personal Mac workflow](https://github.com/YondFane/uTerm/actions/runs/42561722731) on ARM64 macOS
-15.8.2 and Intel macOS 15.7.9. Each ran 43 Release Swift tests and all 10 actual SDK scenarios,
-including signed automatic download/install on quit and replacement/relaunch retaining drafts, PTY
-host and generation. Xcode 16.4, Swift 6.1.2 and Rust 1.99.1 were used.
+Native source and tested commit `6c34d9efc84cc7e90527cecb0031d306025d04bd` passed 43 Release Swift
+tests, app packaging and exact English/Chinese no-update status checks on both ARM64 macOS 15.8.2
+and Intel macOS 15.7.9 using Xcode 16.4, Swift 6.1.2 and Rust 1.99.1. The
+[release verification](https://github.com/YondFane/uTerm/actions/runs/42573243084) passed all 10
+actual SDK scenarios on ARM64 and nine on Intel. Intel's automatic case observed prepared
+installation and cycle completion before the subsequent scheduling callback; its premature assertion
+failed and remains recorded as failed.
 
-[ARM64 evidence](https://github.com/YondFane/uTerm/actions/runs/42561722731/artifacts/13649823444)
+[ARM64 evidence](https://github.com/YondFane/uTerm/actions/runs/42573243084/artifacts/13655540299)
 and
-[Intel evidence](https://github.com/YondFane/uTerm/actions/runs/42561722731/artifacts/13650810282)
-contain `personal-package.json`, `updates/sdk-summary.json`, per-case reports, logs and 20 original
-captures each. Package hashes were independently checked; settings and relaunch captures were
-inspected. `updates/automatic/sdk-native.json` records actual automatic install on quit, and
-`updates/install/native-update-install-relaunched.png` shows output from the retained session.
+[Intel evidence](https://github.com/YondFane/uTerm/actions/runs/42573243084/artifacts/13655597459)
+contain `personal-package.json`, `updates/sdk-summary.json`, per-case reports and original captures.
+The shipped archive hashes, identity, public key and source were independently checked on ARM64; its
+settings and retained-session relaunch images were inspected.
 
-The status-language correction in `2f10dcfdd873c89b0c02ec4647113e6b92466443` adds exact
-English/Chinese no-update status checks before accepting captures. Its
-[native CI](https://github.com/YondFane/uTerm/actions/runs/42564318468) is still waiting for
-runners; the earlier images do not establish acceptance of this correction. Windows frontend/backend
-tests and the desktop build passed for this source. The minimum remains macOS 14.0; runtime coverage
-is 15.x. Apple signing/notarization and the full stable native cutover remain separate.
+The automatic smoke case waits for cycle completion, an idle updater and the actual scheduling
+callback before checking opt-out. Prepared installation alone cannot complete this wait, and the
+90-second deadline is unchanged. Reports record `completedSDKCycleAndSchedulingBeforeOptOut`; the
+Python verifier requires it alongside actual scheduler and opt-out evidence. Native validation of
+this waiting correction is pending. The minimum remains macOS 14.0; runtime coverage is 15.x. Apple
+signing/notarization and the full stable native cutover remain separate.
 
 ### Native macOS QA client
 

@@ -230,6 +230,7 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
             if mode in ("offline", "interrupted"): assert data["actualSDKRetryReachedReady"]
             if mode == "automatic":
                 assert data["actualSDKAutomaticSchedulingAndOptOut"]
+                assert data["completedSDKCycleAndSchedulingBeforeOptOut"]
                 assert not any(item.get("beforeOptIn") for item in requests)
             data.update(passed=True, testedMergeSHA=tested, sourceTreeDirty=False, processExitCode=code,
                         archiveSHA256=hashlib.file_digest(archive.open("rb"), "sha256").hexdigest(),
