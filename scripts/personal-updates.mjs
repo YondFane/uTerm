@@ -1,6 +1,6 @@
 import { createPrivateKey, createPublicKey, generateKeyPairSync, sign, verify } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import paths, { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export function publicKeyBytes(value) {
@@ -60,6 +60,11 @@ const xml = (text) =>
     (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" })[c],
   );
 
+export function externalKeyDirectory(checkout, directory, path = paths) {
+  const traversal = path.relative(checkout, directory);
+  return path.isAbsolute(traversal) || traversal === ".." || traversal.startsWith(`..${path.sep}`);
+}
+
 export function personalAppcast({ version, architecture, archive, signature, repository }) {
   personalFeed(architecture, repository);
   if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version))
@@ -91,8 +96,7 @@ function main() {
     const directory = resolve(argument ?? "");
     if (!argument)
       throw new Error("Specify a new directory outside the checkout for updater keys.");
-    const path = relative(fileURLToPath(new URL("../", import.meta.url)), directory);
-    if (!path.startsWith(`..${sep}`) && path !== "..")
+    if (!externalKeyDirectory(fileURLToPath(new URL("../", import.meta.url)), directory))
       throw new Error("Updater keys must be generated outside the checkout.");
     mkdirSync(directory, { mode: 0o700 });
     const pair = generateKeyPairSync("ed25519");

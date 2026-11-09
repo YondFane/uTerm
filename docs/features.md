@@ -48,11 +48,12 @@ GitHub sign-in requirement. First launch may require approval in **System Settin
 Security**. Version 0.2.6 has no updater: install an updater-enabled release manually once.
 
 In an updater-enabled build, **Settings → General → Automatically check and download updates**
-enables Sparkle checks and signed downloads. It is off by default. The app menu and settings also
-provide **Check for updates…**. Background downloads can install when the app quits; Sparkle asks
-before an immediate install/relaunch. Existing editor, transfer and database quit guards still
-apply. Turning the option off stops future automatic checks/downloads; an already prepared update
-can still install on quit. Update failures remain visible and can be retried manually.
+enables Sparkle checks and signed downloads after **Save settings**. It is off by default. The app
+menu and settings also provide **Check for updates…**. Background downloads can install when the app
+quits; Sparkle asks before an immediate install/relaunch. Existing editor, transfer and database
+quit guards still apply. Turning the option off stops future automatic checks/downloads; an already
+prepared update can still install on quit. Update failures remain visible and can be retried
+manually.
 
 The personal client uses separate HTTPS `personal-stable-arm64.xml` and `personal-stable-x86_64.xml`
 feeds and Ed25519-signed ZIPs. The SDK verifies signatures before extraction; platform,
@@ -106,11 +107,13 @@ covers good/bad signatures, architecture/channel/version rejection, cancel, offl
 retry, automatic checks/downloads, installation and profile/session retention. User decisions are
 simulated; SDK downloads, signature verification and app replacement are real.
 
-Current Linux checks passed 10 signing/release tests and five package-policy tests. macOS ARM64 and
-Intel build, actual update, installation and new settings captures are pending for this source;
-previous manual-build evidence does not establish updater acceptance. Production credentials and a
-first updater-enabled release are not yet configured or published. The minimum remains macOS 14.0;
-Apple signing/notarization and the full stable native cutover remain separate.
+Current Linux checks passed 11 signing/release tests and 12 macOS packaging/capture policy tests.
+Windows-drive regression coverage checks a checkout on D: with key storage on C:, while still
+rejecting checkout descendants. macOS ARM64 and Intel build, actual update, installation and new
+settings captures are pending for this source; previous manual-build evidence does not establish
+updater acceptance. Production credentials and a first updater-enabled release are not yet
+configured or published. The minimum remains macOS 14.0; Apple signing/notarization and the full
+stable native cutover remain separate.
 
 ### Native macOS QA client
 
@@ -4974,14 +4977,16 @@ Native feed configuration fixes stable/preview and the current arm64/x86_64 arch
 must be literal loopback URLs. Appcast items require matching `uterm:platform`/`uterm:architecture`
 metadata, channel and same-origin ZIP archives before proceeding. SDK package verification remains
 required separately. Sparkle retains its native download/install UI; application termination still
-uses the existing editor, transfer and database guards. No production feed is configured or changed.
+uses the existing editor, transfer and database guards. These QA fixtures never change production
+feeds. The [personal app](#personal-macos-app) configures its own signed release feed.
 
 The pinned framework, nested helpers and license are bundled. Candidate audits check signatures,
 architecture, minimum OS and read-only permissions. `python3 -B scripts/macos-updates-smoke.py` runs
 ten actual SDK scenarios using private loopback feeds, signed App ZIPs and unique QA
-identifiers/temp roots. It creates one-time CryptoKit keys, verifies the official signing toolkit's
-pinned hash and retains only public keys/signatures. User choices are simulated; SDK downloading,
-verification, extraction, target checks and scheduling remain real.
+identifiers/temp roots. It creates one-time CryptoKit keys, signs with the Node release helper,
+verifies with the official signing toolkit after checking its pinned hash, and retains only public
+keys/signatures. User choices are simulated; SDK downloading, verification, extraction, target
+checks and scheduling remain real.
 
 Cases include valid/bad signatures, wrong architecture/channel, old versions, cancel, actual retries
 after offline/interrupted downloads, shared automatic opt-in/opt-out and build1→build2 installation.

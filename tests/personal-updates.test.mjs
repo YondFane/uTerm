@@ -3,7 +3,7 @@ import { createPublicKey, generateKeyPairSync, verify } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, posix, win32 } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import {
@@ -11,6 +11,7 @@ import {
   personalConfiguration,
   personalFeed,
   signPersonalArchive,
+  externalKeyDirectory,
 } from "../scripts/personal-updates.mjs";
 
 function keys() {
@@ -26,6 +27,16 @@ function keys() {
       .toString("base64"),
   };
 }
+
+test("external key directories support Windows drives while rejecting checkout descendants", () => {
+  const checkout = String.raw`D:\a\uTerm\uTerm`;
+  assert.equal(externalKeyDirectory(checkout, String.raw`C:\Users\runner\Temp\keys`, win32), true);
+  assert.equal(externalKeyDirectory(checkout, String.raw`D:\a\_temp\keys`, win32), true);
+  assert.equal(externalKeyDirectory(checkout, String.raw`d:\a\uterm\uterm\keys`, win32), false);
+  assert.equal(externalKeyDirectory(checkout, checkout, win32), false);
+  assert.equal(externalKeyDirectory("/workspace/uTerm", "/tmp/keys", posix), true);
+  assert.equal(externalKeyDirectory("/workspace/uTerm", "/workspace/uTerm/keys", posix), false);
+});
 
 test("personal updater signatures bind archive bytes and the embedded public key", () => {
   const key = keys();
