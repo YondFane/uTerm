@@ -71,6 +71,10 @@ enum PersonalSmoke {
             try await TerminalSmoke.wait("Personal Release renders Unicode PTY output") { terminal.text.contains("PERSONAL_READY 中文") && terminal.view.window === window }
             var captures: [String] = []
             var appearances: [String: String] = [:]
+            var updateStatuses: [String: String] = [:]
+            if automatic, phase == "initial" {
+                try await TerminalSmoke.wait("Personal automatic no-update cycle completes") { model.updates.qaEvents.contains("cycle-finished") }
+            }
             for (language, appearance) in [("en", "dark"), ("zh-Hans", "light")] {
                 await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
                 let settings = openSettings()
@@ -79,6 +83,11 @@ enum PersonalSmoke {
                 let expected: NSAppearance.Name = appearance == "dark" ? .darkAqua : .aqua
                 let actual = settings.window.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
                 guard actual == expected else { throw BridgeFailure(code: "PERSONAL_APPEARANCE", message: "Settings window did not apply the selected appearance") }
+                if automatic, phase == "initial" {
+                    let expectedStatus = language == "en" ? "You’re up to date." : "当前已是最新版本。"
+                    guard model.updates.status == expectedStatus, model.updates.error.isEmpty else { throw BridgeFailure(code: "PERSONAL_UPDATE_LOCALE", message: "Update status did not follow the selected language") }
+                    updateStatuses[language] = model.updates.status
+                }
                 appearances[language + "-" + appearance] = actual?.rawValue
                 let name = "personal-\(phase)-settings-\(language)-\(appearance).png"
                 try await TerminalSmoke.capture(window: settings.window, path: root.appendingPathComponent(name))
@@ -90,6 +99,7 @@ enum PersonalSmoke {
             try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(capture))
             captures.append(capture)
             report["settingsWindowAppearances"] = appearances
+            report["localizedUpdateStatuses"] = updateStatuses
             report["captures"] = captures; report["realBundledHelperUnicodePTY"] = true
             report["profileRetainedAfterAppReplacement"] = phase != "initial"
             await model.closeSession()

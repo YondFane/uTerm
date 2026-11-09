@@ -59,6 +59,8 @@ def validate_info(info, head, tested):
 def validate_smoke_report(report, head, tested, phase):
     assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
+    if report.get("updateMode") == "automatic" and phase == "initial":
+        assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}
     assert report["sourceHeadSHA"] == head and report["testedMergeSHA"] == tested
     assert report["settingsWindowAppearances"] == {"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"}
     if phase == "replacement":

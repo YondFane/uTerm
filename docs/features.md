@@ -53,7 +53,7 @@ menu and settings also provide **Check for updates…**. Background downloads ca
 quits; Sparkle asks before an immediate install/relaunch. Existing editor, transfer and database
 quit guards still apply. Turning the option off stops future automatic checks/downloads; an already
 prepared update can still install on quit. Update failures remain visible and can be retried
-manually.
+manually. Update status text follows language changes immediately, including the no-update result.
 
 The personal client uses separate HTTPS `personal-stable-arm64.xml` and `personal-stable-x86_64.xml`
 feeds and Ed25519-signed ZIPs. The SDK verifies signatures before extraction; platform,
@@ -107,7 +107,7 @@ covers good/bad signatures, architecture/channel/version rejection, cancel, offl
 retry, automatic checks/downloads, installation and profile/session retention. User decisions are
 simulated; SDK downloads, signature verification and app replacement are real.
 
-Current Linux checks passed 11 signing/release tests and 12 macOS packaging/capture policy tests.
+Current Linux checks passed 11 signing/release tests and 13 macOS packaging/capture policy tests.
 Windows-drive regression coverage checks a checkout on D: with key storage on C:, while still
 rejecting checkout descendants. macOS ARM64 and Intel build, actual update, installation and new
 settings captures are pending for this source; previous manual-build evidence does not establish

@@ -45,6 +45,16 @@ class PersonalPackageTests(unittest.TestCase):
         with self.assertRaises(AssertionError):
             package.validate_smoke_report(report, "a" * 40, "b" * 40, "replacement")
 
+    def test_update_status_evidence_must_follow_the_selected_language(self):
+        report = dict(passed=True, automaticOptInAndOutVerified=True, updateMode="automatic",
+                      explicitCloseAndIdleHostShutdown=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
+                      settingsWindowAppearances={"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"},
+                      localizedUpdateStatuses={"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"})
+        package.validate_smoke_report(report, "a" * 40, "b" * 40, "initial")
+        report["localizedUpdateStatuses"]["zh-Hans"] = "You’re up to date."
+        with self.assertRaises(AssertionError):
+            package.validate_smoke_report(report, "a" * 40, "b" * 40, "initial")
+
     def test_shipping_metadata_cannot_have_candidate_version_or_raised_minimum(self):
         for key, value in [("CFBundleShortVersionString", "0.0.1 QA"), ("LSMinimumSystemVersion", "15.0")]:
             with self.subTest(key=key), self.assertRaises(AssertionError):

@@ -5,7 +5,18 @@ import UTermBridge
 @MainActor
 final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdaterDelegate {
     @Published private(set) var error = ""
-    @Published private(set) var status = ""
+    private enum Phase { case idle, checking, available(String), current, prepared, finished }
+    @Published private var phase: Phase = .idle
+    var status: String {
+        switch phase {
+        case .idle: return ""
+        case .checking: return localized("Checking for updates…", "正在检查更新…")
+        case .available(let version): return localized("Update available: ", "发现新版本：") + version
+        case .current: return localized("You’re up to date.", "当前已是最新版本。")
+        case .prepared: return localized("Update downloaded. It will be installed when you quit.", "更新已下载，将在退出应用时安装。")
+        case .finished: return localized("Update check finished.", "更新检查已完成。")
+        }
+    }
     private(set) var configuration: NativeUpdateConfiguration?
     private(set) var controller: SPUStandardUpdaterController?
     private var testUpdater: SPUUpdater?
@@ -58,7 +69,7 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
         do {
             try start()
             guard let updater, updater.canCheckForUpdates else { return }
-            error = ""; qaLastError = ""; status = localized("Checking for updates…", "正在检查更新…")
+            error = ""; qaLastError = ""; phase = .checking
             updater.checkForUpdates()
         } catch { self.error = error.localizedDescription }
     }
@@ -77,14 +88,14 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
         catch let failure as BridgeFailure { qaPolicyRejected = failure.code; throw failure }
         qaEvents.append("target-accepted:" + item.versionString)
     }
-    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) { status = localized("Update available: ", "发现新版本：") + item.displayVersionString; qaEvents.append("found:" + item.versionString) }
+    func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) { phase = .available(item.displayVersionString); qaEvents.append("found:" + item.versionString) }
     func updaterDidNotFindUpdate(_ updater: SPUUpdater, error: Error) {
-        self.error = ""; status = localized("You’re up to date.", "当前已是最新版本。")
+        self.error = ""; phase = .current
     }
     func updater(_ updater: SPUUpdater, willScheduleUpdateCheckAfterDelay delay: TimeInterval) { qaEvents.append("scheduled:" + String(delay)) }
     func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem, immediateInstallationBlock: @escaping () -> Void) -> Bool {
         preparedForQuit = true
-        status = localized("Update downloaded. It will be installed when you quit.", "更新已下载，将在退出应用时安装。")
+        phase = .prepared
         qaEvents.append("install-on-quit:" + item.versionString)
         return false
     }
@@ -95,7 +106,7 @@ final class NativeUpdates: NSObject, ObservableObject, @preconcurrency SPUUpdate
         qaEvents.append("abort:" + qaLastError)
     }
     func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
-        if error == nil { self.error = ""; if !preparedForQuit { status = localized("Update check finished.", "更新检查已完成。") } }
+        if error == nil { self.error = ""; if !preparedForQuit { phase = .finished } }
         qaEvents.append("cycle-finished")
     }
 }
