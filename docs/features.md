@@ -86,7 +86,8 @@ They are separate from the existing Tauri signing credentials. The release workf
 before building, embeds only the public key, verifies both architectures' exact source and package
 evidence, signs their ZIPs, and updates the personal feeds only after public archive verification.
 Missing or mismatched signing configuration fails the release instead of publishing an unusable
-personal feed. This change alone does not configure credentials or publish a release.
+personal feed. Production releases require this configuration; PR verification packages use
+temporary test keys.
 
 #### Build and validation
 
@@ -109,11 +110,29 @@ simulated; SDK downloads, signature verification and app replacement are real.
 
 Current Linux checks passed 11 signing/release tests and 13 macOS packaging/capture policy tests.
 Windows-drive regression coverage checks a checkout on D: with key storage on C:, while still
-rejecting checkout descendants. macOS ARM64 and Intel build, actual update, installation and new
-settings captures are pending for this source; previous manual-build evidence does not establish
-updater acceptance. Production credentials and a first updater-enabled release are not yet
-configured or published. The minimum remains macOS 14.0; Apple signing/notarization and the full
-stable native cutover remain separate.
+rejecting checkout descendants. The full Linux suite passed 440 tests with 11 platform skips.
+
+Updater implementation `a40c8b85a9a90f06dd0572059cb42c04ce0f1335`, tested merge
+`c7ebc4a015333e6916d6e3d5f54e0f575ceb715c`, passed the
+[personal Mac workflow](https://github.com/YondFane/uTerm/actions/runs/42561722731) on ARM64 macOS
+15.8.2 and Intel macOS 15.7.9. Each ran 43 Release Swift tests and all 10 actual SDK scenarios,
+including signed automatic download/install on quit and replacement/relaunch retaining drafts, PTY
+host and generation. Xcode 16.4, Swift 6.1.2 and Rust 1.99.1 were used.
+
+[ARM64 evidence](https://github.com/YondFane/uTerm/actions/runs/42561722731/artifacts/13649823444)
+and
+[Intel evidence](https://github.com/YondFane/uTerm/actions/runs/42561722731/artifacts/13650810282)
+contain `personal-package.json`, `updates/sdk-summary.json`, per-case reports, logs and 20 original
+captures each. Package hashes were independently checked; settings and relaunch captures were
+inspected. `updates/automatic/sdk-native.json` records actual automatic install on quit, and
+`updates/install/native-update-install-relaunched.png` shows output from the retained session.
+
+The status-language correction in `2f10dcfdd873c89b0c02ec4647113e6b92466443` adds exact
+English/Chinese no-update status checks before accepting captures. Its
+[native CI](https://github.com/YondFane/uTerm/actions/runs/42564318468) is still waiting for
+runners; the earlier images do not establish acceptance of this correction. Windows frontend/backend
+tests and the desktop build passed for this source. The minimum remains macOS 14.0; runtime coverage
+is 15.x. Apple signing/notarization and the full stable native cutover remain separate.
 
 ### Native macOS QA client
 
