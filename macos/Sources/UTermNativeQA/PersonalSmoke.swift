@@ -120,13 +120,14 @@ enum PersonalSmoke {
                 for section in parity["settingsSections"].array {
                     guard let id = section["id"].string else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing settings section") }
                     try await TerminalSmoke.wait("Render actual settings navigation " + id) {
-                        settings.window.contentView.map { TerminalSmoke.descendants($0).contains { $0.identifier?.rawValue == "native-settings-section-" + id } } == true
+                        settings.window.contentView.map { TerminalSmoke.descendants($0).contains { $0.identifier?.rawValue == "native-settings-section-" + id && ($0 as? NSButton)?.isEnabled == true } } == true
                     }
                     guard let content = settings.window.contentView,
                           let button = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-settings-section-" + id }) as? NSButton,
                           button.isEnabled else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Settings section is unavailable") }
                     button.performClick(nil)
                     try await TerminalSmoke.wait("Select actual settings section") { settings.model.section == id }
+                    let attempts = try await TerminalSmoke.sizeCaptureWindow(settings.window, width: width, height: height)
                     if id == "maven" {
                         try await TerminalSmoke.wait("Load standalone global Maven before capture") { !settings.model.maven.busy && !settings.model.maven.values.isEmpty }
                         guard JSONValue.object(settings.model.maven.values) == parity["maven"], settings.model.maven.error.isEmpty else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Maven controls do not match the shared fixture") }
@@ -136,7 +137,6 @@ enum PersonalSmoke {
                         let actual = settings.model.databaseComponents.status["items"].array.compactMap { $0["id"].string }.sorted()
                         guard actual == parity["databaseComponentIds"].array.compactMap(\.string).sorted(), settings.model.databaseComponents.error.isEmpty, !settings.model.databaseComponents.working else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Database component controls do not match the shared fixture") }
                     }
-                    let attempts = try await TerminalSmoke.sizeCaptureWindow(settings.window, width: width, height: height)
                     guard !settings.model.dirty, !settings.model.maven.dirty, settings.model.error.isEmpty else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Section navigation changed a settings draft") }
                     let name = "personal-\(phase)-settings-\(id)-\(language)-\(appearance)-\(width).png"
                     try await TerminalSmoke.capture(window: settings.window, path: root.appendingPathComponent(name))

@@ -96,7 +96,7 @@ struct NativeMavenSettingsView: View {
                 Button(localized("Reload Maven settings", "重新读取 Maven 设置")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }
                 NativeMavenSaveButton(model: model).frame(width: 150, height: 28)
             }.disabled(model.busy || model.frozen)
-        }.padding().task { await model.reload() }
+        }.padding().task { if model.values.isEmpty { await model.reload() } }
         .confirmationDialog(localized("Discard this Maven draft and read saved settings?", "放弃此 Maven 草稿并读取已保存设置？"), isPresented: $confirmReload) {
             Button(localized("Reload", "重新读取")) { Task { await model.reload(discard: true) } }
             Button(localized("Cancel", "取消"), role: .cancel) {}

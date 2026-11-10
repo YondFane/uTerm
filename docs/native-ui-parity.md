@@ -212,6 +212,19 @@ execution and do not close the full settings acceptance row.
 原生界面／终端字体选择器复用普通版的预设值及双语名称。真实 AppKit 控件 QA 检查自定义值未被隐式写入、选择预设并核对共享核心的完整值往返；`native-settings-custom-font.png`
 记录自定义项，两版分类截图也覆盖相应控件。这组检查仍需新的原生执行，不据此完成整项设置验收。
 
+At head `72c168b957b2cef86a06a38e0d840d7d9e89e746`, tested merge
+`6783ae035fabaec71e595b4b5fd312216ce761b7`, ARM Personal compiled and passed 43 Swift tests.
+[Original evidence](https://github.com/YondFane/uTerm/actions/runs/42767545238/artifacts/13740209277)
+retains 21 settings scenes, including loaded Maven and database controls. The run failed when the
+collector clicked the next category during a repeated Maven read's temporary disabled state. Both
+native collectors now wait for actual enabled navigation and validate loaded controls after window
+layout. Maven settings reuse loaded drafts until explicit reload. This incomplete result does not
+satisfy the full screenshot grid or two-client acceptance.
+
+源码 `72c168b957b2cef86a06a38e0d840d7d9e89e746`、测试 merge
+`6783ae035fabaec71e595b4b5fd312216ce761b7` 的 ARM Personal 编译及 43 项 Swift 测试通过。
+[原始证据](https://github.com/YondFane/uTerm/actions/runs/42767545238/artifacts/13740209277)保留 21 组设置场景，包含已加载的 Maven 与数据库控件。采集器在 Maven 重读暂时禁用导航时点击下一分类，故运行失败。两种原生采集器现均等待真实导航恢复可用，并在窗口布局后核对加载完成。Maven 设置复用已加载草稿，直至显式重读；此次不完整结果不满足截图网格或两版一致性验收。
+
 ## Local checks / 本地检查
 
 Linux checks pass 444 existing Node tests with 11 platform skips, 18 Python package/evidence policy

@@ -37,7 +37,7 @@ enum SettingsSmoke {
         guard model.error.isEmpty, try Data(contentsOf: snapshotFile) == before else { throw BridgeFailure(code: "SETTINGS_QA_OPEN", message: "Opening settings changed saved defaults") }
         report["nativeSettingsMenuAndReadonlyOpen"] = true
         for id in ["appearance", "terminal", "workspace", "keyboard", "agents", "usage", "control", "updates", "general"] {
-            try await TerminalSmoke.wait("Render native settings navigation " + id) { view(current.window, id: "native-settings-section-" + id) != nil }
+            try await TerminalSmoke.wait("Render native settings navigation " + id) { (view(current.window, id: "native-settings-section-" + id) as? NSButton)?.isEnabled == true }
             guard let button = view(current.window, id: "native-settings-section-" + id) as? NSButton, button.isEnabled else { throw BridgeFailure(code: "SETTINGS_QA_SECTION", message: "Settings section is unavailable: " + id) }
             button.performClick(nil)
             try await TerminalSmoke.wait("Select settings section through its actual control") { model.section == id }

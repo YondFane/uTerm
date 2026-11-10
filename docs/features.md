@@ -162,7 +162,11 @@ drain. Candidate native QA checks read-only catalog rendering and captures
 notifies both the native observer and actual WebKit window. At source `d44086b`, both Personal
 architectures and the native matrix failed compilation because the component view exceeded Swift
 type-checking limits. The candidate splits that view into smaller expressions; these new
-interactions still await current-source macOS execution.
+interactions still await complete current-source macOS execution. At `72c168b` (tested merge
+`6783ae0`), ARM compiled and passed 43 Swift tests, then captured 21 settings scenes. The collector
+failed by clicking the next navigation while a repeated Maven read disabled it. It now waits for the
+actual button to become enabled and checks loaded controls after window layout. Maven settings reuse
+an already loaded draft until explicit reload. The incomplete run remains a failure.
 
 #### Configure personal updater signing
 
