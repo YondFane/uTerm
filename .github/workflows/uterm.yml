@@ -169,7 +169,9 @@ jobs:
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           UTERM_QA_UI_PARITY_ONLY: "1"
-        run: node scripts/tauri-state-qa.mjs --skip-build 2>&1 | tee ci-evidence/ui-parity-command.log
+        run: |
+          swift scripts/macos-qa-display.swift | tee ci-evidence/ui-parity-display.json
+          node scripts/tauri-state-qa.mjs --skip-build 2>&1 | tee ci-evidence/ui-parity-command.log
       - name: Isolated Windows candidate installer, actual launch and uninstall
         if: runner.os == 'Windows'
         shell: pwsh

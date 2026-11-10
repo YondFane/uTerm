@@ -113,6 +113,7 @@ enum PersonalSmoke {
                 let name = "personal-\(phase)-settings-\(language)-\(appearance).png"
                 try await TerminalSmoke.capture(window: settings.window, path: root.appendingPathComponent(name))
                 captures.append(name)
+                report["captures"] = captures
                 settings.window.orderOut(nil)
             }
             var workspaceScenes: [[String: Any]] = []
@@ -138,11 +139,13 @@ enum PersonalSmoke {
                         let name = "personal-\(phase)-workspace-\(language)-\(appearance)-\(width).png"
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
                         captures.append(name)
+                        report["captures"] = captures
                         workspaceScenes.append(["screenshot": name, "language": language, "appearance": appearance,
                             "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0),
                             "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-session-tabs-files", "filesReadable": true, "fontSize": model.settings["fontSize"].number ?? 0,
                             "projectName": model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["name"].string ?? "",
                             "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""])
+                        report["workspaceScenes"] = workspaceScenes
                     }
                 }
             }
@@ -158,6 +161,7 @@ enum PersonalSmoke {
             let capture = "personal-\(phase)-terminal.png"
             try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(capture))
             captures.append(capture)
+            report["captures"] = captures
             report["settingsWindowAppearances"] = appearances
             report["localizedUpdateStatuses"] = updateStatuses
             report["captures"] = captures; report["realBundledHelperUnicodePTY"] = true
@@ -172,6 +176,13 @@ enum PersonalSmoke {
         } catch {
             report["failure"] = error.localizedDescription
             report["inspectorDiagnostics"] = ["error": model.inspector.error, "code": model.inspector.errorCode, "directory": model.inspector.directory, "paths": model.inspector.rows.compactMap { $0["path"].string }] as [String: Any]
+            do {
+                let capture = "personal-\(phase)-failure.png"
+                try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(capture))
+                report["captures"] = (report["captures"] as? [String] ?? []) + [capture]
+            } catch {
+                report["failureCaptureError"] = error.localizedDescription
+            }
         }
         await model.shutdown()
         do {

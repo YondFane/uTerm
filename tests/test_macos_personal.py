@@ -1,6 +1,8 @@
 import importlib.util
 import base64
+import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -11,6 +13,40 @@ spec.loader.exec_module(package)
 
 
 class PersonalPackageTests(unittest.TestCase):
+    def test_failed_acceptance_keeps_raw_report_and_available_images(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "source"
+            evidence = Path(temporary) / "evidence"
+            root.mkdir()
+            evidence.mkdir()
+            raw = json.dumps(dict(passed=False, failure="Window too short", captures=["failure.png"]))
+            (root / "personal-initial.json").write_text(raw)
+            image = b"\x89PNG\r\n\x1a\npolicy-test-only"
+            (root / "failure.png").write_bytes(image)
+            report, captures = package.preserve_smoke_outputs(root, evidence, "initial")
+            with self.assertRaises(AssertionError):
+                package.validate_smoke_report(report, "a" * 40, "b" * 40, "initial")
+            self.assertEqual((evidence / "personal-initial.json").read_text(), raw)
+            self.assertEqual((evidence / "failure.png").read_bytes(), image)
+            self.assertEqual(captures, ["failure.png"])
+
+    def test_capture_paths_cannot_escape_the_isolated_smoke_directory(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / "source"
+            evidence = Path(temporary) / "evidence"
+            root.mkdir()
+            evidence.mkdir()
+            outside = Path(temporary) / "outside.png"
+            outside.write_bytes(b"\x89PNG\r\n\x1a\npolicy-test-only")
+            (root / "linked.png").symlink_to(outside)
+            for name in ["../outside.png", str(outside), "linked.png"]:
+                with self.subTest(name=name):
+                    (root / "personal-initial.json").write_text(json.dumps(dict(passed=False, captures=[name])))
+                    with self.assertRaises(AssertionError):
+                        package.preserve_smoke_outputs(root, evidence, "initial")
+                    self.assertFalse((evidence / "outside.png").exists())
+                    self.assertFalse((evidence / "linked.png").exists())
+
     def setUp(self):
         self.info = dict(CFBundleIdentifier="sh.uterm.desktop.personal", CFBundleExecutable="uTerm",
                          UTermBuildFlavor="personal", UTermUpdateMode="manual", UTermSourceHeadSHA="a" * 40,

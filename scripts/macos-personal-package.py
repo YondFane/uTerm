@@ -140,6 +140,25 @@ def smoke(installed, source, root, evidence, head, tested):
         thread.join(timeout=5)
 
 
+def preserve_smoke_outputs(root, evidence, phase):
+    """Keep raw failure evidence before acceptance checks. 在验收检查前保留原始失败证据。"""
+    path = root / f"personal-{phase}.json"
+    shutil.copyfile(path, evidence / path.name)
+    report = json.loads(path.read_text())
+    rollback = root / f"personal-{phase}-rollback.json"
+    if rollback.is_file():
+        shutil.copyfile(rollback, evidence / rollback.name)
+    captures = []
+    for name in report.get("captures", []):
+        assert isinstance(name, str) and Path(name).name == name and name.endswith(".png")
+        image = root / name
+        assert not image.is_symlink() and image.resolve().is_relative_to(root.resolve())
+        assert image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+        shutil.copyfile(image, evidence / name)
+        captures.append(name)
+    return report, captures
+
+
 def run_smoke(installed, source, root, evidence, head, tested, feed):
     captures = []
     reports = []
@@ -158,23 +177,22 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
             process = subprocess.Popen([str(installed / "Contents/MacOS/uTerm"), "--qa-data-root", str(root / "ignored"),
                                         "--smoke-report", str(root / "must-not-exist.json")], stdout=out, stderr=err)
             try:
-                assert process.wait(timeout=90) == 0
+                result = process.wait(timeout=90)
             finally:
                 if process.poll() is None:
                     process.kill()
                     process.wait()
+                if (root / f"personal-{phase}.json").is_file():
+                    report, phase_captures = preserve_smoke_outputs(root, evidence, phase)
+        assert result == 0
         assert not (root / "ignored").exists() and not (root / "must-not-exist.json").exists()
         path = root / f"personal-{phase}.json"
-        report = json.loads(path.read_text())
+        assert path.is_file(), "Personal app did not write its smoke report"
         validate_smoke_report(report, head, tested, phase)
-        shutil.copyfile(path, evidence / path.name)
         rollback = root / f"personal-{phase}-rollback.json"
-        shutil.copyfile(rollback, evidence / rollback.name)
+        assert rollback.is_file(), "Personal rollback evidence is missing"
         reports.append(path.name)
-        for name in report["captures"]:
-            assert Path(name).name == name and (root / name).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-            shutil.copyfile(root / name, evidence / name)
-            captures.append(name)
+        captures.extend(phase_captures)
         endpoint = root / "local-daemon-v1/endpoint.json"
         deadline = time.monotonic() + 10
         pid = report["hostPID"]

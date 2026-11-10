@@ -67,6 +67,8 @@ jobs:
       - name: Build isolated native application
         id: native_build
         run: bash scripts/macos-native-build.sh 2>&1 | tee macos/.build/evidence/native-build.log
+      - name: Prepare real-window capture display
+        run: swift scripts/macos-qa-display.swift | tee macos/.build/evidence/display.json
       - name: Shared core, FFI and Swift bridge tests
         env:
           UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/macos/.build/evidence/terminal-load-core.json

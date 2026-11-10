@@ -242,6 +242,7 @@ async function runUiParity() {
     field.click();
   };
   const terminal = await until(selectedVisibleTerminal, "real selected parity terminal");
+  await until(() => terminalPerformanceSnapshot("ui-parity-0")?.writable, "parity input ownership");
   const original = await until(
     async () =>
       (
@@ -249,7 +250,6 @@ async function runUiParity() {
       ).sessions.find((session) => session.spec.id === "ui-parity-0"),
     "real hosted parity terminal",
   );
-  await until(() => terminalPerformanceSnapshot("ui-parity-0")?.writable, "parity input ownership");
   const input = await until(
     () => terminal.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea"),
     "actual parity terminal input",

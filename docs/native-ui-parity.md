@@ -64,6 +64,15 @@ close. Missing, duplicate, stale-source or mismatched-fixture records fail valid
 `shared/fixtures/client-ui-parity.json`，统一项目名称、文件字节、终端名称及字号，并各采集八组工作区场景。普通版通过真实设置控件改变语言和外观，核对实际保存结果及 PTY
 generation；个人版额外检查按目标关闭后台标签。缺失、重复、过期源码或测试数据不符的记录均会校验失败。
 
+The isolated macOS runner prepares a display of at least 1280×900, records its actual modes and
+bounds in `display.json`, and fails if the required area is unavailable. Actual content dimensions
+remain mandatory. Personal validation retains raw reports and available original PNGs before
+rejecting failed acceptance. A failure-window screenshot is attempted and capture errors are
+recorded. Ordinary collection waits for actual input ownership before reading host identity.
+
+隔离 macOS 运行器准备至少 1280×900 的显示区域，将实际模式及边界记录至
+`display.json`，区域不可用时失败。实际内容尺寸仍为必检项。个人版验收失败前会保留原始报告及已生成的原始 PNG，并尝试截取失败窗口，记录截图错误。普通版采集器在读取宿主身份前等待实际输入控制就绪。
+
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
 uploads 16 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
@@ -79,10 +88,10 @@ ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后�
 
 ## Local checks / 本地检查
 
-Linux checks pass 444 existing Node tests with 11 platform skips, 15 Python package/evidence policy
+Linux checks pass 444 existing Node tests with 11 platform skips, 17 Python package/evidence policy
 tests, seven paired-evidence policy tests, 19 backend tests with QA enabled (one ignored),
 TypeScript/production build, repository formatting, shell syntax and documentation checks. The
 Python fixtures validate rejection rules only; they are not application screenshots. Swift
 compilation and real-window interaction have not run for this candidate.
 
-Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、15 项 Python 安装包／证据策略测试、七项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。
+Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、17 项 Python 安装包／证据策略测试、七项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。

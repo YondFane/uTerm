@@ -91,6 +91,13 @@ remain available while complete settings blocks external CLI writes. The candida
 same-source paired screenshot acceptance; Linux regressions do not establish complete functional or
 visual parity.
 
+Real-window CI prepares a display of at least 1280×900 before the matching screenshot grid; the
+required 720-pixel content height is still checked against actual window bounds. Personal smoke
+failures retain the raw report and available original captures before validation, including an
+attempted failure-window capture. The ordinary collector waits for real terminal input ownership
+before inspecting the host. Linux passes 17 macOS package/evidence policy tests and seven
+paired-evidence policy tests; these fixtures do not represent native window execution.
+
 #### Configure personal updater signing
 
 Run these commands locally from the checkout, using a new key directory outside the repository. Keep
