@@ -22,6 +22,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     for key in ['nativeSettingsMenuAndReadonlyOpen', 'invalidNumericDraftRetainedWithoutWrite', 'unrelatedExternalSettingsPreserved', 'sameFieldConflictRetainsDraftAndPeerValue', 'hiddenWindowAndActualQuitCancellationRetainDraft', 'nativeReservedAndDuplicateShortcutErrors', 'nativeShortcutCaptureAndSave', 'nativeDynamicMenuPaletteKeyboardAndFocusReturn', 'nativeThemeImportDraftFailureAndTerminalEffects', 'explicitResetUsesSharedDefaults', 'simulatedLoginItemOptInApprovalFailureAndDisable']:
         assert data[key], key
     assert data['nativeThemeFileNamesAndBoundedReads']
+    assert data['nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets']
     assert data['nativeGlobalMavenActualSaveConflictDraftAndProjectPreservation']
     assert data['nativeDatabaseComponentsReadonlyCatalogWithoutDownloads']
     assert data['nativeBreakReminderRenderDismissAndDisable']
@@ -29,7 +30,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     assert data['nativeLowerFileTabLimitAppliesToExistingTabs']
     for name in data['preferenceCaptures']: assert (evidence / name).stat().st_size > 1000, name
     assert not data['actualOSLoginRegistrationExecuted']
-    assert len(data['captures']) == 6
+    assert len(data['captures']) == 7
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
     assert not subprocess.check_output(['git', 'status', '--porcelain'])

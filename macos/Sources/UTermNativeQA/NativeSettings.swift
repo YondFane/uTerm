@@ -174,7 +174,7 @@ struct NativeSettingsView: View {
                 }
             }
             Button(localized("Import Ghostty theme…", "导入 Ghostty 主题…")) { model.chooseTheme() }
-            TextField(localized("Interface font", "界面字体"), text: text("interfaceFont"))
+            NativeFontPickerRow(model: model, key: "interfaceFont", title: localized("Interface font", "界面字体"))
             number("interfaceSize", "Interface font size", "界面字号")
             number("rowPadding", "Row padding", "行间留白")
             number("windowPadding", "Window padding", "窗口留白")
@@ -188,7 +188,7 @@ struct NativeSettingsView: View {
     }
     private var terminal: some View {
         Form {
-            TextField(localized("Terminal font family", "终端字体"), text: text("fontFamily"))
+            NativeFontPickerRow(model: model, key: "fontFamily", title: localized("Terminal font family", "终端字体"))
             number("fontSize", "Terminal font size", "终端字号")
             Toggle(localized("Thicken terminal text", "加粗终端文字"), isOn: flag("fontThicken"))
             number("lineHeight", "Line height (1–2)", "行高（1–2）")

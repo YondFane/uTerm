@@ -203,6 +203,15 @@ result from that failed build is counted as acceptance.
 源码 `d44086b6a8ec75687e5609a50a8e4601e01f95af`
 的两种 Personal 架构及原生矩阵均因组件页面超过 Swift 表达式类型推断限制而编译失败（[ARM 日志](https://github.com/YondFane/uTerm/actions/runs/42765375356/job/129660526340)）。候选代码将目录、组件、操作、进度与底栏分别提取；失败构建不计为运行验收。
 
+Native interface/terminal font pickers use the same preset values and bilingual labels as the
+ordinary client. Actual AppKit control QA retains custom values without writes, chooses presets and
+checks their exact shared-core round trip; `native-settings-custom-font.png` records the custom
+entry. The two-client category grid also captures these controls. These checks require fresh native
+execution and do not close the full settings acceptance row.
+
+原生界面／终端字体选择器复用普通版的预设值及双语名称。真实 AppKit 控件 QA 检查自定义值未被隐式写入、选择预设并核对共享核心的完整值往返；`native-settings-custom-font.png`
+记录自定义项，两版分类截图也覆盖相应控件。这组检查仍需新的原生执行，不据此完成整项设置验收。
+
 ## Local checks / 本地检查
 
 Linux checks pass 444 existing Node tests with 11 platform skips, 18 Python package/evidence policy

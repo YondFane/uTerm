@@ -43,6 +43,131 @@
     "shortcuts",
     "agentNotifications"
   ],
+  "fonts": {
+    "interfaceFont": [
+      {
+        "value": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+        "labels": {
+          "en": "System default",
+          "zh-Hans": "系统默认"
+        }
+      },
+      {
+        "value": "Arial, sans-serif",
+        "labels": {
+          "en": "Arial",
+          "zh-Hans": "Arial"
+        }
+      },
+      {
+        "value": "\"Helvetica Neue\", Arial, sans-serif",
+        "labels": {
+          "en": "Helvetica Neue",
+          "zh-Hans": "Helvetica Neue"
+        }
+      },
+      {
+        "value": "\"Segoe UI\", sans-serif",
+        "labels": {
+          "en": "Segoe UI",
+          "zh-Hans": "Segoe UI"
+        }
+      },
+      {
+        "value": "\"PingFang SC\", sans-serif",
+        "labels": {
+          "en": "PingFang SC",
+          "zh-Hans": "苹方"
+        }
+      },
+      {
+        "value": "\"Microsoft YaHei\", sans-serif",
+        "labels": {
+          "en": "Microsoft YaHei",
+          "zh-Hans": "微软雅黑"
+        }
+      },
+      {
+        "value": "\"Source Han Sans SC\", \"Noto Sans CJK SC\", sans-serif",
+        "labels": {
+          "en": "Source Han Sans SC",
+          "zh-Hans": "思源黑体"
+        }
+      }
+    ],
+    "fontFamily": [
+      {
+        "value": "\"Cascadia Code\", \"SFMono-Regular\", Consolas, monospace",
+        "labels": {
+          "en": "System monospace",
+          "zh-Hans": "系统默认等宽字体"
+        }
+      },
+      {
+        "value": "\"Cascadia Code\", monospace",
+        "labels": {
+          "en": "Cascadia Code",
+          "zh-Hans": "Cascadia Code"
+        }
+      },
+      {
+        "value": "\"Cascadia Mono\", monospace",
+        "labels": {
+          "en": "Cascadia Mono",
+          "zh-Hans": "Cascadia Mono"
+        }
+      },
+      {
+        "value": "\"SFMono-Regular\", monospace",
+        "labels": {
+          "en": "SFMono-Regular",
+          "zh-Hans": "SFMono-Regular"
+        }
+      },
+      {
+        "value": "\"Menlo\", monospace",
+        "labels": {
+          "en": "Menlo",
+          "zh-Hans": "Menlo"
+        }
+      },
+      {
+        "value": "\"Monaco\", monospace",
+        "labels": {
+          "en": "Monaco",
+          "zh-Hans": "Monaco"
+        }
+      },
+      {
+        "value": "\"Consolas\", monospace",
+        "labels": {
+          "en": "Consolas",
+          "zh-Hans": "Consolas"
+        }
+      },
+      {
+        "value": "\"JetBrains Mono\", monospace",
+        "labels": {
+          "en": "JetBrains Mono",
+          "zh-Hans": "JetBrains Mono"
+        }
+      },
+      {
+        "value": "\"Fira Code\", monospace",
+        "labels": {
+          "en": "Fira Code",
+          "zh-Hans": "Fira Code"
+        }
+      },
+      {
+        "value": "\"Source Code Pro\", monospace",
+        "labels": {
+          "en": "Source Code Pro",
+          "zh-Hans": "Source Code Pro"
+        }
+      }
+    ]
+  },
   "commands": [
     {
       "id": "palette",

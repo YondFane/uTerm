@@ -151,6 +151,7 @@ enum SettingsSmoke {
                 guard !model.error.isEmpty, model.values == beforeRejectedFile, try Data(contentsOf: snapshotFile) == beforeImport else { throw BridgeFailure(code: "SETTINGS_QA_THEME_FILE_REJECT", message: "Rejected theme file changed the draft or store") }
             }
             report["nativeThemeFileNamesAndBoundedReads"] = true
+            let fontCapture = try await verifyFontPickers(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
             model.values["appearance"] = .string("dark"); model.values["fontFamily"] = .string("Menlo, monospace")
             model.values["cursorStyle"] = .string("bar"); model.values["cursorBlink"] = .bool(false); model.values["copyOnSelect"] = .bool(true)
             model.values["interfaceTheme"] = .string("ocean")
@@ -190,7 +191,7 @@ enum SettingsSmoke {
             guard !model.login.enabled, model.login.error.isEmpty, try Data(contentsOf: snapshotFile) == beforeLogin, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_LOGIN_DISABLE", message: "Login cleanup changed shared preferences") }
             report["simulatedLoginItemOptInApprovalFailureAndDisable"] = true
             report["actualOSLoginRegistrationExecuted"] = false
-            var captures: [String] = [paletteCapture, terminalCapture]
+            var captures: [String] = [paletteCapture, terminalCapture, fontCapture]
             captures.append(try await verifyGlobalMaven(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             captures.append(try await verifyDatabaseComponents(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             current.window.makeKeyAndOrderFront(nil)
@@ -210,6 +211,36 @@ enum SettingsSmoke {
         report["nativeSettingsFeatureAcceptanceComplete"] = false
         report["remaining"] = ["Automatic update effects remain tracked in #45; preference/file/search/inspector/swap/zoom and GitHub have separate reports; actual OS login approval uses the authorized simulation boundary"]
         current.window.orderOut(nil)
+    }
+
+    private static func verifyFontPickers(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
+        let model = settings.model
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Missing font preference bridge") }
+        let before = try await bridge.snapshot()
+        let custom = "QA literal \"中文\", monospace"
+        var selected: [String: JSONValue] = [:]
+        var capture = ""
+        for (key, section) in [("interfaceFont", "appearance"), ("fontFamily", "terminal")] {
+            model.values[key] = .string(custom); model.section = section
+            let identifier = "native-settings-font-" + key
+            try await TerminalSmoke.wait("Render native custom font selection") { (view(settings.window, id: identifier) as? NSPopUpButton)?.selectedItem?.representedObject as? String == custom }
+            guard let picker = view(settings.window, id: identifier) as? NSPopUpButton,
+                  let font = model.catalog["fonts"][key].array.dropFirst().first?["value"].string,
+                  let option = picker.itemArray.first(where: { $0.representedObject as? String == font }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Shared font presets or custom selection are missing") }
+            guard (try await bridge.snapshot()).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_FONT_DRAFT", message: "Rendering a custom font changed saved settings") }
+            if key == "interfaceFont" {
+                capture = "native-settings-custom-font.png"
+                try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+            }
+            picker.select(option)
+            guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker), model.values[key] == .string(font) else { throw BridgeFailure(code: "SETTINGS_QA_FONT_ACTION", message: "Native font picker did not retain the shared preset value") }
+            selected[key] = .string(font)
+        }
+        try await save(model)
+        let saved = try await bridge.snapshot()
+        guard model.error.isEmpty, !model.dirty, selected.allSatisfy({ saved.document.settings[$0.key] == $0.value }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT_SAVE", message: "Selected font values did not round trip through the shared core") }
+        report["nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets"] = true
+        return capture
     }
 
     private static func verifyDatabaseComponents(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {

@@ -28,6 +28,7 @@ import {
   validateShortcuts,
 } from "../src/lib/settings.ts";
 import { importTheme } from "../src/lib/themes.ts";
+import { interfaceFonts, terminalFonts } from "../src/lib/settings-fonts.ts";
 import {
   emptyWorkspace,
   createWorkspaceGroup,
@@ -100,6 +101,17 @@ test("native settings catalog preserves defaults and matches both platform short
   const response = await call("settings.catalog");
   assert.equal(response.error, undefined);
   assert.deepEqual(response.result.defaults, defaults);
+  for (const [key, presets] of [
+    ["interfaceFont", interfaceFonts],
+    ["fontFamily", terminalFonts],
+  ]) {
+    assert.deepEqual(
+      response.result.fonts[key].map((font) => font.value),
+      presets.map(([, value]) => value),
+    );
+    for (const font of response.result.fonts[key])
+      assert.ok(font.labels.en && font.labels["zh-Hans"]);
+  }
   assert.deepEqual(
     response.result.commands.map((command) => command.id),
     commands.map(([id]) => id),

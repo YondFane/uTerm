@@ -5,7 +5,8 @@ import { sourceFiles, sourceTree, parseSource, walk, hasHan, backendKeys } from 
 const catalogData = {
   "src/lib/settings.ts": ["commands"],
   "src/lib/interface-themes.ts": ["interfaceThemes"],
-  "src/components/SettingsPanel.tsx": ["tabs", "interfaceFonts", "terminalFonts"],
+  "src/components/SettingsPanel.tsx": ["tabs"],
+  "src/lib/settings-fonts.ts": ["interfaceFonts", "terminalFonts"],
 };
 export function checkSources() {
   const issues = [];

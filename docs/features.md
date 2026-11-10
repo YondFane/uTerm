@@ -118,6 +118,13 @@ file font/tab preferences; workspace management offers shared create/rename/dele
 commands/hooks and quota open their existing complete native window. The Java environment still
 needs a matching standalone settings section before complete parity can be accepted.
 
+Interface and terminal font selectors share the ordinary client's preset catalog and localized
+labels. Existing custom font strings remain a selected custom entry until a preset is chosen; simply
+opening or switching categories does not replace them. Selection retains the exact fallback-family
+string, and the existing settings save/conflict rules apply. Native QA checks both actual AppKit
+selectors, custom draft retention, no implicit write and a save/read round trip; it also captures
+`native-settings-custom-font.png`. Current-source macOS execution is still required.
+
 The toolbar includes file opening, the command palette, pane zoom and a tools menu for files/search,
 Git/GitHub, Java/Python, SSH, database and Redis entry points. Commands retain their existing focus,
 busy-state and selected-project guards.
