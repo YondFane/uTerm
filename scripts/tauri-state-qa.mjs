@@ -31,7 +31,11 @@ const previewQA = JSON.parse(
 );
 const identifier = "sh.uterm.desktop.qa.sharedstate";
 const performanceOnly = process.env.UTERM_QA_PERFORMANCE_ONLY === "1";
-const output = resolve("ci-evidence/tauri-state-qa");
+const parityOnly = process.env.UTERM_QA_UI_PARITY_ONLY === "1";
+const parityFixture = JSON.parse(
+  readFileSync(resolve("shared/fixtures/client-ui-parity.json"), "utf8"),
+);
+const output = resolve(parityOnly ? "ci-evidence/ui-parity-tauri" : "ci-evidence/tauri-state-qa");
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 const root = mkdtempSync(join(tmpdir(), "uterm-tauri-qa-"));
@@ -97,6 +101,10 @@ const metadata = {
   productionDataAccess: false,
   sourceTreeDirty,
   performanceOnly,
+  parityOnly,
+  uiParityFixtureSHA256: createHash("sha256")
+    .update(readFileSync(resolve("shared/fixtures/client-ui-parity.json")))
+    .digest("hex"),
   productVersion:
     process.platform === "darwin"
       ? execute("/usr/bin/sw_vers", ["-productVersion"]).trim()
@@ -1044,7 +1052,16 @@ print(number.uint32Value)
       }
     }
   }
-  if (performanceOnly) {
+  if (parityOnly) {
+    const directory = join(root, "parity/project");
+    mkdirSync(directory, { recursive: true });
+    for (const [name, value] of Object.entries(parityFixture.files)) {
+      assert(!name.includes("/") && name !== "." && name !== "..");
+      writeFileSync(join(directory, name), value);
+    }
+    await run("ui-parity");
+    assert.equal(scenes.length, 8, "Incomplete ordinary-client parity grid");
+  } else if (performanceOnly) {
     await run("performance");
   } else {
     await run("editor-checkpoint");

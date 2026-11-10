@@ -277,6 +277,10 @@ final class WorkspaceModel: ObservableObject {
         busy = false
     }
 
+    func flushWorkspaceOperations() async {
+        if let operation { _ = await operation.value }
+    }
+
     func selectSession(_ id: String, focus: Bool = true) async {
         if selectedID == id { return }
         if let operation { _ = await operation.value }

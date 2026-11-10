@@ -17,20 +17,21 @@ final class NativeInspectorModel: ObservableObject {
     @Published private(set) var skipped = 0
     @Published private(set) var busy = false
     @Published private(set) var error = ""
+    @Published private(set) var errorCode = ""
     @Published var selected = -1
     private var generation = 0
     private var context = ""
     init(workspace: WorkspaceModel) { self.workspace = workspace }
     func invalidate() { generation += 1; busy = false }
     func reload() async {
-        guard let workspace, let bridge = workspace.bridge, let state = workspace.state else { return }
+        guard let workspace, let bridge = workspace.bridge, workspace.state != nil else { return }
         generation += 1; let request = generation
         if context != workspace.inspectorContextKey {
             context = workspace.inspectorContextKey; directory = ""; path = ""; rows = []; query = ""; selected = -1
         }
-        busy = true; error = ""; defer { if request == generation { busy = false } }
+        busy = true; error = ""; errorCode = ""; defer { if request == generation { busy = false } }
         do {
-            let current = try await bridge.projectContext(expectedRevision: state.snapshot.revision)
+            guard let current = try await currentProject(bridge, workspace: workspace, request: request) else { return }
             guard request == generation, !Task.isCancelled else { return }
             guard let root = current.directory, root.hasPrefix("/") else {
                 directory = ""; rows = []
@@ -51,9 +52,29 @@ final class NativeInspectorModel: ObservableObject {
             partial = result["partial"].bool == true; skipped = Int(result["skipped"].number ?? 0); selected = -1
         } catch {
             guard request == generation, context == workspace.inspectorContextKey, !Task.isCancelled else { return }
+            errorCode = (error as? BridgeFailure)?.code ?? "READ_FAILED"
             rows = []; self.error = localized("Could not read this project. Check the path and retry.", "无法读取此项目，请检查路径后重试。")
         }
     }
+    private func currentProject(_ bridge: CoreBridge, workspace: WorkspaceModel, request: Int) async throws -> CoreProjectContext? {
+        await workspace.flushWorkspaceOperations()
+        for attempt in 0..<3 {
+            guard request == generation, context == workspace.inspectorContextKey, !Task.isCancelled else { return nil }
+            do {
+                let snapshot = try await bridge.snapshot()
+                let saved = snapshot.document.workspace
+                let savedContext = [saved["selectedWorkspace"].string ?? "local", saved["selectedProject"].string ?? "", saved["selectedWorktree"].string ?? ""].joined(separator: "\u{0}")
+                guard savedContext == context else { return nil }
+                // Unrelated settings writes may change the revision without changing this project.
+                // 无关的设置写入可能改变版本，但并未切换当前项目。
+                return try await bridge.projectContext(expectedRevision: snapshot.revision)
+            } catch let failure as BridgeFailure where attempt < 2 && ["CONFLICT", "WRITER_BUSY"].contains(failure.code) {
+                try await Task.sleep(for: .milliseconds(25 * (attempt + 1)))
+            }
+        }
+        return nil
+    }
+
     func up() async {
         guard !path.isEmpty else { return }
         path = path.split(separator: "/").dropLast().joined(separator: "/")

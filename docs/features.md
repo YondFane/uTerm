@@ -83,9 +83,13 @@ open use segmented tool navigation. These interactions use the existing shared o
 conflict protections.
 
 [Two-client acceptance](native-ui-parity.md) covers the full matching scope, including remaining
-checks for drag/group operations, layout persistence, content tabs and workbench integration. The
-candidate has not yet completed native compilation or same-source paired screenshot acceptance.
-Linux regressions do not establish complete functional or visual parity.
+checks for drag/group operations, layout persistence, content tabs and workbench integration. Both
+screenshot collectors share project data and collect matching language/appearance/size grids. PR CI
+assembles their same-source original PNGs and comparison reports in a downloadable artifact; source,
+OS, architecture, fixture hash and scene mismatches fail collection. Native window-owned commands
+remain available while complete settings blocks external CLI writes. The candidate still requires
+same-source paired screenshot acceptance; Linux regressions do not establish complete functional or
+visual parity.
 
 #### Configure personal updater signing
 

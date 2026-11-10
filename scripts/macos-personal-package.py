@@ -73,6 +73,7 @@ def validate_workspace_scenes(report, head, tested, phase):
         assert scene["platform"] == "macOS" and scene["architecture"] in ["arm64", "x86_64"]
         assert scene["system"] and scene["height"] == 720
         assert scene["scenario"] == "toolbar-sidebar-two-session-tabs-files"
+        assert scene["filesReadable"] is True
     assert observed == expected
 
 

@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import UTermBridge
 
 @MainActor
@@ -20,11 +21,20 @@ enum PersonalSmoke {
         do {
             guard model.ready, let bridge = model.bridge, WorkspaceModel.argument("--qa-data-root") == nil,
                   WorkspaceModel.argument("--smoke-report") == nil else { throw BridgeFailure(code: "PERSONAL_QA", message: "Personal startup or QA argument isolation failed: " + model.error) }
+            guard let resources = Bundle.main.resourceURL else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing resources") }
+            let parityBytes = try Data(contentsOf: resources.appendingPathComponent("client-ui-parity.json"))
+            let parity = try JSONDecoder().decode(JSONValue.self, from: parityBytes)
+            report["uiParityFixtureSHA256"] = SHA256.hash(data: parityBytes).map { String(format: "%02x", $0) }.joined()
             if phase == "initial" {
                 let project = root.appendingPathComponent("project")
                 try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
-                guard await model.mutate("project.open", ["id": .string("personal-qa-project"), "name": .string("Personal release QA"), "directory": .string(project.path), "workspaceId": .string(model.groupID)]) else { throw BridgeFailure(code: "PERSONAL_PROJECT", message: model.error) }
-                try Data("Original 中文\r\n".utf8).write(to: project.appendingPathComponent("note.txt"))
+                guard await model.mutate("project.open", ["id": .string("personal-qa-project"), "name": .string(parity["projectName"].string ?? "UI parity project"), "directory": .string(project.path), "workspaceId": .string(model.groupID)]) else { throw BridgeFailure(code: "PERSONAL_PROJECT", message: model.error) }
+                if case .object(let files) = parity["files"] {
+                    for (name, value) in files {
+                        guard !name.contains("/"), name != ".", name != "..", let text = value.string else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Invalid fixture file") }
+                        try Data(text.utf8).write(to: project.appendingPathComponent(name))
+                    }
+                }
                 _ = try await bridge.call("editor.drafts.import", params: .object([:]))
                 for (path, text) in [("note.txt", "Personal 中文 é\r\n"), ("second.txt", "Second 🧪\r\n")] {
                     _ = try await bridge.call("editor.drafts.putDocument", params: .object(["expectedDraftRevision": .null, "draft": .object([
@@ -32,9 +42,9 @@ enum PersonalSmoke {
                         "saved": .string("Original 中文\r\n"), "version": .string(String(repeating: "a", count: 64)), "line_ending": .string("\r\n"), "bom": .bool(false)
                     ])]))
                 }
-                await model.patchSettings(["fontSize": .number(17), "automaticUpdates": .bool(true)])
+                await model.patchSettings(["fontSize": parity["fontSize"], "automaticUpdates": .bool(true)])
             } else {
-                guard model.settings["fontSize"].number == 17, model.projects.contains(where: { $0["id"].string == "personal-qa-project" }) else { throw BridgeFailure(code: "PERSONAL_RETAIN", message: "Replacing the app lost the personal profile") }
+                guard model.settings["fontSize"] == parity["fontSize"], model.projects.contains(where: { $0["id"].string == "personal-qa-project" }) else { throw BridgeFailure(code: "PERSONAL_RETAIN", message: "Replacing the app lost the personal profile") }
             }
             let snapshot = try await bridge.snapshot()
             let drafts = try await bridge.call("editor.drafts.read")
@@ -67,14 +77,17 @@ enum PersonalSmoke {
             await model.newTerminal()
             try await TerminalSmoke.wait("Personal Release helper starts a real PTY") { model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true && (model.selectedTerminal?.qaRenderedFrames ?? 0) > 0 }
             guard let terminal = model.selectedTerminal else { throw BridgeFailure(code: "PERSONAL_PTY", message: "Personal terminal is missing") }
-            terminal.enqueue(Data("printf 'PERSONAL_%s 中文\\n' READY\r".utf8))
-            try await TerminalSmoke.wait("Personal Release renders Unicode PTY output") { terminal.text.contains("PERSONAL_READY 中文") && terminal.view.window === window }
+            guard let marker = parity["marker"].string, !marker.isEmpty, let command = parity["command"].string else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing terminal fixture") }
+            terminal.enqueue(Data((command + "\r").utf8))
+            try await TerminalSmoke.wait("Personal Release renders Unicode PTY output") { terminal.text.contains(marker) && terminal.view.window === window }
             let originalID = terminal.id
             let originalView = ObjectIdentifier(terminal.view)
             let originalGeneration = terminal.generation
             await model.newTerminal()
             try await TerminalSmoke.wait("Create a second real tab") { model.selectedID != originalID && model.selectedTerminal?.generation != nil }
             guard let peerID = model.selectedID else { throw BridgeFailure(code: "PERSONAL_TABS", message: "Second tab is missing") }
+            _ = await model.mutate("session.rename", ["id": .string(originalID), "name": parity["sessions"].array[0]])
+            _ = await model.mutate("session.rename", ["id": .string(peerID), "name": parity["sessions"].array[1]])
             await model.selectSession(originalID)
             try await TerminalSmoke.wait("Switch back without replacing the terminal") { terminal.view.window === window && model.selectedID == originalID }
             var captures: [String] = []
@@ -113,16 +126,22 @@ enum PersonalSmoke {
                         window.makeKeyAndOrderFront(nil)
                         window.setContentSize(NSSize(width: width, height: 720))
                         try await Task.sleep(for: .milliseconds(200))
-                        guard ObjectIdentifier(terminal.view) == originalView, terminal.generation == originalGeneration,
+                        guard model.settings["fontSize"] == parity["fontSize"], model.settings["language"].string == language, model.settings["appearance"].string == appearance,
+                              ObjectIdentifier(terminal.view) == originalView, terminal.generation == originalGeneration,
                               model.selectedID == originalID, terminal.view.window === window else {
                             throw BridgeFailure(code: "PERSONAL_TABS", message: "Workspace chrome replaced the selected terminal")
+                        }
+                        try await TerminalSmoke.wait("Fixture files remain readable across settings changes") {
+                            model.inspector.error.isEmpty && !model.inspector.busy
+                                && Set(model.inspector.rows.compactMap { $0["path"].string }) == Set(["note.txt", "README.md"])
                         }
                         let name = "personal-\(phase)-workspace-\(language)-\(appearance)-\(width).png"
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
                         captures.append(name)
                         workspaceScenes.append(["screenshot": name, "language": language, "appearance": appearance,
                             "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0),
-                            "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-session-tabs-files",
+                            "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-session-tabs-files", "filesReadable": true, "fontSize": model.settings["fontSize"].number ?? 0,
+                            "projectName": model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["name"].string ?? "",
                             "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""])
                     }
                 }
@@ -150,7 +169,10 @@ enum PersonalSmoke {
             _ = try await bridge.call("host.shutdownIdle")
             report["explicitCloseAndIdleHostShutdown"] = true
             report["passed"] = true
-        } catch { report["failure"] = error.localizedDescription }
+        } catch {
+            report["failure"] = error.localizedDescription
+            report["inspectorDiagnostics"] = ["error": model.inspector.error, "code": model.inspector.errorCode, "directory": model.inspector.directory, "paths": model.inspector.rows.compactMap { $0["path"].string }] as [String: Any]
+        }
         await model.shutdown()
         do {
             let bytes = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])

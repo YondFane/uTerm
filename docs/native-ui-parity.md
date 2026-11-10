@@ -54,20 +54,35 @@ conflict handling, session safety or persistence.
 SHA、实际测试 merge SHA、操作及截图文件名。原始 PNG 和报告上传为可访问的 CI
 artifacts。每项关联成对截图及实际操作断言；仅图片不能证明取消、冲突处理、会话安全或持久化。
 
-The personal smoke driver includes an eight-scene workspace grid and checks that closing a
-background tab retains the selected terminal generation. Its package validator rejects missing,
-duplicate or mismatched-source scene records. This is one client's evidence collection, not a
-completed two-client comparison. Same-source native compilation, execution, actual images and paired
-comparison remain pending until the candidate runs on macOS CI.
+The ordinary and Personal collectors use `shared/fixtures/client-ui-parity.json` for the same
+project name, file bytes, terminal names and font size. Both capture eight workspace scenes. The
+ordinary collector changes language and appearance through its real settings controls and checks
+actual saved state and PTY generation. The Personal collector also verifies targeted background-tab
+close. Missing, duplicate, stale-source or mismatched-fixture records fail validation.
 
-个人版冒烟入口包含八组工作区截图及关闭后台标签后保留所选终端 generation 的检查。安装包校验器拒绝场景缺失、重复或源码不符的记录。这仅是单端证据采集，不代表两版对照完成。同源码原生编译、运行、真实截图及成对比较仍待候选代码在 macOS
-CI 执行。
+普通版与个人版采集器共用
+`shared/fixtures/client-ui-parity.json`，统一项目名称、文件字节、终端名称及字号，并各采集八组工作区场景。普通版通过真实设置控件改变语言和外观，核对实际保存结果及 PTY
+generation；个人版额外检查按目标关闭后台标签。缺失、重复、过期源码或测试数据不符的记录均会校验失败。
+
+For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
+artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
+uploads 16 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
+never replaces a missing native capture with a browser render. `comparisonReady` means the images
+are ready for review; `functionalParityAccepted` remains false until all acceptance rows are met.
+This candidate's new collection flow still requires actual CI execution and visual inspection.
+
+PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
+ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 16 张原图、`comparison.md` 和
+`comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
+仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
+始终为 false。当前候选采集流程仍需实际 CI 执行及看图核对。
 
 ## Local checks / 本地检查
 
 Linux checks pass 444 existing Node tests with 11 platform skips, 15 Python package/evidence policy
-tests, TypeScript/production build, repository formatting, shell syntax and documentation checks.
-The Python fixtures validate rejection rules only; they are not application screenshots. Swift
+tests, seven paired-evidence policy tests, 19 backend tests with QA enabled (one ignored),
+TypeScript/production build, repository formatting, shell syntax and documentation checks. The
+Python fixtures validate rejection rules only; they are not application screenshots. Swift
 compilation and real-window interaction have not run for this candidate.
 
-Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、15 项 Python 安装包／证据策略测试、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。
+Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、15 项 Python 安装包／证据策略测试、七项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。

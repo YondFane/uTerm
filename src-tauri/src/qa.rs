@@ -322,6 +322,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
         "input-viewer",
         "package",
         "performance",
+        "ui-parity",
         "updates",
     ]
     .contains(&phase.as_str())
@@ -330,7 +331,7 @@ pub fn qa_context(app: tauri::AppHandle) -> Result<Value, String> {
     }
     Ok(json!({
         "identifier": app.config().identifier,
-        "phase": phase, "root": root, "project":root.join("project"), "backup": argument("--qa-backup").ok(),
+        "phase": phase, "root": root, "project": if phase == "ui-parity" { root.join("parity/project") } else { root.join("project") }, "backup": argument("--qa-backup").ok(),
         "head": option_env!("UTERM_QA_HEAD"), "tested": option_env!("UTERM_QA_TESTED"),
         "sourceTreeDirty":option_env!("UTERM_QA_DIRTY"),
         "platform": std::env::consts::OS, "architecture": std::env::consts::ARCH,
@@ -419,7 +420,7 @@ pub async fn qa_external_settings(app: tauri::AppHandle) -> Result<Value, String
 #[tauri::command]
 pub fn qa_performance_window(app: tauri::AppHandle, width: u32, height: u32) -> Result<(), String> {
     check(&app)?;
-    if argument("--qa-phase")? != "performance"
+    if !["performance", "ui-parity"].contains(&argument("--qa-phase")?.as_str())
         || !(640..=1600).contains(&width)
         || !(420..=1200).contains(&height)
     {

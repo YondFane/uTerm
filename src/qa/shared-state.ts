@@ -1,8 +1,11 @@
+import { translate } from "../lib/i18n";
+import parityFixtureJSON from "../../shared/fixtures/client-ui-parity.json?raw";
 import editorFixtureJSON from "../../shared/fixtures/editor-draft-qa.json?raw";
 import gitFixtureJSON from "../../shared/fixtures/git-qa.json?raw";
 import previewFixtureJSON from "../../shared/fixtures/content-preview-qa.json?raw";
 import sshFixtureJSON from "../../shared/fixtures/ssh-qa.json?raw";
 import { invoke } from "@tauri-apps/api/core";
+import { terminalPerformanceSnapshot } from "../lib/terminal-performance-qa";
 import { coreRequest, flushSharedState } from "../lib/shared-state";
 import { defaults, settingsKey } from "../lib/settings";
 import { emptyWorkspace, workspaceKey, type Workspace } from "../lib/workspace";
@@ -42,12 +45,20 @@ interface Context {
     | "input-owner"
     | "input-viewer"
     | "package"
+    | "ui-parity"
     | "performance"
     | "updates";
   backup?: string;
   ready: boolean;
   performanceLong?: boolean;
 }
+const parityFixture = JSON.parse(parityFixtureJSON) as {
+  projectName: string;
+  fontSize: number;
+  sessions: string[];
+  marker: string;
+  command: string;
+};
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
 const sentinel = "opaque QA draft backup retained byte-for-byte";
 const editorFixture = JSON.parse(editorFixtureJSON) as {
@@ -196,6 +207,143 @@ async function editFont(value: number) {
   input.blur();
 }
 
+async function runUiParity() {
+  const choose = async (labels: string[], value: string) => {
+    const field = await until(
+      () =>
+        [...document.querySelectorAll(".settings-content label")]
+          .find((label) => labels.some((text) => label.textContent?.includes(text)))
+          ?.querySelector("select"),
+      "parity settings field",
+    );
+    field.value = value;
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushSharedState();
+  };
+  const open = async () => {
+    const field = await until(
+      () =>
+        document.querySelector<HTMLButtonElement>(
+          `button[aria-label="${translate("en", "设置")}"], button[aria-label="${translate("zh-Hans", "设置")}"]`,
+        ),
+      "settings entry",
+    );
+    field.click();
+    await until(() => document.querySelector(".settings-content"), "settings window");
+  };
+  const tab = async (labels: string[]) => {
+    const field = await until(
+      () =>
+        [...document.querySelectorAll<HTMLButtonElement>(".settings-layout nav button")].find(
+          (button) => labels.includes(button.textContent?.trim() ?? ""),
+        ),
+      "settings section",
+    );
+    field.click();
+  };
+  const terminal = await until(selectedVisibleTerminal, "real selected parity terminal");
+  const original = await until(
+    async () =>
+      (
+        await invoke<{ sessions: { spec: { id: string }; generation: string }[] }>("qa_host_status")
+      ).sessions.find((session) => session.spec.id === "ui-parity-0"),
+    "real hosted parity terminal",
+  );
+  await until(() => terminalPerformanceSnapshot("ui-parity-0")?.writable, "parity input ownership");
+  const input = await until(
+    () => terminal.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea"),
+    "actual parity terminal input",
+  );
+  input.focus();
+  const data = new DataTransfer();
+  data.setData("text/plain", parityFixture.command);
+  input.dispatchEvent(
+    new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }),
+  );
+  for (const type of ["keydown", "keyup"])
+    input.dispatchEvent(
+      new KeyboardEvent(type, {
+        key: "Enter",
+        code: "Enter",
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  await until(
+    () => terminalPerformanceSnapshot("ui-parity-0")?.text.includes(parityFixture.marker),
+    "parsed parity shell marker",
+  );
+  assert(original, "Selected parity terminal has no actual hosted process");
+  for (const language of ["en", "zh-Hans"]) {
+    await open();
+    await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+    await choose([translate("en", "应用语言"), translate("zh-Hans", "应用语言")], language);
+    await until(async () => (await settings()).language === language, "saved parity language");
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    for (const appearance of ["dark", "light"]) {
+      await open();
+      await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+      await choose([translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")], appearance);
+      await until(
+        async () => (await settings()).appearance === appearance,
+        "saved parity appearance",
+      );
+      document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+      const files = document.querySelector<HTMLButtonElement>(
+        `.inspector-switcher button[aria-label="${translate("en", "文件")}"], .inspector-switcher button[aria-label="${translate("zh-Hans", "文件")}"]`,
+      );
+      assert(files && !files.disabled, "Actual files tool entry is unavailable");
+      files.click();
+      for (const width of [1100, 640]) {
+        await invoke("qa_performance_window", { width, height: 720 });
+        await until(
+          () => innerWidth === width && innerHeight === 720,
+          "actual parity content size",
+        );
+        await until(() => {
+          const panel = document.querySelector<HTMLElement>(".file-panel");
+          const bounds = panel?.getBoundingClientRect();
+          const names = panel?.querySelector(".file-results")?.textContent ?? "";
+          return (
+            bounds &&
+            bounds.width > 0 &&
+            bounds.height > 0 &&
+            !panel?.querySelector('[role="alert"]') &&
+            ["note.txt", "README.md"].every((name) => names.includes(name))
+          );
+        }, "actual parity file list remains readable");
+        assert(
+          visibleTerminal("ui-parity-0") === terminal,
+          "Parity layout replaced the selected terminal",
+        );
+        const current = (
+          await invoke<{ sessions: { spec: { id: string }; generation: string }[] }>(
+            "qa_host_status",
+          )
+        ).sessions.find((session) => session.spec.id === "ui-parity-0");
+        assert(
+          current?.generation === original.generation,
+          "Parity layout restarted the selected terminal",
+        );
+        await scene(`workspace-${language}-${appearance}-${width}`, {
+          language,
+          appearance,
+          width: innerWidth,
+          height: innerHeight,
+          scenario: "toolbar-sidebar-two-session-tabs-files",
+          generationRetained: true,
+          filesReadable: true,
+          fontSize: (await settings()).fontSize,
+          projectName: parityFixture.projectName,
+        });
+      }
+    }
+  }
+  await invoke("qa_request_exit");
+}
+
 export async function prepare() {
   const context = await invoke<Context>("qa_context");
   if (context.phase === "git") {
@@ -207,7 +355,9 @@ export async function prepare() {
       localStorage.setItem(key, '[\r\n "refs/heads/main"\r\n]');
   }
   if (
-    ["initial", "editor-checkpoint", "performance", "updates"].includes(context.phase) &&
+    ["initial", "editor-checkpoint", "performance", "updates", "ui-parity"].includes(
+      context.phase,
+    ) &&
     localStorage.getItem(settingsKey) === null
   ) {
     localStorage.setItem(
@@ -216,6 +366,7 @@ export async function prepare() {
         ...defaults,
         language: "en",
         appearance: "dark",
+        ...(context.phase === "ui-parity" ? { fontSize: parityFixture.fontSize } : {}),
         ...(context.phase === "performance" ? performanceSettings(context.platform) : {}),
         ...(context.phase === "updates" ? { defaultShell: "cmd" } : {}),
       }),
@@ -223,11 +374,20 @@ export async function prepare() {
     const workspace = emptyWorkspace();
     workspace.projects.push({
       id: "shared-state-qa",
-      name: "Temporary QA project",
+      name: context.phase === "ui-parity" ? parityFixture.projectName : "Temporary QA project",
       directory: context.project,
       workspaceId: "local",
       sessions: [],
     });
+    if (context.phase === "ui-parity") {
+      workspace.projects[0].sessions = parityFixture.sessions.map((name, index) => ({
+        id: `ui-parity-${index}`,
+        name,
+        shell: "default",
+      }));
+      workspace.selectedProject = workspace.projects[0].id;
+      workspace.selectedSession = "ui-parity-0";
+    }
     localStorage.setItem(workspaceKey, JSON.stringify(workspace));
     localStorage.setItem(backupKey, sentinel);
   }
@@ -1607,6 +1767,10 @@ export async function run(recovery: boolean) {
       return;
     }
     await until(async () => (await invoke<Context>("qa_context")).ready, "normal quit listener");
+    if (context.phase === "ui-parity") {
+      await runUiParity();
+      return;
+    }
     if (context.phase === "performance") {
       await runPerformance(context, scene, observeCore);
       return;

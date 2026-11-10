@@ -542,9 +542,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func commandAvailable(_ id: String) -> Bool {
-        guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, !model.settingsPresented, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
-        if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
+        guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
         let origin = NSApp.keyWindow === commandPalette?.window ? commandPalette?.returnWindow : NSApp.keyWindow
+        // Settings blocks external writes, while commands owned by that window remain available.
+        // 设置窗口阻止外部写入，但属于该窗口的命令仍可使用。
+        let settingsOrigin = fullSettingsWindow.map { $0.window === origin && $0.window.isVisible && !$0.model.frozen } == true
+        guard !model.settingsPresented || settingsOrigin else { return false }
+        if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
         if id == "close", NSApp.keyWindow === commandPalette?.window { return true }
         if id == "close" {
             if origin === window { return model.inspectorOwnsFocus || model.selectedID != nil }

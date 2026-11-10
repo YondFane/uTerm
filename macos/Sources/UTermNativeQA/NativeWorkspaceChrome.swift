@@ -99,6 +99,7 @@ struct NativeSessionTabs: View {
                 Button { Task { await model.newTerminal() } } label: { Image(systemName: "plus").padding(8) }.help(localized("New terminal", "新建终端"))
             }.padding(.horizontal, 6)
         }
+        .frame(height: 36)
         .buttonStyle(.borderless).scrollIndicators(.hidden)
         .disabled(!model.ready || model.busy || model.gitFavoritesRecoveryPresented)
         .accessibilityIdentifier("native-session-tabs")
