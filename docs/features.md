@@ -173,7 +173,11 @@ remove, Java selection and cancellation. SSH QA waits for parsed, writable remot
 Windows updater QA validates and explicitly selects its isolated CI Java runtime before launching.
 Linux passes 445 Node regressions (11 platform skips), 237 core tests (17 ignored), six FFI tests,
 18 backend tests (one ignored) and 28 macOS/evidence policy tests, plus type/build/format/i18n/docs
-checks. Current-source platform reruns are still required before publishing.
+checks. The ordinary screenshot harness inherits the production main-window chrome before overriding
+its isolated identity and size, retaining the actual 720-pixel viewport. Failure reports include
+measured viewport geometry. Native SSH QA also waits for an authenticated remote prompt before
+key/password session input; PTY ownership alone does not prove authentication. Current-source
+platform reruns are still required before publishing.
 
 The settings page and existing database workbench receive component events from one shared event
 drain. Candidate native QA checks read-only catalog rendering and captures

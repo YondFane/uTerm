@@ -238,6 +238,27 @@ shared-core tests alone.
 generation／视图未变，并采集
 `native-session-ungrouped.png`、`native-session-grouped.png`。原生拖动手势明确标为未执行，不以共享核心测试单独完成会话验收。
 
+At head `ab03155c512e8cf277f2112ba8bd52826e58b53b`, tested merge
+`cf45d9553308bd2c7b830c45f871cd34a7929fe5`, both Personal packages and the ordinary Mac/Windows
+interaction matrices passed. The new ordinary screenshot phase failed its viewport-size assertion
+([originals](https://github.com/YondFane/uTerm/actions/runs/42778323852/artifacts/13746127038)): its
+QA window replaced production's overlay title bar with a standard title bar. The harness now
+inherits the production main-window configuration and keeps the 720-pixel assertion. Failure reports
+include actual inner/outer dimensions; original captures are retained.
+
+源码 `ab03155c512e8cf277f2112ba8bd52826e58b53b`、测试 merge
+`cf45d9553308bd2c7b830c45f871cd34a7929fe5`
+的两种 Personal 安装包及普通版 Mac／Windows 交互矩阵通过。新增普通版截图阶段因视口尺寸断言失败（[原图](https://github.com/YondFane/uTerm/actions/runs/42778323852/artifacts/13746127038)）：QA 窗口把正式版覆盖式标题栏替换成标准标题栏。启动器现继承正式主窗口配置，并保留 720 像素断言；失败报告包含实际内外尺寸，原图继续保留。
+
+The same head's ARM native matrix retained actual SFTP/remote-output checks but timed out when a
+password-session command was sent immediately after PTY ownership
+([original report](https://github.com/YondFane/uTerm/actions/runs/42778323682/artifacts/13747005526)).
+Native key and password QA now requires the parsed authenticated remote prompt before sending the
+command, while keeping the real password/SFTP and generation assertions. Fresh native execution is
+required; no authentication check is waived.
+
+同一源码的 ARM 原生矩阵已完成真实 SFTP／远端输出检查，但在 PTY 取得所有权后立即向密码会话发送命令时超时（[原始报告](https://github.com/YondFane/uTerm/actions/runs/42778323682/artifacts/13747005526)）。原生密钥及密码 QA 现均要求已解析的认证后远端提示符，再发送命令；保留真实密码、SFTP 及 generation 断言。这组修改仍需新的原生执行，未豁免认证检查。
+
 ## Local checks / 本地检查
 
 Linux checks pass 445 existing Node tests with 11 platform skips and 236 shared-core tests (17

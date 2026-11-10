@@ -62,6 +62,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert report['passwordServiceLogin'] == password_required, report
     if password_required:
         assert report['actualPasswordRemoteTerminal'], report
+        assert report['remotePromptObservedBeforePasswordCommand'], report
         assert report['rememberedAndTemporaryPasswordConversion'], report
         assert report['temporaryPasswordSurvivedTerminalTransportReconnect'], report
         assert report['nativeAskpassHostTrustApprovedAndAuthenticated'], report

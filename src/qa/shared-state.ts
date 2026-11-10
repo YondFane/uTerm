@@ -2132,6 +2132,10 @@ export async function run(recovery: boolean) {
     document.querySelector<HTMLButtonElement>('button[aria-label="Close settings"]')?.click();
     await invoke("qa_request_exit");
   } catch (reason) {
-    await scene("failure", { error: String(reason), body: document.body.innerText.slice(0, 4000) });
+    await scene("failure", {
+      error: String(reason),
+      body: document.body.innerText.slice(0, 4000),
+      viewport: { innerWidth, innerHeight, outerWidth, outerHeight, devicePixelRatio },
+    });
   }
 }

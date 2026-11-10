@@ -257,6 +257,10 @@ try {
     env.XDG_CACHE_HOME = join(root, "profile-cache");
     isolate(join(env.XDG_DATA_HOME, identifier), join(root, "data"));
   }
+  const mainWindow = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")).app.windows.find(
+    (window) => window.label === "main",
+  );
+  assert(mainWindow, "Missing production main-window configuration");
   const overlay = JSON.stringify({
     identifier,
     productName: "uTerm Shared State QA",
@@ -264,6 +268,7 @@ try {
     app: {
       windows: [
         {
+          ...mainWindow,
           label: "main",
           title: "uTerm Shared State QA",
           width: performanceOnly ? 1200 : 960,
