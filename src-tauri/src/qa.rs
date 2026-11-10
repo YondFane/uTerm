@@ -433,13 +433,16 @@ pub fn qa_performance_window(app: tauri::AppHandle, width: u32, height: u32) -> 
         .map_err(|error| error.to_string())
 }
 
+fn valid_scene_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 50
+        && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
+
 #[tauri::command]
 pub async fn qa_scene(app: tauri::AppHandle, name: String, value: Value) -> Result<(), String> {
     let root = check(&app)?;
-    if name.is_empty()
-        || name.len() > 50
-        || !name.bytes().all(|b| b.is_ascii_lowercase() || b == b'-')
-    {
+    if !valid_scene_name(&name) {
         return Err("Invalid QA scene".into());
     }
     let phase = argument("--qa-phase")?;
@@ -505,6 +508,38 @@ pub async fn qa_scene(app: tauri::AppHandle, name: String, value: Value) -> Resu
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::valid_scene_name;
+
+    #[test]
+    fn screenshot_scene_names_retain_locale_and_dimensions_without_path_components() {
+        for name in [
+            "workspace-en-dark-1100",
+            "workspace-zh-Hans-light-640",
+            "settings-appearance-zh-Hans-light-660",
+            "performance-progress",
+        ] {
+            assert!(valid_scene_name(name), "{name}");
+        }
+        for name in [
+            "",
+            "../outside",
+            "scene/child",
+            "scene\\child",
+            "scene:stream",
+            "scene.txt",
+            "scene\0",
+            "scene name",
+            "场景",
+        ] {
+            assert!(!valid_scene_name(name), "{name:?}");
+        }
+        assert!(valid_scene_name(&"a".repeat(50)));
+        assert!(!valid_scene_name(&"a".repeat(51)));
+    }
 }
 
 #[tauri::command]

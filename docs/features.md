@@ -176,8 +176,10 @@ Linux passes 445 Node regressions (11 platform skips), 237 core tests (17 ignore
 checks. The ordinary screenshot harness inherits the production main-window chrome before overriding
 its isolated identity and size, retaining the actual 720-pixel viewport. Failure reports include
 measured viewport geometry. Native SSH QA also waits for an authenticated remote prompt before
-key/password session input; PTY ownership alone does not prove authentication. Current-source
-platform reruns are still required before publishing.
+key/password session input; PTY ownership alone does not prove authentication. Screenshot scene
+names retain ASCII locale letters and numeric dimensions while rejecting path separators, dots,
+streams, empty names and names over 50 bytes. All 20 QA-enabled backend tests pass (one ignored).
+Current-source platform reruns are still required before publishing.
 
 The settings page and existing database workbench receive component events from one shared event
 drain. Candidate native QA checks read-only catalog rendering and captures

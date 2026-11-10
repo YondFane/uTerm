@@ -259,6 +259,21 @@ required; no authentication check is waived.
 
 同一源码的 ARM 原生矩阵已完成真实 SFTP／远端输出检查，但在 PTY 取得所有权后立即向密码会话发送命令时超时（[原始报告](https://github.com/YondFane/uTerm/actions/runs/42778323682/artifacts/13747005526)）。原生密钥及密码 QA 现均要求已解析的认证后远端提示符，再发送命令；保留真实密码、SFTP 及 generation 断言。这组修改仍需新的原生执行，未豁免认证检查。
 
+At head `ebb2afea26ed250086e45d729f3c9e3a920f86e4`, tested merge
+`7377aaf29a01aee0d463eb9e5b67cc717601b12e`, both Personal packages, both full native matrices and
+Windows signed-update QA passed. Ordinary Mac interaction passed and its capture reached the actual
+1100×720 viewport, then the backend rejected numeric/locale screenshot scene names
+([original failure](https://github.com/YondFane/uTerm/actions/runs/42782967854/artifacts/13750761295)).
+The isolated QA validator now accepts ASCII letters, digits and hyphens, retaining its length and
+path-component restrictions. The QA-enabled backend passes 20 tests with one explicit ignore;
+new-source real capture is still required. An existing Windows OpenSSH configuration test also timed
+out on that head; its first-attempt log is retained and does not count as a pass.
+
+源码 `ebb2afea26ed250086e45d729f3c9e3a920f86e4`、测试 merge
+`7377aaf29a01aee0d463eb9e5b67cc717601b12e`
+的两种 Personal 安装包、两种完整原生矩阵及 Windows 签名更新 QA 通过。普通版 Mac 交互通过，截图达到实际 1100×720 视口后，后端拒绝了含数字／语言名称的截图场景名（[失败原图](https://github.com/YondFane/uTerm/actions/runs/42782967854/artifacts/13750761295)）。隔离 QA 校验现允许 ASCII 字母、数字及连字符，保留长度与路径组成限制。启用 QA 的 20 项后端测试通过，一项明确忽略；仍需新源码真实采集。同一源码的一项既有 Windows
+OpenSSH 配置测试超时，首次日志保留，不计为通过。
+
 ## Local checks / 本地检查
 
 Linux checks pass 445 existing Node tests with 11 platform skips and 236 shared-core tests (17
