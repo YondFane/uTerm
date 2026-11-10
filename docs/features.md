@@ -166,6 +166,15 @@ existing shared component service. Existing connections prevent component change
 show progress and can be cancelled. Opening the page does not download packages. Read failures have
 an explicit refresh action, and an obsolete hidden-page read cannot replace a newer result.
 
+Saving or removing a database connection can proceed while its component catalog is being read.
+Mutating component operations, live connection use and revision conflicts retain their existing
+protection. The profile guard regression checks a suspended catalog read alongside install/import,
+remove, Java selection and cancellation. SSH QA waits for parsed, writable remote-shell readiness;
+Windows updater QA validates and explicitly selects its isolated CI Java runtime before launching.
+Linux passes 445 Node regressions (11 platform skips), 237 core tests (17 ignored), six FFI tests,
+18 backend tests (one ignored) and 28 macOS/evidence policy tests, plus type/build/format/i18n/docs
+checks. Current-source platform reruns are still required before publishing.
+
 The settings page and existing database workbench receive component events from one shared event
 drain. Candidate native QA checks read-only catalog rendering and captures
 `native-settings-database-components.png`; the PostgreSQL fixture checks that a verified import

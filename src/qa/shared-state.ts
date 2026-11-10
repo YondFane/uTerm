@@ -1828,8 +1828,21 @@ async function runSSH(context: Context) {
   }, "real remote terminal");
   const input = await until(() => {
     const value = terminal.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
-    return value && !value.readOnly && !value.disabled ? value : null;
+    const parsed = terminalPerformanceSnapshot(terminal.dataset.sessionId ?? "");
+    return value &&
+      !value.readOnly &&
+      !value.disabled &&
+      parsed?.writable &&
+      !parsed.waitingToRender
+      ? value
+      : null;
   }, "owned remote terminal input");
+  // A started SSH process can still be authenticating; send input after its remote prompt is parsed.
+  // SSH 进程启动后仍可能正在认证，须在远端提示符完成解析后发送输入。
+  await until(() => {
+    const parsed = terminalPerformanceSnapshot(terminal.dataset.sessionId ?? "");
+    return parsed?.writable && /[$#%>]\s*$/.test(parsed.text.trimEnd());
+  }, "authenticated remote shell prompt before input");
   input.focus();
   const clipboard = new DataTransfer();
   clipboard.setData(
