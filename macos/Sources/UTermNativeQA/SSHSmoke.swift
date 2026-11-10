@@ -4,6 +4,15 @@ import UTermBridge
 
 @MainActor
 enum SSHSmoke {
+    private static func waitForRemotePrompt(_ terminal: TerminalSession) async throws {
+        // PTY ownership precedes authentication; avoid sending a command into the password handshake.
+        // PTY 输入所有权早于认证完成，避免将命令发送到密码握手阶段。
+        try await TerminalSmoke.wait("Parse the authenticated remote shell prompt") {
+            guard terminal.generation != nil, terminal.inputControl?.owned == true,
+                  let last = terminal.text.trimmingCharacters(in: .whitespacesAndNewlines).last else { return false }
+            return "$#%>".contains(last)
+        }
+    }
     static func run(model: WorkspaceModel, open: () async throws -> SSHWindow, lookup: @escaping () -> SSHWindow?, report: inout [String: Any]) async throws {
         guard let bridge = model.sshBridge,
               let reportPath = WorkspaceModel.argument("--ssh-smoke-report"),
@@ -86,7 +95,7 @@ enum SSHSmoke {
         report["nativeForwardingStaleStopRejected"] = true
         await ssh.newTerminal()
         guard ssh.error.isEmpty, let first = model.selectedTerminal else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
-        try await TerminalSmoke.wait("Attach real remote terminal") { first.generation != nil && first.inputControl?.owned == true }
+        try await waitForRemotePrompt(first)
         let command = "printf 'UTERM_%s\\n' 'SSH_NATIVE_中文'\r"
         first.view.insertText(command, replacementRange: NSRange(location: NSNotFound, length: 0))
         try await TerminalSmoke.wait("Render authenticated remote shell output") { first.text.contains("UTERM_SSH_NATIVE_中文") }
@@ -135,7 +144,8 @@ enum SSHSmoke {
                 let passwordProfile = reopened.model.selectedID
                 await reopened.model.newTerminal()
                 guard reopened.model.error.isEmpty, let terminal = model.selectedTerminal else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
-                try await TerminalSmoke.wait("Attach password-authenticated SSH terminal") { terminal.generation != nil && terminal.inputControl?.owned == true }
+                try await waitForRemotePrompt(terminal)
+                report["remotePromptObservedBeforePasswordCommand"] = true
                 terminal.view.insertText("printf 'UTERM_%s\\n' 'SSH_PASSWORD_NATIVE'\r", replacementRange: NSRange(location: NSNotFound, length: 0))
                 try await TerminalSmoke.wait("Password reaches the independent SSH session host") { terminal.text.contains("UTERM_SSH_PASSWORD_NATIVE") }
                 if let parent = NSApp.windows.first(where: { $0.title == "uTerm Native QA" }) {

@@ -21,6 +21,7 @@ import { createInterface } from "node:readline";
 import { createServer } from "node:http";
 import assert from "node:assert/strict";
 import { startResourceSampler } from "./client-resource-sampler.mjs";
+import { assertParityScenes } from "./ui-parity-scenes.mjs";
 
 const editorFixture = JSON.parse(
   readFileSync(resolve("shared/fixtures/editor-draft-qa.json"), "utf8"),
@@ -31,7 +32,11 @@ const previewQA = JSON.parse(
 );
 const identifier = "sh.uterm.desktop.qa.sharedstate";
 const performanceOnly = process.env.UTERM_QA_PERFORMANCE_ONLY === "1";
-const output = resolve("ci-evidence/tauri-state-qa");
+const parityOnly = process.env.UTERM_QA_UI_PARITY_ONLY === "1";
+const parityFixture = JSON.parse(
+  readFileSync(resolve("shared/fixtures/client-ui-parity.json"), "utf8"),
+);
+const output = resolve(parityOnly ? "ci-evidence/ui-parity-tauri" : "ci-evidence/tauri-state-qa");
 rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 const root = mkdtempSync(join(tmpdir(), "uterm-tauri-qa-"));
@@ -97,6 +102,10 @@ const metadata = {
   productionDataAccess: false,
   sourceTreeDirty,
   performanceOnly,
+  parityOnly,
+  uiParityFixtureSHA256: createHash("sha256")
+    .update(readFileSync(resolve("shared/fixtures/client-ui-parity.json")))
+    .digest("hex"),
   productVersion:
     process.platform === "darwin"
       ? execute("/usr/bin/sw_vers", ["-productVersion"]).trim()
@@ -249,6 +258,10 @@ try {
     env.XDG_CACHE_HOME = join(root, "profile-cache");
     isolate(join(env.XDG_DATA_HOME, identifier), join(root, "data"));
   }
+  const mainWindow = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")).app.windows.find(
+    (window) => window.label === "main",
+  );
+  assert(mainWindow, "Missing production main-window configuration");
   const overlay = JSON.stringify({
     identifier,
     productName: "uTerm Shared State QA",
@@ -256,6 +269,7 @@ try {
     app: {
       windows: [
         {
+          ...mainWindow,
           label: "main",
           title: "uTerm Shared State QA",
           width: performanceOnly ? 1200 : 960,
@@ -1024,7 +1038,12 @@ print(number.uint32Value)
                             : phase === "reopen"
                               ? 1
                               : 3;
-      assert.equal(observed.size, expected, `${phase} omitted required scenes`);
+      if (phase === "ui-parity")
+        assertParityScenes(
+          [...observed].map((file) => file.slice(`${phase}-`.length, -".json".length)),
+          parityFixture,
+        );
+      else assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       if (phase === "git") writeFileSync(join(root, "project/.git/qa-git-release"), "release\n");
       if (writer) {
@@ -1044,7 +1063,19 @@ print(number.uint32Value)
       }
     }
   }
-  if (performanceOnly) {
+  if (parityOnly) {
+    const directory = join(root, "parity/project");
+    mkdirSync(directory, { recursive: true });
+    for (const [name, value] of Object.entries(parityFixture.files)) {
+      assert(!name.includes("/") && name !== "." && name !== "..");
+      writeFileSync(join(directory, name), value);
+    }
+    await run("ui-parity");
+    assertParityScenes(
+      scenes.map((scene) => scene.scenario),
+      parityFixture,
+    );
+  } else if (performanceOnly) {
     await run("performance");
   } else {
     await run("editor-checkpoint");

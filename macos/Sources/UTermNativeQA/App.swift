@@ -85,6 +85,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openRedisRequested = { [weak self] in self?.openRedis() }
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
         model.openSettingsRequested = { [weak self] in self?.openFullSettings() }
+        model.openFileRequested = { [weak self] in self?.openFile() }
+        model.performCommandRequested = { [weak self] in self?.performCommand($0) }
+        model.commandIsAvailable = { [weak self] in self?.commandAvailable($0) == true }
+        model.openJavaRequested = { [weak self] in self?.openJava() }
+        model.openPythonRequested = { [weak self] in self?.openPython() }
         model.openGitRequested = { [weak self] in self?.openGit() }
         model.openGitHubRequested = { [weak self] in self?.openGitHub() }
         model.openInspectorFile = { [weak self] directory, path, line in
@@ -532,7 +537,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     @objc private func toggleSidebar() { model.sidebarVisible.toggle() }
-    @objc private func settings() { model.settingsPresented = true }
+    @objc private func settings() { openFullSettings() }
     @objc private func checkForUpdates() {
         model.updates.check()
         if !model.updates.error.isEmpty {
@@ -542,9 +547,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func commandAvailable(_ id: String) -> Bool {
-        guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, !model.settingsPresented, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
-        if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
+        guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
         let origin = NSApp.keyWindow === commandPalette?.window ? commandPalette?.returnWindow : NSApp.keyWindow
+        // Settings blocks external writes, while commands owned by that window remain available.
+        // 设置窗口阻止外部写入，但属于该窗口的命令仍可使用。
+        let settingsOrigin = fullSettingsWindow.map { $0.window === origin && $0.window.isVisible && !$0.model.frozen } == true
+        guard !model.settingsPresented || settingsOrigin else { return false }
+        if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
         if id == "close", NSApp.keyWindow === commandPalette?.window { return true }
         if id == "close" {
             if origin === window { return model.inspectorOwnsFocus || model.selectedID != nil }
@@ -593,7 +602,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case "close": closeSession()
         case "fontIncrease": increaseFont()
         case "fontDecrease": decreaseFont()
-        case "ungroup": if let id = model.selectedID { Task { await model.mutate("session.ungroup", ["id": .string(id)]) } }
+        case "ungroup": if let id = model.selectedID { let revision = model.state?.snapshot.revision; Task { await model.ungroupSession(id, revision: revision) } }
         case "link":
             if let id = model.selectedID?.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")) {
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString("uterm://session/" + id, forType: .string)
@@ -634,6 +643,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func openFullSettings() {
         if fullSettingsWindow == nil { fullSettingsWindow = NativeSettingsWindow(workspace: model) }
         fullSettingsWindow?.window.appearance = window?.appearance
+        model.settingsPresented = true
         fullSettingsWindow?.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -673,7 +683,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private func makeDatabaseWindow() async throws -> ContentWindow {
         guard !preparingQuit, let bridge = model.sshBridge else { throw BridgeFailure(code: "DB_CLOSED", message: localized("Database client is unavailable.", "数据库客户端不可用。")) }
         if let content = contentWindows.values.first(where: { $0.workbenchHost?.kind == "database" }) { content.reveal(); return content }
-        let host = DatabaseHost(bridge: bridge)
+        let host = try model.sharedDatabaseHost()
         host.report = { [weak self] message in self?.model.error = message }
         host.changed = { [weak self] in await self?.model.reload() }
         let content = try ContentWindow(bridge: bridge, directory: WorkspaceModel.dataRoot().deletingLastPathComponent(), path: "Databases", stateBridge: bridge, workbenchHost: host)

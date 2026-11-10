@@ -163,6 +163,16 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           PYTHONDONTWRITEBYTECODE: "1"
         run: python scripts/ssh-tauri-qa.py 2>&1 | tee ci-evidence/tauri-state-qa-run.log
+      - name: Ordinary macOS workspace parity screenshot grid
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          UTERM_QA_UI_PARITY_ONLY: "1"
+        run: |
+          swift scripts/macos-qa-display.swift | tee ci-evidence/ui-parity-display.json
+          swift scripts/macos-qa-display.swift --verify-only | tee ci-evidence/ui-parity-display-verified.json
+          node scripts/tauri-state-qa.mjs --skip-build 2>&1 | tee ci-evidence/ui-parity-command.log
       - name: Isolated Windows candidate installer, actual launch and uninstall
         if: runner.os == 'Windows'
         shell: pwsh
@@ -190,3 +200,53 @@ jobs:
           name: legacy-checks-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: ci-evidence/
           if-no-files-found: error
+
+  ui-parity-evidence:
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      actions: read
+    env:
+      SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Wait for same-source Personal ARM64 evidence
+        id: personal
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(python3 -B scripts/ui-parity-evidence.py find-native-run "$GITHUB_REPOSITORY" "$SOURCE_HEAD" "uTerm-Personal-ARM64-$SOURCE_HEAD")
+          echo "run=$run_id" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with:
+          name: legacy-checks-macos-15-${{ env.SOURCE_HEAD }}
+          path: ci-input/tauri
+      - uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.personal.outputs.run }}
+          name: uTerm-Personal-ARM64-${{ env.SOURCE_HEAD }}
+          path: ci-input/native
+      - name: Validate original images, source identities and matching scene grid
+        run: |
+          python3 -B tests/test_ui_parity_evidence.py
+          python3 -B scripts/ui-parity-evidence.py compare --native ci-input/native/personal-initial.json --tauri ci-input/tauri/ui-parity-tauri/report.json --output ci-evidence/paired-ui --head "$SOURCE_HEAD" --tested "$(git rev-parse HEAD)"
+      - uses: actions/upload-artifact@v4
+        id: comparison
+        with:
+          name: ui-parity-originals-${{ env.SOURCE_HEAD }}
+          path: ci-evidence/paired-ui/
+          if-no-files-found: error
+          retention-days: 90
+      - name: Link paired original screenshots
+        env:
+          EVIDENCE_URL: ${{ steps.comparison.outputs.artifact-url }}
+        run: |
+          echo "[Original paired screenshots / 原始成对截图]($EVIDENCE_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Eight workspace and twenty-two settings pairs; full functional acceptance remains pending. 八组工作区及二十二组设置对照，完整功能验收仍待完成。" >> "$GITHUB_STEP_SUMMARY"

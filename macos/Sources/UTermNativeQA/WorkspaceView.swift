@@ -9,42 +9,12 @@ struct WorkspaceView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Button { model.sidebarVisible.toggle() } label: { Label(localized("Toggle sidebar", "显示或隐藏侧栏"), systemImage: "sidebar.left") }
-                Button { model.openProject() } label: { Label(localized("Open project", "打开项目"), systemImage: "folder.badge.plus") }
-                Button { Task { await model.newTerminal() } } label: { Label(localized("New terminal", "新建终端"), systemImage: "terminal") }
-                Menu {
-                    ForEach(model.environment["agents"].array.compactMap(\.string), id: \.self) { agent in
-                        if model.settings["enabledAgents"].array.contains(.string(agent)) {
-                            Button(agent) { Task { await model.newTerminal(agent: agent) } }
-                        }
-                    }
-                } label: { Label(localized("New Agent session", "新建 Agent 会话"), systemImage: "sparkle") }
-                Spacer()
-                if model.busy { ProgressView().controlSize(.small) }
-                Button { Task { await model.split("horizontal") } } label: { Label(localized("Split right", "向右分屏"), systemImage: "rectangle.split.2x1") }
-                    .disabled(model.selectedID == nil)
-                Button { Task { await model.split("vertical") } } label: { Label(localized("Split down", "向下分屏"), systemImage: "rectangle.split.1x2") }
-                    .disabled(model.selectedID == nil)
-                Button { model.settingsPresented = true } label: { Label(localized("Settings", "设置"), systemImage: "gearshape") }
-                Button { if model.inspectorVisible { model.hideInspector() } else { model.showInspector(.files) } } label: { Label(localized("Toggle tools", "显示或隐藏工具"), systemImage: "sidebar.right") }
-            }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.borderless)
-            .disabled(!model.ready || model.busy || model.gitFavoritesRecoveryPresented)
-            .padding(.leading, model.fullScreen ? 12 : 83)
-            .padding(.trailing, 12)
-            .frame(height: 40)
-            .background(GeometryReader { geometry in Color.clear.onAppear { model.measureToolbar(geometry.size.height) }.onChange(of: geometry.size.height) { _, height in model.measureToolbar(height) } })
-            .background(.bar)
+            NativeWorkspaceToolbar(model: model)
             Divider()
             HSplitView {
                 if model.sidebarVisible {
                 VStack(spacing: 0) {
-                    Picker(localized("Workspace", "工作区"), selection: Binding(get: { model.groupID }, set: { id in Task { await model.mutate("workspace.switch", ["id": .string(id)]) } })) {
-                        ForEach(model.groupItems) { group in Text(group.name).tag(group.id) }
-                    }
-                    .labelsHidden().padding(10).disabled(model.busy || model.gitFavoritesRecoveryPresented)
+                    NativeSidebarNavigation(model: model)
                     NativeSidebar(model: model).frame(maxHeight: .infinity)
                     HStack {
                         Button { model.newWorkspace() } label: { Label(localized("New workspace", "新建工作区"), systemImage: "plus") }
@@ -68,6 +38,7 @@ struct WorkspaceView: View {
                             Button(localized("Recovery copies", "恢复副本")) { model.recover() }
                         }.padding(8)
                     }
+                    NativeSessionTabs(model: model)
                     if let session = model.selectedTerminal {
                         HStack {
                             Text(model.state?.sessions.first { $0.sessionID == session.id }?.session["name"].string ?? "")
@@ -108,8 +79,7 @@ struct WorkspaceView: View {
             }
         }
         .onChange(of: colorScheme) { _, _ in if model.settings["appearance"].string == "system" { Task { await model.reload() } } }
-        .sheet(isPresented: $model.settingsPresented) { BasicSettingsView(model: model) }
-        .sheet(item: $model.nameDraft) { _ in NameEditorView(model: model) }
+        .sheet(item: Binding(get: { model.nameDraftOwner == .workspace ? model.nameDraft : nil }, set: { if model.nameDraftOwner == .workspace { model.nameDraft = $0 } })) { _ in NameEditorView(model: model) }
     }
     private var inspector: some View { InspectorHost(model: model).frame(minWidth: 220, idealWidth: 300, maxWidth: 420) }
 }
@@ -194,60 +164,7 @@ extension CoreSessionEntry {
 }
 
 @MainActor
-struct BasicSettingsView: View {
-    @ObservedObject var model: WorkspaceModel
-    var body: some View {
-        VStack {
-            Form {
-                Button(localized("All settings…", "全部设置…")) {
-                    model.settingsPresented = false
-                    model.openSettingsRequested?()
-                }
-                Picker(localized("Language", "语言"), selection: Binding(get: { model.settings["language"].string ?? "system" }, set: { value in Task { await model.patchSettings(["language": .string(value)]) } })) {
-                    Text(localized("System default", "系统默认")).tag("system")
-                    Text("简体中文").tag("zh-Hans")
-                    Text("English").tag("en")
-                }
-                Picker(localized("Appearance", "外观"), selection: Binding(get: { model.settings["appearance"].string ?? "system" }, set: { value in Task { await model.patchSettings(["appearance": .string(value)]) } })) {
-                    Text(localized("System default", "系统默认")).tag("system")
-                    Text(localized("Dark", "深色")).tag("dark")
-                    Text(localized("Light", "浅色")).tag("light")
-                }
-                Stepper {
-                    Text(localized("Terminal font size", "终端字号") + ": \(Int(model.settings["fontSize"].number ?? 14)) pt")
-                } onIncrement: { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(1)]) } }
-                  onDecrement: { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(-1)]) } }
-                Section(localized("Local control", "本地控制")) {
-                    LocalControlCheckbox(model: model)
-                    if let directory = model.controlStatus["directory"].string {
-                        Text(localized("CLI data directory: ", "CLI 数据目录：") + directory)
-                            .font(.caption).textSelection(.enabled)
-                    }
-                    if !model.controlError.isEmpty {
-                        Text(model.controlError).font(.caption).textSelection(.enabled)
-                        Button(localized("Retry control service", "重试控制服务")) { Task { await model.startControl() } }.disabled(model.controlBusy)
-                    }
-                }
-                Section(localized("Agents", "Agent")) {
-                    Button(localized("Manage Agent commands and hooks…", "管理 Agent 命令与 Hooks…")) {
-                        model.settingsPresented = false
-                        model.openAgentsRequested?()
-                    }
-                    ForEach(model.environment["agents"].array.compactMap(\.string), id: \.self) { agent in
-                        Toggle(agent, isOn: Binding(get: { model.settings["enabledAgents"].array.contains(.string(agent)) }, set: { enabled in Task { await model.mutate("settings.agent.toggle", ["agent": .string(agent), "enabled": .bool(enabled)]) } }))
-                    }
-                    Text(localized("Installed command-line tools are detected automatically.", "自动检测已安装的命令行工具。"))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }.formStyle(.grouped).disabled(model.busy || model.gitFavoritesRecoveryPresented)
-            if !model.error.isEmpty { Text(model.error).font(.caption).textSelection(.enabled) }
-            HStack { Spacer(); Button(localized("Done", "完成")) { model.settingsPresented = false }.keyboardShortcut(.defaultAction) }.padding()
-        }.frame(width: 440, height: 420)
-    }
-}
-
-@MainActor
-private struct LocalControlCheckbox: NSViewRepresentable {
+struct LocalControlCheckbox: NSViewRepresentable {
     @ObservedObject var model: WorkspaceModel
     func makeCoordinator() -> Coordinator { Coordinator(model) }
     func makeNSView(context: Context) -> NSButton {

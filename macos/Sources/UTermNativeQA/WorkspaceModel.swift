@@ -3,6 +3,7 @@ import SwiftUI
 import UTermBridge
 
 struct NativeListItem: Identifiable { let id: String; let name: String }
+enum NameDraftOwner: Equatable { case workspace, settings }
 struct NameDraft: Identifiable {
     let id = UUID()
     let target: String?
@@ -25,8 +26,11 @@ final class WorkspaceModel: ObservableObject {
     @Published var gitFavoritesRecoveryPresented = false
     @Published var worktreeDeletionPresented = false
     @Published var nameDraft: NameDraft?
+    @Published var nameDraftOwner: NameDraftOwner = .workspace
     @Published var fullScreen = false
     @Published var sidebarVisible = true
+    @Published var sidebarSection = "all"
+    @Published var sidebarQuery = ""
     @Published var inspectorVisible = false
     @Published var paneZoomed = false
     @Published private(set) var breakReminderVisible = false
@@ -53,6 +57,12 @@ final class WorkspaceModel: ObservableObject {
     var openRedisRequested: (() -> Void)?
     var openAgentsRequested: (() -> Void)?
     var openSettingsRequested: (() -> Void)?
+    var openFileRequested: (() -> Void)?
+    var performCommandRequested: ((String) -> Void)?
+    var commandIsAvailable: ((String) -> Bool)?
+    var openJavaRequested: (() -> Void)?
+    var openPythonRequested: (() -> Void)?
+    private var databaseHostCache: DatabaseHost?
     var openGitRequested: (() -> Void)?
     var openGitHubRequested: (() -> Void)?
     var openInspectorFile: ((String, String, Int) async throws -> Void)?
@@ -81,6 +91,15 @@ final class WorkspaceModel: ObservableObject {
     }
     func showInspector(_ mode: NativeInspectorModel.Mode) { inspector.mode = mode; inspectorVisible = true }
     func hideInspector() { inspectorVisible = false; inspector.invalidate(); focusRevision += 1 }
+    func sharedDatabaseHost() throws -> DatabaseHost {
+        if let databaseHostCache { return databaseHostCache }
+        guard let sshBridge else { throw BridgeFailure(code: "DB_CLOSED", message: localized("Database client is unavailable.", "数据库客户端不可用。")) }
+        let host = DatabaseHost(bridge: sshBridge)
+        host.report = { [weak self] in self?.error = $0 }
+        host.changed = { [weak self] in await self?.reload() }
+        databaseHostCache = host
+        return host
+    }
 
     var workspace: JSONValue { state?.snapshot.document.workspace ?? .null }
     var settings: JSONValue { state?.snapshot.document.settings ?? .null }
@@ -91,11 +110,16 @@ final class WorkspaceModel: ObservableObject {
     var groups: [JSONValue] { workspace["groups"].array }
     var projects: [JSONValue] {
         let values = workspace["projects"].array.filter { $0["workspaceId"].string == groupID }
-        return settings["projectOrder"].string == "name" ? values.sorted { ($0["name"].string ?? "").localizedStandardCompare($1["name"].string ?? "") == .orderedAscending } : values
+        return values.sorted {
+            if ($0["pinned"].bool == true) != ($1["pinned"].bool == true) { return $0["pinned"].bool == true }
+            if settings["projectOrder"].string == "name" { return ($0["name"].string ?? "").localizedStandardCompare($1["name"].string ?? "") == .orderedAscending }
+            return false
+        }
     }
     var groupItems: [NativeListItem] { groups.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var projectItems: [NativeListItem] { projects.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var sessionEntries: [CoreSessionEntry] { (state?.sessions ?? []).filter { $0.workspaceId == groupID } }
+    func revealSelectedPane() { paneZoomed = false; focusRevision += 1 }
     func measureToolbar(_ height: CGFloat) { if abs(toolbarHeight - height) > 0.1 { toolbarHeight = height } }
 
     static var applicationProfile: NativeApplicationProfile {
@@ -275,6 +299,10 @@ final class WorkspaceModel: ObservableObject {
         busy = false
     }
 
+    func flushWorkspaceOperations() async {
+        if let operation { _ = await operation.value }
+    }
+
     func selectSession(_ id: String, focus: Bool = true) async {
         if selectedID == id { return }
         if let operation { _ = await operation.value }
@@ -356,8 +384,8 @@ final class WorkspaceModel: ObservableObject {
         }
     }
 
-    func closeSession() async {
-        guard let id = selectedID, let terminal = terminals[id], let bridge else { return }
+    func closeSession(id target: String? = nil) async {
+        guard !busy, let id = target ?? selectedID, let terminal = terminals[id], let bridge else { return }
         if let operation { _ = await operation.value }
         do {
             await terminal.drainInput()
@@ -367,9 +395,95 @@ final class WorkspaceModel: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
 
-    func newWorkspace() {
-        guard let state else { return }
+    func renameSession(_ id: String) {
+        guard !busy, !gitFavoritesRecoveryPresented, let state,
+              let entry = sessionEntries.first(where: { $0.sessionID == id }) else { return }
+        let revision = state.snapshot.revision
+        let alert = NSAlert()
+        alert.messageText = localized("Rename session", "重命名会话")
+        let field = NSTextField(string: entry.session["name"].string ?? "")
+        field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: localized("Save", "保存"))
+        alert.addButton(withTitle: localized("Cancel", "取消"))
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        Task { await mutate("session.rename", ["id": .string(id), "name": .string(name)], revision: revision) }
+    }
+
+    func newWorkspace(owner: NameDraftOwner = .workspace) {
+        guard nameDraft == nil, let state else { return }
+        nameDraftOwner = owner
+        if owner == .workspace { requestActivation?() }
         nameDraft = NameDraft(target: nil, name: "", revision: state.snapshot.revision)
+    }
+
+    var canRemoveWorkspace: Bool {
+        guard groups.count > 1, projects.isEmpty, let group = groups.first(where: { $0["id"].string == groupID }) else { return false }
+        return ["terminals", "chats", "sshConnections", "databaseConnections", "redisConnections"].allSatisfy { group[$0].array.isEmpty }
+    }
+
+    func removeWorkspace() {
+        guard canRemoveWorkspace, !busy, let revision = state?.snapshot.revision else { return }
+        let id = groupID
+        let alert = NSAlert()
+        alert.messageText = localized("Delete empty workspace?", "删除空工作区？")
+        alert.informativeText = groups.first(where: { $0["id"].string == id })?["name"].string ?? ""
+        alert.addButton(withTitle: localized("Delete workspace", "删除工作区"))
+        alert.addButton(withTitle: localized("Cancel", "取消"))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        Task { await mutate("workspace.remove", ["id": .string(id)], revision: revision) }
+    }
+
+    func renameProject(_ id: String) {
+        guard !busy, let project = projects.first(where: { $0["id"].string == id }), let revision = state?.snapshot.revision else { return }
+        let alert = NSAlert()
+        alert.messageText = localized("Rename project", "重命名项目")
+        let field = NSTextField(string: project["name"].string ?? "")
+        field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: localized("Save", "保存")); alert.addButton(withTitle: localized("Cancel", "取消"))
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        Task { await mutate("project.rename", ["id": .string(id), "name": .string(name)], revision: revision) }
+    }
+
+    @discardableResult
+    func setProjectFlag(_ id: String, key: String, value: Bool) async -> Bool {
+        guard ["pinned", "collapsed"].contains(key), let state,
+              case .object(var document) = workspace,
+              let index = document["projects"]?.array.firstIndex(where: { $0["id"].string == id && $0["workspaceId"].string == groupID }),
+              var projects = document["projects"]?.array, case .object(var project) = projects[index] else { return false }
+        project[key] = .bool(value); projects[index] = .object(project); document["projects"] = .array(projects)
+        return await mutate("snapshot.replace", ["workspace": .object(document), "settings": settings], revision: state.snapshot.revision)
+    }
+
+    func projectOrderPeers(_ id: String) -> [String] {
+        guard settings["projectOrder"].string != "name", let project = projects.first(where: { $0["id"].string == id }) else { return [] }
+        return projects.filter { ($0["pinned"].bool == true) == (project["pinned"].bool == true) }.compactMap { $0["id"].string }
+    }
+
+    @discardableResult
+    func moveProjectOrder(_ id: String, before target: String?, revision: String? = nil) async -> Bool {
+        let peers = projectOrderPeers(id)
+        guard peers.contains(id), target == nil || (target != id && peers.contains(target!)),
+              case .object(var document) = workspace, var values = document["projects"]?.array else { return false }
+        var reordered = peers.filter { $0 != id }
+        reordered.insert(id, at: target.flatMap { reordered.firstIndex(of: $0) } ?? reordered.count)
+        let originals = Dictionary(uniqueKeysWithValues: values.compactMap { project -> (String, JSONValue)? in
+            guard let id = project["id"].string, peers.contains(id) else { return nil }
+            return (id, project)
+        })
+        var next = 0
+        for index in values.indices where values[index]["id"].string.map({ peers.contains($0) }) == true {
+            values[index] = originals[reordered[next]]!; next += 1
+        }
+        document["projects"] = .array(values)
+        return await mutate("snapshot.replace", ["workspace": .object(document), "settings": settings], revision: revision)
     }
 
     func openProject() {
@@ -400,8 +514,10 @@ final class WorkspaceModel: ObservableObject {
         catch { self.error = localized("Could not refresh Agent availability.", "无法刷新 Agent 可用状态。") }
     }
 
-    func renameWorkspace() {
-        guard let state else { return }
+    func renameWorkspace(owner: NameDraftOwner = .workspace) {
+        guard nameDraft == nil, let state else { return }
+        nameDraftOwner = owner
+        if owner == .workspace { requestActivation?() }
         let current = groups.first { $0["id"].string == groupID }?["name"].string ?? ""
         nameDraft = NameDraft(target: groupID, name: current, revision: state.snapshot.revision)
     }
@@ -455,6 +571,7 @@ final class WorkspaceModel: ObservableObject {
         frames?.cancel()
         failures?.cancel()
         await sshBridge?.close()
+        databaseHostCache?.shutdownEvents(); databaseHostCache = nil
         sshBridge = nil
         await bridge?.close()
         bridge = nil

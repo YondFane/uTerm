@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import UTermBridge
 
@@ -6,6 +7,10 @@ import UTermBridge
 final class NativeSettingsModel: ObservableObject {
     let workspace: WorkspaceModel
     let login = NativeLoginItems()
+    let maven: NativeMavenSettingsModel
+    let databaseComponents: NativeDatabaseComponentsModel
+    private var mavenChanges: AnyCancellable?
+    private var databaseChanges: AnyCancellable?
     @Published private(set) var catalog: JSONValue = .null
     @Published private(set) var agents: JSONValue = .null
     @Published var values: [String: JSONValue] = [:]
@@ -25,7 +30,12 @@ final class NativeSettingsModel: ObservableObject {
     var commands: [JSONValue] { catalog["commands"].array }
     var terminalThemes: [JSONValue] { catalog["themes"].array + (values["customThemes"]?.array ?? []) }
     var agentIDs: [String] { Array(Set(agents["builtins"].array.compactMap(\.string) + agents["definitions"].array.compactMap { $0["id"].string })).sorted() }
-    init(workspace: WorkspaceModel) { self.workspace = workspace }
+    init(workspace: WorkspaceModel) {
+        self.workspace = workspace; maven = NativeMavenSettingsModel()
+        databaseComponents = NativeDatabaseComponentsModel(workspace: workspace)
+        mavenChanges = maven.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        databaseChanges = databaseComponents.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+    }
     private func object(_ value: JSONValue) -> [String: JSONValue] { if case .object(let entries) = value { return entries }; return [:] }
     private func numberStrings(_ entries: [String: JSONValue]) -> [String: String] {
         entries.compactMapValues { value in
@@ -141,13 +151,7 @@ struct NativeSettingsView: View {
     private var general: some View {
         Form {
             choice("language", "Language", "语言", [("system", "System default", "系统默认"), ("en", "English", "English"), ("zh-Hans", "简体中文", "简体中文")])
-            choice("appearance", "Appearance", "外观", [("system", "System default", "系统默认"), ("dark", "Dark", "深色"), ("light", "Light", "浅色")])
-            choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
             choice("defaultShell", "Default shell", "默认 Shell", [("default", "System default", "系统默认"), ("cmd", "Windows Command Prompt", "Windows 命令提示符")])
-            if workspace.updates.controlsVisible {
-                Toggle(WorkspaceModel.applicationProfile.mode == .personal ? localized("Automatically check and download updates", "自动检查并下载更新") : localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates"))
-            }
-            NativeUpdateStatus(model: workspace.updates).id(NativeLocale.preference)
             NativeLoginItemsView(model: model.login).id(NativeLocale.preference)
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
             number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）")
@@ -160,6 +164,7 @@ struct NativeSettingsView: View {
     }
     private var appearance: some View {
         Form {
+            choice("appearance", "Appearance", "外观", [("system", "System default", "系统默认"), ("dark", "Dark", "深色"), ("light", "Light", "浅色")])
             Picker(localized("Interface theme", "界面主题"), selection: text("interfaceTheme")) {
                 ForEach(Array(model.catalog["interfaceThemes"].array.enumerated()), id: \.offset) { _, item in Text(model.title(item)).tag(item["id"].string ?? "") }
             }
@@ -169,18 +174,21 @@ struct NativeSettingsView: View {
                 }
             }
             Button(localized("Import Ghostty theme…", "导入 Ghostty 主题…")) { model.chooseTheme() }
-            TextField(localized("Interface font", "界面字体"), text: text("interfaceFont"))
+            NativeFontPickerRow(model: model, key: "interfaceFont", title: localized("Interface font", "界面字体"))
             number("interfaceSize", "Interface font size", "界面字号")
             number("rowPadding", "Row padding", "行间留白")
             number("windowPadding", "Window padding", "窗口留白")
             number("opacity", "Background opacity (0.3–1)", "背景不透明度（0.3–1）")
             Toggle(localized("Blur background", "背景模糊"), isOn: flag("blur"))
             TextField(localized("Active icon color (hex, optional)", "活跃图标颜色（十六进制，可选）"), text: text("activeIconColor"))
+            number("fileFontSize", "File font size", "文件字号")
+            number("gitDiffFontSize", "Diff font size", "差异字号")
+            number("fileTabLimit", "Maximum file tabs", "文件标签上限")
         }.formStyle(.grouped)
     }
     private var terminal: some View {
         Form {
-            TextField(localized("Terminal font family", "终端字体"), text: text("fontFamily"))
+            NativeFontPickerRow(model: model, key: "fontFamily", title: localized("Terminal font family", "终端字体"))
             number("fontSize", "Terminal font size", "终端字号")
             Toggle(localized("Thicken terminal text", "加粗终端文字"), isOn: flag("fontThicken"))
             number("lineHeight", "Line height (1–2)", "行高（1–2）")
@@ -190,21 +198,61 @@ struct NativeSettingsView: View {
             Toggle(localized("Copy on selection", "选中即复制"), isOn: flag("copyOnSelect"))
         }.formStyle(.grouped)
     }
-    private var files: some View {
+    private var workspaceSection: some View {
         Form {
-            number("fileFontSize", "File font size", "文件字号")
-            number("gitDiffFontSize", "Diff font size", "差异字号")
-            number("fileTabLimit", "Maximum file tabs", "文件标签上限")
+            Section(localized("Manage workspaces", "管理工作区")) {
+                ForEach(workspace.groupItems) { group in
+                    Button { Task { await workspace.mutate("workspace.switch", ["id": .string(group.id)]) } } label: {
+                        HStack { Text(group.name); Spacer(); if group.id == workspace.groupID { Image(systemName: "checkmark") } }
+                    }.disabled(workspace.busy)
+                }
+                HStack {
+                    Button(localized("New workspace…", "新建工作区…")) { workspace.newWorkspace(owner: .settings) }
+                    Button(localized("Rename workspace…", "重命名工作区…")) { workspace.renameWorkspace(owner: .settings) }
+                    Button(localized("Delete workspace…", "删除工作区…")) { workspace.removeWorkspace() }.disabled(!workspace.canRemoveWorkspace)
+                }
+                Text(localized("Only empty workspaces can be deleted. Keep at least one workspace.", "仅可删除空工作区，至少保留一个工作区。")).font(.caption).foregroundStyle(.secondary)
+            }
+            choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
             choice("inspectorPosition", "Inspector position", "检查器位置", [("left", "Left", "左侧"), ("right", "Right", "右侧")])
             choice("sidebarStyle", "Sidebar style", "侧栏样式", [("navigation", "Navigation", "导航")])
+        }.formStyle(.grouped)
+    }
+    private var agents: some View {
+        Form {
             Section(localized("Agents", "Agent")) {
                 Picker(localized("Default Agent", "默认 Agent"), selection: text("defaultAgent")) {
                     ForEach(model.agentIDs, id: \.self) { id in Text(id).tag(id) }
                 }
-                Toggle(localized("Read remote usage", "读取远程用量"), isOn: flag("usageRemote"))
-                number("usageRefreshInterval", "Usage refresh interval (seconds)", "用量刷新间隔（秒）")
                 Button(localized("Agent commands, hooks and notifications…", "Agent 命令、Hooks 与通知…")) { workspace.openAgentsRequested?() }
             }
+        }.formStyle(.grouped)
+    }
+    private var usage: some View {
+        Form {
+            Toggle(localized("Read remote usage", "读取远程用量"), isOn: flag("usageRemote"))
+            number("usageRefreshInterval", "Usage refresh interval (seconds)", "用量刷新间隔（秒）")
+            Button(localized("Agent usage and account quota…", "Agent 用量与账户额度…")) { workspace.openAgentsRequested?() }
+        }.formStyle(.grouped)
+    }
+    private var control: some View {
+        Form {
+            LocalControlCheckbox(model: workspace)
+            if let directory = workspace.controlStatus["directory"].string {
+                Text(localized("CLI data directory: ", "CLI 数据目录：") + directory).font(.caption).textSelection(.enabled)
+            }
+            if !workspace.controlError.isEmpty {
+                Text(workspace.controlError).foregroundStyle(.red)
+                Button(localized("Retry control service", "重试控制服务")) { Task { await workspace.startControl() } }.disabled(workspace.controlBusy)
+            }
+        }.formStyle(.grouped)
+    }
+    private var updates: some View {
+        Form {
+            if workspace.updates.controlsVisible {
+                Toggle(WorkspaceModel.applicationProfile.mode == .personal ? localized("Automatically check and download updates", "自动检查并下载更新") : localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates"))
+            }
+            NativeUpdateStatus(model: workspace.updates).id(NativeLocale.preference)
         }.formStyle(.grouped)
     }
     private var keyboard: some View {
@@ -225,24 +273,39 @@ struct NativeSettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if model.catalog == .null || model.values.isEmpty { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
-            else { TabView(selection: $model.section) {
-                general.tabItem { Text(localized("General", "通用")) }.tag("general")
-                appearance.tabItem { Text(localized("Appearance", "外观")) }.tag("appearance")
-                terminal.tabItem { Text(localized("Terminal", "终端")) }.tag("terminal")
-                files.tabItem { Text(localized("Files and Agents", "文件与 Agent")) }.tag("files")
-                keyboard.tabItem { Text(localized("Shortcuts", "快捷键")) }.tag("keyboard")
-            }.disabled(model.busy || model.frozen || workspace.busy) }
+            else {
+                HStack(spacing: 0) {
+                    ScrollView {
+                        VStack(spacing: 4) {
+                            navigation("general", "gearshape", "General", "通用")
+                            navigation("appearance", "paintpalette", "Appearance", "外观")
+                            navigation("terminal", "terminal", "Terminal", "终端")
+                            navigation("workspace", "rectangle.3.group", "Workspaces", "工作区")
+                            navigation("keyboard", "keyboard", "Shortcuts", "快捷键")
+                            navigation("agents", "sparkle", "Agents", "Agent")
+                            navigation("usage", "chart.bar", "Usage", "用量")
+                            navigation("control", "network", "Local control", "本地控制")
+                            navigation("database", "externaldrive", "Database components", "数据库组件")
+                            navigation("maven", "shippingbox", "Maven settings", "Maven 设置")
+                            navigation("updates", "arrow.down.circle", "Software updates", "软件更新")
+                        }.padding(8)
+                    }.frame(width: 160).background(.bar).disabled(model.databaseComponents.working)
+                    Divider()
+                    selectedSection.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }.disabled(model.busy || model.frozen || model.maven.busy || workspace.busy)
+            }
             if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).padding(.horizontal) }
             if !model.notice.isEmpty { Text(model.notice).textSelection(.enabled).padding(.horizontal) }
             HStack {
-                Button(localized("Restore defaults…", "恢复默认值…")) { confirmReset = true }.disabled(model.busy || model.frozen)
+                Button(localized("Restore defaults…", "恢复默认值…")) { confirmReset = true }.disabled(model.busy || model.frozen || model.maven.busy || model.databaseComponents.working)
                 if model.busy { ProgressView().controlSize(.small) }
                 Spacer()
                 if model.dirty { Text(localized("Unsaved changes", "有未保存修改")).foregroundStyle(.secondary) }
-                Button(localized("Reload", "重新读取")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }.disabled(model.busy || model.frozen)
-                Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.disabled(!model.dirty || model.busy || model.frozen)
+                Button(localized("Reload", "重新读取")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }.disabled(model.busy || model.frozen || model.maven.busy || model.databaseComponents.working)
+                Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.keyboardShortcut(.defaultAction).disabled(!model.dirty || model.busy || model.frozen || model.maven.busy || model.databaseComponents.working)
             }.padding()
         }.frame(minWidth: 640, minHeight: 480).task { await model.reload() }
+        .sheet(item: Binding(get: { workspace.nameDraftOwner == .settings ? workspace.nameDraft : nil }, set: { if workspace.nameDraftOwner == .settings { workspace.nameDraft = $0 } })) { _ in NameEditorView(model: workspace) }
         .confirmationDialog(localized("Replace this draft with default settings?", "用默认设置替换当前草稿？"), isPresented: $confirmReset) {
             Button(localized("Restore defaults", "恢复默认值")) { model.resetDraft() }
             Button(localized("Cancel", "取消"), role: .cancel) {}
@@ -251,6 +314,54 @@ struct NativeSettingsView: View {
             Button(localized("Reload", "重新读取")) { Task { await model.reload() } }
             Button(localized("Cancel", "取消"), role: .cancel) {}
         }
+    }
+    private func navigation(_ id: String, _ symbol: String, _ en: String, _ zh: String) -> some View {
+        NativeSettingsNavigation(model: model, id: id, symbol: symbol, title: localized(en, zh)).frame(height: 32)
+            .background(model.section == id ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+            .accessibilityIdentifier("native-settings-section-" + id)
+    }
+    @ViewBuilder private var selectedSection: some View {
+        switch model.section {
+        case "appearance": appearance
+        case "terminal": terminal
+        case "workspace": workspaceSection
+        case "files": appearance
+        case "keyboard": keyboard
+        case "agents": agents
+        case "usage": usage
+        case "control": control
+        case "database": NativeDatabaseComponentsView(model: model.databaseComponents)
+        case "maven": NativeMavenSettingsView(model: model.maven)
+        case "updates": updates
+        default: general
+        }
+    }
+}
+
+@MainActor
+private struct NativeSettingsNavigation: NSViewRepresentable {
+    @ObservedObject var model: NativeSettingsModel
+    let id: String
+    let symbol: String
+    let title: String
+    func makeCoordinator() -> Coordinator { Coordinator(model: model, id: id) }
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: title, target: context.coordinator, action: #selector(Coordinator.select))
+        button.identifier = NSUserInterfaceItemIdentifier("native-settings-section-" + id)
+        button.setAccessibilityIdentifier("native-settings-section-" + id)
+        button.isBordered = false; button.alignment = .left; button.imagePosition = .imageLeading
+        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        return button
+    }
+    func updateNSView(_ button: NSButton, context: Context) {
+        button.title = title; button.isEnabled = context.environment.isEnabled
+        button.contentTintColor = model.section == id ? .controlAccentColor : .labelColor
+    }
+    @MainActor final class Coordinator: NSObject {
+        let model: NativeSettingsModel
+        let id: String
+        init(model: NativeSettingsModel, id: String) { self.model = model; self.id = id }
+        @objc func select() { model.section = id }
     }
 }
 
@@ -316,20 +427,26 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
         model = NativeSettingsModel(workspace: workspace)
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 620), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
         super.init()
+        window.identifier = NSUserInterfaceItemIdentifier("native-full-settings")
         window.title = localized("Settings", "设置"); window.isReleasedWhenClosed = false; window.delegate = self
         window.contentView = NSHostingView(rootView: NativeSettingsView(model: model, workspace: workspace)); window.center()
     }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { sender.orderOut(nil); return false }
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard !model.busy, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.frozen else { return false }
+        sender.orderOut(nil)
+        model.workspace.settingsPresented = false
+        return false
+    }
     func prepareForQuit() async -> Bool {
-        guard !model.busy, !model.login.busy else { return false }
-        model.frozen = true
-        guard model.dirty else { return true }
+        guard !model.busy, !model.login.busy, !model.maven.busy, !model.databaseComponents.working else { return false }
+        model.frozen = true; model.maven.frozen = true; model.databaseComponents.frozen = true
+        guard model.dirty || model.maven.dirty else { return true }
         let alert = NSAlert(); alert.messageText = localized("Discard settings changes?", "放弃设置修改？")
         alert.addButton(withTitle: localized("Discard changes", "放弃修改")); alert.addButton(withTitle: localized("Cancel", "取消"))
         window.makeKeyAndOrderFront(nil)
         let response = await withCheckedContinuation { continuation in alert.beginSheetModal(for: window) { continuation.resume(returning: $0) } }
-        if response != .alertFirstButtonReturn { model.frozen = false; return false }
+        if response != .alertFirstButtonReturn { resumeAfterQuit(); return false }
         return true
     }
-    func resumeAfterQuit() { model.frozen = false }
+    func resumeAfterQuit() { model.frozen = false; model.maven.frozen = false; model.databaseComponents.frozen = false }
 }

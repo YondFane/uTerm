@@ -28,6 +28,7 @@ import {
   validateShortcuts,
 } from "../src/lib/settings.ts";
 import { importTheme } from "../src/lib/themes.ts";
+import { interfaceFonts, terminalFonts } from "../src/lib/settings-fonts.ts";
 import {
   emptyWorkspace,
   createWorkspaceGroup,
@@ -38,6 +39,9 @@ import {
   moveProject,
   selectProject,
   reconcileWorktrees,
+  groupSessions,
+  ungroupSession,
+  moveSessionPane,
 } from "../src/lib/workspace.ts";
 import { draftKey, readDraft } from "../src/lib/file-document.ts";
 import { EditorDraftQueue } from "../src/lib/editor-drafts.ts";
@@ -92,6 +96,62 @@ async function client(t, existingRoot) {
   };
 }
 
+test("shared session grouping matches ordinary nested layout and selection across regrouping", async (t) => {
+  const call = await client(t);
+  let document = structuredClone({ workspace: emptyWorkspace(), settings: defaults });
+  await call("migration.import", { ...document, legacy: {} });
+  const mutate = async (method, params) => {
+    const { result: current } = await call("snapshot.read");
+    const response = await call(method, { ...params, expectedRevision: current.revision });
+    assert.equal(response.error, undefined);
+    return response.result.document.workspace;
+  };
+  for (const id of ["one", "two", "three", "four"]) {
+    document.workspace = await mutate("session.create", { id, name: id, directory: "/fixture" });
+  }
+  const normalizeSplitIds = (workspace) => {
+    const copy = structuredClone(workspace);
+    const walk = (node) => {
+      if (node.kind !== "split") return;
+      node.id = "split-common";
+      walk(node.first);
+      walk(node.second);
+    };
+    for (const group of copy.groups ?? []) {
+      for (const node of [...(group.terminalSplits ?? []), ...(group.chatSplits ?? [])]) walk(node);
+    }
+    return copy;
+  };
+  let sequence = 0;
+  for (const [id, anchor, axis, before] of [
+    ["two", "one", undefined, false],
+    ["four", "three", "vertical", true],
+    ["two", "three", undefined, false],
+  ]) {
+    const expected = groupSessions(document.workspace, id, anchor, axis, before);
+    document.workspace = await mutate("session.group", {
+      id,
+      anchor,
+      axis: axis ?? null,
+      before,
+      splitId: `split-${++sequence}`,
+    });
+    assert.deepEqual(normalizeSplitIds(document.workspace), normalizeSplitIds(expected));
+  }
+  const moved = moveSessionPane(document.workspace, "four", "two", "left");
+  document.workspace = await mutate("session.movePane", {
+    id: "four",
+    anchor: "two",
+    axis: "horizontal",
+    before: true,
+    splitId: `split-${++sequence}`,
+  });
+  assert.deepEqual(normalizeSplitIds(document.workspace), normalizeSplitIds(moved));
+  const ungrouped = ungroupSession(document.workspace, "three");
+  document.workspace = await mutate("session.ungroup", { id: "three" });
+  assert.deepEqual(normalizeSplitIds(document.workspace), normalizeSplitIds(ungrouped));
+});
+
 test("native settings catalog preserves defaults and matches both platform shortcut validators without writes", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "uterm-settings-readonly-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -100,6 +160,17 @@ test("native settings catalog preserves defaults and matches both platform short
   const response = await call("settings.catalog");
   assert.equal(response.error, undefined);
   assert.deepEqual(response.result.defaults, defaults);
+  for (const [key, presets] of [
+    ["interfaceFont", interfaceFonts],
+    ["fontFamily", terminalFonts],
+  ]) {
+    assert.deepEqual(
+      response.result.fonts[key].map((font) => font.value),
+      presets.map(([, value]) => value),
+    );
+    for (const font of response.result.fonts[key])
+      assert.ok(font.labels.en && font.labels["zh-Hans"]);
+  }
   assert.deepEqual(
     response.result.commands.map((command) => command.id),
     commands.map(([id]) => id),

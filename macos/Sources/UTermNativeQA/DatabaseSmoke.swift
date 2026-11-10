@@ -78,6 +78,17 @@ enum DatabaseSmoke {
             captures.append(name)
         }
         try await wait(content, "document.querySelector('.native-database-profile-name')?.textContent === 'PostgreSQL Native QA 中文'")
+        let components = NativeDatabaseComponentsModel(workspace: model)
+        components.startObserving()
+        defer { components.stopObserving() }
+        await components.refresh()
+        guard components.error.isEmpty else { throw BridgeFailure(code: "DB_COMPONENT_SETTINGS", message: "Could not read shared component status") }
+        guard try await EditorSmoke.evaluate(content, script: "window.__qaComponentEvents=0;window.addEventListener('uterm-content-event',event=>{if(event.detail.kind==='database-components-changed')window.__qaComponentEvents++});return true;", arguments: [:]) else { throw BridgeFailure(code: "DB_COMPONENT_SETTINGS", message: "Could not observe actual WebKit component events") }
+        let beforeEvents = components.receivedComponentEvents
+        _ = try await operation(.object(["kind": .string("components"), "action": .string("import"), "id": .string("postgresql"), "path": .string(driver)]))
+        try await TerminalSmoke.wait("Deliver component events to native settings and the existing workbench") { components.receivedComponentEvents > beforeEvents }
+        try await wait(content, "window.__qaComponentEvents>0")
+        report["sharedComponentEventsReachSettingsAndWorkbench"] = true
         guard try await EditorSmoke.evaluate(content, script: "const button=document.querySelector('.native-database-profile button[aria-label^=\"Edit database\"]');if(!button)return false;button.click();return true;", arguments: [:]) else { throw BridgeFailure(code: "DB_PROFILE", message: "Edit database profile action missing") }
         try await wait(content, "!!document.querySelector('dialog[open] input[type=password]')")
         try await input(content, selector: "dialog[open] input[type=password]", value: password)

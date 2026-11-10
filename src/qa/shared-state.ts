@@ -1,8 +1,11 @@
+import { translate } from "../lib/i18n";
+import parityFixtureJSON from "../../shared/fixtures/client-ui-parity.json?raw";
 import editorFixtureJSON from "../../shared/fixtures/editor-draft-qa.json?raw";
 import gitFixtureJSON from "../../shared/fixtures/git-qa.json?raw";
 import previewFixtureJSON from "../../shared/fixtures/content-preview-qa.json?raw";
 import sshFixtureJSON from "../../shared/fixtures/ssh-qa.json?raw";
 import { invoke } from "@tauri-apps/api/core";
+import { terminalPerformanceSnapshot } from "../lib/terminal-performance-qa";
 import { coreRequest, flushSharedState } from "../lib/shared-state";
 import { defaults, settingsKey } from "../lib/settings";
 import { emptyWorkspace, workspaceKey, type Workspace } from "../lib/workspace";
@@ -12,6 +15,7 @@ import { ContentScope } from "../lib/content-transport";
 import { tauriContentPort } from "../lib/tauri-content";
 import { runRedis } from "./redis";
 import { runDatabase } from "./database";
+import { databaseNames } from "../lib/database";
 import { runAgents } from "./agents";
 import { performanceSettings, runPerformance } from "./performance";
 import { runUpdates } from "./updates";
@@ -42,12 +46,37 @@ interface Context {
     | "input-owner"
     | "input-viewer"
     | "package"
+    | "ui-parity"
     | "performance"
     | "updates";
   backup?: string;
   ready: boolean;
   performanceLong?: boolean;
 }
+const parityFixture = JSON.parse(parityFixtureJSON) as {
+  workspaceName: string;
+  projectName: string;
+  fontSize: number;
+  automaticUpdates: boolean;
+  databaseComponentIds: string[];
+  maven: {
+    distribution: string;
+    home: string;
+    settings: string;
+    repository: string;
+    wrapper: boolean;
+  };
+  sessions: string[];
+  marker: string;
+  command: string;
+  settingsScenes: {
+    language: "en" | "zh-Hans";
+    appearance: string;
+    width: number;
+    height: number;
+  }[];
+  settingsSections: { id: string; label: string }[];
+};
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
 const sentinel = "opaque QA draft backup retained byte-for-byte";
 const editorFixture = JSON.parse(editorFixtureJSON) as {
@@ -196,6 +225,243 @@ async function editFont(value: number) {
   input.blur();
 }
 
+async function runUiParity() {
+  const choose = async (labels: string[], value: string) => {
+    const field = await until(
+      () =>
+        [...document.querySelectorAll(".settings-content label")]
+          .find((label) => labels.some((text) => label.textContent?.includes(text)))
+          ?.querySelector("select"),
+      "parity settings field",
+    );
+    field.value = value;
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    await flushSharedState();
+  };
+  const open = async () => {
+    const field = await until(
+      () =>
+        document.querySelector<HTMLButtonElement>(
+          `button[aria-label="${translate("en", "设置")}"], button[aria-label="${translate("zh-Hans", "设置")}"]`,
+        ),
+      "settings entry",
+    );
+    field.click();
+    await until(() => document.querySelector(".settings-content"), "settings window");
+  };
+  const tab = async (labels: string[]) => {
+    const field = await until(
+      () =>
+        [...document.querySelectorAll<HTMLButtonElement>(".settings-layout nav button")].find(
+          (button) => labels.includes(button.textContent?.trim() ?? ""),
+        ),
+      "settings section",
+    );
+    field.click();
+  };
+  const terminal = await until(selectedVisibleTerminal, "real selected parity terminal");
+  await until(() => terminalPerformanceSnapshot("ui-parity-0")?.writable, "parity input ownership");
+  const original = await until(
+    async () =>
+      (
+        await invoke<{ sessions: { spec: { id: string }; generation: string }[] }>("qa_host_status")
+      ).sessions.find((session) => session.spec.id === "ui-parity-0"),
+    "real hosted parity terminal",
+  );
+  const input = await until(
+    () => terminal.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea"),
+    "actual parity terminal input",
+  );
+  input.focus();
+  const data = new DataTransfer();
+  data.setData("text/plain", parityFixture.command);
+  input.dispatchEvent(
+    new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }),
+  );
+  for (const type of ["keydown", "keyup"])
+    input.dispatchEvent(
+      new KeyboardEvent(type, {
+        key: "Enter",
+        code: "Enter",
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  await until(
+    () => terminalPerformanceSnapshot("ui-parity-0")?.text.includes(parityFixture.marker),
+    "parsed parity shell marker",
+  );
+  assert(original, "Selected parity terminal has no actual hosted process");
+  for (const language of ["en", "zh-Hans"]) {
+    await open();
+    await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+    await choose([translate("en", "应用语言"), translate("zh-Hans", "应用语言")], language);
+    await until(async () => (await settings()).language === language, "saved parity language");
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    for (const appearance of ["dark", "light"]) {
+      await open();
+      await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+      await choose([translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")], appearance);
+      await until(
+        async () => (await settings()).appearance === appearance,
+        "saved parity appearance",
+      );
+      document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+      const files = document.querySelector<HTMLButtonElement>(
+        `.inspector-switcher button[aria-label="${translate("en", "文件")}"], .inspector-switcher button[aria-label="${translate("zh-Hans", "文件")}"]`,
+      );
+      assert(files && !files.disabled, "Actual files tool entry is unavailable");
+      files.click();
+      for (const width of [1100, 640]) {
+        await invoke("qa_performance_window", { width, height: 720 });
+        await until(
+          () => innerWidth === width && innerHeight === 720,
+          "actual parity content size",
+        );
+        await until(() => {
+          const panel = document.querySelector<HTMLElement>(".file-panel");
+          const bounds = panel?.getBoundingClientRect();
+          const names = panel?.querySelector(".file-results")?.textContent ?? "";
+          return (
+            bounds &&
+            bounds.width > 0 &&
+            bounds.height > 0 &&
+            !panel?.querySelector('[role="alert"]') &&
+            ["note.txt", "README.md"].every((name) => names.includes(name))
+          );
+        }, "actual parity file list remains readable");
+        assert(
+          visibleTerminal("ui-parity-0") === terminal,
+          "Parity layout replaced the selected terminal",
+        );
+        const current = (
+          await invoke<{ sessions: { spec: { id: string }; generation: string }[] }>(
+            "qa_host_status",
+          )
+        ).sessions.find((session) => session.spec.id === "ui-parity-0");
+        assert(
+          current?.generation === original.generation,
+          "Parity layout restarted the selected terminal",
+        );
+        await scene(`workspace-${language}-${appearance}-${width}`, {
+          language,
+          appearance,
+          width: innerWidth,
+          height: innerHeight,
+          scenario: "toolbar-sidebar-two-session-tabs-files",
+          generationRetained: true,
+          filesReadable: true,
+          fontSize: (await settings()).fontSize,
+          projectName: parityFixture.projectName,
+          workspaceName: parityFixture.workspaceName,
+        });
+      }
+    }
+  }
+  for (const sceneFixture of parityFixture.settingsScenes) {
+    await open();
+    await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+    await choose(
+      [translate("en", "应用语言"), translate("zh-Hans", "应用语言")],
+      sceneFixture.language,
+    );
+    await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+    await choose(
+      [translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")],
+      sceneFixture.appearance,
+    );
+    await until(async () => {
+      const value = await settings();
+      return (
+        value.language === sceneFixture.language && value.appearance === sceneFixture.appearance
+      );
+    }, "persist settings capture language and appearance");
+    await invoke("qa_performance_window", {
+      width: sceneFixture.width,
+      height: sceneFixture.height,
+    });
+    await until(
+      () => innerWidth === sceneFixture.width && innerHeight === sceneFixture.height,
+      "actual settings capture content size",
+    );
+    for (const section of parityFixture.settingsSections) {
+      await tab([translate(sceneFixture.language, section.label)]);
+      await until(() => {
+        const current = document.querySelector('.settings-layout nav button[aria-pressed="true"]');
+        return current?.textContent?.trim() === translate(sceneFixture.language, section.label);
+      }, "actual settings category selection");
+      if (section.id === "maven") {
+        await until(
+          () => document.querySelector(".maven-setting-fields select:not(:disabled)"),
+          "loaded global Maven controls",
+        );
+        const fields = document.querySelector(".maven-setting-fields")!;
+        const input = (label: string) =>
+          fields.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!.value;
+        const actual = {
+          distribution: fields.querySelector("select")!.value,
+          home: input(translate(sceneFixture.language, "Maven 主目录")),
+          settings: input(translate(sceneFixture.language, "用户设置文件 · settings.xml")),
+          repository: input(translate(sceneFixture.language, "Maven 本地仓库")),
+          wrapper: fields.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked,
+        };
+        assert(
+          JSON.stringify(actual) === JSON.stringify(parityFixture.maven),
+          "Actual global Maven controls differ from the common fixture",
+        );
+      }
+      if (section.id === "database") {
+        await until(
+          () =>
+            document.querySelectorAll(".database-components .database-component-row").length ===
+            parityFixture.databaseComponentIds.length,
+          "loaded actual database component catalog",
+        );
+        const expected = parityFixture.databaseComponentIds
+          .map((id) =>
+            id === "runtime"
+              ? translate(sceneFixture.language, "Java 运行时")
+              : id === "mongodb-core"
+                ? "MongoDB Core"
+                : id === "mongodb-bson"
+                  ? "MongoDB BSON"
+                  : databaseNames[id as keyof typeof databaseNames],
+          )
+          .sort();
+        const actual = [
+          ...document.querySelectorAll(".database-components .database-component-row strong"),
+        ]
+          .map((item) => item.textContent?.trim())
+          .sort();
+        assert(
+          JSON.stringify(actual) === JSON.stringify(expected),
+          "Actual database component labels differ from the shared catalog",
+        );
+      }
+      const draftUnchanged = !document.querySelector(
+        `[aria-label="${translate(sceneFixture.language, "未保存的设置")}"], [role="alert"].settings-error, .settings-content .java-error`,
+      );
+      await scene(
+        `settings-${section.id}-${sceneFixture.language}-${sceneFixture.appearance}-${sceneFixture.width}`,
+        {
+          ...sceneFixture,
+          section: section.id,
+          navigationControlActivated: true,
+          draftUnchanged,
+          mavenFixtureMatched: section.id === "maven",
+          databaseFixtureMatched: section.id === "database",
+          automaticUpdates: (await settings()).automaticUpdates,
+        },
+      );
+      assert(draftUnchanged, "Settings capture shows unsaved values or an error");
+    }
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+  }
+  await invoke("qa_request_exit");
+}
+
 export async function prepare() {
   const context = await invoke<Context>("qa_context");
   if (context.phase === "git") {
@@ -207,7 +473,9 @@ export async function prepare() {
       localStorage.setItem(key, '[\r\n "refs/heads/main"\r\n]');
   }
   if (
-    ["initial", "editor-checkpoint", "performance", "updates"].includes(context.phase) &&
+    ["initial", "editor-checkpoint", "performance", "updates", "ui-parity"].includes(
+      context.phase,
+    ) &&
     localStorage.getItem(settingsKey) === null
   ) {
     localStorage.setItem(
@@ -216,18 +484,35 @@ export async function prepare() {
         ...defaults,
         language: "en",
         appearance: "dark",
+        ...(context.phase === "ui-parity" ? { fontSize: parityFixture.fontSize } : {}),
+        ...(context.phase === "ui-parity"
+          ? { automaticUpdates: parityFixture.automaticUpdates }
+          : {}),
         ...(context.phase === "performance" ? performanceSettings(context.platform) : {}),
         ...(context.phase === "updates" ? { defaultShell: "cmd" } : {}),
       }),
     );
     const workspace = emptyWorkspace();
+    if (context.phase === "ui-parity") {
+      assert(workspace.groups?.[0], "Missing fixture workspace");
+      workspace.groups[0].name = parityFixture.workspaceName;
+    }
     workspace.projects.push({
       id: "shared-state-qa",
-      name: "Temporary QA project",
+      name: context.phase === "ui-parity" ? parityFixture.projectName : "Temporary QA project",
       directory: context.project,
       workspaceId: "local",
       sessions: [],
     });
+    if (context.phase === "ui-parity") {
+      workspace.projects[0].sessions = parityFixture.sessions.map((name, index) => ({
+        id: `ui-parity-${index}`,
+        name,
+        shell: "default",
+      }));
+      workspace.selectedProject = workspace.projects[0].id;
+      workspace.selectedSession = "ui-parity-0";
+    }
     localStorage.setItem(workspaceKey, JSON.stringify(workspace));
     localStorage.setItem(backupKey, sentinel);
   }
@@ -1543,8 +1828,21 @@ async function runSSH(context: Context) {
   }, "real remote terminal");
   const input = await until(() => {
     const value = terminal.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
-    return value && !value.readOnly && !value.disabled ? value : null;
+    const parsed = terminalPerformanceSnapshot(terminal.dataset.sessionId ?? "");
+    return value &&
+      !value.readOnly &&
+      !value.disabled &&
+      parsed?.writable &&
+      !parsed.waitingToRender
+      ? value
+      : null;
   }, "owned remote terminal input");
+  // A started SSH process can still be authenticating; send input after its remote prompt is parsed.
+  // SSH 进程启动后仍可能正在认证，须在远端提示符完成解析后发送输入。
+  await until(() => {
+    const parsed = terminalPerformanceSnapshot(terminal.dataset.sessionId ?? "");
+    return parsed?.writable && /[$#%>]\s*$/.test(parsed.text.trimEnd());
+  }, "authenticated remote shell prompt before input");
   input.focus();
   const clipboard = new DataTransfer();
   clipboard.setData(
@@ -1607,6 +1905,10 @@ export async function run(recovery: boolean) {
       return;
     }
     await until(async () => (await invoke<Context>("qa_context")).ready, "normal quit listener");
+    if (context.phase === "ui-parity") {
+      await runUiParity();
+      return;
+    }
     if (context.phase === "performance") {
       await runPerformance(context, scene, observeCore);
       return;
@@ -1830,6 +2132,10 @@ export async function run(recovery: boolean) {
     document.querySelector<HTMLButtonElement>('button[aria-label="Close settings"]')?.click();
     await invoke("qa_request_exit");
   } catch (reason) {
-    await scene("failure", { error: String(reason), body: document.body.innerText.slice(0, 4000) });
+    await scene("failure", {
+      error: String(reason),
+      body: document.body.innerText.slice(0, 4000),
+      viewport: { innerWidth, innerHeight, outerWidth, outerHeight, devicePixelRatio },
+    });
   }
 }
