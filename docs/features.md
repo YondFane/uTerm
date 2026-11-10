@@ -47,12 +47,12 @@ and drag **uTerm Personal.app** into Applications. Published attachments have no
 GitHub sign-in requirement. First launch may require approval in **System Settings → Privacy &
 Security**. Version 0.2.6 has no updater: install an updater-enabled release manually once.
 
-In an updater-enabled build, **Settings → General → Automatically check and download updates**
-enables Sparkle checks and signed downloads after **Save settings**. It is off by default. The app
-menu and settings also provide **Check for updates…**. Background downloads can install when the app
-quits; Sparkle asks before an immediate install/relaunch. Existing editor, transfer and database
-quit guards still apply. Turning the option off stops future automatic checks/downloads; an already
-prepared update can still install on quit. Update failures remain visible and can be retried
+In an updater-enabled build, **Settings → Software updates → Automatically check and download
+updates** enables Sparkle checks and signed downloads after **Save settings**. It is off by default.
+The app menu and settings also provide **Check for updates…**. Background downloads can install when
+the app quits; Sparkle asks before an immediate install/relaunch. Existing editor, transfer and
+database quit guards still apply. Turning the option off stops future automatic checks/downloads; an
+already prepared update can still install on quit. Update failures remain visible and can be retried
 manually. Update status text follows language changes immediately, including the no-update result.
 
 The personal client uses separate HTTPS `personal-stable-arm64.xml` and `personal-stable-x86_64.xml`
@@ -74,7 +74,7 @@ app does not automatically restore old data or perform the Tauri-to-native cutov
 The native toolbar opens complete settings directly, as does the app menu. Settings retain their
 save/reload/reset behavior and unsaved drafts when the window is hidden. Return saves an edited
 settings draft; Command-W hides the window. The local CLI control switch remains an immediate
-service control in General.
+service control in Local control.
 
 The sidebar includes workspace selection, category navigation and text filtering. A horizontal
 session strip switches sessions and offers rename/close actions. Closing a background session
@@ -103,7 +103,7 @@ Real-window CI prepares a display of at least 1280×900 before the matching scre
 required 720-pixel content height is still checked against actual window bounds. Personal smoke
 failures retain the raw report and available original captures before validation, including an
 attempted failure-window capture. The ordinary collector waits for real terminal input ownership
-before inspecting the host. Linux passes 17 macOS package/evidence policy tests and seven
+before inspecting the host. Linux passes 18 macOS package/evidence policy tests and eight
 paired-evidence policy tests; these fixtures do not represent native window execution.
 
 The Personal collector adjusts the real window frame against measured content bounds, with at most
@@ -111,6 +111,23 @@ five attempts and recorded geometry. It also executes the project context menu a
 control, checks durable pin/collapse/order, rejects a stale reorder after a settings write and
 verifies the selected terminal generation remains unchanged. Both clients use the same literal
 workspace name as well as matching project data.
+
+Settings use left-side categories for General, Appearance, Terminal, Workspaces, Shortcuts, Agents,
+Usage, Local control and Software updates. Appearance includes file font/tab preferences; workspace
+management offers shared create/rename/delete operations. Agent commands/hooks and quota open their
+existing complete native window. Database components, Maven settings and Java environment still need
+matching standalone settings sections before complete parity can be accepted.
+
+The toolbar includes file opening, the command palette, pane zoom and a tools menu for files/search,
+Git/GitHub, Java/Python, SSH, database and Redis entry points. Commands retain their existing focus,
+busy-state and selected-project guards.
+
+The same-source comparison includes 18 settings navigation pairs: nine shared categories at English
+dark 900×640 and Chinese light 660×640. Both collectors activate actual navigation controls and
+reject missing/stale captures, changed drafts or unverified navigation. The combined artifact holds
+52 original screenshots; collection does not establish complete functional parity. The sidebar
+updates existing disclosure buttons when busy state ends, so persisted collapse does not leave
+expansion disabled.
 
 #### Configure personal updater signing
 

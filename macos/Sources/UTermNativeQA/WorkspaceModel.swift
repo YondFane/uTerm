@@ -3,6 +3,7 @@ import SwiftUI
 import UTermBridge
 
 struct NativeListItem: Identifiable { let id: String; let name: String }
+enum NameDraftOwner: Equatable { case workspace, settings }
 struct NameDraft: Identifiable {
     let id = UUID()
     let target: String?
@@ -25,6 +26,7 @@ final class WorkspaceModel: ObservableObject {
     @Published var gitFavoritesRecoveryPresented = false
     @Published var worktreeDeletionPresented = false
     @Published var nameDraft: NameDraft?
+    @Published var nameDraftOwner: NameDraftOwner = .workspace
     @Published var fullScreen = false
     @Published var sidebarVisible = true
     @Published var sidebarSection = "all"
@@ -55,6 +57,11 @@ final class WorkspaceModel: ObservableObject {
     var openRedisRequested: (() -> Void)?
     var openAgentsRequested: (() -> Void)?
     var openSettingsRequested: (() -> Void)?
+    var openFileRequested: (() -> Void)?
+    var performCommandRequested: ((String) -> Void)?
+    var commandIsAvailable: ((String) -> Bool)?
+    var openJavaRequested: (() -> Void)?
+    var openPythonRequested: (() -> Void)?
     var openGitRequested: (() -> Void)?
     var openGitHubRequested: (() -> Void)?
     var openInspectorFile: ((String, String, Int) async throws -> Void)?
@@ -395,8 +402,10 @@ final class WorkspaceModel: ObservableObject {
         Task { await mutate("session.rename", ["id": .string(id), "name": .string(name)], revision: revision) }
     }
 
-    func newWorkspace() {
-        guard let state else { return }
+    func newWorkspace(owner: NameDraftOwner = .workspace) {
+        guard nameDraft == nil, let state else { return }
+        nameDraftOwner = owner
+        if owner == .workspace { requestActivation?() }
         nameDraft = NameDraft(target: nil, name: "", revision: state.snapshot.revision)
     }
 
@@ -494,8 +503,10 @@ final class WorkspaceModel: ObservableObject {
         catch { self.error = localized("Could not refresh Agent availability.", "无法刷新 Agent 可用状态。") }
     }
 
-    func renameWorkspace() {
-        guard let state else { return }
+    func renameWorkspace(owner: NameDraftOwner = .workspace) {
+        guard nameDraft == nil, let state else { return }
+        nameDraftOwner = owner
+        if owner == .workspace { requestActivation?() }
         let current = groups.first { $0["id"].string == groupID }?["name"].string ?? ""
         nameDraft = NameDraft(target: groupID, name: current, revision: state.snapshot.revision)
     }

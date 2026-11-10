@@ -92,16 +92,25 @@ acceptance.
 
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
-uploads 16 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
+uploads 52 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
 never replaces a missing native capture with a browser render. `comparisonReady` means the images
 are ready for review; `functionalParityAccepted` remains false until all acceptance rows are met.
 This candidate's new collection flow still requires actual CI execution and visual inspection.
 
 PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
-ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 16 张原图、`comparison.md` 和
+ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 52 张原图、`comparison.md` 和
 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。当前候选采集流程仍需实际 CI 执行及看图核对。
+
+Settings add 18 matched navigation scenes: nine common categories at English dark 900×640 and
+Chinese light 660×640. Native QA presses actual AppKit buttons; ordinary QA clicks the rendered
+settings navigation. Both assert actual content dimensions, selected section and unchanged drafts.
+The collector requires every settings scene, source identity and original image. Database
+components, Maven and Java environment categories remain implementation gaps, so these captures
+cannot establish complete settings parity.
+
+设置另采集 18 组匹配导航场景：九个共有分类，分别使用英文深色 900×640 与中文浅色 660×640。原生 QA 按下实际 AppKit 按钮，普通版点击渲染的设置导航；两版均检查实际内容尺寸、所选分类及草稿未变。汇集器要求完整分类场景、源码身份及原图。数据库组件、Maven、Java 开发环境分类仍为实现缺口，因此这些截图不能证明完整设置一致性。
 
 ## Source-bound CI findings / 绑定源码的 CI 结果
 
@@ -130,12 +139,27 @@ This failure remains a failure; the candidate's measured-frame correction needs 
 的 ARM 个人版在验收失败时保留了[原图及报告](https://github.com/YondFane/uTerm/actions/runs/42756610518/artifacts/13735713914)。`display.json`
 确认显示区域为 1280×960，但八张工作区原图及实际内容边界高度均为 684 像素。文件列表可读，规定高度未满足。该结果仍为失败；候选代码的实测 frame 修正需要新的 CI 执行。
 
+At head `07b0c7f89416c608916b15489395c52d60817285`, tested merge
+`cbd1054915d21f25ab5e21866238b0cbf3ee4bf6`, the ARM Personal run failed the actual disclosure-button
+expansion check. Its
+[artifact](https://github.com/YondFane/uTerm/actions/runs/42758139510/artifacts/13736453774) retains
+`personal-initial-sidebar-collapsed.png`, `personal-initial-failure.png` and the raw timeout report.
+The collapsed image confirms the hierarchical row and running terminal; expansion was not accepted.
+The candidate refreshes already-created disclosure buttons when busy state changes and keeps the
+same operation assertion for a new run.
+
+源码 `07b0c7f89416c608916b15489395c52d60817285`、实际测试 merge
+`cbd1054915d21f25ab5e21866238b0cbf3ee4bf6`
+的 ARM 个人版在真实展开按钮检查中失败。[产物](https://github.com/YondFane/uTerm/actions/runs/42758139510/artifacts/13736453774)保留
+`personal-initial-sidebar-collapsed.png`、`personal-initial-failure.png`
+及原始超时报告。折叠图确认层级行与运行中的终端，展开未验收。候选代码在忙碌状态变化时刷新已有展开按钮，并保留相同操作断言供新一轮执行。
+
 ## Local checks / 本地检查
 
-Linux checks pass 444 existing Node tests with 11 platform skips, 17 Python package/evidence policy
-tests, seven paired-evidence policy tests, 19 backend tests with QA enabled (one ignored),
+Linux checks pass 444 existing Node tests with 11 platform skips, 18 Python package/evidence policy
+tests, eight paired-evidence policy tests, 19 backend tests with QA enabled (one ignored),
 TypeScript/production build, repository formatting, shell syntax and documentation checks. The
 Python fixtures validate rejection rules only; they are not application screenshots. Swift
 compilation and real-window interaction have not run for this candidate.
 
-Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、17 项 Python 安装包／证据策略测试、七项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。
+Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、18 项 Python 安装包／证据策略测试、八项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。

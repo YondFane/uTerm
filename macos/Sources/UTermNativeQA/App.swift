@@ -85,6 +85,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openRedisRequested = { [weak self] in self?.openRedis() }
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
         model.openSettingsRequested = { [weak self] in self?.openFullSettings() }
+        model.openFileRequested = { [weak self] in self?.openFile() }
+        model.performCommandRequested = { [weak self] in self?.performCommand($0) }
+        model.commandIsAvailable = { [weak self] in self?.commandAvailable($0) == true }
+        model.openJavaRequested = { [weak self] in self?.openJava() }
+        model.openPythonRequested = { [weak self] in self?.openPython() }
         model.openGitRequested = { [weak self] in self?.openGit() }
         model.openGitHubRequested = { [weak self] in self?.openGitHub() }
         model.openInspectorFile = { [weak self] directory, path, line in

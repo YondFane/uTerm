@@ -81,6 +81,7 @@ def validate_workspace_scenes(report, head, tested, phase):
 def validate_smoke_report(report, head, tested, phase):
     assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
     validate_workspace_scenes(report, head, tested, phase)
+    validate_settings_scenes(report, head, tested, phase)
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}
@@ -88,6 +89,23 @@ def validate_smoke_report(report, head, tested, phase):
     assert report["settingsWindowAppearances"] == {"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"}
     if phase == "replacement":
         assert report["profileRetainedAfterAppReplacement"]
+
+
+def validate_settings_scenes(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    expected = {(section["id"], scene["language"], scene["appearance"], scene["width"], scene["height"])
+                for section in fixture["settingsSections"] for scene in fixture["settingsScenes"]}
+    scenes = report.get("settingsScenes", [])
+    assert len(scenes) == len(expected)
+    seen = set()
+    for scene in scenes:
+        key = (scene["section"], scene["language"], scene["appearance"], scene["width"], scene["height"])
+        assert key in expected and key not in seen
+        seen.add(key)
+        assert scene["sourceHeadSHA"] == head and scene["testedMergeSHA"] == tested
+        assert scene["draftUnchanged"] is True and scene["navigationControlActivated"] is True
+        name = f"personal-{phase}-settings-{key[0]}-{key[1]}-{key[2]}-{key[3]}.png"
+        assert scene["screenshot"] == name and name in report["captures"]
 
 def audit_app(app, architecture, head, tested):
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())

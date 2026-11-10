@@ -36,6 +36,21 @@ enum SettingsSmoke {
         try await TerminalSmoke.wait("Load complete settings catalog") { !model.values.isEmpty && !model.busy }
         guard model.error.isEmpty, try Data(contentsOf: snapshotFile) == before else { throw BridgeFailure(code: "SETTINGS_QA_OPEN", message: "Opening settings changed saved defaults") }
         report["nativeSettingsMenuAndReadonlyOpen"] = true
+        for id in ["appearance", "terminal", "workspace", "keyboard", "agents", "usage", "control", "updates", "general"] {
+            try await TerminalSmoke.wait("Render native settings navigation " + id) { view(current.window, id: "native-settings-section-" + id) != nil }
+            guard let button = view(current.window, id: "native-settings-section-" + id) as? NSButton, button.isEnabled else { throw BridgeFailure(code: "SETTINGS_QA_SECTION", message: "Settings section is unavailable: " + id) }
+            button.performClick(nil)
+            try await TerminalSmoke.wait("Select settings section through its actual control") { model.section == id }
+        }
+        guard try Data(contentsOf: snapshotFile) == before, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_SECTION", message: "Navigating settings changed saved data") }
+        report["nativeSettingsSidebarNavigationPreservesSavedData"] = true
+        workspace.newWorkspace(owner: .settings)
+        try await TerminalSmoke.wait("Attach workspace naming to the settings window") { current.window.attachedSheet != nil && workspace.nameDraftOwner == .settings }
+        guard let nameSheet = current.window.attachedSheet else { throw BridgeFailure(code: "SETTINGS_QA_WORKSPACE", message: "Workspace naming sheet is missing") }
+        try key(nameSheet, code: 53, characters: "\u{1b}")
+        try await TerminalSmoke.wait("Cancel settings-owned workspace naming") { workspace.nameDraft == nil && current.window.attachedSheet == nil }
+        guard !model.dirty, try Data(contentsOf: snapshotFile) == before else { throw BridgeFailure(code: "SETTINGS_QA_WORKSPACE", message: "Cancelling workspace naming changed saved data") }
+        report["workspaceNamingOwnedBySettingsAndCancellationPreservesData"] = true
         model.section = "terminal"; model.numbers["fontSize"] = "999"
         try await save(model)
         guard !model.error.isEmpty, model.numbers["fontSize"] == "999", try Data(contentsOf: snapshotFile) == before else { throw BridgeFailure(code: "SETTINGS_QA_INVALID", message: "Invalid settings were written or their draft was discarded") }

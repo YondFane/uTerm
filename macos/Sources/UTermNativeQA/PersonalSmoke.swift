@@ -99,6 +99,8 @@ enum PersonalSmoke {
             if automatic, phase == "initial" {
                 try await TerminalSmoke.wait("Personal automatic no-update cycle completes") { model.updates.qaEvents.contains("cycle-finished") }
             }
+            let updatesBeforeCaptures = model.settings["automaticUpdates"]
+            await model.patchSettings(["automaticUpdates": parity["automaticUpdates"]])
             for (language, appearance) in [("en", "dark"), ("zh-Hans", "light")] {
                 await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
                 let settings = openSettings()
@@ -113,12 +115,35 @@ enum PersonalSmoke {
                     updateStatuses[language] = model.updates.status
                 }
                 appearances[language + "-" + appearance] = actual?.rawValue
-                let name = "personal-\(phase)-settings-\(language)-\(appearance).png"
-                try await TerminalSmoke.capture(window: settings.window, path: root.appendingPathComponent(name))
-                captures.append(name)
-                report["captures"] = captures
-                settings.window.orderOut(nil)
+                guard let scene = parity["settingsScenes"].array.first(where: { $0["language"].string == language }),
+                      let width = scene["width"].number.flatMap({ Int(exactly: $0) }), let height = scene["height"].number.flatMap({ Int(exactly: $0) }) else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing settings capture fixture") }
+                for section in parity["settingsSections"].array {
+                    guard let id = section["id"].string else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing settings section") }
+                    try await TerminalSmoke.wait("Render actual settings navigation " + id) {
+                        settings.window.contentView.map { TerminalSmoke.descendants($0).contains { $0.identifier?.rawValue == "native-settings-section-" + id } } == true
+                    }
+                    guard let content = settings.window.contentView,
+                          let button = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-settings-section-" + id }) as? NSButton,
+                          button.isEnabled else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Settings section is unavailable") }
+                    button.performClick(nil)
+                    try await TerminalSmoke.wait("Select actual settings section") { settings.model.section == id }
+                    let attempts = try await TerminalSmoke.sizeCaptureWindow(settings.window, width: width, height: height)
+                    guard !settings.model.dirty, settings.model.error.isEmpty else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Section navigation changed a settings draft") }
+                    let name = "personal-\(phase)-settings-\(id)-\(language)-\(appearance)-\(width).png"
+                    try await TerminalSmoke.capture(window: settings.window, path: root.appendingPathComponent(name))
+                    captures.append(name); report["captures"] = captures
+                    var scenes = report["settingsScenes"] as? [[String: Any]] ?? []
+                    scenes.append(["section": id, "screenshot": name, "language": language, "appearance": appearance,
+                        "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
+                        "width": Int(settings.window.contentView?.bounds.width ?? 0), "height": Int(settings.window.contentView?.bounds.height ?? 0),
+                        "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "",
+                        "navigationControlActivated": true, "draftUnchanged": true, "automaticUpdates": model.settings["automaticUpdates"].bool ?? false, "windowSizeAttempts": attempts])
+                    report["settingsScenes"] = scenes
+                }
+                settings.window.performClose(nil)
+                guard !settings.window.isVisible, !model.settingsPresented else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Settings close did not restore workspace command availability") }
             }
+            await model.patchSettings(["automaticUpdates": updatesBeforeCaptures])
             var workspaceScenes: [[String: Any]] = []
             model.sidebarSection = "all"
             model.sidebarQuery = ""
@@ -180,6 +205,8 @@ enum PersonalSmoke {
         } catch {
             report["failure"] = error.localizedDescription
             report["inspectorDiagnostics"] = ["error": model.inspector.error, "code": model.inspector.errorCode, "directory": model.inspector.directory, "paths": model.inspector.rows.compactMap { $0["path"].string }] as [String: Any]
+            report["sidebarDiagnostics"] = ["busy": model.busy, "error": model.error, "section": model.sidebarSection, "query": model.sidebarQuery,
+                "projects": model.projects.map { ["id": $0["id"].string ?? "", "collapsed": $0["collapsed"].bool ?? false] as [String: Any] }] as [String: Any]
             do {
                 let capture = "personal-\(phase)-failure.png"
                 try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(capture))

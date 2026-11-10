@@ -1060,7 +1060,11 @@ print(number.uint32Value)
       writeFileSync(join(directory, name), value);
     }
     await run("ui-parity");
-    assert.equal(scenes.length, 8, "Incomplete ordinary-client parity grid");
+    assert.equal(
+      scenes.length,
+      8 + parityFixture.settingsScenes.length * parityFixture.settingsSections.length,
+      "Incomplete ordinary-client parity grid",
+    );
   } else if (performanceOnly) {
     await run("performance");
   } else {

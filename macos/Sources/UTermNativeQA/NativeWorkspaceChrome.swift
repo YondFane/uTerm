@@ -9,6 +9,7 @@ struct NativeWorkspaceToolbar: View {
         HStack(spacing: 10) {
             tool("sidebar.left", localized("Toggle sidebar", "显示或隐藏侧栏")) { model.sidebarVisible.toggle() }
             tool("folder.badge.plus", localized("Open project", "打开项目")) { model.openProject() }
+            tool("doc", localized("Open file", "打开文件")) { model.openFileRequested?() }.disabled(model.workspace["selectedProject"].string == nil)
             tool("terminal", localized("New terminal", "新建终端")) { Task { await model.newTerminal() } }
             Menu {
                 Button(localized("New Agent session", "新建 Agent 会话")) { Task { await model.newDefaultAgent() } }
@@ -23,8 +24,26 @@ struct NativeWorkspaceToolbar: View {
             .help(localized("Agents", "Agent"))
             Spacer(minLength: 8)
             if model.busy { ProgressView().controlSize(.small) }
+            tool("command", localized("Command palette", "命令面板")) { model.performCommandRequested?("palette") }
             tool("rectangle.split.2x1", localized("Split right", "向右分屏")) { Task { await model.split("horizontal") } }.disabled(model.selectedID == nil)
             tool("rectangle.split.1x2", localized("Split down", "向下分屏")) { Task { await model.split("vertical") } }.disabled(model.selectedID == nil)
+            tool(model.paneZoomed ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right", localized("Toggle pane zoom", "切换面板缩放")) { model.performCommandRequested?("zoom") }.disabled(model.commandIsAvailable?("zoom") != true)
+            Menu {
+                command("files", localized("Files", "文件"))
+                command("quick", localized("Quick open", "快速打开"))
+                command("search", localized("Search file contents", "搜索文件内容"))
+                command("swapPanes", localized("Swap tools position", "交换工具位置"))
+                Divider()
+                command("git", "Git")
+                command("github", "GitHub")
+                Button(localized("Java build and run…", "Java 构建与运行…")) { model.openJavaRequested?() }.disabled(model.workspace["selectedProject"].string == nil)
+                Button(localized("Python run…", "Python 运行…")) { model.openPythonRequested?() }.disabled(model.workspace["selectedProject"].string == nil)
+                Divider()
+                Button(localized("SSH connections…", "SSH 连接…")) { model.openSSHRequested?(nil) }
+                Button(localized("Databases…", "数据库…")) { model.openDatabasesRequested?() }
+                Button(localized("Redis connections…", "Redis 连接…")) { model.openRedisRequested?() }
+            } label: { Image(systemName: "wrench.and.screwdriver") }
+            .help(localized("Tools", "工具"))
             tool("gearshape", localized("Settings", "设置")) { model.openSettingsRequested?() }
             tool("sidebar.right", localized("Toggle tools", "显示或隐藏工具")) { if model.inspectorVisible { model.hideInspector() } else { model.showInspector(.files) } }
         }
@@ -42,6 +61,9 @@ struct NativeWorkspaceToolbar: View {
     private func tool(_ symbol: String, _ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: symbol).frame(width: 24, height: 24) }
             .help(title).accessibilityLabel(title)
+    }
+    private func command(_ id: String, _ title: String) -> some View {
+        Button(title) { model.performCommandRequested?(id) }.disabled(model.commandIsAvailable?(id) != true)
     }
 }
 

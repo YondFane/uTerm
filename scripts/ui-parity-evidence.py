@@ -16,13 +16,13 @@ def read_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
 
 
-def image(root, name):
+def image(root, name, minimum_height=720):
     path = root / name
     assert path.resolve().is_relative_to(root.resolve()) and not path.is_symlink(), "Image escaped artifact directory"
     data = path.read_bytes()
     assert len(data) > 1000 and data[:8] == b"\x89PNG\r\n\x1a\n" and data[12:16] == b"IHDR", "Missing real-window PNG"
     width, height = struct.unpack(">II", data[16:24])
-    assert 640 <= width <= 10000 and 720 <= height <= 10000, "Screenshot is too small or invalid"
+    assert 640 <= width <= 10000 and minimum_height <= height <= 10000, "Screenshot is too small or invalid"
     return path, hashlib.sha256(data).hexdigest()
 
 
@@ -69,6 +69,31 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         nfile, ndigest = image(native_path.parent, expected_native)
         tfile, tdigest = image(tauri_path.parent, expected_tauri)
         pairs.append(dict(language=language, appearance=appearance, width=width, height=fixture["height"],
+                          area="workspace",
+                          native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
+    expected_settings = {(section["id"], scene["language"], scene["appearance"], scene["width"], scene["height"])
+                         for section in fixture["settingsSections"] for scene in fixture["settingsScenes"]}
+    nsettings = native.get("settingsScenes", [])
+    tsettings = [entry for entry in tauri["scenes"] if entry["scenario"].startswith("settings-")]
+    assert len(nsettings) == len(tsettings) == len(expected_settings), "Incomplete settings screenshot grid"
+    def settings_key(scene):
+        return scene["section"], scene["language"], scene["appearance"], scene["width"], scene["height"]
+    left_settings = {settings_key(scene): scene for scene in nsettings}
+    right_settings = {settings_key(scene["checks"]): scene for scene in tsettings}
+    assert set(left_settings) == set(right_settings) == expected_settings, "Missing or duplicate settings scenes"
+    for identity in sorted(expected_settings):
+        section, language, appearance, width, height = identity
+        n, t = left_settings[identity], right_settings[identity]
+        assert n["sourceHeadSHA"] == head and n["testedMergeSHA"] == tested, "Stale settings screenshot"
+        assert n["platform"] == native["platform"] and n["architecture"] == native["architecture"] and n["system"] == native["system"], "Wrong settings capture platform"
+        assert all(scene.get("navigationControlActivated") is True and scene.get("draftUnchanged") is True for scene in [n, t["checks"]]), "Unverified settings navigation"
+        assert n["automaticUpdates"] == t["checks"]["automaticUpdates"] == fixture["automaticUpdates"], "Different update preference in settings captures"
+        name = f"settings-{section}-{language}-{appearance}-{width}"
+        expected_native, expected_tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+        assert n["screenshot"] == expected_native and t["screenshot"] == expected_tauri and expected_native in native["captures"]
+        _, ndigest = image(native_path.parent, expected_native, minimum_height=height)
+        _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
+        pairs.append(dict(area="settings", section=section, language=language, appearance=appearance, width=width, height=height,
                           native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
     output.mkdir(parents=True, exist_ok=False)
     for pair in pairs:
@@ -77,13 +102,13 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
     result = dict(sourceHeadSHA=head, testedMergeSHA=tested, uiParityFixtureSHA256=fixture_digest,
                   platform="macOS", architecture="arm64", system=native["system"], pairs=pairs,
                   comparisonReady=True, functionalParityAccepted=False,
-                  scope="Workspace screenshot grid only; review images and execute remaining acceptance rows.")
+                  scope="Workspace and settings navigation screenshots; review images and execute remaining acceptance rows.")
     (output / "comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     rows = ["# Real-window comparison / 真实窗口对照", "", f"Source head: `{head}`", f"Tested merge: `{tested}`", "",
             "These are original CI images. Functional parity remains pending.", "原图来自 CI；功能一致性仍待验收。", "",
             "| Scene / 场景 | Ordinary / 普通版 | Personal / 原生个人版 |", "| --- | --- | --- |"]
     for pair in pairs:
-        label = f"{pair['language']} / {pair['appearance']} / {pair['width']}×{pair['height']}"
+        label = f"{pair['area']} {pair.get('section', '')} / {pair['language']} / {pair['appearance']} / {pair['width']}×{pair['height']}"
         rows.append(f"| {label} | ![ordinary]({pair['tauri']}) | ![personal]({pair['native']}) |")
     (output / "comparison.md").write_text("\n".join(rows) + "\n")
     return result

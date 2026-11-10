@@ -64,6 +64,13 @@ enum ControlSmoke {
         guard let settingsWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "native-full-settings" && $0.isVisible }) else {
             throw BridgeFailure(code: "CONTROL_SMOKE", message: "Full settings window is missing")
         }
+        try await TerminalSmoke.wait("Find the actual local-control settings section") {
+            settingsWindow.contentView.map { TerminalSmoke.descendants($0).contains { $0.identifier?.rawValue == "native-settings-section-control" } } == true
+        }
+        guard let content = settingsWindow.contentView,
+              let section = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-settings-section-control" }) as? NSButton,
+              section.isEnabled else { throw BridgeFailure(code: "CONTROL_SMOKE", message: "Local-control section is unavailable") }
+        section.performClick(nil)
         var pressed = false
         for _ in 0..<40 {
             if try pressControlToggle(in: settingsWindow) { pressed = true; break }

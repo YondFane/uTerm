@@ -27,7 +27,7 @@ class ParityEvidenceTests(unittest.TestCase):
         self.n = dict(passed=True, platform="macOS", architecture="arm64", system="Version 15.8.2",
                       sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, productionDataAccess=False,
                       uiParityFixtureSHA256=digest, backgroundTabCloseRetainedSelectedGeneration=True,
-                      workspaceScenes=[], captures=[])
+                      workspaceScenes=[], settingsScenes=[], captures=[])
         self.t = dict(passed=True, platform="darwin", architecture="arm64", productVersion="15.8.2",
                       head="a" * 40, tested="b" * 40, productionDataAccess=False, sourceTreeDirty=False,
                       uiParityFixtureSHA256=digest, scenes=[])
@@ -47,6 +47,18 @@ class ParityEvidenceTests(unittest.TestCase):
                     self.n["workspaceScenes"].append(dict(values, screenshot=native))
                     self.n["captures"].append(native)
                     self.t["scenes"].append(dict(scenario=f"workspace-{lang}-{appearance}-{width}", checks=values, screenshot=tauri))
+        for scene in fixture["settingsScenes"]:
+            for section in fixture["settingsSections"]:
+                values = dict(scene, section=section["id"], navigationControlActivated=True, draftUnchanged=True, automaticUpdates=fixture["automaticUpdates"])
+                name = f"settings-{section['id']}-{scene['language']}-{scene['appearance']}-{scene['width']}"
+                native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+                image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", scene["width"], scene["height"]) + bytes(1100)
+                (self.native / native).write_bytes(image)
+                (self.tauri / tauri).write_bytes(image)
+                self.n["settingsScenes"].append(dict(values, screenshot=native, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
+                                                    platform="macOS", architecture="arm64", system=self.n["system"]))
+                self.n["captures"].append(native)
+                self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
 
     def run_compare(self):
         for root, name, report in [(self.native, "personal-initial.json", self.n), (self.tauri, "report.json", self.t)]:
@@ -64,8 +76,20 @@ class ParityEvidenceTests(unittest.TestCase):
         result = self.run_compare()
         self.assertTrue(result["comparisonReady"])
         self.assertFalse(result["functionalParityAccepted"])
-        self.assertEqual(len(result["pairs"]), 8)
-        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 16)
+        self.assertEqual(len(result["pairs"]), 26)
+        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 52)
+
+    def test_settings_scenes_require_complete_source_bound_unchanged_navigation(self):
+        original = copy.deepcopy(self.n["settingsScenes"])
+        for mutation in ["missing", "duplicate", "stale", "draft", "navigation", "height"]:
+            self.n["settingsScenes"] = copy.deepcopy(original)
+            if mutation == "missing": self.n["settingsScenes"].pop()
+            if mutation == "duplicate": self.n["settingsScenes"][0] = self.n["settingsScenes"][1]
+            if mutation == "stale": self.n["settingsScenes"][0]["testedMergeSHA"] = "c" * 40
+            if mutation == "draft": self.n["settingsScenes"][0]["draftUnchanged"] = False
+            if mutation == "navigation": self.n["settingsScenes"][0]["navigationControlActivated"] = False
+            if mutation == "height": self.n["settingsScenes"][0]["height"] = 639
+            with self.subTest(mutation=mutation), self.assertRaises(AssertionError): self.run_compare()
 
     def test_rejects_stale_sources_failed_runs_wrong_architecture_and_different_fixtures(self):
         for key, value in [("tested", "c" * 40), ("head", "c" * 40), ("passed", False),

@@ -119,6 +119,12 @@ struct NativeSidebar: NSViewRepresentable {
             updating = true
             defer { updating = false }
             if next != rows || preferenceSignature != signature { rows = next; preferenceSignature = signature; table.reloadData() }
+            for index in rows.indices {
+                guard let cell = table.view(atColumn: 0, row: index, makeIfNecessary: false) else { continue }
+                for disclosure in cell.subviews.compactMap({ $0 as? DisclosureButton }) {
+                    disclosure.isEnabled = !model.busy && !model.gitFavoritesRecoveryPresented && !model.worktreeDeletionPresented
+                }
+            }
             guard !pending else { return }
             let selected = model.selectedID.map { "s:" + $0 } ?? model.workspace["selectedWorktree"].string.map { "w:" + $0 } ?? model.workspace["selectedProject"].string.map { "p:" + $0 }
             let index = rows.firstIndex { $0.key == selected }

@@ -56,9 +56,17 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
   workspaceName: string;
   projectName: string;
   fontSize: number;
+  automaticUpdates: boolean;
   sessions: string[];
   marker: string;
   command: string;
+  settingsScenes: {
+    language: "en" | "zh-Hans";
+    appearance: string;
+    width: number;
+    height: number;
+  }[];
+  settingsSections: { id: string; label: string }[];
 };
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
 const sentinel = "opaque QA draft backup retained byte-for-byte";
@@ -343,6 +351,55 @@ async function runUiParity() {
       }
     }
   }
+  for (const sceneFixture of parityFixture.settingsScenes) {
+    await open();
+    await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+    await choose(
+      [translate("en", "应用语言"), translate("zh-Hans", "应用语言")],
+      sceneFixture.language,
+    );
+    await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+    await choose(
+      [translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")],
+      sceneFixture.appearance,
+    );
+    await until(async () => {
+      const value = await settings();
+      return (
+        value.language === sceneFixture.language && value.appearance === sceneFixture.appearance
+      );
+    }, "persist settings capture language and appearance");
+    await invoke("qa_performance_window", {
+      width: sceneFixture.width,
+      height: sceneFixture.height,
+    });
+    await until(
+      () => innerWidth === sceneFixture.width && innerHeight === sceneFixture.height,
+      "actual settings capture content size",
+    );
+    for (const section of parityFixture.settingsSections) {
+      await tab([translate(sceneFixture.language, section.label)]);
+      await until(() => {
+        const current = document.querySelector('.settings-layout nav button[aria-pressed="true"]');
+        return current?.textContent?.trim() === translate(sceneFixture.language, section.label);
+      }, "actual settings category selection");
+      const draftUnchanged = !document.querySelector(
+        `[aria-label="${translate(sceneFixture.language, "未保存的设置")}"], [role="alert"].settings-error`,
+      );
+      await scene(
+        `settings-${section.id}-${sceneFixture.language}-${sceneFixture.appearance}-${sceneFixture.width}`,
+        {
+          ...sceneFixture,
+          section: section.id,
+          navigationControlActivated: true,
+          draftUnchanged,
+          automaticUpdates: (await settings()).automaticUpdates,
+        },
+      );
+      assert(draftUnchanged, "Settings capture shows unsaved values or an error");
+    }
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+  }
   await invoke("qa_request_exit");
 }
 
@@ -369,6 +426,9 @@ export async function prepare() {
         language: "en",
         appearance: "dark",
         ...(context.phase === "ui-parity" ? { fontSize: parityFixture.fontSize } : {}),
+        ...(context.phase === "ui-parity"
+          ? { automaticUpdates: parityFixture.automaticUpdates }
+          : {}),
         ...(context.phase === "performance" ? performanceSettings(context.platform) : {}),
         ...(context.phase === "updates" ? { defaultShell: "cmd" } : {}),
       }),
