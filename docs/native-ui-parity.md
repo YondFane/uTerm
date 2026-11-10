@@ -92,25 +92,25 @@ acceptance.
 
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
-uploads 56 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
+uploads 60 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
 never replaces a missing native capture with a browser render. `comparisonReady` means the images
 are ready for review; `functionalParityAccepted` remains false until all acceptance rows are met.
 This candidate's new collection flow still requires actual CI execution and visual inspection.
 
 PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
-ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 56 张原图、`comparison.md` 和
+ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 60 张原图、`comparison.md` 和
 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。当前候选采集流程仍需实际 CI 执行及看图核对。
 
-Settings add 20 matched navigation scenes: ten common categories at English dark 900×640 and Chinese
-light 660×640. Native QA presses actual AppKit buttons; ordinary QA clicks the rendered settings
-navigation. Both assert actual content dimensions, selected section and unchanged drafts. The
-collector requires every settings scene, source identity and original image. Database components and
-Java environment categories remain implementation gaps, so these captures cannot establish complete
+Settings add 22 matched navigation scenes: eleven common categories at English dark 900×640 and
+Chinese light 660×640. Native QA presses actual AppKit buttons; ordinary QA clicks the rendered
+settings navigation. Both assert actual content dimensions, selected section and unchanged drafts.
+The collector requires every settings scene, source identity and original image. The Java
+environment category remains an implementation gap, so these captures cannot establish complete
 settings parity.
 
-设置另采集 20 组匹配导航场景：十个共有分类，分别使用英文深色 900×640 与中文浅色 660×640。原生 QA 按下实际 AppKit 按钮，普通版点击渲染的设置导航；两版均检查实际内容尺寸、所选分类及草稿未变。汇集器要求完整分类场景、源码身份及原图。数据库组件、Java 开发环境分类仍为实现缺口，因此这些截图不能证明完整设置一致性。
+设置另采集 22 组匹配导航场景：十一个共有分类，分别使用英文深色 900×640 与中文浅色 660×640。原生 QA 按下实际 AppKit 按钮，普通版点击渲染的设置导航；两版均检查实际内容尺寸、所选分类及草稿未变。汇集器要求完整分类场景、源码身份及原图。Java 开发环境分类仍为实现缺口，因此这些截图不能证明完整设置一致性。
 
 ## Source-bound CI findings / 绑定源码的 CI 结果
 
@@ -176,12 +176,30 @@ configuration still require current-source macOS execution.
 独立原生 Maven 设置新增真实保存按钮、字面路径、并发冲突及项目配置保留检查，并采集
 `native-settings-maven-conflict.png`。两版匹配 Maven 场景要求已加载控件符合共同样例。新增控件、独立读取桥接及显示配置仍需当前源码 macOS 执行。
 
+At source `cd27f9797a23bc97c78a409dc359f1df7f6cc625`, both Personal architectures passed display
+preparation including the fresh-process AppKit verification, but app compilation failed on one
+optional-value access in the new Maven QA assertion. The candidate unwraps that optional; the
+previous failure does not count as runtime acceptance.
+
+源码 `cd27f9797a23bc97c78a409dc359f1df7f6cc625`
+的两种 Personal 架构均通过显示准备及独立进程 AppKit 复查，但应用编译因新增 Maven
+QA 断言的一处可选值访问失败。候选代码已解包该值；此前失败不能作为运行时验收。
+
+The native database components candidate uses the existing shared service for download, resume,
+import, remove, cancel and local Java selection. Settings and the workbench share one event reader
+with separate subscribers, preventing event loss from competing consumers. Native QA captures the
+read-only catalog without creating a download directory; the real PostgreSQL fixture verifies
+component notifications reach both the settings observer and WebKit. Paired component images require
+a loaded catalog. No new native execution result is claimed before CI runs this candidate.
+
+原生数据库组件候选页面沿用共享服务的下载、续传、导入、移除、取消及本机 Java 选择。设置和工作台共用单一事件读取，各自订阅通知，避免竞争消费而丢失事件。原生 QA 采集只读目录且检查未创建下载目录；真实 PostgreSQL 样例验证组件通知同时到达设置观察器与 WebKit。成对组件截图必须先加载目录。CI 执行此候选代码前，不宣称新增原生运行结果。
+
 ## Local checks / 本地检查
 
 Linux checks pass 444 existing Node tests with 11 platform skips, 18 Python package/evidence policy
-tests, nine paired-evidence policy tests, 19 backend tests with QA enabled (one ignored),
+tests, ten paired-evidence policy tests, 19 backend tests with QA enabled (one ignored),
 TypeScript/production build, repository formatting, shell syntax and documentation checks. The
 Python fixtures validate rejection rules only; they are not application screenshots. Swift
 compilation and real-window interaction have not run for this candidate.
 
-Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、18 项 Python 安装包／证据策略测试、九项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。
+Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、18 项 Python 安装包／证据策略测试、十项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。

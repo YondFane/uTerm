@@ -51,6 +51,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-database-') as director
         assert report['coreReady'] and not report['productionDataAccess']
         for key in ['nativeProfileSaveWithoutPasswordPersistence', 'nativeRealPostgresqlConnection', 'nativeSQLInputWaitedForReadyControls', 'nativeSQLClipboardMatchesEditedQuery', 'nativeExactBigintDecimalAndUnicode', 'hiddenWindowRetainedConnectionDraftAndResult', 'nativeActiveProfileMutationRefused', 'temporaryPasswordSurvivedWindowHideAndReconnect', 'nativeDatabaseThemeLanguageAndNarrowLayout']:
             assert report[key], key
+        assert report['sharedComponentEventsReachSettingsAndWorkbench']
         assert len(report['nativeDatabaseCaptures']) == 2
         for name in report['nativeDatabaseCaptures']:
             assert (evidence / name).is_file(), name

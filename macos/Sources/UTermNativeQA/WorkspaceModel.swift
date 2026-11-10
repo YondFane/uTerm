@@ -62,6 +62,7 @@ final class WorkspaceModel: ObservableObject {
     var commandIsAvailable: ((String) -> Bool)?
     var openJavaRequested: (() -> Void)?
     var openPythonRequested: (() -> Void)?
+    private var databaseHostCache: DatabaseHost?
     var openGitRequested: (() -> Void)?
     var openGitHubRequested: (() -> Void)?
     var openInspectorFile: ((String, String, Int) async throws -> Void)?
@@ -90,6 +91,15 @@ final class WorkspaceModel: ObservableObject {
     }
     func showInspector(_ mode: NativeInspectorModel.Mode) { inspector.mode = mode; inspectorVisible = true }
     func hideInspector() { inspectorVisible = false; inspector.invalidate(); focusRevision += 1 }
+    func sharedDatabaseHost() throws -> DatabaseHost {
+        if let databaseHostCache { return databaseHostCache }
+        guard let sshBridge else { throw BridgeFailure(code: "DB_CLOSED", message: localized("Database client is unavailable.", "数据库客户端不可用。")) }
+        let host = DatabaseHost(bridge: sshBridge)
+        host.report = { [weak self] in self?.error = $0 }
+        host.changed = { [weak self] in await self?.reload() }
+        databaseHostCache = host
+        return host
+    }
 
     var workspace: JSONValue { state?.snapshot.document.workspace ?? .null }
     var settings: JSONValue { state?.snapshot.document.settings ?? .null }
@@ -560,6 +570,7 @@ final class WorkspaceModel: ObservableObject {
         frames?.cancel()
         failures?.cancel()
         await sshBridge?.close()
+        databaseHostCache?.shutdownEvents(); databaseHostCache = nil
         sshBridge = nil
         await bridge?.close()
         bridge = nil

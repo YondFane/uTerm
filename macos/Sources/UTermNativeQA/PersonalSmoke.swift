@@ -131,6 +131,11 @@ enum PersonalSmoke {
                         try await TerminalSmoke.wait("Load standalone global Maven before capture") { !settings.model.maven.busy && !settings.model.maven.values.isEmpty }
                         guard JSONValue.object(settings.model.maven.values) == parity["maven"], settings.model.maven.error.isEmpty else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Maven controls do not match the shared fixture") }
                     }
+                    if id == "database" {
+                        try await TerminalSmoke.wait("Load the actual database component catalog") { !settings.model.databaseComponents.loading && settings.model.databaseComponents.status != .null }
+                        let actual = settings.model.databaseComponents.status["items"].array.compactMap { $0["id"].string }.sorted()
+                        guard actual == parity["databaseComponentIds"].array.compactMap(\.string).sorted(), settings.model.databaseComponents.error.isEmpty, !settings.model.databaseComponents.working else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Database component controls do not match the shared fixture") }
+                    }
                     let attempts = try await TerminalSmoke.sizeCaptureWindow(settings.window, width: width, height: height)
                     guard !settings.model.dirty, !settings.model.maven.dirty, settings.model.error.isEmpty else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Section navigation changed a settings draft") }
                     let name = "personal-\(phase)-settings-\(id)-\(language)-\(appearance)-\(width).png"
@@ -141,7 +146,7 @@ enum PersonalSmoke {
                         "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
                         "width": Int(settings.window.contentView?.bounds.width ?? 0), "height": Int(settings.window.contentView?.bounds.height ?? 0),
                         "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "",
-                        "navigationControlActivated": true, "draftUnchanged": true, "mavenFixtureMatched": id == "maven", "automaticUpdates": model.settings["automaticUpdates"].bool ?? false, "windowSizeAttempts": attempts])
+                        "navigationControlActivated": true, "draftUnchanged": true, "mavenFixtureMatched": id == "maven", "databaseFixtureMatched": id == "database", "automaticUpdates": model.settings["automaticUpdates"].bool ?? false, "windowSizeAttempts": attempts])
                     report["settingsScenes"] = scenes
                 }
                 settings.window.performClose(nil)

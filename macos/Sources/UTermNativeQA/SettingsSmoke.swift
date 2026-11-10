@@ -192,6 +192,7 @@ enum SettingsSmoke {
             report["actualOSLoginRegistrationExecuted"] = false
             var captures: [String] = [paletteCapture, terminalCapture]
             captures.append(try await verifyGlobalMaven(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
+            captures.append(try await verifyDatabaseComponents(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             current.window.makeKeyAndOrderFront(nil)
             for (language, appearance, width, name) in [("en", "dark", 900.0, "native-settings-full-dark-en.png"), ("zh-Hans", "light", 660.0, "native-settings-full-light-zh-narrow.png")] {
                 model.values["language"] = .string(language); model.values["appearance"] = .string(appearance); model.section = "appearance"
@@ -209,6 +210,26 @@ enum SettingsSmoke {
         report["nativeSettingsFeatureAcceptanceComplete"] = false
         report["remaining"] = ["Automatic update effects remain tracked in #45; preference/file/search/inspector/swap/zoom and GitHub have separate reports; actual OS login approval uses the authorized simulation boundary"]
         current.window.orderOut(nil)
+    }
+
+    private static func verifyDatabaseComponents(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
+        let components = settings.model.databaseComponents
+        let root = try WorkspaceModel.dataRoot().deletingLastPathComponent().appendingPathComponent("database-components-v1")
+        let existed = FileManager.default.fileExists(atPath: root.path)
+        try await TerminalSmoke.wait("Enable database components navigation") { (view(settings.window, id: "native-settings-section-database") as? NSButton)?.isEnabled == true }
+        guard let button = view(settings.window, id: "native-settings-section-database") as? NSButton, button.isEnabled else { throw BridgeFailure(code: "SETTINGS_QA_COMPONENTS", message: "Database components navigation is missing") }
+        button.performClick(nil)
+        try await TerminalSmoke.wait("Read database components without downloading") { !components.loading && components.status != .null }
+        let ids = Set(components.status["items"].array.compactMap { $0["id"].string })
+        guard components.error.isEmpty, !components.working, !components.connected,
+              ids == Set(["mysql", "postgresql", "oracle", "mongodb", "mongodb-core", "mongodb-bson", "runtime"]),
+              FileManager.default.fileExists(atPath: root.path) == existed else {
+            throw BridgeFailure(code: "SETTINGS_QA_COMPONENTS", message: "Component navigation changed data or did not load the catalog")
+        }
+        let capture = "native-settings-database-components.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        report["nativeDatabaseComponentsReadonlyCatalogWithoutDownloads"] = true
+        return capture
     }
 
     private static func verifyGlobalMaven(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
@@ -247,7 +268,7 @@ enum SettingsSmoke {
             save.performClick(nil)
             try await TerminalSmoke.wait("Reject stale global Maven through the actual button") { !maven.busy && maven.errorCode == "JAVA_CONFIG_CONFLICT" }
             configuration = try await peer.call("java.configuration", params: .object(["directory": .string(directory)]))
-            guard maven.dirty, maven.values["home"].string == literal + " local draft", configuration["global"] == .object(peerGlobal), configuration["project"] == .object(project) else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Conflict lost a Maven draft or peer/project settings") }
+            guard maven.dirty, maven.values["home"]?.string == literal + " local draft", configuration["global"] == .object(peerGlobal), configuration["project"] == .object(project) else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Conflict lost a Maven draft or peer/project settings") }
             settings.window.performClose(nil)
             guard !settings.window.isVisible, maven.dirty else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Hiding settings lost the Maven draft") }
             settings.window.makeKeyAndOrderFront(nil)

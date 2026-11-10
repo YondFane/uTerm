@@ -103,7 +103,7 @@ Real-window CI prepares a display of at least 1280×900 before the matching scre
 required 720-pixel content height is still checked against actual window bounds. Personal smoke
 failures retain the raw report and available original captures before validation, including an
 attempted failure-window capture. The ordinary collector waits for real terminal input ownership
-before inspecting the host. Linux passes 18 macOS package/evidence policy tests and nine
+before inspecting the host. Linux passes 18 macOS package/evidence policy tests and ten
 paired-evidence policy tests; these fixtures do not represent native window execution.
 
 The Personal collector adjusts the real window frame against measured content bounds, with at most
@@ -113,19 +113,19 @@ verifies the selected terminal generation remains unchanged. Both clients use th
 workspace name as well as matching project data.
 
 Settings use left-side categories for General, Appearance, Terminal, Workspaces, Shortcuts, Agents,
-Usage, Local control, Maven settings and Software updates. Appearance includes file font/tab
-preferences; workspace management offers shared create/rename/delete operations. Agent
-commands/hooks and quota open their existing complete native window. Database components and Java
-environment still need matching standalone settings sections before complete parity can be accepted.
+Usage, Local control, Database components, Maven settings and Software updates. Appearance includes
+file font/tab preferences; workspace management offers shared create/rename/delete operations. Agent
+commands/hooks and quota open their existing complete native window. The Java environment still
+needs a matching standalone settings section before complete parity can be accepted.
 
 The toolbar includes file opening, the command palette, pane zoom and a tools menu for files/search,
 Git/GitHub, Java/Python, SSH, database and Redis entry points. Commands retain their existing focus,
 busy-state and selected-project guards.
 
-The same-source comparison includes 20 settings navigation pairs: ten shared categories at English
-dark 900×640 and Chinese light 660×640. Both collectors activate actual navigation controls and
-reject missing/stale captures, changed drafts or unverified navigation. The combined artifact holds
-56 original screenshots; collection does not establish complete functional parity. The sidebar
+The same-source comparison includes 22 settings navigation pairs: eleven shared categories at
+English dark 900×640 and Chinese light 660×640. Both collectors activate actual navigation controls
+and reject missing/stale captures, changed drafts or unverified navigation. The combined artifact
+holds 60 original screenshots; collection does not establish complete functional parity. The sidebar
 updates existing disclosure buttons when busy state ends, so persisted collapse does not leave
 expansion disabled.
 
@@ -142,6 +142,17 @@ Candidate QA presses the actual Maven navigation/save controls, verifies exact l
 unchanged project configuration, rejects a stale global save and captures
 `native-settings-maven-conflict.png`. Matched Maven scenes must show loaded controls matching the
 shared defaults. These new native checks still require CI execution.
+
+**Settings → Database components** lists detected Java and the driver catalog. Install/resume,
+manual HTTPS download, offline import, uninstall confirmation and local Java selection use the
+existing shared component service. Existing connections prevent component changes; active downloads
+show progress and can be cancelled. Opening the page does not download packages. Read failures have
+an explicit refresh action, and an obsolete hidden-page read cannot replace a newer result.
+
+The settings page and existing database workbench receive component events from one shared event
+drain. Candidate native QA checks read-only catalog rendering and captures
+`native-settings-database-components.png`; the PostgreSQL fixture checks that a verified import
+notifies both the native observer and actual WebKit window. These new interactions await macOS CI.
 
 #### Configure personal updater signing
 

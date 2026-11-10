@@ -683,7 +683,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private func makeDatabaseWindow() async throws -> ContentWindow {
         guard !preparingQuit, let bridge = model.sshBridge else { throw BridgeFailure(code: "DB_CLOSED", message: localized("Database client is unavailable.", "数据库客户端不可用。")) }
         if let content = contentWindows.values.first(where: { $0.workbenchHost?.kind == "database" }) { content.reveal(); return content }
-        let host = DatabaseHost(bridge: bridge)
+        let host = try model.sharedDatabaseHost()
         host.report = { [weak self] message in self?.model.error = message }
         host.changed = { [weak self] in await self?.model.reload() }
         let content = try ContentWindow(bridge: bridge, directory: WorkspaceModel.dataRoot().deletingLastPathComponent(), path: "Databases", stateBridge: bridge, workbenchHost: host)

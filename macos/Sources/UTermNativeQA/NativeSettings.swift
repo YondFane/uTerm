@@ -8,7 +8,9 @@ final class NativeSettingsModel: ObservableObject {
     let workspace: WorkspaceModel
     let login = NativeLoginItems()
     let maven: NativeMavenSettingsModel
+    let databaseComponents: NativeDatabaseComponentsModel
     private var mavenChanges: AnyCancellable?
+    private var databaseChanges: AnyCancellable?
     @Published private(set) var catalog: JSONValue = .null
     @Published private(set) var agents: JSONValue = .null
     @Published var values: [String: JSONValue] = [:]
@@ -30,7 +32,9 @@ final class NativeSettingsModel: ObservableObject {
     var agentIDs: [String] { Array(Set(agents["builtins"].array.compactMap(\.string) + agents["definitions"].array.compactMap { $0["id"].string })).sorted() }
     init(workspace: WorkspaceModel) {
         self.workspace = workspace; maven = NativeMavenSettingsModel()
+        databaseComponents = NativeDatabaseComponentsModel(workspace: workspace)
         mavenChanges = maven.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        databaseChanges = databaseComponents.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
     private func object(_ value: JSONValue) -> [String: JSONValue] { if case .object(let entries) = value { return entries }; return [:] }
     private func numberStrings(_ entries: [String: JSONValue]) -> [String: String] {
@@ -281,10 +285,11 @@ struct NativeSettingsView: View {
                             navigation("agents", "sparkle", "Agents", "Agent")
                             navigation("usage", "chart.bar", "Usage", "用量")
                             navigation("control", "network", "Local control", "本地控制")
+                            navigation("database", "externaldrive", "Database components", "数据库组件")
                             navigation("maven", "shippingbox", "Maven settings", "Maven 设置")
                             navigation("updates", "arrow.down.circle", "Software updates", "软件更新")
                         }.padding(8)
-                    }.frame(width: 160).background(.bar)
+                    }.frame(width: 160).background(.bar).disabled(model.databaseComponents.working)
                     Divider()
                     selectedSection.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }.disabled(model.busy || model.frozen || model.maven.busy || workspace.busy)
@@ -292,12 +297,12 @@ struct NativeSettingsView: View {
             if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).padding(.horizontal) }
             if !model.notice.isEmpty { Text(model.notice).textSelection(.enabled).padding(.horizontal) }
             HStack {
-                Button(localized("Restore defaults…", "恢复默认值…")) { confirmReset = true }.disabled(model.busy || model.frozen || model.maven.busy)
+                Button(localized("Restore defaults…", "恢复默认值…")) { confirmReset = true }.disabled(model.busy || model.frozen || model.maven.busy || model.databaseComponents.working)
                 if model.busy { ProgressView().controlSize(.small) }
                 Spacer()
                 if model.dirty { Text(localized("Unsaved changes", "有未保存修改")).foregroundStyle(.secondary) }
-                Button(localized("Reload", "重新读取")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }.disabled(model.busy || model.frozen || model.maven.busy)
-                Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.keyboardShortcut(.defaultAction).disabled(!model.dirty || model.busy || model.frozen || model.maven.busy)
+                Button(localized("Reload", "重新读取")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }.disabled(model.busy || model.frozen || model.maven.busy || model.databaseComponents.working)
+                Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.keyboardShortcut(.defaultAction).disabled(!model.dirty || model.busy || model.frozen || model.maven.busy || model.databaseComponents.working)
             }.padding()
         }.frame(minWidth: 640, minHeight: 480).task { await model.reload() }
         .sheet(item: Binding(get: { workspace.nameDraftOwner == .settings ? workspace.nameDraft : nil }, set: { if workspace.nameDraftOwner == .settings { workspace.nameDraft = $0 } })) { _ in NameEditorView(model: workspace) }
@@ -325,6 +330,7 @@ struct NativeSettingsView: View {
         case "agents": agents
         case "usage": usage
         case "control": control
+        case "database": NativeDatabaseComponentsView(model: model.databaseComponents)
         case "maven": NativeMavenSettingsView(model: model.maven)
         case "updates": updates
         default: general
@@ -426,21 +432,21 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: NativeSettingsView(model: model, workspace: workspace)); window.center()
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard !model.busy, !model.login.busy, !model.maven.busy, !model.frozen else { return false }
+        guard !model.busy, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.frozen else { return false }
         sender.orderOut(nil)
         model.workspace.settingsPresented = false
         return false
     }
     func prepareForQuit() async -> Bool {
-        guard !model.busy, !model.login.busy, !model.maven.busy else { return false }
-        model.frozen = true; model.maven.frozen = true
+        guard !model.busy, !model.login.busy, !model.maven.busy, !model.databaseComponents.working else { return false }
+        model.frozen = true; model.maven.frozen = true; model.databaseComponents.frozen = true
         guard model.dirty || model.maven.dirty else { return true }
         let alert = NSAlert(); alert.messageText = localized("Discard settings changes?", "放弃设置修改？")
         alert.addButton(withTitle: localized("Discard changes", "放弃修改")); alert.addButton(withTitle: localized("Cancel", "取消"))
         window.makeKeyAndOrderFront(nil)
         let response = await withCheckedContinuation { continuation in alert.beginSheetModal(for: window) { continuation.resume(returning: $0) } }
-        if response != .alertFirstButtonReturn { model.frozen = false; model.maven.frozen = false; return false }
+        if response != .alertFirstButtonReturn { resumeAfterQuit(); return false }
         return true
     }
-    func resumeAfterQuit() { model.frozen = false; model.maven.frozen = false }
+    func resumeAfterQuit() { model.frozen = false; model.maven.frozen = false; model.databaseComponents.frozen = false }
 }

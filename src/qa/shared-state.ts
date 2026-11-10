@@ -15,6 +15,7 @@ import { ContentScope } from "../lib/content-transport";
 import { tauriContentPort } from "../lib/tauri-content";
 import { runRedis } from "./redis";
 import { runDatabase } from "./database";
+import { databaseNames } from "../lib/database";
 import { runAgents } from "./agents";
 import { performanceSettings, runPerformance } from "./performance";
 import { runUpdates } from "./updates";
@@ -57,6 +58,7 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
   projectName: string;
   fontSize: number;
   automaticUpdates: boolean;
+  databaseComponentIds: string[];
   maven: {
     distribution: string;
     home: string;
@@ -410,6 +412,34 @@ async function runUiParity() {
           "Actual global Maven controls differ from the common fixture",
         );
       }
+      if (section.id === "database") {
+        await until(
+          () =>
+            document.querySelectorAll(".database-components .database-component-row").length ===
+            parityFixture.databaseComponentIds.length,
+          "loaded actual database component catalog",
+        );
+        const expected = parityFixture.databaseComponentIds
+          .map((id) =>
+            id === "runtime"
+              ? translate(sceneFixture.language, "Java 运行时")
+              : id === "mongodb-core"
+                ? "MongoDB Core"
+                : id === "mongodb-bson"
+                  ? "MongoDB BSON"
+                  : databaseNames[id as keyof typeof databaseNames],
+          )
+          .sort();
+        const actual = [
+          ...document.querySelectorAll(".database-components .database-component-row strong"),
+        ]
+          .map((item) => item.textContent?.trim())
+          .sort();
+        assert(
+          JSON.stringify(actual) === JSON.stringify(expected),
+          "Actual database component labels differ from the shared catalog",
+        );
+      }
       const draftUnchanged = !document.querySelector(
         `[aria-label="${translate(sceneFixture.language, "未保存的设置")}"], [role="alert"].settings-error, .settings-content .java-error`,
       );
@@ -421,6 +451,7 @@ async function runUiParity() {
           navigationControlActivated: true,
           draftUnchanged,
           mavenFixtureMatched: section.id === "maven",
+          databaseFixtureMatched: section.id === "database",
           automaticUpdates: (await settings()).automaticUpdates,
         },
       );

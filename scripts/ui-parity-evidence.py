@@ -90,6 +90,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["automaticUpdates"] == t["checks"]["automaticUpdates"] == fixture["automaticUpdates"], "Different update preference in settings captures"
         if section == "maven":
             assert n["mavenFixtureMatched"] is True and t["checks"]["mavenFixtureMatched"] is True, "Maven controls were not checked against the fixture"
+        if section == "database":
+            assert n["databaseFixtureMatched"] is True and t["checks"]["databaseFixtureMatched"] is True, "Database component catalog was not loaded"
         name = f"settings-{section}-{language}-{appearance}-{width}"
         expected_native, expected_tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
         assert n["screenshot"] == expected_native and t["screenshot"] == expected_tauri and expected_native in native["captures"]

@@ -249,4 +249,4 @@ jobs:
           EVIDENCE_URL: ${{ steps.comparison.outputs.artifact-url }}
         run: |
           echo "[Original paired screenshots / 原始成对截图]($EVIDENCE_URL)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Eight workspace and twenty settings pairs; full functional acceptance remains pending. 八组工作区及二十组设置对照，完整功能验收仍待完成。" >> "$GITHUB_STEP_SUMMARY"
+          echo "Eight workspace and twenty-two settings pairs; full functional acceptance remains pending. 八组工作区及二十二组设置对照，完整功能验收仍待完成。" >> "$GITHUB_STEP_SUMMARY"
