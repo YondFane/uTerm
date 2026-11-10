@@ -602,7 +602,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case "close": closeSession()
         case "fontIncrease": increaseFont()
         case "fontDecrease": decreaseFont()
-        case "ungroup": if let id = model.selectedID { Task { await model.mutate("session.ungroup", ["id": .string(id)]) } }
+        case "ungroup": if let id = model.selectedID { let revision = model.state?.snapshot.revision; Task { await model.ungroupSession(id, revision: revision) } }
         case "link":
             if let id = model.selectedID?.addingPercentEncoding(withAllowedCharacters: CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")) {
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString("uterm://session/" + id, forType: .string)

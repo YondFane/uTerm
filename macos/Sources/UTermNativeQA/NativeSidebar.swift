@@ -37,7 +37,7 @@ struct NativeSidebar: NSViewRepresentable {
         table.autoresizingMask = [.width]
         table.delegate = context.coordinator
         table.dataSource = context.coordinator
-        table.registerForDraggedTypes([Coordinator.projectDragType])
+        table.registerForDraggedTypes([Coordinator.projectDragType, Coordinator.sessionDragType])
         table.setDraggingSourceOperationMask(.move, forLocal: true)
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -62,6 +62,9 @@ struct NativeSidebar: NSViewRepresentable {
         static let projectDragType = NSPasteboard.PasteboardType("sh.uterm.native.project")
         private var dragRevision: String?
         private var dragProject: String?
+        static let sessionDragType = NSPasteboard.PasteboardType("sh.uterm.native.session")
+        private var dragSession: String?
+        private var sessionMenuActions: NativeSessionMenuActions?
 
         func update(_ model: WorkspaceModel) {
             self.model = model
@@ -78,18 +81,18 @@ struct NativeSidebar: NSViewRepresentable {
                 let id = session["id"].string ?? ""
                 let activity = model.terminals[id]?.activityLabel ?? ""
                 let name = (session["name"].string ?? "") + (activity.isEmpty ? "" : " · " + activity)
-                return Row(key: "s:" + id, name: name, symbol: session["agent"].string == nil ? "terminal" : "sparkle", projectID: model.sessionEntries.first(where: { $0.sessionID == id })?.projectId, depth: depth)
+                return Row(key: "s:" + id, name: name, symbol: session["pinned"].bool == true ? "pin.fill" : session["agent"].string == nil ? "terminal" : "sparkle", projectID: model.sessionEntries.first(where: { $0.sessionID == id })?.projectId, depth: depth)
             }
             next.append(Row(key: "projects", name: localized("Projects", "项目"), symbol: nil))
             for project in model.projects {
                 let id = project["id"].string ?? ""
                 next.append(Row(key: "p:" + id, name: project["name"].string ?? "", symbol: project["pinned"].bool == true ? "pin.fill" : "folder", projectID: id))
                 if project["collapsed"].bool == true && model.sidebarQuery.isEmpty { continue }
-                next += project["sessions"].array.filter { $0["worktreeId"].string == nil }.map { sessionRow($0, depth: 1) }
+                next += model.orderedSessions(project["sessions"].array.filter { $0["worktreeId"].string == nil }).map { sessionRow($0, depth: 1) }
                 for tree in project["worktrees"].array {
                     let suffix = tree["missing"] == .bool(true) ? localized(" (missing)", "（缺失）") : ""
                     next.append(Row(key: "w:" + (tree["id"].string ?? ""), name: (tree["name"].string ?? "") + suffix, symbol: "arrow.triangle.branch", projectID: id, worktreeID: tree["id"].string, depth: 1))
-                    next += project["sessions"].array.filter { $0["worktreeId"] == tree["id"] }.map { sessionRow($0, depth: 2) }
+                    next += model.orderedSessions(project["sessions"].array.filter { $0["worktreeId"] == tree["id"] }).map { sessionRow($0, depth: 2) }
                 }
             }
             let connections = model.groups.first { $0["id"].string == model.groupID }?["sshConnections"].array ?? []
@@ -97,11 +100,11 @@ struct NativeSidebar: NSViewRepresentable {
                 next.append(Row(key: "ssh", name: localized("SSH connections", "SSH 连接"), symbol: nil))
                 for connection in connections {
                     next.append(Row(key: "q:" + (connection["id"].string ?? ""), name: connection["name"].string ?? "SSH", symbol: "network"))
-                    next += connection["sessions"].array.map { sessionRow($0, depth: 1) }
+                    next += model.orderedSessions(connection["sessions"].array).map { sessionRow($0, depth: 1) }
                 }
             }
             next += [Row(key: "sessions", name: localized("Sessions", "会话"), symbol: nil)]
-                + model.sessionEntries.filter { $0.projectId == nil && $0.session["ssh"] == .null }.map { sessionRow($0.session, depth: 0) }
+                + model.orderedSessionEntries.filter { $0.projectId == nil && $0.session["ssh"] == .null }.map { sessionRow($0.session, depth: 0) }
             let section = model.sidebarSection
             let query = model.sidebarQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             next = next.filter { row in
@@ -112,7 +115,7 @@ struct NativeSidebar: NSViewRepresentable {
                 return matchesSection && (query.isEmpty || row.name.localizedCaseInsensitiveContains(query))
             }
             if section == "sessions" {
-                next = [Row(key: "sessions", name: localized("Sessions", "会话"), symbol: nil)] + model.sessionEntries.filter {
+                next = [Row(key: "sessions", name: localized("Sessions", "会话"), symbol: nil)] + model.orderedSessionEntries.filter {
                     query.isEmpty || ($0.session["name"].string ?? "").localizedCaseInsensitiveContains(query)
                 }.map { sessionRow($0.session, depth: 0) }
             }
@@ -134,14 +137,30 @@ struct NativeSidebar: NSViewRepresentable {
 
         func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
         func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
-            guard rows.indices.contains(row), rows[row].key.hasPrefix("p:"), let model,
-                  !model.busy, !model.gitFavoritesRecoveryPresented, model.settings["projectOrder"].string != "name" else { return nil }
+            guard rows.indices.contains(row), let model, !model.busy,
+                  !model.gitFavoritesRecoveryPresented, !model.worktreeDeletionPresented else { return nil }
+            if rows[row].key.hasPrefix("s:") {
+                let id = String(rows[row].key.dropFirst(2))
+                dragSession = id; dragProject = nil; dragRevision = model.state?.snapshot.revision
+                let item = NSPasteboardItem(); item.setString(id, forType: Self.sessionDragType)
+                return item
+            }
+            guard rows[row].key.hasPrefix("p:"), model.settings["projectOrder"].string != "name" else { return nil }
             let id = String(rows[row].key.dropFirst(2))
-            dragProject = id; dragRevision = model.state?.snapshot.revision
+            dragProject = id; dragSession = nil; dragRevision = model.state?.snapshot.revision
             let item = NSPasteboardItem(); item.setString(id, forType: Self.projectDragType)
             return item
         }
         func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int, proposedDropOperation operation: NSTableView.DropOperation) -> NSDragOperation {
+            if let id = info.draggingPasteboard.string(forType: Self.sessionDragType) {
+                guard info.draggingSource as? NSTableView === tableView, let model, !model.busy,
+                      !model.gitFavoritesRecoveryPresented, !model.worktreeDeletionPresented,
+                      id == dragSession, dragRevision != nil, rows.indices.contains(row), rows[row].key.hasPrefix("s:") else { return [] }
+                let target = String(rows[row].key.dropFirst(2))
+                guard target != id, model.sessionOrderPeers(id).contains(where: { $0.sessionID == target }) else { return [] }
+                tableView.setDropRow(row, dropOperation: .above)
+                return .move
+            }
             guard info.draggingSource as? NSTableView === tableView, let model, !model.busy,
                   !model.gitFavoritesRecoveryPresented, let id = info.draggingPasteboard.string(forType: Self.projectDragType),
                   id == dragProject, dragRevision != nil, row >= 0 && row <= rows.count else { return [] }
@@ -154,6 +173,14 @@ struct NativeSidebar: NSViewRepresentable {
             return .move
         }
         func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int, dropOperation: NSTableView.DropOperation) -> Bool {
+            if let id = info.draggingPasteboard.string(forType: Self.sessionDragType) {
+                guard self.tableView(tableView, validateDrop: info, proposedRow: row, proposedDropOperation: dropOperation) == .move,
+                      let model, let revision = dragRevision else { return false }
+                let target = String(rows[row].key.dropFirst(2))
+                Task { await model.moveSessionOrder(id, target: target, after: false, revision: revision) }
+                dragSession = nil; dragRevision = nil
+                return true
+            }
             guard self.tableView(tableView, validateDrop: info, proposedRow: row, proposedDropOperation: dropOperation) == .move,
                   let model, let id = dragProject, let revision = dragRevision else { return false }
             let target = row < rows.count ? String(rows[row].key.dropFirst(2)) : nil
@@ -161,6 +188,9 @@ struct NativeSidebar: NSViewRepresentable {
             Task { await model.moveProjectOrder(id, before: target, revision: revision) }
             dragProject = nil; dragRevision = nil
             return true
+        }
+        func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+            dragSession = nil; dragProject = nil; dragRevision = nil
         }
         func menuNeedsUpdate(_ menu: NSMenu) {
             menu.removeAllItems()
@@ -174,12 +204,8 @@ struct NativeSidebar: NSViewRepresentable {
             let row = rows[index]
             if row.key.hasPrefix("s:") {
                 let id = String(row.key.dropFirst(2))
-                for (title, action) in [(localized("Rename session", "重命名会话"), #selector(renameSession(_:))), (localized("Close session", "关闭会话"), #selector(closeSession(_:)))] {
-                    let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
-                    item.target = self; item.representedObject = id
-                    item.isEnabled = !model.busy && !model.gitFavoritesRecoveryPresented
-                    menu.addItem(item)
-                }
+                let actions = NativeSessionMenuActions(model: model, id: id)
+                sessionMenuActions = actions; actions.populate(menu)
                 return
             }
             guard row.key.hasPrefix("p:") || row.worktreeID != nil else { return }
@@ -222,10 +248,6 @@ struct NativeSidebar: NSViewRepresentable {
                 menu.addItem(deletion)
             }
         }
-        @objc private func renameSession(_ item: NSMenuItem) {
-            guard let id = item.representedObject as? String else { return }
-            model?.renameSession(id)
-        }
         @objc private func renameProject(_ item: NSMenuItem) {
             guard let id = item.representedObject as? String else { return }
             model?.renameProject(id)
@@ -255,10 +277,6 @@ struct NativeSidebar: NSViewRepresentable {
             guard let id = item.representedObject as? String, let model else { return }
             Task { await model.mutate("project.remove", ["id": .string(id)]) }
         }
-        @objc private func closeSession(_ item: NSMenuItem) {
-            guard let id = item.representedObject as? String, let model else { return }
-            Task { await model.closeSession(id: id) }
-        }
         @objc private func refreshWorktrees(_ item: NSMenuItem) {
             guard let id = item.representedObject as? String, let model else { return }
             Task { @MainActor in await model.refreshWorktrees(id) }
@@ -274,6 +292,7 @@ struct NativeSidebar: NSViewRepresentable {
             guard rows.indices.contains(row) else { return nil }
             let item = rows[row]
             let cell = NSTableCellView()
+            cell.identifier = NSUserInterfaceItemIdentifier("native-sidebar-row-" + item.key)
             let text = NSTextField(labelWithString: item.name)
             let settings = model?.settings ?? .null
             let palette = NativePreferences.interfacePalette(settings, catalog: model?.settingsCatalog ?? .null)

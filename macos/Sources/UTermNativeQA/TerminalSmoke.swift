@@ -66,6 +66,7 @@ enum TerminalSmoke {
 
         try await verifySidebarKeyboard(model: model, window: window, first: firstID, second: second.id)
         report["sidebarKeyboardSelectionRetainedFocus"] = true
+        let sessionCaptures = try await verifySessionMenus(model: model, window: window, first: first, second: second, report: &report)
 
         window.performClose(nil)
         guard !window.isVisible else { throw BridgeFailure(code: "SMOKE_HIDE", message: "Close did not hide the native window") }
@@ -74,7 +75,7 @@ enum TerminalSmoke {
         window.makeKeyAndOrderFront(nil)
         report["hideAndReopenRetainedOutput"] = window.isVisible
 
-        var captures: [String] = [loadCapture, vimCapture]
+        var captures: [String] = [loadCapture, vimCapture] + sessionCaptures
         guard let settingsMenu = NSApp.mainMenu?.items.first?.submenu,
               let item = settingsMenu.items.first(where: { $0.action.map(NSStringFromSelector) == "settings" }),
               let action = item.action, NSApp.sendAction(action, to: item.target, from: item) else {
@@ -265,6 +266,63 @@ enum TerminalSmoke {
             }
             NSApp.postEvent(event, atStart: false)
         }
+    }
+
+    private static func verifySessionMenus(model: WorkspaceModel, window: NSWindow, first: TerminalSession, second: TerminalSession, report: inout [String: Any]) async throws -> [String] {
+        guard let content = window.contentView,
+              let table = descendants(content).first(where: { $0.identifier?.rawValue == "native-sidebar" }) as? NSTableView,
+              let coordinator = table.delegate as? NativeSidebar.Coordinator,
+              let bridge = model.bridge, let path = WorkspaceModel.argument("--terminal-smoke-report") else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Native session menu context is missing") }
+        let entries = model.state?.sessions.map(\.session) ?? []
+        let generations = [first.generation, second.generation]
+        let views = [ObjectIdentifier(first.view), ObjectIdentifier(second.view)]
+        func menu(_ id: String) throws -> NSMenu {
+            guard let row = (0..<table.numberOfRows).first(where: { table.view(atColumn: 0, row: $0, makeIfNecessary: true)?.identifier?.rawValue == "native-sidebar-row-s:" + id }) else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Native session row is missing") }
+            let menu = NSMenu(); coordinator.populate(menu, row: row); return menu
+        }
+        func click(_ id: String, _ selector: String, value: String? = nil) throws {
+            let menu = try menu(id)
+            guard let index = menu.items.firstIndex(where: { $0.action.map(NSStringFromSelector) == selector && $0.isEnabled && (value == nil || $0.representedObject as? String == value) }) else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Native session action is unavailable: " + selector) }
+            menu.performActionForItem(at: index)
+        }
+        try await wait("Render session menu targets") { !model.busy && table.numberOfRows > 0 }
+        try click(second.id, "pin:", value: "true")
+        try await wait("Persist session pin through its actual menu") { !model.busy && model.state?.sessions.first(where: { $0.sessionID == second.id })?.session["pinned"].bool == true }
+        try click(second.id, "pin:", value: "false")
+        try await wait("Restore session pin group") { !model.busy && model.state?.sessions.first(where: { $0.sessionID == second.id })?.session["pinned"].bool == false }
+        try click(second.id, "up:")
+        try await wait("Persist session menu ordering") { !model.busy && model.sessionOrderPeers(first.id).first?.sessionID == second.id }
+        try click(second.id, "down:")
+        try await wait("Restore session menu order") { !model.busy && model.sessionOrderPeers(first.id).first?.sessionID == first.id }
+        guard let revision = model.state?.snapshot.revision else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Missing menu revision") }
+        let stale = try menu(first.id)
+        let previous = model.settings["breakInterval"]
+        let next: JSONValue = .number(previous.number == 31 ? 32 : 31)
+        _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(revision), "patch": .object(["breakInterval": next])]))
+        guard let pin = stale.items.firstIndex(where: { $0.action.map(NSStringFromSelector) == "pin:" }) else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Missing stale pin action") }
+        stale.performActionForItem(at: pin)
+        try await wait("Reject a stale session menu write") { !model.busy && !model.error.isEmpty }
+        let snapshot = try await bridge.snapshot()
+        guard snapshot.document.settings["breakInterval"] == next,
+              model.state?.sessions.map(\.session) == entries else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Stale menu lost a peer setting or changed sessions") }
+        await model.reload(); await model.patchSettings(["breakInterval": previous])
+        try click(first.id, "ungroup")
+        try await wait("Ungroup an existing native session") { !model.busy && model.selectedID == first.id && model.state?.layout["kind"].string == "leaf" && first.view.window === window }
+        let ungrouped = "native-session-ungrouped.png"
+        try await capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(ungrouped))
+        try click(second.id, "group:", value: first.id)
+        try await wait("Group existing native sessions without restarting them") { !model.busy && model.state?.layout["kind"].string == "split" && first.view.window === window && second.view.window === window }
+        let grouped = "native-session-grouped.png"
+        try await capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(grouped))
+        guard [first.generation, second.generation] == generations,
+              [ObjectIdentifier(first.view), ObjectIdentifier(second.view)] == views,
+              model.state?.sessions.map(\.session) == entries,
+              (try await bridge.call("host.status"))["sessions"].array.filter({ $0["running"].bool == true }).count == 2 else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Session menus replaced a descriptor, generation or native terminal view") }
+        await model.selectSession(first.id)
+        report["nativeSessionMenuPinOrderGroupUngroupAndStaleWrite"] = true
+        report["sessionMenuRetainsPTYGenerationsAndViews"] = true
+        report["sessionDragGestureExecuted"] = false
+        return [ungrouped, grouped]
     }
 
     private static func verifySidebarKeyboard(model: WorkspaceModel, window: NSWindow, first: String, second: String) async throws {

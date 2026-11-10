@@ -119,6 +119,7 @@ final class WorkspaceModel: ObservableObject {
     var groupItems: [NativeListItem] { groups.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var projectItems: [NativeListItem] { projects.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var sessionEntries: [CoreSessionEntry] { (state?.sessions ?? []).filter { $0.workspaceId == groupID } }
+    func revealSelectedPane() { paneZoomed = false; focusRevision += 1 }
     func measureToolbar(_ height: CGFloat) { if abs(toolbarHeight - height) > 0.1 { toolbarHeight = height } }
 
     static var applicationProfile: NativeApplicationProfile {

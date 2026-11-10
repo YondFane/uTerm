@@ -225,12 +225,26 @@ satisfy the full screenshot grid or two-client acceptance.
 `6783ae035fabaec71e595b4b5fd312216ce761b7` 的 ARM Personal 编译及 43 项 Swift 测试通过。
 [原始证据](https://github.com/YondFane/uTerm/actions/runs/42767545238/artifacts/13740209277)保留 21 组设置场景，包含已加载的 Maven 与数据库控件。采集器在 Maven 重读暂时禁用导航时点击下一分类，故运行失败。两种原生采集器现均等待真实导航恢复可用，并在窗口布局后核对加载完成。Maven 设置复用已加载草稿，直至显式重读；此次不完整结果不满足截图网格或两版一致性验收。
 
+Shared session operations add pinning, peer reorder, existing-session grouping and pane
+repositioning. Grouping follows the ordinary TypeScript algorithm's alternating nested axes and leaf
+pruning; ungrouping selects its target. Revision conflicts and invalid roster/Worktree/pin targets
+fail without modifying the stored document. Native sidebar/tab menus expose these operations, and
+the sidebar drag path accepts its own table's captured source only. Actual-menu QA checks preserved
+PTY generations/views and captures `native-session-ungrouped.png` and `native-session-grouped.png`.
+The native drag gesture remains explicitly unexecuted; no session acceptance row is closed from
+shared-core tests alone.
+
+共享会话操作增加置顶、同组重排、已有会话组合及面板位置调整。组合遵循普通版 TypeScript 算法的嵌套轴交替和叶子裁剪，取消组合选中操作目标。revision 冲突或非法列表／Worktree／置顶组目标不会修改存储文档。原生侧栏及标签菜单提供这些操作，侧栏拖动仅接受自身表格记录的来源。真实菜单 QA 检查 PTY
+generation／视图未变，并采集
+`native-session-ungrouped.png`、`native-session-grouped.png`。原生拖动手势明确标为未执行，不以共享核心测试单独完成会话验收。
+
 ## Local checks / 本地检查
 
-Linux checks pass 444 existing Node tests with 11 platform skips, 18 Python package/evidence policy
-tests, ten paired-evidence policy tests, 19 backend tests with QA enabled (one ignored),
-TypeScript/production build, repository formatting, shell syntax and documentation checks. The
-Python fixtures validate rejection rules only; they are not application screenshots. Swift
-compilation and real-window interaction have not run for this candidate.
+Linux checks pass 445 existing Node tests with 11 platform skips and 236 shared-core tests (17
+explicitly ignored), including five session tests and the Rust/TypeScript grouping comparison; 18
+Python package/evidence policy tests, ten paired-evidence policy tests, 19 backend tests with QA
+enabled (one ignored), TypeScript/production build, repository formatting, shell syntax and
+documentation checks. The Python fixtures validate rejection rules only; they are not application
+screenshots. Swift compilation and real-window interaction have not run for this candidate.
 
-Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、18 项 Python 安装包／证据策略测试、十项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。
+Linux 已通过 445 项现有 Node 回归（11 项按平台跳过）及 236 项共享核心测试（17 项显式忽略），包含五项会话测试及 Rust／TypeScript 组合算法对照；另通过 18 项 Python 安装包／证据策略测试、十项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。

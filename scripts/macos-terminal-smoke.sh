@@ -57,7 +57,9 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
         assert first[key],(key,first)
     assert first['splitSessionCount']==2 and first['runningProcessesBeforeQuit']==2,first
     assert abs(first['nativeToolbarHeight']-40)<1,first
-    assert len(first['captures'])==13 and 'native-vim-edit.png' in first['captures'] and 'native-terminal-slow-consumer.png' in first['captures'],first
+    assert first['nativeSessionMenuPinOrderGroupUngroupAndStaleWrite'] and first['sessionMenuRetainsPTYGenerationsAndViews']
+    assert not first['sessionDragGestureExecuted']
+    assert len(first['captures'])==15 and 'native-vim-edit.png' in first['captures'] and 'native-terminal-slow-consumer.png' in first['captures'],first
     vim=first['realVim']
     for key in ['passed','alternateScreenReturned','nativeTextInput','nativeClipboardPaste','sameGenerationAndView','shellResumed']: assert vim[key],(key,vim)
     assert not vim['manualIMEAcceptance'] and not vim['performanceComparison'],vim

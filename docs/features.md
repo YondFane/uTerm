@@ -82,6 +82,16 @@ addresses its own ID and generation, retaining the selected session. Files, cont
 open use segmented tool navigation. These interactions use the existing shared operations and
 conflict protections.
 
+Session context menus add pin/unpin, move up/down, Group with, Ungroup and Copy session link.
+Grouping existing sessions and ungrouping select the moved session while retaining its descriptor,
+PTY generation and terminal view. Reordering stays within the same roster, Worktree and pin group;
+local sidebar drags capture a revision and reject external sources or stale writes. Native menu QA
+checks pin/order/group/ungroup and a racing settings write, and captures
+`native-session-ungrouped.png` and `native-session-grouped.png`. Shared-core tests cover nested
+layouts, scope failures and reopen; an actual native drag gesture and current-source screenshots
+remain pending. Linux passes 445 Node regressions (11 platform skips) and 236 shared-core tests (17
+explicitly ignored), including five session tests and the Rust/TypeScript grouping comparison.
+
 Projects show their sessions and Worktrees as nested rows. Use the project disclosure control or
 context menu to collapse children while their terminals keep running. The context menu includes
 rename, pin/unpin, move up/down, move to another workspace and removal of an empty project. Manual

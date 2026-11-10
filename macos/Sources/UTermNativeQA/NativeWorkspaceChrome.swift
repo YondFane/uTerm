@@ -109,8 +109,9 @@ struct NativeSessionTabs: View {
     var body: some View {
         ScrollView(.horizontal) {
             HStack(spacing: 2) {
-                ForEach(model.sessionEntries, id: \.sessionID) { entry in
+                ForEach(model.orderedSessionEntries, id: \.sessionID) { entry in
                     HStack(spacing: 6) {
+                        if entry.session["pinned"].bool == true { Image(systemName: "pin.fill").font(.caption2) }
                         Button { Task { await model.selectSession(entry.sessionID) } } label: {
                             Label(entry.session["name"].string ?? localized("Terminal", "终端"), systemImage: entry.session["agent"].string == nil ? "terminal" : "sparkle")
                                 .lineLimit(1).frame(maxWidth: 180)
@@ -121,8 +122,7 @@ struct NativeSessionTabs: View {
                     .padding(.horizontal, 10).padding(.vertical, 7)
                     .background(model.selectedID == entry.sessionID ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
                     .contextMenu {
-                        Button(localized("Rename session", "重命名会话")) { model.renameSession(entry.sessionID) }
-                        Button(localized("Close session", "关闭会话")) { Task { await model.closeSession(id: entry.sessionID) } }
+                        NativeSessionContextMenu(model: model, id: entry.sessionID)
                     }
                     .accessibilityIdentifier("native-session-tab-" + entry.sessionID)
                 }
