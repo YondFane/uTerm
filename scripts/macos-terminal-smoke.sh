@@ -53,7 +53,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                     try: helper.wait(timeout=10)
                     except subprocess.TimeoutExpired: helper.kill();helper.wait();raise
     first,second=reports
-    for key in ['unicodeAndAnsiParsed','alternateScreenReturned','hideAndReopenRetainedOutput','viewIdentityRetained','sidebarKeyboardSelectionRetainedFocus','settingsOpenedFromNativeMenu','settingsDismissedWithReturn']:
+    for key in ['unicodeAndAnsiParsed','alternateScreenReturned','hideAndReopenRetainedOutput','viewIdentityRetained','sidebarKeyboardSelectionRetainedFocus','settingsOpenedFromNativeMenu','settingsDismissedWithCommandW']:
         assert first[key],(key,first)
     assert first['splitSessionCount']==2 and first['runningProcessesBeforeQuit']==2,first
     assert abs(first['nativeToolbarHeight']-40)<1,first

@@ -27,6 +27,8 @@ final class WorkspaceModel: ObservableObject {
     @Published var nameDraft: NameDraft?
     @Published var fullScreen = false
     @Published var sidebarVisible = true
+    @Published var sidebarSection = "all"
+    @Published var sidebarQuery = ""
     @Published var inspectorVisible = false
     @Published var paneZoomed = false
     @Published private(set) var breakReminderVisible = false
@@ -356,8 +358,8 @@ final class WorkspaceModel: ObservableObject {
         }
     }
 
-    func closeSession() async {
-        guard let id = selectedID, let terminal = terminals[id], let bridge else { return }
+    func closeSession(id target: String? = nil) async {
+        guard !busy, let id = target ?? selectedID, let terminal = terminals[id], let bridge else { return }
         if let operation { _ = await operation.value }
         do {
             await terminal.drainInput()
@@ -365,6 +367,24 @@ final class WorkspaceModel: ObservableObject {
             _ = try await bridge.call("host.close", params: .object(["id": .string(id), "generation": terminal.generation.map(JSONValue.string) ?? .null]))
             if await mutate("session.remove", ["id": .string(id)]) { focusRevision += 1 }
         } catch { self.error = error.localizedDescription }
+    }
+
+    func renameSession(_ id: String) {
+        guard !busy, !gitFavoritesRecoveryPresented, let state,
+              let entry = sessionEntries.first(where: { $0.sessionID == id }) else { return }
+        let revision = state.snapshot.revision
+        let alert = NSAlert()
+        alert.messageText = localized("Rename session", "重命名会话")
+        let field = NSTextField(string: entry.session["name"].string ?? "")
+        field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: localized("Save", "保存"))
+        alert.addButton(withTitle: localized("Cancel", "取消"))
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        Task { await mutate("session.rename", ["id": .string(id), "name": .string(name)], revision: revision) }
     }
 
     func newWorkspace() {

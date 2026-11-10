@@ -69,6 +69,24 @@ close sessions, quit and back up this directory. Never restore old data over an 
 shared core retains conflict checks, draft recovery and explicit rollback exports; installing the
 app does not automatically restore old data or perform the Tauri-to-native cutover.
 
+#### Native workspace interaction
+
+The native toolbar opens complete settings directly, as does the app menu. Settings retain their
+save/reload/reset behavior and unsaved drafts when the window is hidden. Return saves an edited
+settings draft; Command-W hides the window. The local CLI control switch remains an immediate
+service control in General.
+
+The sidebar includes workspace selection, category navigation and text filtering. A horizontal
+session strip switches sessions and offers rename/close actions. Closing a background session
+addresses its own ID and generation, retaining the selected session. Files, content search and quick
+open use segmented tool navigation. These interactions use the existing shared operations and
+conflict protections.
+
+[Two-client acceptance](native-ui-parity.md) covers the full matching scope, including remaining
+checks for drag/group operations, layout persistence, content tabs and workbench integration. The
+candidate has not yet completed native compilation or same-source paired screenshot acceptance.
+Linux regressions do not establish complete functional or visual parity.
+
 #### Configure personal updater signing
 
 Run these commands locally from the checkout, using a new key directory outside the repository. Keep

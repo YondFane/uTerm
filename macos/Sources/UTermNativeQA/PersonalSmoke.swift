@@ -69,6 +69,14 @@ enum PersonalSmoke {
             guard let terminal = model.selectedTerminal else { throw BridgeFailure(code: "PERSONAL_PTY", message: "Personal terminal is missing") }
             terminal.enqueue(Data("printf 'PERSONAL_%s 中文\\n' READY\r".utf8))
             try await TerminalSmoke.wait("Personal Release renders Unicode PTY output") { terminal.text.contains("PERSONAL_READY 中文") && terminal.view.window === window }
+            let originalID = terminal.id
+            let originalView = ObjectIdentifier(terminal.view)
+            let originalGeneration = terminal.generation
+            await model.newTerminal()
+            try await TerminalSmoke.wait("Create a second real tab") { model.selectedID != originalID && model.selectedTerminal?.generation != nil }
+            guard let peerID = model.selectedID else { throw BridgeFailure(code: "PERSONAL_TABS", message: "Second tab is missing") }
+            await model.selectSession(originalID)
+            try await TerminalSmoke.wait("Switch back without replacing the terminal") { terminal.view.window === window && model.selectedID == originalID }
             var captures: [String] = []
             var appearances: [String: String] = [:]
             var updateStatuses: [String: String] = [:]
@@ -94,6 +102,39 @@ enum PersonalSmoke {
                 captures.append(name)
                 settings.window.orderOut(nil)
             }
+            var workspaceScenes: [[String: Any]] = []
+            model.sidebarSection = "all"
+            model.sidebarQuery = ""
+            model.showInspector(.files)
+            for language in ["en", "zh-Hans"] {
+                for appearance in ["dark", "light"] {
+                    await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
+                    for width in [1100, 640] {
+                        window.makeKeyAndOrderFront(nil)
+                        window.setContentSize(NSSize(width: width, height: 720))
+                        try await Task.sleep(for: .milliseconds(200))
+                        guard ObjectIdentifier(terminal.view) == originalView, terminal.generation == originalGeneration,
+                              model.selectedID == originalID, terminal.view.window === window else {
+                            throw BridgeFailure(code: "PERSONAL_TABS", message: "Workspace chrome replaced the selected terminal")
+                        }
+                        let name = "personal-\(phase)-workspace-\(language)-\(appearance)-\(width).png"
+                        try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
+                        captures.append(name)
+                        workspaceScenes.append(["screenshot": name, "language": language, "appearance": appearance,
+                            "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0),
+                            "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-session-tabs-files",
+                            "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""])
+                    }
+                }
+            }
+            await model.closeSession(id: peerID)
+            guard model.selectedID == originalID, terminal.generation == originalGeneration,
+                  model.sessionEntries.contains(where: { $0.sessionID == originalID }),
+                  !model.sessionEntries.contains(where: { $0.sessionID == peerID }) else {
+                throw BridgeFailure(code: "PERSONAL_TABS", message: "Closing a background tab changed the selected session")
+            }
+            report["backgroundTabCloseRetainedSelectedGeneration"] = true
+            report["workspaceScenes"] = workspaceScenes
             window.makeKeyAndOrderFront(nil)
             let capture = "personal-\(phase)-terminal.png"
             try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(capture))

@@ -17,6 +17,26 @@ class PersonalPackageTests(unittest.TestCase):
                          UTermSourceSHA="b" * 40, CFBundleShortVersionString="0.2.4", LSMinimumSystemVersion="14.0",
                          SUEnableAutomaticChecks=False, SUAutomaticallyUpdate=False, SUAllowsAutomaticUpdates=False)
 
+    def workspace_evidence(self, phase):
+        scenes = [dict(language=language, appearance=appearance, width=width, height=720,
+                       screenshot=f"personal-{phase}-workspace-{language}-{appearance}-{width}.png",
+                       sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64",
+                       system="macOS fixture", scenario="toolbar-sidebar-two-session-tabs-files")
+                  for language in ["en", "zh-Hans"] for appearance in ["dark", "light"] for width in [1100, 640]]
+        return dict(backgroundTabCloseRetainedSelectedGeneration=True, workspaceScenes=scenes,
+                    captures=[scene["screenshot"] for scene in scenes])
+
+    def test_workspace_acceptance_rejects_missing_duplicate_or_wrong_source_screenshots(self):
+        for mutation in ["missing", "duplicate", "source", "file", "background-close"]:
+            report = self.workspace_evidence("initial")
+            if mutation == "missing": report["workspaceScenes"].pop()
+            if mutation == "duplicate": report["workspaceScenes"][0] = report["workspaceScenes"][1]
+            if mutation == "source": report["workspaceScenes"][0]["testedMergeSHA"] = "c" * 40
+            if mutation == "file": report["captures"].pop()
+            if mutation == "background-close": report["backgroundTabCloseRetainedSelectedGeneration"] = False
+            with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
+                package.validate_workspace_scenes(report, "a" * 40, "b" * 40, "initial")
+
     def test_mislabeled_qa_or_stale_source_cannot_be_distributed_as_personal(self):
         package.validate_info(self.info, "a" * 40, "b" * 40)
         for key, value in [("CFBundleIdentifier", "sh.uterm.desktop.qa.native"), ("UTermSourceSHA", "c" * 40),
@@ -36,7 +56,7 @@ class PersonalPackageTests(unittest.TestCase):
                     package.validate_info({**self.info, key: value}, "a" * 40, "b" * 40)
 
     def test_selected_dark_setting_does_not_replace_actual_window_appearance_evidence(self):
-        report = dict(passed=True, automaticOptInCannotStartUpdater=True, explicitCloseAndIdleHostShutdown=True,
+        report = dict(**self.workspace_evidence("replacement"), passed=True, automaticOptInCannotStartUpdater=True, explicitCloseAndIdleHostShutdown=True,
                       sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, profileRetainedAfterAppReplacement=True,
                       settingsWindowAppearances={"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"})
         package.validate_smoke_report(report, "a" * 40, "b" * 40, "replacement")
@@ -46,7 +66,7 @@ class PersonalPackageTests(unittest.TestCase):
             package.validate_smoke_report(report, "a" * 40, "b" * 40, "replacement")
 
     def test_update_status_evidence_must_follow_the_selected_language(self):
-        report = dict(passed=True, automaticOptInAndOutVerified=True, updateMode="automatic",
+        report = dict(**self.workspace_evidence("initial"), passed=True, automaticOptInAndOutVerified=True, updateMode="automatic",
                       explicitCloseAndIdleHostShutdown=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
                       settingsWindowAppearances={"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"},
                       localizedUpdateStatuses={"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"})

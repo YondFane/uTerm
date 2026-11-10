@@ -80,8 +80,10 @@ enum TerminalSmoke {
               let action = item.action, NSApp.sendAction(action, to: item.target, from: item) else {
             throw BridgeFailure(code: "SMOKE_SETTINGS", message: "Native Settings menu action is missing")
         }
-        try await wait("Present Settings from its native menu") { model.settingsPresented && window.attachedSheet?.isVisible == true }
-        guard let sheet = window.attachedSheet else { throw BridgeFailure(code: "SMOKE_SETTINGS", message: "Settings sheet is missing") }
+        try await wait("Present full Settings from its native menu") {
+            model.settingsPresented && NSApp.windows.contains { $0.identifier?.rawValue == "native-full-settings" && $0.isVisible }
+        }
+        guard let sheet = NSApp.windows.first(where: { $0.identifier?.rawValue == "native-full-settings" && $0.isVisible }) else { throw BridgeFailure(code: "SMOKE_SETTINGS", message: "Full Settings window is missing") }
         try await Task.sleep(for: .milliseconds(150))
         if let reportPath = WorkspaceModel.argument("--terminal-smoke-report") {
             let name = "native-settings.png"
@@ -90,9 +92,9 @@ enum TerminalSmoke {
         }
         report["settingsOpenedFromNativeMenu"] = true
         report["settingsScene"] = ["language": model.settings["language"].string ?? "system", "appearance": model.settings["appearance"].string ?? "system", "windowWidth": sheet.frame.width] as [String: Any]
-        try postKey(window: sheet, code: 36, characters: "\r")
-        try await wait("Dismiss Settings with Return") { !model.settingsPresented && window.attachedSheet == nil }
-        report["settingsDismissedWithReturn"] = true
+        try postKey(window: sheet, code: 13, characters: "w", modifiers: .command)
+        try await wait("Dismiss full Settings with Command-W") { !model.settingsPresented && !sheet.isVisible }
+        report["settingsDismissedWithCommandW"] = true
         for language in ["en", "zh-Hans"] {
             for appearance in ["dark", "light"] {
                 await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
@@ -253,9 +255,9 @@ enum TerminalSmoke {
         [view] + view.subviews.flatMap(descendants)
     }
 
-    private static func postKey(window: NSWindow, code: UInt16, characters: String) throws {
+    private static func postKey(window: NSWindow, code: UInt16, characters: String, modifiers: NSEvent.ModifierFlags = []) throws {
         for type in [NSEvent.EventType.keyDown, .keyUp] {
-            guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
+            guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: modifiers,
                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
                 context: nil, characters: characters, charactersIgnoringModifiers: characters,
                 isARepeat: false, keyCode: code) else {

@@ -149,6 +149,16 @@ struct NativeSettingsView: View {
             }
             NativeUpdateStatus(model: workspace.updates).id(NativeLocale.preference)
             NativeLoginItemsView(model: model.login).id(NativeLocale.preference)
+            Section(localized("Local control", "本地控制")) {
+                LocalControlCheckbox(model: workspace)
+                if let directory = workspace.controlStatus["directory"].string {
+                    Text(localized("CLI data directory: ", "CLI 数据目录：") + directory).font(.caption).textSelection(.enabled)
+                }
+                if !workspace.controlError.isEmpty {
+                    Text(workspace.controlError).foregroundStyle(.red)
+                    Button(localized("Retry control service", "重试控制服务")) { Task { await workspace.startControl() } }.disabled(workspace.controlBusy)
+                }
+            }
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
             number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）")
             Section(localized("Sidebar", "侧栏")) {
@@ -240,7 +250,7 @@ struct NativeSettingsView: View {
                 Spacer()
                 if model.dirty { Text(localized("Unsaved changes", "有未保存修改")).foregroundStyle(.secondary) }
                 Button(localized("Reload", "重新读取")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }.disabled(model.busy || model.frozen)
-                Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.disabled(!model.dirty || model.busy || model.frozen)
+                Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.keyboardShortcut(.defaultAction).disabled(!model.dirty || model.busy || model.frozen)
             }.padding()
         }.frame(minWidth: 640, minHeight: 480).task { await model.reload() }
         .confirmationDialog(localized("Replace this draft with default settings?", "用默认设置替换当前草稿？"), isPresented: $confirmReset) {
@@ -316,10 +326,16 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
         model = NativeSettingsModel(workspace: workspace)
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 620), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
         super.init()
+        window.identifier = NSUserInterfaceItemIdentifier("native-full-settings")
         window.title = localized("Settings", "设置"); window.isReleasedWhenClosed = false; window.delegate = self
         window.contentView = NSHostingView(rootView: NativeSettingsView(model: model, workspace: workspace)); window.center()
     }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { sender.orderOut(nil); return false }
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard !model.busy, !model.login.busy, !model.frozen else { return false }
+        sender.orderOut(nil)
+        model.workspace.settingsPresented = false
+        return false
+    }
     func prepareForQuit() async -> Bool {
         guard !model.busy, !model.login.busy else { return false }
         model.frozen = true

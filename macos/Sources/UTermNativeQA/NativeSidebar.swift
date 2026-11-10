@@ -86,6 +86,15 @@ struct NativeSidebar: NSViewRepresentable {
                     let name = (entry.session["name"].string ?? "") + (activity.isEmpty ? "" : " · " + activity)
                     return Row(key: "s:" + entry.sessionID, name: name, symbol: entry.session["agent"].string == nil ? "terminal" : "sparkle")
                 }
+            let section = model.sidebarSection
+            let query = model.sidebarQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+            next = next.filter { row in
+                let matchesSection = section == "all"
+                    || (section == "projects" && (row.key == "projects" || row.key.hasPrefix("p:") || row.key.hasPrefix("w:")))
+                    || (section == "sessions" && (row.key == "sessions" || row.key.hasPrefix("s:")))
+                    || (section == "ssh" && (row.key == "ssh" || row.key.hasPrefix("q:")))
+                return matchesSection && (query.isEmpty || row.name.localizedCaseInsensitiveContains(query))
+            }
             updating = true
             defer { updating = false }
             if next != rows || preferenceSignature != signature { rows = next; preferenceSignature = signature; table.reloadData() }
@@ -107,6 +116,16 @@ struct NativeSidebar: NSViewRepresentable {
             menu.removeAllItems()
             guard rows.indices.contains(index), let model else { return }
             let row = rows[index]
+            if row.key.hasPrefix("s:") {
+                let id = String(row.key.dropFirst(2))
+                for (title, action) in [(localized("Rename session", "重命名会话"), #selector(renameSession(_:))), (localized("Close session", "关闭会话"), #selector(closeSession(_:)))] {
+                    let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+                    item.target = self; item.representedObject = id
+                    item.isEnabled = !model.busy && !model.gitFavoritesRecoveryPresented
+                    menu.addItem(item)
+                }
+                return
+            }
             guard row.key.hasPrefix("p:") || row.worktreeID != nil else { return }
             let item = NSMenuItem(title: localized("Refresh Worktrees", "刷新 Worktree"), action: #selector(refreshWorktrees(_:)), keyEquivalent: "")
             item.target = self
@@ -121,6 +140,14 @@ struct NativeSidebar: NSViewRepresentable {
                 deletion.isEnabled = !model.busy && !model.worktreeDeletionPresented && !model.gitFavoritesRecoveryPresented && !sessions.contains(where: { $0["worktreeId"].string == worktreeID })
                 menu.addItem(deletion)
             }
+        }
+        @objc private func renameSession(_ item: NSMenuItem) {
+            guard let id = item.representedObject as? String else { return }
+            model?.renameSession(id)
+        }
+        @objc private func closeSession(_ item: NSMenuItem) {
+            guard let id = item.representedObject as? String, let model else { return }
+            Task { await model.closeSession(id: id) }
         }
         @objc private func refreshWorktrees(_ item: NSMenuItem) {
             guard let id = item.representedObject as? String, let model else { return }

@@ -532,7 +532,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     @objc private func toggleSidebar() { model.sidebarVisible.toggle() }
-    @objc private func settings() { model.settingsPresented = true }
+    @objc private func settings() { openFullSettings() }
     @objc private func checkForUpdates() {
         model.updates.check()
         if !model.updates.error.isEmpty {
@@ -634,6 +634,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func openFullSettings() {
         if fullSettingsWindow == nil { fullSettingsWindow = NativeSettingsWindow(workspace: model) }
         fullSettingsWindow?.window.appearance = window?.appearance
+        model.settingsPresented = true
         fullSettingsWindow?.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }

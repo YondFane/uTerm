@@ -56,8 +56,29 @@ def validate_info(info, head, tested):
 
 
 
+def validate_workspace_scenes(report, head, tested, phase):
+    assert report.get("backgroundTabCloseRetainedSelectedGeneration") is True
+    scenes = report.get("workspaceScenes", [])
+    expected = {(language, appearance, width) for language in ["en", "zh-Hans"]
+                for appearance in ["dark", "light"] for width in [1100, 640]}
+    assert len(scenes) == len(expected)
+    observed = set()
+    for scene in scenes:
+        identity = (scene["language"], scene["appearance"], scene["width"])
+        assert identity in expected and identity not in observed
+        observed.add(identity)
+        name = f"personal-{phase}-workspace-{identity[0]}-{identity[1]}-{identity[2]}.png"
+        assert scene["screenshot"] == name and name in report["captures"]
+        assert scene["sourceHeadSHA"] == head and scene["testedMergeSHA"] == tested
+        assert scene["platform"] == "macOS" and scene["architecture"] in ["arm64", "x86_64"]
+        assert scene["system"] and scene["height"] == 720
+        assert scene["scenario"] == "toolbar-sidebar-two-session-tabs-files"
+    assert observed == expected
+
+
 def validate_smoke_report(report, head, tested, phase):
     assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
+    validate_workspace_scenes(report, head, tested, phase)
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}

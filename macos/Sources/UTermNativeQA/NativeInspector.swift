@@ -88,7 +88,7 @@ struct NativeInspectorView: View {
                     Text(localized("Files", "文件")).tag(NativeInspectorModel.Mode.files)
                     Text(localized("Search", "搜索")).tag(NativeInspectorModel.Mode.search)
                     Text(localized("Quick open", "快速打开")).tag(NativeInspectorModel.Mode.quick)
-                }.labelsHidden()
+                }.labelsHidden().pickerStyle(.segmented)
                 Button { workspace.hideInspector() } label: { Image(systemName: "xmark") }.help(localized("Close tools", "关闭工具"))
             }
             if !model.directory.isEmpty { Text(URL(fileURLWithPath: model.directory).lastPathComponent).font(.caption).foregroundStyle(.secondary).lineLimit(1).help(model.directory) }

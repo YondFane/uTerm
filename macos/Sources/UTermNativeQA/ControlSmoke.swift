@@ -60,24 +60,27 @@ enum ControlSmoke {
               let action = item.action, NSApp.sendAction(action, to: item.target, from: item) else {
             throw BridgeFailure(code: "CONTROL_SMOKE", message: "Native Settings action missing")
         }
-        try await TerminalSmoke.wait("Show control settings") { window.attachedSheet?.isVisible == true }
+        try await TerminalSmoke.wait("Show full control settings") { NSApp.windows.contains { $0.identifier?.rawValue == "native-full-settings" && $0.isVisible } }
+        guard let settingsWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == "native-full-settings" && $0.isVisible }) else {
+            throw BridgeFailure(code: "CONTROL_SMOKE", message: "Full settings window is missing")
+        }
         var pressed = false
         for _ in 0..<40 {
-            if try pressControlToggle(in: window.attachedSheet!) { pressed = true; break }
+            if try pressControlToggle(in: settingsWindow) { pressed = true; break }
             try await Task.sleep(for: .milliseconds(50))
         }
         guard pressed else { throw BridgeFailure(code: "CONTROL_SMOKE", message: "Native control checkbox is unavailable") }
         try await TerminalSmoke.wait("Enable control through the native checkbox") { model.controlStatus["enabled"].bool == true && !model.controlBusy }
         let directory = URL(fileURLWithPath: path).deletingLastPathComponent()
-        try await TerminalSmoke.capture(window: window.attachedSheet!, path: directory.appendingPathComponent("native-control-settings.png"))
+        try await TerminalSmoke.capture(window: settingsWindow, path: directory.appendingPathComponent("native-control-settings.png"))
         let status = try await cli(root: root, args: ["status"])
         guard status["sessions"].number == 0 else { throw BridgeFailure(code: "CONTROL_SMOKE", message: "Status did not use the native snapshot") }
         let guarded = try await cli(root: root, args: ["sessions", "new", project.path], failure: true)
         guard guarded["error"].string?.contains("dialog") == true else { throw BridgeFailure(code: "CONTROL_SMOKE", message: "Modal guard did not reject the command") }
         report["settingsGuardRejectedWrite"] = true
         report["controlSettingsDriver"] = "Native NSButton.performClick target/action; not manual pointer input"
-        model.settingsPresented = false
-        try await TerminalSmoke.wait("Dismiss control settings") { window.attachedSheet == nil }
+        settingsWindow.performClose(nil)
+        try await TerminalSmoke.wait("Dismiss full control settings") { !settingsWindow.isVisible && !model.settingsPresented }
         let projects = try await cli(root: root, args: ["projects", "list"])
         guard projects.array.contains(where: { $0["name"].string == "Control QA" }) else { throw BridgeFailure(code: "CONTROL_SMOKE", message: "Project list did not use the native store") }
         let first = try await cli(root: root, args: ["sessions", "new", project.path])
