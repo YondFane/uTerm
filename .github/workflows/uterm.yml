@@ -15,7 +15,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        os: [macos-15, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     env:
@@ -48,7 +48,7 @@ jobs:
         shell: bash
         run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
           key: pnpm-${{ runner.os }}-${{ runner.arch }}-11-${{ hashFiles('pnpm-lock.yaml') }}
@@ -66,9 +66,13 @@ jobs:
           components: rustfmt
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
+        # Test concurrency does not change compiled dependencies; keep it out of the cache key.
+        # 测试并发数不改变依赖编译结果，因此不纳入缓存键。
+        env:
+          RUST_TEST_THREADS: ""
         with:
-          cache-on-failure: true
           shared-key: desktop-${{ matrix.os }}-${{ runner.arch }}
+          save-if: false
           workspaces: |
             src-tauri -> target
             crates/utermd-local -> target

@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # uTerm feature guide
@@ -1102,23 +1102,56 @@ protection or unresolved conflicts leave synchronization explicitly incomplete.
 
 #### Build dependency caches
 
-PR/branch CI and stable-release jobs cache the pnpm store and Cargo dependencies, including compiled
-dependencies under both `src-tauri/target` and `crates/utermd-local/target`. Rust debug/test and
-release artifacts remain separate. Cargo cache keys account for the runner image, CPU architecture,
-Rust compiler, build environment and both workspaces' manifests/lockfiles; pnpm keys include the OS,
-architecture, pnpm major version and `pnpm-lock.yaml`.
+Desktop CI uses the same macOS 15 ARM64 and Windows x64 runner families as stable builds; releases
+also build macOS 15 Intel. Their Cargo caches cover all four separate workspaces: `src-tauri`,
+`crates/utermd-local`, `crates/uterm-core` and `crates/uterm-ffi`. Rust debug/test and release
+dependencies remain separate. Cache keys retain compiler, build-environment, architecture and
+manifest/lockfile checks. Desktop tests still use four Rust test threads; only the cache action
+clears this runtime setting so it can restore the prewarmed compiler cache.
+
+Desktop, Windows candidate/updater and personal package jobs restore Cargo dependencies without
+saving large copies under each PR, branch or version tag. Desktop and personal package jobs also
+restore the pnpm store. The default-branch prewarming workflow owns these cache writes, reducing
+space pressure and removing dependency-cache compression/upload from release jobs. No existing cache
+is deleted by these workflows. GitHub can still evict caches; missing or expired entries fall back
+to normal compilation.
 
 The `uTerm build cache` workflow runs after pushes to `main`, or manually with `main` selected. It
-checks out `release` and compiles test targets and the release desktop application without running
-tests or packaging installers on macOS ARM64, macOS Intel and Windows x64.
+checks out `release`. Three desktop jobs compile host/core/FFI/backend test targets and the release
+desktop application without running tests or packaging installers. Two personal jobs compile Release
+Rust FFI/helper dependencies and the debug Core contract helper, and resolve locked SwiftPM
+packages. Native cache keys also include Xcode 16.4, Swift, SDK and the macOS 14.0 deployment
+target.
 
-This seeds caches in the default branch's scope for later version tags; GitHub does not share caches
-between different tags. Prewarming consumes additional CI runner time and does not sign or publish a
-release.
+Personal SwiftPM caches contain dependency repositories, checkouts, downloaded artifacts and
+resolution state only. Swift build products, app bundles, updater keys, QA data, screenshots and
+reports are rebuilt or generated from the actual source. The personal job still runs Swift tests,
+real-window/package checks and every actual Sparkle update scenario.
 
-Cache hits never skip frozen dependency installation, formatting, documentation checks, tests,
-source/tag validation, signing or public-download/update-feed checks. A missing or expired cache
-falls back to a normal build; first runs and compiler changes can still require cold compilation.
+The prewarming workflow must be available on `main`; run all five jobs successfully before a
+subsequent version tag to populate the new caches. This uses the default branch's cache scope, which
+later tags can read; GitHub does not share caches between different tags. Prewarming consumes
+additional runner time and does not sign or publish a release. Cache hits never skip frozen
+dependency installation, formatting, documentation checks, tests, source/tag validation, signing or
+public-download/update-feed checks. Cold starts and compiler/SDK changes still require compilation;
+there is no fixed build-time guarantee.
+
+##### Cache validation
+
+The supplied [release baseline](https://github.com/YondFane/uTerm/actions/runs/42599125208), at
+source/tested commit `2349b3b4721f1b7750d873ccea49da745c97b2e0`, passed but missed both Intel Cargo
+caches. Desktop backend tests took 372 seconds, installer compilation/packaging 782 seconds, and
+Cargo cache cleanup/compression/upload 134 seconds. The personal app build took 951 seconds. The
+repository cache inventory was approximately 10 GiB, including repeated branch/tag copies; earlier
+same-key default-branch caches were no longer available. These measurements precede the optimization
+and are not evidence of its speedup.
+
+Linux checks pass actionlint 1.7.12, workflow/Bash syntax and structural comparisons of the cache
+identities and preserved acceptance steps. The existing suite passes 444 tests with 11 platform
+skips; all 14 macOS Python policy tests, TypeScript/production build, repository/workflow and
+feature-guide formatting and documentation checks pass. Native cache save/restore and optimized
+warm-build timing comparisons require validation on GitHub-hosted macOS/Windows runners. The results
+above are local checks and do not establish a build-time improvement.
 
 #### Stable-release checks
 
@@ -1163,13 +1196,6 @@ geometry. Five existing real-Core queue/flush regressions, type checks, the full
 suite and production build passed for this sequence;
 [PR #50](https://github.com/YondFane/uTerm/pull/50) records its current native execution and exact
 source evidence.
-
-- Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
-  formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).
-  Parsed workflow comparisons confirm that all existing CI/release checks, triggers and permissions
-  remain unchanged, and prewarming uses matching cache settings and release platforms. Remote cache
-  restore/save and timing improvements await a workflow run; Windows cache-path execution has not
-  been tested locally.
 
 - Release preparation on macOS passes frozen dependency installation, 284 frontend/build-helper
   tests (ten skipped), 114 backend tests (nine ignored) and 46 host tests (two native CLI tests

@@ -48,6 +48,7 @@ jobs:
         shell: bash
     env:
       PR_HEAD_SHA: ${{ inputs.source_sha || github.event.pull_request.head.sha || github.sha }}
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
     steps:
       - uses: actions/checkout@v7
         with:
@@ -55,25 +56,26 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+      - run: npm install --global pnpm@11.22.0
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - name: Restore pnpm store
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-${{ runner.os }}-${{ runner.arch }}-11-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-${{ runner.arch }}-11-
       - name: Install pinned frontend dependencies
-        run: |
-          npm install --global pnpm@11.22.0
-          pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
       - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          shared-key: personal-${{ matrix.os }}-${{ runner.arch }}
-          workspaces: |
-            crates/utermd-local -> target
-            crates/uterm-core -> target
-            crates/uterm-ffi -> target
-          cache-bin: false
       - name: Select Xcode and record exact source
+        id: native-toolchain
         run: |
           sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
           mkdir -p macos/.build/personal-packages
@@ -87,6 +89,29 @@ jobs:
             rustc --version
             pnpm --version
           } 2>&1 | tee macos/.build/personal-packages/toolchain.txt
+          native_toolchain=$( { xcodebuild -version; swift --version; xcrun --show-sdk-version; } | shasum -a 256 | cut -d ' ' -f 1)
+          echo "key=$native_toolchain" >> "$GITHUB_OUTPUT"
+      - name: Restore personal Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: personal-${{ matrix.os }}-${{ runner.arch }}
+          key: ${{ steps.native-toolchain.outputs.key }}
+          env-vars: MACOSX_DEPLOYMENT_TARGET
+          save-if: false
+          workspaces: |
+            crates/utermd-local -> target
+            crates/uterm-core -> target
+            crates/uterm-ffi -> target
+          cache-bin: false
+      - name: Restore SwiftPM dependencies only
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            macos/.build/personal-build/repositories
+            macos/.build/personal-build/checkouts
+            macos/.build/personal-build/artifacts
+            macos/.build/personal-build/workspace-state.json
+          key: swiftpm-personal-${{ runner.os }}-${{ runner.arch }}-${{ steps.native-toolchain.outputs.key }}-${{ hashFiles('macos/Package.swift', 'macos/Package.resolved') }}
       - name: Verify package rejection rules and shell syntax
         run: |
           bash -n scripts/macos-native-build.sh
