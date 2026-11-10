@@ -56,8 +56,32 @@ def validate_info(info, head, tested):
 
 
 
+def validate_workspace_scenes(report, head, tested, phase):
+    assert report.get("nativeProjectMenuPinCollapseOrderAndConflictVerified") is True
+    assert report.get("backgroundTabCloseRetainedSelectedGeneration") is True
+    scenes = report.get("workspaceScenes", [])
+    expected = {(language, appearance, width) for language in ["en", "zh-Hans"]
+                for appearance in ["dark", "light"] for width in [1100, 640]}
+    assert len(scenes) == len(expected)
+    observed = set()
+    for scene in scenes:
+        identity = (scene["language"], scene["appearance"], scene["width"])
+        assert identity in expected and identity not in observed
+        observed.add(identity)
+        name = f"personal-{phase}-workspace-{identity[0]}-{identity[1]}-{identity[2]}.png"
+        assert scene["screenshot"] == name and name in report["captures"]
+        assert scene["sourceHeadSHA"] == head and scene["testedMergeSHA"] == tested
+        assert scene["platform"] == "macOS" and scene["architecture"] in ["arm64", "x86_64"]
+        assert scene["system"] and scene["height"] == 720
+        assert scene["scenario"] == "toolbar-sidebar-two-session-tabs-files"
+        assert scene["filesReadable"] is True
+    assert observed == expected
+
+
 def validate_smoke_report(report, head, tested, phase):
     assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
+    validate_workspace_scenes(report, head, tested, phase)
+    validate_settings_scenes(report, head, tested, phase)
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}
@@ -65,6 +89,23 @@ def validate_smoke_report(report, head, tested, phase):
     assert report["settingsWindowAppearances"] == {"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"}
     if phase == "replacement":
         assert report["profileRetainedAfterAppReplacement"]
+
+
+def validate_settings_scenes(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    expected = {(section["id"], scene["language"], scene["appearance"], scene["width"], scene["height"])
+                for section in fixture["settingsSections"] for scene in fixture["settingsScenes"]}
+    scenes = report.get("settingsScenes", [])
+    assert len(scenes) == len(expected)
+    seen = set()
+    for scene in scenes:
+        key = (scene["section"], scene["language"], scene["appearance"], scene["width"], scene["height"])
+        assert key in expected and key not in seen
+        seen.add(key)
+        assert scene["sourceHeadSHA"] == head and scene["testedMergeSHA"] == tested
+        assert scene["draftUnchanged"] is True and scene["navigationControlActivated"] is True
+        name = f"personal-{phase}-settings-{key[0]}-{key[1]}-{key[2]}-{key[3]}.png"
+        assert scene["screenshot"] == name and name in report["captures"]
 
 def audit_app(app, architecture, head, tested):
     info = plistlib.loads((app / "Contents/Info.plist").read_bytes())
@@ -118,6 +159,25 @@ def smoke(installed, source, root, evidence, head, tested):
         thread.join(timeout=5)
 
 
+def preserve_smoke_outputs(root, evidence, phase):
+    """Keep raw failure evidence before acceptance checks. 在验收检查前保留原始失败证据。"""
+    path = root / f"personal-{phase}.json"
+    shutil.copyfile(path, evidence / path.name)
+    report = json.loads(path.read_text())
+    rollback = root / f"personal-{phase}-rollback.json"
+    if rollback.is_file():
+        shutil.copyfile(rollback, evidence / rollback.name)
+    captures = []
+    for name in report.get("captures", []):
+        assert isinstance(name, str) and Path(name).name == name and name.endswith(".png")
+        image = root / name
+        assert not image.is_symlink() and image.resolve().is_relative_to(root.resolve())
+        assert image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+        shutil.copyfile(image, evidence / name)
+        captures.append(name)
+    return report, captures
+
+
 def run_smoke(installed, source, root, evidence, head, tested, feed):
     captures = []
     reports = []
@@ -136,23 +196,22 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
             process = subprocess.Popen([str(installed / "Contents/MacOS/uTerm"), "--qa-data-root", str(root / "ignored"),
                                         "--smoke-report", str(root / "must-not-exist.json")], stdout=out, stderr=err)
             try:
-                assert process.wait(timeout=90) == 0
+                result = process.wait(timeout=90)
             finally:
                 if process.poll() is None:
                     process.kill()
                     process.wait()
+                if (root / f"personal-{phase}.json").is_file():
+                    report, phase_captures = preserve_smoke_outputs(root, evidence, phase)
+        assert result == 0
         assert not (root / "ignored").exists() and not (root / "must-not-exist.json").exists()
         path = root / f"personal-{phase}.json"
-        report = json.loads(path.read_text())
+        assert path.is_file(), "Personal app did not write its smoke report"
         validate_smoke_report(report, head, tested, phase)
-        shutil.copyfile(path, evidence / path.name)
         rollback = root / f"personal-{phase}-rollback.json"
-        shutil.copyfile(rollback, evidence / rollback.name)
+        assert rollback.is_file(), "Personal rollback evidence is missing"
         reports.append(path.name)
-        for name in report["captures"]:
-            assert Path(name).name == name and (root / name).read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-            shutil.copyfile(root / name, evidence / name)
-            captures.append(name)
+        captures.extend(phase_captures)
         endpoint = root / "local-daemon-v1/endpoint.json"
         deadline = time.monotonic() + 10
         pid = report["hostPID"]

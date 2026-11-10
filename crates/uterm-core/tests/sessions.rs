@@ -173,3 +173,203 @@ fn project_open_deduplicates_per_workspace_and_disabled_agent_failure_is_atomic(
     assert_eq!(failed.error.unwrap().code, "AGENT_DISABLED");
     assert_eq!(call(&core, "snapshot.read", Value::Null), before);
 }
+
+#[test]
+fn existing_sessions_group_reposition_ungroup_and_reopen_without_replacing_descriptors() {
+    let root = tempfile::tempdir().unwrap();
+    let core = Core::open(root.path().to_path_buf()).unwrap();
+    initialize(&core);
+    for id in ["a", "b", "c", "d"] {
+        mutate(
+            &core,
+            "session.create",
+            json!({"id":id,"name":id,"directory":root.path()}),
+        );
+    }
+    let descriptors = call(&core, "session.entries", Value::Null);
+    mutate(
+        &core,
+        "session.group",
+        json!({"id":"b","anchor":"a","splitId":"ab"}),
+    );
+    mutate(
+        &core,
+        "session.resize",
+        json!({"rosterId":"terminals:local","splitId":"ab","ratio":0.7}),
+    );
+    mutate(
+        &core,
+        "session.group",
+        json!({"id":"d","anchor":"c","splitId":"cd","axis":"vertical","before":true}),
+    );
+    mutate(
+        &core,
+        "session.resize",
+        json!({"rosterId":"terminals:local","splitId":"cd","ratio":0.65}),
+    );
+    mutate(
+        &core,
+        "session.group",
+        json!({"id":"b","anchor":"c","splitId":"bc"}),
+    );
+    let view = call(&core, "snapshot.view", Value::Null);
+    assert_eq!(view["sessions"], descriptors);
+    assert_eq!(
+        view["layout"],
+        json!({"kind":"split","id":"cd","axis":"vertical","ratio":0.65,
+        "first":{"kind":"leaf","session":"d"},
+        "second":{"kind":"split","id":"bc","axis":"horizontal","ratio":0.5,
+            "first":{"kind":"leaf","session":"c"},"second":{"kind":"leaf","session":"b"}}})
+    );
+    assert_eq!(
+        view["snapshot"]["document"]["workspace"]["groups"][0]["terminalSplits"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let before = call(&core, "snapshot.read", Value::Null);
+    let already_grouped = execute(
+        &core,
+        "session.group",
+        json!({"expectedRevision":before["revision"],"id":"d","anchor":"b","splitId":"invalid"}),
+    );
+    assert_eq!(already_grouped.error.unwrap().code, "INVALID_ARGUMENT");
+    assert_eq!(call(&core, "snapshot.read", Value::Null), before);
+    mutate(
+        &core,
+        "session.movePane",
+        json!({"id":"d","anchor":"b","splitId":"db","axis":"vertical","before":true}),
+    );
+    let view = call(&core, "snapshot.view", Value::Null);
+    assert_eq!(view["layout"]["id"], "bc");
+    assert_eq!(view["layout"]["second"]["first"]["session"], "d");
+    assert_eq!(view["layout"]["second"]["second"]["session"], "b");
+    assert_eq!(view["sessions"], descriptors);
+    mutate(&core, "session.ungroup", json!({"id":"c"}));
+    let view = call(&core, "snapshot.view", Value::Null);
+    assert_eq!(view["layout"], json!({"kind":"leaf","session":"c"}));
+    assert_eq!(
+        view["snapshot"]["document"]["workspace"]["selectedSession"],
+        "c"
+    );
+    mutate(&core, "session.select", json!({"id":"b"}));
+    let view = call(&core, "snapshot.view", Value::Null);
+    assert_eq!(view["layout"]["id"], "db");
+    assert_eq!(view["sessions"], descriptors);
+    core.close();
+    let reopened = Core::open(root.path().to_path_buf()).unwrap();
+    assert_eq!(call(&reopened, "snapshot.view", Value::Null), view);
+}
+
+#[test]
+fn session_order_and_group_boundaries_reject_stale_or_cross_scope_writes_atomically() {
+    let root = tempfile::tempdir().unwrap();
+    let core = Core::open(root.path().to_path_buf()).unwrap();
+    initialize(&core);
+    let mut document = state::defaults();
+    let session = |id: &str, tree: Option<&str>, pinned: bool| {
+        let mut value = json!({"id":id,"name":id,"shell":"default","pinned":pinned});
+        if let Some(tree) = tree {
+            value["worktreeId"] = json!(tree);
+        }
+        value
+    };
+    document["workspace"]["projects"] = json!([{
+        "id":"project","name":"Project","directory":root.path(),"workspaceId":"local",
+        "sessions":[session("a",None,false),session("tree",Some("wt"),false),session("b",None,false),session("pinned",None,true),session("c",None,false)],
+        "splitGroups":[],"worktrees":[{"id":"wt","name":"Worktree","path":root.path(),"branch":"qa","missing":false}]
+    }]);
+    let revision = call(&core, "snapshot.read", Value::Null)["revision"].clone();
+    call(
+        &core,
+        "snapshot.replace",
+        json!({"expectedRevision":revision,"workspace":document["workspace"],"settings":document["settings"]}),
+    );
+    mutate(&core, "session.select", json!({"id":"b"}));
+    let old = call(&core, "snapshot.read", Value::Null);
+    mutate(
+        &core,
+        "session.reorder",
+        json!({"id":"c","target":"a","after":false}),
+    );
+    let reordered = call(&core, "snapshot.read", Value::Null);
+    let items = reordered["document"]["workspace"]["projects"][0]["sessions"]
+        .as_array()
+        .unwrap();
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| item["id"].as_str().unwrap())
+            .collect::<Vec<_>>(),
+        vec!["c", "tree", "a", "pinned", "b"]
+    );
+    assert_eq!(reordered["document"]["workspace"]["selectedSession"], "b");
+    let stale = execute(
+        &core,
+        "session.reorder",
+        json!({"expectedRevision":old["revision"],"id":"a","target":"b","after":true}),
+    );
+    assert_eq!(stale.error.unwrap().code, "CONFLICT");
+    assert_eq!(call(&core, "snapshot.read", Value::Null), reordered);
+    for (method, mut params) in [
+        (
+            "session.reorder",
+            json!({"id":"a","target":"tree","after":true}),
+        ),
+        (
+            "session.reorder",
+            json!({"id":"a","target":"pinned","after":true}),
+        ),
+        (
+            "session.reorder",
+            json!({"id":"a","target":"b","after":"false"}),
+        ),
+        (
+            "session.group",
+            json!({"id":"a","anchor":"tree","splitId":"bad"}),
+        ),
+        (
+            "session.movePane",
+            json!({"id":"a","anchor":"a","splitId":"bad","axis":"horizontal"}),
+        ),
+        (
+            "session.movePane",
+            json!({"id":"a","anchor":"b","splitId":"bad","axis":"diagonal"}),
+        ),
+        ("session.pin", json!({"id":"a","pinned":"true"})),
+    ] {
+        params["expectedRevision"] = reordered["revision"].clone();
+        assert!(execute(&core, method, params).error.is_some(), "{method}");
+        assert_eq!(call(&core, "snapshot.read", Value::Null), reordered);
+    }
+    mutate(&core, "session.pin", json!({"id":"a","pinned":true}));
+    mutate(
+        &core,
+        "session.reorder",
+        json!({"id":"a","target":"pinned","after":true}),
+    );
+    let before = call(&core, "snapshot.read", Value::Null);
+    mutate(
+        &core,
+        "workspace.create",
+        json!({"id":"other","name":"Other","select":true}),
+    );
+    mutate(
+        &core,
+        "session.create",
+        json!({"id":"foreign","name":"Foreign","directory":root.path()}),
+    );
+    let current = call(&core, "snapshot.read", Value::Null);
+    let denied = execute(
+        &core,
+        "session.group",
+        json!({"expectedRevision":current["revision"],"id":"a","anchor":"foreign","splitId":"bad"}),
+    );
+    assert_eq!(denied.error.unwrap().code, "INVALID_ARGUMENT");
+    assert_eq!(call(&core, "snapshot.read", Value::Null), current);
+    assert_eq!(
+        before["document"]["workspace"]["projects"][0]["sessions"],
+        current["document"]["workspace"]["projects"][0]["sessions"]
+    );
+}

@@ -33,6 +33,7 @@ mkdir -p "$native_app/Contents/MacOS"
 mkdir -p "$native_app/Contents/Resources/bin" "$native_app/Contents/Resources/Licenses"
 cp "$native_bin/UTermNativeQA" "$native_app/Contents/MacOS/$native_executable"
 cp shared/fixtures/client-performance.json "$native_app/Contents/Resources/client-performance.json"
+cp shared/fixtures/client-ui-parity.json "$native_app/Contents/Resources/client-ui-parity.json"
 native_sparkle=$(find "$native_swift_root/artifacts" -type d -name Sparkle.framework -print)
 test -n "$native_sparkle" && test "$(printf '%s\n' "$native_sparkle" | wc -l | tr -d ' ')" = 1
 mkdir -p "$native_app/Contents/Frameworks"

@@ -3,6 +3,7 @@ import { commands, defaults } from "../src/lib/settings.ts";
 import { translate } from "../src/lib/i18n.ts";
 import { themes } from "../src/lib/themes.ts";
 import { interfaceThemes } from "../src/lib/interface-themes.ts";
+import { interfaceFonts, terminalFonts } from "../src/lib/settings-fonts.ts";
 
 const labels = (key) => ({
   en: /\p{Script=Han}/u.test(key) ? translate("en", key) : key,
@@ -11,6 +12,15 @@ const labels = (key) => ({
 const catalog = {
   version: 1,
   settingsKeys: [...new Set([...Object.keys(defaults), "agentNotifications"])],
+  fonts: Object.fromEntries(
+    [
+      ["interfaceFont", interfaceFonts],
+      ["fontFamily", terminalFonts],
+    ].map(([key, fonts]) => [
+      key,
+      fonts.map(([label, value]) => ({ value, labels: labels(label) })),
+    ]),
+  ),
   commands: commands.map(([id, title, defaultShortcut]) => ({
     id,
     labels: labels(title),

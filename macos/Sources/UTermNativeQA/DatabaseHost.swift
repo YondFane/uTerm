@@ -9,6 +9,8 @@ final class DatabaseHost: WorkbenchHost {
     private var pending = 0
     private var preparing = false
     private var lastSettings: JSONValue?
+    private var windowListening = false
+    private var observers: [UUID: (String, JSONValue) -> Void] = [:]
     private(set) var prepared = false
     var emit: ((String, JSONValue) -> Void)?
     var report: ((String) -> Void)?
@@ -16,27 +18,51 @@ final class DatabaseHost: WorkbenchHost {
 
     init(bridge: CoreBridge) { self.bridge = bridge }
     func startEvents() {
+        windowListening = true
+        startPolling()
+    }
+    func observe(_ observer: @escaping (String, JSONValue) -> Void) -> UUID {
+        let id = UUID(); observers[id] = observer; startPolling(); return id
+    }
+    func removeObserver(_ id: UUID) {
+        observers.removeValue(forKey: id)
+        if !windowListening && observers.isEmpty { polling?.cancel(); polling = nil }
+    }
+    private func publish(_ kind: String, _ payload: JSONValue) {
+        if windowListening { emit?(kind, payload) }
+        for observer in Array(observers.values) { observer(kind, payload) }
+    }
+    private func startPolling() {
+        // One Core drain feeds settings and the workbench without competing consumers.
+        // 单一 Core 事件读取同时通知设置和工作台，避免竞争消费。
+        guard polling == nil else { return }
         let bridge = bridge
         polling = Task { @MainActor [weak self] in
             while !Task.isCancelled {
                 do {
                     let events = try await bridge.call("database.events")
                     for event in events.array {
-                        if let kind = event["kind"].string { self?.emit?(kind, event["payload"]) }
+                        if let kind = event["kind"].string { self?.publish(kind, event["payload"]) }
                     }
                     try await Task.sleep(for: .milliseconds(200))
                 } catch {
-                    if !Task.isCancelled { self?.emit?("database-host-error", .string(error.localizedDescription)) }
+                    if !Task.isCancelled { self?.publish("database-host-error", .string(error.localizedDescription)) }
                     return
                 }
             }
         }
     }
-    func stopEvents() { polling?.cancel(); polling = nil }
+    func stopEvents() {
+        windowListening = false
+        if observers.isEmpty { polling?.cancel(); polling = nil }
+    }
+    func shutdownEvents() {
+        windowListening = false; observers.removeAll(); polling?.cancel(); polling = nil
+    }
     deinit { polling?.cancel() }
     func settingsChanged(_ settings: JSONValue) {
         guard lastSettings != settings else { return }
-        lastSettings = settings; emit?("database-settings-changed", .null)
+        lastSettings = settings; publish("database-settings-changed", .null)
     }
 
     private func operation(_ parameters: [String: JSONValue]) async throws -> JSONValue {
@@ -130,7 +156,7 @@ final class DatabaseHost: WorkbenchHost {
     func prepareForQuit() async throws -> Bool {
         if prepared { return true }
         guard !preparing, pending == 0 else { return false }
-        preparing = true; emit?("database-frozen", .bool(true))
+        preparing = true; publish("database-frozen", .bool(true))
         defer { preparing = false }
         do {
             let status = try await bridge.call("database.status")
@@ -149,7 +175,7 @@ final class DatabaseHost: WorkbenchHost {
     }
     func resumeAfterQuit() async {
         prepared = false
-        do { _ = try await bridge.call("database.resume"); emit?("database-frozen", .bool(false)) }
+        do { _ = try await bridge.call("database.resume"); publish("database-frozen", .bool(false)) }
         catch { report?(error.localizedDescription) }
     }
 }

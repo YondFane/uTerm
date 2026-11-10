@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-09
+updated: 2026-11-10
 ---
 
 # uTerm feature guide
@@ -47,12 +47,12 @@ and drag **uTerm Personal.app** into Applications. Published attachments have no
 GitHub sign-in requirement. First launch may require approval in **System Settings → Privacy &
 Security**. Version 0.2.6 has no updater: install an updater-enabled release manually once.
 
-In an updater-enabled build, **Settings → General → Automatically check and download updates**
-enables Sparkle checks and signed downloads after **Save settings**. It is off by default. The app
-menu and settings also provide **Check for updates…**. Background downloads can install when the app
-quits; Sparkle asks before an immediate install/relaunch. Existing editor, transfer and database
-quit guards still apply. Turning the option off stops future automatic checks/downloads; an already
-prepared update can still install on quit. Update failures remain visible and can be retried
+In an updater-enabled build, **Settings → Software updates → Automatically check and download
+updates** enables Sparkle checks and signed downloads after **Save settings**. It is off by default.
+The app menu and settings also provide **Check for updates…**. Background downloads can install when
+the app quits; Sparkle asks before an immediate install/relaunch. Existing editor, transfer and
+database quit guards still apply. Turning the option off stops future automatic checks/downloads; an
+already prepared update can still install on quit. Update failures remain visible and can be retried
 manually. Update status text follows language changes immediately, including the no-update result.
 
 The personal client uses separate HTTPS `personal-stable-arm64.xml` and `personal-stable-x86_64.xml`
@@ -68,6 +68,133 @@ detached sessions. Before a manual replacement or rollback, keep the previous pa
 close sessions, quit and back up this directory. Never restore old data over an active app/host. The
 shared core retains conflict checks, draft recovery and explicit rollback exports; installing the
 app does not automatically restore old data or perform the Tauri-to-native cutover.
+
+#### Native workspace interaction
+
+The native toolbar opens complete settings directly, as does the app menu. Settings retain their
+save/reload/reset behavior and unsaved drafts when the window is hidden. Return saves an edited
+settings draft; Command-W hides the window. The local CLI control switch remains an immediate
+service control in Local control.
+
+The sidebar includes workspace selection, category navigation and text filtering. A horizontal
+session strip switches sessions and offers rename/close actions. Closing a background session
+addresses its own ID and generation, retaining the selected session. Files, content search and quick
+open use segmented tool navigation. These interactions use the existing shared operations and
+conflict protections.
+
+Session context menus add pin/unpin, move up/down, Group with, Ungroup and Copy session link.
+Grouping existing sessions and ungrouping select the moved session while retaining its descriptor,
+PTY generation and terminal view. Reordering stays within the same roster, Worktree and pin group;
+local sidebar drags capture a revision and reject external sources or stale writes. Native menu QA
+checks pin/order/group/ungroup and a racing settings write, and captures
+`native-session-ungrouped.png` and `native-session-grouped.png`. Shared-core tests cover nested
+layouts, scope failures and reopen; an actual native drag gesture and current-source screenshots
+remain pending. Linux passes 448 Node regressions (11 platform skips) and 236 shared-core tests (17
+explicitly ignored), including five session tests and the Rust/TypeScript grouping comparison.
+
+Projects show their sessions and Worktrees as nested rows. Use the project disclosure control or
+context menu to collapse children while their terminals keep running. The context menu includes
+rename, pin/unpin, move up/down, move to another workspace and removal of an empty project. Manual
+project order supports local dragging within the same pin group; name sorting disables manual
+reordering. Pinning, collapse and order write shared state with revision checks. The workspace menu
+adds create/rename/delete; deletion is available only for an empty workspace when another remains.
+These candidate interactions require their new native CI checks; drag acceptance remains pending.
+
+[Two-client acceptance](native-ui-parity.md) covers the full matching scope, including remaining
+checks for drag/group operations, layout persistence, content tabs and workbench integration. Both
+screenshot collectors share project data and collect matching language/appearance/size grids. PR CI
+assembles their same-source original PNGs and comparison reports in a downloadable artifact; source,
+OS, architecture, fixture hash and scene mismatches fail collection. Native window-owned commands
+remain available while complete settings blocks external CLI writes. The candidate still requires
+same-source paired screenshot acceptance; Linux regressions do not establish complete functional or
+visual parity.
+
+Real-window CI prepares a display of at least 1280×900 before the matching screenshot grid; the
+required 720-pixel content height is still checked against actual window bounds. Personal smoke
+failures retain the raw report and available original captures before validation, including an
+attempted failure-window capture. The ordinary collector waits for real terminal input ownership
+before inspecting the host. Linux passes 18 macOS package/evidence policy tests and ten
+paired-evidence policy tests; these fixtures do not represent native window execution.
+
+The Personal collector adjusts the real window frame against measured content bounds, with at most
+five attempts and recorded geometry. It also executes the project context menu and disclosure
+control, checks durable pin/collapse/order, rejects a stale reorder after a settings write and
+verifies the selected terminal generation remains unchanged. Both clients use the same literal
+workspace name as well as matching project data.
+
+Settings use left-side categories for General, Appearance, Terminal, Workspaces, Shortcuts, Agents,
+Usage, Local control, Database components, Maven settings and Software updates. Appearance includes
+file font/tab preferences; workspace management offers shared create/rename/delete operations. Agent
+commands/hooks and quota open their existing complete native window. The Java environment still
+needs a matching standalone settings section before complete parity can be accepted.
+
+Interface and terminal font selectors share the ordinary client's preset catalog and localized
+labels. Existing custom font strings remain a selected custom entry until a preset is chosen; simply
+opening or switching categories does not replace them. Selection retains the exact fallback-family
+string, and the existing settings save/conflict rules apply. Native QA checks both actual AppKit
+selectors, custom draft retention, no implicit write and a save/read round trip; it also captures
+`native-settings-custom-font.png`. Current-source macOS execution is still required.
+
+The toolbar includes file opening, the command palette, pane zoom and a tools menu for files/search,
+Git/GitHub, Java/Python, SSH, database and Redis entry points. Commands retain their existing focus,
+busy-state and selected-project guards.
+
+The same-source comparison includes 22 settings navigation pairs: eleven shared categories at
+English dark 900×640 and Chinese light 660×640. Both collectors activate actual navigation controls
+and reject missing/stale captures, changed drafts or unverified navigation. The combined artifact
+holds 60 original screenshots; collection does not establish complete functional parity. The sidebar
+updates existing disclosure buttons when busy state ends, so persisted collapse does not leave
+expansion disabled.
+
+**Settings → Maven settings** edits global distribution, Maven home, `settings.xml`, local
+repository and Wrapper preference without requiring a project. Changes remain a draft until **Save
+Maven settings**; global saves preserve project overrides. On a concurrent configuration change, the
+draft stays visible and an explicit reload reads the current values. Hiding settings retains this
+draft, and quitting guards unsaved Maven changes. Native reads use an independent bridge so JDK
+discovery does not serialize terminal input. Display preparation uses a login-session configuration,
+and a second process verifies both CoreGraphics and AppKit bounds in `display-verified.json` after
+the configuring process exits.
+
+Candidate QA presses the actual Maven navigation/save controls, verifies exact literal paths and
+unchanged project configuration, rejects a stale global save and captures
+`native-settings-maven-conflict.png`. Matched Maven scenes must show loaded controls matching the
+shared defaults. These new native checks still require CI execution.
+
+**Settings → Database components** lists detected Java and the driver catalog. Install/resume,
+manual HTTPS download, offline import, uninstall confirmation and local Java selection use the
+existing shared component service. Existing connections prevent component changes; active downloads
+show progress and can be cancelled. Opening the page does not download packages. Read failures have
+an explicit refresh action, and an obsolete hidden-page read cannot replace a newer result.
+
+Saving or removing a database connection can proceed while its component catalog is being read.
+Mutating component operations, live connection use and revision conflicts retain their existing
+protection. The profile guard regression checks a suspended catalog read alongside install/import,
+remove, Java selection and cancellation. SSH QA waits for parsed, writable remote-shell readiness;
+Windows updater QA validates and explicitly selects its isolated CI Java runtime before launching.
+Linux passes 445 Node regressions (11 platform skips), 237 core tests (17 ignored), six FFI tests,
+18 backend tests (one ignored) and 28 macOS/evidence policy tests, plus type/build/format/i18n/docs
+checks. The ordinary screenshot harness inherits the production main-window chrome before overriding
+its isolated identity and size, retaining the actual 720-pixel viewport. Failure reports include
+measured viewport geometry. Native SSH QA also waits for an authenticated remote prompt before
+key/password session input; PTY ownership alone does not prove authentication. Screenshot scene
+names retain ASCII locale letters and numeric dimensions while rejecting path separators, dots,
+streams, empty names and names over 50 bytes. The ordinary screenshot runner validates the exact
+workspace/settings scene names derived from the shared fixture at both phase and full-grid exit;
+missing, duplicate, substituted or extra scenes fail, including the old three-scene fallback. All 20
+QA-enabled backend tests pass (one ignored). Current-source platform reruns are still required
+before publishing.
+
+The settings page and existing database workbench receive component events from one shared event
+drain. Candidate native QA checks read-only catalog rendering and captures
+`native-settings-database-components.png`; the PostgreSQL fixture checks that a verified import
+notifies both the native observer and actual WebKit window. At source `d44086b`, both Personal
+architectures and the native matrix failed compilation because the component view exceeded Swift
+type-checking limits. The candidate splits that view into smaller expressions; these new
+interactions still await complete current-source macOS execution. At `72c168b` (tested merge
+`6783ae0`), ARM compiled and passed 43 Swift tests, then captured 21 settings scenes. The collector
+failed by clicking the next navigation while a repeated Maven read disabled it. It now waits for the
+actual button to become enabled and checks loaded controls after window layout. Maven settings reuse
+an already loaded draft until explicit reload. The incomplete run remains a failure.
 
 #### Configure personal updater signing
 
@@ -1102,23 +1229,56 @@ protection or unresolved conflicts leave synchronization explicitly incomplete.
 
 #### Build dependency caches
 
-PR/branch CI and stable-release jobs cache the pnpm store and Cargo dependencies, including compiled
-dependencies under both `src-tauri/target` and `crates/utermd-local/target`. Rust debug/test and
-release artifacts remain separate. Cargo cache keys account for the runner image, CPU architecture,
-Rust compiler, build environment and both workspaces' manifests/lockfiles; pnpm keys include the OS,
-architecture, pnpm major version and `pnpm-lock.yaml`.
+Desktop CI uses the same macOS 15 ARM64 and Windows x64 runner families as stable builds; releases
+also build macOS 15 Intel. Their Cargo caches cover all four separate workspaces: `src-tauri`,
+`crates/utermd-local`, `crates/uterm-core` and `crates/uterm-ffi`. Rust debug/test and release
+dependencies remain separate. Cache keys retain compiler, build-environment, architecture and
+manifest/lockfile checks. Desktop tests still use four Rust test threads; only the cache action
+clears this runtime setting so it can restore the prewarmed compiler cache.
+
+Desktop, Windows candidate/updater and personal package jobs restore Cargo dependencies without
+saving large copies under each PR, branch or version tag. Desktop and personal package jobs also
+restore the pnpm store. The default-branch prewarming workflow owns these cache writes, reducing
+space pressure and removing dependency-cache compression/upload from release jobs. No existing cache
+is deleted by these workflows. GitHub can still evict caches; missing or expired entries fall back
+to normal compilation.
 
 The `uTerm build cache` workflow runs after pushes to `main`, or manually with `main` selected. It
-checks out `release` and compiles test targets and the release desktop application without running
-tests or packaging installers on macOS ARM64, macOS Intel and Windows x64.
+checks out `release`. Three desktop jobs compile host/core/FFI/backend test targets and the release
+desktop application without running tests or packaging installers. Two personal jobs compile Release
+Rust FFI/helper dependencies and the debug Core contract helper, and resolve locked SwiftPM
+packages. Native cache keys also include Xcode 16.4, Swift, SDK and the macOS 14.0 deployment
+target.
 
-This seeds caches in the default branch's scope for later version tags; GitHub does not share caches
-between different tags. Prewarming consumes additional CI runner time and does not sign or publish a
-release.
+Personal SwiftPM caches contain dependency repositories, checkouts, downloaded artifacts and
+resolution state only. Swift build products, app bundles, updater keys, QA data, screenshots and
+reports are rebuilt or generated from the actual source. The personal job still runs Swift tests,
+real-window/package checks and every actual Sparkle update scenario.
 
-Cache hits never skip frozen dependency installation, formatting, documentation checks, tests,
-source/tag validation, signing or public-download/update-feed checks. A missing or expired cache
-falls back to a normal build; first runs and compiler changes can still require cold compilation.
+The prewarming workflow must be available on `main`; run all five jobs successfully before a
+subsequent version tag to populate the new caches. This uses the default branch's cache scope, which
+later tags can read; GitHub does not share caches between different tags. Prewarming consumes
+additional runner time and does not sign or publish a release. Cache hits never skip frozen
+dependency installation, formatting, documentation checks, tests, source/tag validation, signing or
+public-download/update-feed checks. Cold starts and compiler/SDK changes still require compilation;
+there is no fixed build-time guarantee.
+
+##### Cache validation
+
+The supplied [release baseline](https://github.com/YondFane/uTerm/actions/runs/42599125208), at
+source/tested commit `2349b3b4721f1b7750d873ccea49da745c97b2e0`, passed but missed both Intel Cargo
+caches. Desktop backend tests took 372 seconds, installer compilation/packaging 782 seconds, and
+Cargo cache cleanup/compression/upload 134 seconds. The personal app build took 951 seconds. The
+repository cache inventory was approximately 10 GiB, including repeated branch/tag copies; earlier
+same-key default-branch caches were no longer available. These measurements precede the optimization
+and are not evidence of its speedup.
+
+Linux checks pass actionlint 1.7.12, workflow/Bash syntax and structural comparisons of the cache
+identities and preserved acceptance steps. The existing suite passes 444 tests with 11 platform
+skips; all 14 macOS Python policy tests, TypeScript/production build, repository/workflow and
+feature-guide formatting and documentation checks pass. Native cache save/restore and optimized
+warm-build timing comparisons require validation on GitHub-hosted macOS/Windows runners. The results
+above are local checks and do not establish a build-time improvement.
 
 #### Stable-release checks
 
@@ -1163,13 +1323,6 @@ geometry. Five existing real-Core queue/flush regressions, type checks, the full
 suite and production build passed for this sequence;
 [PR #50](https://github.com/YondFane/uTerm/pull/50) records its current native execution and exact
 source evidence.
-
-- Cache configuration validation on macOS passes actionlint, workflow/Markdown and repository
-  formatting, documentation metadata/index checks and 284 frontend/build-helper tests (ten skipped).
-  Parsed workflow comparisons confirm that all existing CI/release checks, triggers and permissions
-  remain unchanged, and prewarming uses matching cache settings and release platforms. Remote cache
-  restore/save and timing improvements await a workflow run; Windows cache-path execution has not
-  been tested locally.
 
 - Release preparation on macOS passes frozen dependency installation, 284 frontend/build-helper
   tests (ten skipped), 114 backend tests (nine ignored) and 46 host tests (two native CLI tests

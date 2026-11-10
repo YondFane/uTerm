@@ -66,6 +66,7 @@ enum TerminalSmoke {
 
         try await verifySidebarKeyboard(model: model, window: window, first: firstID, second: second.id)
         report["sidebarKeyboardSelectionRetainedFocus"] = true
+        let sessionCaptures = try await verifySessionMenus(model: model, window: window, first: first, second: second, report: &report)
 
         window.performClose(nil)
         guard !window.isVisible else { throw BridgeFailure(code: "SMOKE_HIDE", message: "Close did not hide the native window") }
@@ -74,14 +75,16 @@ enum TerminalSmoke {
         window.makeKeyAndOrderFront(nil)
         report["hideAndReopenRetainedOutput"] = window.isVisible
 
-        var captures: [String] = [loadCapture, vimCapture]
+        var captures: [String] = [loadCapture, vimCapture] + sessionCaptures
         guard let settingsMenu = NSApp.mainMenu?.items.first?.submenu,
               let item = settingsMenu.items.first(where: { $0.action.map(NSStringFromSelector) == "settings" }),
               let action = item.action, NSApp.sendAction(action, to: item.target, from: item) else {
             throw BridgeFailure(code: "SMOKE_SETTINGS", message: "Native Settings menu action is missing")
         }
-        try await wait("Present Settings from its native menu") { model.settingsPresented && window.attachedSheet?.isVisible == true }
-        guard let sheet = window.attachedSheet else { throw BridgeFailure(code: "SMOKE_SETTINGS", message: "Settings sheet is missing") }
+        try await wait("Present full Settings from its native menu") {
+            model.settingsPresented && NSApp.windows.contains { $0.identifier?.rawValue == "native-full-settings" && $0.isVisible }
+        }
+        guard let sheet = NSApp.windows.first(where: { $0.identifier?.rawValue == "native-full-settings" && $0.isVisible }) else { throw BridgeFailure(code: "SMOKE_SETTINGS", message: "Full Settings window is missing") }
         try await Task.sleep(for: .milliseconds(150))
         if let reportPath = WorkspaceModel.argument("--terminal-smoke-report") {
             let name = "native-settings.png"
@@ -90,9 +93,9 @@ enum TerminalSmoke {
         }
         report["settingsOpenedFromNativeMenu"] = true
         report["settingsScene"] = ["language": model.settings["language"].string ?? "system", "appearance": model.settings["appearance"].string ?? "system", "windowWidth": sheet.frame.width] as [String: Any]
-        try postKey(window: sheet, code: 36, characters: "\r")
-        try await wait("Dismiss Settings with Return") { !model.settingsPresented && window.attachedSheet == nil }
-        report["settingsDismissedWithReturn"] = true
+        try postKey(window: sheet, code: 13, characters: "w", modifiers: .command)
+        try await wait("Dismiss full Settings with Command-W") { !model.settingsPresented && !sheet.isVisible }
+        report["settingsDismissedWithCommandW"] = true
         for language in ["en", "zh-Hans"] {
             for appearance in ["dark", "light"] {
                 await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
@@ -253,9 +256,9 @@ enum TerminalSmoke {
         [view] + view.subviews.flatMap(descendants)
     }
 
-    private static func postKey(window: NSWindow, code: UInt16, characters: String) throws {
+    private static func postKey(window: NSWindow, code: UInt16, characters: String, modifiers: NSEvent.ModifierFlags = []) throws {
         for type in [NSEvent.EventType.keyDown, .keyUp] {
-            guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: [],
+            guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: modifiers,
                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
                 context: nil, characters: characters, charactersIgnoringModifiers: characters,
                 isARepeat: false, keyCode: code) else {
@@ -263,6 +266,63 @@ enum TerminalSmoke {
             }
             NSApp.postEvent(event, atStart: false)
         }
+    }
+
+    private static func verifySessionMenus(model: WorkspaceModel, window: NSWindow, first: TerminalSession, second: TerminalSession, report: inout [String: Any]) async throws -> [String] {
+        guard let content = window.contentView,
+              let table = descendants(content).first(where: { $0.identifier?.rawValue == "native-sidebar" }) as? NSTableView,
+              let coordinator = table.delegate as? NativeSidebar.Coordinator,
+              let bridge = model.bridge, let path = WorkspaceModel.argument("--terminal-smoke-report") else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Native session menu context is missing") }
+        let entries = model.state?.sessions.map(\.session) ?? []
+        let generations = [first.generation, second.generation]
+        let views = [ObjectIdentifier(first.view), ObjectIdentifier(second.view)]
+        func menu(_ id: String) throws -> NSMenu {
+            guard let row = (0..<table.numberOfRows).first(where: { table.view(atColumn: 0, row: $0, makeIfNecessary: true)?.identifier?.rawValue == "native-sidebar-row-s:" + id }) else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Native session row is missing") }
+            let menu = NSMenu(); coordinator.populate(menu, row: row); return menu
+        }
+        func click(_ id: String, _ selector: String, value: String? = nil) throws {
+            let menu = try menu(id)
+            guard let index = menu.items.firstIndex(where: { $0.action.map(NSStringFromSelector) == selector && $0.isEnabled && (value == nil || $0.representedObject as? String == value) }) else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Native session action is unavailable: " + selector) }
+            menu.performActionForItem(at: index)
+        }
+        try await wait("Render session menu targets") { !model.busy && table.numberOfRows > 0 }
+        try click(second.id, "pin:", value: "true")
+        try await wait("Persist session pin through its actual menu") { !model.busy && model.state?.sessions.first(where: { $0.sessionID == second.id })?.session["pinned"].bool == true }
+        try click(second.id, "pin:", value: "false")
+        try await wait("Restore session pin group") { !model.busy && model.state?.sessions.first(where: { $0.sessionID == second.id })?.session["pinned"].bool == false }
+        try click(second.id, "up:")
+        try await wait("Persist session menu ordering") { !model.busy && model.sessionOrderPeers(first.id).first?.sessionID == second.id }
+        try click(second.id, "down:")
+        try await wait("Restore session menu order") { !model.busy && model.sessionOrderPeers(first.id).first?.sessionID == first.id }
+        guard let revision = model.state?.snapshot.revision else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Missing menu revision") }
+        let stale = try menu(first.id)
+        let previous = model.settings["breakInterval"]
+        let next: JSONValue = .number(previous.number == 31 ? 32 : 31)
+        _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(revision), "patch": .object(["breakInterval": next])]))
+        guard let pin = stale.items.firstIndex(where: { $0.action.map(NSStringFromSelector) == "pin:" }) else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Missing stale pin action") }
+        stale.performActionForItem(at: pin)
+        try await wait("Reject a stale session menu write") { !model.busy && !model.error.isEmpty }
+        let snapshot = try await bridge.snapshot()
+        guard snapshot.document.settings["breakInterval"] == next,
+              model.state?.sessions.map(\.session) == entries else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Stale menu lost a peer setting or changed sessions") }
+        await model.reload(); await model.patchSettings(["breakInterval": previous])
+        try click(first.id, "ungroup")
+        try await wait("Ungroup an existing native session") { !model.busy && model.selectedID == first.id && model.state?.layout["kind"].string == "leaf" && first.view.window === window }
+        let ungrouped = "native-session-ungrouped.png"
+        try await capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(ungrouped))
+        try click(second.id, "group:", value: first.id)
+        try await wait("Group existing native sessions without restarting them") { !model.busy && model.state?.layout["kind"].string == "split" && first.view.window === window && second.view.window === window }
+        let grouped = "native-session-grouped.png"
+        try await capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(grouped))
+        guard [first.generation, second.generation] == generations,
+              [ObjectIdentifier(first.view), ObjectIdentifier(second.view)] == views,
+              model.state?.sessions.map(\.session) == entries,
+              (try await bridge.call("host.status"))["sessions"].array.filter({ $0["running"].bool == true }).count == 2 else { throw BridgeFailure(code: "SMOKE_SESSION_MENU", message: "Session menus replaced a descriptor, generation or native terminal view") }
+        await model.selectSession(first.id)
+        report["nativeSessionMenuPinOrderGroupUngroupAndStaleWrite"] = true
+        report["sessionMenuRetainsPTYGenerationsAndViews"] = true
+        report["sessionDragGestureExecuted"] = false
+        return [ungrouped, grouped]
     }
 
     private static func verifySidebarKeyboard(model: WorkspaceModel, window: NSWindow, first: String, second: String) async throws {
@@ -297,5 +357,26 @@ enum TerminalSmoke {
                 throw BridgeFailure(code: "SMOKE_CAPTURE", message: "WindowServer capture failed: " + message)
             }
         }.value
+    }
+
+    static func sizeCaptureWindow(_ window: NSWindow, width: Int, height: Int) async throws -> [[String: Any]] {
+        var attempts: [[String: Any]] = []
+        window.setContentSize(NSSize(width: width, height: height))
+        for attempt in 0..<5 {
+            window.contentView?.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(150))
+            guard let actual = window.contentView?.bounds else { throw BridgeFailure(code: "SMOKE_WINDOW_SIZE", message: "Capture window has no content view") }
+            attempts.append(["attempt": attempt, "frame": NSStringFromRect(window.frame), "contentBounds": NSStringFromRect(actual),
+                "visibleScreen": NSStringFromRect(window.screen?.visibleFrame ?? .zero)])
+            if abs(actual.width - CGFloat(width)) < 0.5 && abs(actual.height - CGFloat(height)) < 0.5 { return attempts }
+            var frame = window.frame
+            let top = frame.maxY
+            frame.size.width += CGFloat(width) - actual.width
+            frame.size.height += CGFloat(height) - actual.height
+            frame.origin.y = top - frame.height
+            window.setFrame(frame, display: true)
+        }
+        let details = String(decoding: try JSONSerialization.data(withJSONObject: attempts, options: [.sortedKeys]), as: UTF8.self)
+        throw BridgeFailure(code: "SMOKE_WINDOW_SIZE", message: "Actual capture content did not reach \(width)x\(height): " + details)
     }
 }

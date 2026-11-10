@@ -142,6 +142,50 @@ fn insert(node: &Value, anchor: &str, new: &Value) -> Value {
     n["second"] = insert(&node["second"], anchor, new);
     n
 }
+fn group_insert(
+    node: &Value,
+    moved: &str,
+    anchor: &str,
+    split: &str,
+    axis: Option<&str>,
+    parent_axis: Option<&str>,
+    before: bool,
+) -> Value {
+    if node["kind"] == "leaf" {
+        if node["session"] != anchor {
+            return node.clone();
+        }
+        let axis = axis.unwrap_or(if parent_axis == Some("horizontal") {
+            "vertical"
+        } else {
+            "horizontal"
+        });
+        let leaf = json!({"kind":"leaf","session":moved});
+        return json!({"kind":"split","id":split,"axis":axis,"ratio":0.5,
+            "first":if before { &leaf } else { node },
+            "second":if before { node } else { &leaf }});
+    }
+    let mut next = node.clone();
+    next["first"] = group_insert(
+        &node["first"],
+        moved,
+        anchor,
+        split,
+        axis,
+        node["axis"].as_str(),
+        before,
+    );
+    next["second"] = group_insert(
+        &node["second"],
+        moved,
+        anchor,
+        split,
+        axis,
+        node["axis"].as_str(),
+        before,
+    );
+    next
+}
 fn resize(node: &mut Value, id: &str, ratio: f64) {
     if node["kind"] != "split" {
         return;
@@ -316,6 +360,138 @@ pub fn transition(w: &mut Value, settings: &Value, method: &str, p: &Value) -> R
                 assign(w, &r.sessions, json!(items));
             }
         }
+        "session.pin" => {
+            let id = string(p, "id")?;
+            let pinned = p["pinned"].as_bool().ok_or_else(|| {
+                CoreError::new("INVALID_ARGUMENT", "Session pin state must be boolean")
+            })?;
+            let r = owner(w, &id)
+                .ok_or_else(|| CoreError::new("SESSION_MISSING", "Session no longer exists"))?;
+            let mut items = sessions(w, &r).to_vec();
+            items.iter_mut().find(|item| item["id"] == id).unwrap()["pinned"] = json!(pinned);
+            assign(w, &r.sessions, json!(items));
+        }
+        "session.reorder" => {
+            let id = string(p, "id")?;
+            let target = string(p, "target")?;
+            let after = p["after"].as_bool().ok_or_else(|| {
+                CoreError::new("INVALID_ARGUMENT", "Session drop position must be boolean")
+            })?;
+            let r = owner(w, &id)
+                .ok_or_else(|| CoreError::new("SESSION_MISSING", "Session no longer exists"))?;
+            let mut items = sessions(w, &r).to_vec();
+            let source = items.iter().find(|item| item["id"] == id).unwrap();
+            let peer = items
+                .iter()
+                .find(|item| item["id"] == target)
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "INVALID_ARGUMENT",
+                        "Reorder target must share the session roster",
+                    )
+                })?;
+            if source.get("worktreeId") != peer.get("worktreeId")
+                || source["pinned"].as_bool().unwrap_or(false)
+                    != peer["pinned"].as_bool().unwrap_or(false)
+            {
+                return Err(CoreError::new(
+                    "INVALID_ARGUMENT",
+                    "Reorder target must share the Worktree and pin group",
+                ));
+            }
+            if id != target {
+                // Reorder peers in their existing slots so other Worktrees keep their order.
+                // 仅在原有槽位重排同组会话，保留其他 Worktree 的顺序。
+                let indices: Vec<_> = items
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, item)| {
+                        item.get("worktreeId") == source.get("worktreeId")
+                            && item["pinned"].as_bool().unwrap_or(false)
+                                == source["pinned"].as_bool().unwrap_or(false)
+                    })
+                    .map(|(index, _)| index)
+                    .collect();
+                let mut peers: Vec<_> = indices.iter().map(|index| items[*index].clone()).collect();
+                let source = peers.remove(peers.iter().position(|item| item["id"] == id).unwrap());
+                let index = peers.iter().position(|item| item["id"] == target).unwrap()
+                    + usize::from(after);
+                peers.insert(index, source);
+                for (index, item) in indices.into_iter().zip(peers) {
+                    items[index] = item;
+                }
+                assign(w, &r.sessions, json!(items));
+            }
+        }
+        "session.group" | "session.movePane" => {
+            let moved = string(p, "id")?;
+            let anchor = string(p, "anchor")?;
+            let split = string(p, "splitId")?;
+            let axis = match p.get("axis") {
+                None | Some(Value::Null) if method == "session.group" => None,
+                Some(Value::String(axis))
+                    if ["horizontal", "vertical"].contains(&axis.as_str()) =>
+                {
+                    Some(axis.as_str())
+                }
+                _ => return Err(CoreError::new("INVALID_ARGUMENT", "Invalid split axis")),
+            };
+            let before = match p.get("before") {
+                None => false,
+                Some(Value::Bool(value)) => *value,
+                _ => {
+                    return Err(CoreError::new(
+                        "INVALID_ARGUMENT",
+                        "Split position must be boolean",
+                    ))
+                }
+            };
+            let r = owner(w, &moved)
+                .ok_or_else(|| CoreError::new("SESSION_MISSING", "Session no longer exists"))?;
+            let items = sessions(w, &r);
+            let source = items.iter().find(|item| item["id"] == moved).unwrap();
+            let target = items
+                .iter()
+                .find(|item| item["id"] == anchor)
+                .ok_or_else(|| {
+                    CoreError::new("INVALID_ARGUMENT", "Grouped sessions must share a roster")
+                })?;
+            if moved == anchor || source.get("worktreeId") != target.get("worktreeId") {
+                return Err(CoreError::new(
+                    "INVALID_ARGUMENT",
+                    "Grouped sessions must be distinct and share a Worktree",
+                ));
+            }
+            let roots = w
+                .pointer(&r.splits)
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            if method == "session.group"
+                && roots
+                    .iter()
+                    .any(|root| contains(root, &moved) && contains(root, &anchor))
+            {
+                return Err(CoreError::new(
+                    "INVALID_ARGUMENT",
+                    "Sessions are already grouped",
+                ));
+            }
+            let mut roots: Vec<_> = roots
+                .iter()
+                .filter_map(|root| remove(root, &moved))
+                .filter(|root| root["kind"] == "split")
+                .collect();
+            let index = roots.iter().position(|root| contains(root, &anchor));
+            let root = index
+                .map(|index| roots.remove(index))
+                .unwrap_or_else(|| json!({"kind":"leaf","session":anchor}));
+            roots.push(group_insert(
+                &root, &moved, &anchor, &split, axis, None, before,
+            ));
+            assign(w, &r.splits, json!(roots));
+            select(w, &r, &moved);
+        }
         "session.remove" | "session.ungroup" => {
             let id = string(p, "id")?;
             if let Some(r) = owner(w, &id) {
@@ -357,6 +533,8 @@ pub fn transition(w: &mut Value, settings: &Value, method: &str, p: &Value) -> R
                     if w["selectedSession"] == id {
                         w["selectedSession"] = json!(next);
                     }
+                } else {
+                    select(w, &r, &id);
                 }
             }
         }

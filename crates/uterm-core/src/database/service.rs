@@ -65,6 +65,9 @@ impl Request {
             Self::Quit => "prepareQuit",
         }
     }
+    fn profile_safe(&self) -> bool {
+        matches!(self, Self::Components { action, .. } if action == "status")
+    }
     fn control(&self) -> bool {
         matches!(
             self,
@@ -76,7 +79,7 @@ impl Request {
 pub struct Service {
     runtime: Mutex<Option<Runtime>>,
     host: Host,
-    operations: Arc<Mutex<HashMap<String, (Operation, bool)>>>,
+    operations: Arc<Mutex<HashMap<String, (Operation, bool, bool)>>>,
     events: Arc<Mutex<VecDeque<Value>>>,
     closed: Arc<AtomicBool>,
     quitting: Arc<AtomicBool>,
@@ -118,6 +121,7 @@ impl Service {
         let runtime = self.runtime.lock().map_err(|_| anyhow!("DB_CLOSED"))?;
         let runtime = runtime.as_ref().context("DB_CLOSED")?;
         let control = request.control();
+        let profile_safe = request.profile_safe();
         let operation = Operation {
             id: uuid::Uuid::new_v4().to_string(),
             generation: uuid::Uuid::new_v4().to_string(),
@@ -143,13 +147,13 @@ impl Service {
         if preparing_quit
             && operations
                 .values()
-                .any(|(value, _)| value.state == "running")
+                .any(|(value, _, _)| value.state == "running")
         {
             bail!("DB_BUSY");
         }
         if operations
             .values()
-            .filter(|(value, is_control)| *is_control == control && value.state == "running")
+            .filter(|(value, is_control, _)| *is_control == control && value.state == "running")
             .count()
             >= 8
         {
@@ -160,7 +164,7 @@ impl Service {
         if !control
             && operations
                 .values()
-                .filter(|(value, is_control)| {
+                .filter(|(value, is_control, _)| {
                     !is_control && (value.state == "running" || value.result.is_some())
                 })
                 .count()
@@ -169,11 +173,14 @@ impl Service {
             bail!("DB_RESULT_LIMIT");
         }
         if operations.len() >= 128 {
-            operations.retain(|_, (value, is_control)| {
+            operations.retain(|_, (value, is_control, _)| {
                 value.state == "running" || (!*is_control && value.result.is_some())
             });
         }
-        operations.insert(operation.id.clone(), (operation.clone(), control));
+        operations.insert(
+            operation.id.clone(),
+            (operation.clone(), control, profile_safe),
+        );
         if preparing_quit {
             self.quitting.store(true, Ordering::Release);
         }
@@ -186,7 +193,7 @@ impl Service {
         runtime.spawn(async move {
             let result = execute(host, request).await;
             if let Ok(mut operations) = operations.lock() {
-                if let Some((value, _)) = operations.get_mut(&id) {
+                if let Some((value, _, _)) = operations.get_mut(&id) {
                     if closed.load(Ordering::Acquire) {
                         return;
                     }
@@ -214,7 +221,7 @@ impl Service {
             .lock()
             .map_err(|_| anyhow!("DB_OPERATION_FAILED"))?
             .values()
-            .map(|(value, _)| Operation {
+            .map(|(value, _, _)| Operation {
                 id: value.id.clone(),
                 generation: value.generation.clone(),
                 kind: value.kind.clone(),
@@ -229,7 +236,7 @@ impl Service {
             .operations
             .lock()
             .map_err(|_| anyhow!("DB_OPERATION_FAILED"))?;
-        let (value, _) = operations.get_mut(id).context("DB_OPERATION_MISSING")?;
+        let (value, _, _) = operations.get_mut(id).context("DB_OPERATION_MISSING")?;
         if value.generation != generation {
             bail!("DB_OPERATION_CHANGED");
         }
@@ -257,7 +264,7 @@ impl Service {
             .lock()
             .map_err(|_| anyhow!("DB_OPERATION_FAILED"))?
             .values()
-            .any(|(value, _)| value.state == "running");
+            .any(|(value, _, _)| value.state == "running");
         Ok(serde_json::json!({
             "operations":operations,
             "busy":self.host.database.busy() || self.host.components.0.load(Ordering::Acquire),
@@ -276,7 +283,7 @@ impl Service {
         }
         if operations
             .values()
-            .any(|(value, _)| value.kind == "prepareQuit" && value.state == "running")
+            .any(|(value, _, _)| value.kind == "prepareQuit" && value.state == "running")
         {
             bail!("DB_BUSY");
         }
@@ -302,7 +309,9 @@ impl Service {
         }
         if operations
             .values()
-            .any(|(value, _)| value.state == "running")
+            // A component catalog read cannot use or mutate a saved connection profile.
+            // 组件目录读取不会使用或修改已保存的连接配置。
+            .any(|(value, _, profile_safe)| value.state == "running" && !profile_safe)
             || self.host.database.profile_in_use(id)
         {
             return Err(crate::CoreError::new(
@@ -330,7 +339,7 @@ impl Service {
         }
         self.host.database.stop();
         if let Ok(mut operations) = self.operations.lock() {
-            for (value, _) in operations.values_mut() {
+            for (value, _, _) in operations.values_mut() {
                 if value.state == "running" {
                     value.state = "failed".into();
                     value.error = Some("DB_CLOSED".into());
@@ -437,5 +446,69 @@ async fn execute(mut host: Host, request: Request) -> std::result::Result<Value,
                 Ok(Value::Null)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod profile_guard_tests {
+    use super::*;
+
+    #[test]
+    fn suspended_catalog_reads_allow_profile_cas_but_mutating_operations_keep_the_guard() {
+        let root = tempfile::tempdir().unwrap();
+        let host = Host {
+            database: Default::default(),
+            components: Default::default(),
+            data: root.path().join("data"),
+            cache: root.path().join("cache"),
+            identifier: "sh.uterm.qa.profile-read".into(),
+            prepare_ssh: Arc::new(|_| Box::pin(async { bail!("Unexpected SSH") })),
+            pick_file: Arc::new(|| Box::pin(async { Ok(None) })),
+            events: Arc::new(|_, _| Ok(())),
+        };
+        let service = Service::new(host).unwrap();
+        let edited = root.path().join("profile-cas");
+        for action in ["status", "install", "import", "remove", "java", "cancel"] {
+            let request = Request::Components {
+                action: action.into(),
+                id: None,
+                path: None,
+            };
+            // Suspend admission records deterministically, without relying on JVM scheduling delays.
+            // 确定性暂停已接收操作，不依赖 JVM 调度延迟。
+            service.operations.lock().unwrap().insert(
+                "pending".into(),
+                (
+                    Operation {
+                        id: "pending".into(),
+                        generation: "generation".into(),
+                        kind: request.kind().into(),
+                        state: "running".into(),
+                        result: None,
+                        error: None,
+                    },
+                    request.control(),
+                    request.profile_safe(),
+                ),
+            );
+            let result = service.with_profile_change("profile", || {
+                std::fs::write(&edited, action)?;
+                Ok(())
+            });
+            if action == "status" {
+                assert!(result.is_ok());
+            } else {
+                assert_eq!(result.unwrap_err().code, "DB_BUSY");
+            }
+            assert_eq!(std::fs::read_to_string(&edited).unwrap(), "status");
+        }
+        service.close();
+        assert_eq!(
+            service
+                .with_profile_change("profile", || Ok(()))
+                .unwrap_err()
+                .code,
+            "DB_CLOSED"
+        );
     }
 }

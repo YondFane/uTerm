@@ -111,7 +111,7 @@ jobs:
         id: pnpm-store
         run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
           path: ${{ steps.pnpm-store.outputs.path }}
           key: pnpm-${{ runner.os }}-${{ runner.arch }}-11-${{ hashFiles('pnpm-lock.yaml') }}
@@ -125,9 +125,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: desktop-${{ matrix.os }}-${{ runner.arch }}
+          save-if: false
           workspaces: |
             src-tauri -> target
             crates/utermd-local -> target
+            crates/uterm-core -> target
+            crates/uterm-ffi -> target
           cache-bin: false
       - run: pnpm install --frozen-lockfile
       - name: Check formatting

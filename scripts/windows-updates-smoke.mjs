@@ -63,6 +63,12 @@ const env = {
   UTERM_QA_DIRTY: "false",
   UTERM_QA_UPDATES_ROOT: root,
 };
+const java = join(process.env.JAVA_HOME ?? "", "bin", "java.exe");
+assert(existsSync(java), "Updater database QA requires the configured Java runtime");
+command(java, ["-version"]);
+const components = join(root, "data", "database-components-v1");
+mkdirSync(components, { recursive: true });
+writeFileSync(join(components, "java-path.txt"), java);
 delete env.TAURI_SIGNING_PRIVATE_KEY;
 delete env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD;
 const report = {

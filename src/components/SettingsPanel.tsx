@@ -16,14 +16,7 @@ import { AgentSettings, AgentUsage } from "./AgentPanel";
 import { canRemoveWorkspace, createWorkspaceGroup, removeWorkspace } from "../lib/workspace";
 import type { Workspace } from "../lib/workspace";
 import { useSettings } from "../lib/SettingsContext";
-import {
-  availableAgents,
-  defaults,
-  binding,
-  chord,
-  commands,
-  shortcutLabel,
-} from "../lib/settings";
+import { availableAgents, binding, chord, commands, shortcutLabel } from "../lib/settings";
 import type { Settings, CommandId } from "../lib/settings";
 import type { Updates } from "../lib/useUpdates";
 import type { RuntimeInfo } from "../lib/desktop";
@@ -31,30 +24,8 @@ import { themes } from "../lib/themes";
 import type { Theme } from "../lib/themes";
 import { activeLanguage, languageOptions, translate } from "../lib/i18n";
 import { ToolbarIcon } from "./SidebarIcon";
+import { interfaceFonts, terminalFonts } from "../lib/settings-fonts";
 const releaseMarkdown = new MarkdownIt({ html: false, linkify: false });
-const interfaceFonts = [
-  ["系统默认", defaults.interfaceFont],
-  ["Arial", "Arial, sans-serif"],
-  ["Helvetica Neue", '"Helvetica Neue", Arial, sans-serif'],
-  ["Segoe UI", '"Segoe UI", sans-serif'],
-  ["苹方", '"PingFang SC", sans-serif'],
-  ["微软雅黑", '"Microsoft YaHei", sans-serif'],
-  ["思源黑体", '"Source Han Sans SC", "Noto Sans CJK SC", sans-serif'],
-] as const;
-const terminalFonts = [
-  ["系统默认等宽字体", defaults.fontFamily],
-  ...[
-    "Cascadia Code",
-    "Cascadia Mono",
-    "SFMono-Regular",
-    "Menlo",
-    "Monaco",
-    "Consolas",
-    "JetBrains Mono",
-    "Fira Code",
-    "Source Code Pro",
-  ].map((name) => [name, `"${name}", monospace`] as const),
-] as const;
 function FontSelect({
   value,
   options,
