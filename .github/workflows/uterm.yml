@@ -171,6 +171,7 @@ jobs:
           UTERM_QA_UI_PARITY_ONLY: "1"
         run: |
           swift scripts/macos-qa-display.swift | tee ci-evidence/ui-parity-display.json
+          swift scripts/macos-qa-display.swift --verify-only | tee ci-evidence/ui-parity-display-verified.json
           node scripts/tauri-state-qa.mjs --skip-build 2>&1 | tee ci-evidence/ui-parity-command.log
       - name: Isolated Windows candidate installer, actual launch and uninstall
         if: runner.os == 'Windows'
@@ -248,4 +249,4 @@ jobs:
           EVIDENCE_URL: ${{ steps.comparison.outputs.artifact-url }}
         run: |
           echo "[Original paired screenshots / 原始成对截图]($EVIDENCE_URL)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Eight workspace and eighteen settings pairs; full functional acceptance remains pending. 八组工作区及十八组设置对照，完整功能验收仍待完成。" >> "$GITHUB_STEP_SUMMARY"
+          echo "Eight workspace and twenty settings pairs; full functional acceptance remains pending. 八组工作区及二十组设置对照，完整功能验收仍待完成。" >> "$GITHUB_STEP_SUMMARY"

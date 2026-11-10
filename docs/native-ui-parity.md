@@ -92,25 +92,25 @@ acceptance.
 
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
-uploads 52 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
+uploads 56 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
 never replaces a missing native capture with a browser render. `comparisonReady` means the images
 are ready for review; `functionalParityAccepted` remains false until all acceptance rows are met.
 This candidate's new collection flow still requires actual CI execution and visual inspection.
 
 PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
-ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 52 张原图、`comparison.md` 和
+ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 56 张原图、`comparison.md` 和
 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。当前候选采集流程仍需实际 CI 执行及看图核对。
 
-Settings add 18 matched navigation scenes: nine common categories at English dark 900×640 and
-Chinese light 660×640. Native QA presses actual AppKit buttons; ordinary QA clicks the rendered
-settings navigation. Both assert actual content dimensions, selected section and unchanged drafts.
-The collector requires every settings scene, source identity and original image. Database
-components, Maven and Java environment categories remain implementation gaps, so these captures
-cannot establish complete settings parity.
+Settings add 20 matched navigation scenes: ten common categories at English dark 900×640 and Chinese
+light 660×640. Native QA presses actual AppKit buttons; ordinary QA clicks the rendered settings
+navigation. Both assert actual content dimensions, selected section and unchanged drafts. The
+collector requires every settings scene, source identity and original image. Database components and
+Java environment categories remain implementation gaps, so these captures cannot establish complete
+settings parity.
 
-设置另采集 18 组匹配导航场景：九个共有分类，分别使用英文深色 900×640 与中文浅色 660×640。原生 QA 按下实际 AppKit 按钮，普通版点击渲染的设置导航；两版均检查实际内容尺寸、所选分类及草稿未变。汇集器要求完整分类场景、源码身份及原图。数据库组件、Maven、Java 开发环境分类仍为实现缺口，因此这些截图不能证明完整设置一致性。
+设置另采集 20 组匹配导航场景：十个共有分类，分别使用英文深色 900×640 与中文浅色 660×640。原生 QA 按下实际 AppKit 按钮，普通版点击渲染的设置导航；两版均检查实际内容尺寸、所选分类及草稿未变。汇集器要求完整分类场景、源码身份及原图。数据库组件、Java 开发环境分类仍为实现缺口，因此这些截图不能证明完整设置一致性。
 
 ## Source-bound CI findings / 绑定源码的 CI 结果
 
@@ -154,12 +154,34 @@ same operation assertion for a new run.
 `personal-initial-sidebar-collapsed.png`、`personal-initial-failure.png`
 及原始超时报告。折叠图确认层级行与运行中的终端，展开未验收。候选代码在忙碌状态变化时刷新已有展开按钮，并保留相同操作断言供新一轮执行。
 
+At head `a2b0fa8766b4ac487375d1148d7427b54671c7ec`, tested merge
+`fc916280c8200a1af45ade7e59c80f22f3684cfe`, ARM Personal completed actual project pin/collapse/order
+and stale-write checks and captured all 18 settings navigation images. Its
+[artifact](https://github.com/YondFane/uTerm/actions/runs/42760190596/artifacts/13737527887) retains
+the originals and failed report. Workspace capture still failed: AppKit saw a 1024×768 display with
+only 684 pixels available, despite the earlier helper reporting 1280×960. The candidate uses a
+login-session display transaction and a separate `--verify-only` process checking both CoreGraphics
+and AppKit, keeping `display-verified.json`. No size requirement is waived.
+
+源码 `a2b0fa8766b4ac487375d1148d7427b54671c7ec`、实际测试 merge
+`fc916280c8200a1af45ade7e59c80f22f3684cfe`
+的 ARM 个人版完成真实项目置顶／折叠／排序与过期写入检查，并采集全部 18 张设置导航原图。[产物](https://github.com/YondFane/uTerm/actions/runs/42760190596/artifacts/13737527887)保留原图及失败报告。工作区截图仍失败：此前辅助进程报告 1280×960，实际 AppKit 却看到 1024×768、仅 684 像素可用。候选代码改用登录会话显示事务，并用独立
+`--verify-only` 进程核对 CoreGraphics／AppKit，保留 `display-verified.json`。尺寸要求未豁免。
+
+Standalone native Maven settings add actual save-button, literal-path, peer-conflict and project
+preservation checks plus `native-settings-maven-conflict.png`. Both matched Maven scenes require
+loaded controls matching the shared fixture. These new controls, independent read bridge and display
+configuration still require current-source macOS execution.
+
+独立原生 Maven 设置新增真实保存按钮、字面路径、并发冲突及项目配置保留检查，并采集
+`native-settings-maven-conflict.png`。两版匹配 Maven 场景要求已加载控件符合共同样例。新增控件、独立读取桥接及显示配置仍需当前源码 macOS 执行。
+
 ## Local checks / 本地检查
 
 Linux checks pass 444 existing Node tests with 11 platform skips, 18 Python package/evidence policy
-tests, eight paired-evidence policy tests, 19 backend tests with QA enabled (one ignored),
+tests, nine paired-evidence policy tests, 19 backend tests with QA enabled (one ignored),
 TypeScript/production build, repository formatting, shell syntax and documentation checks. The
 Python fixtures validate rejection rules only; they are not application screenshots. Swift
 compilation and real-window interaction have not run for this candidate.
 
-Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、18 项 Python 安装包／证据策略测试、八项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。
+Linux 已通过 444 项现有 Node 回归（11 项按平台跳过）、18 项 Python 安装包／证据策略测试、九项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。

@@ -57,6 +57,13 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
   projectName: string;
   fontSize: number;
   automaticUpdates: boolean;
+  maven: {
+    distribution: string;
+    home: string;
+    settings: string;
+    repository: string;
+    wrapper: boolean;
+  };
   sessions: string[];
   marker: string;
   command: string;
@@ -383,8 +390,28 @@ async function runUiParity() {
         const current = document.querySelector('.settings-layout nav button[aria-pressed="true"]');
         return current?.textContent?.trim() === translate(sceneFixture.language, section.label);
       }, "actual settings category selection");
+      if (section.id === "maven") {
+        await until(
+          () => document.querySelector(".maven-setting-fields select:not(:disabled)"),
+          "loaded global Maven controls",
+        );
+        const fields = document.querySelector(".maven-setting-fields")!;
+        const input = (label: string) =>
+          fields.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!.value;
+        const actual = {
+          distribution: fields.querySelector("select")!.value,
+          home: input(translate(sceneFixture.language, "Maven 主目录")),
+          settings: input(translate(sceneFixture.language, "用户设置文件 · settings.xml")),
+          repository: input(translate(sceneFixture.language, "Maven 本地仓库")),
+          wrapper: fields.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked,
+        };
+        assert(
+          JSON.stringify(actual) === JSON.stringify(parityFixture.maven),
+          "Actual global Maven controls differ from the common fixture",
+        );
+      }
       const draftUnchanged = !document.querySelector(
-        `[aria-label="${translate(sceneFixture.language, "未保存的设置")}"], [role="alert"].settings-error`,
+        `[aria-label="${translate(sceneFixture.language, "未保存的设置")}"], [role="alert"].settings-error, .settings-content .java-error`,
       );
       await scene(
         `settings-${section.id}-${sceneFixture.language}-${sceneFixture.appearance}-${sceneFixture.width}`,
@@ -393,6 +420,7 @@ async function runUiParity() {
           section: section.id,
           navigationControlActivated: true,
           draftUnchanged,
+          mavenFixtureMatched: section.id === "maven",
           automaticUpdates: (await settings()).automaticUpdates,
         },
       );

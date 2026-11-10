@@ -191,6 +191,7 @@ enum SettingsSmoke {
             report["simulatedLoginItemOptInApprovalFailureAndDisable"] = true
             report["actualOSLoginRegistrationExecuted"] = false
             var captures: [String] = [paletteCapture, terminalCapture]
+            captures.append(try await verifyGlobalMaven(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             current.window.makeKeyAndOrderFront(nil)
             for (language, appearance, width, name) in [("en", "dark", 900.0, "native-settings-full-dark-en.png"), ("zh-Hans", "light", 660.0, "native-settings-full-light-zh-narrow.png")] {
                 model.values["language"] = .string(language); model.values["appearance"] = .string(appearance); model.section = "appearance"
@@ -208,5 +209,56 @@ enum SettingsSmoke {
         report["nativeSettingsFeatureAcceptanceComplete"] = false
         report["remaining"] = ["Automatic update effects remain tracked in #45; preference/file/search/inspector/swap/zoom and GitHub have separate reports; actual OS login approval uses the authorized simulation boundary"]
         current.window.orderOut(nil)
+    }
+
+    private static func verifyGlobalMaven(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
+        let maven = settings.model.maven
+        settings.window.makeKeyAndOrderFront(nil)
+        try await TerminalSmoke.wait("Render the Maven settings navigation button") { (view(settings.window, id: "native-settings-section-maven") as? NSButton)?.isEnabled == true }
+        guard let navigation = view(settings.window, id: "native-settings-section-maven") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Maven settings navigation is missing") }
+        navigation.performClick(nil)
+        try await TerminalSmoke.wait("Load standalone global Maven configuration") { !maven.busy && !maven.values.isEmpty }
+        guard maven.error.isEmpty, !maven.dirty else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Global Maven settings could not be read") }
+        let root = try WorkspaceModel.dataRoot(), peer = try await CoreBridge.open(root: root)
+        do {
+            let directory = root.deletingLastPathComponent().path
+            var configuration = try await peer.call("java.configuration", params: .object(["directory": .string(directory)]))
+            guard case .object(var project) = configuration["project"] else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Missing project configuration fixture") }
+            project["main_class"] = .string("qa.KeepProjectDraft")
+            _ = try await peer.call("java.saveConfiguration", params: .object([
+                "directory": .string(directory), "revision": configuration["revision"], "project": .object(project), "global": .null
+            ]))
+            await maven.reload(discard: true)
+            let literal = root.deletingLastPathComponent().appendingPathComponent("Maven 中文 & paths").path
+            maven.values["home"] = .string(literal)
+            try await TerminalSmoke.wait("Enable the actual Maven save button") { (view(settings.window, id: "native-maven-settings-save") as? NSButton)?.isEnabled == true }
+            guard let save = view(settings.window, id: "native-maven-settings-save") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Maven save button is missing") }
+            save.performClick(nil)
+            try await TerminalSmoke.wait("Save global Maven through the actual button") { !maven.busy && !maven.dirty && maven.error.isEmpty }
+            configuration = try await peer.call("java.configuration", params: .object(["directory": .string(directory)]))
+            guard configuration["global"]["home"].string == literal, configuration["project"] == .object(project) else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Global save changed project configuration or literal paths") }
+            maven.values["home"] = .string(literal + " local draft")
+            guard case .object(var peerGlobal) = configuration["global"] else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Missing global configuration") }
+            peerGlobal["repository"] = .string(literal + " peer repository")
+            _ = try await peer.call("java.saveConfiguration", params: .object([
+                "directory": .null, "revision": configuration["revision"], "project": .null, "global": .object(peerGlobal)
+            ]))
+            try await TerminalSmoke.wait("Enable stale global Maven save") { save.isEnabled }
+            save.performClick(nil)
+            try await TerminalSmoke.wait("Reject stale global Maven through the actual button") { !maven.busy && maven.errorCode == "JAVA_CONFIG_CONFLICT" }
+            configuration = try await peer.call("java.configuration", params: .object(["directory": .string(directory)]))
+            guard maven.dirty, maven.values["home"].string == literal + " local draft", configuration["global"] == .object(peerGlobal), configuration["project"] == .object(project) else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Conflict lost a Maven draft or peer/project settings") }
+            settings.window.performClose(nil)
+            guard !settings.window.isVisible, maven.dirty else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Hiding settings lost the Maven draft") }
+            settings.window.makeKeyAndOrderFront(nil)
+            let capture = "native-settings-maven-conflict.png"
+            try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+            report["mavenConflictScreenshot"] = capture
+            await maven.reload(discard: true)
+            guard !maven.dirty, maven.error.isEmpty, maven.values == peerGlobal else { throw BridgeFailure(code: "SETTINGS_QA_MAVEN", message: "Explicit Maven reload did not read the peer settings") }
+            report["nativeGlobalMavenActualSaveConflictDraftAndProjectPreservation"] = true
+            await peer.close()
+            return capture
+        } catch { await peer.close(); throw error }
     }
 }

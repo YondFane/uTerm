@@ -88,6 +88,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["platform"] == native["platform"] and n["architecture"] == native["architecture"] and n["system"] == native["system"], "Wrong settings capture platform"
         assert all(scene.get("navigationControlActivated") is True and scene.get("draftUnchanged") is True for scene in [n, t["checks"]]), "Unverified settings navigation"
         assert n["automaticUpdates"] == t["checks"]["automaticUpdates"] == fixture["automaticUpdates"], "Different update preference in settings captures"
+        if section == "maven":
+            assert n["mavenFixtureMatched"] is True and t["checks"]["mavenFixtureMatched"] is True, "Maven controls were not checked against the fixture"
         name = f"settings-{section}-{language}-{appearance}-{width}"
         expected_native, expected_tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
         assert n["screenshot"] == expected_native and t["screenshot"] == expected_tauri and expected_native in native["captures"]

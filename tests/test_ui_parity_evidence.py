@@ -49,7 +49,7 @@ class ParityEvidenceTests(unittest.TestCase):
                     self.t["scenes"].append(dict(scenario=f"workspace-{lang}-{appearance}-{width}", checks=values, screenshot=tauri))
         for scene in fixture["settingsScenes"]:
             for section in fixture["settingsSections"]:
-                values = dict(scene, section=section["id"], navigationControlActivated=True, draftUnchanged=True, automaticUpdates=fixture["automaticUpdates"])
+                values = dict(scene, section=section["id"], navigationControlActivated=True, draftUnchanged=True, automaticUpdates=fixture["automaticUpdates"], mavenFixtureMatched=section["id"] == "maven")
                 name = f"settings-{section['id']}-{scene['language']}-{scene['appearance']}-{scene['width']}"
                 native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
                 image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", scene["width"], scene["height"]) + bytes(1100)
@@ -76,8 +76,8 @@ class ParityEvidenceTests(unittest.TestCase):
         result = self.run_compare()
         self.assertTrue(result["comparisonReady"])
         self.assertFalse(result["functionalParityAccepted"])
-        self.assertEqual(len(result["pairs"]), 26)
-        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 52)
+        self.assertEqual(len(result["pairs"]), 28)
+        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 56)
 
     def test_settings_scenes_require_complete_source_bound_unchanged_navigation(self):
         original = copy.deepcopy(self.n["settingsScenes"])
@@ -134,6 +134,11 @@ class ParityEvidenceTests(unittest.TestCase):
         outside = self.root / "outside.png"
         path.rename(outside)
         path.symlink_to(outside)
+        with self.assertRaises(AssertionError): self.run_compare()
+
+    def test_maven_loading_screens_cannot_replace_verified_controls(self):
+        scene = next(scene for scene in self.n["settingsScenes"] if scene["section"] == "maven")
+        scene["mavenFixtureMatched"] = False
         with self.assertRaises(AssertionError): self.run_compare()
 
 

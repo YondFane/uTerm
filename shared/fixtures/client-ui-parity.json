@@ -20,8 +20,16 @@
     { "id": "agents", "label": "Agent" },
     { "id": "usage", "label": "用量" },
     { "id": "control", "label": "本地控制" },
+    { "id": "maven", "label": "Maven 设置" },
     { "id": "updates", "label": "软件更新" }
   ],
+  "maven": {
+    "distribution": "local",
+    "home": "",
+    "settings": "",
+    "repository": "",
+    "wrapper": true
+  },
   "sessions": ["Terminal 1", "Terminal 2"],
   "files": {
     "note.txt": "Original 中文\r\n",

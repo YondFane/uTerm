@@ -93,7 +93,9 @@ jobs:
           native_toolchain=$( { xcodebuild -version; swift --version; xcrun --show-sdk-version; } | shasum -a 256 | cut -d ' ' -f 1)
           echo "key=$native_toolchain" >> "$GITHUB_OUTPUT"
       - name: Prepare real-window capture display
-        run: swift scripts/macos-qa-display.swift | tee macos/.build/personal-packages/display.json
+        run: |
+          swift scripts/macos-qa-display.swift | tee macos/.build/personal-packages/display.json
+          swift scripts/macos-qa-display.swift --verify-only | tee macos/.build/personal-packages/display-verified.json
       - name: Restore personal Cargo dependencies
         uses: Swatinem/rust-cache@v2
         with:

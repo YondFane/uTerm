@@ -103,7 +103,7 @@ Real-window CI prepares a display of at least 1280×900 before the matching scre
 required 720-pixel content height is still checked against actual window bounds. Personal smoke
 failures retain the raw report and available original captures before validation, including an
 attempted failure-window capture. The ordinary collector waits for real terminal input ownership
-before inspecting the host. Linux passes 18 macOS package/evidence policy tests and eight
+before inspecting the host. Linux passes 18 macOS package/evidence policy tests and nine
 paired-evidence policy tests; these fixtures do not represent native window execution.
 
 The Personal collector adjusts the real window frame against measured content bounds, with at most
@@ -113,21 +113,35 @@ verifies the selected terminal generation remains unchanged. Both clients use th
 workspace name as well as matching project data.
 
 Settings use left-side categories for General, Appearance, Terminal, Workspaces, Shortcuts, Agents,
-Usage, Local control and Software updates. Appearance includes file font/tab preferences; workspace
-management offers shared create/rename/delete operations. Agent commands/hooks and quota open their
-existing complete native window. Database components, Maven settings and Java environment still need
-matching standalone settings sections before complete parity can be accepted.
+Usage, Local control, Maven settings and Software updates. Appearance includes file font/tab
+preferences; workspace management offers shared create/rename/delete operations. Agent
+commands/hooks and quota open their existing complete native window. Database components and Java
+environment still need matching standalone settings sections before complete parity can be accepted.
 
 The toolbar includes file opening, the command palette, pane zoom and a tools menu for files/search,
 Git/GitHub, Java/Python, SSH, database and Redis entry points. Commands retain their existing focus,
 busy-state and selected-project guards.
 
-The same-source comparison includes 18 settings navigation pairs: nine shared categories at English
+The same-source comparison includes 20 settings navigation pairs: ten shared categories at English
 dark 900×640 and Chinese light 660×640. Both collectors activate actual navigation controls and
 reject missing/stale captures, changed drafts or unverified navigation. The combined artifact holds
-52 original screenshots; collection does not establish complete functional parity. The sidebar
+56 original screenshots; collection does not establish complete functional parity. The sidebar
 updates existing disclosure buttons when busy state ends, so persisted collapse does not leave
 expansion disabled.
+
+**Settings → Maven settings** edits global distribution, Maven home, `settings.xml`, local
+repository and Wrapper preference without requiring a project. Changes remain a draft until **Save
+Maven settings**; global saves preserve project overrides. On a concurrent configuration change, the
+draft stays visible and an explicit reload reads the current values. Hiding settings retains this
+draft, and quitting guards unsaved Maven changes. Native reads use an independent bridge so JDK
+discovery does not serialize terminal input. Display preparation uses a login-session configuration,
+and a second process verifies both CoreGraphics and AppKit bounds in `display-verified.json` after
+the configuring process exits.
+
+Candidate QA presses the actual Maven navigation/save controls, verifies exact literal paths and
+unchanged project configuration, rejects a stale global save and captures
+`native-settings-maven-conflict.png`. Matched Maven scenes must show loaded controls matching the
+shared defaults. These new native checks still require CI execution.
 
 #### Configure personal updater signing
 
