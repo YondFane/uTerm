@@ -274,13 +274,26 @@ out on that head; its first-attempt log is retained and does not count as a pass
 的两种 Personal 安装包、两种完整原生矩阵及 Windows 签名更新 QA 通过。普通版 Mac 交互通过，截图达到实际 1100×720 视口后，后端拒绝了含数字／语言名称的截图场景名（[失败原图](https://github.com/YondFane/uTerm/actions/runs/42782967854/artifacts/13750761295)）。隔离 QA 校验现允许 ASCII 字母、数字及连字符，保留长度与路径组成限制。启用 QA 的 20 项后端测试通过，一项明确忽略；仍需新源码真实采集。同一源码的一项既有 Windows
 OpenSSH 配置测试超时，首次日志保留，不计为通过。
 
+At head `b1795ba4854893df3555d25aea319779e32684a2`, tested merge
+`34e144db07faa1ed6829d620b17d13eb866a78ac`, the Windows ordinary matrix passed. Mac ordinary
+interaction passed and all 30 original workspace/settings captures were generated, but phase-exit
+validation incorrectly expected the default three scenes
+([originals and failed report](https://github.com/YondFane/uTerm/actions/runs/42789504113/artifacts/13751935385)).
+Both phase and full-grid validation now require the exact scene identities derived from the shared
+fixture. Regressions reject missing, duplicate, substituted and extra scenes and follow fixture
+changes. The retained run is not rewritten as passing; fresh same-source captures remain required.
+
+源码 `b1795ba4854893df3555d25aea319779e32684a2`、测试 merge
+`34e144db07faa1ed6829d620b17d13eb866a78ac`
+的 Windows 普通版矩阵通过。Mac 普通版交互通过并生成全部 30 张原始工作区／设置截图，但阶段退出校验错误地使用默认三个场景（[原图与失败报告](https://github.com/YondFane/uTerm/actions/runs/42789504113/artifacts/13751935385)）。阶段及完整网格现均要求共同样例定义的完整场景名称。回归拒绝缺失、重复、替换和额外场景，并跟随样例变更。保留的运行不会改写为通过；仍需新源码的真实截图。
+
 ## Local checks / 本地检查
 
-Linux checks pass 445 existing Node tests with 11 platform skips and 236 shared-core tests (17
-explicitly ignored), including five session tests and the Rust/TypeScript grouping comparison; 18
-Python package/evidence policy tests, ten paired-evidence policy tests, 19 backend tests with QA
-enabled (one ignored), TypeScript/production build, repository formatting, shell syntax and
-documentation checks. The Python fixtures validate rejection rules only; they are not application
-screenshots. Swift compilation and real-window interaction have not run for this candidate.
+Linux checks pass 448 Node tests with 11 platform skips and 237 shared-core tests (17 explicitly
+ignored), including five session tests and the Rust/TypeScript grouping comparison; 18 Python
+package/evidence policy tests, ten paired-evidence policy tests, 20 backend tests with QA enabled
+(one ignored), TypeScript/production build, repository formatting, shell syntax and documentation
+checks. The Python fixtures validate rejection rules only; they are not application screenshots.
+Swift compilation and real-window interaction have not run for this candidate.
 
 Linux 已通过 445 项现有 Node 回归（11 项按平台跳过）及 236 项共享核心测试（17 项显式忽略），包含五项会话测试及 Rust／TypeScript 组合算法对照；另通过 18 项 Python 安装包／证据策略测试、十项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。

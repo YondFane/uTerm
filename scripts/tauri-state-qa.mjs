@@ -21,6 +21,7 @@ import { createInterface } from "node:readline";
 import { createServer } from "node:http";
 import assert from "node:assert/strict";
 import { startResourceSampler } from "./client-resource-sampler.mjs";
+import { assertParityScenes } from "./ui-parity-scenes.mjs";
 
 const editorFixture = JSON.parse(
   readFileSync(resolve("shared/fixtures/editor-draft-qa.json"), "utf8"),
@@ -1037,7 +1038,12 @@ print(number.uint32Value)
                             : phase === "reopen"
                               ? 1
                               : 3;
-      assert.equal(observed.size, expected, `${phase} omitted required scenes`);
+      if (phase === "ui-parity")
+        assertParityScenes(
+          [...observed].map((file) => file.slice(`${phase}-`.length, -".json".length)),
+          parityFixture,
+        );
+      else assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       if (phase === "git") writeFileSync(join(root, "project/.git/qa-git-release"), "release\n");
       if (writer) {
@@ -1065,10 +1071,9 @@ print(number.uint32Value)
       writeFileSync(join(directory, name), value);
     }
     await run("ui-parity");
-    assert.equal(
-      scenes.length,
-      8 + parityFixture.settingsScenes.length * parityFixture.settingsSections.length,
-      "Incomplete ordinary-client parity grid",
+    assertParityScenes(
+      scenes.map((scene) => scene.scenario),
+      parityFixture,
     );
   } else if (performanceOnly) {
     await run("performance");
