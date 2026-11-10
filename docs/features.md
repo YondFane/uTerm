@@ -152,7 +152,10 @@ an explicit refresh action, and an obsolete hidden-page read cannot replace a ne
 The settings page and existing database workbench receive component events from one shared event
 drain. Candidate native QA checks read-only catalog rendering and captures
 `native-settings-database-components.png`; the PostgreSQL fixture checks that a verified import
-notifies both the native observer and actual WebKit window. These new interactions await macOS CI.
+notifies both the native observer and actual WebKit window. At source `d44086b`, both Personal
+architectures and the native matrix failed compilation because the component view exceeded Swift
+type-checking limits. The candidate splits that view into smaller expressions; these new
+interactions still await current-source macOS execution.
 
 #### Configure personal updater signing
 

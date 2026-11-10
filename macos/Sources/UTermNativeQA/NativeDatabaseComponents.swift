@@ -106,53 +106,91 @@ struct NativeDatabaseComponentsView: View {
         ["mysql": "MySQL", "postgresql": "PostgreSQL", "oracle": "Oracle", "mongodb": "MongoDB", "mongodb-core": "MongoDB Core", "mongodb-bson": "MongoDB BSON", "runtime": localized("Java runtime", "Java 运行时")][id] ?? id
     }
     private func size(_ bytes: Double) -> String { ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file) }
+    private func stateLabel(_ item: JSONValue) -> String {
+        if item["external"].bool == true { return localized("Local Java ready", "本机 Java 已就绪") }
+        return item["installed"].bool == true ? localized("Installed", "已安装") : localized("Not installed", "未安装")
+    }
+    private func description(_ item: JSONValue) -> String {
+        let version = item["version"].string ?? ""
+        let bytes = size(item["size"].number ?? 0)
+        return [version, bytes, stateLabel(item)].joined(separator: " · ")
+    }
+    private func actions(_ item: JSONValue, id: String) -> some View {
+        HStack {
+            Button(item["installed"].bool == true ? localized("Reinstall", "重新安装") : localized("Install / resume", "安装／继续下载")) {
+                Task { await model.perform("install", id: id) }
+            }.disabled(model.blocked)
+            Button(localized("Offline install…", "离线安装…")) {
+                Task { await model.perform("import", id: id) }
+            }.disabled(model.blocked)
+            Button(localized("Manual download", "手动下载")) { model.manualDownload(item["source"].string ?? "") }
+            if item["installed"].bool == true {
+                Button(localized("Uninstall…", "卸载…")) { model.remove(id) }.disabled(model.blocked)
+            }
+        }.controlSize(.small)
+    }
+    private func component(_ item: JSONValue) -> some View {
+        let id = item["id"].string ?? ""
+        return GroupBox {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(name(id)).font(.headline)
+                Text(description(item)).font(.caption)
+                if item["external"].bool != true {
+                    Text(URL(string: item["source"].string ?? "")?.host ?? "").font(.caption).foregroundStyle(.secondary)
+                    if let downloaded = item["downloaded"].number, downloaded > 0 {
+                        Text(localized("Downloaded: ", "已下载：") + size(downloaded)).font(.caption)
+                    }
+                    actions(item, id: id)
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
+        }
+    }
+    private var catalog: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(localized("The connection engine is bundled. Use local Java 17 or newer and install database drivers as needed.", "连接引擎已内置，可使用本机 Java 17 或更新版本，按需安装数据库驱动。"))
+                Text(localized("Elasticsearch needs no extra driver. MongoDB requires Java and three driver components.", "Elasticsearch 无需额外驱动；MongoDB 需要 Java 与三个驱动组件。")).font(.caption)
+                Text(localized("Interrupted or cancelled downloads retain progress. Install again to resume when the source supports it.", "下载中断或取消后保留进度，下载源支持时再次安装可继续下载。")).font(.caption).foregroundStyle(.secondary)
+                if let java = model.status["java"].string {
+                    Text(localized("Java path: ", "Java 路径：") + java).font(.caption).textSelection(.enabled)
+                }
+                if model.connected {
+                    Text(localized("Disconnect databases before changing components.", "修改组件前请先断开数据库连接。")).foregroundStyle(.secondary)
+                }
+                ForEach(model.status["items"].array, id: \.selfID) { item in component(item) }
+            }
+        }
+    }
+    private var downloadProgress: some View {
+        HStack {
+            if let received = model.progress["received"].number, let total = model.progress["total"].number, total > 0 {
+                ProgressView(value: received, total: total)
+                Text(size(received) + " / " + size(total)).font(.caption)
+            } else { ProgressView().controlSize(.small) }
+            Button(localized("Cancel download", "取消下载")) {
+                Task { await model.perform("cancel") }
+            }.disabled(model.frozen)
+        }
+    }
+    private var footer: some View {
+        HStack {
+            Button(localized("Choose local Java…", "选择本机 Java…")) {
+                Task { await model.perform("java", id: "runtime") }
+            }.disabled(model.blocked)
+            Spacer()
+            Button(localized("Refresh", "刷新")) {
+                Task { await model.refresh(clearError: true) }
+            }.disabled(model.loading || model.frozen)
+        }
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(localized("The connection engine is bundled. Use local Java 17 or newer and install database drivers as needed.", "连接引擎已内置，可使用本机 Java 17 或更新版本，按需安装数据库驱动。"))
-                    Text(localized("Elasticsearch needs no extra driver. MongoDB requires Java and three driver components.", "Elasticsearch 无需额外驱动；MongoDB 需要 Java 与三个驱动组件。")).font(.caption)
-                    Text(localized("Interrupted or cancelled downloads retain progress. Install again to resume when the source supports it.", "下载中断或取消后保留进度，下载源支持时再次安装可继续下载。")).font(.caption).foregroundStyle(.secondary)
-                    if let java = model.status["java"].string { Text(localized("Java path: ", "Java 路径：") + java).font(.caption).textSelection(.enabled) }
-                    if model.connected { Text(localized("Disconnect databases before changing components.", "修改组件前请先断开数据库连接。")).foregroundStyle(.secondary) }
-                    ForEach(model.status["items"].array, id: \.selfID) { item in
-                        let id = item["id"].string ?? ""
-                        GroupBox {
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(name(id)).font(.headline)
-                                Text((item["version"].string ?? "") + " · " + size(item["size"].number ?? 0) + " · " + (item["external"].bool == true ? localized("Local Java ready", "本机 Java 已就绪") : item["installed"].bool == true ? localized("Installed", "已安装") : localized("Not installed", "未安装"))).font(.caption)
-                                if item["external"].bool != true {
-                                    Text(URL(string: item["source"].string ?? "")?.host ?? "").font(.caption).foregroundStyle(.secondary)
-                                    if let downloaded = item["downloaded"].number, downloaded > 0 { Text(localized("Downloaded: ", "已下载：") + size(downloaded)).font(.caption) }
-                                    HStack {
-                                        Button(item["installed"].bool == true ? localized("Reinstall", "重新安装") : localized("Install / resume", "安装／继续下载")) { Task { await model.perform("install", id: id) } }.disabled(model.blocked)
-                                        Button(localized("Offline install…", "离线安装…")) { Task { await model.perform("import", id: id) } }.disabled(model.blocked)
-                                        Button(localized("Manual download", "手动下载")) { model.manualDownload(item["source"].string ?? "") }
-                                        if item["installed"].bool == true { Button(localized("Uninstall…", "卸载…")) { model.remove(id) }.disabled(model.blocked) }
-                                    }.controlSize(.small)
-                                }
-                            }.frame(maxWidth: .infinity, alignment: .leading).padding(4)
-                        }
-                    }
-                }
-            }
+            catalog
             if model.loading { ProgressView().controlSize(.small) }
-            if model.working {
-                HStack {
-                    if let received = model.progress["received"].number, let total = model.progress["total"].number, total > 0 {
-                        ProgressView(value: received, total: total)
-                        Text(size(received) + " / " + size(total)).font(.caption)
-                    } else { ProgressView().controlSize(.small) }
-                    Button(localized("Cancel download", "取消下载")) { Task { await model.perform("cancel") } }.disabled(model.frozen)
-                }
-            }
+            if model.working { downloadProgress }
             if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled) }
             if !model.notice.isEmpty { Text(model.notice).textSelection(.enabled) }
-            HStack {
-                Button(localized("Choose local Java…", "选择本机 Java…")) { Task { await model.perform("java", id: "runtime") } }.disabled(model.blocked)
-                Spacer()
-                Button(localized("Refresh", "刷新")) { Task { await model.refresh(clearError: true) } }.disabled(model.loading || model.frozen)
-            }
+            footer
         }.padding().onAppear { model.startObserving() }.onDisappear { model.stopObserving() }.task { await model.refresh(clearError: true) }
     }
 }

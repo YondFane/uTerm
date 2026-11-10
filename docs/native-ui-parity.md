@@ -194,6 +194,15 @@ a loaded catalog. No new native execution result is claimed before CI runs this 
 
 原生数据库组件候选页面沿用共享服务的下载、续传、导入、移除、取消及本机 Java 选择。设置和工作台共用单一事件读取，各自订阅通知，避免竞争消费而丢失事件。原生 QA 采集只读目录且检查未创建下载目录；真实 PostgreSQL 样例验证组件通知同时到达设置观察器与 WebKit。成对组件截图必须先加载目录。CI 执行此候选代码前，不宣称新增原生运行结果。
 
+At source `d44086b6a8ec75687e5609a50a8e4601e01f95af`, both Personal architectures and the native
+matrix failed compilation because the component page exceeded Swift expression type-checking limits
+([ARM log](https://github.com/YondFane/uTerm/actions/runs/42765375356/job/129660526340)). The
+candidate extracts separate catalog, component, actions, progress and footer expressions. No runtime
+result from that failed build is counted as acceptance.
+
+源码 `d44086b6a8ec75687e5609a50a8e4601e01f95af`
+的两种 Personal 架构及原生矩阵均因组件页面超过 Swift 表达式类型推断限制而编译失败（[ARM 日志](https://github.com/YondFane/uTerm/actions/runs/42765375356/job/129660526340)）。候选代码将目录、组件、操作、进度与底栏分别提取；失败构建不计为运行验收。
+
 ## Local checks / 本地检查
 
 Linux checks pass 444 existing Node tests with 11 platform skips, 18 Python package/evidence policy
