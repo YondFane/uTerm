@@ -296,4 +296,4 @@ package/evidence policy tests, ten paired-evidence policy tests, 20 backend test
 checks. The Python fixtures validate rejection rules only; they are not application screenshots.
 Swift compilation and real-window interaction have not run for this candidate.
 
-Linux 已通过 445 项现有 Node 回归（11 项按平台跳过）及 236 项共享核心测试（17 项显式忽略），包含五项会话测试及 Rust／TypeScript 组合算法对照；另通过 18 项 Python 安装包／证据策略测试、十项成对证据策略测试、19 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。
+Linux 已通过 448 项 Node 回归（11 项按平台跳过）及 237 项共享核心测试（17 项显式忽略），包含五项会话测试及 Rust／TypeScript 组合算法对照；另通过 18 项 Python 安装包／证据策略测试、十项成对证据策略测试、20 项启用 QA 的后端测试（一项忽略）、TypeScript／生产构建、全仓格式、Shell 语法及文档检查。Python 样例仅验证拒绝规则，不属于应用截图；当前候选代码尚未执行 Swift 编译和真实窗口交互。
