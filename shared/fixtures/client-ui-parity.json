@@ -1,4 +1,5 @@
 {
+  "workspaceName": "UI parity workspace",
   "projectName": "UI parity project",
   "languages": ["en", "zh-Hans"],
   "appearances": ["dark", "light"],

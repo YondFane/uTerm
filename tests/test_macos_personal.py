@@ -59,11 +59,11 @@ class PersonalPackageTests(unittest.TestCase):
                        sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64",
                        system="macOS fixture", filesReadable=True, scenario="toolbar-sidebar-two-session-tabs-files")
                   for language in ["en", "zh-Hans"] for appearance in ["dark", "light"] for width in [1100, 640]]
-        return dict(backgroundTabCloseRetainedSelectedGeneration=True, workspaceScenes=scenes,
+        return dict(backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,
                     captures=[scene["screenshot"] for scene in scenes])
 
     def test_workspace_acceptance_rejects_missing_duplicate_or_wrong_source_screenshots(self):
-        for mutation in ["missing", "duplicate", "source", "file", "background-close", "unreadable-files"]:
+        for mutation in ["missing", "duplicate", "source", "file", "background-close", "unreadable-files", "project-actions"]:
             report = self.workspace_evidence("initial")
             if mutation == "missing": report["workspaceScenes"].pop()
             if mutation == "duplicate": report["workspaceScenes"][0] = report["workspaceScenes"][1]
@@ -71,6 +71,7 @@ class PersonalPackageTests(unittest.TestCase):
             if mutation == "file": report["captures"].pop()
             if mutation == "background-close": report["backgroundTabCloseRetainedSelectedGeneration"] = False
             if mutation == "unreadable-files": report["workspaceScenes"][0]["filesReadable"] = False
+            if mutation == "project-actions": report["nativeProjectMenuPinCollapseOrderAndConflictVerified"] = False
             with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
                 package.validate_workspace_scenes(report, "a" * 40, "b" * 40, "initial")
 

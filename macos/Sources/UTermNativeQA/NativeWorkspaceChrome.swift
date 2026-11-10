@@ -50,9 +50,17 @@ struct NativeSidebarNavigation: View {
     @ObservedObject var model: WorkspaceModel
     var body: some View {
         VStack(spacing: 8) {
-            Picker(localized("Workspace", "工作区"), selection: Binding(get: { model.groupID }, set: { id in Task { await model.mutate("workspace.switch", ["id": .string(id)]) } })) {
-                ForEach(model.groupItems) { group in Text(group.name).tag(group.id) }
-            }.labelsHidden()
+            HStack {
+                Picker(localized("Workspace", "工作区"), selection: Binding(get: { model.groupID }, set: { id in Task { await model.mutate("workspace.switch", ["id": .string(id)]) } })) {
+                    ForEach(model.groupItems) { group in Text(group.name).tag(group.id) }
+                }.labelsHidden()
+                Menu {
+                    Button(localized("New workspace…", "新建工作区…")) { model.newWorkspace() }
+                    Button(localized("Rename workspace…", "重命名工作区…")) { model.renameWorkspace() }
+                    Button(localized("Delete workspace…", "删除工作区…")) { model.removeWorkspace() }.disabled(!model.canRemoveWorkspace)
+                } label: { Image(systemName: "ellipsis.circle") }
+                .menuStyle(.borderlessButton).fixedSize().help(localized("Manage workspace", "管理工作区"))
+            }
             HStack(spacing: 4) {
                 navigation("all", "square.grid.2x2", localized("All", "全部"))
                 navigation("projects", "folder", localized("Projects", "项目"))

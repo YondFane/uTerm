@@ -300,4 +300,25 @@ enum TerminalSmoke {
             }
         }.value
     }
+
+    static func sizeCaptureWindow(_ window: NSWindow, width: Int, height: Int) async throws -> [[String: Any]] {
+        var attempts: [[String: Any]] = []
+        window.setContentSize(NSSize(width: width, height: height))
+        for attempt in 0..<5 {
+            window.contentView?.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(150))
+            guard let actual = window.contentView?.bounds else { throw BridgeFailure(code: "SMOKE_WINDOW_SIZE", message: "Capture window has no content view") }
+            attempts.append(["attempt": attempt, "frame": NSStringFromRect(window.frame), "contentBounds": NSStringFromRect(actual),
+                "visibleScreen": NSStringFromRect(window.screen?.visibleFrame ?? .zero)])
+            if abs(actual.width - CGFloat(width)) < 0.5 && abs(actual.height - CGFloat(height)) < 0.5 { return attempts }
+            var frame = window.frame
+            let top = frame.maxY
+            frame.size.width += CGFloat(width) - actual.width
+            frame.size.height += CGFloat(height) - actual.height
+            frame.origin.y = top - frame.height
+            window.setFrame(frame, display: true)
+        }
+        let details = String(decoding: try JSONSerialization.data(withJSONObject: attempts, options: [.sortedKeys]), as: UTF8.self)
+        throw BridgeFailure(code: "SMOKE_WINDOW_SIZE", message: "Actual capture content did not reach \(width)x\(height): " + details)
+    }
 }

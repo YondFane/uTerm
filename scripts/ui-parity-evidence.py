@@ -63,6 +63,7 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["filesReadable"] is True and t["checks"]["filesReadable"] is True
         assert n["fontSize"] == t["checks"]["fontSize"] == fixture["fontSize"]
         assert n["projectName"] == t["checks"]["projectName"] == fixture["projectName"]
+        assert n["workspaceName"] == t["checks"]["workspaceName"] == fixture["workspaceName"]
         assert t["checks"].get("generationRetained") is True and t["checks"]["projectName"] == fixture["projectName"]
         assert expected_native in native["captures"]
         nfile, ndigest = image(native_path.parent, expected_native)

@@ -57,6 +57,7 @@ def validate_info(info, head, tested):
 
 
 def validate_workspace_scenes(report, head, tested, phase):
+    assert report.get("nativeProjectMenuPinCollapseOrderAndConflictVerified") is True
     assert report.get("backgroundTabCloseRetainedSelectedGeneration") is True
     scenes = report.get("workspaceScenes", [])
     expected = {(language, appearance, width) for language in ["en", "zh-Hans"]

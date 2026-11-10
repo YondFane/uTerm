@@ -93,7 +93,11 @@ final class WorkspaceModel: ObservableObject {
     var groups: [JSONValue] { workspace["groups"].array }
     var projects: [JSONValue] {
         let values = workspace["projects"].array.filter { $0["workspaceId"].string == groupID }
-        return settings["projectOrder"].string == "name" ? values.sorted { ($0["name"].string ?? "").localizedStandardCompare($1["name"].string ?? "") == .orderedAscending } : values
+        return values.sorted {
+            if ($0["pinned"].bool == true) != ($1["pinned"].bool == true) { return $0["pinned"].bool == true }
+            if settings["projectOrder"].string == "name" { return ($0["name"].string ?? "").localizedStandardCompare($1["name"].string ?? "") == .orderedAscending }
+            return false
+        }
     }
     var groupItems: [NativeListItem] { groups.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var projectItems: [NativeListItem] { projects.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
@@ -394,6 +398,72 @@ final class WorkspaceModel: ObservableObject {
     func newWorkspace() {
         guard let state else { return }
         nameDraft = NameDraft(target: nil, name: "", revision: state.snapshot.revision)
+    }
+
+    var canRemoveWorkspace: Bool {
+        guard groups.count > 1, projects.isEmpty, let group = groups.first(where: { $0["id"].string == groupID }) else { return false }
+        return ["terminals", "chats", "sshConnections", "databaseConnections", "redisConnections"].allSatisfy { group[$0].array.isEmpty }
+    }
+
+    func removeWorkspace() {
+        guard canRemoveWorkspace, !busy, let revision = state?.snapshot.revision else { return }
+        let id = groupID
+        let alert = NSAlert()
+        alert.messageText = localized("Delete empty workspace?", "删除空工作区？")
+        alert.informativeText = groups.first(where: { $0["id"].string == id })?["name"].string ?? ""
+        alert.addButton(withTitle: localized("Delete workspace", "删除工作区"))
+        alert.addButton(withTitle: localized("Cancel", "取消"))
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        Task { await mutate("workspace.remove", ["id": .string(id)], revision: revision) }
+    }
+
+    func renameProject(_ id: String) {
+        guard !busy, let project = projects.first(where: { $0["id"].string == id }), let revision = state?.snapshot.revision else { return }
+        let alert = NSAlert()
+        alert.messageText = localized("Rename project", "重命名项目")
+        let field = NSTextField(string: project["name"].string ?? "")
+        field.frame = NSRect(x: 0, y: 0, width: 300, height: 24)
+        alert.accessoryView = field
+        alert.addButton(withTitle: localized("Save", "保存")); alert.addButton(withTitle: localized("Cancel", "取消"))
+        alert.window.initialFirstResponder = field
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let name = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        Task { await mutate("project.rename", ["id": .string(id), "name": .string(name)], revision: revision) }
+    }
+
+    @discardableResult
+    func setProjectFlag(_ id: String, key: String, value: Bool) async -> Bool {
+        guard ["pinned", "collapsed"].contains(key), let state,
+              case .object(var document) = workspace,
+              let index = document["projects"]?.array.firstIndex(where: { $0["id"].string == id && $0["workspaceId"].string == groupID }),
+              var projects = document["projects"]?.array, case .object(var project) = projects[index] else { return false }
+        project[key] = .bool(value); projects[index] = .object(project); document["projects"] = .array(projects)
+        return await mutate("snapshot.replace", ["workspace": .object(document), "settings": settings], revision: state.snapshot.revision)
+    }
+
+    func projectOrderPeers(_ id: String) -> [String] {
+        guard settings["projectOrder"].string != "name", let project = projects.first(where: { $0["id"].string == id }) else { return [] }
+        return projects.filter { ($0["pinned"].bool == true) == (project["pinned"].bool == true) }.compactMap { $0["id"].string }
+    }
+
+    @discardableResult
+    func moveProjectOrder(_ id: String, before target: String?, revision: String? = nil) async -> Bool {
+        let peers = projectOrderPeers(id)
+        guard peers.contains(id), target == nil || (target != id && peers.contains(target!)),
+              case .object(var document) = workspace, var values = document["projects"]?.array else { return false }
+        var reordered = peers.filter { $0 != id }
+        reordered.insert(id, at: target.flatMap { reordered.firstIndex(of: $0) } ?? reordered.count)
+        let originals = Dictionary(uniqueKeysWithValues: values.compactMap { project -> (String, JSONValue)? in
+            guard let id = project["id"].string, peers.contains(id) else { return nil }
+            return (id, project)
+        })
+        var next = 0
+        for index in values.indices where values[index]["id"].string.map({ peers.contains($0) }) == true {
+            values[index] = originals[reordered[next]]!; next += 1
+        }
+        document["projects"] = .array(values)
+        return await mutate("snapshot.replace", ["workspace": .object(document), "settings": settings], revision: revision)
     }
 
     func openProject() {

@@ -26,6 +26,7 @@ enum PersonalSmoke {
             let parity = try JSONDecoder().decode(JSONValue.self, from: parityBytes)
             report["uiParityFixtureSHA256"] = SHA256.hash(data: parityBytes).map { String(format: "%02x", $0) }.joined()
             if phase == "initial" {
+                guard await model.mutate("workspace.rename", ["id": .string(model.groupID), "name": parity["workspaceName"]]) else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: model.error) }
                 let project = root.appendingPathComponent("project")
                 try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
                 guard await model.mutate("project.open", ["id": .string("personal-qa-project"), "name": .string(parity["projectName"].string ?? "UI parity project"), "directory": .string(project.path), "workspaceId": .string(model.groupID)]) else { throw BridgeFailure(code: "PERSONAL_PROJECT", message: model.error) }
@@ -91,6 +92,8 @@ enum PersonalSmoke {
             await model.selectSession(originalID)
             try await TerminalSmoke.wait("Switch back without replacing the terminal") { terminal.view.window === window && model.selectedID == originalID }
             var captures: [String] = []
+            try await verifySidebar(model: model, window: window, root: root, phase: phase, report: &report)
+            captures = report["captures"] as? [String] ?? []
             var appearances: [String: String] = [:]
             var updateStatuses: [String: String] = [:]
             if automatic, phase == "initial" {
@@ -125,8 +128,7 @@ enum PersonalSmoke {
                     await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
                     for width in [1100, 640] {
                         window.makeKeyAndOrderFront(nil)
-                        window.setContentSize(NSSize(width: width, height: 720))
-                        try await Task.sleep(for: .milliseconds(200))
+                        let sizeAttempts = try await TerminalSmoke.sizeCaptureWindow(window, width: width, height: 720)
                         guard model.settings["fontSize"] == parity["fontSize"], model.settings["language"].string == language, model.settings["appearance"].string == appearance,
                               ObjectIdentifier(terminal.view) == originalView, terminal.generation == originalGeneration,
                               model.selectedID == originalID, terminal.view.window === window else {
@@ -141,9 +143,11 @@ enum PersonalSmoke {
                         captures.append(name)
                         report["captures"] = captures
                         workspaceScenes.append(["screenshot": name, "language": language, "appearance": appearance,
+                            "windowSizeAttempts": sizeAttempts,
                             "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0),
                             "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-session-tabs-files", "filesReadable": true, "fontSize": model.settings["fontSize"].number ?? 0,
                             "projectName": model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["name"].string ?? "",
+                            "workspaceName": model.groups.first(where: { $0["id"].string == model.groupID })?["name"].string ?? "",
                             "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""])
                         report["workspaceScenes"] = workspaceScenes
                     }
@@ -189,5 +193,67 @@ enum PersonalSmoke {
             let bytes = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
             try bytes.write(to: root.appendingPathComponent("personal-\(phase).json"), options: .atomic)
         } catch { fputs("Personal QA report could not be written\n", stderr) }
+    }
+
+    private static func verifySidebar(model: WorkspaceModel, window: NSWindow, root: URL, phase: String, report: inout [String: Any]) async throws {
+        guard let content = window.contentView, let table = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-sidebar" }) as? NSTableView,
+              let coordinator = table.delegate as? NativeSidebar.Coordinator,
+              let selected = model.selectedID, let generation = model.selectedTerminal?.generation else {
+            throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Real sidebar or selected terminal is missing")
+        }
+        model.sidebarSection = "all"; model.sidebarQuery = ""
+        window.makeKeyAndOrderFront(nil)
+        func row(_ name: String) -> Int? {
+            (0..<table.numberOfRows).first { (table.view(atColumn: 0, row: $0, makeIfNecessary: true) as? NSTableCellView)?.textField?.stringValue == name }
+        }
+        func click(_ project: String, _ title: String) throws {
+            guard let index = row(project) else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Project row is missing") }
+            let menu = NSMenu(); coordinator.populate(menu, row: index)
+            guard let action = menu.items.firstIndex(where: { $0.title == title && $0.isEnabled }) else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Project action is unavailable: " + title) }
+            menu.performActionForItem(at: action)
+        }
+        guard let projectName = model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["name"].string else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Fixture project is missing") }
+        try await TerminalSmoke.wait("Render the hierarchical project sidebar") { row(projectName) != nil }
+        try click(projectName, localized("Pin project", "置顶项目"))
+        try await TerminalSmoke.wait("Persist pin through the real sidebar menu") { model.projects.first?["pinned"].bool == true && !model.busy }
+        try click(projectName, localized("Collapse project", "折叠项目"))
+        try await TerminalSmoke.wait("Hide project children without closing their processes") {
+            model.projects.first?["collapsed"].bool == true && !model.busy && row("Terminal 1") == nil && row("Terminal 2") == nil
+        }
+        let collapsed = "personal-\(phase)-sidebar-collapsed.png"
+        try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(collapsed))
+        report["captures"] = (report["captures"] as? [String] ?? []) + [collapsed]
+        guard let disclosure = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-project-disclosure-personal-qa-project" }) as? NSButton else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Project disclosure control is missing") }
+        disclosure.performClick(nil)
+        try await TerminalSmoke.wait("Expand through the real disclosure control") { row("Terminal 1") != nil && row("Terminal 2") != nil && !model.busy }
+        try click(projectName, localized("Unpin project", "取消置顶项目"))
+        try await TerminalSmoke.wait("Persist unpin through the real sidebar menu") { model.projects.first?["pinned"].bool == false && !model.busy }
+        let extraDirectory = root.appendingPathComponent("sidebar-order")
+        try FileManager.default.createDirectory(at: extraDirectory, withIntermediateDirectories: true)
+        guard await model.mutate("project.add", ["id": .string("sidebar-order"), "name": .string("Sidebar order"), "directory": .string(extraDirectory.path), "workspaceId": .string(model.groupID)]) else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: model.error) }
+        try await TerminalSmoke.wait("Render the second ordering target") { row("Sidebar order") != nil }
+        try click("Sidebar order", localized("Move up", "上移"))
+        try await TerminalSmoke.wait("Reorder project peers through their real context menu") { model.projects.first?["id"].string == "sidebar-order" && !model.busy }
+        guard let staleRevision = model.state?.snapshot.revision, let bridge = model.bridge else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Missing shared state revision") }
+        let previousInterval = model.settings["breakInterval"]
+        let changedInterval: JSONValue = .number(previousInterval.number == 31 ? 32 : 31)
+        await model.patchSettings(["breakInterval": changedInterval])
+        guard !(await model.moveProjectOrder("personal-qa-project", before: "sidebar-order", revision: staleRevision)),
+              model.projects.first?["id"].string == "sidebar-order", model.settings["breakInterval"] == changedInterval else {
+            throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "A stale reorder overwrote current data")
+        }
+        await model.reload()
+        await model.patchSettings(["breakInterval": previousInterval])
+        try click("Sidebar order", localized("Remove project", "移除项目"))
+        try await TerminalSmoke.wait("Remove only the empty project") { model.projects.count == 1 && !model.busy }
+        let snapshot = try await bridge.snapshot()
+        guard snapshot.document.workspace["projects"].array.first?["collapsed"].bool == false,
+              snapshot.document.workspace["projects"].array.first?["pinned"].bool == false,
+              model.selectedID == selected, model.selectedTerminal?.generation == generation, model.selectedTerminal?.view.window === window,
+              !model.canRemoveWorkspace else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Sidebar edits lost state or replaced the selected terminal") }
+        let expanded = "personal-\(phase)-sidebar-expanded.png"
+        try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(expanded))
+        report["captures"] = (report["captures"] as? [String] ?? []) + [expanded]
+        report["nativeProjectMenuPinCollapseOrderAndConflictVerified"] = true
     }
 }

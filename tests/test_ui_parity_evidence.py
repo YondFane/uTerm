@@ -36,7 +36,7 @@ class ParityEvidenceTests(unittest.TestCase):
                 for width in fixture["widths"]:
                     values = dict(language=lang, appearance=appearance, width=width, height=720,
                                   scenario="toolbar-sidebar-two-session-tabs-files", sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
-                                  generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"])
+                                  generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
                     native = f"personal-initial-workspace-{lang}-{appearance}-{width}.png"
                     tauri = f"ui-parity-workspace-{lang}-{appearance}-{width}.png"
                     # Synthetic header fixtures test rejection policy, never native acceptance.
@@ -100,6 +100,9 @@ class ParityEvidenceTests(unittest.TestCase):
         with self.assertRaises(AssertionError): self.run_compare()
         self.n["backgroundTabCloseRetainedSelectedGeneration"] = True
         self.n["workspaceScenes"][0]["filesReadable"] = False
+        with self.assertRaises(AssertionError): self.run_compare()
+        self.n["workspaceScenes"][0]["filesReadable"] = True
+        self.n["workspaceScenes"][0]["workspaceName"] = "Different workspace"
         with self.assertRaises(AssertionError): self.run_compare()
 
     def test_rejects_images_outside_the_artifact(self):

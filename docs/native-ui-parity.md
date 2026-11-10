@@ -64,14 +64,31 @@ close. Missing, duplicate, stale-source or mismatched-fixture records fail valid
 `shared/fixtures/client-ui-parity.json`，统一项目名称、文件字节、终端名称及字号，并各采集八组工作区场景。普通版通过真实设置控件改变语言和外观，核对实际保存结果及 PTY
 generation；个人版额外检查按目标关闭后台标签。缺失、重复、过期源码或测试数据不符的记录均会校验失败。
 
+The project sidebar candidate adds nested sessions/Worktrees, durable pin/collapse, manual peer
+ordering and local drag targets, project rename/move/removal, and empty-workspace deletion. Personal
+QA invokes actual project menu actions and the disclosure button, checks shared saved state, rejects
+a stale reorder and retains the original PTY generation. Extra `personal-*-sidebar-collapsed.png`
+and `personal-*-sidebar-expanded.png` images show these scenarios. Compilation and execution of this
+candidate remain pending; the drag path is not yet accepted. The common fixture includes the literal
+workspace name to avoid differing default names in paired captures.
+
+项目侧栏候选代码增加嵌套会话／Worktree、持久置顶／折叠、同组手动排序与本地拖动、项目重命名／移动／移除，以及空工作区删除。个人版 QA 实际调用项目菜单及展开按钮，检查共享保存结果、拒绝过期重排并保留原 PTY
+generation。额外的 `personal-*-sidebar-collapsed.png`、`personal-*-sidebar-expanded.png`
+展示相应场景。此候选代码尚待编译和执行，拖动路径未验收。共同样例还包含工作区字面名称，避免成对截图的默认名称不同。
+
 The isolated macOS runner prepares a display of at least 1280×900, records its actual modes and
 bounds in `display.json`, and fails if the required area is unavailable. Actual content dimensions
 remain mandatory. Personal validation retains raw reports and available original PNGs before
 rejecting failed acceptance. A failure-window screenshot is attempted and capture errors are
-recorded. Ordinary collection waits for actual input ownership before reading host identity.
+recorded. Ordinary collection waits for actual input ownership before reading host identity. The
+Personal collector measures actual content bounds and adjusts the real window frame in at most five
+attempts. Each scene records the measured attempts; failing to reach 720 pixels still fails
+acceptance.
 
 隔离 macOS 运行器准备至少 1280×900 的显示区域，将实际模式及边界记录至
 `display.json`，区域不可用时失败。实际内容尺寸仍为必检项。个人版验收失败前会保留原始报告及已生成的原始 PNG，并尝试截取失败窗口，记录截图错误。普通版采集器在读取宿主身份前等待实际输入控制就绪。
+
+个人版采集器测量实际内容边界，最多五次调整真实窗口 frame；每个场景记录测量尝试，未达到 720 像素仍验收失败。
 
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
@@ -85,6 +102,33 @@ ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后�
 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。当前候选采集流程仍需实际 CI 执行及看图核对。
+
+## Source-bound CI findings / 绑定源码的 CI 结果
+
+At head `a10d2985b59afd04ebb0cd72ea93417d426b54a6`, tested merge
+`ad48fd33a0872a82f98bf2a8e8a23a58b0a990ae`, the
+[ARM native job](https://github.com/YondFane/uTerm/actions/runs/42753479192/job/129622306101) passed
+its complete native interaction matrix. Its
+[artifact](https://github.com/YondFane/uTerm/actions/runs/42753479192/artifacts/13735681350) retains
+actual settings, terminal and file-tool screenshots. This is regression evidence for that source,
+not acceptance of later candidates or full paired parity.
+
+源码 `a10d2985b59afd04ebb0cd72ea93417d426b54a6`、实际测试 merge
+`ad48fd33a0872a82f98bf2a8e8a23a58b0a990ae` 的
+[ARM 原生任务](https://github.com/YondFane/uTerm/actions/runs/42753479192/job/129622306101)
+已通过完整原生交互矩阵。[产物](https://github.com/YondFane/uTerm/actions/runs/42753479192/artifacts/13735681350)保留实际设置、终端和文件工具截图。这是该源码的回归证据，不能作为后续候选代码或完整两版一致性验收。
+
+At head `0da8f364dd1c734885c45b8bf7e0bb4d72dcf4cb`, tested merge
+`143b26396bc2cc71cb812e0fcad445d3cbd2b756`, the ARM Personal collector retained
+[original images and reports](https://github.com/YondFane/uTerm/actions/runs/42756610518/artifacts/13735713914)
+when acceptance failed. `display.json` confirms 1280×960, but all eight workspace images and actual
+content bounds are 684 pixels tall. File lists were readable, but the required height was not met.
+This failure remains a failure; the candidate's measured-frame correction needs a new CI run.
+
+源码 `0da8f364dd1c734885c45b8bf7e0bb4d72dcf4cb`、实际测试 merge
+`143b26396bc2cc71cb812e0fcad445d3cbd2b756`
+的 ARM 个人版在验收失败时保留了[原图及报告](https://github.com/YondFane/uTerm/actions/runs/42756610518/artifacts/13735713914)。`display.json`
+确认显示区域为 1280×960，但八张工作区原图及实际内容边界高度均为 684 像素。文件列表可读，规定高度未满足。该结果仍为失败；候选代码的实测 frame 修正需要新的 CI 执行。
 
 ## Local checks / 本地检查
 

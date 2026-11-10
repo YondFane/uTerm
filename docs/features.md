@@ -82,6 +82,14 @@ addresses its own ID and generation, retaining the selected session. Files, cont
 open use segmented tool navigation. These interactions use the existing shared operations and
 conflict protections.
 
+Projects show their sessions and Worktrees as nested rows. Use the project disclosure control or
+context menu to collapse children while their terminals keep running. The context menu includes
+rename, pin/unpin, move up/down, move to another workspace and removal of an empty project. Manual
+project order supports local dragging within the same pin group; name sorting disables manual
+reordering. Pinning, collapse and order write shared state with revision checks. The workspace menu
+adds create/rename/delete; deletion is available only for an empty workspace when another remains.
+These candidate interactions require their new native CI checks; drag acceptance remains pending.
+
 [Two-client acceptance](native-ui-parity.md) covers the full matching scope, including remaining
 checks for drag/group operations, layout persistence, content tabs and workbench integration. Both
 screenshot collectors share project data and collect matching language/appearance/size grids. PR CI
@@ -97,6 +105,12 @@ failures retain the raw report and available original captures before validation
 attempted failure-window capture. The ordinary collector waits for real terminal input ownership
 before inspecting the host. Linux passes 17 macOS package/evidence policy tests and seven
 paired-evidence policy tests; these fixtures do not represent native window execution.
+
+The Personal collector adjusts the real window frame against measured content bounds, with at most
+five attempts and recorded geometry. It also executes the project context menu and disclosure
+control, checks durable pin/collapse/order, rejects a stale reorder after a settings write and
+verifies the selected terminal generation remains unchanged. Both clients use the same literal
+workspace name as well as matching project data.
 
 #### Configure personal updater signing
 

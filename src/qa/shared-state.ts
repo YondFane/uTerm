@@ -53,6 +53,7 @@ interface Context {
   performanceLong?: boolean;
 }
 const parityFixture = JSON.parse(parityFixtureJSON) as {
+  workspaceName: string;
   projectName: string;
   fontSize: number;
   sessions: string[];
@@ -337,6 +338,7 @@ async function runUiParity() {
           filesReadable: true,
           fontSize: (await settings()).fontSize,
           projectName: parityFixture.projectName,
+          workspaceName: parityFixture.workspaceName,
         });
       }
     }
@@ -372,6 +374,10 @@ export async function prepare() {
       }),
     );
     const workspace = emptyWorkspace();
+    if (context.phase === "ui-parity") {
+      assert(workspace.groups?.[0], "Missing fixture workspace");
+      workspace.groups[0].name = parityFixture.workspaceName;
+    }
     workspace.projects.push({
       id: "shared-state-qa",
       name: context.phase === "ui-parity" ? parityFixture.projectName : "Temporary QA project",
