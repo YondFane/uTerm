@@ -3,6 +3,7 @@ import UTermBridge
 @MainActor
 func nativeWorkbenchTitle(_ kind: String) -> String {
     switch kind {
+    case "files": return localized("Files", "文件")
     case "github": return "GitHub"
     case "redis": return localized("Redis connections", "Redis 连接")
     default: return localized("Databases", "数据库")

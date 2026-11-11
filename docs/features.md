@@ -132,6 +132,24 @@ still prevents reopening that ID. Older hosts show an upgrade message before any
 Read-only/take-control and visible transport/activity errors remain available. SSH restart, pane
 dragging and complete toolbar alignment remain in the parity scope.
 
+The native Files inspector embeds the same file tree, Quick open, Project search, inline naming,
+context menus and deletion dialogs as the ordinary client. Its header uses the shared Files, Git,
+GitHub and working-directory icons. Git/GitHub still open their existing windows; embedding those
+workbenches remains pending.
+
+File requests stay on the captured local project or Worktree. Writes first resolve open editor
+drafts, then recheck the selected root; cancelled delivery does not release a dispatched write
+early. Paste accepts only known project/Worktree source roots in the current workspace. File-copy
+clipboard sharing across separate native content documents remains pending.
+
+Focused Linux WebKit-transport simulations cover the shared controls, exact open path/line, visible
+failure/retry, retained search text, language/theme refresh and quit freeze/resume. Native QA
+operates actual WebKit tree/search controls and AppKit Return, checks symlink/root/method rejection
+and stale-project writes, and creates, copies, renames and deletes literal temporary names,
+including cancelled directory deletion. Personal workspace captures require the mounted shared
+controls and translated labels. These new checks and screenshots still require current-source macOS
+CI; simulations do not accept native rendering.
+
 Editable files open in the main workspace. When files are open, the tab row includes the selected
 terminal, ordered file names, unsaved indicators and close controls. Reopening selects the retained
 WK editor; returning to the terminal retains its view and generation.
@@ -154,7 +172,7 @@ The local CLI control switch remains an immediate service control in Local contr
 
 Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
 side/tool widths in both real apps. Collection rejects stale vectors, old height, titlebar insets or
-stale panel widths. Linux passes 454 Node checks (11 platform skips), type checking and focused
+stale panel widths. Linux passes 457 Node checks (11 platform skips), type checking and focused
 SVG/side-panel regressions; these do not establish complete native parity.
 
 Real Personal-window checks click file/tab/close controls, send AppKit arrows, retain exact
@@ -170,7 +188,9 @@ current-source native execution.
 
 Another real-window check clicks font controls and their bounds, types Unicode into native search,
 checks case/match navigation, exercises Command-F/Escape and restarts an exited shell. Packaging
-requires its source-bound report and `personal-<phase>-terminal-search.png`.
+requires its source-bound report and `personal-<phase>-terminal-search.png`. The restarted shell
+must reach the same writable condition used by its input entry point before QA sends the output
+probe.
 
 Linux restart tests exercise actual PTYs, rejected stale generations, read-only/live-process
 requests, failed-launch replay, closed-session history and an old-host capability probe. The Core
@@ -179,6 +199,10 @@ ordinary collector explicitly loads the measured font size and waits for the doc
 before checking readiness and character width; failures retain the requested face statuses.
 Ordinary-window QA also clicks the actual Restart button and verifies a new generation, parsed
 Unicode output and the retained terminal element. Current-source macOS execution remains pending.
+
+The ordinary capture contract requires all 32 matching workspace/settings scenes plus one
+`terminal-restart` scene. Missing, duplicate or unknown scenes and incomplete restart assertions
+fail; the paired artifact includes the 64 matching PNGs and the additional restart original.
 
 JDK acceptance waits for the live Add control after rejected input before clicking it. Sidebar
 acceptance checks actual section order and disclosures while retaining shared revision, selection
@@ -247,9 +271,9 @@ busy-state and selected-project guards.
 The same-source comparison includes 24 settings navigation pairs: twelve shared categories at
 English dark 900×640 and Chinese light 660×640. Both collectors activate actual navigation controls
 and reject missing/stale captures, changed drafts or unverified navigation. The combined artifact
-holds 64 original screenshots; collection does not establish complete functional parity. The sidebar
-updates existing disclosure buttons when busy state ends, so persisted collapse does not leave
-expansion disabled.
+holds 64 matching PNGs and the ordinary restart original; collection does not establish complete
+functional parity. The sidebar updates existing disclosure buttons when busy state ends, so
+persisted collapse does not leave expansion disabled.
 
 **Settings → Maven settings** edits global distribution, Maven home, `settings.xml`, local
 repository and Wrapper preference without requiring a project. Changes remain a draft until **Save

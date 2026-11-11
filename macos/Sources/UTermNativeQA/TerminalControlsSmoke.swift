@@ -16,7 +16,7 @@ enum TerminalControlsSmoke {
         let id = session.id, generation = session.generation, view = ObjectIdentifier(session.view)
         defer {
             report["terminalSearchDiagnostics"] = ["index": session.search.index, "total": session.search.total, "visible": session.search.visible, "matchCase": session.search.matchCase, "terminalColumns": session.view.getTerminal().cols, "terminalRows": session.view.getTerminal().rows]
-            report["terminalRestartDiagnostics"] = ["generation": session.generation ?? "", "exited": session.exited, "error": session.error, "owned": session.inputControl?.owned == true, "renderedFrames": session.qaRenderedFrames]
+            report["terminalRestartDiagnostics"] = ["generation": session.generation ?? "", "exited": session.exited, "error": session.error, "owned": session.inputControl?.owned == true, "acceptsInput": session.acceptsInput, "renderedFrames": session.qaRenderedFrames]
         }
         let size = model.settings["fontSize"].number ?? 17
         func control(_ name: String) -> String { "native-terminal-" + name + "-" + id }
@@ -74,7 +74,7 @@ enum TerminalControlsSmoke {
         session.enqueue(Data("exit\r".utf8))
         try await TerminalSmoke.wait("Observe an exited real local shell") { session.exited }
         try await click(window, id: control("restart"))
-        try await TerminalSmoke.wait("Restart through actual button with a new process generation") { session.generation != nil && session.generation != generation && session.error.isEmpty && !session.exited }
+        try await TerminalSmoke.wait("Restart through actual button with a new process generation and writable input") { session.generation != nil && session.generation != generation && session.acceptsInput && session.inputControl?.owned == true }
         session.enqueue(Data("printf 'RESTARTED_%s\\n' '中文'\r".utf8))
         try await TerminalSmoke.wait("Render output from the actual restarted shell") { session.text.contains("RESTARTED_中文") }
         guard model.selectedID == id, model.terminals[id] === session, ObjectIdentifier(session.view) == view,

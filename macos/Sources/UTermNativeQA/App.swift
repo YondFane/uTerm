@@ -99,6 +99,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openPythonRequested = { [weak self] in self?.openPython() }
         model.openGitRequested = { [weak self] in self?.openGit() }
         model.openGitHubRequested = { [weak self] in self?.openGitHub() }
+        model.makeFileTools = { [weak self] root, scope in
+            guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
+            return try await self.makeFileToolsWindow(directory: root, scope: scope)
+        }
         model.openInspectorFile = { [weak self] directory, path, line in
             guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
             let root = try await self.selectedProjectDirectory()
@@ -800,6 +804,114 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             await run.start()
             return controller
         } catch { await worker.close(); throw error }
+    }
+    private func validateFileTools(directory: URL, scope: String, bridge: CoreBridge) async throws {
+        for attempt in 0..<3 {
+            guard model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Refresh the file tools.", "项目选择已变化，请刷新文件面板。")) }
+            do {
+                let snapshot = try await bridge.snapshot()
+                let saved = snapshot.document.workspace
+                let actualScope = [saved["selectedWorkspace"].string ?? "local", saved["selectedProject"].string ?? "", saved["selectedWorktree"].string ?? ""].joined(separator: "\u{0}")
+                guard actualScope == scope else { throw BridgeFailure(code: "ROOT_DENIED", message: "File tools no longer own the selected project") }
+                let context = try await bridge.projectContext(expectedRevision: snapshot.revision)
+                guard let path = context.directory, URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath() == directory.standardizedFileURL.resolvingSymlinksInPath(), model.inspectorContextKey == scope else { throw BridgeFailure(code: "ROOT_DENIED", message: "File tools cannot select another project root") }
+                return
+            } catch let failure as BridgeFailure where attempt < 2 && ["CONFLICT", "WRITER_BUSY"].contains(failure.code) {
+                try await Task.sleep(for: .milliseconds(25 * (attempt + 1)))
+            }
+        }
+    }
+    private func fileToolsSourceRoot(_ source: String, bridge: CoreBridge) async throws -> URL {
+        let state = try await bridge.snapshot()
+        let saved = state.document.workspace
+        var candidates: [String] = []
+        for project in saved["projects"].array where (project["workspaceId"].string ?? "local") == model.groupID {
+            if let directory = project["directory"].string { candidates.append(directory) }
+            for tree in project["worktrees"].array { if let path = tree["path"].string { candidates.append(path) } }
+        }
+        let requested = URL(fileURLWithPath: source).standardizedFileURL.resolvingSymlinksInPath()
+        guard source.hasPrefix("/"), candidates.contains(where: { URL(fileURLWithPath: $0).standardizedFileURL.resolvingSymlinksInPath() == requested }) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Copy source must be an existing project or Worktree in this workspace") }
+        return requested
+    }
+    private func makeFileToolsWindow(directory: URL, scope: String) async throws -> ContentWindow {
+        guard !preparingQuit, let stateBridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+        let root = directory.standardizedFileURL.resolvingSymlinksInPath()
+        try await validateFileTools(directory: root, scope: scope, bridge: stateBridge)
+        if let content = contentWindows.values.first(where: { $0.workbenchHost?.kind == "files" && $0.gitProjectID == scope && $0.directory == root }) { return content }
+        for previous in Array(contentWindows.values) where previous.workbenchHost?.kind == "files" {
+            guard try await previous.prepareForQuit() else { throw BridgeFailure(code: "FILES_BUSY", message: localized("Finish the current file operation first.", "请先完成当前文件操作。")) }
+            previous.forceClose()
+        }
+        let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
+        do {
+            let host = try FilesHost(bridge: worker, directory: root)
+            host.validate = { [weak self] in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                try await self.validateFileTools(directory: root, scope: scope, bridge: worker)
+            }
+            host.context = { [weak model] in
+                let mode = model?.inspector.mode ?? .files
+                return .object(["mode": .string(mode == .files ? "tree" : mode.rawValue), "request": .number(Double(model?.inspector.request ?? 0))])
+            }
+            host.changeMode = { [weak model] mode in
+                let modes: [String: NativeInspectorModel.Mode] = ["tree": .files, "quick": .quick, "search": .search]
+                guard let model, let value = modes[mode] else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Unknown file mode") }
+                model.showInspector(value)
+            }
+            host.toolbar = { [weak model] kind in
+                guard let model else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                switch kind {
+                case "files": model.showInspector(.files)
+                case "git": model.openGitRequested?()
+                case "github": model.openGitHubRequested?()
+                case "directory": NSWorkspace.shared.activateFileViewerSelecting([root])
+                default: throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Unknown file toolbar action")
+                }
+            }
+            host.openFile = { [weak model] path, line in
+                guard let open = model?.openInspectorFile else { throw BridgeFailure(code: "CLOSED", message: "File editor is closed") }
+                try await open(root.path, path, line)
+            }
+            host.sourceRoot = { [weak self] source in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                return try await self.fileToolsSourceRoot(source, bridge: worker)
+            }
+            host.mutate = { [weak self] method, params, bridge in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                return try await self.performFileMutation(method: method, params: params, bridge: bridge, directory: root, scope: scope)
+            }
+            let content = try ContentWindow(bridge: worker, directory: root, path: "Files", gitProjectID: scope, stateBridge: stateBridge, ownsBridge: true, workbenchHost: host)
+            content.window?.contentView = NSView(); content.window?.orderOut(nil)
+            content.presentEmbedded = { [weak model] in if model?.inspectorContextKey == scope { model?.showInspector(.files) } }
+            let id = UUID(); contentWindows[id] = content
+            content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
+            host.settingsChanged(model.settings)
+            return content
+        } catch { await worker.close(); throw error }
+    }
+    private func performFileMutation(method: String, params: JSONValue, bridge: CoreBridge, directory: URL, scope: String) async throws -> JSONValue {
+        guard !preparingQuit, !mutatingRepository, model.beginRepositoryMutation() else { throw BridgeFailure(code: "FILES_BUSY", message: localized("Finish the current file operation first.", "请先完成当前文件操作。")) }
+        mutatingRepository = true
+        let contents = contentWindows.values.filter { $0.editable }
+        var started = false
+        defer {
+            for content in contents {
+                content.resumeAfterQuit()
+                if started { content.refreshAfterRepositoryMutation() }
+            }
+            mutatingRepository = false; model.finishRepositoryMutation()
+        }
+        for content in contents {
+            guard try await content.prepareForQuit() else { throw BridgeFailure(code: "CONTENT_CHANGED", message: localized("Save or resolve open file changes before the file operation.", "执行文件操作前请保存或处理已打开文件的修改。")) }
+        }
+        try Task.checkCancellation()
+        try await validateFileTools(directory: directory, scope: scope, bridge: bridge)
+        if method == "files.copy", let source = params["source_directory"].string { _ = try await fileToolsSourceRoot(source, bridge: bridge) }
+        guard contents.allSatisfy({ $0.isPreparedForQuit }) else { throw BridgeFailure(code: "CONTENT_CHANGED", message: "A file changed during mutation preparation") }
+        started = true
+        // Keep dispatched writes alive through document cancellation until the actual result.
+        // 文档取消后，已分发的写入仍保持保护，直至取得实际结果。
+        return try await Task.detached { try await bridge.call(method, params: params) }.value
     }
     private func selectedProjectDirectory() async throws -> URL {
         guard let bridge = model.bridge, let state = model.state else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }

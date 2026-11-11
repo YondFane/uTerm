@@ -10,6 +10,24 @@ body,
 .native-database {
   flex-direction: column;
 }
+.native-files {
+  flex-direction: column;
+}
+.native-files > fieldset {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.native-files .file-panel {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+}
 .native-github {
   flex-direction: column;
 }

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { assertParityScenes } from "../scripts/ui-parity-scenes.mjs";
+import { assertParityOperations, assertParityScenes } from "../scripts/ui-parity-scenes.mjs";
 
 const fixture = JSON.parse(
   readFileSync(new URL("../shared/fixtures/client-ui-parity.json", import.meta.url), "utf8"),
@@ -20,11 +20,38 @@ const scenes = [
       (section) => `settings-${section.id}-${scene.language}-${scene.appearance}-${scene.width}`,
     ),
   ),
+  ...fixture.ordinaryOperations,
 ];
 
-test("the complete 32-scene ordinary capture accepts file-system enumeration order", () => {
-  assert.equal(scenes.length, 32);
+test("the complete grid and required restart accept file-system enumeration order", () => {
+  assert.equal(scenes.length, 33);
   assert.doesNotThrow(() => assertParityScenes([...scenes].reverse(), fixture));
+});
+
+test("the ordinary restart requires actual controls, retained identity and a new generation", () => {
+  const checks = {
+    passed: true,
+    actualRestartButton: true,
+    parsedUnicodeOutput: true,
+    canonicalWorkspaceRetained: true,
+    terminalViewRetained: true,
+    generationBeforeRestart: "old-generation",
+    restartedGeneration: "new-generation",
+  };
+  const record = { scenario: "terminal-restart", checks };
+  assert.doesNotThrow(() => assertParityOperations([record]));
+  assert.throws(() => assertParityOperations([]));
+  assert.throws(() => assertParityOperations([record, record]));
+  for (const key of Object.keys(checks)) {
+    assert.throws(() =>
+      assertParityOperations([{ ...record, checks: { ...checks, [key]: null } }]),
+    );
+  }
+  assert.throws(() =>
+    assertParityOperations([
+      { ...record, checks: { ...checks, restartedGeneration: "old-generation" } },
+    ]),
+  );
 });
 
 test("three-scene fallback, missing, duplicate, substituted and extra captures fail", () => {

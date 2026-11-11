@@ -82,6 +82,9 @@ export const gitFavoriteMethods: Record<string, string> = {
   git_favorites_write: "git.favorites.write",
 };
 const contentMethods = new Set([
+  "files_context",
+  "files_mode",
+  "files_toolbar",
   "github_repositories",
   "github_read",
   "github_prepare_pr",
@@ -307,6 +310,9 @@ export class ContentScope {
         "editor-repository-refresh",
         "file-focus-line",
         "content-font-adjust",
+        "files-frozen",
+        "files-mode-changed",
+        "files-settings-changed",
         "github-frozen",
         "github-context-changed",
         "github-settings-changed",

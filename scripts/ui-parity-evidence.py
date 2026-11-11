@@ -45,6 +45,16 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
     assert native["platform"] == "macOS" and tauri["platform"] == "darwin"
     assert native["architecture"] == tauri["architecture"] == "arm64", "Different capture architecture"
     assert re.search(r"\d+\.\d+(?:\.\d+)?", native["system"])[0] == tauri["productVersion"], "Different macOS version"
+    restarts = [entry for entry in tauri["scenes"] if entry["scenario"] == "terminal-restart"]
+    assert len(restarts) == 1, "Missing or duplicate ordinary restart evidence"
+    restart = restarts[0]
+    checks = restart["checks"]
+    for key in ["passed", "actualRestartButton", "parsedUnicodeOutput", "canonicalWorkspaceRetained", "terminalViewRetained"]:
+        assert checks.get(key) is True, "Unaccepted ordinary restart: " + key
+    assert isinstance(checks.get("generationBeforeRestart"), str) and checks["generationBeforeRestart"]
+    assert isinstance(checks.get("restartedGeneration"), str) and checks["restartedGeneration"] and checks["restartedGeneration"] != checks["generationBeforeRestart"]
+    assert restart["screenshot"] == "ui-parity-terminal-restart.png"
+    restart_file, restart_digest = image(tauri_path.parent, restart["screenshot"])
     expected = {(lang, appearance, width) for lang in fixture["languages"] for appearance in fixture["appearances"] for width in fixture["widths"]}
     native_scenes = native["workspaceScenes"]
     tauri_scenes = [entry for entry in tauri["scenes"] if entry["scenario"].startswith("workspace-")]
@@ -125,9 +135,11 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
     for pair in pairs:
         shutil.copyfile(native_path.parent / pair["native"], output / pair["native"])
         shutil.copyfile(tauri_path.parent / pair["tauri"], output / pair["tauri"])
+    shutil.copyfile(restart_file, output / restart_file.name)
     result = dict(sourceHeadSHA=head, testedMergeSHA=tested, uiParityFixtureSHA256=fixture_digest,
                   chromeContractSHA256=chrome_digest,
                   platform="macOS", architecture="arm64", system=native["system"], pairs=pairs,
+                  ordinaryRestart=dict(screenshot=restart_file.name, SHA256=restart_digest, checks=checks),
                   comparisonReady=True, functionalParityAccepted=False,
                   scope="Workspace and settings navigation screenshots; review images and execute remaining acceptance rows.")
     (output / "comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
@@ -137,6 +149,7 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
     for pair in pairs:
         label = f"{pair['area']} {pair.get('section', '')} / {pair['language']} / {pair['appearance']} / {pair['width']}×{pair['height']}"
         rows.append(f"| {label} | ![ordinary]({pair['tauri']}) | ![personal]({pair['native']}) |")
+    rows.extend(["", "Actual ordinary restart / 普通版实际重启", "", f"![restart]({restart_file.name})"])
     (output / "comparison.md").write_text("\n".join(rows) + "\n")
     return result
 

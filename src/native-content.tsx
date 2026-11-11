@@ -15,9 +15,10 @@ import { NativeGit } from "./native-git";
 import { NativeDatabase } from "./native-database";
 import { NativeRedis } from "./native-redis";
 import { NativeGitHub } from "./native-github";
+import { NativeFiles } from "./native-files";
 
 interface Context {
-  kind?: "file" | "git" | "github" | "database" | "redis";
+  kind?: "file" | "files" | "git" | "github" | "database" | "redis";
   directory: string;
   path: string;
   line?: number;
@@ -191,7 +192,9 @@ async function start() {
         <SettingsProvider content={content}>
           <BundledFontReady>
             <ContentFontCommands kind={context.kind} />
-            {context.kind === "database" ? (
+            {context.kind === "files" ? (
+              <NativeFiles directory={context.directory} />
+            ) : context.kind === "database" ? (
               <NativeDatabase />
             ) : context.kind === "redis" ? (
               <NativeRedis />

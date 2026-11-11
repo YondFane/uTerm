@@ -465,6 +465,11 @@ acceptance remain pending. Content writes are restricted to the selected file. `
 explicitly runs filesystem failure/retry checks for workspace/draft snapshots and metadata saving
 after Worktree removal, plus Git favorite save/restore/retry.
 
+The native Files inspector mounts the shared `src/components/FilePanel.tsx` through
+`src/native-files.tsx` and scoped `FilesHost.swift` calls. File operations retain root checks and
+editor draft guards. Current-source native interaction and matching screenshots remain required;
+Git/GitHub workbench embedding and cross-document file-copy clipboard sharing remain pending.
+
 The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
 operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this
 service. `pnpm test:host` includes the real standalone CLI/socket regression; `pnpm test:core`

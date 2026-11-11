@@ -597,6 +597,8 @@ async function runUiParity() {
     }
     document.querySelector<HTMLButtonElement>(".settings-close")!.click();
   }
+  await invoke("qa_performance_window", { width: 1100, height: 720 });
+  await until(() => innerWidth === 1100 && innerHeight === 720, "actual restart capture size");
   await flushSharedState();
   const workspaceBeforeRestart = (await observeCore("snapshot.read")) as unknown as CoreSnapshot;
   await invoke("control_session", { id: "ui-parity-0", action: "send", text: "exit\r" });

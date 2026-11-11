@@ -64,6 +64,12 @@ class ParityEvidenceTests(unittest.TestCase):
                                                     platform="macOS", architecture="arm64", system=self.n["system"]))
                 self.n["captures"].append(native)
                 self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
+        restart = "ui-parity-terminal-restart.png"
+        image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 1100, 720) + bytes(1100)
+        (self.tauri / restart).write_bytes(image)
+        self.t["scenes"].append(dict(scenario="terminal-restart", screenshot=restart, checks=dict(
+            passed=True, actualRestartButton=True, parsedUnicodeOutput=True, canonicalWorkspaceRetained=True,
+            terminalViewRetained=True, generationBeforeRestart="old-generation", restartedGeneration="new-generation")))
 
     def run_compare(self):
         for root, name, report in [(self.native, "personal-initial.json", self.n), (self.tauri, "report.json", self.t)]:
@@ -82,7 +88,20 @@ class ParityEvidenceTests(unittest.TestCase):
         self.assertTrue(result["comparisonReady"])
         self.assertFalse(result["functionalParityAccepted"])
         self.assertEqual(len(result["pairs"]), 32)
-        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 64)
+        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 65)
+
+    def test_restart_requires_unique_actual_operation_new_generation_and_screenshot(self):
+        original = copy.deepcopy(self.t["scenes"])
+        for mutation in ["missing", "duplicate", "button", "output", "workspace", "view", "generation", "screenshot"]:
+            self.t["scenes"] = copy.deepcopy(original)
+            restart = self.t["scenes"][-1]
+            if mutation == "missing": self.t["scenes"].pop()
+            if mutation == "duplicate": self.t["scenes"].append(copy.deepcopy(restart))
+            for name, key in [("button", "actualRestartButton"), ("output", "parsedUnicodeOutput"), ("workspace", "canonicalWorkspaceRetained"), ("view", "terminalViewRetained")]:
+                if mutation == name: restart["checks"][key] = False
+            if mutation == "generation": restart["checks"]["restartedGeneration"] = restart["checks"]["generationBeforeRestart"]
+            if mutation == "screenshot": restart["screenshot"] = "absent.png"
+            with self.subTest(mutation=mutation), self.assertRaises(AssertionError): self.run_compare()
 
     def test_settings_scenes_require_complete_source_bound_unchanged_navigation(self):
         original = copy.deepcopy(self.n["settingsScenes"])

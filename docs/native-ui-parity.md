@@ -52,8 +52,8 @@ must match.
 The shared-vector candidate uses `shared/contracts/chrome-ui-v1.json` for regular icon paths and
 44-point chrome metrics. New workspace captures must report the generated contract SHA-256 and
 actual toolbar height/top position and responsive side/tool widths in both applications. The
-collector rejects stale vectors, titlebar insets or old panel geometry; 0.2.10 captures do not meet this new candidate's evidence requirement. Full visual and
-functional parity remains pending.
+collector rejects stale vectors, titlebar insets or old panel geometry; 0.2.10 captures do not meet
+this new candidate's evidence requirement. Full visual and functional parity remains pending.
 
 共享矢量候选使用 `shared/contracts/chrome-ui-v1.json`
 的常规图标路径与 44 点界面尺寸。新的工作区截图须在两版应用中记录生成契约的 SHA-256 与实际顶栏高度／顶部位置及响应式侧栏／工具宽度；汇集器拒绝过期路径、标题栏额外留白或旧面板尺寸。0.2.10 原图不满足此新候选的证据要求，完整视觉／功能一致性仍待完成。
@@ -109,14 +109,15 @@ acceptance.
 
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
-uploads 64 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
-never replaces a missing native capture with a browser render. `comparisonReady` means the images
-are ready for review; `functionalParityAccepted` remains false until all acceptance rows are met.
-The source-bound results below include actual CI execution and inspection of the Java originals.
+uploads 64 matching original images, the ordinary restart image, `comparison.md` and
+`comparison.json`. Collection runs on Ubuntu and never replaces a missing native capture with a
+browser render. `comparisonReady` means the images are ready for review; `functionalParityAccepted`
+remains false until all acceptance rows are met. The source-bound results below include actual CI
+execution and inspection of the Java originals.
 
 PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
-ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 64 张原图、`comparison.md` 和
-`comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
+ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 64 张匹配原图、普通版重启原图、`comparison.md`
+和 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。下列绑定源码的结果包含实际 CI 执行及 Java 原图核对。
 

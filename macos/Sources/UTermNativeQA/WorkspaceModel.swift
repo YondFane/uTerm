@@ -70,6 +70,7 @@ final class WorkspaceModel: ObservableObject {
     var openGitRequested: (() -> Void)?
     var openGitHubRequested: (() -> Void)?
     var openInspectorFile: ((String, String, Int) async throws -> Void)?
+    var makeFileTools: ((URL, String) async throws -> ContentWindow)?
     var prepareSSHTransportReconnect: (() async -> Bool)?
     var sshTrustTask: Task<Void, Never>?
     var sshTrustAlert: NSAlert?
@@ -98,7 +99,7 @@ final class WorkspaceModel: ObservableObject {
         while let current = view { if current is InspectorContainer { return true }; view = current.superview }
         return false
     }
-    func showInspector(_ mode: NativeInspectorModel.Mode) { inspector.mode = mode; inspectorVisible = true }
+    func showInspector(_ mode: NativeInspectorModel.Mode) { inspector.show(mode); inspectorVisible = true }
     func hideInspector() { inspectorVisible = false; inspector.invalidate(); focusRevision += 1 }
     func sharedDatabaseHost() throws -> DatabaseHost {
         if let databaseHostCache { return databaseHostCache }

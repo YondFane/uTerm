@@ -9,6 +9,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     var name: String { entry.session["name"].string ?? localized("Terminal", "终端") }
     var directory: String { entry.directory }
     var supportsRestart: Bool { taskGeneration == nil && entry.session["ssh"] == .null }
+    var acceptsInput: Bool { taskGeneration == nil && receivedInitialFrame && inputControl?.owned != false && generation != nil && error.isEmpty && !exited && !reconnecting }
     let view: NativeTerminalView
     private var appliedSettings: JSONValue = .null
     private var appliedCatalog: JSONValue = .null
@@ -288,7 +289,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     }
 
     func enqueue(_ bytes: Data) {
-        guard taskGeneration == nil, receivedInitialFrame, inputControl?.owned != false, generation != nil, error.isEmpty, !exited, !reconnecting else { return }
+        guard acceptsInput else { return }
         guard input.count + bytes.count <= 1024 * 1024 else {
             error = localized("Input queue is full. Wait before pasting again.", "输入队列已满，请等待后再粘贴。")
             changed?(); return

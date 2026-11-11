@@ -179,6 +179,9 @@ enum PersonalSmoke {
                             model.inspector.error.isEmpty && !model.inspector.busy
                                 && Set(model.inspector.rows.compactMap { $0["path"].string }) == Set(["note.txt", "README.md"])
                         }
+                        guard let files = model.inspector.content, files.webView.window === window else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Shared file controls are not mounted in the real inspector") }
+                        try await ContentSmoke.wait(files, "['note.txt','README.md'].every(name => [...document.querySelectorAll('.file-row-name')].some(row => row.textContent.trim() === name)) && document.querySelectorAll('.inspector-tabs [role=tab]').length === 3 && document.querySelectorAll('.inspector-switcher button').length === 4")
+                        try await ContentSmoke.wait(files, "document.querySelector('.file-panel')?.getAttribute('aria-label') === " + (language == "en" ? "'Files panel'" : "'文件面板'"))
                         let expectedSidebar = CoreChromeLayout.sidebar(available: Double(window.contentView?.bounds.width ?? 0), requested: CoreChrome.sidebarDefaultWidth).width
                         guard abs(Double(model.sidebarWidth) - expectedSidebar) < 1 else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_WIDTH", message: "Actual sidebar differs from shared responsive bounds") }
                         let expectedTools = CoreChromeLayout.inspector(available: Double(window.contentView?.bounds.width ?? 0) - expectedSidebar, ratio: CoreChrome.inspectorDefaultRatio).width

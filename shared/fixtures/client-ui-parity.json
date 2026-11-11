@@ -5,6 +5,7 @@
   "appearances": ["dark", "light"],
   "widths": [1100, 640],
   "height": 720,
+  "ordinaryOperations": ["terminal-restart"],
   "fontSize": 17,
   "automaticUpdates": false,
   "settingsScenes": [
