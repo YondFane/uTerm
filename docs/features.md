@@ -151,11 +151,12 @@ acceptance checks the actual visible file controls after swapping and restoring 
 
 File requests stay on the captured local project or Worktree. Writes first resolve open editor
 drafts, then recheck the selected root; cancelled delivery does not release a dispatched write
-early. Paste accepts only known project/Worktree source roots in the current workspace. Native
-memory retains the copied source when switching projects and replacing the file-tools document;
-paths are not saved to disk. Copy updates serialize, and a rejected copy restores the last confirmed
-source with a visible error. Clipboard hydration ignores late replies from an older document.
-Cross-workspace clipboard alignment remains pending.
+early. Paste accepts only known project/Worktree source roots in saved workspaces. Native memory
+retains the copied source when switching projects or workspaces and replacing the file-tools
+document; paths are not saved to disk. A removed source project is rejected even if its files still
+exist. Copy updates serialize, and a rejected copy restores the last confirmed source with a visible
+error. Clipboard hydration ignores late replies from an older document. Cross-workspace native
+execution still requires current-source CI.
 
 Project metadata reads share the main state bridge with settings writes, while filesystem scans stay
 on their worker. This avoids the client's own background reads rejecting a font change as
@@ -168,16 +169,16 @@ Focused Linux WebKit-transport simulations cover the shared controls, exact open
 failure/retry, retained search text, language/theme refresh and quit freeze/resume. Native QA
 operates actual WebKit tree/search controls and AppKit Return, checks symlink/root/method rejection
 and stale-project writes, and creates, copies, renames and deletes literal temporary names,
-including cancelled directory deletion. It also copies in one actual panel, switches projects,
-replaces that WebKit document and pastes into the new project, checking original bytes and rejected
-outside-root clipboard values. Native QA also operates actual host search and Quick SSH controls,
-checks invalid/cancelled/stale-workspace writes, and creates and keeps a temporary connection using
-loopback port 1 without external credentials. This exercises failure handling, not authenticated
-remote login. Linux simulations exercise queued failures, confirmed-source rollback and stale
-hydration. `native-inspector-copy-across-projects-light-zh.png` records the destination panel.
-Personal workspace captures require the mounted shared controls and translated labels. These new
-checks and screenshots still require current-source macOS CI; simulations do not accept native
-rendering.
+including cancelled directory deletion. It also copies in one actual panel, switches projects and
+workspaces, replaces that WebKit document and pastes into the new project, checking original bytes,
+rejected outside-root clipboard values and a removed source whose files remain on disk. Native QA
+also operates actual host search and Quick SSH controls, checks invalid/cancelled/stale-workspace
+writes, and creates and keeps a temporary connection using loopback port 1 without external
+credentials. This exercises failure handling, not authenticated remote login. Linux simulations
+exercise queued failures, confirmed-source rollback and stale hydration.
+`native-inspector-copy-across-projects-light-zh.png` records the destination panel. Personal
+workspace captures require the mounted shared controls and translated labels. These new checks and
+screenshots still require current-source macOS CI; simulations do not accept native rendering.
 
 Editable files open in the main workspace. When files are open, the tab row includes the selected
 terminal, ordered file names, unsaved indicators and close controls. Reopening selects the retained

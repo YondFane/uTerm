@@ -12,6 +12,15 @@ enum QuickSSHSmoke {
         }
         return window.contentView.flatMap { TerminalSmoke.descendants($0).first { $0.identifier?.rawValue == id } }
     }
+    private static func connections(_ model: WorkspaceModel) -> [JSONValue] {
+        model.groups.flatMap { (group: JSONValue) -> [JSONValue] in group["sshConnections"].array }
+    }
+    private static func createdTemporary(_ model: WorkspaceModel) -> Bool {
+        connections(model).contains(where: { profile in
+            guard profile["temporary"].bool == true, profile["sessions"].array.count == 1 else { return false }
+            return profile["host"].string == "127.0.0.1" && profile["port"].number == 1
+        })
+    }
     private static func address(_ content: ContentWindow, _ text: String) async throws {
         guard let window = content.window, window.makeFirstResponder(content.webView), try await EditorSmoke.evaluate(content, script: """
             const input=document.querySelector('.ssh-quick-dialog input');if(!input)return false;
@@ -82,8 +91,11 @@ enum QuickSSHSmoke {
         quick = try await open()
         try await address(quick, "ssh://127.0.0.1:1")
         _ = try await quick.webView.evaluateJavaScript("document.querySelector('form').requestSubmit()")
-        try await TerminalSmoke.wait("Commit the temporary connection and close the shared form") { lookup() == nil && model.selectedID != nil && model.groups.flatMap { $0["sshConnections"].array }.contains { $0["temporary"].bool == true && $0["host"].string == "127.0.0.1" && $0["port"].number == 1 && $0["sessions"].array.count == 1 } }
-        guard let profile = model.groups.flatMap({ $0["sshConnections"].array }).first(where: { $0["temporary"].bool == true }), let id = profile["id"].string, let session = profile["sessions"].array.first?["id"].string else { throw BridgeFailure(code: "QUICK_SSH_CREATED", message: "Temporary connection or first session is missing") }
+        try await TerminalSmoke.wait("Commit the temporary connection and close the shared form") {
+            guard lookup() == nil, model.selectedID != nil else { return false }
+            return createdTemporary(model)
+        }
+        guard let profile = connections(model).first(where: { $0["temporary"].bool == true }), let id = profile["id"].string, let session = profile["sessions"].array.first?["id"].string else { throw BridgeFailure(code: "QUICK_SSH_CREATED", message: "Temporary connection or first session is missing") }
         await model.patchSettings(["language": .string("zh-Hans"), "appearance": .string("light")])
         window.makeKeyAndOrderFront(nil)
         try await capture("native-quick-ssh-temporary-light-zh.png", window: window)
@@ -93,16 +105,21 @@ enum QuickSSHSmoke {
         guard let row else { throw BridgeFailure(code: "QUICK_SSH_KEEP", message: "Missing temporary host row") }
         let menu = NSMenu(); coordinator.populate(menu, row: row)
         guard let keep = menu.items.first(where: { $0.title == "保存为常用连接" }), let action = keep.action, keep.isEnabled, NSApp.sendAction(action, to: keep.target, from: keep) else { throw BridgeFailure(code: "QUICK_SSH_KEEP", message: "Actual keep-connection menu action is missing") }
-        try await TerminalSmoke.wait("Keep the existing connection without replacing its session") { model.groups.flatMap { $0["sshConnections"].array }.contains { $0["id"].string == id && $0["temporary"].bool == false && $0["sessions"].array.first?["id"].string == session } }
+        try await TerminalSmoke.wait("Keep the existing connection without replacing its session") {
+            connections(model).contains(where: { profile in
+                guard profile["id"].string == id, profile["temporary"].bool == false else { return false }
+                return profile["sessions"].array.first?["id"].string == session
+            })
+        }
         await model.closeSession(id: session)
-        guard model.groups.flatMap({ $0["sshConnections"].array }).contains(where: { $0["id"].string == id }) else { throw BridgeFailure(code: "QUICK_SSH_KEEP", message: "Closing the final session removed a saved connection") }
+        guard connections(model).contains(where: { $0["id"].string == id }) else { throw BridgeFailure(code: "QUICK_SSH_KEEP", message: "Closing the final session removed a saved connection") }
         quick = try await open()
         try await address(quick, "ssh://127.0.0.1:1")
         _ = try await quick.webView.evaluateJavaScript("document.querySelector('form').requestSubmit()")
-        try await TerminalSmoke.wait("Create another temporary connection for actual close cleanup") { lookup() == nil && model.groups.flatMap { $0["sshConnections"].array }.contains { $0["temporary"].bool == true && $0["sessions"].array.count == 1 } }
-        guard let temporary = model.groups.flatMap({ $0["sshConnections"].array }).first(where: { $0["temporary"].bool == true }), let temporaryID = temporary["id"].string, let temporarySession = temporary["sessions"].array.first?["id"].string else { throw BridgeFailure(code: "QUICK_SSH_PRUNE", message: "Missing temporary cleanup fixture") }
+        try await TerminalSmoke.wait("Create another temporary connection for actual close cleanup") { lookup() == nil && createdTemporary(model) }
+        guard let temporary = connections(model).first(where: { $0["temporary"].bool == true }), let temporaryID = temporary["id"].string, let temporarySession = temporary["sessions"].array.first?["id"].string else { throw BridgeFailure(code: "QUICK_SSH_PRUNE", message: "Missing temporary cleanup fixture") }
         await model.closeSession(id: temporarySession)
-        guard !model.groups.flatMap({ $0["sshConnections"].array }).contains(where: { $0["id"].string == temporaryID }) else { throw BridgeFailure(code: "QUICK_SSH_PRUNE", message: "Closing the final session retained an idle temporary connection") }
+        guard !connections(model).contains(where: { $0["id"].string == temporaryID }) else { throw BridgeFailure(code: "QUICK_SSH_PRUNE", message: "Closing the final session retained an idle temporary connection") }
         report["nativeQuickSSHActualFinalSessionPrunesTemporary"] = true
         for id in [firstID, secondID, id] { guard await model.mutate("ssh.profile.remove", ["id": .string(id)]) else { throw BridgeFailure(code: "QUICK_SSH_CLEANUP", message: model.error) } }
         report["nativeQuickSSHActualCreateAndKeepRetainSession"] = true

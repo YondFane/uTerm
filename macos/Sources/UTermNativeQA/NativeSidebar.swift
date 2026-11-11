@@ -92,7 +92,7 @@ struct NativeSidebar: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) { context.coordinator.update(model) }
 
     @MainActor
-    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate, NSTextFieldDelegate {
+    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate, NSSearchFieldDelegate {
         weak var table: NSTableView?
         weak var model: WorkspaceModel?
         private var rows: [Row] = []

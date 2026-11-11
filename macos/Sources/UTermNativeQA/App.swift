@@ -16,7 +16,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var window: NSWindow?
     private var contentWindows: [UUID: ContentWindow] = [:]
     private var fileClipboard: JSONValue = .null
-    private var fileClipboardWorkspace: String?
     private var fileWindowOrder: [UUID] = []
     private var changingFileTabs = false
     private var pendingFileTabTrim = false
@@ -854,12 +853,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let state = try await bridge.snapshot()
         let saved = state.document.workspace
         var candidates: [String] = []
-        for project in saved["projects"].array where (project["workspaceId"].string ?? "local") == model.groupID {
+        for project in saved["projects"].array {
             if let directory = project["directory"].string { candidates.append(directory) }
             for tree in project["worktrees"].array { if let path = tree["path"].string { candidates.append(path) } }
         }
         let requested = URL(fileURLWithPath: source).standardizedFileURL.resolvingSymlinksInPath()
-        guard source.hasPrefix("/"), candidates.contains(where: { URL(fileURLWithPath: $0).standardizedFileURL.resolvingSymlinksInPath() == requested }) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Copy source must be an existing project or Worktree in this workspace") }
+        guard source.hasPrefix("/"), candidates.contains(where: { URL(fileURLWithPath: $0).standardizedFileURL.resolvingSymlinksInPath() == requested }) else { throw BridgeFailure(code: "ROOT_DENIED", message: localized("Copy source must be a saved project or Worktree.", "复制来源必须是已保存的项目或 Worktree。")) }
         return requested
     }
     private func makeFileToolsWindow(directory: URL, scope: String) async throws -> ContentWindow {
@@ -882,12 +881,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             host.context = { [weak self, weak model] in
                 let mode = model?.inspector.mode ?? .files
-                let clipboard = self?.fileClipboardWorkspace == model?.groupID ? self?.fileClipboard ?? .null : .null
-                return .object(["mode": .string(mode == .files ? "tree" : mode.rawValue), "request": .number(Double(model?.inspector.request ?? 0)), "clipboard": clipboard])
+                return .object(["mode": .string(mode == .files ? "tree" : mode.rawValue), "request": .number(Double(model?.inspector.request ?? 0)), "clipboard": self?.fileClipboard ?? .null])
             }
-            host.copySource = { [weak self, weak model] value in
-                guard let self, let model else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
-                self.fileClipboard = value; self.fileClipboardWorkspace = model.groupID
+            host.copySource = { [weak self] value in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                self.fileClipboard = value
             }
             host.changeMode = { [weak model] mode in
                 let modes: [String: NativeInspectorModel.Mode] = ["tree": .files, "quick": .quick, "search": .search]

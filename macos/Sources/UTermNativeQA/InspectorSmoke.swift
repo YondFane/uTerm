@@ -174,6 +174,30 @@ enum InspectorSmoke {
         report["sharedFilesAcrossProjectsRetainCopiedSource"] = true
         try await capture("native-inspector-copy-across-projects-light-zh.png")
         captures.append("native-inspector-copy-across-projects-light-zh.png"); report["captures"] = captures
+        let copyWorkspace = UUID().uuidString
+        guard await model.mutate("workspace.create", ["id": .string(copyWorkspace), "name": .string("Copy destination workspace"), "select": .bool(true)]) else { throw BridgeFailure(code: "INSPECTOR_COPY_WORKSPACE", message: model.error) }
+        let removedSource = root.deletingLastPathComponent().appendingPathComponent("removed-copy-source")
+        let removedID = UUID().uuidString
+        try FileManager.default.createDirectory(at: removedSource, withIntermediateDirectories: true)
+        try Data("MUST_NOT_COPY\n".utf8).write(to: removedSource.appendingPathComponent("private.txt"))
+        guard await model.mutate("project.open", ["id": .string(removedID), "name": .string("Removed source"), "directory": .string(removedSource.path), "workspaceId": .string(copyWorkspace)]) else { throw BridgeFailure(code: "INSPECTOR_COPY_SOURCE", message: model.error) }
+        let crossWorkspace = root.deletingLastPathComponent().appendingPathComponent("cross-workspace-copy-destination")
+        try FileManager.default.createDirectory(at: crossWorkspace, withIntermediateDirectories: true)
+        guard await model.mutate("project.open", ["id": .string(UUID().uuidString), "name": .string("Cross-workspace files"), "directory": .string(crossWorkspace.path), "workspaceId": .string(copyWorkspace)]),
+              await model.mutate("project.remove", ["id": .string(removedID)]) else { throw BridgeFailure(code: "INSPECTOR_COPY_DESTINATION", message: model.error) }
+        try await TerminalSmoke.wait("Mount tools in a different workspace with the retained file source") { model.inspector.content?.webView.window === window && model.inspector.content?.directory.path == crossWorkspace.path }
+        guard let crossFiles = model.inspector.content else { throw BridgeFailure(code: "INSPECTOR_COPY_CONTEXT", message: "Cross-workspace file tools are missing") }
+        try await ContentSmoke.wait(crossFiles, "document.querySelector('.file-results') !== null")
+        _ = try await crossFiles.webView.evaluateJavaScript("document.querySelector('.file-results').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:40,clientY:120}))")
+        try await ContentSmoke.wait(crossFiles, "[...document.querySelectorAll('[role=menuitem]')].some(button=>button.textContent.trim()==='粘贴'&&!button.disabled)")
+        try await EditorSmoke.click(crossFiles, title: "粘贴")
+        try await TerminalSmoke.wait("Paste original bytes across workspaces") { (try? Data(contentsOf: crossWorkspace.appendingPathComponent(".hidden.txt"))) == Data("HIDDEN_ONLY\n".utf8) }
+        try await ContentSmoke.wait(crossFiles, "document.querySelector('.file-row[data-path=\".hidden.txt\"]') !== null && !document.querySelector('.file-options button[disabled]')")
+        let rejectedSource = try await ContentSmoke.request(crossFiles, method: "file_copy", params: ["directory": crossWorkspace.path, "sourceDirectory": removedSource.path, "path": "private.txt", "destination": ""])
+        guard rejectedSource == "ROOT_DENIED", !FileManager.default.fileExists(atPath: crossWorkspace.appendingPathComponent("private.txt").path) else { throw BridgeFailure(code: "INSPECTOR_COPY_BOUNDARY", message: "Copy accepted a removed project source") }
+        report["sharedFilesAcrossWorkspacesRetainCopiedSourceAndRejectRemovedRoots"] = true
+        try await capture("native-inspector-copy-across-workspaces-light-zh.png")
+        captures.append("native-inspector-copy-across-workspaces-light-zh.png"); report["captures"] = captures
         try await QuickSSHSmoke.run(model: model, window: window, lookup: quickLookup, report: &report)
         for id in Array(model.terminals.keys) { await model.selectSession(id); await model.closeSession() }
         let status = try await bridge.call("host.status")
