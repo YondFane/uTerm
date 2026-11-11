@@ -21,10 +21,30 @@ const scenes = [
     ),
   ),
   ...fixture.ordinaryOperations,
+  ...fixture.contentScenes.map(
+    (scene) => `pdf-highlights-${scene.language}-${scene.appearance}-${scene.width}`,
+  ),
 ];
 
+const pdfEvidence = fixture.contentScenes.map((scene) => ({
+  scenario: `pdf-highlights-${scene.language}-${scene.appearance}-${scene.width}`,
+  checks: {
+    ...scene,
+    passed: true,
+    pdfSHA256: fixture.pdf.sha256,
+    markID: fixture.pdf.mark.id,
+    marksCount: 1,
+    actualRemoveButton: true,
+    reopenedRestoredMarks: true,
+    originalPdfUnchanged: true,
+    inMainWorkspace: true,
+    settingsPreserveDocument: true,
+  },
+}));
+const assertOperations = (records) => assertParityOperations([...records, ...pdfEvidence], fixture);
+
 test("the complete grid and required restart accept file-system enumeration order", () => {
-  assert.equal(scenes.length, 33);
+  assert.equal(scenes.length, 35);
   assert.doesNotThrow(() => assertParityScenes([...scenes].reverse(), fixture));
 });
 
@@ -39,19 +59,37 @@ test("the ordinary restart requires actual controls, retained identity and a new
     restartedGeneration: "new-generation",
   };
   const record = { scenario: "terminal-restart", checks };
-  assert.doesNotThrow(() => assertParityOperations([record]));
-  assert.throws(() => assertParityOperations([]));
-  assert.throws(() => assertParityOperations([record, record]));
+  assert.doesNotThrow(() => assertOperations([record]));
+  assert.throws(() => assertOperations([]));
+  assert.throws(() => assertOperations([record, record]));
   for (const key of Object.keys(checks)) {
-    assert.throws(() =>
-      assertParityOperations([{ ...record, checks: { ...checks, [key]: null } }]),
-    );
+    assert.throws(() => assertOperations([{ ...record, checks: { ...checks, [key]: null } }]));
   }
   assert.throws(() =>
-    assertParityOperations([
-      { ...record, checks: { ...checks, restartedGeneration: "old-generation" } },
-    ]),
+    assertOperations([{ ...record, checks: { ...checks, restartedGeneration: "old-generation" } }]),
   );
+});
+
+test("PDF proof rejects missing, duplicate, stale data and unexecuted controls", () => {
+  const restart = {
+    scenario: "terminal-restart",
+    checks: {
+      passed: true,
+      actualRestartButton: true,
+      parsedUnicodeOutput: true,
+      canonicalWorkspaceRetained: true,
+      terminalViewRetained: true,
+      generationBeforeRestart: "a",
+      restartedGeneration: "b",
+    },
+  };
+  for (const key of Object.keys(pdfEvidence[0].checks)) {
+    const rows = structuredClone(pdfEvidence);
+    rows[0].checks[key] = null;
+    assert.throws(() => assertParityOperations([restart, ...rows], fixture), key);
+  }
+  for (const rows of [[], pdfEvidence.slice(1), [pdfEvidence[0], pdfEvidence[0]]])
+    assert.throws(() => assertParityOperations([restart, ...rows], fixture));
 });
 
 test("three-scene fallback, missing, duplicate, substituted and extra captures fail", () => {

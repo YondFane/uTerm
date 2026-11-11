@@ -8,7 +8,12 @@ enum QuickSSHSmoke {
     }
     private static func control(_ window: NSWindow, id: String) -> NSView? {
         if let table = table(window) {
-            for row in 0..<table.numberOfRows { _ = table.view(atColumn: 0, row: row, makeIfNecessary: true) }
+            for row in 0..<table.numberOfRows {
+                guard let cell = table.view(atColumn: 0, row: row, makeIfNecessary: true) else { continue }
+                if let found = TerminalSmoke.descendants(cell).first(where: { $0.identifier?.rawValue == id }) { return found }
+                if cell.identifier?.rawValue == id { return cell }
+            }
+            if id.hasPrefix("native-sidebar-row-") { return nil }
         }
         return window.contentView.flatMap { TerminalSmoke.descendants($0).first { $0.identifier?.rawValue == id } }
     }
@@ -40,8 +45,13 @@ enum QuickSSHSmoke {
         try await TerminalSmoke.wait("Mount actual SSH search within All") { control(window, id: "native-sidebar-filter") is NSSearchField }
         guard let search = control(window, id: "native-sidebar-filter") as? NSSearchField, window.makeFirstResponder(search), let editor = window.firstResponder as? NSTextView else { throw BridgeFailure(code: "QUICK_SSH_SEARCH", message: "SSH search cannot receive native input") }
         editor.selectAll(nil); editor.insertText("ALPHA" as NSString, replacementRange: NSRange(location: NSNotFound, length: 0))
-        try await TerminalSmoke.wait("Filter actual SSH host rows and retain the focused editor") {
-            model.sidebarQuery == "ALPHA" && control(window, id: "native-sidebar-row-q:" + firstID) != nil && control(window, id: "native-sidebar-row-q:" + secondID) == nil && search.currentEditor() === window.firstResponder
+        do {
+            try await TerminalSmoke.wait("Filter actual SSH host rows and retain the focused editor") {
+                model.sidebarQuery == "ALPHA" && control(window, id: "native-sidebar-row-q:" + firstID) != nil && control(window, id: "native-sidebar-row-q:" + secondID) == nil && search.currentEditor() === window.firstResponder
+            }
+        } catch {
+            report["nativeSSHSearchDiagnostics"] = ["query": model.sidebarQuery, "fieldValue": search.stringValue, "fieldAttached": search.window === window, "firstResponder": String(describing: window.firstResponder), "currentEditor": String(describing: search.currentEditor()), "alphaVisible": control(window, id: "native-sidebar-row-q:" + firstID) != nil, "betaVisible": control(window, id: "native-sidebar-row-q:" + secondID) != nil] as [String: Any]
+            throw error
         }
         let selected = model.selectedID, generations = model.terminals.mapValues { $0.generation }
         let root = URL(fileURLWithPath: path).deletingLastPathComponent()

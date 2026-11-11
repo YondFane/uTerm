@@ -81,9 +81,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     self.previousFileTabLimit = limit; self.pendingFileTabTrim = true
                     Task { await self.trimFileTabs() }
                 }
-                for content in self.contentWindows.values where content.workbenchHost != nil {
+                for content in self.contentWindows.values {
                     content.window?.appearance = value
                     content.workbenchHost?.settingsChanged(self.model.settings)
+                    content.settingsChanged(self.model.settings)
                 }
             }
         }

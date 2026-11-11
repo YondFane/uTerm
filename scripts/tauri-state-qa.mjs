@@ -1043,7 +1043,7 @@ print(number.uint32Value)
           [...observed].map((file) => file.slice(`${phase}-`.length, -".json".length)),
           parityFixture,
         );
-        assertParityOperations(scenes.filter((scene) => scene.scenario === "terminal-restart"));
+        assertParityOperations(scenes, parityFixture);
       } else assert.equal(observed.size, expected, `${phase} omitted required scenes`);
     } finally {
       if (phase === "git") writeFileSync(join(root, "project/.git/qa-git-release"), "release\n");
@@ -1071,12 +1071,17 @@ print(number.uint32Value)
       assert(!name.includes("/") && name !== "." && name !== "..");
       writeFileSync(join(directory, name), value);
     }
+    assert.equal(parityFixture.pdf.path, ".ui-parity-pdf/fixture.pdf");
+    const pdf = Buffer.from(parityFixture.pdf.base64, "base64");
+    assert.equal(createHash("sha256").update(pdf).digest("hex"), parityFixture.pdf.sha256);
+    mkdirSync(dirname(join(directory, parityFixture.pdf.path)), { recursive: true });
+    writeFileSync(join(directory, parityFixture.pdf.path), pdf);
     await run("ui-parity");
     assertParityScenes(
       scenes.map((scene) => scene.scenario),
       parityFixture,
     );
-    assertParityOperations(scenes);
+    assertParityOperations(scenes, parityFixture);
   } else if (performanceOnly) {
     await run("performance");
   } else {

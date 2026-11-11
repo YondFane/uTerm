@@ -56,6 +56,7 @@ impl Store {
         }
         let mut legacy_values = snapshot.document.legacy.clone();
         self.favorites_export_locked(&mut legacy_values)?;
+        self.pdf_export_locked(&mut legacy_values)?;
         legacy_values.insert(
             "uterm.desktop.workspace.v1".into(),
             serde_json::to_string(&snapshot.document.workspace)?,

@@ -36,6 +36,10 @@ enum PersonalSmoke {
                         try Data(text.utf8).write(to: project.appendingPathComponent(name))
                     }
                 }
+                guard parity["pdf"]["path"].string == ".ui-parity-pdf/fixture.pdf", let encoded = parity["pdf"]["base64"].string, let pdf = Data(base64Encoded: encoded), SHA256.hash(data: pdf).map({ String(format: "%02x", $0) }).joined() == parity["pdf"]["sha256"].string else { throw BridgeFailure(code: "PERSONAL_PDF_FIXTURE", message: "Invalid shared PDF fixture") }
+                let pdfPath = project.appendingPathComponent(".ui-parity-pdf/fixture.pdf")
+                try FileManager.default.createDirectory(at: pdfPath.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try pdf.write(to: pdfPath)
                 _ = try await bridge.call("editor.drafts.import", params: .object([:]))
                 for (path, text) in [("note.txt", "Personal 中文 é\r\n"), ("second.txt", "Second 🧪\r\n")] {
                     _ = try await bridge.call("editor.drafts.putDocument", params: .object(["expectedDraftRevision": .null, "draft": .object([
@@ -249,6 +253,7 @@ enum PersonalSmoke {
             guard let projectDirectory = model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["directory"].string else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Missing fixture project") }
             try await TerminalControlsSmoke.run(model: model, window: window, root: root, phase: phase, report: &report, captures: &captures)
             try await EmbeddedDocumentsSmoke.run(model: model, window: window, root: URL(fileURLWithPath: projectDirectory), phase: phase, open: openFile, report: &report, captures: &captures)
+            try await PdfParitySmoke.run(model: model, window: window, project: URL(fileURLWithPath: projectDirectory), output: root, fixture: parity, phase: phase, open: openFile, report: &report, captures: &captures)
             report["captures"] = captures
             await model.closeSession()
             let host = try await bridge.call("host.status")

@@ -30,7 +30,7 @@ class ParityEvidenceTests(unittest.TestCase):
         self.n = dict(passed=True, platform="macOS", architecture="arm64", system="Version 15.8.2",
                       sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, productionDataAccess=False,
                       uiParityFixtureSHA256=digest, backgroundTabCloseRetainedSelectedGeneration=True,
-                      workspaceScenes=[], settingsScenes=[], captures=[])
+                      workspaceScenes=[], settingsScenes=[], contentScenes=[], captures=[], pdfHighlightsNativeDrawDeleteReopenAndScopeVerified=True, pdfMarkWrongRootAndPathRejected=True)
         self.t = dict(passed=True, platform="darwin", architecture="arm64", productVersion="15.8.2",
                       head="a" * 40, tested="b" * 40, productionDataAccess=False, sourceTreeDirty=False,
                       uiParityFixtureSHA256=digest, scenes=[])
@@ -65,6 +65,18 @@ class ParityEvidenceTests(unittest.TestCase):
                                                     platform="macOS", architecture="arm64", system=self.n["system"]))
                 self.n["captures"].append(native)
                 self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
+        for scene in fixture["contentScenes"]:
+            values = dict(scene, passed=True, pdfSHA256=fixture["pdf"]["sha256"], markID=fixture["pdf"]["mark"]["id"], marksCount=1,
+                          actualRemoveButton=True, reopenedRestoredMarks=True, originalPdfUnchanged=True, inMainWorkspace=True, settingsPreserveDocument=True)
+            name = f"pdf-highlights-{scene['language']}-{scene['appearance']}-{scene['width']}"
+            native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+            image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", scene["width"], scene["height"]) + bytes(1100)
+            (self.native / native).write_bytes(image)
+            (self.tauri / tauri).write_bytes(image)
+            self.n["contentScenes"].append(dict(values, scenario="pdf-highlights", screenshot=native, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
+                                                platform="macOS", architecture="arm64", system=self.n["system"], nativePointerDrawAndDelete=True))
+            self.n["captures"].append(native)
+            self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
         restart = "ui-parity-terminal-restart.png"
         image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 1100, 720) + bytes(1100)
         (self.tauri / restart).write_bytes(image)
@@ -88,8 +100,26 @@ class ParityEvidenceTests(unittest.TestCase):
         result = self.run_compare()
         self.assertTrue(result["comparisonReady"])
         self.assertFalse(result["functionalParityAccepted"])
-        self.assertEqual(len(result["pairs"]), 32)
-        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 65)
+        self.assertEqual(len(result["pairs"]), 34)
+        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 69)
+
+    def test_pdf_requires_current_images_matching_data_and_actual_operations(self):
+        original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
+        mutations = [("sourceHeadSHA", "c" * 40), ("pdfSHA256", "0" * 64), ("markID", "old"), ("marksCount", 0),
+                     ("actualRemoveButton", False), ("reopenedRestoredMarks", False), ("originalPdfUnchanged", False),
+                     ("inMainWorkspace", False), ("settingsPreserveDocument", False), ("nativePointerDrawAndDelete", False), ("screenshot", "old.png")]
+        for key, value in mutations:
+            self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+            self.n["contentScenes"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): self.run_compare()
+        for kind in ["missing", "duplicate", "ordinary", "scope", "pointer"]:
+            self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+            if kind == "missing": self.n["contentScenes"].pop()
+            if kind == "duplicate": self.n["contentScenes"][0] = self.n["contentScenes"][1]
+            if kind == "ordinary": next(row for row in self.t["scenes"] if row["scenario"].startswith("pdf-highlights-"))["checks"]["actualRemoveButton"] = False
+            if kind == "scope": self.n["pdfMarkWrongRootAndPathRejected"] = False
+            if kind == "pointer": self.n["pdfHighlightsNativeDrawDeleteReopenAndScopeVerified"] = False
+            with self.subTest(kind=kind), self.assertRaises(AssertionError): self.run_compare()
 
     def test_restart_requires_unique_actual_operation_new_generation_and_screenshot(self):
         original = copy.deepcopy(self.t["scenes"])

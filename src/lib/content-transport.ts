@@ -1,6 +1,7 @@
 import type { JSONValue } from "./core-contract.generated.ts";
 
 export const contentWriteMethods = new Set([
+  "pdf_marks_write",
   "quick_ssh_connect",
   "files_clipboard",
   "github_create_pr",
@@ -56,6 +57,10 @@ export const editorDraftMethods: Record<string, string> = {
   editor_drafts_put: "editor.drafts.putDocument",
   editor_drafts_remove: "editor.drafts.removeDocument",
 };
+export const pdfMarkMethods: Record<string, string> = {
+  pdf_marks_read: "pdf.marks.read",
+  pdf_marks_write: "pdf.marks.write",
+};
 export const gitMethods: Record<string, string> = {
   git_branch: "git.branch",
   git_branches: "git.branches",
@@ -84,6 +89,7 @@ export const gitFavoriteMethods: Record<string, string> = {
   git_favorites_write: "git.favorites.write",
 };
 const contentMethods = new Set([
+  ...Object.keys(pdfMarkMethods),
   "quick_ssh_context",
   "quick_ssh_connect",
   "quick_ssh_close",
@@ -316,6 +322,7 @@ export class ContentScope {
         "editor-repository-refresh",
         "file-focus-line",
         "content-font-adjust",
+        "content-settings-changed",
         "files-frozen",
         "files-mode-changed",
         "files-settings-changed",

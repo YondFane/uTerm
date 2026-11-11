@@ -181,6 +181,19 @@ exercise queued failures, confirmed-source rollback and stale hydration.
 workspace captures require the mounted shared controls and translated labels. These new checks and
 screenshots still require current-source macOS CI; simulations do not accept native rendering.
 
+At head `ccdbf1ea0427ac4b37200b63f56808686d4e07f5`, tested merge
+`eaa310c912902c2c222175b6b5fafc2fd19933ec`, both Personal architectures pass the full package,
+real-window and same-source replacement checks in
+[Personal CI](https://github.com/YondFane/uTerm/actions/runs/43037565205). The
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43037565265/artifacts/13865841147)
+contains 32 matched pairs and the ordinary restart image; all paired image digests were checked, and
+both English/dark workspace originals were inspected. Full-height files controls align, while
+terminal insets, native control styling and other parity rows still differ. The
+[native ARM report](https://github.com/YondFane/uTerm/actions/runs/43037565487/artifacts/13865611496)
+passes actual pane swap/zoom/close focus and cross-workspace paste with removed-source rejection,
+then fails SSH search-focus acceptance. That failure does not accept Quick SSH or the full native
+matrix. New PDF and search-focus changes require their own current-source CI.
+
 Editable files open in the main workspace. When files are open, the tab row includes the selected
 terminal, ordered file names, unsaved indicators and close controls. Reopening selects the retained
 WK editor; returning to the terminal retains its view and generation.
@@ -877,20 +890,21 @@ Export legacy-compatible data** saves the current workspace/settings and origina
 as JSON. This export is a recovery artifact. A real Rust-process test reads the exported
 workspace/settings with unchanged release readers, preserving split/session IDs and opaque
 draft/backup bytes after repeated import. Automatic downgrade into an unmodified old client's
-WebView storage is not verified. Export refreshes workspace/settings and adopted Git favorites;
-other auxiliary values retain their first-import bytes. Before replacement, retain a fresh old
-WebView profile and the complete canonical store as well. Editor/PDF, Git favorites and Agent
-notification migration belong to #34, #35 and #40; full installation rollback remains #46.
+WebView storage is not verified. Export refreshes workspace/settings, adopted Git favorites and
+current PDF highlights; other auxiliary values retain their first-import bytes. Before replacement,
+retain a fresh old WebView profile and the complete canonical store as well. Editor/PDF, Git
+favorites and Agent notification migration belong to #34, #35 and #40; full installation rollback
+remains #46.
 
 For operators preparing rollback, the Core `rollback.export` method accepts the current
 `expectedRevision` and optional `expectedDraftRevision`. It reads canonical state, adopted Git
-favorites and current editor drafts under one writer lease, returning schema1 `RollbackArchive` with
-source revisions, original auxiliary strings, every current draft and per-document old-format
-candidates. A single current draft fills the old slot; cleared drafts remove it; multiple drafts
-leave the slot empty and require an explicit choice while retaining every draft in the archive. The
-existing UI's `legacy.export` keeps its original semantics. Export never installs, restores or
-automatically authorizes a downgrade. Keep the complete data backup and validate the old reader;
-credential stores and live host endpoint files remain outside this archive.
+favorites, current PDF highlights and current editor drafts under one writer lease, returning
+schema1 `RollbackArchive` with source revisions, original auxiliary strings, every current draft and
+per-document old-format candidates. A single current draft fills the old slot; cleared drafts remove
+it; multiple drafts leave the slot empty and require an explicit choice while retaining every draft
+in the archive. The existing UI's `legacy.export` keeps its original semantics. Export never
+installs, restores or automatically authorizes a downgrade. Keep the complete data backup and
+validate the old reader; credential stores and live host endpoint files remain outside this archive.
 
 Linux checks pass 33 targeted storage/rollback tests (three existing permission cases ignored), two
 real-process reader tests, generated TS/Swift contract checks and type checking. They cover latest
@@ -2240,6 +2254,9 @@ Native temporary connections offer **Save connection** in their context menu and
 Cleanup retains file/tunnel ownership and database/Redis dependencies, including legacy SSH-host
 references; an unresolved native connection draft also defers cleanup.
 
+SSH host filtering retains the mounted native search cell while inserting/removing result rows, so
+typing does not end the field editor. Its updated actual-input check is pending macOS CI.
+
 Linux validation passes six targeted core tests for atomic creation, rollback, stale revisions,
 private fields, retention and cleanup; the complete core, FFI and desktop-backend suites also pass.
 Twenty-four focused frontend/transport simulations cover submission, visible failure/retry, fixed
@@ -2869,9 +2886,10 @@ project. Text editing and recovery use the protected editable window; preview wi
 read-only mode. Its ephemeral WKWebView loads manifest-listed bundle resources and accepts only
 main-document messages. The host rejects stale document IDs, another root and writes from the
 readonly preview. Fonts use revision-checked shared settings; static HTML cannot run scripts or load
-external resources. This preview does not offer PDF annotation controls. Writable-editor and
-interaction evidence is recorded separately in the closed #34/#42 tasks, with their original gaps
-and user-approved human waiver still visible in #13.
+external resources. PDF previews expose the shared highlight controls; annotations are separate
+metadata and never change the read-only PDF bytes. Writable-editor and interaction evidence is
+recorded separately in the closed #34/#42 tasks, with their original gaps and user-approved human
+waiver still visible in #13.
 
 At source `8a72b00754c5580150546ea2ae104f5166e04a39` / tested merge
 `ea3895ab1d8db65ad59159fc45f3deff7326baf6`,
@@ -2899,6 +2917,41 @@ unexecuted human IME/focus checks remain distinct. This accepts #33 without a si
 #34–#37 are now closed in their recorded scope; M3 #17 was closed not_planned by the user. Original
 layout/PDF/Windows panel gaps remain in #13. Earlier PDF, workspace/path and input-control failures
 retain their source-bound reports.
+
+### PDF highlights
+
+Open a PDF in a workspace file tab. Choose **Box highlight** and drag on the page, or choose
+**Highlights** in PDF navigation to jump to or delete a mark. Both clients use the same reader and
+highlight controls. Language and appearance changes update an open native document without replacing
+its WebView.
+
+Desktop highlights are saved in the shared Rust store, separately for the project root, relative
+file path and PDF byte digest. Reopening the same version restores its marks; changed PDF bytes
+start a separate set. Up to 2,000 marks are allowed, with normalized double-precision coordinates.
+The PDF itself remains unchanged. Browser previews retain their existing local-storage owner.
+Original imported highlight strings remain intact; legacy-compatible and coherent rollback exports
+include the latest adopted marks. Up to eight previous sidecar versions are retained. Corrupt,
+unsupported or blocked stores, or missing current records with recovery copies, fail visibly without
+resetting the original.
+
+The viewer shows a mark as saved only after acknowledgment. A conflicting or failed write retains
+the attempted operation and offers **Retry** or **Cancel**. Retry explicitly reads the latest marks
+and reapplies only this operation, preserving marks from another window. It never automatically
+replays a write. Cancellation of an already dispatched request does not undo it; close and quit wait
+for its actual result. Failed attempts are held in memory until handled or the view is closed.
+
+Linux checks pass eight targeted real-filesystem Core tests, all 471 frontend/build-helper checks
+(11 platform checks skipped), 257 Core checks (17 ignored), six FFI checks, and 19 QA-enabled
+backend checks (one ignored). The focused frontend/transport/evidence-grid suite passes 27 checks;
+16 paired-evidence policy tests and 13 Personal package policy tests also pass. They cover stale
+revisions, exact PDF bytes, independent writers, legacy retention, export, filesystem failure,
+symlink rejection, corrupt/missing stores, canceled writes, delayed replies and explicit retry.
+Policy fixtures test rejection rules and do not count as application screenshots. The candidate adds
+English/dark 1100×720 and Chinese/light 640×720 real-window comparison scenes with shared PDF bytes
+and seeded comparison marks. Actual deletion and close/reopen are required in both apps; native QA
+also draws and deletes through window pointer events, rejects other document targets, and checks
+persistence after same-source app replacement. These new macOS scenes are pending CI execution and
+visual inspection; Windows execution of the new persistence path is also pending.
 
 ### Shared local file service
 

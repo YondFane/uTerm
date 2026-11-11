@@ -134,6 +134,34 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
         pairs.append(dict(area="settings", section=section, language=language, appearance=appearance, width=width, height=height,
                           native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
+    expected_pdf = {(scene["language"], scene["appearance"], scene["width"], scene["height"]) for scene in fixture["contentScenes"]}
+    npdf = native.get("contentScenes", [])
+    tpdf = [entry for entry in tauri["scenes"] if entry["scenario"].startswith("pdf-highlights-")]
+    assert len(npdf) == len(tpdf) == len(expected_pdf), "Incomplete PDF screenshot grid"
+    assert native.get("pdfHighlightsNativeDrawDeleteReopenAndScopeVerified") is True and native.get("pdfMarkWrongRootAndPathRejected") is True, "Unverified native PDF gestures or document scope"
+    def pdf_key(scene):
+        return scene["language"], scene["appearance"], scene["width"], scene["height"]
+    left_pdf = {pdf_key(scene): scene for scene in npdf}
+    right_pdf = {pdf_key(scene["checks"]): scene for scene in tpdf}
+    assert set(left_pdf) == set(right_pdf) == expected_pdf, "Missing or duplicate PDF scenes"
+    for identity in sorted(expected_pdf):
+        language, appearance, width, height = identity
+        n, t = left_pdf[identity], right_pdf[identity]
+        assert n.get("sourceHeadSHA") == head and n.get("testedMergeSHA") == tested, "Stale PDF screenshot"
+        assert n.get("platform") == native["platform"] and n.get("architecture") == native["architecture"] and n.get("system") == native["system"], "Wrong PDF capture platform"
+        assert n.get("scenario") == "pdf-highlights" and n.get("nativePointerDrawAndDelete") is True
+        assert t["checks"].get("passed") is True
+        for actual in [n, t["checks"]]:
+            assert actual.get("pdfSHA256") == fixture["pdf"]["sha256"] and actual.get("markID") == fixture["pdf"]["mark"]["id"] and actual.get("marksCount") == 1, "Different PDF or annotations"
+            for proof in ["actualRemoveButton", "reopenedRestoredMarks", "originalPdfUnchanged", "inMainWorkspace", "settingsPreserveDocument"]:
+                assert actual.get(proof) is True, "Unverified PDF operation: " + proof
+        name = f"pdf-highlights-{language}-{appearance}-{width}"
+        expected_native, expected_tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+        assert t["scenario"] == name and n["screenshot"] == expected_native and t["screenshot"] == expected_tauri and expected_native in native["captures"]
+        _, ndigest = image(native_path.parent, expected_native, minimum_height=height)
+        _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
+        pairs.append(dict(area="pdf-highlights", language=language, appearance=appearance, width=width, height=height,
+                          native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
     output.mkdir(parents=True, exist_ok=False)
     for pair in pairs:
         shutil.copyfile(native_path.parent / pair["native"], output / pair["native"])
@@ -144,7 +172,7 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
                   platform="macOS", architecture="arm64", system=native["system"], pairs=pairs,
                   ordinaryRestart=dict(screenshot=restart_file.name, SHA256=restart_digest, checks=checks),
                   comparisonReady=True, functionalParityAccepted=False,
-                  scope="Workspace and settings navigation screenshots; review images and execute remaining acceptance rows.")
+                  scope="Workspace, settings and PDF screenshots. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Review images and execute remaining acceptance rows.")
     (output / "comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     rows = ["# Real-window comparison / 真实窗口对照", "", f"Source head: `{head}`", f"Tested merge: `{tested}`", "",
             "These are original CI images. Functional parity remains pending.", "原图来自 CI；功能一致性仍待验收。", "",

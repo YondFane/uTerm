@@ -81,6 +81,13 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
     height: number;
   }[];
   settingsSections: { id: string; label: string }[];
+  pdf: { path: string; base64: string; sha256: string; mark: import("../lib/pdf-marks").PdfMark };
+  contentScenes: {
+    language: "en" | "zh-Hans";
+    appearance: string;
+    width: number;
+    height: number;
+  }[];
 };
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
 const sentinel = "opaque QA draft backup retained byte-for-byte";
@@ -674,6 +681,159 @@ async function runUiParity() {
     generationBeforeRestart: original.generation,
     restartedGeneration: restarted.generation,
   });
+  const pdfContext = await invoke<Context>("qa_context");
+  const pdfFile = (await coreRequest("files.read", {
+    directory: pdfContext.project,
+    path: parityFixture.pdf.path,
+  })) as unknown as { version: string; kind: string };
+  assert(
+    pdfFile.kind === "pdf" && pdfFile.version === parityFixture.pdf.sha256,
+    "Shared PDF fixture bytes differ",
+  );
+  const pdfTarget = {
+    directory: pdfContext.project,
+    path: parityFixture.pdf.path,
+    version: pdfFile.version,
+  };
+  const pdfMarks = async () =>
+    (await coreRequest("pdf.marks.read", pdfTarget)) as unknown as {
+      revision: string;
+      marks: unknown[];
+    };
+  const initialMarks = await pdfMarks();
+  await coreRequest("pdf.marks.write", {
+    ...pdfTarget,
+    expectedRevision: initialMarks.revision,
+    marks: [parityFixture.pdf.mark],
+  });
+  const pdfReady = async (count: number) =>
+    until(() => {
+      const viewer = document.querySelector(".pdf-reader");
+      return (
+        viewer &&
+        viewer.querySelectorAll(".pdf-mark").length === count &&
+        viewer.querySelector<HTMLCanvasElement>("canvas[data-rendered=true]") &&
+        viewer.querySelector<HTMLButtonElement>(".pdf-controls button[aria-pressed]")?.disabled ===
+          false
+      );
+    }, "actual PDF canvas and acknowledged highlights");
+  const openPdf = async (count: number) => {
+    const folder = await until(
+      () => document.querySelector<HTMLButtonElement>('.file-row[data-path=".ui-parity-pdf"]'),
+      "shared PDF fixture folder",
+    );
+    if (folder.getAttribute("aria-expanded") !== "true") folder.click();
+    const file = await until(
+      () =>
+        document.querySelector<HTMLButtonElement>(
+          `.file-row[data-path="${parityFixture.pdf.path}"]`,
+        ),
+      "shared PDF file row",
+    );
+    file.click();
+    await pdfReady(count);
+    const select = document.querySelector<HTMLSelectElement>(".pdf-layout nav select")!;
+    select.value = "marks";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  const closePdf = async () => {
+    const close = await until(
+      () =>
+        [...document.querySelectorAll<HTMLButtonElement>(".workspace-tab-close")].find((button) =>
+          button.getAttribute("aria-label")?.includes(parityFixture.pdf.path),
+        ),
+      "actual PDF workspace close tab",
+    );
+    close.click();
+    await until(() => !document.querySelector(".pdf-reader"), "closed actual PDF workspace view");
+  };
+  await openPdf(1);
+  const removeMark = await until(
+    () =>
+      [...document.querySelectorAll<HTMLButtonElement>(".pdf-layout nav button")].find((button) =>
+        [translate("en", "删除高亮"), translate("zh-Hans", "删除高亮")].includes(
+          button.textContent?.trim() ?? "",
+        ),
+      ),
+    "actual highlight removal button",
+  );
+  removeMark.click();
+  await pdfReady(0);
+  const removedMarks = await pdfMarks();
+  assert(removedMarks.marks.length === 0, "Highlight removal did not reach shared storage");
+  await closePdf();
+  await openPdf(0);
+  await closePdf();
+  await coreRequest("pdf.marks.write", {
+    ...pdfTarget,
+    expectedRevision: removedMarks.revision,
+    marks: [parityFixture.pdf.mark],
+  });
+  await openPdf(1);
+  const pdfView = document.querySelector(".pdf-reader");
+  for (const pdfScene of parityFixture.contentScenes) {
+    await open();
+    await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+    await choose(
+      [translate("en", "应用语言"), translate("zh-Hans", "应用语言")],
+      pdfScene.language,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await open();
+    await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+    await choose(
+      [translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")],
+      pdfScene.appearance,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await invoke("qa_performance_window", { width: pdfScene.width, height: pdfScene.height });
+    await until(
+      () => innerWidth === pdfScene.width && innerHeight === pdfScene.height,
+      "actual PDF capture size",
+    );
+    await pdfReady(1);
+    await until(
+      () =>
+        [...document.querySelectorAll(".pdf-layout nav button")].some(
+          (button) => button.textContent?.trim() === translate(pdfScene.language, "删除高亮"),
+        ),
+      "localized actual PDF controls",
+    );
+    assert(document.querySelector(".pdf-reader") === pdfView, "Settings replaced the PDF view");
+    const unchanged = (await coreRequest("files.read", {
+      directory: pdfContext.project,
+      path: parityFixture.pdf.path,
+    })) as unknown as { version: string };
+    assert(unchanged.version === pdfFile.version, "Annotations changed PDF source bytes");
+    const savedMarks = (await pdfMarks()).marks as Record<string, unknown>[];
+    assert(
+      savedMarks.length === 1 &&
+        Object.entries(parityFixture.pdf.mark).every(
+          ([key, value]) => savedMarks[0][key] === value,
+        ),
+      "Unexpected saved PDF marks",
+    );
+    assert(
+      document.querySelector(".pdf-mark")?.getAttribute("data-mark-id") ===
+        parityFixture.pdf.mark.id,
+      "Rendered PDF highlight differs",
+    );
+    await scene(`pdf-highlights-${pdfScene.language}-${pdfScene.appearance}-${pdfScene.width}`, {
+      ...pdfScene,
+      passed: true,
+      pdfSHA256: pdfFile.version,
+      markID: parityFixture.pdf.mark.id,
+      marksCount: 1,
+      actualRemoveButton: true,
+      reopenedRestoredMarks: true,
+      originalPdfUnchanged: true,
+      inMainWorkspace: true,
+      settingsPreserveDocument: true,
+      input:
+        "Actual shared file rows, PDF removal and workspace close controls; the initial comparison mark is seeded fixture data, not a claimed ordinary native pointer gesture",
+    });
+  }
+  await closePdf();
   await invoke("qa_request_exit");
 }
 

@@ -28,10 +28,32 @@ interface Context {
   embedded?: boolean;
 }
 function ContentFontCommands({ kind }: { kind: Context["kind"] }) {
-  const { resizeFont } = useSettings();
+  const { resizeFont, reload } = useSettings();
   const resize = useRef(resizeFont);
   resize.current = resizeFont;
   const [error, setError] = useState("");
+  const [settingsError, setSettingsError] = useState("");
+  const reloadSettings = useRef(reload);
+  reloadSettings.current = reload;
+  useEffect(() => {
+    let disposed = false;
+    const subscription = listenContent("content-settings-changed", () => {
+      void reloadSettings
+        .current()
+        .then(() => {
+          if (!disposed) setSettingsError("");
+        })
+        .catch((reason) => {
+          if (!disposed) setSettingsError(String(reason));
+        });
+    }).catch((reason) => {
+      if (!disposed) setSettingsError(String(reason));
+    });
+    return () => {
+      disposed = true;
+      void subscription.then((stop) => stop?.());
+    };
+  }, []);
   useEffect(() => {
     if (kind && kind !== "file" && kind !== "git") return;
     let disposed = false;
@@ -59,9 +81,11 @@ function ContentFontCommands({ kind }: { kind: Context["kind"] }) {
       void subscription.then((remove) => remove?.());
     };
   }, [kind]);
-  return error ? (
+  return error || settingsError ? (
     <p role="alert" className="native-content-command-error">
-      {tx("无法保存字号：{p0}", { p0: localizeMessage(error) })}
+      {error
+        ? tx("无法保存字号：{p0}", { p0: localizeMessage(error) })
+        : localizeMessage(settingsError)}
     </p>
   ) : null;
 }
@@ -139,7 +163,7 @@ function Content({ context }: { context: Context }) {
     <main className="native-content">
       {focusError && <p role="alert">{localizeMessage(focusError)}</p>}
       {editor.document ? (
-        <FileEditor editor={editor} allowPdfAnnotations={false} />
+        <FileEditor editor={editor} />
       ) : (
         <p role={editor.error ? "alert" : "status"}>
           {editor.error ? localizeMessage(editor.error) : tx("文件")}

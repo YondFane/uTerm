@@ -5,6 +5,7 @@ import {
   contentWriteMethods,
   editorDraftMethods,
   gitFavoriteMethods,
+  pdfMarkMethods,
 } from "./content-transport.ts";
 import type { ContentPort } from "./content-transport.ts";
 
@@ -26,14 +27,18 @@ export const tauriContentPort: ContentPort = {
       let result: unknown;
       if (
         Object.hasOwn(editorDraftMethods, message.method) ||
-        Object.hasOwn(gitFavoriteMethods, message.method)
+        Object.hasOwn(gitFavoriteMethods, message.method) ||
+        Object.hasOwn(pdfMarkMethods, message.method)
       ) {
         const reply = JSON.parse(
           await invoke<string>("shared_core_request", {
             request: JSON.stringify({
               version: 1,
               id: message.id,
-              method: editorDraftMethods[message.method] ?? gitFavoriteMethods[message.method],
+              method:
+                editorDraftMethods[message.method] ??
+                gitFavoriteMethods[message.method] ??
+                pdfMarkMethods[message.method],
               params: message.params,
             }),
           }),

@@ -194,10 +194,33 @@ struct NativeSidebar: NSViewRepresentable {
                 let editor = sshSearch.currentEditor()
                 let ownsQuery = editor != nil && table.window?.firstResponder === editor
                 let range = editor?.selectedRange
-                rows = next; preferenceSignature = signature; table.reloadData()
+                let previous = rows
+                let preserveSearch = ownsQuery && preferenceSignature == signature && next.contains(where: { $0.key == "ssh-filter" })
+                rows = next; preferenceSignature = signature
+                if preserveSearch {
+                    // Keep the search cell attached while filtering host rows; detaching ends native editing.
+                    // 筛选主机行时保留搜索单元格的挂载，移除控件会结束原生输入。
+                    let difference = next.map(\.key).difference(from: previous.map(\.key))
+                    var removed = IndexSet(), inserted = IndexSet()
+                    for change in difference {
+                        switch change {
+                        case .remove(let offset, _, _): removed.insert(offset)
+                        case .insert(let offset, _, _): inserted.insert(offset)
+                        }
+                    }
+                    table.beginUpdates()
+                    table.removeRows(at: removed, withAnimation: [])
+                    table.insertRows(at: inserted, withAnimation: [])
+                    table.endUpdates()
+                    let changed = IndexSet(next.indices.filter { index in
+                        let row = next[index]
+                        return row.key != "ssh-filter" && !inserted.contains(index) && previous.first(where: { $0.key == row.key }) != row
+                    })
+                    table.reloadData(forRowIndexes: changed, columnIndexes: IndexSet(integer: 0))
+                } else { table.reloadData() }
                 // Reloading filtered rows must retain only an already-focused search editor.
                 // 重载筛选行时，仅恢复原本已获得焦点的搜索编辑器。
-                if ownsQuery, let index = rows.firstIndex(where: { $0.key == "ssh-filter" }) {
+                if ownsQuery, !preserveSearch, let index = rows.firstIndex(where: { $0.key == "ssh-filter" }) {
                     _ = table.view(atColumn: 0, row: index, makeIfNecessary: true)
                     table.layoutSubtreeIfNeeded()
                     if table.window?.makeFirstResponder(sshSearch) == true, let range { sshSearch.currentEditor()?.selectedRange = range }

@@ -109,6 +109,7 @@ def validate_smoke_report(report, head, tested, phase):
     validate_settings_scenes(report, head, tested, phase)
     validate_embedded_workspace(report, head, tested, phase)
     validate_terminal_controls(report, head, tested, phase)
+    validate_pdf_scenes(report, head, tested, phase)
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}
@@ -116,6 +117,30 @@ def validate_smoke_report(report, head, tested, phase):
     assert report["settingsWindowAppearances"] == {"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"}
     if phase == "replacement":
         assert report["profileRetainedAfterAppReplacement"]
+
+
+def validate_pdf_scenes(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    expected = {(scene["language"], scene["appearance"], scene["width"], scene["height"]) for scene in fixture["contentScenes"]}
+    scenes = report.get("contentScenes", [])
+    assert len(scenes) == len(expected), "Incomplete PDF screenshot grid"
+    assert report.get("pdfHighlightsNativeDrawDeleteReopenAndScopeVerified") is True
+    assert report.get("pdfMarkWrongRootAndPathRejected") is True
+    if phase == "replacement": assert report.get("pdfHighlightsRetainedAfterReplacement") is True
+    seen = set()
+    for scene in scenes:
+        identity = (scene["language"], scene["appearance"], scene["width"], scene["height"])
+        assert identity in expected and identity not in seen, "Missing or duplicate PDF scene"
+        seen.add(identity)
+        assert scene.get("sourceHeadSHA") == head and scene.get("testedMergeSHA") == tested
+        assert scene.get("platform") == "macOS" and scene.get("architecture") in ["arm64", "x86_64"] and scene.get("system")
+        assert scene.get("scenario") == "pdf-highlights"
+        assert scene.get("pdfSHA256") == fixture["pdf"]["sha256"] and scene.get("markID") == fixture["pdf"]["mark"]["id"]
+        assert scene.get("marksCount") == 1
+        for key in ["actualRemoveButton", "reopenedRestoredMarks", "originalPdfUnchanged", "inMainWorkspace", "settingsPreserveDocument", "nativePointerDrawAndDelete"]:
+            assert scene.get(key) is True, "Unverified PDF operation: " + key
+        name = f"personal-{phase}-pdf-highlights-{identity[0]}-{identity[1]}-{identity[2]}.png"
+        assert scene.get("screenshot") == name and name in report["captures"]
 
 
 def validate_settings_scenes(report, head, tested, phase):

@@ -7,9 +7,9 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import worker from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import type { OpenFile } from "../lib/file-document";
 import { boundedPdfScale } from "../lib/pdf-limits";
+import { usePdfMarks } from "../lib/usePdfMarks";
 
 GlobalWorkerOptions.workerSrc = worker;
-type Mark = { id: string; page: number; x: number; y: number; width: number; height: number };
 type Outline = { title: string; dest: unknown; items: Outline[] };
 
 function PageCanvas({
@@ -109,8 +109,8 @@ export function PdfReader({
   const [outline, setOutline] = useState<Outline[]>([]);
   const [error, setError] = useState("");
   const [marking, setMarking] = useState(false);
-  const [marks, setMarks] = useState<Mark[]>([]);
-  const [marksReadable, setMarksReadable] = useState(false);
+  const highlights = usePdfMarks(document, annotationsEnabled);
+  const marks = highlights.marks;
   const start = useRef<{ x: number; y: number } | null>(null);
   const key = `uterm.pdf.marks:${document.directory}/${document.path}:${document.version}`;
   useEffect(() => {
@@ -118,33 +118,8 @@ export function PdfReader({
     setPdf(null);
     setPage(1);
     setOutline([]);
-    setMarks([]);
     setError("");
-    setMarksReadable(false);
-    try {
-      const saved: unknown = annotationsEnabled
-        ? JSON.parse(localStorage.getItem(key) ?? "[]")
-        : [];
-      if (
-        !Array.isArray(saved) ||
-        saved.length > 2000 ||
-        !saved.every(
-          (mark) =>
-            !!mark &&
-            typeof mark.id === "string" &&
-            Number.isInteger(mark.page) &&
-            mark.page > 0 &&
-            [mark.x, mark.y, mark.width, mark.height].every(
-              (n) => Number.isFinite(n) && n >= 0 && n <= 1,
-            ),
-        )
-      )
-        throw new Error(tx("PDF 高亮记录无效，原记录已保留。"));
-      setMarks(saved);
-      setMarksReadable(annotationsEnabled);
-    } catch (reason) {
-      setError(String(reason));
-    }
+    start.current = null;
     let bytes: Uint8Array;
     try {
       const encoded = document.text.split(",", 2)[1];
@@ -179,23 +154,6 @@ export function PdfReader({
       void task.destroy().catch((reason) => console.error("PDF cleanup", reason));
     };
   }, [document.id, key, document.text, annotationsEnabled]);
-  function saveMarks(next: Mark[]) {
-    if (!annotationsEnabled) return;
-    if (next.length > 2000) {
-      setError(tx("当前文件最多保存 2,000 个高亮，请先删除部分高亮。"));
-      return;
-    }
-    if (!marksReadable) {
-      setError(tx("高亮记录无法读取，未覆盖原记录。"));
-      return;
-    }
-    try {
-      localStorage.setItem(key, JSON.stringify(next));
-      setMarks(next);
-    } catch (reason) {
-      setError(tx("高亮保存失败：{p0}", { p0: String(reason) }));
-    }
-  }
   async function navigate(dest: unknown) {
     if (!pdf) return;
     try {
@@ -256,12 +214,32 @@ export function PdfReader({
           {tx("放大")}
         </button>
         {annotationsEnabled && (
-          <button aria-pressed={marking} onClick={() => setMarking(!marking)}>
+          <button
+            disabled={!highlights.ready || highlights.busy || highlights.pending}
+            aria-pressed={marking}
+            onClick={() => setMarking(!marking)}
+          >
             {tx("框选高亮")}
           </button>
         )}
       </div>
       {error && <p role="alert">{localizeMessage(error)}</p>}
+      {annotationsEnabled && highlights.busy && (
+        <p role="status">{highlights.ready ? tx("正在保存…") : tx("加载中…")}</p>
+      )}
+      {highlights.error && (
+        <div className="pdf-marks-error">
+          <p role="alert">{localizeMessage(highlights.error)}</p>
+          <button disabled={highlights.busy} onClick={() => void highlights.retry()}>
+            {tx("重试")}
+          </button>
+          {highlights.pending && (
+            <button disabled={highlights.busy} onClick={highlights.discard}>
+              {tx("取消")}
+            </button>
+          )}
+        </div>
+      )}
       {!pdf ? (
         <p>{tx("正在读取 PDF…")}</p>
       ) : (
@@ -294,7 +272,10 @@ export function PdfReader({
                   <button onClick={() => setPage(mark.page)}>
                     {tx("第 {p0} 页", { p0: mark.page })}
                   </button>
-                  <button onClick={() => saveMarks(marks.filter((item) => item.id !== mark.id))}>
+                  <button
+                    disabled={highlights.busy || highlights.pending}
+                    onClick={() => void highlights.remove(mark.id)}
+                  >
                     {tx("删除高亮")}
                   </button>
                 </div>
@@ -311,11 +292,19 @@ export function PdfReader({
                 touchAction: marking ? "none" : "auto",
               }}
               onPointerDown={(event) => {
-                if (!annotationsEnabled || !marking || event.button !== 0) return;
+                if (
+                  !annotationsEnabled ||
+                  !marking ||
+                  !highlights.ready ||
+                  highlights.busy ||
+                  highlights.pending ||
+                  event.button !== 0
+                )
+                  return;
                 const rect = event.currentTarget.getBoundingClientRect();
                 start.current = {
-                  x: (event.clientX - rect.left) / rect.width,
-                  y: (event.clientY - rect.top) / rect.height,
+                  x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+                  y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
                 };
                 event.currentTarget.setPointerCapture(event.pointerId);
               }}
@@ -330,17 +319,14 @@ export function PdfReader({
                 const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
                 const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
                 if (Math.abs(x - from.x) < 0.005 || Math.abs(y - from.y) < 0.005) return;
-                saveMarks([
-                  ...marks,
-                  {
-                    id: crypto.randomUUID(),
-                    page,
-                    x: Math.min(x, from.x),
-                    y: Math.min(y, from.y),
-                    width: Math.abs(x - from.x),
-                    height: Math.abs(y - from.y),
-                  },
-                ]);
+                void highlights.add({
+                  id: crypto.randomUUID(),
+                  page,
+                  x: Math.min(x, from.x),
+                  y: Math.min(y, from.y),
+                  width: Math.abs(x - from.x),
+                  height: Math.abs(y - from.y),
+                });
               }}
             >
               <PageCanvas pdf={pdf} page={page} scale={scale} report={setError} />
@@ -350,6 +336,7 @@ export function PdfReader({
                   <span
                     key={mark.id}
                     className="pdf-mark"
+                    data-mark-id={mark.id}
                     style={{
                       left: `${mark.x * 100}%`,
                       top: `${mark.y * 100}%`,

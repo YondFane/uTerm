@@ -115,14 +115,14 @@ acceptance.
 
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
-uploads 64 matching original images, the ordinary restart image, `comparison.md` and
+uploads 68 matching original images, the ordinary restart image, `comparison.md` and
 `comparison.json`. Collection runs on Ubuntu and never replaces a missing native capture with a
 browser render. `comparisonReady` means the images are ready for review; `functionalParityAccepted`
 remains false until all acceptance rows are met. The source-bound results below include actual CI
 execution and inspection of the Java originals.
 
 PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
-ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 64 张匹配原图、普通版重启原图、`comparison.md`
+ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 68 张匹配原图、普通版重启原图、`comparison.md`
 和 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。下列绑定源码的结果包含实际 CI 执行及 Java 原图核对。
@@ -136,6 +136,18 @@ registration tests. Both native architectures pass these operations in the sourc
 below; captures alone cannot establish complete settings parity.
 
 设置另采集 24 组匹配导航场景：十二个共有分类，分别使用英文深色 900×640 与中文浅色 660×640。原生 QA 按下实际 AppKit 按钮，普通版点击渲染的设置导航；两版均检查实际内容尺寸、所选分类及草稿未变。汇集器要求完整分类场景、源码身份及原图。Java 开发环境分类接入共享组件服务，包含目录加载断言与本机 JDK 注册测试。下列绑定源码的结果中，两种原生架构均通过这些操作；不能只凭截图证明完整设置一致性。
+
+PDF adds two matched main-workspace scenes: English/dark 1100×720 and Chinese/light 640×720, using
+the same deterministic PDF bytes and seeded comparison mark. Both clients must activate actual
+delete and tab-close controls, reopen to verify deletion, and restore the retained comparison mark.
+Native QA also draws and deletes through actual window pointer events, verifies document scope and
+checks marks after app replacement. Both keep the same document while settings change and preserve
+original PDF bytes. The strict grid now requires 35 ordinary captures and 34 pairs (68 paired
+originals plus the ordinary restart image). Missing, duplicated, stale or unverified PDF scenes fail
+collection. Seeded marks demonstrate matched display; they are not described as a user drawing
+gesture. The new PDF scenes are pending real CI execution and visual inspection.
+
+PDF 另采集两组主工作区对照：英文深色 1100×720、中文浅色 640×720，使用相同确定性 PDF 字节和预置对照标记。两版均须操作实际删除及标签关闭控件，重开验证删除结果，并恢复保留的对照标记。原生 QA 另通过实际窗口指针事件绘制并删除标记，验证文档作用域和应用替换后的标记保留。两版切换设置时保留同一文档，PDF 原字节不变。严格网格现要求普通版 35 张截图、34 组成对截图（68 张配对原图加普通版重启原图）；PDF 场景缺失、重复、过期或未经操作验证均使汇集失败。预置标记仅证明匹配显示，不描述为用户绘制手势。新增 PDF 场景尚待真实 CI 执行及目视核对。
 
 ## Source-bound CI findings / 绑定源码的 CI 结果
 

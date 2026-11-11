@@ -56,15 +56,22 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     private let stateBridge: CoreBridge
     private let ownsBridge: Bool
     private var gitMutationInProgress = false
+    private var pdfMutationInProgress = false
     private var documentID = UUID().uuidString
     private var tasks: [String: Task<Void, Never>] = [:]
     private var permitsClose = false
     private let quitGate = ContentQuitGate()
     private var quitToken: String?
     private var preparedDocument: String?
-    var isPreparedForQuit: Bool { permitsClose || (workbenchHost?.prepared ?? (preparedDocument == documentID && (gitMode ? !gitMutationInProgress : quitToken != nil))) }
+    var isPreparedForQuit: Bool { !pdfMutationInProgress && (permitsClose || (workbenchHost?.prepared ?? (preparedDocument == documentID && (gitMode ? !gitMutationInProgress : quitToken != nil)))) }
     private(set) var navigationError = ""
     private var focusLine = 0
+    private var lastContentSettings: JSONValue?
+    func settingsChanged(_ settings: JSONValue) {
+        guard workbenchHost == nil, settings != lastContentSettings else { return }
+        lastContentSettings = settings
+        deliver("content-settings-changed", payload: .null)
+    }
     func focusFileLine(_ line: Int) {
         guard editable, !gitMode, workbenchHost == nil, line > 0 else { return }
         focusLine = line
@@ -197,6 +204,13 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         if let workbenchHost, !["content_context", "content_copy_text", "open_external", "content_font_adjust", "content_settings_patch"].contains(request.method ?? "") {
             return try await workbenchHost.execute(request.method ?? "", params: params)
         }
+        if let method = request.method, ["pdf_marks_read", "pdf_marks_write"].contains(method) {
+            guard !gitMode, workbenchHost == nil, params["directory"] == .string(documentDirectory), params["path"] == .string(path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "PDF highlights belong to this document only") }
+            if method == "pdf_marks_read" { return try await stateBridge.call("pdf.marks.read", params: .object(params)) }
+            guard !permitsClose, quitToken == nil, !pdfMutationInProgress else { throw BridgeFailure(code: "QUIT_BUSY", message: localized("Wait for the PDF highlight operation.", "请等待 PDF 高亮操作完成。")) }
+            pdfMutationInProgress = true; defer { pdfMutationInProgress = false }
+            return try await stateBridge.call("pdf.marks.write", params: .object(params))
+        }
         if request.method == "git_favorites_recovery_open" {
             guard gitMode, let recoverGitFavorites else { throw BridgeFailure(code: "METHOD_DENIED", message: "This window cannot open favorite recovery") }
             guard params.count == 1, params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Favorite recovery cannot select another repository") }
@@ -303,6 +317,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if permitsClose { return true }
+        if pdfMutationInProgress { return false }
         if let quick = workbenchHost as? QuickSSHHost {
             if !quick.pending { forceClose() }
             return false
@@ -352,6 +367,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     func prepareForQuit(timeout: Duration = .seconds(20)) async throws -> Bool {
         if permitsClose { return true }
+        if pdfMutationInProgress { return false }
         if let workbenchHost { return try await workbenchHost.prepareForQuit() }
         if gitMode {
             if gitMutationInProgress { return false }

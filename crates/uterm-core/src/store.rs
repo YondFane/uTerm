@@ -10,6 +10,7 @@ use std::{
 };
 mod editor;
 mod git_favorites;
+mod pdf;
 mod rollback;
 pub use editor::{
     EditorDraft, EditorDraftCollection, EditorDraftDocument, EditorDraftEntry, EditorDraftSnapshot,

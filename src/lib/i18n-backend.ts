@@ -1,4 +1,11 @@
 export const backendMessages: Record<string, string> = {
+  "PDF 高亮已变化，请保留选区并明确重试。":
+    "PDF highlights changed; retain the selection and retry explicitly",
+  "PDF 高亮无法读取，原记录已保留。": "PDF highlights are unreadable; original retained",
+  "原始 PDF 高亮无法读取，来源已保留。": "Original PDF highlights are unreadable; source retained",
+  "不支持此 PDF 高亮存储格式。": "PDF highlight schema is unsupported",
+  "PDF 高亮缺失，请明确恢复备份副本。":
+    "PDF highlights are missing; restore a recovery copy explicitly",
   "Git 收藏恢复版本无效。": "Invalid Git favorite recovery revision",
   "Git 收藏恢复副本校验和不同，未替换数据。":
     "Git favorite recovery checksum differs; no data was replaced",
