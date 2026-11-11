@@ -60,6 +60,11 @@ const quickEvidence = fixture.quickScenes.map((scene) => ({
     terminalGenerationRetained: true,
     actualSidebarButton: true,
     actualCancelPreservedState: true,
+    workspaceVisibleAroundDialog: true,
+    modalWidth: 540,
+    modalHeight: 300,
+    modalLeft: (scene.width - 540) / 2,
+    modalTop: (scene.height - 300) / 2,
   },
 }));
 const assertOperations = (records) =>

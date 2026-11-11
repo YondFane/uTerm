@@ -11,6 +11,7 @@ final class QuickSSHHost: WorkbenchHost {
     var emit: ((String, JSONValue) -> Void)?
     var connect: ((JSONValue) async throws -> Bool)?
     var close: (() -> Void)?
+    var layoutChanged: ((Double) -> Void)?
     init(workspaceID: String) { self.workspaceID = workspaceID }
     func settingsChanged(_ settings: JSONValue) { emit?("quick-ssh-settings-changed", .null) }
     func execute(_ method: String, params: [String: JSONValue]) async throws -> JSONValue {
@@ -19,6 +20,11 @@ final class QuickSSHHost: WorkbenchHost {
         case "quick_ssh_context":
             guard params.isEmpty else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Quick SSH context accepts no arguments") }
             return .object(["workspaceId": .string(workspaceID)])
+        case "quick_ssh_layout":
+            guard params.count == 1, let height = params["height"]?.number, height.isFinite, height >= 40, height <= 4096, let layoutChanged else {
+                throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Quick SSH layout height is invalid")
+            }
+            layoutChanged(height); return .null
         case "quick_ssh_connect":
             guard !pending, !completed, params.count == 1, let connection = params["connection"], connection["workspace_id"] == .string(workspaceID), let connect else {
                 throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Quick SSH workspace or operation changed")

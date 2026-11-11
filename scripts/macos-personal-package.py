@@ -3,6 +3,7 @@ import base64
 import hashlib
 import http.server
 import json
+import math
 import os
 import platform
 import plistlib
@@ -159,8 +160,13 @@ def validate_quick_scenes(report, head, tested, phase):
         assert scene.get("platform") == "macOS" and scene.get("architecture") in ["arm64", "x86_64"] and scene.get("system")
         assert scene.get("scenario") == "quick-ssh-invalid" and scene.get("inputAddress") == fixture["quickAddress"]
         assert scene.get("terminalFixtureMarker") == fixture["marker"]
-        for key in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState"]:
+        for key in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState", "workspaceVisibleAroundDialog"]:
             assert scene.get(key) is True, "Unverified Quick SSH operation: " + key
+        for key in ["modalLeft", "modalTop", "modalWidth", "modalHeight"]:
+            assert type(scene.get(key)) in [int, float] and math.isfinite(scene[key]), "Missing actual Quick SSH geometry: " + key
+        assert abs(scene["modalWidth"] - min(540, scene["width"] - 32)) < 1, "Quick SSH covers more than its form"
+        assert 40 <= scene["modalHeight"] <= scene["height"] - 48, "Quick SSH form is clipped"
+        assert abs(scene["modalLeft"] - (scene["width"] - scene["modalWidth"]) / 2) < 1 and abs(scene["modalTop"] - (scene["height"] - scene["modalHeight"]) / 2) < 1, "Quick SSH is not centered"
         name = f"personal-{phase}-quick-ssh-invalid-{identity[0]}-{identity[1]}-{identity[2]}.png"
         assert scene.get("screenshot") == name and name in report["captures"]
 

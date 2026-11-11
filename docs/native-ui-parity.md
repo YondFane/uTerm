@@ -121,11 +121,23 @@ browser render. `comparisonReady` means the images are ready for review; `functi
 remains false until all acceptance rows are met. The source-bound results below include actual CI
 execution and inspection of the Java originals.
 
+After downloading and extracting the paired artifact, open `comparison.html` to choose an area and
+scene, move between pairs and open either original PNG at its actual size. The page includes both
+source identities, image digests and restart evidence, and keeps the pending functional-acceptance
+notice. It uses local artifact files without external scripts or services. The viewer does not
+generate or modify application images. Linux browser verification opens all 34 historical pairs,
+checks unchanged original digests, filters the 24 settings pairs and exercises both navigation
+buttons; this verifies the report viewer, not the current application. The new HTML still requires
+upload in a current-source paired CI artifact.
+
 PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
 ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 72 张匹配原图、普通版重启原图、`comparison.md`
 和 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。下列绑定源码的结果包含实际 CI 执行及 Java 原图核对。
+
+下载并解压成对产物后，打开 `comparison.html`
+可选择区域和场景、前后翻页，并按实际尺寸打开两版原始 PNG。页面包含两项源码身份、图片摘要及重启证据，并保留功能待验收提示；仅使用产物内文件，不加载外部脚本或服务，不生成或修改应用截图。Linux 浏览器检查打开全部 34 组历史图片、核对原图摘要不变、筛选 24 组设置图片并操作前后翻页；这仅验证报告查看器，不作为当前应用验收。新增 HTML 仍需随当前源码成对 CI 产物上传。
 
 Settings add 24 matched navigation scenes: twelve common categories at English dark 900×640 and
 Chinese light 660×640. Native QA presses actual AppKit buttons; ordinary QA clicks the rendered
@@ -178,6 +190,20 @@ regression additionally exercises Escape and Command-W; loading failures retain 
 flow. The new modal and 37/36/73 grid remain pending current-source CI.
 
 快速 SSH 另采集英文深色 1100×720、中文浅色 640×720 两组模态对照。两版通过真实 Shell 准备相同提示符／标记，打开实际侧栏入口，拒绝相同的模拟无效地址并保留输入，取消后工作区数据和终端 generation 不变。原生 Personal 原图要求共用 WK 表单位于主窗口，独立窗口图不能满足门槛；无效地址样例不证明远端登录。必须保留原图、平台／源码身份和实际操作证据。原生回归另执行 Escape 与 Command-W；加载失败保留模态重试／取消流程。新增模态及 37／36／73 网格仍待当前源码 CI。
+
+The Intel Personal images at head `becc4e233a0354137fe8248486e8dd7fb0df29fa`, merge
+`198238492c3f298999257b09bb3813468a1b11b3`, pass automated operations but visibly hide the workspace
+behind an opaque WebKit canvas. They fail visual acceptance. The candidate limits WebKit to the
+measured form and draws the outer dimming natively. Both reports must include finite, centered
+`modalLeft`/`modalTop`/`modalWidth`/`modalHeight`, equal within one pixel, plus retained visible
+workspace proof. Oversized or clipped frames fail; earlier images cannot satisfy this new gate.
+Actual backdrop clicks and invalid layout arguments are checked separately. New composition still
+requires real Mac images.
+
+源码 `becc4e233a0354137fe8248486e8dd7fb0df29fa`、merge `198238492c3f298999257b09bb3813468a1b11b3`
+的 Intel
+Personal 原图虽通过自动操作，却显示不透明 WebKit 底色遮住工作区，视觉验收失败。候选将 WebKit 限于实测表单，外围由原生绘制遮罩。两版报告须包含有限且居中的
+`modalLeft`／`modalTop`／`modalWidth`／`modalHeight`，相差小于一像素，并证明外围工作区仍显示。过大或裁切的边界失败；旧图不能满足新增门槛。另检查实际外围点击和无效尺寸参数；新合成仍须真实 Mac 原图。
 
 ## Source-bound CI findings / 绑定源码的 CI 结果
 

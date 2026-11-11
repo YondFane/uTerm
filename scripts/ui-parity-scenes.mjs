@@ -96,7 +96,23 @@ export function assertParityOperations(scenes, fixture) {
       "terminalGenerationRetained",
       "actualSidebarButton",
       "actualCancelPreservedState",
+      "workspaceVisibleAroundDialog",
     ])
       assert.equal(checks[key], true, `Unaccepted ordinary Quick SSH: ${key}`);
+    for (const key of ["modalLeft", "modalTop", "modalWidth", "modalHeight"])
+      assert.ok(Number.isFinite(checks[key]), `Missing actual Quick SSH geometry: ${key}`);
+    assert.ok(
+      Math.abs(checks.modalWidth - Math.min(540, checks.width - 32)) < 1,
+      "Quick SSH covers more than its form",
+    );
+    assert.ok(
+      checks.modalHeight >= 40 && checks.modalHeight <= checks.height - 48,
+      "Quick SSH form is clipped",
+    );
+    assert.ok(
+      Math.abs(checks.modalLeft - (checks.width - checks.modalWidth) / 2) < 1 &&
+        Math.abs(checks.modalTop - (checks.height - checks.modalHeight) / 2) < 1,
+      "Quick SSH form is not centered",
+    );
   }
 }

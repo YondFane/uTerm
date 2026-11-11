@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>uTerm real-window comparison / 真实窗口对照</title>
+    <style>
+      :root {
+        font-family: system-ui, sans-serif;
+        color-scheme: light dark;
+      }
+      body {
+        margin: 20px auto;
+        padding: 0 16px;
+        max-width: 1800px;
+      }
+      h1 {
+        font-size: 22px;
+      }
+      .pending {
+        padding: 12px;
+        border: 2px solid #b87810;
+        border-radius: 6px;
+      }
+      .meta {
+        overflow-wrap: anywhere;
+        white-space: pre-line;
+        font:
+          12px/1.6 ui-monospace,
+          monospace;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin: 16px 0;
+      }
+      select {
+        max-width: 100%;
+        padding: 8px;
+      }
+      button {
+        padding: 8px 12px;
+      }
+      #scene {
+        flex: 1;
+        min-width: min(100%, 260px);
+      }
+      .windows {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 16px;
+      }
+      figure {
+        margin: 0;
+        min-width: 0;
+      }
+      figcaption {
+        overflow-wrap: anywhere;
+        margin-bottom: 8px;
+      }
+      img {
+        display: block;
+        width: 100%;
+        height: auto;
+        border: 1px solid #888;
+        box-sizing: border-box;
+      }
+      details {
+        margin: 16px 0;
+      }
+      pre {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      @media (max-width: 800px) {
+        .windows {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Real-window comparison / 真实窗口对照</h1>
+    <p id="acceptance" class="pending"></p>
+    <p class="meta" id="source"></p>
+    <p>Scaled previews use the original PNGs. Click an image to inspect its original size.</p>
+    <p>缩放预览引用原始 PNG，点击图片查看原始尺寸。此页面不生成或修改应用截图。</p>
+    <nav aria-label="Comparison scenes / 对照场景">
+      <label for="area">Area / 区域</label>
+      <select id="area"></select>
+      <button id="previous" type="button">Previous / 上一组</button>
+      <label for="scene">Scene / 场景</label>
+      <select id="scene"></select>
+      <button id="next" type="button">Next / 下一组</button>
+    </nav>
+    <p id="position" aria-live="polite"></p>
+    <div class="windows">
+      <figure>
+        <figcaption>
+          <strong>Personal / 原生个人版</strong><br /><span id="native-name"></span>
+        </figcaption>
+        <a id="native-link"
+          ><img id="native" alt="Original native Personal window / 原生个人版窗口原图"
+        /></a>
+      </figure>
+      <figure>
+        <figcaption>
+          <strong>Ordinary macOS / 普通 macOS 版</strong><br /><span id="tauri-name"></span>
+        </figcaption>
+        <a id="tauri-link"
+          ><img id="tauri" alt="Original ordinary macOS window / 普通 macOS 窗口原图"
+        /></a>
+      </figure>
+    </div>
+    <details>
+      <summary>Scene identity and image digests / 场景身份与原图摘要</summary>
+      <pre id="details"></pre>
+    </details>
+    <details>
+      <summary>Ordinary restart evidence / 普通版重启证据</summary>
+      <p><a id="restart"></a></p>
+      <pre id="restart-details"></pre>
+    </details>
+    <script id="comparison" type="application/json">
+      "__UTERM_COMPARISON__"
+    </script>
+    <script>
+      const report = JSON.parse(document.getElementById("comparison").textContent);
+      const byId = (id) => document.getElementById(id);
+      byId("acceptance").textContent = report.functionalParityAccepted
+        ? "Functional parity accepted / 功能一致性已验收"
+        : "Functional parity remains pending. Evidence readiness is not acceptance. / 功能一致性仍待验收，证据齐全不代表验收通过。";
+      byId("source").textContent =
+        `Head: ${report.sourceHeadSHA}\nMerge: ${report.testedMergeSHA}\n${report.platform} / ${report.architecture} / ${report.system}`;
+      const labels = {
+        workspace: "Workspace / 工作区",
+        settings: "Settings / 设置",
+        "pdf-highlights": "PDF",
+        "quick-ssh-invalid": "Quick SSH / 快速 SSH",
+      };
+      const allAreas = [...new Set(report.pairs.map((pair) => pair.area))];
+      const area = byId("area"),
+        scene = byId("scene");
+      area.add(new Option("All / 全部", ""));
+      for (const name of allAreas) area.add(new Option(labels[name] || name, name));
+      let scenes = [];
+      function show() {
+        const index = scene.selectedIndex,
+          pair = scenes[index];
+        if (!pair) return;
+        for (const client of ["native", "tauri"]) {
+          byId(client).src = pair[client];
+          byId(client + "-link").href = pair[client];
+          byId(client + "-name").textContent = pair[client];
+        }
+        byId("previous").disabled = index === 0;
+        byId("next").disabled = index === scenes.length - 1;
+        byId("position").textContent = `${index + 1} / ${scenes.length}`;
+        byId("details").textContent = JSON.stringify(pair, null, 2);
+      }
+      function filter() {
+        scenes = report.pairs.filter((pair) => !area.value || pair.area === area.value);
+        scene.replaceChildren();
+        for (const [index, pair] of scenes.entries()) {
+          const label = `${labels[pair.area] || pair.area}${pair.section ? " · " + pair.section : ""} · ${pair.language} · ${pair.appearance} · ${pair.width}×${pair.height}`;
+          scene.add(new Option(label, String(index)));
+        }
+        show();
+      }
+      area.addEventListener("change", filter);
+      scene.addEventListener("change", show);
+      byId("previous").addEventListener("click", () => {
+        scene.selectedIndex--;
+        show();
+      });
+      byId("next").addEventListener("click", () => {
+        scene.selectedIndex++;
+        show();
+      });
+      if (report.ordinaryRestart) {
+        byId("restart").href = report.ordinaryRestart.screenshot;
+        byId("restart").textContent = report.ordinaryRestart.screenshot;
+        byId("restart-details").textContent = JSON.stringify(report.ordinaryRestart, null, 2);
+      }
+      filter();
+    </script>
+  </body>
+</html>

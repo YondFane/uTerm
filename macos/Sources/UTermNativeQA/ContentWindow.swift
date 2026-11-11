@@ -43,13 +43,6 @@ private struct ContentMessage: Decodable {
 }
 
 @MainActor
-private final class TransparentContentWebView: WKWebView {
-    // Keep the live workspace visible behind the shared dialog backdrop.
-    // 在共用对话框背景后保留实时工作区。
-    override var isOpaque: Bool { false }
-}
-
-@MainActor
 final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandlerWithReply {
     let webView: WKWebView
     let directory: URL
@@ -102,11 +95,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
         configuration.setURLSchemeHandler(ContentSchemeHandler(resources: resources), forURLScheme: ContentResources.scheme)
-        if workbenchHost?.kind == "ssh-quick" {
-            let transparent = TransparentContentWebView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700), configuration: configuration)
-            transparent.underPageBackgroundColor = .clear
-            webView = transparent
-        } else { webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700), configuration: configuration) }
+        webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700), configuration: configuration)
         self.bridge = bridge
         self.stateBridge = stateBridge ?? bridge
         self.ownsBridge = ownsBridge

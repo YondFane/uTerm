@@ -32,6 +32,16 @@ enum QuickSSHSmoke {
             input.focus();input.select();return document.execCommand('insertText',false,text);
             """, arguments: ["text": text]) else { throw BridgeFailure(code: "QUICK_SSH_INPUT", message: "Quick SSH input did not accept actual WebKit typing") }
     }
+    static func modalGeometry(_ content: ContentWindow, window: NSWindow) async throws -> [String: Double] {
+        try await ContentSmoke.wait(content, "(()=>{const d=document.querySelector('.ssh-quick-dialog[open]');if(!d)return false;const r=d.getBoundingClientRect(),s=getComputedStyle(d);return r.left===0 && r.top===0 && Math.abs(r.width-innerWidth)<1 && Math.abs(d.scrollHeight+parseFloat(s.borderTopWidth)+parseFloat(s.borderBottomWidth)-innerHeight)<1})()", allowAlert: true)
+        guard let root = window.contentView, content.webView.window === window else { throw BridgeFailure(code: "QUICK_LAYOUT", message: "Quick SSH is outside its workspace") }
+        let frame = content.webView.convert(content.webView.bounds, to: root)
+        let top = root.isFlipped ? frame.minY : root.bounds.maxY - frame.maxY
+        guard abs(frame.width - min(540, root.bounds.width - 32)) < 1,
+              abs(frame.midX - root.bounds.midX) < 1, abs(frame.midY - root.bounds.midY) < 1,
+              frame.height >= 40, frame.height <= root.bounds.height - 48 + 1 else { throw BridgeFailure(code: "QUICK_LAYOUT", message: "Quick SSH WebKit covers more than its centered form") }
+        return ["modalLeft": Double(frame.minX), "modalTop": Double(top), "modalWidth": Double(frame.width), "modalHeight": Double(frame.height)]
+    }
     static func run(model: WorkspaceModel, window: NSWindow, lookup: @escaping () -> ContentWindow?, report: inout [String: Any]) async throws {
         guard let bridge = model.bridge, let path = WorkspaceModel.argument("--inspector-smoke-report") else { throw BridgeFailure(code: "QUICK_SSH_CONTEXT", message: "Missing isolated quick SSH context") }
         let workspaceID = model.groupID, firstID = UUID().uuidString, secondID = UUID().uuidString
@@ -91,6 +101,10 @@ enum QuickSSHSmoke {
         try await address(quick, "ssh://dev:private@example.com")
         _ = try await quick.webView.evaluateJavaScript("document.querySelector('form').requestSubmit()")
         try await ContentSmoke.wait(quick, "document.querySelector('[role=alert]') !== null", allowAlert: true)
+        _ = try await modalGeometry(quick, window: window)
+        guard try await ContentSmoke.request(quick, method: "quick_ssh_layout", params: ["height": -1]) == "INVALID_ARGUMENT",
+              try await ContentSmoke.request(quick, method: "quick_ssh_layout", params: ["height": 300, "directory": "/"]) == "INVALID_ARGUMENT" else { throw BridgeFailure(code: "QUICK_LAYOUT", message: "Invalid layout arguments were accepted") }
+        report["nativeQuickSSHFormBoundsAndLayoutArguments"] = true
         guard (try await bridge.snapshot()).revision == before.revision else { throw BridgeFailure(code: "QUICK_SSH_INVALID", message: "Invalid quick input changed shared state") }
         try await capture("native-quick-ssh-invalid-en-dark.png", window: window)
         try await EditorSmoke.click(quick, title: "Cancel")
@@ -100,6 +114,17 @@ enum QuickSSHSmoke {
         try TerminalSmoke.postKey(window: window, code: 13, characters: "w", modifiers: .command)
         try await TerminalSmoke.wait("Command-W closes only the embedded Quick SSH dialog") { lookup() == nil && model.quickSSHContent == nil && window.isVisible }
         guard (try await bridge.snapshot()).revision == before.revision else { throw BridgeFailure(code: "QUICK_SSH_CANCEL", message: "Closing the modal changed shared state") }
+        quick = try await open()
+        _ = try await modalGeometry(quick, window: window)
+        guard let root = window.contentView else { throw BridgeFailure(code: "QUICK_BACKDROP", message: "Missing workspace backdrop") }
+        let point = root.convert(NSPoint(x: 16, y: root.bounds.midY), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            guard let event = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: type == .leftMouseDown ? 1 : 0) else { throw BridgeFailure(code: "QUICK_BACKDROP", message: "Cannot create backdrop pointer event") }
+            window.sendEvent(event)
+        }
+        try await TerminalSmoke.wait("Clicking the native backdrop closes only Quick SSH") { lookup() == nil && model.quickSSHContent == nil && window.isVisible }
+        guard (try await bridge.snapshot()).revision == before.revision else { throw BridgeFailure(code: "QUICK_SSH_CANCEL", message: "Backdrop cancellation changed shared state") }
+        report["nativeQuickSSHActualBackdropCancelRetainsState"] = true
         guard model.selectedID == selected, model.terminals.mapValues({ $0.generation }) == generations else { throw BridgeFailure(code: "QUICK_SSH_MODAL", message: "Opening or closing Quick SSH changed existing terminal generations") }
         report["nativeQuickSSHModalRetainsExistingSessions"] = true
         quick = try await open()

@@ -23,6 +23,7 @@ export function NativeFiles({ directory }: { directory: string }) {
   const [error, setError] = useState("");
   useEffect(() => {
     let disposed = false;
+    let refreshRevision = 0;
     let hydratedClipboard = false;
     const stops: (() => void)[] = [];
     stops.push(
@@ -34,9 +35,10 @@ export function NativeFiles({ directory }: { directory: string }) {
       ),
     );
     const refresh = async () => {
+      const revision = ++refreshRevision;
       try {
         const value = await contentInvoke<FilesContext>("files_context");
-        if (!disposed) {
+        if (!disposed && revision === refreshRevision) {
           if (!hydratedClipboard) {
             restoreFileClipboard(value.clipboard ?? null);
             hydratedClipboard = true;
@@ -45,7 +47,7 @@ export function NativeFiles({ directory }: { directory: string }) {
           setError("");
         }
       } catch (reason) {
-        if (!disposed) setError(String(reason));
+        if (!disposed && revision === refreshRevision) setError(String(reason));
       }
     };
     for (const [kind, receive] of [

@@ -136,8 +136,15 @@ body,
   color: var(--ui-text);
   display: flex;
 }
-:root:has(.native-ssh-quick),
-.native-content.native-ssh-quick {
+.native-ssh-quick .ssh-quick-dialog {
+  position: fixed;
+  inset: 0 auto auto 0;
+  width: 100%;
+  max-width: none;
+  max-height: 100vh;
+  margin: 0;
+}
+.native-ssh-quick .ssh-quick-dialog::backdrop {
   background: transparent;
 }
 .native-content > .file-editor {

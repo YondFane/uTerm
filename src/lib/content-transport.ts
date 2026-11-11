@@ -91,6 +91,7 @@ export const gitFavoriteMethods: Record<string, string> = {
 const contentMethods = new Set([
   ...Object.keys(pdfMarkMethods),
   "quick_ssh_context",
+  "quick_ssh_layout",
   "quick_ssh_connect",
   "quick_ssh_close",
   "files_clipboard",

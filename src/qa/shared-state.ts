@@ -1016,6 +1016,7 @@ async function runUiParity() {
     await cancelQuick(await invalidQuick());
     const dialog = await invalidQuick();
     await unchangedQuick();
+    const bounds = dialog.getBoundingClientRect();
     await scene(
       `quick-ssh-invalid-${quickScene.language}-${quickScene.appearance}-${quickScene.width}`,
       {
@@ -1030,6 +1031,11 @@ async function runUiParity() {
         terminalGenerationRetained: true,
         actualSidebarButton: true,
         actualCancelPreservedState: true,
+        workspaceVisibleAroundDialog: true,
+        modalLeft: bounds.left,
+        modalTop: bounds.top,
+        modalWidth: bounds.width,
+        modalHeight: bounds.height,
       },
     );
     await cancelQuick(dialog);

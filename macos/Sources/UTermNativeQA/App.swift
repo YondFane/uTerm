@@ -729,6 +729,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return try await self.model.createQuickSSH(connection, workspaceID: workspaceID)
         }
         let content = try ContentWindow(bridge: bridge, directory: WorkspaceModel.dataRoot().deletingLastPathComponent(), path: "", workbenchHost: host)
+        model.quickSSHHeight = 240
+        host.layoutChanged = { [weak self, weak content] height in
+            guard let self, let content, self.model.quickSSHContent === content else { return }
+            if abs(self.model.quickSSHHeight - height) >= 0.5 { self.model.quickSSHHeight = height }
+        }
         host.close = { [weak content] in content?.forceClose() }
         content.window?.appearance = window?.appearance
         let previous = parent.firstResponder as? NSView
@@ -915,7 +920,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             host.context = { [weak self, weak model] in
                 let mode = model?.inspector.mode ?? .files
-                return .object(["mode": .string(mode == .files ? "tree" : mode.rawValue), "request": .number(Double(model?.inspector.request ?? 0)), "clipboard": self?.fileClipboard ?? .null])
+                let fileMode = mode == .search || mode == .quick ? mode.rawValue : "tree"
+                return .object(["mode": .string(fileMode), "request": .number(Double(model?.inspector.request ?? 0)), "clipboard": self?.fileClipboard ?? .null])
             }
             host.copySource = { [weak self] value in
                 guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }

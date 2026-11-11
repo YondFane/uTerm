@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -14,6 +15,16 @@ from pathlib import Path
 
 def read_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def write_viewer(output, report):
+    template = Path(__file__).with_name("ui-parity-viewer.html").read_text(encoding="utf-8")
+    token = '"__UTERM_COMPARISON__"'
+    assert template.count(token) == 1
+    # JSON stays data even if source metadata contains an HTML closing tag.
+    # 即使源码元数据包含 HTML 结束标签，JSON 也仅作为数据处理。
+    data = json.dumps(report, ensure_ascii=False).replace("<", "\\u003c").replace("&", "\\u0026")
+    (Path(output) / "comparison.html").write_text(template.replace(token, data), encoding="utf-8")
 
 
 def image(root, name, minimum_height=720):
@@ -188,8 +199,14 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n.get("scenario") == "quick-ssh-invalid" and t["checks"].get("passed") is True
         for actual in [n, t["checks"]]:
             assert actual.get("inputAddress") == fixture["quickAddress"] and actual.get("terminalFixtureMarker") == fixture["marker"], "Different Quick SSH fixture data"
-            for proof in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState"]:
+            for proof in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState", "workspaceVisibleAroundDialog"]:
                 assert actual.get(proof) is True, "Unverified Quick SSH operation: " + proof
+            for key in ["modalLeft", "modalTop", "modalWidth", "modalHeight"]:
+                assert type(actual.get(key)) in [int, float] and math.isfinite(actual[key]), "Missing actual Quick SSH geometry: " + key
+            assert abs(actual["modalWidth"] - min(540, width - 32)) < 1 and 40 <= actual["modalHeight"] <= height - 48, "Quick SSH covers more than its form"
+            assert abs(actual["modalLeft"] - (width - actual["modalWidth"]) / 2) < 1 and abs(actual["modalTop"] - (height - actual["modalHeight"]) / 2) < 1, "Quick SSH is not centered"
+        for key in ["modalLeft", "modalTop", "modalWidth", "modalHeight"]:
+            assert abs(n[key] - t["checks"][key]) < 1, "Different actual Quick SSH geometry: " + key
         name = f"quick-ssh-invalid-{language}-{appearance}-{width}"
         expected_native, expected_tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
         assert t["scenario"] == name and n["screenshot"] == expected_native and t["screenshot"] == expected_tauri and expected_native in native["captures"]
@@ -209,8 +226,10 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
                   comparisonReady=True, functionalParityAccepted=False,
                   scope="Workspace, settings, PDF and Quick SSH screenshots. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Quick SSH uses an invalid fixture address, actual modal controls and real shell output; no authenticated login claim. Review images and execute remaining acceptance rows.")
     (output / "comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+    write_viewer(output, result)
     rows = ["# Real-window comparison / 真实窗口对照", "", f"Source head: `{head}`", f"Tested merge: `{tested}`", "",
             "These are original CI images. Functional parity remains pending.", "原图来自 CI；功能一致性仍待验收。", "",
+            "[Open the offline scene viewer / 打开离线场景对照](comparison.html)", "",
             "| Scene / 场景 | Ordinary / 普通版 | Personal / 原生个人版 |", "| --- | --- | --- |"]
     for pair in pairs:
         label = f"{pair['area']} {pair.get('section', '')} / {pair['language']} / {pair['appearance']} / {pair['width']}×{pair['height']}"

@@ -60,6 +60,36 @@ export function NativeSshQuick() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const reading = useRef(false);
+  useEffect(() => {
+    const dialog = document.querySelector<HTMLDialogElement>(".ssh-quick-dialog");
+    const form = dialog?.querySelector("form");
+    if (!dialog || !form || typeof ResizeObserver === "undefined") return;
+    let active = true;
+    let lastHeight = 0;
+    const measure = () => {
+      if (!active) return;
+      const style = getComputedStyle(dialog);
+      const height = Math.ceil(
+        dialog.scrollHeight +
+          parseFloat(style.borderTopWidth) +
+          parseFloat(style.borderBottomWidth),
+      );
+      if (!Number.isFinite(height) || height < 40 || height > 4096 || height === lastHeight) return;
+      lastHeight = height;
+      void contentInvoke("quick_ssh_layout", { height }).catch((reason) => {
+        if (active) setError(localizeMessage(String(reason)));
+      });
+    };
+    const observer = new ResizeObserver(measure);
+    observer.observe(form);
+    observer.observe(dialog);
+    void document.fonts?.ready.then(measure);
+    measure();
+    return () => {
+      active = false;
+      observer.disconnect();
+    };
+  }, [workspaceId]);
   async function load() {
     if (reading.current) return;
     reading.current = true;

@@ -103,9 +103,18 @@ struct WorkspaceView: View {
         .disabled(model.quickSSHPresented)
         .overlay {
             if let content = model.quickSSHContent {
-                NativeEmbeddedDocument(content: content, modal: true)
-                    .id(ObjectIdentifier(content))
-                    .ignoresSafeArea(.container, edges: .top)
+                GeometryReader { geometry in
+                    ZStack {
+                        // WebKit still paints its page canvas; limit it to the form and dim native views separately.
+                        // WebKit 仍会绘制页面底色，因此只让它覆盖表单，原生视图另行绘制遮罩。
+                        Color.black.opacity(136.0 / 255).contentShape(Rectangle())
+                            .onTapGesture { content.window?.performClose(nil) }
+                        NativeEmbeddedDocument(content: content, modal: true)
+                            .id(ObjectIdentifier(content))
+                            .frame(width: min(540, max(0, geometry.size.width - 32)), height: min(CGFloat(model.quickSSHHeight), max(0, geometry.size.height - 48)))
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }.ignoresSafeArea(.container, edges: .top)
             }
         }
         .overlay(alignment: .bottomTrailing) {

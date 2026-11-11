@@ -28,6 +28,8 @@ test("native file tools use scoped WebKit controls, retain the query and react t
   };
   let settings = { ...defaults, language: "en" };
   let failCopy = false;
+  let delayContext = false;
+  let finishContext;
   const event = (kind, payload = null) =>
     window.dispatchEvent(
       new window.CustomEvent("uterm-content-event", {
@@ -44,8 +46,15 @@ test("native file tools use scoped WebKit controls, retain the query and react t
           calls.push(message);
           const { method, params } = message;
           let result = null;
-          if (method === "files_context") result = context;
-          else if (method === "files_clipboard") {
+          if (method === "files_context") {
+            result = { ...context };
+            if (delayContext) {
+              delayContext = false;
+              await new Promise((resolve) => {
+                finishContext = resolve;
+              });
+            }
+          } else if (method === "files_clipboard") {
             if (failCopy)
               return {
                 version: 1,
@@ -144,6 +153,25 @@ test("native file tools use scoped WebKit controls, retain the query and react t
       path: "note.txt",
       line: 0,
     });
+    context = { ...context, mode: "quick", request: context.request + 1 };
+    delayContext = true;
+    await act(async () => event("files-mode-changed"));
+    assert.equal(typeof finishContext, "function");
+    context = { ...context, mode: "search", request: context.request + 1 };
+    await act(async () => event("files-mode-changed"));
+    assert.equal(
+      document
+        .querySelector('[role=tab][aria-label="Project search"]')
+        .getAttribute("aria-selected"),
+      "true",
+    );
+    await act(async () => finishContext());
+    assert.equal(
+      document
+        .querySelector('[role=tab][aria-label="Project search"]')
+        .getAttribute("aria-selected"),
+      "true",
+    );
     await click('[role=tab][aria-label="Project search"]');
     const query = document.querySelector(".file-query");
     assert.ok(

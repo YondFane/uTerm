@@ -37,6 +37,8 @@ enum QuickParitySmoke {
             try await ContentSmoke.wait(quick, "document.querySelector('.ssh-quick-dialog input').value===" + quoted + " && document.documentElement.lang==='" + language + "'", allowAlert: true)
             guard (try await bridge.snapshot()).document.workspace == original.document.workspace, terminal.generation == generation,
                   ObjectIdentifier(terminal.view) == identity else { throw BridgeFailure(code: "QUICK_FIXTURE", message: "Invalid Quick SSH changed the workspace or terminal generation") }
+            let geometry = try await QuickSSHSmoke.modalGeometry(quick, window: window)
+            guard terminal.view.window === window, !terminal.view.isHiddenOrHasHiddenAncestor, !terminal.view.visibleRect.isEmpty else { throw BridgeFailure(code: "QUICK_BACKDROP", message: "Quick SSH hid the live terminal behind its form") }
             let name = "personal-\(phase)-quick-ssh-invalid-\(language)-\(appearance)-\(width).png"
             try await TerminalSmoke.capture(window: window, path: output.appendingPathComponent(name))
             captures.append(name); report["captures"] = captures
@@ -45,6 +47,8 @@ enum QuickParitySmoke {
                 "architecture": report["architecture"] ?? "", "system": report["system"] ?? "", "scenario": "quick-ssh-invalid", "inputAddress": address,
                 "terminalFixtureMarker": marker, "invalidInputRejected": true, "addressRetained": true, "savedWorkspaceUnchanged": true,
                 "sameMainWindow": true, "terminalGenerationRetained": true, "actualSidebarButton": true]
+            for (key, value) in geometry { row[key] = value }
+            row["workspaceVisibleAroundDialog"] = true
             let cancel = language == "en" ? "Cancel" : "取消"
             try await EditorSmoke.click(quick, title: cancel)
             try await TerminalSmoke.wait("Cancel shared Quick SSH without closing the workspace") { model.quickSSHContent == nil && window.isVisible && terminal.view.window === window }

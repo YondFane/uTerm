@@ -82,7 +82,8 @@ class ParityEvidenceTests(unittest.TestCase):
         for scene in fixture["quickScenes"]:
             values = dict(scene, passed=True, inputAddress=fixture["quickAddress"], terminalFixtureMarker=fixture["marker"],
                           invalidInputRejected=True, addressRetained=True, savedWorkspaceUnchanged=True, sameMainWindow=True,
-                          terminalGenerationRetained=True, actualSidebarButton=True, actualCancelPreservedState=True)
+                          terminalGenerationRetained=True, actualSidebarButton=True, actualCancelPreservedState=True,
+                          workspaceVisibleAroundDialog=True, modalWidth=540, modalHeight=300, modalLeft=(scene["width"]-540)/2, modalTop=(scene["height"]-300)/2)
             name = f"quick-ssh-invalid-{scene['language']}-{scene['appearance']}-{scene['width']}"
             native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
             image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", scene["width"], scene["height"]) + bytes(1100)
@@ -120,7 +121,8 @@ class ParityEvidenceTests(unittest.TestCase):
     def test_quick_ssh_requires_current_main_window_images_and_preserved_data(self):
         original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
         changes = [("sourceHeadSHA", "c" * 40), ("testedMergeSHA", "c" * 40), ("inputAddress", "different"), ("terminalFixtureMarker", "old"), ("screenshot", "old.png")]
-        changes += [(key, False) for key in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState"]]
+        changes += [(key, False) for key in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState", "workspaceVisibleAroundDialog"]]
+        changes += [("modalWidth", 1100), ("modalHeight", 720), ("modalTop", None), ("modalLeft", float("nan"))]
         for key, value in changes:
             self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
             self.n["quickSSHScenes"][0][key] = value
@@ -132,6 +134,11 @@ class ParityEvidenceTests(unittest.TestCase):
             if kind == "ordinary": next(row for row in self.t["scenes"] if row["scenario"].startswith("quick-ssh-invalid-"))["checks"]["sameMainWindow"] = False
             if kind == "platform": self.n["quickSSHScenes"][0]["platform"] = "browser"
             with self.subTest(kind=kind), self.assertRaises(AssertionError): self.run_compare()
+
+    def test_quick_ssh_forms_must_have_the_same_actual_bounds(self):
+        self.n["quickSSHScenes"][0].update(modalHeight=302, modalTop=209)
+        with self.assertRaisesRegex(AssertionError, "Different actual Quick SSH geometry"):
+            self.run_compare()
 
     def test_terminal_geometry_requires_matching_actual_insets_header_and_viewport_gap(self):
         original = copy.deepcopy(self.n)

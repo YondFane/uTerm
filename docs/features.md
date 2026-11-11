@@ -122,10 +122,20 @@ remain forbidden. Failed images/logs are retained in the
 [ordinary artifact](https://github.com/YondFane/uTerm/actions/runs/43051436701/artifacts/13873090397).
 The new modal and full pairing remain unaccepted until their own current-source run.
 
-These same real Mac reports expose a one-pixel narrow terminal-header difference: ordinary 66px,
-native 65px (both wide headers are 35px). The candidate uses the measured 23px Mac font-button
-height in native flow layout and adds the 66/35px Swift regression; the strict pairing tolerance is
-unchanged. Current-source window verification is pending.
+Paired artifacts also include a local `comparison.html` scene viewer alongside the original PNGs,
+JSON and Markdown. Extract the artifact, select an area/scene, and open either image at its original
+size. Source/merge identities, image digests and the pending functional-acceptance notice stay
+visible; no screenshots are synthesized or changed. Linux browser checks verify all 34 historical
+pairs, unchanged digests, the 24 settings-pair filter and previous/next actions. This is report-tool
+validation; current-source native acceptance and upload of the new viewer remain pending.
+
+Real Mac reports exposed a one-pixel narrow terminal-header difference. Source
+`becc4e233a0354137fe8248486e8dd7fb0df29fa`, merge `198238492c3f298999257b09bb3813468a1b11b3`, now
+records 66px narrow and 35px wide across all eight Intel Personal scenes, with top inset 11px and
+output gap 12px, in the
+[Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43065251107/artifacts/13876314613).
+Native flow uses the measured 23px Mac font-button height; the Swift regression passes. The strict
+pairing tolerance is unchanged, and matching current-source ordinary/ARM captures remain required.
 
 The Intel native matrix at that source stops before launching database QA because Maven Central DNS
 resolution fails. Its
@@ -197,15 +207,23 @@ with tools focused hides the column while retaining the main window and unsubmit
 Reopening reattaches the same document. Draft-discard confirmation belongs to the main window;
 pending CLI operations still block quitting until their actual result.
 
-The GitHub tools candidate passes 21 targeted Linux form/transport/navigation checks and the full
-frontend suite (473 passed, 11 conditional skips), plus type/build, format, contracts and i18n
-checks. Navigation failure remains visible, toolbar labels update immediately with the language, and
-a PR draft retains its input during settings changes. New Mac QA requires actual Files/search/GitHub
-switching, main-window attachment, full-height panel bounds, Command-W/reopen and quit cancellation.
-Its four existing screenshot names now capture the main window at 1100×720 and 640×720. Real Mac
-execution and same-source ordinary GitHub comparisons remain pending; the isolated CLI fixture does
-not make real GitHub requests. Workbench-wide PR modal placement, Git embedding and the other
+The GitHub tools pass 21 targeted Linux checks and the full frontend suite (473 passed, 11
+conditional skips), plus type/build, format, contracts and i18n checks. At head
+`becc4e233a0354137fe8248486e8dd7fb0df29fa`, merge `198238492c3f298999257b09bb3813468a1b11b3`, the
+[Intel native report](https://github.com/YondFane/uTerm/actions/runs/43065251099/artifacts/13876574598)
+passes actual Files/search/GitHub switching, main-window bounds, Command-W/reopen, retained terminal
+generations and PR draft quit cancellation. Its four main-window PNGs use 1100×720 and 640×720. The
+English issue view was inspected, but the Chinese narrow PR image visibly crushes fields inside the
+tools viewport; its visual acceptance fails despite passed action checks. A workspace-wide PR modal
+and ordinary-client paired images remain required. The isolated CLI makes no real GitHub requests.
+The same native run later fails the SSH host-trust sheet, after successful password, SFTP, transfer
+and tunnel checks; downstream checks remain unexecuted. QA retains the failure image and adds
+bounded prompt/poller/controller diagnostics without bypassing trust. Git embedding and the other
 remaining tools still require parity work.
+
+Files context refreshes discard older replies and errors when a newer mode request exists. A
+reordered-response regression fails with the earlier handler and passes with this guard; hidden
+Files documents cannot receive the GitHub mode value. This candidate still requires its own Mac run.
 
 File requests stay on the captured local project or Worktree. Writes first resolve open editor
 drafts, then recheck the selected root; cancelled delivery does not release a dispatched write
@@ -2325,23 +2343,44 @@ Those flows use a separate Quick SSH window and do not accept the new main-windo
 matrix passes real PostgreSQL disconnect; Intel database QA remains unexecuted after its download
 DNS failure.
 
-The modal candidate passes 27 focused Linux shared-form/transport/grid checks, including duplicate
-submission, visible error/retry, malformed workspace context, cancellation and fixed workspace
-ownership. Nineteen paired-evidence policy tests and 14 Personal policy tests also pass. Loading
-failures remain in a modal Retry/Cancel flow; a duplicate pending read cannot start another attempt.
-Native acceptance now requires the actual WK form inside the main window, Cancel/Escape/Command-W
-with unchanged saved data and retained terminal generations. `native-quick-ssh-invalid-en-dark.png`
-captures that main window; actual rendering, transparent backdrop and focus restoration still
-require current-source Mac CI. Two matched Quick SSH scenes use the same synthetic invalid address
-and actual shell prompt/marker, with actual sidebar opening, invalid-input feedback, retained
-address and cancellation checks. The strict grid requires 37 ordinary captures / 36 pairs (73
-originals including restart). These new modal captures require current-source CI and visual review.
-The complete Linux frontend run passes 472 tests with 11 conditional skips; type checking,
-production build, contracts, i18n, formatting and bilingual documentation checks pass.
+At source `becc4e233a0354137fe8248486e8dd7fb0df29fa`, merge
+`198238492c3f298999257b09bb3813468a1b11b3`, Intel Personal passes real install, initial/replacement
+windows and the Sparkle SDK suite. Its
+[artifact](https://github.com/YondFane/uTerm/actions/runs/43065251107/artifacts/13876314613)
+includes English/dark 1100px and replacement Chinese/light 640px Quick SSH images. Both were
+inspected: the form is in the main window and operations pass, but an opaque WebKit canvas hides the
+workspace, so visual acceptance fails. Passing window identity alone is insufficient.
+
+The candidate bounds WebKit to the measured form, paints the outer dimming with native views and
+clips the form's corners. A ResizeObserver reports content height without changing saved data.
+Acceptance requires actual centered form bounds in both clients, matching within one pixel, with the
+live terminal retained around the form. Missing, oversized or clipped bounds fail collection; the
+native test also clicks the actual backdrop and checks invalid layout arguments. This new rendering
+remains pending current-source Mac CI and visual inspection.
+
+Twenty-seven targeted Linux UI/transport/grid checks, 20 paired-evidence policies and 14 Personal
+policies pass. The complete frontend run passes 473 tests with 11 conditional skips; type/build,
+contracts, i18n, format and documentation checks pass. Loading failures retain modal Retry/Cancel
+and prevent duplicate reads. Two shared invalid-address scenes still require actual sidebar opening,
+visible rejection, retained input, Cancel/Escape/Command-W and unchanged workspace/session
+generations. The strict grid remains 37 ordinary captures / 36 pairs (73 originals including
+restart), without accepting the opaque historical images as proof of the new renderer.
 
 Linux validation passes six targeted core tests for atomic creation, rollback, stale revisions,
 private fields, retention and cleanup; the complete core, FFI and desktop-backend suites also pass.
 These core results belong to the existing implementation; this modal phase changes no Rust code.
+
+At the same `becc4e2` source, the
+[ARM native matrix](https://github.com/YondFane/uTerm/actions/runs/43065251099/artifacts/13878942719)
+passes completely, including GitHub switching, real SSH trust and PostgreSQL. Its JDBC provenance
+retains the pinned 42.7.14 digest and primary Central URL. The
+[ARM Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43065251107/artifacts/13877484403)
+also passes package, initial/replacement and SDK checks; its Chinese Quick SSH original was
+inspected and shows the same opaque background. Intel SSH trust remains unresolved. The ordinary Mac
+job executed no steps:
+[GitHub reports](https://github.com/YondFane/uTerm/actions/runs/43065251386/job/130678363243) that
+no hosted runner acquired it after multiple attempts, with macOS ARM capacity notices. No paired
+artifact exists for that run; a fresh ordinary run remains required.
 
 ### Jump hosts
 
