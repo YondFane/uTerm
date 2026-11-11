@@ -1212,6 +1212,15 @@ establish hosted Pages deployment or desktop runtime acceptance.
 
 ### Stable releases
 
+Release drafts are published by their verified numeric ID. An explicit recovery dispatch can restore
+the five feeds from an already public version after all five source builds pass; it preserves the
+tag and archives a source-bound recovery report. Eight local release-policy tests and YAML/docs
+checks pass. The [actual recovery run](https://github.com/YondFane/uTerm/actions/runs/42974125671)
+passes for published source `a0b865e32a57a78d9cbab76c744ae4a01edd393a`; its
+[report](https://github.com/YondFane/uTerm/actions/runs/42974125671/artifacts/13833859633) records
+five successful source builds, five restored feeds, five public installers and Latest. The original
+failed publication run is retained as failure evidence.
+
 The repository sidebar’s Latest entry points to the stable installer release. The release workflow
 marks a version Latest only after public downloads are verified and the stable update feed is
 published.

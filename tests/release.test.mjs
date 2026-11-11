@@ -352,3 +352,48 @@ test("personal release collection rejects stale source, simulated install and mo
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("draft publication resolves one numeric ID even before tag lookup sees it", () => {
+  const workflow = readFileSync(
+    new URL("../.github/workflows/uterm-release.yml", import.meta.url),
+    "utf8",
+  ).replace(/\r\n/g, "\n");
+  const source = workflow
+    .split("RELEASE_ID=$(node --input-type=module - <<'JS'\n")[1]
+    ?.split("\n          JS\n")[0];
+  assert.ok(source, "draft ID lookup must be explicit");
+  assert.ok(
+    workflow.includes(
+      'gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=false',
+    ),
+  );
+  const root = mkdtempSync(join(tmpdir(), "uterm-draft-id-"));
+  const run = (releases) => {
+    writeFileSync(join(root, "draft-releases.json"), JSON.stringify(releases));
+    return execFileSync(process.execPath, ["--input-type=module", "-e", source], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: "pipe",
+      env: { ...process.env, RELEASE_TAG: "uTerm-v1.2.3" },
+    }).trim();
+  };
+  const draft = {
+    id: 441305603,
+    tag_name: "uTerm-v1.2.3",
+    draft: true,
+    html_url: "https://github.com/example/repo/releases/tag/untagged-placeholder",
+  };
+  try {
+    assert.equal(run([{ ...draft, id: 1, tag_name: "other" }, draft]), "441305603");
+    for (const values of [
+      [],
+      [{ ...draft, draft: false }],
+      [draft, { ...draft, id: 2 }],
+      [{ ...draft, id: "441305603" }],
+      [{ ...draft, id: Number.MAX_SAFE_INTEGER + 1 }],
+    ])
+      assert.throws(() => run(values));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
