@@ -91,7 +91,9 @@ one file while retaining its sibling and external bytes. The embedded-file candi
 check is not yet counted as passed;
 macOS must run it at the new source SHA. JDK registration acceptance also waits for the live Add
 control to re-enable after rejected input, then clicks the refreshed control and preserves failure
-diagnostics. Packaging rejects a missing operation, stale source or
+diagnostics. Sidebar acceptance checks the actual section order and clicks Active disclosures while
+asserting unchanged shared revisions, selection and terminal generation; this new candidate check
+awaits macOS CI. Packaging rejects a missing operation, stale source or
 missing `personal-<phase>-embedded-files.png` evidence.
 
 The candidate capture flow records the exact chrome contract digest and measured toolbar height in
@@ -108,7 +110,12 @@ settings draft; Command-W hides the window. The local CLI control switch remains
 service control in Local control.
 
 The sidebar includes workspace selection and All, Projects, SSH, Redis and Database categories.
-SSH host search stays within its category; switching categories retains sessions and selection. Opening an editable file places it in the main workspace. The tab row appears when files are open,
+The native list separates Active, Pinned, SSH, Redis, Databases, loose terminals/chats and inactive
+Projects in the same order. Section disclosures only hide local rows; they do not edit shared data
+or close sessions. Empty connection categories retain their add/manage entry. Commands, settings
+and Agents have separate rail footer buttons and follow the interface palette and active-icon color.
+SSH host search stays within its category; switching categories retains sessions and selection.
+Quick SSH, direct connection rows and the full workbench presentation still require alignment. Opening an editable file places it in the main workspace. The tab row appears when files are open,
 with the selected terminal and ordered file labels, unsaved indicators and close controls. Reopening
 selects the retained WK editor; switching back to the terminal retains its view and generation.
 Left/Right and Home/End move between tabs. Editors receive focus after their AppKit view attaches;

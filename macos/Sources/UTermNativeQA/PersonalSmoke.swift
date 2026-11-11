@@ -304,6 +304,27 @@ enum PersonalSmoke {
               snapshot.document.workspace["projects"].array.first?["pinned"].bool == false,
               model.selectedID == selected, model.selectedTerminal?.generation == generation, model.selectedTerminal?.view.window === window,
               !model.canRemoveWorkspace else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Sidebar edits lost state or replaced the selected terminal") }
+        var sections: [String] = []
+        for index in 0..<table.numberOfRows {
+            if let cell = table.view(atColumn: 0, row: index, makeIfNecessary: true), let id = cell.subviews.compactMap({ $0.identifier?.rawValue }).first(where: { $0.hasPrefix("native-sidebar-section-") }) { sections.append(String(id.dropFirst("native-sidebar-section-".count))) }
+        }
+        var expected = ["active"]
+        if model.settings["showSshConnections"].bool != false { expected.append("ssh") }
+        if model.settings["showRedisConnections"].bool != false { expected.append("redis") }
+        if model.settings["showDatabaseConnections"].bool != false { expected.append("database") }
+        expected.append("projects")
+        guard sections == expected else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_SECTIONS", message: "Actual sidebar section order differs from the workspace categories") }
+        func sectionButton() -> NSButton? { window.contentView.flatMap { TerminalSmoke.descendants($0).first(where: { $0.identifier?.rawValue == "native-sidebar-section-active" }) as? NSButton } }
+        guard let collapse = sectionButton(), collapse.isEnabled else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_SECTIONS", message: "Missing actual Active disclosure") }
+        collapse.performClick(nil)
+        try await TerminalSmoke.wait("Collapse Active through its actual sidebar control") { row(projectName) == nil }
+        guard let expand = sectionButton(), expand.isEnabled else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_SECTIONS", message: "Missing updated Active disclosure") }
+        expand.performClick(nil)
+        try await TerminalSmoke.wait("Expand Active through its actual sidebar control") { row(projectName) != nil }
+        let afterSections = try await bridge.snapshot()
+        guard afterSections.revision == snapshot.revision, afterSections.document.workspace == snapshot.document.workspace, afterSections.document.settings == snapshot.document.settings, model.selectedID == selected, model.selectedTerminal?.generation == generation else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_SECTIONS", message: "Section collapse changed shared data or a session") }
+        report["nativeSidebarSectionOrderAndReadOnlyCollapse"] = true
+        report["nativeSidebarSectionIds"] = sections
         let expanded = "personal-\(phase)-sidebar-expanded.png"
         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(expanded))
         report["captures"] = (report["captures"] as? [String] ?? []) + [expanded]

@@ -13,9 +13,12 @@ struct NativeSidebar: NSViewRepresentable {
         let projectID: String?
         let worktreeID: String?
         let depth: Int
-        init(key: String, name: String, symbol: String?, projectID: String? = nil, worktreeID: String? = nil, depth: Int = 0) {
+        let sectionID: String?
+        let collapsed: Bool
+        init(key: String, name: String, symbol: String?, projectID: String? = nil, worktreeID: String? = nil, depth: Int = 0, sectionID: String? = nil, collapsed: Bool = false) {
             self.key = key; self.name = name; self.symbol = symbol
             self.projectID = projectID; self.worktreeID = worktreeID; self.depth = depth
+            self.sectionID = sectionID; self.collapsed = collapsed
         }
     }
 
@@ -29,6 +32,7 @@ struct NativeSidebar: NSViewRepresentable {
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
         table.addTableColumn(column)
         table.headerView = nil
+        table.style = .fullWidth
         table.rowHeight = 28
         table.intercellSpacing = NSSize(width: 0, height: 2)
         table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
@@ -77,56 +81,81 @@ struct NativeSidebar: NSViewRepresentable {
             let section = model.sidebarSection
             let query = section == "ssh" ? model.sidebarQuery.trimmingCharacters(in: .whitespacesAndNewlines) : ""
             var next: [Row] = []
-            if settings["showDatabaseConnections"].bool != false { next.append(Row(key: "db", name: localized("Databases", "数据库"), symbol: "externaldrive")) }
-            if settings["showRedisConnections"].bool != false { next.append(Row(key: "redis", name: localized("Redis connections", "Redis 连接"), symbol: "cylinder")) }
             func sessionRow(_ session: JSONValue, depth: Int) -> Row {
                 let id = session["id"].string ?? ""
                 let activity = model.terminals[id]?.activityLabel ?? ""
                 let name = (session["name"].string ?? "") + (activity.isEmpty ? "" : " · " + activity)
                 return Row(key: "s:" + id, name: name, symbol: session["pinned"].bool == true ? "pin.fill" : session["agent"].string == nil ? "terminal" : "sparkle", projectID: model.sessionEntries.first(where: { $0.sessionID == id })?.projectId, depth: depth)
             }
-            next.append(Row(key: "projects", name: localized("Projects", "项目"), symbol: nil))
-            for project in model.projects {
+            func worktreeRows(_ tree: JSONValue, project: JSONValue, depth: Int) -> [Row] {
                 let id = project["id"].string ?? ""
-                next.append(Row(key: "p:" + id, name: project["name"].string ?? "", symbol: project["pinned"].bool == true ? "pin.fill" : "folder", projectID: id))
-                if project["collapsed"].bool == true && query.isEmpty { continue }
-                next += model.orderedSessions(project["sessions"].array.filter { $0["worktreeId"].string == nil }).map { sessionRow($0, depth: 1) }
-                for tree in project["worktrees"].array {
-                    let suffix = tree["missing"] == .bool(true) ? localized(" (missing)", "（缺失）") : ""
-                    next.append(Row(key: "w:" + (tree["id"].string ?? ""), name: (tree["name"].string ?? "") + suffix, symbol: "arrow.triangle.branch", projectID: id, worktreeID: tree["id"].string, depth: 1))
-                    next += model.orderedSessions(project["sessions"].array.filter { $0["worktreeId"] == tree["id"] }).map { sessionRow($0, depth: 2) }
-                }
+                let suffix = tree["missing"] == .bool(true) ? localized(" (missing)", "（缺失）") : ""
+                var rows = [Row(key: "w:" + (tree["id"].string ?? ""), name: (tree["name"].string ?? "") + suffix, symbol: "arrow.triangle.branch", projectID: id, worktreeID: tree["id"].string, depth: depth)]
+                rows += model.orderedSessions(project["sessions"].array.filter { $0["worktreeId"] == tree["id"] }).map { sessionRow($0, depth: depth + 1) }
+                return rows
             }
-            let connections = model.groups.first { $0["id"].string == model.groupID }?["sshConnections"].array ?? []
-            if !connections.isEmpty && settings["showSshConnections"].bool != false {
-                next.append(Row(key: "ssh", name: localized("SSH connections", "SSH 连接"), symbol: nil))
-                for connection in connections {
-                    next.append(Row(key: "q:" + (connection["id"].string ?? ""), name: connection["name"].string ?? "SSH", symbol: "network"))
-                    next += model.orderedSessions(connection["sessions"].array).map { sessionRow($0, depth: 1) }
+            func projectRows(_ project: JSONValue) -> [Row] {
+                let id = project["id"].string ?? ""
+                let collapsed = project["collapsed"].bool == true
+                var rows = [Row(key: "p:" + id, name: project["name"].string ?? "", symbol: project["pinned"].bool == true ? "pin.fill" : "folder", projectID: id, collapsed: collapsed)]
+                if collapsed { return rows }
+                rows += model.orderedSessions(project["sessions"].array.filter { $0["worktreeId"].string == nil }).map { sessionRow($0, depth: 1) }
+                for tree in project["worktrees"].array where !project["sessions"].array.isEmpty || project["pinned"].bool == true || tree["pinned"].bool != true {
+                    rows += worktreeRows(tree, project: project, depth: 1)
                 }
+                return rows
             }
-            next += [Row(key: "sessions", name: localized("Sessions", "会话"), symbol: nil)]
-                + model.orderedSessionEntries.filter { $0.projectId == nil && $0.session["ssh"] == .null }.map { sessionRow($0.session, depth: 0) }
-            next = next.filter { row in
-                let matchesSection = section == "all"
-                    || (section == "projects" && (row.key == "projects" || row.projectID != nil))
-                    || (section == "sessions" && (row.key == "sessions" || row.key.hasPrefix("s:")))
-                    || (section == "ssh" && (row.key == "ssh" || row.key.hasPrefix("q:") || (row.key.hasPrefix("s:") && model.sessionEntries.contains { "s:" + $0.sessionID == row.key && $0.session["ssh"] != .null })))
-                    || (section == "redis" && row.key == "redis")
-                    || (section == "database" && row.key == "db")
-                return matchesSection && (query.isEmpty || row.name.localizedCaseInsensitiveContains(query))
+            func appendSection(_ id: String, _ title: String, rows: [Row]) {
+                let collapsed = model.sidebarCollapsed.contains(id)
+                next.append(Row(key: "section:" + id, name: title, symbol: nil, sectionID: id, collapsed: collapsed))
+                if !collapsed { next += rows }
+            }
+            let showProjects = section == "all" || section == "projects"
+            let active = model.projects.filter { !$0["sessions"].array.isEmpty }
+            let inactive = model.projects.filter { $0["sessions"].array.isEmpty }
+            let loose = model.orderedSessionEntries.filter { $0.projectId == nil && $0.session["ssh"] == .null }
+            if showProjects {
+                if !active.isEmpty { appendSection("active", localized("Active", "活动"), rows: active.flatMap(projectRows)) }
+                var pinned = inactive.filter { $0["pinned"].bool == true }.flatMap(projectRows)
+                for project in inactive where project["pinned"].bool != true {
+                    for tree in project["worktrees"].array where tree["pinned"].bool == true { pinned += worktreeRows(tree, project: project, depth: 0) }
+                }
+                pinned += loose.filter { $0.session["pinned"].bool == true }.map { sessionRow($0.session, depth: 0) }
+                if !pinned.isEmpty { appendSection("pinned", localized("Pinned", "已固定"), rows: pinned) }
+            }
+            let group = model.groups.first { $0["id"].string == model.groupID } ?? .null
+            if (section == "all" || section == "ssh") && settings["showSshConnections"].bool != false {
+                var connections: [Row] = []
+                for connection in group["sshConnections"].array {
+                    let searchable = ["name", "host", "username", "root"].compactMap { connection[$0].string }.joined(separator: " ")
+                    if !query.isEmpty && !searchable.localizedCaseInsensitiveContains(query) { continue }
+                    connections.append(Row(key: "q:" + (connection["id"].string ?? ""), name: connection["name"].string ?? "SSH", symbol: "network"))
+                    connections += model.orderedSessions(connection["sessions"].array).map { sessionRow($0, depth: 1) }
+                }
+                appendSection("ssh", "SSH", rows: connections)
+            }
+            if (section == "all" || section == "redis") && settings["showRedisConnections"].bool != false {
+                appendSection("redis", "Redis", rows: group["redisConnections"].array.isEmpty ? [] : [Row(key: "redis", name: localized("Redis connections…", "Redis 连接…"), symbol: "cylinder")])
+            }
+            if (section == "all" || section == "database") && settings["showDatabaseConnections"].bool != false {
+                appendSection("database", localized("Databases", "数据库"), rows: group["databaseConnections"].array.isEmpty ? [] : [Row(key: "db", name: localized("Database connections…", "数据库连接…"), symbol: "externaldrive")])
+            }
+            if showProjects {
+                let terminals = loose.filter { $0.session["pinned"].bool != true && $0.session["agent"].string == nil }
+                let chats = loose.filter { $0.session["pinned"].bool != true && $0.session["agent"].string != nil }
+                if !terminals.isEmpty { appendSection("terminals", localized("Terminals", "终端"), rows: terminals.map { sessionRow($0.session, depth: 0) }) }
+                if !chats.isEmpty { appendSection("chats", localized("Chats", "聊天"), rows: chats.map { sessionRow($0.session, depth: 0) }) }
+                appendSection("projects", localized("Projects", "项目"), rows: inactive.filter { $0["pinned"].bool != true }.flatMap(projectRows))
             }
             if section == "sessions" {
-                next = [Row(key: "sessions", name: localized("Sessions", "会话"), symbol: nil)] + model.orderedSessionEntries.filter {
-                    query.isEmpty || ($0.session["name"].string ?? "").localizedCaseInsensitiveContains(query)
-                }.map { sessionRow($0.session, depth: 0) }
+                next = model.orderedSessionEntries.map { sessionRow($0.session, depth: 0) }
             }
             updating = true
             defer { updating = false }
             if next != rows || preferenceSignature != signature { rows = next; preferenceSignature = signature; table.reloadData() }
             for index in rows.indices {
                 guard let cell = table.view(atColumn: 0, row: index, makeIfNecessary: false) else { continue }
-                for disclosure in cell.subviews.compactMap({ $0 as? DisclosureButton }) {
+                for disclosure in cell.subviews.compactMap({ $0 as? NSButton }) {
                     disclosure.isEnabled = !model.busy && !model.gitFavoritesRecoveryPresented && !model.worktreeDeletionPresented
                 }
             }
@@ -259,6 +288,21 @@ struct NativeSidebar: NSViewRepresentable {
                   let project = model.projects.first(where: { $0["id"].string == id }) else { return }
             Task { await model.setProjectFlag(id, key: key, value: project[key].bool != true) }
         }
+        final class SectionButton: NSButton { var sectionID = "" }
+        @objc private func toggleSection(_ button: SectionButton) {
+            guard let model else { return }
+            if !model.sidebarCollapsed.insert(button.sectionID).inserted { model.sidebarCollapsed.remove(button.sectionID) }
+        }
+        @objc private func addInSection(_ button: SectionButton) {
+            guard let model else { return }
+            switch button.sectionID {
+            case "projects": model.openProject()
+            case "ssh": model.openSSHRequested?(nil)
+            case "redis": model.openRedisRequested?()
+            case "database": model.openDatabasesRequested?()
+            default: break
+            }
+        }
         final class DisclosureButton: NSButton { var projectID = "" }
         @objc private func toggleDisclosure(_ button: DisclosureButton) {
             guard let model, let project = model.projects.first(where: { $0["id"].string == button.projectID }) else { return }
@@ -295,9 +339,31 @@ struct NativeSidebar: NSViewRepresentable {
             let item = rows[row]
             let cell = NSTableCellView()
             cell.identifier = NSUserInterfaceItemIdentifier("native-sidebar-row-" + item.key)
-            let text = NSTextField(labelWithString: item.name)
             let settings = model?.settings ?? .null
             let palette = NativePreferences.interfacePalette(settings, catalog: model?.settingsCatalog ?? .null)
+            if let section = item.sectionID {
+                let toggle = SectionButton(title: item.name, target: self, action: #selector(toggleSection(_:)))
+                toggle.sectionID = section; toggle.isBordered = false; toggle.alignment = .left
+                toggle.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: 11)
+                toggle.contentTintColor = NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)
+                toggle.image = NativeChromeImages.sidebarChevron(expanded: !item.collapsed)
+                toggle.imagePosition = .imageTrailing; toggle.imageScaling = .scaleProportionallyDown
+                toggle.identifier = NSUserInterfaceItemIdentifier("native-sidebar-section-" + section)
+                toggle.setAccessibilityLabel(item.name); toggle.setAccessibilityExpanded(!item.collapsed)
+                toggle.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(toggle)
+                NSLayoutConstraint.activate([toggle.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4), toggle.centerYAnchor.constraint(equalTo: cell.centerYAnchor), toggle.heightAnchor.constraint(equalToConstant: 24)])
+                if ["projects", "ssh", "redis", "database"].contains(section) {
+                    let add = SectionButton(title: "", target: self, action: #selector(addInSection(_:)))
+                    add.sectionID = section; add.isBordered = false; add.contentTintColor = NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor); add.image = NativeChromeImages.sidebar(.plus)
+                    add.imageScaling = .scaleProportionallyDown
+                    add.identifier = NSUserInterfaceItemIdentifier("native-sidebar-add-" + section)
+                    add.setAccessibilityLabel(localized("Add ", "添加") + item.name)
+                    add.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(add)
+                    NSLayoutConstraint.activate([add.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2), add.centerYAnchor.constraint(equalTo: cell.centerYAnchor), add.widthAnchor.constraint(equalToConstant: 20), add.heightAnchor.constraint(equalToConstant: 24), toggle.trailingAnchor.constraint(lessThanOrEqualTo: add.leadingAnchor, constant: -4)])
+                } else { toggle.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -4).isActive = true }
+                return cell
+            }
+            let text = NSTextField(labelWithString: item.name)
             text.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13) - (item.symbol == nil ? 2 : 0), bold: item.symbol == nil)
             text.textColor = NativePreferences.color(palette[item.symbol == nil ? "muted" : "text"], fallback: item.symbol == nil ? .secondaryLabelColor : .labelColor)
             text.lineBreakMode = .byTruncatingMiddle
@@ -318,7 +384,7 @@ struct NativeSidebar: NSViewRepresentable {
                     let collapsed = model?.projects.first(where: { $0["id"].string == id })?["collapsed"].bool == true
                     let disclosure = DisclosureButton()
                     disclosure.projectID = id; disclosure.target = self; disclosure.action = #selector(toggleDisclosure(_:))
-                    disclosure.image = NSImage(systemSymbolName: collapsed ? "chevron.right" : "chevron.down", accessibilityDescription: nil)
+                    disclosure.image = NativeChromeImages.sidebarChevron(expanded: !collapsed)
                     disclosure.isBordered = false; disclosure.isEnabled = model?.busy == false && model?.gitFavoritesRecoveryPresented == false
                     disclosure.setAccessibilityLabel(collapsed ? localized("Expand project", "展开项目") : localized("Collapse project", "折叠项目"))
                     disclosure.identifier = NSUserInterfaceItemIdentifier("native-project-disclosure-" + id)

@@ -31,6 +31,7 @@ final class WorkspaceModel: ObservableObject {
     @Published var sidebarVisible = true
     @Published var sidebarSection = "all"
     @Published var sidebarQuery = ""
+    @Published var sidebarCollapsed: Set<String> = []
     @Published var inspectorVisible = false
     @Published var paneZoomed = false
     @Published private(set) var breakReminderVisible = false

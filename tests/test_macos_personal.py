@@ -64,7 +64,7 @@ class PersonalPackageTests(unittest.TestCase):
                          draftUnchanged=True, navigationControlActivated=True, javaFixtureMatched=section["id"] == "java",
                          screenshot=f"personal-{phase}-settings-{section['id']}-{scene['language']}-{scene['appearance']}-{scene['width']}.png")
                     for section in fixture["settingsSections"] for scene in fixture["settingsScenes"]]
-        return dict(backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,
+        return dict(nativeSidebarSectionOrderAndReadOnlyCollapse=True, backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,
                     settingsScenes=settings, embeddedWorkspaceFiles=dict(passed=True, tabControlsActivated=True, arrowNavigationActivated=True, sameMainWindow=True, orderedAndReused=True, exactUnsavedDraftRetained=True, cancelCloseRetainedTabs=True, discardPreservedSiblingAndExternalWriter=True, terminalViewAndGenerationRetained=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-embedded-files.png"), captures=[scene["screenshot"] for scene in scenes + settings] + [f"personal-{phase}-embedded-files.png"])
 
     def test_embedded_workspace_requires_actual_controls_and_current_source(self):
@@ -89,12 +89,13 @@ class PersonalPackageTests(unittest.TestCase):
                 package.validate_settings_scenes(report, "a" * 40, "b" * 40, "initial")
 
     def test_workspace_acceptance_rejects_missing_duplicate_or_wrong_source_screenshots(self):
-        for mutation in ["missing", "duplicate", "source", "file", "background-close", "unreadable-files", "project-actions"]:
+        for mutation in ["missing", "duplicate", "source", "file", "background-close", "unreadable-files", "sidebar-sections", "project-actions"]:
             report = self.workspace_evidence("initial")
             if mutation == "missing": report["workspaceScenes"].pop()
             if mutation == "duplicate": report["workspaceScenes"][0] = report["workspaceScenes"][1]
             if mutation == "source": report["workspaceScenes"][0]["testedMergeSHA"] = "c" * 40
             if mutation == "file": report["captures"].remove(report["workspaceScenes"][0]["screenshot"])
+            if mutation == "sidebar-sections": report["nativeSidebarSectionOrderAndReadOnlyCollapse"] = False
             if mutation == "background-close": report["backgroundTabCloseRetainedSelectedGeneration"] = False
             if mutation == "unreadable-files": report["workspaceScenes"][0]["filesReadable"] = False
             if mutation == "project-actions": report["nativeProjectMenuPinCollapseOrderAndConflictVerified"] = False

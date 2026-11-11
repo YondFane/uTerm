@@ -74,6 +74,7 @@ struct NativeSidebarNavigation: View {
 @MainActor
 struct NativeSidebarRail: View {
     @ObservedObject var model: WorkspaceModel
+    private var palette: JSONValue { NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog) }
     var body: some View {
         VStack(spacing: 6) {
             navigation("all", .home, localized("All", "全部"))
@@ -82,6 +83,7 @@ struct NativeSidebarRail: View {
             if model.settings["showRedisConnections"].bool != false { navigation("redis", .database, localized("Redis connections", "Redis 连接")) }
             if model.settings["showDatabaseConnections"].bool != false { navigation("database", .sqlDatabase, localized("Database connections", "数据库连接")) }
             Spacer(minLength: 12)
+            Color(nsColor: NativePreferences.color(palette["border"], fallback: .separatorColor)).frame(height: 1).padding(.bottom, 2)
             Menu {
                 Button(localized("Open project…", "打开项目…")) { model.openProject() }
                 Button(localized("Open file…", "打开文件…")) { model.openFileRequested?() }.disabled(model.workspace["selectedProject"].string == nil)
@@ -111,12 +113,21 @@ struct NativeSidebarRail: View {
                 Button(localized("Manage Agents…", "管理 Agent…")) { model.openAgentsRequested?() }
             } label: { NativeChromeIcon(sidebar: .plus, size: CGFloat(CoreChrome.railIconSize)).frame(width: CGFloat(CoreChrome.railButtonSize), height: CGFloat(CoreChrome.railButtonSize)) }
                 .menuStyle(.borderlessButton).menuIndicator(.hidden).help(localized("Add", "添加"))
+            Button { model.performCommandRequested?("palette") } label: {
+                NativeChromeIcon(toolbar: .command, size: CGFloat(CoreChrome.railIconSize)).frame(width: CGFloat(CoreChrome.railButtonSize), height: CGFloat(CoreChrome.railButtonSize))
+            }.help(localized("Commands", "命令")).accessibilityLabel(localized("Commands", "命令"))
             Button { model.openSettingsRequested?() } label: {
                 NativeChromeIcon(toolbar: .settings, size: CGFloat(CoreChrome.railIconSize)).frame(width: CGFloat(CoreChrome.railButtonSize), height: CGFloat(CoreChrome.railButtonSize))
             }.help(localized("Settings", "设置")).accessibilityLabel(localized("Settings", "设置"))
+            Button { model.openAgentsRequested?() } label: {
+                NativeChromeIcon(toolbar: .agent, size: CGFloat(CoreChrome.railIconSize)).frame(width: CGFloat(CoreChrome.railButtonSize), height: CGFloat(CoreChrome.railButtonSize))
+            }.help("Agent").accessibilityLabel("Agent")
         }
         .buttonStyle(.borderless).padding(.horizontal, 6).padding(.top, CGFloat(CoreChrome.titlebarHeight) + 8).padding(.bottom, 8)
         .frame(width: CGFloat(CoreChrome.sidebarRailWidth))
+        .foregroundStyle(Color(nsColor: NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)))
+        .background(Color(nsColor: NativePreferences.color(palette["sidebar"], fallback: .windowBackgroundColor).blended(withFraction: 0.2, of: NativePreferences.color(palette["hover"], fallback: .controlBackgroundColor)) ?? .windowBackgroundColor))
+        .overlay(alignment: .top) { Color(nsColor: NativePreferences.color(palette["sidebar"], fallback: .windowBackgroundColor)).frame(height: CGFloat(CoreChrome.titlebarHeight)).allowsHitTesting(false) }
         .disabled(!model.ready || model.busy || model.gitFavoritesRecoveryPresented)
         .accessibilityIdentifier("native-sidebar-rail")
     }
@@ -124,7 +135,13 @@ struct NativeSidebarRail: View {
         Button { model.sidebarSection = id; model.sidebarVisible = true } label: {
             NativeChromeIcon(sidebar: icon, size: CGFloat(CoreChrome.railIconSize))
                 .frame(width: CGFloat(CoreChrome.railButtonSize), height: CGFloat(CoreChrome.railButtonSize))
-                .background(model.sidebarSection == id ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                .foregroundStyle(Color(nsColor: NativePreferences.color(model.sidebarSection == id ? model.settings["activeIconColor"] : palette["muted"], fallback: NativePreferences.color(palette[model.sidebarSection == id ? "accent" : "muted"], fallback: .labelColor))))
+                .background(model.sidebarSection == id ? Color(nsColor: NativePreferences.color(palette["accent"], fallback: .controlAccentColor)).opacity(NativePreferences.light(model.settings) ? 18.0 / 255 : 22.0 / 255) : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+                .overlay(alignment: .leading) {
+                    if model.sidebarSection == id {
+                        Color(nsColor: NativePreferences.color(model.settings["activeIconColor"], fallback: NativePreferences.color(palette["accent"], fallback: .controlAccentColor))).frame(width: 2, height: 16).offset(x: -5)
+                    }
+                }
         }.help(title).accessibilityLabel(title)
             .accessibilityAddTraits(model.sidebarSection == id ? .isSelected : [])
             .accessibilityIdentifier("native-sidebar-category-" + id)
