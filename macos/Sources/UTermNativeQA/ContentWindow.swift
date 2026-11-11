@@ -322,6 +322,10 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             if !quick.pending { forceClose() }
             return false
         }
+        if let form = workbenchHost as? GitHubPRHost {
+            if !form.pending && !form.prepared { form.dismiss?() }
+            return false
+        }
         if workbenchHost != nil { sender.orderOut(nil); return false }
         if gitMode {
             if !gitMutationInProgress { forceClose() }

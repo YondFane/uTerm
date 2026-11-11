@@ -86,7 +86,7 @@ struct NativeEmbeddedDocument: NSViewRepresentable {
         let host = EmbeddedDocumentHost()
         host.document = content.webView
         host.modal = modal
-        if modal { host.wantsLayer = true; host.layer?.cornerRadius = 12; host.layer?.masksToBounds = true }
+        if modal { host.wantsLayer = true; host.layer?.cornerRadius = content.workbenchHost is GitHubPRHost ? 9 : 12; host.layer?.masksToBounds = true }
         host.identifier = NSUserInterfaceItemIdentifier("native-embedded-document")
         content.webView.removeFromSuperview()
         content.webView.translatesAutoresizingMaskIntoConstraints = false

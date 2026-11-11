@@ -64,6 +64,29 @@ files themselves are readable.
 
 工作区配对还要求两版实测完整高度的工具面板／标题／视口／底部路径边界。即使文件可读，内层标题栏造成的 44 点偏移或路径栏裁切仍会使对照失败。
 
+The shared PR form now has a bounded native workspace modal instead of using the narrow tools
+viewport. Native host requests fix the repository/root, reject injected fields and duplicate writes,
+and retain a hidden draft across Command-W/reopen. Cancel/Escape discard; pending writes still block
+close/quit. Linux frontend (474 passed, 11 skipped), 22 focused checks and three-width CSS checks
+pass. New real Mac modal screenshots and ordinary PR pairs remain required.
+
+共用 PR 表单改为有界的原生工作区模态，不再受窄工具视口限制。原生请求固定仓库／根目录，拒绝注入字段及重复写入；Command-W／重开保留隐藏草稿，取消／Escape 放弃，写入期间仍禁止关闭／退出。Linux 前端 474 通过、11 跳过，22 项专项及三种宽度 CSS 检查通过。新模态仍需真实 Mac 截图及普通版 PR 配对。
+
+At head `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
+`6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)
+contains 36 pairs, 73 original PNGs and the offline viewer. Both Quick SSH pairs were inspected:
+measured bounds and the live surrounding workspace match, while sidebar styling remains different.
+The
+[Intel native report](https://github.com/YondFane/uTerm/actions/runs/43074768464/artifacts/13882499663)
+passes actual backdrop cancellation and real SSH trust Cancel/Approve. This does not accept the new
+PR modal or the full parity goal. ARM Personal initial/replacement pass, but its
+[SDK install scenario](https://github.com/YondFane/uTerm/actions/runs/43074768643/artifacts/13881394081)
+fails host reattachment with a lock-acquisition error; the complete Personal run remains failed.
+
+源码与 merge 如上，两种原生矩阵通过。配对产物包含 36 组、73 张原始 PNG 及离线查看器；两组快速 SSH 原图已查看，实测边界与外围实时工作区相符，侧栏样式仍有差异。Intel 原生报告通过实际外围取消及真实 SSH 信任取消／批准。这不接受新 PR 模态或完整一致性目标。ARM
+Personal 初次／替换通过，但 SDK 安装场景在宿主重新附着时发生锁获取错误，完整 Personal 运行仍失败。
+
 ## Evidence / 证据
 
 Use isolated application identities and temporary projects. Capture both actual windows for English

@@ -127,7 +127,13 @@ JSON and Markdown. Extract the artifact, select an area/scene, and open either i
 size. Source/merge identities, image digests and the pending functional-acceptance notice stay
 visible; no screenshots are synthesized or changed. Linux browser checks verify all 34 historical
 pairs, unchanged digests, the 24 settings-pair filter and previous/next actions. This is report-tool
-validation; current-source native acceptance and upload of the new viewer remain pending.
+validation. At source `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
+`6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, the
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)
+contains the viewer, 36 pairs and 73 originals including restart. Image digests and all viewer
+scenes were checked. English/dark wide and Chinese/light narrow Quick SSH pairs were inspected: the
+form and live surrounding workspace now agree; sidebar styling and full functional parity remain
+pending.
 
 Real Mac reports exposed a one-pixel narrow terminal-header difference. Source
 `becc4e233a0354137fe8248486e8dd7fb0df29fa`, merge `198238492c3f298999257b09bb3813468a1b11b3`, now
@@ -201,29 +207,38 @@ to the terminal when the previous control was removed and focus fell back to the
 checks the actual visible file controls after swapping and restoring split panes.
 
 GitHub and Files use the same translated tool switcher. Switching retains each WebKit document;
-returning to Files applies the requested tree/search mode to its retained view. GitHub requests
-remain bound to the captured repository/project and reject a changed workspace context. Command-W
-with tools focused hides the column while retaining the main window and unsubmitted PR draft.
-Reopening reattaches the same document. Draft-discard confirmation belongs to the main window;
-pending CLI operations still block quitting until their actual result.
+returning to Files applies the requested tree/search mode to its retained view. Requests stay bound
+to the captured repository/project and reject changed workspace context.
 
-The GitHub tools pass 21 targeted Linux checks and the full frontend suite (473 passed, 11
-conditional skips), plus type/build, format, contracts and i18n checks. At head
-`becc4e233a0354137fe8248486e8dd7fb0df29fa`, merge `198238492c3f298999257b09bb3813468a1b11b3`, the
-[Intel native report](https://github.com/YondFane/uTerm/actions/runs/43065251099/artifacts/13876574598)
-passes actual Files/search/GitHub switching, main-window bounds, Command-W/reopen, retained terminal
-generations and PR draft quit cancellation. Its four main-window PNGs use 1100×720 and 640×720. The
-English issue view was inspected, but the Chinese narrow PR image visibly crushes fields inside the
-tools viewport; its visual acceptance fails despite passed action checks. A workspace-wide PR modal
-and ordinary-client paired images remain required. The isolated CLI makes no real GitHub requests.
-The same native run later fails the SSH host-trust sheet, after successful password, SFTP, transfer
-and tunnel checks; downstream checks remain unexecuted. QA retains the failure image and adds
-bounded prompt/poller/controller diagnostics without bypassing trust. Git embedding and the other
-remaining tools still require parity work.
+**New PR** uses the shared title/body/base/head/draft form over the entire main workspace, at up to
+640px or 92% of its width. WebKit covers only the measured form; native views dim and blur the live
+workspace. The tools and terminal remain mounted. Command-W hides the form and retains its literal
+draft; **New PR** restores that same document. Cancel and Escape discard it. Without a form,
+Command-W with tools focused hides the tools column. Draft-discard confirmation belongs to the main
+window; pending CLI operations block closing and quitting until their actual result. The native host
+injects the captured root/repository and rejects extra fields, invalid layout and duplicate
+submission. Ambiguous create failures retain the warning to refresh before retrying.
+
+Twenty-two focused Linux checks and the full frontend suite (474 passed, 11 conditional skips) pass,
+plus type/build, format, contracts and i18n checks. Context failures offer Retry/Cancel;
+language/theme refresh retains literal input, frozen/pending forms cannot close or submit, and a
+failed create never retries automatically. Chromium checks at widths 640/900/1100 match the shared
+form dimensions within one pixel. These are frontend/CSS checks; the new Swift modal, actual
+Command-W/reopen, Escape, quit cancellation and readable narrow fields still require their own Mac
+run and ordinary-client paired images.
+
+At source `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
+`6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
+[Intel report](https://github.com/YondFane/uTerm/actions/runs/43074768464/artifacts/13882499663)
+passes real host-trust Cancel/Approve/authentication and the full interaction matrix, including
+Files/search/GitHub switching and guarded drafts. The earlier narrow GitHub form remains visually
+rejected: those images do not accept the new workspace modal. The previous intermittent Intel trust
+failure has not reproduced in this run; no speculative trust workaround was applied.
 
 Files context refreshes discard older replies and errors when a newer mode request exists. A
 reordered-response regression fails with the earlier handler and passes with this guard; hidden
-Files documents cannot receive the GitHub mode value. This candidate still requires its own Mac run.
+Files documents cannot receive the GitHub mode value. The same-source native inspector checks pass.
+Git embedding and the other remaining tools still require parity work.
 
 File requests stay on the captured local project or Worktree. Writes first resolve open editor
 drafts, then recheck the selected root; cancelled delivery does not release a dispatched write
@@ -2355,8 +2370,16 @@ The candidate bounds WebKit to the measured form, paints the outer dimming with 
 clips the form's corners. A ResizeObserver reports content height without changing saved data.
 Acceptance requires actual centered form bounds in both clients, matching within one pixel, with the
 live terminal retained around the form. Missing, oversized or clipped bounds fail collection; the
-native test also clicks the actual backdrop and checks invalid layout arguments. This new rendering
-remains pending current-source Mac CI and visual inspection.
+native test also clicks the actual backdrop and checks invalid layout arguments. At source
+`760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge `6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`,
+[36 paired scenes](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)
+pass the bounds policy; both Quick SSH original pairs were viewed and retain the surrounding
+workspace. Actual backdrop Cancel and invalid layout checks pass the Intel native inspector. The ARM
+Personal initial/replacement windows pass, but its full SDK suite fails during installed-app host
+reattachment with a lock-acquisition error; package/window success does not accept that update
+scenario. The
+[failure artifact](https://github.com/YondFane/uTerm/actions/runs/43074768643/artifacts/13881394081)
+retains the actual reports. The full functional-parity flag stays false.
 
 Twenty-seven targeted Linux UI/transport/grid checks, 20 paired-evidence policies and 14 Personal
 policies pass. The complete frontend run passes 473 tests with 11 conditional skips; type/build,

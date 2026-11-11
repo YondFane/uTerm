@@ -14,12 +14,13 @@ import { BundledFontReady } from "./components/BundledFontReady";
 import { NativeGit } from "./native-git";
 import { NativeDatabase } from "./native-database";
 import { NativeRedis } from "./native-redis";
+import { NativeGitHubPR } from "./native-github-pr";
 import { NativeGitHub } from "./native-github";
 import { NativeFiles } from "./native-files";
 import { NativeSshQuick } from "./native-ssh-quick";
 
 interface Context {
-  kind?: "file" | "files" | "git" | "github" | "database" | "redis" | "ssh-quick";
+  kind?: "file" | "files" | "git" | "github" | "database" | "redis" | "ssh-quick" | "github-pr";
   directory: string;
   path: string;
   line?: number;
@@ -219,6 +220,8 @@ async function start() {
             <ContentFontCommands kind={context.kind} />
             {context.kind === "ssh-quick" ? (
               <NativeSshQuick />
+            ) : context.kind === "github-pr" ? (
+              <NativeGitHubPR />
             ) : context.kind === "files" ? (
               <NativeFiles directory={context.directory} />
             ) : context.kind === "database" ? (

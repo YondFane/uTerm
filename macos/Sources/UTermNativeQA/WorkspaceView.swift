@@ -100,19 +100,21 @@ struct WorkspaceView: View {
         .background(Color(nsColor: NativePreferences.color(NativePreferences.terminalTheme(model.settings, catalog: model.settingsCatalog)["background"], fallback: .textBackgroundColor)).opacity(model.settings["opacity"].number ?? 1))
         .background(NativeWindowMaterial(enabled: model.settings["blur"].bool == true))
         .ignoresSafeArea(.container, edges: .top)
-        .disabled(model.quickSSHPresented)
+        .blur(radius: model.githubPRContent == nil ? 0 : 4)
+        .disabled(model.workspaceModalPresented)
         .overlay {
-            if let content = model.quickSSHContent {
+            if let content = model.workspaceModalContent {
+                let pr = content.workbenchHost is GitHubPRHost
                 GeometryReader { geometry in
                     ZStack {
                         // WebKit still paints its page canvas; limit it to the form and dim native views separately.
                         // WebKit 仍会绘制页面底色，因此只让它覆盖表单，原生视图另行绘制遮罩。
-                        Color.black.opacity(136.0 / 255).contentShape(Rectangle())
-                            .onTapGesture { content.window?.performClose(nil) }
+                        Color.black.opacity((pr ? 119.0 : 136.0) / 255).contentShape(Rectangle())
+                            .onTapGesture { if !pr { content.window?.performClose(nil) } }
                         NativeEmbeddedDocument(content: content, modal: true)
                             .id(ObjectIdentifier(content))
-                            .frame(width: min(540, max(0, geometry.size.width - 32)), height: min(CGFloat(model.quickSSHHeight), max(0, geometry.size.height - 48)))
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                            .frame(width: (pr ? min(640, geometry.size.width * 0.92) : min(540, max(0, geometry.size.width - 32))), height: min(CGFloat(pr ? model.githubPRHeight : model.quickSSHHeight), max(0, geometry.size.height - 48)))
+                            .clipShape(RoundedRectangle(cornerRadius: pr ? 9 : 12))
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }.ignoresSafeArea(.container, edges: .top)
             }

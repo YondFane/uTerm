@@ -8,6 +8,7 @@ import { useSettings } from "./lib/SettingsContext";
 export function NativeGitHub({ directory }: { directory: string }) {
   const settings = useSettings();
   const [context, setContext] = useState({ canAssociate: false, canInsert: false });
+  const [createdPR, setCreatedPR] = useState<{ number: number }>();
   const [frozen, setFrozen] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -27,6 +28,14 @@ export function NativeGitHub({ directory }: { directory: string }) {
     void refresh();
     for (const [kind, receive] of [
       ["github-frozen", (value: unknown) => setFrozen(value === true)],
+      [
+        "github-pr-created",
+        (value: unknown) => {
+          const number = (value as { number?: unknown })?.number;
+          if (typeof number === "number" && Number.isSafeInteger(number) && number > 0)
+            setCreatedPR({ number });
+        },
+      ],
       ["github-context-changed", () => void refresh()],
       [
         "github-settings-changed",
@@ -77,8 +86,9 @@ export function NativeGitHub({ directory }: { directory: string }) {
           associate={(item) => action("associate", item)}
           insert={(url) => action("insert", { url, title: "" })}
           createSession={(item) => action("create", item)}
-          guardForm={async (active) => {
-            await contentInvoke("github_form_guard", { active });
+          createdPR={createdPR}
+          externalForm={async (repository) => {
+            await contentInvoke("github_pr_open", { repository });
           }}
         />
       </fieldset>

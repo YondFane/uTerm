@@ -28,6 +28,15 @@ final class WorkspaceModel: ObservableObject {
     @Published var quickSSHPresented = false
     @Published var quickSSHContent: ContentWindow?
     @Published var quickSSHHeight: Double = 240
+    @Published var githubPRContent: ContentWindow?
+    @Published var githubPRHeight: Double = 520
+    var workspaceModalContent: ContentWindow? { quickSSHContent ?? githubPRContent }
+    var workspaceModalPresented: Bool { workspaceModalContent != nil }
+    var workspaceModalPending: Bool {
+        if let host = workspaceModalContent?.workbenchHost as? QuickSSHHost { return host.pending }
+        if let host = workspaceModalContent?.workbenchHost as? GitHubPRHost { return host.pending }
+        return false
+    }
     @Published var nameDraft: NameDraft?
     @Published var nameDraftOwner: NameDraftOwner = .workspace
     @Published var fullScreen = false
@@ -373,7 +382,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func performControlAction(_ request: JSONValue) async throws -> JSONValue {
-        guard !busy, !shuttingDown, !settingsPresented, !editorRecoveryPresented, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, !quickSSHPresented, nameDraft == nil,
+        guard !busy, !shuttingDown, !settingsPresented, !editorRecoveryPresented, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, !workspaceModalPresented, nameDraft == nil,
               let bridge, let state else {
             throw BridgeFailure(code: "CONTROL_BUSY", message: localized("Finish the current dialog or operation first.", "请先完成当前对话框或操作。"))
         }

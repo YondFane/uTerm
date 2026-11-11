@@ -524,9 +524,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return false }
-        if let quick = model.quickSSHContent {
+        if model.workspaceModalContent != nil {
             if menuItem.action == #selector(quit) { return true }
-            if menuItem.action == #selector(closeSession) { menuItem.title = localized("Close dialog", "关闭对话框"); return (quick.workbenchHost as? QuickSSHHost)?.pending == false }
+            if menuItem.action == #selector(closeSession) { menuItem.title = localized("Close dialog", "关闭对话框"); return !model.workspaceModalPending }
             if menuItem.action != #selector(performSemanticCommand(_:)) { return false }
         }
         if menuItem.action == #selector(performSemanticCommand(_:)) { return (menuItem.representedObject as? String).map(commandAvailable) == true }
@@ -579,7 +579,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     private func commandAvailable(_ id: String) -> Bool {
         guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
-        if let quick = model.quickSSHContent { return id == "close" && NSApp.keyWindow === window && (quick.workbenchHost as? QuickSSHHost)?.pending == false }
+        if model.workspaceModalContent != nil { return id == "close" && NSApp.keyWindow === window && !model.workspaceModalPending }
         let origin = NSApp.keyWindow === commandPalette?.window ? commandPalette?.returnWindow : NSApp.keyWindow
         // Settings blocks external writes, while commands owned by that window remain available.
         // 设置窗口阻止外部写入，但属于该窗口的命令仍可使用。
@@ -719,7 +719,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     private func makeQuickSSHWindow() async throws -> ContentWindow {
         guard !preparingQuit, !mutatingRepository, !model.busy, !model.settingsPresented, !model.editorRecoveryPresented,
-              !model.worktreeDeletionPresented, !model.gitFavoritesRecoveryPresented, model.nameDraft == nil,
+              !model.worktreeDeletionPresented, !model.gitFavoritesRecoveryPresented, model.githubPRContent == nil, model.nameDraft == nil,
               let bridge = model.bridge, let parent = window else { throw BridgeFailure(code: "SSH_OPERATION_BUSY", message: localized("Finish the current operation first.", "请先完成当前操作。")) }
         if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "ssh-quick" }) { current.reveal(); return current }
         let workspaceID = model.groupID
@@ -1169,10 +1169,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             content.window?.appearance = window?.appearance
             try embedGitHubTools(content, scope: scope)
             let id = UUID(); contentWindows[id] = content
-            content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
+            host.openPR = { [weak self, weak content] repository in
+                guard let self, let content, !self.preparingQuit, !self.mutatingRepository, self.model.inspector.content === content, self.model.inspectorContextKey == scope, self.model.quickSSHContent == nil else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+                try await self.presentGitHubPR(owner: content, repository: repository)
+            }
+            content.closed = { [weak self, weak host] in
+                guard let self else { return }
+                for child in Array(self.contentWindows.values) where (child.workbenchHost as? GitHubPRHost)?.owner === host { child.forceClose() }
+                self.contentWindows.removeValue(forKey: id)
+            }
             if present { content.reveal() }
             return content
         } catch { await worker.close(); throw error }
+    }
+    private func presentGitHubPR(owner: ContentWindow, repository: String) async throws {
+        guard let host = owner.workbenchHost as? GitHubHost, let bridge = model.bridge, let parent = window else { throw BridgeFailure(code: "CLOSED", message: "GitHub workbench is closed") }
+        let scope = model.inspectorContextKey
+        if let cached = contentWindows.values.first(where: { ($0.workbenchHost as? GitHubPRHost)?.owner === host }) {
+            model.githubPRContent = cached; cached.reveal(); return
+        }
+        let context = try await host.execute("github_prepare_pr", params: ["directory": .string(host.directory), "repository": .string(repository)])
+        guard !preparingQuit, !mutatingRepository, model.inspectorContextKey == scope, model.inspector.content === owner else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+        let form = GitHubPRHost(owner: host, repository: repository, context: context)
+        let content = try ContentWindow(bridge: bridge, directory: owner.directory, path: "", workbenchHost: form)
+        content.window?.appearance = parent.appearance
+        content.window?.contentView = NSView(); content.window?.orderOut(nil)
+        let id = UUID(); contentWindows[id] = content; host.formActive = true
+        model.githubPRHeight = 520; model.githubPRContent = content
+        form.layoutChanged = { [weak self, weak content] height in
+            guard let self, let content, self.model.githubPRContent === content else { return }
+            if abs(self.model.githubPRHeight - height) >= 0.5 { self.model.githubPRHeight = height }
+        }
+        func restoreToolsFocus() {
+            DispatchQueue.main.async { [weak parent, weak owner] in
+                guard let parent, let owner, parent.isKeyWindow, owner.webView.window === parent else { return }
+                parent.makeFirstResponder(owner.webView)
+            }
+        }
+        form.dismiss = { [weak self, weak content] in
+            guard let self, self.model.githubPRContent === content else { return }
+            self.model.githubPRContent = nil; restoreToolsFocus()
+        }
+        form.close = { [weak content] in content?.forceClose() }
+        content.closed = { [weak self, weak content, weak host] in
+            guard let self else { return }
+            host?.formActive = false
+            if self.model.githubPRContent === content { self.model.githubPRContent = nil }
+            self.contentWindows.removeValue(forKey: id); restoreToolsFocus()
+        }
+        content.presentEmbedded = { [weak parent, weak content] in
+            guard let parent else { return }
+            parent.makeKeyAndOrderFront(nil)
+            DispatchQueue.main.async { [weak parent, weak content] in
+                guard let parent, let content, content.webView.window === parent else { return }
+                parent.makeFirstResponder(content.webView)
+            }
+        }
+        content.reveal()
     }
     private func makeGitContentWindow(directory: URL) async throws -> ContentWindow {
         guard !preparingQuit, !mutatingRepository, let stateBridge = model.bridge else {
@@ -1335,7 +1388,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }
     @objc private func closeSession() {
-        if let quick = model.quickSSHContent { quick.window?.performClose(nil); return }
+        if let quick = model.workspaceModalContent { quick.window?.performClose(nil); return }
         if commandPalette?.window === NSApp.keyWindow { commandPalette?.dismiss(); return }
         if let fullSettingsWindow, fullSettingsWindow.window === NSApp.keyWindow { fullSettingsWindow.window.performClose(nil); return }
         if let agentsWindow, agentsWindow.window === NSApp.keyWindow { agentsWindow.window.performClose(nil); return }
@@ -1365,14 +1418,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard let responder = window?.firstResponder else { return }
         DispatchQueue.main.async { [weak self, weak responder] in
             guard let self, let responder, self.window?.firstResponder === responder,
-                  self.model.ready, !self.model.busy, !self.model.settingsPresented, !self.model.quickSSHPresented, !self.model.editorRecoveryPresented, self.model.nameDraft == nil,
+                  self.model.ready, !self.model.busy, !self.model.settingsPresented, !self.model.workspaceModalPresented, !self.model.editorRecoveryPresented, self.model.nameDraft == nil,
                   let session = self.model.terminals.values.first(where: { $0.view === responder }),
                   session.id != self.model.selectedID else { return }
             Task { await self.model.selectSession(session.id, focus: false) }
         }
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if let quick = model.quickSSHContent { quick.window?.performClose(nil); return false }
+        if let quick = model.workspaceModalContent { quick.window?.performClose(nil); return false }
         if !model.worktreeDeletionPresented && !model.gitFavoritesRecoveryPresented { sender.orderOut(nil) }
         return false
     }
