@@ -71,6 +71,17 @@ app does not automatically restore old data or perform the Tauri-to-native cutov
 
 #### Native workspace interaction
 
+Both clients include the same unmodified Cascadia Code 2407.24 static faces and their SIL Open Font
+License. The default face loads before a Web terminal mounts; native CoreText registration remains
+inside the app process. No font installation or startup download is required, and custom family
+settings remain available. Font loading failures show a retry or reinstall message.
+
+Matching workspace evidence records the bundled regular-face digest and actual measured character
+width. The comparison rejects stale files, fallback faces or widths differing by 0.1 point or more.
+Linux checks verify release bytes, styles, delayed mounting, load failures and retry. Actual
+Chromium loads all five faces with an M advance of 9.9609375px at 17px. Latest macOS font
+registration, window rendering and paired metrics still require CI.
+
 Regular toolbar/sidebar vectors and dimensions use `shared/contracts/chrome-ui-v1.json`. React reads
 that source and Swift renders the generated paths through CoreGraphics. The native candidate uses
 the shared 44-point toolbar and interface palette; Agent brands and special close controls remain
@@ -98,8 +109,10 @@ window reload task. Recovering the catalog restarts visible usage refresh withou
 
 Each native split pane has its own session/directory header, 10–32 point font controls, output
 search, match-case toggle, match counter and previous/next controls. Escape closes search and
-returns input to that terminal; search-field input does not enter the PTY. An exited local shell can
-restart from its header, retaining its descriptor and view with a new process generation.
+returns input to that terminal; search-field input does not enter the PTY. Missing reverse
+selections recover within 1,000 matches; changing the query or closing search cancels recovery, and
+long scans yield execution time. An exited local shell can restart from its header, retaining its
+descriptor and view with a new process generation.
 
 Read-only/take-control and visible transport/activity errors remain available. SSH restart, pane
 dragging and complete toolbar alignment remain in the parity scope.
@@ -126,7 +139,7 @@ The local CLI control switch remains an immediate service control in Local contr
 
 Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
 side/tool widths in both real apps. Collection rejects stale vectors, old height, titlebar insets or
-stale panel widths. Linux passes 452 Node checks (11 platform skips), type checking and focused
+stale panel widths. Linux passes 454 Node checks (11 platform skips), type checking and focused
 SVG/side-panel regressions; these do not establish complete native parity.
 
 Real Personal-window checks click file/tab/close controls, send AppKit arrows, retain exact

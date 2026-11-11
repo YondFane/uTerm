@@ -39,7 +39,8 @@
     "copyright": "Copyright (c) 2026 YondFane",
     "resources": {
       "../LICENSE": "licenses/uTerm-LICENSE.txt",
-      "../NOTICE": "licenses/uTerm-NOTICE.txt"
+      "../NOTICE": "licenses/uTerm-NOTICE.txt",
+      "../src/assets/fonts/LICENSE": "licenses/Cascadia-Code-OFL.txt"
     },
     "targets": "all",
     "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"],

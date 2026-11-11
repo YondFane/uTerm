@@ -1,4 +1,7 @@
 export const messages: Record<string, string> = {
+  "无法加载内置终端字体，请重试或重新安装应用。":
+    "Could not load the bundled terminal font. Retry or reinstall the app.",
+  "加载中…": "Loading…",
   "配置正在由其他窗口保存，请稍后重试。":
     "Another window is saving the configuration. Please retry shortly.",
   "选择或添加 Redis 连接后打开工作台。": "Select or add a Redis connection to open its workbench.",

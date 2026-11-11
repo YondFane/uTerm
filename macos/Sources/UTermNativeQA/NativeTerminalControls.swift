@@ -14,20 +14,45 @@ final class NativeTerminalSearch: ObservableObject {
     @Published private(set) var index = 0
     @Published private(set) var total = 0
     private var refresh: Task<Void, Never>?
+    private var navigation: Task<Void, Never>?
+    private var navigationRevision = 0
     init(session: TerminalSession) { self.session = session }
     func open() { visible = true; focusRequest += 1; if !query.isEmpty { find(reset: true) } }
     func close() {
         visible = false; refresh?.cancel(); refresh = nil
+        navigationRevision += 1; navigation?.cancel(); navigation = nil
         session?.view.clearSearch()
         if let view = session?.view { view.window?.makeFirstResponder(view) }
     }
     func find(previous: Bool = false, reset: Bool = false) {
         guard let view = session?.view else { return }
+        navigationRevision += 1; navigation?.cancel(); navigation = nil
+        let previousIndex = index
         if reset { view.clearSearch() }
         guard !query.isEmpty else { view.clearSearch(); index = 0; total = 0; return }
         let options = SearchOptions(caseSensitive: matchCase)
         if previous { view.findPrevious(query, options: options) } else { view.findNext(query, options: options) }
         count()
+        if previous && total > 0 {
+            let target = previousIndex > 1 ? previousIndex - 1 : total
+            if index != target { selectMatch(target, view: view, options: options) }
+        }
+    }
+    private func selectMatch(_ target: Int, view: NativeTerminalView, options: SearchOptions) {
+        let revision = navigationRevision, term = query
+        // Recover missing reverse selections through bounded forward navigation without blocking input.
+        // 反向选择缺失时，通过有界的正向导航恢复匹配，并让出执行时间避免阻塞输入。
+        navigation = Task { @MainActor [weak self, weak view] in
+            guard let self, let view, !Task.isCancelled, self.visible, revision == self.navigationRevision else { return }
+            view.clearSearch()
+            for match in 1...min(target, 1000) {
+                guard !Task.isCancelled, self.visible, revision == self.navigationRevision else { return }
+                guard view.findNext(term, options: options, scrollToResult: match == target) else { break }
+                if match % 16 == 0 { await Task.yield() }
+            }
+            guard !Task.isCancelled, revision == self.navigationRevision else { return }
+            self.navigation = nil; self.count()
+        }
     }
     private func count() {
         guard let view = session?.view, !query.isEmpty else { index = 0; total = 0; return }

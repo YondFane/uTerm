@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import { SettingsProvider } from "./lib/SettingsContext";
 import { App } from "./App";
 import "./styles.css";
+import "./assets/fonts/fonts.css";
+import { BundledFontReady } from "./components/BundledFontReady";
 import { activeLanguage, setUiLanguage } from "./lib/i18n";
 import { StateRecovery } from "./components/StateRecovery";
 import { defaults, readSettings, settingsKey } from "./lib/settings";
@@ -60,7 +62,9 @@ async function start() {
     application.render(
       <StrictMode>
         <SettingsProvider>
-          <App />
+          <BundledFontReady>
+            <App />
+          </BundledFontReady>
         </SettingsProvider>
       </StrictMode>,
     );

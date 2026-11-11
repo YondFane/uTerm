@@ -31,6 +31,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var mutatingRepository = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        do { try NativeBundledFonts.register() }
+        catch {
+            let alert = NSAlert()
+            alert.messageText = localized("Could not load the bundled terminal font. Reinstall the app.", "无法加载内置终端字体，请重新安装应用。")
+            alert.informativeText = error.localizedDescription
+            alert.runModal(); NSApp.terminate(nil); return
+        }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = WorkspaceModel.applicationProfile.displayName
         window.titleVisibility = .hidden

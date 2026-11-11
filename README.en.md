@@ -170,6 +170,11 @@ regressions.
 `shared/contracts/chrome-ui-v1.json`; `pnpm chrome:check` rejects stale copies. Both are included in
 contract generation/checks.
 
+Both clients bundle the same Cascadia Code 2407.24 font faces and their SIL Open Font License.
+Startup waits for the bundled default face before creating terminals; builds and app startup do not
+download fonts. Native registration is limited to the app process. See
+[`src/assets/fonts/manifest.json`](src/assets/fonts/manifest.json) for source and checksums.
+
 The native UI candidate includes workspace file tabs and per-pane font/search controls. Complete
 parity and the latest real-window checks remain pending; see the
 [native workspace guide](docs/features.md#native-workspace-interaction).

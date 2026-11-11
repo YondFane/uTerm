@@ -26,6 +26,7 @@ class ParityEvidenceTests(unittest.TestCase):
         digest = hashlib.sha256(self.fixture.read_bytes()).hexdigest()
         chrome = self.fixture.parent.parent / "contracts/chrome-ui-v1.json"
         chrome_digest = hashlib.sha256(chrome.read_bytes()).hexdigest()
+        font_digest = module.read_json(self.fixture.parents[2] / "src/assets/fonts/manifest.json")["files"]["CascadiaCode-Regular.ttf"]
         self.n = dict(passed=True, platform="macOS", architecture="arm64", system="Version 15.8.2",
                       sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, productionDataAccess=False,
                       uiParityFixtureSHA256=digest, backgroundTabCloseRetainedSelectedGeneration=True,
@@ -37,6 +38,7 @@ class ParityEvidenceTests(unittest.TestCase):
             for appearance in fixture["appearances"]:
                 for width in fixture["widths"]:
                     values = dict(language=lang, appearance=appearance, width=width, height=720,
+                                  fontFamily="Cascadia Code", fontFace="CascadiaCode-Regular", fontSourceSHA256=font_digest, fontCharacterWidth=9.96,
                                   scenario="toolbar-sidebar-two-sessions-files", sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
                                   chromeContractSHA256=chrome_digest, toolbarHeight=44, toolbarTop=0, sidebarWidth=min(248, max(180, min(320, width * .3))), inspectorWidth=298.2 if width == 1100 else 128, generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
                     native = f"personal-initial-workspace-{lang}-{appearance}-{width}.png"
@@ -119,6 +121,12 @@ class ParityEvidenceTests(unittest.TestCase):
         self.n = original
         self.n["workspaceScenes"][0] = self.n["workspaceScenes"][1]
         with self.assertRaises(AssertionError): self.run_compare()
+
+    def test_rejects_fallback_stale_or_differently_measured_fonts(self):
+        original = copy.deepcopy(self.t["scenes"][0]["checks"])
+        for key, value in [("fontFamily", "Courier"), ("fontFace", "Menlo-Regular"), ("fontSourceSHA256", "0" * 64), ("fontCharacterWidth", 10.4), ("fontCharacterWidth", None), ("fontCharacterWidth", float('nan'))]:
+            self.t["scenes"][0]["checks"] = {**original, key: value}
+            with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
 
     def test_rejects_missing_or_tiny_images(self):
         path = self.native / self.n["captures"][0]

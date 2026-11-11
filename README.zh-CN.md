@@ -148,6 +148,10 @@ ARM64／X64 DMG和ZIP附件，不设置自动过期、下载无需登录。 **ma
 `pnpm chrome:generate` 从 `shared/contracts/chrome-ui-v1.json`
 生成 Swift 矢量及客户端摘要；`pnpm chrome:check` 拒绝过期副本，契约生成／检查已包含这两项。
 
+两版随包提供同一组 Cascadia Code 2407.24 字形及 SIL Open
+Font 许可。启动时等待内置默认字体就绪后再创建终端；构建与应用启动均不下载字体。原生注册仅限应用进程，来源及摘要见
+[`src/assets/fonts/manifest.json`](src/assets/fonts/manifest.json)。
+
 原生 UI 候选包含工作区文件标签及各窗格字号／搜索控件；完整一致性及最新真实窗口检查仍待完成，参见[原生工作区指南](docs/features.zh-CN.md#原生工作区交互)。
 
 `pnpm settings:generate` 从现有 TypeScript 设置和文案生成原生命令／主题目录， `pnpm settings:check`

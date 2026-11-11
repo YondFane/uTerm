@@ -9,6 +9,8 @@ import { isDirty } from "./lib/file-document";
 import { useFileDocument } from "./lib/useFileDocument";
 import "./styles.css";
 import "./native-content.css";
+import "./assets/fonts/fonts.css";
+import { BundledFontReady } from "./components/BundledFontReady";
 import { NativeGit } from "./native-git";
 import { NativeDatabase } from "./native-database";
 import { NativeRedis } from "./native-redis";
@@ -187,18 +189,20 @@ async function start() {
       };
       root.render(
         <SettingsProvider content={content}>
-          <ContentFontCommands kind={context.kind} />
-          {context.kind === "database" ? (
-            <NativeDatabase />
-          ) : context.kind === "redis" ? (
-            <NativeRedis />
-          ) : context.kind === "github" ? (
-            <NativeGitHub directory={context.directory} />
-          ) : context.kind === "git" ? (
-            <NativeGit directory={context.directory} />
-          ) : (
-            <Content context={context} />
-          )}
+          <BundledFontReady>
+            <ContentFontCommands kind={context.kind} />
+            {context.kind === "database" ? (
+              <NativeDatabase />
+            ) : context.kind === "redis" ? (
+              <NativeRedis />
+            ) : context.kind === "github" ? (
+              <NativeGitHub directory={context.directory} />
+            ) : context.kind === "git" ? (
+              <NativeGit directory={context.directory} />
+            ) : (
+              <Content context={context} />
+            )}
+          </BundledFontReady>
         </SettingsProvider>,
       );
     } catch (reason) {

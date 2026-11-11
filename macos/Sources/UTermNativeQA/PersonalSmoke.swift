@@ -189,14 +189,20 @@ enum PersonalSmoke {
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
                         captures.append(name)
                         report["captures"] = captures
-                        workspaceScenes.append(["screenshot": name, "language": language, "appearance": appearance,
+                        var captured: [String: Any] = ["screenshot": name, "language": language, "appearance": appearance,
                             "chromeContractSHA256": CoreChrome.contractSHA256, "toolbarHeight": model.toolbarHeight, "toolbarTop": model.toolbarTop, "sidebarWidth": model.sidebarWidth, "inspectorWidth": model.inspectorWidth,
                             "windowSizeAttempts": sizeAttempts,
                             "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0),
                             "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-sessions-files", "filesReadable": true, "fontSize": model.settings["fontSize"].number ?? 0,
                             "projectName": model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["name"].string ?? "",
                             "workspaceName": model.groups.first(where: { $0["id"].string == model.groupID })?["name"].string ?? "",
-                            "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""])
+                            "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""]
+                        guard let font = model.selectedTerminal?.view.font, font.fontName == "CascadiaCode-Regular", font.familyName == "Cascadia Code" else { throw BridgeFailure(code: "PERSONAL_FONT", message: "Terminal used a fallback instead of the bundled face") }
+                        captured["fontFamily"] = font.familyName ?? ""
+                        captured["fontFace"] = font.fontName
+                        captured["fontSourceSHA256"] = NativeBundledFonts.regularSHA256
+                        captured["fontCharacterWidth"] = ("M" as NSString).size(withAttributes: [.font: font]).width
+                        workspaceScenes.append(captured)
                         report["workspaceScenes"] = workspaceScenes
                     }
                 }

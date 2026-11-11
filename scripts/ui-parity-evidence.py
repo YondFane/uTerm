@@ -35,6 +35,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
     chrome_path = Path(fixture_path).parent.parent / "contracts/chrome-ui-v1.json"
     chrome_digest = hashlib.sha256(chrome_path.read_bytes()).hexdigest()
     chrome = read_json(chrome_path)
+    fonts = read_json(chrome_path.parents[2] / "src/assets/fonts/manifest.json")
+    font_digest = fonts["files"]["CascadiaCode-Regular.ttf"]
     for report, source, merge in [(native, "sourceHeadSHA", "testedMergeSHA"), (tauri, "head", "tested")]:
         assert report.get("passed") is True and not report.get("failure") and not report.get("cleanupErrors"), "Unaccepted application run"
         assert report.get(source) == head and report.get(merge) == tested, "Wrong source or tested merge SHA"
@@ -73,6 +75,11 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["scenario"] == t["checks"]["scenario"] == "toolbar-sidebar-two-sessions-files"
         assert n["filesReadable"] is True and t["checks"]["filesReadable"] is True
         assert n["fontSize"] == t["checks"]["fontSize"] == fixture["fontSize"]
+        for actual in [n, t["checks"]]:
+            assert actual.get("fontFamily") == fonts["family"] and actual.get("fontFace") == "CascadiaCode-Regular", "Terminal used a fallback face"
+            assert actual.get("fontSourceSHA256") == font_digest, "Different or stale bundled font"
+            assert isinstance(actual.get("fontCharacterWidth"), (int, float)) and 1 < actual["fontCharacterWidth"] < 32, "Missing actual font measurement"
+        assert abs(n["fontCharacterWidth"] - t["checks"]["fontCharacterWidth"]) < 0.1, "Different actual terminal character widths"
         assert n["projectName"] == t["checks"]["projectName"] == fixture["projectName"]
         assert n["workspaceName"] == t["checks"]["workspaceName"] == fixture["workspaceName"]
         assert t["checks"].get("generationRetained") is True and t["checks"]["projectName"] == fixture["projectName"]

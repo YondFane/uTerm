@@ -16,6 +16,7 @@ for (const [language, retryTitle] of [
     for (const key of ["window", "document", "navigator", "HTMLElement", "Node", "localStorage"])
       Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+    Object.defineProperty(document, "fonts", { value: { load: async () => [{}] } });
     globalThis.matchMedia = () => ({
       matches: false,
       addEventListener() {},

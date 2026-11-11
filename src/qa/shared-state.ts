@@ -1,4 +1,5 @@
 import { chromeContractSHA256 } from "../lib/chrome.generated";
+import fontManifest from "../assets/fonts/manifest.json" with { type: "json" };
 import chrome from "../../shared/contracts/chrome-ui-v1.json" with { type: "json" };
 import { translate } from "../lib/i18n";
 import parityFixtureJSON from "../../shared/fixtures/client-ui-parity.json?raw";
@@ -396,6 +397,14 @@ async function runUiParity() {
           inspectorWidth !== undefined && Math.abs(inspectorWidth - expectedInspector) < 1,
           "Actual tools width differs from shared responsive bounds",
         );
+        const fontSize = (await settings()).fontSize;
+        assert(
+          document.fonts.check(`${fontSize}px "Cascadia Code"`),
+          "Bundled terminal font was not loaded",
+        );
+        const fontContext = document.createElement("canvas").getContext("2d");
+        assert(fontContext, "Cannot measure actual terminal font");
+        fontContext.font = `${fontSize}px "Cascadia Code"`;
         await scene(`workspace-${language}-${appearance}-${width}`, {
           chromeContractSHA256,
           toolbarHeight,
@@ -409,7 +418,11 @@ async function runUiParity() {
           scenario: "toolbar-sidebar-two-sessions-files",
           generationRetained: true,
           filesReadable: true,
-          fontSize: (await settings()).fontSize,
+          fontSize,
+          fontFamily: fontManifest.family,
+          fontFace: "CascadiaCode-Regular",
+          fontSourceSHA256: fontManifest.files["CascadiaCode-Regular.ttf"],
+          fontCharacterWidth: fontContext.measureText("M").width,
           projectName: parityFixture.projectName,
           workspaceName: parityFixture.workspaceName,
         });

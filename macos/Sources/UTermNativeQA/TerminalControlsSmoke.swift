@@ -14,6 +14,9 @@ enum TerminalControlsSmoke {
     static func run(model: WorkspaceModel, window: NSWindow, root: URL, phase: String, report: inout [String: Any], captures: inout [String]) async throws {
         guard let bridge = model.bridge, let session = model.selectedTerminal else { throw BridgeFailure(code: "TERMINAL_CONTROLS", message: "Missing selected terminal") }
         let id = session.id, generation = session.generation, view = ObjectIdentifier(session.view)
+        defer {
+            report["terminalSearchDiagnostics"] = ["index": session.search.index, "total": session.search.total, "visible": session.search.visible, "matchCase": session.search.matchCase, "terminalColumns": session.view.getTerminal().cols, "terminalRows": session.view.getTerminal().rows]
+        }
         let size = model.settings["fontSize"].number ?? 17
         func control(_ name: String) -> String { "native-terminal-" + name + "-" + id }
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark"), "fontSize": .number(17)])
