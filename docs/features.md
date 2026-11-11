@@ -165,6 +165,21 @@ disclosure arrows on hover. The toolbar shows pane zoom only for split layouts.
 Actual row/header/gap/inset measurements are required in both clients; current-source native
 rendering remains pending CI.
 
+Session rows provide the same 22px **Close Session** action and shared close glyph in both clients.
+Native actions appear on row hover or keyboard focus, retain their layout space while hidden and
+reject pointer hits until visible. Focusing the native button shows its theme-colored focus ring;
+Space closes that specific session. Closing a background row keeps the selected session and its
+process generation. Busy operations and workspace modals disable the action. Long names use one line
+with end ellipsis in both clients, leaving room for the close action; the full name remains in
+accessibility text and the existing name control.
+
+The new Personal QA captures `personal-{phase}-sidebar-close-background.png`, focuses the actual
+AppKit control and posts Space, then checks the background ID was removed while selection and the
+original generation remain. Its mandatory proof rejects stale metadata, missing controls or a
+foreground target. Sixteen local Personal policies pass; the native control, mouse-hover rendering
+and actual Space action still require this candidate's own Mac execution. A direct model call is no
+longer sufficient for the new close-control proof.
+
 Section disclosures hide local rows without editing shared data or closing sessions; empty
 connection categories retain their add/manage entry. Rail controls follow the interface palette and
 active-icon color.
@@ -218,6 +233,29 @@ Command-W with tools focused hides the tools column. Draft-discard confirmation 
 window; pending CLI operations block closing and quitting until their actual result. The native host
 injects the captured root/repository and rejects extra fields, invalid layout and duplicate
 submission. Ambiguous create failures retain the warning to refresh before retrying.
+
+At head `efcb4dfa997232d68458374f919a1b45f7d4fe26`, tested merge
+`a3fb8fcd7f2785e50a43cbc42687a838aed2186e`, the
+[ARM Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43085265725/artifacts/13887612080)
+and
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43085265725/artifacts/13887922988)
+both pass package, initial/replacement windows and the complete SDK installation, including original
+host PID exit and endpoint removal. The
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43085266223/artifacts/13887811848)
+contains all 38 pairs and 77 original PNGs. All 76 paired digests and all viewer scenes pass. Both
+PR pairs were viewed: title/body/branches/draft, readable fields and centered 640×500 / 588×500
+forms agree. English wide and Chinese narrow workspace pairs were also viewed; sidebar
+controls/fonts, Git branch/status presentation and other visible differences remain. The native PR
+shadow also needs alignment. These source-specific captures do not accept the new sidebar control or
+full parity. Full functional acceptance stays false.
+
+The same source's
+[Intel native matrix artifact](https://github.com/YondFane/uTerm/actions/runs/43085265868/artifacts/13887393269)
+retains a failing file-tools operation: `CONTENT_RENDER` reports a missing file path after the root,
+symlink and hidden-file checks. Its GitHub and complete SDK checks pass, but the inspector and final
+matrix remain failed. The original `native-inspector-failure.png` was viewed; the source literal
+file remains and the copy-target directory is absent. This failure requires diagnosis and a targeted
+regression; it is not waived by the successful Personal or paired runs.
 
 Nine focused GitHub/grid checks and the full frontend suite (475 passed, 11 conditional skips) pass,
 plus type/build, format, contracts and i18n checks. Context failures offer Retry/Cancel;

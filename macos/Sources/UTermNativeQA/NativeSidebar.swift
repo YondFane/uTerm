@@ -3,6 +3,61 @@ import SwiftUI
 import UTermBridge
 
 @MainActor
+private final class SidebarSessionCloseButton: NSButton {
+    var sessionID = ""
+    var hoverFill = NSColor.controlBackgroundColor
+    var hoverBorder = NSColor.separatorColor
+    var focusColor = NSColor.controlAccentColor
+    var normalTint = NSColor.secondaryLabelColor
+    var activeTint = NSColor.labelColor
+    private var hovered = false
+    private var hoverArea: NSTrackingArea?
+    var rowHovered = false { didSet { if rowHovered != oldValue { updateVisibility() } } }
+    override var acceptsFirstResponder: Bool { isEnabled }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+        hoverArea = area; addTrackingArea(area)
+    }
+    override func mouseEntered(with event: NSEvent) { hovered = true; needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { hovered = false; needsDisplay = true }
+    func updateVisibility() {
+        let visible = rowHovered || window?.firstResponder === self
+        let alpha: CGFloat = visible ? 1 : 0
+        if alphaValue != alpha { alphaValue = alpha }
+    }
+    override func becomeFirstResponder() -> Bool {
+        let accepted = super.becomeFirstResponder()
+        if accepted { alphaValue = 1 }
+        return accepted
+    }
+    override func resignFirstResponder() -> Bool {
+        let accepted = super.resignFirstResponder()
+        DispatchQueue.main.async { [weak self] in self?.updateVisibility() }
+        return accepted
+    }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // Keep hidden actions in layout and keyboard navigation while pointer hits stay on the row.
+        // 隐藏操作仍保留布局及键盘入口，鼠标命中则继续交给会话行。
+        alphaValue > 0 ? super.hitTest(point) : nil
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        let focused = isEnabled && window?.firstResponder === self
+        let active = isEnabled && (hovered || focused)
+        let tint = active ? activeTint : normalTint
+        if contentTintColor?.isEqual(tint) != true { contentTintColor = tint }
+        let circle = NSBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1))
+        if active {
+            hoverFill.setFill(); circle.fill()
+            hoverBorder.setStroke(); circle.lineWidth = 1; circle.stroke()
+        }
+        super.draw(dirtyRect)
+        if focused { focusColor.setStroke(); circle.lineWidth = 2; circle.stroke() }
+    }
+}
+
+@MainActor
 private final class SidebarRowView: NSTableRowView {
     var accent = NSColor.controlAccentColor
     var hover = NSColor.controlBackgroundColor
@@ -18,9 +73,17 @@ private final class SidebarRowView: NSTableRowView {
         let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
         hoverArea = area; addTrackingArea(area)
     }
-    override func mouseEntered(with event: NSEvent) { hovered = true; needsDisplay = true }
-    override func mouseExited(with event: NSEvent) { hovered = false; needsDisplay = true }
+    override func mouseEntered(with event: NSEvent) { hovered = true; updateCloseButtons(); needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { hovered = false; updateCloseButtons(); needsDisplay = true }
+    private func updateCloseButtons() {
+        var queue = subviews
+        while let view = queue.popLast() {
+            if let close = view as? SidebarSessionCloseButton { close.rowHovered = hovered }
+            else { queue += view.subviews }
+        }
+    }
     override func drawBackground(in dirtyRect: NSRect) {
+        updateCloseButtons()
         guard selectable, hovered, !isSelected else { return }
         hover.setFill(); outline.fill()
     }
@@ -408,6 +471,12 @@ struct NativeSidebar: NSViewRepresentable {
             Task { await model.setProjectFlag(id, key: key, value: project[key].bool != true) }
         }
         final class SectionButton: NSButton { var sectionID = "" }
+        @objc private func closeSidebarSession(_ sender: SidebarSessionCloseButton) {
+            guard let model, !model.busy, !model.workspaceModalPresented,
+                  model.sessionEntries.contains(where: { $0.sessionID == sender.sessionID }) else { return }
+            let id = sender.sessionID
+            Task { await model.closeSession(id: id) }
+        }
         @objc private func quickSSH(_ sender: NSButton) { model?.openQuickSSHRequested?() }
         @objc private func keepQuickSSH(_ sender: NSMenuItem) {
             guard let id = sender.representedObject as? String else { return }
@@ -531,7 +600,7 @@ struct NativeSidebar: NSViewRepresentable {
             let text = NSTextField(labelWithString: item.name)
             text.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13), bold: true)
             text.textColor = NativePreferences.color(palette[item.symbol == nil ? "muted" : "text"], fallback: item.symbol == nil ? .secondaryLabelColor : .labelColor)
-            text.lineBreakMode = .byTruncatingMiddle
+            text.lineBreakMode = .byTruncatingTail
             text.translatesAutoresizingMaskIntoConstraints = false
             cell.addSubview(text)
             cell.textField = text
@@ -564,7 +633,33 @@ struct NativeSidebar: NSViewRepresentable {
                 leading = icon.trailingAnchor
                 inset = 7
             }
-            NSLayoutConstraint.activate([text.leadingAnchor.constraint(equalTo: leading, constant: inset), text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8), text.centerYAnchor.constraint(equalTo: cell.centerYAnchor)])
+            var trailing = cell.trailingAnchor
+            var trailingInset: CGFloat = -8
+            if item.key.hasPrefix("s:") {
+                let id = String(item.key.dropFirst(2))
+                let close = SidebarSessionCloseButton(title: "", target: self, action: #selector(closeSidebarSession(_:)))
+                close.sessionID = id; close.isBordered = false; close.imagePosition = .imageOnly
+                if let image = NativeChromeImages.toolbar(.close).copy() as? NSImage {
+                    image.size = NSSize(width: 13, height: 13); close.image = image
+                }
+                close.contentTintColor = NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)
+                let textColor = NativePreferences.color(palette["text"], fallback: .labelColor)
+                close.normalTint = NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)
+                close.activeTint = textColor
+                close.hoverFill = NativePreferences.color(palette["hover"], fallback: .controlBackgroundColor).blended(withFraction: 0.28, of: textColor) ?? .controlBackgroundColor
+                close.hoverBorder = NativePreferences.color(palette["border"], fallback: .separatorColor).blended(withFraction: 0.2, of: textColor) ?? .separatorColor
+                close.focusColor = NativePreferences.color(palette["accent"], fallback: .controlAccentColor)
+                close.focusRingType = .none
+                close.alphaValue = 0
+                close.isEnabled = model?.busy == false && model?.gitFavoritesRecoveryPresented == false && model?.workspaceModalPresented == false
+                close.identifier = NSUserInterfaceItemIdentifier("native-sidebar-close-" + id)
+                close.toolTip = localized("Close Session", "关闭会话")
+                close.setAccessibilityLabel(localized("Close Session: ", "关闭会话：") + item.name)
+                close.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(close)
+                NSLayoutConstraint.activate([close.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -5), close.centerYAnchor.constraint(equalTo: cell.centerYAnchor), close.widthAnchor.constraint(equalToConstant: 22), close.heightAnchor.constraint(equalToConstant: 22)])
+                trailing = close.leadingAnchor; trailingInset = -4
+            }
+            NSLayoutConstraint.activate([text.leadingAnchor.constraint(equalTo: leading, constant: inset), text.trailingAnchor.constraint(equalTo: trailing, constant: trailingInset), text.centerYAnchor.constraint(equalTo: cell.centerYAnchor)])
             cell.setAccessibilityLabel(item.name)
             return cell
         }

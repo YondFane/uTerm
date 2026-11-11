@@ -259,13 +259,24 @@ enum PersonalSmoke {
                     }
                 }
             }
-            await model.closeSession(id: peerID)
+            guard let sidebarRoot = window.contentView,
+                  let close = TerminalSmoke.descendants(sidebarRoot).first(where: { $0.identifier?.rawValue == "native-sidebar-close-" + peerID }) as? NSButton,
+                  close.isEnabled, window.makeFirstResponder(close), close.alphaValue == 1 else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_CLOSE", message: "Background session close control cannot receive visible keyboard focus") }
+            let closeCapture = "personal-\(phase)-sidebar-close-background.png"
+            try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(closeCapture))
+            captures.append(closeCapture); report["captures"] = captures
+            try TerminalSmoke.postKey(window: window, code: 49, characters: " ", modifiers: [])
+            try await TerminalSmoke.wait("Close the background session through actual focused sidebar control") { !model.sessionEntries.contains(where: { $0.sessionID == peerID }) }
             guard model.selectedID == originalID, terminal.generation == originalGeneration,
                   model.sessionEntries.contains(where: { $0.sessionID == originalID }),
                   !model.sessionEntries.contains(where: { $0.sessionID == peerID }) else {
                 throw BridgeFailure(code: "PERSONAL_TABS", message: "Closing a background tab changed the selected session")
             }
             report["backgroundTabCloseRetainedSelectedGeneration"] = true
+            report["nativeSidebarSessionClose"] = ["passed": true, "actualKeyboardFocusVisible": true, "actualSpaceClosedBackgroundSession": true,
+                "selectedGenerationRetained": true, "targetSessionID": peerID, "selectedSessionID": originalID, "screenshot": closeCapture,
+                "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "", "platform": "macOS", "architecture": architecture,
+                "system": report["system"] ?? "", "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0)] as [String: Any]
             report["workspaceScenes"] = workspaceScenes
             window.makeKeyAndOrderFront(nil)
             let capture = "personal-\(phase)-terminal.png"

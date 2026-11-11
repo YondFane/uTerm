@@ -3266,6 +3266,12 @@ select:focus-visible {
   margin-left: 4px;
   color: var(--ui-muted);
 }
+.sidebar .sidebar-row-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .sidebar-row:not(:hover):not(:has(:focus-visible)) > .row-close {
   opacity: 0;
   pointer-events: none;

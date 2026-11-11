@@ -98,6 +98,41 @@ This does not accept the new Personal/ordinary paired grid.
 
 92bd88e／上述 merge 的 ARM 构建失败：PR 采集器将 Double 尺寸传入 Int 窗口函数。候选精确转换并拒绝小数／非有限值，新增截图仍待执行，失败产物保留。此前 43b3995／上述 merge 的完整 ARM 矩阵及 SDK 安装通过，产物中两张真实 PR 原图已查看：宽窗 640×500、窄窗 588×500，字段可读且保留外围工作区。这不接受新增 Personal／普通版配对网格。
 
+At source `efcb4dfa997232d68458374f919a1b45f7d4fe26`, merge
+`a3fb8fcd7f2785e50a43cbc42687a838aed2186e`,
+[Personal ARM](https://github.com/YondFane/uTerm/actions/runs/43085265725/artifacts/13887612080)
+passes package/windows/replacement/full SDK. The
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43085266223/artifacts/13887811848)
+has 38 pairs and 77 originals; all 76 paired digests and viewer scenes were checked. Both PR pairs
+were inspected: literal fields and centered 640×500 / 588×500 forms match. Two workspace pairs were
+also inspected and still expose sidebar font/control and Git presentation differences; PR shadow
+alignment remains pending. This is not full functional parity.
+
+The same EF source's
+[Personal Intel](https://github.com/YondFane/uTerm/actions/runs/43085265725/artifacts/13887922988)
+also passes package/windows/replacement/SDK. Its
+[native Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43085265868/artifacts/13887393269)
+fails file tools with `CONTENT_RENDER` and a missing path, after passed root/symlink checks. The
+failure PNG was viewed; GitHub/SDK pass does not waive the failed inspector/matrix. Targeted
+reproduction remains required.
+
+同一 EF 源码的 Personal
+Intel 也通过安装包／窗口／替换／SDK；原生 Intel 产物却在根目录／链接检查后，文件工具报
+`CONTENT_RENDER` 路径缺失。失败原图已查看，GitHub／SDK 通过不豁免文件及最终矩阵，仍需针对性复现。
+
+The sidebar candidate adds a 22px hover/focus Close Session action, with hidden layout retained and
+pointer hits refused while invisible. Space targets the row ID and keeps a background close from
+changing the selected generation. Both names use end ellipsis. Personal QA now requires an actual
+focused control, Space, target/selected identities and a real screenshot; direct model closure is
+insufficient. Sixteen Personal policy checks pass; actual new Mac execution and hover inspection
+remain pending.
+
+上述 efcb4df／merge 的 Personal
+ARM 安装包、初次／替换及完整 SDK 通过。配对产物包含 38 组、77 张原图，76 个配对摘要和全部查看器场景核对通过。两组 PR 已查看，字面字段及居中的 640×500／588×500 表单相符；两组工作区仍显示侧栏字体／控件及 Git 呈现差异，PR 阴影也需对齐，不能作为完整功能一致性。
+
+侧栏候选新增 22px 悬停／聚焦关闭会话操作，隐藏时保留布局且拒绝鼠标命中。Space 按行 ID 关闭，后台关闭保留当前 generation；两版名称使用末尾省略。Personal
+QA 必须有实际聚焦控件、Space、前后台身份及真实截图，直接模型调用不足。16 项 Personal 策略通过；新 Mac 执行与悬停目视核对仍待完成。
+
 At head `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
 `6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
 [paired artifact](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)
