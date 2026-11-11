@@ -356,9 +356,27 @@ async function runUiParity() {
             Math.abs(toolbarHeight - chrome.metrics.titlebarHeight) < 1,
           "Actual toolbar differs from shared chrome height",
         );
+        const sidebarWidth = document
+          .querySelector("#workspace-sidebar")
+          ?.getBoundingClientRect().width;
+        const expectedSidebar = Math.min(
+          chrome.metrics.sidebarDefaultWidth,
+          Math.max(
+            chrome.metrics.sidebarMinimumWide,
+            Math.min(
+              chrome.metrics.sidebarMaximumWidth,
+              innerWidth * chrome.metrics.sidebarMaximumRatio,
+            ),
+          ),
+        );
+        assert(
+          sidebarWidth !== undefined && Math.abs(sidebarWidth - expectedSidebar) < 1,
+          "Actual sidebar differs from shared responsive bounds",
+        );
         await scene(`workspace-${language}-${appearance}-${width}`, {
           chromeContractSHA256,
           toolbarHeight,
+          sidebarWidth,
           language,
           appearance,
           width: innerWidth,

@@ -6,61 +6,86 @@ import UTermBridge
 struct WorkspaceView: View {
     @ObservedObject var model: WorkspaceModel
     @Environment(\.colorScheme) private var colorScheme
+    @State private var requestedSidebarWidth = CoreChrome.sidebarDefaultWidth
+    @State private var resizeStart: Double?
 
     var body: some View {
-        VStack(spacing: 0) {
-            NativeWorkspaceToolbar(model: model)
-            HSplitView {
-                if model.sidebarVisible {
-                VStack(spacing: 0) {
-                    NativeSidebarNavigation(model: model)
-                    NativeSidebar(model: model).frame(maxHeight: .infinity)
-                    HStack {
-                        Button { model.newWorkspace() } label: { Label(localized("New workspace", "新建工作区"), systemImage: "plus") }
-                        Button { model.renameWorkspace() } label: { Label(localized("Rename workspace", "重命名工作区"), systemImage: "pencil") }
-                        Spacer()
-                    }.labelStyle(.iconOnly).buttonStyle(.borderless).padding(12).disabled(model.busy || !model.ready || model.gitFavoritesRecoveryPresented)
-                }
-                .frame(minWidth: 176, idealWidth: 220, maxWidth: 320)
-                }
-                if model.inspectorVisible && model.settings["inspectorPosition"].string == "left" { inspector }
-                VStack(spacing: 0) {
-                    if !model.terminalError.isEmpty {
-                        HStack { Text(model.terminalError).font(.caption).textSelection(.enabled); Spacer(); Button(localized("Reconnect", "重新连接")) { Task { await model.reconnectTransport() } } }.padding(8)
-                    }
-
-                    if !model.error.isEmpty {
-                        HStack {
-                            Text(model.error).font(.caption).textSelection(.enabled).lineLimit(3)
-                            Spacer()
-                            Button(localized("Reload", "重新读取")) { Task { await model.reload() } }
-                            Button(localized("Recovery copies", "恢复副本")) { model.recover() }
-                        }.padding(8)
-                    }
-                    NativeSessionTabs(model: model)
-                    if let session = model.selectedTerminal {
-                        HStack {
-                            Text(model.state?.sessions.first { $0.sessionID == session.id }?.session["name"].string ?? "")
-                            if !session.activityLabel.isEmpty { Text(session.activityLabel).foregroundStyle(.secondary) }
-                            Spacer()
-                            if session.exited { Text(localized("Exited", "已退出")).foregroundStyle(.secondary) }
-                            if session.inputControl?.owned == false {
-                                Text(localized("Read-only attachment", "只读连接")).foregroundStyle(.secondary)
-                                InputControlButton(session: session)
+        GeometryReader { geometry in
+            let sidebar = CoreChromeLayout.sidebar(available: Double(geometry.size.width), requested: requestedSidebarWidth)
+            let sidebarWidth = model.sidebarVisible ? sidebar.width : CoreChrome.sidebarRailWidth
+            HStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    NativeSidebarRail(model: model)
+                    if model.sidebarVisible {
+                        VStack(spacing: 0) {
+                            NativeSidebarNavigation(model: model)
+                            if model.sidebarSection == "ssh" {
+                                TextField(localized("Search SSH hosts", "搜索 SSH 主机"), text: $model.sidebarQuery)
+                                    .textFieldStyle(.roundedBorder).padding(.bottom, 8).accessibilityIdentifier("native-sidebar-filter")
                             }
-                            Button(localized("Reconnect", "重新连接")) { Task { await session.reconnect() } }
-                            Button(localized("Close session", "关闭会话")) { Task { await model.closeSession() } }
-                                .disabled(model.busy || model.gitFavoritesRecoveryPresented)
-                        }.font(.caption).padding(.horizontal, 10).frame(height: 30)
-                        if !session.error.isEmpty { Text(session.error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(6) }
-                        if session.activityUnavailable { Text(localized("Agent activity is unavailable. Reconnect to retry.", "Agent 活动暂不可用，请重新连接后重试。")).font(.caption).foregroundStyle(.red).padding(6) }
+                            NativeSidebar(model: model).frame(maxHeight: .infinity)
+                        }.padding(.horizontal, 10)
                     }
-                    TerminalCanvas(model: model).frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(minWidth: 220)
-                if model.inspectorVisible && model.settings["inspectorPosition"].string != "left" { inspector }
+                .frame(width: CGFloat(sidebarWidth))
+                .background(GeometryReader { geometry in
+                    Color.clear.onAppear { model.measureSidebar(geometry.size.width) }
+                        .onChange(of: geometry.size.width) { _, width in model.measureSidebar(width) }
+                })
+                .background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["sidebar"], fallback: .windowBackgroundColor)))
+                .overlay(alignment: .trailing) {
+                    Color(nsColor: .separatorColor).frame(width: 1)
+                        .overlay(Color.clear.frame(width: 8).contentShape(Rectangle()).gesture(
+                            DragGesture(minimumDistance: 0).onChanged { value in
+                                if resizeStart == nil { resizeStart = sidebarWidth }
+                                let requested = (resizeStart ?? sidebarWidth) + Double(value.translation.width)
+                                let next = CoreChromeLayout.sidebar(available: Double(geometry.size.width), requested: requested)
+                                requestedSidebarWidth = next.width
+                                model.sidebarVisible = !next.hidden
+                            }.onEnded { _ in resizeStart = nil }
+                        ))
+                }
+                HSplitView {
+                    if model.inspectorVisible && model.settings["inspectorPosition"].string == "left" { inspector }
+                    VStack(spacing: 0) {
+                        NativeWorkspaceToolbar(model: model, sidebarWidth: CGFloat(sidebarWidth))
+                        if !model.terminalError.isEmpty {
+                            HStack { Text(model.terminalError).font(.caption).textSelection(.enabled); Spacer(); Button(localized("Reconnect", "重新连接")) { Task { await model.reconnectTransport() } } }.padding(8)
+                        }
+
+                        if !model.error.isEmpty {
+                            HStack {
+                                Text(model.error).font(.caption).textSelection(.enabled).lineLimit(3)
+                                Spacer()
+                                Button(localized("Reload", "重新读取")) { Task { await model.reload() } }
+                                Button(localized("Recovery copies", "恢复副本")) { model.recover() }
+                            }.padding(8)
+                        }
+                        NativeSessionTabs(model: model)
+                        if let session = model.selectedTerminal {
+                            HStack {
+                                Text(model.state?.sessions.first { $0.sessionID == session.id }?.session["name"].string ?? "")
+                                if !session.activityLabel.isEmpty { Text(session.activityLabel).foregroundStyle(.secondary) }
+                                Spacer()
+                                if session.exited { Text(localized("Exited", "已退出")).foregroundStyle(.secondary) }
+                                if session.inputControl?.owned == false {
+                                    Text(localized("Read-only attachment", "只读连接")).foregroundStyle(.secondary)
+                                    InputControlButton(session: session)
+                                }
+                                Button(localized("Reconnect", "重新连接")) { Task { await session.reconnect() } }
+                                Button(localized("Close session", "关闭会话")) { Task { await model.closeSession() } }
+                                    .disabled(model.busy || model.gitFavoritesRecoveryPresented)
+                            }.font(.caption).padding(.horizontal, 10).frame(height: 30)
+                            if !session.error.isEmpty { Text(session.error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(6) }
+                            if session.activityUnavailable { Text(localized("Agent activity is unavailable. Reconnect to retry.", "Agent 活动暂不可用，请重新连接后重试。")).font(.caption).foregroundStyle(.red).padding(6) }
+                        }
+                        TerminalCanvas(model: model).frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .padding(CGFloat(model.settings["windowPadding"].number ?? 10))
+                    }
+                    .frame(minWidth: 220)
+                    if model.inspectorVisible && model.settings["inspectorPosition"].string != "left" { inspector }
+                }
             }
-            .padding(CGFloat(model.settings["windowPadding"].number ?? 10))
         }
         .font(.custom(NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: CGFloat(model.settings["interfaceSize"].number ?? 13)).fontName, size: CGFloat(model.settings["interfaceSize"].number ?? 13)))
         .foregroundStyle(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["text"], fallback: .labelColor)))
@@ -76,6 +101,9 @@ struct WorkspaceView: View {
                     BreakDismissButton(model: model)
                 }.padding(16).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10)).padding(20)
             }
+        }
+        .onChange(of: model.sidebarVisible) { _, visible in
+            if visible && requestedSidebarWidth <= CoreChromeLayout.sidebarCollapseWidth { requestedSidebarWidth = CoreChrome.sidebarDefaultWidth }
         }
         .onChange(of: colorScheme) { _, _ in if model.settings["appearance"].string == "system" { Task { await model.reload() } } }
         .sheet(item: Binding(get: { model.nameDraftOwner == .workspace ? model.nameDraft : nil }, set: { if model.nameDraftOwner == .workspace { model.nameDraft = $0 } })) { _ in NameEditorView(model: model) }

@@ -74,6 +74,8 @@ struct NativeSidebar: NSViewRepresentable {
             let signature = [settings["interfaceFont"].string ?? "", String(settings["interfaceSize"].number ?? 13), String(settings["rowPadding"].number ?? 1), settings["interfaceTheme"].string ?? "", String(NativePreferences.light(settings)), settings["activeIconColor"].string ?? ""]
             table.rowHeight = 26 + CGFloat(settings["rowPadding"].number ?? 1) * 2
             table.backgroundColor = NativePreferences.color(palette["sidebar"], fallback: .windowBackgroundColor)
+            let section = model.sidebarSection
+            let query = section == "ssh" ? model.sidebarQuery.trimmingCharacters(in: .whitespacesAndNewlines) : ""
             var next: [Row] = []
             if settings["showDatabaseConnections"].bool != false { next.append(Row(key: "db", name: localized("Databases", "数据库"), symbol: "externaldrive")) }
             if settings["showRedisConnections"].bool != false { next.append(Row(key: "redis", name: localized("Redis connections", "Redis 连接"), symbol: "cylinder")) }
@@ -87,7 +89,7 @@ struct NativeSidebar: NSViewRepresentable {
             for project in model.projects {
                 let id = project["id"].string ?? ""
                 next.append(Row(key: "p:" + id, name: project["name"].string ?? "", symbol: project["pinned"].bool == true ? "pin.fill" : "folder", projectID: id))
-                if project["collapsed"].bool == true && model.sidebarQuery.isEmpty { continue }
+                if project["collapsed"].bool == true && query.isEmpty { continue }
                 next += model.orderedSessions(project["sessions"].array.filter { $0["worktreeId"].string == nil }).map { sessionRow($0, depth: 1) }
                 for tree in project["worktrees"].array {
                     let suffix = tree["missing"] == .bool(true) ? localized(" (missing)", "（缺失）") : ""
@@ -105,13 +107,13 @@ struct NativeSidebar: NSViewRepresentable {
             }
             next += [Row(key: "sessions", name: localized("Sessions", "会话"), symbol: nil)]
                 + model.orderedSessionEntries.filter { $0.projectId == nil && $0.session["ssh"] == .null }.map { sessionRow($0.session, depth: 0) }
-            let section = model.sidebarSection
-            let query = model.sidebarQuery.trimmingCharacters(in: .whitespacesAndNewlines)
             next = next.filter { row in
                 let matchesSection = section == "all"
                     || (section == "projects" && (row.key == "projects" || row.projectID != nil))
                     || (section == "sessions" && (row.key == "sessions" || row.key.hasPrefix("s:")))
-                    || (section == "ssh" && (row.key == "ssh" || row.key.hasPrefix("q:")))
+                    || (section == "ssh" && (row.key == "ssh" || row.key.hasPrefix("q:") || (row.key.hasPrefix("s:") && model.sessionEntries.contains { "s:" + $0.sessionID == row.key && $0.session["ssh"] != .null })))
+                    || (section == "redis" && row.key == "redis")
+                    || (section == "database" && row.key == "db")
                 return matchesSection && (query.isEmpty || row.name.localizedCaseInsensitiveContains(query))
             }
             if section == "sessions" {

@@ -75,11 +75,16 @@ Regular toolbar/sidebar vector paths and chrome dimensions use `shared/contracts
 React reads that source; generated Swift paths are rendered through CoreGraphics with matching round
 strokes, rather than substituted system glyphs. The candidate native toolbar uses the shared
 44-point height and interface palette. Agent brands and special close controls remain outside this
-first vector contract; the complete shell layout is still being aligned.
+first vector contract. The candidate shell places the 48-point category rail down the left edge,
+with workspace selection above the list and the title/Java/Python controls above the main pane.
+The sidebar defaults to 248 points, clamps to 30% of the window (at most 320), and retains the
+rail when collapsed. Add, session, split and tool actions remain available from the rail menu;
+settings opens from its footer. File/session tabs, embedded workbenches and complete settings
+styling still require alignment.
 
 The candidate capture flow records the exact chrome contract digest and measured toolbar height in
-both real applications. Collection rejects a different contract or the previous 40-point native
-height. Linux passes 450 Node checks (11 platform skips), type checking and the focused
+both real applications, together with the measured responsive sidebar width. Collection rejects a
+different contract, the previous 40-point native height or a stale sidebar width. Linux passes 450 Node checks (11 platform skips), type checking and the focused
 SVG/side-panel regressions. Swift vector geometry tests cover relative subpaths, smooth curves,
 arcs/rotation/radius expansion and invalid inputs; actual macOS compilation and windows still
 require this candidate's CI.
@@ -89,7 +94,8 @@ save/reload/reset behavior and unsaved drafts when the window is hidden. Return 
 settings draft; Command-W hides the window. The local CLI control switch remains an immediate
 service control in Local control.
 
-The sidebar includes workspace selection, category navigation and text filtering. A horizontal
+The sidebar includes workspace selection and All, Projects, SSH, Redis and Database categories.
+SSH host search stays within its category; switching categories retains sessions and selection. A horizontal
 session strip switches sessions and offers rename/close actions. Closing a background session
 addresses its own ID and generation, retaining the selected session. Files, content search and quick
 open use segmented tool navigation. These interactions use the existing shared operations and

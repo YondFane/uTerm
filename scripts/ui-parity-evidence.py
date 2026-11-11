@@ -64,6 +64,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["height"] == t["checks"]["height"] == fixture["height"]
         assert n.get("chromeContractSHA256") == t["checks"].get("chromeContractSHA256") == chrome_digest, "Different or stale chrome contract"
         assert all(abs(scene.get("toolbarHeight", 0) - chrome["metrics"]["titlebarHeight"]) < 1 for scene in [n, t["checks"]]), "Wrong actual chrome height"
+        expected_sidebar = min(chrome["metrics"]["sidebarDefaultWidth"], max(chrome["metrics"]["sidebarMinimumWide"], min(chrome["metrics"]["sidebarMaximumWidth"], width * chrome["metrics"]["sidebarMaximumRatio"])))
+        assert all(abs(scene.get("sidebarWidth", 0) - expected_sidebar) < 1 for scene in [n, t["checks"]]), "Wrong actual sidebar width"
         assert n["scenario"] == t["checks"]["scenario"] == "toolbar-sidebar-two-session-tabs-files"
         assert n["filesReadable"] is True and t["checks"]["filesReadable"] is True
         assert n["fontSize"] == t["checks"]["fontSize"] == fixture["fontSize"]
