@@ -90,6 +90,7 @@ enum EmbeddedDocumentsSmoke {
         let screenshot = "personal-\(phase)-embedded-files.png"
         try await TerminalSmoke.capture(window: window, path: root.deletingLastPathComponent().appendingPathComponent(screenshot))
         captures.append(screenshot)
+        report["captures"] = captures
         try click(window, id: "native-file-close-" + firstID.uuidString)
         try await ContentSmoke.wait(first, "document.querySelector('dialog[open]') !== null", allowAlert: true)
         try await EditorSmoke.click(first, title: "Discard changes and continue")

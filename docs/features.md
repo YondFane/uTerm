@@ -158,6 +158,10 @@ recovered Unicode drafts with existing autosave, cancel a dirty close and discar
 retaining its sibling and external bytes. Packaging requires its source-bound report and
 `personal-<phase>-embedded-files.png`.
 
+Native menu shortcuts preserve Shift for letter chords: Command-F opens terminal search and
+Command-Shift-F opens project search. The custom shifted palette shortcut rejects the unshifted
+event. These event-routing checks still require current-source native execution.
+
 Another real-window check clicks font controls and their bounds, types Unicode into native search,
 checks case/match navigation, exercises Command-F/Escape and restarts an exited shell. Packaging
 requires its source-bound report and `personal-<phase>-terminal-search.png`.

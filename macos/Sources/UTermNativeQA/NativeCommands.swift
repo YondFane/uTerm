@@ -15,7 +15,12 @@ enum NativeCommandKey {
         guard parts.first == "Mod", let code = parts.last else { item.keyEquivalent = ""; return }
         let punctuation = ["Comma": ",", "Period": ".", "Slash": "/", "Backslash": "\\", "Minus": "-", "Equal": "=", "BracketLeft": "[", "BracketRight": "]", "Enter": "\r"]
         let arrows: [String: Int] = ["ArrowLeft": NSLeftArrowFunctionKey, "ArrowRight": NSRightArrowFunctionKey, "ArrowUp": NSUpArrowFunctionKey, "ArrowDown": NSDownArrowFunctionKey]
-        if code.hasPrefix("Key") { item.keyEquivalent = String(code.dropFirst(3)).lowercased() }
+        if code.hasPrefix("Key") {
+            // AppKit needs uppercase equivalents to distinguish shifted letter chords.
+            // AppKit 需要大写键等价项，才能区分带 Shift 的字母组合。
+            let letter = String(code.dropFirst(3))
+            item.keyEquivalent = parts.contains("Shift") ? letter.uppercased() : letter.lowercased()
+        }
         else if code.hasPrefix("Digit") { item.keyEquivalent = String(code.dropFirst(5)) }
         else if let arrow = arrows[code], let scalar = UnicodeScalar(arrow) { item.keyEquivalent = String(scalar) }
         else { item.keyEquivalent = punctuation[code] ?? "" }

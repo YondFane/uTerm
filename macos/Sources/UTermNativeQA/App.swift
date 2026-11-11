@@ -442,7 +442,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return submenu
         }
         func add(_ menu: NSMenu, _ title: String, _ action: Selector, _ key: String = "", _ modifiers: NSEvent.ModifierFlags = .command) {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: modifiers.contains(.shift) ? key.uppercased() : key)
             item.keyEquivalentModifierMask = modifiers
             item.target = self
             menu.addItem(item)

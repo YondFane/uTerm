@@ -98,6 +98,8 @@ Agent 用量轮询等待目录初始化，先于窗口重载任务启动时也�
 个人版真实窗口检查点击文件／标签／关闭控件，发送 AppKit 方向键，保留精确的恢复 Unicode 草稿及原有自动保存行为，取消脏文件关闭，再丢弃其中一个文件，同时保留另一文件及外部写入内容。打包要求其绑定源码的报告及
 `personal-<phase>-embedded-files.png`。
 
+原生菜单为字母组合保留 Shift：Command-F 打开终端搜索，Command-Shift-F 打开项目搜索；自定义带 Shift 的命令面板快捷键拒绝不带 Shift 的事件。相关事件路由仍需当前源码的原生执行。
+
 另一个真实窗口检查点击字号及边界控件，在原生搜索框输入 Unicode，核对大小写／匹配导航，执行 Command-F／Escape，并重启实际退出的 Shell。打包要求其绑定源码的报告及
 `personal-<phase>-terminal-search.png`。
 

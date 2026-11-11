@@ -53,6 +53,7 @@ enum TerminalControlsSmoke {
         let screenshot = "personal-\(phase)-terminal-search.png"
         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(screenshot))
         captures.append(screenshot)
+        report["captures"] = captures
         try await click(window, id: control("close-search"))
         try await TerminalSmoke.wait("Close search and restore terminal focus") { !session.search.visible && window.firstResponder === session.view }
         try TerminalSmoke.postKey(window: window, code: 3, characters: "f", modifiers: .command)
@@ -60,6 +61,11 @@ enum TerminalControlsSmoke {
         try await TerminalSmoke.wait("Focus the actual terminal search editor") { window.firstResponder is NSTextView }
         try TerminalSmoke.postKey(window: window, code: 53, characters: "\u{1b}")
         try await TerminalSmoke.wait("Escape from actual search returns terminal focus") { !session.search.visible && window.firstResponder === session.view }
+        try TerminalSmoke.postKey(window: window, code: 3, characters: "F", modifiers: [.command, .shift])
+        try await TerminalSmoke.wait("Shifted find routes to project content search") { model.inspector.mode == .search && model.inspectorVisible }
+        guard !session.search.visible else { throw BridgeFailure(code: "TERMINAL_SEARCH_CHORD", message: "Shifted find opened the terminal search") }
+        model.showInspector(.files)
+        window.makeFirstResponder(session.view)
         guard session.qaUserInputBytes == inputBefore, model.selectedID == id, session.generation == generation, ObjectIdentifier(session.view) == view else {
             throw BridgeFailure(code: "TERMINAL_CONTROLS_IDENTITY", message: "Search reached the PTY or controls replaced terminal identity")
         }
@@ -75,7 +81,7 @@ enum TerminalControlsSmoke {
         await model.patchSettings(["fontSize": .number(size)])
         guard model.settings["fontSize"].number == size, session.view.font.pointSize == CGFloat(size), model.error.isEmpty else { throw BridgeFailure(code: "TERMINAL_FONT_RESTORE", message: "Font controls did not restore the saved size") }
         var proof: [String: Any] = [:]
-        for key in ["passed", "actualFontButtonsAppliedAndRestored", "fontBoundsDisabled", "unicodeCaseCountsAndNavigation", "keyboardOpenAndEscape", "searchInputDidNotReachPTY", "terminalIdentityAndGenerationRetained", "explicitRestartRetainedDescriptorAndView"] { proof[key] = true }
+        for key in ["passed", "actualFontButtonsAppliedAndRestored", "fontBoundsDisabled", "unicodeCaseCountsAndNavigation", "keyboardOpenAndEscape", "keyboardShiftFindRoutesProjectSearch", "searchInputDidNotReachPTY", "terminalIdentityAndGenerationRetained", "explicitRestartRetainedDescriptorAndView"] { proof[key] = true }
         proof["generationBeforeRestart"] = generation ?? ""
         proof["restartedGeneration"] = session.generation ?? ""
         proof["sessionID"] = id
