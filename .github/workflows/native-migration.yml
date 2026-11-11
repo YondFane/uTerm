@@ -67,6 +67,9 @@ jobs:
       - name: Build isolated native application
         id: native_build
         run: bash scripts/macos-native-build.sh 2>&1 | tee macos/.build/evidence/native-build.log
+      - name: Shared file-tree refresh and deletion regression
+        run: |
+          node --experimental-strip-types --test tests/file-refresh-order.test.mjs tests/file-refresh.test.mjs tests/file-delete.test.mjs 2>&1 | tee macos/.build/evidence/file-refresh-tests.log
       - name: Prepare real-window capture display
         run: |
           swift scripts/macos-qa-display.swift | tee macos/.build/evidence/display.json

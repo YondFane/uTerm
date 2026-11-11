@@ -32,6 +32,8 @@ enum FileToolsSmoke {
         try await EditorSmoke.click(files, title: title)
     }
     static func run(_ files: ContentWindow, root: URL, report: inout [String: Any]) async throws {
+        var stage = "create-file"
+        defer { report["sharedFilesActualMutationStage"] = stage }
         let literal = "literal $(uterm-qa) 中文.txt", target = root.appendingPathComponent("copy-target")
         let source = root.appendingPathComponent(literal), renamed = target.appendingPathComponent("renamed 中文.txt")
         try await click(files, label: "New file")
@@ -39,8 +41,10 @@ enum FileToolsSmoke {
         guard FileManager.default.fileExists(atPath: source.path) else { throw BridgeFailure(code: "FILES_CREATE", message: "Actual file control did not create the literal name") }
         let bytes = Data("COPY_LITERAL_中文\n".utf8)
         try bytes.write(to: source)
+        stage = "create-directory"
         try await click(files, label: "New directory")
         try await name(files, "copy-target")
+        stage = "copy-and-expand-directory"
         try await menu(files, path: literal, title: "Copy")
         try await menu(files, path: "copy-target", title: "Paste")
         try await TerminalSmoke.wait("Complete actual file paste") { (try? Data(contentsOf: target.appendingPathComponent(literal))) == bytes }
@@ -48,25 +52,31 @@ enum FileToolsSmoke {
         guard try Data(contentsOf: target.appendingPathComponent(literal)) == bytes else { throw BridgeFailure(code: "FILES_COPY", message: "Actual paste did not preserve file bytes") }
         guard try await EditorSmoke.evaluate(files, script: "document.querySelector('.file-row[data-path=\"copy-target\"]').click();return true;", arguments: [:]) else { throw BridgeFailure(code: "FILES_COPY", message: "Copied directory could not expand") }
         try await ContentSmoke.wait(files, "document.querySelector('.file-row[data-path^=\"copy-target/\"]') !== null")
+        stage = "rename-copied-file"
         try await menu(files, path: "copy-target/" + literal, title: "Rename")
         try await name(files, "renamed 中文.txt")
         guard try Data(contentsOf: renamed) == bytes, !FileManager.default.fileExists(atPath: target.appendingPathComponent(literal).path) else { throw BridgeFailure(code: "FILES_RENAME", message: "Actual rename changed bytes or retained the old name") }
+        stage = "delete-copied-file"
         try await menu(files, path: "copy-target/renamed 中文.txt", title: "Delete")
         try await EditorSmoke.click(files, title: "Confirm deletion")
         try await ContentSmoke.wait(files, "document.querySelector('.file-management') === null")
         guard !FileManager.default.fileExists(atPath: renamed.path) else { throw BridgeFailure(code: "FILES_DELETE", message: "Actual file deletion did not finish") }
+        stage = "cancel-directory-delete"
         try await menu(files, path: "copy-target", title: "Delete")
         try await ContentSmoke.wait(files, "document.querySelector('dialog.file-delete-dialog[open]') !== null && document.activeElement?.textContent.trim() === 'Cancel'")
         try await EditorSmoke.click(files, title: "Cancel")
         guard FileManager.default.fileExists(atPath: target.path) else { throw BridgeFailure(code: "FILES_CANCEL", message: "Cancelling directory deletion changed the disk") }
+        stage = "delete-expanded-directory"
         try await menu(files, path: "copy-target", title: "Delete")
         try await EditorSmoke.click(files, title: "Confirm deletion")
         try await ContentSmoke.wait(files, "document.querySelector('.file-management') === null")
         guard !FileManager.default.fileExists(atPath: target.path) else { throw BridgeFailure(code: "FILES_DELETE", message: "Directory deletion did not finish") }
+        stage = "delete-original-file"
         try await menu(files, path: literal, title: "Delete")
         try await EditorSmoke.click(files, title: "Confirm deletion")
         try await ContentSmoke.wait(files, "document.querySelector('.file-management') === null")
         guard !FileManager.default.fileExists(atPath: source.path) else { throw BridgeFailure(code: "FILES_CLEANUP", message: "File-operation fixture was not removed") }
         report["sharedFilesActualCreateCopyRenameDeleteAndCancel"] = true
+        stage = "completed"
     }
 }

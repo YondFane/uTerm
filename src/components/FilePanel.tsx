@@ -76,6 +76,7 @@ function Folder({
   useUiLanguage();
 
   const [listing, setListing] = useState<Listing | null>(null);
+  const [loadedRevision, setLoadedRevision] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   useEffect(() => {
@@ -87,6 +88,7 @@ function Folder({
         const result = await fileInvoke<Listing>("files_list", { directory, path, hidden });
         if (!disposed) {
           setListing(result);
+          setLoadedRevision(revision);
           setError("");
         }
       } catch (reason) {
@@ -191,7 +193,9 @@ function Folder({
                   path={entry.path}
                   depth={depth + 1}
                   hidden={hidden}
-                  paused={paused}
+                  // Refresh the parent before descendants so deleted expanded paths are pruned.
+                  // 先刷新父目录再读取子目录，避免再次读取已删除但尚未从列表移除的展开路径。
+                  paused={paused || loadedRevision !== revision}
                   open={open}
                   manage={manage}
                   select={select}

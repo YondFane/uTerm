@@ -3774,6 +3774,10 @@ changing projects or closing the panel cancels its timer and ignores late result
 
 Quick-open and content-search results are not periodically queried.
 
+Manual and mutation-triggered refreshes update each parent before rereading its expanded children.
+Cached rows and expansion remain while the parent loads; deleted directories are removed before
+their old child paths can be read. Real directory errors remain visible.
+
 #### Validation and limits
 
 - Component tests cover updated listings, scheduling after completion and timer cleanup; frontend
@@ -3781,6 +3785,12 @@ Quick-open and content-search results are not periodically queried.
   macOS. Native timing and Windows runtime acceptance remain pending.
 - The Windows file-tree refresh regression, scoped formatting and documentation checks pass. Native
   empty-folder visual acceptance remains pending.
+- A Linux component regression reproduces the missing-path error when deleting an expanded folder
+  with a delayed parent response, then passes with parent-first refresh. It also checks retained
+  cached rows/expansion, resumed child reads and visible permission errors. The native CI retains
+  `file-refresh-tests.log` and records the actual CRUD stage if a window check fails; this fix still
+  requires its own macOS run. The complete Linux frontend suite passes 476 checks with 11
+  conditional skips; TypeScript/production, formatting, localization and documentation checks pass.
 
 ### File-operation errors
 

@@ -113,12 +113,16 @@ The same EF source's
 also passes package/windows/replacement/SDK. Its
 [native Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43085265868/artifacts/13887393269)
 fails file tools with `CONTENT_RENDER` and a missing path, after passed root/symlink checks. The
-failure PNG was viewed; GitHub/SDK pass does not waive the failed inspector/matrix. Targeted
-reproduction remains required.
+failure PNG was viewed; GitHub/SDK pass does not waive the failed inspector/matrix. A deterministic
+Linux component test now reproduces the exact missing-path error: deleting an expanded directory
+starts child reads before the delayed parent can remove it. Parent-first revision refresh passes the
+same test, preserving cached rows/expansion and real permission errors. Native CI saves the targeted
+regression log and the actual CRUD stage; the fix still needs its own Mac matrix.
 
 同一 EF 源码的 Personal
 Intel 也通过安装包／窗口／替换／SDK；原生 Intel 产物却在根目录／链接检查后，文件工具报
-`CONTENT_RENDER` 路径缺失。失败原图已查看，GitHub／SDK 通过不豁免文件及最终矩阵，仍需针对性复现。
+`CONTENT_RENDER`
+路径缺失。失败原图已查看，GitHub／SDK 通过不豁免文件及最终矩阵。Linux 组件测试已稳定复现相同路径错误：删除展开目录时，子目录先于延迟父回复读取已删除路径。父目录优先刷新后同一测试通过，缓存行／展开状态及真实权限错误保留；原生 CI 保存专项日志与实际增删改阶段，修复仍待自己的 Mac 矩阵。
 
 The sidebar candidate adds a 22px hover/focus Close Session action, with hidden layout retained and
 pointer hits refused while invisible. Space targets the row ID and keeps a background close from
