@@ -13,6 +13,7 @@ final class FilesHost: WorkbenchHost {
     var emit: ((String, JSONValue) -> Void)?
     var validate: (() async throws -> Void)?
     var context: (() -> JSONValue)?
+    var copySource: ((JSONValue) throws -> Void)?
     var changeMode: ((String) throws -> Void)?
     var toolbar: ((String) throws -> Void)?
     var openFile: ((String, Int) async throws -> Void)?
@@ -36,6 +37,14 @@ final class FilesHost: WorkbenchHost {
         try await validate()
         try Task.checkCancellation()
         switch method {
+        case "files_clipboard":
+            guard params.count == 1, let value = params["value"], let copySource else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing file clipboard source") }
+            if value != .null {
+                guard case .object(let fields) = value, fields.count == 2, fields["directory"] == .string(directory), let path = fields["path"]?.string,
+                      !path.isEmpty, !path.hasPrefix("/"), !path.contains("\0"), !path.split(separator: "/").contains(where: { $0 == "." || $0 == ".." }),
+                      root.relativePath(for: root.resolvedDirectory.appendingPathComponent(path)) != nil else { throw BridgeFailure(code: "ROOT_DENIED", message: "Clipboard source must stay in this file tools root") }
+            }
+            try copySource(value); return .null
         case "files_context":
             guard params.isEmpty, let context else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "File context accepts no arguments") }
             return context()

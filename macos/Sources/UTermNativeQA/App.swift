@@ -15,6 +15,8 @@ func localized(_ english: String, _ chinese: String) -> String {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     private var window: NSWindow?
     private var contentWindows: [UUID: ContentWindow] = [:]
+    private var fileClipboard: JSONValue = .null
+    private var fileClipboardWorkspace: String?
     private var fileWindowOrder: [UUID] = []
     private var changingFileTabs = false
     private var pendingFileTabTrim = false
@@ -847,11 +849,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let host = try FilesHost(bridge: worker, directory: root)
             host.validate = { [weak self] in
                 guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
-                try await self.validateFileTools(directory: root, scope: scope, bridge: worker)
+                // Serialize canonical reads with UI writes; filesystem work stays on the worker.
+                // 规范数据读取与界面写入串行执行；文件系统工作仍使用工作桥接。
+                try await self.validateFileTools(directory: root, scope: scope, bridge: stateBridge)
             }
-            host.context = { [weak model] in
+            host.context = { [weak self, weak model] in
                 let mode = model?.inspector.mode ?? .files
-                return .object(["mode": .string(mode == .files ? "tree" : mode.rawValue), "request": .number(Double(model?.inspector.request ?? 0))])
+                let clipboard = self?.fileClipboardWorkspace == model?.groupID ? self?.fileClipboard ?? .null : .null
+                return .object(["mode": .string(mode == .files ? "tree" : mode.rawValue), "request": .number(Double(model?.inspector.request ?? 0)), "clipboard": clipboard])
+            }
+            host.copySource = { [weak self, weak model] value in
+                guard let self, let model else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                self.fileClipboard = value; self.fileClipboardWorkspace = model.groupID
             }
             host.changeMode = { [weak model] mode in
                 let modes: [String: NativeInspectorModel.Mode] = ["tree": .files, "quick": .quick, "search": .search]
@@ -874,7 +883,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             host.sourceRoot = { [weak self] source in
                 guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
-                return try await self.fileToolsSourceRoot(source, bridge: worker)
+                return try await self.fileToolsSourceRoot(source, bridge: stateBridge)
             }
             host.mutate = { [weak self] method, params, bridge in
                 guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
@@ -905,8 +914,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             guard try await content.prepareForQuit() else { throw BridgeFailure(code: "CONTENT_CHANGED", message: localized("Save or resolve open file changes before the file operation.", "执行文件操作前请保存或处理已打开文件的修改。")) }
         }
         try Task.checkCancellation()
-        try await validateFileTools(directory: directory, scope: scope, bridge: bridge)
-        if method == "files.copy", let source = params["source_directory"].string { _ = try await fileToolsSourceRoot(source, bridge: bridge) }
+        guard let stateBridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+        try await validateFileTools(directory: directory, scope: scope, bridge: stateBridge)
+        if method == "files.copy", let source = params["source_directory"].string { _ = try await fileToolsSourceRoot(source, bridge: stateBridge) }
         guard contents.allSatisfy({ $0.isPreparedForQuit }) else { throw BridgeFailure(code: "CONTENT_CHANGED", message: "A file changed during mutation preparation") }
         started = true
         // Keep dispatched writes alive through document cancellation until the actual result.

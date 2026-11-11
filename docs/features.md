@@ -139,16 +139,29 @@ workbenches remains pending.
 
 File requests stay on the captured local project or Worktree. Writes first resolve open editor
 drafts, then recheck the selected root; cancelled delivery does not release a dispatched write
-early. Paste accepts only known project/Worktree source roots in the current workspace. File-copy
-clipboard sharing across separate native content documents remains pending.
+early. Paste accepts only known project/Worktree source roots in the current workspace. Native
+memory retains the copied source when switching projects and replacing the file-tools document;
+paths are not saved to disk. Copy updates serialize, and a rejected copy restores the last confirmed
+source with a visible error. Clipboard hydration ignores late replies from an older document.
+Cross-workspace clipboard alignment remains pending.
+
+Project metadata reads share the main state bridge with settings writes, while filesystem scans stay
+on their worker. This avoids the client's own background reads rejecting a font change as
+`WRITER_BUSY`; external writer conflicts retain their explicit retry behavior. Native acceptance
+refreshes the actual file list while pressing smaller/larger font controls through six cycles,
+including after application replacement.
 
 Focused Linux WebKit-transport simulations cover the shared controls, exact open path/line, visible
 failure/retry, retained search text, language/theme refresh and quit freeze/resume. Native QA
 operates actual WebKit tree/search controls and AppKit Return, checks symlink/root/method rejection
 and stale-project writes, and creates, copies, renames and deletes literal temporary names,
-including cancelled directory deletion. Personal workspace captures require the mounted shared
-controls and translated labels. These new checks and screenshots still require current-source macOS
-CI; simulations do not accept native rendering.
+including cancelled directory deletion. It also copies in one actual panel, switches projects,
+replaces that WebKit document and pastes into the new project, checking original bytes and rejected
+outside-root clipboard values. Linux simulations exercise queued failures, confirmed-source rollback
+and stale hydration. `native-inspector-copy-across-projects-light-zh.png` records the destination
+panel. Personal workspace captures require the mounted shared controls and translated labels. These
+new checks and screenshots still require current-source macOS CI; simulations do not accept native
+rendering.
 
 Editable files open in the main workspace. When files are open, the tab row includes the selected
 terminal, ordered file names, unsaved indicators and close controls. Reopening selects the retained
@@ -172,7 +185,7 @@ The local CLI control switch remains an immediate service control in Local contr
 
 Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
 side/tool widths in both real apps. Collection rejects stale vectors, old height, titlebar insets or
-stale panel widths. Linux passes 457 Node checks (11 platform skips), type checking and focused
+stale panel widths. Linux passes 458 Node checks (11 platform skips), type checking and focused
 SVG/side-panel regressions; these do not establish complete native parity.
 
 Real Personal-window checks click file/tab/close controls, send AppKit arrows, retain exact

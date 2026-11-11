@@ -142,6 +142,10 @@ enum InspectorSmoke {
         report["inputMethod"] = "Actual NSMenu, AppKit Return, shared WK file controls and DOM insertText; not manual IME acceptance"
         report["manualAcceptance"] = "waived by user"
         guard let oldHost = files.workbenchHost as? FilesHost else { throw BridgeFailure(code: "INSPECTOR_HOST", message: "Shared file host is missing") }
+        let deniedClipboard = try await ContentSmoke.request(files, method: "files_clipboard", params: ["value": ["directory": root.deletingLastPathComponent().path, "path": "outside-private.txt"]])
+        guard deniedClipboard == "ROOT_DENIED" else { throw BridgeFailure(code: "INSPECTOR_CLIPBOARD", message: "Clipboard accepted an unselected source root") }
+        try await FileToolsSmoke.menu(files, path: ".hidden.txt", title: "复制")
+        try await TerminalSmoke.wait("Retain the copied source in native memory") { oldHost.context?()["clipboard"]["path"].string == ".hidden.txt" }
         let other = root.deletingLastPathComponent().appendingPathComponent("other-file-project")
         try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
         guard await model.mutate("project.open", ["id": .string(UUID().uuidString), "name": .string("Other files"), "directory": .string(other.path), "workspaceId": .string(model.groupID)]) else { throw BridgeFailure(code: "INSPECTOR_PROJECT", message: model.error) }
@@ -152,6 +156,16 @@ enum InspectorSmoke {
             guard ["CONFLICT", "ROOT_DENIED", "FILES_QUITTING"].contains(error.code), !FileManager.default.fileExists(atPath: root.appendingPathComponent("stale-must-not-exist.txt").path) else { throw error }
         }
         report["sharedFilesStaleProjectRejected"] = true
+        try await TerminalSmoke.wait("Mount new project file tools after replacing the old WebKit document") { model.inspector.content !== files && model.inspector.content?.webView.window === window }
+        guard let destination = model.inspector.content else { throw BridgeFailure(code: "INSPECTOR_CLIPBOARD", message: "Destination file tools are missing") }
+        try await ContentSmoke.wait(destination, "document.querySelector('.file-results') !== null")
+        _ = try await destination.webView.evaluateJavaScript("document.querySelector('.file-results').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:40,clientY:120}))")
+        try await ContentSmoke.wait(destination, "[...document.querySelectorAll('[role=menuitem]')].some(button=>button.textContent.trim()==='粘贴'&&!button.disabled)")
+        try await EditorSmoke.click(destination, title: "粘贴")
+        try await TerminalSmoke.wait("Paste the retained source into the new project") { (try? Data(contentsOf: other.appendingPathComponent(".hidden.txt"))) == Data("HIDDEN_ONLY\n".utf8) }
+        report["sharedFilesAcrossProjectsRetainCopiedSource"] = true
+        try await capture("native-inspector-copy-across-projects-light-zh.png")
+        captures.append("native-inspector-copy-across-projects-light-zh.png"); report["captures"] = captures
         for id in Array(model.terminals.keys) { await model.selectSession(id); await model.closeSession() }
         let status = try await bridge.call("host.status")
         guard status["sessions"].array.isEmpty else { throw BridgeFailure(code: "INSPECTOR_CLEANUP", message: "Fixture host sessions remain") }

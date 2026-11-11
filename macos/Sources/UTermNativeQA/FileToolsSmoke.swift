@@ -18,7 +18,7 @@ enum FileToolsSmoke {
         _ = try await files.webView.evaluateJavaScript("document.querySelector('.file-inline-edit').requestSubmit()")
         try await ContentSmoke.wait(files, "document.querySelector('.file-inline-edit') === null")
     }
-    private static func menu(_ files: ContentWindow, path: String, title: String) async throws {
+    static func menu(_ files: ContentWindow, path: String, title: String) async throws {
         let deadline = Date().addingTimeInterval(5)
         while true {
             if try await EditorSmoke.evaluate(files, script: """

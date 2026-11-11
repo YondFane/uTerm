@@ -340,7 +340,7 @@ ARM／Intel 通过，持久标签／窗口顺序及完整编辑验收仍待完�
 明确执行工作区／草稿快照及 Worktree 删除后元数据及 Git 收藏保存／恢复的文件系统失败／重试检查。
 
 原生文件面板通过 `src/native-files.tsx` 与限定范围的 `FilesHost.swift` 调用接入共用
-`src/components/FilePanel.tsx`，文件操作保留根目录检查与编辑器草稿保护。仍要求当前源码的原生交互及匹配截图；Git／GitHub 工作台嵌入及跨内容文档共享文件复制剪贴板仍待完成。
+`src/components/FilePanel.tsx`，文件操作保留根目录检查与编辑器草稿保护。同一工作区内替换原生面板后保留已复制文件的来源，路径不写入磁盘。仍要求当前源码的原生交互及匹配截图；Git／GitHub 工作台嵌入及跨工作区文件复制对齐仍待完成。
 
 共享回环控制服务位于
 `crates/utermd-local/src/control/server.rs`，Tauri 与核心操作复用同一队列及生命周期；宿主为该服务直接声明 Tokio 和 tempfile。`pnpm test:host`

@@ -468,7 +468,8 @@ after Worktree removal, plus Git favorite save/restore/retry.
 The native Files inspector mounts the shared `src/components/FilePanel.tsx` through
 `src/native-files.tsx` and scoped `FilesHost.swift` calls. File operations retain root checks and
 editor draft guards. Current-source native interaction and matching screenshots remain required;
-Git/GitHub workbench embedding and cross-document file-copy clipboard sharing remain pending.
+Copied file sources survive native panel replacement within the same workspace, without saving paths
+to disk. Git/GitHub workbench embedding and cross-workspace file-copy alignment remain pending.
 
 The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
 operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this

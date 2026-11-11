@@ -25,6 +25,16 @@ enum TerminalControlsSmoke {
         try await TerminalSmoke.wait("Apply actual smaller font button") { model.settings["fontSize"].number == 16 && session.view.font.pointSize == 16 && !model.busy }
         try await click(window, id: control("font-larger"))
         try await TerminalSmoke.wait("Apply actual larger font button") { model.settings["fontSize"].number == 17 && session.view.font.pointSize == 17 && !model.busy }
+        if let files = model.inspector.content {
+            try await ContentSmoke.wait(files, "document.querySelector('button[aria-label=\"Refresh file list\"]') !== null")
+            for _ in 0..<6 {
+                for (name, expected) in [("font-smaller", 16.0), ("font-larger", 17.0)] {
+                    _ = try await files.webView.evaluateJavaScript("document.querySelector('button[aria-label=\"Refresh file list\"]').click()")
+                    try await click(window, id: control(name))
+                    try await TerminalSmoke.wait("Keep actual font writes available during file refresh") { model.settings["fontSize"].number == expected && session.view.font.pointSize == CGFloat(expected) && !model.busy && model.error.isEmpty }
+                }
+            }
+        } else { throw BridgeFailure(code: "TERMINAL_FILES", message: "Shared file tools are missing for concurrent font acceptance") }
         for (bound, name) in [(10.0, "font-smaller"), (32.0, "font-larger")] {
             await model.patchSettings(["fontSize": .number(bound)])
             try await Task.sleep(for: .milliseconds(50))
@@ -82,7 +92,7 @@ enum TerminalControlsSmoke {
         await model.patchSettings(["fontSize": .number(size)])
         guard model.settings["fontSize"].number == size, session.view.font.pointSize == CGFloat(size), model.error.isEmpty else { throw BridgeFailure(code: "TERMINAL_FONT_RESTORE", message: "Font controls did not restore the saved size") }
         var proof: [String: Any] = [:]
-        for key in ["passed", "actualFontButtonsAppliedAndRestored", "fontBoundsDisabled", "unicodeCaseCountsAndNavigation", "keyboardOpenAndEscape", "keyboardShiftFindRoutesProjectSearch", "searchInputDidNotReachPTY", "terminalIdentityAndGenerationRetained", "explicitRestartRetainedDescriptorAndView"] { proof[key] = true }
+        for key in ["passed", "actualFontButtonsAppliedAndRestored", "fontWritesRemainAvailableDuringFileRefresh", "fontBoundsDisabled", "unicodeCaseCountsAndNavigation", "keyboardOpenAndEscape", "keyboardShiftFindRoutesProjectSearch", "searchInputDidNotReachPTY", "terminalIdentityAndGenerationRetained", "explicitRestartRetainedDescriptorAndView"] { proof[key] = true }
         proof["generationBeforeRestart"] = generation ?? ""
         proof["restartedGeneration"] = session.generation ?? ""
         proof["sessionID"] = id

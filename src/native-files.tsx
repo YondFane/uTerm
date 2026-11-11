@@ -4,10 +4,16 @@ import { ToolbarIcon } from "./components/SidebarIcon";
 import { contentInvoke, listenContent } from "./lib/content-host";
 import { localizeMessage, tx } from "./lib/i18n";
 import { useSettings } from "./lib/SettingsContext";
+import {
+  installFileClipboardWriter,
+  restoreFileClipboard,
+  type FileClipboard,
+} from "./lib/file-clipboard";
 
 interface FilesContext {
   mode: FileMode;
   request: number;
+  clipboard: FileClipboard;
 }
 
 export function NativeFiles({ directory }: { directory: string }) {
@@ -17,11 +23,24 @@ export function NativeFiles({ directory }: { directory: string }) {
   const [error, setError] = useState("");
   useEffect(() => {
     let disposed = false;
+    let hydratedClipboard = false;
     const stops: (() => void)[] = [];
+    stops.push(
+      installFileClipboardWriter(
+        (value) => contentInvoke("files_clipboard", { value }),
+        (reason) => {
+          if (!disposed) setError(tx("复制失败：{p0}", { p0: localizeMessage(String(reason)) }));
+        },
+      ),
+    );
     const refresh = async () => {
       try {
         const value = await contentInvoke<FilesContext>("files_context");
         if (!disposed) {
+          if (!hydratedClipboard) {
+            restoreFileClipboard(value.clipboard ?? null);
+            hydratedClipboard = true;
+          }
           setContext(value);
           setError("");
         }

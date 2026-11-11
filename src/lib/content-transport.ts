@@ -1,6 +1,7 @@
 import type { JSONValue } from "./core-contract.generated.ts";
 
 export const contentWriteMethods = new Set([
+  "files_clipboard",
   "github_create_pr",
   "github_form_guard",
   "github_session_action",
@@ -82,6 +83,7 @@ export const gitFavoriteMethods: Record<string, string> = {
   git_favorites_write: "git.favorites.write",
 };
 const contentMethods = new Set([
+  "files_clipboard",
   "files_context",
   "files_mode",
   "files_toolbar",

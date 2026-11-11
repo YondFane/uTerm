@@ -21,8 +21,13 @@ test("native file tools use scoped WebKit controls, retain the query and react t
   const { createRoot } = await import("react-dom/client");
   const root = createRoot(document.getElementById("root"));
   const calls = [];
-  let context = { mode: "tree", request: 0 };
+  let context = {
+    mode: "tree",
+    request: 0,
+    clipboard: { directory: "/other", path: "copied.txt" },
+  };
   let settings = { ...defaults, language: "en" };
+  let failCopy = false;
   const event = (kind, payload = null) =>
     window.dispatchEvent(
       new window.CustomEvent("uterm-content-event", {
@@ -40,8 +45,17 @@ test("native file tools use scoped WebKit controls, retain the query and react t
           const { method, params } = message;
           let result = null;
           if (method === "files_context") result = context;
-          else if (method === "files_mode") {
-            context = { mode: params.mode, request: context.request + 1 };
+          else if (method === "files_clipboard") {
+            if (failCopy)
+              return {
+                version: 1,
+                id: message.id,
+                document: message.document,
+                error: { code: "ROOT_DENIED", message: "Copy source changed" },
+              };
+            context = { ...context, clipboard: params.value };
+          } else if (method === "files_mode") {
+            context = { ...context, mode: params.mode, request: context.request + 1 };
             event("files-mode-changed");
           } else if (method === "files_list") {
             assert.equal(params.directory, "/fixture");
@@ -98,6 +112,33 @@ test("native file tools use scoped WebKit controls, retain the query and react t
     });
     assert.equal(document.querySelectorAll(".inspector-tabs [role=tab]").length, 3);
     assert.equal(document.querySelectorAll(".inspector-switcher button").length, 4);
+    const copy = async () => {
+      await act(async () =>
+        document.querySelector('.file-row[data-path="note.txt"]').dispatchEvent(
+          new window.MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            clientX: 40,
+            clientY: 100,
+          }),
+        ),
+      );
+      const items = [...document.querySelectorAll('[role="menuitem"]')];
+      assert.equal(items.find((button) => button.textContent.trim() === "Paste").disabled, false);
+      await act(async () => items.find((button) => button.textContent.trim() === "Copy").click());
+    };
+    await copy();
+    assert.deepEqual(calls.findLast((call) => call.method === "files_clipboard").params, {
+      value: { directory: "/fixture", path: "note.txt" },
+    });
+    failCopy = true;
+    await copy();
+    assert.match(
+      document.querySelector('[role="alert"]').textContent,
+      /Copy failed.*source changed/,
+    );
+    await click('.inspector-switcher button[aria-label="Files"]');
+    failCopy = false;
     await click('.file-row[data-path="note.txt"]');
     assert.deepEqual(calls.findLast((call) => call.method === "content_open_file").params, {
       path: "note.txt",
