@@ -20,10 +20,13 @@ enum EmbeddedDocumentsSmoke {
         for name in names { try Data(original.utf8).write(to: root.appendingPathComponent(name)) }
         defer { for name in names { try? FileManager.default.removeItem(at: root.appendingPathComponent(name)) } }
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
+        let disk = try await bridge.call("files.read", params: .object(["directory": .string(root.path), "path": .string(names[0])]))
+        let recovered: JSONValue = .object(["directory": .string(root.path), "path": .string(names[0]), "kind": .string("text"), "text": .string("RECOVERED_TAB_SEED\n"), "saved": disk["text"], "version": disk["version"], "line_ending": disk["line_ending"], "bom": disk["bom"]])
+        _ = try await bridge.call("editor.drafts.putDocument", params: .object(["expectedDraftRevision": .null, "draft": recovered]))
         let first = try await open(root, names[0])
         defer { first.forceClose() }
         try await TerminalSmoke.wait("Attach first actual editor to workspace") { first.webView.window === window && first.window?.isVisible == false }
-        try await ContentSmoke.wait(first, "document.querySelector('.cm-content[contenteditable=true]') !== null")
+        try await ContentSmoke.wait(first, "document.querySelector('.cm-content[contenteditable=true]')?.textContent.includes('RECOVERED_TAB_SEED') === true")
         try await EditorSmoke.replace(first, text: edited)
         try await TerminalSmoke.wait("Report the actual embedded dirty state") { first.editorDirty }
         var stored = try await bridge.call("editor.drafts.document", params: .object(["directory": .string(root.path), "path": .string(names[0])]))
@@ -46,9 +49,12 @@ enum EmbeddedDocumentsSmoke {
         try await TerminalSmoke.wait("Return to the retained editor instance") { first.webView.window === window && second.webView.window == nil }
         try await ContentSmoke.wait(first, "document.querySelector('.cm-content')?.textContent.includes('EMBEDDED_DRAFT') === true")
         let reused = try await open(root, names[0])
+        let originalBytesKept = try String(contentsOf: root.appendingPathComponent(names[0]), encoding: .utf8) == original
         guard reused === first, ObjectIdentifier(first.webView) == firstView, ObjectIdentifier(second.webView) == secondView,
-              model.documents.visible(in: scope).count == 2, try String(contentsOf: root.appendingPathComponent(names[0]), encoding: .utf8) == original else {
-            throw BridgeFailure(code: "EMBEDDED_REUSE", message: "Reopening replaced an editor, reordered tabs or saved unsaved bytes")
+              model.documents.visible(in: scope).count == 2, originalBytesKept else {
+            let diagnostics: [String: Any] = ["reusedController": reused === first, "firstViewRetained": ObjectIdentifier(first.webView) == firstView, "secondViewRetained": ObjectIdentifier(second.webView) == secondView, "documentCount": model.documents.visible(in: scope).count, "originalBytesKept": originalBytesKept, "dirty": first.editorDirty]
+            report["embeddedReuseDiagnostics"] = diagnostics
+            throw BridgeFailure(code: "EMBEDDED_REUSE", message: "Reopening replaced an editor, reordered tabs or saved a recovered unsaved draft")
         }
         try await Task.sleep(for: .milliseconds(100))
         try click(window, id: "native-file-select-" + firstID.uuidString, focus: true)

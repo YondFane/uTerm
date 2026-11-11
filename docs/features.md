@@ -86,7 +86,7 @@ default width. The native layout avoids a separate split-view titlebar inset. Em
 file tabs still need their candidate macOS CI acceptance.
 
 The candidate adds a real Personal-window check that clicks embedded file/tab/close controls,
-sends an AppKit arrow event, verifies exact durable Unicode drafts, cancels a dirty close and discards
+sends an AppKit arrow event, verifies exact recovered Unicode drafts without bypassing autosave, cancels a dirty close and discards
 one file while retaining its sibling and external bytes. The embedded-file candidate has not yet passed macOS compilation and operation acceptance; this new
 check is not yet counted as passed;
 macOS must run it at the new source SHA. JDK registration acceptance also waits for the live Add
