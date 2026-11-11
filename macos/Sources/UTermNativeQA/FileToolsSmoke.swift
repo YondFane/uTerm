@@ -61,7 +61,7 @@ enum FileToolsSmoke {
         guard FileManager.default.fileExists(atPath: target.path) else { throw BridgeFailure(code: "FILES_CANCEL", message: "Cancelling directory deletion changed the disk") }
         try await menu(files, path: "copy-target", title: "Delete")
         try await EditorSmoke.click(files, title: "Confirm deletion")
-        try await ContentSmoke.wait(files, "document.querySelector('dialog.file-delete-dialog[open]') === null")
+        try await ContentSmoke.wait(files, "document.querySelector('.file-management') === null")
         guard !FileManager.default.fileExists(atPath: target.path) else { throw BridgeFailure(code: "FILES_DELETE", message: "Directory deletion did not finish") }
         try await menu(files, path: literal, title: "Delete")
         try await EditorSmoke.click(files, title: "Confirm deletion")

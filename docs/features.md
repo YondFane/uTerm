@@ -97,10 +97,12 @@ the whole tools column inside the window. Side/tool separators support dragging,
 and Return; native layout avoids an extra split-view titlebar inset.
 
 The file tools use the full window height, with their toolbar at the top and the path footer at the
-bottom. Their embedded root ignores the nested titlebar safe area. Both collectors measure actual
-panel/header position, panel/viewport height and footer bounds; pairing rejects offsets, missing
-metrics and clipped paths. Fifteen Linux pairing-policy tests pass; current-source macOS rendering
-still requires CI.
+bottom. Embedded tools stay in normal document flow; narrow WebKit viewports do not inherit the
+ordinary floating panel's 44-point offset or shadow. Their root ignores the nested titlebar safe
+area. Both collectors measure actual panel/header position, panel/viewport height and footer bounds;
+pairing rejects offsets, missing metrics and clipped paths. Fifteen Linux pairing-policy tests and
+Chromium geometry checks at five widths (128–1100px) pass; current-source macOS rendering still
+requires CI.
 
 The list separates Active, Pinned, SSH, Redis, Databases, loose terminals/chats and inactive
 Projects.
@@ -155,7 +157,8 @@ Project metadata reads share the main state bridge with settings writes, while f
 on their worker. This avoids the client's own background reads rejecting a font change as
 `WRITER_BUSY`; external writer conflicts retain their explicit retry behavior. Native acceptance
 refreshes the actual file list while pressing smaller/larger font controls through six cycles,
-including after application replacement.
+including after application replacement. Acceptance uses the shared **Refresh files** control and
+waits for directory mutation completion, rather than the early dismissal of its confirmation.
 
 Focused Linux WebKit-transport simulations cover the shared controls, exact open path/line, visible
 failure/retry, retained search text, language/theme refresh and quit freeze/resume. Native QA

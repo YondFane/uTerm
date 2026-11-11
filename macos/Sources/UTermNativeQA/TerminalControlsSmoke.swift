@@ -26,10 +26,10 @@ enum TerminalControlsSmoke {
         try await click(window, id: control("font-larger"))
         try await TerminalSmoke.wait("Apply actual larger font button") { model.settings["fontSize"].number == 17 && session.view.font.pointSize == 17 && !model.busy }
         if let files = model.inspector.content {
-            try await ContentSmoke.wait(files, "document.querySelector('button[aria-label=\"Refresh file list\"]') !== null")
+            try await ContentSmoke.wait(files, "document.querySelector('button[aria-label=\"Refresh files\"]') !== null")
             for _ in 0..<6 {
                 for (name, expected) in [("font-smaller", 16.0), ("font-larger", 17.0)] {
-                    _ = try await files.webView.evaluateJavaScript("document.querySelector('button[aria-label=\"Refresh file list\"]').click()")
+                    _ = try await files.webView.evaluateJavaScript("document.querySelector('button[aria-label=\"Refresh files\"]').click()")
                     try await click(window, id: control(name))
                     try await TerminalSmoke.wait("Keep actual font writes available during file refresh") { model.settings["fontSize"].number == expected && session.view.font.pointSize == CGFloat(expected) && !model.busy && model.error.isEmpty }
                 }
