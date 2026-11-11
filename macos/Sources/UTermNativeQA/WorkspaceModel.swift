@@ -81,6 +81,7 @@ final class WorkspaceModel: ObservableObject {
     private var helperReady = false
     private var needsReload = false
     lazy var agentNotifications = AgentNotifications(workspace: self)
+    let documents = NativeWorkspaceDocuments()
     lazy var inspector = NativeInspectorModel(workspace: self)
     lazy var updates = NativeUpdates()
     var inspectorContextKey: String { [groupID, workspace["selectedProject"].string ?? "", workspace["selectedWorktree"].string ?? ""].joined(separator: "\u{0}") }
@@ -306,7 +307,8 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func selectSession(_ id: String, focus: Bool = true) async {
-        if selectedID == id { return }
+        if focus { documents.showTerminal(in: inspectorContextKey) }
+        if selectedID == id { if focus { focusRevision += 1 }; return }
         if let operation { _ = await operation.value }
         if await mutate("session.select", ["id": .string(id)]), focus { focusRevision += 1 }
     }

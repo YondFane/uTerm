@@ -256,7 +256,7 @@ enum TerminalSmoke {
         [view] + view.subviews.flatMap(descendants)
     }
 
-    private static func postKey(window: NSWindow, code: UInt16, characters: String, modifiers: NSEvent.ModifierFlags = []) throws {
+    static func postKey(window: NSWindow, code: UInt16, characters: String, modifiers: NSEvent.ModifierFlags = []) throws {
         for type in [NSEvent.EventType.keyDown, .keyUp] {
             guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: modifiers,
                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,

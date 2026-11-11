@@ -37,7 +37,7 @@ class ParityEvidenceTests(unittest.TestCase):
             for appearance in fixture["appearances"]:
                 for width in fixture["widths"]:
                     values = dict(language=lang, appearance=appearance, width=width, height=720,
-                                  scenario="toolbar-sidebar-two-session-tabs-files", sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
+                                  scenario="toolbar-sidebar-two-sessions-files", sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
                                   chromeContractSHA256=chrome_digest, toolbarHeight=44, sidebarWidth=min(248, max(180, min(320, width * .3))), generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
                     native = f"personal-initial-workspace-{lang}-{appearance}-{width}.png"
                     tauri = f"ui-parity-workspace-{lang}-{appearance}-{width}.png"

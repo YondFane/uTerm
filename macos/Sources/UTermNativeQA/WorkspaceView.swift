@@ -61,26 +61,7 @@ struct WorkspaceView: View {
                                 Button(localized("Recovery copies", "恢复副本")) { model.recover() }
                             }.padding(8)
                         }
-                        NativeSessionTabs(model: model)
-                        if let session = model.selectedTerminal {
-                            HStack {
-                                Text(model.state?.sessions.first { $0.sessionID == session.id }?.session["name"].string ?? "")
-                                if !session.activityLabel.isEmpty { Text(session.activityLabel).foregroundStyle(.secondary) }
-                                Spacer()
-                                if session.exited { Text(localized("Exited", "已退出")).foregroundStyle(.secondary) }
-                                if session.inputControl?.owned == false {
-                                    Text(localized("Read-only attachment", "只读连接")).foregroundStyle(.secondary)
-                                    InputControlButton(session: session)
-                                }
-                                Button(localized("Reconnect", "重新连接")) { Task { await session.reconnect() } }
-                                Button(localized("Close session", "关闭会话")) { Task { await model.closeSession() } }
-                                    .disabled(model.busy || model.gitFavoritesRecoveryPresented)
-                            }.font(.caption).padding(.horizontal, 10).frame(height: 30)
-                            if !session.error.isEmpty { Text(session.error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(6) }
-                            if session.activityUnavailable { Text(localized("Agent activity is unavailable. Reconnect to retry.", "Agent 活动暂不可用，请重新连接后重试。")).font(.caption).foregroundStyle(.red).padding(6) }
-                        }
-                        TerminalCanvas(model: model).frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .padding(CGFloat(model.settings["windowPadding"].number ?? 10))
+                            NativeWorkspaceDocumentSurface(model: model, documents: model.documents).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(minWidth: 220)
                     if model.inspectorVisible && model.settings["inspectorPosition"].string != "left" { inspector }
@@ -140,7 +121,7 @@ private struct NativeWindowMaterial: NSViewRepresentable {
 }
 
 @MainActor
-private struct InputControlButton: NSViewRepresentable {
+struct InputControlButton: NSViewRepresentable {
     let session: TerminalSession
     func makeCoordinator() -> Coordinator { Coordinator(session) }
     func makeNSView(context: Context) -> NSButton {

@@ -5,6 +5,7 @@ import { SettingsProvider } from "./lib/SettingsContext";
 import { contentInvoke, listenContent } from "./lib/content-host";
 import { activeLanguage, localizeMessage, setUiLanguage, tx } from "./lib/i18n";
 import { readSettings, type Settings } from "./lib/settings";
+import { isDirty } from "./lib/file-document";
 import { useFileDocument } from "./lib/useFileDocument";
 import "./styles.css";
 import "./native-content.css";
@@ -20,6 +21,7 @@ interface Context {
   line?: number;
   settings: Settings;
   editable: boolean;
+  embedded?: boolean;
 }
 function Content({ context }: { context: Context }) {
   const state = useFileDocument(
@@ -40,6 +42,17 @@ function Content({ context }: { context: Context }) {
   const [focusError, setFocusError] = useState("");
   const [focusRequest, setFocusRequest] = useState({ line: context.line ?? 0, serial: 0 });
   const appliedFocus = useRef(-1);
+  const dirty = isDirty(editor.document);
+  useEffect(() => {
+    if (!context.editable || !context.embedded) return;
+    let disposed = false;
+    void contentInvoke("content_editor_state", { dirty }).catch((reason) => {
+      if (!disposed) setFocusError(String(reason));
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [dirty, context.editable, context.embedded]);
   useEffect(() => {
     void current.current.open(context.directory, context.path, context.line);
     let disposed = false;

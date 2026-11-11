@@ -22,7 +22,7 @@ enum EditorSmoke {
     }
 
     static func replace(_ content: ContentWindow, text: String) async throws {
-        guard let window = content.window else { throw BridgeFailure(code: "EDITOR_WINDOW", message: "Editor window missing") }
+        guard let window = content.presentationWindow else { throw BridgeFailure(code: "EDITOR_WINDOW", message: "Editor window missing") }
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         guard window.makeFirstResponder(content.webView) else { throw BridgeFailure(code: "EDITOR_FOCUS", message: "Native WK editor cannot become first responder") }

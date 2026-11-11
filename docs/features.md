@@ -79,8 +79,14 @@ first vector contract. The candidate shell places the 48-point category rail dow
 with workspace selection above the list and the title/Java/Python controls above the main pane.
 The sidebar defaults to 248 points, clamps to 30% of the window (at most 320), and retains the
 rail when collapsed. Add, session, split and tool actions remain available from the rail menu;
-settings opens from its footer. File/session tabs, embedded workbenches and complete settings
-styling still require alignment.
+settings opens from its footer. Embedded workbenches and complete settings styling still require alignment; the new workspace
+file tabs still need their candidate macOS CI acceptance.
+
+The candidate adds a real Personal-window check that clicks embedded file/tab/close controls,
+sends an AppKit arrow event, verifies exact durable Unicode drafts, cancels a dirty close and discards
+one file while retaining its sibling and external bytes. This new check is not yet counted as passed;
+macOS must run it at the new source SHA. Packaging rejects a missing operation, stale source or
+missing `personal-<phase>-embedded-files.png` evidence.
 
 The candidate capture flow records the exact chrome contract digest and measured toolbar height in
 both real applications, together with the measured responsive sidebar width. Collection rejects a
@@ -95,8 +101,13 @@ settings draft; Command-W hides the window. The local CLI control switch remains
 service control in Local control.
 
 The sidebar includes workspace selection and All, Projects, SSH, Redis and Database categories.
-SSH host search stays within its category; switching categories retains sessions and selection. A horizontal
-session strip switches sessions and offers rename/close actions. Closing a background session
+SSH host search stays within its category; switching categories retains sessions and selection. Opening an editable file places it in the main workspace. The tab row appears when files are open,
+with the selected terminal and ordered file labels, unsaved indicators and close controls. Reopening
+selects the retained WK editor; switching back to the terminal retains its view and generation.
+Left/Right and Home/End move between tabs. Dirty close and repository/quit preparation use the
+existing editor confirmation and conflict guards. Standalone preview and detached regression
+windows retain their separate presentation. Persistent tab/window restoration and wrapping still
+require alignment. Closing a background session
 addresses its own ID and generation, retaining the selected session. Files, content search and quick
 open use segmented tool navigation. These interactions use the existing shared operations and
 conflict protections.

@@ -4,7 +4,7 @@ import UTermBridge
 
 @MainActor
 enum PersonalSmoke {
-    static func run(model: WorkspaceModel, window: NSWindow, openSettings: () -> NativeSettingsWindow) async {
+    static func run(model: WorkspaceModel, window: NSWindow, openSettings: () -> NativeSettingsWindow, openFile: (URL, String) async throws -> ContentWindow) async {
         guard WorkspaceModel.applicationProfile.personalFixture, let store = try? WorkspaceModel.dataRoot() else { return }
         let root = store.deletingLastPathComponent()
         let phase = Bundle.main.object(forInfoDictionaryKey: "UTermPersonalQAPhase") as? String ?? "initial"
@@ -190,7 +190,7 @@ enum PersonalSmoke {
                             "chromeContractSHA256": CoreChrome.contractSHA256, "toolbarHeight": model.toolbarHeight, "sidebarWidth": model.sidebarWidth,
                             "windowSizeAttempts": sizeAttempts,
                             "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0),
-                            "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-session-tabs-files", "filesReadable": true, "fontSize": model.settings["fontSize"].number ?? 0,
+                            "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-sessions-files", "filesReadable": true, "fontSize": model.settings["fontSize"].number ?? 0,
                             "projectName": model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["name"].string ?? "",
                             "workspaceName": model.groups.first(where: { $0["id"].string == model.groupID })?["name"].string ?? "",
                             "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""])
@@ -215,6 +215,9 @@ enum PersonalSmoke {
             report["localizedUpdateStatuses"] = updateStatuses
             report["captures"] = captures; report["realBundledHelperUnicodePTY"] = true
             report["profileRetainedAfterAppReplacement"] = phase != "initial"
+            guard let projectDirectory = model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["directory"].string else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Missing fixture project") }
+            try await EmbeddedDocumentsSmoke.run(model: model, window: window, root: URL(fileURLWithPath: projectDirectory), phase: phase, open: openFile, report: &report, captures: &captures)
+            report["captures"] = captures
             await model.closeSession()
             let host = try await bridge.call("host.status")
             report["hostPID"] = host["pid"].number.flatMap { Int(exactly: $0) }

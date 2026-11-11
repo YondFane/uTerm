@@ -73,15 +73,26 @@ def validate_workspace_scenes(report, head, tested, phase):
         assert scene["sourceHeadSHA"] == head and scene["testedMergeSHA"] == tested
         assert scene["platform"] == "macOS" and scene["architecture"] in ["arm64", "x86_64"]
         assert scene["system"] and scene["height"] == 720
-        assert scene["scenario"] == "toolbar-sidebar-two-session-tabs-files"
+        assert scene["scenario"] == "toolbar-sidebar-two-sessions-files"
         assert scene["filesReadable"] is True
     assert observed == expected
+
+
+def validate_embedded_workspace(report, head, tested, phase):
+    proof = report.get("embeddedWorkspaceFiles", {})
+    for key in ["passed", "tabControlsActivated", "arrowNavigationActivated", "sameMainWindow", "orderedAndReused", "exactUnsavedDraftRetained", "cancelCloseRetainedTabs", "discardPreservedSiblingAndExternalWriter", "terminalViewAndGenerationRetained"]:
+        assert proof.get(key) is True, "Missing actual embedded workspace operation: " + key
+    assert proof.get("sourceHeadSHA") == head and proof.get("testedMergeSHA") == tested
+    assert proof.get("platform") == "macOS" and proof.get("architecture") in ["arm64", "x86_64"]
+    assert proof.get("system") and proof.get("width", 0) >= 640 and proof.get("height", 0) >= 420
+    assert proof.get("screenshot") == f"personal-{phase}-embedded-files.png" and proof["screenshot"] in report["captures"]
 
 
 def validate_smoke_report(report, head, tested, phase):
     assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
     validate_workspace_scenes(report, head, tested, phase)
     validate_settings_scenes(report, head, tested, phase)
+    validate_embedded_workspace(report, head, tested, phase)
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}

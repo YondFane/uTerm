@@ -381,7 +381,7 @@ async function runUiParity() {
           appearance,
           width: innerWidth,
           height: innerHeight,
-          scenario: "toolbar-sidebar-two-session-tabs-files",
+          scenario: "toolbar-sidebar-two-sessions-files",
           generationRetained: true,
           filesReadable: true,
           fontSize: (await settings()).fontSize,

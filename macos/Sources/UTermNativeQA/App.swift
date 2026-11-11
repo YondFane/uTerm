@@ -118,7 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 do {
                     if Bundle.main.object(forInfoDictionaryKey: "UTermUpdateTestMode") as? String == "install" {
                         try await UpdateInstallationSmoke.run(model: model, window: window,
-                            openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) },
+                            openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) },
                             openSSH: { try await self.makeSSHWindow() }, openDatabase: { try await self.makeDatabaseWindow() },
                             attemptQuit: { _ = self.applicationShouldTerminate(NSApp) }, report: &report)
                     } else { try await UpdatesSmoke.run(model: model, window: window, report: &report) }
@@ -135,14 +135,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             #if UTERM_PERSONAL
             if WorkspaceModel.applicationProfile.personalFixture {
-                await PersonalSmoke.run(model: model, window: window, openSettings: { self.openFullSettings(); return self.fullSettingsWindow! })
+                await PersonalSmoke.run(model: model, window: window, openSettings: { self.openFullSettings(); return self.fullSettingsWindow! }, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) })
                 terminating = true
                 NSApp.terminate(nil)
             }
             #else
             if let path = WorkspaceModel.argument("--transition-smoke-report") {
                 var report = baseReport()
-                do { try await TransitionSmoke.run(model: model, window: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report) }
+                do { try await TransitionSmoke.run(model: model, window: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) }, report: &report) }
                 catch { report["failure"] = error.localizedDescription }
                 let checkpoint = WorkspaceModel.argument("--transition-smoke-phase") == "checkpoint" && report["failure"] == nil
                 if !checkpoint {
@@ -219,7 +219,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 var report = baseReport()
                 do {
                     try await SettingsSmoke.run(workspace: model, open: { self.openFullSettings(); return self.fullSettingsWindow! }, report: &report)
-                    try await PreferencesSmoke.run(workspace: model, parent: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report)
+                    try await PreferencesSmoke.run(workspace: model, parent: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) }, report: &report)
                 }
                 catch {
                     report["failure"] = error.localizedDescription
@@ -382,14 +382,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             if let path = WorkspaceModel.argument("--git-smoke-report") {
                 var report = baseReport()
-                do { try await GitSmoke.run(model: model, parent: window, open: { directory in try await self.makeGitContentWindow(directory: directory) }, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report) }
+                do { try await GitSmoke.run(model: model, parent: window, open: { directory in try await self.makeGitContentWindow(directory: directory) }, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) }, report: &report) }
                 catch { report["failure"] = error.localizedDescription }
                 finishReport(report, path: path)
                 return
             }
             if let path = WorkspaceModel.argument("--editor-smoke-report") {
                 var report = baseReport()
-                do { try await EditorSmoke.run(model: model, parent: window, open: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, lookup: { directory, path in self.existingContent(directory: directory, path: path, editable: true) }, report: &report) }
+                do { try await EditorSmoke.run(model: model, parent: window, open: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) }, lookup: { directory, path in self.existingContent(directory: directory, path: path, editable: true) }, report: &report) }
                 catch { report["failure"] = error.localizedDescription }
                 finishReport(report, path: path, keepRunning: WorkspaceModel.argument("--editor-smoke-phase") == "checkpoint" && report["failure"] == nil)
                 return
@@ -522,7 +522,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 menuItem.title = localized("Close window", "关闭窗口")
                 return !run.model.busy && !run.model.prepared
             }
-            let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow }
+            let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow } || (NSApp.keyWindow === window && !model.inspectorOwnsFocus && model.documents.active(in: model.inspectorContextKey) != nil)
             menuItem.title = fileFocused ? localized("Close file", "关闭文件") : model.inspectorOwnsFocus ? localized("Close tools", "关闭工具") : localized("Close session", "关闭会话")
             if fileFocused { return true }
             if model.inspectorOwnsFocus { return true }
@@ -556,7 +556,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
         if id == "close", NSApp.keyWindow === commandPalette?.window { return true }
         if id == "close" {
-            if origin === window { return model.inspectorOwnsFocus || model.selectedID != nil }
+            if origin === window { return model.inspectorOwnsFocus || model.selectedID != nil || model.documents.active(in: model.inspectorContextKey) != nil }
             return origin != nil && (origin === commandPalette?.window || origin === fullSettingsWindow?.window || origin === agentsWindow?.window || origin === sshWindow?.window || contentWindows.values.contains { $0.window === origin } || pythonWindows.values.contains { $0.window === origin } || javaWindows.values.contains { $0.window === origin })
         }
         if ["fontIncrease", "fontDecrease"].contains(id) { return origin === window || contentWindows.values.contains { $0.window === origin } }
@@ -815,11 +815,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
         }
     }
-    private func makeEditableContentWindow(directory: URL, path: String) async throws -> ContentWindow {
+    private func makeEditableContentWindow(directory: URL, path: String, embedded: Bool = true) async throws -> ContentWindow {
         guard !changingFileTabs else { throw BridgeFailure(code: "CONTENT_BUSY", message: localized("Finish the current file operation first.", "请先完成当前文件操作。")) }
         changingFileTabs = true; defer { changingFileTabs = false; if pendingFileTabTrim { Task { await self.trimFileTabs() } } }
         guard !mutatingRepository, !model.worktreeDeletionPresented, !model.gitFavoritesRecoveryPresented else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
         if let content = existingContent(directory: directory, path: path, editable: true) {
+            if embedded { model.documents.retarget(content, scope: model.inspectorContextKey) }
             content.reveal()
             return content
         }
@@ -846,7 +847,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         // Construct successfully before removing prepared tabs, so a failed open retains existing editors.
         // 成功创建后才移除已确认的标签，打开失败时保留现有编辑器。
         let content: ContentWindow
-        do { content = try makeContentWindow(directory: directory, path: path, editable: true) }
+        do { content = try makeContentWindow(directory: directory, path: path, editable: true, embedded: embedded) }
         catch { excess.forEach { $0.resumeAfterQuit() }; throw error }
         excess.forEach { $0.forceClose() }
         return content
@@ -870,7 +871,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             excess.forEach { $0.forceClose() }
         } catch { excess.forEach { $0.resumeAfterQuit() }; model.error = error.localizedDescription }
     }
-    private func makeContentWindow(directory: URL, path: String, editable: Bool = false) throws -> ContentWindow {
+    private func makeContentWindow(directory: URL, path: String, editable: Bool = false, embedded: Bool = false) throws -> ContentWindow {
         guard !preparingQuit else { throw BridgeFailure(code: "QUIT_BUSY", message: localized("The client is preparing to quit.", "客户端正在准备退出。")) }
         guard let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
         if let content = existingContent(directory: directory, path: path, editable: editable) {
@@ -879,7 +880,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let content = try ContentWindow(bridge: bridge, directory: directory, path: path, editable: editable)
         content.window?.appearance = window?.appearance
-        if editable, let next = content.window {
+        if editable, !embedded, let next = content.window {
             let siblings = contentWindows.values.filter { $0.editable && !$0.gitMode && $0.directory == content.directory }
             if let anchor = NSApp.orderedWindows.first(where: { window in siblings.contains { $0.window === window } }) {
                 // Append after the group's last tab; dictionary iteration must not choose the tab order.
@@ -890,7 +891,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let id = UUID()
         contentWindows[id] = content
         fileWindowOrder.append(id)
-        content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id); self?.fileWindowOrder.removeAll { $0 == id } }
+        content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id); self?.fileWindowOrder.removeAll { $0 == id }; self?.model.documents.remove(id) }
+        if embedded, let window { model.documents.attach(content, id: id, scope: model.inspectorContextKey, parent: window) }
         content.reveal()
         return content
     }
@@ -1116,6 +1118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
+        else if NSApp.keyWindow === window, !model.inspectorOwnsFocus, let document = model.documents.active(in: model.inspectorContextKey) { model.documents.close(document.id) }
         else if NSApp.keyWindow === window && model.inspectorOwnsFocus { model.hideInspector() }
         else { Task { await model.closeSession() } }
     }

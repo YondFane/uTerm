@@ -57,7 +57,7 @@ class PersonalPackageTests(unittest.TestCase):
         scenes = [dict(language=language, appearance=appearance, width=width, height=720,
                        screenshot=f"personal-{phase}-workspace-{language}-{appearance}-{width}.png",
                        sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64",
-                       system="macOS fixture", filesReadable=True, scenario="toolbar-sidebar-two-session-tabs-files")
+                       system="macOS fixture", filesReadable=True, scenario="toolbar-sidebar-two-sessions-files")
                   for language in ["en", "zh-Hans"] for appearance in ["dark", "light"] for width in [1100, 640]]
         fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
         settings = [dict(scene, section=section["id"], sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
@@ -65,7 +65,16 @@ class PersonalPackageTests(unittest.TestCase):
                          screenshot=f"personal-{phase}-settings-{section['id']}-{scene['language']}-{scene['appearance']}-{scene['width']}.png")
                     for section in fixture["settingsSections"] for scene in fixture["settingsScenes"]]
         return dict(backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,
-                    settingsScenes=settings, captures=[scene["screenshot"] for scene in scenes + settings])
+                    settingsScenes=settings, embeddedWorkspaceFiles=dict(passed=True, tabControlsActivated=True, arrowNavigationActivated=True, sameMainWindow=True, orderedAndReused=True, exactUnsavedDraftRetained=True, cancelCloseRetainedTabs=True, discardPreservedSiblingAndExternalWriter=True, terminalViewAndGenerationRetained=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-embedded-files.png"), captures=[scene["screenshot"] for scene in scenes + settings] + [f"personal-{phase}-embedded-files.png"])
+
+    def test_embedded_workspace_requires_actual_controls_and_current_source(self):
+        for key, value in [("tabControlsActivated", False), ("arrowNavigationActivated", False), ("terminalViewAndGenerationRetained", False), ("sourceHeadSHA", "c" * 40), ("screenshot", "old.png")]:
+            report = self.workspace_evidence("initial")
+            report["embeddedWorkspaceFiles"][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): package.validate_embedded_workspace(report, "a" * 40, "b" * 40, "initial")
+        report = self.workspace_evidence("initial")
+        report.pop("embeddedWorkspaceFiles")
+        with self.assertRaises(AssertionError): package.validate_embedded_workspace(report, "a" * 40, "b" * 40, "initial")
 
     def test_settings_navigation_evidence_rejects_missing_stale_or_changed_drafts(self):
         for mutation in ["missing", "duplicate", "source", "draft", "navigation", "height"]:

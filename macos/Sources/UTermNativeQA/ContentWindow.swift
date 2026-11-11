@@ -71,6 +71,10 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         deliver("file-focus-line", payload: .number(Double(line)))
     }
     var closed: (() -> Void)?
+    var presentEmbedded: (() -> Void)?
+    var editorStateChanged: (() -> Void)?
+    private(set) var editorDirty = false
+    var presentationWindow: NSWindow? { presentEmbedded == nil ? window : webView.window }
     var mutateGit: ((String, JSONValue, CoreBridge) async throws -> JSONValue)?
     var openRepositoryFile: ((String) async throws -> Void)?
     var recoverGitFavorites: (() throws -> Void)?
@@ -116,6 +120,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     required init?(coder: NSCoder) { return nil }
 
     func reveal() {
+        if let presentEmbedded { presentEmbedded(); return }
         guard let window else { return }
         window.tabGroup?.selectedWindow = window
         showWindow(nil)
@@ -214,7 +219,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         switch request.method {
         case "content_context":
             let state = try await stateBridge.snapshot()
-            return .object(["directory": .string(documentDirectory), "path": .string(path), "line": .number(Double(focusLine)), "settings": state.document.settings, "editable": .bool(editable), "kind": .string(workbenchHost?.kind ?? (gitMode ? "git" : "file"))])
+            return .object(["directory": .string(documentDirectory), "path": .string(path), "line": .number(Double(focusLine)), "settings": state.document.settings, "editable": .bool(editable), "embedded": .bool(presentEmbedded != nil), "kind": .string(workbenchHost?.kind ?? (gitMode ? "git" : "file"))])
         case "content_copy_text":
             guard params.count == 1, let text = params["text"]?.string else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing clipboard text") }
             NSPasteboard.general.clearContents()
@@ -258,6 +263,12 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             return try await bridge.call("files.save", params: .object(scoped))
         case "file_copy", "file_mutate":
             throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。"))
+        case "content_editor_state":
+            guard editable, !gitMode, workbenchHost == nil, params.count == 1, let value = params["dirty"], case .bool(let dirty) = value else {
+                throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Invalid editor state")
+            }
+            if editorDirty != dirty { editorDirty = dirty; editorStateChanged?() }
+            return .null
         case "editor_guard":
             guard params["active"] == .bool(false) || (editable && params["active"] == .bool(true)) else { throw BridgeFailure(code: "READ_ONLY", message: "Native preview cannot enable editing") }
             return .null
@@ -339,6 +350,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             return true
         }
         guard quitToken == nil else { throw BridgeFailure(code: "QUIT_BUSY", message: "Content is already preparing to quit") }
+        if editorDirty { presentEmbedded?() }
         let sourceDocument = documentID
         do {
             let ready = try await quitGate.prepare(timeout: timeout) { token in

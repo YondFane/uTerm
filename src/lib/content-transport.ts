@@ -129,6 +129,7 @@ const contentMethods = new Set([
   "ssh_file_read",
   "ssh_file_save",
   "ssh_file_mutate",
+  "content_editor_state",
   "editor_guard",
   "editor_exit",
   "editor_prepare_result",

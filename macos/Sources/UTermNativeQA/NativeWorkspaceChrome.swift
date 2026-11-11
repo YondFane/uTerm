@@ -131,36 +131,3 @@ struct NativeSidebarRail: View {
             .accessibilityIdentifier("native-sidebar-category-" + id)
     }
 }
-
-@MainActor
-struct NativeSessionTabs: View {
-    @ObservedObject var model: WorkspaceModel
-    var body: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 2) {
-                ForEach(model.orderedSessionEntries, id: \.sessionID) { entry in
-                    HStack(spacing: 6) {
-                        if entry.session["pinned"].bool == true { Image(systemName: "pin.fill").font(.caption2) }
-                        Button { Task { await model.selectSession(entry.sessionID) } } label: {
-                            Label(entry.session["name"].string ?? localized("Terminal", "终端"), systemImage: entry.session["agent"].string == nil ? "terminal" : "sparkle")
-                                .lineLimit(1).frame(maxWidth: 180)
-                        }
-                        Button { Task { await model.closeSession(id: entry.sessionID) } } label: { Image(systemName: "xmark").font(.caption2) }
-                            .help(localized("Close session", "关闭会话"))
-                    }
-                    .padding(.horizontal, 10).padding(.vertical, 7)
-                    .background(model.selectedID == entry.sessionID ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
-                    .contextMenu {
-                        NativeSessionContextMenu(model: model, id: entry.sessionID)
-                    }
-                    .accessibilityIdentifier("native-session-tab-" + entry.sessionID)
-                }
-                Button { Task { await model.newTerminal() } } label: { Image(systemName: "plus").padding(8) }.help(localized("New terminal", "新建终端"))
-            }.padding(.horizontal, 6)
-        }
-        .frame(height: 36)
-        .buttonStyle(.borderless).scrollIndicators(.hidden)
-        .disabled(!model.ready || model.busy || model.gitFavoritesRecoveryPresented)
-        .accessibilityIdentifier("native-session-tabs")
-    }
-}
