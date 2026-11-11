@@ -5,8 +5,10 @@ import json
 import struct
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 spec = importlib.util.spec_from_file_location("parity_evidence", Path(__file__).parents[1] / "scripts/ui-parity-evidence.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
@@ -92,12 +94,39 @@ class ParityEvidenceTests(unittest.TestCase):
                                                 sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system=self.n["system"]))
             self.n["captures"].append(native)
             self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
+        self.n["githubPRScenes"] = []
+        for scene in fixture["githubScenes"]:
+            width = min(640, scene["width"]*.92)
+            values = dict(scene, passed=True, form=fixture["github"], actualToolsSwitcher=True, literalInputRetained=True, readableFields=True,
+                          workspaceVisibleAroundDialog=True, terminalGenerationRetained=True, savedWorkspaceUnchanged=True,
+                          isolatedSimulatedCLI=True, noGitHubWrites=True, actualCancelPreservedState=True,
+                          modalWidth=width, modalHeight=500, modalLeft=(scene["width"]-width)/2, modalTop=(scene["height"]-500)/2)
+            name = f"github-pr-draft-{scene['language']}-{scene['appearance']}-{scene['width']}"
+            native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+            image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", scene["width"], scene["height"]) + bytes(1100)
+            (self.native / native).write_bytes(image); (self.tauri / tauri).write_bytes(image)
+            self.n["githubPRScenes"].append(dict(values, scenario="github-pr-draft", screenshot=native, sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system=self.n["system"]))
+            self.n["captures"].append(native)
+            self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
         restart = "ui-parity-terminal-restart.png"
         image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 1100, 720) + bytes(1100)
         (self.tauri / restart).write_bytes(image)
         self.t["scenes"].append(dict(scenario="terminal-restart", screenshot=restart, checks=dict(
             passed=True, actualRestartButton=True, parsedUnicodeOutput=True, canonicalWorkspaceRetained=True,
             terminalViewRetained=True, generationBeforeRestart="old-generation", restartedGeneration="new-generation")))
+
+    def test_pr_tool_width_and_missing_or_modified_operations_are_rejected(self):
+        baseline = copy.deepcopy(self.n)
+        for key, value in [("modalWidth",128), ("readableFields",False), ("noGitHubWrites",False), ("form",{}), ("modalLeft", float("nan"))]:
+            with self.subTest(key=key):
+                self.n=copy.deepcopy(baseline);self.n["githubPRScenes"][0][key]=value
+                with self.assertRaises(AssertionError): self.run_compare()
+        self.n=copy.deepcopy(baseline);self.n["githubPRScenes"].pop()
+        with self.assertRaises(AssertionError): self.run_compare()
+
+    def test_pr_centered_forms_with_different_heights_are_rejected(self):
+        self.n["githubPRScenes"][0].update(modalHeight=502,modalTop=(720-502)/2)
+        with self.assertRaises(AssertionError): self.run_compare()
 
     def run_compare(self):
         for root, name, report in [(self.native, "personal-initial.json", self.n), (self.tauri, "report.json", self.t)]:
@@ -115,8 +144,8 @@ class ParityEvidenceTests(unittest.TestCase):
         result = self.run_compare()
         self.assertTrue(result["comparisonReady"])
         self.assertFalse(result["functionalParityAccepted"])
-        self.assertEqual(len(result["pairs"]), 36)
-        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 73)
+        self.assertEqual(len(result["pairs"]), 38)
+        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 77)
 
     def test_quick_ssh_requires_current_main_window_images_and_preserved_data(self):
         original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)

@@ -20,6 +20,9 @@ const scenes = [
       (section) => `settings-${section.id}-${scene.language}-${scene.appearance}-${scene.width}`,
     ),
   ),
+  ...fixture.githubScenes.map(
+    (scene) => `github-pr-draft-${scene.language}-${scene.appearance}-${scene.width}`,
+  ),
   ...fixture.ordinaryOperations,
   ...fixture.contentScenes.map(
     (scene) => `pdf-highlights-${scene.language}-${scene.appearance}-${scene.width}`,
@@ -67,11 +70,32 @@ const quickEvidence = fixture.quickScenes.map((scene) => ({
     modalTop: (scene.height - 300) / 2,
   },
 }));
+const prEvidence = fixture.githubScenes.map((scene) => ({
+  scenario: `github-pr-draft-${scene.language}-${scene.appearance}-${scene.width}`,
+  checks: {
+    ...scene,
+    passed: true,
+    form: structuredClone(fixture.github),
+    actualToolsSwitcher: true,
+    literalInputRetained: true,
+    readableFields: true,
+    workspaceVisibleAroundDialog: true,
+    terminalGenerationRetained: true,
+    savedWorkspaceUnchanged: true,
+    isolatedSimulatedCLI: true,
+    noGitHubWrites: true,
+    actualCancelPreservedState: true,
+    modalWidth: Math.min(640, scene.width * 0.92),
+    modalHeight: 500,
+    modalLeft: (scene.width - Math.min(640, scene.width * 0.92)) / 2,
+    modalTop: (scene.height - 500) / 2,
+  },
+}));
 const assertOperations = (records) =>
-  assertParityOperations([...records, ...pdfEvidence, ...quickEvidence], fixture);
+  assertParityOperations([...records, ...pdfEvidence, ...quickEvidence, ...prEvidence], fixture);
 
 test("the complete grid and required restart accept file-system enumeration order", () => {
-  assert.equal(scenes.length, 37);
+  assert.equal(scenes.length, 39);
   assert.doesNotThrow(() => assertParityScenes([...scenes].reverse(), fixture));
 });
 
@@ -113,10 +137,15 @@ test("PDF proof rejects missing, duplicate, stale data and unexecuted controls",
   for (const key of Object.keys(pdfEvidence[0].checks)) {
     const rows = structuredClone(pdfEvidence);
     rows[0].checks[key] = null;
-    assert.throws(() => assertParityOperations([restart, ...rows, ...quickEvidence], fixture), key);
+    assert.throws(
+      () => assertParityOperations([restart, ...rows, ...quickEvidence, ...prEvidence], fixture),
+      key,
+    );
   }
   for (const rows of [[], pdfEvidence.slice(1), [pdfEvidence[0], pdfEvidence[0]]])
-    assert.throws(() => assertParityOperations([restart, ...rows, ...quickEvidence], fixture));
+    assert.throws(() =>
+      assertParityOperations([restart, ...rows, ...quickEvidence, ...prEvidence], fixture),
+    );
 });
 
 test("Quick SSH pairing rejects missing controls, data changes and stale fixture values", () => {
@@ -168,4 +197,37 @@ test("the required grid follows fixture changes instead of a hardcoded scene cou
       changed,
     ),
   );
+});
+
+test("PR scenes reject tool-width forms, changed literals, missing operations and duplicate scenes", () => {
+  const restart = {
+    scenario: "terminal-restart",
+    checks: {
+      passed: true,
+      actualRestartButton: true,
+      parsedUnicodeOutput: true,
+      canonicalWorkspaceRetained: true,
+      terminalViewRetained: true,
+      generationBeforeRestart: "before",
+      restartedGeneration: "after",
+    },
+  };
+  const verify = (rows) =>
+    assertParityOperations([restart, ...pdfEvidence, ...quickEvidence, ...rows], fixture);
+  assert.doesNotThrow(() => verify(prEvidence));
+  for (const patch of [
+    { modalWidth: 128 },
+    { modalTop: 0 },
+    { modalHeight: 720 },
+    { noGitHubWrites: false },
+    { readableFields: false },
+    { literalInputRetained: false },
+    { form: { ...fixture.github, body: "changed" } },
+  ]) {
+    const rows = structuredClone(prEvidence);
+    Object.assign(rows[0].checks, patch);
+    assert.throws(() => verify(rows));
+  }
+  for (const rows of [[], prEvidence.slice(1), [prEvidence[0], prEvidence[0]]])
+    assert.throws(() => verify(rows));
 });

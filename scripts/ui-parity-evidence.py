@@ -1,5 +1,7 @@
 """Compare source-bound real-window artifacts. 对照绑定源码的真实窗口产物。"""
 
+from ui_parity_github import validate_pr
+
 import argparse
 import hashlib
 import json
@@ -214,6 +216,29 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
         pairs.append(dict(area="quick-ssh-invalid", language=language, appearance=appearance, width=width, height=height,
                           native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
+    expected_pr = {(scene["language"], scene["appearance"], scene["width"], scene["height"]) for scene in fixture["githubScenes"]}
+    npr = native.get("githubPRScenes", [])
+    tpr = [entry for entry in tauri["scenes"] if entry["scenario"].startswith("github-pr-draft-")]
+    assert len(npr) == len(tpr) == len(expected_pr), "Incomplete PR screenshot grid"
+    left_pr = {content_key(scene): scene for scene in npr}
+    right_pr = {content_key(scene["checks"]): scene for scene in tpr}
+    assert set(left_pr) == set(right_pr) == expected_pr, "Missing or duplicate PR scenes"
+    for identity in sorted(expected_pr):
+        language, appearance, width, height = identity
+        n, t = left_pr[identity], right_pr[identity]
+        assert n.get("sourceHeadSHA") == head and n.get("testedMergeSHA") == tested, "Stale PR screenshot"
+        assert n.get("platform") == native["platform"] and n.get("architecture") == native["architecture"] and n.get("system") == native["system"], "Wrong PR capture platform"
+        assert n.get("scenario") == "github-pr-draft" and t["checks"].get("passed") is True
+        validate_pr(n, fixture); validate_pr(t["checks"], fixture)
+        for key in ["modalLeft", "modalTop", "modalWidth", "modalHeight"]:
+            assert abs(n[key] - t["checks"][key]) < 1, "Different actual PR geometry: " + key
+        name = f"github-pr-draft-{language}-{appearance}-{width}"
+        expected_native, expected_tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+        assert t["scenario"] == name and n["screenshot"] == expected_native and t["screenshot"] == expected_tauri and expected_native in native["captures"]
+        _, ndigest = image(native_path.parent, expected_native, minimum_height=height)
+        _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
+        pairs.append(dict(area="github-pr-draft", language=language, appearance=appearance, width=width, height=height,
+                          native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
     output.mkdir(parents=True, exist_ok=False)
     for pair in pairs:
         shutil.copyfile(native_path.parent / pair["native"], output / pair["native"])
@@ -224,7 +249,7 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
                   platform="macOS", architecture="arm64", system=native["system"], pairs=pairs,
                   ordinaryRestart=dict(screenshot=restart_file.name, SHA256=restart_digest, checks=checks),
                   comparisonReady=True, functionalParityAccepted=False,
-                  scope="Workspace, settings, PDF and Quick SSH screenshots. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Quick SSH uses an invalid fixture address, actual modal controls and real shell output; no authenticated login claim. Review images and execute remaining acceptance rows.")
+                  scope="Workspace, settings, PDF, Quick SSH and GitHub PR screenshots. PR uses the isolated simulated CLI, literal form input and actual Cancel; no real GitHub write. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Quick SSH uses an invalid fixture address, actual modal controls and real shell output; no authenticated login claim. Review images and execute remaining acceptance rows.")
     (output / "comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     write_viewer(output, result)
     rows = ["# Real-window comparison / 真实窗口对照", "", f"Source head: `{head}`", f"Tested merge: `{tested}`", "",

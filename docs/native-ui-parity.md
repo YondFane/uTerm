@@ -67,10 +67,23 @@ files themselves are readable.
 The shared PR form now has a bounded native workspace modal instead of using the narrow tools
 viewport. Native host requests fix the repository/root, reject injected fields and duplicate writes,
 and retain a hidden draft across Command-W/reopen. Cancel/Escape discard; pending writes still block
-close/quit. Linux frontend (474 passed, 11 skipped), 22 focused checks and three-width CSS checks
-pass. New real Mac modal screenshots and ordinary PR pairs remain required.
+close/quit. Linux frontend (475 passed, 11 skipped), nine GitHub/grid checks and three-width CSS
+checks pass. New real Mac modal screenshots and ordinary PR pairs remain required.
 
 共用 PR 表单改为有界的原生工作区模态，不再受窄工具视口限制。原生请求固定仓库／根目录，拒绝注入字段及重复写入；Command-W／重开保留隐藏草稿，取消／Escape 放弃，写入期间仍禁止关闭／退出。Linux 前端 474 通过、11 跳过，22 项专项及三种宽度 CSS 检查通过。新模态仍需真实 Mac 截图及普通版 PR 配对。
+
+Two shared PR scenes add English/dark 1100×720 and Chinese/light 640×720. Both real clients operate
+literal fields and Cancel with the same temporary Git repository and simulated CLI, retaining the
+live terminal and saved data; Personal repeats after app replacement. Original screenshots, source
+metadata and CLI logs must show no GitHub write. Twenty-five evidence/fixture and 15 Personal Python
+policies pass, including refusal of external/symlink/reused roots and crushed or stale form proof. A
+real Linux Rust Core process prepares/reads the fixture without an account. The expanded grid is 39
+ordinary captures / 38 pairs / 77 original PNGs including restart. Current-source Mac screenshots
+remain pending; historical 36-pair artifacts do not satisfy this expanded grid.
+
+新增两组共用 PR 场景：英文深色 1100×720、中文浅色 640×720。两种真实客户端在同一临时 Git 仓库及模拟 CLI 下输入字面字段并取消，保留实时终端及保存数据；Personal 在应用替换后重复。原始截图、源码元数据及 CLI 日志必须证明未写 GitHub。25 项证据／样例及 15 项 Personal
+Python 策略通过，包含外部／符号链接／复用目录及挤压／过期表单证据拒绝。真实 Linux Rust
+Core 进程通过无需账户的准备／读取。扩大网格为普通版 39 张／38 组／含重启共 77 张原始 PNG；当前源码 Mac 原图仍待生成，历史 36 组不满足新网格。
 
 At head `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
 `6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
@@ -181,13 +194,13 @@ the same deterministic PDF bytes and seeded comparison mark. Both clients must a
 delete and tab-close controls, reopen to verify deletion, and restore the retained comparison mark.
 Native QA also draws and deletes through actual window pointer events, verifies document scope and
 checks marks after app replacement. Both keep the same document while settings change and preserve
-original PDF bytes. The strict grid now requires 37 ordinary captures and 36 pairs (72 paired
+original PDF bytes. The strict grid now requires 39 ordinary captures and 38 pairs (76 paired
 originals plus the ordinary restart image), including two Quick SSH modal scenes. Missing,
 duplicated, stale or unverified PDF scenes fail collection. Seeded marks demonstrate matched
 display; they are not described as a user drawing gesture. The new PDF scenes are pending real CI
 execution and visual inspection.
 
-PDF 另采集两组主工作区对照：英文深色 1100×720、中文浅色 640×720，使用相同确定性 PDF 字节和预置对照标记。两版均须操作实际删除及标签关闭控件，重开验证删除结果，并恢复保留的对照标记。原生 QA 另通过实际窗口指针事件绘制并删除标记，验证文档作用域和应用替换后的标记保留。两版切换设置时保留同一文档，PDF 原字节不变。严格网格现要求普通版 37 张截图、36 组成对截图（72 张配对原图加普通版重启原图），包含两组快速 SSH 模态场景；PDF 场景缺失、重复、过期或未经操作验证均使汇集失败。预置标记仅证明匹配显示，不描述为用户绘制手势。新增 PDF 场景尚待真实 CI 执行及目视核对。
+PDF 另采集两组主工作区对照：英文深色 1100×720、中文浅色 640×720，使用相同确定性 PDF 字节和预置对照标记。两版均须操作实际删除及标签关闭控件，重开验证删除结果，并恢复保留的对照标记。原生 QA 另通过实际窗口指针事件绘制并删除标记，验证文档作用域和应用替换后的标记保留。两版切换设置时保留同一文档，PDF 原字节不变。严格网格现要求普通版 39 张截图、38 组成对截图（76 张配对原图加普通版重启原图），包含两组快速 SSH 模态场景；PDF 场景缺失、重复、过期或未经操作验证均使汇集失败。预置标记仅证明匹配显示，不描述为用户绘制手势。新增 PDF 场景尚待真实 CI 执行及目视核对。
 
 Terminal pairing also measures actual pane insets, header height/top and the 12px output gap. The
 native header wraps individual controls using their measured text widths and retained order;
@@ -214,9 +227,9 @@ terminal generation. Native Personal captures require the shared WK form in the 
 separate-window images cannot satisfy this gate. Invalid address fixtures do not prove remote login.
 Original images, platform/source identities and actual operation proofs are mandatory. Native
 regression additionally exercises Escape and Command-W; loading failures retain a modal Retry/Cancel
-flow. The new modal and 37/36/73 grid remain pending current-source CI.
+flow. The new modal and 39/38/77 grid remain pending current-source CI.
 
-快速 SSH 另采集英文深色 1100×720、中文浅色 640×720 两组模态对照。两版通过真实 Shell 准备相同提示符／标记，打开实际侧栏入口，拒绝相同的模拟无效地址并保留输入，取消后工作区数据和终端 generation 不变。原生 Personal 原图要求共用 WK 表单位于主窗口，独立窗口图不能满足门槛；无效地址样例不证明远端登录。必须保留原图、平台／源码身份和实际操作证据。原生回归另执行 Escape 与 Command-W；加载失败保留模态重试／取消流程。新增模态及 37／36／73 网格仍待当前源码 CI。
+快速 SSH 另采集英文深色 1100×720、中文浅色 640×720 两组模态对照。两版通过真实 Shell 准备相同提示符／标记，打开实际侧栏入口，拒绝相同的模拟无效地址并保留输入，取消后工作区数据和终端 generation 不变。原生 Personal 原图要求共用 WK 表单位于主窗口，独立窗口图不能满足门槛；无效地址样例不证明远端登录。必须保留原图、平台／源码身份和实际操作证据。原生回归另执行 Escape 与 Command-W；加载失败保留模态重试／取消流程。新增模态及 39／38／77 网格仍待当前源码 CI。
 
 The Intel Personal images at head `becc4e233a0354137fe8248486e8dd7fb0df29fa`, merge
 `198238492c3f298999257b09bb3813468a1b11b3`, pass automated operations but visibly hide the workspace

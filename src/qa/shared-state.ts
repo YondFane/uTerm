@@ -90,6 +90,15 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
   }[];
   quickAddress: string;
   quickTerminalCommand: string;
+  github: {
+    repository: string;
+    title: string;
+    body: string;
+    base: string;
+    head: string;
+    draft: boolean;
+  };
+  githubScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
   quickScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
 };
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
@@ -936,6 +945,21 @@ async function runUiParity() {
       current.text.trimEnd().endsWith("ui-parity >")
     );
   }, "shared modal background prepared by actual shell output");
+  async function unchangedQuick() {
+    const current = await invoke<{ sessions: { spec: { id: string }; generation: string }[] }>(
+      "qa_host_status",
+    );
+    assert(
+      current.sessions.length === 1 &&
+        current.sessions[0].spec.id === "ui-parity-0" &&
+        current.sessions[0].generation === restarted.generation &&
+        JSON.stringify(
+          ((await observeCore("snapshot.read")) as unknown as CoreSnapshot).document.workspace,
+        ) === JSON.stringify(quickWorkspace),
+      "Quick SSH changed the workspace or terminal generation",
+    );
+    assert(visibleTerminal("ui-parity-0") === terminal, "Quick SSH replaced the terminal view");
+  }
   for (const quickScene of parityFixture.quickScenes) {
     await open();
     await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
@@ -986,21 +1010,6 @@ async function runUiParity() {
       assert(field.value === parityFixture.quickAddress, "Quick SSH lost the rejected address");
       return dialog;
     }
-    async function unchangedQuick() {
-      const current = await invoke<{ sessions: { spec: { id: string }; generation: string }[] }>(
-        "qa_host_status",
-      );
-      assert(
-        current.sessions.length === 1 &&
-          current.sessions[0].spec.id === "ui-parity-0" &&
-          current.sessions[0].generation === restarted.generation &&
-          JSON.stringify(
-            ((await observeCore("snapshot.read")) as unknown as CoreSnapshot).document.workspace,
-          ) === JSON.stringify(quickWorkspace),
-        "Quick SSH changed the workspace or terminal generation",
-      );
-      assert(visibleTerminal("ui-parity-0") === terminal, "Quick SSH replaced the terminal view");
-    }
     async function cancelQuick(dialog: HTMLDialogElement) {
       const cancel = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(
         (button) => button.textContent?.trim() === translate(quickScene.language, "取消"),
@@ -1039,6 +1048,110 @@ async function runUiParity() {
       },
     );
     await cancelQuick(dialog);
+  }
+  for (const githubScene of parityFixture.githubScenes) {
+    await open();
+    await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+    await choose(
+      [translate("en", "应用语言"), translate("zh-Hans", "应用语言")],
+      githubScene.language,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await open();
+    await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+    await choose(
+      [translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")],
+      githubScene.appearance,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await invoke("qa_performance_window", { width: githubScene.width, height: githubScene.height });
+    await until(
+      () => innerWidth === githubScene.width && innerHeight === githubScene.height,
+      "actual GitHub capture dimensions",
+    );
+    const trigger = await until(
+      () =>
+        document.querySelector<HTMLButtonElement>(".inspector-switcher button[aria-label=GitHub]"),
+      "actual GitHub tool switcher",
+    );
+    trigger.click();
+    await until(
+      () =>
+        document.querySelector<HTMLSelectElement>(".github-panel .compare-picker select")?.value ===
+        parityFixture.github.repository,
+      "captured fixture repository",
+    );
+    await click(translate(githubScene.language, "合并请求"));
+    await until(() => {
+      const current = button(translate(githubScene.language, "新建 PR"));
+      return current && !current.disabled;
+    }, "ready PR creation control");
+    await click(translate(githubScene.language, "新建 PR"));
+    const dialog = await until(
+      () => document.querySelector<HTMLDialogElement>(".pr-dialog[open]"),
+      "actual shared PR dialog",
+    );
+    const form = dialog.querySelector("form")!,
+      fields = form.querySelectorAll<HTMLInputElement>("input:not([type=checkbox])");
+    for (const [field, prototype, value] of [
+      [fields[0], HTMLInputElement.prototype, parityFixture.github.title],
+      [fields[1], HTMLInputElement.prototype, parityFixture.github.base],
+      [fields[2], HTMLInputElement.prototype, parityFixture.github.head],
+      [form.querySelector("textarea")!, HTMLTextAreaElement.prototype, parityFixture.github.body],
+    ] as const) {
+      Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    const draft = form.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+    if (draft.checked !== parityFixture.github.draft) draft.click();
+    await pause(0);
+    assert(
+      fields[0].value === parityFixture.github.title &&
+        form.querySelector("textarea")!.value === parityFixture.github.body,
+      "PR literal input changed",
+    );
+    assert(
+      [...form.querySelectorAll<HTMLInputElement>("input:not([type=checkbox]),textarea")].every(
+        (field) => field.getBoundingClientRect().width > 300,
+      ),
+      "PR fields are crushed",
+    );
+    assert(
+      fields[1].value === parityFixture.github.base &&
+        fields[2].value === parityFixture.github.head &&
+        draft.checked === parityFixture.github.draft,
+      "PR branch/draft fields changed",
+    );
+    await unchangedQuick();
+    const bounds = dialog.getBoundingClientRect();
+    const proofs = {
+      ...githubScene,
+      passed: true,
+      form: parityFixture.github,
+      actualToolsSwitcher: true,
+      literalInputRetained: true,
+      readableFields: true,
+      workspaceVisibleAroundDialog: true,
+      terminalGenerationRetained: true,
+      savedWorkspaceUnchanged: true,
+      isolatedSimulatedCLI: true,
+      noGitHubWrites: true,
+      actualCancelPreservedState: true,
+      modalLeft: bounds.left,
+      modalTop: bounds.top,
+      modalWidth: bounds.width,
+      modalHeight: bounds.height,
+    };
+    const cancel = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === translate(githubScene.language, "取消"),
+    )!;
+    await scene(
+      `github-pr-draft-${githubScene.language}-${githubScene.appearance}-${githubScene.width}`,
+      proofs,
+    );
+    cancel.click();
+    await until(() => !dialog.open, "actual PR cancel");
+    await unchangedQuick();
   }
   await invoke("qa_request_exit");
 }

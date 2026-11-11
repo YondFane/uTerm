@@ -13,6 +13,8 @@ export function assertParityScenes(actual, fixture) {
     expected.push(`pdf-highlights-${scene.language}-${scene.appearance}-${scene.width}`);
   for (const scene of fixture.quickScenes)
     expected.push(`quick-ssh-invalid-${scene.language}-${scene.appearance}-${scene.width}`);
+  for (const scene of fixture.githubScenes)
+    expected.push(`github-pr-draft-${scene.language}-${scene.appearance}-${scene.width}`);
   expected.push(...fixture.ordinaryOperations);
   assert.deepEqual([...actual].sort(), expected.sort(), "Incomplete ordinary-client parity grid");
 }
@@ -113,6 +115,55 @@ export function assertParityOperations(scenes, fixture) {
       Math.abs(checks.modalLeft - (checks.width - checks.modalWidth) / 2) < 1 &&
         Math.abs(checks.modalTop - (checks.height - checks.modalHeight) / 2) < 1,
       "Quick SSH form is not centered",
+    );
+  }
+  const prs = scenes.filter((scene) => scene.scenario.startsWith("github-pr-draft-"));
+  assert.equal(prs.length, fixture.githubScenes.length, "Missing or duplicate PR evidence");
+  const prSeen = new Set();
+  for (const scene of prs) {
+    const checks = scene.checks;
+    const identity = `github-pr-draft-${checks.language}-${checks.appearance}-${checks.width}`;
+    assert.equal(scene.scenario, identity);
+    assert.ok(!prSeen.has(identity), "Duplicate PR evidence");
+    prSeen.add(identity);
+    assert.ok(
+      fixture.githubScenes.some(
+        (expected) =>
+          expected.language === checks.language &&
+          expected.appearance === checks.appearance &&
+          expected.width === checks.width &&
+          expected.height === checks.height,
+      ),
+      "Unexpected PR scene",
+    );
+    assert.deepEqual(checks.form, fixture.github, "Different literal PR form");
+    for (const key of [
+      "passed",
+      "actualToolsSwitcher",
+      "literalInputRetained",
+      "readableFields",
+      "workspaceVisibleAroundDialog",
+      "terminalGenerationRetained",
+      "savedWorkspaceUnchanged",
+      "isolatedSimulatedCLI",
+      "noGitHubWrites",
+      "actualCancelPreservedState",
+    ])
+      assert.equal(checks[key], true, `Unaccepted ordinary PR: ${key}`);
+    for (const key of ["modalLeft", "modalTop", "modalWidth", "modalHeight"])
+      assert.ok(Number.isFinite(checks[key]), `Missing actual PR geometry: ${key}`);
+    assert.ok(
+      Math.abs(checks.modalWidth - Math.min(640, checks.width * 0.92)) < 1,
+      "PR is limited to the tools viewport",
+    );
+    assert.ok(
+      checks.modalHeight >= 40 && checks.modalHeight <= checks.height - 48,
+      "PR form is clipped",
+    );
+    assert.ok(
+      Math.abs(checks.modalLeft - (checks.width - checks.modalWidth) / 2) < 1 &&
+        Math.abs(checks.modalTop - (checks.height - checks.modalHeight) / 2) < 1,
+      "PR form is not centered",
     );
   }
 }

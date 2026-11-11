@@ -1067,6 +1067,26 @@ print(number.uint32Value)
   if (parityOnly) {
     const directory = join(root, "parity/project");
     mkdirSync(directory, { recursive: true });
+    const githubFixtureRoot = join(root, "parity/uterm-native-qa-github-parity");
+    Object.assign(
+      env,
+      JSON.parse(
+        execute("python3", [
+          resolve("scripts/ui-parity-github-fixture.py"),
+          "--root",
+          githubFixtureRoot,
+          "--project",
+          directory,
+        ]),
+      ),
+    );
+    for (const key of [
+      "GH_TOKEN",
+      "GITHUB_TOKEN",
+      "GH_ENTERPRISE_TOKEN",
+      "GITHUB_ENTERPRISE_TOKEN",
+    ])
+      delete env[key];
     for (const [name, value] of Object.entries(parityFixture.files)) {
       assert(!name.includes("/") && name !== "." && name !== "..");
       writeFileSync(join(directory, name), value);
@@ -1082,6 +1102,16 @@ print(number.uint32Value)
       parityFixture,
     );
     assertParityOperations(scenes, parityFixture);
+    const cliLog = readFileSync(join(githubFixtureRoot, "github-cli.jsonl"), "utf8");
+    const cliCalls = cliLog
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    assert(
+      cliCalls.length > 0 && cliCalls.every((call) => call.arguments[0] !== "api"),
+      "PR comparison dispatched a GitHub write",
+    );
+    writeFileSync(join(output, "github-parity-cli-simulated.jsonl"), cliLog);
   } else if (performanceOnly) {
     await run("performance");
   } else {
@@ -1254,6 +1284,11 @@ print(number.uint32Value)
     } catch (error) {
       if (error.code !== "ENOENT") cleanupErrors.push(String(error));
     }
+  }
+  if (parityOnly) {
+    const githubLog = join(root, "parity/uterm-native-qa-github-parity/github-cli.jsonl");
+    if (existsSync(githubLog))
+      copyFileSync(githubLog, join(output, "github-parity-cli-simulated.jsonl"));
   }
   // Keep failure fixtures only in the isolated temporary profile for diagnosis.
   // 失败测试数据仅保留在隔离临时配置中供诊断。

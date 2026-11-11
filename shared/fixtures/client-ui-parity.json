@@ -92,5 +92,17 @@
       "width": 640,
       "height": 720
     }
+  ],
+  "github": {
+    "repository": "fixture-owner/fixture-repo",
+    "title": "Keep `literal` $(literal) 中文",
+    "body": "Line one\n$(literal)\n`literal` 中文",
+    "base": "main",
+    "head": "qa-feature",
+    "draft": true
+  },
+  "githubScenes": [
+    { "language": "en", "appearance": "dark", "width": 1100, "height": 720 },
+    { "language": "zh-Hans", "appearance": "light", "width": 640, "height": 720 }
   ]
 }

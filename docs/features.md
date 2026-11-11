@@ -219,13 +219,28 @@ window; pending CLI operations block closing and quitting until their actual res
 injects the captured root/repository and rejects extra fields, invalid layout and duplicate
 submission. Ambiguous create failures retain the warning to refresh before retrying.
 
-Twenty-two focused Linux checks and the full frontend suite (474 passed, 11 conditional skips) pass,
+Nine focused GitHub/grid checks and the full frontend suite (475 passed, 11 conditional skips) pass,
 plus type/build, format, contracts and i18n checks. Context failures offer Retry/Cancel;
 language/theme refresh retains literal input, frozen/pending forms cannot close or submit, and a
 failed create never retries automatically. Chromium checks at widths 640/900/1100 match the shared
 form dimensions within one pixel. These are frontend/CSS checks; the new Swift modal, actual
 Command-W/reopen, Escape, quit cancellation and readable narrow fields still require their own Mac
 run and ordinary-client paired images.
+
+The shared screenshot grid includes English/dark 1100×720 and Chinese/light 640×720 PR drafts. Both
+actual applications use the same temporary repository and isolated simulated CLI, enter the literal
+title/body/branches/draft, capture the centered form and cancel without changing saved workspace
+data or terminal generations. The collectors reject missing/stale/duplicate scenes, crushed fields,
+injected form values, GitHub writes and geometry differing by at least one pixel. Personal repeats
+the controls after app replacement. CLI logs and originals are artifacts; fixture responses are
+explicitly simulated, not authenticated GitHub acceptance. The grid requires 39 ordinary captures
+and 38 pairs (77 original PNGs including restart).
+
+Twenty-five Python evidence/fixture policies and 15 Personal policies pass. They reject a reused
+fixture, external/symlink project, old source metadata, 128px PR forms and missing no-write proof. A
+real Rust Core process prepares/reads the new CLI fixture on Linux without an account or GitHub
+write. Type/build, format, contracts and i18n checks pass. Actual new Mac images remain pending;
+760d433's 36 pairs retain their original scope and do not satisfy the expanded grid.
 
 At source `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
 `6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
@@ -2392,8 +2407,9 @@ policies pass. The complete frontend run passes 473 tests with 11 conditional sk
 contracts, i18n, format and documentation checks pass. Loading failures retain modal Retry/Cancel
 and prevent duplicate reads. Two shared invalid-address scenes still require actual sidebar opening,
 visible rejection, retained input, Cancel/Escape/Command-W and unchanged workspace/session
-generations. The strict grid remains 37 ordinary captures / 36 pairs (73 originals including
-restart), without accepting the opaque historical images as proof of the new renderer.
+generations. The expanded strict grid requires 39 ordinary captures / 38 pairs (77 originals
+including restart and two PR scenes), without accepting the opaque historical images as proof of the
+new renderer.
 
 Linux validation passes six targeted core tests for atomic creation, rollback, stale revisions,
 private fields, retention and cleanup; the complete core, FFI and desktop-backend suites also pass.

@@ -16,6 +16,7 @@ import time
 import uuid
 from pathlib import Path
 
+from ui_parity_github import validate_pr
 from macos_disk_image import create_disk_image, verify_disk_image
 
 IDENTIFIER = "sh.uterm.desktop.personal"
@@ -112,6 +113,7 @@ def validate_smoke_report(report, head, tested, phase):
     validate_terminal_controls(report, head, tested, phase)
     validate_pdf_scenes(report, head, tested, phase)
     validate_quick_scenes(report, head, tested, phase)
+    validate_github_scenes(report, head, tested, phase)
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}
@@ -168,6 +170,24 @@ def validate_quick_scenes(report, head, tested, phase):
         assert 40 <= scene["modalHeight"] <= scene["height"] - 48, "Quick SSH form is clipped"
         assert abs(scene["modalLeft"] - (scene["width"] - scene["modalWidth"]) / 2) < 1 and abs(scene["modalTop"] - (scene["height"] - scene["modalHeight"]) / 2) < 1, "Quick SSH is not centered"
         name = f"personal-{phase}-quick-ssh-invalid-{identity[0]}-{identity[1]}-{identity[2]}.png"
+        assert scene.get("screenshot") == name and name in report["captures"]
+
+
+def validate_github_scenes(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    expected = {(scene["language"], scene["appearance"], scene["width"], scene["height"]) for scene in fixture["githubScenes"]}
+    scenes = report.get("githubPRScenes", [])
+    assert len(scenes) == len(expected), "Incomplete PR screenshot grid"
+    seen = set()
+    for scene in scenes:
+        identity = (scene["language"], scene["appearance"], scene["width"], scene["height"])
+        assert identity in expected and identity not in seen, "Missing or duplicate PR scene"
+        seen.add(identity)
+        assert scene.get("sourceHeadSHA") == head and scene.get("testedMergeSHA") == tested
+        assert scene.get("platform") == "macOS" and scene.get("architecture") in ["arm64", "x86_64"] and scene.get("system")
+        assert scene.get("scenario") == "github-pr-draft"
+        validate_pr(scene, fixture)
+        name = f"personal-{phase}-github-pr-draft-{identity[0]}-{identity[1]}-{identity[2]}.png"
         assert scene.get("screenshot") == name and name in report["captures"]
 
 
@@ -263,6 +283,10 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
     captures = []
     reports = []
     identity = "sh.uterm.desktop.qa.native.personal." + uuid.uuid4().hex
+    github_root = root / "uterm-native-qa-github-parity"
+    environment = dict(os.environ)
+    environment.update(json.loads(run("python3", Path(__file__).with_name("ui-parity-github-fixture.py"), "--root", github_root, "--project", root / "project")))
+    for key in ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"]: environment.pop(key, None)
     for phase in ["initial", "replacement"]:
         info_path = installed / "Contents/Info.plist"
         info = plistlib.loads(info_path.read_bytes())
@@ -275,13 +299,15 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
         run("codesign", "--force", "--sign", "-", installed)
         with (evidence / f"personal-{phase}-stdout.log").open("wb") as out, (evidence / f"personal-{phase}-stderr.log").open("wb") as err:
             process = subprocess.Popen([str(installed / "Contents/MacOS/uTerm"), "--qa-data-root", str(root / "ignored"),
-                                        "--smoke-report", str(root / "must-not-exist.json")], stdout=out, stderr=err)
+                                        "--smoke-report", str(root / "must-not-exist.json")], stdout=out, stderr=err, env=environment)
             try:
                 result = process.wait(timeout=90)
             finally:
                 if process.poll() is None:
                     process.kill()
                     process.wait()
+                if (github_root / "github-cli.jsonl").is_file():
+                    shutil.copyfile(github_root / "github-cli.jsonl", evidence / f"github-parity-cli-{phase}-simulated.jsonl")
                 if (root / f"personal-{phase}.json").is_file():
                     report, phase_captures = preserve_smoke_outputs(root, evidence, phase)
         assert result == 0

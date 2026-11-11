@@ -3,7 +3,7 @@ import UTermBridge
 
 @MainActor
 enum GitHubSmoke {
-    private static func modalGeometry(_ content: ContentWindow, parent: NSWindow) async throws -> [String: Double] {
+    static func modalGeometry(_ content: ContentWindow, parent: NSWindow) async throws -> [String: Double] {
         try await ContentSmoke.wait(content, "(()=>{const d=document.querySelector('.pr-dialog[open]');if(!d)return false;const r=d.getBoundingClientRect();return r.left===0&&r.top===0&&Math.abs(r.width-innerWidth)<1&&Math.abs(d.scrollHeight+2-innerHeight)<1&&[...d.querySelectorAll('input:not([type=checkbox]),textarea')].every(i=>i.getBoundingClientRect().width>300)})()")
         guard let root = parent.contentView, content.webView.window === parent else { throw BridgeFailure(code: "GITHUB_QA_MODAL", message: "PR form is detached from the main workspace") }
         let frame = content.webView.convert(content.webView.bounds, to: root), bounds = root.bounds
