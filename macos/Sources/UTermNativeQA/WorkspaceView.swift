@@ -316,7 +316,9 @@ final class CanvasHost: NSView {
                       requested == model.focusRevision, !model.inspectorOwnsFocus else { return }
                 // A later explicit click or search focus takes precedence over queued pane focus.
                 // 后发生的明确点击或搜索焦点优先于排队中的窗格聚焦。
-                guard window.firstResponder === previousResponder || (previousResponder == nil && (window.firstResponder === window || window.firstResponder === window.contentView)) else { return }
+                let fallback = window.firstResponder === window || window.firstResponder === window.contentView
+                let previousWasRemoved = (previousResponder as? NSView)?.window !== window
+                guard window.firstResponder === previousResponder || (fallback && previousWasRemoved) else { return }
                 window.makeFirstResponder(view)
             }
         }

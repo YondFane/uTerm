@@ -146,7 +146,8 @@ The native Files inspector embeds the same file tree, Quick open, Project search
 context menus and deletion dialogs as the ordinary client. Its header uses the shared Files, Git,
 GitHub and working-directory icons. Git/GitHub still open their existing windows; embedding those
 workbenches remains pending. Moving tools left or right reorders stable native regions and retains
-the mounted WebKit document and query. Deferred pane focus yields to a later explicit focus change;
+the mounted WebKit document and query. Deferred pane focus yields to a later explicit focus change,
+but returns to the terminal when the previous control was removed and focus fell back to the window;
 acceptance checks the actual visible file controls after swapping and restoring split panes.
 
 File requests stay on the captured local project or Worktree. Writes first resolve open editor

@@ -133,7 +133,11 @@ enum InspectorSmoke {
             throw error
         }
         try command("close")
-        try await TerminalSmoke.wait("Close tools and return focus to terminal") { !model.inspectorVisible && window.firstResponder === second.view }
+        do { try await TerminalSmoke.wait("Close tools and return focus to terminal") { !model.inspectorVisible && window.firstResponder === second.view } }
+        catch {
+            report["toolsCloseDiagnostics"] = ["visible": model.inspectorVisible, "selectedID": model.selectedID ?? "", "expectedID": second.id, "responder": String(describing: window.firstResponder)]
+            throw error
+        }
         guard Set(model.terminals.keys) == ids else { throw BridgeFailure(code: "INSPECTOR_CLOSE", message: "Close tools terminated a PTY") }
         report["closeFocusedToolsRetainsPTYAndReturnsFocus"] = true
         model.sidebarVisible = false
