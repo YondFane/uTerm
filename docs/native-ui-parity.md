@@ -137,6 +137,16 @@ ARM 安装包、初次／替换及完整 SDK 通过。配对产物包含 38 组�
 侧栏候选新增 22px 悬停／聚焦关闭会话操作，隐藏时保留布局且拒绝鼠标命中。Space 按行 ID 关闭，后台关闭保留当前 generation；两版名称使用末尾省略。Personal
 QA 必须有实际聚焦控件、Space、前后台身份及真实截图，直接模型调用不足。16 项 Personal 策略通过；新 Mac 执行与悬停目视核对仍待完成。
 
+At head `689c445d40878906c40314c0018697997b518f02` / merge
+`c560eaeac79d2cbd790b9b3b60fb04673800cc9b`, ARM Swift 6.1.2 cannot type-check the sidebar proof
+dictionary in time. The
+[failed build artifact](https://github.com/YondFane/uTerm/actions/runs/43093865999/artifacts/13890621537)
+has no window captures. Typed, smaller expressions retain all proof fields and assertions; fresh
+native/Personal execution remains pending.
+
+上述 689c445／merge 在 ARM Swift
+6.1.2 上因侧栏报告字典类型推断超时而失败，失败构建产物没有窗口截图。候选使用明确类型及更小表达式，保留全部证据字段与断言；新的原生／Personal 执行仍待完成。
+
 At head `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
 `6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
 [paired artifact](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)

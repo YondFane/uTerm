@@ -180,6 +180,12 @@ foreground target. Sixteen local Personal policies pass; the native control, mou
 and actual Space action still require this candidate's own Mac execution. A direct model call is no
 longer sufficient for the new close-control proof.
 
+At source `689c445d40878906c40314c0018697997b518f02`, tested merge
+`c560eaeac79d2cbd790b9b3b60fb04673800cc9b`, ARM macOS 15.8.2 / Swift 6.1.2 stops at a type-checking
+timeout in the close-proof dictionary. The candidate splits that construction without removing
+fields or assertions. No close-control screenshot was produced at that source; a fresh Mac build and
+interaction run remain required.
+
 Section disclosures hide local rows without editing shared data or closing sessions; empty
 connection categories retain their add/manage entry. Rail controls follow the interface palette and
 active-icon color.

@@ -273,10 +273,14 @@ enum PersonalSmoke {
                 throw BridgeFailure(code: "PERSONAL_TABS", message: "Closing a background tab changed the selected session")
             }
             report["backgroundTabCloseRetainedSelectedGeneration"] = true
-            report["nativeSidebarSessionClose"] = ["passed": true, "actualKeyboardFocusVisible": true, "actualSpaceClosedBackgroundSession": true,
+            var closeProof: [String: Any] = ["passed": true, "actualKeyboardFocusVisible": true, "actualSpaceClosedBackgroundSession": true,
                 "selectedGenerationRetained": true, "targetSessionID": peerID, "selectedSessionID": originalID, "screenshot": closeCapture,
-                "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "", "platform": "macOS", "architecture": architecture,
-                "system": report["system"] ?? "", "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0)] as [String: Any]
+                "platform": "macOS", "architecture": architecture,
+                "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0)]
+            closeProof["sourceHeadSHA"] = report["sourceHeadSHA"] ?? ""
+            closeProof["testedMergeSHA"] = report["testedMergeSHA"] ?? ""
+            closeProof["system"] = report["system"] ?? ""
+            report["nativeSidebarSessionClose"] = closeProof
             report["workspaceScenes"] = workspaceScenes
             window.makeKeyAndOrderFront(nil)
             let capture = "personal-\(phase)-terminal.png"
