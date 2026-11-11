@@ -16,6 +16,7 @@ enum TerminalControlsSmoke {
         let id = session.id, generation = session.generation, view = ObjectIdentifier(session.view)
         defer {
             report["terminalSearchDiagnostics"] = ["index": session.search.index, "total": session.search.total, "visible": session.search.visible, "matchCase": session.search.matchCase, "terminalColumns": session.view.getTerminal().cols, "terminalRows": session.view.getTerminal().rows]
+            report["terminalRestartDiagnostics"] = ["generation": session.generation ?? "", "exited": session.exited, "error": session.error, "owned": session.inputControl?.owned == true, "renderedFrames": session.qaRenderedFrames]
         }
         let size = model.settings["fontSize"].number ?? 17
         func control(_ name: String) -> String { "native-terminal-" + name + "-" + id }

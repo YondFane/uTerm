@@ -125,6 +125,10 @@ selections recover within 1,000 matches; changing the query or closing search ca
 long scans yield execution time. An exited local shell can restart from its header, retaining its
 descriptor and view with a new process generation.
 
+Both clients use the same explicit restart operation. It requires the current generation, input
+control and an exited process; a failed launch retains the old replay for retry. Closing a session
+still prevents reopening that ID. Older hosts show an upgrade message before any restart is sent.
+
 Read-only/take-control and visible transport/activity errors remain available. SSH restart, pane
 dragging and complete toolbar alignment remain in the parity scope.
 
@@ -165,6 +169,12 @@ event. These event-routing checks still require current-source native execution.
 Another real-window check clicks font controls and their bounds, types Unicode into native search,
 checks case/match navigation, exercises Command-F/Escape and restarts an exited shell. Packaging
 requires its source-bound report and `personal-<phase>-terminal-search.png`.
+
+Linux restart tests exercise actual PTYs, rejected stale generations, read-only/live-process
+requests, failed-launch replay, closed-session history and an old-host capability probe. The Core
+end-to-end check verifies writable output after restart with unchanged workspace descriptors.
+Ordinary-window QA also clicks the actual Restart button and verifies a new generation, parsed
+Unicode output and the retained terminal element. Current-source macOS execution remains pending.
 
 JDK acceptance waits for the live Add control after rejected input before clicking it. Sidebar
 acceptance checks actual section order and disclosures while retaining shared revision, selection

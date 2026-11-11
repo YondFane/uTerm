@@ -251,17 +251,21 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
         reconnecting = true
         defer { reconnecting = false; changed?() }
         if let connecting { await connecting.value }
-        guard exited, let generation else { return }
+        guard exited, generation != nil else { return }
         let previous = attachment
         await drainInput()
         do {
-            _ = try await bridge.call("host.close", params: .object(["id": .string(id), "generation": .string(generation)]))
+            _ = try await bridge.call("terminal.action", params: .object(["attachment": .string(previous), "action": .string("restart")]))
             guard attachment == previous else { return }
             attachment = UUID().uuidString; self.generation = nil; inputControl = nil
             receivedInitialFrame = false; hostSize = nil; exited = false; error = ""; input.removeAll()
             search.close()
             await connect()
-        } catch { self.error = error.localizedDescription }
+        } catch {
+            self.error = error.localizedDescription.contains("SESSION_HOST_UPGRADE_REQUIRED")
+                ? localized("The host cannot restart sessions. Close sessions, quit and reopen the app; existing processes were not stopped.", "后台服务不支持会话重启。请关闭会话后退出并重新打开应用；已有进程未被终止。")
+                : error.localizedDescription
+        }
     }
 
     func reconnect() async {

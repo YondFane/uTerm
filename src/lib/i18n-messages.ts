@@ -1,4 +1,6 @@
 export const messages: Record<string, string> = {
+  "后台服务不支持会话重启。请关闭会话后退出并重新打开应用；已有进程未被终止。":
+    "The host cannot restart sessions. Close sessions, quit and reopen the app; existing processes were not stopped.",
   "无法加载内置终端字体，请重试或重新安装应用。":
     "Could not load the bundled terminal font. Retry or reinstall the app.",
   "加载中…": "Loading…",

@@ -65,6 +65,102 @@ impl Drop for HostCleanup {
 }
 
 #[test]
+fn explicit_restart_reopens_an_exited_core_attachment_without_changing_its_descriptor() {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = temporary.path().canonicalize().unwrap();
+    let _cleanup = HostCleanup(root.join("local-daemon-v1"));
+    let core = Core::open(root.join("shared-state-v1")).unwrap();
+    let defaults = uterm_core::state::defaults();
+    call(
+        &core,
+        "migration.import",
+        json!({"workspace":defaults["workspace"],"settings":defaults["settings"],"legacy":{}}),
+    );
+    call(&core, "host.configure", json!({"helper":helper()}));
+    let initial = call(&core, "snapshot.read", Value::Null);
+    call(
+        &core,
+        "session.create",
+        json!({"expectedRevision":initial["revision"],"id":"restart-core","name":"Restart core","directory":root}),
+    );
+    let before = call(&core, "snapshot.read", Value::Null)["document"]["workspace"].clone();
+    let (send, receive) = mpsc::channel();
+    core.set_terminal_sink(Arc::new(move |attachment, generation, frame| {
+        send.send((attachment.to_owned(), generation.to_owned(), frame))
+            .map_err(|e| e.to_string())
+    }))
+    .unwrap();
+    let open = |attachment: &str| json!({"id":"restart-core","attachment":attachment,"directory":root,"shell":"default","rows":24,"cols":80});
+    let wait = |attachment: &str, exited: bool| {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        loop {
+            let (actual, generation, frame) = receive
+                .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                .unwrap();
+            if actual != attachment {
+                continue;
+            }
+            call(
+                &core,
+                "terminal.action",
+                json!({"attachment":attachment,"action":"ack","sequence":frame.sequence.to_string()}),
+            );
+            assert!(frame.error.is_none(), "{:?}", frame.error);
+            if frame.exited == exited {
+                break (generation, frame);
+            }
+        }
+    };
+    let old = call(&core, "terminal.open", open("restart-owner"))["generation"].clone();
+    assert!(wait("restart-owner", false).1.input_control.unwrap().owned);
+    core.terminal_write(
+        "restart-owner",
+        if cfg!(windows) { b"exit\r" } else { b"exit\n" },
+    )
+    .unwrap();
+    assert!(wait("restart-owner", true).1.exited);
+    call(
+        &core,
+        "terminal.action",
+        json!({"attachment":"restart-owner","action":"restart"}),
+    );
+    let next = call(&core, "terminal.open", open("restarted-owner"))["generation"].clone();
+    assert_ne!(old, next);
+    let (generation, first) = wait("restarted-owner", false);
+    assert_eq!(next, generation);
+    assert!(first.reset);
+    assert!(first.input_control.unwrap().owned);
+    assert!(core.terminal_write("restart-owner", b"STALE").is_err());
+    core.terminal_write(
+        "restarted-owner",
+        if cfg!(windows) {
+            b"echo RESTART_VERIFIED > restart-proof.txt\r"
+        } else {
+            b"echo RESTART_VERIFIED > restart-proof.txt\n"
+        },
+    )
+    .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while std::fs::read(root.join("restart-proof.txt")).map_or(true, |bytes| bytes.is_empty()) {
+        assert!(
+            Instant::now() < deadline,
+            "Restarted Core attachment did not accept actual shell input"
+        );
+        std::thread::sleep(Duration::from_millis(25));
+    }
+    assert_eq!(
+        call(&core, "snapshot.read", Value::Null)["document"]["workspace"],
+        before
+    );
+    call(
+        &core,
+        "terminal.action",
+        json!({"attachment":"restarted-owner","action":"close"}),
+    );
+    core.close();
+}
+
+#[test]
 fn explicit_detach_releases_input_before_a_blocked_old_sink_returns() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path().canonicalize().unwrap();

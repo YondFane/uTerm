@@ -27,6 +27,7 @@ import type {
   CoreFileDocument,
   CoreGitFavoriteRecoveryCatalog,
   CoreGitFavorites,
+  CoreSnapshot,
 } from "../lib/core-contract.generated";
 
 interface Context {
@@ -584,6 +585,57 @@ async function runUiParity() {
     }
     document.querySelector<HTMLButtonElement>(".settings-close")!.click();
   }
+  await flushSharedState();
+  const workspaceBeforeRestart = (await observeCore("snapshot.read")) as unknown as CoreSnapshot;
+  await invoke("control_session", { id: "ui-parity-0", action: "send", text: "exit\r" });
+  const restart = await until(
+    () =>
+      visibleTerminal("ui-parity-0")?.querySelector<HTMLButtonElement>(
+        `button[aria-label="${translate("en", "重新启动")}"],button[aria-label="${translate("zh-Hans", "重新启动")}"]`,
+      ),
+    "actual exited-shell restart button",
+  );
+  restart.click();
+  const restarted = await until(async () => {
+    const current = (
+      await invoke<{ sessions: { spec: { id: string }; generation: string; running: boolean }[] }>(
+        "qa_host_status",
+      )
+    ).sessions.find((entry) => entry.spec.id === "ui-parity-0");
+    return current?.running && current.generation !== original.generation ? current : null;
+  }, "actual restarted process generation");
+  await until(() => {
+    const current = terminalPerformanceSnapshot("ui-parity-0");
+    return current?.writable && !current.text.includes(parityFixture.marker);
+  }, "restarted input ownership");
+  await invoke("control_session", {
+    id: "ui-parity-0",
+    action: "send",
+    text: parityFixture.command + "\r",
+  });
+  await until(
+    () => terminalPerformanceSnapshot("ui-parity-0")?.text.includes(parityFixture.marker),
+    "actual restarted terminal output",
+  );
+  const workspaceAfterRestart = (await observeCore("snapshot.read")) as unknown as CoreSnapshot;
+  assert(
+    JSON.stringify(workspaceBeforeRestart.document.workspace) ===
+      JSON.stringify(workspaceAfterRestart.document.workspace),
+    "Explicit restart changed canonical workspace descriptors",
+  );
+  assert(
+    visibleTerminal("ui-parity-0") === terminal,
+    "Explicit restart replaced the terminal view",
+  );
+  await scene("terminal-restart", {
+    passed: true,
+    actualRestartButton: true,
+    parsedUnicodeOutput: true,
+    canonicalWorkspaceRetained: true,
+    terminalViewRetained: true,
+    generationBeforeRestart: original.generation,
+    restartedGeneration: restarted.generation,
+  });
   await invoke("qa_request_exit");
 }
 
