@@ -80,14 +80,17 @@ enum EmbeddedDocumentsSmoke {
               (try await bridge.call("editor.drafts.document", params: .object(["directory": .string(root.path), "path": .string(names[0])]))) == .null else {
             throw BridgeFailure(code: "EMBEDDED_CLOSE", message: "Closing one embedded editor changed its sibling or external bytes")
         }
-        report["embeddedWorkspaceFiles"] = ["passed": true, "screenshot": screenshot,
-            "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "",
-            "platform": "macOS", "architecture": report["architecture"] ?? "", "system": ProcessInfo.processInfo.operatingSystemVersionString,
-            "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0),
-            "tabControlsActivated": true, "arrowNavigationActivated": true,
-            "sameMainWindow": true, "orderedAndReused": true, "exactUnsavedDraftRetained": true,
-            "cancelCloseRetainedTabs": true, "discardPreservedSiblingAndExternalWriter": true,
-            "terminalViewAndGenerationRetained": true,
-            "input": "Real AppKit workspace and WK CodeMirror DOM input; no physical keyboard/IME claim"] as [String: Any]
+        var proof: [String: Any] = [:]
+        for key in ["passed", "tabControlsActivated", "arrowNavigationActivated", "sameMainWindow", "orderedAndReused", "exactUnsavedDraftRetained", "cancelCloseRetainedTabs", "discardPreservedSiblingAndExternalWriter", "terminalViewAndGenerationRetained"] { proof[key] = true }
+        proof["screenshot"] = screenshot
+        proof["sourceHeadSHA"] = report["sourceHeadSHA"] ?? ""
+        proof["testedMergeSHA"] = report["testedMergeSHA"] ?? ""
+        proof["platform"] = "macOS"
+        proof["architecture"] = report["architecture"] ?? ""
+        proof["system"] = ProcessInfo.processInfo.operatingSystemVersionString
+        proof["width"] = Int(window.contentView?.bounds.width ?? 0)
+        proof["height"] = Int(window.contentView?.bounds.height ?? 0)
+        proof["input"] = "Real AppKit workspace and WK CodeMirror DOM input; no physical keyboard/IME claim"
+        report["embeddedWorkspaceFiles"] = proof
     }
 }
