@@ -95,6 +95,11 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
             assert actual.get("fontSourceSHA256") == font_digest, "Different or stale bundled font"
             assert isinstance(actual.get("fontCharacterWidth"), (int, float)) and 1 < actual["fontCharacterWidth"] < 32, "Missing actual font measurement"
         assert abs(n["fontCharacterWidth"] - t["checks"]["fontCharacterWidth"]) < 0.1, "Different actual terminal character widths"
+        for metric in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop", "terminalHeaderHeight", "terminalViewportGap"]:
+            values = [scene.get(metric) for scene in [n, t["checks"]]]
+            assert all(type(value) in [int, float] and 0 <= value < 1000 for value in values), "Missing actual terminal geometry: " + metric
+            assert abs(values[0] - values[1]) < 1, "Different actual terminal geometry: " + metric
+        assert abs(n["terminalViewportGap"] - 12) < 1 and n["terminalHeaderHeight"] >= 26, "Wrong terminal header or viewport gap"
         assert n["projectName"] == t["checks"]["projectName"] == fixture["projectName"]
         assert n["workspaceName"] == t["checks"]["workspaceName"] == fixture["workspaceName"]
         assert t["checks"].get("generationRetained") is True and t["checks"]["projectName"] == fixture["projectName"]
@@ -153,6 +158,7 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert t["checks"].get("passed") is True
         for actual in [n, t["checks"]]:
             assert actual.get("pdfSHA256") == fixture["pdf"]["sha256"] and actual.get("markID") == fixture["pdf"]["mark"]["id"] and actual.get("marksCount") == 1, "Different PDF or annotations"
+            assert actual.get("fixtureSessionCount") == 1 and actual.get("filesFolderExpanded") is True, "Different PDF surrounding fixture state"
             for proof in ["actualRemoveButton", "reopenedRestoredMarks", "originalPdfUnchanged", "inMainWorkspace", "settingsPreserveDocument"]:
                 assert actual.get(proof) is True, "Unverified PDF operation: " + proof
         name = f"pdf-highlights-{language}-{appearance}-{width}"

@@ -34,6 +34,8 @@ const pdfEvidence = fixture.contentScenes.map((scene) => ({
     pdfSHA256: fixture.pdf.sha256,
     markID: fixture.pdf.mark.id,
     marksCount: 1,
+    fixtureSessionCount: 1,
+    filesFolderExpanded: true,
     actualRemoveButton: true,
     reopenedRestoredMarks: true,
     originalPdfUnchanged: true,

@@ -165,7 +165,7 @@ struct NativeSidebar: NSViewRepresentable {
             if (section == "all" || section == "ssh") && settings["showSshConnections"].bool != false {
                 var connections: [Row] = [Row(key: "ssh-quick", name: localized("Quick SSH connection", "快速 SSH 连接"), symbol: nil), Row(key: "ssh-filter", name: model.sidebarQuery, symbol: nil)]
                 for connection in group["sshConnections"].array {
-                    if !["name", "host", "username"].compactMap({ connection[$0].string }).contains(where: { $0.lowercased().contains(query) }) { continue }
+                    if !query.isEmpty && !["name", "host", "username"].compactMap({ connection[$0].string }).contains(where: { $0.lowercased().contains(query) }) { continue }
                     let temporary = connection["temporary"].bool == true ? localized(" · Temporary", " · 临时") : ""
                     connections.append(Row(key: "q:" + (connection["id"].string ?? ""), name: (connection["name"].string ?? "SSH") + temporary, symbol: "network"))
                     connections += model.orderedSessions(connection["sessions"].array).map { sessionRow($0, depth: 1) }
@@ -194,6 +194,17 @@ struct NativeSidebar: NSViewRepresentable {
                 let editor = sshSearch.currentEditor()
                 let ownsQuery = editor != nil && table.window?.firstResponder === editor
                 let range = editor?.selectedRange
+                if sshSearch.stringValue != model.sidebarQuery {
+                    sshSearch.stringValue = model.sidebarQuery
+                    if ownsQuery, let editor {
+                        editor.string = model.sidebarQuery
+                        if let range {
+                            let length = (model.sidebarQuery as NSString).length
+                            let start = min(range.location, length)
+                            editor.selectedRange = NSRange(location: start, length: min(range.length, length - start))
+                        }
+                    }
+                }
                 let previous = rows
                 let preserveSearch = ownsQuery && preferenceSignature == signature && next.contains(where: { $0.key == "ssh-filter" })
                 rows = next; preferenceSignature = signature

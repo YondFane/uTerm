@@ -2,6 +2,25 @@ import XCTest
 @testable import UTermBridge
 
 final class ChromeLayoutTests: XCTestCase {
+    func testTerminalHeaderMatchesMeasuredCSSWrapBoundariesWithoutDroppingControls() {
+        let items = [CoreChromeLayout.HeaderItem("name", width: 66.234375, height: 13),
+                     .init("directory", width: 100, height: 12), .init("font", width: 96.75, height: 22),
+                     .init("search", width: 26, height: 26), .init("status", width: 18, height: 26)]
+        for (pane, expected) in [(554.0, 35.0), (394, 35), (360, 69), (350, 69), (320, 65), (298, 56), (264, 56)] {
+            let flow = CoreChromeLayout.terminalHeader(width: pane - 22, items: items)
+            XCTAssertEqual(flow.height, expected)
+            XCTAssertEqual(flow.frames.count, items.count)
+            for frame in flow.frames {
+                XCTAssertGreaterThanOrEqual(frame.x, 0); XCTAssertGreaterThanOrEqual(frame.y, 0)
+                XCTAssertLessThanOrEqual(frame.x + frame.width, pane - 22 + 0.001)
+                XCTAssertLessThanOrEqual(frame.y + frame.height, flow.height - 9)
+            }
+        }
+        let narrow = CoreChromeLayout.terminalHeader(width: 100, items: items)
+        XCTAssertEqual(narrow.frames.count, items.count)
+        XCTAssertGreaterThan(narrow.height, 56)
+        XCTAssertEqual(CoreChromeLayout.terminalHeader(width: 0, items: []).height, 34)
+    }
     func testSidebarKeepsTheRailAndBoundsForWideAndNarrowWindows() {
         XCTAssertEqual(CoreChromeLayout.sidebar(available: 1100, requested: 248).width, 248)
         XCTAssertEqual(CoreChromeLayout.sidebar(available: 640, requested: 248).width, 192)

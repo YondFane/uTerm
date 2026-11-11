@@ -96,7 +96,7 @@ struct WorkspaceView: View {
         }
         .font(.custom(NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: CGFloat(model.settings["interfaceSize"].number ?? 13)).fontName, size: CGFloat(model.settings["interfaceSize"].number ?? 13)))
         .foregroundStyle(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["text"], fallback: .labelColor)))
-        .background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["canvas"], fallback: .windowBackgroundColor)).opacity(model.settings["opacity"].number ?? 1))
+        .background(Color(nsColor: NativePreferences.color(NativePreferences.terminalTheme(model.settings, catalog: model.settingsCatalog)["background"], fallback: .textBackgroundColor)).opacity(model.settings["opacity"].number ?? 1))
         .background(NativeWindowMaterial(enabled: model.settings["blur"].bool == true))
         .ignoresSafeArea(.container, edges: .top)
         .overlay(alignment: .bottomTrailing) {

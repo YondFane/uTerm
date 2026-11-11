@@ -62,10 +62,19 @@ enum QuickSSHSmoke {
         try await capture("native-ssh-host-filter-en-dark.png", window: window)
         model.sidebarSection = "ssh"
         try await TerminalSmoke.wait("Retain host query across categories") { control(window, id: "native-sidebar-filter") != nil && model.sidebarQuery == "ALPHA" }
-        model.sidebarQuery = "root-only-needle"
+        func replaceQuery(_ text: String) throws {
+            guard window.makeFirstResponder(search), let editor = search.currentEditor() as? NSTextView else { throw BridgeFailure(code: "QUICK_SSH_SEARCH", message: "The actual SSH search field lost its editor") }
+            editor.selectAll(nil); editor.insertText(text as NSString, replacementRange: NSRange(location: NSNotFound, length: 0))
+        }
+        try replaceQuery("root-only-needle")
         try await TerminalSmoke.wait("Exclude file roots from host search") { control(window, id: "native-sidebar-row-q:" + firstID) == nil && control(window, id: "native-sidebar-row-q:" + secondID) == nil }
-        model.sidebarQuery = ""; model.sidebarSection = "all"
-        try await TerminalSmoke.wait("Restore hosts after clearing the query") { control(window, id: "native-sidebar-row-q:" + firstID) != nil && control(window, id: "native-sidebar-row-q:" + secondID) != nil }
+        try replaceQuery(""); model.sidebarSection = "all"
+        do {
+            try await TerminalSmoke.wait("Restore hosts after clearing the query") { model.sidebarQuery.isEmpty && search.stringValue.isEmpty && control(window, id: "native-sidebar-row-q:" + firstID) != nil && control(window, id: "native-sidebar-row-q:" + secondID) != nil }
+        } catch {
+            report["nativeSSHClearDiagnostics"] = ["query": model.sidebarQuery, "fieldValue": search.stringValue, "alphaVisible": control(window, id: "native-sidebar-row-q:" + firstID) != nil, "betaVisible": control(window, id: "native-sidebar-row-q:" + secondID) != nil] as [String: Any]
+            throw error
+        }
         guard model.selectedID == selected, model.terminals.mapValues({ $0.generation }) == generations else { throw BridgeFailure(code: "QUICK_SSH_SEARCH", message: "Host filtering changed terminal identity") }
         report["nativeSSHSearchAllAndCategoryRetainFocusAndSessions"] = true
         func open() async throws -> ContentWindow {

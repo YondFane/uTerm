@@ -137,6 +137,7 @@ def validate_pdf_scenes(report, head, tested, phase):
         assert scene.get("scenario") == "pdf-highlights"
         assert scene.get("pdfSHA256") == fixture["pdf"]["sha256"] and scene.get("markID") == fixture["pdf"]["mark"]["id"]
         assert scene.get("marksCount") == 1
+        assert scene.get("fixtureSessionCount") == 1 and scene.get("filesFolderExpanded") is True
         for key in ["actualRemoveButton", "reopenedRestoredMarks", "originalPdfUnchanged", "inMainWorkspace", "settingsPreserveDocument", "nativePointerDrawAndDelete"]:
             assert scene.get(key) is True, "Unverified PDF operation: " + key
         name = f"personal-{phase}-pdf-highlights-{identity[0]}-{identity[1]}-{identity[2]}.png"

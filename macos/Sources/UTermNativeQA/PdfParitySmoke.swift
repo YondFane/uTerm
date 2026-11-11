@@ -30,7 +30,7 @@ enum PdfParitySmoke {
         _ = try await content.webView.evaluateJavaScript("[...document.querySelectorAll('.pdf-layout nav > div')].at(-1).querySelector('button:last-child').click()")
         try await ContentSmoke.wait(content, "document.querySelectorAll('.pdf-mark').length === 1 && !document.querySelector('.pdf-controls button[aria-pressed]').disabled")
     }
-    static func run(model: WorkspaceModel, window: NSWindow, project: URL, output: URL, fixture: JSONValue, phase: String, open: (URL, String) async throws -> ContentWindow, report: inout [String: Any], captures: inout [String]) async throws {
+    static func run(model: WorkspaceModel, window: NSWindow, project: URL, output: URL, fixture: JSONValue, phase: String, report: inout [String: Any], captures: inout [String]) async throws {
         guard let bridge = model.bridge, let path = fixture["pdf"]["path"].string, let digest = fixture["pdf"]["sha256"].string, let terminal = model.selectedTerminal else { throw BridgeFailure(code: "PDF_PARITY", message: "Missing shared PDF context") }
         let source = try Data(contentsOf: project.appendingPathComponent(path))
         guard SHA256.hash(data: source).map({ String(format: "%02x", $0) }).joined() == digest else { throw BridgeFailure(code: "PDF_FIXTURE", message: "Shared PDF bytes differ") }
@@ -45,7 +45,17 @@ enum PdfParitySmoke {
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         _ = try await TerminalSmoke.sizeCaptureWindow(window, width: 1100, height: 720)
         let generation = terminal.generation, terminalView = ObjectIdentifier(terminal.view)
-        var content = try await open(project, path)
+        guard let files = model.inspector.content, model.sessionEntries.count == 1 else { throw BridgeFailure(code: "PDF_FIXTURE_STATE", message: "PDF comparison requires one retained session and the actual Files panel") }
+        func openFromFiles() async throws -> ContentWindow {
+            try await ContentSmoke.wait(files, "document.querySelector('.file-row[data-path=\".ui-parity-pdf\"]') !== null")
+            _ = try await files.webView.evaluateJavaScript("(()=>{const folder=document.querySelector('.file-row[data-path=\".ui-parity-pdf\"]');if(folder.getAttribute('aria-expanded')!=='true')folder.click()})()")
+            try await ContentSmoke.wait(files, "document.querySelector('.file-row[data-path=\".ui-parity-pdf/fixture.pdf\"]') !== null")
+            _ = try await files.webView.evaluateJavaScript("document.querySelector('.file-row[data-path=\".ui-parity-pdf/fixture.pdf\"]').click()")
+            try await TerminalSmoke.wait("Open PDF through the actual Files row") { model.documents.active(in: model.inspectorContextKey)?.content.path == path }
+            guard let opened = model.documents.active(in: model.inspectorContextKey)?.content else { throw BridgeFailure(code: "PDF_FILE_ROW", message: "Actual Files row did not open the PDF") }
+            return opened
+        }
+        var content = try await openFromFiles()
         try await TerminalSmoke.wait("Display PDF inside the actual workspace") { content.webView.window === window && content.presentEmbedded != nil }
         try await ContentSmoke.wait(content, "[...document.querySelectorAll('.pdf-page canvas')].some(c=>c.dataset.rendered==='true') && document.querySelectorAll('.pdf-mark').length===1 && !document.querySelector('.pdf-controls button[aria-pressed]').disabled")
         let wrongRoot = try await ContentSmoke.request(content, method: "pdf_marks_read", params: ["directory": project.deletingLastPathComponent().path, "path": path, "version": digest])
@@ -58,12 +68,12 @@ enum PdfParitySmoke {
         let deleted = try await bridge.call("pdf.marks.read", params: .object(target))
         guard deleted["marks"] == .array([]) else { throw BridgeFailure(code: "PDF_DELETE", message: "Actual deletion did not reach the core") }
         try await close(content, model: model, window: window)
-        content = try await open(project, path)
+        content = try await openFromFiles()
         try await ContentSmoke.wait(content, "[...document.querySelectorAll('.pdf-page canvas')].some(c=>c.dataset.rendered==='true') && document.querySelectorAll('.pdf-mark').length===0 && !document.querySelector('.pdf-controls button[aria-pressed]').disabled")
         try await close(content, model: model, window: window)
         seed["expectedRevision"] = deleted["revision"]
         _ = try await bridge.call("pdf.marks.write", params: .object(seed))
-        content = try await open(project, path)
+        content = try await openFromFiles()
         try await ContentSmoke.wait(content, "document.querySelectorAll('.pdf-mark').length===1 && !document.querySelector('.pdf-controls button[aria-pressed]').disabled")
         _ = try await content.webView.evaluateJavaScript("const select=document.querySelector('.pdf-layout nav select');select.value='marks';select.dispatchEvent(new Event('change',{bubbles:true}))")
         try await draw(content, window: window)
@@ -81,11 +91,14 @@ enum PdfParitySmoke {
             let quoted = String(data: try JSONEncoder().encode(label), encoding: .utf8)!
             try await ContentSmoke.wait(content, "[...document.querySelectorAll('.pdf-layout nav button')].some(button=>button.textContent.trim()===" + quoted + ")")
             try await ContentSmoke.wait(content, "document.querySelectorAll('.pdf-mark').length===1 && [...document.querySelectorAll('.pdf-page canvas')].some(c=>c.dataset.rendered==='true')")
+            try await ContentSmoke.wait(files, "document.querySelector('.file-row[data-path=\".ui-parity-pdf\"]')?.getAttribute('aria-expanded')==='true' && document.querySelector('.file-row[data-path=\".ui-parity-pdf/fixture.pdf\"]')!==null")
             guard ObjectIdentifier(content.webView) == identity, content.webView.window === window else { throw BridgeFailure(code: "PDF_IDENTITY", message: "Settings replaced the PDF document") }
             let name = "personal-\(phase)-pdf-highlights-\(language)-\(appearance)-\(Int(width)).png"
             try await TerminalSmoke.capture(window: window, path: output.appendingPathComponent(name))
             captures.append(name); report["captures"] = captures
             scenes.append(["scenario": "pdf-highlights", "screenshot": name, "platform": "macOS", "architecture": report["architecture"] ?? "", "system": report["system"] ?? "", "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "", "language": language, "appearance": appearance, "width": Int(width), "height": Int(height), "pdfSHA256": digest, "markID": fixture["pdf"]["mark"]["id"].string ?? "", "marksCount": 1, "actualRemoveButton": true, "reopenedRestoredMarks": true, "originalPdfUnchanged": true, "inMainWorkspace": true, "settingsPreserveDocument": true, "nativePointerDrawAndDelete": true])
+            scenes[scenes.count - 1]["fixtureSessionCount"] = model.sessionEntries.count
+            scenes[scenes.count - 1]["filesFolderExpanded"] = true
             report["contentScenes"] = scenes
         }
         try await close(content, model: model, window: window)

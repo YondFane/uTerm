@@ -139,6 +139,13 @@ Both clients use the same explicit restart operation. It requires the current ge
 control and an exited process; a failed launch retains the old replay for retry. Closing a session
 still prevents reopening that ID. Older hosts show an upgrade message before any restart is sent.
 
+Native pane margins now use the selected terminal background. Header labels and controls wrap
+individually in their original order as the pane narrows, retaining font/search/status controls and
+the 12 px gap before output. Both collectors measure actual left/right/bottom insets, header
+position/height and output gap; mismatches reject pairing. Linux stylesheet probes cover nine pane
+widths; 14 related frontend checks and 17 paired-evidence policy tests pass. The Swift wrapping
+regression and the updated actual windows still require current-source macOS CI.
+
 Read-only/take-control and visible transport/activity errors remain available. SSH restart, pane
 dragging and complete toolbar alignment remain in the parity scope.
 
@@ -2254,8 +2261,15 @@ Native temporary connections offer **Save connection** in their context menu and
 Cleanup retains file/tunnel ownership and database/Redis dependencies, including legacy SSH-host
 references; an unresolved native connection draft also defers cleanup.
 
-SSH host filtering retains the mounted native search cell while inserting/removing result rows, so
-typing does not end the field editor. Its updated actual-input check is pending macOS CI.
+SSH host filtering retains the mounted native search cell while inserting/removing result rows. An
+empty query explicitly restores all hosts and external query changes synchronize the editor. The
+source-bound `3d0217a` ARM run passes initial typed filtering/focus, then fails clearing the query;
+its original image and `inspector-native.json` are retained in the
+[native artifact](https://github.com/YondFane/uTerm/actions/runs/43043946804/artifacts/13868261505).
+Actual typing/clearing and Quick SSH completion require the updated macOS run. The same run reaches
+real PostgreSQL disconnect before failing an immediate status check; QA now waits for the visible
+Connect control and verifies the actual disconnected/idle service within a bounded deadline. It
+retains the cleanup assertion and records status on failure.
 
 Linux validation passes six targeted core tests for atomic creation, rollback, stale revisions,
 private fields, retention and cleanup; the complete core, FFI and desktop-backend suites also pass.
@@ -2950,8 +2964,21 @@ Policy fixtures test rejection rules and do not count as application screenshots
 English/dark 1100×720 and Chinese/light 640×720 real-window comparison scenes with shared PDF bytes
 and seeded comparison marks. Actual deletion and close/reopen are required in both apps; native QA
 also draws and deletes through window pointer events, rejects other document targets, and checks
-persistence after same-source app replacement. These new macOS scenes are pending CI execution and
-visual inspection; Windows execution of the new persistence path is also pending.
+persistence after same-source app replacement. At source `3d0217a9df8fb9c019c909187315ce71931ae0f1`,
+tested merge `aa48cadf41f9c9b1a9a323b22d8862b235915676`, the
+[ARM Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43043946735/artifacts/13866689848)
+passes initial and replacement PDF drawing/deletion/reopen, document-scope and original-byte checks.
+Both `personal-initial.json` and `personal-replacement.json` were read; English/dark initial and
+Chinese/light replacement PDF originals were inspected. The
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43043946739/artifacts/13867981101)
+contains 34 pairs plus the restart image (69 PNGs); all 68 paired digests were verified, and the two
+ordinary PDF originals were inspected. Reader/highlight content matches; surrounding session counts
+and folder expansion differ. Updated collection closes the background ordinary session through its
+actual control, opens native PDFs through actual file rows, and requires one retained session and
+the expanded PDF folder in both captures. Those stricter surrounding-state checks need fresh CI. The
+[Windows log](https://github.com/YondFane/uTerm/actions/runs/43043946739/artifacts/13866998454)
+records all seven portable PDF storage tests passing; Unix symlink coverage remains
+platform-specific.
 
 ### Shared local file service
 

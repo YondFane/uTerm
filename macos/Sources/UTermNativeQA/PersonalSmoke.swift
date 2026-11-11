@@ -220,6 +220,13 @@ enum PersonalSmoke {
                         captured["fontFace"] = font.fontName
                         captured["fontSourceSHA256"] = NativeBundledFonts.regularSHA256
                         captured["fontCharacterWidth"] = ("M" as NSString).size(withAttributes: [.font: font]).width
+                        guard let pane = terminal.view.superview as? NativeTerminalPane else { throw BridgeFailure(code: "PERSONAL_TERMINAL_GEOMETRY", message: "Actual terminal pane is detached") }
+                        let terminalGeometry = pane.measuredGeometry()
+                        for key in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop"] {
+                            guard let actual = terminalGeometry[key], abs(actual - (model.settings["windowPadding"].number ?? 10) - 1) < 1 else { throw BridgeFailure(code: "PERSONAL_TERMINAL_GEOMETRY", message: "Wrong actual terminal inset: " + key) }
+                        }
+                        guard let gap = terminalGeometry["terminalViewportGap"], abs(gap - 12) < 1 else { throw BridgeFailure(code: "PERSONAL_TERMINAL_GEOMETRY", message: "Wrong terminal viewport gap") }
+                        for (key, value) in terminalGeometry { captured[key] = value }
                         guard let rootView = window.contentView,
                               let sidebar = TerminalSmoke.descendants(rootView).first(where: { $0.identifier?.rawValue == "native-sidebar" }) as? NSTableView,
                               let coordinator = sidebar.delegate as? NativeSidebar.Coordinator,
@@ -253,7 +260,7 @@ enum PersonalSmoke {
             guard let projectDirectory = model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["directory"].string else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Missing fixture project") }
             try await TerminalControlsSmoke.run(model: model, window: window, root: root, phase: phase, report: &report, captures: &captures)
             try await EmbeddedDocumentsSmoke.run(model: model, window: window, root: URL(fileURLWithPath: projectDirectory), phase: phase, open: openFile, report: &report, captures: &captures)
-            try await PdfParitySmoke.run(model: model, window: window, project: URL(fileURLWithPath: projectDirectory), output: root, fixture: parity, phase: phase, open: openFile, report: &report, captures: &captures)
+            try await PdfParitySmoke.run(model: model, window: window, project: URL(fileURLWithPath: projectDirectory), output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
             report["captures"] = captures
             await model.closeSession()
             let host = try await bridge.call("host.status")

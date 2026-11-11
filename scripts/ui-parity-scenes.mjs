@@ -52,6 +52,8 @@ export function assertParityOperations(scenes, fixture) {
     assert.equal(checks.pdfSHA256, fixture.pdf.sha256);
     assert.equal(checks.markID, fixture.pdf.mark.id);
     assert.equal(checks.marksCount, 1);
+    assert.equal(checks.fixtureSessionCount, 1);
+    assert.equal(checks.filesFolderExpanded, true);
     for (const key of [
       "passed",
       "actualRemoveButton",

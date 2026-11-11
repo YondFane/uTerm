@@ -428,7 +428,33 @@ async function runUiParity() {
           inspectorWidth !== undefined && Math.abs(inspectorWidth - expectedInspector) < 1,
           "Actual tools width differs from shared responsive bounds",
         );
-        const fontSize = (await settings()).fontSize;
+        const terminalSettings = await settings();
+        const fontSize = terminalSettings.fontSize;
+        const paneBounds = terminal.getBoundingClientRect();
+        const terminalBounds = terminal.querySelector(".terminal")!.getBoundingClientRect();
+        const headerBounds = terminal.querySelector(".session-controls")!.getBoundingClientRect();
+        const terminalGeometry = {
+          terminalInsetLeft: terminalBounds.left - paneBounds.left,
+          terminalInsetRight: paneBounds.right - terminalBounds.right,
+          terminalInsetBottom: paneBounds.bottom - terminalBounds.bottom,
+          terminalHeaderTop: headerBounds.top - paneBounds.top,
+          terminalHeaderHeight: headerBounds.height,
+          terminalViewportGap: terminalBounds.top - headerBounds.bottom,
+        };
+        for (const key of [
+          "terminalInsetLeft",
+          "terminalInsetRight",
+          "terminalInsetBottom",
+          "terminalHeaderTop",
+        ] as const)
+          assert(
+            Math.abs(terminalGeometry[key] - terminalSettings.windowPadding - 1) < 1,
+            `Wrong actual ${key}`,
+          );
+        assert(
+          Math.abs(terminalGeometry.terminalViewportGap - 12) < 1,
+          "Wrong terminal viewport gap",
+        );
         const fontQuery = `${fontSize}px "Cascadia Code"`;
         const fontFaces = await document.fonts.load(fontQuery);
         await document.fonts.ready;
@@ -481,6 +507,7 @@ async function runUiParity() {
           sidebarWidth,
           inspectorWidth,
           ...inspectorGeometry,
+          ...terminalGeometry,
           language,
           appearance,
           width: innerWidth,
@@ -681,6 +708,32 @@ async function runUiParity() {
     generationBeforeRestart: original.generation,
     restartedGeneration: restarted.generation,
   });
+  const backgroundClose = await until(
+    () =>
+      [...document.querySelectorAll<HTMLButtonElement>(".session-close")].find((button) =>
+        [
+          translate("en", "关闭会话：{p0}", { p0: parityFixture.sessions[1] }),
+          translate("zh-Hans", "关闭会话：{p0}", { p0: parityFixture.sessions[1] }),
+        ].includes(button.getAttribute("aria-label") ?? ""),
+      ),
+    "actual background session close before PDF comparison",
+  );
+  backgroundClose.click();
+  await until(async () => {
+    const entries = (await observeCore("session.entries")) as unknown as {
+      session: { id: string };
+    }[];
+    const status = await invoke<{ sessions: { spec: { id: string }; generation: string }[] }>(
+      "qa_host_status",
+    );
+    return (
+      entries.length === 1 &&
+      entries[0].session.id === "ui-parity-0" &&
+      status.sessions.length === 1 &&
+      status.sessions[0].spec.id === "ui-parity-0" &&
+      status.sessions[0].generation === restarted.generation
+    );
+  }, "matching single-session PDF fixture and retained process");
   const pdfContext = await invoke<Context>("qa_context");
   const pdfFile = (await coreRequest("files.read", {
     directory: pdfContext.project,
@@ -824,6 +877,8 @@ async function runUiParity() {
       pdfSHA256: pdfFile.version,
       markID: parityFixture.pdf.mark.id,
       marksCount: 1,
+      fixtureSessionCount: 1,
+      filesFolderExpanded: true,
       actualRemoveButton: true,
       reopenedRestoredMarks: true,
       originalPdfUnchanged: true,

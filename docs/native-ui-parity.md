@@ -149,6 +149,17 @@ gesture. The new PDF scenes are pending real CI execution and visual inspection.
 
 PDF 另采集两组主工作区对照：英文深色 1100×720、中文浅色 640×720，使用相同确定性 PDF 字节和预置对照标记。两版均须操作实际删除及标签关闭控件，重开验证删除结果，并恢复保留的对照标记。原生 QA 另通过实际窗口指针事件绘制并删除标记，验证文档作用域和应用替换后的标记保留。两版切换设置时保留同一文档，PDF 原字节不变。严格网格现要求普通版 35 张截图、34 组成对截图（68 张配对原图加普通版重启原图）；PDF 场景缺失、重复、过期或未经操作验证均使汇集失败。预置标记仅证明匹配显示，不描述为用户绘制手势。新增 PDF 场景尚待真实 CI 执行及目视核对。
 
+Terminal pairing also measures actual pane insets, header height/top and the 12px output gap. The
+native header wraps individual controls using their measured text widths and retained order;
+selected terminal backgrounds fill its margins. Missing, non-finite or unequal geometry fails
+collection. PDF pairing additionally requires one retained session and an expanded PDF folder in
+both apps. Native collection opens the actual file row; ordinary collection closes its background
+session through the actual sidebar control before capturing PDF scenes. These stricter geometry and
+surrounding-state gates require fresh real-window CI; the earlier 34-pair artifact does not satisfy
+the new gates.
+
+终端配对还测量实际窗格内边距、标题高度／顶部及输出前 12px 间距。原生标题按实测文本宽度和原顺序逐项换行，留白填充所选终端背景；几何值缺失、非有限数或不一致均使汇集失败。PDF 配对另要求两版仅保留一个会话、展开 PDF 文件夹；原生通过实际文件行打开，普通版在截图前通过实际侧栏控件关闭后台会话。更严格的几何及周围状态门槛需新的真实窗口 CI，已有 34 组产物不能满足新增门槛。
+
 ## Source-bound CI findings / 绑定源码的 CI 结果
 
 At head `7170352cf0846c0ee68ea5663ed7c7e8d29adf1c`, tested merge

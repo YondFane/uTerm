@@ -75,20 +75,16 @@ struct NativeTerminalHeader: View {
     @ObservedObject var model: WorkspaceModel
     let session: TerminalSession
     @ObservedObject var search: NativeTerminalSearch
-    let compact: Bool
     private var palette: JSONValue { NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog) }
     private var fontSize: Int { Int(model.settings["fontSize"].number ?? 14) }
     private var tint: NSColor { NativePreferences.color(palette["text"], fallback: .labelColor) }
     private var visibleError: String { session.error.isEmpty ? session.activityUnavailable ? localized("Agent activity is unavailable. Reconnect to retry.", "Agent 活动暂不可用，请重新连接后重试。") : "" : session.error }
     var body: some View {
         VStack(spacing: 0) {
-            Group {
-                if compact {
-                    VStack(spacing: 8) { labels; HStack(spacing: 8) { Spacer(minLength: 0); controls } }
-                } else { HStack(spacing: 8) { labels; controls } }
+            NativeTerminalFlow(items: flowItems) {
+                ForEach(flowItems, id: \.id) { item in headerItem(item.id) }
             }
-            .frame(height: compact ? 58 : 26)
-            .padding(.bottom, 8)
+            .padding(.bottom, 9)
             .overlay(alignment: .bottom) { Color(nsColor: NativePreferences.color(palette["border"], fallback: .separatorColor)).frame(height: 1) }
             if search.visible {
                 HStack(spacing: 5) {
@@ -107,39 +103,73 @@ struct NativeTerminalHeader: View {
         .background(Color(nsColor: NativePreferences.color(NativePreferences.terminalTheme(model.settings, catalog: model.settingsCatalog)["background"], fallback: .textBackgroundColor)))
         .accessibilityIdentifier("native-terminal-header-" + session.id)
     }
-    private var labels: some View {
-        HStack(spacing: 8) {
-            Text(session.name).font(.system(size: 11, design: .monospaced)).lineLimit(1).frame(minWidth: 45, maxWidth: 90, alignment: .leading)
-                .onTapGesture { Task { await model.selectSession(session.id) } }
-            Text(session.directory).foregroundStyle(Color(nsColor: NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)))
-                .lineLimit(1).truncationMode(.middle).frame(minWidth: 60, maxWidth: .infinity, alignment: .leading).help(session.directory)
-        }
-    }
-    @ViewBuilder private var controls: some View {
+    private var textFont: NSFont { NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: 11) }
+    private var flowItems: [CoreChromeLayout.HeaderItem] {
+        func measured(_ text: String, font: NSFont) -> Double { Double((text as NSString).size(withAttributes: [.font: font]).width) }
+        let line = Double(ceil(textFont.ascender - textFont.descender + textFont.leading))
+        let nameFont = NSFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        var items: [CoreChromeLayout.HeaderItem] = [.init("name", width: measured(session.name, font: nameFont), height: Double(ceil(nameFont.ascender - nameFont.descender + nameFont.leading))), .init("directory", width: 100, height: line)]
         if session.inputControl?.owned == false {
-            Text(localized("Read-only attachment", "只读连接")).font(.system(size: 10))
-            InputControlButton(session: session)
+            items.append(.init("read-only", width: measured(localized("Read-only attachment", "只读连接"), font: textFont), height: line))
+            items.append(.init("take-control", width: measured(localized("Take control", "接管输入"), font: textFont) + 14, height: 22))
         }
-        HStack(spacing: 4) {
-            control("A−", "font-smaller", localized("Decrease terminal font size", "减小终端字号"), enabled: fontSize > 10, bordered: true) { adjustFont(-1) }.frame(width: 28)
-            Text("\(fontSize) px").font(.system(size: 10)).fixedSize()
-            control("A+", "font-larger", localized("Increase terminal font size", "增大终端字号"), enabled: fontSize < 32, bordered: true) { adjustFont(1) }.frame(width: 28)
+        items += [.init("font", width: 96, height: 22), .init("search", width: 26, height: 26), .init("status", width: 18, height: 26)]
+        if session.exited && session.supportsRestart { items.append(.init("restart", width: 26, height: 26)) }
+        else if !session.error.isEmpty || session.activityUnavailable { items.append(.init("reconnect", width: 26, height: 26)) }
+        return items
+    }
+    func requiredHeight(width: CGFloat) -> CGFloat {
+        CGFloat(CoreChromeLayout.terminalHeader(width: Double(width), items: flowItems).height) + (search.visible ? 32 : 0) + (visibleError.isEmpty ? 0 : 32)
+    }
+    @ViewBuilder private func headerItem(_ id: String) -> some View {
+        switch id {
+        case "name":
+            Text(session.name).font(.system(size: 11, design: .monospaced)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                .onTapGesture { Task { await model.selectSession(session.id) } }
+        case "directory":
+            Text(session.directory).foregroundStyle(Color(nsColor: NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)))
+                .lineLimit(1).truncationMode(.tail).frame(maxWidth: .infinity, alignment: .leading).help(session.directory)
+        case "read-only": Text(localized("Read-only attachment", "只读连接")).font(.custom(textFont.fontName, size: 11))
+        case "take-control": InputControlButton(session: session)
+        case "font":
+            HStack(spacing: 4) {
+                control("A−", "font-smaller", localized("Decrease terminal font size", "减小终端字号"), enabled: fontSize > 10, bordered: true) { adjustFont(-1) }.frame(width: 28)
+                Text("\(fontSize) px").font(.custom(textFont.fontName, size: 11)).frame(width: 32)
+                control("A+", "font-larger", localized("Increase terminal font size", "增大终端字号"), enabled: fontSize < 32, bordered: true) { adjustFont(1) }.frame(width: 28)
+            }
+        case "search":
+            icon(.search, "search", localized("Search terminal", "搜索终端")) {
+                Task { await model.selectSession(session.id); if search.visible { search.close() } else { search.open() } }
+            }
+        case "status":
+            Circle().fill(session.exited ? Color.gray : session.error.isEmpty && session.generation != nil ? Color(red: 106.0 / 255, green: 199.0 / 255, blue: 137.0 / 255) : Color.red).frame(width: 6, height: 6).frame(width: 18, height: 26)
+                .help(session.activityLabel.isEmpty ? session.exited ? localized("Exited", "已退出") : session.generation == nil ? localized("Starting", "正在启动") : localized("Running", "运行中") : session.activityLabel)
+        case "restart": icon(.restart, "restart", localized("Restart", "重新启动")) { Task { await session.restart() } }
+        case "reconnect": icon(.restart, "reconnect", localized("Reconnect", "重新连接")) { Task { await session.reconnect() } }
+        default: EmptyView()
         }
-        icon(.search, "search", localized("Search terminal", "搜索终端")) {
-            Task { await model.selectSession(session.id); if search.visible { search.close() } else { search.open() } }
-        }
-        Circle().fill(session.exited ? Color.gray : session.error.isEmpty && session.generation != nil ? Color(red: 0.49, green: 0.74, blue: 0.58) : Color.red).frame(width: 5, height: 5)
-            .help(session.activityLabel.isEmpty ? session.exited ? localized("Exited", "已退出") : session.generation == nil ? localized("Starting", "正在启动") : localized("Running", "运行中") : session.activityLabel)
-        if session.exited && session.supportsRestart {
-            icon(.restart, "restart", localized("Restart", "重新启动")) { Task { await session.restart() } }
-        } else if !session.error.isEmpty || session.activityUnavailable { icon(.restart, "reconnect", localized("Reconnect", "重新连接")) { Task { await session.reconnect() } } }
     }
     private func adjustFont(_ delta: Double) { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(delta)]) } }
     private func control(_ title: String, _ id: String, _ help: String, enabled: Bool = true, bordered: Bool = false, active: Bool = false, action: @escaping () -> Void) -> some View {
-        NativeTerminalControl(title: title, image: nil, id: "native-terminal-" + id + "-" + session.id, help: help, enabled: enabled && !model.busy && !model.gitFavoritesRecoveryPresented, bordered: bordered, active: active, tint: tint, border: NativePreferences.color(palette["border"], fallback: .separatorColor), font: NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: 11), action: action).frame(height: 24)
+        NativeTerminalControl(title: title, image: nil, id: "native-terminal-" + id + "-" + session.id, help: help, enabled: enabled && !model.busy && !model.gitFavoritesRecoveryPresented, bordered: bordered, active: active, tint: tint, border: NativePreferences.color(palette["border"], fallback: .separatorColor), font: NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: 11), action: action).frame(height: 22)
     }
     private func icon(_ icon: CoreToolbarIcon, _ id: String, _ help: String, action: @escaping () -> Void) -> some View {
         NativeTerminalControl(title: "", image: NativeChromeImages.toolbar(icon), id: "native-terminal-" + id + "-" + session.id, help: help, enabled: !model.busy && !model.gitFavoritesRecoveryPresented, bordered: false, active: false, tint: tint, border: .clear, font: NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: 11), action: action).frame(width: 26, height: 26)
+    }
+}
+
+private struct NativeTerminalFlow: Layout {
+    let items: [CoreChromeLayout.HeaderItem]
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let natural = CGFloat(items.reduce(0) { $0 + $1.width } + Double(max(0, items.count - 1)) * 8)
+        let width = max(0, proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? natural)
+        return CGSize(width: width, height: CGFloat(CoreChromeLayout.terminalHeader(width: Double(width), items: items).height - 9))
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let flow = CoreChromeLayout.terminalHeader(width: Double(bounds.width), items: items)
+        for (view, frame) in zip(subviews, flow.frames) {
+            view.place(at: CGPoint(x: bounds.minX + CGFloat(frame.x), y: bounds.minY + CGFloat(frame.y)), proposal: ProposedViewSize(width: CGFloat(frame.width), height: CGFloat(frame.height)))
+        }
     }
 }
 
@@ -237,13 +267,12 @@ final class NativeTerminalPane: NSView {
     private let model: WorkspaceModel
     private var searchChanges: AnyCancellable?
     private var workspaceChanges: AnyCancellable?
-    private var compact = false
     private var appliedPadding: CGFloat = -1
     private var appliedPalette: JSONValue = .null
     private var appliedActive = false
     init(model: WorkspaceModel, session: TerminalSession) {
         self.model = model; self.session = session
-        header = NSHostingView(rootView: NativeTerminalHeader(model: model, session: session, search: session.search, compact: false))
+        header = NSHostingView(rootView: NativeTerminalHeader(model: model, session: session, search: session.search))
         header.safeAreaRegions = []
         super.init(frame: .zero)
         wantsLayer = true; layer?.masksToBounds = true; layer?.borderWidth = 1
@@ -257,10 +286,7 @@ final class NativeTerminalPane: NSView {
     override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); needsLayout = true }
     private var padding: CGFloat { CGFloat(model.settings["windowPadding"].number ?? 10) }
     private var requiredHeight: CGFloat {
-        var height: CGFloat = bounds.width - 2 * padding - 2 < 360 ? 66 : 34
-        if session.search.visible { height += 32 }
-        if !session.error.isEmpty || session.activityUnavailable { height += 32 }
-        return height
+        header.rootView.requiredHeight(width: max(0, bounds.width - 2 * padding - 2))
     }
     private func scheduleLayout() {
         if abs(header.frame.height - requiredHeight) > 0.1 || appliedPadding != padding { needsLayout = true }
@@ -274,11 +300,6 @@ final class NativeTerminalPane: NSView {
     }
     override func layout() {
         super.layout()
-        let nextCompact = bounds.width - 2 * padding - 2 < 360
-        if compact != nextCompact {
-            compact = nextCompact
-            header.rootView = NativeTerminalHeader(model: model, session: session, search: session.search, compact: compact)
-        }
         let height = requiredHeight
         appliedPadding = padding
         let inset = padding + 1
@@ -286,5 +307,13 @@ final class NativeTerminalPane: NSView {
         header.frame = NSRect(x: inset, y: inset, width: width, height: height)
         session.view.frame = NSRect(x: inset, y: inset + height + 12, width: width, height: max(0, bounds.height - 2 * inset - height - 12))
         scheduleLayout()
+    }
+    func measuredGeometry() -> [String: Double] {
+        ["terminalInsetLeft": Double(session.view.frame.minX - bounds.minX),
+         "terminalInsetRight": Double(bounds.maxX - session.view.frame.maxX),
+         "terminalInsetBottom": Double(bounds.maxY - session.view.frame.maxY),
+         "terminalHeaderTop": Double(header.frame.minY - bounds.minY),
+         "terminalHeaderHeight": Double(header.frame.height),
+         "terminalViewportGap": Double(session.view.frame.minY - header.frame.maxY)]
     }
 }

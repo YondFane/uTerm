@@ -38,6 +38,7 @@ class ParityEvidenceTests(unittest.TestCase):
             for appearance in fixture["appearances"]:
                 for width in fixture["widths"]:
                     values = dict(language=lang, appearance=appearance, width=width, height=720,
+                                  terminalInsetLeft=11, terminalInsetRight=11, terminalInsetBottom=11, terminalHeaderTop=11, terminalHeaderHeight=35, terminalViewportGap=12,
                                   inspectorTop=0, inspectorHeight=720, inspectorHeaderTop=0, inspectorFooterBottom=720, inspectorViewportHeight=720,
                                   sidebarRowHeight=32, sidebarSectionHeight=32, sidebarSectionGap=18, sidebarListTop=8,
                                   fontFamily="Cascadia Code", fontFace="CascadiaCode-Regular", fontSourceSHA256=font_digest, fontCharacterWidth=9.96,
@@ -66,7 +67,7 @@ class ParityEvidenceTests(unittest.TestCase):
                 self.n["captures"].append(native)
                 self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
         for scene in fixture["contentScenes"]:
-            values = dict(scene, passed=True, pdfSHA256=fixture["pdf"]["sha256"], markID=fixture["pdf"]["mark"]["id"], marksCount=1,
+            values = dict(scene, passed=True, fixtureSessionCount=1, filesFolderExpanded=True, pdfSHA256=fixture["pdf"]["sha256"], markID=fixture["pdf"]["mark"]["id"], marksCount=1,
                           actualRemoveButton=True, reopenedRestoredMarks=True, originalPdfUnchanged=True, inMainWorkspace=True, settingsPreserveDocument=True)
             name = f"pdf-highlights-{scene['language']}-{scene['appearance']}-{scene['width']}"
             native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
@@ -103,9 +104,20 @@ class ParityEvidenceTests(unittest.TestCase):
         self.assertEqual(len(result["pairs"]), 34)
         self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 69)
 
+    def test_terminal_geometry_requires_matching_actual_insets_header_and_viewport_gap(self):
+        original = copy.deepcopy(self.n)
+        for key in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop", "terminalHeaderHeight", "terminalViewportGap"]:
+            for value in [None, True, float("nan"), float("inf"), -1, original["workspaceScenes"][0][key] + 12]:
+                self.n = copy.deepcopy(original)
+                self.n["workspaceScenes"][0][key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
+        self.n = copy.deepcopy(original)
+        self.n["workspaceScenes"][0].pop("terminalHeaderHeight")
+        with self.assertRaises(AssertionError): self.run_compare()
+
     def test_pdf_requires_current_images_matching_data_and_actual_operations(self):
         original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
-        mutations = [("sourceHeadSHA", "c" * 40), ("pdfSHA256", "0" * 64), ("markID", "old"), ("marksCount", 0),
+        mutations = [("sourceHeadSHA", "c" * 40), ("pdfSHA256", "0" * 64), ("markID", "old"), ("marksCount", 0), ("fixtureSessionCount", 2), ("filesFolderExpanded", False),
                      ("actualRemoveButton", False), ("reopenedRestoredMarks", False), ("originalPdfUnchanged", False),
                      ("inMainWorkspace", False), ("settingsPreserveDocument", False), ("nativePointerDrawAndDelete", False), ("screenshot", "old.png")]
         for key, value in mutations:
