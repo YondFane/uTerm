@@ -123,10 +123,11 @@ verifies the selected terminal generation remains unchanged. Both clients use th
 workspace name as well as matching project data.
 
 Settings use left-side categories for General, Appearance, Terminal, Workspaces, Shortcuts, Agents,
-Usage, Local control, Database components, Maven settings and Software updates. Appearance includes
-file font/tab preferences; workspace management offers shared create/rename/delete operations. Agent
-commands/hooks and quota open their existing complete native window. The Java environment still
-needs a matching standalone settings section before complete parity can be accepted.
+Usage, Local control, Database components, Maven settings, Java development tools and Software
+updates. Appearance includes file font/tab preferences; workspace management offers shared
+create/rename/delete operations. Agent commands/hooks and quota open their existing complete native
+window. Java development tools now has a standalone candidate section; it still requires same-source
+native execution before acceptance.
 
 Interface and terminal font selectors share the ordinary client's preset catalog and localized
 labels. Existing custom font strings remain a selected custom entry until a preset is chosen; simply
@@ -139,10 +140,10 @@ The toolbar includes file opening, the command palette, pane zoom and a tools me
 Git/GitHub, Java/Python, SSH, database and Redis entry points. Commands retain their existing focus,
 busy-state and selected-project guards.
 
-The same-source comparison includes 22 settings navigation pairs: eleven shared categories at
+The same-source comparison includes 24 settings navigation pairs: twelve shared categories at
 English dark 900×640 and Chinese light 660×640. Both collectors activate actual navigation controls
 and reject missing/stale captures, changed drafts or unverified navigation. The combined artifact
-holds 60 original screenshots; collection does not establish complete functional parity. The sidebar
+holds 64 original screenshots; collection does not establish complete functional parity. The sidebar
 updates existing disclosure buttons when busy state ends, so persisted collapse does not leave
 expansion disabled.
 
@@ -3682,6 +3683,20 @@ Linux passes five targeted component tests, including a real loopback HTTP downl
 cancellation, actual cancellation and close while running. Locked Core, six FFI and backend
 regressions pass. The new native settings entry and Windows/macOS execution still require CI
 evidence for their candidate source; these local checks do not replace it.
+
+The native **Settings → Java development tools** candidate provides the same local JDK detection,
+manual registration/removal and five optional managed tools as the ordinary client. It preserves an
+invalid path, removes only registry records, supports manual HTTPS download/offline import and keeps
+cancellation bound to its actual operation until the worker settles. Settings and quit guards retain
+unfinished component operations. Opening the section does not download archives.
+
+Candidate native QA activates the actual navigation/register controls, checks an invalid path is
+retained, registers and removes the real CI JDK without deleting files, and captures
+`native-settings-java-components.png`. Same-source settings captures include all twelve categories
+(24 settings pairs plus eight workspace pairs). A missing/unloaded Java catalog fails collection.
+Linux type/build/format/contracts/docs checks, 448 Node regressions (11 platform skips) and 29
+package/evidence policy checks pass. Swift compilation and real-window execution remain pending CI;
+this does not complete visual or full functional parity.
 
 ### Shared Java service validation
 

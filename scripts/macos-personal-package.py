@@ -104,6 +104,7 @@ def validate_settings_scenes(report, head, tested, phase):
         seen.add(key)
         assert scene["sourceHeadSHA"] == head and scene["testedMergeSHA"] == tested
         assert scene["draftUnchanged"] is True and scene["navigationControlActivated"] is True
+        if scene["section"] == "java": assert scene.get("javaFixtureMatched") is True
         name = f"personal-{phase}-settings-{key[0]}-{key[1]}-{key[2]}-{key[3]}.png"
         assert scene["screenshot"] == name and name in report["captures"]
 

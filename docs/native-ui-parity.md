@@ -3,18 +3,26 @@ title: Native UI parity acceptance / 原生界面一致性验收
 status: active
 type: reference
 created: 2026-11-10
-updated: 2026-11-10
+updated: 2026-11-11
 ---
 
 # Native UI parity acceptance / 原生界面一致性验收
 
-The ordinary macOS client at release source `a33f890f1bdac1afe8f6e37955f9be08edf7732a` is the
+The ordinary macOS client at release source `3f91a6aac4c348c21276a4fe97136d77d5a84a6a` is the
 comparison baseline. Compare both actual applications at the same candidate source, language,
 appearance, content size and fixture data. Shared Rust behavior and build success alone do not
 establish UI parity.
 
-普通 macOS 客户端的 release 源码 `a33f890f1bdac1afe8f6e37955f9be08edf7732a`
+普通 macOS 客户端的 release 源码 `3f91a6aac4c348c21276a4fe97136d77d5a84a6a`
 为对照基线。两版真实应用须使用同一候选源码、语言、外观、内容尺寸和测试数据。共享 Rust 行为或构建成功不能单独证明界面一致。
+
+The goal includes matching layout, visible controls, icons, typography, spacing and colors as well
+as function and interaction. Native platform APIs do not exempt the Personal client from these
+visual requirements. Existing 0.2.9 evidence covers 30 matched navigation/workspace scenarios; it is
+retained at PR #51 and is not acceptance of the new Java candidate or the complete interface.
+
+目标包含布局、可见控件、图标、字体、间距及颜色与功能／交互的一致性。原生平台 API 不能作为 Personal 界面不同的豁免理由。0.2.9 已有 30 组导航／工作区对照证据保留于 PR
+#51，不能作为新增 Java 候选或完整界面的一致性验收。
 
 ## Acceptance scope / 验收范围
 
@@ -92,25 +100,26 @@ acceptance.
 
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
-uploads 60 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
+uploads 64 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
 never replaces a missing native capture with a browser render. `comparisonReady` means the images
 are ready for review; `functionalParityAccepted` remains false until all acceptance rows are met.
 This candidate's new collection flow still requires actual CI execution and visual inspection.
 
 PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
-ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 60 张原图、`comparison.md` 和
+ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 64 张原图、`comparison.md` 和
 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。当前候选采集流程仍需实际 CI 执行及看图核对。
 
-Settings add 22 matched navigation scenes: eleven common categories at English dark 900×640 and
+Settings add 24 matched navigation scenes: twelve common categories at English dark 900×640 and
 Chinese light 660×640. Native QA presses actual AppKit buttons; ordinary QA clicks the rendered
 settings navigation. Both assert actual content dimensions, selected section and unchanged drafts.
 The collector requires every settings scene, source identity and original image. The Java
-environment category remains an implementation gap, so these captures cannot establish complete
-settings parity.
+environment candidate now uses the shared component service, with loaded catalog assertions and
+local JDK registration tests. Its new native execution remains pending; captures alone cannot
+establish complete settings parity.
 
-设置另采集 22 组匹配导航场景：十一个共有分类，分别使用英文深色 900×640 与中文浅色 660×640。原生 QA 按下实际 AppKit 按钮，普通版点击渲染的设置导航；两版均检查实际内容尺寸、所选分类及草稿未变。汇集器要求完整分类场景、源码身份及原图。Java 开发环境分类仍为实现缺口，因此这些截图不能证明完整设置一致性。
+设置另采集 24 组匹配导航场景：十二个共有分类，分别使用英文深色 900×640 与中文浅色 660×640。原生 QA 按下实际 AppKit 按钮，普通版点击渲染的设置导航；两版均检查实际内容尺寸、所选分类及草稿未变。汇集器要求完整分类场景、源码身份及原图。Java 开发环境候选分类现接入共享组件服务，增加目录加载断言与本机 JDK 注册测试。新增原生执行仍待完成，不能只凭截图证明完整设置一致性。
 
 ## Source-bound CI findings / 绑定源码的 CI 结果
 

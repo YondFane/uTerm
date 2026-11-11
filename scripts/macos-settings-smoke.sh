@@ -25,12 +25,13 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     assert data['nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets']
     assert data['nativeGlobalMavenActualSaveConflictDraftAndProjectPreservation']
     assert data['nativeDatabaseComponentsReadonlyCatalogWithoutDownloads']
+    assert data['nativeJavaCatalogDetectionRegistrationFailureRetentionAndRecordRemoval']
     assert data['nativeBreakReminderRenderDismissAndDisable']
     assert data['nativeFileTabLimitConflictRetainsDraftAndExplicitCloseAllowsRetry']
     assert data['nativeLowerFileTabLimitAppliesToExistingTabs']
     for name in data['preferenceCaptures']: assert (evidence / name).stat().st_size > 1000, name
     assert not data['actualOSLoginRegistrationExecuted']
-    assert len(data['captures']) == 7
+    assert len(data['captures']) == 8
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
     assert not subprocess.check_output(['git', 'status', '--porcelain'])
