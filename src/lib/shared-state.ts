@@ -1,10 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import {
   readWorkspace,
+  sshTargetFor,
   workspaceKey,
   type Workspace,
   type Project,
   type Worktree,
+  type SshConnection,
 } from "./workspace";
 import { readSettings, settingsKey, type Settings } from "./settings";
 import type { CoreRequest, CoreResponse, CoreSnapshot, JSONValue } from "./core-contract.generated";
@@ -86,6 +88,27 @@ export function persistWorkspace(change: (workspace: Workspace) => Workspace): P
       expectedRevision: snapshot.revision,
       workspace: next,
       settings: snapshot.document.settings,
+    })) as unknown as CoreSnapshot;
+    return snapshot.document.workspace as unknown as Workspace;
+  });
+}
+
+export async function createSharedQuickSsh(
+  connection: SshConnection,
+  workspaceId: string,
+  id: string,
+  directory: string,
+): Promise<Workspace> {
+  // Each explicit attempt reloads canonical state; the core checks the dialog's captured workspace.
+  // 每次明确尝试都重读规范状态，由核心核对窗口打开时捕获的工作区。
+  await initializeSharedState();
+  return serial(async () => {
+    if (!snapshot) throw Error("Shared state is not initialized");
+    snapshot = (await coreRequest("ssh.quick.create", {
+      expectedRevision: snapshot.revision,
+      connection: sshTargetFor(connection, workspaceId),
+      id,
+      directory,
     })) as unknown as CoreSnapshot;
     return snapshot.document.workspace as unknown as Workspace;
   });

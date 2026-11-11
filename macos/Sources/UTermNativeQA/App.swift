@@ -90,6 +90,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         model.deleteWorktreeRequested = { [weak self] project, tree in self?.confirmWorktreeDeletion(projectID: project, worktreeID: tree) }
         model.openSSHRequested = { [weak self] id in Task { @MainActor in try? await self?.makeSSHWindow(selected: id) } }
+        model.openQuickSSHRequested = { [weak self] in
+            Task { @MainActor in
+                do { _ = try await self?.makeQuickSSHWindow() }
+                catch { self?.model.error = error.localizedDescription }
+            }
+        }
+        model.canPruneQuickSSH = { [weak self] in self?.sshWindow?.model.dirty != true && self?.sshWindow?.model.busy != true }
         model.openDatabasesRequested = { [weak self] in self?.openDatabases() }
         model.openRedisRequested = { [weak self] in self?.openRedis() }
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
@@ -213,7 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             if let path = WorkspaceModel.argument("--inspector-smoke-report") {
                 var report = baseReport()
-                do { try await InspectorSmoke.run(model: model, window: window, lookup: { self.existingContent(directory: $0, path: $1, editable: true) }, report: &report) }
+                do { try await InspectorSmoke.run(model: model, window: window, lookup: { self.existingContent(directory: $0, path: $1, editable: true) }, quickLookup: { self.contentWindows.values.first { $0.workbenchHost?.kind == "ssh-quick" } }, report: &report) }
                 catch {
                     report["failure"] = error.localizedDescription
                     try? await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-inspector-failure.png"))
@@ -700,6 +707,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             catch { model.error = error.localizedDescription }
         }
     }
+    private func makeQuickSSHWindow() async throws -> ContentWindow {
+        guard !preparingQuit, !model.busy, let bridge = model.bridge else { throw BridgeFailure(code: "SSH_OPERATION_BUSY", message: localized("Finish the current operation first.", "请先完成当前操作。")) }
+        if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "ssh-quick" }) { current.reveal(); return current }
+        let workspaceID = model.groupID
+        let host = QuickSSHHost(workspaceID: workspaceID)
+        host.connect = { [weak self] connection in
+            guard let self, !self.preparingQuit else { throw BridgeFailure(code: "CLOSED", message: "Quick SSH is closed") }
+            return try await self.model.createQuickSSH(connection, workspaceID: workspaceID)
+        }
+        let content = try ContentWindow(bridge: bridge, directory: WorkspaceModel.dataRoot().deletingLastPathComponent(), path: "", workbenchHost: host)
+        host.close = { [weak content] in content?.forceClose() }
+        content.window?.setContentSize(NSSize(width: 620, height: 420))
+        content.window?.appearance = window?.appearance
+        let id = UUID(); contentWindows[id] = content; model.quickSSHPresented = true
+        content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id); self?.model.quickSSHPresented = false }
+        content.reveal(); return content
+    }
     private func makeDatabaseWindow() async throws -> ContentWindow {
         guard !preparingQuit, let bridge = model.sshBridge else { throw BridgeFailure(code: "DB_CLOSED", message: localized("Database client is unavailable.", "数据库客户端不可用。")) }
         if let content = contentWindows.values.first(where: { $0.workbenchHost?.kind == "database" }) { content.reveal(); return content }
@@ -784,7 +808,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let ssh = SSHModel(workspace: model, bridge: bridge)
         let controller = SSHWindow(model: ssh)
-        controller.didClose = { [weak self] in self?.sshWindow = nil }
+        controller.didClose = { [weak self] in
+            self?.sshWindow = nil
+            Task { await self?.model.cleanupQuickSSH() }
+        }
         controller.window?.appearance = window?.appearance
         sshWindow = controller
         controller.showWindow(nil); controller.window?.makeKeyAndOrderFront(nil)
@@ -1333,7 +1360,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 for content in contents {
                     guard try await content.prepareForQuit() else {
                         let message: String
-                        if content.workbenchHost?.kind == "redis" { message = localized("Finish Redis operations and resolve drafts before quitting.", "退出前请完成 Redis 操作并处理草稿。") }
+                        if content.workbenchHost?.kind == "ssh-quick" { message = localized("Wait for the Quick SSH operation to finish.", "请等待快速 SSH 操作完成。") }
+                        else if content.workbenchHost?.kind == "redis" { message = localized("Finish Redis operations and resolve drafts before quitting.", "退出前请完成 Redis 操作并处理草稿。") }
                         else if content.workbenchHost != nil { message = localized("Finish database operations and commit or roll back transactions before quitting.", "退出前请完成数据库操作，并提交或回滚事务。") }
                         else { message = localized("Save or resolve file changes before quitting.", "退出前请保存或处理文件修改。") }
                         throw BridgeFailure(code: "QUIT_REFUSED", message: message)

@@ -2,6 +2,7 @@ pub mod auth;
 pub mod files;
 pub mod paths;
 pub mod profiles;
+mod quick;
 mod request;
 pub mod service;
 #[cfg(all(test, unix))]

@@ -12,7 +12,7 @@ enum InspectorSmoke {
         while !queue.isEmpty { let next = queue.removeFirst(); if next.identifier?.rawValue == id { return next }; queue += next.subviews }
         return nil
     }
-    static func run(model: WorkspaceModel, window: NSWindow, lookup: @escaping (URL, String) -> ContentWindow?, report: inout [String: Any]) async throws {
+    static func run(model: WorkspaceModel, window: NSWindow, lookup: @escaping (URL, String) -> ContentWindow?, quickLookup: @escaping () -> ContentWindow?, report: inout [String: Any]) async throws {
         guard model.ready, let bridge = model.bridge, let reportPath = WorkspaceModel.argument("--inspector-smoke-report") else { throw BridgeFailure(code: "INSPECTOR_CONTEXT", message: "Missing isolated inspector context") }
         let root = try WorkspaceModel.dataRoot().appendingPathComponent("inspector-project")
         let nested = root.appendingPathComponent("nested")
@@ -36,6 +36,9 @@ enum InspectorSmoke {
         let tools = model.inspector
         try await TerminalSmoke.wait("Mount shared file tools in the actual inspector") { model.inspectorVisible && tools.content?.webView.window === window }
         guard let files = tools.content else { throw BridgeFailure(code: "INSPECTOR_FILES", message: "Shared file tools are missing") }
+        defer {
+            report["toolsAttachmentDiagnostics"] = ["keyWindowIsMain": window.isKeyWindow, "filesWindowIsMain": files.webView.window === window, "currentDocumentRetained": tools.content === files, "mode": tools.mode.rawValue, "hierarchy": files.webView.superview.map { String(describing: $0) } ?? "detached"]
+        }
         try await ContentSmoke.wait(files, "document.querySelector('.file-row[data-path=\"nested\"]') !== null && document.querySelector('.file-row[data-path=\".hidden.txt\"]') !== null")
         guard try await ContentSmoke.request(files, method: "content_open_file", params: ["path": "escape.txt", "line": 0]) == "FILE_ERROR", lookup(root, "escape.txt") == nil else { throw BridgeFailure(code: "INSPECTOR_SCOPE", message: "Outside-root link opened in an editor") }
         guard try await EditorSmoke.evaluate(files, script: "document.querySelector('.file-row[data-path=\"nested\"]').click();return true;", arguments: [:]) else { throw BridgeFailure(code: "INSPECTOR_FOLDER", message: "Folder control did not activate") }
@@ -103,7 +106,7 @@ enum InspectorSmoke {
         let layout = model.state?.layout, ids = Set(model.terminals.keys), firstView = ObjectIdentifier(first.view), secondView = ObjectIdentifier(second.view)
         try command("swapPanes")
         try await TerminalSmoke.wait("Persist left tools preference") { !model.busy && model.settings["inspectorPosition"].string == "left" }
-        try await TerminalSmoke.wait("Reattach native inspector after swapping") { view(window, id: "native-inspector-container") != nil }
+        try await TerminalSmoke.wait("Retain the actual WebKit file tools after swapping") { tools.content === files && files.webView.window === window && files.webView.visibleRect.width > 0 && files.webView.visibleRect.height > 0 }
         try command("zoom")
         try await TerminalSmoke.wait("Zoom selected terminal only") { model.paneZoomed && second.view.window === window && first.view.window == nil }
         let renderedBefore = first.qaRenderedFrames, acknowledgedBefore = first.qaAcknowledgedFrames
@@ -119,11 +122,16 @@ enum InspectorSmoke {
         try await capture("native-inspector-zoom-dark-en.png"); captures.append("native-inspector-zoom-dark-en.png"); report["captures"] = captures
         try command("zoom")
         try await TerminalSmoke.wait("Restore original split views") { !model.paneZoomed && first.view.window === window && second.view.window === window }
+        try await TerminalSmoke.wait("Keep the actual file tools attached after restoring split views") { tools.content === files && files.webView.window === window && files.webView.visibleRect.width > 0 && files.webView.visibleRect.height > 0 }
         guard model.state?.layout == layout, Set(model.terminals.keys) == ids, ObjectIdentifier(first.view) == firstView, ObjectIdentifier(second.view) == secondView else { throw BridgeFailure(code: "INSPECTOR_IDENTITY", message: "Swap or zoom replaced a session, view or shared layout") }
         report["paneSwapAndZoomRetainLayoutViewsAndOutput"] = true
         guard window.makeFirstResponder(files.webView) else { throw BridgeFailure(code: "INSPECTOR_CLOSE_FOCUS", message: "Shared tools cannot regain focus") }
         _ = try await files.webView.evaluateJavaScript("document.querySelector('.file-query')?.focus()")
-        try await TerminalSmoke.wait("Return focus to the actual shared tools") { model.inspectorOwnsFocus }
+        do { try await TerminalSmoke.wait("Return focus to the actual shared tools") { model.inspectorOwnsFocus } }
+        catch {
+            report["toolsFocusDiagnostics"] = ["keyWindowIsMain": window.isKeyWindow, "responder": String(describing: window.firstResponder), "filesWindowIsMain": files.webView.window === window, "currentDocumentRetained": tools.content === files, "mode": tools.mode.rawValue, "hierarchy": files.webView.superview.map { String(describing: $0) } ?? "detached"]
+            throw error
+        }
         try command("close")
         try await TerminalSmoke.wait("Close tools and return focus to terminal") { !model.inspectorVisible && window.firstResponder === second.view }
         guard Set(model.terminals.keys) == ids else { throw BridgeFailure(code: "INSPECTOR_CLOSE", message: "Close tools terminated a PTY") }
@@ -166,6 +174,7 @@ enum InspectorSmoke {
         report["sharedFilesAcrossProjectsRetainCopiedSource"] = true
         try await capture("native-inspector-copy-across-projects-light-zh.png")
         captures.append("native-inspector-copy-across-projects-light-zh.png"); report["captures"] = captures
+        try await QuickSSHSmoke.run(model: model, window: window, lookup: quickLookup, report: &report)
         for id in Array(model.terminals.keys) { await model.selectSession(id); await model.closeSession() }
         let status = try await bridge.call("host.status")
         guard status["sessions"].array.isEmpty else { throw BridgeFailure(code: "INSPECTOR_CLEANUP", message: "Fixture host sessions remain") }

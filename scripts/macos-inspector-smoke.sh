@@ -23,11 +23,13 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-inspector-') as directo
     assert data['bundleIdentifier'] == 'sh.uterm.desktop.qa.native'
     for key in ['nativeFilesHiddenNavigationAndSymlinkBoundary', 'nativeInspectorQueryFocusSurvivesPTYOutput', 'nativeSearchReturnOpenedExactLine',
                 'sharedFilesRootAndMethodBoundaries', 'sharedFilesActualCreateCopyRenameDeleteAndCancel', 'sharedFilesStaleProjectRejected', 'sharedFilesAcrossProjectsRetainCopiedSource',
+                'nativeSSHSearchAllAndCategoryRetainFocusAndSessions', 'nativeQuickSSHInvalidCancelAndStaleWorkspacePreserveState', 'nativeQuickSSHActualCreateAndKeepRetainSession',
+                'nativeQuickSSHActualFinalSessionPrunesTemporary',
                 'searchJumpRetainsExistingEditorText', 'cancelledSearchAndFilenameQuickOpen',
                 'paneSwapAndZoomRetainLayoutViewsAndOutput', 'closeFocusedToolsRetainsPTYAndReturnsFocus',
                 'leftToolsRemainVisibleWithoutSidebar', 'explicitFixtureCloseAndIdleHostShutdown']:
         assert data[key], key
-    assert len(data['captures']) == 5
+    assert len(data['captures']) == 8
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
     assert not subprocess.check_output(['git', 'status', '--porcelain'])

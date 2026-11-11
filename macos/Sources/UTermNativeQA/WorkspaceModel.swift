@@ -25,6 +25,7 @@ final class WorkspaceModel: ObservableObject {
     @Published var editorRecoveryPresented = false
     @Published var gitFavoritesRecoveryPresented = false
     @Published var worktreeDeletionPresented = false
+    @Published var quickSSHPresented = false
     @Published var nameDraft: NameDraft?
     @Published var nameDraftOwner: NameDraftOwner = .workspace
     @Published var fullScreen = false
@@ -57,6 +58,8 @@ final class WorkspaceModel: ObservableObject {
     var commandsChanged: (() -> Void)?
     var deleteWorktreeRequested: ((String, String) -> Void)?
     var openSSHRequested: ((String?) -> Void)?
+    var openQuickSSHRequested: (() -> Void)?
+    var canPruneQuickSSH: (() -> Bool)?
     var openDatabasesRequested: (() -> Void)?
     var openRedisRequested: (() -> Void)?
     var openAgentsRequested: (() -> Void)?
@@ -195,6 +198,7 @@ final class WorkspaceModel: ObservableObject {
             environment = try await bridge.call("host.environment")
             await reload()
             guard state != nil else { throw BridgeFailure(code: "BOOTSTRAP", message: error) }
+            await cleanupQuickSSH()
             events = Task { @MainActor [weak self, bridge] in
                 for await event in bridge.events {
                     guard let self, !Task.isCancelled else { return }
@@ -282,7 +286,7 @@ final class WorkspaceModel: ObservableObject {
     func mutate(_ method: String, _ values: [String: JSONValue], revision: String? = nil) async -> Bool {
         guard !busy, !shuttingDown, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, let bridge, let state else { return false }
         let actionBridge: CoreBridge
-        if method.hasPrefix("ssh.") {
+        if method.hasPrefix("ssh."), !["ssh.quick.create", "ssh.quick.keep"].contains(method) {
             guard let sshBridge else { return false }
             actionBridge = sshBridge
         } else { actionBridge = bridge }
@@ -316,6 +320,44 @@ final class WorkspaceModel: ObservableObject {
         if let operation { _ = await operation.value }
     }
 
+    func createQuickSSH(_ connection: JSONValue, workspaceID: String) async throws -> Bool {
+        await flushWorkspaceOperations()
+        guard !busy, !shuttingDown, groupID == workspaceID, let bridge, let sshBridge,
+              let directory = environment["home"].string else { throw BridgeFailure(code: "CONFLICT", message: localized("Workspace changed. Reopen Quick SSH.", "工作区已变化，请重新打开快速 SSH。")) }
+        let snapshot = try await bridge.snapshot()
+        let id = UUID().uuidString
+        guard await mutate("ssh.quick.create", ["connection": connection, "id": .string(id), "directory": .string(directory)], revision: snapshot.revision) else {
+            throw BridgeFailure(code: "SSH_SAVE_FAILED", message: error.isEmpty ? localized("Could not save the connection.", "无法保存连接。") : error)
+        }
+        do {
+            _ = try await sshBridge.call("ssh.session.start", params: .object(["id": .string(id)]))
+            await reload()
+        } catch {
+            // Metadata is already committed; a transport failure must not invite duplicate creation.
+            // 元数据已提交，传输失败不能引导用户重复创建连接。
+            self.error = localized("Connection saved. SSH could not start: ", "连接已保存，SSH 无法启动：") + error.localizedDescription
+        }
+        return true
+    }
+
+    func keepQuickSSH(_ id: String) async {
+        guard let bridge, !busy else { return }
+        do {
+            let snapshot = try await bridge.snapshot()
+            _ = await mutate("ssh.quick.keep", ["id": .string(id)], revision: snapshot.revision)
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func cleanupQuickSSH() async {
+        await flushWorkspaceOperations()
+        guard !busy, !shuttingDown, canPruneQuickSSH?() != false, let bridge,
+              groups.contains(where: { $0["sshConnections"].array.contains { $0["temporary"].bool == true && $0["sessions"].array.isEmpty } }) else { return }
+        do {
+            let snapshot = try await bridge.snapshot()
+            _ = await mutate("ssh.quick.prune", [:], revision: snapshot.revision)
+        } catch { self.error = error.localizedDescription }
+    }
+
     func selectSession(_ id: String, focus: Bool = true) async {
         if focus { documents.showTerminal(in: inspectorContextKey) }
         if selectedID == id { if focus { focusRevision += 1 }; return }
@@ -324,7 +366,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func performControlAction(_ request: JSONValue) async throws -> JSONValue {
-        guard !busy, !shuttingDown, !settingsPresented, !editorRecoveryPresented, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, nameDraft == nil,
+        guard !busy, !shuttingDown, !settingsPresented, !editorRecoveryPresented, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, !quickSSHPresented, nameDraft == nil,
               let bridge, let state else {
             throw BridgeFailure(code: "CONTROL_BUSY", message: localized("Finish the current dialog or operation first.", "请先完成当前对话框或操作。"))
         }
@@ -400,12 +442,16 @@ final class WorkspaceModel: ObservableObject {
 
     func closeSession(id target: String? = nil) async {
         guard !busy, let id = target ?? selectedID, let terminal = terminals[id], let bridge else { return }
+        let isSSH = sessionEntries.contains { $0.sessionID == id && $0.session["ssh"] != .null }
         if let operation { _ = await operation.value }
         do {
             await terminal.drainInput()
             await terminal.finishConnection()
             _ = try await bridge.call("host.close", params: .object(["id": .string(id), "generation": terminal.generation.map(JSONValue.string) ?? .null]))
-            if await mutate("session.remove", ["id": .string(id)]) { focusRevision += 1 }
+            if await mutate("session.remove", ["id": .string(id)]) {
+                focusRevision += 1
+                if isSSH { await cleanupQuickSSH() }
+            }
         } catch { self.error = error.localizedDescription }
     }
 

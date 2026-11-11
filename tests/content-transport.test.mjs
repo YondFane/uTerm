@@ -6,8 +6,13 @@ import { tauriContentPort } from "../src/lib/tauri-content.ts";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-for (const platform of ["Tauri", "WebKit"]) {
-  test(`${platform} database writes retain their caller after cancellation until the actual result`, async (t) => {
+for (const [platform, method] of [
+  ["Tauri", "database_request"],
+  ["Tauri", "quick_ssh_connect"],
+  ["WebKit", "database_request"],
+  ["WebKit", "quick_ssh_connect"],
+]) {
+  test(`${platform} ${method} writes retain their caller after cancellation until the actual result`, async (t) => {
     const previous = global.window;
     global.window = {};
     const upstream = deferred();
@@ -51,7 +56,7 @@ for (const platform of ["Tauri", "WebKit"]) {
     let finished = false;
     const result = scope
       .call(
-        "database_request",
+        method,
         { handle: "qa", request: { op: "query", sql: "UPDATE fixture SET value=1" } },
         controller.signal,
       )

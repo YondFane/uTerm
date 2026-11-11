@@ -1,6 +1,7 @@
 import type { JSONValue } from "./core-contract.generated.ts";
 
 export const contentWriteMethods = new Set([
+  "quick_ssh_connect",
   "files_clipboard",
   "github_create_pr",
   "github_form_guard",
@@ -83,6 +84,9 @@ export const gitFavoriteMethods: Record<string, string> = {
   git_favorites_write: "git.favorites.write",
 };
 const contentMethods = new Set([
+  "quick_ssh_context",
+  "quick_ssh_connect",
+  "quick_ssh_close",
   "files_clipboard",
   "files_context",
   "files_mode",
@@ -315,6 +319,7 @@ export class ContentScope {
         "files-frozen",
         "files-mode-changed",
         "files-settings-changed",
+        "quick-ssh-settings-changed",
         "github-frozen",
         "github-context-changed",
         "github-settings-changed",

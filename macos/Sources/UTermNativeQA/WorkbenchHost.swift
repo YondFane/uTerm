@@ -4,6 +4,7 @@ import UTermBridge
 func nativeWorkbenchTitle(_ kind: String) -> String {
     switch kind {
     case "files": return localized("Files", "文件")
+    case "ssh-quick": return localized("Quick SSH connection", "快速 SSH 连接")
     case "github": return "GitHub"
     case "redis": return localized("Redis connections", "Redis 连接")
     default: return localized("Databases", "数据库")

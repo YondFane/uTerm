@@ -92,7 +92,7 @@ struct NativeSidebar: NSViewRepresentable {
     func updateNSView(_ scroll: NSScrollView, context: Context) { context.coordinator.update(model) }
 
     @MainActor
-    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
+    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate, NSTextFieldDelegate {
         weak var table: NSTableView?
         weak var model: WorkspaceModel?
         private var rows: [Row] = []
@@ -106,6 +106,7 @@ struct NativeSidebar: NSViewRepresentable {
         static let sessionDragType = NSPasteboard.PasteboardType("sh.uterm.native.session")
         private var dragSession: String?
         private var sessionMenuActions: NativeSessionMenuActions?
+        private let sshSearch = NSSearchField()
 
         func update(_ model: WorkspaceModel) {
             self.model = model
@@ -116,7 +117,7 @@ struct NativeSidebar: NSViewRepresentable {
             table.rowHeight = max(CGFloat(CoreChrome.sidebarRowHeight), CGFloat(settings["interfaceSize"].number ?? 13) + 19) + CGFloat(settings["rowPadding"].number ?? 1) * 2
             table.backgroundColor = NativePreferences.color(palette["sidebar"], fallback: .windowBackgroundColor)
             let section = model.sidebarSection
-            let query = section == "ssh" ? model.sidebarQuery.trimmingCharacters(in: .whitespacesAndNewlines) : ""
+            let query = model.sidebarQuery.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             var next: [Row] = []
             func sessionRow(_ session: JSONValue, depth: Int) -> Row {
                 let id = session["id"].string ?? ""
@@ -162,11 +163,11 @@ struct NativeSidebar: NSViewRepresentable {
             }
             let group = model.groups.first { $0["id"].string == model.groupID } ?? .null
             if (section == "all" || section == "ssh") && settings["showSshConnections"].bool != false {
-                var connections: [Row] = []
+                var connections: [Row] = [Row(key: "ssh-quick", name: localized("Quick SSH connection", "快速 SSH 连接"), symbol: nil), Row(key: "ssh-filter", name: model.sidebarQuery, symbol: nil)]
                 for connection in group["sshConnections"].array {
-                    let searchable = ["name", "host", "username", "root"].compactMap { connection[$0].string }.joined(separator: " ")
-                    if !query.isEmpty && !searchable.localizedCaseInsensitiveContains(query) { continue }
-                    connections.append(Row(key: "q:" + (connection["id"].string ?? ""), name: connection["name"].string ?? "SSH", symbol: "network"))
+                    if !["name", "host", "username"].compactMap({ connection[$0].string }).contains(where: { $0.lowercased().contains(query) }) { continue }
+                    let temporary = connection["temporary"].bool == true ? localized(" · Temporary", " · 临时") : ""
+                    connections.append(Row(key: "q:" + (connection["id"].string ?? ""), name: (connection["name"].string ?? "SSH") + temporary, symbol: "network"))
                     connections += model.orderedSessions(connection["sessions"].array).map { sessionRow($0, depth: 1) }
                 }
                 appendSection("ssh", "SSH", rows: connections)
@@ -189,7 +190,19 @@ struct NativeSidebar: NSViewRepresentable {
             }
             updating = true
             defer { updating = false }
-            if next != rows || preferenceSignature != signature { rows = next; preferenceSignature = signature; table.reloadData() }
+            if next != rows || preferenceSignature != signature {
+                let editor = sshSearch.currentEditor()
+                let ownsQuery = editor != nil && table.window?.firstResponder === editor
+                let range = editor?.selectedRange
+                rows = next; preferenceSignature = signature; table.reloadData()
+                // Reloading filtered rows must retain only an already-focused search editor.
+                // 重载筛选行时，仅恢复原本已获得焦点的搜索编辑器。
+                if ownsQuery, let index = rows.firstIndex(where: { $0.key == "ssh-filter" }) {
+                    _ = table.view(atColumn: 0, row: index, makeIfNecessary: true)
+                    table.layoutSubtreeIfNeeded()
+                    if table.window?.makeFirstResponder(sshSearch) == true, let range { sshSearch.currentEditor()?.selectedRange = range }
+                }
+            }
             for index in rows.indices {
                 guard let cell = table.view(atColumn: 0, row: index, makeIfNecessary: false) else { continue }
                 for disclosure in cell.subviews.compactMap({ $0 as? NSButton }) {
@@ -301,6 +314,16 @@ struct NativeSidebar: NSViewRepresentable {
                 sessionMenuActions = actions; actions.populate(menu)
                 return
             }
+            if row.key.hasPrefix("q:") {
+                let id = String(row.key.dropFirst(2))
+                let profile = model.groups.flatMap { $0["sshConnections"].array }.first { $0["id"].string == id }
+                if profile?["temporary"].bool == true {
+                    let keep = NSMenuItem(title: localized("Save connection", "保存为常用连接"), action: #selector(keepQuickSSH(_:)), keyEquivalent: "")
+                    keep.target = self; keep.representedObject = id; keep.isEnabled = !model.busy
+                    menu.addItem(keep)
+                }
+                return
+            }
             guard row.key.hasPrefix("p:") || row.worktreeID != nil else { return }
             if row.key.hasPrefix("p:"), let project = model.projects.first(where: { $0["id"].string == String(row.key.dropFirst(2)) }) {
                 let id = project["id"].string ?? ""
@@ -351,6 +374,15 @@ struct NativeSidebar: NSViewRepresentable {
             Task { await model.setProjectFlag(id, key: key, value: project[key].bool != true) }
         }
         final class SectionButton: NSButton { var sectionID = "" }
+        @objc private func quickSSH(_ sender: NSButton) { model?.openQuickSSHRequested?() }
+        @objc private func keepQuickSSH(_ sender: NSMenuItem) {
+            guard let id = sender.representedObject as? String else { return }
+            Task { await model?.keepQuickSSH(id) }
+        }
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSSearchField, field === sshSearch else { return }
+            model?.sidebarQuery = sshSearch.stringValue
+        }
         @objc private func toggleSection(_ button: SectionButton) {
             guard let model else { return }
             if !model.sidebarCollapsed.insert(button.sectionID).inserted { model.sidebarCollapsed.remove(button.sectionID) }
@@ -416,6 +448,30 @@ struct NativeSidebar: NSViewRepresentable {
             cell.identifier = NSUserInterfaceItemIdentifier("native-sidebar-row-" + item.key)
             let settings = model?.settings ?? .null
             let palette = NativePreferences.interfacePalette(settings, catalog: model?.settingsCatalog ?? .null)
+            if item.key == "ssh-quick" || item.key == "ssh-filter" {
+                let control: NSView
+                if item.key == "ssh-quick" {
+                    let button = NSButton(title: item.name, target: self, action: #selector(quickSSH(_:)))
+                    button.bezelStyle = .rounded
+                    button.identifier = NSUserInterfaceItemIdentifier("native-ssh-quick")
+                    button.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
+                    button.isEnabled = model?.busy == false
+                    control = button
+                } else {
+                    sshSearch.removeFromSuperview()
+                    sshSearch.delegate = self
+                    sshSearch.identifier = NSUserInterfaceItemIdentifier("native-sidebar-filter")
+                    sshSearch.placeholderString = localized("Search SSH hosts", "搜索 SSH 主机")
+                    sshSearch.setAccessibilityLabel(sshSearch.placeholderString)
+                    sshSearch.sendsSearchStringImmediately = true
+                    sshSearch.stringValue = model?.sidebarQuery ?? ""
+                    sshSearch.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
+                    control = sshSearch
+                }
+                control.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(control)
+                NSLayoutConstraint.activate([control.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2), control.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2), control.centerYAnchor.constraint(equalTo: cell.centerYAnchor), control.heightAnchor.constraint(equalToConstant: 26)])
+                return cell
+            }
             if let section = item.sectionID {
                 let toggle = SectionButton(title: item.name, target: self, action: #selector(toggleSection(_:)))
                 toggle.sectionID = section; toggle.isBordered = false; toggle.alignment = .left

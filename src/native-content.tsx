@@ -16,9 +16,10 @@ import { NativeDatabase } from "./native-database";
 import { NativeRedis } from "./native-redis";
 import { NativeGitHub } from "./native-github";
 import { NativeFiles } from "./native-files";
+import { NativeSshQuick } from "./native-ssh-quick";
 
 interface Context {
-  kind?: "file" | "files" | "git" | "github" | "database" | "redis";
+  kind?: "file" | "files" | "git" | "github" | "database" | "redis" | "ssh-quick";
   directory: string;
   path: string;
   line?: number;
@@ -192,7 +193,9 @@ async function start() {
         <SettingsProvider content={content}>
           <BundledFontReady>
             <ContentFontCommands kind={context.kind} />
-            {context.kind === "files" ? (
+            {context.kind === "ssh-quick" ? (
+              <NativeSshQuick />
+            ) : context.kind === "files" ? (
               <NativeFiles directory={context.directory} />
             ) : context.kind === "database" ? (
               <NativeDatabase />

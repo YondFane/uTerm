@@ -303,6 +303,10 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if permitsClose { return true }
+        if let quick = workbenchHost as? QuickSSHHost {
+            if !quick.pending { forceClose() }
+            return false
+        }
         if workbenchHost != nil { sender.orderOut(nil); return false }
         if gitMode {
             if !gitMutationInProgress { forceClose() }

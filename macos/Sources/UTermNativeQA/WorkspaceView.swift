@@ -16,16 +16,13 @@ struct WorkspaceView: View {
             let sidebar = CoreChromeLayout.sidebar(available: Double(geometry.size.width), requested: requestedSidebarWidth)
             let sidebarWidth = model.sidebarVisible ? sidebar.width : CoreChrome.sidebarRailWidth
             let tools = CoreChromeLayout.inspector(available: Double(geometry.size.width) - sidebarWidth, ratio: inspectorRatio)
+            let regions = model.settings["inspectorPosition"].string == "left" ? ["tools", "main"] : ["main", "tools"]
             HStack(spacing: 0) {
                 HStack(spacing: 0) {
                     NativeSidebarRail(model: model)
                     if model.sidebarVisible {
                         VStack(spacing: 0) {
                             NativeSidebarNavigation(model: model)
-                            if model.sidebarSection == "ssh" {
-                                TextField(localized("Search SSH hosts", "搜索 SSH 主机"), text: $model.sidebarQuery)
-                                    .textFieldStyle(.roundedBorder).padding(.bottom, 8).accessibilityIdentifier("native-sidebar-filter")
-                            }
                             NativeSidebar(model: model).padding(.horizontal, 2).padding(.top, CGFloat(CoreChrome.sidebarListTop)).padding(.bottom, 10).frame(maxHeight: .infinity)
                         }.padding(.horizontal, 10)
                     }
@@ -65,25 +62,31 @@ struct WorkspaceView: View {
                         ))
                 }
                 HStack(spacing: 0) {
-                    if model.inspectorVisible && model.settings["inspectorPosition"].string == "left" { inspector(width: tools.width, available: tools.available, height: geometry.size.height) }
-                    VStack(spacing: 0) {
-                        NativeWorkspaceToolbar(model: model, sidebarWidth: CGFloat(sidebarWidth))
-                        if !model.terminalError.isEmpty {
-                            HStack { Text(model.terminalError).font(.caption).textSelection(.enabled); Spacer(); Button(localized("Reconnect", "重新连接")) { Task { await model.reconnectTransport() } } }.padding(8)
-                        }
+                    // Moving stable regions retains the WebKit document instead of mounting competing hosts.
+                    // 移动稳定标识的区域以保留 WebKit 文档，避免接入相互争用的宿主。
+                    ForEach(regions, id: \.self) { region in
+                        if region == "tools" {
+                            if model.inspectorVisible { inspector(width: tools.width, available: tools.available, height: geometry.size.height) }
+                        } else {
+                            VStack(spacing: 0) {
+                                NativeWorkspaceToolbar(model: model, sidebarWidth: CGFloat(sidebarWidth))
+                                if !model.terminalError.isEmpty {
+                                    HStack { Text(model.terminalError).font(.caption).textSelection(.enabled); Spacer(); Button(localized("Reconnect", "重新连接")) { Task { await model.reconnectTransport() } } }.padding(8)
+                                }
 
-                        if !model.error.isEmpty {
-                            HStack {
-                                Text(model.error).font(.caption).textSelection(.enabled).lineLimit(3)
-                                Spacer()
-                                Button(localized("Reload", "重新读取")) { Task { await model.reload() } }
-                                Button(localized("Recovery copies", "恢复副本")) { model.recover() }
-                            }.padding(8)
+                                if !model.error.isEmpty {
+                                    HStack {
+                                        Text(model.error).font(.caption).textSelection(.enabled).lineLimit(3)
+                                        Spacer()
+                                        Button(localized("Reload", "重新读取")) { Task { await model.reload() } }
+                                        Button(localized("Recovery copies", "恢复副本")) { model.recover() }
+                                    }.padding(8)
+                                }
+                                NativeWorkspaceDocumentSurface(model: model, documents: model.documents).frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                            .frame(minWidth: CGFloat(CoreChrome.mainMinimumWidth), maxWidth: .infinity)
                         }
-                        NativeWorkspaceDocumentSurface(model: model, documents: model.documents).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .frame(minWidth: CGFloat(CoreChrome.mainMinimumWidth), maxWidth: .infinity)
-                    if model.inspectorVisible && model.settings["inspectorPosition"].string != "left" { inspector(width: tools.width, available: tools.available, height: geometry.size.height) }
                 }
             }
             .onChange(of: model.inspectorVisible) { _, visible in
@@ -306,9 +309,15 @@ final class CanvasHost: NSView {
         for session in model.terminals.values { session.search.outputChanged() }
         if !isHidden, focusRevision != model.focusRevision, let view = model.selectedTerminal?.view {
             focusRevision = model.focusRevision
-            DispatchQueue.main.async { [weak self, weak view] in
-                guard let self, let view, view.window === self.window else { return }
-                self.window?.makeFirstResponder(view)
+            let requested = focusRevision
+            let previousResponder = window?.firstResponder
+            DispatchQueue.main.async { [weak self, weak view, weak model, weak previousResponder] in
+                guard let self, let view, let model, let window = self.window, view.window === window,
+                      requested == model.focusRevision, !model.inspectorOwnsFocus else { return }
+                // A later explicit click or search focus takes precedence over queued pane focus.
+                // 后发生的明确点击或搜索焦点优先于排队中的窗格聚焦。
+                guard window.firstResponder === previousResponder || (previousResponder == nil && (window.firstResponder === window || window.firstResponder === window.contentView)) else { return }
+                window.makeFirstResponder(view)
             }
         }
     }

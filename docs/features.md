@@ -120,8 +120,10 @@ Section disclosures hide local rows without editing shared data or closing sessi
 connection categories retain their add/manage entry. Rail controls follow the interface palette and
 active-icon color.
 
-SSH host search stays within its category and category changes retain selection and sessions. Quick
-SSH, direct connection rows and full workbench presentation still require alignment.
+Quick SSH and host search appear inside the SSH section in both All and SSH categories. Filtering
+uses name, host and username, ignoring case, and retains selection, sessions and an already-focused
+search editor. The native Quick SSH window embeds the same address form and parser as the ordinary
+client. Direct connection rows, embedded presentation and full workbench alignment remain pending.
 
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
@@ -143,7 +145,9 @@ dragging and complete toolbar alignment remain in the parity scope.
 The native Files inspector embeds the same file tree, Quick open, Project search, inline naming,
 context menus and deletion dialogs as the ordinary client. Its header uses the shared Files, Git,
 GitHub and working-directory icons. Git/GitHub still open their existing windows; embedding those
-workbenches remains pending.
+workbenches remains pending. Moving tools left or right reorders stable native regions and retains
+the mounted WebKit document and query. Deferred pane focus yields to a later explicit focus change;
+acceptance checks the actual visible file controls after swapping and restoring split panes.
 
 File requests stay on the captured local project or Worktree. Writes first resolve open editor
 drafts, then recheck the selected root; cancelled delivery does not release a dispatched write
@@ -166,10 +170,13 @@ operates actual WebKit tree/search controls and AppKit Return, checks symlink/ro
 and stale-project writes, and creates, copies, renames and deletes literal temporary names,
 including cancelled directory deletion. It also copies in one actual panel, switches projects,
 replaces that WebKit document and pastes into the new project, checking original bytes and rejected
-outside-root clipboard values. Linux simulations exercise queued failures, confirmed-source rollback
-and stale hydration. `native-inspector-copy-across-projects-light-zh.png` records the destination
-panel. Personal workspace captures require the mounted shared controls and translated labels. These
-new checks and screenshots still require current-source macOS CI; simulations do not accept native
+outside-root clipboard values. Native QA also operates actual host search and Quick SSH controls,
+checks invalid/cancelled/stale-workspace writes, and creates and keeps a temporary connection using
+loopback port 1 without external credentials. This exercises failure handling, not authenticated
+remote login. Linux simulations exercise queued failures, confirmed-source rollback and stale
+hydration. `native-inspector-copy-across-projects-light-zh.png` records the destination panel.
+Personal workspace captures require the mounted shared controls and translated labels. These new
+checks and screenshots still require current-source macOS CI; simulations do not accept native
 rendering.
 
 Editable files open in the main workspace. When files are open, the tab row includes the selected
@@ -194,7 +201,7 @@ The local CLI control switch remains an immediate service control in Local contr
 
 Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
 side/tool widths in both real apps. Collection rejects stale vectors, old height, titlebar insets or
-stale panel widths. Linux passes 458 Node checks (11 platform skips), type checking and focused
+stale panel widths. Linux passes 463 Node checks (11 platform skips), type checking and focused
 SVG/side-panel regressions; these do not establish complete native parity.
 
 Real Personal-window checks click file/tab/close controls, send AppKit arrows, retain exact
@@ -2209,7 +2216,14 @@ status.
 Choose **Quick SSH connection** in the SSH sidebar and enter a Host alias, `user@host:port` or
 `ssh://user@host:port`. IPv6 addresses with a port use brackets, such as `user@[::1]:2222`. A plain
 alias inherits OpenSSH configuration; explicit addresses default to port 22. Commands, embedded
-passwords, URL paths and invalid ports are rejected.
+passwords, URL paths and invalid ports are rejected. Both clients use the same address form and
+parser. The native form currently opens in a separate window; embedded presentation remains pending.
+
+The shared core saves the temporary connection and first session in one revision-checked write. It
+rejects a workspace changed after the dialog opened, duplicate IDs and stale revisions without
+leaving half a connection. SSH login starts only after saving succeeds. Saving disables duplicate
+submission and dismissal; failures retain the address for explicit retry. A later SSH launch failure
+retains the saved connection and reports a separate error.
 
 Quick connections use automatic OpenSSH authentication in the terminal. They appear as Temporary;
 their local settings remain available for attachment after reopening the app. Closing the last
@@ -2218,7 +2232,18 @@ been released. **Save connection** keeps the profile without changing existing s
 before selecting it for a Redis or database tunnel.
 
 **Search SSH hosts** filters the current workspace by connection name, host and username, ignoring
-case. Clearing the search restores all hosts; filtering preserves sessions and connections.
+case. Clearing the search restores all hosts; filtering preserves sessions and connections. The
+native search is available in All and SSH and retains its input focus when filtered rows reload.
+Native temporary connections offer **Save connection** in their context menu and connection window.
+Cleanup retains file/tunnel ownership and database/Redis dependencies, including legacy SSH-host
+references; an unresolved native connection draft also defers cleanup.
+
+Linux validation passes six targeted core tests for atomic creation, rollback, stale revisions,
+private fields, retention and cleanup; the complete core, FFI and desktop-backend suites also pass.
+Twenty-four focused frontend/transport simulations cover submission, visible failure/retry, fixed
+workspace ownership and language refresh. The native QA adds `native-ssh-host-filter-en-dark.png`,
+`native-quick-ssh-invalid-en-dark.png` and `native-quick-ssh-temporary-light-zh.png`; current-source
+macOS execution remains pending.
 
 ### Jump hosts
 
