@@ -104,6 +104,7 @@ const contentMethods = new Set([
   "github_form_guard",
   "github_session_action",
   "github_context",
+  "github_toolbar",
   "redis_profiles",
   "redis_profile_save",
   "redis_profile_remove",

@@ -13,6 +13,7 @@ final class GitHubHost: WorkbenchHost {
     var emit: ((String, JSONValue) -> Void)?
     var context: (() async throws -> JSONValue)?
     var sessionAction: ((String, JSONValue) async throws -> Void)?
+    var toolbar: ((String) throws -> Void)?
     weak var window: NSWindow?
     init(bridge: CoreBridge, directory: String) { self.bridge = bridge; self.directory = directory }
     func settingsChanged(_ settings: JSONValue) {
@@ -28,6 +29,10 @@ final class GitHubHost: WorkbenchHost {
         if method == "github_form_guard" {
             guard params.count == 1, let active = params["active"]?.bool else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing PR form state") }
             formActive = active; return .null
+        }
+        if method == "github_toolbar" {
+            guard params.count == 1, let kind = params["kind"]?.string, let toolbar else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing GitHub toolbar action") }
+            try toolbar(kind); return .null
         }
         pending += 1; defer { pending -= 1 }
         if method == "github_session_action" {

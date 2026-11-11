@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { GitHubPanel, type GitHubItem } from "./components/GitHubPanel";
+import { NativeInspectorActions } from "./components/NativeInspectorActions";
 import { contentInvoke, listenContent } from "./lib/content-host";
 import { localizeMessage } from "./lib/i18n";
 import { useSettings } from "./lib/SettingsContext";
@@ -61,10 +62,14 @@ export function NativeGitHub({ directory }: { directory: string }) {
           directory={directory}
           resizeHandle={null}
           headerActions={
-            <>
-              <strong>GitHub</strong>
-              <span title={directory}>{directory}</span>
-            </>
+            <NativeInspectorActions
+              active="github"
+              command={(kind) => {
+                void contentInvoke("github_toolbar", { kind })
+                  .then(() => setError(""))
+                  .catch((reason) => setError(String(reason)));
+              }}
+            />
           }
           port={contentInvoke}
           canAssociate={context.canAssociate}

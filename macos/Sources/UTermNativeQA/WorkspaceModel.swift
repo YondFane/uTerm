@@ -75,6 +75,7 @@ final class WorkspaceModel: ObservableObject {
     private var databaseHostCache: DatabaseHost?
     var openGitRequested: (() -> Void)?
     var openGitHubRequested: (() -> Void)?
+    var makeGitHubTools: ((URL, String) async throws -> ContentWindow)?
     var openInspectorFile: ((String, String, Int) async throws -> Void)?
     var makeFileTools: ((URL, String) async throws -> ContentWindow)?
     var prepareSSHTransportReconnect: (() async -> Bool)?

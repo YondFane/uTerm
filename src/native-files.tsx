@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { FilePanel, type FileMode } from "./components/FilePanel";
-import { ToolbarIcon } from "./components/SidebarIcon";
+import { NativeInspectorActions } from "./components/NativeInspectorActions";
 import { contentInvoke, listenContent } from "./lib/content-host";
 import { localizeMessage, tx } from "./lib/i18n";
 import { useSettings } from "./lib/SettingsContext";
@@ -89,27 +89,10 @@ export function NativeFiles({ directory }: { directory: string }) {
             paused={frozen}
             resizeHandle={null}
             headerActions={
-              <div className="inspector-switcher" role="group" aria-label={tx("工具面板")}>
-                {(
-                  [
-                    ["files", "files", tx("文件")],
-                    ["git", "git", "Git"],
-                    ["github", "github", "GitHub"],
-                    ["directory", "folder", tx("工作目录")],
-                  ] as const
-                ).map(([kind, icon, label]) => (
-                  <button
-                    key={kind}
-                    className="toolbar-icon-button"
-                    aria-label={label}
-                    title={label}
-                    aria-pressed={kind === "files"}
-                    onClick={() => void command("files_toolbar", { kind })}
-                  >
-                    <ToolbarIcon name={icon} />
-                  </button>
-                ))}
-              </div>
+              <NativeInspectorActions
+                active="files"
+                command={(kind) => void command("files_toolbar", { kind })}
+              />
             }
             mode={context.mode}
             request={context.request}

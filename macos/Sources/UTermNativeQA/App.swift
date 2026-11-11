@@ -108,6 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openPythonRequested = { [weak self] in self?.openPython() }
         model.openGitRequested = { [weak self] in self?.openGit() }
         model.openGitHubRequested = { [weak self] in self?.openGitHub() }
+        model.makeGitHubTools = { [weak self] root, scope in
+            guard let self, self.model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: "GitHub tools no longer own the selected project") }
+            return try await self.makeGitHubContentWindow(directory: root, present: false)
+        }
         model.makeFileTools = { [weak self] root, scope in
             guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
             return try await self.makeFileToolsWindow(directory: root, scope: scope)
@@ -626,7 +630,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case "swapPanes": Task { await model.mutate("settings.patch", ["patch": .object(["inspectorPosition": .string(model.settings["inspectorPosition"].string == "left" ? "right" : "left")])]) }
         case "zoom": model.paneZoomed.toggle()
         case "git": if let current = contentWindows.values.first(where: { $0.gitMode && $0.window === NSApp.keyWindow }) { current.window?.orderOut(nil) } else { openGit() }
-        case "github": if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "github" && $0.window === NSApp.keyWindow }) { current.window?.orderOut(nil) } else { openGitHub() }
+        case "github": if model.inspectorVisible && model.inspector.mode == .github { model.hideInspector() } else { openGitHub() }
         case "agents": openAgents()
         case "toggleSidebar": toggleSidebar()
         case "splitRight": splitRight()
@@ -1093,21 +1097,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return contentWindows.values.first { !$0.gitMode && $0.workbenchHost == nil && $0.directory == root && $0.documentDirectory == directory.path && $0.path == path && $0.editable == editable }
     }
     private func openGitHub() {
-        Task { @MainActor in
-            do { let directory = try await selectedProjectDirectory(); _ = try await makeGitHubContentWindow(directory: directory) }
-            catch { model.error = error.localizedDescription }
+        model.showInspector(.github)
+    }
+    private func embedGitHubTools(_ content: ContentWindow, scope: String) throws {
+        guard let parent = window, model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+        content.window?.contentView = NSView(); content.window?.orderOut(nil)
+        (content.workbenchHost as? GitHubHost)?.window = parent
+        (content.workbenchHost as? GitHubHost)?.toolbar = { [weak self, weak content] kind in
+            guard let self, let content, self.model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+            switch kind {
+            case "files": self.model.showInspector(.files)
+            case "git": self.openGit()
+            case "github": self.model.showInspector(.github)
+            case "directory": NSWorkspace.shared.activateFileViewerSelecting([content.directory])
+            default: throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Unknown GitHub toolbar action")
+            }
+        }
+        content.presentEmbedded = { [weak model, weak content] in
+            guard let model, let content, model.inspectorContextKey == scope else { return }
+            model.inspector.presentGitHub(content, scope: scope); model.inspectorVisible = true
         }
     }
-    private func makeGitHubContentWindow(directory: URL) async throws -> ContentWindow {
+    private func makeGitHubContentWindow(directory: URL, present: Bool = true) async throws -> ContentWindow {
         guard !preparingQuit, !mutatingRepository, let bridge = model.bridge, let state = model.state else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current client operation first.", "请先完成当前客户端操作。")) }
+        let scope = model.inspectorContextKey
         let root = directory.standardizedFileURL.resolvingSymlinksInPath()
         let selected = try await bridge.projectContext(expectedRevision: state.snapshot.revision)
-        guard let projectID = selected.projectId, let path = selected.directory, URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath() == root else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+        guard model.inspectorContextKey == scope, let projectID = selected.projectId, let path = selected.directory, URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath() == root else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
         if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "github" && $0.directory == root && $0.gitProjectID == projectID }) {
-            current.workbenchHost?.emit?("github-context-changed", .null); current.reveal(); return current
+            try embedGitHubTools(current, scope: scope)
+            current.workbenchHost?.emit?("github-context-changed", .null)
+            if present { current.reveal() }
+            return current
         }
         let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
         do {
+            guard model.inspectorContextKey == scope, window != nil else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
             let host = GitHubHost(bridge: worker, directory: root.path)
             host.context = { [weak self] in
                 guard let self, self.model.workspace["selectedProject"].string == projectID else { return .object(["canAssociate": .bool(false), "canInsert": .bool(false)]) }
@@ -1136,9 +1161,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             let content = try ContentWindow(bridge: worker, directory: root, path: "", gitProjectID: projectID, stateBridge: bridge, ownsBridge: true, workbenchHost: host)
             content.window?.appearance = window?.appearance
+            try embedGitHubTools(content, scope: scope)
             let id = UUID(); contentWindows[id] = content
             content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
-            content.reveal(); return content
+            if present { content.reveal() }
+            return content
         } catch { await worker.close(); throw error }
     }
     private func makeGitContentWindow(directory: URL) async throws -> ContentWindow {

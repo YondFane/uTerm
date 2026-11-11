@@ -5,10 +5,10 @@ import WebKit
 
 @MainActor
 final class NativeInspectorModel: ObservableObject {
-    enum Mode: String, CaseIterable { case files, search, quick }
+    enum Mode: String, CaseIterable { case files, search, quick, github }
     private weak var workspace: WorkspaceModel?
     @Published var mode: Mode = .files {
-        didSet { if mode != oldValue { (content?.workbenchHost as? FilesHost)?.modeChanged() } }
+        didSet { if mode != oldValue && mode != .github { (content?.workbenchHost as? FilesHost)?.modeChanged() } }
     }
     @Published private(set) var content: ContentWindow?
     private(set) var request = 0
@@ -28,8 +28,15 @@ final class NativeInspectorModel: ObservableObject {
     private var context = ""
     init(workspace: WorkspaceModel) { self.workspace = workspace }
     func show(_ mode: Mode) {
+        if (mode == .github) != (content?.workbenchHost?.kind == "github") { content = nil }
         self.mode = mode; request += 1
-        (content?.workbenchHost as? FilesHost)?.modeChanged()
+        if mode != .github { (content?.workbenchHost as? FilesHost)?.modeChanged() }
+    }
+    func presentGitHub(_ content: ContentWindow, scope: String) {
+        guard let workspace, workspace.inspectorContextKey == scope else { return }
+        generation += 1; busy = false; error = ""; errorCode = ""
+        context = scope; directory = content.directory.path
+        mode = .github; self.content = content
     }
     func invalidate() { generation += 1; busy = false }
     func reload() async {
@@ -48,10 +55,20 @@ final class NativeInspectorModel: ObservableObject {
                 return
             }
             if directory != root { directory = root; path = ""; rows = []; selected = -1; content = nil }
+            if mode == .github {
+                guard let make = workspace.makeGitHubTools else { throw BridgeFailure(code: "CLOSED", message: "GitHub tools are unavailable") }
+                if content?.workbenchHost?.kind != "github" {
+                    let next = try await make(URL(fileURLWithPath: root), context)
+                    guard request == generation, context == workspace.inspectorContextKey, mode == .github, !Task.isCancelled else { return }
+                    content = next
+                }
+                return
+            }
             if content == nil, let make = workspace.makeFileTools {
                 let next = try await make(URL(fileURLWithPath: root), context)
                 guard request == generation, context == workspace.inspectorContextKey, !Task.isCancelled else { return }
                 content = next
+                (next.workbenchHost as? FilesHost)?.modeChanged()
             }
             let result: JSONValue
             if mode == .files {
@@ -118,7 +135,9 @@ struct NativeInspectorView: View {
     var body: some View {
         Group {
             if let content = model.content {
-                FileToolsSurface(content: content)
+                if content.workbenchHost?.kind == "github" {
+                    NativeEmbeddedDocument(content: content).id(ObjectIdentifier(content))
+                } else { FileToolsSurface(content: content) }
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     if model.busy { ProgressView().controlSize(.small) }

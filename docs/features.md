@@ -184,11 +184,28 @@ dragging and complete toolbar alignment remain in the parity scope.
 
 The native Files inspector embeds the same file tree, Quick open, Project search, inline naming,
 context menus and deletion dialogs as the ordinary client. Its header uses the shared Files, Git,
-GitHub and working-directory icons. Git/GitHub still open their existing windows; embedding those
-workbenches remains pending. Moving tools left or right reorders stable native regions and retains
-the mounted WebKit document and query. Deferred pane focus yields to a later explicit focus change,
-but returns to the terminal when the previous control was removed and focus fell back to the window;
-acceptance checks the actual visible file controls after swapping and restoring split panes.
+GitHub and working-directory icons. GitHub opens in the same tools column; Git still uses its
+existing window. Moving tools left or right reorders stable native regions and retains the mounted
+WebKit document and query. Deferred pane focus yields to a later explicit focus change, but returns
+to the terminal when the previous control was removed and focus fell back to the window; acceptance
+checks the actual visible file controls after swapping and restoring split panes.
+
+GitHub and Files use the same translated tool switcher. Switching retains each WebKit document;
+returning to Files applies the requested tree/search mode to its retained view. GitHub requests
+remain bound to the captured repository/project and reject a changed workspace context. Command-W
+with tools focused hides the column while retaining the main window and unsubmitted PR draft.
+Reopening reattaches the same document. Draft-discard confirmation belongs to the main window;
+pending CLI operations still block quitting until their actual result.
+
+The GitHub tools candidate passes 21 targeted Linux form/transport/navigation checks and the full
+frontend suite (473 passed, 11 conditional skips), plus type/build, format, contracts and i18n
+checks. Navigation failure remains visible, toolbar labels update immediately with the language, and
+a PR draft retains its input during settings changes. New Mac QA requires actual Files/search/GitHub
+switching, main-window attachment, full-height panel bounds, Command-W/reopen and quit cancellation.
+Its four existing screenshot names now capture the main window at 1100×720 and 640×720. Real Mac
+execution and same-source ordinary GitHub comparisons remain pending; the isolated CLI fixture does
+not make real GitHub requests. Workbench-wide PR modal placement, Git embedding and the other
+remaining tools still require parity work.
 
 File requests stay on the captured local project or Worktree. Writes first resolve open editor
 drafts, then recheck the selected root; cancelled delivery does not release a dispatched write
