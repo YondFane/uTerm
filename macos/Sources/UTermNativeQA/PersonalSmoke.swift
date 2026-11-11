@@ -179,11 +179,13 @@ enum PersonalSmoke {
                             model.inspector.error.isEmpty && !model.inspector.busy
                                 && Set(model.inspector.rows.compactMap { $0["path"].string }) == Set(["note.txt", "README.md"])
                         }
+                        guard abs(model.toolbarHeight - CGFloat(CoreChrome.titlebarHeight)) < 1 else { throw BridgeFailure(code: "PERSONAL_CHROME_HEIGHT", message: "Actual toolbar differs from the shared chrome height") }
                         let name = "personal-\(phase)-workspace-\(language)-\(appearance)-\(width).png"
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
                         captures.append(name)
                         report["captures"] = captures
                         workspaceScenes.append(["screenshot": name, "language": language, "appearance": appearance,
+                            "chromeContractSHA256": CoreChrome.contractSHA256, "toolbarHeight": model.toolbarHeight,
                             "windowSizeAttempts": sizeAttempts,
                             "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0),
                             "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-session-tabs-files", "filesReadable": true, "fontSize": model.settings["fontSize"].number ?? 0,

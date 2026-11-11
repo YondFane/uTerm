@@ -146,7 +146,7 @@ enum TerminalSmoke {
         report["sidebarHiddenAndRestored"] = model.sidebarVisible
         report["captures"] = captures
         report["viewIdentityRetained"] = true
-        guard abs(model.toolbarHeight - 40) < 1 else { throw BridgeFailure(code: "SMOKE_TOOLBAR", message: "Measured native toolbar height differs from the 40pt target") }
+        guard abs(model.toolbarHeight - CGFloat(CoreChrome.titlebarHeight)) < 1 else { throw BridgeFailure(code: "SMOKE_TOOLBAR", message: "Measured native toolbar height differs from the shared chrome target") }
         report["nativeToolbarHeight"] = model.toolbarHeight
         report["sessions"] = model.terminals.values.map { ["id": $0.id, "generation": $0.generation ?? ""] }
         let status = try await bridge.call("host.status")

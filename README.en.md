@@ -166,6 +166,10 @@ and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift b
 bridge suite includes logical file-root alias recovery and resolved file-picker boundary
 regressions.
 
+`pnpm chrome:generate` generates the Swift vectors and client digest from
+`shared/contracts/chrome-ui-v1.json`; `pnpm chrome:check` rejects stale copies. Both are included in
+contract generation/checks.
+
 `pnpm settings:generate` derives the native command/theme catalog from the existing TypeScript
 settings and translations; `pnpm settings:check` verifies it. Contract generation/checks include
 this catalog. Core `settings.catalog` and `settings.validate` read defaults and validate platform

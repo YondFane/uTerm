@@ -3580,7 +3580,7 @@ select:focus-visible {
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex: 0 0 48px;
+  flex: 0 0 var(--sidebar-rail-width, 48px);
   min-height: 0;
   gap: 12px;
   padding: 12px 6px 8px;

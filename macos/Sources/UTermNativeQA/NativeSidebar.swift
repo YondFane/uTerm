@@ -305,7 +305,9 @@ struct NativeSidebar: NSViewRepresentable {
             var leading: NSLayoutXAxisAnchor = cell.leadingAnchor
             var inset: CGFloat = 12
             if let symbol = item.symbol {
-                let icon = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage())
+                let shared: [String: CoreSidebarIcon] = ["folder": .folder, "terminal": .terminal, "arrow.triangle.branch": .branch, "network": .terminal, "externaldrive": .sqlDatabase, "cylinder": .database]
+                let image = shared[symbol].map { NativeChromeImages.sidebar($0) } ?? NSImage(systemSymbolName: symbol, accessibilityDescription: nil) ?? NSImage()
+                let icon = NSImageView(image: image)
                 icon.contentTintColor = NativePreferences.color(settings["activeIconColor"], fallback: NativePreferences.color(palette["accent"], fallback: .controlAccentColor))
                 icon.translatesAutoresizingMaskIntoConstraints = false
                 cell.addSubview(icon)
@@ -321,7 +323,7 @@ struct NativeSidebar: NSViewRepresentable {
                     disclosure.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(disclosure)
                     NSLayoutConstraint.activate([disclosure.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2), disclosure.centerYAnchor.constraint(equalTo: cell.centerYAnchor), disclosure.widthAnchor.constraint(equalToConstant: 14), disclosure.heightAnchor.constraint(equalToConstant: 20)])
                 }
-                NSLayoutConstraint.activate([icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 20 + CGFloat(item.depth) * 16), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: 16), icon.heightAnchor.constraint(equalToConstant: 16)])
+                NSLayoutConstraint.activate([icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 20 + CGFloat(item.depth) * 16), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: CGFloat(CoreChrome.sidebarIconSize)), icon.heightAnchor.constraint(equalToConstant: CGFloat(CoreChrome.sidebarIconSize))])
                 leading = icon.trailingAnchor
                 inset = 6
             }

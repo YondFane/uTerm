@@ -24,6 +24,8 @@ class ParityEvidenceTests(unittest.TestCase):
         self.fixture = Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json"
         fixture = module.read_json(self.fixture)
         digest = hashlib.sha256(self.fixture.read_bytes()).hexdigest()
+        chrome = self.fixture.parent.parent / "contracts/chrome-ui-v1.json"
+        chrome_digest = hashlib.sha256(chrome.read_bytes()).hexdigest()
         self.n = dict(passed=True, platform="macOS", architecture="arm64", system="Version 15.8.2",
                       sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, productionDataAccess=False,
                       uiParityFixtureSHA256=digest, backgroundTabCloseRetainedSelectedGeneration=True,
@@ -36,7 +38,7 @@ class ParityEvidenceTests(unittest.TestCase):
                 for width in fixture["widths"]:
                     values = dict(language=lang, appearance=appearance, width=width, height=720,
                                   scenario="toolbar-sidebar-two-session-tabs-files", sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
-                                  generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
+                                  chromeContractSHA256=chrome_digest, toolbarHeight=44, generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
                     native = f"personal-initial-workspace-{lang}-{appearance}-{width}.png"
                     tauri = f"ui-parity-workspace-{lang}-{appearance}-{width}.png"
                     # Synthetic header fixtures test rejection policy, never native acceptance.
@@ -100,6 +102,15 @@ class ParityEvidenceTests(unittest.TestCase):
             with self.subTest(key=key), self.assertRaises(AssertionError):
                 self.run_compare()
             self.t = original
+
+    def test_rejects_different_chrome_and_old_toolbar_geometry(self):
+        original = copy.deepcopy(self.t["scenes"][0]["checks"])
+        for key, value in [("chromeContractSHA256", "0" * 64), ("toolbarHeight", 40), ("toolbarHeight", 0)]:
+            self.t["scenes"][0]["checks"] = {**original, key: value}
+            with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
+        self.t["scenes"][0]["checks"] = original
+        self.n["workspaceScenes"][0].pop("chromeContractSHA256")
+        with self.assertRaises(AssertionError): self.run_compare()
 
     def test_rejects_missing_and_duplicate_scene_records(self):
         original = copy.deepcopy(self.n)

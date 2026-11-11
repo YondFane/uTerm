@@ -145,6 +145,9 @@ ARM64／X64 DMG和ZIP附件，不设置自动过期、下载无需登录。 **ma
 `bash scripts/macos-native-build.sh` 和 `bash scripts/macos-native-test.sh`
 构建隔离QA应用并运行Rust／Swift桥接测试；桥接测试包含逻辑文件根路径别名恢复及解析后的文件选择边界回归。
 
+`pnpm chrome:generate` 从 `shared/contracts/chrome-ui-v1.json`
+生成 Swift 矢量及客户端摘要；`pnpm chrome:check` 拒绝过期副本，契约生成／检查已包含这两项。
+
 `pnpm settings:generate` 从现有 TypeScript 设置和文案生成原生命令／主题目录， `pnpm settings:check`
 核对目录；契约生成／检查已包含该目录。Core `settings.catalog` 和 `settings.validate`
 读取默认值并校验平台快捷键，不保存配置；共享／原生设置、菜单及受保护的登录模拟已在

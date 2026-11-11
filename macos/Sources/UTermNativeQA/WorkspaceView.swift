@@ -10,7 +10,6 @@ struct WorkspaceView: View {
     var body: some View {
         VStack(spacing: 0) {
             NativeWorkspaceToolbar(model: model)
-            Divider()
             HSplitView {
                 if model.sidebarVisible {
                 VStack(spacing: 0) {

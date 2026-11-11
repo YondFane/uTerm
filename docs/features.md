@@ -71,6 +71,19 @@ app does not automatically restore old data or perform the Tauri-to-native cutov
 
 #### Native workspace interaction
 
+Regular toolbar/sidebar vector paths and chrome dimensions use `shared/contracts/chrome-ui-v1.json`.
+React reads that source; generated Swift paths are rendered through CoreGraphics with matching round
+strokes, rather than substituted system glyphs. The candidate native toolbar uses the shared
+44-point height and interface palette. Agent brands and special close controls remain outside this
+first vector contract; the complete shell layout is still being aligned.
+
+The candidate capture flow records the exact chrome contract digest and measured toolbar height in
+both real applications. Collection rejects a different contract or the previous 40-point native
+height. Linux passes 450 Node checks (11 platform skips), type checking and the focused
+SVG/side-panel regressions. Swift vector geometry tests cover relative subpaths, smooth curves,
+arcs/rotation/radius expansion and invalid inputs; actual macOS compilation and windows still
+require this candidate's CI.
+
 The native toolbar opens complete settings directly, as does the app menu. Settings retain their
 save/reload/reset behavior and unsaved drafts when the window is hidden. Return saves an edited
 settings draft; Command-W hides the window. The local CLI control switch remains an immediate

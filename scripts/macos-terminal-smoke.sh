@@ -56,7 +56,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     for key in ['unicodeAndAnsiParsed','alternateScreenReturned','hideAndReopenRetainedOutput','viewIdentityRetained','sidebarKeyboardSelectionRetainedFocus','settingsOpenedFromNativeMenu','settingsDismissedWithCommandW']:
         assert first[key],(key,first)
     assert first['splitSessionCount']==2 and first['runningProcessesBeforeQuit']==2,first
-    assert abs(first['nativeToolbarHeight']-40)<1,first
+    assert abs(first['nativeToolbarHeight']-json.load(open('shared/contracts/chrome-ui-v1.json'))['metrics']['titlebarHeight'])<1,first
     assert first['nativeSessionMenuPinOrderGroupUngroupAndStaleWrite'] and first['sessionMenuRetainsPTYGenerationsAndViews']
     assert not first['sessionDragGestureExecuted']
     assert len(first['captures'])==15 and 'native-vim-edit.png' in first['captures'] and 'native-terminal-slow-consumer.png' in first['captures'],first

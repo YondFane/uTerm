@@ -1,3 +1,5 @@
+import { chromeContractSHA256 } from "../lib/chrome.generated";
+import chrome from "../../shared/contracts/chrome-ui-v1.json" with { type: "json" };
 import { translate } from "../lib/i18n";
 import parityFixtureJSON from "../../shared/fixtures/client-ui-parity.json?raw";
 import editorFixtureJSON from "../../shared/fixtures/editor-draft-qa.json?raw";
@@ -346,7 +348,17 @@ async function runUiParity() {
           current?.generation === original.generation,
           "Parity layout restarted the selected terminal",
         );
+        const toolbarHeight = document
+          .querySelector("main > .toolbar")
+          ?.getBoundingClientRect().height;
+        assert(
+          toolbarHeight !== undefined &&
+            Math.abs(toolbarHeight - chrome.metrics.titlebarHeight) < 1,
+          "Actual toolbar differs from shared chrome height",
+        );
         await scene(`workspace-${language}-${appearance}-${width}`, {
+          chromeContractSHA256,
+          toolbarHeight,
           language,
           appearance,
           width: innerWidth,

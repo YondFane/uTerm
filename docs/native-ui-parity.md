@@ -49,6 +49,15 @@ must match.
 | Settings / 设置 | One complete entry, all sections/defaults, search, theme import and shortcuts / 统一完整入口、全部分类／默认值、搜索、主题导入及快捷键          | Pending / 待验收 |
 | Settings / 设置 | Save/reload/reset, concurrent conflicts, retained drafts, restart and update preferences / 保存／重读／重置、并发冲突、草稿保留、重启及更新偏好 | Pending / 待验收 |
 
+The shared-vector candidate uses `shared/contracts/chrome-ui-v1.json` for regular icon paths and
+44-point chrome metrics. New workspace captures must report the generated contract SHA-256 and
+actual toolbar height in both applications. The collector rejects stale vectors or old native
+height; 0.2.10 captures do not meet this new candidate's evidence requirement. Full visual and
+functional parity remains pending.
+
+共享矢量候选使用 `shared/contracts/chrome-ui-v1.json`
+的常规图标路径与 44 点界面尺寸。新的工作区截图须在两版应用中记录生成契约的 SHA-256 与实际顶栏高度；汇集器拒绝过期路径或旧原生高度。0.2.10 原图不满足此新候选的证据要求，完整视觉／功能一致性仍待完成。
+
 ## Evidence / 证据
 
 Use isolated application identities and temporary projects. Capture both actual windows for English

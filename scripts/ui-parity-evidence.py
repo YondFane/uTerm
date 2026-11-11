@@ -32,6 +32,9 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
     native, tauri = read_json(native_path), read_json(tauri_path)
     fixture = read_json(fixture_path)
     fixture_digest = hashlib.sha256(Path(fixture_path).read_bytes()).hexdigest()
+    chrome_path = Path(fixture_path).parent.parent / "contracts/chrome-ui-v1.json"
+    chrome_digest = hashlib.sha256(chrome_path.read_bytes()).hexdigest()
+    chrome = read_json(chrome_path)
     for report, source, merge in [(native, "sourceHeadSHA", "testedMergeSHA"), (tauri, "head", "tested")]:
         assert report.get("passed") is True and not report.get("failure") and not report.get("cleanupErrors"), "Unaccepted application run"
         assert report.get(source) == head and report.get(merge) == tested, "Wrong source or tested merge SHA"
@@ -59,6 +62,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["screenshot"] == expected_native and t["screenshot"] == expected_tauri
         assert n["sourceHeadSHA"] == head and n["testedMergeSHA"] == tested
         assert n["height"] == t["checks"]["height"] == fixture["height"]
+        assert n.get("chromeContractSHA256") == t["checks"].get("chromeContractSHA256") == chrome_digest, "Different or stale chrome contract"
+        assert all(abs(scene.get("toolbarHeight", 0) - chrome["metrics"]["titlebarHeight"]) < 1 for scene in [n, t["checks"]]), "Wrong actual chrome height"
         assert n["scenario"] == t["checks"]["scenario"] == "toolbar-sidebar-two-session-tabs-files"
         assert n["filesReadable"] is True and t["checks"]["filesReadable"] is True
         assert n["fontSize"] == t["checks"]["fontSize"] == fixture["fontSize"]
@@ -106,6 +111,7 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         shutil.copyfile(native_path.parent / pair["native"], output / pair["native"])
         shutil.copyfile(tauri_path.parent / pair["tauri"], output / pair["tauri"])
     result = dict(sourceHeadSHA=head, testedMergeSHA=tested, uiParityFixtureSHA256=fixture_digest,
+                  chromeContractSHA256=chrome_digest,
                   platform="macOS", architecture="arm64", system=native["system"], pairs=pairs,
                   comparisonReady=True, functionalParityAccepted=False,
                   scope="Workspace and settings navigation screenshots; review images and execute remaining acceptance rows.")

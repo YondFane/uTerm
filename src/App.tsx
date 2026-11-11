@@ -1,3 +1,4 @@
+import chrome from "../shared/contracts/chrome-ui-v1.json" with { type: "json" };
 import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
 import { GitFavoritesRecovery } from "./components/GitFavoritesRecovery";
 import { WorktreeDeleteDialog } from "./components/WorktreeDeleteDialog";
@@ -194,7 +195,9 @@ export function App() {
   const registerJavaClose = useCallback((prepare: (() => Promise<boolean>) | null) => {
     prepareJavaClose.current = prepare;
   }, []);
-  const [requestedSidebarWidth, setRequestedSidebarWidth] = useState(248);
+  const [requestedSidebarWidth, setRequestedSidebarWidth] = useState(
+    chrome.metrics.sidebarDefaultWidth,
+  );
   const sidebarDrag = useRef<{
     x: number;
     width: number;
@@ -2527,6 +2530,8 @@ export function App() {
         {
           "--inspector-width": `${inspectorSize.width}px`,
           "--sidebar-width": `${sidebarWidth}px`,
+          "--titlebar-height": `${chrome.metrics.titlebarHeight}px`,
+          "--sidebar-rail-width": `${chrome.metrics.sidebarRailWidth}px`,
           "--inspector-boundary": `${sidebarWidth + (inspectorOnLeft ? inspectorSize.width : Math.max(320, shellWidth - sidebarWidth - inspectorSize.width))}px`,
         } as CSSProperties
       }
