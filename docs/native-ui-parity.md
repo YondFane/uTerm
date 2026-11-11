@@ -85,6 +85,19 @@ remain pending; historical 36-pair artifacts do not satisfy this expanded grid.
 Python 策略通过，包含外部／符号链接／复用目录及挤压／过期表单证据拒绝。真实 Linux Rust
 Core 进程通过无需账户的准备／读取。扩大网格为普通版 39 张／38 组／含重启共 77 张原始 PNG；当前源码 Mac 原图仍待生成，历史 36 组不满足新网格。
 
+Head `92bd88e2f0ba0f31d8fd20c02eed45d40229ac7d` / merge `383f762158b9285bd65d70bfbbe3fe1bfcdca018`
+fails ARM compilation: the PR collector passed Double sizes to the Int window-sizing function. Exact
+conversion now rejects fractional/non-finite input; new screenshots remain pending. The
+[failed artifact](https://github.com/YondFane/uTerm/actions/runs/43084143961/artifacts/13885543296)
+is retained. At prior head `43b3995769cf7d8c687a2b038e57e3325941488b` / merge
+`5ff58f2dbdb25a063c222ab99df3852965bb43d1`, the full ARM matrix and SDK install pass. Both real PR
+originals in
+[artifact13885342948](https://github.com/YondFane/uTerm/actions/runs/43080810933/artifacts/13885342948)
+were viewed: 640×500 wide and 588×500 narrow, with readable fields and the surrounding workspace.
+This does not accept the new Personal/ordinary paired grid.
+
+92bd88e／上述 merge 的 ARM 构建失败：PR 采集器将 Double 尺寸传入 Int 窗口函数。候选精确转换并拒绝小数／非有限值，新增截图仍待执行，失败产物保留。此前 43b3995／上述 merge 的完整 ARM 矩阵及 SDK 安装通过，产物中两张真实 PR 原图已查看：宽窗 640×500、窄窗 588×500，字段可读且保留外围工作区。这不接受新增 Personal／普通版配对网格。
+
 At head `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
 `6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
 [paired artifact](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)

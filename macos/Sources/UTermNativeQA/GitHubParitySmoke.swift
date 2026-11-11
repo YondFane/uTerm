@@ -12,7 +12,8 @@ enum GitHubParitySmoke {
         var scenes: [[String: Any]] = []
         for scene in fixture["githubScenes"].array {
             guard let language = scene["language"].string, let appearance = scene["appearance"].string,
-                  let width = scene["width"].number, let height = scene["height"].number else { throw BridgeFailure(code: "GITHUB_PARITY_SCENE", message: "Invalid GitHub comparison scene") }
+                  let widthNumber = scene["width"].number, let heightNumber = scene["height"].number,
+                  let width = Int(exactly: widthNumber), let height = Int(exactly: heightNumber) else { throw BridgeFailure(code: "GITHUB_PARITY_SCENE", message: "Invalid GitHub comparison scene") }
             await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
             _ = try await TerminalSmoke.sizeCaptureWindow(window, width: width, height: height)
             guard let tools = model.inspector.content else { throw BridgeFailure(code: "GITHUB_PARITY_TOOLS", message: "Missing live tools switcher") }
@@ -40,7 +41,7 @@ enum GitHubParitySmoke {
             guard github.webView.window === window, terminal.view.window === window, !terminal.view.visibleRect.isEmpty,
                   terminal.generation == generation, ObjectIdentifier(terminal.view) == identity,
                   (try await bridge.snapshot()).document.workspace == original.document.workspace else { throw BridgeFailure(code: "GITHUB_PARITY_STATE", message: "PR form replaced the live workspace") }
-            let name = "personal-\(phase)-github-pr-draft-\(language)-\(appearance)-\(Int(width)).png"
+            let name = "personal-\(phase)-github-pr-draft-\(language)-\(appearance)-\(width).png"
             try await TerminalSmoke.capture(window: window, path: output.appendingPathComponent(name))
             captures.append(name); report["captures"] = captures
             var row: [String: Any] = ["language": language, "appearance": appearance, "width": width, "height": height, "screenshot": name,

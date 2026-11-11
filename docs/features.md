@@ -242,6 +242,23 @@ real Rust Core process prepares/reads the new CLI fixture on Linux without an ac
 write. Type/build, format, contracts and i18n checks pass. Actual new Mac images remain pending;
 760d433's 36 pairs retain their original scope and do not satisfy the expanded grid.
 
+The macOS ARM capture build at head `92bd88e2f0ba0f31d8fd20c02eed45d40229ac7d`, merge
+`383f762158b9285bd65d70bfbbe3fe1bfcdca018`, fails because the new collector passed JSON Double sizes
+to an Int window-sizing function. The candidate uses exact integer conversion, rejecting fractional
+or non-finite dimensions. The
+[failed build artifact](https://github.com/YondFane/uTerm/actions/runs/43084143961/artifacts/13885543296)
+is retained; no new PR pair was accepted.
+
+The workspace PR implementation itself passes the full ARM native matrix at head
+`43b3995769cf7d8c687a2b038e57e3325941488b`, merge `5ff58f2dbdb25a063c222ab99df3852965bb43d1`. Both
+original PR images in the
+[artifact](https://github.com/YondFane/uTerm/actions/runs/43080810933/artifacts/13885342948) were
+inspected: English 1100×720 uses a centered 640×500 form; Chinese 640×720 uses 588×500. Fields are
+readable and the live workspace remains around the form. Actual draft, pending/quit, injected-root
+and Escape checks pass. The same source's complete SDK installation accepts the update and proves
+original host PID exit and endpoint removal. This accepts that source's ARM native QA scope; it does
+not accept the new Personal/ordinary capture grid or Intel.
+
 At source `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
 `6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
 [Intel report](https://github.com/YondFane/uTerm/actions/runs/43074768464/artifacts/13882499663)

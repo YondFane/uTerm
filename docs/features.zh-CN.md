@@ -126,6 +126,14 @@ GitHub 与文件面板使用同一组随语言翻译的工具切换按钮。切�
 PR 表单及缺失无写入证据。Linux 的真实 Rust
 Core 进程通过新 CLI 样例的准备／读取，无需账户且不写 GitHub。类型／构建、格式、契约与 i18n 检查通过。新增 Mac 原图仍待生成；760d433 的 36 组保留原有范围，不满足扩大后的网格。
 
+源码 `92bd88e2f0ba0f31d8fd20c02eed45d40229ac7d`、merge `383f762158b9285bd65d70bfbbe3fe1bfcdca018`
+的 macOS ARM 采集构建失败：新增采集器将 JSON
+Double 尺寸传给要求 Int 的窗口尺寸函数。候选改为精确整数转换，拒绝小数及非有限尺寸。[失败构建产物](https://github.com/YondFane/uTerm/actions/runs/43084143961/artifacts/13885543296)保留，没有接受新增 PR 配对。
+
+PR 工作区实现本身在源码 `43b3995769cf7d8c687a2b038e57e3325941488b`、merge
+`5ff58f2dbdb25a063c222ab99df3852965bb43d1`
+通过完整 ARM 原生矩阵。[产物](https://github.com/YondFane/uTerm/actions/runs/43080810933/artifacts/13885342948)中的两张 PR 原图已查看：英文 1100×720 使用居中的 640×500 表单，中文 640×720 使用 588×500，字段可读，外围保留实时工作区。实际草稿、提交中／退出、根目录注入和 Escape 检查通过。同源码完整 SDK 安装通过，确认原宿主 PID 退出及端点删除。这仅接受该源码 ARM 原生 QA 范围，不接受新增 Personal／普通版采集网格或 Intel。
+
 源码 `760d433f319a0e95685e7dd4724a8b23b14b07ec`、merge `6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`
 的两种原生矩阵均通过。[Intel 报告](https://github.com/YondFane/uTerm/actions/runs/43074768464/artifacts/13882499663)通过真实主机信任取消／批准／认证及完整交互矩阵，包括文件／搜索／GitHub 切换和草稿保护。此前窄 GitHub 表单仍为视觉拒绝；这些原图不能接受新工作区模态。上次 Intel 偶发信任失败本轮没有复现，没有加入推测性的信任绕过。
 
