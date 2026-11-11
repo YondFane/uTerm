@@ -65,7 +65,16 @@ class PersonalPackageTests(unittest.TestCase):
                          screenshot=f"personal-{phase}-settings-{section['id']}-{scene['language']}-{scene['appearance']}-{scene['width']}.png")
                     for section in fixture["settingsSections"] for scene in fixture["settingsScenes"]]
         return dict(nativeSidebarSectionOrderAndReadOnlyCollapse=True, backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,
-                    settingsScenes=settings, embeddedWorkspaceFiles=dict(passed=True, tabControlsActivated=True, arrowNavigationActivated=True, sameMainWindow=True, orderedAndReused=True, exactUnsavedDraftRetained=True, cancelCloseRetainedTabs=True, discardPreservedSiblingAndExternalWriter=True, terminalViewAndGenerationRetained=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-embedded-files.png"), captures=[scene["screenshot"] for scene in scenes + settings] + [f"personal-{phase}-embedded-files.png"])
+                    settingsScenes=settings, nativeTerminalControls=dict(generationBeforeRestart="old-generation", restartedGeneration="new-generation", searchInputBytesBefore=0, searchInputBytesAfter=0, passed=True, actualFontButtonsAppliedAndRestored=True, fontBoundsDisabled=True, unicodeCaseCountsAndNavigation=True, keyboardOpenAndEscape=True, searchInputDidNotReachPTY=True, terminalIdentityAndGenerationRetained=True, explicitRestartRetainedDescriptorAndView=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-terminal-search.png"), embeddedWorkspaceFiles=dict(passed=True, tabControlsActivated=True, arrowNavigationActivated=True, sameMainWindow=True, orderedAndReused=True, exactUnsavedDraftRetained=True, cancelCloseRetainedTabs=True, discardPreservedSiblingAndExternalWriter=True, terminalViewAndGenerationRetained=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-embedded-files.png"), captures=[scene["screenshot"] for scene in scenes + settings] + [f"personal-{phase}-embedded-files.png", f"personal-{phase}-terminal-search.png"])
+
+    def test_terminal_controls_require_actual_input_and_current_source(self):
+        for key, value in [("unicodeCaseCountsAndNavigation", False), ("searchInputDidNotReachPTY", False), ("terminalIdentityAndGenerationRetained", False), ("sourceHeadSHA", "c" * 40), ("screenshot", "old.png")]:
+            report = self.workspace_evidence("initial")
+            report["nativeTerminalControls"][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): package.validate_terminal_controls(report, "a" * 40, "b" * 40, "initial")
+        report = self.workspace_evidence("initial")
+        report.pop("nativeTerminalControls")
+        with self.assertRaises(AssertionError): package.validate_terminal_controls(report, "a" * 40, "b" * 40, "initial")
 
     def test_embedded_workspace_requires_actual_controls_and_current_source(self):
         for key, value in [("tabControlsActivated", False), ("arrowNavigationActivated", False), ("terminalViewAndGenerationRetained", False), ("sourceHeadSHA", "c" * 40), ("screenshot", "old.png")]:

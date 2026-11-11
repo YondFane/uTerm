@@ -5,6 +5,10 @@ import UTermBridge
 @MainActor
 final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     let id: String
+    lazy var search = NativeTerminalSearch(session: self)
+    var name: String { entry.session["name"].string ?? localized("Terminal", "终端") }
+    var directory: String { entry.directory }
+    var supportsRestart: Bool { taskGeneration == nil && entry.session["ssh"] == .null }
     let view: NativeTerminalView
     private var appliedSettings: JSONValue = .null
     private var appliedCatalog: JSONValue = .null
@@ -224,6 +228,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             applyingTaskLogViewport = false
         }
         qaRenderedBytes += packet.bytes.count
+        search.outputChanged()
         qaRenderedFrames += 1
         qaLargestFrame = max(qaLargestFrame, packet.bytes.count)
         let wasExited = exited
@@ -239,6 +244,24 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             qaLastAckUptime = ProcessInfo.processInfo.systemUptime
         } catch { self.error = error.localizedDescription; changed?() }
         await resizeIfNeeded()
+    }
+
+    func restart() async {
+        guard supportsRestart, exited, !reconnecting else { return }
+        reconnecting = true
+        defer { reconnecting = false; changed?() }
+        if let connecting { await connecting.value }
+        guard exited, let generation else { return }
+        let previous = attachment
+        await drainInput()
+        do {
+            _ = try await bridge.call("host.close", params: .object(["id": .string(id), "generation": .string(generation)]))
+            guard attachment == previous else { return }
+            attachment = UUID().uuidString; self.generation = nil; inputControl = nil
+            receivedInitialFrame = false; hostSize = nil; exited = false; error = ""; input.removeAll()
+            search.close()
+            await connect()
+        } catch { self.error = error.localizedDescription }
     }
 
     func reconnect() async {

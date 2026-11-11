@@ -148,6 +148,8 @@ ARM64／X64 DMG和ZIP附件，不设置自动过期、下载无需登录。 **ma
 `pnpm chrome:generate` 从 `shared/contracts/chrome-ui-v1.json`
 生成 Swift 矢量及客户端摘要；`pnpm chrome:check` 拒绝过期副本，契约生成／检查已包含这两项。
 
+原生 UI 候选包含工作区文件标签及各窗格字号／搜索控件；完整一致性及最新真实窗口检查仍待完成，参见[原生工作区指南](docs/features.zh-CN.md#原生工作区交互)。
+
 `pnpm settings:generate` 从现有 TypeScript 设置和文案生成原生命令／主题目录， `pnpm settings:check`
 核对目录；契约生成／检查已包含该目录。Core `settings.catalog` 和 `settings.validate`
 读取默认值并校验平台快捷键，不保存配置；共享／原生设置、菜单及受保护的登录模拟已在

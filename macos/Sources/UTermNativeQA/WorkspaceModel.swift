@@ -84,7 +84,11 @@ final class WorkspaceModel: ObservableObject {
     private var helperReady = false
     private var needsReload = false
     lazy var agentNotifications = AgentNotifications(workspace: self)
-    let documents = NativeWorkspaceDocuments()
+    lazy var documents: NativeWorkspaceDocuments = {
+        let value = NativeWorkspaceDocuments()
+        value.terminalFocusRequested = { [weak self] in self?.focusRevision += 1 }
+        return value
+    }()
     lazy var inspector = NativeInspectorModel(workspace: self)
     lazy var updates = NativeUpdates()
     var inspectorContextKey: String { [groupID, workspace["selectedProject"].string ?? "", workspace["selectedWorktree"].string ?? ""].joined(separator: "\u{0}") }

@@ -563,6 +563,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if id == "git", contentWindows.values.contains(where: { $0.gitMode && $0.window === origin }) { return true }
         if id == "github", contentWindows.values.contains(where: { $0.workbenchHost?.kind == "github" && $0.window === origin }) { return true }
         guard origin === window else { return false }
+        if id == "terminalSearch", model.documents.active(in: model.inspectorContextKey) != nil { return false }
         if ["terminal", "chat", "toggleSidebar", "toggleInspector"].contains(id) { return true }
         if ["quick", "git", "github", "files", "search"].contains(id) { return model.workspace["selectedProject"].string != nil }
         if id == "swapPanes" { return model.inspectorVisible }
@@ -608,8 +609,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString("uterm://session/" + id, forType: .string)
             }
         case "terminalSearch":
-            let item = NSMenuItem(); item.tag = Int(NSFindPanelAction.showFindPanel.rawValue)
-            model.selectedTerminal?.view.performFindPanelAction(item)
+            if let session = model.selectedTerminal {
+                session.search.open()
+            }
         case "next", "previous":
             let selected = model.sessionEntries.first { $0.sessionID == model.selectedID }
             let entries = model.sessionEntries.filter { $0.rosterId == selected?.rosterId && $0.session["worktreeId"] == selected?.session["worktreeId"] }

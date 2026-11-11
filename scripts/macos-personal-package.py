@@ -89,11 +89,26 @@ def validate_embedded_workspace(report, head, tested, phase):
     assert proof.get("screenshot") == f"personal-{phase}-embedded-files.png" and proof["screenshot"] in report["captures"]
 
 
+def validate_terminal_controls(report, head, tested, phase):
+    proof = report.get("nativeTerminalControls", {})
+    for key in ["passed", "actualFontButtonsAppliedAndRestored", "fontBoundsDisabled", "unicodeCaseCountsAndNavigation", "keyboardOpenAndEscape", "searchInputDidNotReachPTY", "terminalIdentityAndGenerationRetained", "explicitRestartRetainedDescriptorAndView"]:
+        assert proof.get(key) is True, "Missing actual terminal control operation: " + key
+    assert proof.get("sourceHeadSHA") == head and proof.get("testedMergeSHA") == tested
+    assert proof.get("platform") == "macOS" and proof.get("architecture") in ["arm64", "x86_64"]
+    assert proof.get("system") and proof.get("width", 0) >= 640 and proof.get("height", 0) >= 420
+    assert proof.get("screenshot") == f"personal-{phase}-terminal-search.png" and proof["screenshot"] in report["captures"]
+    assert isinstance(proof.get("generationBeforeRestart"), str) and proof["generationBeforeRestart"]
+    assert isinstance(proof.get("restartedGeneration"), str) and proof["restartedGeneration"] and proof["restartedGeneration"] != proof["generationBeforeRestart"]
+    assert type(proof.get("searchInputBytesBefore")) is int and proof["searchInputBytesBefore"] >= 0
+    assert proof["searchInputBytesBefore"] == proof.get("searchInputBytesAfter")
+
+
 def validate_smoke_report(report, head, tested, phase):
     assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
     validate_workspace_scenes(report, head, tested, phase)
     validate_settings_scenes(report, head, tested, phase)
     validate_embedded_workspace(report, head, tested, phase)
+    validate_terminal_controls(report, head, tested, phase)
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}

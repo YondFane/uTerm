@@ -11,6 +11,7 @@ final class NativeWorkspaceDocuments: ObservableObject {
         let content: ContentWindow
     }
     @Published private(set) var documents: [Document] = []
+    var terminalFocusRequested: (() -> Void)?
     @Published private var selected: [String: UUID] = [:]
     func visible(in scope: String) -> [Document] { documents.filter { $0.scope == scope } }
     func active(in scope: String) -> Document? { documents.first { $0.scope == scope && $0.id == selected[scope] } }
@@ -46,6 +47,7 @@ final class NativeWorkspaceDocuments: ObservableObject {
         if selected[old.scope] == id {
             let remaining = visible(in: old.scope)
             selected[old.scope] = remaining.isEmpty ? nil : remaining[min(index, remaining.count - 1)].id
+            if remaining.isEmpty { terminalFocusRequested?() }
         }
     }
     func close(_ id: UUID) {
@@ -64,27 +66,8 @@ struct NativeWorkspaceDocumentSurface: View {
             if !documents.visible(in: model.inspectorContextKey).isEmpty {
                 NativeWorkspaceDocumentTabs(model: model, documents: documents)
             }
-            if documents.active(in: model.inspectorContextKey) == nil, let session = model.selectedTerminal {
-                HStack {
-                    Text(model.state?.sessions.first { $0.sessionID == session.id }?.session["name"].string ?? "")
-                    if !session.activityLabel.isEmpty { Text(session.activityLabel).foregroundStyle(.secondary) }
-                    Spacer()
-                    if session.exited { Text(localized("Exited", "已退出")).foregroundStyle(.secondary) }
-                    if session.inputControl?.owned == false {
-                        Text(localized("Read-only attachment", "只读连接")).foregroundStyle(.secondary)
-                        InputControlButton(session: session)
-                    }
-                    Button(localized("Reconnect", "重新连接")) { Task { await session.reconnect() } }
-                    Button(localized("Close session", "关闭会话")) { Task { await model.closeSession() } }
-                        .disabled(model.busy || model.gitFavoritesRecoveryPresented)
-                }.font(.caption).padding(.horizontal, 10).frame(height: 30)
-                if !session.error.isEmpty { Text(session.error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(6) }
-                if session.activityUnavailable { Text(localized("Agent activity is unavailable. Reconnect to retry.", "Agent 活动暂不可用，请重新连接后重试。")).font(.caption).foregroundStyle(.red).padding(6) }
-            }
             ZStack {
-                TerminalCanvas(model: model)
-                    .padding(CGFloat(model.settings["windowPadding"].number ?? 10))
-                    .opacity(documents.active(in: model.inspectorContextKey) == nil ? 1 : 0)
+                TerminalCanvas(model: model, hidden: documents.active(in: model.inspectorContextKey) != nil)
                     .allowsHitTesting(documents.active(in: model.inspectorContextKey) == nil)
                 if let selected = documents.active(in: model.inspectorContextKey) {
                     NativeEmbeddedDocument(content: selected.content)

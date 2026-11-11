@@ -170,6 +170,10 @@ regressions.
 `shared/contracts/chrome-ui-v1.json`; `pnpm chrome:check` rejects stale copies. Both are included in
 contract generation/checks.
 
+The native UI candidate includes workspace file tabs and per-pane font/search controls. Complete
+parity and the latest real-window checks remain pending; see the
+[native workspace guide](docs/features.md#native-workspace-interaction).
+
 `pnpm settings:generate` derives the native command/theme catalog from the existing TypeScript
 settings and translations; `pnpm settings:check` verifies it. Contract generation/checks include
 this catalog. Core `settings.catalog` and `settings.validate` read defaults and validate platform

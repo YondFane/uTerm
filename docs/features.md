@@ -71,63 +71,74 @@ app does not automatically restore old data or perform the Tauri-to-native cutov
 
 #### Native workspace interaction
 
-Regular toolbar/sidebar vector paths and chrome dimensions use `shared/contracts/chrome-ui-v1.json`.
-React reads that source; generated Swift paths are rendered through CoreGraphics with matching round
-strokes, rather than substituted system glyphs. The candidate native toolbar uses the shared
-44-point height and interface palette. Agent brands and special close controls remain outside this
-first vector contract. The candidate shell places the 48-point category rail down the left edge,
-with workspace selection above the list and the title/Java/Python controls above the main pane.
-The sidebar defaults to 248 points, clamps to 30% of the window (at most 320), and retains the
-rail when collapsed. Add, session, split and tool actions remain available from the rail menu;
-settings opens from its footer. Tools default to 35% of the remaining width and reserve a 320-point
-main pane; narrow windows use their actual remaining space, keeping the whole tools column inside
-the window. Side/tool separators support dragging, arrow keys, Home/End and Return to restore the
-default width. The native layout avoids a separate split-view titlebar inset. Embedded workbenches and complete settings styling still require alignment; the new workspace
-file tabs still need their candidate macOS CI acceptance.
+Regular toolbar/sidebar vectors and dimensions use `shared/contracts/chrome-ui-v1.json`. React reads
+that source and Swift renders the generated paths through CoreGraphics. The native candidate uses
+the shared 44-point toolbar and interface palette; Agent brands and special close controls remain
+outside this vector contract.
 
-The candidate adds a real Personal-window check that clicks embedded file/tab/close controls,
-sends an AppKit arrow event, verifies exact recovered Unicode drafts without bypassing autosave, cancels a dirty close and discards
-one file while retaining its sibling and external bytes. The embedded-file candidate has not yet passed macOS compilation and operation acceptance; this new
-check is not yet counted as passed;
-macOS must run it at the new source SHA. JDK registration acceptance also waits for the live Add
-control to re-enable after rejected input, then clicks the refreshed control and preserves failure
-diagnostics. Sidebar acceptance checks the actual section order and clicks Active disclosures while
-asserting unchanged shared revisions, selection and terminal generation; this new candidate check
-awaits macOS CI. Packaging rejects a missing operation, stale source or
-missing `personal-<phase>-embedded-files.png` evidence.
+The 48-point category rail sits at the left edge, workspace selection above its list, and the
+title/Java/Python controls above the main pane. The sidebar defaults to 248 points, clamps to 30% of
+the window (at most 320), and retains the rail when collapsed. Add, Commands, Settings and Agents
+have separate footer entries.
 
-The candidate capture flow records the exact chrome contract digest and measured toolbar height in
-both real applications, together with responsive sidebar/tools widths and the toolbar’s actual
-top position. Collection rejects a
-different contract, the previous 40-point native height, a titlebar inset or stale panel widths. Linux passes 451 Node checks (11 platform skips), type checking and the focused
-SVG/side-panel regressions. Swift vector geometry tests cover relative subpaths, smooth curves,
-arcs/rotation/radius expansion and invalid inputs; actual macOS compilation and windows still
-require this candidate's CI.
+Tools default to 35% of the remaining width and reserve a 320-point main pane. Narrow windows keep
+the whole tools column inside the window. Side/tool separators support dragging, arrows, Home/End
+and Return; native layout avoids an extra split-view titlebar inset.
 
-The native toolbar opens complete settings directly, as does the app menu. Settings retain their
-save/reload/reset behavior and unsaved drafts when the window is hidden. Return saves an edited
-settings draft; Command-W hides the window. The local CLI control switch remains an immediate
-service control in Local control.
+The list separates Active, Pinned, SSH, Redis, Databases, loose terminals/chats and inactive
+Projects. Section disclosures hide local rows without editing shared data or closing sessions; empty
+connection categories retain their add/manage entry. Rail controls follow the interface palette and
+active-icon color.
 
-The sidebar includes workspace selection and All, Projects, SSH, Redis and Database categories.
-The native list separates Active, Pinned, SSH, Redis, Databases, loose terminals/chats and inactive
-Projects in the same order. Section disclosures only hide local rows; they do not edit shared data
-or close sessions. Empty connection categories retain their add/manage entry. Commands, settings
-and Agents have separate rail footer buttons and follow the interface palette and active-icon color.
+SSH host search stays within its category and category changes retain selection and sessions. Quick
+SSH, direct connection rows and full workbench presentation still require alignment.
+
 Agent usage polling waits for catalog initialization, including when polling starts before the
-window reload task; recovering the catalog restarts visible usage refresh without discarding drafts.
-SSH host search stays within its category; switching categories retains sessions and selection.
-Quick SSH, direct connection rows and the full workbench presentation still require alignment. Opening an editable file places it in the main workspace. The tab row appears when files are open,
-with the selected terminal and ordered file labels, unsaved indicators and close controls. Reopening
-selects the retained WK editor; switching back to the terminal retains its view and generation.
-Left/Right and Home/End move between tabs. Editors receive focus after their AppKit view attaches;
-keyboard tab navigation retains its tab focus. Dirty close and repository/quit preparation use the
-existing editor confirmation and conflict guards. Standalone preview and detached regression
-windows retain their separate presentation. Persistent tab/window restoration and wrapping still
-require alignment. Closing a background session
-addresses its own ID and generation, retaining the selected session. Files, content search and quick
-open use segmented tool navigation. These interactions use the existing shared operations and
-conflict protections.
+window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
+
+Each native split pane has its own session/directory header, 10–32 point font controls, output
+search, match-case toggle, match counter and previous/next controls. Escape closes search and
+returns input to that terminal; search-field input does not enter the PTY. An exited local shell can
+restart from its header, retaining its descriptor and view with a new process generation.
+
+Read-only/take-control and visible transport/activity errors remain available. SSH restart, pane
+dragging and complete toolbar alignment remain in the parity scope.
+
+Editable files open in the main workspace. When files are open, the tab row includes the selected
+terminal, ordered file names, unsaved indicators and close controls. Reopening selects the retained
+WK editor; returning to the terminal retains its view and generation.
+
+Left/Right and Home/End move between tabs. Editors receive focus after their AppKit view attaches,
+and keyboard tab navigation retains tab focus. Dirty close, repository operations and quit
+preparation keep the existing editor confirmation and conflict guards.
+
+Standalone previews and detached regression windows retain separate presentation. Persistent
+tab/window restoration, wrapping, embedded workbenches and complete settings styling still require
+alignment.
+
+The toolbar footer and app menu open complete settings. Save/reload/reset and unsaved drafts remain
+available when the settings window is hidden; Return saves an edited draft and Command-W hides it.
+The local CLI control switch remains an immediate service control in Local control.
+
+Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
+side/tool widths in both real apps. Collection rejects stale vectors, old height, titlebar insets or
+stale panel widths. Linux passes 451 Node checks (11 platform skips), type checking and focused
+SVG/side-panel regressions; these do not establish complete native parity.
+
+Real Personal-window checks click file/tab/close controls, send AppKit arrows, retain exact
+recovered Unicode drafts with existing autosave, cancel a dirty close and discard one file while
+retaining its sibling and external bytes. Packaging requires its source-bound report and
+`personal-<phase>-embedded-files.png`.
+
+Another real-window check clicks font controls and their bounds, types Unicode into native search,
+checks case/match navigation, exercises Command-F/Escape and restarts an exited shell. Packaging
+requires its source-bound report and `personal-<phase>-terminal-search.png`.
+
+JDK acceptance waits for the live Add control after rejected input before clicking it. Sidebar
+acceptance checks actual section order and disclosures while retaining shared revision, selection
+and generation; Agent acceptance also exercises polling before catalog loading. These candidate
+checks, Swift vector geometry and complete real-window acceptance still require the latest macOS CI;
+earlier-source results cannot accept new code.
 
 Session context menus add pin/unpin, move up/down, Group with, Ungroup and Copy session link.
 Grouping existing sessions and ungrouping select the moved session while retaining its descriptor,

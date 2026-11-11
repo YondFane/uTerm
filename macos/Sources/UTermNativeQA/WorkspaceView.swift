@@ -263,8 +263,9 @@ struct LocalControlCheckbox: NSViewRepresentable {
 @MainActor
 struct TerminalCanvas: NSViewRepresentable {
     @ObservedObject var model: WorkspaceModel
+    var hidden = false
     func makeNSView(context: Context) -> CanvasHost { CanvasHost() }
-    func updateNSView(_ host: CanvasHost, context: Context) { host.render(model) }
+    func updateNSView(_ host: CanvasHost, context: Context) { host.isHidden = hidden; host.render(model) }
 }
 
 @MainActor
@@ -302,7 +303,8 @@ final class CanvasHost: NSView {
             apply(node["first"]); apply(node["second"])
         }
         apply(layout)
-        if focusRevision != model.focusRevision, let view = model.selectedTerminal?.view {
+        for session in model.terminals.values { session.search.outputChanged() }
+        if !isHidden, focusRevision != model.focusRevision, let view = model.selectedTerminal?.view {
             focusRevision = model.focusRevision
             DispatchQueue.main.async { [weak self, weak view] in
                 guard let self, let view, view.window === self.window else { return }
@@ -312,9 +314,8 @@ final class CanvasHost: NSView {
     }
 
     private func makePane(_ node: JSONValue, model: WorkspaceModel) -> NSView {
-        if node["kind"].string == "leaf", let id = node["session"].string, let view = model.terminals[id]?.view {
-            view.removeFromSuperview()
-            return view
+        if node["kind"].string == "leaf", let id = node["session"].string, let session = model.terminals[id] {
+            return NativeTerminalPane(model: model, session: session)
         }
         if node["kind"].string == "split" {
             let split = SessionSplitView()
