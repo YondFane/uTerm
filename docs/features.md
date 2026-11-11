@@ -1212,6 +1212,11 @@ establish hosted Pages deployment or desktop runtime acceptance.
 
 ### Stable releases
 
+Release drafts are published by their verified numeric ID. An explicit recovery dispatch can restore
+the five feeds from an already public version after all five source builds pass; it preserves the
+tag and archives a source-bound recovery report. Local release-policy and YAML checks cover this
+path; the actual recovery run remains pending.
+
 The repository sidebar’s Latest entry points to the stable installer release. The release workflow
 marks a version Latest only after public downloads are verified and the stable update feed is
 published.
