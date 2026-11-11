@@ -104,6 +104,12 @@ pairing rejects offsets, missing metrics and clipped paths. Fifteen Linux pairin
 Chromium geometry checks at five widths (128–1100px) pass; current-source macOS rendering still
 requires CI.
 
+Narrow sidebars allocate separate widths to the navigation rail and workspace menu/list. The
+workspace name truncates within its own button instead of pushing the navigation icons outside the
+window. Both collectors measure the actual rail position/width and All button position/size; clipped
+or missing controls fail pairing even if the outer sidebar width is correct. Eighteen Linux
+paired-evidence rejection tests pass; the candidate's actual macOS rendering remains pending CI.
+
 The list separates Active, Pinned, SSH, Redis, Databases, loose terminals/chats and inactive
 Projects.
 

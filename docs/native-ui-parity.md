@@ -160,6 +160,13 @@ the new gates.
 
 终端配对还测量实际窗格内边距、标题高度／顶部及输出前 12px 间距。原生标题按实测文本宽度和原顺序逐项换行，留白填充所选终端背景；几何值缺失、非有限数或不一致均使汇集失败。PDF 配对另要求两版仅保留一个会话、展开 PDF 文件夹；原生通过实际文件行打开，普通版在截图前通过实际侧栏控件关闭后台会话。更严格的几何及周围状态门槛需新的真实窗口 CI，已有 34 组产物不能满足新增门槛。
 
+Sidebar pairing additionally requires the rail to begin at the window's left edge with its shared
+width, and the actual All button to remain fully visible at the shared position and size. The native
+workspace menu receives only its allocated width. Outer sidebar width alone cannot accept an
+overflowing inner layout. These new navigation gates require current-source real windows.
+
+侧栏配对另要求图标栏从窗口左缘开始、保持共用宽度，实际“全部”按钮完整显示于共用位置／尺寸；原生工作区菜单仅使用分配的宽度。外层侧栏宽度正确不能接受内部布局溢出，新增导航门槛需当前源码真实窗口验证。
+
 ## Source-bound CI findings / 绑定源码的 CI 结果
 
 At head `7170352cf0846c0ee68ea5663ed7c7e8d29adf1c`, tested merge

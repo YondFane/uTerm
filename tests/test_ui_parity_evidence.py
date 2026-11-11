@@ -38,6 +38,7 @@ class ParityEvidenceTests(unittest.TestCase):
             for appearance in fixture["appearances"]:
                 for width in fixture["widths"]:
                     values = dict(language=lang, appearance=appearance, width=width, height=720,
+                                  sidebarRailLeft=0, sidebarRailWidth=48, sidebarAllButtonLeft=7, sidebarAllButtonTop=52, sidebarAllButtonWidth=34, sidebarAllButtonHeight=34,
                                   terminalInsetLeft=11, terminalInsetRight=11, terminalInsetBottom=11, terminalHeaderTop=11, terminalHeaderHeight=35, terminalViewportGap=12,
                                   inspectorTop=0, inspectorHeight=720, inspectorHeaderTop=0, inspectorFooterBottom=720, inspectorViewportHeight=720,
                                   sidebarRowHeight=32, sidebarSectionHeight=32, sidebarSectionGap=18, sidebarListTop=8,
@@ -114,6 +115,16 @@ class ParityEvidenceTests(unittest.TestCase):
         self.n = copy.deepcopy(original)
         self.n["workspaceScenes"][0].pop("terminalHeaderHeight")
         with self.assertRaises(AssertionError): self.run_compare()
+
+    def test_navigation_cannot_pass_from_outer_sidebar_width_while_the_rail_is_clipped(self):
+        original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
+        for side in ["native", "ordinary"]:
+            for key in ["sidebarRailLeft", "sidebarRailWidth", "sidebarAllButtonLeft", "sidebarAllButtonTop", "sidebarAllButtonWidth", "sidebarAllButtonHeight"]:
+                for value in [None, True, float("nan"), -24]:
+                    self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+                    scene = self.n["workspaceScenes"][0] if side == "native" else self.t["scenes"][0]["checks"]
+                    scene[key] = value
+                    with self.subTest(side=side, key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
 
     def test_pdf_requires_current_images_matching_data_and_actual_operations(self):
         original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)

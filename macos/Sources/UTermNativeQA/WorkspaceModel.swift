@@ -42,6 +42,8 @@ final class WorkspaceModel: ObservableObject {
     @Published private(set) var toolbarHeight: CGFloat = 0
     @Published private(set) var toolbarTop: CGFloat = -1
     @Published private(set) var sidebarWidth: CGFloat = 0
+    private(set) var sidebarRailFrame: CGRect = .zero
+    private(set) var sidebarAllButtonFrame: CGRect = .zero
     @Published private(set) var inspectorWidth: CGFloat = 0
     @Published var controlStatus: JSONValue = .null
     @Published var controlError = ""
@@ -135,6 +137,8 @@ final class WorkspaceModel: ObservableObject {
     func revealSelectedPane() { paneZoomed = false; focusRevision += 1 }
     func measureInspector(_ width: CGFloat) { if abs(inspectorWidth - width) > 0.1 { inspectorWidth = width } }
     func measureSidebar(_ width: CGFloat) { if abs(sidebarWidth - width) > 0.1 { sidebarWidth = width } }
+    func measureSidebarRail(_ frame: CGRect) { sidebarRailFrame = frame }
+    func measureSidebarAllButton(_ frame: CGRect) { sidebarAllButtonFrame = frame }
     func measureToolbarTop(_ top: CGFloat) { if abs(toolbarTop - top) > 0.1 { toolbarTop = top } }
     func measureToolbar(_ height: CGFloat) { if abs(toolbarHeight - height) > 0.1 { toolbarHeight = height } }
 

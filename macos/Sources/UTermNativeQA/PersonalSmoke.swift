@@ -202,6 +202,19 @@ enum PersonalSmoke {
                         guard abs(Double(model.inspectorWidth) - expectedTools) < 1 else { throw BridgeFailure(code: "PERSONAL_INSPECTOR_WIDTH", message: "Actual tools width differs from shared responsive bounds") }
                         guard abs(model.toolbarTop) < 1 else { throw BridgeFailure(code: "PERSONAL_CHROME_POSITION", message: "Actual toolbar does not begin at the workspace top") }
                         guard abs(model.toolbarHeight - CGFloat(CoreChrome.titlebarHeight)) < 1 else { throw BridgeFailure(code: "PERSONAL_CHROME_HEIGHT", message: "Actual toolbar differs from the shared chrome height") }
+                        do {
+                            try await TerminalSmoke.wait("Keep actual sidebar navigation inside the narrow window") {
+                                abs(model.sidebarRailFrame.minX) < 1 && abs(model.sidebarRailFrame.width - CGFloat(CoreChrome.sidebarRailWidth)) < 1 &&
+                                abs(model.sidebarAllButtonFrame.width - CGFloat(CoreChrome.railButtonSize)) < 1 && abs(model.sidebarAllButtonFrame.height - CGFloat(CoreChrome.railButtonSize)) < 1 &&
+                                abs(model.sidebarAllButtonFrame.minX - CGFloat((CoreChrome.sidebarRailWidth - CoreChrome.railButtonSize) / 2)) < 1 &&
+                                abs(model.sidebarAllButtonFrame.minY - CGFloat(CoreChrome.titlebarHeight + 8)) < 1
+                            }
+                        } catch {
+                            report["sidebarNavigationGeometry"] = ["railLeft": model.sidebarRailFrame.minX, "railWidth": model.sidebarRailFrame.width,
+                                "allLeft": model.sidebarAllButtonFrame.minX, "allTop": model.sidebarAllButtonFrame.minY,
+                                "allWidth": model.sidebarAllButtonFrame.width, "allHeight": model.sidebarAllButtonFrame.height]
+                            throw error
+                        }
                         let name = "personal-\(phase)-workspace-\(language)-\(appearance)-\(width).png"
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
                         captures.append(name)
@@ -217,6 +230,12 @@ enum PersonalSmoke {
                         guard let font = model.selectedTerminal?.view.font, font.fontName == "CascadiaCode-Regular", font.familyName == "Cascadia Code" else { throw BridgeFailure(code: "PERSONAL_FONT", message: "Terminal used a fallback instead of the bundled face") }
                         captured["fontFamily"] = font.familyName ?? ""
                         for (key, value) in inspectorGeometry { captured[key] = value }
+                        captured["sidebarRailLeft"] = model.sidebarRailFrame.minX
+                        captured["sidebarRailWidth"] = model.sidebarRailFrame.width
+                        captured["sidebarAllButtonLeft"] = model.sidebarAllButtonFrame.minX
+                        captured["sidebarAllButtonTop"] = model.sidebarAllButtonFrame.minY
+                        captured["sidebarAllButtonWidth"] = model.sidebarAllButtonFrame.width
+                        captured["sidebarAllButtonHeight"] = model.sidebarAllButtonFrame.height
                         captured["fontFace"] = font.fontName
                         captured["fontSourceSHA256"] = NativeBundledFonts.regularSHA256
                         captured["fontCharacterWidth"] = ("M" as NSString).size(withAttributes: [.font: font]).width

@@ -372,6 +372,31 @@ async function runUiParity() {
         const sidebarWidth = document
           .querySelector("#workspace-sidebar")
           ?.getBoundingClientRect().width;
+        const railBounds = document.querySelector(".sidebar-rail")!.getBoundingClientRect();
+        const allButtonBounds = document
+          .querySelector(".sidebar-rail-button")!
+          .getBoundingClientRect();
+        const sidebarRailGeometry = {
+          sidebarRailLeft: railBounds.left,
+          sidebarRailWidth: railBounds.width,
+          sidebarAllButtonLeft: allButtonBounds.left,
+          sidebarAllButtonTop: allButtonBounds.top,
+          sidebarAllButtonWidth: allButtonBounds.width,
+          sidebarAllButtonHeight: allButtonBounds.height,
+        };
+        for (const [key, expected] of Object.entries({
+          sidebarRailLeft: 0,
+          sidebarRailWidth: chrome.metrics.sidebarRailWidth,
+          sidebarAllButtonLeft:
+            (chrome.metrics.sidebarRailWidth - chrome.metrics.railButtonSize) / 2,
+          sidebarAllButtonTop: chrome.metrics.titlebarHeight + 8,
+          sidebarAllButtonWidth: chrome.metrics.railButtonSize,
+          sidebarAllButtonHeight: chrome.metrics.railButtonSize,
+        }))
+          assert(
+            Math.abs(sidebarRailGeometry[key as keyof typeof sidebarRailGeometry] - expected) < 1,
+            `Clipped actual ${key}`,
+          );
         const expectedSidebar = Math.min(
           chrome.metrics.sidebarDefaultWidth,
           Math.max(
@@ -521,6 +546,7 @@ async function runUiParity() {
           fontSourceSHA256: fontManifest.files["CascadiaCode-Regular.ttf"],
           fontCharacterWidth: fontContext.measureText("M").width,
           ...sidebarGeometry,
+          ...sidebarRailGeometry,
           projectName: parityFixture.projectName,
           workspaceName: parityFixture.workspaceName,
         });

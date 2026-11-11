@@ -25,9 +25,10 @@ struct WorkspaceView: View {
                             NativeSidebarNavigation(model: model)
                             NativeSidebar(model: model).padding(.horizontal, 2).padding(.top, CGFloat(CoreChrome.sidebarListTop)).padding(.bottom, 10).frame(maxHeight: .infinity)
                         }.padding(.horizontal, 10)
+                            .frame(width: max(0, CGFloat(sidebarWidth - CoreChrome.sidebarRailWidth)), alignment: .leading)
                     }
                 }
-                .frame(width: CGFloat(sidebarWidth))
+                .frame(width: CGFloat(sidebarWidth), alignment: .leading)
                 .background(GeometryReader { geometry in
                     Color.clear.onAppear { model.measureSidebar(geometry.size.width) }
                         .onChange(of: geometry.size.width) { _, width in model.measureSidebar(width) }

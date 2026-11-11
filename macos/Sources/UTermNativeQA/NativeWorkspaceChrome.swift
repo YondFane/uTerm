@@ -48,26 +48,33 @@ struct NativeWorkspaceToolbar: View {
 struct NativeSidebarNavigation: View {
     @ObservedObject var model: WorkspaceModel
     var body: some View {
-        HStack(spacing: 6) {
-            Menu {
-                ForEach(model.groupItems) { group in
-                    Button(group.name) { Task { await model.mutate("workspace.switch", ["id": .string(group.id)]) } }
-                }
-                Divider()
-                Button(localized("New workspace…", "新建工作区…")) { model.newWorkspace() }
-                Button(localized("Rename workspace…", "重命名工作区…")) { model.renameWorkspace() }
-                Button(localized("Delete workspace…", "删除工作区…")) { model.removeWorkspace() }.disabled(!model.canRemoveWorkspace)
-            } label: {
-                Text(model.groupItems.first { $0.id == model.groupID }?.name ?? localized("Workspace", "工作区"))
-                    .font(.system(size: 12, weight: .semibold)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
-            }.menuStyle(.borderlessButton).menuIndicator(.hidden)
-                .help(localized("Switch workspace", "切换工作区"))
-                .accessibilityIdentifier("native-workspace-switcher")
-            Button { model.sidebarVisible = false } label: { NativeChromeIcon(sidebar: .sidebar).frame(width: 18, height: 24) }
-                .help(localized("Hide sidebar", "隐藏侧栏")).accessibilityLabel(localized("Hide sidebar", "隐藏侧栏"))
+        GeometryReader { geometry in
+            let trafficPadding: CGFloat = model.fullScreen ? 0 : 36
+            HStack(spacing: 6) {
+                Menu {
+                    ForEach(model.groupItems) { group in
+                        Button(group.name) { Task { await model.mutate("workspace.switch", ["id": .string(group.id)]) } }
+                    }
+                    Divider()
+                    Button(localized("New workspace…", "新建工作区…")) { model.newWorkspace() }
+                    Button(localized("Rename workspace…", "重命名工作区…")) { model.renameWorkspace() }
+                    Button(localized("Delete workspace…", "删除工作区…")) { model.removeWorkspace() }.disabled(!model.canRemoveWorkspace)
+                } label: {
+                    Text(model.groupItems.first { $0.id == model.groupID }?.name ?? localized("Workspace", "工作区"))
+                        .font(.system(size: 12, weight: .semibold)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                }.menuStyle(.borderlessButton).menuIndicator(.hidden)
+                    .frame(width: max(0, geometry.size.width - trafficPadding - 24), alignment: .leading)
+                    .clipped()
+                    .help(localized("Switch workspace", "切换工作区"))
+                    .accessibilityIdentifier("native-workspace-switcher")
+                Button { model.sidebarVisible = false } label: { NativeChromeIcon(sidebar: .sidebar).frame(width: 18, height: 24) }
+                    .help(localized("Hide sidebar", "隐藏侧栏")).accessibilityLabel(localized("Hide sidebar", "隐藏侧栏"))
+                    .frame(width: 18, height: 24)
+            }
+            .buttonStyle(.borderless)
+            .padding(.leading, trafficPadding)
+            .frame(width: geometry.size.width, height: CGFloat(CoreChrome.titlebarHeight), alignment: .leading)
         }
-        .buttonStyle(.borderless)
-        .padding(.leading, model.fullScreen ? 0 : 36)
         .frame(height: CGFloat(CoreChrome.titlebarHeight))
         .disabled(!model.ready || model.busy || model.gitFavoritesRecoveryPresented)
     }
@@ -127,6 +134,7 @@ struct NativeSidebarRail: View {
         }
         .buttonStyle(.borderless).padding(.horizontal, 6).padding(.top, CGFloat(CoreChrome.titlebarHeight) + 8).padding(.bottom, 8)
         .frame(width: CGFloat(CoreChrome.sidebarRailWidth))
+        .background(NativeChromeMeasurement { frame in model.measureSidebarRail(frame) }.allowsHitTesting(false))
         .foregroundStyle(Color(nsColor: NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)))
         .background(Color(nsColor: NativePreferences.color(palette["sidebar"], fallback: .windowBackgroundColor).blended(withFraction: 0.2, of: NativePreferences.color(palette["hover"], fallback: .controlBackgroundColor)) ?? .windowBackgroundColor))
         .overlay(alignment: .top) { Color(nsColor: NativePreferences.color(palette["sidebar"], fallback: .windowBackgroundColor)).frame(height: CGFloat(CoreChrome.titlebarHeight)).allowsHitTesting(false) }
@@ -145,6 +153,7 @@ struct NativeSidebarRail: View {
                     }
                 }
         }.help(title).accessibilityLabel(title)
+            .background(NativeChromeMeasurement { frame in if id == "all" { model.measureSidebarAllButton(frame) } }.allowsHitTesting(false))
             .accessibilityAddTraits(model.sidebarSection == id ? .isSelected : [])
             .accessibilityIdentifier("native-sidebar-category-" + id)
     }
