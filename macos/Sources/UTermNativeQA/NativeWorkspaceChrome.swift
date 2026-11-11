@@ -12,14 +12,16 @@ struct NativeWorkspaceToolbar: View {
                 sidebarTool(.sidebar, localized("Show sidebar", "显示侧栏")) { model.sidebarVisible = true }
             }
             Text(model.projects.first { $0["id"] == model.workspace["selectedProject"] }?["name"].string ?? localized("Terminal", "终端"))
-                .font(.system(size: 12, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+                .font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.middle)
             Spacer(minLength: 8)
             if model.busy { ProgressView().controlSize(.small) }
             if model.workspace["selectedProject"].string != nil {
                 tool(.java, localized("Java build and run…", "Java 构建与运行…")) { model.openJavaRequested?() }
                 tool(.python, localized("Python run…", "Python 运行…")) { model.openPythonRequested?() }
             }
-            tool(model.paneZoomed ? .restore : .maximize, localized("Toggle pane zoom", "切换面板缩放")) { model.performCommandRequested?("zoom") }.disabled(model.commandIsAvailable?("zoom") != true)
+            if model.paneZoomed || model.state?.layout["kind"].string == "split" {
+                tool(model.paneZoomed ? .restore : .maximize, localized("Toggle pane zoom", "切换面板缩放")) { model.performCommandRequested?("zoom") }.disabled(model.commandIsAvailable?("zoom") != true)
+            }
             sidebarTool(.sidebarRight, localized("Toggle tools", "显示或隐藏工具")) { if model.inspectorVisible { model.hideInspector() } else { model.showInspector(.files) } }
         }
         .buttonStyle(.borderless).controlSize(.small)

@@ -26,7 +26,7 @@ struct WorkspaceView: View {
                                 TextField(localized("Search SSH hosts", "搜索 SSH 主机"), text: $model.sidebarQuery)
                                     .textFieldStyle(.roundedBorder).padding(.bottom, 8).accessibilityIdentifier("native-sidebar-filter")
                             }
-                            NativeSidebar(model: model).frame(maxHeight: .infinity)
+                            NativeSidebar(model: model).padding(.horizontal, 2).padding(.top, CGFloat(CoreChrome.sidebarListTop)).padding(.bottom, 10).frame(maxHeight: .infinity)
                         }.padding(.horizontal, 10)
                     }
                 }

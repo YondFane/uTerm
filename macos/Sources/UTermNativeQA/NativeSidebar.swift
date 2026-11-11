@@ -3,6 +3,41 @@ import SwiftUI
 import UTermBridge
 
 @MainActor
+private final class SidebarRowView: NSTableRowView {
+    var accent = NSColor.controlAccentColor
+    var hover = NSColor.controlBackgroundColor
+    var alpha: CGFloat = 22.0 / 255
+    var padding: CGFloat = 1
+    var selectable = true
+    private var hovered = false
+    private var hoverArea: NSTrackingArea?
+    override var interiorBackgroundStyle: NSView.BackgroundStyle { .normal }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverArea { removeTrackingArea(hoverArea) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+        hoverArea = area; addTrackingArea(area)
+    }
+    override func mouseEntered(with event: NSEvent) { hovered = true; needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { hovered = false; needsDisplay = true }
+    override func drawBackground(in dirtyRect: NSRect) {
+        guard selectable, hovered, !isSelected else { return }
+        hover.setFill(); outline.fill()
+    }
+    private var outline: NSBezierPath {
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: padding + 0.5), xRadius: CGFloat(CoreChrome.sidebarRowCorner), yRadius: CGFloat(CoreChrome.sidebarRowCorner))
+    }
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard selectable else { return }
+        let path = outline
+        accent.withAlphaComponent(alpha).setFill(); path.fill()
+        accent.withAlphaComponent(0.25).setStroke(); path.lineWidth = 1; path.stroke()
+        accent.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 0, y: padding + 8, width: 2, height: max(0, bounds.height - 2 * padding - 16)), xRadius: 1, yRadius: 1).fill()
+    }
+}
+
+@MainActor
 struct NativeSidebar: NSViewRepresentable {
     @ObservedObject var model: WorkspaceModel
 
@@ -27,14 +62,16 @@ struct NativeSidebar: NSViewRepresentable {
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
+        scroll.autohidesScrollers = true; scroll.scrollerStyle = .overlay
+        scroll.automaticallyAdjustsContentInsets = false
         let table = NSTableView()
         table.identifier = NSUserInterfaceItemIdentifier("native-sidebar")
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
         table.addTableColumn(column)
         table.headerView = nil
-        table.style = .fullWidth
-        table.rowHeight = 28
-        table.intercellSpacing = NSSize(width: 0, height: 2)
+        table.style = .plain
+        table.rowHeight = CGFloat(CoreChrome.sidebarRowHeight)
+        table.intercellSpacing = .zero
         table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         table.backgroundColor = .clear
         table.allowsEmptySelection = true
@@ -76,7 +113,7 @@ struct NativeSidebar: NSViewRepresentable {
             let settings = model.settings
             let palette = NativePreferences.interfacePalette(settings, catalog: model.settingsCatalog)
             let signature = [settings["interfaceFont"].string ?? "", String(settings["interfaceSize"].number ?? 13), String(settings["rowPadding"].number ?? 1), settings["interfaceTheme"].string ?? "", String(NativePreferences.light(settings)), settings["activeIconColor"].string ?? ""]
-            table.rowHeight = 26 + CGFloat(settings["rowPadding"].number ?? 1) * 2
+            table.rowHeight = max(CGFloat(CoreChrome.sidebarRowHeight), CGFloat(settings["interfaceSize"].number ?? 13) + 19) + CGFloat(settings["rowPadding"].number ?? 1) * 2
             table.backgroundColor = NativePreferences.color(palette["sidebar"], fallback: .windowBackgroundColor)
             let section = model.sidebarSection
             let query = section == "ssh" ? model.sidebarQuery.trimmingCharacters(in: .whitespacesAndNewlines) : ""
@@ -167,6 +204,31 @@ struct NativeSidebar: NSViewRepresentable {
         }
 
         func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+        func measuredGeometry(in root: NSView) -> [String: Double]? {
+            guard let table, let first = rows.firstIndex(where: { $0.sectionID != nil }),
+                  let later = rows.indices.first(where: { $0 > first && rows[$0].sectionID != nil }),
+                  let regular = rows.firstIndex(where: { $0.sectionID == nil }) else { return nil }
+            let frame = table.convert(table.rect(ofRow: first), to: root)
+            let top = root.isFlipped ? frame.minY - root.bounds.minY : root.bounds.maxY - frame.maxY
+            let section = table.rect(ofRow: first).height
+            let regularHeight = table.rect(ofRow: regular).height - CGFloat(model?.settings["rowPadding"].number ?? 1) * 2
+            return ["sidebarRowHeight": Double(regularHeight), "sidebarSectionHeight": Double(section), "sidebarSectionGap": Double(table.rect(ofRow: later).height - section), "sidebarListTop": Double(top) - CoreChrome.titlebarHeight]
+        }
+        func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+            guard rows.indices.contains(row), rows[row].sectionID != nil else { return tableView.rowHeight }
+            return CGFloat(CoreChrome.sidebarSectionHeight + (row == 0 ? 0 : CoreChrome.sidebarSectionGap))
+        }
+        func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+            let view = SidebarRowView()
+            let settings = model?.settings ?? .null
+            let palette = NativePreferences.interfacePalette(settings, catalog: model?.settingsCatalog ?? .null)
+            view.accent = NativePreferences.color(palette["accent"], fallback: .controlAccentColor)
+            view.hover = NativePreferences.color(palette["hover"], fallback: .controlBackgroundColor)
+            view.alpha = NativePreferences.light(settings) ? 18.0 / 255 : 22.0 / 255
+            view.padding = CGFloat(settings["rowPadding"].number ?? 1)
+            view.selectable = rows.indices.contains(row) && rows[row].sectionID == nil
+            return view
+        }
         func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
             guard rows.indices.contains(row), let model, !model.busy,
                   !model.gitFavoritesRecoveryPresented, !model.worktreeDeletionPresented else { return nil }
@@ -303,7 +365,20 @@ struct NativeSidebar: NSViewRepresentable {
             default: break
             }
         }
-        final class DisclosureButton: NSButton { var projectID = "" }
+        final class DisclosureButton: NSButton {
+            var projectID = ""
+            var expanded = true
+            var folder: NSImage?
+            private var hoverArea: NSTrackingArea?
+            override func updateTrackingAreas() {
+                super.updateTrackingAreas()
+                if let hoverArea { removeTrackingArea(hoverArea) }
+                let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil)
+                hoverArea = area; addTrackingArea(area)
+            }
+            override func mouseEntered(with event: NSEvent) { image = NativeChromeImages.sidebarChevron(expanded: expanded) }
+            override func mouseExited(with event: NSEvent) { image = folder }
+        }
         @objc private func toggleDisclosure(_ button: DisclosureButton) {
             guard let model, let project = model.projects.first(where: { $0["id"].string == button.projectID }) else { return }
             Task { await model.setProjectFlag(button.projectID, key: "collapsed", value: project["collapsed"].bool != true) }
@@ -344,14 +419,14 @@ struct NativeSidebar: NSViewRepresentable {
             if let section = item.sectionID {
                 let toggle = SectionButton(title: item.name, target: self, action: #selector(toggleSection(_:)))
                 toggle.sectionID = section; toggle.isBordered = false; toggle.alignment = .left
-                toggle.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: 11)
-                toggle.contentTintColor = NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor)
+                toggle.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: 11, bold: true)
+                toggle.contentTintColor = NativePreferences.color(palette["text"], fallback: .labelColor)
                 toggle.image = NativeChromeImages.sidebarChevron(expanded: !item.collapsed)
                 toggle.imagePosition = .imageTrailing; toggle.imageScaling = .scaleProportionallyDown
                 toggle.identifier = NSUserInterfaceItemIdentifier("native-sidebar-section-" + section)
                 toggle.setAccessibilityLabel(item.name); toggle.setAccessibilityExpanded(!item.collapsed)
                 toggle.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(toggle)
-                NSLayoutConstraint.activate([toggle.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4), toggle.centerYAnchor.constraint(equalTo: cell.centerYAnchor), toggle.heightAnchor.constraint(equalToConstant: 24)])
+                NSLayoutConstraint.activate([toggle.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4), toggle.centerYAnchor.constraint(equalTo: cell.bottomAnchor, constant: -CGFloat(CoreChrome.sidebarSectionHeight) / 2), toggle.heightAnchor.constraint(equalToConstant: 24)])
                 if ["projects", "ssh", "redis", "database"].contains(section) {
                     let add = SectionButton(title: "", target: self, action: #selector(addInSection(_:)))
                     add.sectionID = section; add.isBordered = false; add.contentTintColor = NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor); add.image = NativeChromeImages.sidebar(.plus)
@@ -359,12 +434,12 @@ struct NativeSidebar: NSViewRepresentable {
                     add.identifier = NSUserInterfaceItemIdentifier("native-sidebar-add-" + section)
                     add.setAccessibilityLabel(localized("Add ", "添加") + item.name)
                     add.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(add)
-                    NSLayoutConstraint.activate([add.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2), add.centerYAnchor.constraint(equalTo: cell.centerYAnchor), add.widthAnchor.constraint(equalToConstant: 20), add.heightAnchor.constraint(equalToConstant: 24), toggle.trailingAnchor.constraint(lessThanOrEqualTo: add.leadingAnchor, constant: -4)])
+                    NSLayoutConstraint.activate([add.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2), add.centerYAnchor.constraint(equalTo: toggle.centerYAnchor), add.widthAnchor.constraint(equalToConstant: 20), add.heightAnchor.constraint(equalToConstant: 24), toggle.trailingAnchor.constraint(lessThanOrEqualTo: add.leadingAnchor, constant: -4)])
                 } else { toggle.trailingAnchor.constraint(lessThanOrEqualTo: cell.trailingAnchor, constant: -4).isActive = true }
                 return cell
             }
             let text = NSTextField(labelWithString: item.name)
-            text.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13) - (item.symbol == nil ? 2 : 0), bold: item.symbol == nil)
+            text.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13), bold: true)
             text.textColor = NativePreferences.color(palette[item.symbol == nil ? "muted" : "text"], fallback: item.symbol == nil ? .secondaryLabelColor : .labelColor)
             text.lineBreakMode = .byTruncatingMiddle
             text.translatesAutoresizingMaskIntoConstraints = false
@@ -384,16 +459,20 @@ struct NativeSidebar: NSViewRepresentable {
                     let collapsed = model?.projects.first(where: { $0["id"].string == id })?["collapsed"].bool == true
                     let disclosure = DisclosureButton()
                     disclosure.projectID = id; disclosure.target = self; disclosure.action = #selector(toggleDisclosure(_:))
-                    disclosure.image = NativeChromeImages.sidebarChevron(expanded: !collapsed)
+                    disclosure.expanded = !collapsed
+                    disclosure.folder = NativeChromeImages.sidebar(collapsed ? .folderClosed : .folder)
+                    disclosure.image = disclosure.folder; disclosure.contentTintColor = icon.contentTintColor
+                    disclosure.imageScaling = .scaleProportionallyDown
+                    icon.isHidden = true
                     disclosure.isBordered = false; disclosure.isEnabled = model?.busy == false && model?.gitFavoritesRecoveryPresented == false
                     disclosure.setAccessibilityLabel(collapsed ? localized("Expand project", "展开项目") : localized("Collapse project", "折叠项目"))
                     disclosure.identifier = NSUserInterfaceItemIdentifier("native-project-disclosure-" + id)
                     disclosure.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(disclosure)
-                    NSLayoutConstraint.activate([disclosure.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2), disclosure.centerYAnchor.constraint(equalTo: cell.centerYAnchor), disclosure.widthAnchor.constraint(equalToConstant: 14), disclosure.heightAnchor.constraint(equalToConstant: 20)])
+                    NSLayoutConstraint.activate([disclosure.leadingAnchor.constraint(equalTo: icon.leadingAnchor), disclosure.centerYAnchor.constraint(equalTo: cell.centerYAnchor), disclosure.widthAnchor.constraint(equalToConstant: CGFloat(CoreChrome.sidebarIconSize)), disclosure.heightAnchor.constraint(equalToConstant: 22)])
                 }
-                NSLayoutConstraint.activate([icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 20 + CGFloat(item.depth) * 16), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: CGFloat(CoreChrome.sidebarIconSize)), icon.heightAnchor.constraint(equalToConstant: CGFloat(CoreChrome.sidebarIconSize))])
+                NSLayoutConstraint.activate([icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 5 + CGFloat(item.depth) * 16 + (item.key.hasPrefix("s:") ? 3.5 : 0)), icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor), icon.widthAnchor.constraint(equalToConstant: CGFloat(CoreChrome.sidebarIconSize)), icon.heightAnchor.constraint(equalToConstant: CGFloat(CoreChrome.sidebarIconSize))])
                 leading = icon.trailingAnchor
-                inset = 6
+                inset = 7
             }
             NSLayoutConstraint.activate([text.leadingAnchor.constraint(equalTo: leading, constant: inset), text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8), text.centerYAnchor.constraint(equalTo: cell.centerYAnchor)])
             cell.setAccessibilityLabel(item.name)

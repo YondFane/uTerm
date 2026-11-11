@@ -405,6 +405,32 @@ async function runUiParity() {
         const fontContext = document.createElement("canvas").getContext("2d");
         assert(fontContext, "Cannot measure actual terminal font");
         fontContext.font = `${fontSize}px "Cascadia Code"`;
+        const sectionHeader = document
+          .querySelector(".sidebar-section .section-header")
+          ?.getBoundingClientRect();
+        const sidebarHeader = document.querySelector(".sidebar-header")?.getBoundingClientRect();
+        const laterSection = document.querySelectorAll(".sidebar-section")[1];
+        const sidebarGeometry = {
+          sidebarRowHeight: document.querySelector(".sidebar-row")?.getBoundingClientRect().height,
+          sidebarSectionHeight: sectionHeader?.height,
+          sidebarSectionGap: laterSection
+            ? parseFloat(getComputedStyle(laterSection).marginTop)
+            : undefined,
+          sidebarListTop:
+            sectionHeader && sidebarHeader ? sectionHeader.top - sidebarHeader.bottom : undefined,
+        };
+        for (const key of [
+          "sidebarRowHeight",
+          "sidebarSectionHeight",
+          "sidebarSectionGap",
+          "sidebarListTop",
+        ] as const) {
+          const actual = sidebarGeometry[key];
+          assert(
+            actual !== undefined && Math.abs(actual - chrome.metrics[key]) < 1,
+            `Actual ${key} differs from shared geometry`,
+          );
+        }
         await scene(`workspace-${language}-${appearance}-${width}`, {
           chromeContractSHA256,
           toolbarHeight,
@@ -423,6 +449,7 @@ async function runUiParity() {
           fontFace: "CascadiaCode-Regular",
           fontSourceSHA256: fontManifest.files["CascadiaCode-Regular.ttf"],
           fontCharacterWidth: fontContext.measureText("M").width,
+          ...sidebarGeometry,
           projectName: parityFixture.projectName,
           workspaceName: parityFixture.workspaceName,
         });

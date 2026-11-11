@@ -69,6 +69,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert all(abs(scene.get("toolbarTop", -100)) < 1 for scene in [n, t["checks"]]), "Wrong actual chrome position"
         expected_sidebar = min(chrome["metrics"]["sidebarDefaultWidth"], max(chrome["metrics"]["sidebarMinimumWide"], min(chrome["metrics"]["sidebarMaximumWidth"], width * chrome["metrics"]["sidebarMaximumRatio"])))
         assert all(abs(scene.get("sidebarWidth", 0) - expected_sidebar) < 1 for scene in [n, t["checks"]]), "Wrong actual sidebar width"
+        for metric in ["sidebarRowHeight", "sidebarSectionHeight", "sidebarSectionGap", "sidebarListTop"]:
+            assert all(abs(scene.get(metric, -100) - chrome["metrics"][metric]) < 1 for scene in [n, t["checks"]]), "Wrong actual sidebar geometry: " + metric
         remaining = max(chrome["metrics"]["inspectorMinimumAvailable"], width - expected_sidebar)
         expected_tools = max(chrome["metrics"]["panelCollapseWidth"], min(remaining - chrome["metrics"]["mainMinimumWidth"], remaining * chrome["metrics"]["inspectorMaximumRatio"], remaining * chrome["metrics"]["inspectorDefaultRatio"]))
         assert all(abs(scene.get("inspectorWidth", 0) - expected_tools) < 1 for scene in [n, t["checks"]]), "Wrong actual tools width"

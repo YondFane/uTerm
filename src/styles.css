@@ -1050,7 +1050,7 @@ select:focus-visible {
   gap: 6px;
   flex: 0 0 var(--titlebar-height);
   min-width: 0;
-  margin-bottom: 8px;
+  margin-bottom: var(--sidebar-list-top, 8px);
   padding: 0 5px;
 }
 .platform-macos .sidebar-header {
@@ -1109,7 +1109,7 @@ select:focus-visible {
   margin-top: 12px;
 }
 .section-header {
-  height: 32px;
+  height: var(--sidebar-section-height, 32px);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1165,7 +1165,7 @@ select:focus-visible {
   position: relative;
   display: flex;
   align-items: center;
-  height: 32px;
+  height: var(--sidebar-row-height, 32px);
   border-radius: 6px;
   padding-left: calc(4px + var(--depth) * 16px);
   padding-right: 5px;
@@ -3748,7 +3748,7 @@ select:focus-visible {
   padding: 0 2px;
 }
 .sidebar-section + .sidebar-section {
-  margin-top: 18px;
+  margin-top: var(--sidebar-section-gap, 18px);
 }
 .sidebar .section-toggle {
   color: var(--ui-text);
@@ -3758,7 +3758,7 @@ select:focus-visible {
 }
 .sidebar-row {
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--sidebar-row-corner, 5px);
 }
 .sidebar-row:hover {
   background: var(--ui-hover);

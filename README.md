@@ -175,8 +175,9 @@ Startup waits for the bundled default face before creating terminals; builds and
 download fonts. Native registration is limited to the app process. See
 [`src/assets/fonts/manifest.json`](src/assets/fonts/manifest.json) for source and checksums.
 
-The native UI candidate includes workspace file tabs and per-pane font/search controls. Complete
-parity and the latest real-window checks remain pending; see the
+The native UI candidate includes workspace file tabs and per-pane font/search controls. Sidebar row
+geometry is shared and measured in both real-window collectors. Complete parity and the latest
+real-window checks remain pending; see the
 [native workspace guide](docs/features.md#native-workspace-interaction).
 
 `pnpm settings:generate` derives the native command/theme catalog from the existing TypeScript

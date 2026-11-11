@@ -202,6 +202,14 @@ enum PersonalSmoke {
                         captured["fontFace"] = font.fontName
                         captured["fontSourceSHA256"] = NativeBundledFonts.regularSHA256
                         captured["fontCharacterWidth"] = ("M" as NSString).size(withAttributes: [.font: font]).width
+                        guard let rootView = window.contentView,
+                              let sidebar = TerminalSmoke.descendants(rootView).first(where: { $0.identifier?.rawValue == "native-sidebar" }) as? NSTableView,
+                              let coordinator = sidebar.delegate as? NativeSidebar.Coordinator,
+                              let measured = coordinator.measuredGeometry(in: rootView) else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_GEOMETRY", message: "Actual sidebar rows could not be measured") }
+                        for (key, expected) in ["sidebarRowHeight": CoreChrome.sidebarRowHeight, "sidebarSectionHeight": CoreChrome.sidebarSectionHeight, "sidebarSectionGap": CoreChrome.sidebarSectionGap, "sidebarListTop": CoreChrome.sidebarListTop] {
+                            guard let actual = measured[key], abs(actual - expected) < 1 else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_GEOMETRY", message: "Actual " + key + " differs from shared geometry: " + String(describing: measured[key])) }
+                            captured[key] = actual
+                        }
                         workspaceScenes.append(captured)
                         report["workspaceScenes"] = workspaceScenes
                     }

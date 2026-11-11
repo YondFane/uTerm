@@ -97,7 +97,18 @@ the whole tools column inside the window. Side/tool separators support dragging,
 and Return; native layout avoids an extra split-view titlebar inset.
 
 The list separates Active, Pinned, SSH, Redis, Databases, loose terminals/chats and inactive
-Projects. Section disclosures hide local rows without editing shared data or closing sessions; empty
+Projects.
+
+Rows share a 32-point minimum height, 32-point section headers, 18-point section gaps and an 8-point
+list inset. Row padding and larger interface text still expand rows.
+
+Native selection uses the same rounded accent fill/border, and project folder icons reveal
+disclosure arrows on hover. The toolbar shows pane zoom only for split layouts.
+
+Actual row/header/gap/inset measurements are required in both clients; current-source native
+rendering remains pending CI.
+
+Section disclosures hide local rows without editing shared data or closing sessions; empty
 connection categories retain their add/manage entry. Rail controls follow the interface palette and
 active-icon color.
 
@@ -188,7 +199,7 @@ Real-window CI prepares a display of at least 1280×900 before the matching scre
 required 720-pixel content height is still checked against actual window bounds. Personal smoke
 failures retain the raw report and available original captures before validation, including an
 attempted failure-window capture. The ordinary collector waits for real terminal input ownership
-before inspecting the host. Linux passes 18 macOS package/evidence policy tests and ten
+before inspecting the host. Linux passes 12 Personal package/evidence policy tests and 13
 paired-evidence policy tests; these fixtures do not represent native window execution.
 
 The Personal collector adjusts the real window frame against measured content bounds, with at most

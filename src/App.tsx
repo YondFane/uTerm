@@ -2532,6 +2532,11 @@ export function App() {
           "--sidebar-width": `${sidebarWidth}px`,
           "--titlebar-height": `${chrome.metrics.titlebarHeight}px`,
           "--sidebar-rail-width": `${chrome.metrics.sidebarRailWidth}px`,
+          "--sidebar-row-height": `${chrome.metrics.sidebarRowHeight}px`,
+          "--sidebar-section-height": `${chrome.metrics.sidebarSectionHeight}px`,
+          "--sidebar-section-gap": `${chrome.metrics.sidebarSectionGap}px`,
+          "--sidebar-list-top": `${chrome.metrics.sidebarListTop}px`,
+          "--sidebar-row-corner": `${chrome.metrics.sidebarRowCorner}px`,
           "--inspector-boundary": `${sidebarWidth + (inspectorOnLeft ? inspectorSize.width : Math.max(320, shellWidth - sidebarWidth - inspectorSize.width))}px`,
         } as CSSProperties
       }
