@@ -59,6 +59,7 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
   fontSize: number;
   automaticUpdates: boolean;
   databaseComponentIds: string[];
+  javaComponentIds: string[];
   maven: {
     distribution: string;
     home: string;
@@ -440,6 +441,34 @@ async function runUiParity() {
           "Actual database component labels differ from the shared catalog",
         );
       }
+      if (section.id === "java") {
+        await until(
+          () =>
+            document.querySelectorAll(".java-components > .java-component-row").length ===
+            parityFixture.javaComponentIds.length,
+          "loaded actual managed Java component catalog",
+        );
+        const expected = parityFixture.javaComponentIds
+          .map((id) =>
+            id === "maven"
+              ? translate(sceneFixture.language, "托管 Maven")
+              : id.replace("jdk-", "JDK "),
+          )
+          .sort();
+        const actual = [
+          ...document.querySelectorAll(".java-components > .java-component-row strong"),
+        ]
+          .map((item) => item.textContent?.trim())
+          .sort();
+        assert(
+          JSON.stringify(actual) === JSON.stringify(expected),
+          "Actual Java components differ from the shared catalog",
+        );
+        assert(
+          !document.querySelector(".java-components .java-error"),
+          "Java settings contain an actual component/JDK read error",
+        );
+      }
       const draftUnchanged = !document.querySelector(
         `[aria-label="${translate(sceneFixture.language, "未保存的设置")}"], [role="alert"].settings-error, .settings-content .java-error`,
       );
@@ -452,6 +481,7 @@ async function runUiParity() {
           draftUnchanged,
           mavenFixtureMatched: section.id === "maven",
           databaseFixtureMatched: section.id === "database",
+          javaFixtureMatched: section.id === "java",
           automaticUpdates: (await settings()).automaticUpdates,
         },
       );

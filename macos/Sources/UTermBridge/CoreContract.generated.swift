@@ -247,6 +247,34 @@ public struct CoreInputControl: Codable, Sendable {
     public var owner: String?
 }
 
+public struct CoreJavaComponentCatalog: Codable, Sendable {
+    public var busy: Bool
+    public var items: [CoreJavaComponentItem]
+}
+
+public struct CoreJavaComponentItem: Codable, Sendable {
+    public var downloaded: UInt32
+    public var id: String
+    public var installed: Bool
+    public var size: UInt32
+    public var source: String
+    public var version: String
+}
+
+public struct CoreJavaComponentOperation: Codable, Sendable {
+    public var error: String?
+    public var generation: String
+    public var id: String
+    public var result: CoreJavaComponentCatalog?
+    public var state: String
+}
+
+public struct CoreJavaComponentProgress: Codable, Sendable {
+    public var id: String
+    public var received: UInt32
+    public var total: UInt32
+}
+
 public struct CoreJavaConfiguration: Codable, Sendable {
     public var configured: Bool
     public var global: CoreJavaMavenConfig

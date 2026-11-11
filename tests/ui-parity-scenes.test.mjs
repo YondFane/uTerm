@@ -22,8 +22,8 @@ const scenes = [
   ),
 ];
 
-test("the complete 30-scene ordinary capture accepts file-system enumeration order", () => {
-  assert.equal(scenes.length, 30);
+test("the complete 32-scene ordinary capture accepts file-system enumeration order", () => {
+  assert.equal(scenes.length, 32);
   assert.doesNotThrow(() => assertParityScenes([...scenes].reverse(), fixture));
 });
 

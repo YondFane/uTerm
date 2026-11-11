@@ -13,6 +13,7 @@ pub mod git;
 pub mod github;
 pub mod host;
 pub mod java;
+pub mod java_components;
 pub mod python;
 pub mod redis;
 pub mod session_state;
@@ -109,6 +110,7 @@ pub struct Core {
     database: Mutex<Option<Arc<database::service::Service>>>,
     redis: Mutex<Option<Arc<redis::service::Service>>>,
     agent: Mutex<Option<agents::Host>>,
+    java_components: Mutex<Option<Arc<java_components::service::Service>>>,
 }
 impl Core {
     pub fn open(root: PathBuf) -> Result<Self> {
@@ -122,6 +124,7 @@ impl Core {
             database: Mutex::new(None),
             redis: Mutex::new(None),
             agent: Mutex::new(None),
+            java_components: Mutex::new(None),
         })
     }
     pub fn set_terminal_sink(&self, sink: terminal::Sink) -> Result<()> {
@@ -133,6 +136,11 @@ impl Core {
         Ok(())
     }
     pub fn close(&self) {
+        if let Ok(service) = self.java_components.lock() {
+            if let Some(service) = service.as_ref() {
+                service.close();
+            }
+        }
         if let Ok(mut redis) = self.redis.lock() {
             if let Some(service) = redis.take() {
                 service.close();
@@ -153,7 +161,57 @@ impl Core {
             control.take();
         }
     }
+    pub fn java_components(&self) -> Result<Arc<java_components::service::Service>> {
+        let mut service = self.java_components.lock().map_err(|_| {
+            CoreError::new("JAVA_OPERATION_FAILED", "Java components are unavailable")
+        })?;
+        if service.is_none() {
+            *service = Some(Arc::new(java_components::service::Service::new(
+                java_components::Host::new(self.data_root()?.to_path_buf()),
+            )));
+        }
+        Ok(service.as_ref().unwrap().clone())
+    }
     fn java_request(&self, method: &str, params: &Value) -> Result<Value> {
+        if method.starts_with("java.components.") {
+            let service = self.java_components()?;
+            return match method {
+                "java.components.status" => Ok(
+                    json!({"catalog":java_result(service.status())?,"operation":java_result(service.active())?,"progress":java_result(service.progress())?}),
+                ),
+                "java.components.start" => {
+                    let path = match params.get("path") {
+                        None | Some(Value::Null) => None,
+                        Some(Value::String(path)) => Some(PathBuf::from(path)),
+                        _ => {
+                            return Err(CoreError::new(
+                                "INVALID_PARAMS",
+                                "path must be text or null",
+                            ))
+                        }
+                    };
+                    service_json(java_result(service.start(
+                        string(params, "action")?,
+                        string(params, "component")?,
+                        path,
+                    ))?)
+                }
+                "java.components.read" => service_json(java_result(service.read(
+                    &string(params, "id")?,
+                    &string(params, "generation")?,
+                    params["consume"].as_bool().ok_or_else(|| {
+                        CoreError::new("INVALID_PARAMS", "consume must be boolean")
+                    })?,
+                ))?),
+                "java.components.cancel" => service_json(java_result(
+                    service.cancel(&string(params, "id")?, &string(params, "generation")?),
+                )?),
+                _ => Err(CoreError::new(
+                    "METHOD_NOT_FOUND",
+                    "Unknown Java component method",
+                )),
+            };
+        }
         let directory = match params.get("directory") {
             None | Some(Value::Null) => None,
             Some(Value::String(value)) => Some(value.as_str()),

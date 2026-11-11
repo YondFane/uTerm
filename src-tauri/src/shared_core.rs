@@ -22,23 +22,31 @@ pub fn shared_core_exit(app: tauri::AppHandle, state: tauri::State<'_, Lifecycle
     app.exit(0);
 }
 
+pub(crate) fn core(app: &tauri::AppHandle) -> Result<Arc<uterm_core::Core>, String> {
+    let state = app.state::<Lifecycle>();
+    if state.core.get().is_none() {
+        let root = app
+            .path()
+            .app_data_dir()
+            .map_err(|error| error.to_string())?
+            .join("shared-state-v1");
+        let core = Arc::new(uterm_core::Core::open(root).map_err(|error| error.to_string())?);
+        let _ = state.core.set(core);
+    }
+    state
+        .core
+        .get()
+        .cloned()
+        .ok_or_else(|| "Shared core is not initialized".into())
+}
+
 #[tauri::command]
 pub async fn shared_core_request(app: tauri::AppHandle, request: String) -> Result<String, String> {
     let operation = crate::content_operations::begin_request(&app, &request)?;
-    let root = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("shared-state-v1");
     tauri::async_runtime::spawn_blocking(move || {
         let _operation = operation;
-        let state = app.state::<Lifecycle>();
-        if state.core.get().is_none() {
-            let core = Arc::new(uterm_core::Core::open(root).map_err(|e| e.to_string())?);
-            let _ = state.core.set(core);
-        }
-        let core = state.core.get().ok_or("Shared core is not initialized")?;
-        serde_json::to_string(&core.execute(request.as_bytes())).map_err(|e| e.to_string())
+        let core = core(&app)?;
+        serde_json::to_string(&core.execute(request.as_bytes())).map_err(|error| error.to_string())
     })
     .await
     .map_err(|e| e.to_string())?

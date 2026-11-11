@@ -248,6 +248,34 @@ export interface CoreInputControl {
   owner?: string | null;
 }
 
+export interface CoreJavaComponentCatalog {
+  busy: boolean;
+  items: CoreJavaComponentItem[];
+}
+
+export interface CoreJavaComponentItem {
+  downloaded: number;
+  id: string;
+  installed: boolean;
+  size: number;
+  source: string;
+  version: string;
+}
+
+export interface CoreJavaComponentOperation {
+  error?: string | null;
+  generation: string;
+  id: string;
+  result?: CoreJavaComponentCatalog | null;
+  state: string;
+}
+
+export interface CoreJavaComponentProgress {
+  id: string;
+  received: number;
+  total: number;
+}
+
 export interface CoreJavaConfiguration {
   configured: boolean;
   global: CoreJavaMavenConfig;
