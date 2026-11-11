@@ -133,8 +133,8 @@ private struct NativeTerminalControl: NSViewRepresentable {
     let action: () -> Void
     func makeCoordinator() -> Coordinator { Coordinator(action: action) }
     func makeNSView(context: Context) -> NSButton {
-        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.perform))
-        button.isBordered = false; button.wantsLayer = true; button.font = .systemFont(ofSize: 11)
+        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.handleClick))
+        button.isBordered = false; button.wantsLayer = true; button.font = NSFont.systemFont(ofSize: 11)
         button.identifier = NSUserInterfaceItemIdentifier(id); button.setAccessibilityIdentifier(id)
         return button
     }
@@ -152,7 +152,7 @@ private struct NativeTerminalControl: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject {
         var action: () -> Void
         init(action: @escaping () -> Void) { self.action = action }
-        @objc func perform() { action() }
+        @objc func handleClick() { action() }
     }
 }
 

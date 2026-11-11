@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FileEditor, UnsavedDialog } from "./components/FileEditor";
-import { SettingsProvider } from "./lib/SettingsContext";
+import { SettingsProvider, useSettings } from "./lib/SettingsContext";
 import { contentInvoke, listenContent } from "./lib/content-host";
 import { activeLanguage, localizeMessage, setUiLanguage, tx } from "./lib/i18n";
 import { readSettings, type Settings } from "./lib/settings";
@@ -22,6 +22,44 @@ interface Context {
   settings: Settings;
   editable: boolean;
   embedded?: boolean;
+}
+function ContentFontCommands({ kind }: { kind: Context["kind"] }) {
+  const { resizeFont } = useSettings();
+  const resize = useRef(resizeFont);
+  resize.current = resizeFont;
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (kind && kind !== "file" && kind !== "git") return;
+    let disposed = false;
+    const subscription = listenContent<number>("content-font-adjust", (delta) => {
+      if (delta !== 1 && delta !== -1) return;
+      const eligible =
+        kind === "git"
+          ? document.querySelector(".git-diff pre")
+          : document.querySelector(".code-editor-host, .markdown-preview");
+      if (!eligible || document.querySelector(".html-preview, dialog[open]")) return;
+      void resize
+        .current(kind === "git" ? "gitDiffFontSize" : "fileFontSize", delta, true)
+        .then(() => {
+          if (!disposed) setError("");
+        })
+        .catch((reason) => {
+          if (!disposed) setError(String(reason));
+        });
+    }).catch((reason) => {
+      if (!disposed) setError(String(reason));
+      return undefined;
+    });
+    return () => {
+      disposed = true;
+      void subscription.then((remove) => remove?.());
+    };
+  }, [kind]);
+  return error ? (
+    <p role="alert" className="native-content-command-error">
+      {tx("无法保存字号：{p0}", { p0: localizeMessage(error) })}
+    </p>
+  ) : null;
 }
 function Content({ context }: { context: Context }) {
   const state = useFileDocument(
@@ -149,6 +187,7 @@ async function start() {
       };
       root.render(
         <SettingsProvider content={content}>
+          <ContentFontCommands kind={context.kind} />
           {context.kind === "database" ? (
             <NativeDatabase />
           ) : context.kind === "redis" ? (

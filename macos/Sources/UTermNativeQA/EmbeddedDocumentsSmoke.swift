@@ -29,6 +29,19 @@ enum EmbeddedDocumentsSmoke {
         try await ContentSmoke.wait(first, "document.querySelector('.cm-content[contenteditable=true]')?.textContent.includes('RECOVERED_TAB_SEED') === true")
         try await EditorSmoke.replace(first, text: edited)
         try await TerminalSmoke.wait("Report the actual embedded dirty state") { first.editorDirty }
+        let savedSettings = (try await bridge.snapshot()).document.settings
+        let originalFileFont = savedSettings["fileFontSize"].number ?? 14
+        let fontDelta: Double = originalFileFont < 32 ? 1 : -1
+        try TerminalSmoke.postKey(window: window, code: fontDelta > 0 ? 24 : 27, characters: fontDelta > 0 ? "=" : "-", modifiers: .command)
+        try await ContentSmoke.wait(first, "parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--file-font-size')) === \(originalFileFont + fontDelta)")
+        guard (try await bridge.snapshot()).document.settings["fontSize"] == savedSettings["fontSize"], session.generation == generation else { throw BridgeFailure(code: "EMBEDDED_FONT", message: "File font shortcut changed the background terminal") }
+        try TerminalSmoke.postKey(window: window, code: fontDelta > 0 ? 27 : 24, characters: fontDelta > 0 ? "-" : "=", modifiers: .command)
+        try await ContentSmoke.wait(first, "parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--file-font-size')) === \(originalFileFont)")
+        try TerminalSmoke.postKey(window: window, code: 3, characters: "f", modifiers: .command)
+        try await ContentSmoke.wait(first, "document.querySelector('.cm-search') !== null")
+        guard !session.search.visible, first.webView.window === window else { throw BridgeFailure(code: "EMBEDDED_FIND", message: "File find shortcut revealed the background terminal") }
+        try TerminalSmoke.postKey(window: window, code: 53, characters: "\u{1b}")
+        try await ContentSmoke.wait(first, "document.querySelector('.cm-search') === null")
         var stored = try await bridge.call("editor.drafts.document", params: .object(["directory": .string(root.path), "path": .string(names[0])]))
         let deadline = Date().addingTimeInterval(10)
         while stored["draft"]["text"].string != edited && Date() < deadline {
@@ -87,7 +100,7 @@ enum EmbeddedDocumentsSmoke {
             throw BridgeFailure(code: "EMBEDDED_CLOSE", message: "Closing one embedded editor changed its sibling or external bytes")
         }
         var proof: [String: Any] = [:]
-        for key in ["passed", "tabControlsActivated", "arrowNavigationActivated", "sameMainWindow", "orderedAndReused", "exactUnsavedDraftRetained", "cancelCloseRetainedTabs", "discardPreservedSiblingAndExternalWriter", "terminalViewAndGenerationRetained"] { proof[key] = true }
+        for key in ["passed", "tabControlsActivated", "arrowNavigationActivated", "sameMainWindow", "orderedAndReused", "exactUnsavedDraftRetained", "cancelCloseRetainedTabs", "discardPreservedSiblingAndExternalWriter", "terminalViewAndGenerationRetained", "fontShortcutsTargetEditor", "findShortcutRetainsEditorAndTerminal"] { proof[key] = true }
         proof["screenshot"] = screenshot
         proof["sourceHeadSHA"] = report["sourceHeadSHA"] ?? ""
         proof["testedMergeSHA"] = report["testedMergeSHA"] ?? ""

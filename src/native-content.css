@@ -135,6 +135,19 @@ body,
   min-height: 28px;
   flex: none;
 }
+.native-content-command-error {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  z-index: 40;
+  margin: 0;
+  padding: 8px;
+  color: var(--ui-text);
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  overflow-wrap: anywhere;
+}
 .native-git {
   flex-direction: column;
 }

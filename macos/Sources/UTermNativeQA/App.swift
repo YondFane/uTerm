@@ -528,7 +528,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             if model.inspectorOwnsFocus { return true }
         }
         if contentWindows.values.contains(where: { $0.window === NSApp.keyWindow }) || agentsWindow?.window === NSApp.keyWindow || fullSettingsWindow?.window === NSApp.keyWindow, let action = menuItem.action,
-           [#selector(splitRight), #selector(splitDown), #selector(increaseFont), #selector(decreaseFont)].contains(action) { return false }
+           [#selector(splitRight), #selector(splitDown)].contains(action) { return false }
+        if menuItem.action == #selector(increaseFont) { return commandAvailable("fontIncrease") }
+        if menuItem.action == #selector(decreaseFont) { return commandAvailable("fontDecrease") }
         if menuItem.action == #selector(quit) || menuItem.action == #selector(hideWindow) { return true }
         if model.nameDraft != nil || model.settingsPresented { return false }
         if menuItem.action == #selector(settings) { return model.state != nil }
@@ -559,7 +561,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             if origin === window { return model.inspectorOwnsFocus || model.selectedID != nil || model.documents.active(in: model.inspectorContextKey) != nil }
             return origin != nil && (origin === commandPalette?.window || origin === fullSettingsWindow?.window || origin === agentsWindow?.window || origin === sshWindow?.window || contentWindows.values.contains { $0.window === origin } || pythonWindows.values.contains { $0.window === origin } || javaWindows.values.contains { $0.window === origin })
         }
-        if ["fontIncrease", "fontDecrease"].contains(id) { return origin === window || contentWindows.values.contains { $0.window === origin } }
+        if ["fontIncrease", "fontDecrease"].contains(id) {
+            if let content = focusedContent(in: origin) { return content.workbenchHost == nil }
+            return origin === window && model.selectedTerminal != nil && !model.inspectorOwnsFocus
+        }
         if id == "git", contentWindows.values.contains(where: { $0.gitMode && $0.window === origin }) { return true }
         if id == "github", contentWindows.values.contains(where: { $0.workbenchHost?.kind == "github" && $0.window === origin }) { return true }
         guard origin === window else { return false }
@@ -1126,8 +1131,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc private func splitRight() { Task { await model.split("horizontal") } }
     @objc private func splitDown() { Task { await model.split("vertical") } }
-    @objc private func increaseFont() { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(1)]) } }
-    @objc private func decreaseFont() { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(-1)]) } }
+    private func focusedContent(in origin: NSWindow?) -> ContentWindow? {
+        guard let origin else { return nil }
+        if origin === window, !model.inspectorOwnsFocus { return model.documents.active(in: model.inspectorContextKey)?.content }
+        return contentWindows.values.first { $0.window === origin }
+    }
+    private func adjustFocusedFont(_ delta: Int) {
+        if let content = focusedContent(in: NSApp.keyWindow) { content.adjustContentFont(delta); return }
+        Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(Double(delta))]) }
+    }
+    @objc private func increaseFont() { adjustFocusedFont(1) }
+    @objc private func decreaseFont() { adjustFocusedFont(-1) }
 
     func windowDidUpdate(_ notification: Notification) {
         guard let responder = window?.firstResponder else { return }

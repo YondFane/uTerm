@@ -306,6 +306,7 @@ export class ContentScope {
         "editor-resume",
         "editor-repository-refresh",
         "file-focus-line",
+        "content-font-adjust",
         "github-frozen",
         "github-context-changed",
         "github-settings-changed",

@@ -81,7 +81,7 @@ def validate_workspace_scenes(report, head, tested, phase):
 
 def validate_embedded_workspace(report, head, tested, phase):
     proof = report.get("embeddedWorkspaceFiles", {})
-    for key in ["passed", "tabControlsActivated", "arrowNavigationActivated", "sameMainWindow", "orderedAndReused", "exactUnsavedDraftRetained", "cancelCloseRetainedTabs", "discardPreservedSiblingAndExternalWriter", "terminalViewAndGenerationRetained"]:
+    for key in ["passed", "tabControlsActivated", "arrowNavigationActivated", "sameMainWindow", "orderedAndReused", "exactUnsavedDraftRetained", "cancelCloseRetainedTabs", "discardPreservedSiblingAndExternalWriter", "terminalViewAndGenerationRetained", "fontShortcutsTargetEditor", "findShortcutRetainsEditorAndTerminal"]:
         assert proof.get(key) is True, "Missing actual embedded workspace operation: " + key
     assert proof.get("sourceHeadSHA") == head and proof.get("testedMergeSHA") == tested
     assert proof.get("platform") == "macOS" and proof.get("architecture") in ["arm64", "x86_64"]

@@ -193,7 +193,7 @@ test("content abort and timeout suppress late responses without claiming writes 
   assert.equal(h.cancelled.at(-1).document, "file-slow");
   slow.close();
 });
-for (const eventKind of ["editor-close-request", "file-focus-line"]) {
+for (const eventKind of ["editor-close-request", "file-focus-line", "content-font-adjust"]) {
   test(`closing a content document drains ${eventKind} and rejects pending deliveries`, async () => {
     const h = harness();
     const scope = new ContentScope(h.port, "A");

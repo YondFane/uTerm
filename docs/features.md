@@ -112,6 +112,10 @@ Left/Right and Home/End move between tabs. Editors receive focus after their App
 and keyboard tab navigation retains tab focus. Dirty close, repository operations and quit
 preparation keep the existing editor confirmation and conflict guards.
 
+Font shortcuts in file editors and Git diffs adjust their own saved content size through the scoped
+content channel. Invalid or stale events are ignored; save failures remain visible and can be
+retried. Command-F in an active file stays in its editor rather than revealing the terminal.
+
 Standalone previews and detached regression windows retain separate presentation. Persistent
 tab/window restoration, wrapping, embedded workbenches and complete settings styling still require
 alignment.
@@ -122,7 +126,7 @@ The local CLI control switch remains an immediate service control in Local contr
 
 Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
 side/tool widths in both real apps. Collection rejects stale vectors, old height, titlebar insets or
-stale panel widths. Linux passes 451 Node checks (11 platform skips), type checking and focused
+stale panel widths. Linux passes 452 Node checks (11 platform skips), type checking and focused
 SVG/side-panel regressions; these do not establish complete native parity.
 
 Real Personal-window checks click file/tab/close controls, send AppKit arrows, retain exact

@@ -127,6 +127,11 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         window.makeKeyAndOrderFront(nil)
     }
 
+    func adjustContentFont(_ delta: Int) {
+        guard [-1, 1].contains(delta), workbenchHost == nil else { return }
+        deliver("content-font-adjust", payload: .number(Double(delta)))
+    }
+
     private func prepareDocument() {
         quitGate.invalidate()
         quitToken = nil
