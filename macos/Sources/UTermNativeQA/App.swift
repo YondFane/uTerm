@@ -148,7 +148,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     } else { try await UpdatesSmoke.run(model: model, window: window, report: &report) }
                 }
                 catch { report["failure"] = error.localizedDescription }
-                if let bridge = model.bridge {
+                // Installation already closes its fixture host; querying it again races shutdown or restarts it.
+                // 安装检查已关闭自己的样例宿主，再次查询会与退出竞争或重新启动宿主。
+                if report["explicitFixtureCloseAndIdleHostShutdown"] as? Bool != true, let bridge = model.bridge {
                     do {
                         for session in try await bridge.call("host.status")["sessions"].array { _ = try await bridge.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]])) }
                         _ = try await bridge.call("host.shutdownIdle")

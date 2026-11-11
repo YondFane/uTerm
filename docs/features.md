@@ -2375,9 +2375,15 @@ native test also clicks the actual backdrop and checks invalid layout arguments.
 [36 paired scenes](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)
 pass the bounds policy; both Quick SSH original pairs were viewed and retain the surrounding
 workspace. Actual backdrop Cancel and invalid layout checks pass the Intel native inspector. The ARM
-Personal initial/replacement windows pass, but its full SDK suite fails during installed-app host
-reattachment with a lock-acquisition error; package/window success does not accept that update
-scenario. The
+Personal initial/replacement windows pass, but its full SDK suite fails in redundant outer cleanup
+after the installed app has already reattached, retained its PTY/draft and explicitly stopped its
+host. The second host-status query races shutdown. QA skips that query only after the internal
+successful-cleanup flag, retaining fallback cleanup and all failures. The coordinator also uses the
+shared process-exit observer to require the retained host PID to exit and its endpoint to disappear;
+it never terminates the host to force a pass. Seven focused Linux updater/exit checks pass,
+including delayed endpoint removal and a still-running process. Python syntax and documentation
+checks pass; current-source Mac verification remains pending. Package/window success alone does not
+accept the update scenario. The
 [failure artifact](https://github.com/YondFane/uTerm/actions/runs/43074768643/artifacts/13881394081)
 retains the actual reports. The full functional-parity flag stays false.
 

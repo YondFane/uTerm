@@ -82,10 +82,14 @@ The
 passes actual backdrop cancellation and real SSH trust Cancel/Approve. This does not accept the new
 PR modal or the full parity goal. ARM Personal initial/replacement pass, but its
 [SDK install scenario](https://github.com/YondFane/uTerm/actions/runs/43074768643/artifacts/13881394081)
-fails host reattachment with a lock-acquisition error; the complete Personal run remains failed.
+fails redundant outer cleanup with a host lock-acquisition error after successful reattachment and
+explicit shutdown. QA now avoids that second query only after successful internal cleanup and also
+requires actual host PID exit and endpoint removal. The new checks still need current-source Mac CI;
+the complete retained run remains failed.
 
 源码与 merge 如上，两种原生矩阵通过。配对产物包含 36 组、73 张原始 PNG 及离线查看器；两组快速 SSH 原图已查看，实测边界与外围实时工作区相符，侧栏样式仍有差异。Intel 原生报告通过实际外围取消及真实 SSH 信任取消／批准。这不接受新 PR 模态或完整一致性目标。ARM
-Personal 初次／替换通过，但 SDK 安装场景在宿主重新附着时发生锁获取错误，完整 Personal 运行仍失败。
+Personal 初次／替换通过，但 SDK 安装场景在成功重新附着及明确关闭后，外层重复清理发生宿主锁错误。QA 仅在内部成功清理后避免第二次查询，并要求实际宿主 PID 退出及端点移除；新检查仍待当前源码 Mac
+CI，保留的完整运行仍失败。
 
 ## Evidence / 证据
 

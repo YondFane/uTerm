@@ -222,6 +222,15 @@ try key.publicKey.rawRepresentation.base64EncodedString().write(toFile: CommandL
                 else: raise AssertionError("Relaunched QA app did not complete ordinary exit")
                 data["relaunchedProcessExited"] = True
                 data["relaunchedProcessExitCode"] = None
+                # Observe the owned process/endpoint without starting another host during cleanup.
+                # 清理时仅观察本次拥有的进程／端点，不再启动另一个宿主。
+                data["hostExit"] = json.loads(run("node", "--input-type=module", "-e", """
+import { pathToFileURL } from 'node:url';
+const { waitForOwnedHostExit } = await import(pathToFileURL(process.argv[1]).href);
+process.stdout.write(JSON.stringify(await waitForOwnedHostExit(process.argv[2], Number(process.argv[3]), 20000)));
+""", Path(__file__).with_name("owned-host-exit.mjs").resolve(), root / "local-daemon-v1/endpoint.json", data["hostPIDAfter"], timeout=25))
+                assert data["hostExit"]["endpointRemoved"] and data["hostExit"]["hostPIDExited"]
+                data["retainedHostProcessExited"] = True
                 assert not (root / "local-daemon-v1/endpoint.json").exists()
             assert all((case_dir / name).stat().st_size > 1000 for name in data["captures"])
             assert requests and all(item["path"] in ("/appcast.xml", "/update.zip") for item in requests)
