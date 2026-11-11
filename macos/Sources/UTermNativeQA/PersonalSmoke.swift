@@ -137,6 +137,13 @@ enum PersonalSmoke {
                         let actual = settings.model.databaseComponents.status["items"].array.compactMap { $0["id"].string }.sorted()
                         guard actual == parity["databaseComponentIds"].array.compactMap(\.string).sorted(), settings.model.databaseComponents.error.isEmpty, !settings.model.databaseComponents.working else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Database component controls do not match the shared fixture") }
                     }
+                    if id == "java" {
+                        try await TerminalSmoke.wait("Load actual Java tools and local JDKs before capture") { !settings.model.javaComponents.loading && settings.model.javaComponents.catalog != .null }
+                        let actual = settings.model.javaComponents.catalog["items"].array.compactMap { $0["id"].string }.sorted()
+                        guard actual == parity["javaComponentIds"].array.compactMap(\.string).sorted(), settings.model.javaComponents.error.isEmpty, !settings.model.javaComponents.working else {
+                            throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Java component controls do not match the shared fixture")
+                        }
+                    }
                     guard !settings.model.dirty, !settings.model.maven.dirty, settings.model.error.isEmpty else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Section navigation changed a settings draft") }
                     let name = "personal-\(phase)-settings-\(id)-\(language)-\(appearance)-\(width).png"
                     try await TerminalSmoke.capture(window: settings.window, path: root.appendingPathComponent(name))
@@ -146,7 +153,7 @@ enum PersonalSmoke {
                         "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
                         "width": Int(settings.window.contentView?.bounds.width ?? 0), "height": Int(settings.window.contentView?.bounds.height ?? 0),
                         "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "",
-                        "navigationControlActivated": true, "draftUnchanged": true, "mavenFixtureMatched": id == "maven", "databaseFixtureMatched": id == "database", "automaticUpdates": model.settings["automaticUpdates"].bool ?? false, "windowSizeAttempts": attempts])
+                        "navigationControlActivated": true, "draftUnchanged": true, "mavenFixtureMatched": id == "maven", "databaseFixtureMatched": id == "database", "javaFixtureMatched": id == "java", "automaticUpdates": model.settings["automaticUpdates"].bool ?? false, "windowSizeAttempts": attempts])
                     report["settingsScenes"] = scenes
                 }
                 settings.window.performClose(nil)

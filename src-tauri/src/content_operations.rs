@@ -55,6 +55,8 @@ impl ContentOperations {
                     | "python.project"
                     | "python.path.validate"
                     | "python.tasks"
+                    | "java.components.status"
+                    | "java.components.read"
                     | "java.configuration"
                     | "java.jdks.list"
                     | "java.project"

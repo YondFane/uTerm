@@ -90,6 +90,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["automaticUpdates"] == t["checks"]["automaticUpdates"] == fixture["automaticUpdates"], "Different update preference in settings captures"
         if section == "maven":
             assert n["mavenFixtureMatched"] is True and t["checks"]["mavenFixtureMatched"] is True, "Maven controls were not checked against the fixture"
+        if section == "java":
+            assert n["javaFixtureMatched"] is True and t["checks"]["javaFixtureMatched"] is True, "Java component catalog was not loaded"
         if section == "database":
             assert n["databaseFixtureMatched"] is True and t["checks"]["databaseFixtureMatched"] is True, "Database component catalog was not loaded"
         name = f"settings-{section}-{language}-{appearance}-{width}"

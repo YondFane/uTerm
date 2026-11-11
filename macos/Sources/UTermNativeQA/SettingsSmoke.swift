@@ -194,6 +194,7 @@ enum SettingsSmoke {
             var captures: [String] = [paletteCapture, terminalCapture, fontCapture]
             captures.append(try await verifyGlobalMaven(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             captures.append(try await verifyDatabaseComponents(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
+            captures.append(try await verifyJavaComponents(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report))
             current.window.makeKeyAndOrderFront(nil)
             for (language, appearance, width, name) in [("en", "dark", 900.0, "native-settings-full-dark-en.png"), ("zh-Hans", "light", 660.0, "native-settings-full-light-zh-narrow.png")] {
                 model.values["language"] = .string(language); model.values["appearance"] = .string(appearance); model.section = "appearance"
@@ -241,6 +242,40 @@ enum SettingsSmoke {
         guard model.error.isEmpty, !model.dirty, selected.allSatisfy({ saved.document.settings[$0.key] == $0.value }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT_SAVE", message: "Selected font values did not round trip through the shared core") }
         report["nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets"] = true
         return capture
+    }
+
+    private static func verifyJavaComponents(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
+        try await TerminalSmoke.wait("Render Java development settings navigation") { (view(settings.window, id: "native-settings-section-java") as? NSButton)?.isEnabled == true }
+        guard let navigation = view(settings.window, id: "native-settings-section-java") as? NSButton,
+              let home = ProcessInfo.processInfo.environment["JAVA_HOME"], let bridge = settings.model.workspace.sshBridge else {
+            throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Missing Java settings, isolated bridge or CI JDK")
+        }
+        navigation.performClick(nil)
+        let java = settings.model.javaComponents
+        try await TerminalSmoke.wait("Load actual Java component catalog and JDK list") { !java.loading && java.catalog != .null }
+        guard java.error.isEmpty, java.catalog["items"].array.compactMap({ $0["id"].string }).sorted() == ["jdk-11", "jdk-17", "jdk-21", "jdk-8", "maven"],
+              !java.working else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Java settings did not load all managed tools without starting a download") }
+        let before = try await bridge.snapshot()
+        java.adding = true; java.home = "/missing JDK 中文 & %"
+        try await TerminalSmoke.wait("Render actual JDK registration button") { (view(settings.window, id: "native-java-register") as? NSButton)?.isEnabled == true }
+        guard let add = view(settings.window, id: "native-java-register") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "JDK register control missing") }
+        add.performClick(nil)
+        try await TerminalSmoke.wait("Retain invalid JDK path and show visible failure") { !java.mutating && !java.error.isEmpty }
+        guard java.home == "/missing JDK 中文 & %", java.adding else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Invalid JDK path was lost") }
+        java.home = home
+        add.performClick(nil)
+        try await TerminalSmoke.wait("Register real local full JDK through actual AppKit button") { !java.mutating && java.error.isEmpty && !java.adding }
+        guard let registered = java.jdks.first(where: { $0["registered"].bool == true }), let canonical = registered["home"].string,
+              registered["available"].bool == true else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Real local JDK record is missing") }
+        await java.register(canonical, remove: true)
+        let after = try await bridge.snapshot()
+        guard java.error.isEmpty, !java.jdks.contains(where: { $0["home"].string == canonical && $0["registered"].bool == true }),
+              FileManager.default.fileExists(atPath: URL(fileURLWithPath: canonical).appendingPathComponent("bin/javac").path),
+              after.document.workspace == before.document.workspace, after.document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "JDK record removal changed files or workspace/settings state") }
+        let name = "native-settings-java-components.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(name))
+        report["nativeJavaCatalogDetectionRegistrationFailureRetentionAndRecordRemoval"] = true
+        return name
     }
 
     private static func verifyDatabaseComponents(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {

@@ -61,7 +61,7 @@ class PersonalPackageTests(unittest.TestCase):
                   for language in ["en", "zh-Hans"] for appearance in ["dark", "light"] for width in [1100, 640]]
         fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
         settings = [dict(scene, section=section["id"], sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
-                         draftUnchanged=True, navigationControlActivated=True,
+                         draftUnchanged=True, navigationControlActivated=True, javaFixtureMatched=section["id"] == "java",
                          screenshot=f"personal-{phase}-settings-{section['id']}-{scene['language']}-{scene['appearance']}-{scene['width']}.png")
                     for section in fixture["settingsSections"] for scene in fixture["settingsScenes"]]
         return dict(backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,

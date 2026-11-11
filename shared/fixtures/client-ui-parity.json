@@ -22,6 +22,7 @@
     { "id": "control", "label": "本地控制" },
     { "id": "database", "label": "数据库组件" },
     { "id": "maven", "label": "Maven 设置" },
+    { "id": "java", "label": "Java 开发环境" },
     { "id": "updates", "label": "软件更新" }
   ],
   "maven": {
@@ -40,6 +41,7 @@
     "postgresql",
     "runtime"
   ],
+  "javaComponentIds": ["jdk-8", "jdk-11", "jdk-17", "jdk-21", "maven"],
   "sessions": ["Terminal 1", "Terminal 2"],
   "files": {
     "note.txt": "Original 中文\r\n",

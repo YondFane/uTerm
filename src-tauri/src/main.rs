@@ -426,7 +426,6 @@ fn main() {
         .manage(redis::RedisState::default())
         .manage(database::DatabaseState::default())
         .manage(database_components::Components::default())
-        .manage(java_components::Components::default())
         .invoke_handler(tauri::generate_handler![
             #[cfg(feature = "qa")]
             qa::qa_context,
