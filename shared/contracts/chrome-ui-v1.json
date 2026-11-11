@@ -10,7 +10,12 @@
     "railButtonSize": 34,
     "railIconSize": 18,
     "toolbarIconSize": 17,
-    "sidebarIconSize": 15
+    "sidebarIconSize": 15,
+    "panelCollapseWidth": 30,
+    "mainMinimumWidth": 320,
+    "inspectorMinimumAvailable": 350,
+    "inspectorMaximumRatio": 0.6,
+    "inspectorDefaultRatio": 0.35
   },
   "icons": {
     "sidebar": {

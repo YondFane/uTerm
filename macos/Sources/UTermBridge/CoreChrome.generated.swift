@@ -12,7 +12,7 @@ public enum CoreToolbarIcon: String, CaseIterable, Sendable {
 }
 
 public enum CoreChrome {
-    public static let contractSHA256 = "be9cc907231c05529a1b04f3c1e8d278158ececd038fbe4573ea50f98f525a7e"
+    public static let contractSHA256 = "8960f8036f8c16c0a8461394f8eceeed1687dbe05501edae71d4ecbb25e308f7"
     public static let titlebarHeight: Double = 44
     public static let sidebarRailWidth: Double = 48
     public static let sidebarDefaultWidth: Double = 248
@@ -23,6 +23,11 @@ public enum CoreChrome {
     public static let railIconSize: Double = 18
     public static let toolbarIconSize: Double = 17
     public static let sidebarIconSize: Double = 15
+    public static let panelCollapseWidth: Double = 30
+    public static let mainMinimumWidth: Double = 320
+    public static let inspectorMinimumAvailable: Double = 350
+    public static let inspectorMaximumRatio: Double = 0.6
+    public static let inspectorDefaultRatio: Double = 0.35
     public static let sidebar: [String: String] = [
         "home": "M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9",
         "folder": "M3 8V6a2 2 0 0 1 2-2h4l3 3h7a2 2 0 0 1 2 2v1M3 8h5l2 3h11l-2 8H5a2 2 0 0 1-2-2Z",

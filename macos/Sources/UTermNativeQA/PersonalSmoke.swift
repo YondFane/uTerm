@@ -181,13 +181,16 @@ enum PersonalSmoke {
                         }
                         let expectedSidebar = CoreChromeLayout.sidebar(available: Double(window.contentView?.bounds.width ?? 0), requested: CoreChrome.sidebarDefaultWidth).width
                         guard abs(Double(model.sidebarWidth) - expectedSidebar) < 1 else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_WIDTH", message: "Actual sidebar differs from shared responsive bounds") }
+                        let expectedTools = CoreChromeLayout.inspector(available: Double(window.contentView?.bounds.width ?? 0) - expectedSidebar, ratio: CoreChrome.inspectorDefaultRatio).width
+                        guard abs(Double(model.inspectorWidth) - expectedTools) < 1 else { throw BridgeFailure(code: "PERSONAL_INSPECTOR_WIDTH", message: "Actual tools width differs from shared responsive bounds") }
+                        guard abs(model.toolbarTop) < 1 else { throw BridgeFailure(code: "PERSONAL_CHROME_POSITION", message: "Actual toolbar does not begin at the workspace top") }
                         guard abs(model.toolbarHeight - CGFloat(CoreChrome.titlebarHeight)) < 1 else { throw BridgeFailure(code: "PERSONAL_CHROME_HEIGHT", message: "Actual toolbar differs from the shared chrome height") }
                         let name = "personal-\(phase)-workspace-\(language)-\(appearance)-\(width).png"
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
                         captures.append(name)
                         report["captures"] = captures
                         workspaceScenes.append(["screenshot": name, "language": language, "appearance": appearance,
-                            "chromeContractSHA256": CoreChrome.contractSHA256, "toolbarHeight": model.toolbarHeight, "sidebarWidth": model.sidebarWidth,
+                            "chromeContractSHA256": CoreChrome.contractSHA256, "toolbarHeight": model.toolbarHeight, "toolbarTop": model.toolbarTop, "sidebarWidth": model.sidebarWidth, "inspectorWidth": model.inspectorWidth,
                             "windowSizeAttempts": sizeAttempts,
                             "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0),
                             "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-sessions-files", "filesReadable": true, "fontSize": model.settings["fontSize"].number ?? 0,

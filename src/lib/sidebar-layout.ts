@@ -1,6 +1,6 @@
 import chrome from "../../shared/contracts/chrome-ui-v1.json" with { type: "json" };
 
-export const panelCollapseWidth = 30;
+export const panelCollapseWidth = chrome.metrics.panelCollapseWidth;
 export const sidebarRailWidth = chrome.metrics.sidebarRailWidth;
 
 export function sidebarLayout(available: number, requested: number) {

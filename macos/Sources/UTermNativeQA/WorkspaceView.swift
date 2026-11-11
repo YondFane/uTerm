@@ -8,11 +8,14 @@ struct WorkspaceView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var requestedSidebarWidth = CoreChrome.sidebarDefaultWidth
     @State private var resizeStart: Double?
+    @State private var inspectorRatio = CoreChrome.inspectorDefaultRatio
+    @State private var inspectorResizeStart: Double?
 
     var body: some View {
         GeometryReader { geometry in
             let sidebar = CoreChromeLayout.sidebar(available: Double(geometry.size.width), requested: requestedSidebarWidth)
             let sidebarWidth = model.sidebarVisible ? sidebar.width : CoreChrome.sidebarRailWidth
+            let tools = CoreChromeLayout.inspector(available: Double(geometry.size.width) - sidebarWidth, ratio: inspectorRatio)
             HStack(spacing: 0) {
                 HStack(spacing: 0) {
                     NativeSidebarRail(model: model)
@@ -35,6 +38,22 @@ struct WorkspaceView: View {
                 .background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["sidebar"], fallback: .windowBackgroundColor)))
                 .overlay(alignment: .trailing) {
                     Color(nsColor: .separatorColor).frame(width: 1)
+
+                        .focusable()
+                        .accessibilityLabel(localized("Resize sidebar", "调整侧栏宽度"))
+                        .accessibilityValue(Text(String(Int(sidebarWidth.rounded()))))
+                        .accessibilityAdjustableAction { direction in
+                            switch direction {
+                            case .increment: resizeSidebar(sidebarWidth + 24, available: Double(geometry.size.width))
+                            case .decrement: resizeSidebar(sidebarWidth - 24, available: Double(geometry.size.width))
+                            @unknown default: break
+                            }
+                        }
+                        .onKeyPress(.leftArrow) { resizeSidebar(sidebarWidth - 24, available: Double(geometry.size.width)); return .handled }
+                        .onKeyPress(.rightArrow) { resizeSidebar(model.sidebarVisible ? sidebarWidth + 24 : CoreChromeLayout.sidebarCollapseWidth + 24, available: Double(geometry.size.width)); return .handled }
+                        .onKeyPress(.home) { resizeSidebar(CoreChromeLayout.sidebarCollapseWidth, available: Double(geometry.size.width)); return .handled }
+                        .onKeyPress(.end) { resizeSidebar(sidebar.maximum, available: Double(geometry.size.width)); return .handled }
+                        .onKeyPress(.return) { resizeSidebar(CoreChrome.sidebarDefaultWidth, available: Double(geometry.size.width)); return .handled }
                         .overlay(Color.clear.frame(width: 8).contentShape(Rectangle()).gesture(
                             DragGesture(minimumDistance: 0).onChanged { value in
                                 if resizeStart == nil { resizeStart = sidebarWidth }
@@ -45,8 +64,8 @@ struct WorkspaceView: View {
                             }.onEnded { _ in resizeStart = nil }
                         ))
                 }
-                HSplitView {
-                    if model.inspectorVisible && model.settings["inspectorPosition"].string == "left" { inspector }
+                HStack(spacing: 0) {
+                    if model.inspectorVisible && model.settings["inspectorPosition"].string == "left" { inspector(width: tools.width, available: tools.available) }
                     VStack(spacing: 0) {
                         NativeWorkspaceToolbar(model: model, sidebarWidth: CGFloat(sidebarWidth))
                         if !model.terminalError.isEmpty {
@@ -61,11 +80,15 @@ struct WorkspaceView: View {
                                 Button(localized("Recovery copies", "恢复副本")) { model.recover() }
                             }.padding(8)
                         }
-                            NativeWorkspaceDocumentSurface(model: model, documents: model.documents).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        NativeWorkspaceDocumentSurface(model: model, documents: model.documents).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .frame(minWidth: 220)
-                    if model.inspectorVisible && model.settings["inspectorPosition"].string != "left" { inspector }
+                    .frame(minWidth: CGFloat(CoreChrome.mainMinimumWidth), maxWidth: .infinity)
+                    if model.inspectorVisible && model.settings["inspectorPosition"].string != "left" { inspector(width: tools.width, available: tools.available) }
                 }
+            }
+            .onChange(of: model.inspectorVisible) { _, visible in
+                inspectorResizeStart = nil
+                if visible && tools.width <= CoreChrome.panelCollapseWidth + 1 { inspectorRatio = CoreChrome.inspectorDefaultRatio }
             }
         }
         .font(.custom(NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: CGFloat(model.settings["interfaceSize"].number ?? 13)).fontName, size: CGFloat(model.settings["interfaceSize"].number ?? 13)))
@@ -89,7 +112,47 @@ struct WorkspaceView: View {
         .onChange(of: colorScheme) { _, _ in if model.settings["appearance"].string == "system" { Task { await model.reload() } } }
         .sheet(item: Binding(get: { model.nameDraftOwner == .workspace ? model.nameDraft : nil }, set: { if model.nameDraftOwner == .workspace { model.nameDraft = $0 } })) { _ in NameEditorView(model: model) }
     }
-    private var inspector: some View { InspectorHost(model: model).frame(minWidth: 220, idealWidth: 300, maxWidth: 420) }
+    private func resizeSidebar(_ requested: Double, available: Double) {
+        let next = CoreChromeLayout.sidebar(available: available, requested: requested)
+        requestedSidebarWidth = next.width
+        model.sidebarVisible = !next.hidden
+    }
+    private func resizeInspector(_ requested: Double, available: Double) {
+        inspectorRatio = CoreChromeLayout.inspector(available: available, ratio: requested / available).ratio
+        if requested <= CoreChrome.panelCollapseWidth { model.hideInspector() }
+    }
+    private func inspector(width: Double, available: Double) -> some View {
+        let left = model.settings["inspectorPosition"].string == "left"
+        return InspectorHost(model: model).frame(width: CGFloat(width)).clipped()
+            .background(NativeChromeMeasurement { frame in model.measureInspector(frame.width) }.allowsHitTesting(false))
+            .overlay(alignment: left ? .trailing : .leading) {
+                Color(nsColor: .separatorColor).frame(width: 1)
+
+                    .focusable()
+                    .accessibilityLabel(localized("Resize tools", "调整工具面板宽度"))
+                    .accessibilityValue(Text(String(Int((width / available * 100).rounded())) + "%"))
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: resizeInspector(width + 24, available: available)
+                        case .decrement: resizeInspector(width - 24, available: available)
+                        @unknown default: break
+                        }
+                    }
+                    .onKeyPress(.leftArrow) { resizeInspector(width + (left ? -24 : 24), available: available); return .handled }
+                    .onKeyPress(.rightArrow) { resizeInspector(width + (left ? 24 : -24), available: available); return .handled }
+                    .onKeyPress(.home) { model.hideInspector(); return .handled }
+                    .onKeyPress(.end) { inspectorRatio = CoreChrome.inspectorMaximumRatio; return .handled }
+                    .onKeyPress(.return) { inspectorRatio = CoreChrome.inspectorDefaultRatio; return .handled }
+                    .overlay(Color.clear.frame(width: 8).contentShape(Rectangle()).gesture(
+                        DragGesture(minimumDistance: 0).onChanged { value in
+                            if inspectorResizeStart == nil { inspectorResizeStart = width }
+                            let next = (inspectorResizeStart ?? width) + Double(value.translation.width) * (left ? 1 : -1)
+                            inspectorRatio = CoreChromeLayout.inspector(available: available, ratio: next / available).ratio
+                            if next <= CoreChrome.panelCollapseWidth { model.hideInspector() }
+                        }.onEnded { _ in inspectorResizeStart = nil }
+                    ))
+            }
+    }
 }
 
 @MainActor

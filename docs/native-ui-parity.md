@@ -51,12 +51,12 @@ must match.
 
 The shared-vector candidate uses `shared/contracts/chrome-ui-v1.json` for regular icon paths and
 44-point chrome metrics. New workspace captures must report the generated contract SHA-256 and
-actual toolbar height in both applications. The collector rejects stale vectors or old native
-height; 0.2.10 captures do not meet this new candidate's evidence requirement. Full visual and
+actual toolbar height/top position and responsive side/tool widths in both applications. The
+collector rejects stale vectors, titlebar insets or old panel geometry; 0.2.10 captures do not meet this new candidate's evidence requirement. Full visual and
 functional parity remains pending.
 
 共享矢量候选使用 `shared/contracts/chrome-ui-v1.json`
-的常规图标路径与 44 点界面尺寸。新的工作区截图须在两版应用中记录生成契约的 SHA-256 与实际顶栏高度；汇集器拒绝过期路径或旧原生高度。0.2.10 原图不满足此新候选的证据要求，完整视觉／功能一致性仍待完成。
+的常规图标路径与 44 点界面尺寸。新的工作区截图须在两版应用中记录生成契约的 SHA-256 与实际顶栏高度／顶部位置及响应式侧栏／工具宽度；汇集器拒绝过期路径、标题栏额外留白或旧面板尺寸。0.2.10 原图不满足此新候选的证据要求，完整视觉／功能一致性仍待完成。
 
 ## Evidence / 证据
 

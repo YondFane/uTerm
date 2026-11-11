@@ -18,4 +18,18 @@ final class ChromeLayoutTests: XCTestCase {
         XCTAssertEqual(wide.width, 248)
         XCTAssertFalse(wide.hidden)
     }
+    func testInspectorUsesActualRemainingWidthWithoutClippingTheNarrowWindow() {
+        let narrow = CoreChromeLayout.inspector(available: 640 - 192, ratio: 0.35)
+        XCTAssertEqual(narrow.width, 128)
+        XCTAssertEqual(narrow.available - narrow.width, 320)
+        XCTAssertEqual(CoreChromeLayout.inspector(available: 1100 - 248, ratio: 0.35).width, 298.2, accuracy: 0.0001)
+        for available in [392.0, 448, 560, 852, 2200] {
+            for ratio in [-2.0, 0, 0.35, 0.6, 4] {
+                let result = CoreChromeLayout.inspector(available: available, ratio: ratio)
+                XCTAssertGreaterThanOrEqual(result.width, 30)
+                XCTAssertGreaterThanOrEqual(result.available - result.width, 320)
+                XCTAssertLessThanOrEqual(result.ratio, 0.6)
+            }
+        }
+    }
 }

@@ -105,12 +105,14 @@ struct NativeInspectorView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Picker(localized("Tools", "工具"), selection: $model.mode) {
-                    Text(localized("Files", "文件")).tag(NativeInspectorModel.Mode.files)
-                    Text(localized("Search", "搜索")).tag(NativeInspectorModel.Mode.search)
-                    Text(localized("Quick open", "快速打开")).tag(NativeInspectorModel.Mode.quick)
-                }.labelsHidden().pickerStyle(.segmented)
-                Button { workspace.hideInspector() } label: { Image(systemName: "xmark") }.help(localized("Close tools", "关闭工具"))
+                Menu {
+                    Button(localized("Files", "文件")) { model.mode = .files }
+                    Button(localized("Search", "搜索")) { model.mode = .search }
+                    Button(localized("Quick open", "快速打开")) { model.mode = .quick }
+                } label: {
+                    Text(model.mode == .files ? localized("Files", "文件") : model.mode == .search ? localized("Search", "搜索") : localized("Quick open", "快速打开")).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                }.menuStyle(.borderlessButton)
+                Button { workspace.hideInspector() } label: { NativeChromeIcon(toolbar: .close, size: 12).frame(width: 22, height: 22) }.help(localized("Close tools", "关闭工具"))
             }
             if !model.directory.isEmpty { Text(URL(fileURLWithPath: model.directory).lastPathComponent).font(.caption).foregroundStyle(.secondary).lineLimit(1).help(model.directory) }
             if model.mode == .files {
@@ -141,6 +143,9 @@ struct NativeInspectorView: View {
                 Button(localized("Open", "打开")) { model.activateFromUI(model.selected) }.disabled(!model.rows.indices.contains(model.selected) || model.busy)
             }
         }.padding(10)
+        .font(.custom(NativePreferences.font(workspace.settings["interfaceFont"].string ?? "", size: CGFloat(workspace.settings["interfaceSize"].number ?? 13)).fontName, size: CGFloat(workspace.settings["interfaceSize"].number ?? 13)))
+        .foregroundStyle(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(workspace.settings, catalog: workspace.settingsCatalog)["text"], fallback: .labelColor)))
+        .background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(workspace.settings, catalog: workspace.settingsCatalog)["sidebar"], fallback: .windowBackgroundColor)))
         .task(id: workspace.inspectorContextKey) { await model.reload(); queryFocused = model.mode != .files }
         .onChange(of: model.mode) { _, mode in Task { await model.reload() }; queryFocused = mode != .files }
         .onChange(of: model.hidden) { _, _ in Task { await model.reload() } }
@@ -158,6 +163,7 @@ struct InspectorHost: NSViewRepresentable {
     func makeNSView(context: Context) -> InspectorContainer {
         let view = InspectorContainer(rootView: NativeInspectorView(model: model.inspector, workspace: model))
         view.identifier = NSUserInterfaceItemIdentifier("native-inspector-container")
+        view.safeAreaRegions = []
         return view
     }
     func updateNSView(_ view: InspectorContainer, context: Context) {

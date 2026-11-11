@@ -38,7 +38,7 @@ class ParityEvidenceTests(unittest.TestCase):
                 for width in fixture["widths"]:
                     values = dict(language=lang, appearance=appearance, width=width, height=720,
                                   scenario="toolbar-sidebar-two-sessions-files", sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
-                                  chromeContractSHA256=chrome_digest, toolbarHeight=44, sidebarWidth=min(248, max(180, min(320, width * .3))), generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
+                                  chromeContractSHA256=chrome_digest, toolbarHeight=44, toolbarTop=0, sidebarWidth=min(248, max(180, min(320, width * .3))), inspectorWidth=298.2 if width == 1100 else 128, generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
                     native = f"personal-initial-workspace-{lang}-{appearance}-{width}.png"
                     tauri = f"ui-parity-workspace-{lang}-{appearance}-{width}.png"
                     # Synthetic header fixtures test rejection policy, never native acceptance.
@@ -105,7 +105,7 @@ class ParityEvidenceTests(unittest.TestCase):
 
     def test_rejects_different_chrome_and_old_toolbar_geometry(self):
         original = copy.deepcopy(self.t["scenes"][0]["checks"])
-        for key, value in [("chromeContractSHA256", "0" * 64), ("toolbarHeight", 40), ("sidebarWidth", 320), ("toolbarHeight", 0)]:
+        for key, value in [("chromeContractSHA256", "0" * 64), ("toolbarTop", 28), ("toolbarHeight", 40), ("inspectorWidth", 420), ("sidebarWidth", 320), ("toolbarHeight", 0)]:
             self.t["scenes"][0]["checks"] = {**original, key: value}
             with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
         self.t["scenes"][0]["checks"] = original

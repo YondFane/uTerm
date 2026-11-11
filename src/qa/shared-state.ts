@@ -348,9 +348,13 @@ async function runUiParity() {
           current?.generation === original.generation,
           "Parity layout restarted the selected terminal",
         );
-        const toolbarHeight = document
-          .querySelector("main > .toolbar")
-          ?.getBoundingClientRect().height;
+        const toolbarBounds = document.querySelector("main > .toolbar")?.getBoundingClientRect();
+        const toolbarHeight = toolbarBounds?.height;
+        const toolbarTop = toolbarBounds?.top;
+        assert(
+          toolbarTop !== undefined && Math.abs(toolbarTop) < 1,
+          "Actual toolbar does not begin at the workspace top",
+        );
         assert(
           toolbarHeight !== undefined &&
             Math.abs(toolbarHeight - chrome.metrics.titlebarHeight) < 1,
@@ -373,10 +377,31 @@ async function runUiParity() {
           sidebarWidth !== undefined && Math.abs(sidebarWidth - expectedSidebar) < 1,
           "Actual sidebar differs from shared responsive bounds",
         );
+        const inspectorWidth = document
+          .querySelector(".app-shell > .file-panel")
+          ?.getBoundingClientRect().width;
+        const remaining = Math.max(
+          chrome.metrics.inspectorMinimumAvailable,
+          innerWidth - expectedSidebar,
+        );
+        const expectedInspector = Math.max(
+          chrome.metrics.panelCollapseWidth,
+          Math.min(
+            remaining - chrome.metrics.mainMinimumWidth,
+            remaining * chrome.metrics.inspectorMaximumRatio,
+            remaining * chrome.metrics.inspectorDefaultRatio,
+          ),
+        );
+        assert(
+          inspectorWidth !== undefined && Math.abs(inspectorWidth - expectedInspector) < 1,
+          "Actual tools width differs from shared responsive bounds",
+        );
         await scene(`workspace-${language}-${appearance}-${width}`, {
           chromeContractSHA256,
           toolbarHeight,
+          toolbarTop,
           sidebarWidth,
+          inspectorWidth,
           language,
           appearance,
           width: innerWidth,

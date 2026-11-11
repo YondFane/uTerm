@@ -28,10 +28,9 @@ struct NativeWorkspaceToolbar: View {
         .frame(height: CGFloat(CoreChrome.titlebarHeight))
         .background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["sidebar"], fallback: .windowBackgroundColor)))
         .overlay(alignment: .bottom) { Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["border"], fallback: .separatorColor)).frame(height: 1) }
-        .background(GeometryReader { geometry in
-            Color.clear.onAppear { model.measureToolbar(geometry.size.height) }
-                .onChange(of: geometry.size.height) { _, height in model.measureToolbar(height) }
-        })
+        .background(NativeChromeMeasurement { frame in
+            model.measureToolbar(frame.height); model.measureToolbarTop(frame.minY)
+        }.allowsHitTesting(false))
         .accessibilityIdentifier("native-workspace-toolbar")
     }
     private func tool(_ icon: CoreToolbarIcon, _ title: String, action: @escaping () -> Void) -> some View {

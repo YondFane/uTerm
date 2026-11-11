@@ -63,3 +63,11 @@ test("drag and arrow deltas track the physical separator on either side", () => 
     assert.equal(inspectorResizeWidth(200, 16, position), position === "left" ? 216 : 184);
   }
 });
+
+test("narrow windows keep the full inspector inside the available columns", () => {
+  const layout = inspectorLayout(640 - 192, 0.35);
+  assert.equal(layout.available, 448);
+  assert.equal(layout.width, 128);
+  assert.equal(layout.available - layout.width, 320);
+  assert.equal(inspectorLayout(0, 0.35).width, 30);
+});

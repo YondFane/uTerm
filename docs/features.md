@@ -79,7 +79,10 @@ first vector contract. The candidate shell places the 48-point category rail dow
 with workspace selection above the list and the title/Java/Python controls above the main pane.
 The sidebar defaults to 248 points, clamps to 30% of the window (at most 320), and retains the
 rail when collapsed. Add, session, split and tool actions remain available from the rail menu;
-settings opens from its footer. Embedded workbenches and complete settings styling still require alignment; the new workspace
+settings opens from its footer. Tools default to 35% of the remaining width and reserve a 320-point
+main pane; narrow windows use their actual remaining space, keeping the whole tools column inside
+the window. Side/tool separators support dragging, arrow keys, Home/End and Return to restore the
+default width. The native layout avoids a separate split-view titlebar inset. Embedded workbenches and complete settings styling still require alignment; the new workspace
 file tabs still need their candidate macOS CI acceptance.
 
 The candidate adds a real Personal-window check that clicks embedded file/tab/close controls,
@@ -89,8 +92,9 @@ macOS must run it at the new source SHA. Packaging rejects a missing operation, 
 missing `personal-<phase>-embedded-files.png` evidence.
 
 The candidate capture flow records the exact chrome contract digest and measured toolbar height in
-both real applications, together with the measured responsive sidebar width. Collection rejects a
-different contract, the previous 40-point native height or a stale sidebar width. Linux passes 450 Node checks (11 platform skips), type checking and the focused
+both real applications, together with responsive sidebar/tools widths and the toolbar’s actual
+top position. Collection rejects a
+different contract, the previous 40-point native height, a titlebar inset or stale panel widths. Linux passes 451 Node checks (11 platform skips), type checking and the focused
 SVG/side-panel regressions. Swift vector geometry tests cover relative subpaths, smooth curves,
 arcs/rotation/radius expansion and invalid inputs; actual macOS compilation and windows still
 require this candidate's CI.

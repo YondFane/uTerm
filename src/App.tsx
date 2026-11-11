@@ -220,7 +220,7 @@ export function App() {
   const [gitDiffTarget, setGitDiffTarget] = useState<HTMLDivElement | null>(null);
   const shellElement = useRef<HTMLDivElement>(null);
   const [shellWidth, setShellWidth] = useState(window.innerWidth);
-  const [inspectorRatio, setInspectorRatio] = useState(0.35);
+  const [inspectorRatio, setInspectorRatio] = useState(chrome.metrics.inspectorDefaultRatio);
   const [resizingInspector, setResizingInspector] = useState(false);
   const inspectorDrag = useRef<{
     x: number;

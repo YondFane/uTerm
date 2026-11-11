@@ -38,7 +38,9 @@ final class WorkspaceModel: ObservableObject {
     private var breakTimer: Task<Void, Never>?
     @Published private(set) var focusRevision = 0
     @Published private(set) var toolbarHeight: CGFloat = 0
+    @Published private(set) var toolbarTop: CGFloat = -1
     @Published private(set) var sidebarWidth: CGFloat = 0
+    @Published private(set) var inspectorWidth: CGFloat = 0
     @Published var controlStatus: JSONValue = .null
     @Published var controlError = ""
     @Published var controlBusy = false
@@ -122,7 +124,9 @@ final class WorkspaceModel: ObservableObject {
     var projectItems: [NativeListItem] { projects.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var sessionEntries: [CoreSessionEntry] { (state?.sessions ?? []).filter { $0.workspaceId == groupID } }
     func revealSelectedPane() { paneZoomed = false; focusRevision += 1 }
+    func measureInspector(_ width: CGFloat) { if abs(inspectorWidth - width) > 0.1 { inspectorWidth = width } }
     func measureSidebar(_ width: CGFloat) { if abs(sidebarWidth - width) > 0.1 { sidebarWidth = width } }
+    func measureToolbarTop(_ top: CGFloat) { if abs(toolbarTop - top) > 0.1 { toolbarTop = top } }
     func measureToolbar(_ height: CGFloat) { if abs(toolbarHeight - height) > 0.1 { toolbarHeight = height } }
 
     static var applicationProfile: NativeApplicationProfile {
