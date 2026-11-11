@@ -25,7 +25,7 @@ final class NativeWorkspaceDocuments: ObservableObject {
             self.selected[item.scope] = id
             parent.makeKeyAndOrderFront(nil)
             DispatchQueue.main.async { [weak self, weak parent, weak content] in
-                guard let self, let parent, let content, self.active(in: item.scope)?.id == id, content.webView.window === parent else { return }
+                guard let self, let parent, let content, self.active(in: item.scope)?.id == id, content.webView.window === parent, !(parent.firstResponder is WorkspaceTabButton) else { return }
                 parent.makeFirstResponder(content.webView)
             }
         }
@@ -98,8 +98,9 @@ struct NativeWorkspaceDocumentSurface: View {
 @MainActor
 private struct NativeEmbeddedDocument: NSViewRepresentable {
     let content: ContentWindow
-    func makeNSView(context: Context) -> NSView {
-        let host = NSView()
+    func makeNSView(context: Context) -> EmbeddedDocumentHost {
+        let host = EmbeddedDocumentHost()
+        host.document = content.webView
         host.identifier = NSUserInterfaceItemIdentifier("native-embedded-document")
         content.webView.removeFromSuperview()
         content.webView.translatesAutoresizingMaskIntoConstraints = false
@@ -112,9 +113,22 @@ private struct NativeEmbeddedDocument: NSViewRepresentable {
         ])
         return host
     }
-    func updateNSView(_ host: NSView, context: Context) {}
-    static func dismantleNSView(_ host: NSView, coordinator: ()) {
+    func updateNSView(_ host: EmbeddedDocumentHost, context: Context) {}
+    static func dismantleNSView(_ host: EmbeddedDocumentHost, coordinator: ()) {
         for view in host.subviews { view.removeFromSuperview() }
+    }
+}
+
+@MainActor
+private final class EmbeddedDocumentHost: NSView {
+    weak var document: WKWebView?
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window, window.isKeyWindow, let document = self.document,
+                  document.window === window, !(window.firstResponder is WorkspaceTabButton) else { return }
+            window.makeFirstResponder(document)
+        }
     }
 }
 

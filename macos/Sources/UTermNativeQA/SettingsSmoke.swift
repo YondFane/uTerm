@@ -263,8 +263,15 @@ enum SettingsSmoke {
         try await TerminalSmoke.wait("Retain invalid JDK path and show visible failure") { !java.mutating && !java.error.isEmpty }
         guard java.home == "/missing JDK 中文 & %", java.adding else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Invalid JDK path was lost") }
         java.home = home
-        add.performClick(nil)
-        try await TerminalSmoke.wait("Register real local full JDK through actual AppKit button") { !java.mutating && java.error.isEmpty && !java.adding }
+        try await TerminalSmoke.wait("Re-enable the actual JDK registration control after rejected input") { (view(settings.window, id: "native-java-register") as? NSButton)?.isEnabled == true }
+        guard let retry = view(settings.window, id: "native-java-register") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Updated JDK register control missing") }
+        retry.performClick(nil)
+        do {
+            try await TerminalSmoke.wait("Register real local full JDK through actual AppKit button") { !java.mutating && java.error.isEmpty && !java.adding }
+        } catch {
+            report["javaRegistrationDiagnostics"] = ["error": java.error, "adding": java.adding, "mutating": java.mutating, "blocked": java.blocked, "home": java.home, "liveButtonEnabled": (view(settings.window, id: "native-java-register") as? NSButton)?.isEnabled ?? false] as [String: Any]
+            throw error
+        }
         guard let registered = java.jdks.first(where: { $0["registered"].bool == true }), let canonical = registered["home"].string,
               registered["available"].bool == true else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Real local JDK record is missing") }
         await java.register(canonical, remove: true)
