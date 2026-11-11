@@ -88,6 +88,9 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
     width: number;
     height: number;
   }[];
+  quickAddress: string;
+  quickTerminalCommand: string;
+  quickScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
 };
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
 const sentinel = "opaque QA draft backup retained byte-for-byte";
@@ -123,6 +126,7 @@ async function observeCore(method: string, params?: Parameters<typeof coreReques
   assert(
     [
       "snapshot.read",
+      "session.entries",
       "editor.drafts.document",
       "git.favorites.read",
       "git.favorites.recovery.list",
@@ -915,6 +919,121 @@ async function runUiParity() {
     });
   }
   await closePdf();
+  const quickWorkspace = ((await observeCore("snapshot.read")) as unknown as CoreSnapshot).document
+    .workspace;
+  const quickFrames = terminalPerformanceSnapshot("ui-parity-0")!.frames;
+  await invoke("control_session", {
+    id: "ui-parity-0",
+    action: "send",
+    text: parityFixture.quickTerminalCommand + "\r",
+  });
+  await until(() => {
+    const current = terminalPerformanceSnapshot("ui-parity-0");
+    return (
+      current &&
+      current.frames > quickFrames &&
+      current.text.includes(parityFixture.marker) &&
+      current.text.trimEnd().endsWith("ui-parity >")
+    );
+  }, "shared modal background prepared by actual shell output");
+  for (const quickScene of parityFixture.quickScenes) {
+    await open();
+    await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+    await choose(
+      [translate("en", "应用语言"), translate("zh-Hans", "应用语言")],
+      quickScene.language,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await open();
+    await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+    await choose(
+      [translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")],
+      quickScene.appearance,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await invoke("qa_performance_window", { width: quickScene.width, height: quickScene.height });
+    await until(
+      () => innerWidth === quickScene.width && innerHeight === quickScene.height,
+      "actual Quick SSH capture dimensions",
+    );
+    async function invalidQuick() {
+      const trigger = await until(
+        () =>
+          [...document.querySelectorAll<HTMLButtonElement>(".ssh-sidebar-tools button")].find(
+            (button) =>
+              button.textContent?.trim() === translate(quickScene.language, "快速 SSH 连接") &&
+              !button.disabled,
+          ),
+        "actual Quick SSH sidebar button",
+      );
+      trigger.click();
+      const dialog = await until(
+        () => document.querySelector<HTMLDialogElement>(".ssh-quick-dialog[open]"),
+        "actual shared Quick SSH modal",
+      );
+      const field = dialog.querySelector<HTMLInputElement>("input")!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+        field,
+        parityFixture.quickAddress,
+      );
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      await pause(0);
+      dialog.querySelector("form")!.requestSubmit();
+      await until(
+        () => dialog.querySelector("[role=alert]") && !field.disabled,
+        "actual invalid-input rejection",
+      );
+      assert(field.value === parityFixture.quickAddress, "Quick SSH lost the rejected address");
+      return dialog;
+    }
+    async function unchangedQuick() {
+      const current = await invoke<{ sessions: { spec: { id: string }; generation: string }[] }>(
+        "qa_host_status",
+      );
+      assert(
+        current.sessions.length === 1 &&
+          current.sessions[0].spec.id === "ui-parity-0" &&
+          current.sessions[0].generation === restarted.generation &&
+          JSON.stringify(
+            ((await observeCore("snapshot.read")) as unknown as CoreSnapshot).document.workspace,
+          ) === JSON.stringify(quickWorkspace),
+        "Quick SSH changed the workspace or terminal generation",
+      );
+      assert(visibleTerminal("ui-parity-0") === terminal, "Quick SSH replaced the terminal view");
+    }
+    async function cancelQuick(dialog: HTMLDialogElement) {
+      const cancel = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(
+        (button) => button.textContent?.trim() === translate(quickScene.language, "取消"),
+      );
+      assert(cancel, "Actual modal Cancel is unavailable");
+      cancel.click();
+      await until(
+        () => !document.querySelector(".ssh-quick-dialog"),
+        "cancel only the actual Quick SSH modal",
+      );
+      await unchangedQuick();
+    }
+    await cancelQuick(await invalidQuick());
+    const dialog = await invalidQuick();
+    await unchangedQuick();
+    await scene(
+      `quick-ssh-invalid-${quickScene.language}-${quickScene.appearance}-${quickScene.width}`,
+      {
+        ...quickScene,
+        passed: true,
+        inputAddress: parityFixture.quickAddress,
+        terminalFixtureMarker: parityFixture.marker,
+        invalidInputRejected: true,
+        addressRetained: true,
+        savedWorkspaceUnchanged: true,
+        sameMainWindow: true,
+        terminalGenerationRetained: true,
+        actualSidebarButton: true,
+        actualCancelPreservedState: true,
+      },
+    );
+    await cancelQuick(dialog);
+  }
   await invoke("qa_request_exit");
 }
 

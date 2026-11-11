@@ -26,8 +26,8 @@ enum QuickSSHSmoke {
             return profile["host"].string == "127.0.0.1" && profile["port"].number == 1
         })
     }
-    private static func address(_ content: ContentWindow, _ text: String) async throws {
-        guard let window = content.window, window.makeFirstResponder(content.webView), try await EditorSmoke.evaluate(content, script: """
+    static func address(_ content: ContentWindow, _ text: String) async throws {
+        guard let window = content.presentationWindow, window.makeFirstResponder(content.webView), try await EditorSmoke.evaluate(content, script: """
             const input=document.querySelector('.ssh-quick-dialog input');if(!input)return false;
             input.focus();input.select();return document.execCommand('insertText',false,text);
             """, arguments: ["text": text]) else { throw BridgeFailure(code: "QUICK_SSH_INPUT", message: "Quick SSH input did not accept actual WebKit typing") }
@@ -80,9 +80,10 @@ enum QuickSSHSmoke {
         func open() async throws -> ContentWindow {
             guard let button = control(window, id: "native-ssh-quick") as? NSButton, button.isEnabled else { throw BridgeFailure(code: "QUICK_SSH_BUTTON", message: "Missing actual Quick SSH button") }
             button.performClick(nil)
-            try await TerminalSmoke.wait("Open shared Quick SSH through the actual sidebar button") { lookup()?.window?.isVisible == true }
+            try await TerminalSmoke.wait("Open shared Quick SSH through the actual sidebar button") { lookup()?.webView.window === window }
             guard let content = lookup() else { throw BridgeFailure(code: "QUICK_SSH_WINDOW", message: "Quick SSH window is missing") }
             try await ContentSmoke.wait(content, "document.querySelector('.ssh-quick-dialog[open] input') !== null")
+            guard content.presentationWindow === window, content.window?.isVisible == false, model.quickSSHContent === content else { throw BridgeFailure(code: "QUICK_SSH_PRESENTATION", message: "Quick SSH is not embedded in the main window") }
             return content
         }
         var quick = try await open()
@@ -91,10 +92,16 @@ enum QuickSSHSmoke {
         _ = try await quick.webView.evaluateJavaScript("document.querySelector('form').requestSubmit()")
         try await ContentSmoke.wait(quick, "document.querySelector('[role=alert]') !== null", allowAlert: true)
         guard (try await bridge.snapshot()).revision == before.revision else { throw BridgeFailure(code: "QUICK_SSH_INVALID", message: "Invalid quick input changed shared state") }
-        if let current = quick.window { try await capture("native-quick-ssh-invalid-en-dark.png", window: current) }
+        try await capture("native-quick-ssh-invalid-en-dark.png", window: window)
         try await EditorSmoke.click(quick, title: "Cancel")
         try await TerminalSmoke.wait("Cancel Quick SSH without saving") { lookup() == nil && !model.quickSSHPresented }
         guard (try await bridge.snapshot()).revision == before.revision else { throw BridgeFailure(code: "QUICK_SSH_CANCEL", message: "Cancellation changed shared state") }
+        quick = try await open()
+        try TerminalSmoke.postKey(window: window, code: 13, characters: "w", modifiers: .command)
+        try await TerminalSmoke.wait("Command-W closes only the embedded Quick SSH dialog") { lookup() == nil && model.quickSSHContent == nil && window.isVisible }
+        guard (try await bridge.snapshot()).revision == before.revision else { throw BridgeFailure(code: "QUICK_SSH_CANCEL", message: "Closing the modal changed shared state") }
+        guard model.selectedID == selected, model.terminals.mapValues({ $0.generation }) == generations else { throw BridgeFailure(code: "QUICK_SSH_MODAL", message: "Opening or closing Quick SSH changed existing terminal generations") }
+        report["nativeQuickSSHModalRetainsExistingSessions"] = true
         quick = try await open()
         let other = UUID().uuidString
         guard await model.mutate("workspace.create", ["id": .string(other), "name": .string("Other quick workspace"), "select": .bool(true)]) else { throw BridgeFailure(code: "QUICK_SSH_CONFLICT", message: model.error) }
@@ -103,8 +110,10 @@ enum QuickSSHSmoke {
         _ = try await quick.webView.evaluateJavaScript("document.querySelector('form').requestSubmit()")
         try await ContentSmoke.wait(quick, "document.querySelector('[role=alert]') !== null && !document.querySelector('input').disabled", allowAlert: true)
         guard (try await bridge.snapshot()).revision == switched.revision else { throw BridgeFailure(code: "QUICK_SSH_CONFLICT", message: "Stale quick dialog wrote into another workspace") }
-        try await EditorSmoke.click(quick, title: "Cancel")
+        try TerminalSmoke.postKey(window: window, code: 53, characters: "\u{1b}")
         try await TerminalSmoke.wait("Close rejected stale quick dialog") { lookup() == nil }
+        guard (try await bridge.snapshot()).revision == switched.revision else { throw BridgeFailure(code: "QUICK_SSH_CANCEL", message: "Escape changed the rejected dialog's shared state") }
+        report["nativeQuickSSHModalCloseKeysRetainState"] = true
         guard await model.mutate("workspace.switch", ["id": .string(workspaceID)]) else { throw BridgeFailure(code: "QUICK_SSH_RESTORE", message: model.error) }
         report["nativeQuickSSHInvalidCancelAndStaleWorkspacePreserveState"] = true
         quick = try await open()
@@ -142,6 +151,7 @@ enum QuickSSHSmoke {
         report["nativeQuickSSHActualFinalSessionPrunesTemporary"] = true
         for id in [firstID, secondID, id] { guard await model.mutate("ssh.profile.remove", ["id": .string(id)]) else { throw BridgeFailure(code: "QUICK_SSH_CLEANUP", message: model.error) } }
         report["nativeQuickSSHActualCreateAndKeepRetainSession"] = true
+        report["nativeQuickSSHInMainWindow"] = true
         report["quickSSHScenario"] = "Real WebKit form and AppKit search/menu; loopback port 1 exercises failure without external credentials; no authenticated remote login acceptance"
     }
 }

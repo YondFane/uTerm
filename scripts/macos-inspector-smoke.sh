@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-inspector-') as directo
                 'sharedFilesRootAndMethodBoundaries', 'sharedFilesActualCreateCopyRenameDeleteAndCancel', 'sharedFilesStaleProjectRejected', 'sharedFilesAcrossProjectsRetainCopiedSource',
                 'sharedFilesAcrossWorkspacesRetainCopiedSourceAndRejectRemovedRoots',
                 'nativeSSHSearchAllAndCategoryRetainFocusAndSessions', 'nativeQuickSSHInvalidCancelAndStaleWorkspacePreserveState', 'nativeQuickSSHActualCreateAndKeepRetainSession',
-                'nativeQuickSSHActualFinalSessionPrunesTemporary',
+                'nativeQuickSSHActualFinalSessionPrunesTemporary', 'nativeQuickSSHInMainWindow', 'nativeQuickSSHModalCloseKeysRetainState', 'nativeQuickSSHModalRetainsExistingSessions',
                 'searchJumpRetainsExistingEditorText', 'cancelledSearchAndFilenameQuickOpen',
                 'paneSwapAndZoomRetainLayoutViewsAndOutput', 'closeFocusedToolsRetainsPTYAndReturnsFocus',
                 'leftToolsRemainVisibleWithoutSidebar', 'explicitFixtureCloseAndIdleHostShutdown']:

@@ -132,6 +132,10 @@ body,
   color: var(--ui-text);
   display: flex;
 }
+:root:has(.native-ssh-quick),
+.native-content.native-ssh-quick {
+  background: transparent;
+}
 .native-content > .file-editor {
   width: 100%;
   height: 100%;

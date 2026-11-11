@@ -520,6 +520,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return false }
+        if let quick = model.quickSSHContent {
+            if menuItem.action == #selector(quit) { return true }
+            if menuItem.action == #selector(closeSession) { menuItem.title = localized("Close dialog", "关闭对话框"); return (quick.workbenchHost as? QuickSSHHost)?.pending == false }
+            if menuItem.action != #selector(performSemanticCommand(_:)) { return false }
+        }
         if menuItem.action == #selector(performSemanticCommand(_:)) { return (menuItem.representedObject as? String).map(commandAvailable) == true }
         if menuItem.action == #selector(closeSession) {
             if let fullSettingsWindow, fullSettingsWindow.window === NSApp.keyWindow {
@@ -570,6 +575,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     private func commandAvailable(_ id: String) -> Bool {
         guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
+        if let quick = model.quickSSHContent { return id == "close" && NSApp.keyWindow === window && (quick.workbenchHost as? QuickSSHHost)?.pending == false }
         let origin = NSApp.keyWindow === commandPalette?.window ? commandPalette?.returnWindow : NSApp.keyWindow
         // Settings blocks external writes, while commands owned by that window remain available.
         // 设置窗口阻止外部写入，但属于该窗口的命令仍可使用。
@@ -708,7 +714,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     private func makeQuickSSHWindow() async throws -> ContentWindow {
-        guard !preparingQuit, !model.busy, let bridge = model.bridge else { throw BridgeFailure(code: "SSH_OPERATION_BUSY", message: localized("Finish the current operation first.", "请先完成当前操作。")) }
+        guard !preparingQuit, !mutatingRepository, !model.busy, !model.settingsPresented, !model.editorRecoveryPresented,
+              !model.worktreeDeletionPresented, !model.gitFavoritesRecoveryPresented, model.nameDraft == nil,
+              let bridge = model.bridge, let parent = window else { throw BridgeFailure(code: "SSH_OPERATION_BUSY", message: localized("Finish the current operation first.", "请先完成当前操作。")) }
         if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "ssh-quick" }) { current.reveal(); return current }
         let workspaceID = model.groupID
         let host = QuickSSHHost(workspaceID: workspaceID)
@@ -718,10 +726,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let content = try ContentWindow(bridge: bridge, directory: WorkspaceModel.dataRoot().deletingLastPathComponent(), path: "", workbenchHost: host)
         host.close = { [weak content] in content?.forceClose() }
-        content.window?.setContentSize(NSSize(width: 620, height: 420))
         content.window?.appearance = window?.appearance
+        let previous = parent.firstResponder as? NSView
+        parent.makeFirstResponder(nil)
+        content.window?.contentView = NSView()
+        content.window?.orderOut(nil)
+        content.presentEmbedded = { [weak parent, weak content] in
+            guard let parent, let content else { return }
+            parent.makeKeyAndOrderFront(nil)
+            DispatchQueue.main.async { [weak parent, weak content] in
+                guard let parent, let content, content.webView.window === parent else { return }
+                parent.makeFirstResponder(content.webView)
+            }
+        }
         let id = UUID(); contentWindows[id] = content; model.quickSSHPresented = true
-        content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id); self?.model.quickSSHPresented = false }
+        model.quickSSHContent = content
+        content.closed = { [weak self, weak parent, weak previous] in
+            guard let self else { return }
+            self.contentWindows.removeValue(forKey: id); self.model.quickSSHContent = nil; self.model.quickSSHPresented = false
+            DispatchQueue.main.async { [weak self, weak parent, weak previous] in
+                guard let self, let parent, parent.isKeyWindow else { return }
+                if let previous, previous.window === parent, parent.makeFirstResponder(previous) { return }
+                if let active = self.model.documents.active(in: self.model.inspectorContextKey)?.content, active.webView.window === parent { parent.makeFirstResponder(active.webView) }
+                else if let terminal = self.model.selectedTerminal, terminal.view.window === parent { parent.makeFirstResponder(terminal.view) }
+            }
+        }
         content.reveal(); return content
     }
     private func makeDatabaseWindow() async throws -> ContentWindow {
@@ -1273,6 +1302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }
     @objc private func closeSession() {
+        if let quick = model.quickSSHContent { quick.window?.performClose(nil); return }
         if commandPalette?.window === NSApp.keyWindow { commandPalette?.dismiss(); return }
         if let fullSettingsWindow, fullSettingsWindow.window === NSApp.keyWindow { fullSettingsWindow.window.performClose(nil); return }
         if let agentsWindow, agentsWindow.window === NSApp.keyWindow { agentsWindow.window.performClose(nil); return }
@@ -1302,13 +1332,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard let responder = window?.firstResponder else { return }
         DispatchQueue.main.async { [weak self, weak responder] in
             guard let self, let responder, self.window?.firstResponder === responder,
-                  self.model.ready, !self.model.busy, !self.model.settingsPresented, !self.model.editorRecoveryPresented, self.model.nameDraft == nil,
+                  self.model.ready, !self.model.busy, !self.model.settingsPresented, !self.model.quickSSHPresented, !self.model.editorRecoveryPresented, self.model.nameDraft == nil,
                   let session = self.model.terminals.values.first(where: { $0.view === responder }),
                   session.id != self.model.selectedID else { return }
             Task { await self.model.selectSession(session.id, focus: false) }
         }
     }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { if !model.worktreeDeletionPresented && !model.gitFavoritesRecoveryPresented { sender.orderOut(nil) }; return false }
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if let quick = model.quickSSHContent { quick.window?.performClose(nil); return false }
+        if !model.worktreeDeletionPresented && !model.gitFavoritesRecoveryPresented { sender.orderOut(nil) }
+        return false
+    }
     func windowDidEnterFullScreen(_ notification: Notification) { model.fullScreen = true }
     func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }

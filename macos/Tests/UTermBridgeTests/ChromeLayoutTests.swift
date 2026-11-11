@@ -17,6 +17,9 @@ final class ChromeLayoutTests: XCTestCase {
             }
         }
         let narrow = CoreChromeLayout.terminalHeader(width: 100, items: items)
+        let macItems = items.map { CoreChromeLayout.HeaderItem($0.id, width: $0.width, height: $0.id == "font" ? 23 : $0.height) }
+        XCTAssertEqual(CoreChromeLayout.terminalHeader(width: 320 - 22, items: macItems).height, 66)
+        XCTAssertEqual(CoreChromeLayout.terminalHeader(width: 554 - 22, items: macItems).height, 35)
         XCTAssertEqual(narrow.frames.count, items.count)
         XCTAssertGreaterThan(narrow.height, 56)
         XCTAssertEqual(CoreChromeLayout.terminalHeader(width: 0, items: []).height, 34)

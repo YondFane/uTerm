@@ -11,6 +11,8 @@ export function assertParityScenes(actual, fixture) {
       expected.push(`settings-${section.id}-${scene.language}-${scene.appearance}-${scene.width}`);
   for (const scene of fixture.contentScenes)
     expected.push(`pdf-highlights-${scene.language}-${scene.appearance}-${scene.width}`);
+  for (const scene of fixture.quickScenes)
+    expected.push(`quick-ssh-invalid-${scene.language}-${scene.appearance}-${scene.width}`);
   expected.push(...fixture.ordinaryOperations);
   assert.deepEqual([...actual].sort(), expected.sort(), "Incomplete ordinary-client parity grid");
 }
@@ -63,5 +65,38 @@ export function assertParityOperations(scenes, fixture) {
       "settingsPreserveDocument",
     ])
       assert.equal(checks[key], true, `Unaccepted ordinary PDF: ${key}`);
+  }
+  const quick = scenes.filter((scene) => scene.scenario.startsWith("quick-ssh-invalid-"));
+  assert.equal(quick.length, fixture.quickScenes.length, "Missing or duplicate Quick SSH evidence");
+  const quickSeen = new Set();
+  for (const scene of quick) {
+    const checks = scene.checks;
+    const identity = `quick-ssh-invalid-${checks.language}-${checks.appearance}-${checks.width}`;
+    assert.equal(scene.scenario, identity);
+    assert.ok(!quickSeen.has(identity), "Duplicate Quick SSH evidence");
+    quickSeen.add(identity);
+    assert.ok(
+      fixture.quickScenes.some(
+        (expected) =>
+          expected.language === checks.language &&
+          expected.appearance === checks.appearance &&
+          expected.width === checks.width &&
+          expected.height === checks.height,
+      ),
+      "Unexpected Quick SSH scene",
+    );
+    assert.equal(checks.inputAddress, fixture.quickAddress);
+    assert.equal(checks.terminalFixtureMarker, fixture.marker);
+    for (const key of [
+      "passed",
+      "invalidInputRejected",
+      "addressRetained",
+      "savedWorkspaceUnchanged",
+      "sameMainWindow",
+      "terminalGenerationRetained",
+      "actualSidebarButton",
+      "actualCancelPreservedState",
+    ])
+      assert.equal(checks[key], true, `Unaccepted ordinary Quick SSH: ${key}`);
   }
 }

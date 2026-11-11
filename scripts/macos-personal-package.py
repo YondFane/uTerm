@@ -110,6 +110,7 @@ def validate_smoke_report(report, head, tested, phase):
     validate_embedded_workspace(report, head, tested, phase)
     validate_terminal_controls(report, head, tested, phase)
     validate_pdf_scenes(report, head, tested, phase)
+    validate_quick_scenes(report, head, tested, phase)
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}
@@ -141,6 +142,26 @@ def validate_pdf_scenes(report, head, tested, phase):
         for key in ["actualRemoveButton", "reopenedRestoredMarks", "originalPdfUnchanged", "inMainWorkspace", "settingsPreserveDocument", "nativePointerDrawAndDelete"]:
             assert scene.get(key) is True, "Unverified PDF operation: " + key
         name = f"personal-{phase}-pdf-highlights-{identity[0]}-{identity[1]}-{identity[2]}.png"
+        assert scene.get("screenshot") == name and name in report["captures"]
+
+
+def validate_quick_scenes(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    expected = {(scene["language"], scene["appearance"], scene["width"], scene["height"]) for scene in fixture["quickScenes"]}
+    scenes = report.get("quickSSHScenes", [])
+    assert len(scenes) == len(expected), "Incomplete Quick SSH screenshot grid"
+    seen = set()
+    for scene in scenes:
+        identity = (scene["language"], scene["appearance"], scene["width"], scene["height"])
+        assert identity in expected and identity not in seen, "Missing or duplicate Quick SSH scene"
+        seen.add(identity)
+        assert scene.get("sourceHeadSHA") == head and scene.get("testedMergeSHA") == tested
+        assert scene.get("platform") == "macOS" and scene.get("architecture") in ["arm64", "x86_64"] and scene.get("system")
+        assert scene.get("scenario") == "quick-ssh-invalid" and scene.get("inputAddress") == fixture["quickAddress"]
+        assert scene.get("terminalFixtureMarker") == fixture["marker"]
+        for key in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState"]:
+            assert scene.get(key) is True, "Unverified Quick SSH operation: " + key
+        name = f"personal-{phase}-quick-ssh-invalid-{identity[0]}-{identity[1]}-{identity[2]}.png"
         assert scene.get("screenshot") == name and name in report["captures"]
 
 

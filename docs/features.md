@@ -105,10 +105,37 @@ Chromium geometry checks at five widths (128–1100px) pass; current-source macO
 requires CI.
 
 Narrow sidebars allocate separate widths to the navigation rail and workspace menu/list. The
-workspace name truncates within its own button instead of pushing the navigation icons outside the
-window. Both collectors measure the actual rail position/width and All button position/size; clipped
-or missing controls fail pairing even if the outer sidebar width is correct. Eighteen Linux
-paired-evidence rejection tests pass; the candidate's actual macOS rendering remains pending CI.
+workspace name stays within its own button instead of pushing navigation icons outside the window.
+Both collectors measure actual rail position/width and All-button position/size, rejecting clipping
+regardless of the outer sidebar width. At source `1a9754a0f86acaf9178dbe65dd30e91957469627`, tested
+merge `e59b91c76512f176a5fe904a38c46311a3a31931`, both Personal architectures pass the full package
+and real-window/replacement checks. The
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/43051436652/artifacts/13869434943)
+reports a 192px sidebar at 640px, rail left/width 0/48 and All button left/top/size 7/52/34×34.
+English/dark workspace and Chinese/light PDF originals were inspected; the rail is fully visible.
+The
+[ARM native matrix](https://github.com/YondFane/uTerm/actions/runs/43051436660/artifacts/13871301710)
+also passes, including actual typed SSH clearing, create/keep/prune and PostgreSQL disconnect.
+Ordinary Mac pairing at this source fails its QA-only read observer because `session.entries` was
+missing from its explicit read allowlist. The candidate adds only that read method; mutation retries
+remain forbidden. Failed images/logs are retained in the
+[ordinary artifact](https://github.com/YondFane/uTerm/actions/runs/43051436701/artifacts/13873090397).
+The new modal and full pairing remain unaccepted until their own current-source run.
+
+These same real Mac reports expose a one-pixel narrow terminal-header difference: ordinary 66px,
+native 65px (both wide headers are 35px). The candidate uses the measured 23px Mac font-button
+height in native flow layout and adds the 66/35px Swift regression; the strict pairing tolerance is
+unchanged. Current-source window verification is pending.
+
+The Intel native matrix at that source stops before launching database QA because Maven Central DNS
+resolution fails. Its
+[retained artifact](https://github.com/YondFane/uTerm/actions/runs/43051436660/artifacts/13871038779)
+does pass the original Quick SSH/search/clipboard checks, but does not accept the full matrix or the
+new modal. QA now tries the independent official Central domain after a transport failure, requiring
+the same catalog size and SHA-256; integrity failures stop immediately. Five simulated download
+checks cover DNS/partial files, timeouts, both hosts failing and digest rejection. Mac CI retains
+`database-download-tests.log` and successful `database-jdbc.json` provenance; real PostgreSQL
+acceptance remains mandatory.
 
 The list separates Active, Pinned, SSH, Redis, Databases, loose terminals/chats and inactive
 Projects.
@@ -128,8 +155,8 @@ active-icon color.
 
 Quick SSH and host search appear inside the SSH section in both All and SSH categories. Filtering
 uses name, host and username, ignoring case, and retains selection, sessions and an already-focused
-search editor. The native Quick SSH window embeds the same address form and parser as the ordinary
-client. Direct connection rows, embedded presentation and full workbench alignment remain pending.
+search editor. Native Quick SSH displays the same modal form and parser over the main workspace.
+Direct connection rows and full workbench alignment remain pending.
 
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
@@ -2246,7 +2273,10 @@ Choose **Quick SSH connection** in the SSH sidebar and enter a Host alias, `user
 `ssh://user@host:port`. IPv6 addresses with a port use brackets, such as `user@[::1]:2222`. A plain
 alias inherits OpenSSH configuration; explicit addresses default to port 22. Commands, embedded
 passwords, URL paths and invalid ports are rejected. Both clients use the same address form and
-parser. The native form currently opens in a separate window; embedded presentation remains pending.
+parser. The native form opens over the main workspace. Cancel, Escape and Command-W close only the
+form; existing terminal generations and editor views are retained. Background commands are disabled
+while it is open. A pending submission blocks dismissal and quit until its actual result. Closing
+restores the previous visible control or active document/terminal focus.
 
 The shared core saves the temporary connection and first session in one revision-checked write. It
 rejects a workspace changed after the dialog opened, duplicate IDs and stale revisions without
@@ -2268,21 +2298,33 @@ Cleanup retains file/tunnel ownership and database/Redis dependencies, including
 references; an unresolved native connection draft also defers cleanup.
 
 SSH host filtering retains the mounted native search cell while inserting/removing result rows. An
-empty query explicitly restores all hosts and external query changes synchronize the editor. The
-source-bound `3d0217a` ARM run passes initial typed filtering/focus, then fails clearing the query;
-its original image and `inspector-native.json` are retained in the
-[native artifact](https://github.com/YondFane/uTerm/actions/runs/43043946804/artifacts/13868261505).
-Actual typing/clearing and Quick SSH completion require the updated macOS run. The same run reaches
-real PostgreSQL disconnect before failing an immediate status check; QA now waits for the visible
-Connect control and verifies the actual disconnected/idle service within a bounded deadline. It
-retains the cleanup assertion and records status on failure.
+empty query explicitly restores all hosts and external query changes synchronize the editor. At head
+`1a9754a0f86acaf9178dbe65dd30e91957469627`, merge `e59b91c76512f176a5fe904a38c46311a3a31931`, both
+native architectures pass the actual typed search/clear/focus and original Quick SSH
+create/keep/prune flows. Reports and nine screenshots are in the
+[ARM](https://github.com/YondFane/uTerm/actions/runs/43051436660/artifacts/13871301710) and
+[Intel](https://github.com/YondFane/uTerm/actions/runs/43051436660/artifacts/13871038779) artifacts.
+Those flows use a separate Quick SSH window and do not accept the new main-window modal. The ARM
+matrix passes real PostgreSQL disconnect; Intel database QA remains unexecuted after its download
+DNS failure.
+
+The modal candidate passes 27 focused Linux shared-form/transport/grid checks, including duplicate
+submission, visible error/retry, malformed workspace context, cancellation and fixed workspace
+ownership. Nineteen paired-evidence policy tests and 14 Personal policy tests also pass. Loading
+failures remain in a modal Retry/Cancel flow; a duplicate pending read cannot start another attempt.
+Native acceptance now requires the actual WK form inside the main window, Cancel/Escape/Command-W
+with unchanged saved data and retained terminal generations. `native-quick-ssh-invalid-en-dark.png`
+captures that main window; actual rendering, transparent backdrop and focus restoration still
+require current-source Mac CI. Two matched Quick SSH scenes use the same synthetic invalid address
+and actual shell prompt/marker, with actual sidebar opening, invalid-input feedback, retained
+address and cancellation checks. The strict grid requires 37 ordinary captures / 36 pairs (73
+originals including restart). These new modal captures require current-source CI and visual review.
+The complete Linux frontend run passes 472 tests with 11 conditional skips; type checking,
+production build, contracts, i18n, formatting and bilingual documentation checks pass.
 
 Linux validation passes six targeted core tests for atomic creation, rollback, stale revisions,
 private fields, retention and cleanup; the complete core, FFI and desktop-backend suites also pass.
-Twenty-four focused frontend/transport simulations cover submission, visible failure/retry, fixed
-workspace ownership and language refresh. The native QA adds `native-ssh-host-filter-en-dark.png`,
-`native-quick-ssh-invalid-en-dark.png` and `native-quick-ssh-temporary-light-zh.png`; current-source
-macOS execution remains pending.
+These core results belong to the existing implementation; this modal phase changes no Rust code.
 
 ### Jump hosts
 

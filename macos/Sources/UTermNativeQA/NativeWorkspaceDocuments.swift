@@ -79,11 +79,13 @@ struct NativeWorkspaceDocumentSurface: View {
 }
 
 @MainActor
-private struct NativeEmbeddedDocument: NSViewRepresentable {
+struct NativeEmbeddedDocument: NSViewRepresentable {
     let content: ContentWindow
+    var modal = false
     func makeNSView(context: Context) -> EmbeddedDocumentHost {
         let host = EmbeddedDocumentHost()
         host.document = content.webView
+        host.modal = modal
         host.identifier = NSUserInterfaceItemIdentifier("native-embedded-document")
         content.webView.removeFromSuperview()
         content.webView.translatesAutoresizingMaskIntoConstraints = false
@@ -103,13 +105,14 @@ private struct NativeEmbeddedDocument: NSViewRepresentable {
 }
 
 @MainActor
-private final class EmbeddedDocumentHost: NSView {
+final class EmbeddedDocumentHost: NSView {
     weak var document: WKWebView?
+    var modal = false
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         DispatchQueue.main.async { [weak self] in
             guard let self, let window = self.window, window.isKeyWindow, let document = self.document,
-                  document.window === window, !(window.firstResponder is WorkspaceTabButton) else { return }
+                  document.window === window, self.modal || !(window.firstResponder is WorkspaceTabButton) else { return }
             window.makeFirstResponder(document)
         }
     }

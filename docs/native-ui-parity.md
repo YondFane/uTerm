@@ -115,14 +115,14 @@ acceptance.
 
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
-uploads 68 matching original images, the ordinary restart image, `comparison.md` and
+uploads 72 matching original images, the ordinary restart image, `comparison.md` and
 `comparison.json`. Collection runs on Ubuntu and never replaces a missing native capture with a
 browser render. `comparisonReady` means the images are ready for review; `functionalParityAccepted`
 remains false until all acceptance rows are met. The source-bound results below include actual CI
 execution and inspection of the Java originals.
 
 PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
-ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 68 张匹配原图、普通版重启原图、`comparison.md`
+ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 72 张匹配原图、普通版重启原图、`comparison.md`
 和 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。下列绑定源码的结果包含实际 CI 执行及 Java 原图核对。
@@ -142,12 +142,13 @@ the same deterministic PDF bytes and seeded comparison mark. Both clients must a
 delete and tab-close controls, reopen to verify deletion, and restore the retained comparison mark.
 Native QA also draws and deletes through actual window pointer events, verifies document scope and
 checks marks after app replacement. Both keep the same document while settings change and preserve
-original PDF bytes. The strict grid now requires 35 ordinary captures and 34 pairs (68 paired
-originals plus the ordinary restart image). Missing, duplicated, stale or unverified PDF scenes fail
-collection. Seeded marks demonstrate matched display; they are not described as a user drawing
-gesture. The new PDF scenes are pending real CI execution and visual inspection.
+original PDF bytes. The strict grid now requires 37 ordinary captures and 36 pairs (72 paired
+originals plus the ordinary restart image), including two Quick SSH modal scenes. Missing,
+duplicated, stale or unverified PDF scenes fail collection. Seeded marks demonstrate matched
+display; they are not described as a user drawing gesture. The new PDF scenes are pending real CI
+execution and visual inspection.
 
-PDF 另采集两组主工作区对照：英文深色 1100×720、中文浅色 640×720，使用相同确定性 PDF 字节和预置对照标记。两版均须操作实际删除及标签关闭控件，重开验证删除结果，并恢复保留的对照标记。原生 QA 另通过实际窗口指针事件绘制并删除标记，验证文档作用域和应用替换后的标记保留。两版切换设置时保留同一文档，PDF 原字节不变。严格网格现要求普通版 35 张截图、34 组成对截图（68 张配对原图加普通版重启原图）；PDF 场景缺失、重复、过期或未经操作验证均使汇集失败。预置标记仅证明匹配显示，不描述为用户绘制手势。新增 PDF 场景尚待真实 CI 执行及目视核对。
+PDF 另采集两组主工作区对照：英文深色 1100×720、中文浅色 640×720，使用相同确定性 PDF 字节和预置对照标记。两版均须操作实际删除及标签关闭控件，重开验证删除结果，并恢复保留的对照标记。原生 QA 另通过实际窗口指针事件绘制并删除标记，验证文档作用域和应用替换后的标记保留。两版切换设置时保留同一文档，PDF 原字节不变。严格网格现要求普通版 37 张截图、36 组成对截图（72 张配对原图加普通版重启原图），包含两组快速 SSH 模态场景；PDF 场景缺失、重复、过期或未经操作验证均使汇集失败。预置标记仅证明匹配显示，不描述为用户绘制手势。新增 PDF 场景尚待真实 CI 执行及目视核对。
 
 Terminal pairing also measures actual pane insets, header height/top and the 12px output gap. The
 native header wraps individual controls using their measured text widths and retained order;
@@ -166,6 +167,17 @@ workspace menu receives only its allocated width. Outer sidebar width alone cann
 overflowing inner layout. These new navigation gates require current-source real windows.
 
 侧栏配对另要求图标栏从窗口左缘开始、保持共用宽度，实际“全部”按钮完整显示于共用位置／尺寸；原生工作区菜单仅使用分配的宽度。外层侧栏宽度正确不能接受内部布局溢出，新增导航门槛需当前源码真实窗口验证。
+
+Quick SSH adds English/dark 1100×720 and Chinese/light 640×720 modal comparisons. Both apps prepare
+the same prompt/marker through the real shell, open the actual sidebar entry, reject the same
+synthetic invalid address, retain that address and cancel without changing workspace data or the
+terminal generation. Native Personal captures require the shared WK form in the main window;
+separate-window images cannot satisfy this gate. Invalid address fixtures do not prove remote login.
+Original images, platform/source identities and actual operation proofs are mandatory. Native
+regression additionally exercises Escape and Command-W; loading failures retain a modal Retry/Cancel
+flow. The new modal and 37/36/73 grid remain pending current-source CI.
+
+快速 SSH 另采集英文深色 1100×720、中文浅色 640×720 两组模态对照。两版通过真实 Shell 准备相同提示符／标记，打开实际侧栏入口，拒绝相同的模拟无效地址并保留输入，取消后工作区数据和终端 generation 不变。原生 Personal 原图要求共用 WK 表单位于主窗口，独立窗口图不能满足门槛；无效地址样例不证明远端登录。必须保留原图、平台／源码身份和实际操作证据。原生回归另执行 Escape 与 Command-W；加载失败保留模态重试／取消流程。新增模态及 37／36／73 网格仍待当前源码 CI。
 
 ## Source-bound CI findings / 绑定源码的 CI 结果
 

@@ -24,6 +24,9 @@ const scenes = [
   ...fixture.contentScenes.map(
     (scene) => `pdf-highlights-${scene.language}-${scene.appearance}-${scene.width}`,
   ),
+  ...fixture.quickScenes.map(
+    (scene) => `quick-ssh-invalid-${scene.language}-${scene.appearance}-${scene.width}`,
+  ),
 ];
 
 const pdfEvidence = fixture.contentScenes.map((scene) => ({
@@ -43,10 +46,27 @@ const pdfEvidence = fixture.contentScenes.map((scene) => ({
     settingsPreserveDocument: true,
   },
 }));
-const assertOperations = (records) => assertParityOperations([...records, ...pdfEvidence], fixture);
+const quickEvidence = fixture.quickScenes.map((scene) => ({
+  scenario: `quick-ssh-invalid-${scene.language}-${scene.appearance}-${scene.width}`,
+  checks: {
+    ...scene,
+    passed: true,
+    inputAddress: fixture.quickAddress,
+    terminalFixtureMarker: fixture.marker,
+    invalidInputRejected: true,
+    addressRetained: true,
+    savedWorkspaceUnchanged: true,
+    sameMainWindow: true,
+    terminalGenerationRetained: true,
+    actualSidebarButton: true,
+    actualCancelPreservedState: true,
+  },
+}));
+const assertOperations = (records) =>
+  assertParityOperations([...records, ...pdfEvidence, ...quickEvidence], fixture);
 
 test("the complete grid and required restart accept file-system enumeration order", () => {
-  assert.equal(scenes.length, 35);
+  assert.equal(scenes.length, 37);
   assert.doesNotThrow(() => assertParityScenes([...scenes].reverse(), fixture));
 });
 
@@ -88,10 +108,32 @@ test("PDF proof rejects missing, duplicate, stale data and unexecuted controls",
   for (const key of Object.keys(pdfEvidence[0].checks)) {
     const rows = structuredClone(pdfEvidence);
     rows[0].checks[key] = null;
-    assert.throws(() => assertParityOperations([restart, ...rows], fixture), key);
+    assert.throws(() => assertParityOperations([restart, ...rows, ...quickEvidence], fixture), key);
   }
   for (const rows of [[], pdfEvidence.slice(1), [pdfEvidence[0], pdfEvidence[0]]])
-    assert.throws(() => assertParityOperations([restart, ...rows], fixture));
+    assert.throws(() => assertParityOperations([restart, ...rows, ...quickEvidence], fixture));
+});
+
+test("Quick SSH pairing rejects missing controls, data changes and stale fixture values", () => {
+  const restart = {
+    scenario: "terminal-restart",
+    checks: {
+      passed: true,
+      actualRestartButton: true,
+      parsedUnicodeOutput: true,
+      canonicalWorkspaceRetained: true,
+      terminalViewRetained: true,
+      generationBeforeRestart: "a",
+      restartedGeneration: "b",
+    },
+  };
+  for (const key of Object.keys(quickEvidence[0].checks)) {
+    const rows = structuredClone(quickEvidence);
+    rows[0].checks[key] = null;
+    assert.throws(() => assertParityOperations([restart, ...pdfEvidence, ...rows], fixture), key);
+  }
+  for (const rows of [[], quickEvidence.slice(1), [quickEvidence[0], quickEvidence[0]]])
+    assert.throws(() => assertParityOperations([restart, ...pdfEvidence, ...rows], fixture));
 });
 
 test("three-scene fallback, missing, duplicate, substituted and extra captures fail", () => {

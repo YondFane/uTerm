@@ -151,6 +151,7 @@ export const messages: Record<string, string> = {
   "无法监听本地端口，请检查端口权限或更换端口。":
     "Could not listen on the local port. Check port permissions or choose another port.",
   "快速 SSH 连接": "Quick SSH connection",
+  "快速 SSH 工作区无效，请重试。": "Invalid Quick SSH workspace. Retry.",
   "搜索 SSH 主机": "Search SSH hosts",
   "没有匹配的 SSH 主机": "No matching SSH hosts",
   临时: "Temporary",

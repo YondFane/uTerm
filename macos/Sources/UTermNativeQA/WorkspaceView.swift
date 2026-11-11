@@ -100,6 +100,14 @@ struct WorkspaceView: View {
         .background(Color(nsColor: NativePreferences.color(NativePreferences.terminalTheme(model.settings, catalog: model.settingsCatalog)["background"], fallback: .textBackgroundColor)).opacity(model.settings["opacity"].number ?? 1))
         .background(NativeWindowMaterial(enabled: model.settings["blur"].bool == true))
         .ignoresSafeArea(.container, edges: .top)
+        .disabled(model.quickSSHPresented)
+        .overlay {
+            if let content = model.quickSSHContent {
+                NativeEmbeddedDocument(content: content, modal: true)
+                    .id(ObjectIdentifier(content))
+                    .ignoresSafeArea(.container, edges: .top)
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             if model.breakReminderVisible {
                 VStack(alignment: .leading, spacing: 8) {

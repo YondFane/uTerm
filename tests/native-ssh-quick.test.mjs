@@ -25,6 +25,7 @@ test("native Quick SSH uses the shared form with a fixed workspace and retains i
   const root = createRoot(document.getElementById("root"));
   let settings = { ...defaults, language: "en" };
   let ready = false;
+  let malformed = true;
   let succeeds = false;
   let failClose = true;
   const calls = [];
@@ -38,7 +39,7 @@ test("native Quick SSH uses the shared form with a fixed workspace and retains i
           let error;
           if (message.method === "quick_ssh_context") {
             if (!ready) error = { code: "READ_FAILED", message: "Connection context failed" };
-            else result = { workspaceId: "captured" };
+            else result = { workspaceId: malformed ? "" : "captured" };
           } else if (message.method === "quick_ssh_connect") {
             assert.equal(message.params.connection.workspace_id, "captured");
             assert.equal(message.params.connection.host, "::1");
@@ -86,8 +87,24 @@ test("native Quick SSH uses the shared form with a fixed workspace and retains i
       ),
     );
     assert.match(document.querySelector('[role="alert"]').textContent, /context failed/);
+    assert.ok(document.querySelector(".ssh-quick-dialog[open]"));
     ready = true;
-    await act(async () => document.querySelector("button").click());
+    await act(async () =>
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent.trim() === "Retry")
+        .click(),
+    );
+    assert.match(
+      document.querySelector('[role="alert"]').textContent,
+      /Invalid Quick SSH workspace/,
+    );
+    assert.equal(document.querySelector("input"), null);
+    malformed = false;
+    await act(async () =>
+      [...document.querySelectorAll("button")]
+        .find((button) => button.textContent.trim() === "Retry")
+        .click(),
+    );
     assert.ok(document.querySelector(".ssh-quick-dialog[open]"));
     await act(async () => {
       const field = document.querySelector("input");
@@ -123,7 +140,7 @@ test("native Quick SSH uses the shared form with a fixed workspace and retains i
     failClose = false;
     await act(async () => document.querySelector('button[type="button"]').click());
     assert.equal(calls.filter((call) => call.method === "quick_ssh_close").length, 2);
-    assert.equal(calls.filter((call) => call.method === "quick_ssh_context").length, 2);
+    assert.equal(calls.filter((call) => call.method === "quick_ssh_context").length, 3);
   } finally {
     await act(async () => root.unmount());
     await server.close();

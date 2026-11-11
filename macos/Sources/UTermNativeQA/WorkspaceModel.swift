@@ -26,6 +26,7 @@ final class WorkspaceModel: ObservableObject {
     @Published var gitFavoritesRecoveryPresented = false
     @Published var worktreeDeletionPresented = false
     @Published var quickSSHPresented = false
+    @Published var quickSSHContent: ContentWindow?
     @Published var nameDraft: NameDraft?
     @Published var nameDraftOwner: NameDraftOwner = .workspace
     @Published var fullScreen = false

@@ -113,7 +113,7 @@ struct NativeTerminalHeader: View {
             items.append(.init("read-only", width: measured(localized("Read-only attachment", "只读连接"), font: textFont), height: line))
             items.append(.init("take-control", width: measured(localized("Take control", "接管输入"), font: textFont) + 14, height: 22))
         }
-        items += [.init("font", width: 96, height: 22), .init("search", width: 26, height: 26), .init("status", width: 18, height: 26)]
+        items += [.init("font", width: 96, height: 23), .init("search", width: 26, height: 26), .init("status", width: 18, height: 26)]
         if session.exited && session.supportsRestart { items.append(.init("restart", width: 26, height: 26)) }
         else if !session.error.isEmpty || session.activityUnavailable { items.append(.init("reconnect", width: 26, height: 26)) }
         return items
@@ -151,7 +151,7 @@ struct NativeTerminalHeader: View {
     }
     private func adjustFont(_ delta: Double) { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(delta)]) } }
     private func control(_ title: String, _ id: String, _ help: String, enabled: Bool = true, bordered: Bool = false, active: Bool = false, action: @escaping () -> Void) -> some View {
-        NativeTerminalControl(title: title, image: nil, id: "native-terminal-" + id + "-" + session.id, help: help, enabled: enabled && !model.busy && !model.gitFavoritesRecoveryPresented, bordered: bordered, active: active, tint: tint, border: NativePreferences.color(palette["border"], fallback: .separatorColor), font: NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: 11), action: action).frame(height: 22)
+        NativeTerminalControl(title: title, image: nil, id: "native-terminal-" + id + "-" + session.id, help: help, enabled: enabled && !model.busy && !model.gitFavoritesRecoveryPresented, bordered: bordered, active: active, tint: tint, border: NativePreferences.color(palette["border"], fallback: .separatorColor), font: NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: 11), action: action).frame(height: 23)
     }
     private func icon(_ icon: CoreToolbarIcon, _ id: String, _ help: String, action: @escaping () -> Void) -> some View {
         NativeTerminalControl(title: "", image: NativeChromeImages.toolbar(icon), id: "native-terminal-" + id + "-" + session.id, help: help, enabled: !model.busy && !model.gitFavoritesRecoveryPresented, bordered: false, active: false, tint: tint, border: .clear, font: NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: 11), action: action).frame(width: 26, height: 26)

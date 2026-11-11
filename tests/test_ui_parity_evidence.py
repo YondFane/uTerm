@@ -30,7 +30,7 @@ class ParityEvidenceTests(unittest.TestCase):
         self.n = dict(passed=True, platform="macOS", architecture="arm64", system="Version 15.8.2",
                       sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, productionDataAccess=False,
                       uiParityFixtureSHA256=digest, backgroundTabCloseRetainedSelectedGeneration=True,
-                      workspaceScenes=[], settingsScenes=[], contentScenes=[], captures=[], pdfHighlightsNativeDrawDeleteReopenAndScopeVerified=True, pdfMarkWrongRootAndPathRejected=True)
+                      workspaceScenes=[], settingsScenes=[], contentScenes=[], quickSSHScenes=[], captures=[], pdfHighlightsNativeDrawDeleteReopenAndScopeVerified=True, pdfMarkWrongRootAndPathRejected=True)
         self.t = dict(passed=True, platform="darwin", architecture="arm64", productVersion="15.8.2",
                       head="a" * 40, tested="b" * 40, productionDataAccess=False, sourceTreeDirty=False,
                       uiParityFixtureSHA256=digest, scenes=[])
@@ -79,6 +79,18 @@ class ParityEvidenceTests(unittest.TestCase):
                                                 platform="macOS", architecture="arm64", system=self.n["system"], nativePointerDrawAndDelete=True))
             self.n["captures"].append(native)
             self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
+        for scene in fixture["quickScenes"]:
+            values = dict(scene, passed=True, inputAddress=fixture["quickAddress"], terminalFixtureMarker=fixture["marker"],
+                          invalidInputRejected=True, addressRetained=True, savedWorkspaceUnchanged=True, sameMainWindow=True,
+                          terminalGenerationRetained=True, actualSidebarButton=True, actualCancelPreservedState=True)
+            name = f"quick-ssh-invalid-{scene['language']}-{scene['appearance']}-{scene['width']}"
+            native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+            image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", scene["width"], scene["height"]) + bytes(1100)
+            (self.native / native).write_bytes(image); (self.tauri / tauri).write_bytes(image)
+            self.n["quickSSHScenes"].append(dict(values, scenario="quick-ssh-invalid", screenshot=native,
+                                                sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system=self.n["system"]))
+            self.n["captures"].append(native)
+            self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
         restart = "ui-parity-terminal-restart.png"
         image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 1100, 720) + bytes(1100)
         (self.tauri / restart).write_bytes(image)
@@ -102,8 +114,24 @@ class ParityEvidenceTests(unittest.TestCase):
         result = self.run_compare()
         self.assertTrue(result["comparisonReady"])
         self.assertFalse(result["functionalParityAccepted"])
-        self.assertEqual(len(result["pairs"]), 34)
-        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 69)
+        self.assertEqual(len(result["pairs"]), 36)
+        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 73)
+
+    def test_quick_ssh_requires_current_main_window_images_and_preserved_data(self):
+        original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
+        changes = [("sourceHeadSHA", "c" * 40), ("testedMergeSHA", "c" * 40), ("inputAddress", "different"), ("terminalFixtureMarker", "old"), ("screenshot", "old.png")]
+        changes += [(key, False) for key in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState"]]
+        for key, value in changes:
+            self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+            self.n["quickSSHScenes"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): self.run_compare()
+        for kind in ["missing", "duplicate", "ordinary", "platform"]:
+            self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+            if kind == "missing": self.n["quickSSHScenes"].pop()
+            if kind == "duplicate": self.n["quickSSHScenes"][0] = self.n["quickSSHScenes"][1]
+            if kind == "ordinary": next(row for row in self.t["scenes"] if row["scenario"].startswith("quick-ssh-invalid-"))["checks"]["sameMainWindow"] = False
+            if kind == "platform": self.n["quickSSHScenes"][0]["platform"] = "browser"
+            with self.subTest(kind=kind), self.assertRaises(AssertionError): self.run_compare()
 
     def test_terminal_geometry_requires_matching_actual_insets_header_and_viewport_gap(self):
         original = copy.deepcopy(self.n)

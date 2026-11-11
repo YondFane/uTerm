@@ -9,9 +9,11 @@ if [ ! -x "$native_db_prefix/bin/initdb" ]; then
   HOMEBREW_NO_AUTO_UPDATE=1 brew install postgresql@16
 fi
 export UTERM_QA_POSTGRES_BIN="$native_db_prefix/bin"
-python3 - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" <<'PY'
+python3 -B - "$PWD/macos/.build/qa/UTermNativeQA.app" "$PWD/macos/.build/evidence" <<'PY'
 import hashlib, json, os, secrets, socket, subprocess, sys, tempfile
 from pathlib import Path
+sys.path.insert(0, str(Path('scripts').resolve()))
+from database_qa_service import fetch_postgres_driver
 app, evidence = map(Path, sys.argv[1:])
 evidence.mkdir(parents=True, exist_ok=True)
 binary = Path(os.environ['UTERM_QA_POSTGRES_BIN'])
@@ -24,9 +26,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-database-') as director
     password_file.write_text(password + '\n'); password_file.chmod(0o600)
     driver = root / 'postgresql.jar'
     artifact = json.loads(Path('components/database/catalog.json').read_text())['drivers']['postgresql']
-    subprocess.run(['curl', '--fail', '--location', '--retry', '3', '--silent', '--show-error', '--output', str(driver), artifact['url']], check=True)
-    assert driver.stat().st_size == artifact['size']
-    assert hashlib.sha256(driver.read_bytes()).hexdigest() == artifact['sha256']
+    driver_report = fetch_postgres_driver(driver)
+    driver_report.update(sourceHeadSHA=os.environ.get('PR_HEAD_SHA') or subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip(),
+                         testedMergeSHA=subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip())
+    (evidence / 'database-jdbc.json').write_text(json.dumps(driver_report, indent=2) + '\n')
     data = root / 'postgres-data'
     with (evidence / 'database-postgres-init.log').open('w') as log:
         subprocess.run([str(binary / 'initdb'), '-D', str(data), '--username=uterm_qa', '--pwfile=' + str(password_file), '--auth-local=trust', '--auth-host=scram-sha-256', '--encoding=UTF8', '--no-locale'], check=True, stdout=log, stderr=subprocess.STDOUT)
