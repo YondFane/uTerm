@@ -10,6 +10,17 @@ enum AgentSmoke {
         let config = home.appendingPathComponent(".claude/settings.json")
         let original = try Data(contentsOf: config)
         await model.patchSettings(["usageRemote": .bool(false)])
+        let pollingFirst = AgentSettingsModel(workspace: model)
+        pollingFirst.visible = true
+        let earlyUsage = Task { @MainActor in await pollingFirst.pollUsage() }
+        do {
+            try await TerminalSmoke.wait("Load Agent catalog even when usage polling starts first") { pollingFirst.catalog != .null && pollingFirst.qaUsageReads > 0 && !pollingFirst.busy }
+        } catch {
+            pollingFirst.visible = false; earlyUsage.cancel(); await earlyUsage.value
+            throw error
+        }
+        pollingFirst.visible = false; earlyUsage.cancel(); await earlyUsage.value
+        report["usagePollingLoadsCatalogBeforeUsage"] = true
         let current = open()
         try await TerminalSmoke.wait("Load Agent catalog") { current.model.catalog != .null && !current.model.busy }
         try await TerminalSmoke.wait("Automatically read local usage on opening") { current.model.qaUsageReads > 0 && !current.model.busy }

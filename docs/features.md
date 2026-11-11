@@ -114,6 +114,8 @@ The native list separates Active, Pinned, SSH, Redis, Databases, loose terminals
 Projects in the same order. Section disclosures only hide local rows; they do not edit shared data
 or close sessions. Empty connection categories retain their add/manage entry. Commands, settings
 and Agents have separate rail footer buttons and follow the interface palette and active-icon color.
+Agent usage polling waits for catalog initialization, including when polling starts before the
+window reload task; recovering the catalog restarts visible usage refresh without discarding drafts.
 SSH host search stays within its category; switching categories retains sessions and selection.
 Quick SSH, direct connection rows and the full workbench presentation still require alignment. Opening an editable file places it in the main workspace. The tab row appears when files are open,
 with the selected terminal and ordered file labels, unsaved indicators and close controls. Reopening
