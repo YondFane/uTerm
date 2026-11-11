@@ -147,6 +147,17 @@ native/Personal execution remains pending.
 上述 689c445／merge 在 ARM Swift
 6.1.2 上因侧栏报告字典类型推断超时而失败，失败构建产物没有窗口截图。候选使用明确类型及更小表达式，保留全部证据字段与断言；新的原生／Personal 执行仍待完成。
 
+The Git-color candidate normalizes read-only Git roots through the same Cocoa path rules as Files;
+relative changes, draft identities and write guards stay intact. Real Linux Git/Core alias reads
+reproduce the empty lexical mapping and pass with one namespace, retaining index bytes. Twenty UI
+regressions, 16 Personal and 26 paired/fixture policies pass. Two Swift tests and actual Mac
+captures remain pending. Both collectors now require each fixture file's actual `data-git-status`,
+and retain raw/selected/normalized roots for diagnosis; readable names alone cannot accept missing
+colors.
+
+Git 着色候选使用与文件面板一致的 Cocoa 路径规则规范只读 Git 根目录，保留相对变更、草稿身份与写入保护。Linux 真实 Git／Core 别名读取复现空的字面路径映射，统一表示后通过且索引字节保持。20 项界面回归、16 项 Personal 及 26 项配对／样例策略通过；两项 Swift 测试与实际 Mac 截图仍待完成。两版采集器要求每个样例文件实际的
+`data-git-status`，保留原始／所选／规范根目录用于诊断；仅文件名可读不能接受缺失着色。
+
 At head `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
 `6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
 [paired artifact](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)

@@ -185,6 +185,13 @@ enum PersonalSmoke {
                         }
                         guard let files = model.inspector.content, files.webView.window === window else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Shared file controls are not mounted in the real inspector") }
                         try await ContentSmoke.wait(files, "['note.txt','README.md'].every(name => [...document.querySelectorAll('.file-row-name')].some(row => row.textContent.trim() === name)) && document.querySelectorAll('.inspector-tabs [role=tab]').length === 3 && document.querySelectorAll('.inspector-switcher button').length === 4")
+                        let rawStatus = try await bridge.call("git.fileStatus", params: .object(["directory": .string(files.directory.path)]))
+                        let normalizedStatus = try ContentFileRoot.normalizingGitRoot(rawStatus)
+                        report["workspaceGitRootDiagnostics"] = ["selectedDirectory": files.directory.path, "rawGitRoot": rawStatus["root"].string ?? "", "normalizedGitRoot": normalizedStatus["root"].string ?? ""]
+                        try await ContentSmoke.wait(files, "['note.txt','README.md'].every(path=>[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus==='untracked')")
+                        let gitStateJSON = try await files.webView.evaluateJavaScript("JSON.stringify(Object.fromEntries(['note.txt','README.md'].map(path=>[path,[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus])))")
+                        guard let gitStateText = gitStateJSON as? String, let gitStateBytes = gitStateText.data(using: .utf8) else { throw BridgeFailure(code: "PERSONAL_FILE_GIT_STATE", message: "Could not read actual file-row Git states") }
+                        let fileGitStates = try JSONDecoder().decode([String: String].self, from: gitStateBytes)
                         try await ContentSmoke.wait(files, "document.querySelector('.file-panel')?.getAttribute('aria-label') === " + (language == "en" ? "'Files panel'" : "'文件面板'"))
                         let inspectorDOM = try await files.webView.evaluateJavaScript("JSON.stringify({inspectorHeaderTop:document.querySelector('.inspector-header').getBoundingClientRect().top,inspectorFooterBottom:document.querySelector('.file-panel-footer').getBoundingClientRect().bottom,inspectorViewportHeight:innerHeight})")
                         guard let json = inspectorDOM as? String, let bytes = json.data(using: .utf8), let metrics = try JSONSerialization.jsonObject(with: bytes) as? [String: Double], let windowRoot = window.contentView else { throw BridgeFailure(code: "PERSONAL_INSPECTOR_GEOMETRY", message: "Could not measure the shared inspector") }
@@ -237,6 +244,7 @@ enum PersonalSmoke {
                         captured["sidebarAllButtonWidth"] = model.sidebarAllButtonFrame.width
                         captured["sidebarAllButtonHeight"] = model.sidebarAllButtonFrame.height
                         captured["fontFace"] = font.fontName
+                        captured["fileGitStates"] = fileGitStates
                         captured["fontSourceSHA256"] = NativeBundledFonts.regularSHA256
                         captured["fontCharacterWidth"] = ("M" as NSString).size(withAttributes: [.font: font]).width
                         guard let pane = terminal.view.superview as? NativeTerminalPane else { throw BridgeFailure(code: "PERSONAL_TERMINAL_GEOMETRY", message: "Actual terminal pane is detached") }

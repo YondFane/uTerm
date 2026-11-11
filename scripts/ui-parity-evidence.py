@@ -87,6 +87,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["screenshot"] == expected_native and t["screenshot"] == expected_tauri
         assert n["sourceHeadSHA"] == head and n["testedMergeSHA"] == tested
         assert n["height"] == t["checks"]["height"] == fixture["height"]
+        for scene in [n, t["checks"]]:
+            assert scene.get("fileGitStates") == {path: "untracked" for path in fixture["files"]}, "Missing actual file Git states"
         assert n.get("chromeContractSHA256") == t["checks"].get("chromeContractSHA256") == chrome_digest, "Different or stale chrome contract"
         assert all(abs(scene.get("toolbarHeight", 0) - chrome["metrics"]["titlebarHeight"]) < 1 for scene in [n, t["checks"]]), "Wrong actual chrome height"
         assert all(abs(scene.get("toolbarTop", -100)) < 1 for scene in [n, t["checks"]]), "Wrong actual chrome position"

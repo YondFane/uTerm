@@ -60,6 +60,7 @@ interface Context {
 const parityFixture = JSON.parse(parityFixtureJSON) as {
   workspaceName: string;
   projectName: string;
+  files: Record<string, string>;
   fontSize: number;
   automaticUpdates: boolean;
   databaseComponentIds: string[];
@@ -538,6 +539,19 @@ async function runUiParity() {
             `Actual ${key} differs from shared geometry`,
           );
         }
+        const fileGitStates = () =>
+          Object.fromEntries(
+            Object.keys(parityFixture.files).map((path) => [
+              path,
+              [...document.querySelectorAll<HTMLElement>(".file-row")].find(
+                (row) => row.dataset.path === path,
+              )?.dataset.gitStatus,
+            ]),
+          );
+        await until(
+          () => Object.values(fileGitStates()).every((state) => state === "untracked"),
+          "actual file Git state decorations",
+        );
         await scene(`workspace-${language}-${appearance}-${width}`, {
           chromeContractSHA256,
           toolbarHeight,
@@ -553,6 +567,7 @@ async function runUiParity() {
           scenario: "toolbar-sidebar-two-sessions-files",
           generationRetained: true,
           filesReadable: true,
+          fileGitStates: fileGitStates(),
           fontSize,
           fontFamily: fontManifest.family,
           fontFace: "CascadiaCode-Regular",

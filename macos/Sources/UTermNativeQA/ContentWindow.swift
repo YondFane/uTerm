@@ -233,7 +233,8 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
                 defer { gitMutationInProgress = false; window?.standardWindowButton(.closeButton)?.isEnabled = true }
                 return try await mutateGit(method, .object(params), bridge)
             }
-            return try await bridge.call(method, params: .object(params))
+            let result = try await bridge.call(method, params: .object(params))
+            return ["git.snapshot", "git.fileStatus"].contains(method) ? try ContentFileRoot.normalizingGitRoot(result) : result
         }
         switch request.method {
         case "content_context":

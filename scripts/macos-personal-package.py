@@ -78,6 +78,7 @@ def validate_workspace_scenes(report, head, tested, phase):
         assert scene["system"] and scene["height"] == 720
         assert scene["scenario"] == "toolbar-sidebar-two-sessions-files"
         assert scene["filesReadable"] is True
+        assert scene.get("fileGitStates") == {"note.txt": "untracked", "README.md": "untracked"}, "Missing actual file Git states"
     assert observed == expected
 
 

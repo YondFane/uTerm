@@ -231,6 +231,17 @@ GitHub and Files use the same translated tool switcher. Switching retains each W
 returning to Files applies the requested tree/search mode to its retained view. Requests stay bound
 to the captured repository/project and reject changed workspace context.
 
+Native Git status/snapshot reads normalize the returned repository root with the same Cocoa
+filesystem rules as the selected Files root. This keeps temporary-directory and symlink aliases in
+one path namespace without changing draft keys, relative change paths or write guards. Workspace
+captures now require actual untracked markers on both fixture files; missing or incorrect states
+fail Personal and paired evidence checks. Raw Git/selected/normalized roots remain in the report.
+
+The Linux real Git/Core alias check and 20 file-state/native-transport regressions pass, as do 16
+Personal and 26 paired/fixture policies. Two Swift checks cover alias normalization, malformed roots
+and actual Core status for selected subdirectories. Their execution and the new actual macOS
+markers/screenshots remain pending; the candidate does not yet accept the observed missing colors.
+
 **New PR** uses the shared title/body/base/head/draft form over the entire main workspace, at up to
 640px or 92% of its width. WebKit covers only the measured form; native views dim and blur the live
 workspace. The tools and terminal remain mounted. Command-W hides the form and retains its literal

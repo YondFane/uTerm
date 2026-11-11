@@ -50,6 +50,7 @@ import { ContentFailure, ContentScope, editorDraftMethods } from "../src/lib/con
 import { tauriContentPort } from "../src/lib/tauri-content.ts";
 import { webKitContentPort } from "../src/lib/webkit-content.ts";
 import { SharedGitFavorites } from "../src/lib/git-favorites.ts";
+import { gitFileStates } from "../src/lib/git-file-status.ts";
 import { gitFavoriteMethods } from "../src/lib/content-transport.ts";
 
 execFileSync(
@@ -2445,6 +2446,22 @@ test("shared Git contracts preserve selected-directory status, literal paths, hi
   assert.equal(selected.result.changes.length, 1);
   assert.equal(selected.result.changes[0].path, relative);
   assert.deepEqual(readFileSync(join(directory, ".git", "index")), index);
+  if (process.platform !== "win32") {
+    const alias = directory + "-selected-link";
+    symlinkSync(directory, alias);
+    const aliased = await call("git.fileStatus", { directory: join(alias, "src") });
+    assert.equal(aliased.error, undefined);
+    assert.deepEqual(aliased.result, selected.result);
+    assert.equal(gitFileStates(join(alias, "src"), aliased.result).size, 0);
+    assert.equal(
+      gitFileStates(join(aliased.result.root, "src"), aliased.result).get("中文 [literal].txt"),
+      "modified",
+    );
+    assert.deepEqual(readFileSync(join(directory, ".git", "index")), index);
+    t.diagnostic(
+      "actual Git/Core retain the physical namespace for an aliased selected subdirectory",
+    );
+  }
   const snapshot = (await call("git.snapshot", { directory })).result;
   assert.equal(snapshot.head, head);
   assert.equal(snapshot.branch, "main");

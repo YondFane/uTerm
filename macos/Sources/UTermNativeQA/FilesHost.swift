@@ -83,7 +83,8 @@ final class FilesHost: WorkbenchHost {
             }
             return try await mutate(operation, .object(scoped), bridge)
         }
-        return try await bridge.call(operation, params: .object(params))
+        let result = try await bridge.call(operation, params: .object(params))
+        return method == "git_file_status" ? try ContentFileRoot.normalizingGitRoot(result) : result
     }
     func prepareForQuit() async throws -> Bool {
         guard pending == 0 else { return false }
