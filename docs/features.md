@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-10
+updated: 2026-11-11
 ---
 
 # uTerm feature guide
@@ -3670,6 +3670,18 @@ development tools. Installation uses versioned directories and does not change s
 Main application builds still need no JDK. Maintainers refresh the catalog with
 `node scripts/java-components.mjs` using curl and vendor metadata; the helper checks Maven against
 Apache's SHA-512 before recording SHA-256.
+
+Java component installation uses a shared-core operation service; the ordinary client retains its
+existing pickers, events and response shape. String IDs/generations identify reads and cancellation;
+completed results must be consumed before another operation can start. Closing the service cancels
+workers and guards installation-pointer commits. Failed offline imports retain the original archive,
+and downloads retain their existing cache paths. Byte counts use bounded 32-bit values so generated
+TypeScript/Swift types match actual JSON numbers.
+
+Linux passes five targeted component tests, including a real loopback HTTP download with stale
+cancellation, actual cancellation and close while running. Locked Core, six FFI and backend
+regressions pass. The new native settings entry and Windows/macOS execution still require CI
+evidence for their candidate source; these local checks do not replace it.
 
 ### Shared Java service validation
 
