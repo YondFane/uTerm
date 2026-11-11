@@ -55,8 +55,14 @@ actual toolbar height/top position and responsive side/tool widths in both appli
 collector rejects stale vectors, titlebar insets or old panel geometry; 0.2.10 captures do not meet
 this new candidate's evidence requirement. Full visual and functional parity remains pending.
 
+Workspace pairing also requires measured full-height inspector/header/viewport/footer geometry in
+both applications. A 44-point nested-titlebar offset or clipped footer fails comparison, even if the
+files themselves are readable.
+
 共享矢量候选使用 `shared/contracts/chrome-ui-v1.json`
 的常规图标路径与 44 点界面尺寸。新的工作区截图须在两版应用中记录生成契约的 SHA-256 与实际顶栏高度／顶部位置及响应式侧栏／工具宽度；汇集器拒绝过期路径、标题栏额外留白或旧面板尺寸。0.2.10 原图不满足此新候选的证据要求，完整视觉／功能一致性仍待完成。
+
+工作区配对还要求两版实测完整高度的工具面板／标题／视口／底部路径边界。即使文件可读，内层标题栏造成的 44 点偏移或路径栏裁切仍会使对照失败。
 
 ## Evidence / 证据
 

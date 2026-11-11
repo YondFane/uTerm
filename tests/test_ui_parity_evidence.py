@@ -38,6 +38,7 @@ class ParityEvidenceTests(unittest.TestCase):
             for appearance in fixture["appearances"]:
                 for width in fixture["widths"]:
                     values = dict(language=lang, appearance=appearance, width=width, height=720,
+                                  inspectorTop=0, inspectorHeight=720, inspectorHeaderTop=0, inspectorFooterBottom=720, inspectorViewportHeight=720,
                                   sidebarRowHeight=32, sidebarSectionHeight=32, sidebarSectionGap=18, sidebarListTop=8,
                                   fontFamily="Cascadia Code", fontFace="CascadiaCode-Regular", fontSourceSHA256=font_digest, fontCharacterWidth=9.96,
                                   scenario="toolbar-sidebar-two-sessions-files", sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
@@ -133,6 +134,16 @@ class ParityEvidenceTests(unittest.TestCase):
         self.t["scenes"][0]["checks"] = original
         self.n["workspaceScenes"][0].pop("chromeContractSHA256")
         with self.assertRaises(AssertionError): self.run_compare()
+
+    def test_rejects_offset_short_clipped_or_missing_native_and_ordinary_tools_geometry(self):
+        for scene in [self.n["workspaceScenes"][0], self.t["scenes"][0]["checks"]]:
+            original = copy.deepcopy(scene)
+            for key in ["inspectorTop", "inspectorHeight", "inspectorHeaderTop", "inspectorFooterBottom", "inspectorViewportHeight"]:
+                for value in [None, float("nan"), original[key] + 44]:
+                    scene[key] = value
+                    with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
+                scene.clear()
+                scene.update(original)
 
     def test_rejects_missing_and_duplicate_scene_records(self):
         original = copy.deepcopy(self.n)

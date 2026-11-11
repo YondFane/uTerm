@@ -182,6 +182,16 @@ enum PersonalSmoke {
                         guard let files = model.inspector.content, files.webView.window === window else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Shared file controls are not mounted in the real inspector") }
                         try await ContentSmoke.wait(files, "['note.txt','README.md'].every(name => [...document.querySelectorAll('.file-row-name')].some(row => row.textContent.trim() === name)) && document.querySelectorAll('.inspector-tabs [role=tab]').length === 3 && document.querySelectorAll('.inspector-switcher button').length === 4")
                         try await ContentSmoke.wait(files, "document.querySelector('.file-panel')?.getAttribute('aria-label') === " + (language == "en" ? "'Files panel'" : "'文件面板'"))
+                        let inspectorDOM = try await files.webView.evaluateJavaScript("JSON.stringify({inspectorHeaderTop:document.querySelector('.inspector-header').getBoundingClientRect().top,inspectorFooterBottom:document.querySelector('.file-panel-footer').getBoundingClientRect().bottom,inspectorViewportHeight:innerHeight})")
+                        guard let json = inspectorDOM as? String, let bytes = json.data(using: .utf8), let metrics = try JSONSerialization.jsonObject(with: bytes) as? [String: Double], let windowRoot = window.contentView else { throw BridgeFailure(code: "PERSONAL_INSPECTOR_GEOMETRY", message: "Could not measure the shared inspector") }
+                        let inspectorFrame = files.webView.convert(files.webView.bounds, to: windowRoot)
+                        let inspectorTop = windowRoot.isFlipped ? inspectorFrame.minY - windowRoot.bounds.minY : windowRoot.bounds.maxY - inspectorFrame.maxY
+                        var inspectorGeometry: [String: Double] = ["inspectorTop": Double(inspectorTop), "inspectorHeight": Double(inspectorFrame.height), "inspectorSafeAreaTop": Double(files.webView.safeAreaInsets.top)]
+                        for (key, value) in metrics { inspectorGeometry[key] = value + (key == "inspectorViewportHeight" ? 0 : Double(inspectorTop)) }
+                        report["inspectorGeometry"] = inspectorGeometry
+                        for (key, expected) in ["inspectorTop": 0.0, "inspectorHeight": 720.0, "inspectorHeaderTop": 0.0, "inspectorFooterBottom": 720.0, "inspectorViewportHeight": 720.0] {
+                            guard let actual = inspectorGeometry[key], abs(actual - expected) < 1 else { throw BridgeFailure(code: "PERSONAL_INSPECTOR_GEOMETRY", message: "Wrong full-height tools geometry: " + key + "=" + String(describing: inspectorGeometry[key])) }
+                        }
                         let expectedSidebar = CoreChromeLayout.sidebar(available: Double(window.contentView?.bounds.width ?? 0), requested: CoreChrome.sidebarDefaultWidth).width
                         guard abs(Double(model.sidebarWidth) - expectedSidebar) < 1 else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_WIDTH", message: "Actual sidebar differs from shared responsive bounds") }
                         let expectedTools = CoreChromeLayout.inspector(available: Double(window.contentView?.bounds.width ?? 0) - expectedSidebar, ratio: CoreChrome.inspectorDefaultRatio).width
@@ -202,6 +212,7 @@ enum PersonalSmoke {
                             "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""]
                         guard let font = model.selectedTerminal?.view.font, font.fontName == "CascadiaCode-Regular", font.familyName == "Cascadia Code" else { throw BridgeFailure(code: "PERSONAL_FONT", message: "Terminal used a fallback instead of the bundled face") }
                         captured["fontFamily"] = font.familyName ?? ""
+                        for (key, value) in inspectorGeometry { captured[key] = value }
                         captured["fontFace"] = font.fontName
                         captured["fontSourceSHA256"] = NativeBundledFonts.regularSHA256
                         captured["fontCharacterWidth"] = ("M" as NSString).size(withAttributes: [.font: font]).width

@@ -382,6 +382,29 @@ async function runUiParity() {
         const inspectorWidth = document
           .querySelector(".app-shell > .file-panel")
           ?.getBoundingClientRect().width;
+        const inspector = document.querySelector(".app-shell > .file-panel")!;
+        const inspectorGeometry = {
+          inspectorTop: inspector.getBoundingClientRect().top,
+          inspectorHeight: inspector.getBoundingClientRect().height,
+          inspectorHeaderTop: inspector.querySelector(".inspector-header")!.getBoundingClientRect()
+            .top,
+          inspectorFooterBottom: inspector
+            .querySelector(".file-panel-footer")!
+            .getBoundingClientRect().bottom,
+          inspectorViewportHeight: innerHeight,
+        };
+        for (const [key, expected] of Object.entries({
+          inspectorTop: 0,
+          inspectorHeight: innerHeight,
+          inspectorHeaderTop: 0,
+          inspectorFooterBottom: innerHeight,
+          inspectorViewportHeight: innerHeight,
+        })) {
+          assert(
+            Math.abs(inspectorGeometry[key as keyof typeof inspectorGeometry] - expected) < 1,
+            `Actual ${key} does not span the full tools height`,
+          );
+        }
         const remaining = Math.max(
           chrome.metrics.inspectorMinimumAvailable,
           innerWidth - expectedSidebar,
@@ -450,6 +473,7 @@ async function runUiParity() {
           toolbarTop,
           sidebarWidth,
           inspectorWidth,
+          ...inspectorGeometry,
           language,
           appearance,
           width: innerWidth,

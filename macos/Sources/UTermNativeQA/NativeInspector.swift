@@ -128,6 +128,8 @@ struct NativeInspectorView: View {
                 }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.container, edges: .top)
         .task(id: workspace.inspectorContextKey) { await model.reload() }
         .onChange(of: model.mode) { _, _ in Task { await model.reload() } }
         .onDisappear { model.invalidate() }

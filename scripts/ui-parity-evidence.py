@@ -84,6 +84,9 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         remaining = max(chrome["metrics"]["inspectorMinimumAvailable"], width - expected_sidebar)
         expected_tools = max(chrome["metrics"]["panelCollapseWidth"], min(remaining - chrome["metrics"]["mainMinimumWidth"], remaining * chrome["metrics"]["inspectorMaximumRatio"], remaining * chrome["metrics"]["inspectorDefaultRatio"]))
         assert all(abs(scene.get("inspectorWidth", 0) - expected_tools) < 1 for scene in [n, t["checks"]]), "Wrong actual tools width"
+        for metric, expected_value in dict(inspectorTop=0, inspectorHeight=fixture["height"], inspectorHeaderTop=0,
+                                           inspectorFooterBottom=fixture["height"], inspectorViewportHeight=fixture["height"]).items():
+            assert all(type(scene.get(metric)) in [int, float] and abs(scene[metric] - expected_value) < 1 for scene in [n, t["checks"]]), "Wrong actual tools vertical geometry: " + metric
         assert n["scenario"] == t["checks"]["scenario"] == "toolbar-sidebar-two-sessions-files"
         assert n["filesReadable"] is True and t["checks"]["filesReadable"] is True
         assert n["fontSize"] == t["checks"]["fontSize"] == fixture["fontSize"]

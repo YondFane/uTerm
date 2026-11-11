@@ -96,6 +96,12 @@ Tools default to 35% of the remaining width and reserve a 320-point main pane. N
 the whole tools column inside the window. Side/tool separators support dragging, arrows, Home/End
 and Return; native layout avoids an extra split-view titlebar inset.
 
+The file tools use the full window height, with their toolbar at the top and the path footer at the
+bottom. Their embedded root ignores the nested titlebar safe area. Both collectors measure actual
+panel/header position, panel/viewport height and footer bounds; pairing rejects offsets, missing
+metrics and clipped paths. Fifteen Linux pairing-policy tests pass; current-source macOS rendering
+still requires CI.
+
 The list separates Active, Pinned, SSH, Redis, Databases, loose terminals/chats and inactive
 Projects.
 

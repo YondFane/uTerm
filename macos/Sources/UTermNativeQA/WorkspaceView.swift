@@ -65,7 +65,7 @@ struct WorkspaceView: View {
                         ))
                 }
                 HStack(spacing: 0) {
-                    if model.inspectorVisible && model.settings["inspectorPosition"].string == "left" { inspector(width: tools.width, available: tools.available) }
+                    if model.inspectorVisible && model.settings["inspectorPosition"].string == "left" { inspector(width: tools.width, available: tools.available, height: geometry.size.height) }
                     VStack(spacing: 0) {
                         NativeWorkspaceToolbar(model: model, sidebarWidth: CGFloat(sidebarWidth))
                         if !model.terminalError.isEmpty {
@@ -83,7 +83,7 @@ struct WorkspaceView: View {
                         NativeWorkspaceDocumentSurface(model: model, documents: model.documents).frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                     .frame(minWidth: CGFloat(CoreChrome.mainMinimumWidth), maxWidth: .infinity)
-                    if model.inspectorVisible && model.settings["inspectorPosition"].string != "left" { inspector(width: tools.width, available: tools.available) }
+                    if model.inspectorVisible && model.settings["inspectorPosition"].string != "left" { inspector(width: tools.width, available: tools.available, height: geometry.size.height) }
                 }
             }
             .onChange(of: model.inspectorVisible) { _, visible in
@@ -121,9 +121,9 @@ struct WorkspaceView: View {
         inspectorRatio = CoreChromeLayout.inspector(available: available, ratio: requested / available).ratio
         if requested <= CoreChrome.panelCollapseWidth { model.hideInspector() }
     }
-    private func inspector(width: Double, available: Double) -> some View {
+    private func inspector(width: Double, available: Double, height: CGFloat) -> some View {
         let left = model.settings["inspectorPosition"].string == "left"
-        return InspectorHost(model: model).frame(width: CGFloat(width)).clipped()
+        return InspectorHost(model: model).frame(width: CGFloat(width), height: height).clipped()
             .background(NativeChromeMeasurement { frame in model.measureInspector(frame.width) }.allowsHitTesting(false))
             .overlay(alignment: left ? .trailing : .leading) {
                 Color(nsColor: .separatorColor).frame(width: 1)
