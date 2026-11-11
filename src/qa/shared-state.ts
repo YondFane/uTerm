@@ -399,13 +399,25 @@ async function runUiParity() {
           "Actual tools width differs from shared responsive bounds",
         );
         const fontSize = (await settings()).fontSize;
+        const fontQuery = `${fontSize}px "Cascadia Code"`;
+        const fontFaces = await document.fonts.load(fontQuery);
+        await document.fonts.ready;
         assert(
-          document.fonts.check(`${fontSize}px "Cascadia Code"`),
-          "Bundled terminal font was not loaded",
+          fontFaces.length > 0 && document.fonts.check(fontQuery),
+          `Bundled terminal font was not loaded: ${JSON.stringify({
+            query: fontQuery,
+            status: document.fonts.status,
+            faces: fontFaces.map((face) => ({
+              family: face.family,
+              style: face.style,
+              weight: face.weight,
+              status: face.status,
+            })),
+          })}`,
         );
         const fontContext = document.createElement("canvas").getContext("2d");
         assert(fontContext, "Cannot measure actual terminal font");
-        fontContext.font = `${fontSize}px "Cascadia Code"`;
+        fontContext.font = fontQuery;
         const sectionHeader = document
           .querySelector(".sidebar-section .section-header")
           ?.getBoundingClientRect();

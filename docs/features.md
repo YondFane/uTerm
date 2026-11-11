@@ -164,7 +164,9 @@ retaining its sibling and external bytes. Packaging requires its source-bound re
 
 Native menu shortcuts preserve Shift for letter chords: Command-F opens terminal search and
 Command-Shift-F opens project search. The custom shifted palette shortcut rejects the unshifted
-event. These event-routing checks still require current-source native execution.
+event. Synthetic AppKit events retain Shift in `charactersIgnoringModifiers`, matching actual letter
+events; reports retain the live menu binding. These event-routing checks still require
+current-source native execution.
 
 Another real-window check clicks font controls and their bounds, types Unicode into native search,
 checks case/match navigation, exercises Command-F/Escape and restarts an exited shell. Packaging
@@ -172,7 +174,9 @@ requires its source-bound report and `personal-<phase>-terminal-search.png`.
 
 Linux restart tests exercise actual PTYs, rejected stale generations, read-only/live-process
 requests, failed-launch replay, closed-session history and an old-host capability probe. The Core
-end-to-end check verifies writable output after restart with unchanged workspace descriptors.
+end-to-end check verifies writable output after restart with unchanged workspace descriptors. The
+ordinary collector explicitly loads the measured font size and waits for the document font set
+before checking readiness and character width; failures retain the requested face statuses.
 Ordinary-window QA also clicks the actual Restart button and verifies a new generation, parsed
 Unicode output and the retained terminal element. Current-source macOS execution remains pending.
 

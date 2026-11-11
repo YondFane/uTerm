@@ -100,12 +100,16 @@ Agent 用量轮询等待目录初始化，先于窗口重载任务启动时也�
 个人版真实窗口检查点击文件／标签／关闭控件，发送 AppKit 方向键，保留精确的恢复 Unicode 草稿及原有自动保存行为，取消脏文件关闭，再丢弃其中一个文件，同时保留另一文件及外部写入内容。打包要求其绑定源码的报告及
 `personal-<phase>-embedded-files.png`。
 
-原生菜单为字母组合保留 Shift：Command-F 打开终端搜索，Command-Shift-F 打开项目搜索；自定义带 Shift 的命令面板快捷键拒绝不带 Shift 的事件。相关事件路由仍需当前源码的原生执行。
+原生菜单为字母组合保留 Shift：Command-F 打开终端搜索，Command-Shift-F 打开项目搜索；自定义带 Shift 的命令面板快捷键拒绝不带 Shift 的事件。合成 AppKit 事件在
+`charactersIgnoringModifiers`
+中保留 Shift，与实际字母事件一致；报告保留实时菜单绑定。相关事件路由仍需当前源码的原生执行。
 
 另一个真实窗口检查点击字号及边界控件，在原生搜索框输入 Unicode，核对大小写／匹配导航，执行 Command-F／Escape，并重启实际退出的 Shell。打包要求其绑定源码的报告及
 `personal-<phase>-terminal-search.png`。
 
-Linux 重启测试使用真实 PTY，覆盖过期 generation、只读／运行中进程拒绝、启动失败回放、已关闭会话记录及旧宿主能力探测。Core 端到端检查验证重启后可写输出及工作区配置未变。普通版窗口 QA 也点击实际重新启动按钮，验证新 generation、解析后的 Unicode 输出及保留的终端元素。当前源码的 macOS 执行仍待完成。
+Linux 重启测试使用真实 PTY，覆盖过期 generation、只读／运行中进程拒绝、启动失败回放、已关闭会话记录及旧宿主能力探测。Core 端到端检查验证重启后可写输出及工作区配置未变。
+
+普通版采集器显式加载测量字号并等待文档字体集合就绪，再检查加载状态与字符宽度；失败时保留所请求字体的状态。普通版窗口 QA 也点击实际重新启动按钮，验证新 generation、解析后的 Unicode 输出及保留的终端元素。当前源码的 macOS 执行仍待完成。
 
 JDK 验收在无效输入后等待真实添加按钮重新启用，再点击该控件。侧栏验收核对实际分类顺序及折叠，并保留共享 revision、所选项及 generation；Agent 验收还执行轮询先于目录加载的场景。这些候选检查、Swift 矢量几何及完整真实窗口验收仍需最新 macOS
 CI 执行，不能用旧源码结果验收新代码。
