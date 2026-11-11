@@ -220,6 +220,12 @@ export function TerminalView({
   }, [status]);
   useEffect(() => () => statusCallback.current?.(null), []);
   const [error, setError] = useState("");
+  const [inputNotice, setInputNotice] = useState<{ message: string } | null>(null);
+  useEffect(() => {
+    if (!inputNotice) return;
+    const timeout = setTimeout(() => setInputNotice(null), 3000);
+    return () => clearTimeout(timeout);
+  }, [inputNotice]);
   const [activityError, setActivityError] = useState("");
 
   useEffect(() => {
@@ -354,7 +360,7 @@ export function TerminalView({
       const current = connection.current;
       if (!current || current.closed || current.replaying || term.options.disableStdin) return;
       if (current.bytes + data.length > 1024 * 1024) {
-        setError(tx("输入过长，请分段粘贴。"));
+        setInputNotice({ message: tx("输入过长，请分段粘贴。") });
         return;
       }
       current.bytes += data.length;
@@ -508,6 +514,7 @@ export function TerminalView({
     const term = terminal.current;
     if (!term || connection.current) return;
     detectedAgentRef.current(null);
+    setInputNotice(null);
     setError("");
     setInputControl(undefined);
     setStatus("starting");
@@ -1035,8 +1042,10 @@ export function TerminalView({
           </button>
         </form>
       )}
-      {(fontError || error || activityError) && (
-        <p role="alert">{localizeMessage(fontError || error || activityError)}</p>
+      {(fontError || error || activityError || inputNotice) && (
+        <p role="alert">
+          {localizeMessage(fontError || error || activityError || inputNotice?.message || "")}
+        </p>
       )}
       <div
         ref={container}

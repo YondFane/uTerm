@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-11
+updated: 2026-11-12
 ---
 
 # uTerm feature guide
@@ -5407,6 +5407,10 @@ bracketed-paste mode when enabled.
   “Paste” click and does not produce that API's `NotAllowedError` banner. Control keys remain
   available to terminal programs.
 
+- When input would exceed the 1 MiB queue limit, that input is not sent and a notice asks you to
+  paste in smaller parts. The notice disappears after three seconds; triggering it again restarts
+  the timer. Connection, clipboard and font-setting errors are not cleared by this timer.
+
 - Native paste retains bracketed-paste handling and disabled-input protection. Other clipboard and
   session failures remain visible; a pending asynchronous paste is discarded if its connection
   closes or changes.
@@ -5415,6 +5419,15 @@ bracketed-paste mode when enabled.
 
 - Shortcut regression tests cover native macOS routing, selection states and Shift modifiers,
   alongside Windows copy/paste and Control passthrough; native acceptance is recorded below.
+
+- Linux component regression uses real xterm with fixture session IPC to cover three-second expiry,
+  repeated-notice timer resets, normal input, persistent write errors and unmount cleanup. Linux
+  Chromium at 900×600 and 640×420 uses the actual terminal component and fixture IPC to verify
+  notice display/expiry, repeated timing, subsequent input and retained errors, with visual
+  inspection of terminal layout after dismissal. TypeScript, production build, localization and
+  formatting checks for changed files pass. The full frontend suite cannot start the shared-core
+  contract and Git-favorites recovery tests because this environment lacks `cargo`. Native
+  macOS/Windows long-paste acceptance remains pending.
 
 ### Input-method punctuation
 
