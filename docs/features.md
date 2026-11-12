@@ -200,6 +200,14 @@ SSH fixture simulates at most three explicit resubmissions only for `WRITER_BUSY
 `CONFLICT` failures. SSH/Redis failures remain mandatory gates while independent Git/database checks
 continue. The complete native matrix and new Git/connection-row scenarios need a fresh run.
 
+At source `605d4d3`, both Personal packages and ordinary/paired capture checks pass. The ARM/Intel
+native matrices reach Git and expose operation feedback being cleared by unrelated successful
+snapshots. Background refresh now clears only its own read failures. Explicit Reload and successful
+user operations acknowledge operation errors; branch writes return an explicit result and retain
+failure text across read refreshes. Native Git QA requires that retention and keeps dirty-worktree
+refusal mandatory, with sheet/busy/file diagnostics on timeout. These corrections require new Mac
+execution; earlier passing captures do not accept the corrected source.
+
 Actual row/header/gap/inset measurements are required in both clients; current-source native
 rendering remains pending CI.
 

@@ -79,7 +79,7 @@ struct WorkspaceView: View {
                                     HStack {
                                         Text(model.error).font(.caption).textSelection(.enabled).lineLimit(3)
                                         Spacer()
-                                        Button(localized("Reload", "重新读取")) { Task { await model.reload() } }
+                                        Button(localized("Reload", "重新读取")) { model.branchPicker.clearOperationError(); Task { await model.reload(clearOperationError: true) } }
                                         Button(localized("Recovery copies", "恢复副本")) { model.recover() }
                                     }.padding(8)
                                 }

@@ -1331,7 +1331,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 let snapshot = try await bridge.snapshot()
                 _ = try await bridge.call("project.worktrees.refresh", params: .object(["id": .string(projectID), "expectedRevision": .string(snapshot.revision)]))
             }
-            await model.reload()
+            await model.reload(clearOperationError: true)
         } catch {
             throw BridgeFailure(code: "WORKTREE_SYNC", message: localized("The Git operation completed, but the project tree could not be refreshed. Refresh the project: ", "Git 操作已完成，但项目树刷新失败，请刷新项目：") + error.localizedDescription)
         }
