@@ -61,6 +61,8 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer
+          swift scripts/macos-qa-display.swift | tee ci-evidence/performance/display.json
+          swift scripts/macos-qa-display.swift --verify-only | tee ci-evidence/performance/display-verified.json
           bash scripts/macos-native-build.sh 2>&1 | tee ci-evidence/performance/native-build.log
           xcodebuild -version >> ci-evidence/performance/toolchain.txt
           swift --version >> ci-evidence/performance/toolchain.txt
