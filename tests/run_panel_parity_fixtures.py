@@ -10,7 +10,7 @@ def policy_scenes(fixture, phase, head, tested, system):
                 rows.append(dict(item, kind=kind, state=state, passed=True, actualToolbarButton=True,
                                  actualExpandAndRestore=True, retainedPanelView=True, terminalGenerationRetained=True,
                                  canonicalWorkspaceRetained=True, fileVisible=state == 'file',
-                                 panelLeft=100, panelTop=item['height']-height, panelWidth=item['width']-200, panelHeight=height,
+                                 panelLeft=100, panelTop=item['height']-height, panelWidth=item['width']-200, panelHeight=height, panelHeaderHeight=36,
                                  sourceHeadSHA=head, testedMergeSHA=tested, platform='macOS', architecture='arm64', system=system,
                                  screenshot=f"personal-{phase}-run-{kind}-{state}-{item['language']}-{item['appearance']}-{item['width']}.png"))
     return rows

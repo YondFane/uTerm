@@ -48,11 +48,12 @@ export function assertParityOperations(scenes, fixture) {
         ),
       ),
     );
-    for (const field of ["panelLeft", "panelTop", "panelWidth", "panelHeight"])
+    for (const field of ["panelLeft", "panelTop", "panelWidth", "panelHeight", "panelHeaderHeight"])
       assert.ok(
         Number.isFinite(checks[field]) && checks[field] >= 0,
         "Invalid actual run-panel geometry: " + field,
       );
+    assert.ok(checks.panelHeaderHeight > 0 && checks.panelHeaderHeight <= checks.panelHeight);
     assert.ok(
       checks.panelWidth > 0 &&
         checks.panelHeight > 0 &&

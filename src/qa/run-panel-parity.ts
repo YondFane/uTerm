@@ -151,6 +151,8 @@ export async function runPanelParity(
           panelTop: bounds.top,
           panelWidth: bounds.width,
           panelHeight: bounds.height,
+          panelHeaderHeight: panel.querySelector(".java-panel-header")!.getBoundingClientRect()
+            .height,
         });
       };
       await expand(true);

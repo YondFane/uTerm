@@ -144,7 +144,7 @@ class ParityEvidenceTests(unittest.TestCase):
 
     def test_run_panels_require_matching_finite_actual_geometry_and_cleanup(self):
         original = copy.deepcopy(self.n)
-        for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight"]:
+        for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight", "panelHeaderHeight"]:
             for value in [None, True, float("nan"), float("inf"), -1, original["runPanelScenes"][0][key] + 2]:
                 self.n = copy.deepcopy(original); self.n["runPanelScenes"][0][key] = value
                 with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()

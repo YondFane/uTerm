@@ -13,9 +13,9 @@ def validate_run_panels(scenes, fixture):
         for key in ['passed', 'actualToolbarButton', 'actualExpandAndRestore', 'retainedPanelView', 'terminalGenerationRetained', 'canonicalWorkspaceRetained']:
             assert row.get(key) is True, 'Unverified run-panel operation: ' + key
         assert type(row.get('fileVisible')) is bool and row['fileVisible'] == (row['state'] == 'file'), 'Run-panel file coexistence was not executed'
-        for key in ['panelLeft', 'panelTop', 'panelWidth', 'panelHeight']:
+        for key in ['panelLeft', 'panelTop', 'panelWidth', 'panelHeight', 'panelHeaderHeight']:
             value = row.get(key)
             assert type(value) in [int, float] and math.isfinite(value) and value >= 0, 'Missing actual run-panel geometry: ' + key
-        assert row['panelWidth'] > 0 and row['panelHeight'] > 0
+        assert row['panelWidth'] > 0 and row['panelHeight'] > 0 and 0 < row['panelHeaderHeight'] <= row['panelHeight']
         assert row['panelLeft'] + row['panelWidth'] <= row['width'] + 0.5 and row['panelTop'] + row['panelHeight'] <= row['height'] + 0.5, 'Run panel extends outside its actual window'
     return {identity(row): row for row in scenes}

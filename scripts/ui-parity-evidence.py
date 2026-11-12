@@ -280,13 +280,13 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         expected_native, expected_tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
         assert n.get("screenshot") == expected_native and expected_native in native["captures"]
         assert ordinary_scene.get("screenshot") == expected_tauri
-        for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight"]:
+        for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight", "panelHeaderHeight"]:
             assert abs(n[key] - t[key]) < 1, "Different actual run-panel geometry: " + key
         _, ndigest = image(native_path.parent, expected_native, minimum_height=height)
         _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
         pair = dict(area="run-panel", kind=kind, state=state, language=language, appearance=appearance, width=width, height=height,
                     native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest,
-                    panelGeometry={key: n[key] for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight"]})
+                    panelGeometry={key: n[key] for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight", "panelHeaderHeight"]})
         pairs.append(pair)
     run_cleanup = completed[0]
     assert run_cleanup.get("screenshot") == "ui-parity-run-panels-complete.png", "Substituted ordinary run-panel cleanup capture"

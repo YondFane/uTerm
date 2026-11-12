@@ -66,6 +66,7 @@ enum RunPanelParitySmoke {
                     guard fileVisible == (state == "file"), !fileVisible || activeFile?.content.path == "README.md" else { throw BridgeFailure(code: "RUN_PARITY", message: "Unexpected actual file visibility beside the run panel") }
                     try await Task.sleep(for: .milliseconds(200))
                     guard let measured = TerminalSmoke.descendants(root).first(where: { $0.identifier?.rawValue == "native-run-panel-frame-" + panel.id }) else { throw BridgeFailure(code: "RUN_PARITY", message: "Missing actual native panel frame") }
+                    guard let header = TerminalSmoke.descendants(root).first(where: { $0.identifier?.rawValue == "native-run-panel-header-" + panel.id }), header.bounds.height > 0 else { throw BridgeFailure(code: "RUN_PARITY", message: "Missing actual run-panel header frame") }
                     let bounds = measured.convert(measured.bounds, to: root)
                     let top = root.isFlipped ? bounds.minY : root.bounds.height - bounds.maxY
                     guard bounds.minX >= 0, bounds.width > 0, bounds.height > 0, top >= 0, top + bounds.height <= root.bounds.height + 0.5, bounds.maxX <= root.bounds.width + 0.5 else { throw BridgeFailure(code: "RUN_PARITY", message: "Run panel extends outside the actual workspace") }
@@ -73,7 +74,7 @@ enum RunPanelParitySmoke {
                     try await TerminalSmoke.capture(window: window, path: output.appendingPathComponent(name)); captures.append(name)
                     var row: [String: Any] = ["kind": kind, "state": state, "language": language, "appearance": appearance, "width": Int(width), "height": Int(height), "screenshot": name,
                         "passed": true, "actualToolbarButton": true, "actualExpandAndRestore": true, "retainedPanelView": true, "terminalGenerationRetained": true, "canonicalWorkspaceRetained": true,
-                        "fileVisible": fileVisible, "panelLeft": bounds.minX, "panelTop": top, "panelWidth": bounds.width, "panelHeight": bounds.height]
+                        "fileVisible": fileVisible, "panelLeft": bounds.minX, "panelTop": top, "panelWidth": bounds.width, "panelHeight": bounds.height, "panelHeaderHeight": header.bounds.height]
                     for key in ["sourceHeadSHA", "testedMergeSHA", "platform", "architecture", "system"] { row[key] = report[key] }
                     scenes.append(row); report["runPanelScenes"] = scenes
                 }

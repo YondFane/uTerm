@@ -22,6 +22,7 @@ struct NativeDockedRunPanel: View {
                 NativeDocumentAction(title: localized("Hide run panel", "隐藏运行面板"), identifier: "native-run-panel-hide-" + panel.id, image: NativeChromeImages.toolbar(.close), iconOnly: true, active: false, tint: tint) { panels.close(panel.id) }.frame(width: 28, height: 28)
             }
             .padding(.horizontal, 8).frame(height: CGFloat(CoreChrome.runPanelHeaderHeight))
+            .background(NativeRunPanelFrame(identifier: "native-run-panel-header-" + panel.id))
             NativeHostedPanel(panel: panel).id(panel.id)
         }
         .background(Color(nsColor: NativePreferences.color(palette["canvas"], fallback: .windowBackgroundColor)))

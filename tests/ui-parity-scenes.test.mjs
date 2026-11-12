@@ -117,6 +117,7 @@ const runEvidence = fixture.runPanelScenes.flatMap((item) =>
         panelTop: 240,
         panelWidth: item.width - 200,
         panelHeight: 480,
+        panelHeaderHeight: 36,
       },
     })),
   ),
@@ -342,6 +343,7 @@ test("run-panel proof rejects unexecuted controls, duplicate scenes, invalid fra
     "canonicalWorkspaceRetained",
     "fileVisible",
     "panelWidth",
+    "panelHeaderHeight",
   ]) {
     const rows = structuredClone(runEvidence);
     rows[0].checks[field] = null;
