@@ -14,6 +14,7 @@ pub mod github;
 pub mod host;
 pub mod java;
 pub mod java_components;
+pub mod project_runs;
 pub mod python;
 pub mod redis;
 pub mod session_state;
@@ -262,6 +263,9 @@ impl Core {
                 ))?;
                 service_json(java_result(java::find_jdks(self.data_root()?))?)
             }
+            "project.tasks" => service_json(project_runs::running(java_result(
+                project_runs::read(&self.data_root()?.join("local-daemon-v1")),
+            )?)),
             "java.tasks" => service_json(java_result(java::tasks(
                 &self.data_root()?.join("local-daemon-v1"),
                 &string(params, "directory")?,

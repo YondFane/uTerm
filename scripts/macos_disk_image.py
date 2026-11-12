@@ -20,7 +20,9 @@ def verify_disk_image(image, attempts):
         temporary = any(message in stderr for message in ['Resource temporarily unavailable', 'Resource busy'])
         if not temporary or number == 5:
             raise RuntimeError(f'hdiutil verify failed ({result.returncode}): ' + stderr)
-        time.sleep(number * 0.25)
+        delay = 2 ** (number - 1)
+        attempts[-1]["retryDelaySeconds"] = delay
+        time.sleep(delay)
 
 
 def create_disk_image(source, image, volume, attempts):

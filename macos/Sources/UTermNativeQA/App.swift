@@ -120,6 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.performCommandRequested = { [weak self] in self?.performCommand($0) }
         model.commandIsAvailable = { [weak self] in self?.commandAvailable($0) == true }
         model.openJavaRequested = { [weak self] in self?.openJava() }
+        model.revealProjectRunRequested = { [weak self] language, task in self?.revealProjectRun(language, task: task) }
         model.openPythonRequested = { [weak self] in self?.openPython() }
         model.openGitRequested = { [weak self] in self?.openGit() }
         model.openGitHubRequested = { [weak self] in self?.openGitHub() }
@@ -872,6 +873,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let id = UUID(); contentWindows[id] = content
         content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id); self?.model.documents.remove(id) }
         if present { content.reveal() }; return content
+    }
+    private func revealProjectRun(_ language: String, task: JSONValue) {
+        Task { @MainActor in
+            do {
+                guard !preparingQuit, !model.busy, !model.settingsPresented, !model.editorRecoveryPresented,
+                      !model.workspaceModalPresented, let root = task["task"]["root"].string,
+                      let id = task["spec"]["id"].string, let generation = task["generation"].string else { return }
+                await model.projectRuns.refresh()
+                guard model.projectRuns.error.isEmpty else { throw BridgeFailure(code: "RUN_LIST", message: model.projectRuns.error) }
+                guard model.projectRuns.tasks(language).contains(where: { $0["spec"]["id"].string == id && $0["generation"].string == generation && $0["task"]["root"].string == root }) else { throw BridgeFailure(code: "TASK_STALE", message: localized("The task has exited or changed. Reopen the launch list.", "任务已退出或变化，请重新打开启动列表。")) }
+                let projects = model.workspace["projects"].array
+                guard let project = projects.first(where: { $0["directory"].string == root || $0["worktrees"].array.contains { $0["path"].string == root } }),
+                      let projectID = project["id"].string else { throw BridgeFailure(code: "PROJECT_REMOVED", message: localized("This running project was removed. Add it again first.", "此运行项目已从工作区移除，请先重新添加项目。")) }
+                let tree = project["worktrees"].array.first { $0["path"].string == root }?["id"].string
+                let group = project["workspaceId"].string ?? "local"
+                if model.groupID != group { guard await model.mutate("workspace.switch", ["id": .string(group)]) else { return } }
+                await model.selectProject(projectID, worktree: tree)
+                guard model.workspace["selectedProject"].string == projectID, model.workspace["selectedWorktree"].string == tree else { return }
+                let scope = model.inspectorContextKey, directory = try await selectedProjectDirectory()
+                guard directory.standardizedFileURL.resolvingSymlinksInPath().path == URL(fileURLWithPath: root).standardizedFileURL.resolvingSymlinksInPath().path else { throw BridgeFailure(code: "TASK_SCOPE", message: "The selected project changed") }
+                if language == "java" {
+                    let controller = try await makeJavaWindow(directory: directory, present: false)
+                    await controller.model.refreshTasks(); controller.model.selectedID = id; await controller.model.selectTask()
+                    try presentPanel(controller, id: "java-" + controller.model.directory, title: "Java — " + directory.lastPathComponent, scope: scope)
+                } else {
+                    let controller = try await makePythonWindow(directory: directory, present: false)
+                    await controller.model.refreshTasks(); controller.model.selectedID = id; await controller.model.selectTask()
+                    try presentPanel(controller, id: "python-" + controller.model.directory, title: "Python — " + directory.lastPathComponent, scope: scope)
+                }
+            } catch { model.error = error.localizedDescription }
+        }
     }
     @objc private func openJava() {
         Task { @MainActor in
