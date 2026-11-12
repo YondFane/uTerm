@@ -50,7 +50,7 @@ private struct NativeFontPicker: NSViewRepresentable {
         init(model: NativeSettingsModel, key: String) { self.model = model; self.key = key }
         @objc func select(_ picker: NSPopUpButton) {
             guard !model.busy, !model.frozen, let value = picker.selectedItem?.representedObject as? String else { return }
-            model.values[key] = .string(value)
+            model.values[key] = .string(value); model.saveAutomatically([key])
         }
     }
 }

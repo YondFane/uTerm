@@ -25,6 +25,12 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     for key in ['actualAppKitInput', 'filteredNavigation', 'matchingCategoryClickable', 'draftRetained', 'escapeClearsWithoutClosing', 'savedBytesUnchanged']:
         assert proof[key] is True, key
     assert (evidence / proof['capture']).stat().st_size > 1000
+    proof = data['nativeSettingsAutomaticSaveProof']
+    for key in ['actualFieldEditorBlur', 'invalidDraftRetainedWithoutWrite', 'correctedFieldSavedAutomatically', 'actualFontPicker', 'scopedWrite', 'otherDraftRetained', 'peerWriteConflictRetained', 'actualThemePreviewSelection', 'terminalThemeUnchanged', 'explicitReloadRecovery']:
+        assert proof[key] is True, key
+    assert (evidence / proof['capture']).stat().st_size > 1000
+    assert len(proof['themeCaptures']) == 2
+    for name in proof['themeCaptures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['nativeThemeFileNamesAndBoundedReads']
     assert data['nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets']
     assert data['nativeGlobalMavenActualSaveConflictDraftAndProjectPreservation']
