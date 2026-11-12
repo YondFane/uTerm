@@ -311,7 +311,11 @@ CI 将同源码原始 PNG 及对照报告汇集为可下载产物，源码、系
 的 Intel 门禁在菜单验收前停止，原因是 WindowServer 报告 Dock 覆盖整个 1920×1080 显示器。[设置报告、可见性数据及原图](https://github.com/YondFane/uTerm/actions/runs/43236606283/artifacts/13954825002)保留不变，实际设置搜索图中未见弹窗。这证明元数据存在歧义，尚未证明 Dock 图层透明。两项 Mac
 CoreGraphics 测试覆盖实际 alpha 提取、缩放／偏移相交区域及无效区域。源码 `c977840`、实际测试 merge
 `0f5ac287` 的 ARM macOS 15.8.2／Swift
-6.1.2 通过全部60项 Swift 测试，包含两项 alpha 及两项工作区刷新测试。[产物13959190940](https://github.com/YondFane/uTerm/actions/runs/43243034024/artifacts/13959190940)保留日志与真实原图。完整原生套件仍失败：全屏截图报告两个指针层级的 WindowServer 图层，独立 SSH 截图与 Dock 相交。隐藏指针候选与完整应用验收仍须新的 Mac 执行。不单凭未知窗口名称或层级排除遮挡。完整原生／个人版构建前的短诊断会直接编译同一 alpha 辅助类，采集隔离测试窗口，并保留其绑定源码的原图与 JSON；它只验证截图基础设施，不是 uTerm 窗口或产品验收，全部应用门禁仍保留。
+6.1.2 通过全部60项 Swift 测试，包含两项 alpha 及两项工作区刷新测试。[产物13959190940](https://github.com/YondFane/uTerm/actions/runs/43243034024/artifacts/13959190940)保留日志与真实原图。完整原生套件仍失败：全屏截图报告两个指针层级的 WindowServer 图层，独立 SSH 截图与 Dock 相交。隐藏指针候选与完整应用验收仍须新的 Mac 执行。不单凭未知窗口名称或层级排除遮挡。源码
+`48316ba`、实际测试 merge `04d9dc87` 的 Intel
+[探针13961772101](https://github.com/YondFane/uTerm/actions/runs/43251078760/artifacts/13961772101)确认指针隐藏／恢复调用成功，但10×18的 WindowServer 光标图层仍出现在两次元数据快照。全显示区域原图已保留并查看；它是基础设施窗口，不能作产品验收。采集策略现在仅在内核报告的可执行路径准确指向系统 WindowServer、图层为光标层、尺寸为有限正数且不超过128px，并已成功隐藏指针时识别这一元数据。身份缺失、其他程序／图层或过大窗口继续阻止截图。可见性报告单独记录已核实的系统指针。四项 Foundation 回归在隔离 Linux
+Swift
+6.1.2 包中通过，覆盖伪造／缺失路径、其他图层、隐藏状态及无效／过大尺寸；内核查询和修正策略仍须新的真实 Mac 执行。完整原生／个人版构建前的短诊断会直接编译同一 alpha 辅助类，采集隔离测试窗口，并保留其绑定源码的原图与 JSON；它只验证截图基础设施，不是 uTerm 窗口或产品验收，全部应用门禁仍保留。
 
 源码 `d07e8ff`、实际测试 merge `d3e31732` 的
 [Personal Intel 产物](https://github.com/YondFane/uTerm/actions/runs/43228172020/artifacts/13951198726)报告包／替换／SDK 检查通过，但通用与 Agent 设置原图被 Python 本地网络权限提示遮挡，不能满足界面验收。反向 DNS 被作为潜在触发因素从样例移除；弹窗的准确原因和无遮挡采集仍须新 Mac 执行。Linux 的 30 项 macOS 包／镜像／HTTP 策略测试通过，包含真实回环请求不执行反向查询、保留失败截图及 sidecar、拒绝 sidecar 符号链接；这些测试不代表 Mac 窗口验收。
