@@ -5396,6 +5396,15 @@ the legacy SSE completion/permission status.
 
 #### OpenCode CLI compatibility validation
 
+- The macOS ARM host check at source `957a50f`, tested merge `4b7fc570`, fails a test that compares
+  `/private/var` and `/var` as literal strings, before desktop QA starts. Its
+  [report and log](https://github.com/YondFane/uTerm/actions/runs/43223865217/artifacts/13947094255)
+  remain failed. The test now uses a real project-directory symlink and compares canonical directory
+  identities, retaining all legacy listener authentication and launch assertions. Linux reproduces
+  the former assertion and passes all 11 event-bridge regressions after correction; two
+  installed-CLI checks remain ignored. No production argument or authentication behavior changes.
+  Fresh Mac execution is still required.
+
 - The Linux host suite passes serially, together with focused Agent/session-lifecycle frontend
   checks. Regression coverage includes v2 argument preservation, legacy authentication, help on
   stdout/stderr, failed/timed-out probes, paths with spaces and permission/completion filtering. A
