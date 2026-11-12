@@ -27,6 +27,7 @@ final class AgentSettingsModel: ObservableObject {
     private var usageTask: Task<Void, Never>?
     private var pollingKey = ""
     private(set) var qaUsageReads = 0
+    private(set) var qaCatalogReads = 0
     private(set) var qaUsageLastRemote = false
     private(set) var qaUsageLastKeychain = false
     private(set) var qaUsageReadsByAgent: [String: Int] = [:]
@@ -84,7 +85,7 @@ final class AgentSettingsModel: ObservableObject {
     func reload() async {
         guard !busy, !frozen, let bridge else { return }
         busy = true; defer { busy = false }
-        do { catalog = try await bridge.call("agent.catalog"); select(selected); error = "" }
+        do { catalog = try await bridge.call("agent.catalog"); select(selected); error = ""; qaCatalogReads += 1 }
         catch { self.error = localized("Could not read Agent settings. Retry after checking the configuration.", "无法读取 Agent 设置，请检查配置后重试。") }
     }
     func perform(_ method: String, params: [String: JSONValue]) async {

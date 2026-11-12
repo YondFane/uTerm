@@ -472,11 +472,27 @@ enum SettingsSmoke {
         guard agents.program == draft, agents.dirty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "The existing menu window replaced the inline Agent draft") }
         standalone.window.performClose(nil)
         try await TerminalSmoke.wait("Hide the existing Agent window after its reads finish") { !standalone.window.isVisible && !agents.visible && !agents.busy }
+        let catalogReadsBeforeReopen = agents.qaCatalogReads
         model.section = "agents"
         guard open() === settings else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Opening settings replaced its cached window") }
-        try await TerminalSmoke.wait("Reopen the actual inline Agent editor") { (view(settings.window, id: "native-agent-field-program") as? NSTextField)?.stringValue == draft && !agents.busy }
+        try await TerminalSmoke.wait("Reopen the actual inline Agent editor after its catalog read completes") {
+            (view(settings.window, id: "native-agent-field-program") as? NSTextField)?.stringValue == draft &&
+                agents.qaCatalogReads > catalogReadsBeforeReopen && !agents.busy && !model.busy && !model.automaticSaving &&
+                !model.maven.busy && !model.databaseComponents.working && !model.javaComponents.pending && !model.javaComponents.mutating && !model.login.busy
+        }
         NSApp.terminate(nil)
-        try await TerminalSmoke.wait("Quit protects the shared Agent draft even when its separate window is hidden") { settings.window.attachedSheet != nil }
+        do {
+            try await TerminalSmoke.wait("Quit protects the shared Agent draft even when its separate window is hidden") { settings.window.attachedSheet != nil }
+        } catch {
+            report["inlineAgentQuitDiagnostics"] = ["catalogReadsBeforeReopen": catalogReadsBeforeReopen, "catalogReads": agents.qaCatalogReads,
+                "agentBusy": agents.busy, "agentDirty": agents.dirty, "agentFrozen": agents.frozen, "agentErrorVisible": !agents.error.isEmpty,
+                "settingsBusy": model.busy, "settingsAutomaticSaving": model.automaticSaving, "settingsFrozen": model.frozen,
+                "settingsDirty": model.dirty, "settingsErrorVisible": !model.error.isEmpty, "settingsVisible": settings.window.isVisible,
+                "workspaceBusy": model.workspace.busy, "workspaceErrorCode": model.workspace.error.split(separator: ":").first.map(String.init) ?? "",
+                "standaloneVisible": standalone.window.isVisible, "standaloneHasSheet": standalone.window.attachedSheet != nil,
+                "hasModalWindow": NSApp.modalWindow != nil] as [String: Any]
+            throw error
+        }
         if let sheet = settings.window.attachedSheet { settings.window.endSheet(sheet, returnCode: .alertSecondButtonReturn) }
         try await TerminalSmoke.wait("Cancelled quit resumes inline settings and Agent operations") { !model.frozen && !agents.frozen && settings.window.attachedSheet == nil }
         guard agents.program == draft, agents.dirty, try Data(contentsOf: snapshotFile) == before, try await bridge.call("agent.catalog")["definitions"] == commandsBefore else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Navigation, window hiding or cancelled quit changed the saved Agent command or discarded the draft") }
@@ -485,7 +501,7 @@ enum SettingsSmoke {
         model.values["usageRemote"] = previousRemote
         try await save(model)
         guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Could not restore the saved usage preference") }
-        report["nativeInlineAgentSettingsProof"] = ["actualFieldEditor": true, "actualCategorySelection": true, "sameWorkspaceOverlay": true, "sameCachedModelAcrossMenuWindow": true, "inlineLocalUsage": true, "independentUsageAgentTabs": true, "perAgentResultsRetained": true, "automaticKeychainAllowed": agents.qaUsageLastKeychain, "hiddenPollingStopped": true, "cancelledQuitRetainsDraft": true, "savedDataUnchanged": true, "preferencesRestored": true, "captures": [commandsCapture, usageCapture]] as [String: Any]
+        report["nativeInlineAgentSettingsProof"] = ["actualFieldEditor": true, "actualCategorySelection": true, "sameWorkspaceOverlay": true, "sameCachedModelAcrossMenuWindow": true, "inlineLocalUsage": true, "independentUsageAgentTabs": true, "perAgentResultsRetained": true, "automaticKeychainAllowed": agents.qaUsageLastKeychain, "hiddenPollingStopped": true, "reopenedCatalogReadCompletedBeforeQuit": true, "cancelledQuitRetainsDraft": true, "savedDataUnchanged": true, "preferencesRestored": true, "captures": [commandsCapture, usageCapture]] as [String: Any]
         model.section = "general"
     }
 

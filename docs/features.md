@@ -694,14 +694,15 @@ counts and partial/no-record notices. Visible entries share one sequential polli
 reads preserve unrelated command errors. QA operates the actual Agent tabs with an unsaved command
 and requires a new read plus both retained results.
 
-At source `64c0bc6`, macOS ARM64 compiles and passes the real icon-color controls, but export QA
-rejects the compact button's actual bounds before inline-Agent acceptance runs. The candidate uses
-an explicit AppKit container to give that button its real 28-point target, waits for layout and
-records `nativeLegacyExportControlFrame`; the same strict size check remains. The failed originals
-are retained in
-[artifact13937325928](https://github.com/YondFane/uTerm/actions/runs/43202454312/artifacts/13937325928).
-The inspected General original confirms readable wrapped navigation and the visible close icon, but
-does not accept the incomplete settings suite. Fresh current-source Mac execution is required.
+Source/tested commit `994a43a` passes the ARM64 build, actual automatic saves, icon colors, default
+Agent selection and export, including the real 182×28-point export button and save-sheet guards. Its
+settings suite still fails while waiting for the Agent draft's quit confirmation after reopening.
+The original images and report remain in
+[artifact13944372328](https://github.com/YondFane/uTerm/actions/runs/43216419431/artifacts/13944372328).
+QA now waits for a completed catalog read from the reopened command view and idle settings
+operations before quitting, retaining the actual confirmation and cancelled-quit requirements. A
+failure records busy/frozen/draft/window diagnostics. These new checks still need Mac execution; the
+earlier failure is not accepted as a complete settings pass.
 
 General, Terminal, Workspace, Shortcuts, Local control, Maven and Software updates use plain
 scrollable rows with checkboxes instead of macOS grouped cards. Maven paths have visible labels,
@@ -7566,9 +7567,14 @@ the same workbench mounted, including its connection, query, temporary password 
 
 Seventeen Linux UI regressions pass, covering directory collapse, reopening management, retained
 workbench identity and the existing profile-conflict/password guards. Type checking, production
-build, localization and documentation checks also pass. Current-source macOS checks additionally
-require full-pane bounds, the actual management button, retained views and original main-window
-screenshots; these new native checks have not yet run.
+build, localization and documentation checks also pass. Source/tested commit `994a43a` passes the
+real PostgreSQL and Redis checks on macOS 15.8.2 ARM64, Xcode 16.4 and Swift 6.1.2. Both reports
+verify full-pane bounds, the actual management button and the same retained workbench. The four
+originals `native-{database,redis}-sidebar-profile-en-dark.png` and
+`native-{database,redis}-retained-connection-manager.png` were inspected in
+[artifact13944452193](https://github.com/YondFane/uTerm/actions/runs/43216419431/artifacts/13944452193).
+This validates that source's native workbench behavior; complete current-source and paired-client
+acceptance remain pending.
 
 Closing this window hides it while retaining connections, drafts and results. Application quit
 refuses active work or pending transactions and confirms draft loss. If another window cancels quit,
