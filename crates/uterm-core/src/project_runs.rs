@@ -44,6 +44,38 @@ mod tests {
     }
 
     #[test]
+    fn public_core_route_discovers_without_starting_a_host_and_preserves_errors() {
+        let root = tempfile::tempdir().unwrap();
+        let core = crate::Core::open(root.path().join("shared-state-v1")).unwrap();
+        let request = |params| {
+            core.execute(&serde_json::to_vec(&serde_json::json!({
+                "version": 1, "id": "project-runs-route", "method": "project.tasks", "params": params,
+            })).unwrap())
+        };
+        for params in [serde_json::Value::Null, serde_json::json!({})] {
+            let response = request(params);
+            assert!(response.error.is_none(), "{:?}", response.error);
+            assert_eq!(response.result, Some(serde_json::json!([])));
+        }
+        let host = root.path().join("local-daemon-v1");
+        assert!(!host.exists());
+        for params in [
+            serde_json::json!({"directory": "/unowned"}),
+            serde_json::json!([]),
+            serde_json::json!(1),
+        ] {
+            assert_eq!(request(params).error.unwrap().code, "INVALID_PARAMS");
+        }
+        std::fs::create_dir(&host).unwrap();
+        std::fs::write(host.join("endpoint.json"), "invalid endpoint").unwrap();
+        assert_eq!(
+            request(serde_json::Value::Null).error.unwrap().code,
+            "PROJECT_RUNS_FAILED"
+        );
+        assert_eq!(std::fs::read_dir(host).unwrap().count(), 1);
+    }
+
+    #[test]
     fn keeps_live_java_and_python_tasks_with_exact_identity_and_removed_roots() {
         let task = |id: &str, action: &str, running: bool| TaskSession {
             spec: SessionSpec {

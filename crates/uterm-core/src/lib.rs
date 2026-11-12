@@ -263,9 +263,6 @@ impl Core {
                 ))?;
                 service_json(java_result(java::find_jdks(self.data_root()?))?)
             }
-            "project.tasks" => service_json(project_runs::running(java_result(
-                project_runs::read(&self.data_root()?.join("local-daemon-v1")),
-            )?)),
             "java.tasks" => service_json(java_result(java::tasks(
                 &self.data_root()?.join("local-daemon-v1"),
                 &string(params, "directory")?,
@@ -868,6 +865,17 @@ impl Core {
                 }
                 self.links.stop_session(&id);
                 Ok(Value::Null)
+            }
+            "project.tasks" => {
+                if !params.is_null() && params.as_object().is_none_or(|value| !value.is_empty()) {
+                    return Err(CoreError::new(
+                        "INVALID_PARAMS",
+                        "Project task discovery accepts no parameters",
+                    ));
+                }
+                let tasks = project_runs::read(&self.data_root()?.join("local-daemon-v1"))
+                    .map_err(|error| CoreError::new("PROJECT_RUNS_FAILED", error.to_string()))?;
+                service_json(project_runs::running(tasks))
             }
             method if method.starts_with("java.") => self.java_request(method, &params),
             method if method.starts_with("python.") => self.python_request(method, &params),
