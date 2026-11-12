@@ -269,29 +269,25 @@ toolbar button twice to hide/reopen the retained panel without replacing its tas
 follows panel selection immediately, independently of task polling. Popup pointer/keyboard input is
 not claimed.
 
-Linux passes three Core discovery tests covering the public request route, absent/broken hosts,
-rejected parameters and removed roots, plus the backend run-classification check and 24 focused
-content/workbench checks. At head `ad94eea`, tested merge `76fd24cc`, Intel macOS passes all 12
-actual main-workspace panel captures and direct retained Java/Python switching. Launch-list QA still
-times out with no product error or mounted panel. QA now obtains the actual mounted toolbar
-coordinator and dispatches both stale and current NSMenu items through AppKit, checking action
-delivery before panel/generation assertions. Source `cdbd110`, tested merge `63b9bea4`, still times
-out for both languages on ARM64 despite successful action delivery. These failed runs remain
-available. Bounded stage records now follow the actual callback through discovery, project/context
-selection and panel attachment in `javaLaunchSelectionDiagnostics` /
-`pythonLaunchSelectionDiagnostics`. They locate a failure without accepting it; current-source macOS
-checks and full comparison remain required. On Intel source `7ef74ba`, callbacks reach presentation
-in under half a second but the panel list remains empty and the failure window is blank. Source
-`08b110d`, tested merge `58ad9749`, confirms that the backing window has no content; the visible
-`PANEL_UNAVAILABLE` error now reports this failure. Java, Python and SSH controllers retain their
-original panel view independently of the backing window. Attachment restores that view, preserving
-its model and drafts. QA explicitly clears the backing content to reproduce the observed loss, then
-requires the exact retained view, original task generation and real hide/reopen actions. The reports
-require `retainedContentAfterBackingWindowCleared`; this candidate still needs current-source Mac
-execution.
+Linux passes three Core discovery tests covering the public route, absent/broken hosts, rejected
+parameters and removed roots, plus the backend classification check and 24 content/workbench checks.
+At source `d081b46`, tested merge `98dffde7`, the complete Java/Python launch suites pass on both
+ARM64 and Intel: exact retained view/controller, original task generation, stale rejection and real
+hide/reopen. ARM64 also passes all twelve main-window panel scenes and direct retained Java/Python
+switching. Controllers retain panel content independently of the backing window; missing content
+reports a visible error. Bounded callback stages remain available for failure diagnosis.
+
+The full matrix is not accepted: real PostgreSQL operations succeed but actual sidebar selection
+times out, while SSH service operations pass and its old standalone-window visibility check is false
+after embedding. QA now brings the actual workspace forward before matching a saved connection's
+stable ID, requires its retained workbench in that main window, and records safe sidebar diagnostics
+on failure. SSH verifies the real menu's mounted panel and canonical saved profile before restoring
+its standalone service-test view. Current-source execution of these corrections remains required.
 
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
-before the Git test tool compiles, and uploads their early reports and original windows. Failures
+before the Git test tool compiles, and uploads their early reports and original windows. SSH,
+database and Redis checks likewise run early and upload `native-services-<runner>-<head>-<attempt>`.
+A database failure remains mandatory in the final gate while Agent/control checks continue. Failures
 remain mandatory in the final matrix while independent suites continue. Full Core, bridge, SDK and
 service checks remain required; the complete artifact remains mandatory. The job budget is 55
 minutes to include the observed Intel build, complete interaction matrix and cache cleanup.

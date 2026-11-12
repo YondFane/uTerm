@@ -66,6 +66,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
         assert report['rememberedAndTemporaryPasswordConversion'], report
         assert report['temporaryPasswordSurvivedTerminalTransportReconnect'], report
         assert report['nativeAskpassHostTrustApprovedAndAuthenticated'], report
+    assert (evidence / report['nativeSSHMenuWorkspaceCapture']).stat().st_size > 1000
     assert len(report['sshCaptures']) == (10 if password_required else 7), report
     for name in report['sshCaptures']:
         assert (evidence / name).is_file(), name

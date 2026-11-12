@@ -25,11 +25,19 @@ enum SSHSmoke {
         menu.performActionForItem(at: index)
         try await TerminalSmoke.wait("Open actual native SSH menu") { lookup()?.model.snapshot != nil }
         guard let controller = lookup(), let window = controller.window else { throw BridgeFailure(code: "SSH_QA", message: "SSH window missing") }
+        try await TerminalSmoke.wait("SSH menu mounts its retained panel in the main workspace") { model.panels.panels.contains { $0.controller === controller && $0.view.window?.isVisible == true && $0.view.window !== window } }
+        guard let panel = model.panels.panels.first(where: { $0.controller === controller }), let workspaceWindow = panel.view.window else { throw BridgeFailure(code: "SSH_QA", message: "SSH menu did not mount its actual workspace view") }
         let ssh = controller.model
         ssh.name = "SSH QA 中文"; ssh.host = fixture["alias"].string ?? ""; ssh.mode = "alias"; ssh.port = ""; ssh.authentication = "key"; ssh.identity = fixture["identity"].string ?? ""; ssh.rootPath = fixture["remote"].string ?? ""
         guard await ssh.save(), !ssh.dirty else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
         let profileID = ssh.selectedID
-        report["nativeSSHMenuAndProfileSaved"] = window.isVisible && !profileID.isEmpty
+        await model.reload()
+        guard model.groups.flatMap({ $0["sshConnections"].array }).contains(where: { $0["id"].string == profileID && $0["name"].string == "SSH QA 中文" }) else { throw BridgeFailure(code: "SSH_QA", message: "SSH menu profile was not saved in shared state") }
+        let menuCapture = "native-ssh-menu-workspace.png"
+        try await TerminalSmoke.capture(window: workspaceWindow, path: evidence.appendingPathComponent(menuCapture))
+        report["nativeSSHMenuAndProfileSaved"] = true
+        report["nativeSSHMenuWorkspaceCapture"] = menuCapture
+        try await ProjectRunSmoke.restoreStandalone(model: model, panel: panel)
         let previousRevision = ssh.snapshot?.revision
         _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(previousRevision ?? ""), "patch": .object(["fontSize": .number(15)])]))
         ssh.name = "RETAINED_DRAFT"
