@@ -192,6 +192,14 @@ The first Intel CI compilation rejected a shadowed error property, an ambiguous 
 and menu helpers missing main-actor isolation. The candidate corrects these diagnostics; no native
 execution is claimed for the failed build. Fresh Mac execution remains required.
 
+At source `b5ae671`, merge `85b133d`, ordinary macOS/Windows and the paired capture collector pass;
+both Personal architectures pass initial/replacement windows and update installation. ARM native
+execution exposes an outdated Redis capture count and a transient canonical writer refusal while
+saving the final SSH trust fixture. Capture checks now require the added actual sidebar proof; the
+SSH fixture simulates at most three explicit resubmissions only for `WRITER_BUSY`, preserving
+`CONFLICT` failures. SSH/Redis failures remain mandatory gates while independent Git/database checks
+continue. The complete native matrix and new Git/connection-row scenarios need a fresh run.
+
 Actual row/header/gap/inset measurements are required in both clients; current-source native
 rendering remains pending CI.
 
