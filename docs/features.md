@@ -738,12 +738,15 @@ private temporary Applications directory. The installed app starts its bundled h
 Unicode PTY output, explicitly closes the fixture session and stops the idle host before removal.
 The native QA version remains the bundle's recorded `0.0.1`; this is not a stable release package.
 
-The image checksum verifier retries only explicit temporary-busy responses, up to five attempts;
-each exit code and diagnostic remains in the report. Invalid images and exhausted retries fail.
-Three Linux simulations cover busy-then-valid, invalid images, persistent busy and timeout. The
-79872ba ARM candidate failed its original busy response; the unchanged report remains in
-[artifact13543080480](https://github.com/YondFane/uTerm/actions/runs/42295306002/artifacts/13543080480).
-Actual image creation, checksum validation and installation still require the macOS run.
+The image checksum verifier retries only explicit temporary-busy responses, up to five attempts,
+waiting 1, 2, 4 and 8 seconds between attempts. Each exit code, diagnostic and retry delay remains
+in the report. Invalid images, silent errors, timeouts and exhausted retries fail. Linux simulations
+cover busy-then-valid, invalid images, persistent busy and timeout, including the bounded delay
+schedule. At head `0e12048`, merge `548af389`, the ARM Personal image exhausted the former
+2.5-second busy retry window before native launch; its
+[original package report](https://github.com/YondFane/uTerm/actions/runs/43156681197/artifacts/13917631166)
+is retained. The longer bounded retry and subsequent actual installation/window checks require a
+fresh macOS run.
 
 The candidate wrapper disables Python bytecode writes so importing its image verifier cannot create
 an untracked `scripts/__pycache__` before the clean-source gate. At source `6ef8dba`, both Mac
