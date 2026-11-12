@@ -239,6 +239,13 @@ Full workbench integration and visual alignment remain pending.
 
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
+The separate Agent QA window fits within the visible desktop after each enlarged capture size,
+reserving 64 points vertically for the Dock shadow and recording the actual frame and clearance. The
+ARM64 `d0c5ebb` / `b93af668` run passes its Agent command, usage and quit-cancel checks, then fails
+capture because 37,557 Dock pixels intersect the enlarged window; the full
+[artifact13976370340](https://github.com/YondFane/uTerm/actions/runs/43282517996/artifacts/13976370340)
+retains this failure. Swift syntax and script parsing pass on Linux. New Mac screenshots and the
+remaining notification checks are pending; the alpha gate is unchanged.
 
 Java/Maven, Python and SSH/SFTP open as native tabs in the main workspace. Switching to the terminal
 and back retains the same native view, run model, transfers and drafts; closing uses the existing
