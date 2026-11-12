@@ -161,23 +161,19 @@ struct NativeSettingsView: View {
     private var general: some View {
         Form {
             choice("language", "Language", "语言", [("system", "System default", "系统默认"), ("en", "English", "English"), ("zh-Hans", "简体中文", "简体中文")])
-            choice("defaultShell", "Default shell", "默认 Shell", [("default", "System default", "系统默认"), ("cmd", "Windows Command Prompt", "Windows 命令提示符")])
             NativeLoginItemsView(model: model.login).id(NativeLocale.preference)
+            number("fileTabLimit", "File tab limit", "文件标签数量上限")
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
-            number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）")
-            Section(localized("Sidebar", "侧栏")) {
-                Toggle(localized("Show SSH connections", "显示 SSH 连接"), isOn: flag("showSshConnections"))
-                Toggle(localized("Show Redis connections", "显示 Redis 连接"), isOn: flag("showRedisConnections"))
-                Toggle(localized("Show database connections", "显示数据库连接"), isOn: flag("showDatabaseConnections"))
-            }
+            number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）").disabled(model.values["breakReminder"]?.bool != true)
         }.formStyle(.grouped)
     }
     private var appearance: some View {
         Form {
-            choice("appearance", "Appearance", "外观", [("system", "System default", "系统默认"), ("dark", "Dark", "深色"), ("light", "Light", "浅色")])
             Picker(localized("Interface theme", "界面主题"), selection: text("interfaceTheme")) {
                 ForEach(Array(model.catalog["interfaceThemes"].array.enumerated()), id: \.offset) { _, item in Text(model.title(item)).tag(item["id"].string ?? "") }
             }
+            TextField(localized("Active icon color (hex, optional)", "活跃图标颜色（十六进制，可选）"), text: text("activeIconColor"))
+            choice("appearance", "Color mode", "颜色模式", [("system", "System default", "系统默认"), ("dark", "Dark", "深色"), ("light", "Light", "浅色")])
             ForEach(["darkTheme", "lightTheme"], id: \.self) { key in
                 Picker(key == "darkTheme" ? localized("Dark terminal theme", "深色终端主题") : localized("Light terminal theme", "浅色终端主题"), selection: text(key)) {
                     ForEach(Array(model.terminalThemes.enumerated()), id: \.offset) { _, item in Text(model.title(item)).tag(item["id"].string ?? "") }
@@ -190,18 +186,16 @@ struct NativeSettingsView: View {
             number("windowPadding", "Window padding", "窗口留白")
             number("opacity", "Background opacity (0.3–1)", "背景不透明度（0.3–1）")
             Toggle(localized("Blur background", "背景模糊"), isOn: flag("blur"))
-            TextField(localized("Active icon color (hex, optional)", "活跃图标颜色（十六进制，可选）"), text: text("activeIconColor"))
+            NativeFontPickerRow(model: model, key: "fontFamily", title: localized("Terminal font", "终端字体"))
+            Toggle(localized("Thicken terminal text", "加粗字形"), isOn: flag("fontThicken"))
+            number("fontSize", "Font size", "字号")
+            number("lineHeight", "Line height (1–2)", "行高（1–2）")
             number("fileFontSize", "File font size", "文件字号")
             number("gitDiffFontSize", "Diff font size", "差异字号")
-            number("fileTabLimit", "Maximum file tabs", "文件标签上限")
         }.formStyle(.grouped)
     }
     private var terminal: some View {
         Form {
-            NativeFontPickerRow(model: model, key: "fontFamily", title: localized("Terminal font family", "终端字体"))
-            number("fontSize", "Terminal font size", "终端字号")
-            Toggle(localized("Thicken terminal text", "加粗终端文字"), isOn: flag("fontThicken"))
-            number("lineHeight", "Line height (1–2)", "行高（1–2）")
             choice("cursorStyle", "Cursor", "光标", [("block", "Block", "方块"), ("bar", "Bar", "竖线"), ("underline", "Underline", "下划线")])
             Toggle(localized("Blink cursor", "光标闪烁"), isOn: flag("cursorBlink"))
             number("scrollback", "Scrollback lines", "回滚行数")
@@ -224,6 +218,14 @@ struct NativeSettingsView: View {
                 Text(localized("Only empty workspaces can be deleted. Keep at least one workspace.", "仅可删除空工作区，至少保留一个工作区。")).font(.caption).foregroundStyle(.secondary)
             }
             choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
+                Picker(localized("Default Agent", "默认 Agent"), selection: text("defaultAgent")) {
+                    ForEach(model.agentIDs, id: \.self) { id in Text(id).tag(id) }
+                }
+            Section(localized("Sidebar", "侧栏")) {
+                Toggle(localized("Show SSH connections", "显示 SSH 连接"), isOn: flag("showSshConnections"))
+                Toggle(localized("Show Redis connections", "显示 Redis 连接"), isOn: flag("showRedisConnections"))
+                Toggle(localized("Show database connections", "显示数据库连接"), isOn: flag("showDatabaseConnections"))
+            }
             choice("inspectorPosition", "Inspector position", "检查器位置", [("left", "Left", "左侧"), ("right", "Right", "右侧")])
             choice("sidebarStyle", "Sidebar style", "侧栏样式", [("navigation", "Navigation", "导航")])
         }.formStyle(.grouped)
@@ -231,9 +233,6 @@ struct NativeSettingsView: View {
     private var agents: some View {
         Form {
             Section(localized("Agents", "Agent")) {
-                Picker(localized("Default Agent", "默认 Agent"), selection: text("defaultAgent")) {
-                    ForEach(model.agentIDs, id: \.self) { id in Text(id).tag(id) }
-                }
                 Button(localized("Agent commands, hooks and notifications…", "Agent 命令、Hooks 与通知…")) { workspace.openAgentsRequested?() }
             }
         }.formStyle(.grouped)
@@ -331,7 +330,7 @@ struct NativeSettingsView: View {
     private func navigation(_ id: String, _ symbol: String, _ en: String, _ zh: String) -> some View {
         Group {
             if model.matchesSection(id, title: localized(en, zh)) {
-                NativeSettingsNavigation(model: model, id: id, symbol: symbol, title: localized(en, zh)).frame(height: 32)
+                NativeSettingsNavigation(model: model, id: id, symbol: symbol, title: model.title(model.catalog["sections"].array.first { $0["id"].string == id } ?? .null)).frame(height: 32)
                     .background(model.section == id ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
                     .accessibilityIdentifier("native-settings-section-" + id)
             }
@@ -367,8 +366,7 @@ private struct NativeSettingsNavigation: NSViewRepresentable {
         let button = NSButton(title: title, target: context.coordinator, action: #selector(Coordinator.select))
         button.identifier = NSUserInterfaceItemIdentifier("native-settings-section-" + id)
         button.setAccessibilityIdentifier("native-settings-section-" + id)
-        button.isBordered = false; button.alignment = .left; button.imagePosition = .imageLeading
-        button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        button.isBordered = false; button.alignment = .left; button.imagePosition = .noImage
         return button
     }
     func updateNSView(_ button: NSButton, context: Context) {
