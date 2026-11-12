@@ -604,7 +604,9 @@ concurrent Core writer. It checks invalid-input retention, correction, scoped pe
 original conflict baseline and explicit reload recovery, recording
 `nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`. A macOS ARM64 run
 reported visible `WRITER_BUSY` during the font action; that run does not establish scoped-save
-acceptance. QA records every attempted font action's error, committed values and retained draft in
+acceptance. CI runs settings interactions before the heavy core suite and uploads an early
+`native-settings-<runner>-<head>-<attempt>` artifact, while retaining every later check and final
+failure gate. QA records every attempted font action's error, committed values and retained draft in
 `nativeSettingsAutomaticSaveAttempts`. On contention it first requires unchanged committed data and
 retained drafts, captures `native-settings-autosave-busy.png`, and explicitly reselects the same
 control at most twice. The application does not retry failed mutations automatically. The same check

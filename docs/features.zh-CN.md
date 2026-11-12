@@ -278,7 +278,9 @@ Linux x86_64／Node
 `nativeSettingsSearchProof` 和
 `native-settings-search-jdk.png`。自动保存 QA 使用真实 AppKit 字段编辑、无效值失去焦点及保留无关数值草稿时修正后回车，再在无关草稿与另一个 Core 写入者同时存在时操作真实字体选择器，检查无效输入保留、修正、字段独立持久化、原始冲突基点及明确重读恢复，记录
 `nativeSettingsAutomaticSaveProof` 和 `native-settings-autosave-conflict.png`。一次 macOS
-ARM64 运行在字体操作中显示了 `WRITER_BUSY`，该次运行不能证明限定字段保存验收通过。QA 在
+ARM64 运行在字体操作中显示了
+`WRITER_BUSY`，该次运行不能证明限定字段保存验收通过。CI 在较慢的核心套件之前运行设置交互，提前上传
+`native-settings-<runner>-<head>-<attempt>` 产物，仍保留全部后续检查和最终失败门禁。QA 在
 `nativeSettingsAutomaticSaveAttempts`
 中记录每次字体操作的错误、已保存值与保留草稿。遇到锁争用时先核对已保存数据未变且草稿仍在，采集
 `native-settings-autosave-busy.png`，再明确重新选择同一控件，最多重选两次。应用不会自动重试失败的变更。同一检查点击真实主题预览按钮、核对终端偏好未变，并采集

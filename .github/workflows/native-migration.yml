@@ -113,6 +113,23 @@ jobs:
             macos/.build/evidence/native-python*.png
             macos/.build/evidence/toolchain.txt
             macos/.build/evidence/display*.json
+      - name: Real native settings, conflicts, shortcut capture, reset and screenshots
+        id: settings-preferences
+        continue-on-error: true
+        run: bash scripts/macos-settings-smoke.sh
+      - name: Preserve early settings interaction evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-settings-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            macos/.build/evidence/settings-native.json
+            macos/.build/evidence/settings-native-*.log
+            macos/.build/evidence/native-settings*.png
+            macos/.build/evidence/native-settings*.json
+            macos/.build/evidence/toolchain.txt
+            macos/.build/evidence/display*.json
       - name: Shared core, FFI and Swift bridge tests
         env:
           UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/macos/.build/evidence/terminal-load-core.json
@@ -151,10 +168,6 @@ jobs:
         run: |
           python3 -B tests/test_macos_disk_image.py 2>&1 | tee macos/.build/evidence/disk-image-tests.log
           bash scripts/macos-candidate-package.sh 2>&1 | tee macos/.build/evidence/candidate-package-command.log
-      - name: Real native settings, conflicts, shortcut capture, reset and screenshots
-        id: settings-preferences
-        continue-on-error: true
-        run: bash scripts/macos-settings-smoke.sh
       - name: Real Sparkle SDK with loopback signed archives and simulated user choices
         id: sdk-updates
         continue-on-error: true
