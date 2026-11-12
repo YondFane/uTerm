@@ -24,6 +24,8 @@ test("Windows performance waits for the acknowledged parent prompt rather than a
     acknowledgedFrames: 12,
   };
   assert.equal(windowsPerformancePromptReady(ready, "c:/qa/project"), true);
+  assert.equal(windowsPerformancePromptReady(ready, String.raw`\\?\C:\QA\project`), true);
+  assert.equal(windowsPerformancePromptReady(ready, "//?/C:/QA/project"), true);
   assert.equal(windowsPerformancePromptReady(undefined, "C:\\QA\\project"), false);
   for (const change of [
     { cursorLine: "TUI_02" },

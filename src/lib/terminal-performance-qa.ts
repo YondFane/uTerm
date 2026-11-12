@@ -1,3 +1,5 @@
+import { displayLocalPath } from "./file-target.ts";
+
 export interface TerminalPerformanceSnapshot {
   text: string;
   frames: number;
@@ -26,7 +28,7 @@ export function windowsPerformancePromptReady(
     !!snapshot &&
     snapshot.writable &&
     snapshot.frames === snapshot.acknowledgedFrames &&
-    snapshot.cursorLine.toLowerCase() === (directory.replaceAll("/", "\\") + ">").toLowerCase()
+    snapshot.cursorLine.toLowerCase() === (displayLocalPath(directory) + ">").toLowerCase()
   );
 }
 

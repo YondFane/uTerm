@@ -1014,14 +1014,10 @@ table painting.
 
 Windows performance QA waits for the actual acknowledged parent `cmd` prompt before each command.
 The probe reads the cursor's logical line, including wrapped rows, rather than accepting a child
-output marker from earlier buffer text. Readiness waits occur outside latency samples and before
-pausing the slow consumer; the workload, grid, deadlines and acceptance thresholds stay fixed. At
-head `22c1b57`, tested merge `902ffdef`, the
-[Windows failure13964937868](https://github.com/YondFane/uTerm/actions/runs/43262864971/artifacts/13964937868)
-retains the third redraw's unexecuted command and previous `TUI_02` output. Its real window original
-has been inspected. Thirty-seven Linux terminal/input/replay/renderer, performance-report and i18n
-regressions, type checking, production build, format and document checks pass. The readiness
-correction requires new Windows execution.
+output marker from earlier buffer text. It compares the existing `displayLocalPath` presentation of
+the directory, so extended Windows prefixes do not change the expected prompt. Readiness waits occur
+outside latency samples and before pausing the slow consumer; the workload, grid, deadlines and
+acceptance thresholds stay fixed.
 
 After the native build, run `python3 -B scripts/client-performance-database.py` (`python` on
 Windows). The wrapper owns one loopback PostgreSQL cluster across all sequential measurements,
@@ -1060,6 +1056,17 @@ acknowledgement, not physical keyboard/display latency. A ten-minute sample does
 multi-hour leak freedom.
 
 #### Measurement validation
+
+Head `22c1b57`, tested merge `902ffdef`, retains a third-redraw timeout in
+[Windows artifact13964937868](https://github.com/YondFane/uTerm/actions/runs/43262864971/artifacts/13964937868).
+Its original window shows an unexecuted command and previous `TUI_02` output. The first
+parent-prompt candidate `431c178`, tested merge `bdef6e59`, then rejects the initial prompt because
+QA context uses an extended drive path while `cmd` omits its prefix.
+[Artifact13965803472](https://github.com/YondFane/uTerm/actions/runs/43266511297/artifacts/13965803472)
+retains that report and inspected original. Reusing the existing path conversion fixes the extended
+drive comparison in regression tests. Thirty-eight Linux terminal/input/replay/renderer, file-path,
+performance-report and i18n checks, plus types, production build, format and documents, pass. Fresh
+Windows execution of the corrected readiness check remains required.
 
 At head `047ff1a7`, tested merge `885b4efb`, Windows completes the first real Tauri workload but
 fails temporary-profile deletion with `EPERM`.
