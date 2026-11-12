@@ -5,17 +5,24 @@ import UTermBridge
 @MainActor
 enum SSHSmoke {
     private static func saveProfile(_ ssh: SSHModel, workspace: WorkspaceModel, phase: String, report: inout [String: Any]) async throws -> Bool {
-        let draft = ssh.fingerprint
+        let draft = ssh.fingerprint, originalProfile = ssh.profile
         for attempt in 1...3 {
             await workspace.flushWorkspaceOperations()
             let saved = await ssh.save()
+            let writerBusy = ssh.error.hasPrefix("WRITER_BUSY:")
+            var targetUnchanged = false
+            if !saved, writerBusy, !ssh.error.contains("\n") {
+                let current = try await ssh.bridge.snapshot()
+                let profile = current.document.workspace["groups"].array.flatMap { $0["sshConnections"].array }.first { $0["id"].string == ssh.connectionID } ?? .null
+                targetUnchanged = profile == originalProfile
+            }
             var attempts = report["explicitSSHProfileSaveAttempts"] as? [[String: Any]] ?? []
-            attempts.append(["phase": phase, "attempt": attempt, "saved": saved, "writerBusy": ssh.error.hasPrefix("WRITER_BUSY:"), "failedDraftRetained": saved || ssh.fingerprint == draft])
+            attempts.append(["phase": phase, "attempt": attempt, "saved": saved, "writerBusy": writerBusy, "failedDraftRetained": saved || ssh.fingerprint == draft, "canonicalTargetRetainedOnBusy": !writerBusy || targetUnchanged])
             report["explicitSSHProfileSaveAttempts"] = attempts
-            if saved { return true }
-            guard ssh.error.hasPrefix("WRITER_BUSY:"), ssh.fingerprint == draft, attempt < 3 else { return false }
-            // Only the QA driver repeats an explicit save after a side-effect-free writer-busy result.
-            // 仅 QA 驱动在没有副作用的写入繁忙结果后，重复明确的保存操作。
+            if saved { return ssh.error.isEmpty }
+            guard writerBusy, targetUnchanged, ssh.fingerprint == draft, attempt < 3 else { return false }
+            // The QA driver repeats only an unchanged canonical target/draft; credential cleanup errors stop it.
+            // QA 驱动仅在规范目标与草稿未变时重复操作，凭据清理错误会停止重试。
             try await Task.sleep(for: .milliseconds(100))
         }
         return false
