@@ -18,6 +18,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-panels-') as directory:
     assert code == 0, code
     data = json.loads(report.read_text())
     assert 'failure' not in data, data.get('failure')
+    assert data['directNativePanelSwitchRetainsAndRemountsExactViews'] is True
     assert data['coreReady'] and not data['productionDataAccess']
     assert data['bundleIdentifier'] == 'sh.uterm.desktop.qa.native'
     required = {

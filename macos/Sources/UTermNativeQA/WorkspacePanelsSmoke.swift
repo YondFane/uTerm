@@ -72,6 +72,17 @@ enum WorkspacePanelsSmoke {
             try await TerminalSmoke.wait("Actual close button routes through the native panel close guard") { !model.panels.panels.contains { $0.id == panel.id } }
             report[kind + "WorkspacePanelProof"] = ["actualMainWindow": true, "retainedViewAfterTabSwitch": true, "terminalGenerationRetained": true, "actualCloseButton": true]
         }
+        model.openJavaRequested?()
+        try await TerminalSmoke.wait("Mount Java before switching directly between retained native panels") { model.panels.active(in: model.inspectorContextKey)?.id.hasPrefix("java-") == true }
+        guard let retainedJava = model.panels.active(in: model.inspectorContextKey) else { throw BridgeFailure(code: "PANELS_SWITCH", message: "Java panel is missing") }
+        model.openPythonRequested?()
+        try await TerminalSmoke.wait("Replace mounted Java with the actual Python view") { model.panels.active(in: model.inspectorContextKey)?.id.hasPrefix("python-") == true && model.panels.active(in: model.inspectorContextKey)?.view.window === window && retainedJava.view.window !== window }
+        guard let retainedPython = model.panels.active(in: model.inspectorContextKey) else { throw BridgeFailure(code: "PANELS_SWITCH", message: "Python panel is missing") }
+        model.panels.select(retainedJava.id, scope: model.inspectorContextKey)
+        try await TerminalSmoke.wait("Direct tab selection remounts the exact retained Java view") { retainedJava.view.window === window && retainedPython.view.window !== window }
+        model.panels.close(retainedJava.id); model.panels.close(retainedPython.id)
+        try await TerminalSmoke.wait("Close both directly switched native panels") { !model.panels.panels.contains { $0.id == retainedJava.id || $0.id == retainedPython.id } }
+        report["directNativePanelSwitchRetainsAndRemountsExactViews"] = true
         for kind in ["database", "redis"] {
             let id = UUID().uuidString
             var config: [String: JSONValue] = ["id": .string(id), "name": .string(kind + " offline QA"), "host": .string("127.0.0.1"), "port": .number(kind == "database" ? 5432 : 6379), "username": .string("qa"), "tls": .bool(false), "ca_file": .string(""), "credential_id": .null]

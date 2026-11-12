@@ -85,7 +85,7 @@ struct NativeProjectRunButton: NSViewRepresentable {
             } else if language == "java" { model.openJavaRequested?() } else { model.openPythonRequested?() }
         }
         func menu() -> NSMenu {
-            let menu = NSMenu()
+            let menu = NSMenu(); menu.autoenablesItems = false
             let heading = NSMenuItem(title: language == "java" ? localized("Java launch list", "Java 启动列表") : localized("Python launch list", "Python 启动列表"), action: nil, keyEquivalent: "")
             heading.isEnabled = false; menu.addItem(heading); menu.addItem(.separator())
             if !model.projectRuns.error.isEmpty {

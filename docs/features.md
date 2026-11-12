@@ -268,14 +268,15 @@ toolbar button twice to hide/reopen the retained panel without replacing its tas
 follows panel selection immediately, independently of task polling. Popup pointer/keyboard input is
 not claimed.
 
-Linux passes three Core discovery tests, including the real request route, absent/broken hosts,
-rejected parameters and literal removed roots, plus the existing backend run-classification check.
-Linux passes 24 focused content/workbench checks and the production build. At head `edff1f4`, the
-Intel real main-workspace integration passes all six mounted panel scenes and the actual settings
-checks pass, while live Java launch selection fails: `project.tasks` was placed in a Java-only
-handler and never reached from the public request route. The correction dispatches it directly, adds
-an actual Core request regression, and reads again after an overlapping status poll. New-source Mac
-run-list and full visual acceptance remain required.
+Linux passes three Core discovery tests covering the public request route, absent/broken hosts,
+rejected parameters and removed roots, plus the backend run-classification check and 24 focused
+content/workbench checks. At head `14487b8`, tested merge `3f438ffe`, ARM macOS passes all 12 actual
+main-workspace panel captures, but live Java launch selection still fails to mount its panel.
+Candidate handling normalizes project/task path aliases, remounts the retained view when AppKit
+updates its host, and preserves visible selection errors and failure diagnostics. A new real-window
+check switches directly Java → Python → Java without visiting the terminal. These changes and the
+run-list selection require fresh macOS execution; the failed run is not accepted. Full visual
+comparison remains required.
 
 Each native split pane has its own session/directory header, 10–32 point font controls, output
 search, match-case toggle, match counter and previous/next controls. Escape closes search and
