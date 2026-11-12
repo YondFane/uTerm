@@ -254,10 +254,13 @@ terminal without closing its retained task. Both clients read the same Core disc
 never starts a host and excludes build/test history. The native Close menu labels embedded content
 as a tab and a standalone file as a file; each action retains its existing save and close guard.
 
-The isolated `workspace-panels-native.json` scenario captures six actual main-window scenes, clicks
-terminal/panel/close controls, checks retained views/documents and preserves terminal
-identity/generation. Connection profiles in this integration scene are offline fixtures; the
-existing PostgreSQL, Redis, SSH and run suites retain service/lifetime coverage.
+The isolated `workspace-panels-native.json` scenario captures twelve actual main-window scenes
+(English/dark at 1100px and Chinese/light at 640px), clicks terminal/panel/close controls, checks
+retained views/documents and preserves terminal identity/generation. Each capture records its
+source, actual window width and platform metadata. Run panels redraw localized labels when settings
+change. The disposable mixed project contains a valid minimal POM and Python entry. Connection
+profiles in this integration scene are offline fixtures; the existing PostgreSQL, Redis, SSH and run
+suites retain service/lifetime coverage.
 
 Run suites also capture the actual main-window menu entry, simulate a stale launch selection,
 dispatch the real NSMenu task item and verify the same hosted generation. They click the actual

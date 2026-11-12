@@ -9,6 +9,7 @@ enum WorkspacePanelsSmoke {
         let root = try WorkspaceModel.dataRoot().deletingLastPathComponent().appendingPathComponent("workspace-panels 中文")
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try Data("print('workspace panel')\n".utf8).write(to: root.appendingPathComponent("main.py"))
+        try Data("<project><modelVersion>4.0.0</modelVersion><groupId>qa</groupId><artifactId>native-panels</artifactId><version>1</version></project>\n".utf8).write(to: root.appendingPathComponent("pom.xml"))
         try Data("# Workspace fixture\n".utf8).write(to: root.appendingPathComponent("README.md"))
         func git(_ args: [String]) throws {
             let process = Process(); process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
@@ -25,9 +26,25 @@ enum WorkspacePanelsSmoke {
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         window.setContentSize(NSSize(width: 1100, height: 720)); window.makeKeyAndOrderFront(nil)
         var captures: [String] = []
+        var scenes: [[String: Any]] = []
+        let source = report["sourceHeadSHA"] as? String ?? "", tested = report["sourceSHA"] as? String ?? ""
+        let architecture = report["architecture"] as? String ?? "", system = report["system"] as? String ?? ""
         func capture(_ name: String) async throws {
             try await Task.sleep(for: .milliseconds(200))
             try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent(name)); captures.append(name)
+        }
+        func captureWidths(_ kind: String) async throws {
+            for (language, appearance, width) in [("en", "dark", 1100), ("zh-Hans", "light", 640)] {
+                await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
+                window.setContentSize(NSSize(width: CGFloat(width), height: 720))
+                try await TerminalSmoke.wait("Actual panel window reaches requested width") { abs((window.contentView?.bounds.width ?? 0) - CGFloat(width)) < 1 }
+                let screenshot = "native-workspace-panel-" + kind + "-" + language + "-" + appearance + "-" + String(width) + ".png"
+                try await capture(screenshot)
+                scenes.append(["scenario": kind, "language": language, "appearance": appearance, "width": width, "height": 720, "screenshot": screenshot,
+                    "sourceHeadSHA": source, "testedMergeSHA": tested, "platform": "macOS", "architecture": architecture, "system": system])
+            }
+            await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
+            window.setContentSize(NSSize(width: 1100, height: 720))
         }
         func button(_ id: String) -> NSButton? {
             guard let root = window.contentView else { return nil }
@@ -42,7 +59,7 @@ enum WorkspacePanelsSmoke {
             }
             guard let panel = model.panels.active(in: model.inspectorContextKey) else { throw BridgeFailure(code: "PANELS_VIEW", message: "Missing mounted native panel") }
             let view = panel.view
-            try await capture("native-workspace-panel-" + kind + "-en-dark-1100.png")
+            try await captureWidths(kind)
             guard let terminalTab = button("native-workspace-terminal-tab") else { throw BridgeFailure(code: "PANELS_TAB", message: "Missing terminal tab") }
             terminalTab.performClick(nil)
             try await TerminalSmoke.wait("Terminal tab hides the panel without closing its controller") { model.panels.active(in: model.inspectorContextKey) == nil && model.panels.panels.contains { $0.id == panel.id } }
@@ -65,7 +82,7 @@ enum WorkspacePanelsSmoke {
             try await TerminalSmoke.wait("Connection document is embedded in the main workspace") { model.documents.active(in: model.inspectorContextKey)?.content.workbenchHost?.kind == kind && model.documents.active(in: model.inspectorContextKey)?.content.webView.window === window }
             guard let document = model.documents.active(in: model.inspectorContextKey) else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "Missing workbench document") }
             try await ContentSmoke.wait(document.content, "document.querySelector('.native-database-profile-name[aria-pressed=true]')?.textContent === '" + kind + " offline QA'")
-            try await capture("native-workspace-panel-" + kind + "-en-dark-1100.png")
+            try await captureWidths(kind)
             guard let close = button("native-file-close-" + document.id.uuidString) else { throw BridgeFailure(code: "PANELS_CLOSE", message: "Missing workbench tab close control") }
             close.performClick(nil)
             try await TerminalSmoke.wait("Workbench tab closes while its client remains retained") { !model.documents.documents.contains { $0.id == document.id } }
@@ -78,14 +95,14 @@ enum WorkspacePanelsSmoke {
         try await TerminalSmoke.wait("Git is mounted in the tools column") { model.inspector.content?.gitMode == true && model.inspector.content?.webView.window === window }
         guard let gitContent = model.inspector.content else { throw BridgeFailure(code: "PANELS_GIT", message: "Missing Git inspector") }
         try await ContentSmoke.wait(gitContent, "document.querySelector('.inspector-switcher button[aria-label=Git][aria-pressed=true]') !== null")
-        try await capture("native-workspace-panel-git-en-dark-1100.png")
+        try await captureWidths("git")
         model.showInspector(.files)
         try await TerminalSmoke.wait("Files returns to the tools column") { model.inspector.content?.workbenchHost?.kind == "files" && model.inspector.content?.webView.window === window }
         model.showInspector(.git)
         try await TerminalSmoke.wait("Git returns with the same retained document") { model.inspector.content === gitContent && gitContent.webView.window === window }
         report["gitWorkspacePanelProof"] = ["actualMainWindow": true, "toolsSwitcher": true, "retainedDocumentAfterModeSwitch": true]
         guard model.selectedID == session, model.selectedTerminal?.generation == generation else { throw BridgeFailure(code: "PANELS_PTY", message: "Workbench operations changed terminal identity") }
-        report["captures"] = captures
+        report["captures"] = captures; report["scenes"] = scenes
         report["scenario"] = "Real AppKit controls and mounted views; isolated Git repository, offline connection profiles, no external services. Service failure/lifetime checks run in their existing suites."
         for entry in model.sessionEntries { await model.closeSession(id: entry.sessionID) }
         _ = try await bridge.call("host.shutdownIdle")
