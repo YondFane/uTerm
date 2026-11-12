@@ -68,20 +68,30 @@ enum EditorRecoverySmoke {
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
         try await present("recoverEditorDrafts", parent: parent)
         try press(0, parent: parent)
-        try await TerminalSmoke.wait("Open missing-source recovery from File menu") { !model.editorRecoveryPresented && lookup(root, path) != nil }
-        guard let opened = lookup(root, path), let openedWindow = opened.window else { throw BridgeFailure(code: "RECOVERY_OPEN", message: "Recovered file window missing") }
+        try await TerminalSmoke.wait("Open missing-source recovery in its actual workspace tab") {
+            guard !model.editorRecoveryPresented, parent.attachedSheet == nil, let opened = lookup(root, path) else { return false }
+            return opened.presentationWindow === parent && model.documents.active(in: model.inspectorContextKey)?.content === opened
+        }
+        guard let opened = lookup(root, path), let openedWindow = opened.presentationWindow,
+              openedWindow === parent else { throw BridgeFailure(code: "RECOVERY_OPEN", message: "Recovered file is missing from the actual workspace") }
         defer { opened.forceClose() }
         try await ContentSmoke.wait(opened, "document.querySelector('.cm-content[contenteditable=false]')?.textContent.includes('MISSING_SOURCE_RECOVERY') === true", allowAlert: true)
         let image = "native-editor-recovery-opened.png"
         try await TerminalSmoke.capture(window: openedWindow, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(image))
         captures.append(image)
+        report["recoveryOpenedInMainWorkspace"] = true
         try await present("recoverEditorDrafts", parent: parent)
         try press(0, parent: parent)
-        try await TerminalSmoke.wait("Focus existing recovered window") { !model.editorRecoveryPresented }
-        guard lookup(root, path) === opened else { throw BridgeFailure(code: "RECOVERY_DUPLICATE", message: "Recovery opened a second owner for the same file") }
+        try await TerminalSmoke.wait("Focus the existing recovered workspace document") { !model.editorRecoveryPresented && parent.attachedSheet == nil && opened.presentationWindow === parent }
+        guard lookup(root, path) === opened, let document = model.documents.active(in: model.inspectorContextKey),
+              document.content === opened, let content = parent.contentView,
+              let close = descendants(content).first(where: { $0.identifier?.rawValue == "native-file-close-" + document.id.uuidString }) as? NSButton,
+              close.isEnabled else { throw BridgeFailure(code: "RECOVERY_DUPLICATE", message: "Recovery did not retain the same document and its actual tab close control") }
         report["recoveryMenuOpenedAndReusedReadonlyWindow"] = true
-        opened.window?.performClose(nil)
-        try await TerminalSmoke.wait("Close retained recovery before snapshot restore") { opened.window?.isVisible == false }
+        close.performClick(nil)
+        try await TerminalSmoke.wait("Close the actual recovered tab before snapshot restore") { lookup(root, path) == nil && !model.documents.documents.contains { $0.content === opened } }
+        guard try await bridge.call("editor.drafts.read") == before else { throw BridgeFailure(code: "RECOVERY_CLOSE", message: "Closing the readonly recovery tab changed its retained draft") }
+        report["recoveryActualTabClosePreservedDraft"] = true
 
         _ = try await bridge.call("editor.drafts.putDocument", params: .object([
             "expectedDraftRevision": .null, "draft": .object([
