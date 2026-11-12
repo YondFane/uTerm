@@ -1,9 +1,11 @@
 import AppKit
+import CoreGraphics
 import Foundation
 import UTermBridge
 
 @MainActor
 enum TerminalSmoke {
+    static let captureMethod = "WindowServer -l; visible child overlays use their owned onscreen -R bounds"
     static func wait(_ label: String, until condition: @escaping @MainActor () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(12)
         while !condition() {
@@ -342,12 +344,26 @@ enum TerminalSmoke {
     }
 
     static func capture(window: NSWindow, path: URL) async throws {
+        var arguments = ["-x", "-o", "-l", String(window.windowNumber), path.path]
+        if window.parent != nil {
+            window.parent?.orderFront(nil); window.makeKeyAndOrderFront(nil)
+            try await Task.sleep(for: .milliseconds(100))
+            let entries = CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(window.windowNumber)) as? [[String: Any]] ?? []
+            guard window.isVisible, let entry = entries.first(where: { ($0[kCGWindowNumber as String] as? NSNumber)?.intValue == window.windowNumber }),
+                  (entry[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == ProcessInfo.processInfo.processIdentifier,
+                  let bounds = entry[kCGWindowBounds as String] as? [String: NSNumber],
+                  let x = bounds["X"]?.doubleValue, let y = bounds["Y"]?.doubleValue,
+                  let width = bounds["Width"]?.doubleValue, let height = bounds["Height"]?.doubleValue,
+                  [x, y, width, height].allSatisfy(\.isFinite), width > 0, height > 0 else { throw BridgeFailure(code: "SMOKE_CAPTURE", message: "The owned overlay is not visible on screen") }
+            let region = [Int(floor(x)), Int(floor(y)), Int(ceil(width)), Int(ceil(height))].map(String.init).joined(separator: ",")
+            arguments = ["-x", "-o", "-R", region, path.path]
+        }
         window.displayIfNeeded()
-        let identifier = window.windowNumber
+        let captureArguments = arguments
         try await Task.detached {
             let capture = Process()
             capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
-            capture.arguments = ["-x", "-o", "-l", String(identifier), path.path]
+            capture.arguments = captureArguments
             let diagnostics = Pipe()
             capture.standardError = diagnostics
             try capture.run()

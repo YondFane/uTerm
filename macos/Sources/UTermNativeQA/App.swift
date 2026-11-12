@@ -1676,7 +1676,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         #else
         let architecture = "x86_64"
         #endif
-        return ["captureMethod": "WindowServer screencapture -l", "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
+        return ["captureMethod": TerminalSmoke.captureMethod, "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
          "sourceHeadSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceHeadSHA") ?? "",
          "windowVisible": window?.isVisible == true, "screenCount": NSScreen.screens.count,
          "bundleIdentifier": Bundle.main.bundleIdentifier ?? "", "minimumOS": Bundle.main.object(forInfoDictionaryKey: "LSMinimumSystemVersion") ?? "",

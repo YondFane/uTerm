@@ -41,6 +41,7 @@ enum PersonalSmoke {
         let architecture = "x86_64"
         #endif
         var report: [String: Any] = ["platform": "macOS", "architecture": architecture,
+            "captureMethod": TerminalSmoke.captureMethod,
             "system": ProcessInfo.processInfo.operatingSystemVersionString, "phase": phase,
             "sourceHeadSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceHeadSHA") as? String ?? "",
             "testedMergeSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceSHA") as? String ?? "",

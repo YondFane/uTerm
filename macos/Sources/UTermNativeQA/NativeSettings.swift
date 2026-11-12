@@ -582,6 +582,7 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
     }
     func present(over parent: NSWindow) {
         if !window.isVisible { previousResponder = parent.firstResponder as? NSView }
+        parent.orderFront(nil)
         if window.parent !== parent { window.parent?.removeChildWindow(window); parent.addChildWindow(window, ordered: .above) }
         window.setFrame(parent.frame, display: true); window.makeKeyAndOrderFront(nil)
     }

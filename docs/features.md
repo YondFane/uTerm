@@ -685,7 +685,11 @@ symbol in the settings overlay. The candidate constrains the navigation to its a
 long category names, hides scroll indicators and gives search the shared 40-point row. The close
 control draws the same visible circle/cross and hover colors as the ordinary client, with keyboard
 focus and busy disabling retained. Fresh Mac screenshots remain required; the earlier images are
-diagnostic evidence, not acceptance of this candidate.
+diagnostic evidence, not acceptance of this candidate. Child-overlay captures bring the owned
+workspace forward and record WindowServer's visible screen rectangle, validating its window ID,
+process and bounds first. This includes the actual workspace behind the overlay; other window
+captures retain the window-surface method. Reports record the capture method, and fresh same-source
+Mac execution remains required.
 
 Native General includes **Export legacy-compatible data**, using the shared export format and a
 native save sheet. Cancel leaves the store and drafts unchanged. Export writes committed values,
