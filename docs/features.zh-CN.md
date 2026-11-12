@@ -451,11 +451,10 @@ CI；调整后的字段与完整设置样式仍需实际 Mac 截图并在 #53 �
 `native-settings-default-agent-disabled.png`。这两组新增检查仍需当前源码 macOS 执行。
 
 界面与终端字体选择器共用普通版的字体预设目录和本地化名称。已有自定义字体字符串保留为选中的自定义项，直到主动选择预设；打开页面或切换分类不会替换它。选择保留完整的后备字体字符串，沿用现有设置保存／冲突规则。原生 QA 检查两种真实 AppKit 选择器、自定义草稿保留、渲染时不写入及自动保存重读，并采集
-`native-settings-custom-font.png`。ARM64 源码 `7356a7c`、实际测试 merge `b12d5c56`
-的预设持久化检查失败，见[产物 13969121408](https://github.com/YondFane/uTerm/actions/runs/43262878555/artifacts/13969121408)。采集器等待选择器空闲且启用，在截图后重新取得当前菜单，选择与已保存值不同的预设；在
-`nativeFontPickerSaveAttempts`
-中记录字段、已保存值、草稿、错误及忙碌状态。写入失败仍使验收失败，不自动重试。Linux
-Swift 语法解析通过，仍须新的 Mac 执行。
+`native-settings-custom-font.png`。ARM64 源码 `d0c5ebb`、实际测试 merge `b93af668`
+的[产物 13974362478](https://github.com/YondFane/uTerm/actions/runs/43282517996/artifacts/13974362478)记录界面字体已保存，但终端字体返回
+`WRITER_BUSY`。终端预设和可见错误保留在草稿，存储值未变。采集器等待空闲启用的选择器并选择不同的共用预设；只有确认完整存储 revision／工作区／设置及原字段比较基点均未变，才采集忙碌错误并明确重新选择同一真实控件，最多三次选择。其他错误或冲突立即失败，忙碌次数耗尽仍失败。每次操作保留在
+`nativeFontPickerSaveAttempts`，应用不会自动重试失败写入。Linux 通过 Swift 语法解析及57项包／配对／SDK／HTTP 策略；新的 Mac 恢复原图和明确重选成功验证仍待完成。
 
 顶栏包含打开文件、命令面板、面板缩放，以及文件／搜索、Git／GitHub、Java／Python、SSH、数据库和 Redis 的工具菜单入口。命令保留原有焦点、忙碌状态及所选项目保护。
 

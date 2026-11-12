@@ -871,16 +871,29 @@ enum SettingsSmoke {
                 capture = "native-settings-custom-font.png"
                 try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
             }
-            guard let picker = view(settings.window, id: identifier) as? NSPopUpButton, picker.isEnabled,
-                  let font = model.catalog["fonts"][key].array.dropFirst().compactMap({ $0["value"].string }).first(where: { $0 != before.document.settings[key].string }),
-                  let option = picker.itemArray.first(where: { $0.representedObject as? String == font }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Enabled font picker or different shared preset is missing: " + key) }
-            picker.select(option)
-            guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker), model.values[key] == .string(font) else { throw BridgeFailure(code: "SETTINGS_QA_FONT_ACTION", message: "Native font picker did not retain the shared preset value") }
-            try await TerminalSmoke.wait("Persist the actual font selection automatically") { !model.automaticSaving && !model.busy }
+            guard let font = model.catalog["fonts"][key].array.dropFirst().compactMap({ $0["value"].string }).first(where: { $0 != before.document.settings[key].string }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Different shared preset is missing: " + key) }
+            let baseline = model.lastSavedValue(key)
+            for attempt in 1...3 {
+                try await TerminalSmoke.wait("Enable the actual font picker before explicit selection") { (view(settings.window, id: identifier) as? NSPopUpButton)?.isEnabled == true && !model.automaticSaving && !model.busy && !model.frozen }
+                guard let picker = view(settings.window, id: identifier) as? NSPopUpButton,
+                      let option = picker.itemArray.first(where: { $0.representedObject as? String == font }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Current shared font preset is missing: " + key) }
+                picker.select(option)
+                guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker), model.values[key] == .string(font) else { throw BridgeFailure(code: "SETTINGS_QA_FONT_ACTION", message: "Native font picker did not retain the shared preset value") }
+                try await TerminalSmoke.wait("Finish the explicit font selection") { !model.automaticSaving && !model.busy }
+                let observed = try await readSnapshot(bridge)
+                var attempts = report["nativeFontPickerSaveAttempts"] as? [[String: Any]] ?? []
+                attempts.append(["key": key, "attempt": attempt, "maximumExplicitSelections": 3, "expectedFont": font, "savedFont": observed.document.settings[key].string ?? "", "draftFont": model.values[key]?.string ?? "", "error": model.error, "errorCode": model.errorCode, "pickerEnabled": picker.isEnabled, "busy": model.busy, "automaticSaving": model.automaticSaving, "frozen": model.frozen])
+                report["nativeFontPickerSaveAttempts"] = attempts
+                if model.errorCode != "WRITER_BUSY" { break }
+                guard !model.error.isEmpty, observed.revision == before.revision, observed.document.workspace == before.document.workspace,
+                      observed.document.settings == before.document.settings, model.values[key] == .string(font),
+                      model.lastSavedValue(key) == baseline, model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_FONT_BUSY", message: "Busy font selection changed storage or discarded the original draft/baseline") }
+                let name = "native-settings-font-busy-\(key)-\(attempt).png"
+                try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(name))
+                var busyCaptures = report["nativeFontPickerBusyCaptures"] as? [String] ?? []; busyCaptures.append(name); report["nativeFontPickerBusyCaptures"] = busyCaptures
+                if attempt < 3 { try await Task.sleep(for: .milliseconds(100)) }
+            }
             let persisted = try await readSnapshot(bridge)
-            var attempts = report["nativeFontPickerSaveAttempts"] as? [[String: Any]] ?? []
-            attempts.append(["key": key, "expectedFont": font, "savedFont": persisted.document.settings[key].string ?? "", "draftFont": model.values[key]?.string ?? "", "error": model.error, "errorCode": model.errorCode, "pickerEnabled": picker.isEnabled, "busy": model.busy, "automaticSaving": model.automaticSaving, "frozen": model.frozen])
-            report["nativeFontPickerSaveAttempts"] = attempts
             guard model.error.isEmpty, persisted.document.settings[key].string == font else { throw BridgeFailure(code: "SETTINGS_QA_FONT_SAVE", message: "Selected font preset was not saved automatically: " + key + "; see nativeFontPickerSaveAttempts") }
             selected[key] = .string(font)
         }
