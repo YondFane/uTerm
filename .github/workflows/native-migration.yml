@@ -15,7 +15,7 @@ jobs:
       matrix:
         os: [macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
+    timeout-minutes: 55
     defaults:
       run:
         shell: bash
@@ -90,6 +90,29 @@ jobs:
             macos/.build/evidence/native-toolbar-branch-picker*.png
             macos/.build/evidence/toolchain.txt
             macos/.build/evidence/display*.json
+      - name: Real native Java configuration, output and task lifetime
+        id: java-runs
+        continue-on-error: true
+        run: bash scripts/macos-java-smoke.sh
+      - name: Real native Python configuration, output and task lifetime
+        id: python-runs
+        continue-on-error: true
+        run: bash scripts/macos-python-smoke.sh
+      - name: Preserve early launch-list interaction evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-runlists-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            macos/.build/evidence/java-live.json
+            macos/.build/evidence/python-live.json
+            macos/.build/evidence/java-*.log
+            macos/.build/evidence/python-*.log
+            macos/.build/evidence/native-java*.png
+            macos/.build/evidence/native-python*.png
+            macos/.build/evidence/toolchain.txt
+            macos/.build/evidence/display*.json
       - name: Shared core, FFI and Swift bridge tests
         env:
           UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/macos/.build/evidence/terminal-load-core.json
@@ -158,10 +181,6 @@ jobs:
         id: workspace-panels
         continue-on-error: true
         run: bash scripts/macos-panels-smoke.sh
-      - name: Real native Java configuration, output and task lifetime
-        run: bash scripts/macos-java-smoke.sh
-      - name: Real native Python configuration, output and task lifetime
-        run: bash scripts/macos-python-smoke.sh
       - name: Real native SSH, SFTP, transfer and host-trust workflows
         id: ssh-workbench
         continue-on-error: true
@@ -180,9 +199,9 @@ jobs:
       - name: Real native control and standalone CLI smoke
         run: bash scripts/macos-control-smoke.sh
       - name: Preserve independent candidate and controls failures
-        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure' || steps.workspace-panels.outcome == 'failure' || steps.ssh-workbench.outcome == 'failure' || steps.redis-workbench.outcome == 'failure' || steps.git-workbench.outcome == 'failure') }}
+        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure' || steps.workspace-panels.outcome == 'failure' || steps.ssh-workbench.outcome == 'failure' || steps.redis-workbench.outcome == 'failure' || steps.git-workbench.outcome == 'failure' || steps.java-runs.outcome == 'failure' || steps.python-runs.outcome == 'failure') }}
         run: |
-          echo "Candidate, settings, SDK, inspector, workspace panels, GitHub, SSH, Redis or Git checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
+          echo "Candidate, settings, SDK, inspector, workspace panels, Java, Python, GitHub, SSH, Redis or Git checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
           exit 1
       - name: Audit source-bound native interaction matrix
         if: ${{ always() && steps.native_build.outcome == 'success' }}
