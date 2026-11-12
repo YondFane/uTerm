@@ -45,6 +45,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
 
     assert report['coreReady'] and not report['productionDataAccess'], report
     assert report['bundleIdentifier'] == 'sh.uterm.desktop.qa.native', report
+    assert report['nativeWorktreeConfirmationPaintedBeforeCapture'] is True
     for key in ['realDiffAndHistory', 'copiedDiffThroughNativePasteboard', 'wrongRootRejected',
                 'oldDocumentRejected', 'fileWindowCannotInvokeGit', 'branchFormSavedOpenEditorBeforeWrite',
                 'dirtyWorktreeDeletionRefused', 'worktreeBridgeCreateAndCleanDelete',

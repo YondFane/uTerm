@@ -1,4 +1,5 @@
 import AppKit
+import CoreGraphics
 import WebKit
 import UTermBridge
 
@@ -199,6 +200,20 @@ enum GitSmoke {
                 menu.performActionForItem(at: index)
                 try await TerminalSmoke.wait("Show real native Worktree deletion confirmation") { parent.attachedSheet != nil && model.worktreeDeletionPresented }
                 guard let sheet = parent.attachedSheet else { throw BridgeFailure(code: "GIT_MENU", message: "Missing deletion sheet") }
+                var previousBounds: [Double] = [], stableSince = ProcessInfo.processInfo.systemUptime
+                try await TerminalSmoke.wait("The actual Worktree confirmation is painted by WindowServer") {
+                    guard sheet.isVisible, sheet.windowNumber > 0,
+                          let entries = CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(sheet.windowNumber)) as? [[String: Any]],
+                          let entry = entries.first(where: { ($0[kCGWindowNumber as String] as? NSNumber)?.intValue == sheet.windowNumber }),
+                          (entry[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == ProcessInfo.processInfo.processIdentifier,
+                          entry[kCGWindowIsOnscreen as String] as? Bool == true,
+                          let bounds = entry[kCGWindowBounds as String] as? [String: NSNumber] else { return false }
+                    let current = ["X", "Y", "Width", "Height"].compactMap { bounds[$0]?.doubleValue }
+                    guard current.count == 4, current.allSatisfy(\.isFinite), current[2] > 0, current[3] > 0 else { return false }
+                    if current != previousBounds { previousBounds = current; stableSince = ProcessInfo.processInfo.systemUptime; return false }
+                    return ProcessInfo.processInfo.systemUptime - stableSince >= 0.15
+                }
+                report["nativeWorktreeConfirmationPaintedBeforeCapture"] = true
                 return sheet
             }
             func press(_ sheet: NSWindow, _ title: String) throws {
