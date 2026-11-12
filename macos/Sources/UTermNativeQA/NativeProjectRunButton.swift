@@ -34,12 +34,14 @@ final class NativeProjectRunsModel: ObservableObject {
 struct NativeProjectRunButton: NSViewRepresentable {
     @ObservedObject var model: WorkspaceModel
     @ObservedObject var runs: NativeProjectRunsModel
+    @ObservedObject var panels: NativeWorkspacePanels
     let language: String
     private var title: String { language == "java" ? localized("Java build and run…", "Java 构建与运行…") : localized("Python run…", "Python 运行…") }
     func makeCoordinator() -> Coordinator { Coordinator(model: model, language: language) }
     func makeNSView(context: Context) -> RunButton {
         let button = RunButton(title: "", target: context.coordinator, action: #selector(Coordinator.activate))
         button.isBordered = false; button.setButtonType(.momentaryPushIn); button.imagePosition = .imageOnly
+        button.wantsLayer = true; button.layer?.cornerRadius = 4
         button.identifier = .init("native-project-run-" + language)
         button.menuRequested = { [weak coordinator = context.coordinator] in coordinator?.openMenu() }
         return button
@@ -51,7 +53,11 @@ struct NativeProjectRunButton: NSViewRepresentable {
         icon.size = NSSize(width: 18, height: 18); button.image = icon
         button.running = !runs.tasks(language).isEmpty; button.needsDisplay = true
         button.toolTip = title; button.setAccessibilityLabel(title)
-        button.state = model.panels.active(in: model.inspectorContextKey)?.id.hasPrefix(language + "-") == true ? .on : .off
+        let active = panels.active(in: model.inspectorContextKey)?.id.hasPrefix(language + "-") == true
+        button.state = active ? .on : .off
+        let palette = NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)
+        let color = NativePreferences.color(palette["accent"], fallback: .controlAccentColor)
+        button.layer?.backgroundColor = active ? color.withAlphaComponent(0.14).cgColor : NSColor.clear.cgColor
     }
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: RunButton, context: Context) -> CGSize? { CGSize(width: 30, height: 30) }
     @MainActor final class RunButton: NSButton {
