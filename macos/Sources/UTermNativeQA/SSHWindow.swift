@@ -261,14 +261,21 @@ final class SSHModel: ObservableObject {
         do { _ = try await bridge.call("ssh.operation.cancel", params: .object(["id": .string(active.id), "generation": .string(active.generation)])) }
         catch { self.error = error.localizedDescription }
     }
-    func newTerminal() async {
-        guard !dirty, !selectedID.isEmpty, let snapshot else { return }
+    @discardableResult
+    func newTerminal() async -> String? {
+        guard !busy, !prepared else { error = localized("Wait for the SSH operation to finish, then retry.", "请等待 SSH 操作完成后重试。"); return nil }
+        guard !dirty, !selectedID.isEmpty else { error = localized("Save the connection before opening a terminal.", "请保存连接后再打开终端。"); return nil }
+        guard let snapshot else { error = localized("Reload the saved SSH connection, then retry.", "请重新读取已保存的 SSH 连接后重试。"); return nil }
+        let id = UUID().uuidString
+        var created = false
         await execute {
             do {
-                _ = try await self.bridge.call("ssh.session.create", params: .object(["id": .string(UUID().uuidString), "name": .string(self.name.isEmpty ? self.host : self.name), "sshConnectionId": .string(self.selectedID), "workspaceId": .string(self.workspaceID), "expectedRevision": .string(snapshot.revision)]))
+                _ = try await self.bridge.call("ssh.session.create", params: .object(["id": .string(id), "name": .string(self.name.isEmpty ? self.host : self.name), "sshConnectionId": .string(self.selectedID), "workspaceId": .string(self.workspaceID), "expectedRevision": .string(snapshot.revision)]))
+                created = true
             } catch { await self.workspace?.reload(); throw error }
             await self.workspace?.reload(); await self.reload(select: self.selectedID)
         }
+        return created && error.isEmpty ? id : nil
     }
     func remove() async {
         guard !selectedID.isEmpty, let snapshot else { return }
