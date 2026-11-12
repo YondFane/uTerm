@@ -142,6 +142,9 @@ Java/Maven、Python 和 SSH/SFTP 在主工作区内使用原生标签。切回�
 
 Java 与 Python 顶栏按钮显示实际运行状态，右键或 Shift-F10 打开对应语言的启动列表。选择任务后打开其项目／Worktree 面板并保留同一任务 generation；项目已移除或 generation 过期时显示错误。点击当前运行按钮返回终端，不关闭保留任务。两版共用 Core 查询逻辑，不启动宿主，并排除构建／测试历史。原生关闭菜单对内嵌内容显示“关闭标签”，对独立文件显示“关闭文件”，各操作保留既有保存与关闭保护。
 
+独立 SSH 窗口与 Java／Python 一样在可见桌面居中打开。源码 `c977840`、实际测试 merge `0f5ac287`
+的 SSH 冲突截图包含41,315个不透明 Dock 像素，[产物13958841216](https://github.com/YondFane/uTerm/actions/runs/43243034024/artifacts/13958841216)保留该失败。位置修正保留遮挡检查，仍须新的 Mac 执行。
+
 隔离的 `workspace-panels-native.json`
 场景采集十二张实际主窗口：1100px 英文深色、640px 中文浅色；点击终端／面板／关闭控件，检查视图与文档保留，以及终端身份／generation。每张记录源码、实际窗口宽度及平台信息。运行面板在设置变化时重绘本地化标签；临时混合项目同时包含有效的最小 POM 与 Python 入口。此集成场景使用离线连接样例；既有 PostgreSQL、Redis、SSH 及运行测试继续覆盖服务与生命周期。
 
@@ -488,9 +491,17 @@ artifacts。CPU／RSS 覆盖应用、其子进程与经认证的宿主进程树�
 
 #### 测量验证
 
+源码 `047ff1a7`、实际测试 merge `885b4efb` 的 Windows 完成首轮真实 Tauri 负载，但临时配置目录删除因
+`EPERM`
+失败。[产物13958390509](https://github.com/YondFane/uTerm/actions/runs/43243047449/artifacts/13958390509)保留失败报告。QA 现在异步删除自己创建的临时配置目录，使用有界文件系统重试，让进程回调继续完成，并在
+`temporary-profile-cleanup.json`
+记录删除耗时与错误。目录仍存在或删除报错仍使运行失败；修正须新的 Windows 执行。
+
 本地报告测试拒绝过期源码／负载、sequence 精度丢失、缺失行／TUI 样本、运行时长不足、缺少慢消费证据及网格不符。按来源记录的version4
 Mac／Windows结果及验收见[#43](https://github.com/YondFane/uTerm/issues/43)，不宣称改善比例。旧负载版本不作为 version4 证据。原生记录每次真实窗口／视图／网格几何。ARM
-CI 在 CoreGraphics 报告更大模式后仍把窗口限制为684px，保留这些失败运行。version4 对所有客户端使用相同的120×30网格，容纳于原始 CI 桌面，不改屏幕模式、字体、负载总量或裁剪检查。Windows 接收真实 Git
+CI 在 CoreGraphics 报告更大模式后仍把窗口限制为684px，保留这些失败运行。version4 对所有客户端保留相同的120×30网格、字体、负载总量及裁剪检查。历史 #43 结果容纳于当时的原始 CI 桌面。当前一致性 CI 在运行两种 Mac 客户端之前，准备并复核至少1280×900的登录会话显示区域，保留两份显示报告。源码
+`cfc0a19`、实际测试 merge `35ca4ce5`
+使用未准备的1024×768桌面时，实际1048px宽原生窗口被裁剪，截图含1,099个不透明 Dock 像素。[失败产物13957121898](https://github.com/YondFane/uTerm/actions/runs/43243034266/artifacts/13957121898)保留；显示准备修正仍须新的 Mac 测量。Windows 接收真实 Git
 Bash 路径并兼容 mingw64 目录。SQL 通过独立输出别名按数值序列排序。修正后的平台测量以#43准确来源绑定的报告为准。
 
 c24d81a的Intel运行达到真实120×30网格，完成首组原生／Tauri负载；第二次原生负载完成，但协调器在异步宿主退出结束前检查端点，失败保留于[artifact13538810238](https://github.com/YondFane/uTerm/actions/runs/42282798481/artifacts/13538810238)。原生协调器现最多等待十秒，要求端点删除且已认证测试宿主PID实际退出，不终止它或放宽负载检查。真实子进程回归覆盖延迟删除／退出；另一回归核对超时不会杀死运行进程。Mac验收依据新来源的CI及#43记录的边界。

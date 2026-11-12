@@ -458,7 +458,7 @@ final class SSHWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePane
         super.init(window: window)
         window.title = localized("SSH connections", "SSH 连接"); window.minSize = NSSize(width: 760, height: 520); window.delegate = self
         workspacePanelView = NSHostingView(rootView: SSHView(model: model))
-        window.contentView = workspacePanelView; model.ownerWindow = window
+        window.contentView = workspacePanelView; model.ownerWindow = window; window.center()
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     func windowShouldClose(_ sender: NSWindow) -> Bool {

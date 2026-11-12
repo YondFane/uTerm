@@ -311,6 +311,13 @@ still fails instead of risking a duplicate session. Reports retain each attempt 
 observed canonical IDs. Read-only state snapshots separately allow bounded writer-busy retries; this
 does not add automatic creation retries to the app. Fresh current-source Mac checks remain required.
 
+Standalone SSH windows open centered in the visible desktop, matching the Java/Python placement. At
+head `c977840`, tested merge `0f5ac287`, the SSH conflict capture contains 41,315 opaque Dock
+pixels;
+[artifact13958841216](https://github.com/YondFane/uTerm/actions/runs/43243034024/artifacts/13958841216)
+retains that failure. The placement correction does not waive obstruction checks and still requires
+fresh Mac execution.
+
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
 before the Git test tool compiles, and uploads their early reports and original windows. SSH,
 database and Redis checks likewise run early and upload `native-services-<runner>-<head>-<attempt>`.
@@ -1017,16 +1024,29 @@ multi-hour leak freedom.
 
 #### Measurement validation
 
+At head `047ff1a7`, tested merge `885b4efb`, Windows completes the first real Tauri workload but
+fails temporary-profile deletion with `EPERM`.
+[Artifact13958390509](https://github.com/YondFane/uTerm/actions/runs/43243047449/artifacts/13958390509)
+retains the failed report. QA now removes that owned temporary profile asynchronously with bounded
+filesystem retries, allowing process callbacks to drain, and records deletion duration and errors in
+`temporary-profile-cleanup.json`. Any remaining profile or removal error still fails the run; fresh
+Windows execution is required.
+
 Local report tests reject stale source/workload, imprecise sequence, missing rows/TUI samples,
 insufficient soak, missing slow-consumer evidence and unequal grids. Source-specific version4
 Mac/Windows results and acceptance remain in [#43](https://github.com/YondFane/uTerm/issues/43); no
 improvement percentage is claimed. Earlier workload versions are not accepted as version4 evidence.
 Native fitting records each actual window/view/grid attempt. The ARM CI display remained capped at
-684px even after CoreGraphics reported a larger mode; those failed runs are retained. Version4 uses
-the same 120×30 grid on all clients, fitting the original CI desktop without changing screen modes,
-fonts, workload volume or clipping checks. Windows receives the real Git Bash path and handles Git's
-mingw64 layout. SQL orders the numeric series through a distinct output alias. Corrected platform
-measurements require the exact source-bound reports in #43.
+684px even after CoreGraphics reported a larger mode; those failed runs are retained. Version4 keeps
+the same 120×30 grid, fonts, workload volume and clipping checks on all clients. The historical #43
+results fit their original CI desktop. Current parity CI prepares and verifies a login-session
+display of at least 1280×900 before either Mac client runs, recording both display reports. At head
+`cfc0a19`, tested merge `35ca4ce5`, the unprepared 1024×768 desktop clips the actual 1048px-wide
+native window and leaves 1,099 opaque Dock pixels in its capture. That failed
+[artifact13957121898](https://github.com/YondFane/uTerm/actions/runs/43243034266/artifacts/13957121898)
+is retained; the display correction still requires fresh Mac measurement. Windows receives the real
+Git Bash path and handles Git's mingw64 layout. SQL orders the numeric series through a distinct
+output alias. Corrected platform measurements require the exact source-bound reports in #43.
 
 The c24d81a Intel run reaches the real 120×30 grid and completes its first native/Tauri pair; the
 second native workload completes but its coordinator checks the endpoint before asynchronous host
