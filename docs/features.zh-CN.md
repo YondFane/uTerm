@@ -485,6 +485,13 @@ CAS 文件保存／读取及真实连接回放，不能更换进程 generation�
 负载还包括二十次合成 alternate-screen
 TUI 重绘、每帧刻意延迟200ms的真实消费者，以及二十次经 Core／JDBC 执行的真实 PostgreSQL 查询。每次核对128行有序文本，每行包含128个 ASCII 字符及 Unicode。初始渲染门控保持真实帧至少50ms；若收到另一帧或提前确认，则慢消费检查失败。释放门控后排空并验证全部1,024条输出。这是可控终端重绘，不是交互 Vim 基准；查询计时包含行序列化，不包含表格绘制。
 
+Windows 性能 QA 在每条命令前等待真实 `cmd`
+父进程提示符及其 ACK。探针读取光标所在的完整逻辑行，包含换行续接，不把缓冲历史里的子进程输出标记当成可输入证明。等待放在延迟样本计时及慢消费暂停之前；负载、网格、超时和验收阈值保持一致。源码
+`22c1b57`、实际测试 merge `902ffdef` 的
+[Windows 失败13964937868](https://github.com/YondFane/uTerm/actions/runs/43262864971/artifacts/13964937868)保留第三次重绘命令尚未执行、上一轮
+`TUI_02` 仍显示的结果，真实窗口原图已查看。Linux
+37 项终端／输入／回放／渲染、性能报告及国际化回归，以及类型检查、生产构建、格式与文档检查通过；输入就绪修正仍须新的 Windows 执行。
+
 原生构建后运行 `python3 -B scripts/client-performance-database.py`（Windows 使用
 `python`）。包装脚本在全部顺序测量期间管理同一个回环 PostgreSQL 集群，向客户端脚本提供私有凭据并调用
 `scripts/run-client-performance.sh`。它核对原始数据库测试数据不变、连接关闭、自有服务停止，且证据不含凭据。`node scripts/client-performance-report.mjs`

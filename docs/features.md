@@ -1012,6 +1012,17 @@ check. The gate is released before draining and checking all 1,024 records. Thes
 terminal redraws, not an interactive Vim benchmark; query timings include row serialization, not
 table painting.
 
+Windows performance QA waits for the actual acknowledged parent `cmd` prompt before each command.
+The probe reads the cursor's logical line, including wrapped rows, rather than accepting a child
+output marker from earlier buffer text. Readiness waits occur outside latency samples and before
+pausing the slow consumer; the workload, grid, deadlines and acceptance thresholds stay fixed. At
+head `22c1b57`, tested merge `902ffdef`, the
+[Windows failure13964937868](https://github.com/YondFane/uTerm/actions/runs/43262864971/artifacts/13964937868)
+retains the third redraw's unexecuted command and previous `TUI_02` output. Its real window original
+has been inspected. Thirty-seven Linux terminal/input/replay/renderer, performance-report and i18n
+regressions, type checking, production build, format and document checks pass. The readiness
+correction requires new Windows execution.
+
 After the native build, run `python3 -B scripts/client-performance-database.py` (`python` on
 Windows). The wrapper owns one loopback PostgreSQL cluster across all sequential measurements,
 supplies private credentials to the client runners and invokes `scripts/run-client-performance.sh`.

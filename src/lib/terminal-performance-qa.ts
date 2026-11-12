@@ -13,6 +13,21 @@ export interface TerminalPerformanceSnapshot {
   waitingToRender: boolean;
   largestFrameBytes: number;
   alternateScreen: boolean;
+  cursorLine: string;
+}
+
+export function windowsPerformancePromptReady(
+  snapshot:
+    | Pick<TerminalPerformanceSnapshot, "cursorLine" | "writable" | "frames" | "acknowledgedFrames">
+    | undefined,
+  directory: string,
+): boolean {
+  return (
+    !!snapshot &&
+    snapshot.writable &&
+    snapshot.frames === snapshot.acknowledgedFrames &&
+    snapshot.cursorLine.toLowerCase() === (directory.replaceAll("/", "\\") + ">").toLowerCase()
+  );
 }
 
 const probes = new Map<
