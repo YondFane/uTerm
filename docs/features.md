@@ -642,10 +642,17 @@ positive dimensions no larger than 128px. Missing identity, another executable, 
 oversized surface still blocks capture. Visibility reports record the verified system pointer
 separately. Four Foundation tests pass in an isolated Linux Swift 6.1.2 package, covering
 spoofed/missing paths, other layers, hidden state and invalid/oversized dimensions; the kernel
-lookup and revised policy require fresh real Mac execution. A short source-bound diagnostic probe
-compiles this exact alpha helper and captures an isolated test window before the full
-native/personal build, retaining its own originals and JSON. It is capture-infrastructure evidence,
-not a uTerm window or product acceptance; all application gates remain required.
+lookup and revised policy require fresh real Mac execution. The first ARM build at `6c20117`, tested
+merge `593f44d3`, fails because Xcode 16.4 does not export `PROC_PIDPATHINFO_MAXSIZE` to Swift. Its
+[artifact13963723122](https://github.com/YondFane/uTerm/actions/runs/43258709922/artifacts/13963723122)
+retains the compiler error. The lookup uses libproc's documented 4096-byte maximum, and the early
+probe creates its evidence directory before compilation and always tees compiler/runtime output into
+`compile-and-run.log`. A continue-on-error step status alone never establishes probe success;
+acceptance requires the actual source-bound report and original images. The corrected Mac build and
+lookup remain pending. A short source-bound diagnostic probe compiles this exact alpha helper and
+captures an isolated test window before the full native/personal build, retaining its own originals
+and JSON. It is capture-infrastructure evidence, not a uTerm window or product acceptance; all
+application gates remain required.
 
 At source `d07e8ff`, tested merge `d3e31732`, the
 [Personal Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43228172020/artifacts/13951198726)

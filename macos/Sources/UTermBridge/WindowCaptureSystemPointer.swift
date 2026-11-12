@@ -15,7 +15,9 @@ public enum WindowCaptureSystemPointer {
 
     #if os(macOS)
     public static func executable(pid: Int32) -> String? {
-        var buffer = [CChar](repeating: 0, count: Int(PROC_PIDPATHINFO_MAXSIZE))
+        // libproc's maximum is 4096 bytes; Xcode 16.4 does not export its size macro to Swift.
+        // libproc 的上限为 4096 字节；Xcode 16.4 不向 Swift 导出该尺寸宏。
+        var buffer = [CChar](repeating: 0, count: 4096)
         let count = buffer.withUnsafeMutableBufferPointer { proc_pidpath(pid, $0.baseAddress, UInt32($0.count)) }
         guard count > 0 else { return nil }
         return String(cString: buffer)
