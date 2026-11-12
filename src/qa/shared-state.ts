@@ -715,6 +715,8 @@ async function runUiParity() {
       const draftUnchanged = !document.querySelector(
         `[aria-label="${translate(sceneFixture.language, "未保存的设置")}"], [role="alert"].settings-error, .settings-content .java-error`,
       );
+      const settingsDialog = document.querySelector<HTMLDialogElement>(".settings-dialog")!;
+      const settingsCard = settingsDialog.getBoundingClientRect();
       await scene(
         `settings-${section.id}-${sceneFixture.language}-${sceneFixture.appearance}-${sceneFixture.width}`,
         {
@@ -726,6 +728,13 @@ async function runUiParity() {
           databaseFixtureMatched: section.id === "database",
           javaFixtureMatched: section.id === "java",
           automaticUpdates: (await settings()).automaticUpdates,
+          workspaceModal: settingsDialog.open && settingsDialog.matches(":modal"),
+          settingsCard: {
+            x: settingsCard.x,
+            y: settingsCard.y,
+            width: settingsCard.width,
+            height: settingsCard.height,
+          },
         },
       );
       assert(draftUnchanged, "Settings capture shows unsaved values or an error");

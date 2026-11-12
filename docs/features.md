@@ -483,9 +483,23 @@ Standalone previews and detached regression windows retain separate presentation
 tab/window restoration, wrapping, embedded workbenches and complete settings styling still require
 alignment.
 
-The toolbar footer and app menu open complete settings. Save/reload/reset and unsaved drafts remain
-available when the settings window is hidden; Return commits an edited field and Command-W hides it.
-The local CLI control switch remains an immediate service control in Local control.
+The toolbar footer and app menu open settings over the live main workspace with a dimmed, blurred
+backdrop. The centered surface shares the ordinary client's 760 px / 94% width, category navigation,
+header and responsive theme previews. The close control, Escape and an outside click hide settings
+and retain drafts; active settings/component operations keep the close guard. Search consumes Escape
+first when its query is nonempty. Closing restores workspace focus; reopening retains the same
+settings model. Restore defaults is in General, while retry/reload controls appear for retained
+drafts or errors. Return commits an edited field. Local control still changes its service
+immediately.
+
+Both collectors record the actual settings card bounds inside matching workspace windows. Pairing
+rejects separate settings windows, missing measurements, out-of-bounds cards or different actual
+positions/sizes. Linux passes 25 paired-evidence policy checks, including both-client modal and
+geometry rejection; 479 Node checks pass with 11 platform skips, alongside type/production build and
+format checks. Native QA uses the 640×420 minimum workspace, clicks the actual close button,
+verifies workspace focus and cached reopen, and requires `nativeSettingsOverlayProof` plus
+`native-settings-workspace-overlay.png`. These new actual-window operations and screenshots remain
+pending current-source macOS CI; the complete settings field styling is not accepted yet.
 
 Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
 side/tool widths in both real apps. Collection rejects stale vectors, old height, titlebar insets or

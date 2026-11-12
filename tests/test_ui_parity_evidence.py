@@ -60,6 +60,8 @@ class ParityEvidenceTests(unittest.TestCase):
         for scene in fixture["settingsScenes"]:
             for section in fixture["settingsSections"]:
                 values = dict(scene, section=section["id"], navigationControlActivated=True, draftUnchanged=True, automaticUpdates=fixture["automaticUpdates"], mavenFixtureMatched=section["id"] == "maven", databaseFixtureMatched=section["id"] == "database", javaFixtureMatched=section["id"] == "java")
+                card_width, card_height = min(760, scene["width"] * 0.94), min(scene["height"] * 0.88, 75 + min(520, scene["height"] * 0.72))
+                values.update(workspaceModal=True, settingsCard=dict(x=(scene["width"] - card_width) / 2, y=(scene["height"] - card_height) / 2, width=card_width, height=card_height))
                 name = f"settings-{section['id']}-{scene['language']}-{scene['appearance']}-{scene['width']}"
                 native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
                 image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", scene["width"], scene["height"]) + bytes(1100)
@@ -68,7 +70,7 @@ class ParityEvidenceTests(unittest.TestCase):
                 self.n["settingsScenes"].append(dict(values, screenshot=native, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
                                                     platform="macOS", architecture="arm64", system=self.n["system"]))
                 self.n["captures"].append(native)
-                self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
+                self.t["scenes"].append(dict(scenario=name, checks=copy.deepcopy(values), screenshot=tauri))
         for scene in fixture["contentScenes"]:
             values = dict(scene, passed=True, fixtureSessionCount=1, filesFolderExpanded=True, pdfSHA256=fixture["pdf"]["sha256"], markID=fixture["pdf"]["mark"]["id"], marksCount=1,
                           actualRemoveButton=True, reopenedRestoredMarks=True, originalPdfUnchanged=True, inMainWorkspace=True, settingsPreserveDocument=True)
@@ -232,6 +234,17 @@ class ParityEvidenceTests(unittest.TestCase):
             if mutation == "navigation": self.n["settingsScenes"][0]["navigationControlActivated"] = False
             if mutation == "height": self.n["settingsScenes"][0]["height"] = 639
             with self.subTest(mutation=mutation), self.assertRaises(AssertionError): self.run_compare()
+
+    def test_settings_require_workspace_modals_and_matching_actual_card_bounds(self):
+        original_native, original_tauri = copy.deepcopy(self.n), copy.deepcopy(self.t)
+        mutations = [("workspaceModal", False), ("settingsCard", {}), ("x", -1), ("y", float("nan")), ("width", 900), ("height", 0), ("width", 759), ("height", 500)]
+        for side in ["native", "tauri"]:
+            for key, value in mutations:
+                self.n, self.t = copy.deepcopy(original_native), copy.deepcopy(original_tauri)
+                scene = self.n["settingsScenes"][0] if side == "native" else next(scene["checks"] for scene in self.t["scenes"] if scene["scenario"].startswith("settings-"))
+                if key in ["workspaceModal", "settingsCard"]: scene[key] = value
+                else: scene["settingsCard"][key] = value
+                with self.subTest(side=side, key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
 
     def test_rejects_stale_sources_failed_runs_wrong_architecture_and_different_fixtures(self):
         for key, value in [("tested", "c" * 40), ("head", "c" * 40), ("passed", False),

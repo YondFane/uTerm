@@ -31,6 +31,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     assert (evidence / proof['capture']).stat().st_size > 1000
     assert len(proof['themeCaptures']) == 2
     for name in proof['themeCaptures']: assert (evidence / name).stat().st_size > 1000, name
+    proof = data['nativeSettingsOverlayProof']
+    for key in ['realWorkspaceChildWindow', 'actualCloseButton', 'workspaceFocusRestored', 'sameCachedWindowReopened', 'minimumWindow640x420']:
+        assert proof[key] is True, key
+    assert (evidence / proof['capture']).stat().st_size > 1000
     assert data['nativeThemeFileNamesAndBoundedReads']
     assert data['nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets']
     assert data['nativeGlobalMavenActualSaveConflictDraftAndProjectPreservation']

@@ -241,10 +241,25 @@ enum SettingsSmoke {
             report["captures"] = captures
             await other.close()
         } catch { await other.close(); throw error }
+        guard let parent = current.window.parent, !current.window.styleMask.contains(.titled) else { throw BridgeFailure(code: "SETTINGS_QA_OVERLAY", message: "Settings is not attached over the actual workspace") }
+        try await TerminalSmoke.wait("Render the actual overlay close control") { (view(current.window, id: "native-settings-close") as? NSButton)?.isEnabled == true }
+        guard let close = view(current.window, id: "native-settings-close") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_OVERLAY", message: "Missing settings close control") }
+        let parentSize = parent.contentView?.bounds.size ?? NSSize(width: 1100, height: 720)
+        _ = try await TerminalSmoke.sizeCaptureWindow(parent, width: 640, height: 420)
+        current.alignToParent()
+        try await TerminalSmoke.wait("Settings overlay fits the minimum actual workspace window") { abs((current.window.contentView?.bounds.height ?? 0) - 420) < 1 && current.model.presentationCardFrame.height > 0 && current.model.presentationCardFrame.maxY <= 420 }
+        let overlayCapture = "native-settings-workspace-overlay.png"
+        try await TerminalSmoke.capture(window: current.window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(overlayCapture))
+        close.performClick(nil)
+        try await TerminalSmoke.wait("Actual close control restores the underlying workspace") { !current.window.isVisible && !workspace.settingsPresented && parent.isVisible && parent.isKeyWindow }
+        parent.setContentSize(parentSize)
+        guard open() === current else { throw BridgeFailure(code: "SETTINGS_QA_OVERLAY", message: "Reopening settings replaced its retained model") }
+        try await TerminalSmoke.wait("Reopening attaches the same settings window to the workspace") { current.window.isVisible && current.window.parent === parent && workspace.settingsPresented }
+        report["nativeSettingsOverlayProof"] = ["realWorkspaceChildWindow": true, "actualCloseButton": true, "workspaceFocusRestored": true, "sameCachedWindowReopened": true, "minimumWindow640x420": true, "capture": overlayCapture]
         report["manualAcceptance"] = "waived by user"
         report["nativeSettingsFeatureAcceptanceComplete"] = false
         report["remaining"] = ["Automatic update effects remain tracked in #45; preference/file/search/inspector/swap/zoom and GitHub have separate reports; actual OS login approval uses the authorized simulation boundary"]
-        current.window.orderOut(nil)
+        current.window.performClose(nil)
     }
 
     private static func editField(_ settings: NativeSettingsWindow, key: String, text: String) async throws {

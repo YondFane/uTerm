@@ -13,6 +13,7 @@ final class NativeSettingsModel: ObservableObject {
     private var mavenChanges: AnyCancellable?
     private var databaseChanges: AnyCancellable?
     private var javaChanges: AnyCancellable?
+    private var loginChanges: AnyCancellable?
     @Published private(set) var catalog: JSONValue = .null
     @Published private(set) var agents: JSONValue = .null
     @Published var values: [String: JSONValue] = [:]
@@ -28,6 +29,8 @@ final class NativeSettingsModel: ObservableObject {
     @Published var notice = ""
     @Published var section = "general"
     @Published var query = ""
+    @Published var presentationWidth: CGFloat = 760
+    var presentationCardFrame = CGRect.zero
     func matchesSection(_ id: String, title: String) -> Bool {
         let section = catalog["sections"].array.first { $0["id"].string == id } ?? .null
         let value = [id, title, section["labels"]["en"].string ?? "", section["labels"]["zh-Hans"].string ?? "", section["keywords"].string ?? ""].joined(separator: " ").precomposedStringWithCompatibilityMapping.lowercased()
@@ -49,6 +52,7 @@ final class NativeSettingsModel: ObservableObject {
         mavenChanges = maven.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         databaseChanges = databaseComponents.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         javaChanges = javaComponents.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        loginChanges = login.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
     private func object(_ value: JSONValue) -> [String: JSONValue] { if case .object(let entries) = value { return entries }; return [:] }
     private func numberStrings(_ entries: [String: JSONValue]) -> [String: String] {
@@ -222,6 +226,8 @@ struct NativeSettingsView: View {
             number("fileTabLimit", "File tab limit", "文件标签数量上限")
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
             number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）").disabled(model.values["breakReminder"]?.bool != true)
+            Button(localized("Restore interface and terminal defaults…", "恢复界面与终端默认设置…")) { confirmReset = true }
+                .disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
         }.formStyle(.grouped)
     }
     private var appearance: some View {
@@ -362,22 +368,26 @@ struct NativeSettingsView: View {
                             navigation("java", "cup.and.saucer", "Java development tools", "Java 开发环境")
                             navigation("updates", "arrow.down.circle", "Software updates", "软件更新")
                         }.padding(8)
-                    }.frame(width: 160).background(.bar).disabled(model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
+                    }.frame(width: 150).background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(workspace.settings, catalog: model.catalog)["sidebar"], fallback: .controlBackgroundColor))).disabled(model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
                     Divider()
-                    selectedSection.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(model.title(model.catalog["sections"].array.first { $0["id"].string == model.section } ?? .null)).font(.system(size: 16, weight: .semibold)).padding(.horizontal, 28).padding(.top, 24)
+                        selectedSection.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }.disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || workspace.busy)
             }
             if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).padding(.horizontal) }
-            if !model.notice.isEmpty { Text(model.notice).textSelection(.enabled).padding(.horizontal) }
+            if !model.notice.isEmpty && model.dirty { Text(model.notice).textSelection(.enabled).padding(.horizontal) }
+            if model.dirty || !model.error.isEmpty {
             HStack {
-                Button(localized("Restore defaults…", "恢复默认值…")) { confirmReset = true }.disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
                 if model.busy { ProgressView().controlSize(.small) }
                 Spacer()
                 if model.dirty { Text(localized("Unsaved changes", "有未保存修改")).foregroundStyle(.secondary) }
                 Button(localized("Reload", "重新读取")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }.disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
                 Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.keyboardShortcut(.defaultAction).disabled(!model.dirty || model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
             }.padding()
-        }.frame(minWidth: 640, minHeight: 480).task { await model.reload() }
+            }
+        }.task { await model.reload() }
         .sheet(item: Binding(get: { workspace.nameDraftOwner == .settings ? workspace.nameDraft : nil }, set: { if workspace.nameDraftOwner == .settings { workspace.nameDraft = $0 } })) { _ in NameEditorView(model: workspace) }
         .confirmationDialog(localized("Replace this draft with default settings?", "用默认设置替换当前草稿？"), isPresented: $confirmReset) {
             Button(localized("Restore defaults", "恢复默认值")) { model.resetDraft(); model.saveAutomatically(Set(model.values.keys).union(["shortcuts"])) }
@@ -500,18 +510,32 @@ private struct NativeShortcutCapture: NSViewRepresentable {
 final class NativeSettingsWindow: NSObject, NSWindowDelegate {
     let model: NativeSettingsModel
     let window: NSWindow
+    private weak var previousResponder: NSView?
     init(workspace: WorkspaceModel) {
         model = NativeSettingsModel(workspace: workspace)
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 620), styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
+        window = NativeSettingsOverlayWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 620), styleMask: [.borderless, .resizable], backing: .buffered, defer: false)
         super.init()
         window.identifier = NSUserInterfaceItemIdentifier("native-full-settings")
         window.title = localized("Settings", "设置"); window.isReleasedWhenClosed = false; window.delegate = self
-        window.contentView = NSHostingView(rootView: NativeSettingsView(model: model, workspace: workspace)); window.center()
+        window.isOpaque = false; window.backgroundColor = .clear; window.hasShadow = false
+        window.collectionBehavior.insert(.fullScreenAuxiliary)
+        (window as? NativeSettingsOverlayWindow)?.closeRequested = { [weak self] in if let self { _ = self.windowShouldClose(self.window) } }
+        window.contentView = NSHostingView(rootView: NativeSettingsOverlay(model: model, workspace: workspace, close: { [weak self] in self?.window.performClose(nil) })); window.center()
+    }
+    func present(over parent: NSWindow) {
+        if !window.isVisible { previousResponder = parent.firstResponder as? NSView }
+        if window.parent !== parent { window.parent?.removeChildWindow(window); parent.addChildWindow(window, ordered: .above) }
+        window.setFrame(parent.frame, display: true); window.makeKeyAndOrderFront(nil)
+    }
+    func alignToParent() {
+        if window.isVisible, let parent = window.parent { window.setFrame(parent.frame, display: true) }
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard !model.busy, !model.automaticSaving, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.javaComponents.pending, !model.javaComponents.mutating, !model.frozen else { return false }
-        sender.orderOut(nil)
+        let parent = sender.parent; parent?.removeChildWindow(sender); sender.orderOut(nil)
         model.workspace.settingsPresented = false
+        parent?.makeKeyAndOrderFront(nil)
+        if let previousResponder, previousResponder.window === parent { parent?.makeFirstResponder(previousResponder) }
         return false
     }
     func prepareForQuit() async -> Bool {

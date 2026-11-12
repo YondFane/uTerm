@@ -151,6 +151,14 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["sourceHeadSHA"] == head and n["testedMergeSHA"] == tested, "Stale settings screenshot"
         assert n["platform"] == native["platform"] and n["architecture"] == native["architecture"] and n["system"] == native["system"], "Wrong settings capture platform"
         assert all(scene.get("navigationControlActivated") is True and scene.get("draftUnchanged") is True for scene in [n, t["checks"]]), "Unverified settings navigation"
+        for scene in [n, t["checks"]]:
+            assert scene.get("workspaceModal") is True, "Settings is not a workspace modal"
+            card = scene.get("settingsCard", {})
+            assert all(type(card.get(key)) in [int, float] for key in ["x", "y", "width", "height"]), "Missing actual settings card geometry"
+            assert card["width"] > 0 and card["height"] > 0 and 0 <= card["x"] < width and 0 <= card["y"] < height, "Invalid settings card geometry"
+            assert card["x"] + card["width"] <= width + 1 and card["y"] + card["height"] <= height + 1, "Settings card extends outside the workspace"
+        for metric in ["x", "y", "width", "height"]:
+            assert abs(n["settingsCard"][metric] - t["checks"]["settingsCard"][metric]) < 1, "Different actual settings card geometry: " + metric
         assert n["automaticUpdates"] == t["checks"]["automaticUpdates"] == fixture["automaticUpdates"], "Different update preference in settings captures"
         if section == "maven":
             assert n["mavenFixtureMatched"] is True and t["checks"]["mavenFixtureMatched"] is True, "Maven controls were not checked against the fixture"
@@ -163,7 +171,7 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         assert n["screenshot"] == expected_native and t["screenshot"] == expected_tauri and expected_native in native["captures"]
         _, ndigest = image(native_path.parent, expected_native, minimum_height=height)
         _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
-        pairs.append(dict(area="settings", section=section, language=language, appearance=appearance, width=width, height=height,
+        pairs.append(dict(area="settings", section=section, language=language, appearance=appearance, width=width, height=height, settingsCard=n["settingsCard"],
                           native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
     expected_pdf = {(scene["language"], scene["appearance"], scene["width"], scene["height"]) for scene in fixture["contentScenes"]}
     npdf = native.get("contentScenes", [])

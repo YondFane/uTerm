@@ -735,7 +735,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if fullSettingsWindow == nil { fullSettingsWindow = NativeSettingsWindow(workspace: model) }
         fullSettingsWindow?.window.appearance = window?.appearance
         model.settingsPresented = true
-        fullSettingsWindow?.window.makeKeyAndOrderFront(nil)
+        if let window { fullSettingsWindow?.present(over: window) }
         NSApp.activate(ignoringOtherApps: true)
     }
     @objc private func openAgents() {
@@ -1563,7 +1563,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func windowDidEnterFullScreen(_ notification: Notification) { model.fullScreen = true }
     func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false; if let window { NativeWindowControls.align(window) } }
-    func windowDidResize(_ notification: Notification) { if let window { NativeWindowControls.align(window) } }
+    func windowDidResize(_ notification: Notification) { if let window { NativeWindowControls.align(window) }; fullSettingsWindow?.alignToParent() }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if let fullSettingsWindow, fullSettingsWindow.model.busy || fullSettingsWindow.model.login.busy {

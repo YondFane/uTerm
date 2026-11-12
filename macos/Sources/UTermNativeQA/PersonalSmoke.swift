@@ -131,6 +131,8 @@ enum PersonalSmoke {
                           button.isEnabled else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Settings section is unavailable") }
                     button.performClick(nil)
                     try await TerminalSmoke.wait("Select actual settings section") { settings.model.section == id }
+                    _ = try await TerminalSmoke.sizeCaptureWindow(window, width: width, height: height)
+                    settings.alignToParent()
                     let attempts = try await TerminalSmoke.sizeCaptureWindow(settings.window, width: width, height: height)
                     if id == "maven" {
                         try await TerminalSmoke.wait("Load standalone global Maven before capture") { !settings.model.maven.busy && !settings.model.maven.values.isEmpty }
@@ -157,7 +159,9 @@ enum PersonalSmoke {
                         "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString,
                         "width": Int(settings.window.contentView?.bounds.width ?? 0), "height": Int(settings.window.contentView?.bounds.height ?? 0),
                         "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "",
-                        "navigationControlActivated": true, "draftUnchanged": true, "mavenFixtureMatched": id == "maven", "databaseFixtureMatched": id == "database", "javaFixtureMatched": id == "java", "automaticUpdates": model.settings["automaticUpdates"].bool ?? false, "windowSizeAttempts": attempts])
+                        "navigationControlActivated": true, "draftUnchanged": true, "mavenFixtureMatched": id == "maven", "databaseFixtureMatched": id == "database", "javaFixtureMatched": id == "java", "automaticUpdates": model.settings["automaticUpdates"].bool ?? false, "windowSizeAttempts": attempts,
+                        "workspaceModal": settings.window.parent === window && !settings.window.styleMask.contains(.titled),
+                        "settingsCard": ["x": Double(settings.model.presentationCardFrame.minX), "y": Double(settings.model.presentationCardFrame.minY), "width": Double(settings.model.presentationCardFrame.width), "height": Double(settings.model.presentationCardFrame.height)]])
                     report["settingsScenes"] = scenes
                 }
                 settings.window.performClose(nil)
