@@ -4,6 +4,43 @@ import UTermBridge
 
 @MainActor
 enum SSHSmoke {
+    private static func readSessionState(_ ssh: SSHModel) async throws -> CoreViewSnapshot {
+        for attempt in 1...3 {
+            do { return try await ssh.bridge.viewSnapshot() }
+            catch let failure as BridgeFailure where failure.code == "WRITER_BUSY" && attempt < 3 { try await Task.sleep(for: .milliseconds(100)) }
+        }
+        throw BridgeFailure(code: "SSH_QA_READ", message: "Could not read isolated SSH session state")
+    }
+    private static func createTerminal(_ ssh: SSHModel, workspace: WorkspaceModel, phase: String, report: inout [String: Any]) async throws -> String? {
+        await workspace.flushWorkspaceOperations()
+        let before = try await readSessionState(ssh), draft = ssh.fingerprint
+        let sessionIDs = Set(before.sessions.map(\.sessionID))
+        let hostBefore = try await ssh.bridge.call("host.status")
+        let hostedIDs = Set(hostBefore["sessions"].array.compactMap { $0["spec"]["id"].string })
+        for attempt in 1...3 {
+            let created = await ssh.newTerminal()
+            var unchanged = true, additions: [String] = []
+            let busy = ssh.error.hasPrefix("WRITER_BUSY:") && !ssh.error.contains("\n")
+            if created == nil, busy {
+                let after = try await readSessionState(ssh)
+                let hostAfter = try await ssh.bridge.call("host.status")
+                let currentIDs = Set(after.sessions.map(\.sessionID))
+                let currentHosted = Set(hostAfter["sessions"].array.compactMap { $0["spec"]["id"].string })
+                additions = currentIDs.subtracting(sessionIDs).sorted()
+                unchanged = after.snapshot.revision == before.snapshot.revision && currentIDs == sessionIDs && currentHosted == hostedIDs && ssh.fingerprint == draft
+            }
+            var attempts = report["explicitSSHSessionCreateAttempts"] as? [[String: Any]] ?? []
+            attempts.append(["phase": phase, "attempt": attempt, "created": created != nil, "writerBusy": busy, "runtimeUnchangedOnBusy": !busy || unchanged, "newCanonicalSessionIDs": additions])
+            report["explicitSSHSessionCreateAttempts"] = attempts
+            if let created { return ssh.error.isEmpty ? created : nil }
+            guard busy, unchanged, attempt < 3 else { return nil }
+            // Never repeat a create after canonical or hosted session state has changed.
+            // 规范存储或宿主会话状态变化后，绝不重复新建操作。
+            try await Task.sleep(for: .milliseconds(100))
+            await workspace.flushWorkspaceOperations()
+        }
+        return nil
+    }
     private static func saveProfile(_ ssh: SSHModel, workspace: WorkspaceModel, phase: String, report: inout [String: Any]) async throws -> Bool {
         let draft = ssh.fingerprint, originalProfile = ssh.profile
         for attempt in 1...3 {
@@ -124,7 +161,7 @@ enum SSHSmoke {
         await ssh.stopForward(status)
         try await TerminalSmoke.wait("Stop owned SSH tunnel") { !ssh.tunnels.contains(where: { $0["id"] == rule["id"] }) }
         report["nativeForwardingStaleStopRejected"] = true
-        guard let firstID = await ssh.newTerminal(), ssh.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
+        guard let firstID = try await createTerminal(ssh, workspace: model, phase: "first", report: &report), ssh.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
         try await TerminalSmoke.wait("Select the exact first SSH terminal") { model.selectedID == firstID && model.terminals[firstID] != nil }
         guard let first = model.terminals[firstID] else { throw BridgeFailure(code: "SSH_QA", message: "The created SSH session was not attached") }
         try await waitForRemotePrompt(first)
@@ -145,7 +182,7 @@ enum SSHSmoke {
         report["remoteDetachReplayAndHostRetained"] = true
         var reopened = try await open()
         await reopened.model.reload(select: profileID)
-        guard let secondID = await reopened.model.newTerminal(), reopened.model.error.isEmpty else {
+        guard let secondID = try await createTerminal(reopened.model, workspace: model, phase: "after-reconnect", report: &report), reopened.model.error.isEmpty else {
             report["secondSSHSessionDiagnostics"] = ["profile": reopened.model.selectedID, "workspace": reopened.model.workspaceID, "dirty": reopened.model.dirty, "busy": reopened.model.busy, "prepared": reopened.model.prepared, "hasSnapshot": reopened.model.snapshot != nil, "selectedSession": model.selectedID ?? ""]
             throw BridgeFailure(code: "SSH_QA_SECOND_SESSION", message: reopened.model.error.isEmpty ? "The saved connection did not create a second session" : reopened.model.error)
         }
@@ -178,7 +215,7 @@ enum SSHSmoke {
                 await reopened.model.disconnectFiles()
                 report["passwordServiceLogin"] = true
                 let passwordProfile = reopened.model.selectedID
-                guard let passwordID = await reopened.model.newTerminal(), reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+                guard let passwordID = try await createTerminal(reopened.model, workspace: model, phase: "password", report: &report), reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
                 try await TerminalSmoke.wait("Select the exact password-authenticated SSH terminal") { model.selectedID == passwordID && model.terminals[passwordID] != nil }
                 guard let terminal = model.terminals[passwordID] else { throw BridgeFailure(code: "SSH_QA", message: "The password-authenticated SSH session was not attached") }
                 try await waitForRemotePrompt(terminal)
