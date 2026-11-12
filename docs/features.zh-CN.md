@@ -43,7 +43,7 @@ Developer 账户或上架 App Store，也没有 Apple 公证。
 Silicon 或 Intel DMG／ZIP，核对个人版 SHA256SUMS 文件，再将 **uTerm Personal.app**
 拖入 Applications。已发布附件不设置自动过期，下载无需登录 GitHub。首次启动可能需要在**系统设置 → 隐私与安全**中批准。0.2.6 没有更新器，需要先手动安装一次支持更新的新版。
 
-支持更新的构建在**设置 → 软件更新 → 自动检查并下载更新**中开启并点击**保存设置**后启用 Sparkle 检查与签名下载，默认关闭。应用菜单和设置也提供**检查更新…**。后台下载完成的更新可在退出应用时安装；立即安装并重启前由 Sparkle 请求确认，仍经过已有编辑器、传输和数据库退出保护。关闭开关会停止后续自动检查／下载，已准备好的更新仍可在退出时安装。更新失败会显示错误，可以手动重试；包括“当前已是最新版本”在内的状态文案会随界面语言立即切换。
+支持更新的构建在**设置 → 软件更新 → 自动检查并下载更新**中开启后立即保存选择并启用 Sparkle 检查与签名下载，默认关闭。应用菜单和设置也提供**检查更新…**。后台下载完成的更新可在退出应用时安装；立即安装并重启前由 Sparkle 请求确认，仍经过已有编辑器、传输和数据库退出保护。关闭开关会停止后续自动检查／下载，已准备好的更新仍可在退出时安装。更新失败会显示错误，可以手动重试；包括“当前已是最新版本”在内的状态文案会随界面语言立即切换。
 
 个人版使用独立 HTTPS `personal-stable-arm64.xml`、`personal-stable-x86_64.xml`
 更新源及 Ed25519 签名 ZIP。SDK 在解压前验签，下载前核对平台、架构、通道及归档来源，并排除旧版本。已有 Tauri 安装包及 JSON 更新源保持独立。更新包验签不需要付费 Apple 签名证书。
@@ -301,8 +301,13 @@ Linux x86_64／Node
 26 的 20 项设置、搜索及 Maven 专项检查，以及类型／生产构建、i18n 和生成契约检查通过。原生 QA 通过实际 AppKit 字段编辑器输入、点击匹配分类、发送 Escape，检查数值草稿保留且快照字节未变；Mac 产物记录
 `nativeSettingsSearchProof` 和
 `native-settings-search-jdk.png`。自动保存 QA 使用真实 AppKit 字段编辑、无效值失去焦点及保留无关数值草稿时修正后回车，再在无关草稿与另一个 Core 写入者同时存在时操作真实字体选择器，检查无效输入保留、修正、字段独立持久化、原始冲突基点及明确重读恢复，记录
-`nativeSettingsAutomaticSaveProof` 和
-`native-settings-autosave-conflict.png`。同一检查点击真实主题预览按钮、核对终端偏好未变，并采集
+`nativeSettingsAutomaticSaveProof` 和 `native-settings-autosave-conflict.png`。一次 macOS
+ARM64 运行在字体操作中显示了
+`WRITER_BUSY`，该次运行不能证明限定字段保存验收通过。CI 在较慢的核心套件之前运行设置交互，提前上传
+`native-settings-<runner>-<head>-<attempt>` 产物，仍保留全部后续检查和最终失败门禁。QA 在
+`nativeSettingsAutomaticSaveAttempts`
+中记录每次字体操作的错误、已保存值与保留草稿。遇到锁争用时先核对已保存数据未变且草稿仍在，采集
+`native-settings-autosave-busy.png`，再明确重新选择同一控件，最多重选两次。应用不会自动重试失败的变更。同一检查点击真实主题预览按钮、核对终端偏好未变，并采集
 `native-settings-theme-cards-900.png`／`native-settings-theme-cards-640.png`。新增自动保存操作及同源码截图仍待 macOS
 CI；调整后的字段与完整设置样式仍需实际 Mac 截图并在 #53 对照。
 

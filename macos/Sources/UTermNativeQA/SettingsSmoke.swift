@@ -371,12 +371,31 @@ enum SettingsSmoke {
             guard let picker = view(settings.window, id: id) as? NSPopUpButton,
                   let option = picker.itemArray.first(where: { ($0.representedObject as? String).map { $0 != model.values["interfaceFont"]?.string } == true }),
                   let font = option.representedObject as? String else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_PICKER", message: "Alternative font preset is missing") }
-            picker.select(option)
-            guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker) else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_PICKER", message: "Actual font action was not delivered") }
-            try await TerminalSmoke.wait("Complete scoped font automatic save") { !model.automaticSaving && !model.busy }
+            var attempts: [[String: Any]] = []
+            for attempt in 0..<3 {
+                try await TerminalSmoke.wait("Font control is ready for explicit selection") { picker.isEnabled }
+                guard let selected = picker.itemArray.first(where: { $0.representedObject as? String == font }) else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_PICKER", message: "Selected font preset disappeared") }
+                picker.select(selected)
+                guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker) else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_PICKER", message: "Actual font action was not delivered") }
+                try await TerminalSmoke.wait("Complete scoped font automatic save") { !model.automaticSaving && !model.busy }
+                let observed = try await peer.snapshot()
+                attempts.append(["attempt": attempt + 1, "errorCode": model.errorCode, "error": model.error,
+                    "expectedFont": font, "savedFont": observed.document.settings["interfaceFont"].string ?? "",
+                    "expectedPeerSize": peerSize, "savedPeerSize": observed.document.settings["fontSize"].number ?? -1,
+                    "expectedDraft": draft, "retainedDraft": model.numbers["fontSize"] ?? ""])
+                report["nativeSettingsAutomaticSaveAttempts"] = attempts
+                guard model.errorCode == "WRITER_BUSY", attempt < 2 else { break }
+                guard !model.error.isEmpty, model.values["interfaceFont"] == .string(font),
+                      observed.document.settings["interfaceFont"] == entered.document.settings["interfaceFont"],
+                      observed.document.settings["fontSize"].number == peerSize, model.numbers["fontSize"] == draft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_BUSY", message: "Writer contention lost the draft, changed committed data or hid its error") }
+                try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent("native-settings-autosave-busy.png"))
+                // A failed mutation stays failed; QA explicitly selects the same control again, like a user retry.
+                // 失败的变更保持失败；QA 像用户重试一样，明确再次选择同一控件。
+                try await Task.sleep(for: .milliseconds(100))
+            }
             let saved = try await peer.snapshot()
             guard model.error.isEmpty, saved.document.settings["interfaceFont"].string == font,
-                  saved.document.settings["fontSize"].number == peerSize, model.numbers["fontSize"] == draft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_SCOPE", message: "Automatic save overwrote an unrelated draft or the peer value") }
+                  saved.document.settings["fontSize"].number == peerSize, model.numbers["fontSize"] == draft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_SCOPE", message: "Scoped font save did not satisfy its error, committed-value and retained-draft checks; see nativeSettingsAutomaticSaveAttempts") }
             try await save(model)
             guard model.errorCode == "SETTINGS_CONFLICT", model.numbers["fontSize"] == draft,
                   (try await peer.snapshot()).document.settings["fontSize"].number == peerSize else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_CONFLICT", message: "Saving another field silently rebased the conflicting draft") }
