@@ -172,7 +172,7 @@ enum DatabaseSmoke {
         report["databaseDisconnectStatus"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(status))
         guard status["connected"] == .bool(false), status["busy"] == .bool(false) else { throw BridgeFailure(code: "DB_CLEANUP", message: "Database work remained after disconnect") }
         let sidebarCapture = "native-database-sidebar-profile-en-dark.png"
-        try await NativeChromeSmoke.selectConnection(model: model, name: name, category: "database", capture: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(sidebarCapture))
+        try await NativeChromeSmoke.selectConnection(model: model, id: id, name: name, category: "database", capture: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(sidebarCapture), report: &report)
         try await wait(content, "document.querySelector('.native-database-profile-name[aria-pressed=true]') !== null")
         report["databaseSidebarSelectionProof"] = ["actualAppKitRow": true, "selectedTarget": true, "capture": sidebarCapture]
         captures.append(sidebarCapture)
