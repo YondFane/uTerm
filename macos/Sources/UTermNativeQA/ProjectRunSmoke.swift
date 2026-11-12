@@ -5,12 +5,14 @@ import UTermBridge
 enum ProjectRunSmoke {
     static func restoreStandalone(model: WorkspaceModel, panel: NativeWorkspacePanels.Panel) async throws {
         guard let backing = panel.controller.window else { throw BridgeFailure(code: "RUN_PANEL", message: "The retained panel window is missing") }
-        panel.view.removeFromSuperview()
         model.panels.remove(panel.controller)
+        try await Task.sleep(for: .milliseconds(100))
+        panel.view.removeFromSuperview()
         panel.view.translatesAutoresizingMaskIntoConstraints = true
         panel.view.autoresizingMask = [.width, .height]
         backing.contentView = panel.view
         panel.controller.showWindow(nil); backing.makeKeyAndOrderFront(nil)
+        try await Task.sleep(for: .milliseconds(100))
         try await TerminalSmoke.wait("Restore the exact panel content to its standalone QA window") { backing.contentView === panel.view && panel.view.window === backing && backing.isVisible }
     }
     static func run(model: WorkspaceModel, language: String, controller: NSWindowController, task: JSONValue, evidence: URL, report: inout [String: Any]) async throws {
