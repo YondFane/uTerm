@@ -274,10 +274,15 @@ enum SettingsSmoke {
         let before = try await bridge.snapshot(), file = root.appendingPathComponent("snapshot-v1.json")
         let bytes = try Data(contentsOf: file), original = model.numbers["fontSize"]
         model.numbers["fontSize"] = "999"; model.section = "general"
-        try await TerminalSmoke.wait("Render actual compatibility export entry") { (view(settings.window, id: "native-settings-legacy-export") as? NSButton)?.isEnabled == true }
+        try await TerminalSmoke.wait("Render actual compatibility export entry") {
+            guard let button = view(settings.window, id: "native-settings-legacy-export") as? NSButton else { return false }
+            settings.window.contentView?.layoutSubtreeIfNeeded()
+            return button.isEnabled && button.window === settings.window && button.bounds.width > 0 && button.bounds.height > 0
+        }
         guard let button = view(settings.window, id: "native-settings-legacy-export") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Missing export control") }
         _ = button.scrollToVisible(button.bounds)
-        guard button.bounds.width > 100, button.bounds.width < 320, abs(button.bounds.height - 28) < 1 else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "The export action stretched instead of retaining its compact target") }
+        report["nativeLegacyExportControlFrame"] = ["width": button.bounds.width, "height": button.bounds.height]
+        guard button.bounds.width > 100, button.bounds.width < 320, abs(button.bounds.height - 28) < 1 else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "The export action did not retain its compact 28-point target") }
         button.performClick(nil)
         try await TerminalSmoke.wait("Actual export entry opens its native save sheet") { settings.window.attachedSheet is NSSavePanel && model.busy }
         guard let panel = settings.window.attachedSheet as? NSSavePanel else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "The actual export sheet is missing") }

@@ -664,6 +664,15 @@ counts and partial/no-record notices. Visible entries share one sequential polli
 reads preserve unrelated command errors. QA operates the actual Agent tabs with an unsaved command
 and requires a new read plus both retained results.
 
+At source `64c0bc6`, macOS ARM64 compiles and passes the real icon-color controls, but export QA
+rejects the compact button's actual bounds before inline-Agent acceptance runs. The candidate uses
+an explicit AppKit container to give that button its real 28-point target, waits for layout and
+records `nativeLegacyExportControlFrame`; the same strict size check remains. The failed originals
+are retained in
+[artifact13937325928](https://github.com/YondFane/uTerm/actions/runs/43202454312/artifacts/13937325928).
+The inspected General original confirms readable wrapped navigation and the visible close icon, but
+does not accept the incomplete settings suite. Fresh current-source Mac execution is required.
+
 General, Terminal, Shortcuts, Local control and Software updates use plain scrollable rows with
 checkboxes instead of macOS grouped cards. General keeps the existing login-item approval/retry
 controls, with compact export/reset actions below a divider; narrow windows stack these actions.

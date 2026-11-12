@@ -6,17 +6,28 @@ import UTermBridge
 struct NativeLegacyExportButton: NSViewRepresentable {
     @ObservedObject var model: NativeSettingsModel
     func makeCoordinator() -> Coordinator { Coordinator(model) }
-    func makeNSView(context: Context) -> NSButton {
+    func makeNSView(context: Context) -> Container {
         let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.export(_:)))
         button.identifier = .init("native-settings-legacy-export"); button.bezelStyle = .rounded
-        return button
+        return Container(button: button)
     }
-    func updateNSView(_ button: NSButton, context: Context) {
+    func updateNSView(_ container: Container, context: Context) {
+        let button = container.button
         button.title = localized("Export legacy-compatible data", "导出旧版兼容数据")
         button.font = .systemFont(ofSize: 11)
         button.isEnabled = context.environment.isEnabled && !model.busy && !model.automaticSaving && !model.frozen
+        container.needsLayout = true
     }
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSButton, context: Context) -> CGSize? { CGSize(width: nsView.intrinsicContentSize.width, height: 28) }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: Container, context: Context) -> CGSize? { CGSize(width: nsView.button.intrinsicContentSize.width, height: 28) }
+    @MainActor final class Container: NSView {
+        let button: NSButton
+        init(button: NSButton) {
+            self.button = button; super.init(frame: .zero)
+            button.autoresizingMask = [.width, .height]; addSubview(button)
+        }
+        required init?(coder: NSCoder) { fatalError("Use programmatic construction") }
+        override func layout() { super.layout(); button.frame = bounds }
+    }
     @MainActor final class Coordinator: NSObject {
         let model: NativeSettingsModel
         init(_ model: NativeSettingsModel) { self.model = model }
