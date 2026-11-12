@@ -275,14 +275,24 @@ content/workbench checks. At head `ad94eea`, tested merge `76fd24cc`, Intel macO
 actual main-workspace panel captures and direct retained Java/Python switching. Launch-list QA still
 times out with no product error or mounted panel. QA now obtains the actual mounted toolbar
 coordinator and dispatches both stale and current NSMenu items through AppKit, checking action
-delivery before panel/generation assertions. The failed run is retained; the new dispatch still
-requires actual macOS execution and full visual comparison.
+delivery before panel/generation assertions. Source `cdbd110`, tested merge `63b9bea4`, still times
+out for both languages on ARM64 despite successful action delivery. These failed runs remain
+available. Bounded stage records now follow the actual callback through discovery, project/context
+selection and panel attachment in `javaLaunchSelectionDiagnostics` /
+`pythonLaunchSelectionDiagnostics`. They locate a failure without accepting it; current-source macOS
+checks and full comparison remain required. On Intel source `7ef74ba`, both callbacks reach
+presentation in under half a second, but the panel list remains empty and the original Java failure
+window is blank. QA now explicitly removes retained content from its former host before restoring
+the standalone window and checks that exact view/window ownership. Production attachment reports
+missing content visibly instead of silently returning. Actual menu selection, unchanged task
+generation and hide/reopen assertions remain required; the new handoff still needs current-source
+Mac execution.
 
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
-and uploads their early reports and original windows. Failures remain mandatory in the final matrix
-while independent suites continue. Full Core, bridge, SDK and service checks remain required; the
-complete artifact remains mandatory. The job budget is 55 minutes to include the observed Intel
-build, complete interaction matrix and cache cleanup.
+before the Git test tool compiles, and uploads their early reports and original windows. Failures
+remain mandatory in the final matrix while independent suites continue. Full Core, bridge, SDK and
+service checks remain required; the complete artifact remains mandatory. The job budget is 55
+minutes to include the observed Intel build, complete interaction matrix and cache cleanup.
 
 Each native split pane has its own session/directory header, 10–32 point font controls, output
 search, match-case toggle, match counter and previous/next controls. Escape closes search and
@@ -5547,18 +5557,20 @@ requests or asks before discarding a form; cancellation cannot release an alread
 operation before its actual result. PR creation uses literal JSON input and never pushes a branch or
 creates a fork implicitly.
 
-The native QA app opens **Settings → All settings…** or **File → All settings…** for General,
-Appearance, Terminal, Files/Agents and Shortcuts. Changes remain drafts until **Save settings**.
-**Restore defaults** prepares a draft and still requires saving. Hiding/reopening retains the draft;
-quit refuses an active operation or asks about unsaved changes. Invalid numbers and reserved or
-duplicate shortcuts show an error without discarding input. Saving checks each changed field against
-the latest store, preserving unrelated peer changes and refusing conflicting overwrites.
+The native QA app opens **Settings → All settings…** or **File → All settings…** for the shared
+categories. Switches, choices, fonts, shortcuts, defaults and successful theme-file selections save
+their changed fields immediately. Numeric/color fields retain incomplete drafts while typing and
+commit on Enter or blur. Hiding/reopening retains pending drafts; quit refuses an active operation
+or asks about unsaved changes. Invalid numbers and reserved or duplicate shortcuts show an error
+without discarding input. Saving checks each changed field against the latest store, preserving
+unrelated peer changes and refusing conflicting overwrites. **Save settings** retries the retained
+complete draft; **Reload** discards it.
 
 Both clients parse Ghostty themes through Core `settings.theme.import`, retaining existing name/ID,
-UTF-16 length, six-digit color and palette-index rules. Parsing itself does not save settings. Tauri
-saves after a successful selection; native import adds a draft that requires **Save settings**. The
-native chooser reads at most 32 KB and requires UTF-8. Names remove only a final `.conf` or `.txt`,
-ignoring extension case; other extensions remain part of the name and identity.
+UTF-16 length, six-digit color and palette-index rules. Parsing itself does not save settings. Both
+clients save after a successful file selection. The native chooser reads at most 32 KB and requires
+UTF-8. Names remove only a final `.conf` or `.txt`, ignoring extension case; other extensions remain
+part of the name and identity.
 
 Native terminals and task logs apply bundled/custom palettes, cursor/selection colors, available
 font fallback/weight, line spacing, cursor shape/blink, scrollback and background opacity. Copy on

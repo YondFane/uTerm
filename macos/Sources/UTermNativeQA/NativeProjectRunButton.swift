@@ -7,6 +7,13 @@ final class NativeProjectRunsModel: ObservableObject {
     weak var workspace: WorkspaceModel?
     @Published private(set) var tasks: [JSONValue] = []
     @Published private(set) var error = ""
+    private(set) var selectionTrace: [String] = []
+    private var traceStarted = ProcessInfo.processInfo.systemUptime
+    func traceSelection(_ event: String, reset: Bool = false) {
+        if reset { selectionTrace.removeAll(); traceStarted = ProcessInfo.processInfo.systemUptime }
+        selectionTrace.append(String(format: "%.3f", ProcessInfo.processInfo.systemUptime - traceStarted) + " " + event)
+        if selectionTrace.count > 32 { selectionTrace.removeFirst(selectionTrace.count - 32) }
+    }
     private var loading = false
     init(_ workspace: WorkspaceModel) { self.workspace = workspace }
     func refresh() async {
@@ -110,8 +117,11 @@ struct NativeProjectRunButton: NSViewRepresentable {
             }
         }
         @objc func selectTask(_ item: NSMenuItem) {
-            guard let task = item.representedObject as? JSONValue else { return }
-            model.revealProjectRunRequested?(language, task)
+            model.projectRuns.traceSelection("action.entered", reset: true)
+            guard let task = item.representedObject as? JSONValue else { model.projectRuns.traceSelection("action.invalid-payload"); return }
+            guard let request = model.revealProjectRunRequested else { model.projectRuns.traceSelection("action.missing-callback"); return }
+            model.projectRuns.traceSelection("action.dispatch")
+            request(language, task)
         }
     }
 }

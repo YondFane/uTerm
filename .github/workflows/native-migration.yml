@@ -74,22 +74,6 @@ jobs:
         run: |
           swift scripts/macos-qa-display.swift | tee macos/.build/evidence/display.json
           swift scripts/macos-qa-display.swift --verify-only | tee macos/.build/evidence/display-verified.json
-      - name: Real native Git, Worktree and open-editor protection
-        id: git-workbench
-        continue-on-error: true
-        run: bash scripts/macos-git-smoke.sh
-      - name: Preserve early Git interaction evidence
-        if: ${{ always() && steps.native_build.outcome == 'success' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-git-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
-          path: |
-            macos/.build/evidence/git-live.json
-            macos/.build/evidence/git-*.log
-            macos/.build/evidence/native-git*.png
-            macos/.build/evidence/native-toolbar-branch-picker*.png
-            macos/.build/evidence/toolchain.txt
-            macos/.build/evidence/display*.json
       - name: Real native Java configuration, output and task lifetime
         id: java-runs
         continue-on-error: true
@@ -128,6 +112,22 @@ jobs:
             macos/.build/evidence/settings-native-*.log
             macos/.build/evidence/native-settings*.png
             macos/.build/evidence/native-settings*.json
+            macos/.build/evidence/toolchain.txt
+            macos/.build/evidence/display*.json
+      - name: Real native Git, Worktree and open-editor protection
+        id: git-workbench
+        continue-on-error: true
+        run: bash scripts/macos-git-smoke.sh
+      - name: Preserve early Git interaction evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-git-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            macos/.build/evidence/git-live.json
+            macos/.build/evidence/git-*.log
+            macos/.build/evidence/native-git*.png
+            macos/.build/evidence/native-toolbar-branch-picker*.png
             macos/.build/evidence/toolchain.txt
             macos/.build/evidence/display*.json
       - name: Shared core, FFI and Swift bridge tests
