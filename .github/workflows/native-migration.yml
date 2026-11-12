@@ -147,12 +147,16 @@ jobs:
       - name: Real native Python configuration, output and task lifetime
         run: bash scripts/macos-python-smoke.sh
       - name: Real native SSH, SFTP, transfer and host-trust workflows
+        id: ssh-workbench
+        continue-on-error: true
         run: bash scripts/macos-ssh-smoke.sh
       - name: Real native database profile, PostgreSQL, window lifetime and screenshots
         run: |
           python3 -B tests/test_database_qa_download.py 2>&1 | tee macos/.build/evidence/database-download-tests.log
           bash scripts/macos-database-smoke.sh
       - name: Real native Redis, binary identity, protected write and window lifetime
+        id: redis-workbench
+        continue-on-error: true
         if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
         run: bash scripts/macos-redis-smoke.sh
       - name: Real native Agent settings, installed Hooks and simulated OS notification lifecycle
@@ -162,9 +166,9 @@ jobs:
       - name: Real native control and standalone CLI smoke
         run: bash scripts/macos-control-smoke.sh
       - name: Preserve independent candidate and controls failures
-        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure' || steps.workspace-panels.outcome == 'failure') }}
+        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure' || steps.workspace-panels.outcome == 'failure' || steps.ssh-workbench.outcome == 'failure' || steps.redis-workbench.outcome == 'failure') }}
         run: |
-          echo "Candidate, settings, SDK, inspector, workspace panels or GitHub checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
+          echo "Candidate, settings, SDK, inspector, workspace panels, GitHub, SSH or Redis checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
           exit 1
       - name: Audit source-bound native interaction matrix
         if: ${{ always() && steps.native_build.outcome == 'success' }}

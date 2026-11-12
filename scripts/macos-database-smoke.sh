@@ -55,7 +55,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-database-') as director
         for key in ['nativeProfileSaveWithoutPasswordPersistence', 'nativeRealPostgresqlConnection', 'nativeSQLInputWaitedForReadyControls', 'nativeSQLClipboardMatchesEditedQuery', 'nativeExactBigintDecimalAndUnicode', 'hiddenWindowRetainedConnectionDraftAndResult', 'nativeActiveProfileMutationRefused', 'temporaryPasswordSurvivedWindowHideAndReconnect', 'nativeDatabaseThemeLanguageAndNarrowLayout']:
             assert report[key], key
         assert report['sharedComponentEventsReachSettingsAndWorkbench']
-        assert len(report['nativeDatabaseCaptures']) == 2
+        assert len(report['nativeDatabaseCaptures']) == 3
+        selection = report['databaseSidebarSelectionProof']
+        assert selection['actualAppKitRow'] is True and selection['selectedTarget'] is True
+        assert selection['capture'] == 'native-database-sidebar-profile-en-dark.png'
+        assert selection['capture'] in report['nativeDatabaseCaptures']
         for name in report['nativeDatabaseCaptures']:
             assert (evidence / name).is_file(), name
         report.update(passed=True, testedMergeSHA=report['sourceSHA'], sourceTreeDirty=bool(subprocess.check_output(['git', 'status', '--porcelain'])), processExitCode=code,
