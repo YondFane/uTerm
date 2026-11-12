@@ -1004,7 +1004,13 @@ labels. Existing custom font strings remain a selected custom entry until a pres
 opening or switching categories does not replace them. Selection retains the exact fallback-family
 string, and the existing settings save/conflict rules apply. Native QA checks both actual AppKit
 selectors, custom draft retention, no write while rendering and an automatic save/read round trip;
-it also captures `native-settings-custom-font.png`. Current-source macOS execution is still
+it also captures `native-settings-custom-font.png`. ARM64 head `7356a7c`, tested merge `b12d5c56`,
+failed the preset persistence check in
+[artifact 13969121408](https://github.com/YondFane/uTerm/actions/runs/43262878555/artifacts/13969121408).
+The collector now waits for an enabled idle picker, reacquires its current menu after the
+screenshot, and selects a preset different from the saved value. It records the field, saved and
+draft values, error and busy state in `nativeFontPickerSaveAttempts`; a failed write remains a
+failure without an automatic retry. Linux Swift parsing passed; fresh Mac execution is still
 required.
 
 The toolbar includes file opening, the command palette, pane zoom and a tools menu for files/search,

@@ -440,7 +440,11 @@ CI；调整后的字段与完整设置样式仍需实际 Mac 截图并在 #53 �
 `native-settings-default-agent-disabled.png`。这两组新增检查仍需当前源码 macOS 执行。
 
 界面与终端字体选择器共用普通版的字体预设目录和本地化名称。已有自定义字体字符串保留为选中的自定义项，直到主动选择预设；打开页面或切换分类不会替换它。选择保留完整的后备字体字符串，沿用现有设置保存／冲突规则。原生 QA 检查两种真实 AppKit 选择器、自定义草稿保留、渲染时不写入及自动保存重读，并采集
-`native-settings-custom-font.png`。当前源码仍需 macOS 实际执行。
+`native-settings-custom-font.png`。ARM64 源码 `7356a7c`、实际测试 merge `b12d5c56`
+的预设持久化检查失败，见[产物 13969121408](https://github.com/YondFane/uTerm/actions/runs/43262878555/artifacts/13969121408)。采集器等待选择器空闲且启用，在截图后重新取得当前菜单，选择与已保存值不同的预设；在
+`nativeFontPickerSaveAttempts`
+中记录字段、已保存值、草稿、错误及忙碌状态。写入失败仍使验收失败，不自动重试。Linux
+Swift 语法解析通过，仍须新的 Mac 执行。
 
 顶栏包含打开文件、命令面板、面板缩放，以及文件／搜索、Git／GitHub、Java／Python、SSH、数据库和 Redis 的工具菜单入口。命令保留原有焦点、忙碌状态及所选项目保护。
 
