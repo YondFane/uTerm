@@ -28,6 +28,12 @@ enum NativePreferences {
         if bold, font.familyName == "Cascadia Code", let semibold = NSFont(name: "CascadiaCode-SemiBold", size: size) { return semibold }
         return bold ? NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask) : font
     }
+    static func semiboldFont(_ families: String, size: CGFloat) -> NSFont {
+        let regular = font(families, size: size)
+        if regular.familyName == NSFont.systemFont(ofSize: size).familyName { return .systemFont(ofSize: size, weight: .semibold) }
+        let descriptor = regular.fontDescriptor.addingAttributes([.traits: [NSFontDescriptor.TraitKey.weight: NSFont.Weight.semibold.rawValue]])
+        return NSFont(descriptor: descriptor, size: size) ?? regular
+    }
     static func terminalTheme(_ settings: JSONValue, catalog: JSONValue) -> JSONValue {
         let id = settings[light(settings) ? "lightTheme" : "darkTheme"]
         return (settings["customThemes"].array + catalog["themes"].array).first { $0["id"] == id } ?? .null

@@ -184,7 +184,19 @@ enum SSHSmoke {
         await reopened.model.select(nil)
         guard reopened.model.lastTransfer == nil else { throw BridgeFailure(code: "SSH_QA", message: "New connection inherited another profile's transfer status") }
         reopened.model.name = "Host trust QA"; reopened.model.host = fixture["unknownAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = fixture["password"].string ?? "isolated-qa-password"; reopened.model.rootPath = fixture["passwordRemote"].string ?? ""
-        guard await reopened.model.save() else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+        // A refused canonical write has no side effects; simulate an explicit user retry only for WRITER_BUSY.
+        // 规范写入被拒绝时尚未产生副作用；仅在 WRITER_BUSY 下模拟用户明确重试。
+        var trustProfileSaved = false
+        var trustProfileAttempts = 0
+        for attempt in 0..<3 {
+            trustProfileAttempts += 1
+            if await reopened.model.save() { trustProfileSaved = true; break }
+            guard reopened.model.error.hasPrefix("WRITER_BUSY:"), attempt < 2 else { break }
+            await model.flushWorkspaceOperations()
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        guard trustProfileSaved else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+        report["hostTrustFixtureWriterBusyRetry"] = ["attempts": trustProfileAttempts, "maximumAttempts": 3, "conflictsRetried": false, "scenario": "Explicit fixture resubmission only after a canonical WRITER_BUSY refusal"]
         let connecting = Task { @MainActor in await reopened.model.connectFiles() }
         do {
             try await TerminalSmoke.wait("Native host trust sheet through actual askpass") {

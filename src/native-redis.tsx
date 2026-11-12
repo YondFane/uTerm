@@ -16,6 +16,8 @@ import { useSettings } from "./lib/SettingsContext";
 import { useUiLanguage } from "./lib/useUiLanguage";
 import { randomUUID } from "./lib/uuid";
 
+import { workbenchSelection, type WorkbenchSelection } from "./lib/workbench-selection";
+
 interface Group {
   id: string;
   name: string;
@@ -25,6 +27,7 @@ interface Group {
 interface Catalog {
   revision: string;
   selectedWorkspace: string;
+  selection?: WorkbenchSelection | null;
   groups: Group[];
 }
 const message = (reason: unknown) =>
@@ -53,6 +56,7 @@ export function NativeRedis() {
   const [error, setError] = useState("");
   const removeDialog = useRef<HTMLDialogElement>(null);
   const revision = useRef(0);
+  const consumedSelection = useRef<string>(undefined);
   const profileGuard = useRef(randomUUID());
   const statuses = useSyncExternalStore(subscribeRedis, redisSnapshot);
   const group = catalog?.groups.find((group) => group.id === groupId);
@@ -63,6 +67,23 @@ export function NativeRedis() {
   const accept = (value: Catalog) => {
     revision.current++;
     setCatalog(value);
+    const target = workbenchSelection(
+      value.selection,
+      consumedSelection.current,
+      value.selectedWorkspace,
+      value.groups.map((group) => ({ id: group.id, profiles: group.redisConnections })),
+    );
+    if (target) {
+      consumedSelection.current = target.request;
+      setGroupId(target.group);
+      setSelected(target.profile.id);
+      setTabs((previous) =>
+        previous.some((tab) => tab.id === target.profile.id)
+          ? previous
+          : [...previous, target.profile],
+      );
+      return;
+    }
     setGroupId((previous) =>
       value.groups.some((group) => group.id === previous) ? previous : value.selectedWorkspace,
     );
@@ -93,6 +114,11 @@ export function NativeRedis() {
     track(
       listenContent("redis-settings-changed", () => {
         void reloadSettings.current().catch((reason) => setError(message(reason)));
+      }),
+    );
+    track(
+      listenContent("redis-selection-changed", () => {
+        void refresh();
       }),
     );
     void refresh();

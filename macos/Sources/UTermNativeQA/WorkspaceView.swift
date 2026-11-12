@@ -79,7 +79,7 @@ struct WorkspaceView: View {
                                     HStack {
                                         Text(model.error).font(.caption).textSelection(.enabled).lineLimit(3)
                                         Spacer()
-                                        Button(localized("Reload", "重新读取")) { Task { await model.reload() } }
+                                        Button(localized("Reload", "重新读取")) { model.branchPicker.clearOperationError(); Task { await model.reload(clearOperationError: true) } }
                                         Button(localized("Recovery copies", "恢复副本")) { model.recover() }
                                     }.padding(8)
                                 }
@@ -115,6 +115,7 @@ struct WorkspaceView: View {
                             .id(ObjectIdentifier(content))
                             .frame(width: (pr ? min(640, geometry.size.width * 0.92) : min(540, max(0, geometry.size.width - 32))), height: min(CGFloat(pr ? model.githubPRHeight : model.quickSSHHeight), max(0, geometry.size.height - 48)))
                             .clipShape(RoundedRectangle(cornerRadius: pr ? 9 : 12))
+                            .shadow(color: Color(nsColor: NativePreferences.light(model.settings) ? NSColor(srgbRed: 48.0 / 255, green: 43.0 / 255, blue: 37.0 / 255, alpha: 0.125) : .black.withAlphaComponent(0.4)).opacity(pr ? 1 : 0), radius: 30, x: 0, y: 18)
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }.ignoresSafeArea(.container, edges: .top)
             }

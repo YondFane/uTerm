@@ -13,6 +13,9 @@ struct NativeWorkspaceToolbar: View {
             }
             Text(model.projects.first { $0["id"] == model.workspace["selectedProject"] }?["name"].string ?? localized("Terminal", "终端"))
                 .font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.middle)
+            if model.workspace["selectedProject"].string != nil {
+                NativeBranchPicker(picker: model.branchPicker, settings: model.settings).frame(maxWidth: 180).fixedSize(horizontal: false, vertical: true)
+            }
             Spacer(minLength: 8)
             if model.busy { ProgressView().controlSize(.small) }
             if model.workspace["selectedProject"].string != nil {
@@ -34,6 +37,12 @@ struct NativeWorkspaceToolbar: View {
             model.measureToolbar(frame.height); model.measureToolbarTop(frame.minY)
         }.allowsHitTesting(false))
         .accessibilityIdentifier("native-workspace-toolbar")
+        .task(id: model.inspectorContextKey + String(model.ready)) {
+            while !Task.isCancelled {
+                await model.branchPicker.refresh()
+                do { try await Task.sleep(for: .seconds(4)) } catch { return }
+            }
+        }
     }
     private func tool(_ icon: CoreToolbarIcon, _ title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { NativeChromeIcon(toolbar: icon).frame(width: 24, height: 24) }

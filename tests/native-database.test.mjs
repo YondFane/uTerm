@@ -142,6 +142,27 @@ test("native database profile conflicts retain input and quit/resume keeps a mod
       0,
       "Opening the profile editor must not start an unseen component probe that blocks saving",
     );
+    catalog.selection = { request: "sidebar-click", group: "qa", id: config.id };
+    await act(async () =>
+      window.dispatchEvent(
+        new window.CustomEvent("uterm-content-event", {
+          detail: {
+            version: 1,
+            document: "native-database-unit",
+            kind: "database-selection-changed",
+            payload: null,
+          },
+        }),
+      ),
+    );
+    assert.ok(
+      document.querySelector("dialog[open]"),
+      "Selecting a connection must preserve the open profile draft",
+    );
+    assert.equal(
+      document.querySelector(".native-database-profile-name[aria-pressed=true]")?.textContent,
+      config.name,
+    );
     const name = document.querySelector("dialog[open] input");
     await change(name, "Retained draft 中文");
     await change(input("Password"), "PRIVATE_TEMPORARY_PASSWORD");
@@ -177,7 +198,13 @@ test("native database profile conflicts retain input and quit/resume keeps a mod
     assert.notEqual(document.querySelector("dialog[open]").inert, true);
     assert.equal(input("Password").value, "PRIVATE_TEMPORARY_PASSWORD");
     assert.equal(
-      calls.filter((call) => call.method === "database_guard").at(-1).params.dirty,
+      calls
+        .filter(
+          (call) =>
+            call.method === "database_guard" &&
+            call.params.id === calls.find((call) => call.method === "database_guard").params.id,
+        )
+        .at(-1).params.dirty,
       true,
     );
     await act(async () => button("Reload").click());

@@ -144,6 +144,11 @@ enum RedisSmoke {
             captures.append(filename)
         }
         try await wait(content, "!!document.querySelector('.native-redis .native-database-profile-name')")
+        let sidebarCapture = "native-redis-sidebar-profile-en-dark.png"
+        try await NativeChromeSmoke.selectConnection(model: model, name: config["name"]?.string ?? "Redis", category: "redis", capture: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(sidebarCapture))
+        try await wait(content, "document.querySelector('.native-database-profile-name[aria-pressed=true]') !== null")
+        report["redisSidebarSelectionProof"] = ["actualAppKitRow": true, "selectedTarget": true, "capture": sidebarCapture]
+        captures.append(sidebarCapture)
         guard try await EditorSmoke.evaluate(content, script: "const b=document.querySelector('.native-redis button[aria-label^=\"Edit Redis\"]');if(!b)return false;b.click();return true;", arguments: [:]) else { throw BridgeFailure(code: "REDIS_PROFILE", message: "Redis edit action unavailable") }
         try await wait(content, "!!document.querySelector('dialog[open] input[type=password]')")
         try await input(content, selector: "dialog[open] input[type=password]", text: password)

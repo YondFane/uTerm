@@ -162,6 +162,57 @@ list inset. Row padding and larger interface text still expand rows.
 Native selection uses the same rounded accent fill/border, and project folder icons reveal
 disclosure arrows on hover. The toolbar shows pane zoom only for split layouts.
 
+The native toolbar includes the selected repository's branch picker. Left click or Arrow Down opens
+local and remote branches; right click or Shift-F10 opens Push, Pull, Fetch and Refresh. Mutations
+capture the project, working directory and expected branch, retain editor-save and conflict checks,
+and reject changed selections without retrying writes. Reads refresh every four seconds. Errors are
+shown in the workspace.
+
+Redis and Database sections list each saved connection by name. Selecting a row opens that exact
+profile in its retained workbench, without closing other tabs or an open connection-editing draft.
+Selection requests are scoped to the current workspace, survive initial document loading and are
+consumed once. Deleted profiles and workspace changes reject the request. Sidebar text uses the
+shared 600 weight; focusing a hidden session-close button invalidates its drawing immediately. The
+GitHub PR modal casts the interface-theme shadow outside its clipped form.
+
+**Toolbar and connection-row validation**
+
+Linux x86_64 / Node 26: the frontend suite passes 478 checks (11 conditional skips); type checks,
+production build and documentation checks pass. Focused checks cover workspace boundaries,
+deleted/repeated targets, connection selection with a protected profile/password draft, and existing
+save conflicts. Native Git QA exercises branch switching, stale expected-branch rejection and
+restoration through the guarded application callback, and captures
+`native-toolbar-branch-picker-en-dark.png`. Database/Redis QA selects the actual AppKit row and
+captures `native-database-sidebar-profile-en-dark.png` and
+`native-redis-sidebar-profile-en-dark.png`. These new Mac scenarios and current-source paired visual
+acceptance remain pending CI; the branch popup's pointer/keyboard operation is not claimed from
+model checks.
+
+The first Intel CI compilation rejected a shadowed error property, an ambiguous Objective-C selector
+and menu helpers missing main-actor isolation. The candidate corrects these diagnostics; no native
+execution is claimed for the failed build. Fresh Mac execution remains required.
+
+At source `b5ae671`, merge `85b133d`, ordinary macOS/Windows and the paired capture collector pass;
+both Personal architectures pass initial/replacement windows and update installation. ARM native
+execution exposes an outdated Redis capture count and a transient canonical writer refusal while
+saving the final SSH trust fixture. Capture checks now require the added actual sidebar proof; the
+SSH fixture simulates at most three explicit resubmissions only for `WRITER_BUSY`, preserving
+`CONFLICT` failures. SSH/Redis failures remain mandatory gates while independent Git/database checks
+continue. The complete native matrix and new Git/connection-row scenarios need a fresh run.
+
+At source `605d4d3`, both Personal packages and ordinary/paired capture checks pass. The ARM/Intel
+native matrices reach Git and expose operation feedback being cleared by unrelated successful
+snapshots. Background refresh now clears only its own read failures. Explicit Reload and successful
+user operations acknowledge operation errors; branch writes return an explicit result and retain
+failure text across read refreshes. Native Git QA requires that retention and keeps dirty-worktree
+refusal mandatory, with sheet/busy/file diagnostics on timeout. These corrections require new Mac
+execution; earlier passing captures do not accept the corrected source.
+
+CI runs Git window checks after the isolated build and display setup, publishing
+`native-git-{platform}-{head}-{attempt}` evidence before the remaining matrix. Git failures remain
+mandatory in the final gate; earlier evidence is retained across later failures. This reduces the
+wait for branch/Worktree failure details without removing the full matrix.
+
 Actual row/header/gap/inset measurements are required in both clients; current-source native
 rendering remains pending CI.
 
@@ -193,7 +244,7 @@ active-icon color.
 Quick SSH and host search appear inside the SSH section in both All and SSH categories. Filtering
 uses name, host and username, ignoring case, and retains selection, sessions and an already-focused
 search editor. Native Quick SSH displays the same modal form and parser over the main workspace.
-Direct connection rows and full workbench alignment remain pending.
+Full workbench integration and visual alignment remain pending.
 
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
@@ -661,12 +712,15 @@ private temporary Applications directory. The installed app starts its bundled h
 Unicode PTY output, explicitly closes the fixture session and stops the idle host before removal.
 The native QA version remains the bundle's recorded `0.0.1`; this is not a stable release package.
 
-The image checksum verifier retries only explicit temporary-busy responses, up to five attempts;
-each exit code and diagnostic remains in the report. Invalid images and exhausted retries fail.
-Three Linux simulations cover busy-then-valid, invalid images, persistent busy and timeout. The
-79872ba ARM candidate failed its original busy response; the unchanged report remains in
-[artifact13543080480](https://github.com/YondFane/uTerm/actions/runs/42295306002/artifacts/13543080480).
-Actual image creation, checksum validation and installation still require the macOS run.
+The image checksum verifier retries only explicit temporary-busy responses, up to five attempts,
+waiting 1, 2, 4 and 8 seconds between attempts. Each exit code, diagnostic and retry delay remains
+in the report. Invalid images, silent errors, timeouts and exhausted retries fail. Linux simulations
+cover busy-then-valid, invalid images, persistent busy and timeout, including the bounded delay
+schedule. At head `0e12048`, merge `548af389`, the ARM Personal image exhausted the former
+2.5-second busy retry window before native launch; its
+[original package report](https://github.com/YondFane/uTerm/actions/runs/43156681197/artifacts/13917631166)
+is retained. The longer bounded retry and subsequent actual installation/window checks require a
+fresh macOS run.
 
 The candidate wrapper disables Python bytecode writes so importing its image verifier cannot create
 an untracked `scripts/__pycache__` before the clean-source gate. At source `6ef8dba`, both Mac
