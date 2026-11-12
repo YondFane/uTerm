@@ -318,6 +318,14 @@ pixels;
 retains that failure. The placement correction does not waive obstruction checks and still requires
 fresh Mac execution.
 
+At source `e4a909a`, tested merge `3784e956`, Intel Git QA fails isolated Worktree creation after
+its branch/editor checks.
+[Artifact13957342510](https://github.com/YondFane/uTerm/actions/runs/43243044376/artifacts/13957342510)
+retains `native-git-failure.png` and the failed report, which omitted the bridge reply code. QA now
+records that exact code plus whether the target path or branch exists, and includes the code in its
+failure. It does not retry or waive Worktree creation. The cause and fresh current-source Mac
+acceptance remain unresolved.
+
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
 before the Git test tool compiles, and uploads their early reports and original windows. SSH,
 database and Redis checks likewise run early and upload `native-services-<runner>-<head>-<attempt>`.
