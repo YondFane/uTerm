@@ -274,14 +274,18 @@ content/workbench checks. At head `ad94eea`, tested merge `76fd24cc`, Intel macO
 actual main-workspace panel captures and direct retained Java/Python switching. Launch-list QA still
 times out with no product error or mounted panel. QA now obtains the actual mounted toolbar
 coordinator and dispatches both stale and current NSMenu items through AppKit, checking action
-delivery before panel/generation assertions. The failed run is retained; the new dispatch still
-requires actual macOS execution and full visual comparison.
+delivery before panel/generation assertions. Source `cdbd110`, tested merge `63b9bea4`, still times
+out for both languages on ARM64 despite successful action delivery. These failed runs remain
+available. Bounded stage records now follow the actual callback through discovery, project/context
+selection and panel attachment in `javaLaunchSelectionDiagnostics` /
+`pythonLaunchSelectionDiagnostics`. They locate a failure without accepting it; current-source macOS
+checks and full comparison remain required.
 
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
-and uploads their early reports and original windows. Failures remain mandatory in the final matrix
-while independent suites continue. Full Core, bridge, SDK and service checks remain required; the
-complete artifact remains mandatory. The job budget is 55 minutes to include the observed Intel
-build, complete interaction matrix and cache cleanup.
+before the Git test tool compiles, and uploads their early reports and original windows. Failures
+remain mandatory in the final matrix while independent suites continue. Full Core, bridge, SDK and
+service checks remain required; the complete artifact remains mandatory. The job budget is 55
+minutes to include the observed Intel build, complete interaction matrix and cache cleanup.
 
 Each native split pane has its own session/directory header, 10–32 point font controls, output
 search, match-case toggle, match counter and previous/next controls. Escape closes search and

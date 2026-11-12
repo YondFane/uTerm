@@ -874,13 +874,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if present { content.reveal() }; return content
     }
     private func revealProjectRun(_ language: String, task: JSONValue) {
+        model.projectRuns.traceSelection("request.queued")
         Task { @MainActor in
+            model.projectRuns.traceSelection("request.started")
+            defer { model.projectRuns.traceSelection("request.finished") }
             do {
                 guard !preparingQuit, !model.busy, !model.settingsPresented, !model.editorRecoveryPresented,
                       !model.workspaceModalPresented else { throw BridgeFailure(code: "RUN_BUSY", message: localized("Finish the current operation before selecting a running project.", "请先完成当前操作，再选择运行项目。")) }
                 guard let root = task["task"]["root"].string, let id = task["spec"]["id"].string,
                       let generation = task["generation"].string else { throw BridgeFailure(code: "RUN_LIST", message: localized("This launch entry is invalid. Reopen the launch list.", "此启动项无效，请重新打开启动列表。")) }
+                model.projectRuns.traceSelection("discovery.start")
                 await model.projectRuns.refresh()
+                model.projectRuns.traceSelection("discovery.done")
                 guard model.projectRuns.error.isEmpty else { throw BridgeFailure(code: "RUN_LIST", message: model.projectRuns.error) }
                 guard model.projectRuns.tasks(language).contains(where: { $0["spec"]["id"].string == id && $0["generation"].string == generation && $0["task"]["root"].string == root }) else { throw BridgeFailure(code: "TASK_STALE", message: localized("The task has exited or changed. Reopen the launch list.", "任务已退出或变化，请重新打开启动列表。")) }
                 let projects = model.workspace["projects"].array
@@ -891,23 +896,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 }
                 guard let project = projects.first(where: { matchesRoot($0["directory"]) || $0["worktrees"].array.contains { matchesRoot($0["path"]) } }),
                       let projectID = project["id"].string else { throw BridgeFailure(code: "PROJECT_REMOVED", message: localized("This running project was removed. Add it again first.", "此运行项目已从工作区移除，请先重新添加项目。")) }
+                model.projectRuns.traceSelection("project.matched")
                 let tree = project["worktrees"].array.first { matchesRoot($0["path"]) }?["id"].string
                 let group = project["workspaceId"].string ?? "local"
-                if model.groupID != group { guard await model.mutate("workspace.switch", ["id": .string(group)]) else { return } }
+                if model.groupID != group {
+                    model.projectRuns.traceSelection("workspace.switch.start")
+                    let switched = await model.mutate("workspace.switch", ["id": .string(group)])
+                    model.projectRuns.traceSelection("workspace.switch.done " + String(switched))
+                    guard switched else { return }
+                }
+                model.projectRuns.traceSelection("project.select.start")
                 await model.selectProject(projectID, worktree: tree)
+                model.projectRuns.traceSelection("project.select.done")
                 guard model.workspace["selectedProject"].string == projectID, model.workspace["selectedWorktree"].string == tree else { throw BridgeFailure(code: "TASK_SCOPE", message: localized("The selected project changed. Reopen the launch list.", "所选项目已变化，请重新打开启动列表。")) }
+                model.projectRuns.traceSelection("context.start")
                 let scope = model.inspectorContextKey, directory = try await selectedProjectDirectory()
+                model.projectRuns.traceSelection("context.done")
                 guard directory.standardizedFileURL.resolvingSymlinksInPath().path == URL(fileURLWithPath: root).standardizedFileURL.resolvingSymlinksInPath().path else { throw BridgeFailure(code: "TASK_SCOPE", message: "The selected project changed") }
                 if language == "java" {
+                    model.projectRuns.traceSelection("java.controller.start")
                     let controller = try await makeJavaWindow(directory: directory, present: false)
+                    model.projectRuns.traceSelection("java.tasks.start")
                     await controller.model.refreshTasks(); controller.model.selectedID = id; await controller.model.selectTask()
+                    model.projectRuns.traceSelection("java.tasks.done")
                     try presentPanel(controller, id: "java-" + controller.model.directory, title: "Java — " + directory.lastPathComponent, scope: scope)
                 } else {
+                    model.projectRuns.traceSelection("python.controller.start")
                     let controller = try await makePythonWindow(directory: directory, present: false)
+                    model.projectRuns.traceSelection("python.tasks.start")
                     await controller.model.refreshTasks(); controller.model.selectedID = id; await controller.model.selectTask()
+                    model.projectRuns.traceSelection("python.tasks.done")
                     try presentPanel(controller, id: "python-" + controller.model.directory, title: "Python — " + directory.lastPathComponent, scope: scope)
                 }
-            } catch { model.error = error.localizedDescription }
+                model.projectRuns.traceSelection("panel.presented")
+            } catch { model.projectRuns.traceSelection("request.failed " + error.localizedDescription); model.error = error.localizedDescription }
         }
     }
     @objc private func openJava() {
