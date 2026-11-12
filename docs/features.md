@@ -254,18 +254,26 @@ and back retains the same native view, run model, transfers and drafts; closing 
 save/transfer/run guards. Database and Redis use workspace document tabs. Closing a workbench tab
 hides its retained client; reopening restores the same WebKit document, connection handles and
 drafts. Project changes scope visible panels without retargeting an in-flight request. New terminal
-actions return to the terminal, and closing a native panel restores terminal focus. The native Close
-menu labels embedded content as a tab and a standalone file as a file; each action retains its
-existing save and close guard.
+actions return to the terminal, and closing a native panel restores terminal focus.
+
+Java and Python toolbar buttons show live run status; right-click or Shift-F10 opens the language's
+launch list. Selecting a task reveals its project/Worktree panel and the same task generation;
+removed projects and stale generations report an error. Clicking an active run button returns to the
+terminal without closing its retained task. Both clients read the same Core discovery logic, which
+never starts a host and excludes build/test history. The native Close menu labels embedded content
+as a tab and a standalone file as a file; each action retains its existing save and close guard.
 
 The isolated `workspace-panels-native.json` scenario captures six actual main-window scenes, clicks
 terminal/panel/close controls, checks retained views/documents and preserves terminal
 identity/generation. Connection profiles in this integration scene are offline fixtures; the
-existing PostgreSQL, Redis, SSH and run suites retain service/lifetime coverage. Linux passes 24
-focused content/workbench checks and the production build. New AppKit integration and screenshots
-remain pending macOS ARM/Intel CI. The previous integration run on both architectures found the
-standalone-file Close label incorrectly changed to Close tab; the correction needs a new run. No
-full visual acceptance is claimed here.
+existing PostgreSQL, Redis, SSH and run suites retain service/lifetime coverage. Run suites also
+capture the actual main-window menu entry, simulate a stale launch selection, dispatch the real
+NSMenu task item and verify the same hosted generation. Popup pointer/keyboard input is not claimed.
+Linux passes two Core discovery tests, including absent/broken hosts and literal removed roots, plus
+the existing backend run-classification check. Linux passes 24 focused content/workbench checks and
+the production build. New AppKit integration and screenshots remain pending macOS ARM/Intel CI. The
+previous integration run on both architectures found the standalone-file Close label incorrectly
+changed to Close tab; the correction needs a new run. No full visual acceptance is claimed here.
 
 Each native split pane has its own session/directory header, 10–32 point font controls, output
 search, match-case toggle, match counter and previous/next controls. Escape closes search and
@@ -770,12 +778,15 @@ private temporary Applications directory. The installed app starts its bundled h
 Unicode PTY output, explicitly closes the fixture session and stops the idle host before removal.
 The native QA version remains the bundle's recorded `0.0.1`; this is not a stable release package.
 
-The image checksum verifier retries only explicit temporary-busy responses, up to five attempts;
-each exit code and diagnostic remains in the report. Invalid images and exhausted retries fail.
-Three Linux simulations cover busy-then-valid, invalid images, persistent busy and timeout. The
-79872ba ARM candidate failed its original busy response; the unchanged report remains in
-[artifact13543080480](https://github.com/YondFane/uTerm/actions/runs/42295306002/artifacts/13543080480).
-Actual image creation, checksum validation and installation still require the macOS run.
+The image checksum verifier retries only explicit temporary-busy responses, up to five attempts,
+waiting 1, 2, 4 and 8 seconds between attempts. Each exit code, diagnostic and retry delay remains
+in the report. Invalid images, silent errors, timeouts and exhausted retries fail. Linux simulations
+cover busy-then-valid, invalid images, persistent busy and timeout, including the bounded delay
+schedule. At head `0e12048`, merge `548af389`, the ARM Personal image exhausted the former
+2.5-second busy retry window before native launch; its
+[original package report](https://github.com/YondFane/uTerm/actions/runs/43156681197/artifacts/13917631166)
+is retained. The longer bounded retry and subsequent actual installation/window checks require a
+fresh macOS run.
 
 The candidate wrapper disables Python bytecode writes so importing its image verifier cannot create
 an untracked `scripts/__pycache__` before the clean-source gate. At source `6ef8dba`, both Mac

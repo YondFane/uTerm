@@ -67,6 +67,11 @@ public class TaskProbe {
                 'normalStopRetainedFinalOutputAndCopy']:
         assert report[key], (key, report)
     assert report['unsupportedDevelopmentArgumentsRejected'], report
+    proof = report['javaToolbarRunList']
+    for field in ['passed', 'realHostTask', 'actualMenuAction', 'staleGenerationRejected', 'scopeRetainedOnRejection', 'sameTaskGeneration', 'actualMainWindow']:
+        assert proof[field] is True, (field, proof)
+    for name in [proof['screenshot'], report['nativeJavaMenuWorkspaceCapture']]:
+        assert (evidence / name).stat().st_size > 1000, name
     assert len(report['javaCaptures']) == 5, report
     for name in report['javaCaptures']:
         assert (evidence / name).is_file(), name

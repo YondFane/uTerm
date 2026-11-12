@@ -95,34 +95,11 @@ fn read_project_run_summary(root: &std::path::Path) -> Result<ProjectRunSummary,
 }
 
 fn read_project_run_tasks(root: &std::path::Path) -> Result<Vec<TaskSession>, String> {
-    // Status reads must neither launch a host nor depend on a still-existing project directory.
-    // 状态读取既不能启动宿主，也不能依赖项目目录仍然存在。
-    if !root.join("endpoint.json").exists() {
-        return Ok(vec![]);
-    }
-    let client = Client::connect(root).map_err(|error| error.to_string())?;
-    client
-        .require_task_support()
-        .map_err(|error| error.to_string())?;
-    match client
-        .request(Operation::TaskSnapshot)
-        .map_err(|error| error.to_string())?
-    {
-        Reply::Tasks(tasks) => Ok(tasks),
-        _ => Err("Invalid project run summary".into()),
-    }
+    uterm_core::project_runs::read(root).map_err(|error| error.to_string())
 }
 
 fn running_project_tasks(tasks: Vec<TaskSession>) -> Vec<TaskSession> {
-    tasks
-        .into_iter()
-        .filter(|task| {
-            task.running
-                && (task.task.action == "run"
-                    || task.task.action == "python:run"
-                    || task.task.action.starts_with("python:run|"))
-        })
-        .collect()
+    uterm_core::project_runs::running(tasks)
 }
 
 #[tauri::command]

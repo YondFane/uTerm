@@ -78,6 +78,8 @@ final class WorkspaceModel: ObservableObject {
     var openDatabaseProfileRequested: ((String, String) -> Void)?
     var openRedisProfileRequested: ((String, String) -> Void)?
     lazy var branchPicker = NativeBranchPickerModel(self)
+    lazy var projectRuns = NativeProjectRunsModel(self)
+    var revealProjectRunRequested: ((String, JSONValue) -> Void)?
     var openAgentsRequested: (() -> Void)?
     var openSettingsRequested: (() -> Void)?
     var openFileRequested: (() -> Void)?
