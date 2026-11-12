@@ -575,7 +575,10 @@ text fields save on Enter or blur, retaining incomplete input while typing. Each
 its own field; unrelated drafts retain their original conflict comparison point. Invalid values and
 conflicts remain visible without an automatic retry. Correct the field to retry, use **Reload** to
 discard drafts, or **Save settings** to retry the complete draft. Restore defaults and theme file
-selection also apply automatically. Full settings styling still requires comparison.
+selection also apply automatically. Appearance shows the shared six interface-theme previews with
+localized names, descriptions and a selected marker. Narrow settings use one column; clicking a card
+saves the interface theme while retaining terminal colors. Full settings styling still requires
+comparison.
 
 Linux x86_64 / Node 26 passes 20 focused settings, search and Maven checks, type/production build,
 i18n and generated-contract checks. Native QA inserts text through the actual AppKit field editor,
@@ -584,7 +587,9 @@ snapshot bytes. It records `nativeSettingsSearchProof` and `native-settings-sear
 Mac artifact. Automatic-save QA uses actual AppKit field editing and blur, then an actual font
 selection with an unrelated draft and a concurrent Core writer. It checks invalid-input retention,
 correction, scoped persistence, the original conflict baseline and explicit reload recovery,
-recording `nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`. These new
+recording `nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`. The same
+check clicks a real theme-preview button, verifies terminal preferences are unchanged, and captures
+`native-settings-theme-cards-900.png` / `native-settings-theme-cards-640.png`. These new
 automatic-save operations and same-source screenshots remain pending macOS CI; the reordered fields
 and full settings styling still require actual Mac screenshots and comparison under #53.
 

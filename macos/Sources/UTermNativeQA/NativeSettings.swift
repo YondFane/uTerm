@@ -225,10 +225,10 @@ struct NativeSettingsView: View {
         }.formStyle(.grouped)
     }
     private var appearance: some View {
-        Form {
-            Picker(localized("Interface theme", "界面主题"), selection: text("interfaceTheme")) {
-                ForEach(Array(model.catalog["interfaceThemes"].array.enumerated()), id: \.offset) { _, item in Text(model.title(item)).tag(item["id"].string ?? "") }
-            }
+        ScrollView {
+          VStack(alignment: .leading, spacing: 16) {
+            NativeInterfaceThemes(model: model)
+            Divider()
             HStack {
                 Text(localized("Active icon color (hex, optional)", "活跃图标颜色（十六进制，可选）")); Spacer()
                 NativeSettingsField(model: model, key: "activeIconColor", numeric: false, label: localized("Highlight color value", "高亮颜色值")).frame(width: 160, height: 24)
@@ -252,7 +252,8 @@ struct NativeSettingsView: View {
             number("lineHeight", "Line height (1–2)", "行高（1–2）")
             number("fileFontSize", "File font size", "文件字号")
             number("gitDiffFontSize", "Diff font size", "差异字号")
-        }.formStyle(.grouped)
+          }.padding(28)
+        }
     }
     private var terminal: some View {
         Form {

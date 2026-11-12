@@ -233,7 +233,7 @@ enum SettingsSmoke {
                 model.values["language"] = .string(language); model.values["appearance"] = .string(appearance); model.section = "appearance"
                 try await save(model)
                 guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_QA_APPEARANCE", message: "Could not save language and appearance") }
-                current.window.setContentSize(NSSize(width: width, height: 640))
+                current.window.setContentSize(NSSize(width: CGFloat(width), height: 640))
                 try await Task.sleep(for: .milliseconds(200))
                 try await TerminalSmoke.capture(window: current.window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
                 captures.append(name)
@@ -291,11 +291,29 @@ enum SettingsSmoke {
                   (try await peer.snapshot()).document.settings["fontSize"].number == peerSize else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_CONFLICT", message: "Saving another field silently rebased the conflicting draft") }
             let capture = "native-settings-autosave-conflict.png"
             try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+            guard let theme = model.catalog["interfaceThemes"].array.first(where: { $0["id"].string != model.values["interfaceTheme"]?.string }), let themeID = theme["id"].string else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Alternative shared interface theme is missing") }
+            let themeControl = "native-settings-theme-" + themeID
+            try await TerminalSmoke.wait("Render actual theme preview controls") { (view(settings.window, id: themeControl) as? NSButton)?.isEnabled == true }
+            guard let themeButton = view(settings.window, id: themeControl) as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Actual theme preview button is missing") }
+            themeButton.performClick(nil)
+            try await TerminalSmoke.wait("Save the clicked interface theme") { !model.automaticSaving && !model.busy }
+            let themed = try await peer.snapshot()
+            guard model.error.isEmpty, themed.document.settings["interfaceTheme"].string == themeID,
+                  ["darkTheme", "lightTheme", "customThemes", "fontSize", "fontFamily"].allSatisfy({ themed.document.settings[$0] == saved.document.settings[$0] }) else { throw BridgeFailure(code: "SETTINGS_QA_THEME_CARD", message: "Theme selection changed terminal preferences or failed to save") }
+            let oldSize = settings.window.contentView?.bounds.size ?? NSSize(width: 760, height: 620)
+            var themeCaptures: [String] = []
+            for width in [900, 640] {
+                settings.window.setContentSize(NSSize(width: CGFloat(width), height: 640))
+                try await Task.sleep(for: .milliseconds(200))
+                let name = "native-settings-theme-cards-\(width).png"
+                try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(name)); themeCaptures.append(name)
+            }
+            settings.window.setContentSize(oldSize)
             let current = try await peer.snapshot()
-            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(current.revision), "patch": .object(["fileTabLimit": before.document.settings["fileTabLimit"], "fontSize": before.document.settings["fontSize"], "interfaceFont": before.document.settings["interfaceFont"]])]))
+            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(current.revision), "patch": .object(["fileTabLimit": before.document.settings["fileTabLimit"], "fontSize": before.document.settings["fontSize"], "interfaceFont": before.document.settings["interfaceFont"], "interfaceTheme": before.document.settings["interfaceTheme"]])]))
             await model.workspace.reload(); await model.reload()
             guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_RELOAD", message: "Explicit reload did not recover the saved preferences") }
-            report["nativeSettingsAutomaticSaveProof"] = ["actualFieldEditorBlur": true, "invalidDraftRetainedWithoutWrite": true, "correctedFieldSavedAutomatically": true, "actualFontPicker": true, "scopedWrite": true, "otherDraftRetained": true, "peerWriteConflictRetained": true, "explicitReloadRecovery": true, "capture": capture]
+            report["nativeSettingsAutomaticSaveProof"] = ["actualFieldEditorBlur": true, "invalidDraftRetainedWithoutWrite": true, "correctedFieldSavedAutomatically": true, "actualFontPicker": true, "scopedWrite": true, "otherDraftRetained": true, "peerWriteConflictRetained": true, "actualThemePreviewSelection": true, "terminalThemeUnchanged": true, "explicitReloadRecovery": true, "capture": capture, "themeCaptures": themeCaptures]
             await peer.close()
         } catch { await peer.close(); throw error }
     }
