@@ -100,6 +100,7 @@ const contentMethods = new Set([
   "files_context",
   "files_mode",
   "files_toolbar",
+  "git_toolbar",
   "github_repositories",
   "github_read",
   "github_prepare_pr",

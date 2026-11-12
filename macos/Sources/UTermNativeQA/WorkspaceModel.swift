@@ -88,6 +88,7 @@ final class WorkspaceModel: ObservableObject {
     private var databaseHostCache: DatabaseHost?
     var openGitRequested: (() -> Void)?
     var openGitHubRequested: (() -> Void)?
+    var makeGitTools: ((URL, String) async throws -> ContentWindow)?
     var makeGitHubTools: ((URL, String) async throws -> ContentWindow)?
     var openInspectorFile: ((String, String, Int) async throws -> Void)?
     var makeFileTools: ((URL, String) async throws -> ContentWindow)?
@@ -107,6 +108,12 @@ final class WorkspaceModel: ObservableObject {
     lazy var agentNotifications = AgentNotifications(workspace: self)
     lazy var documents: NativeWorkspaceDocuments = {
         let value = NativeWorkspaceDocuments()
+        value.selectionChanged = { [weak self] in guard let self else { return }; self.panels.showTerminal(in: self.inspectorContextKey) }
+        value.terminalFocusRequested = { [weak self] in self?.focusRevision += 1 }
+        return value
+    }()
+    lazy var panels: NativeWorkspacePanels = {
+        let value = NativeWorkspacePanels()
         value.terminalFocusRequested = { [weak self] in self?.focusRevision += 1 }
         return value
     }()
@@ -378,7 +385,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func selectSession(_ id: String, focus: Bool = true) async {
-        if focus { documents.showTerminal(in: inspectorContextKey) }
+        if focus { documents.showTerminal(in: inspectorContextKey); panels.showTerminal(in: inspectorContextKey) }
         if selectedID == id { if focus { focusRevision += 1 }; return }
         if let operation { _ = await operation.value }
         if await mutate("session.select", ["id": .string(id)]), focus { focusRevision += 1 }
@@ -430,12 +437,12 @@ final class WorkspaceModel: ObservableObject {
         if agent == nil, let selected = sessionEntries.first(where: { $0.sessionID == selectedID }), let connection = selected.session["ssh"]["connection_id"].string {
             values["sshConnectionId"] = .string(connection)
             values["workspaceId"] = .string(selected.workspaceId)
-            if await mutate("ssh.session.create", values) { focusRevision += 1 }
+            if await mutate("ssh.session.create", values) { documents.showTerminal(in: inspectorContextKey); panels.showTerminal(in: inspectorContextKey); focusRevision += 1 }
             else { let failure = error; await reload(); error = failure }
             return
         }
         if let agent { values["agent"] = .string(agent); values["projectId"] = .null }
-        if await mutate("session.create", values) { focusRevision += 1 }
+        if await mutate("session.create", values) { documents.showTerminal(in: inspectorContextKey); panels.showTerminal(in: inspectorContextKey); focusRevision += 1 }
     }
     func newDefaultAgent() async {
         if await mutate("session.createChat", ["id": .string(UUID().uuidString)]) { focusRevision += 1 }

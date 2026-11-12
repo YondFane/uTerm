@@ -228,6 +228,20 @@ Full workbench integration and visual alignment remain pending.
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
 
+Java/Maven, Python and SSH/SFTP open as native tabs in the main workspace. Switching to the terminal
+and back retains the same native view, run model, transfers and drafts; closing uses the existing
+save/transfer/run guards. Database and Redis use workspace document tabs. Closing a workbench tab
+hides its retained client; reopening restores the same WebKit document, connection handles and
+drafts. Project changes scope visible panels without retargeting an in-flight request. New terminal
+actions return to the terminal, and closing a native panel restores terminal focus.
+
+The isolated `workspace-panels-native.json` scenario captures six actual main-window scenes, clicks
+terminal/panel/close controls, checks retained views/documents and preserves terminal
+identity/generation. Connection profiles in this integration scene are offline fixtures; the
+existing PostgreSQL, Redis, SSH and run suites retain service/lifetime coverage. Linux passes 24
+focused content/workbench checks and the production build. New AppKit integration and screenshots
+remain pending macOS ARM/Intel CI; no full visual acceptance is claimed here.
+
 Each native split pane has its own session/directory header, 10–32 point font controls, output
 search, match-case toggle, match counter and previous/next controls. Escape closes search and
 returns input to that terminal; search-field input does not enter the PTY. Missing reverse
@@ -251,11 +265,11 @@ dragging and complete toolbar alignment remain in the parity scope.
 
 The native Files inspector embeds the same file tree, Quick open, Project search, inline naming,
 context menus and deletion dialogs as the ordinary client. Its header uses the shared Files, Git,
-GitHub and working-directory icons. GitHub opens in the same tools column; Git still uses its
-existing window. Moving tools left or right reorders stable native regions and retains the mounted
-WebKit document and query. Deferred pane focus yields to a later explicit focus change, but returns
-to the terminal when the previous control was removed and focus fell back to the window; acceptance
-checks the actual visible file controls after swapping and restoring split panes.
+GitHub and working-directory icons. Git and GitHub open in the same tools column, retaining their
+documents when returning to Files. Moving tools left or right reorders stable native regions and
+retains the mounted WebKit document and query. Deferred pane focus yields to a later explicit focus
+change, but returns to the terminal when the previous control was removed and focus fell back to the
+window; acceptance checks the actual visible file controls after swapping and restoring split panes.
 
 GitHub and Files use the same translated tool switcher. Switching retains each WebKit document;
 returning to Files applies the requested tree/search mode to its retained view. Requests stay bound

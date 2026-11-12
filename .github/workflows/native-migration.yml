@@ -138,6 +138,10 @@ jobs:
         run: bash scripts/macos-content-smoke.sh
       - name: Real native editor save, conflict and forced-exit recovery
         run: bash scripts/macos-editor-smoke.sh
+      - name: Real main-workspace tool and run-panel integration
+        id: workspace-panels
+        continue-on-error: true
+        run: bash scripts/macos-panels-smoke.sh
       - name: Real native Java configuration, output and task lifetime
         run: bash scripts/macos-java-smoke.sh
       - name: Real native Python configuration, output and task lifetime
@@ -158,9 +162,9 @@ jobs:
       - name: Real native control and standalone CLI smoke
         run: bash scripts/macos-control-smoke.sh
       - name: Preserve independent candidate and controls failures
-        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure') }}
+        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure' || steps.workspace-panels.outcome == 'failure') }}
         run: |
-          echo "Candidate, settings, SDK, inspector or GitHub checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
+          echo "Candidate, settings, SDK, inspector, workspace panels or GitHub checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
           exit 1
       - name: Audit source-bound native interaction matrix
         if: ${{ always() && steps.native_build.outcome == 'success' }}
