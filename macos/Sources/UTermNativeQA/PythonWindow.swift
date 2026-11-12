@@ -398,8 +398,9 @@ private struct PythonLogCanvas: NSViewRepresentable {
 }
 
 @MainActor
-final class PythonWindow: NSWindowController, NSWindowDelegate {
+final class PythonWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePanelContent {
     let model: PythonRunModel
+    private(set) var workspacePanelView: NSView?
     var didClose: (() -> Void)?
     private var closing = false
     init(model: PythonRunModel) {
@@ -410,7 +411,8 @@ final class PythonWindow: NSWindowController, NSWindowDelegate {
         window.minSize = NSSize(width: 640, height: 560); window.delegate = self
         let appearance = model.settings["appearance"].string
         window.appearance = appearance == "light" ? NSAppearance(named: .aqua) : appearance == "dark" ? NSAppearance(named: .darkAqua) : nil
-        window.contentView = NSHostingView(rootView: PythonRunView(model: model, reload: { [weak self] in self?.reloadSaved() }))
+        workspacePanelView = NSHostingView(rootView: PythonRunView(model: model, reload: { [weak self] in self?.reloadSaved() }))
+        window.contentView = workspacePanelView
         window.center()
     }
     required init?(coder: NSCoder) { fatalError("Use programmatic construction") }

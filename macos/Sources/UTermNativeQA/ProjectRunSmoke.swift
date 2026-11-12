@@ -5,8 +5,6 @@ import UTermBridge
 enum ProjectRunSmoke {
     static func restoreStandalone(model: WorkspaceModel, panel: NativeWorkspacePanels.Panel) async throws {
         guard let backing = panel.controller.window else { throw BridgeFailure(code: "RUN_PANEL", message: "The retained panel window is missing") }
-        // Release the old host before changing ownership, so its later dismantle cannot clear the window.
-        // 改变所属窗口前先脱离旧容器，避免其后续卸载清空新窗口内容。
         panel.view.removeFromSuperview()
         model.panels.remove(panel.controller)
         panel.view.translatesAutoresizingMaskIntoConstraints = true
@@ -17,7 +15,10 @@ enum ProjectRunSmoke {
     }
     static func run(model: WorkspaceModel, language: String, controller: NSWindowController, task: JSONValue, evidence: URL, report: inout [String: Any]) async throws {
         guard let id = task["spec"]["id"].string, let generation = task["generation"].string,
-              let backing = controller.window else { throw BridgeFailure(code: "RUN_LIST", message: "Missing live task") }
+              let backing = controller.window,
+              let retainedView = (controller as? NativeWorkspacePanelContent)?.workspacePanelView else { throw BridgeFailure(code: "RUN_LIST", message: "Missing live task or retained panel view") }
+        let backingHadContent = backing.contentView != nil
+        backing.contentView = nil
         await model.projectRuns.refresh()
         guard model.projectRuns.error.isEmpty else { throw BridgeFailure(code: "RUN_LIST", message: model.projectRuns.error) }
         guard model.projectRuns.tasks(language).contains(where: { $0["spec"]["id"].string == id && $0["generation"].string == generation }) else { throw BridgeFailure(code: "RUN_LIST", message: "Shared run discovery missed the actual host task") }
@@ -59,6 +60,7 @@ enum ProjectRunSmoke {
             throw error
         }
         guard let panel = model.panels.panels.first(where: { $0.controller === controller }), let window = panel.view.window else { throw BridgeFailure(code: "RUN_LIST", message: "No mounted run panel") }
+        guard panel.view === retainedView else { throw BridgeFailure(code: "RUN_LIST", message: "Launch selection replaced the retained panel view") }
         let terminal = (controller as? JavaWindow)?.model.terminal ?? (controller as? PythonWindow)?.model.terminal
         guard terminal?.id == id, terminal?.generation == generation else { throw BridgeFailure(code: "RUN_LIST", message: "Launch selection replaced the task generation") }
         let screenshot = "native-" + language + "-launch-list-workspace.png"
@@ -74,6 +76,12 @@ enum ProjectRunSmoke {
         toggle.performClick(nil)
         try await TerminalSmoke.wait("Clicking again reopens the exact run panel") { model.panels.active(in: model.inspectorContextKey)?.id == panel.id && panel.view.window === window }
         try await restoreStandalone(model: model, panel: panel)
-        report[language + "ToolbarRunList"] = ["passed": true, "realHostTask": true, "actualMenuAction": true, "actualToolbarCoordinator": true, "appKitActionDispatched": true, "staleGenerationRejected": true, "scopeRetainedOnRejection": true, "sameTaskGeneration": true, "actualMainWindow": true, "actualToggleButtonRetainedGeneration": true, "screenshot": screenshot, "input": "NSApplication.sendAction using the mounted toolbar coordinator and actual NSMenuItem; real Core host task; no physical popup pointer/keyboard claim"]
+        var proof: [String: Any] = ["passed": true, "realHostTask": true, "actualMenuAction": true, "actualToolbarCoordinator": true,
+            "appKitActionDispatched": true, "staleGenerationRejected": true, "scopeRetainedOnRejection": true, "sameTaskGeneration": true,
+            "actualMainWindow": true, "actualToggleButtonRetainedGeneration": true, "retainedContentAfterBackingWindowCleared": true,
+            "backingHadContentBeforeQA": backingHadContent]
+        proof["screenshot"] = screenshot
+        proof["input"] = "NSApplication.sendAction using the mounted toolbar coordinator and actual NSMenuItem; explicit backing content removal reproduces the observed loss; real Core host task; no physical popup pointer/keyboard claim"
+        report[language + "ToolbarRunList"] = proof
     }
 }
