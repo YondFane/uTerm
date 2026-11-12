@@ -109,6 +109,9 @@ QA 通过受保护的应用回调执行分支切换、过期预期分支拒绝�
 `native-database-sidebar-profile-en-dark.png` 和
 `native-redis-sidebar-profile-en-dark.png`。这些新增 Mac 场景与当前源码的双版本视觉对照仍待 CI；模型检查不代表已验收分支弹出菜单的鼠标／键盘操作。
 
+首轮 Intel
+CI 编译发现错误属性被遮蔽、Objective-C 选择器重名及菜单辅助函数缺少主线程隔离。候选按诊断修正；失败构建未执行原生窗口，仍需新的 Mac 执行结果。
+
 两版均须记录实际行高／标题／间距／留白；当前源码原生渲染仍待 CI。
 
 两版会话行提供相同的 22px

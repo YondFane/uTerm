@@ -188,6 +188,10 @@ captures `native-database-sidebar-profile-en-dark.png` and
 acceptance remain pending CI; the branch popup's pointer/keyboard operation is not claimed from
 model checks.
 
+The first Intel CI compilation rejected a shadowed error property, an ambiguous Objective-C selector
+and menu helpers missing main-actor isolation. The candidate corrects these diagnostics; no native
+execution is claimed for the failed build. Fresh Mac execution remains required.
+
 Actual row/header/gap/inset measurements are required in both clients; current-source native
 rendering remains pending CI.
 
