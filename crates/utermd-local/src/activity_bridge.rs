@@ -65,6 +65,73 @@ fn supports_remote(program: &Path) -> Result<bool> {
     Ok(reader.join().unwrap_or(false))
 }
 
+fn opencode_listener_options(help: &str) -> bool {
+    ["--hostname", "--port"].iter().all(|option| {
+        help.lines().any(|line| {
+            let line = line.trim_start();
+            line.starts_with('-')
+                && line
+                    .split_whitespace()
+                    .take(2)
+                    .any(|token| token.trim_end_matches(',') == *option)
+        })
+    })
+}
+
+// OpenCode v2 moves listener flags to serve; probe before adapting an interactive launch.
+// OpenCode v2 将监听参数移至 serve，适配交互启动前先探测顶层能力。
+fn supports_opencode_listener(program: &Path, directory: &Path) -> Result<bool> {
+    let mut command = crate::process::background_command(program, &["--help".into()]);
+    command
+        .current_dir(directory)
+        .env("NO_COLOR", "1")
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = BackgroundChild::spawn(&mut command)?;
+    let stdout = child
+        .take_stdout()
+        .context("Missing OpenCode help output")?;
+    let stderr = child
+        .take_stderr()
+        .context("Missing OpenCode help diagnostics")?;
+    let (send, receive) = std::sync::mpsc::channel();
+    // Some OpenCode 1.x builds write help to stderr; drain both streams within one deadline.
+    // 部分 OpenCode 1.x 将帮助写到 stderr，两路输出共用同一个读取期限。
+    for output in [Box::new(stdout) as Box<dyn Read + Send>, Box::new(stderr)] {
+        let send = send.clone();
+        std::thread::spawn(move || {
+            let mut bytes = vec![];
+            let _ = output.take(128 * 1024).read_to_end(&mut bytes);
+            let _ = send.send(String::from_utf8_lossy(&bytes).into_owned());
+        });
+    }
+    drop(send);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    loop {
+        if let Some(status) = child.try_wait()? {
+            if !status.success() {
+                return Ok(false);
+            }
+            let mut help = String::new();
+            for _ in 0..2 {
+                let Ok(output) =
+                    receive.recv_timeout(deadline.saturating_duration_since(Instant::now()))
+                else {
+                    return Ok(false);
+                };
+                help.push_str(&output);
+                help.push('\n');
+            }
+            return Ok(opencode_listener_options(&help));
+        }
+        if Instant::now() >= deadline {
+            return Ok(false);
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
+}
+
 pub(crate) fn prepare(
     agent: &str,
     program: &Path,
@@ -195,10 +262,18 @@ pub(crate) fn prepare(
             if !arguments.iter().any(|arg| {
                 matches!(
                     arg.as_str(),
-                    "attach" | "serve" | "web" | "--port" | "--hostname" | "--mdns"
+                    "attach"
+                        | "serve"
+                        | "web"
+                        | "--port"
+                        | "--hostname"
+                        | "--mdns"
+                        | "--server"
+                        | "--standalone"
                 ) || arg.starts_with("--port=")
                     || arg.starts_with("--hostname=")
-            }) =>
+                    || arg.starts_with("--server=")
+            }) && supports_opencode_listener(program, directory)? =>
         {
             let address = format!("http://127.0.0.1:{}", port()?);
             let password = uuid::Uuid::new_v4().to_string();
@@ -292,6 +367,12 @@ fn explicit_command(agent: &str, arguments: &[String]) -> bool {
             "help",
         ],
         "opencode" => &[
+            "api",
+            "mini",
+            "service",
+            "reload",
+            "pair",
+            "session",
             "completion",
             "acp",
             "mcp",
@@ -350,6 +431,9 @@ fn explicit_command(agent: &str, arguments: &[String]) -> bool {
                 | "--hostname"
                 | "--port"
                 | "--agent"
+                | "--session"
+                | "--server"
+                | "--prompt"
         ) {
             remaining.next();
             continue;
@@ -731,6 +815,163 @@ mod tests {
     use super::*;
 
     #[test]
+    fn opencode_requires_both_listener_flags_in_top_level_options() {
+        assert!(opencode_listener_options(
+            "Options:\n  --hostname  bind address\n  --port  listen port\n"
+        ));
+        assert!(!opencode_listener_options(
+            "FLAGS\n  --server string  Server URL\n  --standalone  Private server\n\
+             SUBCOMMANDS\n  serve Start a server\n  opencode serve --hostname --port\n"
+        ));
+        for help in [
+            "--hostname address",
+            "--port number",
+            "",
+            "Start with --hostname and --port",
+        ] {
+            assert!(!opencode_listener_options(help));
+        }
+    }
+
+    #[cfg(unix)]
+    fn opencode_fixture(help_command: &str) -> (tempfile::TempDir, PathBuf, PathBuf) {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("project with spaces");
+        std::fs::create_dir(&directory).unwrap();
+        let program = root.path().join("opencode cli");
+        std::fs::write(
+            &program,
+            format!("#!/bin/sh\n[ \"$1\" = --help ] || exit 9\n{help_command}\n"),
+        )
+        .unwrap();
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        (root, program, directory)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opencode_v2_preserves_interactive_resume_and_literal_arguments() {
+        let (root, program, directory) = opencode_fixture(
+            "printf '%s\\n' '  --standalone  Private server' '  --server string  Server URL'",
+        );
+        for arguments in [
+            vec![],
+            vec!["--continue".into()],
+            vec!["--session".into(), "saved session".into()],
+            vec!["--prompt".into(), "serve".into()],
+            vec!["--".into(), "directory with spaces".into()],
+        ] {
+            let launch = prepare(
+                "opencode",
+                &program,
+                arguments.clone(),
+                &directory,
+                root.path(),
+            )
+            .unwrap();
+            assert_eq!(launch.arguments, arguments);
+            assert!(launch.environment.is_empty());
+            assert!(launch.observer.is_none());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opencode_legacy_listener_stays_authenticated_and_uses_project_directory() {
+        let (root, program, actual_directory) = opencode_fixture(
+            "pwd > help-directory; printf '%s\\n' '  --hostname  address' '  --port  number' >&2",
+        );
+        let directory = root.path().join("project alias with spaces");
+        std::os::unix::fs::symlink(&actual_directory, &directory).unwrap();
+        let arguments = vec![
+            "--continue".into(),
+            "--session".into(),
+            "saved session".into(),
+        ];
+        let launch = prepare(
+            "opencode",
+            &program,
+            arguments.clone(),
+            &directory,
+            root.path(),
+        )
+        .unwrap();
+        let reported_directory = std::fs::read_to_string(directory.join("help-directory")).unwrap();
+        // Shells may report physical paths, including macOS /private/var instead of /var.
+        // Shell 可能输出实际路径，例如在 macOS 上以 /private/var 代替 /var。
+        assert_eq!(
+            std::fs::canonicalize(reported_directory.trim()).unwrap(),
+            directory.canonicalize().unwrap()
+        );
+        assert!(launch.arguments.ends_with(&arguments));
+        assert_eq!(
+            &launch.arguments[..3],
+            &["--hostname", "127.0.0.1", "--port"]
+        );
+        let Observer::OpenCode { address, password } = launch.observer.as_ref().unwrap() else {
+            panic!("Expected legacy OpenCode observer");
+        };
+        assert_eq!(
+            address,
+            &format!("http://127.0.0.1:{}", launch.arguments[3])
+        );
+        assert!(launch
+            .environment
+            .contains(&("OPENCODE_SERVER_USERNAME".into(), "uterm".into())));
+        assert!(launch
+            .environment
+            .contains(&("OPENCODE_SERVER_PASSWORD".into(), password.clone())));
+    }
+
+    #[test]
+    fn opencode_explicit_servers_and_commands_do_not_probe_or_rewrite_arguments() {
+        for arguments in [
+            vec!["--server", "http://127.0.0.1:1234"],
+            vec!["--server=http://127.0.0.1:1234"],
+            vec!["--standalone"],
+            vec!["serve", "--hostname", "127.0.0.1", "--port", "1234"],
+            vec!["service", "status"],
+            vec!["api", "--help"],
+            vec!["mini"],
+            vec!["session", "list"],
+            vec!["--session", "saved session", "service", "status"],
+            vec!["--prompt", "literal prompt", "models"],
+        ] {
+            let arguments: Vec<String> = arguments.into_iter().map(str::to_string).collect();
+            let launch = prepare(
+                "opencode",
+                Path::new("missing-opencode"),
+                arguments.clone(),
+                Path::new("."),
+                Path::new("."),
+            )
+            .unwrap();
+            assert_eq!(launch.arguments, arguments);
+            assert!(launch.environment.is_empty());
+            assert!(launch.observer.is_none());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn opencode_failed_or_slow_help_keeps_plain_interactive_launch() {
+        for help_command in [
+            "printf '%s\\n' '  --hostname  address' '  --port  number'; exit 1",
+            "sleep 10",
+            "(sleep 10) & exit 0",
+        ] {
+            let (root, program, directory) = opencode_fixture(help_command);
+            let started = Instant::now();
+            let launch = prepare("opencode", &program, vec![], &directory, root.path()).unwrap();
+            assert!(started.elapsed() < Duration::from_secs(4));
+            assert!(launch.arguments.is_empty());
+            assert!(launch.environment.is_empty());
+            assert!(launch.observer.is_none());
+        }
+    }
+
+    #[test]
     fn opencode_sse_authenticates_filters_children_and_keeps_failures_distinct() {
         use std::io::Write;
         use std::sync::{
@@ -883,6 +1124,182 @@ mod tests {
             &args(&["--model", "run", "D:/project with spaces"])
         ));
         assert!(!explicit_command("custom", &args(&["exec"])));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "Runs an installed OpenCode v2 TUI without model requests"]
+    fn installed_opencode_v2_keeps_plain_interactive_launch_and_resume() {
+        let program = std::env::var_os("UTERM_TEST_OPENCODE")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| crate::process::resolve_program("opencode").unwrap());
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("project with spaces");
+        std::fs::create_dir(&directory).unwrap();
+        let environment: Vec<_> = [
+            "XDG_CONFIG_HOME",
+            "XDG_DATA_HOME",
+            "XDG_CACHE_HOME",
+            "XDG_STATE_HOME",
+        ]
+        .into_iter()
+        .map(|key| (key, root.path().join(key)))
+        .collect();
+        struct Cleanup {
+            program: PathBuf,
+            environment: Vec<(&'static str, PathBuf)>,
+        }
+        impl Drop for Cleanup {
+            fn drop(&mut self) {
+                let mut command = crate::process::background_command(
+                    &self.program,
+                    &["service".into(), "stop".into()],
+                );
+                command
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null());
+                for (key, value) in &self.environment {
+                    command.env(key, value);
+                }
+                if let Ok(mut child) = BackgroundChild::spawn(&mut command) {
+                    let deadline = Instant::now() + Duration::from_secs(5);
+                    while child.try_wait().ok().flatten().is_none() && Instant::now() < deadline {
+                        std::thread::sleep(Duration::from_millis(50));
+                    }
+                }
+            }
+        }
+        let _cleanup = Cleanup {
+            program: program.clone(),
+            environment: environment.clone(),
+        };
+        let mut service_config = crate::process::background_command(
+            &program,
+            &[
+                "service".into(),
+                "set".into(),
+                "port".into(),
+                port().unwrap().to_string(),
+            ],
+        );
+        for (key, value) in &environment {
+            service_config.env(key, value);
+        }
+        let configured = service_config.output().unwrap();
+        assert!(
+            configured.status.success(),
+            "{}",
+            String::from_utf8_lossy(&configured.stderr)
+        );
+        let mut seed = crate::process::background_command(
+            &program,
+            &[
+                "api".into(),
+                "session.create".into(),
+                "--data".into(),
+                json!({"title":"uTerm compatibility fixture", "location":{"directory":directory}})
+                    .to_string(),
+            ],
+        );
+        seed.current_dir(&directory).stdin(Stdio::null());
+        for (key, value) in &environment {
+            seed.env(key, value);
+        }
+        let seeded = seed.output().unwrap();
+        assert!(
+            seeded.status.success(),
+            "{}",
+            String::from_utf8_lossy(&seeded.stderr)
+        );
+        let seeded: Value = serde_json::from_slice(&seeded.stdout).unwrap();
+        let session_id = seeded["data"]["id"].as_str().unwrap();
+        assert!(session_id.starts_with("ses"));
+        assert_eq!(
+            seeded["data"]["location"]["directory"],
+            directory.to_str().unwrap()
+        );
+        for arguments in [
+            vec![],
+            vec!["--session".into(), session_id.into()],
+            vec!["--continue".into()],
+            vec!["--standalone".into()],
+        ] {
+            let launch = prepare(
+                "opencode",
+                &program,
+                arguments.clone(),
+                &directory,
+                root.path(),
+            )
+            .unwrap();
+            assert_eq!(launch.arguments, arguments);
+            assert!(launch.environment.is_empty());
+            assert!(launch.observer.is_none());
+            let mut command = crate::process::launch_resolved(&program, &launch.arguments).unwrap();
+            for (key, value) in &environment {
+                command.env(key, value);
+            }
+            let screen =
+                std::sync::Arc::new(std::sync::Mutex::new(vt100::Parser::new_with_callbacks(
+                    30,
+                    100,
+                    1000,
+                    crate::daemon::TerminalReplies::default(),
+                )));
+            let output = screen.clone();
+            let (reply, replies) = std::sync::mpsc::channel::<Vec<u8>>();
+            let session = std::sync::Arc::new(
+                crate::Session::spawn_background(command, &directory, 30, 100, move |event| {
+                    if let crate::Event::Output { data, .. } = event {
+                        let mut parser = output.lock().unwrap();
+                        parser.process(&data);
+                        let data = std::mem::take(&mut parser.callbacks_mut().bytes);
+                        if !data.is_empty() {
+                            let _ = reply.send(data);
+                        }
+                    }
+                    Ok(())
+                })
+                .unwrap(),
+            );
+            let input = std::sync::Arc::downgrade(&session);
+            std::thread::spawn(move || {
+                while let Ok(data) = replies.recv() {
+                    let Some(session) = input.upgrade() else {
+                        break;
+                    };
+                    let _ = session.write(data);
+                }
+            });
+            let deadline = Instant::now() + Duration::from_secs(30);
+            let result = loop {
+                let text = screen.lock().unwrap().screen().contents();
+                if session.has_exited()
+                    || text.contains("Unrecognized flag")
+                    || text.contains("Expected a string")
+                {
+                    break Err(format!("OpenCode exited for {arguments:?}: {text}"));
+                }
+                let restored = arguments
+                    .iter()
+                    .any(|arg| arg == "--session" || arg == "--continue");
+                let ready = if restored {
+                    text.contains("uTerm compatibility fixture") && text.contains("ctrl+p commands")
+                } else {
+                    text.contains("Ask anything") || text.contains("Connect a provider")
+                };
+                if ready && text.contains("project with spaces") {
+                    break Ok(text);
+                }
+                if Instant::now() >= deadline {
+                    break Err(format!("OpenCode TUI not ready for {arguments:?}: {text}"));
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            };
+            session.close().unwrap();
+            println!("OpenCode v2 TUI {arguments:?}: {}", result.unwrap());
+        }
     }
 
     #[test]
