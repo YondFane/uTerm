@@ -3,6 +3,29 @@ import SwiftUI
 import UTermBridge
 
 @MainActor
+struct NativeShortcutResetButton: NSViewRepresentable {
+    @ObservedObject var model: NativeSettingsModel
+    func makeCoordinator() -> Coordinator { Coordinator(model) }
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.reset))
+        button.identifier = .init("native-settings-shortcuts-reset"); button.bezelStyle = .rounded
+        return button
+    }
+    func updateNSView(_ button: NSButton, context: Context) {
+        button.title = localized("Restore default shortcuts", "恢复默认快捷键")
+        button.isEnabled = context.environment.isEnabled && !model.busy && !model.automaticSaving && !model.frozen
+    }
+    @MainActor final class Coordinator: NSObject {
+        let model: NativeSettingsModel
+        init(_ model: NativeSettingsModel) { self.model = model }
+        @objc func reset() {
+            guard !model.busy, !model.automaticSaving, !model.frozen else { return }
+            model.shortcuts = [:]; model.saveAutomatically(["shortcuts"])
+        }
+    }
+}
+
+@MainActor
 struct NativeLegacyExportButton: NSViewRepresentable {
     @ObservedObject var model: NativeSettingsModel
     func makeCoordinator() -> Coordinator { Coordinator(model) }

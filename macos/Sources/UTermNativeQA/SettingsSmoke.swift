@@ -171,6 +171,7 @@ enum SettingsSmoke {
             try key(palette, code: 36, characters: "\r")
             try await TerminalSmoke.wait("Execute selected settings command with Return") { !palette.isVisible && current.window.isKeyWindow }
             report["nativeDynamicMenuPaletteKeyboardAndFocusReturn"] = true
+            try await verifyShortcutActions(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
             let beforeImport = try Data(contentsOf: snapshotFile), draftBeforeImport = model.values
             await model.importTheme(source: "background=invalid-private-color", name: "QA")
             guard !model.error.isEmpty, model.values == draftBeforeImport, try Data(contentsOf: snapshotFile) == beforeImport else { throw BridgeFailure(code: "SETTINGS_QA_THEME_ERROR", message: "Invalid theme changed settings or the draft") }
@@ -306,6 +307,63 @@ enum SettingsSmoke {
         model.numbers["fontSize"] = original; await model.reload()
         guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Explicit reload did not recover export feedback") }
         report["nativeLegacyExportProof"] = ["actualSavePanelCancellation": true, "busyCloseGuard": true, "committedDataExported": true, "storeUnchanged": true, "draftRetained": true, "failedWriteRetainsPreviousExport": true, "capture": capture, "exportFile": name]
+    }
+
+    private static func verifyShortcutActions(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Missing isolated settings bridge") }
+        model.section = "keyboard"
+        let originalNumber = model.numbers["scrollback"]
+        let draft = originalNumber == "2400" ? "2300" : "2400"
+        model.numbers["scrollback"] = draft
+        var attempts: [[String: Any]] = []
+        func operate(_ phase: String, before: CoreSnapshot, action: () throws -> Void) async throws -> CoreSnapshot {
+            for attempt in 1...3 {
+                try action()
+                try await TerminalSmoke.wait("Finish the explicit shortcut control save") { !model.busy && !model.automaticSaving }
+                let after = try await bridge.snapshot()
+                let busy = model.errorCode == "WRITER_BUSY"
+                attempts.append(["phase": phase, "attempt": attempt, "writerBusy": busy, "unrelatedDraftRetained": model.numbers["scrollback"] == draft])
+                guard model.numbers["scrollback"] == draft else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "A shortcut action discarded an unrelated numeric draft") }
+                if !busy {
+                    guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "The explicit shortcut action failed") }
+                    return after
+                }
+                guard after.document.settings == before.document.settings, attempt < 3 else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Writer-busy changed saved settings or exhausted explicit shortcut actions") }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Shortcut action did not finish")
+        }
+        let before = try await bridge.snapshot()
+        try await TerminalSmoke.wait("Render the actual shortcut recording control") { (view(settings.window, id: "native-shortcut-palette") as? NSButton)?.isEnabled == true }
+        guard let frozenCapture = view(settings.window, id: "native-shortcut-palette") as? NSButton else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Shortcut recording control is missing") }
+        model.frozen = true
+        try await TerminalSmoke.wait("Frozen settings disable the actual recording control") { !frozenCapture.isEnabled }
+        frozenCapture.performClick(nil)
+        guard let frozenEvent = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: settings.window.windowNumber, context: nil, characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}", isARepeat: false, keyCode: 51), !frozenCapture.performKeyEquivalent(with: frozenEvent), (try await bridge.snapshot()).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Frozen recording accepted a key or changed settings") }
+        model.frozen = false
+        try await TerminalSmoke.wait("Resume the actual shortcut recording control") { frozenCapture.isEnabled }
+        let cleared = try await operate("backspace", before: before) {
+            guard let capture = view(settings.window, id: "native-shortcut-palette") as? NSButton else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Shortcut recording control is missing") }
+            settings.window.makeKeyAndOrderFront(nil); capture.performClick(nil)
+            try key(settings.window, code: 51, characters: "\u{7f}")
+        }
+        guard case .object(var expected) = before.document.settings, case .object(var shortcuts) = expected["shortcuts"] ?? .null else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Invalid isolated shortcut snapshot") }
+        shortcuts["palette"] = .string(""); expected["shortcuts"] = .object(shortcuts)
+        guard cleared.document.settings == .object(expected), model.shortcuts["palette"] == "" else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Backspace did not clear only the recorded shortcut") }
+        try await TerminalSmoke.wait("Render the actual reset-all-shortcuts action") { (view(settings.window, id: "native-settings-shortcuts-reset") as? NSButton)?.isEnabled == true }
+        let reset = try await operate("reset-all", before: cleared) {
+            guard let button = view(settings.window, id: "native-settings-shortcuts-reset") as? NSButton else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Reset-all-shortcuts action is missing") }
+            _ = button.scrollToVisible(button.bounds); button.performClick(nil)
+        }
+        expected["shortcuts"] = .object([:])
+        guard reset.document.settings == .object(expected), model.shortcuts.isEmpty else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "Reset-all changed other preferences or retained shortcut overrides") }
+        let capture = "native-settings-shortcuts-reset.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        model.numbers["scrollback"] = originalNumber
+        guard !model.dirty else { throw BridgeFailure(code: "SETTINGS_SHORTCUT_QA", message: "The shortcut actions left an unexpected settings draft") }
+        report["nativeShortcutActionsProof"] = ["actualBackspaceEvent": true, "actualResetButton": true, "frozenRecorderDisabled": true, "scopedPersistence": true, "unrelatedDraftRetained": true, "preferencesPreserved": true, "capture": capture] as [String: Any]
+        report["nativeShortcutActionAttempts"] = attempts
     }
 
     private static func verifyInlineAgents(settings: NativeSettingsWindow, open: () -> NativeSettingsWindow, openAgents: () -> AgentSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {

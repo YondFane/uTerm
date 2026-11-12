@@ -49,6 +49,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     assert proof['simulatedAgentPrograms'] == '/usr/bin/true; no real Agent account or login'
     assert (evidence / proof['capture']).stat().st_size > 1000
     assert data['nativeThemeFileNamesAndBoundedReads']
+    proof = data['nativeShortcutActionsProof']
+    for key in ['actualBackspaceEvent', 'actualResetButton', 'frozenRecorderDisabled', 'scopedPersistence', 'unrelatedDraftRetained', 'preferencesPreserved']:
+        assert proof[key] is True, key
+    assert (evidence / proof['capture']).stat().st_size > 1000
     proof = data['nativeInlineAgentSettingsProof']
     for key in ['actualFieldEditor', 'actualCategorySelection', 'sameWorkspaceOverlay', 'sameCachedModelAcrossMenuWindow', 'inlineLocalUsage', 'independentUsageAgentTabs', 'perAgentResultsRetained', 'hiddenPollingStopped', 'cancelledQuitRetainsDraft', 'savedDataUnchanged', 'preferencesRestored']:
         assert proof[key] is True, key

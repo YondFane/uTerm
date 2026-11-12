@@ -691,6 +691,14 @@ Native export QA measures the actual button before opening its save sheet. Curre
 screenshots must still verify this layout against the ordinary client; remaining settings sections
 and full visual parity are not accepted.
 
+In **Shortcuts**, Backspace clears the binding being recorded and **Restore default shortcuts**
+clears all overrides immediately. Both operations save only `shortcuts`, retaining other preferences
+and drafts. The actual recorder disables with the settings page during saves or a frozen quit.
+Native QA dispatches Backspace, clicks the actual reset button, checks the complete Core snapshot
+with an unrelated numeric draft, and verifies a frozen recorder refuses input. It requires
+`nativeShortcutActionsProof` and `native-settings-shortcuts-reset.png`; these new controls and
+checks still need current-source Mac execution.
+
 Both settings windows provide **Search settings** above category navigation. Search matches category
 names and bilingual field keywords, including JDK registration, proxy settings and update
 preferences. Matching normalizes full-width characters, ignores case and requires every word to

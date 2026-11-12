@@ -389,6 +389,7 @@ struct NativeSettingsView: View {
                     Button(localized("Default", "默认")) { model.shortcuts[id] = nil; model.saveAutomatically(["shortcuts"]) }
                 }
             }
+            NativeShortcutResetButton(model: model).fixedSize(horizontal: true, vertical: false).frame(height: 28)
         }
     }
     var body: some View {
@@ -547,26 +548,27 @@ private struct NativeShortcutCapture: NSViewRepresentable {
     func makeNSView(context: Context) -> CaptureButton {
         let button = CaptureButton(); button.identifier = NSUserInterfaceItemIdentifier("native-shortcut-" + id); return button
     }
-    func updateNSView(_ view: CaptureButton, context: Context) { view.value = value; view.changed = changed; view.refresh() }
+    func updateNSView(_ view: CaptureButton, context: Context) { view.value = value; view.changed = changed; view.isEnabled = context.environment.isEnabled; view.refresh() }
     final class CaptureButton: NSButton {
         var value = ""
         var changed: ((String) -> Void)?
         private var recording = false
-        override var acceptsFirstResponder: Bool { true }
+        override var acceptsFirstResponder: Bool { isEnabled }
         init() { super.init(frame: .zero); bezelStyle = .rounded; target = self; action = #selector(beginCapture) }
         required init?(coder: NSCoder) { fatalError("Not supported") }
         func refresh() {
             if recording { title = localized("Press shortcut…", "按下快捷键…"); return }
             title = value.isEmpty ? localized("Unassigned", "未设置") : NativeCommandKey.label(value)
         }
-        @objc private func beginCapture() { recording = true; window?.makeFirstResponder(self); refresh() }
+        @objc private func beginCapture() { guard isEnabled else { return }; recording = true; window?.makeFirstResponder(self); refresh() }
         override func performKeyEquivalent(with event: NSEvent) -> Bool {
-            guard recording else { return super.performKeyEquivalent(with: event) }
+            guard recording, isEnabled else { return super.performKeyEquivalent(with: event) }
             keyDown(with: event); return true
         }
         override func keyDown(with event: NSEvent) {
-            guard recording else { super.keyDown(with: event); return }
+            guard recording, isEnabled else { super.keyDown(with: event); return }
             if event.keyCode == 53 { recording = false; refresh(); return }
+            if event.keyCode == 51 { recording = false; value = ""; changed?(value); refresh(); return }
             let codes: [UInt16: String] = [0:"KeyA",1:"KeyS",2:"KeyD",3:"KeyF",4:"KeyH",5:"KeyG",6:"KeyZ",7:"KeyX",8:"KeyC",9:"KeyV",11:"KeyB",12:"KeyQ",13:"KeyW",14:"KeyE",15:"KeyR",16:"KeyY",17:"KeyT",18:"Digit1",19:"Digit2",20:"Digit3",21:"Digit4",22:"Digit6",23:"Digit5",24:"Equal",25:"Digit9",26:"Digit7",27:"Minus",28:"Digit8",29:"Digit0",30:"BracketRight",31:"KeyO",32:"KeyU",33:"BracketLeft",34:"KeyI",35:"KeyP",36:"Enter",37:"KeyL",38:"KeyJ",40:"KeyK",42:"Backslash",43:"Comma",44:"Slash",45:"KeyN",46:"KeyM",47:"Period",123:"ArrowLeft",124:"ArrowRight",125:"ArrowDown",126:"ArrowUp"]
             guard event.modifierFlags.contains(.command), !event.modifierFlags.contains(.control), let code = codes[event.keyCode] else { NSSound.beep(); return }
             let result = "Mod+" + (event.modifierFlags.contains(.option) ? "Alt+" : "") + (event.modifierFlags.contains(.shift) ? "Shift+" : "") + code
