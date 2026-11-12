@@ -284,7 +284,9 @@ terminal/panel/close controls, checks retained views/documents and preserves ter
 identity/generation. Connection profiles in this integration scene are offline fixtures; the
 existing PostgreSQL, Redis, SSH and run suites retain service/lifetime coverage. Run suites also
 capture the actual main-window menu entry, simulate a stale launch selection, dispatch the real
-NSMenu task item and verify the same hosted generation. Popup pointer/keyboard input is not claimed.
+NSMenu task item and verify the same hosted generation. They click the actual toolbar button twice
+to hide/reopen the retained panel without replacing its task. Pressed styling follows panel
+selection immediately, independently of task polling. Popup pointer/keyboard input is not claimed.
 Linux passes two Core discovery tests, including absent/broken hosts and literal removed roots, plus
 the existing backend run-classification check. Linux passes 24 focused content/workbench checks and
 the production build. New AppKit integration and screenshots remain pending macOS ARM/Intel CI. The
