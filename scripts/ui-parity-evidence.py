@@ -1,6 +1,7 @@
 """Compare source-bound real-window artifacts. 对照绑定源码的真实窗口产物。"""
 
 from ui_parity_github import validate_pr
+from ui_parity_run_panels import validate_run_panels
 
 import argparse
 import hashlib
@@ -261,17 +262,50 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
         pairs.append(dict(area="github-pr-draft", language=language, appearance=appearance, width=width, height=height,
                           native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
+    native_runs = native.get("runPanelScenes", [])
+    ordinary_runs = [row["checks"] for row in tauri["scenes"] if row["scenario"].startswith("run-") and row["scenario"] != "run-panels-complete"]
+    left_runs = validate_run_panels(native_runs, fixture)
+    right_runs = validate_run_panels(ordinary_runs, fixture)
+    assert native.get("runPanelActualFileCloseAndHideVerified") is True, "Native run-panel close/hide was not executed"
+    completed = [row for row in tauri["scenes"] if row["scenario"] == "run-panels-complete"]
+    assert len(completed) == 1 and completed[0]["checks"].get("actualFileCloseAndHideVerified") is True, "Ordinary run-panel close/hide was not executed"
+    for identity in sorted(left_runs):
+        kind, state, language, appearance, width, height = identity
+        n, t = left_runs[identity], right_runs[identity]
+        assert n.get("sourceHeadSHA") == head and n.get("testedMergeSHA") == tested, "Stale native run-panel scene"
+        assert n.get("platform") == native["platform"] and n.get("architecture") == native["architecture"] and n.get("system") == native["system"]
+        name = f"run-{kind}-{state}-{language}-{appearance}-{width}"
+        ordinary_scene = next(row for row in tauri["scenes"] if row["checks"] is t)
+        assert ordinary_scene["scenario"] == name, "Substituted ordinary run-panel identity"
+        expected_native, expected_tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+        assert n.get("screenshot") == expected_native and expected_native in native["captures"]
+        assert ordinary_scene.get("screenshot") == expected_tauri
+        for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight"]:
+            assert abs(n[key] - t[key]) < 1, "Different actual run-panel geometry: " + key
+        _, ndigest = image(native_path.parent, expected_native, minimum_height=height)
+        _, tdigest = image(tauri_path.parent, expected_tauri, minimum_height=height)
+        pair = dict(area="run-panel", kind=kind, state=state, language=language, appearance=appearance, width=width, height=height,
+                    native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest,
+                    panelGeometry={key: n[key] for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight"]})
+        pairs.append(pair)
+    run_cleanup = completed[0]
+    assert run_cleanup.get("screenshot") == "ui-parity-run-panels-complete.png", "Substituted ordinary run-panel cleanup capture"
+    for key in ["passed", "terminalGenerationRetained", "canonicalWorkspaceRetained"]:
+        assert run_cleanup["checks"].get(key) is True, "Unverified run-panel cleanup: " + key
+    run_cleanup_file, run_cleanup_digest = image(tauri_path.parent, run_cleanup["screenshot"])
     output.mkdir(parents=True, exist_ok=False)
     for pair in pairs:
         shutil.copyfile(native_path.parent / pair["native"], output / pair["native"])
         shutil.copyfile(tauri_path.parent / pair["tauri"], output / pair["tauri"])
     shutil.copyfile(restart_file, output / restart_file.name)
+    shutil.copyfile(run_cleanup_file, output / run_cleanup_file.name)
     result = dict(sourceHeadSHA=head, testedMergeSHA=tested, uiParityFixtureSHA256=fixture_digest,
                   chromeContractSHA256=chrome_digest,
                   platform="macOS", architecture="arm64", system=native["system"], pairs=pairs,
                   ordinaryRestart=dict(screenshot=restart_file.name, SHA256=restart_digest, checks=checks),
+                  ordinaryRunPanelsCleanup=dict(screenshot=run_cleanup_file.name, SHA256=run_cleanup_digest, checks=run_cleanup["checks"]),
                   comparisonReady=True, functionalParityAccepted=False,
-                  scope="Workspace, settings, PDF, Quick SSH and GitHub PR screenshots. PR uses the isolated simulated CLI, literal form input and actual Cancel; no real GitHub write. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Quick SSH uses an invalid fixture address, actual modal controls and real shell output; no authenticated login claim. Review images and execute remaining acceptance rows.")
+                  scope="Workspace, settings, PDF, Quick SSH, GitHub PR and Java/Python docked/expanded/file screenshots. PR uses the isolated simulated CLI, literal form input and actual Cancel; no real GitHub write. PDF comparison data is seeded; deletion and reopen use actual controls; native drawing uses window pointer events. Quick SSH uses an invalid fixture address, actual modal controls and real shell output; no authenticated login claim. Review images and execute remaining acceptance rows.")
     (output / "comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
     write_viewer(output, result)
     rows = ["# Real-window comparison / 真实窗口对照", "", f"Source head: `{head}`", f"Tested merge: `{tested}`", "",
@@ -279,9 +313,10 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
             "[Open the offline scene viewer / 打开离线场景对照](comparison.html)", "",
             "| Scene / 场景 | Ordinary / 普通版 | Personal / 原生个人版 |", "| --- | --- | --- |"]
     for pair in pairs:
-        label = f"{pair['area']} {pair.get('section', '')} / {pair['language']} / {pair['appearance']} / {pair['width']}×{pair['height']}"
+        label = f"{pair['area']} {pair.get('section', pair.get('kind', ''))} {pair.get('state', '')} / {pair['language']} / {pair['appearance']} / {pair['width']}×{pair['height']}"
         rows.append(f"| {label} | ![ordinary]({pair['tauri']}) | ![personal]({pair['native']}) |")
     rows.extend(["", "Actual ordinary restart / 普通版实际重启", "", f"![restart]({restart_file.name})"])
+    rows.extend(["", "Actual ordinary run-panel cleanup / 普通版运行面板实际清理", "", f"![run-panel cleanup]({run_cleanup_file.name})"])
     (output / "comparison.md").write_text("\n".join(rows) + "\n")
     return result
 

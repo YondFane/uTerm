@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 
 from ui_parity_github import validate_pr
+from ui_parity_run_panels import validate_run_panels
 from macos_disk_image import create_disk_image, verify_disk_image
 from macos_qa_http import LoopbackHTTPServer
 
@@ -146,6 +147,15 @@ def validate_smoke_report(report, head, tested, phase):
     validate_pdf_scenes(report, head, tested, phase)
     validate_quick_scenes(report, head, tested, phase)
     validate_github_scenes(report, head, tested, phase)
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    validate_run_panels(report.get("runPanelScenes", []), fixture)
+    assert report.get("runPanelActualFileCloseAndHideVerified") is True, "Missing actual run-panel file close/hide"
+    for row in report["runPanelScenes"]:
+        assert row.get("sourceHeadSHA") == head and row.get("testedMergeSHA") == tested, "Stale run-panel scene"
+        assert row.get("platform") == report["platform"] and row.get("architecture") == report["architecture"] and row.get("system") == report["system"]
+        name = f"personal-{phase}-run-{row['kind']}-{row['state']}-{row['language']}-{row['appearance']}-{row['width']}.png"
+        assert row.get("screenshot") == name and name in report["captures"], "Missing actual run-panel original"
+
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}

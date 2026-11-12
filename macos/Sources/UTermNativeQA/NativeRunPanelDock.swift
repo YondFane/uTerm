@@ -25,6 +25,7 @@ struct NativeDockedRunPanel: View {
             NativeHostedPanel(panel: panel).id(panel.id)
         }
         .background(Color(nsColor: NativePreferences.color(palette["canvas"], fallback: .windowBackgroundColor)))
+        .background(NativeRunPanelFrame(identifier: "native-run-panel-frame-" + panel.id))
         .overlay(alignment: .top) { Color(nsColor: NativePreferences.color(palette["border"], fallback: .separatorColor)).frame(height: 1) }
         .overlay(alignment: .top) {
             if !expanded {
@@ -95,4 +96,14 @@ private final class RunPanelResizeView: NSView {
     override func accessibilityPerformIncrement() -> Bool { guard enabled else { return false }; resize?(layout.height + CoreChrome.runPanelResizeStep); return true }
     override func accessibilityPerformDecrement() -> Bool { guard enabled else { return false }; resize?(layout.height - CoreChrome.runPanelResizeStep); return true }
     override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); if window == nil { cancelOperation(nil) } }
+}
+
+@MainActor
+private struct NativeRunPanelFrame: NSViewRepresentable {
+    let identifier: String
+    final class FrameView: NSView {
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+    func makeNSView(context: Context) -> FrameView { FrameView() }
+    func updateNSView(_ view: FrameView, context: Context) { view.identifier = .init(identifier) }
 }

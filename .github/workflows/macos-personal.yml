@@ -13,6 +13,7 @@ on:
       - scripts/macos-personal-*
       - scripts/macos_disk_image.py
       - scripts/macos_qa_http.py
+      - scripts/ui_parity_run_panels.py
       - scripts/macos-qa-display.swift
       - scripts/macos-qa-capture-probe.swift
       - scripts/macos-updates-smoke.py

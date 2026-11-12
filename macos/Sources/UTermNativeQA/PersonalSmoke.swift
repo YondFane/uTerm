@@ -375,6 +375,8 @@ enum PersonalSmoke {
             try await QuickParitySmoke.run(model: model, window: window, output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
             try checkpoint("github")
             try await GitHubParitySmoke.run(model: model, window: window, output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
+            try checkpoint("run-panels")
+            try await RunPanelParitySmoke.run(model: model, window: window, output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
             report["captures"] = captures
             try checkpoint("host-shutdown")
             await model.closeSession()

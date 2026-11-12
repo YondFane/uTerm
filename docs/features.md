@@ -302,6 +302,21 @@ assertion; a failed wait captures the original window and records actual host/co
 retains the failed reports. Fresh Mac interaction and matched ordinary-client images remain
 required.
 
+The paired run-panel grid uses the shared minimal POM/Python project and twelve required scenes:
+Java/Python × docked/expanded/file × English dark 1100px/Chinese light 640px, all at 720px height.
+Both collectors click actual toolbar, expand/restore, Files-row, file-close and hide controls while
+retaining the original terminal generation and panel view. The native collector measures an actual
+noninteractive AppKit background view; the ordinary collector measures the rendered panel element.
+Missing scenes, stale originals, unexecuted controls, invalid geometry or a difference of at least
+one pixel reject pairing. Closing the clean file must retain its run panel. The candidate produces
+50 required pairs plus ordinary restart and final panel-cleanup originals; this is a larger capture
+grid, not complete functional acceptance. Linux passes 484 Node tests (11 platform skips), 53
+paired/Personal policy tests and seven run-discovery/matrix policies. Type checking, production
+build, i18n, formatting, Swift parsing and documentation checks pass. An initial i18n failure in the
+collector is corrected; these checks do not execute AppKit or establish new window acceptance. New
+Mac collection and original-image review remain required; existing real long-running Java/Python
+suites separately verify running-task behavior.
+
 Java and Python toolbar buttons show live run status; right-click or Shift-F10 opens the language's
 launch list. Selecting a task reveals its project/Worktree panel and the same task generation;
 removed projects and stale generations report an error. Clicking an active run button returns to the

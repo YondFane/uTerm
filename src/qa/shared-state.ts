@@ -22,6 +22,7 @@ import { databaseNames } from "../lib/database";
 import { runAgents } from "./agents";
 import { performanceSettings, runPerformance } from "./performance";
 import { runUpdates } from "./updates";
+import { runPanelParity } from "./run-panel-parity";
 import { writeFavoriteFixture, type FavoriteFixtureAttempt } from "./git-favorite-fixture";
 import type {
   CoreEditorDraftEntry,
@@ -102,6 +103,13 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
   };
   githubScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
   quickScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
+  runPanelKinds: string[];
+  runPanelScenes: {
+    language: "en" | "zh-Hans";
+    appearance: string;
+    width: number;
+    height: number;
+  }[];
 };
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
 const sentinel = "opaque QA draft backup retained byte-for-byte";
@@ -1245,6 +1253,35 @@ async function runUiParity() {
     await until(() => !dialog.open, "actual PR cancel");
     await unchangedQuick();
   }
+  await runPanelParity(
+    parityFixture,
+    async (runScene) => {
+      await open();
+      await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+      await choose(
+        [translate("en", "应用语言"), translate("zh-Hans", "应用语言")],
+        runScene.language,
+      );
+      document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+      await open();
+      await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+      await choose(
+        [translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")],
+        runScene.appearance,
+      );
+      document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+      await invoke("qa_performance_window", { width: runScene.width, height: runScene.height });
+      await until(
+        () => innerWidth === runScene.width && innerHeight === runScene.height,
+        "actual run-panel capture size",
+      );
+    },
+    async () =>
+      JSON.stringify(
+        ((await observeCore("snapshot.read")) as unknown as CoreSnapshot).document.workspace,
+      ),
+    scene,
+  );
   await invoke("qa_request_exit");
 }
 

@@ -58,6 +58,19 @@ class ParityEvidenceTests(unittest.TestCase):
                     self.n["workspaceScenes"].append(dict(values, screenshot=native))
                     self.n["captures"].append(native)
                     self.t["scenes"].append(dict(scenario=f"workspace-{lang}-{appearance}-{width}", checks=values, screenshot=tauri))
+        from tests.run_panel_parity_fixtures import policy_scenes
+        self.n["runPanelScenes"] = policy_scenes(fixture, "initial", "a"*40, "b"*40, self.n["system"])
+        self.n["runPanelActualFileCloseAndHideVerified"] = True
+        for row in self.n["runPanelScenes"]:
+            name = f"run-{row['kind']}-{row['state']}-{row['language']}-{row['appearance']}-{row['width']}"
+            native, tauri = row["screenshot"], f"ui-parity-{name}.png"
+            image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", row["width"], row["height"]) + bytes(1100)
+            (self.native / native).write_bytes(image); (self.tauri / tauri).write_bytes(image)
+            self.n["captures"].append(native)
+            self.t["scenes"].append(dict(scenario=name, checks=copy.deepcopy(row), screenshot=tauri))
+        cleanup = "ui-parity-run-panels-complete.png"
+        (self.tauri / cleanup).write_bytes(image)
+        self.t["scenes"].append(dict(scenario="run-panels-complete", screenshot=cleanup, checks=dict(passed=True, actualFileCloseAndHideVerified=True, terminalGenerationRetained=True, canonicalWorkspaceRetained=True)))
         for scene in fixture["settingsScenes"]:
             for section in fixture["settingsSections"]:
                 values = dict(scene, section=section["id"], navigationControlActivated=True, draftUnchanged=True, automaticUpdates=fixture["automaticUpdates"], mavenFixtureMatched=section["id"] == "maven", databaseFixtureMatched=section["id"] == "database", javaFixtureMatched=section["id"] == "java")
@@ -118,6 +131,26 @@ class ParityEvidenceTests(unittest.TestCase):
             passed=True, actualRestartButton=True, parsedUnicodeOutput=True, canonicalWorkspaceRetained=True,
             terminalViewRetained=True, generationBeforeRestart="old-generation", restartedGeneration="new-generation")))
 
+    def test_run_panels_reject_missing_duplicate_and_stale_controls(self):
+        original = copy.deepcopy(self.n)
+        for mutation in ["missing", "duplicate", "source", "file", "toolbar", "view"]:
+            self.n = copy.deepcopy(original)
+            if mutation == "missing": self.n["runPanelScenes"].pop()
+            elif mutation == "duplicate": self.n["runPanelScenes"][0] = self.n["runPanelScenes"][1]
+            else:
+                key, value = {"source": ("sourceHeadSHA", "c"*40), "file": ("fileVisible", True), "toolbar": ("actualToolbarButton", False), "view": ("retainedPanelView", False)}[mutation]
+                self.n["runPanelScenes"][0][key] = value
+            with self.subTest(mutation=mutation), self.assertRaises(AssertionError): self.run_compare()
+
+    def test_run_panels_require_matching_finite_actual_geometry_and_cleanup(self):
+        original = copy.deepcopy(self.n)
+        for key in ["panelLeft", "panelTop", "panelWidth", "panelHeight"]:
+            for value in [None, True, float("nan"), float("inf"), -1, original["runPanelScenes"][0][key] + 2]:
+                self.n = copy.deepcopy(original); self.n["runPanelScenes"][0][key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
+        self.n = copy.deepcopy(original); self.n["runPanelActualFileCloseAndHideVerified"] = False
+        with self.assertRaises(AssertionError): self.run_compare()
+
     def test_pr_tool_width_and_missing_or_modified_operations_are_rejected(self):
         baseline = copy.deepcopy(self.n)
         for key, value in [("modalWidth",128), ("readableFields",False), ("noGitHubWrites",False), ("form",{}), ("modalLeft", float("nan"))]:
@@ -142,13 +175,16 @@ class ParityEvidenceTests(unittest.TestCase):
         self.assertEqual(fixture["files"]["note.txt"].encode(), "Original 中文\r\n".encode())
         self.assertTrue(fixture["files"]["README.md"].startswith("# UI parity\n"))
         self.assertEqual(fixture["command"], "printf 'PERSONAL_%s 中文\\n' READY")
+        import xml.etree.ElementTree as ET
+        self.assertEqual(ET.fromstring(fixture["files"]["pom.xml"]).findtext("artifactId"), "parity")
+        compile(fixture["files"]["main.py"], "shared parity/main.py", "exec")
 
     def test_complete_pair_is_reviewable_but_does_not_claim_functional_parity(self):
         result = self.run_compare()
         self.assertTrue(result["comparisonReady"])
         self.assertFalse(result["functionalParityAccepted"])
-        self.assertEqual(len(result["pairs"]), 38)
-        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 77)
+        self.assertEqual(len(result["pairs"]), 50)
+        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 102)
 
     def test_quick_ssh_requires_current_main_window_images_and_preserved_data(self):
         original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
