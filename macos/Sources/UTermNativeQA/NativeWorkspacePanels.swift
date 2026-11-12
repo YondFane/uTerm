@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UTermBridge
 
 @MainActor
 final class NativeWorkspacePanels: ObservableObject {
@@ -16,12 +17,12 @@ final class NativeWorkspacePanels: ObservableObject {
     func visible(in scope: String) -> [Panel] { panels.filter { $0.scope == scope } }
     func active(in scope: String) -> Panel? { panels.first { $0.scope == scope && $0.id == selected[scope] } }
     func showTerminal(in scope: String) { selected[scope] = nil }
-    func attach(_ controller: NSWindowController, id: String, title: String, scope: String, parent: NSWindow) {
+    func attach(_ controller: NSWindowController, id: String, title: String, scope: String, parent: NSWindow) throws {
         if let index = panels.firstIndex(where: { $0.id == id }) {
             let previous = panels[index].scope
             if previous != scope { selected[previous] = nil; panels[index].scope = scope }
         } else {
-            guard let view = controller.window?.contentView else { return }
+            guard let view = controller.window?.contentView else { throw BridgeFailure(code: "PANEL_UNAVAILABLE", message: localized("The panel content is unavailable. Close and reopen the panel.", "面板内容不可用，请关闭后重新打开面板。")) }
             controller.window?.contentView = NSView()
             panels.append(Panel(id: id, title: title, scope: scope, controller: controller, view: view))
         }
