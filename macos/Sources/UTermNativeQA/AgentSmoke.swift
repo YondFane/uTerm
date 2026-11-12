@@ -64,9 +64,23 @@ enum AgentSmoke {
         guard current.model.error.isEmpty, current.model.usage["records"].number == 1 else { throw BridgeFailure(code: "AGENT_USAGE", message: "Native local usage did not read the isolated fixture") }
         report["nativeHookPreservationDraftAndLocalUsage"] = true
         var captures: [String] = []
+        var captureGeometry: [[String: Any]] = []
         for (language, appearance, width, name) in [("en", "dark", 850.0, "native-agent-settings-dark-en.png"), ("zh-Hans", "light", 640.0, "native-agent-settings-light-zh-narrow.png")] {
             await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
             current.window.setContentSize(NSSize(width: width, height: 850))
+            guard let visible = current.window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame else { throw BridgeFailure(code: "AGENT_CAPTURE_SCREEN", message: "Missing actual Agent QA screen") }
+            // Fit enlarged QA windows above the measured Dock shadow; preserve the original alpha gate.
+            // 放大的 QA 窗口须避开实测 Dock 阴影，原有 alpha 门禁保持不变。
+            let bounds = visible.insetBy(dx: 8, dy: 64)
+            var frame = current.window.frame
+            frame.size.width = min(frame.width, bounds.width); frame.size.height = min(frame.height, bounds.height)
+            frame.origin = NSPoint(x: bounds.midX - frame.width / 2, y: bounds.midY - frame.height / 2)
+            current.window.setFrame(frame, display: true)
+            let actual = current.window.frame
+            let clearance = min(actual.minY - visible.minY, visible.maxY - actual.maxY)
+            guard visible.contains(actual), clearance >= 63.5 else { throw BridgeFailure(code: "AGENT_CAPTURE_SCREEN", message: "The enlarged Agent QA window does not fit its visible desktop") }
+            captureGeometry.append(["screenshot": name, "frame": NSStringFromRect(actual), "visibleFrame": NSStringFromRect(visible), "minimumVerticalClearance": 64, "actualVerticalClearance": clearance])
+            report["agentCaptureGeometry"] = captureGeometry
             try await Task.sleep(for: .milliseconds(200))
             try await TerminalSmoke.capture(window: current.window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
             captures.append(name)

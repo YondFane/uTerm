@@ -280,6 +280,13 @@ retained. No application write retry is introduced; full current-source Mac acce
 
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
+The separate Agent QA window fits within the visible desktop after each enlarged capture size,
+reserving 64 points vertically for the Dock shadow and recording the actual frame and clearance. The
+ARM64 `d0c5ebb` / `b93af668` run passes its Agent command, usage and quit-cancel checks, then fails
+capture because 37,557 Dock pixels intersect the enlarged window; the full
+[artifact13976370340](https://github.com/YondFane/uTerm/actions/runs/43282517996/artifacts/13976370340)
+retains this failure. Swift syntax and script parsing pass on Linux. New Mac screenshots and the
+remaining notification checks are pending; the alpha gate is unchanged.
 
 Hiding or closing a docked Java/Python panel saves its loaded configuration, including an unchanged
 form. Busy operations, conflicts and storage errors keep the panel and draft open. Reload saved
