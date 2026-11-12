@@ -48,10 +48,34 @@ struct CaptureProbe {
             }
             report["desktopSurfaceObserved"] = !surfaces.isEmpty
             report["desktopSurfaces"] = surfaces
-            report["passed"] = surfaces.allSatisfy { ($0["nontransparentPixelsInTarget"] as? Int) == 0 }
+            let pointer = try await pointerProbe(window: window, root: root)
+            report["pointerProbe"] = pointer
+            report["passed"] = surfaces.allSatisfy { ($0["nontransparentPixelsInTarget"] as? Int) == 0 } && pointer["cursorSurfacesGoneDuringCapture"] as? Bool == true
         } catch { report["failure"] = error.localizedDescription }
         try? JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys]).write(to: root.appendingPathComponent("report.json"), options: .atomic)
         if report["passed"] as? Bool != true { exit(1) }
+    }
+
+    @MainActor
+    private static func pointerProbe(window: NSWindow, root: URL) async throws -> [String: Any] {
+        guard let frame = NSScreen.main?.frame else { throw failure("Missing probe display") }
+        window.styleMask = [.borderless]; window.setFrame(frame, display: true)
+        func cursorSurfaces() throws -> [[String: Any]] {
+            guard let above = CGWindowListCopyWindowInfo([.optionOnScreenAboveWindow, .excludeDesktopElements], CGWindowID(window.windowNumber)) as? [[String: Any]] else { throw failure("Could not inspect pointer surfaces") }
+            return above.filter { ($0[kCGWindowOwnerName as String] as? String) == "Window Server" && ($0[kCGWindowLayer as String] as? Int) == 2147483630 }
+                .map { ["windowNumber": $0[kCGWindowNumber as String] ?? 0, "bounds": $0[kCGWindowBounds as String] ?? [:]] }
+        }
+        let before = try cursorSurfaces(), display = CGMainDisplayID()
+        guard CGDisplayHideCursor(display) == .success else { throw failure("Could not hide the probe pointer") }
+        var hidden = true
+        defer { if hidden { _ = CGDisplayShowCursor(display) } }
+        try await Task.sleep(for: .milliseconds(100))
+        let during = try cursorSurfaces()
+        let filename = "probe-fullscreen-pointer-hidden.png"
+        try await capture(window: window.windowNumber, path: root.appendingPathComponent(filename))
+        let restored = CGDisplayShowCursor(display) == .success; hidden = !restored
+        guard restored else { throw failure("Could not restore the probe pointer") }
+        return ["frame": NSStringFromRect(frame), "before": before, "during": during, "pointerHidden": true, "pointerRestored": restored, "cursorSurfacesGoneDuringCapture": during.isEmpty, "capture": filename]
     }
 
     private static func failure(_ message: String) -> NSError { NSError(domain: "UTermCaptureProbe", code: 1, userInfo: [NSLocalizedDescriptionKey: message]) }

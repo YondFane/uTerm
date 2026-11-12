@@ -344,6 +344,11 @@ enum TerminalSmoke {
 
     static func capture(window: NSWindow, path: URL) async throws {
         window.displayIfNeeded()
+        let display = CGMainDisplayID()
+        guard CGDisplayHideCursor(display) == .success else { throw BridgeFailure(code: "SMOKE_CAPTURE_CURSOR", message: "Could not hide the test pointer for the original window capture") }
+        var cursorHidden = true
+        defer { if cursorHidden { _ = CGDisplayShowCursor(display) } }
+        try await Task.sleep(for: .milliseconds(100))
         let identifier = window.windowNumber
         let before = try await captureObstructions(window: identifier, path: path, phase: "before")
         try await Task.detached {
@@ -360,11 +365,14 @@ enum TerminalSmoke {
             }
         }.value
         let after = try await captureObstructions(window: identifier, path: path, phase: "after")
-        let visible = before.obstructions.isEmpty && after.obstructions.isEmpty
-        let visibility: [String: Any] = ["passed": visible, "windowNumber": identifier, "before": before.obstructions, "after": after.obstructions,
+        let restored = CGDisplayShowCursor(display) == .success
+        cursorHidden = !restored
+        let visible = before.obstructions.isEmpty && after.obstructions.isEmpty && restored
+        let visibility: [String: Any] = ["passed": visible, "windowNumber": identifier, "pointerHiddenDuringCapture": true, "pointerRestored": restored, "before": before.obstructions, "after": after.obstructions,
                                        "desktopSurfacesBefore": before.desktop, "desktopSurfacesAfter": after.desktop]
         let data = try JSONSerialization.data(withJSONObject: visibility, options: [.prettyPrinted, .sortedKeys])
         try data.write(to: path.appendingPathExtension("visibility.json"), options: .atomic)
+        guard restored else { throw BridgeFailure(code: "SMOKE_CAPTURE_CURSOR", message: "Could not restore the test pointer; capture acceptance failed") }
         guard visible else { throw BridgeFailure(code: "SMOKE_CAPTURE_OCCLUDED", message: "Another application's window covers the captured QA window; inspect its visibility report and original PNG") }
     }
 
