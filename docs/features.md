@@ -1278,6 +1278,17 @@ the clean-source field; the strict readiness audit rejects that missing metadata
 is retained. A focused regression keeps such reports blocked; fresh Mac evidence for the wrapper
 correction is tracked in #47.
 
+The two-process native QA explicitly activates the target process and waits for its key window
+before each capture. Each report requires two foreground checks; activating a passive viewer must
+leave it without input control. Existing passive resize/input rejection and original-image
+obstruction checks remain required. At source `e639a92`, tested merge `5d0ad911`,
+[artifact13967306606](https://github.com/YondFane/uTerm/actions/runs/43262863855/artifacts/13967306606)
+retains the original failure: viewer window 251 remains above owner window 244, rejecting
+`native-input-owner-readonly.png`; the viewer then times out waiting for the owner. The same source
+passes all 64 Swift tests and the real fullscreen/reconnect checks, but its complete interaction
+matrix fails and later editor scenes are unexecuted. The foreground correction requires new Mac
+execution.
+
 `bash scripts/macos-input-control-smoke.sh` drives two concurrent, isolated native app processes,
 the native take-control button, passive input/resize rejection, output/ack, ordinary viewer exit,
 reacquisition and exact close, with four WindowServer captures. `pnpm qa:shared-state` includes two
