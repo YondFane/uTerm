@@ -60,6 +60,14 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     for name in proof['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets']
     assert data['nativeGlobalMavenActualSaveConflictDraftAndProjectPreservation']
+    proof = data['nativeWorkspaceManagementProof']
+    for key in ['actualAddEditDeleteControls', 'actualNameField', 'inactiveRename', 'stalePeerRenameRetainsDraft', 'cancelledDeletionPreservedRow', 'occupiedWorkspaceDeleteDisabled', 'activeWorkspaceSessionAndGenerationRetained', 'savedDataRestored']:
+        assert proof[key] is True, key
+    assert (evidence / proof['capture']).stat().st_size > 1000
+    for phase in ['add', 'rename']:
+        attempts = [item for item in data['nativeWorkspaceManagementAttempts'] if item['phase'] == phase]
+        assert attempts and len(attempts) <= 3 and attempts[-1]['saved'] is True
+        assert all(item['unchangedOnBusy'] is True for item in attempts)
     assert data['nativeDatabaseComponentsReadonlyCatalogWithoutDownloads']
     assert data['nativeJavaCatalogDetectionRegistrationFailureRetentionAndRecordRemoval']
     assert data['nativeBreakReminderRenderDismissAndDisable']

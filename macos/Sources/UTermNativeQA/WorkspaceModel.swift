@@ -518,13 +518,17 @@ final class WorkspaceModel: ObservableObject {
     }
 
     var canRemoveWorkspace: Bool {
-        guard groups.count > 1, projects.isEmpty, let group = groups.first(where: { $0["id"].string == groupID }) else { return false }
+        canRemoveWorkspace(groupID)
+    }
+    func canRemoveWorkspace(_ id: String) -> Bool {
+        guard groups.count > 1, !workspace["projects"].array.contains(where: { $0["workspaceId"].string == id }),
+              let group = groups.first(where: { $0["id"].string == id }) else { return false }
         return ["terminals", "chats", "sshConnections", "databaseConnections", "redisConnections"].allSatisfy { group[$0].array.isEmpty }
     }
 
-    func removeWorkspace() {
-        guard canRemoveWorkspace, !busy, let revision = state?.snapshot.revision else { return }
-        let id = groupID
+    func removeWorkspace(id target: String? = nil) {
+        let id = target ?? groupID
+        guard canRemoveWorkspace(id), !busy, let revision = state?.snapshot.revision else { return }
         let alert = NSAlert()
         alert.messageText = localized("Delete empty workspace?", "删除空工作区？")
         alert.informativeText = groups.first(where: { $0["id"].string == id })?["name"].string ?? ""
@@ -611,12 +615,12 @@ final class WorkspaceModel: ObservableObject {
         catch { self.error = localized("Could not refresh Agent availability.", "无法刷新 Agent 可用状态。") }
     }
 
-    func renameWorkspace(owner: NameDraftOwner = .workspace) {
-        guard nameDraft == nil, let state else { return }
+    func renameWorkspace(id target: String? = nil, owner: NameDraftOwner = .workspace) {
+        let id = target ?? groupID
+        guard nameDraft == nil, !busy, let state, let group = groups.first(where: { $0["id"].string == id }) else { return }
         nameDraftOwner = owner
         if owner == .workspace { requestActivation?() }
-        let current = groups.first { $0["id"].string == groupID }?["name"].string ?? ""
-        nameDraft = NameDraft(target: groupID, name: current, revision: state.snapshot.revision)
+        nameDraft = NameDraft(target: id, name: group["name"].string ?? "", revision: state.snapshot.revision)
     }
 
     func saveNameDraft() async {
@@ -624,7 +628,7 @@ final class WorkspaceModel: ObservableObject {
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
         let method = draft.target == nil ? "workspace.create" : "workspace.rename"
-        if await mutate(method, ["id": .string(draft.target ?? draft.id.uuidString), "name": .string(name), "select": .bool(true)], revision: draft.revision) { nameDraft = nil }
+        if await mutate(method, ["id": .string(draft.target ?? draft.id.uuidString), "name": .string(name), "select": .bool(nameDraftOwner == .workspace)], revision: draft.revision) { nameDraft = nil }
     }
 
     func reloadNameDraft() async {

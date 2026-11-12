@@ -3,6 +3,45 @@ import SwiftUI
 import UTermBridge
 
 @MainActor
+struct NativeWorkspaceSettingsAction: NSViewRepresentable {
+    enum Action: String { case add, rename, remove }
+    @ObservedObject var workspace: WorkspaceModel
+    let action: Action
+    var id = ""
+    func makeCoordinator() -> Coordinator { Coordinator(workspace) }
+    func makeNSView(context: Context) -> NSButton {
+        let button = NSButton(title: "", target: context.coordinator, action: #selector(Coordinator.applyWorkspaceAction(_:)))
+        button.bezelStyle = .rounded
+        return button
+    }
+    func updateNSView(_ button: NSButton, context: Context) {
+        context.coordinator.action = action; context.coordinator.id = id
+        button.identifier = .init("native-settings-workspace-" + action.rawValue + (id.isEmpty ? "" : "-" + id))
+        switch action {
+        case .add: button.title = localized("Add workspace", "新增工作区")
+        case .rename: button.title = localized("Edit", "编辑")
+        case .remove: button.title = localized("Delete", "删除")
+        }
+        button.isEnabled = context.environment.isEnabled && workspace.ready && !workspace.busy && workspace.nameDraft == nil &&
+            (action != .remove || workspace.canRemoveWorkspace(id))
+    }
+    @MainActor final class Coordinator: NSObject {
+        let workspace: WorkspaceModel
+        var action = Action.add
+        var id = ""
+        init(_ workspace: WorkspaceModel) { self.workspace = workspace }
+        @objc func applyWorkspaceAction(_ button: NSButton) {
+            guard button.isEnabled, !workspace.busy, workspace.nameDraft == nil else { return }
+            switch action {
+            case .add: workspace.newWorkspace(owner: .settings)
+            case .rename: workspace.renameWorkspace(id: id, owner: .settings)
+            case .remove: workspace.removeWorkspace(id: id)
+            }
+        }
+    }
+}
+
+@MainActor
 struct NativeShortcutResetButton: NSViewRepresentable {
     @ObservedObject var model: NativeSettingsModel
     func makeCoordinator() -> Coordinator { Coordinator(model) }

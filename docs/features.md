@@ -661,13 +661,24 @@ workspace name as well as matching project data.
 
 Settings use left-side categories for General, Appearance, Terminal, Workspaces, Shortcuts, Agents,
 Usage, Local control, Database components, Maven settings, Java development tools and Software
-updates. Appearance includes file font/tab preferences; workspace management offers shared
-create/rename/delete operations. Agents and Usage now show their controls inside the settings
-overlay. The menu's Agent window shares the same command model and draft. Usage polling has one
-owner per model, stops when both views are hidden and never requests Keychain access automatically.
-Quitting protects an unsaved command even when its separate window is hidden. Java development tools
-has a standalone section; its source-bound native checks are recorded under Optional JDK and Maven
-tools.
+updates. Appearance includes file font preferences; the file-tab limit is in General. Agents and
+Usage now show their controls inside the settings overlay. The menu's Agent window shares the same
+command model and draft. Usage polling has one owner per model, stops when both views are hidden and
+never requests Keychain access automatically. Quitting protects an unsaved command even when its
+separate window is hidden. Java development tools has a standalone section; its source-bound native
+checks are recorded under Optional JDK and Maven tools.
+
+**Workspace** offers **Edit** and **Delete** on every saved row, including inactive workspaces.
+Adding a workspace here keeps the active workspace and session selected; the main menu's New
+Workspace still selects its new workspace. Renaming retains the chosen row and comparison revision.
+Conflicts preserve the name draft. Deletion confirms the target and is disabled for occupied
+workspaces and the final workspace.
+
+Twenty-one shared workspace and rendering regressions pass on Linux. The new macOS check uses actual
+add/edit/delete buttons and name input while a terminal remains live, checks a stale peer rename and
+cancelled deletion, and requires the same active session, view and generation after cleanup.
+`native-settings-workspace-inactive-row.png` and `nativeWorkspaceManagementProof` remain pending
+current-source Mac execution; the Linux regressions do not validate these AppKit controls.
 
 The new native QA edits the actual command field, selects Usage through its category button, reads
 local usage, hides/reopens both entries and cancels a real application quit. It requires retained

@@ -4,6 +4,26 @@ import UTermBridge
 
 @MainActor
 enum SettingsSmoke {
+    @MainActor private final class WorkspaceDeletionResponse {
+        let title: String
+        private var timer: Timer?
+        private let deadline = Date().addingTimeInterval(5)
+        private(set) var clicked = false
+        init(_ title: String) { self.title = title }
+        func start() {
+            let timer = Timer(timeInterval: 0.04, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.tick() } }
+            self.timer = timer; RunLoop.main.add(timer, forMode: .modalPanel)
+        }
+        func stop() { timer?.invalidate(); timer = nil }
+        private func tick() {
+            if Date() > deadline { stop(); if NSApp.modalWindow != nil { NSApp.stopModal(withCode: .abort) }; return }
+            guard let modal = NSApp.modalWindow, let root = modal.contentView else { return }
+            let contents = TerminalSmoke.descendants(root)
+            guard contents.contains(where: { ($0 as? NSTextField)?.stringValue == "Delete empty workspace?" }),
+                  let button = contents.compactMap({ $0 as? NSButton }).first(where: { $0.title == title && $0.isEnabled }) else { return }
+            clicked = true; button.performClick(nil); stop()
+        }
+    }
     private static func key(_ window: NSWindow, code: UInt16, characters: String) throws {
         guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code) else { throw BridgeFailure(code: "SETTINGS_QA_EVENT", message: "Could not construct native key input") }
         NSApp.sendEvent(event)
@@ -210,6 +230,7 @@ enum SettingsSmoke {
             try await Task.sleep(for: .milliseconds(200))
             try await TerminalSmoke.capture(window: terminalWindow, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(terminalCapture))
             report["nativeThemeImportDraftFailureAndTerminalEffects"] = true
+            try await verifyWorkspaceManagement(settings: current, peer: other, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
             await workspace.closeSession()
             guard workspace.state?.sessions.isEmpty == true else { throw BridgeFailure(code: "SETTINGS_QA_CLOSE", message: "Settings QA session was not closed") }
             _ = try await bridge.call("host.shutdownIdle")
@@ -429,6 +450,89 @@ enum SettingsSmoke {
         guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Could not restore the saved usage preference") }
         report["nativeInlineAgentSettingsProof"] = ["actualFieldEditor": true, "actualCategorySelection": true, "sameWorkspaceOverlay": true, "sameCachedModelAcrossMenuWindow": true, "inlineLocalUsage": true, "independentUsageAgentTabs": true, "perAgentResultsRetained": true, "automaticKeychainAllowed": agents.qaUsageLastKeychain, "hiddenPollingStopped": true, "cancelledQuitRetainsDraft": true, "savedDataUnchanged": true, "preferencesRestored": true, "captures": [commandsCapture, usageCapture]] as [String: Any]
         model.section = "general"
+    }
+
+    private static func verifyWorkspaceManagement(settings: NativeSettingsWindow, peer: CoreBridge, evidence: URL, report: inout [String: Any]) async throws {
+        let workspace = settings.model.workspace
+        guard let bridge = workspace.bridge, let terminal = workspace.selectedTerminal, let generation = terminal.generation else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Missing live workspace fixture") }
+        let original = try await bridge.snapshot(), selected = workspace.groupID, session = workspace.selectedID
+        let viewBefore = terminal.view
+        let initialIDs = Set(workspace.groupItems.map(\.id))
+        settings.model.section = "workspace"; settings.window.makeKeyAndOrderFront(nil)
+        func button(_ action: String, _ id: String = "") async throws -> NSButton {
+            let identifier = "native-settings-workspace-" + action + (id.isEmpty ? "" : "-" + id)
+            try await TerminalSmoke.wait("Render workspace settings action " + action) { (view(settings.window, id: identifier) as? NSButton)?.isEnabled == true }
+            guard let button = view(settings.window, id: identifier) as? NSButton else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace action is unavailable") }
+            _ = button.scrollToVisible(button.bounds); return button
+        }
+        func editName(_ name: String) async throws -> NSWindow {
+            try await TerminalSmoke.wait("Present workspace naming in settings") { settings.window.attachedSheet != nil && workspace.nameDraftOwner == .settings }
+            guard let sheet = settings.window.attachedSheet, let root = sheet.contentView,
+                  let field = TerminalSmoke.descendants(root).compactMap({ $0 as? NSTextField }).first(where: { $0.isEditable }),
+                  sheet.makeFirstResponder(field), let editor = field.currentEditor() as? NSTextView else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace name editor is unavailable") }
+            editor.insertText(name, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+            try await TerminalSmoke.wait("Edit the actual workspace name field") { workspace.nameDraft?.name == name }
+            return sheet
+        }
+        var attempts: [[String: Any]] = []
+        func submit(_ sheet: NSWindow, phase: String) async throws {
+            let before = try await bridge.snapshot()
+            for attempt in 1...3 {
+                try key(sheet, code: 36, characters: "\r")
+                try await Task.sleep(for: .milliseconds(50))
+                try await TerminalSmoke.wait("Complete the explicit workspace name action") { !workspace.busy }
+                let saved = workspace.nameDraft == nil, busy = workspace.error.hasPrefix("WRITER_BUSY:")
+                let after = try await bridge.snapshot()
+                let retained = after.revision == before.revision && after.document.workspace == before.document.workspace
+                attempts.append(["phase": phase, "attempt": attempt, "saved": saved, "writerBusy": busy, "unchangedOnBusy": !busy || retained])
+                if saved { return }
+                guard busy, retained, attempt < 3 else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace naming failed; no uncertain operation was repeated") }
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        func retainedActive() throws {
+            guard workspace.groupID == selected, workspace.selectedID == session, workspace.selectedTerminal === terminal,
+                  terminal.generation == generation, terminal.view === viewBefore else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Managing another workspace changed the active terminal") }
+        }
+        let add = try await button("add"); add.performClick(nil)
+        var sheet = try await editName("Workspace settings 中文")
+        try await submit(sheet, phase: "add")
+        guard let created = workspace.groupItems.first(where: { !initialIDs.contains($0.id) }), created.name == "Workspace settings 中文" else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Adding a workspace did not persist the new row") }
+        try retainedActive()
+        let rename = try await button("rename", created.id); rename.performClick(nil)
+        sheet = try await editName("Inactive renamed 中文")
+        try await submit(sheet, phase: "rename")
+        guard workspace.groupItems.first(where: { $0.id == created.id })?.name == "Inactive renamed 中文" else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "The inactive row did not keep its target") }
+        try retainedActive()
+        let staleRename = try await button("rename", created.id); staleRename.performClick(nil)
+        sheet = try await editName("Retained workspace draft")
+        let state = try await peer.snapshot()
+        _ = try await peer.call("workspace.rename", params: .object(["id": .string(created.id), "name": .string("Peer workspace name"), "expectedRevision": .string(state.revision)]))
+        try key(sheet, code: 36, characters: "\r")
+        try await TerminalSmoke.wait("Reject the actual stale workspace rename") { !workspace.busy && workspace.error.hasPrefix("CONFLICT:") }
+        guard workspace.nameDraft?.target == created.id, workspace.nameDraft?.name == "Retained workspace draft",
+              (try await peer.snapshot()).document.workspace["groups"].array.first(where: { $0["id"].string == created.id })?["name"].string == "Peer workspace name" else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "A stale rename lost its draft or overwrote the peer") }
+        try key(sheet, code: 53, characters: "\u{1b}")
+        try await TerminalSmoke.wait("Cancel the retained rename draft") { workspace.nameDraft == nil && settings.window.attachedSheet == nil }
+        await workspace.reload(clearOperationError: true)
+        try await TerminalSmoke.wait("Disable deletion of the occupied active workspace") { (view(settings.window, id: "native-settings-workspace-remove-" + selected) as? NSButton)?.isEnabled == false }
+        let capture = "native-settings-workspace-inactive-row.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        for title in ["Cancel", "Delete workspace"] {
+            let remove = try await button("remove", created.id)
+            let response = WorkspaceDeletionResponse(title); response.start()
+            remove.performClick(nil); response.stop()
+            guard response.clicked else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace delete confirmation was not activated") }
+            if title == "Cancel" {
+                guard (try await bridge.snapshot()).document.workspace["groups"].array.contains(where: { $0["id"].string == created.id }) else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Cancelling deletion removed the inactive workspace") }
+            } else { try await TerminalSmoke.wait("Remove the explicitly confirmed inactive workspace") { !workspace.groupItems.contains(where: { $0.id == created.id }) } }
+            try retainedActive()
+        }
+        let final = try await bridge.snapshot()
+        guard final.document.workspace == original.document.workspace, final.document.settings == original.document.settings else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace management changed unrelated saved data") }
+        report["nativeWorkspaceManagementAttempts"] = attempts
+        report["nativeWorkspaceManagementProof"] = ["actualAddEditDeleteControls": true, "actualNameField": true, "inactiveRename": true, "stalePeerRenameRetainsDraft": true, "cancelledDeletionPreservedRow": true, "occupiedWorkspaceDeleteDisabled": true, "activeWorkspaceSessionAndGenerationRetained": true, "savedDataRestored": true, "capture": capture]
+        settings.model.section = "general"
     }
 
     private static func verifyDefaultAgent(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {

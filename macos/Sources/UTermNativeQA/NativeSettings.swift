@@ -322,15 +322,14 @@ struct NativeSettingsView: View {
         NativeSettingsForm {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(workspace.groupItems) { group in
-                    Button { Task { await workspace.mutate("workspace.switch", ["id": .string(group.id)]) } } label: {
-                        HStack { Text(group.name); Spacer(); if group.id == workspace.groupID { Image(systemName: "checkmark") } }
-                    }.disabled(workspace.busy)
+                    HStack {
+                        Text(group.name + (group.id == workspace.groupID ? localized(" (current)", "（当前）") : ""))
+                            .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                        NativeWorkspaceSettingsAction(workspace: workspace, action: .rename, id: group.id).frame(width: 54, height: 28)
+                        NativeWorkspaceSettingsAction(workspace: workspace, action: .remove, id: group.id).frame(width: 62, height: 28)
+                    }
                 }
-                HStack {
-                    Button(localized("New workspace…", "新建工作区…")) { workspace.newWorkspace(owner: .settings) }
-                    Button(localized("Rename workspace…", "重命名工作区…")) { workspace.renameWorkspace(owner: .settings) }
-                    Button(localized("Delete workspace…", "删除工作区…")) { workspace.removeWorkspace() }.disabled(!workspace.canRemoveWorkspace)
-                }
+                NativeWorkspaceSettingsAction(workspace: workspace, action: .add).frame(width: 132, height: 28)
                 Text(localized("Only empty workspaces can be deleted. Keep at least one workspace.", "仅可删除空工作区，至少保留一个工作区。")).font(.caption).foregroundStyle(.secondary)
             }
             choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
