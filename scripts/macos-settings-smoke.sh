@@ -26,7 +26,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
         assert proof[key] is True, key
     assert (evidence / proof['capture']).stat().st_size > 1000
     proof = data['nativeSettingsAutomaticSaveProof']
-    for key in ['actualFieldEditorBlur', 'invalidDraftRetainedWithoutWrite', 'correctedFieldSavedAutomatically', 'actualFontPicker', 'scopedWrite', 'otherDraftRetained', 'peerWriteConflictRetained', 'actualThemePreviewSelection', 'terminalThemeUnchanged', 'explicitReloadRecovery']:
+    for key in ['actualFieldEditorBlur', 'actualFieldEditorEnter', 'enterRetainsUnrelatedDraft', 'invalidDraftRetainedWithoutWrite', 'correctedFieldSavedAutomatically', 'actualFontPicker', 'scopedWrite', 'otherDraftRetained', 'peerWriteConflictRetained', 'actualThemePreviewSelection', 'terminalThemeUnchanged', 'explicitReloadRecovery']:
         assert proof[key] is True, key
     assert (evidence / proof['capture']).stat().st_size > 1000
     assert len(proof['themeCaptures']) == 2
