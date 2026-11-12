@@ -830,6 +830,11 @@ Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
 
 #### Git 与编辑器并发验证
 
+Git 恢复 QA 的两次检查点准备分别最多明确写入三次；仅当仓库、收藏版本、来源摘要及准确引用都未变时，写入繁忙才允许再次操作，结果不确定的写入、冲突或读取失败均停止。每次操作记录于
+`favoriteFixtureAttempts`，生产写入保留既有明确重试行为。源码／实际测试提交 `994a43a` 在 macOS
+15.8.2 ARM64 上因真实写入繁忙而准备失败，失败保留于
+[artifact13945320297](https://github.com/YondFane/uTerm/actions/runs/43216431201/artifacts/13945320297)。Linux 的六项样例／恢复回归通过，包含真实 Core 对话框检查；类型检查和生产构建也通过。检查点保护仍须新的真实桌面执行。
+
 已验收的 Git／Worktree 实现为 source `e06168dbe9491c3c862977dc931c6b7ad098a4ee`／实际 CI merge
 `e48ce2f886987f92b17f77a42637f6b692bf6da2`，父提交已核对为本源码与 release
 `ca65aa9ca76abcc510124427398789ba01635c4d`；这是 CI 临时测试合并，不代表 PR 已合入。[两个原生 job](https://github.com/YondFane/uTerm/actions/runs/41984445494)和[两个 Tauri job](https://github.com/YondFane/uTerm/actions/runs/41984445471)均以干净源码报告通过，[Java 矩阵](https://github.com/YondFane/uTerm/actions/runs/41984445509)及[Maven 六组合](https://github.com/YondFane/uTerm/actions/runs/41984445498)也通过。

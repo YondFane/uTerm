@@ -22,6 +22,7 @@ import { databaseNames } from "../lib/database";
 import { runAgents } from "./agents";
 import { performanceSettings, runPerformance } from "./performance";
 import { runUpdates } from "./updates";
+import { writeFavoriteFixture, type FavoriteFixtureAttempt } from "./git-favorite-fixture";
 import type {
   CoreEditorDraftEntry,
   CoreFileDocument,
@@ -132,6 +133,7 @@ const sshQA = JSON.parse(sshFixtureJSON) as {
 const pause = (ms: number) => new Promise((done) => setTimeout(done, ms));
 let observerBusyReads = 0;
 let favoritePreviewReloads = 0;
+const favoriteFixtureAttempts: (FavoriteFixtureAttempt & { phase: string })[] = [];
 async function observeCore(method: string, params?: Parameters<typeof coreRequest>[1]) {
   assert(
     [
@@ -204,7 +206,12 @@ async function scene(name: string, checks: unknown) {
   await pause(500);
   await invoke("qa_scene", {
     name,
-    value: { ...(checks as Record<string, unknown>), observerBusyReads, favoritePreviewReloads },
+    value: {
+      ...(checks as Record<string, unknown>),
+      observerBusyReads,
+      favoritePreviewReloads,
+      favoriteFixtureAttempts,
+    },
   });
 }
 export async function reportEditorRecoveryFailure(reason: unknown) {
@@ -1939,16 +1946,24 @@ async function runFavoriteRecovery(context: Context) {
   const favorites = (await observeCore("git.favorites.read", {
     directory: context.project,
   })) as unknown as CoreGitFavorites;
-  const checkpoint = (await coreRequest("git.favorites.write", {
-    directory: context.project,
-    expectedRevision: favorites.revision,
-    references: [],
-  })) as unknown as CoreGitFavorites;
-  await coreRequest("git.favorites.write", {
-    directory: context.project,
-    expectedRevision: checkpoint.revision,
-    references: favorites.references,
-  });
+  async function checkpointWrite(baseline: CoreGitFavorites, references: string[], phase: string) {
+    return writeFavoriteFixture(
+      baseline,
+      async () =>
+        (await coreRequest("git.favorites.write", {
+          directory: context.project,
+          expectedRevision: baseline.revision,
+          references,
+        })) as unknown as CoreGitFavorites,
+      async () =>
+        (await observeCore("git.favorites.read", {
+          directory: context.project,
+        })) as unknown as CoreGitFavorites,
+      (attempt) => favoriteFixtureAttempts.push({ ...attempt, phase }),
+    );
+  }
+  const checkpoint = await checkpointWrite(favorites, [], "checkpoint");
+  await checkpointWrite(checkpoint, favorites.references, "restore-fixture");
   const initial = (await observeCore(
     "git.favorites.recovery.list",
   )) as unknown as CoreGitFavoriteRecoveryCatalog;
