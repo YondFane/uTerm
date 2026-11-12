@@ -32,7 +32,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                 'runAgainWaitedForOldExit', 'normalStopRetainedFinalOutputAndCopy']:
         assert report[key], (key, report)
     proof = report['pythonToolbarRunList']
-    for field in ['passed', 'realHostTask', 'actualMenuAction', 'staleGenerationRejected', 'scopeRetainedOnRejection', 'sameTaskGeneration', 'actualMainWindow', 'actualToggleButtonRetainedGeneration']:
+    for field in ['passed', 'realHostTask', 'actualMenuAction', 'actualToolbarCoordinator', 'appKitActionDispatched', 'staleGenerationRejected', 'scopeRetainedOnRejection', 'sameTaskGeneration', 'actualMainWindow', 'actualToggleButtonRetainedGeneration']:
         assert proof[field] is True, (field, proof)
     for name in [proof['screenshot'], report['nativePythonMenuWorkspaceCapture']]:
         assert (evidence / name).stat().st_size > 1000, name

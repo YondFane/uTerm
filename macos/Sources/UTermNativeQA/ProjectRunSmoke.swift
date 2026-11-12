@@ -9,17 +9,31 @@ enum ProjectRunSmoke {
         await model.projectRuns.refresh()
         guard model.projectRuns.error.isEmpty else { throw BridgeFailure(code: "RUN_LIST", message: model.projectRuns.error) }
         guard model.projectRuns.tasks(language).contains(where: { $0["spec"]["id"].string == id && $0["generation"].string == generation }) else { throw BridgeFailure(code: "RUN_LIST", message: "Shared run discovery missed the actual host task") }
-        let coordinator = NativeProjectRunButton.Coordinator(model: model, language: language)
+        let identifier = "native-project-run-" + language
+        func mountedButton() -> NSButton? {
+            NSApp.windows.compactMap { window -> NSButton? in
+                guard let content = window.contentView else { return nil }
+                return TerminalSmoke.descendants(content).first { $0.identifier?.rawValue == identifier && ($0 as? NSButton)?.isEnabled == true } as? NSButton
+            }.first
+        }
+        try await TerminalSmoke.wait("Actual toolbar launch control is enabled") { mountedButton() != nil }
+        guard let origin = mountedButton(), let coordinator = origin.target as? NativeProjectRunButton.Coordinator,
+              origin.window?.isVisible == true else { throw BridgeFailure(code: "RUN_LIST", message: "Missing mounted toolbar coordinator") }
         let menu = coordinator.menu()
+        defer { withExtendedLifetime((coordinator, menu)) {} }
         guard let index = menu.items.firstIndex(where: { ($0.representedObject as? JSONValue)?["spec"]["id"].string == id }) else { throw BridgeFailure(code: "RUN_LIST", message: "Native launch menu missed the live task") }
+        let item = menu.items[index]
+        guard let action = item.action, item.target === coordinator, item.isEnabled else { throw BridgeFailure(code: "RUN_LIST", message: "Launch menu action is not bound to the mounted toolbar") }
         let scope = model.inspectorContextKey
         guard case .object(var stale) = task else { throw BridgeFailure(code: "RUN_LIST", message: "Invalid task fixture") }
         stale["generation"] = .string("stale-generation")
-        model.revealProjectRunRequested?(language, .object(stale))
+        let staleItem = NSMenuItem(title: item.title, action: action, keyEquivalent: "")
+        staleItem.target = coordinator; staleItem.representedObject = JSONValue.object(stale)
+        guard NSApp.sendAction(action, to: coordinator, from: staleItem) else { throw BridgeFailure(code: "RUN_LIST", message: "AppKit did not dispatch stale launch selection") }
         try await TerminalSmoke.wait("Stale launch-menu generation is rejected") { model.error.contains("TASK_STALE") }
         guard model.inspectorContextKey == scope else { throw BridgeFailure(code: "RUN_LIST", message: "Stale task selection changed the project") }
         model.error = ""
-        withExtendedLifetime(coordinator) { menu.performActionForItem(at: index) }
+        guard NSApp.sendAction(action, to: item.target, from: item) else { throw BridgeFailure(code: "RUN_LIST", message: "AppKit did not dispatch the actual launch action") }
         do {
             try await TerminalSmoke.wait("Actual launch-menu action reveals its retained main-window panel") { !model.error.isEmpty || model.panels.panels.contains { $0.controller === controller && $0.view.window?.isVisible == true && $0.view.window !== backing } }
             guard model.error.isEmpty else { throw BridgeFailure(code: "RUN_LIST", message: model.error) }
@@ -47,6 +61,6 @@ enum ProjectRunSmoke {
         try await TerminalSmoke.wait("Clicking again reopens the exact run panel") { model.panels.active(in: model.inspectorContextKey)?.id == panel.id && panel.view.window === window }
         model.panels.remove(controller); backing.contentView = panel.view
         controller.showWindow(nil); backing.makeKeyAndOrderFront(nil)
-        report[language + "ToolbarRunList"] = ["passed": true, "realHostTask": true, "actualMenuAction": true, "staleGenerationRejected": true, "scopeRetainedOnRejection": true, "sameTaskGeneration": true, "actualMainWindow": true, "actualToggleButtonRetainedGeneration": true, "screenshot": screenshot, "input": "Automated NSMenu action and real Core host task; no physical popup pointer/keyboard claim"]
+        report[language + "ToolbarRunList"] = ["passed": true, "realHostTask": true, "actualMenuAction": true, "actualToolbarCoordinator": true, "appKitActionDispatched": true, "staleGenerationRejected": true, "scopeRetainedOnRejection": true, "sameTaskGeneration": true, "actualMainWindow": true, "actualToggleButtonRetainedGeneration": true, "screenshot": screenshot, "input": "NSApplication.sendAction using the mounted toolbar coordinator and actual NSMenuItem; real Core host task; no physical popup pointer/keyboard claim"]
     }
 }

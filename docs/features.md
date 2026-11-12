@@ -286,13 +286,18 @@ not claimed.
 
 Linux passes three Core discovery tests covering the public request route, absent/broken hosts,
 rejected parameters and removed roots, plus the backend run-classification check and 24 focused
-content/workbench checks. At head `14487b8`, tested merge `3f438ffe`, ARM macOS passes all 12 actual
-main-workspace panel captures, but live Java launch selection still fails to mount its panel.
-Candidate handling normalizes project/task path aliases, remounts the retained view when AppKit
-updates its host, and preserves visible selection errors and failure diagnostics. A new real-window
-check switches directly Java → Python → Java without visiting the terminal. These changes and the
-run-list selection require fresh macOS execution; the failed run is not accepted. Full visual
-comparison remains required.
+content/workbench checks. At head `ad94eea`, tested merge `76fd24cc`, Intel macOS passes all 12
+actual main-workspace panel captures and direct retained Java/Python switching. Launch-list QA still
+times out with no product error or mounted panel. QA now obtains the actual mounted toolbar
+coordinator and dispatches both stale and current NSMenu items through AppKit, checking action
+delivery before panel/generation assertions. The failed run is retained; the new dispatch still
+requires actual macOS execution and full visual comparison.
+
+Native CI executes Java/Python interaction checks after building the app and preparing the display,
+and uploads their early reports and original windows. Failures remain mandatory in the final matrix
+while independent suites continue. Full Core, bridge, SDK and service checks remain required; the
+complete artifact remains mandatory. The job budget is 55 minutes to include the observed Intel
+build, complete interaction matrix and cache cleanup.
 
 Each native split pane has its own session/directory header, 10–32 point font controls, output
 search, match-case toggle, match counter and previous/next controls. Escape closes search and
