@@ -97,6 +97,39 @@ jobs:
             macos/.build/evidence/native-python*.png
             macos/.build/evidence/toolchain.txt
             macos/.build/evidence/display*.json
+      - name: Real native SSH, SFTP, transfer and host-trust workflows
+        id: ssh-workbench
+        continue-on-error: true
+        run: bash scripts/macos-ssh-smoke.sh
+      - name: Real native database profile, PostgreSQL, window lifetime and screenshots
+        id: database-workbench
+        continue-on-error: true
+        run: |
+          python3 -B tests/test_database_qa_download.py 2>&1 | tee macos/.build/evidence/database-download-tests.log
+          bash scripts/macos-database-smoke.sh
+      - name: Real native Redis, binary identity, protected write and window lifetime
+        id: redis-workbench
+        continue-on-error: true
+        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
+        run: bash scripts/macos-redis-smoke.sh
+      - name: Preserve early service interaction evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-services-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            macos/.build/evidence/ssh-live.json
+            macos/.build/evidence/database-live.json
+            macos/.build/evidence/redis-live.json
+            macos/.build/evidence/ssh-*.log
+            macos/.build/evidence/database-*.log
+            macos/.build/evidence/redis-*.log
+            macos/.build/evidence/native-ssh*.png
+            macos/.build/evidence/native-database*.png
+            macos/.build/evidence/native-redis*.png
+            macos/.build/evidence/toolchain.txt
+            macos/.build/evidence/display*.json
       - name: Real native Git, Worktree and open-editor protection
         id: git-workbench
         continue-on-error: true
@@ -181,25 +214,12 @@ jobs:
         id: workspace-panels
         continue-on-error: true
         run: bash scripts/macos-panels-smoke.sh
-      - name: Real native SSH, SFTP, transfer and host-trust workflows
-        id: ssh-workbench
-        continue-on-error: true
-        run: bash scripts/macos-ssh-smoke.sh
-      - name: Real native database profile, PostgreSQL, window lifetime and screenshots
-        run: |
-          python3 -B tests/test_database_qa_download.py 2>&1 | tee macos/.build/evidence/database-download-tests.log
-          bash scripts/macos-database-smoke.sh
-      - name: Real native Redis, binary identity, protected write and window lifetime
-        id: redis-workbench
-        continue-on-error: true
-        if: ${{ !cancelled() && steps.native_build.outcome == 'success' }}
-        run: bash scripts/macos-redis-smoke.sh
       - name: Real native Agent settings, installed Hooks and simulated OS notification lifecycle
         run: bash scripts/macos-agent-smoke.sh
       - name: Real native control and standalone CLI smoke
         run: bash scripts/macos-control-smoke.sh
       - name: Preserve independent candidate and controls failures
-        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure' || steps.workspace-panels.outcome == 'failure' || steps.ssh-workbench.outcome == 'failure' || steps.redis-workbench.outcome == 'failure' || steps.git-workbench.outcome == 'failure' || steps.java-runs.outcome == 'failure' || steps.python-runs.outcome == 'failure') }}
+        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure' || steps.workspace-panels.outcome == 'failure' || steps.ssh-workbench.outcome == 'failure' || steps.redis-workbench.outcome == 'failure' || steps.database-workbench.outcome == 'failure' || steps.git-workbench.outcome == 'failure' || steps.java-runs.outcome == 'failure' || steps.python-runs.outcome == 'failure') }}
         run: |
           echo "Candidate, settings, SDK, inspector, workspace panels, Java, Python, GitHub, SSH, Redis or Git checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
           exit 1
