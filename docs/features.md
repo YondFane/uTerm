@@ -310,12 +310,13 @@ still fails instead of risking a duplicate session. Reports retain each attempt 
 observed canonical IDs. Read-only state snapshots separately allow bounded writer-busy retries; this
 does not add automatic creation retries to the app. Fresh current-source Mac checks remain required.
 
-Standalone SSH windows open centered in the visible desktop, matching the Java/Python placement. At
-head `c977840`, tested merge `0f5ac287`, the SSH conflict capture contains 41,315 opaque Dock
-pixels;
-[artifact13958841216](https://github.com/YondFane/uTerm/actions/runs/43243034024/artifacts/13958841216)
-retains that failure. The placement correction does not waive obstruction checks and still requires
-fresh Mac execution.
+Standalone SSH windows open centered inside the usable desktop, with an 8-point margin and a smaller
+initial size when required to fit above the Dock. QA records the actual window and visible screen
+rectangles and rejects an out-of-bounds window before capturing it. On ARM64, head `7356a7c`, tested
+merge `b12d5c56`, the SSH conflict capture contains 32,527 opaque Dock pixels;
+[artifact 13968292984](https://github.com/YondFane/uTerm/actions/runs/43262878555/artifacts/13968292984)
+retains that failure. Linux Swift parsing passed for the placement correction; real Mac window and
+obstruction checks remain pending.
 
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
 before the Git test tool compiles, and uploads their early reports and original windows. SSH,
