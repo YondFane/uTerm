@@ -23,6 +23,7 @@ enum ProjectMenuSmoke {
             generations[id] = generation; views[id] = ObjectIdentifier(terminal.view)
         }
         guard ids.count >= 2 else { throw BridgeFailure(code: "PROJECT_MENU", message: "Project menu fixture needs two real terminals") }
+        let dragProof = try await SessionDragSimulation.run(model: model, table: table, coordinator: coordinator, ids: ids)
         var groupedThroughMenu = false
         if originalLayout.array.isEmpty {
             let actions = NativeSessionMenuActions(model: model, id: ids[0]), menu = NSMenu()
@@ -97,6 +98,7 @@ enum ProjectMenuSmoke {
               model.settings["breakInterval"] == oldInterval, model.selectedID == originalSession,
               retainedIDs.allSatisfy({ model.terminals[$0]?.generation == generations[$0] && model.terminals[$0].map { ObjectIdentifier($0.view) } == views[$0] }) else { throw BridgeFailure(code: "PROJECT_MENU_PERSIST", message: "Cleanup did not restore layout/settings or retain original terminals") }
         var proof: [String: Any] = ["passed": true, "actualMenuActions": true, "stalePinRejected": true, "staleMoveRejected": true, "peerSettingRetained": true, "terminalGenerationsAndViewsRetained": true, "splitLayoutRetainedInReopenedSnapshot": true, "movedAndReturned": true]
+        proof["dragSimulation"] = dragProof
         proof["groupMenuExecuted"] = groupedThroughMenu; proof["physicalDragExecuted"] = false; proof["screenshot"] = screenshot
         proof["sourceHeadSHA"] = report["sourceHeadSHA"] as? String ?? ""
         proof["testedMergeSHA"] = report["testedMergeSHA"] as? String ?? report["sourceSHA"] as? String ?? ""

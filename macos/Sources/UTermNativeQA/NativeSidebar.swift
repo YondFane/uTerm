@@ -396,9 +396,8 @@ struct NativeSidebar: NSViewRepresentable {
             dragProject = nil; dragRevision = nil
             return true
         }
-        func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
-            dragSession = nil; dragProject = nil; dragRevision = nil
-        }
+        func finishDrag() { dragSession = nil; dragProject = nil; dragRevision = nil }
+        func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) { finishDrag() }
         func menuNeedsUpdate(_ menu: NSMenu) {
             menu.removeAllItems()
             guard let table else { return }

@@ -510,9 +510,13 @@ checks the same PTY generations and native views, and reopens the saved snapshot
 layout. Originals are `native-project-workspace-move.png` and
 `personal-{phase}-project-workspace-move.png`; source-bound
 `nativeProjectMenuRevisionAndWorkspaceMove` proof is required for personal packages. Linux x86_64
-passes five session checks, twelve persistence checks (one explicit I/O check ignored) and seventeen
-package-evidence policies. The new menu scenarios and screenshots remain pending Mac CI. Physical
-dragging has not been executed and remains in the full acceptance scope.
+passes five session checks, twelve persistence checks (one explicit I/O check ignored) and eighteen
+package-evidence policies. A native delegate simulation uses an owned pasteboard and the actual
+table callbacks to reject foreign sources, forged payloads, cancelled drags and stale revisions,
+then reorder and restore sessions through shared Core. Its report explicitly labels the input as
+simulated; physical pointer dragging has not been executed. The new menu, simulated drop and
+screenshot scenarios remain pending Mac CI. Manual interaction is waived for this task; the
+automated checks remain required.
 
 [Two-client acceptance](native-ui-parity.md) covers the full matching scope, including remaining
 checks for drag/group operations, layout persistence, content tabs and workbench integration. Both
