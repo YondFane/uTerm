@@ -208,6 +208,11 @@ failure text across read refreshes. Native Git QA requires that retention and ke
 refusal mandatory, with sheet/busy/file diagnostics on timeout. These corrections require new Mac
 execution; earlier passing captures do not accept the corrected source.
 
+CI runs Git window checks after the isolated build and display setup, publishing
+`native-git-{platform}-{head}-{attempt}` evidence before the remaining matrix. Git failures remain
+mandatory in the final gate; earlier evidence is retained across later failures. This reduces the
+wait for branch/Worktree failure details without removing the full matrix.
+
 Actual row/header/gap/inset measurements are required in both clients; current-source native
 rendering remains pending CI.
 

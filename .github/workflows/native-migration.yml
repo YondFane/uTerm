@@ -74,6 +74,22 @@ jobs:
         run: |
           swift scripts/macos-qa-display.swift | tee macos/.build/evidence/display.json
           swift scripts/macos-qa-display.swift --verify-only | tee macos/.build/evidence/display-verified.json
+      - name: Real native Git, Worktree and open-editor protection
+        id: git-workbench
+        continue-on-error: true
+        run: bash scripts/macos-git-smoke.sh
+      - name: Preserve early Git interaction evidence
+        if: ${{ always() && steps.native_build.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-git-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: |
+            macos/.build/evidence/git-live.json
+            macos/.build/evidence/git-*.log
+            macos/.build/evidence/native-git*.png
+            macos/.build/evidence/native-toolbar-branch-picker*.png
+            macos/.build/evidence/toolchain.txt
+            macos/.build/evidence/display*.json
       - name: Shared core, FFI and Swift bridge tests
         env:
           UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/macos/.build/evidence/terminal-load-core.json
@@ -157,14 +173,12 @@ jobs:
         run: bash scripts/macos-redis-smoke.sh
       - name: Real native Agent settings, installed Hooks and simulated OS notification lifecycle
         run: bash scripts/macos-agent-smoke.sh
-      - name: Real native Git, Worktree and open-editor protection
-        run: bash scripts/macos-git-smoke.sh
       - name: Real native control and standalone CLI smoke
         run: bash scripts/macos-control-smoke.sh
       - name: Preserve independent candidate and controls failures
-        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure' || steps.ssh-workbench.outcome == 'failure' || steps.redis-workbench.outcome == 'failure') }}
+        if: ${{ always() && (steps.candidate-package.outcome == 'failure' || steps.settings-preferences.outcome == 'failure' || steps.sdk-updates.outcome == 'failure' || steps.inspector-controls.outcome == 'failure' || steps.github-workbench.outcome == 'failure' || steps.ssh-workbench.outcome == 'failure' || steps.redis-workbench.outcome == 'failure' || steps.git-workbench.outcome == 'failure') }}
         run: |
-          echo "Candidate, settings, SDK, inspector, GitHub, SSH or Redis checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
+          echo "Candidate, settings, SDK, inspector, GitHub, SSH, Redis or Git checks failed; independent checks do not waive their failures." | tee macos/.build/evidence/independent-gates-failed.txt
           exit 1
       - name: Audit source-bound native interaction matrix
         if: ${{ always() && steps.native_build.outcome == 'success' }}
