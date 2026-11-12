@@ -460,7 +460,9 @@ final class SSHWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePane
         workspacePanelView = NSHostingView(rootView: SSHView(model: model))
         window.contentView = workspacePanelView; model.ownerWindow = window
         if let screen = window.screen ?? NSScreen.main {
-            let visible = screen.visibleFrame.insetBy(dx: 8, dy: 8)
+            // Dock shadows extend above the usable rectangle; keep clearance with scrollable content.
+            // Dock 阴影会伸入可用矩形上方；保留间隔，窗口内容仍可滚动。
+            let visible = screen.visibleFrame.insetBy(dx: 8, dy: 64)
             let size = NSSize(width: min(window.frame.width, visible.width), height: min(window.frame.height, visible.height))
             window.setFrame(NSRect(x: visible.midX - size.width / 2, y: visible.midY - size.height / 2, width: size.width, height: size.height), display: false)
         } else { window.center() }
