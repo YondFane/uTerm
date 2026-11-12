@@ -7,7 +7,7 @@
         "en": "General",
         "zh-Hans": "通用"
       },
-      "keywords": "language defaultShell login startup breakReminder breakInterval SSH Redis database 语言 默认 Shell 开机 登录 休息 提醒 侧栏 连接"
+      "keywords": "language login startup fileTabLimit breakReminder breakInterval 语言 开机 登录 文件 标签 休息 提醒"
     },
     {
       "id": "appearance",
@@ -15,7 +15,7 @@
         "en": "Appearance",
         "zh-Hans": "外观"
       },
-      "keywords": "appearance interfaceTheme darkTheme lightTheme interfaceFont interfaceSize activeIconColor opacity blur windowFrameStyle fileTabLimit previewFont themes import export 外观 深色 浅色 界面 主题 字体 字号 透明 模糊 窗口 边框 文件 标签 导入 导出"
+      "keywords": "appearance interfaceTheme darkTheme lightTheme interfaceFont interfaceSize activeIconColor opacity blur windowFrameStyle fontFamily fontSize fontThicken lineHeight previewFont themes import export 外观 深色 浅色 界面 主题 字体 字号 透明 模糊 窗口 边框 文件 标签 导入 导出"
     },
     {
       "id": "terminal",
@@ -23,7 +23,7 @@
         "en": "Terminal",
         "zh-Hans": "终端"
       },
-      "keywords": "fontFamily fontSize cursorStyle cursorBlink scrollback bell copyOnSelect rightClickPaste 终端 字体 字号 光标 闪烁 回滚 提示音 选择 复制 右键 粘贴"
+      "keywords": "cursorStyle cursorBlink scrollback bell copyOnSelect rightClickPaste 终端 光标 闪烁 回滚 提示音 选择 复制 右键 粘贴"
     },
     {
       "id": "workspace",
@@ -31,7 +31,7 @@
         "en": "Workspace",
         "zh-Hans": "工作区"
       },
-      "keywords": "projectOrder recentLimit workspaces create rename remove projects sessions 项目 排序 最近 工作区 新建 重命名 删除 会话"
+      "keywords": "projectOrder recentLimit defaultShell defaultAgent SSH Redis database workspaces create rename remove projects sessions 项目 排序 默认 Shell Agent 侧栏 连接 最近 工作区 新建 重命名 删除 会话"
     },
     {
       "id": "keyboard",

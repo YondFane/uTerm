@@ -252,7 +252,7 @@ enum SettingsSmoke {
         let custom = "QA literal \"中文\", monospace"
         var selected: [String: JSONValue] = [:]
         var capture = ""
-        for (key, section) in [("interfaceFont", "appearance"), ("fontFamily", "terminal")] {
+        for (key, section) in [("interfaceFont", "appearance"), ("fontFamily", "appearance")] {
             model.values[key] = .string(custom); model.section = section
             let identifier = "native-settings-font-" + key
             try await TerminalSmoke.wait("Render native custom font selection") { (view(settings.window, id: identifier) as? NSPopUpButton)?.selectedItem?.representedObject as? String == custom }

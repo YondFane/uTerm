@@ -554,12 +554,21 @@ match. Filtering keeps the selected category and unsaved values; select a result
 clears a nonempty query without closing the window. Clearing search restores every category. The
 search index is shared with the Rust-delivered native catalog and never changes saved settings.
 
+Native settings use the same category labels as the shared catalog. File tab limit follows login in
+General; terminal fonts, weight, size and line height are in Appearance alongside interface and file
+fonts. Terminal contains cursor, blink, scrollback and copy behavior. The default Agent is in
+Workspace; Windows-only shell selection is not offered on macOS. Break interval is disabled while
+the reminder is off. Search aliases follow these actual field locations. Existing draft, save,
+reload and conflict handling is preserved; this does not yet claim matching automatic-save behavior
+or complete settings styling.
+
 Linux x86_64 / Node 26 passes 20 focused settings, search and Maven checks, type/production build,
 i18n and generated-contract checks. Native QA inserts text through the actual AppKit field editor,
 clicks the matching category, sends Escape and checks the retained numeric draft and unchanged
 snapshot bytes. It records `nativeSettingsSearchProof` and `native-settings-search-jdk.png` in the
-Mac artifact. The new native operation and same-source search screenshots remain pending CI;
-complete settings styling and field-order comparison are still tracked in #53.
+Mac artifact. The new native operation and same-source search screenshots remain pending CI; the
+reordered fields and full settings styling still require actual Mac screenshots and comparison under
+#53.
 
 Interface and terminal font selectors share the ordinary client's preset catalog and localized
 labels. Existing custom font strings remain a selected custom entry until a preset is chosen; simply

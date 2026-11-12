@@ -12,7 +12,9 @@ test("settings navigation search shares bilingual field aliases without modifyin
   assert.deepEqual(find("　ｊｄｋ　注册　"), ["java"]);
   assert.deepEqual(find("maven proxy"), ["maven"]);
   assert.deepEqual(find("自动 更新"), ["updates"]);
-  assert.deepEqual(find("fontSize"), ["terminal"]);
+  assert.deepEqual(find("fontSize"), ["appearance"]);
+  assert.deepEqual(find("fileTabLimit"), ["general"]);
+  assert.deepEqual(find("defaultShell"), ["workspace"]);
   assert.ok(find("theme").includes("appearance"));
   assert.deepEqual(find("nonexistent-unique-query"), []);
   assert.equal(find("").length, 12);
