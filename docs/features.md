@@ -302,6 +302,14 @@ single attempts, and the application does not replay failed writes. Linux eviden
 shell/report-validator syntax and documentation checks pass; fresh native execution of these timing
 fixes is still required.
 
+The Intel run at head `7d9b7b4`, tested merge `ed12879f`, passes Java/Python, PostgreSQL and Redis,
+but reports writer-busy while creating the second SSH session after reconnect. QA now repeats an
+explicit create at most twice only when the canonical revision, complete canonical/host session
+rosters and connection draft all remain unchanged. Partial creation, a changed roster or a conflict
+still fails instead of risking a duplicate session. Reports retain each attempt and any newly
+observed canonical IDs. Read-only state snapshots separately allow bounded writer-busy retries; this
+does not add automatic creation retries to the app. Fresh current-source Mac checks remain required.
+
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
 before the Git test tool compiles, and uploads their early reports and original windows. SSH,
 database and Redis checks likewise run early and upload `native-services-<runner>-<head>-<attempt>`.

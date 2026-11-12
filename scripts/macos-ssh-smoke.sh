@@ -59,6 +59,12 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
         assert type(item['attempt']) is int and 1 <= item['attempt'] <= 3
         assert item['failedDraftRetained'] is True
         assert item['canonicalTargetRetainedOnBusy'] is True
+    attempts = report['explicitSSHSessionCreateAttempts']
+    for phase in ['first', 'after-reconnect']:
+        assert any(item['phase'] == phase and item['created'] is True for item in attempts)
+    for item in attempts:
+        assert type(item['attempt']) is int and 1 <= item['attempt'] <= 3
+        assert item['runtimeUnchangedOnBusy'] is True
     for key in ['nativeSSHMenuAndProfileSaved', 'profileCASRetainedDraft', 'realAuthenticatedSFTPUploadAndDownload',
                 'nativeTransferProgressAndGenerationCancel', 'nativeForwardingStarted', 'nativeForwardingBannerReceived',
                 'nativeForwardingStaleStopRejected', 'realRemoteTerminalOutput', 'remoteDetachReplayAndHostRetained',
