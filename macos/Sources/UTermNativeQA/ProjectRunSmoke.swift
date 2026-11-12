@@ -20,7 +20,16 @@ enum ProjectRunSmoke {
         guard model.inspectorContextKey == scope else { throw BridgeFailure(code: "RUN_LIST", message: "Stale task selection changed the project") }
         model.error = ""
         withExtendedLifetime(coordinator) { menu.performActionForItem(at: index) }
-        try await TerminalSmoke.wait("Actual launch-menu action reveals its retained main-window panel") { model.panels.panels.contains { $0.controller === controller && $0.view.window?.isVisible == true && $0.view.window !== backing } }
+        do {
+            try await TerminalSmoke.wait("Actual launch-menu action reveals its retained main-window panel") { !model.error.isEmpty || model.panels.panels.contains { $0.controller === controller && $0.view.window?.isVisible == true && $0.view.window !== backing } }
+            guard model.error.isEmpty else { throw BridgeFailure(code: "RUN_LIST", message: model.error) }
+        } catch {
+            let mounted: [[String: Any]] = model.panels.panels.map { ["id": $0.id, "scope": $0.scope, "matchesController": $0.controller === controller, "windowNumber": $0.view.window?.windowNumber ?? -1, "visible": $0.view.window?.isVisible == true] }
+            report[language + "LaunchSelectionDiagnostics"] = ["operationError": model.error, "busy": model.busy,
+                "taskRoot": task["task"]["root"].string ?? "", "scope": model.inspectorContextKey,
+                "selectedProject": model.workspace["selectedProject"].string ?? "", "selectedWorktree": model.workspace["selectedWorktree"].string ?? "", "panels": mounted]
+            throw error
+        }
         guard let panel = model.panels.panels.first(where: { $0.controller === controller }), let window = panel.view.window else { throw BridgeFailure(code: "RUN_LIST", message: "No mounted run panel") }
         let terminal = (controller as? JavaWindow)?.model.terminal ?? (controller as? PythonWindow)?.model.terminal
         guard terminal?.id == id, terminal?.generation == generation else { throw BridgeFailure(code: "RUN_LIST", message: "Launch selection replaced the task generation") }
