@@ -747,10 +747,21 @@ tests and both workspace refresh tests. Its
 retains the logs and actual originals. The full native suite still fails: the full-screen capture
 reports two WindowServer surfaces at cursor level, and the standalone SSH capture intersects Dock.
 The pointer-hiding candidate and full application acceptance still require fresh Mac execution.
-Unknown foreign windows are never excluded by owner name or layer alone. A short source-bound
-diagnostic probe compiles this exact alpha helper and captures an isolated test window before the
-full native/personal build, retaining its own originals and JSON. It is capture-infrastructure
-evidence, not a uTerm window or product acceptance; all application gates remain required.
+Unknown foreign windows are never excluded by owner name or layer alone. At source `48316ba`, tested
+merge `04d9dc87`, the real Intel infrastructure
+[probe13961772101](https://github.com/YondFane/uTerm/actions/runs/43251078760/artifacts/13961772101)
+confirms successful pointer hide/restore while a 10×18 WindowServer cursor surface remains in both
+metadata snapshots. Its original full-display image is retained and was inspected; this is an
+infrastructure window, not product acceptance. The capture policy now recognizes such a hidden
+pointer only with the kernel-reported, exact system WindowServer executable, cursor layer and finite
+positive dimensions no larger than 128px. Missing identity, another executable, another layer or an
+oversized surface still blocks capture. Visibility reports record the verified system pointer
+separately. Four Foundation tests pass in an isolated Linux Swift 6.1.2 package, covering
+spoofed/missing paths, other layers, hidden state and invalid/oversized dimensions; the kernel
+lookup and revised policy require fresh real Mac execution. A short source-bound diagnostic probe
+compiles this exact alpha helper and captures an isolated test window before the full
+native/personal build, retaining its own originals and JSON. It is capture-infrastructure evidence,
+not a uTerm window or product acceptance; all application gates remain required.
 
 At source `d07e8ff`, tested merge `d3e31732`, the
 [Personal Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43228172020/artifacts/13951198726)
