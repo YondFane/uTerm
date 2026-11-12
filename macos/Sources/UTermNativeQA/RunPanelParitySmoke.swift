@@ -57,6 +57,10 @@ enum RunPanelParitySmoke {
                     if let controller = panel.controller as? PythonWindow { return !controller.model.busy && controller.model.config != nil }
                     return false
                 }
+                if kind == "java" {
+                    try await RunPanelJavaToolsSmoke.run(model: model, window: window, panel: panel, evidence: output, phase: phase, scene: scene, readSnapshot: snapshot, report: &report, captures: &captures)
+                    try await unchanged()
+                }
                 func capture(_ state: String) async throws {
                     try await unchanged()
                     guard let current = model.panels.active(in: model.inspectorContextKey), current.id == panel.id,

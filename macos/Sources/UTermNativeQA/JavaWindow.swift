@@ -26,6 +26,7 @@ final class JavaRunModel: ObservableObject {
     @Published var tasks: [JSONValue] = []
     @Published var jdks: [JSONValue] = []
     @Published var modules: [JSONValue] = []
+    private(set) var qaCompletedDetections = 0
     @Published var selectedID = ""
     @Published var search = ""
     @Published var searchSummary = ""
@@ -99,7 +100,7 @@ final class JavaRunModel: ObservableObject {
         guard !busy, !prepared else { return }
         busy = true; error = ""
         defer { busy = false }
-        do { try await detectValues() } catch { self.error = error.localizedDescription }
+        do { try await detectValues(); qaCompletedDetections += 1 } catch { self.error = error.localizedDescription }
     }
     private func formConfig() throws -> CoreJavaProjectConfig {
         guard var result = config else {

@@ -84,6 +84,7 @@ final class WorkspaceModel: ObservableObject {
     var revealProjectRunRequested: ((String, JSONValue) -> Void)?
     var openAgentsRequested: (() -> Void)?
     var openSettingsRequested: (() -> Void)?
+    var openJavaToolsRequested: (() -> Bool)?
     var openFileRequested: (() -> Void)?
     var performCommandRequested: ((String) -> Void)?
     var commandIsAvailable: ((String) -> Bool)?

@@ -328,6 +328,19 @@ initial/replacement refusal of missing or modified POM/Python states and unexpec
 synthetic reports are not native window evidence. App replacement and the 50-pair grid still need
 fresh Mac execution.
 
+The native Java run header provides **Manage tools**, opening **Settings → Java development tools**
+with the existing component model. Busy or prepared runs, a different project and another modal
+block the action. Closing settings refreshes the same run model's JDK/module detection while
+retaining its configuration, arguments, environment and live task. Opening this page starts no
+installation.
+
+Native Personal QA adds two Java-tools originals per phase, separately from the 50 paired scenes. It
+clicks the actual header and close controls, checks the five shared components and completed
+redetection, and retains the panel, terminal generation and canonical data. The busy state and
+unsaved argument are explicitly injected QA fixtures; disabled-action dispatch must be rejected, and
+the draft must survive. Linux passed 55 package/pairing policies and Swift syntax parsing; actual
+AppKit compilation, both language captures and comparison with the ordinary dialog remain pending.
+
 The paired run-panel grid uses the shared minimal POM/Python project and twelve required scenes:
 Java/Python × docked/expanded/file × English dark 1100px/Chinese light 640px, all at 720px height.
 Both collectors click actual toolbar, expand/restore, Files-row, file-close and hide controls while

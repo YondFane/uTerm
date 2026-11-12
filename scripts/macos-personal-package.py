@@ -137,6 +137,24 @@ def validate_sidebar_close(report, head, tested, phase):
     assert proof.get("width", 0) >= 640 and proof.get("height", 0) >= 420
 
 
+def validate_java_run_tools(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    expected = {(s["language"], s["appearance"], s["width"], s["height"]) for s in fixture["runPanelScenes"]}
+    proofs = report.get("runPanelJavaToolsProof", [])
+    assert len(proofs) == len(expected), "Incomplete Java run tools evidence"
+    seen = set()
+    for proof in proofs:
+        identity = (proof["language"], proof["appearance"], proof["width"], proof["height"])
+        assert identity in expected and identity not in seen, "Missing or duplicate Java tools scenario"
+        seen.add(identity)
+        for key in ["passed", "actualManageToolsButton", "busyStateInjectedForQA", "busyActionRejected", "argumentDraftInjectedForQA", "argumentDraftRetained", "actualSharedJavaCatalog", "actualCloseControl", "projectDetectionCompletedAfterClose", "runConfigurationAndPanelRetained", "terminalGenerationRetained", "canonicalStateUnchanged"]:
+            assert proof.get(key) is True, "Missing actual Java run tools operation: " + key
+        assert proof.get("sourceHeadSHA") == head and proof.get("testedMergeSHA") == tested, "Stale Java tools evidence"
+        assert proof.get("platform") == report["platform"] and proof.get("architecture") == report["architecture"] and proof.get("system") == report["system"]
+        name = f"personal-{phase}-java-tools-{proof['language']}-{proof['appearance']}-{proof['width']}.png"
+        assert proof.get("screenshot") == name and name in report.get("captures", []), "Missing actual Java tools original"
+
+
 def validate_smoke_report(report, head, tested, phase):
     assert report.get("inProgress", False) is False, "An unfinished phase cannot satisfy acceptance"
     assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
@@ -148,6 +166,7 @@ def validate_smoke_report(report, head, tested, phase):
     validate_pdf_scenes(report, head, tested, phase)
     validate_quick_scenes(report, head, tested, phase)
     validate_github_scenes(report, head, tested, phase)
+    validate_java_run_tools(report, head, tested, phase)
     fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
     validate_run_panels(report.get("runPanelScenes", []), fixture)
     assert report.get("runPanelActualFileCloseAndHideVerified") is True, "Missing actual run-panel file close/hide"

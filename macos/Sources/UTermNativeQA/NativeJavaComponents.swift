@@ -225,7 +225,7 @@ private extension JSONValue {
 }
 
 @MainActor
-private struct NativeJavaActionButton: NSViewRepresentable {
+struct NativeJavaActionButton: NSViewRepresentable {
     let title: String
     let id: String
     let enabled: Bool
