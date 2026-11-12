@@ -311,13 +311,18 @@ still fails instead of risking a duplicate session. Reports retain each attempt 
 observed canonical IDs. Read-only state snapshots separately allow bounded writer-busy retries; this
 does not add automatic creation retries to the app. Fresh current-source Mac checks remain required.
 
-Standalone SSH windows open centered inside the usable desktop, with an 8-point margin and a smaller
-initial size when required to fit above the Dock. QA records the actual window and visible screen
-rectangles and rejects an out-of-bounds window before capturing it. On ARM64, head `7356a7c`, tested
-merge `b12d5c56`, the SSH conflict capture contains 32,527 opaque Dock pixels;
-[artifact 13968292984](https://github.com/YondFane/uTerm/actions/runs/43262878555/artifacts/13968292984)
-retains that failure. Linux Swift parsing passed for the placement correction; real Mac window and
-obstruction checks remain pending.
+Standalone SSH windows open centered inside the usable desktop, reserving 8 points horizontally and
+64 vertically and shrinking the initial frame when required. The right-side content remains
+scrollable. QA records the actual frame, visible screen and vertical clearance before capture; the
+unchanged pixel gate still rejects every nontransparent overlapping Dock pixel.
+
+On ARM64 head `d0c5ebb`, tested merge `b93af668`, the frame was inside the visible desktop but its
+8-point vertical gap still contained 35,467 Dock shadow pixels.
+[Artifact 13974925661](https://github.com/YondFane/uTerm/actions/runs/43282517996/artifacts/13974925661)
+retains that failure. The inspected full-display Dock original has nonzero alpha from row 837, above
+its visible bar near row 890, while the window ends at row 880. Linux pixel analysis and Swift
+parsing support the increased clearance; fresh Mac window, scrolling and obstruction checks remain
+pending.
 
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
 before the Git test tool compiles, and uploads their early reports and original windows. SSH,
