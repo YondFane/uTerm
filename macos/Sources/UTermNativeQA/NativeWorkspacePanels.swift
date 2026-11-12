@@ -3,6 +3,11 @@ import SwiftUI
 import UTermBridge
 
 @MainActor
+protocol NativeWorkspacePanelContent: AnyObject {
+    var workspacePanelView: NSView? { get }
+}
+
+@MainActor
 final class NativeWorkspacePanels: ObservableObject {
     struct Panel: Identifiable {
         let id: String
@@ -22,7 +27,8 @@ final class NativeWorkspacePanels: ObservableObject {
             let previous = panels[index].scope
             if previous != scope { selected[previous] = nil; panels[index].scope = scope }
         } else {
-            guard let view = controller.window?.contentView else { throw BridgeFailure(code: "PANEL_UNAVAILABLE", message: localized("The panel content is unavailable. Close and reopen the panel.", "面板内容不可用，请关闭后重新打开面板。")) }
+            guard controller.window != nil,
+                  let view = (controller as? NativeWorkspacePanelContent)?.workspacePanelView ?? controller.window?.contentView else { throw BridgeFailure(code: "PANEL_UNAVAILABLE", message: localized("The panel content is unavailable. Close and reopen the panel.", "面板内容不可用，请关闭后重新打开面板。")) }
             controller.window?.contentView = NSView()
             panels.append(Panel(id: id, title: title, scope: scope, controller: controller, view: view))
         }
