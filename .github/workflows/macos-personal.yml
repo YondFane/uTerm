@@ -12,6 +12,7 @@ on:
       - scripts/macos-native-build.sh
       - scripts/macos-personal-*
       - scripts/macos_disk_image.py
+      - scripts/macos_qa_http.py
       - scripts/macos-qa-display.swift
       - scripts/macos-updates-smoke.py
       - scripts/personal-updates.mjs

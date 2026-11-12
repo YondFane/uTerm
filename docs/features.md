@@ -599,6 +599,22 @@ time. A timeout samples only the owned QA process for at most five seconds and k
 reports and existing original images, even if no final report was produced. Incomplete progress
 cannot satisfy acceptance; all operation, fixture and shutdown assertions remain required.
 
+The capture gate inspects WindowServer before and after each original PNG. Another application's
+intersecting visible window rejects acceptance; the original and `.visibility.json` diagnostics
+remain available, including a capture rejected before it entered the scene list. The private
+package/update HTTP fixtures bind numeric loopback and skip reverse hostname lookup. This changes
+neither macOS permissions nor application network access.
+
+At source `d07e8ff`, tested merge `d3e31732`, the
+[Personal Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43228172020/artifacts/13951198726)
+reports successful package/replacement/SDK checks. Original General and Agent settings screenshots
+show a Python local-network permission prompt covering the application. Those images do not satisfy
+visual acceptance. Reverse DNS is removed from the fixture as a potential trigger; the exact prompt
+cause and unobstructed capture still require new Mac execution. Linux passes 30 macOS
+package/disk-image/HTTP policy tests, including a real loopback request without reverse lookup,
+retention of failed captures and sidecars, and rejection of sidecar symlinks. These tests do not
+establish Mac window acceptance.
+
 Source `d8fe48e`, tested merge `a801c8f`, passes the complete ARM native matrix and Personal
 initial/replacement/SDK checks. Its Intel Personal phase exceeds the former 90-second deadline
 before writing a final report; the original

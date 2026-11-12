@@ -14,6 +14,36 @@ spec.loader.exec_module(package)
 
 
 class PersonalPackageTests(unittest.TestCase):
+    def test_occluded_attempt_keeps_original_and_visibility_without_changing_failed_report(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, evidence = Path(temporary) / "source", Path(temporary) / "evidence"
+            root.mkdir(); evidence.mkdir()
+            raw = json.dumps(dict(passed=False, failure="SMOKE_CAPTURE_OCCLUDED", captures=[]))
+            (root / "personal-initial.json").write_text(raw)
+            name = "personal-initial-settings.png"
+            image = b"\x89PNG\r\n\x1a\npolicy-test-only"
+            (root / name).write_bytes(image)
+            visibility = json.dumps(dict(passed=False, before=[dict(owner="QA fixture")], after=[]))
+            (root / (name + ".visibility.json")).write_text(visibility)
+            report, captures = package.preserve_smoke_outputs(root, evidence, "initial")
+            self.assertEqual((evidence / name).read_bytes(), image)
+            self.assertEqual((evidence / (name + ".visibility.json")).read_text(), visibility)
+            self.assertEqual((evidence / "personal-initial.json").read_text(), raw)
+            self.assertFalse(report["passed"])
+            self.assertEqual(captures, [])
+
+    def test_visibility_sidecar_cannot_follow_a_symlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, evidence = Path(temporary) / "source", Path(temporary) / "evidence"
+            root.mkdir(); evidence.mkdir()
+            (root / "image.png").write_bytes(b"\x89PNG\r\n\x1a\npolicy-test-only")
+            outside = Path(temporary) / "outside.json"
+            outside.write_text('{"passed": true}')
+            (root / "image.png.visibility.json").symlink_to(outside)
+            with self.assertRaises(AssertionError):
+                package.preserve_capture(root, evidence, "image.png")
+            self.assertFalse((evidence / "image.png.visibility.json").exists())
+
     def test_missing_final_report_retains_progress_and_actual_partial_images(self):
         with tempfile.TemporaryDirectory() as temporary:
             root, evidence = Path(temporary) / "source", Path(temporary) / "evidence"
