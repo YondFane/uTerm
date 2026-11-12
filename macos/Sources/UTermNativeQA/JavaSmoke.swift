@@ -21,14 +21,13 @@ enum JavaSmoke {
               let index = menu.items.firstIndex(where: { $0.title == "Java build and run…" }) else { throw BridgeFailure(code: "JAVA_QA", message: "Native Java menu is missing") }
         menu.performActionForItem(at: index)
         try await TerminalSmoke.wait("Open Java through its native menu") { lookup(root.path)?.model.config != nil && lookup(root.path)?.model.busy == false }
-        guard let first = lookup(root.path), let window = first.window else { throw BridgeFailure(code: "JAVA_QA", message: "Java window is missing") }
+        guard let first = lookup(root.path), first.window != nil else { throw BridgeFailure(code: "JAVA_QA", message: "Java window is missing") }
         try await TerminalSmoke.wait("Native Java menu mounts its panel in the main workspace") { model.panels.panels.contains { $0.controller === first && $0.view.window?.isVisible == true } }
         guard let embedded = model.panels.panels.first(where: { $0.controller === first }), let workspaceWindow = embedded.view.window else { throw BridgeFailure(code: "RUN_MENU", message: "The run menu did not mount the actual workspace panel") }
         let menuCapture = "native-java-menu-workspace.png"
         try await TerminalSmoke.capture(window: workspaceWindow, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(menuCapture))
         report["nativeJavaMenuOpened"] = true; report["nativeJavaMenuWorkspaceCapture"] = menuCapture
-        model.panels.remove(first); window.contentView = embedded.view
-        first.showWindow(nil); window.makeKeyAndOrderFront(nil)
+        try await ProjectRunSmoke.restoreStandalone(model: model, panel: embedded)
         let run = first.model
         run.config?.java_home = home; run.config?.mode = "jar"; run.config?.jar = "target/literal 中文 & %.jar"; run.config?.offline = true
         run.arguments = [JavaArgument(text: "literal & %PATH%"), JavaArgument(text: "")]

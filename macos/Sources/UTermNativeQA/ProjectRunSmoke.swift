@@ -3,6 +3,18 @@ import UTermBridge
 
 @MainActor
 enum ProjectRunSmoke {
+    static func restoreStandalone(model: WorkspaceModel, panel: NativeWorkspacePanels.Panel) async throws {
+        guard let backing = panel.controller.window else { throw BridgeFailure(code: "RUN_PANEL", message: "The retained panel window is missing") }
+        // Release the old host before changing ownership, so its later dismantle cannot clear the window.
+        // 改变所属窗口前先脱离旧容器，避免其后续卸载清空新窗口内容。
+        panel.view.removeFromSuperview()
+        model.panels.remove(panel.controller)
+        panel.view.translatesAutoresizingMaskIntoConstraints = true
+        panel.view.autoresizingMask = [.width, .height]
+        backing.contentView = panel.view
+        panel.controller.showWindow(nil); backing.makeKeyAndOrderFront(nil)
+        try await TerminalSmoke.wait("Restore the exact panel content to its standalone QA window") { backing.contentView === panel.view && panel.view.window === backing && backing.isVisible }
+    }
     static func run(model: WorkspaceModel, language: String, controller: NSWindowController, task: JSONValue, evidence: URL, report: inout [String: Any]) async throws {
         guard let id = task["spec"]["id"].string, let generation = task["generation"].string,
               let backing = controller.window else { throw BridgeFailure(code: "RUN_LIST", message: "Missing live task") }
@@ -41,7 +53,9 @@ enum ProjectRunSmoke {
             let mounted: [[String: Any]] = model.panels.panels.map { ["id": $0.id, "scope": $0.scope, "matchesController": $0.controller === controller, "windowNumber": $0.view.window?.windowNumber ?? -1, "visible": $0.view.window?.isVisible == true] }
             report[language + "LaunchSelectionDiagnostics"] = ["operationError": model.error, "busy": model.busy,
                 "taskRoot": task["task"]["root"].string ?? "", "scope": model.inspectorContextKey,
-                "selectedProject": model.workspace["selectedProject"].string ?? "", "selectedWorktree": model.workspace["selectedWorktree"].string ?? "", "panels": mounted]
+                "selectedProject": model.workspace["selectedProject"].string ?? "", "selectedWorktree": model.workspace["selectedWorktree"].string ?? "", "panels": mounted, "selectionTrace": model.projectRuns.selectionTrace,
+                "backingHasContent": backing.contentView != nil, "backingVisible": backing.isVisible,
+                "backingContentClass": backing.contentView.map { NSStringFromClass(type(of: $0)) } ?? ""]
             throw error
         }
         guard let panel = model.panels.panels.first(where: { $0.controller === controller }), let window = panel.view.window else { throw BridgeFailure(code: "RUN_LIST", message: "No mounted run panel") }
@@ -59,8 +73,7 @@ enum ProjectRunSmoke {
         guard terminal?.id == id, terminal?.generation == generation else { throw BridgeFailure(code: "RUN_LIST", message: "Hiding the run panel replaced its task") }
         toggle.performClick(nil)
         try await TerminalSmoke.wait("Clicking again reopens the exact run panel") { model.panels.active(in: model.inspectorContextKey)?.id == panel.id && panel.view.window === window }
-        model.panels.remove(controller); backing.contentView = panel.view
-        controller.showWindow(nil); backing.makeKeyAndOrderFront(nil)
+        try await restoreStandalone(model: model, panel: panel)
         report[language + "ToolbarRunList"] = ["passed": true, "realHostTask": true, "actualMenuAction": true, "actualToolbarCoordinator": true, "appKitActionDispatched": true, "staleGenerationRejected": true, "scopeRetainedOnRejection": true, "sameTaskGeneration": true, "actualMainWindow": true, "actualToggleButtonRetainedGeneration": true, "screenshot": screenshot, "input": "NSApplication.sendAction using the mounted toolbar coordinator and actual NSMenuItem; real Core host task; no physical popup pointer/keyboard claim"]
     }
 }
