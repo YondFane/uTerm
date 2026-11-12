@@ -30,6 +30,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as temporary, ExitSt
         value=json.loads(report.read_text()); assert value.get('passed') and 'failure' not in value,value
         assert value['coreReady'] and value['windowVisible'] and not value['productionDataAccess'],value
         assert not value['manualKeyboardIMEAcceptance'],value
+        assert value['captureWindowForegroundChecks']==2,value
         assert value['sourceHeadSHA']==head and value['sourceSHA']==tested,value
         assert not subprocess.check_output(['git','status','--porcelain'],text=True).strip(),'Input ownership QA changed source'
         for name in value['captures']: assert (evidence/name).stat().st_size>5000,name

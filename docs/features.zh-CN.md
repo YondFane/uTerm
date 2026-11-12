@@ -570,6 +570,13 @@ fork 继承的描述符继续持有探测锁、阻止替换宿主启动。
 
 原生输入控制入口在启动前及每个进程结束后检查Git源码清洁状态，核对包内两种源码身份，再为每份报告记录`testedMergeSHA`和`sourceTreeDirty`。c15f1bb的ARM工作流实际场景通过，但两份原始输入控制报告缺少清洁字段，严格准备审计因此拒绝。[原始产物](https://github.com/YondFane/uTerm/actions/runs/42309000560/artifacts/13548990662)保留不变。针对性回归保证缺少字段的报告仍被拒绝；入口修正后的新Mac证据由#47跟踪。
 
+双进程原生 QA 在每次截图前明确激活目标进程，并等待目标成为 key
+window。每份报告必须记录两次前台核对；激活只读观察者后仍须保持没有输入权。既有只读 resize／输入拒绝及原图遮挡检查继续执行。源码
+`e639a92`、实际测试 merge `5d0ad911` 的
+[产物13967306606](https://github.com/YondFane/uTerm/actions/runs/43262863855/artifacts/13967306606)保留原始失败：观察者窗口251仍位于所有者窗口244之上，导致
+`native-input-owner-readonly.png`
+被拒绝，随后观察者等待所有者完成而超时。同一来源的64项 Swift 测试和真实全屏／重连检查通过，但完整交互矩阵失败，后续编辑器场景未执行；前台修正仍须新的 Mac 执行。
+
 `bash scripts/macos-input-control-smoke.sh`
 操作两个同时运行的隔离原生应用进程，检查原生接管按钮、只读输入／resize 拒绝、输出／ack、观察者正常退出、重新接管和准确关闭，并采集四张 WindowServer 截图。`pnpm qa:shared-state`
 包含两个同时运行的真实 Tauri 进程，通过实际终端输入和接管按钮执行六个场景。QA 首条命令等待实际 xterm 输入框可写且已解析终端行显示 Shell 提示符，接管后也等待输入可写；报告保留首次就绪证据。命令只发送一次，不修改应用 Shell，不重放输入。隔离 QA 构建允许并存应用进程，为观察者分配单独的临时 CLI 控制端点，但两个进程仍连接同一共享存储、宿主和会话。Windows 样例通过真实 PowerShell 终端输入明确写出 UTF-8 标记文件，与文本读取器匹配，不更改应用 Shell。编译隔离的观察器读取 Tauri 实际会话宿主，失败清理只关闭临时 QA 根目录内准确 generation 的会话，再停止空闲宿主。真实原生并存检查已在 macOS
