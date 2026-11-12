@@ -12,7 +12,6 @@ final class NativeProjectRunsModel: ObservableObject {
     func refresh() async {
         if loading {
             while loading { do { try await Task.sleep(for: .milliseconds(10)) } catch { return } }
-            return
         }
         guard let workspace, workspace.ready, let bridge = workspace.bridge else { return }
         loading = true; defer { loading = false }
