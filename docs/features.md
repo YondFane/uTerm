@@ -525,8 +525,20 @@ retaining its sibling and external bytes. Packaging requires its source-bound re
 Native menu shortcuts preserve Shift for letter chords: Command-F opens terminal search and
 Command-Shift-F opens project search. The custom shifted palette shortcut rejects the unshifted
 event. Synthetic AppKit events retain Shift in `charactersIgnoringModifiers`, matching actual letter
-events; reports retain the live menu binding. These event-routing checks still require
-current-source native execution.
+events; reports retain the live menu binding. Workspace refreshes coalesce overlapping requests and
+wait for the latest read and derived commands before returning. Snapshot and command bindings
+publish together; replaced transports and shutdown cannot publish an old response. This changes read
+coordination, without replaying writes.
+
+Source `30f4395`, tested merge `7fdfd721`, fails the ARM settings gate with the saved palette chord
+at Command-Shift-K while the actual system menu still has Command-Shift-P. The failed
+[full report and originals](https://github.com/YondFane/uTerm/actions/runs/43228146756/artifacts/13950187770)
+remain available; other passed native suites do not waive this failure. The candidate adds gated
+Swift tests for overlapping reads, a cancelled caller and subsequent reuse. Both tests pass with
+Swift 6.1.2 on Linux using exact copies of only the Foundation helper and its tests; this isolated
+package does not compile AppKit or the full bridge. Reports also retain draft/workspace/resolved
+shortcut and read-error diagnostics. The exact real-menu assertion, shift rejection and actual
+command dispatch remain required on the new Mac candidate.
 
 Another real-window check clicks font controls and their bounds, types Unicode into native search,
 checks case/match navigation, exercises Command-F/Escape and restarts an exited shell. Packaging
@@ -588,12 +600,32 @@ time. A timeout samples only the owned QA process for at most five seconds and k
 reports and existing original images, even if no final report was produced. Incomplete progress
 cannot satisfy acceptance; all operation, fixture and shutdown assertions remain required.
 
+The capture gate inspects WindowServer before and after each original PNG. Another application's
+intersecting visible window rejects acceptance; the original and `.visibility.json` diagnostics
+remain available, including a capture rejected before it entered the scene list. The private
+package/update HTTP fixtures bind numeric loopback and skip reverse hostname lookup. This changes
+neither macOS permissions nor application network access.
+
+At source `d07e8ff`, tested merge `d3e31732`, the
+[Personal Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43228172020/artifacts/13951198726)
+reports successful package/replacement/SDK checks. Original General and Agent settings screenshots
+show a Python local-network permission prompt covering the application. Those images do not satisfy
+visual acceptance. Reverse DNS is removed from the fixture as a potential trigger; the exact prompt
+cause and unobstructed capture still require new Mac execution. Linux passes 30 macOS
+package/disk-image/HTTP policy tests, including a real loopback request without reverse lookup,
+retention of failed captures and sidecars, and rejection of sidecar symlinks. These tests do not
+establish Mac window acceptance.
+
 Source `d8fe48e`, tested merge `a801c8f`, passes the complete ARM native matrix and Personal
 initial/replacement/SDK checks. Its Intel Personal phase exceeds the former 90-second deadline
 before writing a final report; the original
 [failed artifact](https://github.com/YondFane/uTerm/actions/runs/43219329935/artifacts/13947023184)
-has logs but no scene report. The exact stalled stage remains unknown. The new checkpoints and
-bounded phase budget still need their own Mac execution. The ordinary collector waits for real
+has logs but no scene report. The exact stalled stage remains unknown. At source `30f4395`, tested
+merge `7fdfd721`, the new
+[Personal Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43228146788/artifacts/13951452027)
+passes initial/replacement and the complete SDK checks, recording 83.7 and 73.5 seconds under the
+180-second phase limit. These are successful measured phases, not proof of the old timeout's cause;
+full current-candidate platform gates remain required. The ordinary collector waits for real
 terminal input ownership before inspecting the host. Linux passes 19 Personal package/evidence
 policies and 26 pairing/interaction policies, including incomplete reports, scoped image copying and
 sample failure. These fixtures do not represent native window execution.

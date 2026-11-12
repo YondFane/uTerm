@@ -344,6 +344,7 @@ enum TerminalSmoke {
     static func capture(window: NSWindow, path: URL) async throws {
         window.displayIfNeeded()
         let identifier = window.windowNumber
+        let before = try captureObstructions(window: identifier)
         try await Task.detached {
             let capture = Process()
             capture.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
@@ -357,6 +358,33 @@ enum TerminalSmoke {
                 throw BridgeFailure(code: "SMOKE_CAPTURE", message: "WindowServer capture failed: " + message)
             }
         }.value
+        let after = try captureObstructions(window: identifier)
+        let visible = before.isEmpty && after.isEmpty
+        let visibility: [String: Any] = ["passed": visible, "windowNumber": identifier, "before": before, "after": after]
+        let data = try JSONSerialization.data(withJSONObject: visibility, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: path.appendingPathExtension("visibility.json"), options: .atomic)
+        guard visible else { throw BridgeFailure(code: "SMOKE_CAPTURE_OCCLUDED", message: "Another application's window covers the captured QA window; inspect its visibility report and original PNG") }
+    }
+
+    private static func captureObstructions(window identifier: Int) throws -> [[String: Any]] {
+        guard let target = (CGWindowListCopyWindowInfo(.optionIncludingWindow, CGWindowID(identifier)) as? [[String: Any]])?.first,
+              let bounds = target[kCGWindowBounds as String] as? [String: Any],
+              let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenAboveWindow, .excludeDesktopElements], CGWindowID(identifier)) as? [[String: Any]] else {
+            throw BridgeFailure(code: "SMOKE_CAPTURE_VISIBILITY", message: "Could not inspect WindowServer visibility for the QA window")
+        }
+        // Keep the original image, but reject acceptance when another application covers it.
+        // 保留原图，但其他应用遮挡时拒绝将其作为验收证据。
+        return windows.compactMap { entry in
+            guard let pid = entry[kCGWindowOwnerPID as String] as? Int, pid != Int(ProcessInfo.processInfo.processIdentifier),
+                  (entry[kCGWindowAlpha as String] as? Double ?? 0) > 0,
+                  let bounds = entry[kCGWindowBounds as String] as? [String: Any],
+                  let rectangle = CGRect(dictionaryRepresentation: bounds as CFDictionary),
+                  !frame.intersection(rectangle).isNull, !frame.intersection(rectangle).isEmpty else { return nil }
+            return ["owner": entry[kCGWindowOwnerName as String] as? String ?? "", "pid": pid,
+                    "windowNumber": entry[kCGWindowNumber as String] as? Int ?? 0,
+                    "layer": entry[kCGWindowLayer as String] as? Int ?? 0, "bounds": bounds]
+        }
     }
 
     static func sizeCaptureWindow(_ window: NSWindow, width: Int, height: Int) async throws -> [[String: Any]] {
