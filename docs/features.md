@@ -200,6 +200,19 @@ SSH fixture simulates at most three explicit resubmissions only for `WRITER_BUSY
 `CONFLICT` failures. SSH/Redis failures remain mandatory gates while independent Git/database checks
 continue. The complete native matrix and new Git/connection-row scenarios need a fresh run.
 
+At source `605d4d3`, both Personal packages and ordinary/paired capture checks pass. The ARM/Intel
+native matrices reach Git and expose operation feedback being cleared by unrelated successful
+snapshots. Background refresh now clears only its own read failures. Explicit Reload and successful
+user operations acknowledge operation errors; branch writes return an explicit result and retain
+failure text across read refreshes. Native Git QA requires that retention and keeps dirty-worktree
+refusal mandatory, with sheet/busy/file diagnostics on timeout. These corrections require new Mac
+execution; earlier passing captures do not accept the corrected source.
+
+CI runs Git window checks after the isolated build and display setup, publishing
+`native-git-{platform}-{head}-{attempt}` evidence before the remaining matrix. Git failures remain
+mandatory in the final gate; earlier evidence is retained across later failures. This reduces the
+wait for branch/Worktree failure details without removing the full matrix.
+
 Actual row/header/gap/inset measurements are required in both clients; current-source native
 rendering remains pending CI.
 
@@ -241,14 +254,18 @@ and back retains the same native view, run model, transfers and drafts; closing 
 save/transfer/run guards. Database and Redis use workspace document tabs. Closing a workbench tab
 hides its retained client; reopening restores the same WebKit document, connection handles and
 drafts. Project changes scope visible panels without retargeting an in-flight request. New terminal
-actions return to the terminal, and closing a native panel restores terminal focus.
+actions return to the terminal, and closing a native panel restores terminal focus. The native Close
+menu labels embedded content as a tab and a standalone file as a file; each action retains its
+existing save and close guard.
 
 The isolated `workspace-panels-native.json` scenario captures six actual main-window scenes, clicks
 terminal/panel/close controls, checks retained views/documents and preserves terminal
 identity/generation. Connection profiles in this integration scene are offline fixtures; the
 existing PostgreSQL, Redis, SSH and run suites retain service/lifetime coverage. Linux passes 24
 focused content/workbench checks and the production build. New AppKit integration and screenshots
-remain pending macOS ARM/Intel CI; no full visual acceptance is claimed here.
+remain pending macOS ARM/Intel CI. The previous integration run on both architectures found the
+standalone-file Close label incorrectly changed to Close tab; the correction needs a new run. No
+full visual acceptance is claimed here.
 
 Each native split pane has its own session/directory header, 10–32 point font controls, output
 search, match-case toggle, match counter and previous/next controls. Escape closes search and
