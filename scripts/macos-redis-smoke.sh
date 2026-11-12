@@ -88,7 +88,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-redis-') as directory:
         assert command('LLEN', LARGE_KEY) == str(LARGE_MEMBERS).encode()
         assert command('LINDEX', LARGE_KEY, -1) == list_value(LARGE_MEMBERS - 1).encode()
         assert int(command('PTTL', LARGE_KEY)) > 0
-        assert len(report['nativeRedisCaptures']) == 6
+        assert len(report['nativeRedisCaptures']) == 7
+        selection = report['redisSidebarSelectionProof']
+        assert selection['actualAppKitRow'] is True and selection['selectedTarget'] is True
+        assert selection['capture'] == 'native-redis-sidebar-profile-en-dark.png'
+        assert selection['capture'] in report['nativeRedisCaptures']
         for name in report['nativeRedisCaptures']:
             assert (evidence / name).is_file(), name
         report.update(passed=True, testedMergeSHA=report['sourceSHA'], sourceTreeDirty=bool(subprocess.check_output(['git', 'status', '--porcelain'])), processExitCode=code,
