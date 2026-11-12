@@ -826,6 +826,10 @@ Tauri 交接前保留准确的旧 `uterm.git.favorites:*`
 
 #### Git 与编辑器并发验证
 
+Worktree 创建 QA 先等待真实 Git 操作完成提示，再观察持久工作区快照。快照读取会取得规范存储锁，QA 不应在应用保存项目树时引入竞争读取。创建错误仍立即失败，保存后的 Worktree 条目仍须验证，不重试 Git 写入。源码
+`c0e05be4`、实际测试 merge `7b181bc3` 的 Windows 部分注册失败保留于
+[产物13963248321](https://github.com/YondFane/uTerm/actions/runs/43258716782/artifacts/13963248321)。Linux 七项既有 Worktree／收藏恢复回归、类型检查、生产构建及文档检查通过。调整观察顺序后的 Windows 与 Mac 执行仍待完成。
+
 Git 恢复 QA 的两次检查点准备分别最多明确写入三次；仅当仓库、收藏版本、来源摘要及准确引用都未变时，写入繁忙才允许再次操作，结果不确定的写入、冲突或读取失败均停止。每次操作记录于
 `favoriteFixtureAttempts`，生产写入保留既有明确重试行为。源码／实际测试提交 `994a43a` 在 macOS
 15.8.2 ARM64 上因真实写入繁忙而准备失败，失败保留于
