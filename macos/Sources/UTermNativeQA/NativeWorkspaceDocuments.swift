@@ -80,8 +80,8 @@ struct NativeWorkspaceDocumentSurface: View {
                 NativeWorkspaceDocumentTabs(model: model, documents: documents, panels: panels)
             }
             GeometryReader { geometry in
-                let available = Double(geometry.size.height)
-                let viewport = available + CoreChrome.titlebarHeight + (hasTabs ? 29 : 0)
+                let available = Double(geometry.size.height) + (hasTabs ? Double(NativeWorkspaceDocumentTabs.height) : 0)
+                let viewport = available + CoreChrome.titlebarHeight
                 let run = panel.flatMap { $0.runKind == nil ? nil : $0 }
                 let layout = run.map { panels.runLayout($0, available: available, viewport: viewport) }
                 let expanded = run.map { panels.runExpanded($0.id) } ?? false
@@ -154,6 +154,7 @@ final class EmbeddedDocumentHost: NSView {
 
 @MainActor
 private struct NativeWorkspaceDocumentTabs: View {
+    static let height: CGFloat = 29
     @ObservedObject var model: WorkspaceModel
     @ObservedObject var documents: NativeWorkspaceDocuments
     @ObservedObject var panels: NativeWorkspacePanels
@@ -193,7 +194,7 @@ private struct NativeWorkspaceDocumentTabs: View {
                 }
             }
         }
-        .frame(height: 29).scrollIndicators(.hidden).buttonStyle(.borderless)
+        .frame(height: Self.height).scrollIndicators(.hidden).buttonStyle(.borderless)
         .background(color("sidebar"))
         .overlay(alignment: .bottom) { color("border").frame(height: 1) }
         .disabled(!model.ready || model.busy || model.settingsPresented || model.gitFavoritesRecoveryPresented || model.worktreeDeletionPresented)

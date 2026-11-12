@@ -608,7 +608,26 @@ enum SettingsSmoke {
         let staleRename = try await button("rename", created.id); staleRename.performClick(nil)
         sheet = try await editName("Retained workspace draft")
         let state = try await readSnapshot(peer)
-        _ = try await peer.call("workspace.rename", params: .object(["id": .string(created.id), "name": .string("Peer workspace name"), "expectedRevision": .string(state.revision)]))
+        report["nativeWorkspaceManagementPhase"] = "peer-rename"
+        for attempt in 1...3 {
+            do {
+                _ = try await peer.call("workspace.rename", params: .object(["id": .string(created.id), "name": .string("Peer workspace name"), "expectedRevision": .string(state.revision)]))
+                attempts.append(["phase": "peer-rename", "attempt": attempt, "saved": true])
+                report["nativeWorkspaceManagementAttempts"] = attempts
+                break
+            } catch let failure as BridgeFailure where failure.code == "WRITER_BUSY" {
+                let after = try await readSnapshot(peer)
+                let unchanged = after.revision == state.revision && after.document.workspace == state.document.workspace && after.document.settings == state.document.settings
+                attempts.append(["phase": "peer-rename", "attempt": attempt, "saved": false, "writerBusy": true, "unchangedOnBusy": unchanged])
+                report["nativeWorkspaceManagementAttempts"] = attempts
+                // Repeat only this fixture's peer operation after proving no canonical write occurred.
+                // 仅在确认规范数据未写入后，有限重试此测试样例的外部操作。
+                guard attempt < 3, unchanged else { throw failure }
+                peerWriteRetries += 1
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        report["nativeWorkspaceManagementPhase"] = "stale-rename"
         try key(sheet, code: 36, characters: "\r")
         try await TerminalSmoke.wait("Reject the actual stale workspace rename") { !workspace.busy && workspace.error.hasPrefix("CONFLICT:") }
         guard workspace.nameDraft?.target == created.id, workspace.nameDraft?.name == "Retained workspace draft",

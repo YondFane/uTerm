@@ -268,20 +268,39 @@ uses name, host and username, ignoring case, and retains selection, sessions and
 search editor. Native Quick SSH displays the same modal form and parser over the main workspace.
 Full workbench integration and visual alignment remain pending.
 
+At source `047ff1a7`, tested merge `885b4efb`, Intel settings verifies actual Agent search, empty
+results and Escape, inline editing, usage/quit cancellation, shortcuts, export/default Agent and
+palette-key dispatch. The suite subsequently fails with `WRITER_BUSY` after inactive workspace
+rename;
+[artifact13957846028](https://github.com/YondFane/uTerm/actions/runs/43243047041/artifacts/13957846028)
+retains the partial report. QA now records the peer-rename phase and bounds its peer fixture retry
+to three attempts, only after the original revision and complete workspace/settings remain
+unchanged. The actual stale application rename still runs once and must reject with its draft
+retained. No application write retry is introduced; full current-source Mac acceptance is pending.
+
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
 
 Java/Maven and Python dock below the main terminal or file, using shared default heights of 380px
 and 470px. Drag the separator or use Up/Down in 24px steps, Home/End for its bounds, and
 double-click for the default height. Expand/Restore retains the docked height and the same native
-view, run model and task log. Window shrinking clamps the panel and reserves space for the main
-area. Opening or closing a file retains the run panel; connection workbenches and SSH use their
-existing main-area selection. SSH/SFTP remains a native workspace tab. Switching to the terminal and
-back retains the same native view, run model, transfers and drafts; closing uses the existing
-save/transfer/run guards. Database and Redis use workspace document tabs. Closing a workbench tab
-hides its retained client; reopening restores the same WebKit document, connection handles and
-drafts. Project changes scope visible panels without retargeting an in-flight request. New terminal
-actions return to the terminal, and closing a native panel restores terminal focus.
+view, run model and task log. Window shrinking clamps the panel and reserves 88px for the main area,
+including the native document-tab strip; expansion uses the same top inset as the ordinary client.
+Docked configuration and log areas can shrink within the panel minimum; standalone logs retain their
+160px minimum. Opening or closing a file retains the run panel; connection workbenches and SSH use
+their existing main-area selection. SSH/SFTP remains a native workspace tab. Switching to the
+terminal and back retains the same native view, run model, transfers and drafts; closing uses the
+existing save/transfer/run guards. Database and Redis use workspace document tabs. Closing a
+workbench tab hides its retained client; reopening restores the same WebKit document, connection
+handles and drafts. Project changes scope visible panels without retargeting an in-flight request.
+New terminal actions return to the terminal, and closing a native panel restores terminal focus.
+
+At source `047ff1a7`, tested merge `885b4efb`, the real Intel Java/Python suites fail their Home-key
+minimum-height check. The corrected flexible docked log and tab-inclusive geometry retain that
+assertion; a failed wait captures the original window and records actual host/content bounds.
+[Artifact13958940224](https://github.com/YondFane/uTerm/actions/runs/43243047041/artifacts/13958940224)
+retains the failed reports. Fresh Mac interaction and matched ordinary-client images remain
+required.
 
 Java and Python toolbar buttons show live run status; right-click or Shift-F10 opens the language's
 launch list. Selecting a task reveals its project/Worktree panel and the same task generation;
@@ -295,8 +314,9 @@ passing Node panel/navigation/vector regressions. These do not compile AppKit or
 docking acceptance. The required Mac run exercises real responder keys, actual Expand/Restore
 buttons and labelled synthetic double-click events, both on empty panels and while real Java/Python
 tasks run. Reports retain task IDs/generations, follow mode, native-view identity, original
-expanded/restored PNGs and the main terminal or file. This candidate's Mac execution and
-ordinary-client panel pairing remain pending; earlier full-tab images do not accept the new dock.
+expanded/restored PNGs and the main terminal or file. Failed waits include the expected height and
+actual host/content/window bounds. This candidate's Mac execution and ordinary-client panel pairing
+remain pending; earlier full-tab images do not accept the new dock.
 
 The isolated `workspace-panels-native.json` scenario captures twelve panel-grid main-window scenes
 (English/dark at 1100px and Chinese/light at 640px), clicks terminal/panel/close controls, checks

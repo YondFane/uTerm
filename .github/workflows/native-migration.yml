@@ -109,6 +109,8 @@ jobs:
             macos/.build/evidence/python-*.log
             macos/.build/evidence/native-java*.png
             macos/.build/evidence/native-python*.png
+            macos/.build/evidence/native-live-java*.png
+            macos/.build/evidence/native-live-python*.png
             macos/.build/evidence/*.visibility.json
             macos/.build/evidence/*.desktop-*.png
             macos/.build/evidence/toolchain.txt

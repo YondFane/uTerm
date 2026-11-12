@@ -351,7 +351,7 @@ struct PythonRunView: View {
                     }
                     HStack { Spacer(); Button(localized("Save configuration", "保存配置")) { Task { _ = await model.save() } } }
                 }.padding(2)
-            }.frame(maxHeight: 290).disabled(model.busy || model.prepared || model.config == nil)
+            }.frame(minHeight: 0, maxHeight: 290).disabled(model.busy || model.prepared || model.config == nil)
             if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled) }
             if !model.feedback.isEmpty { Text(model.feedback).font(.caption) }
             HStack {
@@ -378,7 +378,7 @@ struct PythonRunView: View {
                     Text(model.searchSummary).font(.caption)
                     Toggle(localized("Auto follow", "自动跟随"), isOn: Binding(get: { terminal.taskLogFollowsOutput }, set: { terminal.followTaskLog($0) })).toggleStyle(.checkbox)
                 }
-                PythonLogCanvas(terminal: terminal).id(terminal.attachment).frame(minHeight: 160)
+                PythonLogCanvas(terminal: terminal).id(terminal.attachment).frame(minHeight: model.workspaceDocked ? 0 : 160, maxHeight: .infinity)
                 HStack {
                     Text(terminal.error).foregroundStyle(.red)
                     Spacer()
