@@ -86,6 +86,8 @@ enum SettingsSmoke {
         try await save(model)
         guard model.error.isEmpty, !model.dirty, workspace.settings["fontSize"].number == 17 else { throw BridgeFailure(code: "SETTINGS_QA_SAVE", message: "Native settings did not save") }
         try await verifyAutomaticSave(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
+        try await verifyLegacyExport(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
+        try await verifyDefaultAgent(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         let other = try await CoreBridge.open(root: root)
         do {
             model.numbers["fileFontSize"] = "19"
@@ -245,6 +247,75 @@ enum SettingsSmoke {
         report["nativeSettingsFeatureAcceptanceComplete"] = false
         report["remaining"] = ["Automatic update effects remain tracked in #45; preference/file/search/inspector/swap/zoom and GitHub have separate reports; actual OS login approval uses the authorized simulation boundary"]
         current.window.orderOut(nil)
+    }
+
+    private static func verifyLegacyExport(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Missing actual Core bridge") }
+        let before = try await bridge.snapshot(), file = root.appendingPathComponent("snapshot-v1.json")
+        let bytes = try Data(contentsOf: file), original = model.numbers["fontSize"]
+        model.numbers["fontSize"] = "999"; model.section = "general"
+        try await TerminalSmoke.wait("Render actual compatibility export entry") { (view(settings.window, id: "native-settings-legacy-export") as? NSButton)?.isEnabled == true }
+        guard let button = view(settings.window, id: "native-settings-legacy-export") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Missing export control") }
+        button.performClick(nil)
+        try await TerminalSmoke.wait("Actual export entry opens its native save sheet") { settings.window.attachedSheet is NSSavePanel && model.busy }
+        guard let panel = settings.window.attachedSheet as? NSSavePanel else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "The actual export sheet is missing") }
+        settings.window.performClose(nil)
+        guard settings.window.isVisible else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Closing bypassed the pending export guard") }
+        if settings.window.attachedSheet === panel { panel.cancel(nil) }
+        try await TerminalSmoke.wait("Cancelling export restores settings without saving") { settings.window.attachedSheet == nil && !model.busy && settings.window.isVisible }
+        guard model.numbers["fontSize"] == "999", try Data(contentsOf: file) == bytes else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Cancelled export changed saved data or discarded a draft") }
+        let name = "native-settings-legacy-export.json", destination = evidence.appendingPathComponent(name)
+        guard await model.exportLegacy(to: destination) else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: model.error) }
+        let exportedBytes = try Data(contentsOf: destination), exported = try JSONDecoder().decode(JSONValue.self, from: exportedBytes)
+        guard let source = exported["values"]["uterm.desktop.settings.v1"].string,
+              try JSONDecoder().decode(JSONValue.self, from: Data(source.utf8)) == before.document.settings,
+              exported["revision"].string == before.revision, model.numbers["fontSize"] == "999",
+              try Data(contentsOf: file) == bytes else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Export changed the store or included an invalid settings draft") }
+        guard !(await model.exportLegacy(to: root)), model.errorCode == "LEGACY_EXPORT_FAILED",
+              model.numbers["fontSize"] == "999", try Data(contentsOf: file) == bytes,
+              try Data(contentsOf: destination) == exportedBytes else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Failed export changed data, the previous export or its draft") }
+        let capture = "native-settings-legacy-export-error.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        model.numbers["fontSize"] = original; await model.reload()
+        guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Explicit reload did not recover export feedback") }
+        report["nativeLegacyExportProof"] = ["actualSavePanelCancellation": true, "busyCloseGuard": true, "committedDataExported": true, "storeUnchanged": true, "draftRetained": true, "failedWriteRetainsPreviousExport": true, "capture": capture, "exportFile": name]
+    }
+
+    private static func verifyDefaultAgent(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_QA_AGENT", message: "Missing actual Core bridge") }
+        let before = try await bridge.snapshot(), definitions = try await bridge.call("agent.catalog")["definitions"]
+        let ids = ["qa-settings-a", "qa-settings-b"]
+        let fixtures: [JSONValue] = ids.map { .object(["id": .string($0), "name": .string("Settings fixture " + $0), "program": .string("/usr/bin/true"), "arguments": .array([])]) }
+        _ = try await bridge.call("agent.definitions.save", params: .object(["definitions": .array(definitions.array + fixtures)]))
+        _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(before.revision), "patch": .object(["enabledAgents": .array(ids.map(JSONValue.string))])]))
+        await model.workspace.reload(); await model.reload(); model.section = "workspace"
+        let file = root.appendingPathComponent("snapshot-v1.json"), readonly = try Data(contentsOf: file)
+        try await TerminalSmoke.wait("Render enabled available Agents in the actual picker") { (view(settings.window, id: "native-settings-default-agent") as? NSPopUpButton)?.isEnabled == true }
+        guard let picker = view(settings.window, id: "native-settings-default-agent") as? NSPopUpButton,
+              picker.itemArray.compactMap({ $0.representedObject as? String }) == ids,
+              picker.selectedItem?.representedObject as? String == ids[0], !model.dirty,
+              picker.itemArray.allSatisfy({ $0.title.hasPrefix("Settings fixture ") }),
+              try Data(contentsOf: file) == readonly else { throw BridgeFailure(code: "SETTINGS_QA_AGENT", message: "Agent filtering, names or read-only fallback differs from shared behavior") }
+        picker.selectItem(at: 1)
+        guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker) else { throw BridgeFailure(code: "SETTINGS_QA_AGENT", message: "Actual Agent selection was not delivered") }
+        try await TerminalSmoke.wait("Save actual default Agent selection") { !model.automaticSaving && !model.busy }
+        let selected = try await bridge.snapshot()
+        guard model.error.isEmpty, selected.document.settings["defaultAgent"].string == ids[1] else { throw BridgeFailure(code: "SETTINGS_QA_AGENT", message: "Actual Agent selection was not persisted") }
+        _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(selected.revision), "patch": .object(["enabledAgents": .array([])])]))
+        await model.workspace.reload(); await model.reload()
+        let disabledBytes = try Data(contentsOf: file)
+        try await TerminalSmoke.wait("Disable the picker when no available Agent is enabled") { !picker.isEnabled && picker.selectedItem?.representedObject as? String == "" }
+        guard !model.dirty, try Data(contentsOf: file) == disabledBytes, (try await bridge.snapshot()).document.settings["defaultAgent"].string == ids[1] else { throw BridgeFailure(code: "SETTINGS_QA_AGENT", message: "Empty Agent rendering implicitly rewrote preferences") }
+        _ = picker.scrollToVisible(picker.bounds)
+        let capture = "native-settings-default-agent-disabled.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        let current = try await bridge.snapshot()
+        _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(current.revision), "patch": .object(["enabledAgents": before.document.settings["enabledAgents"], "defaultAgent": before.document.settings["defaultAgent"]])]))
+        _ = try await bridge.call("agent.definitions.save", params: .object(["definitions": definitions]))
+        await model.workspace.reload(); await model.reload()
+        report["nativeDefaultAgentPickerProof"] = ["actualCoreCatalog": true, "enabledAvailableOnly": true, "customNames": true, "displayFallbackDoesNotWrite": true, "actualPickerAutosaved": true, "disabledEmptyDoesNotWrite": true, "simulatedAgentPrograms": "/usr/bin/true; no real Agent account or login", "capture": capture]
     }
 
     private static func editField(_ settings: NativeSettingsWindow, key: String, text: String, enter: Bool = false) async throws {

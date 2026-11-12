@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import SwiftUI
 import UTermBridge
+import UniformTypeIdentifiers
 
 @MainActor
 final class NativeSettingsModel: ObservableObject {
@@ -41,7 +42,10 @@ final class NativeSettingsModel: ObservableObject {
     var dirty: Bool { values != baseline || numbers != baselineNumbers || shortcuts != baselineShortcuts }
     var commands: [JSONValue] { catalog["commands"].array }
     var terminalThemes: [JSONValue] { catalog["themes"].array + (values["customThemes"]?.array ?? []) }
-    var agentIDs: [String] { Array(Set(agents["builtins"].array.compactMap(\.string) + agents["definitions"].array.compactMap { $0["id"].string })).sorted() }
+    var agentIDs: [String] {
+        let enabled = Set((values["enabledAgents"]?.array ?? []).compactMap(\.string))
+        return agents["available"].array.compactMap(\.string).filter { enabled.contains($0) }
+    }
     init(workspace: WorkspaceModel) {
         self.workspace = workspace; maven = NativeMavenSettingsModel()
         databaseComponents = NativeDatabaseComponentsModel(workspace: workspace)
@@ -119,6 +123,40 @@ final class NativeSettingsModel: ObservableObject {
         values["agentNotifications"] = .bool(false)
         numbers = numberStrings(values); shortcuts = [:]
         error = ""; notice = localized("Defaults are ready. Save to apply them.", "已载入默认值，保存后生效。")
+    }
+    func chooseLegacyExport(over window: NSWindow) {
+        guard !busy, !automaticSaving, !frozen else { return }
+        let panel = NSSavePanel(); panel.nameFieldStringValue = "uterm-legacy-export.json"; panel.allowedContentTypes = [.json]
+        busy = true; error = ""; errorCode = ""; notice = ""
+        panel.beginSheetModal(for: window) { [weak self] response in
+            Task { @MainActor in
+                guard let self else { return }
+                defer { self.busy = false }
+                if response == .OK, let destination = panel.url { _ = await self.writeLegacyExport(to: destination) }
+            }
+        }
+    }
+    func exportLegacy(to destination: URL) async -> Bool {
+        guard !busy, !automaticSaving, !frozen else { return false }
+        busy = true; error = ""; errorCode = ""; notice = ""; defer { busy = false }
+        return await writeLegacyExport(to: destination)
+    }
+    private func writeLegacyExport(to destination: URL) async -> Bool {
+        guard let bridge else { errorCode = "CLOSED"; error = localized("The settings client is closed. Reopen settings.", "设置客户端已关闭，请重新打开设置。"); return false }
+        do {
+            await workspace.flushWorkspaceOperations()
+            let exported = try await bridge.call("legacy.export")
+            try await Task.detached(priority: .utility) {
+                let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                try encoder.encode(exported).write(to: destination, options: .atomic)
+            }.value
+            notice = localized("Legacy-compatible data exported.", "旧版兼容数据已导出。")
+            return true
+        } catch {
+            errorCode = (error as? BridgeFailure)?.code ?? "LEGACY_EXPORT_FAILED"
+            self.error = localized("Could not export compatibility data. Check saved data and the destination, then retry. Your draft is retained.", "无法导出兼容数据，请检查保存数据和目标后重试，草稿已保留。")
+            return false
+        }
     }
     func importTheme(source: String, name: String) async {
         guard !busy, !frozen, let bridge else { return }
@@ -222,6 +260,7 @@ struct NativeSettingsView: View {
             number("fileTabLimit", "File tab limit", "文件标签数量上限")
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
             number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）").disabled(model.values["breakReminder"]?.bool != true)
+            NativeLegacyExportButton(model: model).frame(height: 28)
         }.formStyle(.grouped)
     }
     private var appearance: some View {
@@ -279,9 +318,7 @@ struct NativeSettingsView: View {
                 Text(localized("Only empty workspaces can be deleted. Keep at least one workspace.", "仅可删除空工作区，至少保留一个工作区。")).font(.caption).foregroundStyle(.secondary)
             }
             choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
-                Picker(localized("Default Agent", "默认 Agent"), selection: text("defaultAgent")) {
-                    ForEach(model.agentIDs, id: \.self) { id in Text(id).tag(id) }
-                }
+            NativeDefaultAgentPicker(model: model)
             Section(localized("Sidebar", "侧栏")) {
                 Toggle(localized("Show SSH connections", "显示 SSH 连接"), isOn: flag("showSshConnections"))
                 Toggle(localized("Show Redis connections", "显示 Redis 连接"), isOn: flag("showRedisConnections"))
