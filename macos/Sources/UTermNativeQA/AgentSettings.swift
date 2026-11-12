@@ -15,7 +15,12 @@ final class AgentSettingsModel: ObservableObject {
     @Published var argumentsText = "[]"
     @Published var notice = ""
     @Published var error = ""
-    @Published var usage: JSONValue = .null
+    @Published private(set) var usageByAgent: [String: JSONValue] = [:]
+    @Published private(set) var usageErrors: [String: String] = [:]
+    @Published var usageSelected = "claude"
+    static let usageAgents = ["claude", "codex", "kimi", "grok"]
+    var usage: JSONValue { usage(for: selected) }
+    func usage(for agent: String) -> JSONValue { usageByAgent[agent] ?? .null }
     @Published var visible = false
     @Published private(set) var inlineVisible = false
     private var inlineOwners: Set<String> = []
@@ -24,8 +29,15 @@ final class AgentSettingsModel: ObservableObject {
     private(set) var qaUsageReads = 0
     private(set) var qaUsageLastRemote = false
     private(set) var qaUsageLastKeychain = false
+    private(set) var qaUsageReadsByAgent: [String: Int] = [:]
     private var usageVisible: Bool { visible || inlineVisible }
-    var usageRefreshKey: String { [selected, String(usageVisible), String(frozen), String(workspace.settings["usageRemote"].bool ?? true), String(workspace.settings["usageRefreshInterval"].number ?? 60)].joined(separator: ":") }
+    private var usageTargets: [String] {
+        var targets: Set<String> = []
+        if visible, Self.usageAgents.contains(selected) { targets.insert(selected) }
+        if inlineVisible, Self.usageAgents.contains(usageSelected) { targets.insert(usageSelected) }
+        return targets.sorted()
+    }
+    var usageRefreshKey: String { [usageTargets.joined(separator: ","), String(usageVisible), String(frozen), String(workspace.settings["usageRemote"].bool ?? true), String(workspace.settings["usageRefreshInterval"].number ?? 60)].joined(separator: ":") }
     private var original = ""
     private var draftID = "codex"
     var definitions: [JSONValue] { catalog["definitions"].array }
@@ -77,12 +89,16 @@ final class AgentSettingsModel: ObservableObject {
     }
     func perform(_ method: String, params: [String: JSONValue]) async {
         guard !busy, !frozen, let bridge else { return }
-        busy = true; error = ""; notice = ""; defer { busy = false }
+        let readingUsage = method == "agent.usage", agent = params["agent"]?.string ?? selected
+        busy = true
+        if !readingUsage { error = ""; notice = "" }
+        defer { busy = false }
         do {
             let value = try await bridge.call(method, params: .object(params))
             if method == "agent.usage" {
                 qaUsageReads += 1; qaUsageLastRemote = params["remote"]?.bool == true; qaUsageLastKeychain = params["allowKeychain"]?.bool == true
-                if params["agent"]?.string == selected { usage = value }
+                qaUsageReadsByAgent[agent, default: 0] += 1
+                usageByAgent[agent] = value; usageErrors[agent] = nil
             } else {
                 catalog = try await bridge.call("agent.catalog")
                 if method == "agent.definitions.save" { select(identifiers.contains(identifier) ? identifier : "codex", force: true) }
@@ -90,22 +106,25 @@ final class AgentSettingsModel: ObservableObject {
                 notice = localized("Agent settings updated.", "Agent 设置已更新。")
             }
         } catch {
-            self.error = localized("Agent operation failed. Check the command path and configuration, then retry.", "Agent 操作失败，请检查程序路径和配置后重试。")
+            let message = localized("Agent operation failed. Check the command path and configuration, then retry.", "Agent 操作失败，请检查程序路径和配置后重试。")
+            if readingUsage { usageErrors[agent] = message } else { self.error = message }
         }
     }
     func pollUsage() async {
-        guard usageVisible, !frozen, ["codex", "claude", "kimi", "grok"].contains(selected) else { return }
+        guard usageVisible, !frozen, !usageTargets.isEmpty else { return }
         while catalog == .null && usageVisible && !frozen && !Task.isCancelled {
             if busy { try? await Task.sleep(for: .milliseconds(25)) }
             else { await reload(); if catalog == .null { return } }
         }
         guard catalog != .null else { return }
         while !Task.isCancelled && usageVisible && !frozen {
+          for agent in usageTargets {
             while busy && !Task.isCancelled {
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }
             }
             guard !Task.isCancelled, usageVisible, !frozen else { return }
-            await perform("agent.usage", params: ["agent": .string(selected), "remote": .bool(workspace.settings["usageRemote"].bool ?? true), "allowKeychain": .bool(false)])
+            if usageTargets.contains(agent) { await perform("agent.usage", params: ["agent": .string(agent), "remote": .bool(workspace.settings["usageRemote"].bool ?? true), "allowKeychain": .bool(false)]) }
+          }
             do { try await Task.sleep(for: .seconds(workspace.settings["usageRefreshInterval"].number ?? 60)) } catch { return }
         }
     }
@@ -152,6 +171,7 @@ struct AgentSettingsView: View {
     var scope: AgentSettingsScope = .all
     @State private var confirmInstall = false
     @State private var confirmQuota = false
+    private var usageAgent: String { scope == .usage ? model.usageSelected : model.selected }
     private func field(_ key: ReferenceWritableKeyPath<AgentSettingsModel, String>, _ id: String, _ en: String, _ zh: String) -> some View {
         HStack {
             Text(localized(en, zh)); Spacer()
@@ -197,32 +217,40 @@ struct AgentSettingsView: View {
         }
     }
     @ViewBuilder private var usageControls: some View {
+        let usage = model.usage(for: usageAgent)
         Section(localized("Usage", "用量")) {
-            Button(localized("Read local usage", "读取本地用量")) { Task { await model.perform("agent.usage", params: ["agent": .string(model.selected), "remote": .bool(false), "allowKeychain": .bool(false)]) } }
-                .disabled(!["codex", "claude", "kimi", "grok"].contains(model.selected))
+            Button(localized("Read local usage", "读取本地用量")) { Task { await model.perform("agent.usage", params: ["agent": .string(usageAgent), "remote": .bool(false), "allowKeychain": .bool(false)]) } }
+                .disabled(!AgentSettingsModel.usageAgents.contains(usageAgent))
             Button(localized("Read account quota…", "读取账户额度…")) { confirmQuota = true }
-                .disabled(!["codex", "claude", "kimi", "grok"].contains(model.selected))
-            if model.usage != .null {
-                Text(localized("Input / output tokens: ", "输入／输出 Token：") + String(format: "%.0f / %.0f", model.usage["input"].number ?? 0, model.usage["output"].number ?? 0))
-                Text(localized("Usage records: ", "用量记录：") + String(format: "%.0f", model.usage["records"].number ?? 0))
-                ForEach(Array(model.usage["windows"].array.enumerated()), id: \.offset) { _, value in
+                .disabled(!AgentSettingsModel.usageAgents.contains(usageAgent))
+            if let error = model.usageErrors[usageAgent] { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            if usage != .null {
+                Text(localized("Input / output tokens: ", "输入／输出 Token：") + String(format: "%.0f / %.0f", usage["input"].number ?? 0, usage["output"].number ?? 0))
+                Text(localized("Cache read / write tokens: ", "缓存读取／写入 Token：") + String(format: "%.0f / %.0f", usage["cache_read"].number ?? 0, usage["cache_write"].number ?? 0))
+                Text(localized("Usage records: ", "用量记录：") + String(format: "%.0f", usage["records"].number ?? 0))
+                if usage["records"].number == 0 { Text(localized("No token records found for the last seven days.", "未找到近 7 天的 Token 记录。")) }
+                if usage["partial"].bool == true { Text(localized("These totals include only readable log records.", "当前统计仅包含可读取的日志记录。")) }
+                ForEach(Array(usage["windows"].array.enumerated()), id: \.offset) { _, value in
                     Text((value["label"].string ?? "") + String(format: " %.0f%%", value["percent"].number ?? 0))
                 }
-                if let notice = model.usage["notice"].string { Text(localized("Account quota is unavailable. Check the CLI sign-in and retry.", "账户额度暂不可用，请检查 CLI 登录状态后重试。")).help(notice) }
+                if let notice = usage["notice"].string { Text(localized("Account quota is unavailable. Check the CLI sign-in and retry.", "账户额度暂不可用，请检查 CLI 登录状态后重试。")).help(notice) }
             }
         }
     }
     var body: some View {
         VStack(alignment: .leading) {
             Form {
+                if scope == .usage { NativeUsageTabs(model: model).frame(height: 32) }
+                else {
                 Picker("Agent", selection: $model.selected) {
                     if !model.identifiers.contains(model.selected) { Text(model.selected.isEmpty ? localized("New custom Agent", "新建自定义 Agent") : model.selected).tag(model.selected) }
                     ForEach(model.identifiers, id: \.self) { id in Text(id).tag(id) }
                 }.onChange(of: model.selected) { _, value in model.select(value) }
+                }
                 if scope != .usage { commandControls }
                 if scope != .commands { usageControls }
             }.formStyle(.grouped).disabled(model.busy || model.frozen || workspace.busy)
-            if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).padding(.horizontal) }
+            if scope != .usage, !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).padding(.horizontal) }
             if !model.notice.isEmpty { Text(model.notice).textSelection(.enabled).padding(.horizontal) }
             HStack { if model.busy { ProgressView().controlSize(.small) }; Spacer(); Button(localized("Reload", "重新读取")) { Task { await model.reload() } }.disabled(model.busy || model.frozen) }.padding()
         }.frame(minWidth: scope == .all ? 600 : 0, minHeight: scope == .all ? 540 : 0).task { await model.reload() }
@@ -232,7 +260,7 @@ struct AgentSettingsView: View {
             Button(localized("Cancel", "取消"), role: .cancel) {}
         }
         .confirmationDialog(localized("Read quota using the CLI's saved sign-in? macOS may request Keychain access.", "使用 CLI 已保存的登录信息读取额度？macOS 可能请求钥匙串访问权限。"), isPresented: $confirmQuota) {
-            Button(localized("Read account quota", "读取账户额度")) { Task { await model.perform("agent.usage", params: ["agent": .string(model.selected), "remote": .bool(true), "allowKeychain": .bool(true)]) } }
+            Button(localized("Read account quota", "读取账户额度")) { Task { await model.perform("agent.usage", params: ["agent": .string(usageAgent), "remote": .bool(true), "allowKeychain": .bool(true)]) } }
             Button(localized("Cancel", "取消"), role: .cancel) {}
         }
     }

@@ -658,6 +658,12 @@ require a successful current-source macOS run; Linux cannot establish AppKit acc
 passes 23 focused settings/Agent tests, 34 paired-evidence/discovery policies, 19 personal package
 policies, formatting, report-validator syntax and documentation checks for this candidate.
 
+Usage has independent Claude, Codex, Kimi and Grok tabs, so changing its Agent never selects or
+discards a command draft. Results and errors are retained per Agent, including cache-read/write
+counts and partial/no-record notices. Visible entries share one sequential polling task; automatic
+reads preserve unrelated command errors. QA operates the actual Agent tabs with an unsaved command
+and requires a new read plus both retained results.
+
 General, Terminal, Shortcuts, Local control and Software updates use plain scrollable rows with
 checkboxes instead of macOS grouped cards. General keeps the existing login-item approval/retry
 controls, with compact export/reset actions below a divider; narrow windows stack these actions.

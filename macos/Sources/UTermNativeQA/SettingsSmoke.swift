@@ -315,7 +315,7 @@ enum SettingsSmoke {
         let commandsBefore = try await bridge.call("agent.catalog")["definitions"]
         model.section = "agents"
         try await TerminalSmoke.wait("Load inline Agent commands in the settings workspace") { agents.catalog != .null && !agents.busy && view(settings.window, id: "native-agent-field-program") != nil }
-        let program = agents.program
+        let program = agents.program, commandAgent = agents.selected
         func editProgram(_ text: String) throws {
             guard let field = view(settings.window, id: "native-agent-field-program") as? NSTextField else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Inline Agent command field is missing") }
             _ = field.scrollToVisible(field.bounds)
@@ -332,7 +332,15 @@ enum SettingsSmoke {
         guard let usage = view(settings.window, id: "native-settings-section-usage") as? NSButton else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual Usage category is missing") }
         let reads = agents.qaUsageReads
         usage.performClick(nil)
-        try await TerminalSmoke.wait("Read local usage inside the same settings overlay") { model.section == "usage" && agents.inlineVisible && agents.qaUsageReads > reads && !agents.busy }
+        try await TerminalSmoke.wait("Read local usage inside the same settings overlay") { model.section == "usage" && agents.inlineVisible && agents.qaUsageReads > reads && agents.usage(for: agents.usageSelected) != .null && !agents.busy }
+        let firstUsageAgent = agents.usageSelected, firstUsage = agents.usage(for: agents.usageSelected)
+        guard let tabs = view(settings.window, id: "native-agent-usage-tabs") as? NSSegmentedControl else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual Usage Agent tabs are missing") }
+        let nextAgent = firstUsageAgent == "kimi" ? "grok" : "kimi"
+        let nextReads = agents.qaUsageReadsByAgent[nextAgent] ?? 0
+        tabs.selectedSegment = AgentSettingsModel.usageAgents.firstIndex(of: nextAgent)!
+        guard let action = tabs.action, NSApp.sendAction(action, to: tabs.target, from: tabs) else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual usage tab selection was not delivered") }
+        try await TerminalSmoke.wait("Usage Agent tabs refresh independently of an unsaved command") { agents.usageSelected == nextAgent && (agents.qaUsageReadsByAgent[nextAgent] ?? 0) > nextReads && agents.usage(for: nextAgent) != .null && !agents.busy }
+        guard agents.selected == commandAgent, agents.program == draft, agents.dirty, agents.usage(for: firstUsageAgent) == firstUsage else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Changing usage Agent discarded a command or another Agent's result") }
         guard !agents.qaUsageLastRemote, !agents.qaUsageLastKeychain, agents.program == draft else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Inline usage lost the command draft or requested account access") }
         let usageCapture = "native-settings-inline-agent-usage.png"
         try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(usageCapture))
@@ -356,7 +364,7 @@ enum SettingsSmoke {
         model.values["usageRemote"] = previousRemote
         try await save(model)
         guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Could not restore the saved usage preference") }
-        report["nativeInlineAgentSettingsProof"] = ["actualFieldEditor": true, "actualCategorySelection": true, "sameWorkspaceOverlay": true, "sameCachedModelAcrossMenuWindow": true, "inlineLocalUsage": true, "automaticKeychainAllowed": agents.qaUsageLastKeychain, "hiddenPollingStopped": true, "cancelledQuitRetainsDraft": true, "savedDataUnchanged": true, "preferencesRestored": true, "captures": [commandsCapture, usageCapture]] as [String: Any]
+        report["nativeInlineAgentSettingsProof"] = ["actualFieldEditor": true, "actualCategorySelection": true, "sameWorkspaceOverlay": true, "sameCachedModelAcrossMenuWindow": true, "inlineLocalUsage": true, "independentUsageAgentTabs": true, "perAgentResultsRetained": true, "automaticKeychainAllowed": agents.qaUsageLastKeychain, "hiddenPollingStopped": true, "cancelledQuitRetainsDraft": true, "savedDataUnchanged": true, "preferencesRestored": true, "captures": [commandsCapture, usageCapture]] as [String: Any]
         model.section = "general"
     }
 

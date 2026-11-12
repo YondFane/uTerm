@@ -50,7 +50,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     assert (evidence / proof['capture']).stat().st_size > 1000
     assert data['nativeThemeFileNamesAndBoundedReads']
     proof = data['nativeInlineAgentSettingsProof']
-    for key in ['actualFieldEditor', 'actualCategorySelection', 'sameWorkspaceOverlay', 'sameCachedModelAcrossMenuWindow', 'inlineLocalUsage', 'hiddenPollingStopped', 'cancelledQuitRetainsDraft', 'savedDataUnchanged', 'preferencesRestored']:
+    for key in ['actualFieldEditor', 'actualCategorySelection', 'sameWorkspaceOverlay', 'sameCachedModelAcrossMenuWindow', 'inlineLocalUsage', 'independentUsageAgentTabs', 'perAgentResultsRetained', 'hiddenPollingStopped', 'cancelledQuitRetainsDraft', 'savedDataUnchanged', 'preferencesRestored']:
         assert proof[key] is True, key
     assert proof['automaticKeychainAllowed'] is False
     for name in proof['captures']: assert (evidence / name).stat().st_size > 1000, name
