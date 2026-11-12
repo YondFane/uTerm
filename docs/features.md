@@ -618,6 +618,16 @@ create/rename/delete operations. Agent commands/hooks and quota open their exist
 window. Java development tools has a standalone section; its source-bound native checks are recorded
 under Optional JDK and Maven tools.
 
+Settings QA reads retry a writer-busy snapshot at most twice. A peer fixture write repeats only
+after confirming that its original revision, workspace and settings are unchanged; an uncertain
+write or conflict still fails. Application writes retain their existing behavior. Reports record the
+peer phase and retry counts. Source `3304f74`, tested merge `2cc4f37`, passes Intel launch lists,
+SSH/PostgreSQL/Redis, Git and workspace panels, but its settings peer-conflict setup fails with
+`WRITER_BUSY`; the full interaction matrix is not accepted. The original report remains in
+[artifact13942897475](https://github.com/YondFane/uTerm/actions/runs/43210025899/artifacts/13942897475).
+Linux passes 26 evidence-policy checks plus shell/report syntax, formatting and documentation
+checks. The bounded-read and unchanged-peer protection still needs current-source Mac validation.
+
 Both settings windows provide **Search settings** above category navigation. Search matches category
 names and bilingual field keywords, including JDK registration, proxy settings and update
 preferences. Matching normalizes full-width characters, ignores case and requires every word to
