@@ -53,6 +53,12 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
     assert 'failure' not in report, report
     assert 'cleanupError' not in report, report
     assert report['coreReady'] and not report['productionDataAccess'], report
+    attempts = report['explicitSSHProfileSaveAttempts']
+    assert any(item['phase'] == 'initial' and item['saved'] is True for item in attempts)
+    for item in attempts:
+        assert type(item['attempt']) is int and 1 <= item['attempt'] <= 3
+        assert item['failedDraftRetained'] is True
+        assert item['canonicalTargetRetainedOnBusy'] is True
     for key in ['nativeSSHMenuAndProfileSaved', 'profileCASRetainedDraft', 'realAuthenticatedSFTPUploadAndDownload',
                 'nativeTransferProgressAndGenerationCancel', 'nativeForwardingStarted', 'nativeForwardingBannerReceived',
                 'nativeForwardingStaleStopRejected', 'realRemoteTerminalOutput', 'remoteDetachReplayAndHostRetained',
