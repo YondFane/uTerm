@@ -45,6 +45,7 @@ class ParityEvidenceTests(unittest.TestCase):
                                   inspectorTop=0, inspectorHeight=720, inspectorHeaderTop=0, inspectorFooterBottom=720, inspectorViewportHeight=720,
                                   sidebarRowHeight=32, sidebarSectionHeight=32, sidebarSectionGap=18, sidebarListTop=8,
                                   fontFamily="Cascadia Code", fontFace="CascadiaCode-Regular", fontSourceSHA256=font_digest, fontCharacterWidth=9.96,
+                                  terminalRenderer=dict(columns=40, rows=24, viewportWidth=400, viewportHeight=600, backingScale=2),
                                   scenario="toolbar-sidebar-two-sessions-files", branchPicker=dict(name=fixture["github"]["head"], fontSize=11, captionGap=5, width=115, height=24, actualAppKitControl=True, actualDOMControl=True, fontName="policy fixture"), fileGitStates={path: "untracked" for path in fixture["files"]}, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
                                   chromeContractSHA256=chrome_digest, toolbarHeight=44, toolbarTop=0, sidebarWidth=min(248, max(180, min(320, width * .3))), inspectorWidth=298.2 if width == 1100 else 128, generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
                     native = f"personal-initial-workspace-{lang}-{appearance}-{width}.png"
@@ -181,6 +182,24 @@ class ParityEvidenceTests(unittest.TestCase):
         self.n = copy.deepcopy(original)
         self.n["workspaceScenes"][0].pop("terminalHeaderHeight")
         with self.assertRaises(AssertionError): self.run_compare()
+
+    def test_renderer_metrics_require_real_grid_viewport_and_scale_on_both_clients(self):
+        original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
+        for side in ["native", "ordinary"]:
+            for key in ["columns", "rows", "viewportWidth", "viewportHeight", "backingScale"]:
+                for value in [None, True, 0, -1, float("nan"), float("inf")]:
+                    self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+                    scene = self.n["workspaceScenes"][0] if side == "native" else self.t["scenes"][0]["checks"]
+                    scene["terminalRenderer"] = {**scene["terminalRenderer"], key: value}
+                    with self.subTest(side=side, key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
+        self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+        scene = self.n["workspaceScenes"][0]
+        scene["terminalRenderer"] = dict(columns=39, rows=23, viewportWidth=400, viewportHeight=600, backingScale=2)
+        result = self.run_compare()
+        pair = next(pair for pair in result["pairs"] if pair["area"] == "workspace" and all(pair[key] == scene[key] for key in ["width", "language", "appearance"]))
+        self.assertEqual(pair["terminalRenderer"]["native"]["columns"], 39)
+        self.assertEqual(pair["terminalRenderer"]["tauri"]["columns"], 40)
+        self.assertFalse(result["functionalParityAccepted"])
 
     def test_navigation_cannot_pass_from_outer_sidebar_width_while_the_rail_is_clipped(self):
         original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)

@@ -121,6 +121,10 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
             assert actual.get("fontSourceSHA256") == font_digest, "Different or stale bundled font"
             assert isinstance(actual.get("fontCharacterWidth"), (int, float)) and 1 < actual["fontCharacterWidth"] < 32, "Missing actual font measurement"
         assert abs(n["fontCharacterWidth"] - t["checks"]["fontCharacterWidth"]) < 0.1, "Different actual terminal character widths"
+        for scene in [n, t["checks"]]:
+            renderer = scene.get("terminalRenderer", {})
+            assert all(type(renderer.get(key)) is int and 0 < renderer[key] <= 10000 for key in ["columns", "rows"]), "Missing actual terminal renderer grid"
+            assert all(type(renderer.get(key)) in [int, float] and math.isfinite(renderer[key]) and 0 < renderer[key] <= 10000 for key in ["viewportWidth", "viewportHeight", "backingScale"]), "Missing actual terminal renderer viewport or scale"
         for metric in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop", "terminalHeaderHeight", "terminalViewportGap"]:
             values = [scene.get(metric) for scene in [n, t["checks"]]]
             assert all(type(value) in [int, float] and 0 <= value < 1000 for value in values), "Missing actual terminal geometry: " + metric
@@ -134,7 +138,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         tfile, tdigest = image(tauri_path.parent, expected_tauri)
         pairs.append(dict(language=language, appearance=appearance, width=width, height=fixture["height"],
                           area="workspace",
-                          native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest))
+                          native=expected_native, tauri=expected_tauri, nativeSHA256=ndigest, tauriSHA256=tdigest,
+                          terminalRenderer=dict(native=n["terminalRenderer"], tauri=t["checks"]["terminalRenderer"])))
     expected_settings = {(section["id"], scene["language"], scene["appearance"], scene["width"], scene["height"])
                          for section in fixture["settingsSections"] for scene in fixture["settingsScenes"]}
     nsettings = native.get("settingsScenes", [])

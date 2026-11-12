@@ -265,6 +265,12 @@ enum PersonalSmoke {
                         captured["fileGitStates"] = fileGitStates
                         captured["fontSourceSHA256"] = NativeBundledFonts.regularSHA256
                         captured["fontCharacterWidth"] = ("M" as NSString).size(withAttributes: [.font: font]).width
+                        let renderer = terminal.view.getTerminal(), optimal = terminal.view.getOptimalFrameSize()
+                        guard renderer.cols > 0, renderer.rows > 0, terminal.view.bounds.width > 0, terminal.view.bounds.height > 0,
+                              terminal.view.window === window else { throw BridgeFailure(code: "PERSONAL_TERMINAL_RENDERER", message: "Actual terminal renderer is detached or has no grid") }
+                        captured["terminalRenderer"] = ["columns": renderer.cols, "rows": renderer.rows,
+                            "viewportWidth": terminal.view.bounds.width, "viewportHeight": terminal.view.bounds.height,
+                            "backingScale": window.backingScaleFactor, "optimalWidth": optimal.width, "optimalHeight": optimal.height] as [String: Any]
                         guard let pane = terminal.view.superview as? NativeTerminalPane else { throw BridgeFailure(code: "PERSONAL_TERMINAL_GEOMETRY", message: "Actual terminal pane is detached") }
                         let terminalGeometry = pane.measuredGeometry()
                         for key in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop"] {

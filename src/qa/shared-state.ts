@@ -574,6 +574,24 @@ async function runUiParity() {
             Math.abs(branchMetrics.captionGap - 5) < 1,
           "Incorrect actual ordinary branch geometry",
         );
+        const renderer = terminalPerformanceSnapshot("ui-parity-0");
+        const viewport = terminal.querySelector<HTMLElement>(".xterm");
+        const screen = viewport?.querySelector<HTMLElement>(".xterm-screen");
+        assert(
+          renderer && renderer.columns > 0 && renderer.rows > 0 && viewport && screen,
+          "Missing actual ordinary terminal renderer grid",
+        );
+        const viewportBounds = viewport.getBoundingClientRect();
+        const screenBounds = screen.getBoundingClientRect();
+        const terminalRenderer = {
+          columns: renderer.columns,
+          rows: renderer.rows,
+          viewportWidth: viewportBounds.width,
+          viewportHeight: viewportBounds.height,
+          backingScale: devicePixelRatio,
+          screenWidth: screenBounds.width,
+          screenHeight: screenBounds.height,
+        };
         await scene(`workspace-${language}-${appearance}-${width}`, {
           chromeContractSHA256,
           branchPicker: branchMetrics,
@@ -596,6 +614,7 @@ async function runUiParity() {
           fontFace: "CascadiaCode-Regular",
           fontSourceSHA256: fontManifest.files["CascadiaCode-Regular.ttf"],
           fontCharacterWidth: fontContext.measureText("M").width,
+          terminalRenderer,
           ...sidebarGeometry,
           ...sidebarRailGeometry,
           projectName: parityFixture.projectName,

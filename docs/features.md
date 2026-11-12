@@ -82,6 +82,13 @@ Linux checks verify release bytes, styles, delayed mounting, load failures and r
 Chromium loads all five faces with an M advance of 9.9609375px at 17px. Latest macOS font
 registration, window rendering and paired metrics still require CI.
 
+Workspace reports also read actual renderer columns/rows, viewport bounds and backing scale from
+SwiftTerm and xterm. Native optimal size and ordinary screen bounds are retained alongside them. The
+paired report rejects missing or invalid metrics and retains both grids for diagnosis; matching font
+glyph widths alone do not establish matching terminal wrapping or full visual acceptance. Linux
+passes 33 paired-evidence and run-discovery policy checks, type/production build, formatting and
+documentation checks. These new renderer measurements still require same-source Mac captures.
+
 Regular toolbar/sidebar vectors and dimensions use `shared/contracts/chrome-ui-v1.json`. React reads
 that source and Swift renders the generated paths through CoreGraphics. The native candidate uses
 the shared 44-point toolbar and interface palette; Agent brands and special close controls remain
