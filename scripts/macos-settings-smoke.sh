@@ -35,6 +35,15 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     for key in ['realWorkspaceChildWindow', 'actualCloseButton', 'workspaceFocusRestored', 'sameCachedWindowReopened', 'minimumWindow640x420']:
         assert proof[key] is True, key
     assert (evidence / proof['capture']).stat().st_size > 1000
+    proof = data['nativeLegacyExportProof']
+    for key in ['actualSavePanelCancellation', 'busyCloseGuard', 'committedDataExported', 'storeUnchanged', 'draftRetained', 'failedWriteRetainsPreviousExport']:
+        assert proof[key] is True, key
+    for name in [proof['capture'], proof['exportFile']]: assert (evidence / name).stat().st_size > 100, name
+    proof = data['nativeDefaultAgentPickerProof']
+    for key in ['actualCoreCatalog', 'enabledAvailableOnly', 'customNames', 'displayFallbackDoesNotWrite', 'actualPickerAutosaved', 'disabledEmptyDoesNotWrite']:
+        assert proof[key] is True, key
+    assert proof['simulatedAgentPrograms'] == '/usr/bin/true; no real Agent account or login'
+    assert (evidence / proof['capture']).stat().st_size > 1000
     assert data['nativeThemeFileNamesAndBoundedReads']
     assert data['nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets']
     assert data['nativeGlobalMavenActualSaveConflictDraftAndProjectPreservation']

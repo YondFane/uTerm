@@ -631,6 +631,13 @@ localized names, descriptions and a selected marker. Narrow settings use one col
 saves the interface theme while retaining terminal colors. Full settings styling still requires
 comparison.
 
+Native General includes **Export legacy-compatible data**, using the shared export format and a
+native save sheet. Cancel leaves the store and drafts unchanged. Export writes committed values,
+keeps pending drafts, and reports destination failures without replacing a prior export. The
+new-chat Agent picker lists only enabled, available commands with their custom names. A missing
+default uses the first enabled entry for display; an empty list is disabled. Rendering either
+fallback does not rewrite the stored default.
+
 Linux x86_64 / Node 26 passes 20 focused settings, search and Maven checks, type/production build,
 i18n and generated-contract checks. Native QA inserts text through the actual AppKit field editor,
 clicks the matching category, sends Escape and checks the retained numeric draft and unchanged
@@ -644,6 +651,15 @@ clicks a real theme-preview button, verifies terminal preferences are unchanged,
 `native-settings-theme-cards-900.png` / `native-settings-theme-cards-640.png`. These new
 automatic-save operations and same-source screenshots remain pending macOS CI; the reordered fields
 and full settings styling still require actual Mac screenshots and comparison under #53.
+
+Native QA opens and cancels the actual save sheet, checks its close guard, exports committed data
+with an invalid draft, and rejects a directory destination while retaining the prior export. It
+records `nativeLegacyExportProof`, `native-settings-legacy-export.json` and
+`native-settings-legacy-export-error.png`. Agent selection uses the real Core catalog with two
+explicit `/usr/bin/true` program fixtures, not real Agent accounts; it verifies filtering, custom
+names, read-only fallback, actual selection/save and an unchanged disabled default. It records
+`nativeDefaultAgentPickerProof` and `native-settings-default-agent-disabled.png`. Both new checks
+still require current-source macOS execution.
 
 Interface and terminal font selectors share the ordinary client's preset catalog and localized
 labels. Existing custom font strings remain a selected custom entry until a preset is chosen; simply
