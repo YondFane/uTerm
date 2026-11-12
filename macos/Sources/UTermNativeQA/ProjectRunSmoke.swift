@@ -25,8 +25,18 @@ enum ProjectRunSmoke {
         guard terminal?.id == id, terminal?.generation == generation else { throw BridgeFailure(code: "RUN_LIST", message: "Launch selection replaced the task generation") }
         let screenshot = "native-" + language + "-launch-list-workspace.png"
         try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent(screenshot))
+        guard let content = window.contentView else { throw BridgeFailure(code: "RUN_LIST", message: "Missing actual workspace view") }
+        try await TerminalSmoke.wait("Toolbar run toggle becomes enabled after task selection") {
+            (TerminalSmoke.descendants(content).first { $0.identifier?.rawValue == "native-project-run-" + language } as? NSButton)?.isEnabled == true
+        }
+        guard let toggle = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-project-run-" + language }) as? NSButton else { throw BridgeFailure(code: "RUN_LIST", message: "Missing actual toolbar run button") }
+        toggle.performClick(nil)
+        try await TerminalSmoke.wait("Clicking the active toolbar run button returns to the terminal") { model.panels.active(in: model.inspectorContextKey) == nil }
+        guard terminal?.id == id, terminal?.generation == generation else { throw BridgeFailure(code: "RUN_LIST", message: "Hiding the run panel replaced its task") }
+        toggle.performClick(nil)
+        try await TerminalSmoke.wait("Clicking again reopens the exact run panel") { model.panels.active(in: model.inspectorContextKey)?.id == panel.id && panel.view.window === window }
         model.panels.remove(controller); backing.contentView = panel.view
         controller.showWindow(nil); backing.makeKeyAndOrderFront(nil)
-        report[language + "ToolbarRunList"] = ["passed": true, "realHostTask": true, "actualMenuAction": true, "staleGenerationRejected": true, "scopeRetainedOnRejection": true, "sameTaskGeneration": true, "actualMainWindow": true, "screenshot": screenshot, "input": "Automated NSMenu action and real Core host task; no physical popup pointer/keyboard claim"]
+        report[language + "ToolbarRunList"] = ["passed": true, "realHostTask": true, "actualMenuAction": true, "staleGenerationRejected": true, "scopeRetainedOnRejection": true, "sameTaskGeneration": true, "actualMainWindow": true, "actualToggleButtonRetainedGeneration": true, "screenshot": screenshot, "input": "Automated NSMenu action and real Core host task; no physical popup pointer/keyboard claim"]
     }
 }
