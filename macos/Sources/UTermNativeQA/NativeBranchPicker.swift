@@ -55,7 +55,7 @@ final class NativeBranchPickerModel: ObservableObject {
         changing = true; defer { changing = false }
         var values = arguments; values["directory"] = .string(captured.directory); values["expected"] = expected
         do { _ = try await mutate(method, .object(values), captured) }
-        catch { error = error.localizedDescription; workspace?.error = error.localizedDescription }
+        catch { self.error = error.localizedDescription; workspace?.error = error.localizedDescription }
         await refresh()
     }
 }
@@ -104,12 +104,12 @@ struct NativeBranchPicker: NSViewRepresentable {
                     let remote = actions ? JSONValue.null : try await picker.remote(captured)
                     guard picker.enabled, picker.context == captured, picker.workspace?.inspectorContextKey == captured.key, button.window?.isVisible == true else { return }
                     let menu = NSMenu(); menu.autoenablesItems = false; commands.removeAll()
-                    func note(_ title: String) { let item = NSMenuItem(title: title, action: nil, keyEquivalent: ""); item.isEnabled = false; menu.addItem(item) }
-                    func command(_ title: String, _ method: String, _ values: [String: JSONValue], enabled: Bool = true, checked: Bool = false) {
+                    @MainActor func note(_ title: String) { let item = NSMenuItem(title: title, action: nil, keyEquivalent: ""); item.isEnabled = false; menu.addItem(item) }
+                    @MainActor func command(_ title: String, _ method: String, _ values: [String: JSONValue], enabled: Bool = true, checked: Bool = false) {
                         let id = UUID().uuidString
                         commands[id] = (method, values, captured, expected)
-                        let item = NSMenuItem(title: title, action: #selector(perform(_:)), keyEquivalent: "")
-                        item.target = self; item.representedObject = id; item.isEnabled = enabled; item.state = checked ? .on : .off; menu.addItem(item)
+                        let item = NSMenuItem(title: title, action: #selector(performBranchAction(_:)), keyEquivalent: "")
+                        item.target = self; item.representedObject = id; item.isEnabled = enabled; item.state = checked ? NSControl.StateValue.on : NSControl.StateValue.off; menu.addItem(item)
                     }
                     if actions {
                         note(picker.current); note(picker.branches["upstream"].string ?? localized("No upstream branch", "未设置上游分支"))
@@ -133,7 +133,7 @@ struct NativeBranchPicker: NSViewRepresentable {
                 } catch { picker.workspace?.error = error.localizedDescription }
             }
         }
-        @objc private func perform(_ sender: NSMenuItem) {
+        @objc private func performBranchAction(_ sender: NSMenuItem) {
             guard let id = sender.representedObject as? String, let (method, values, captured, expected) = commands[id] else { return }
             Task { if method == "refresh" { await picker.refresh() } else { await picker.execute(method, arguments: values, captured: captured, expected: expected) } }
         }
