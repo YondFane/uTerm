@@ -1673,6 +1673,18 @@ async function runGit(context: Context) {
   input("Worktree directory", worktree);
   await pause(100);
   await click("New worktree");
+  // Observe the actual completion UI before taking the store lock for a durable read.
+  // 获取存储锁读取持久数据前，先观察界面中的实际完成状态。
+  await until(() => {
+    const tree = document.querySelector(".git-branch-tree");
+    const error = tree?.querySelector('.git-tree-error[role="alert"]')?.textContent;
+    assert(!error, `Worktree creation failed: ${error}`);
+    return [...(tree?.querySelectorAll('[role="status"]') ?? [])].some(
+      (status) =>
+        status.textContent?.trim() ===
+        translate("en", "操作已完成：{p0}", { p0: "qa-tauri-worktree" }),
+    );
+  }, "actual Worktree creation completion before durable observation");
   await until(async () => {
     const shared = (await observeCore("snapshot.read")) as unknown as {
       document: {
@@ -1687,6 +1699,7 @@ async function runGit(context: Context) {
   await scene("git-worktree", {
     branch: "qa-tauri-worktree",
     sharedWorkspaceRegistered: true,
+    observedAfterActualCompletion: true,
     temporaryDirectory: worktree,
   });
   await runWorktreeDeletion();

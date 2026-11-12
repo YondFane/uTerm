@@ -1760,6 +1760,15 @@ repositories' recovery data.
 
 #### Git and editor concurrency validation
 
+Worktree creation QA waits for the actual Git action completion message before observing the durable
+workspace snapshot. Snapshot reads take the canonical store lock and must not introduce a competing
+QA read while the application saves its project tree. Creation errors still fail immediately, and
+the saved Worktree entry remains required; no Git writes are retried. Source `c0e05be4`, tested
+merge `7b181bc3`, retains a Windows partial-registration failure in
+[artifact13963248321](https://github.com/YondFane/uTerm/actions/runs/43258716782/artifacts/13963248321).
+Seven existing Linux Worktree/favorite recovery regressions, type checking, production build and
+document checks pass. The revised observation order requires fresh Windows and Mac execution.
+
 Git recovery QA prepares its two checkpoints with at most three explicit fixture writes each. A
 writer-busy failure permits another attempt only while the repository, favorite revision, source
 digest and exact references remain unchanged; uncertain writes, conflicts and failed reads stop the
