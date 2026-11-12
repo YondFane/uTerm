@@ -4,6 +4,22 @@ import UTermBridge
 
 @MainActor
 enum SSHSmoke {
+    private static func saveProfile(_ ssh: SSHModel, workspace: WorkspaceModel, phase: String, report: inout [String: Any]) async throws -> Bool {
+        let draft = ssh.fingerprint
+        for attempt in 1...3 {
+            await workspace.flushWorkspaceOperations()
+            let saved = await ssh.save()
+            var attempts = report["explicitSSHProfileSaveAttempts"] as? [[String: Any]] ?? []
+            attempts.append(["phase": phase, "attempt": attempt, "saved": saved, "writerBusy": ssh.error.hasPrefix("WRITER_BUSY:"), "failedDraftRetained": saved || ssh.fingerprint == draft])
+            report["explicitSSHProfileSaveAttempts"] = attempts
+            if saved { return true }
+            guard ssh.error.hasPrefix("WRITER_BUSY:"), ssh.fingerprint == draft, attempt < 3 else { return false }
+            // Only the QA driver repeats an explicit save after a side-effect-free writer-busy result.
+            // 仅 QA 驱动在没有副作用的写入繁忙结果后，重复明确的保存操作。
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        return false
+    }
     private static func waitForRemotePrompt(_ terminal: TerminalSession) async throws {
         // PTY ownership precedes authentication; avoid sending a command into the password handshake.
         // PTY 输入所有权早于认证完成，避免将命令发送到密码握手阶段。
@@ -29,7 +45,7 @@ enum SSHSmoke {
         guard let panel = model.panels.panels.first(where: { $0.controller === controller }), let workspaceWindow = panel.view.window else { throw BridgeFailure(code: "SSH_QA", message: "SSH menu did not mount its actual workspace view") }
         let ssh = controller.model
         ssh.name = "SSH QA 中文"; ssh.host = fixture["alias"].string ?? ""; ssh.mode = "alias"; ssh.port = ""; ssh.authentication = "key"; ssh.identity = fixture["identity"].string ?? ""; ssh.rootPath = fixture["remote"].string ?? ""
-        guard await ssh.save(), !ssh.dirty else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
+        guard try await saveProfile(ssh, workspace: model, phase: "initial", report: &report), !ssh.dirty else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
         let profileID = ssh.selectedID
         await model.reload()
         guard model.groups.flatMap({ $0["sshConnections"].array }).contains(where: { $0["id"].string == profileID && $0["name"].string == "SSH QA 中文" }) else { throw BridgeFailure(code: "SSH_QA", message: "SSH menu profile was not saved in shared state") }
@@ -146,7 +162,7 @@ enum SSHSmoke {
         if fixture["passwordServiceLogin"].bool == true {
             await reopened.model.select(nil)
             reopened.model.name = "Password login QA"; reopened.model.host = fixture["passwordAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = fixture["password"].string ?? ""; reopened.model.remember = true; reopened.model.rootPath = fixture["passwordRemote"].string ?? ""
-            guard await reopened.model.save() else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+            guard try await saveProfile(reopened.model, workspace: model, phase: "password", report: &report) else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
             var reference = reopened.model.profile["credential_id"]
             do {
                 await reopened.model.connectFiles()
@@ -171,7 +187,7 @@ enum SSHSmoke {
                 for remembered in [false, true] {
                     let previous = try reopened.model.target()
                     reopened.model.remember = remembered
-                    guard await reopened.model.save(), reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+                    guard try await saveProfile(reopened.model, workspace: model, phase: remembered ? "remember-password" : "temporary-password", report: &report), reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
                     reference = reopened.model.profile["credential_id"]
                     do {
                         _ = try await reopened.model.perform(["kind": .string("auth.configure"), "connection": previous, "password": .null, "remember": previous["remember_password"]])

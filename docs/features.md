@@ -291,6 +291,16 @@ independent-sibling close check and records safe state on creation failure. Thes
 require fresh current-source Mac execution. Linux passes nine targeted SSH/workbench tests, three
 evidence policies, shell syntax, Markdown formatting and documentation checks for these corrections.
 
+At source `a23d81c`, ARM64 passes settings, Java/Python, SSH/PostgreSQL/Redis, Agent and the
+interaction matrix, but the independent Git gate fails while capturing a just-attached Worktree
+confirmation sheet. QA now waits for the actual owned sheet to be visible in WindowServer with
+stable positive bounds before capturing it; cancellation/deletion and screenshot requirements stay
+unchanged. Source `64c0bc6` separately reports writer-busy during password-profile setup. The SSH QA
+driver records each explicit save and retries at most twice only after writer-busy with an unchanged
+draft. Conflict assertions remain single attempts, and the application does not replay failed
+writes. Linux evidence policies, shell/report-validator syntax and documentation checks pass; fresh
+native execution of these timing fixes is still required.
+
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
 before the Git test tool compiles, and uploads their early reports and original windows. SSH,
 database and Redis checks likewise run early and upload `native-services-<runner>-<head>-<attempt>`.
