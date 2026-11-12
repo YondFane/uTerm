@@ -3806,7 +3806,7 @@ their old child paths can be read. Real directory errors remain visible.
   with a delayed parent response, then passes with parent-first refresh. It also checks retained
   cached rows/expansion, resumed child reads and visible permission errors. The native CI retains
   `file-refresh-tests.log` and records the actual CRUD stage if a window check fails; this fix still
-  requires its own macOS run. The complete Linux frontend suite passes 476 checks with 11
+  requires its own macOS run. The complete Linux frontend suite passes 477 checks with 11
   conditional skips; TypeScript/production, formatting, localization and documentation checks pass.
 
 ### File-operation errors
@@ -5913,8 +5913,10 @@ bracketed-paste mode when enabled.
   Chromium at 900×600 and 640×420 uses the actual terminal component and fixture IPC to verify
   notice display/expiry, repeated timing, subsequent input and retained errors, with visual
   inspection of terminal layout after dismissal. TypeScript, production build, localization and
-  formatting checks for changed files pass. The full frontend suite cannot start the shared-core
-  contract and Git-favorites recovery tests because this environment lacks `cargo`. Native
+  formatting checks for changed files pass. On merged source `24a1928`, the Linux suite passes 477
+  frontend checks with 11 conditional skips. Shared Core/FFI checks pass 267 cases, host checks pass
+  86 and backend checks pass 17; optional cases remain ignored. TypeScript/production, desktop
+  compilation, contracts, localization, formatting and documentation checks pass. Native
   macOS/Windows long-paste acceptance remains pending.
 
 ### Input-method punctuation
