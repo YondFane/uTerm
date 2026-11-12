@@ -101,8 +101,9 @@ enum SSHSmoke {
         await ssh.stopForward(status)
         try await TerminalSmoke.wait("Stop owned SSH tunnel") { !ssh.tunnels.contains(where: { $0["id"] == rule["id"] }) }
         report["nativeForwardingStaleStopRejected"] = true
-        await ssh.newTerminal()
-        guard ssh.error.isEmpty, let first = model.selectedTerminal else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
+        guard let firstID = await ssh.newTerminal(), ssh.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: ssh.error) }
+        try await TerminalSmoke.wait("Select the exact first SSH terminal") { model.selectedID == firstID && model.terminals[firstID] != nil }
+        guard let first = model.terminals[firstID] else { throw BridgeFailure(code: "SSH_QA", message: "The created SSH session was not attached") }
         try await waitForRemotePrompt(first)
         let command = "printf 'UTERM_%s\\n' 'SSH_NATIVE_中文'\r"
         first.view.insertText(command, replacementRange: NSRange(location: NSNotFound, length: 0))
@@ -120,9 +121,13 @@ enum SSHSmoke {
         guard hostBefore["pid"] == hostAfter["pid"] else { throw BridgeFailure(code: "SSH_QA", message: "Reconnect replaced the SSH host") }
         report["remoteDetachReplayAndHostRetained"] = true
         var reopened = try await open()
-        await reopened.model.newTerminal()
-        guard reopened.model.error.isEmpty, let second = model.selectedTerminal, second.id != first.id else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
-        try await TerminalSmoke.wait("Second real SSH terminal") { second.generation != nil }
+        await reopened.model.reload(select: profileID)
+        guard let secondID = await reopened.model.newTerminal(), reopened.model.error.isEmpty else {
+            report["secondSSHSessionDiagnostics"] = ["profile": reopened.model.selectedID, "workspace": reopened.model.workspaceID, "dirty": reopened.model.dirty, "busy": reopened.model.busy, "prepared": reopened.model.prepared, "hasSnapshot": reopened.model.snapshot != nil, "selectedSession": model.selectedID ?? ""]
+            throw BridgeFailure(code: "SSH_QA_SECOND_SESSION", message: reopened.model.error.isEmpty ? "The saved connection did not create a second session" : reopened.model.error)
+        }
+        try await TerminalSmoke.wait("Select and attach the exact second real SSH session after reconnect") { model.selectedID == secondID && model.terminals[secondID]?.generation != nil }
+        guard let second = model.terminals[secondID], second.id != first.id else { throw BridgeFailure(code: "SSH_QA_SECOND_SESSION", message: "The second SSH session did not retain its distinct identity") }
         await model.selectSession(first.id); await model.closeSession()
         let remaining = try await current.call("host.status")
         guard !remaining["sessions"].array.contains(where: { $0["spec"]["id"].string == first.id }), remaining["sessions"].array.contains(where: { $0["spec"]["id"].string == second.id && $0["running"].bool == true }) else { throw BridgeFailure(code: "SSH_QA", message: "Closing SSH session affected its sibling") }
@@ -150,8 +155,9 @@ enum SSHSmoke {
                 await reopened.model.disconnectFiles()
                 report["passwordServiceLogin"] = true
                 let passwordProfile = reopened.model.selectedID
-                await reopened.model.newTerminal()
-                guard reopened.model.error.isEmpty, let terminal = model.selectedTerminal else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+                guard let passwordID = await reopened.model.newTerminal(), reopened.model.error.isEmpty else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
+                try await TerminalSmoke.wait("Select the exact password-authenticated SSH terminal") { model.selectedID == passwordID && model.terminals[passwordID] != nil }
+                guard let terminal = model.terminals[passwordID] else { throw BridgeFailure(code: "SSH_QA", message: "The password-authenticated SSH session was not attached") }
                 try await waitForRemotePrompt(terminal)
                 report["remotePromptObservedBeforePasswordCommand"] = true
                 terminal.view.insertText("printf 'UTERM_%s\\n' 'SSH_PASSWORD_NATIVE'\r", replacementRange: NSRange(location: NSNotFound, length: 0))
