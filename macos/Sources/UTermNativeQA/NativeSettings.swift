@@ -386,9 +386,9 @@ struct NativeSettingsView: View {
             if model.catalog == .null || model.values.isEmpty { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
             else {
                 HStack(spacing: 0) {
-                    ScrollView {
-                        VStack(spacing: 4) {
-                            NativeSettingsSearch(model: model).frame(height: 28)
+                    ScrollView(.vertical) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            NativeSettingsSearch(model: model).frame(height: 40)
                             if !model.catalog["sections"].array.contains(where: { model.matchesSection($0["id"].string ?? "", title: model.title($0)) }) { Text(localized("No matching items.", "没有匹配的条目。")).font(.caption).foregroundStyle(.secondary) }
                             navigation("general", "gearshape", "General", "通用")
                             navigation("appearance", "paintpalette", "Appearance", "外观")
@@ -402,8 +402,8 @@ struct NativeSettingsView: View {
                             navigation("maven", "shippingbox", "Maven settings", "Maven 设置")
                             navigation("java", "cup.and.saucer", "Java development tools", "Java 开发环境")
                             navigation("updates", "arrow.down.circle", "Software updates", "软件更新")
-                        }.padding(8)
-                    }.frame(width: 150).background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(workspace.settings, catalog: model.catalog)["sidebar"], fallback: .controlBackgroundColor))).disabled(model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
+                        }.frame(width: 133).padding(.horizontal, 8).padding(.vertical, 12)
+                    }.scrollIndicators(.hidden).frame(width: 149).background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(workspace.settings, catalog: model.catalog)["sidebar"], fallback: .controlBackgroundColor))).disabled(model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
                     Divider()
                     VStack(alignment: .leading, spacing: 0) {
                         Text(model.title(model.catalog["sections"].array.first { $0["id"].string == model.section } ?? .null)).font(.system(size: 16, weight: .semibold)).padding(.horizontal, 28).padding(.top, 24)
@@ -436,8 +436,7 @@ struct NativeSettingsView: View {
     private func navigation(_ id: String, _ symbol: String, _ en: String, _ zh: String) -> some View {
         Group {
             if model.matchesSection(id, title: localized(en, zh)) {
-                NativeSettingsNavigation(model: model, id: id, symbol: symbol, title: model.title(model.catalog["sections"].array.first { $0["id"].string == id } ?? .null)).frame(height: 32)
-                    .background(model.section == id ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                NativeSettingsNavigation(model: model, id: id, symbol: symbol, title: model.title(model.catalog["sections"].array.first { $0["id"].string == id } ?? .null)).frame(maxWidth: .infinity, minHeight: 32)
                     .accessibilityIdentifier("native-settings-section-" + id)
             }
         }
@@ -468,16 +467,40 @@ private struct NativeSettingsNavigation: NSViewRepresentable {
     let symbol: String
     let title: String
     func makeCoordinator() -> Coordinator { Coordinator(model: model, id: id) }
-    func makeNSView(context: Context) -> NSButton {
-        let button = NSButton(title: title, target: context.coordinator, action: #selector(Coordinator.select))
+    func makeNSView(context: Context) -> NavigationButton {
+        let button = NavigationButton(title: title, target: context.coordinator, action: #selector(Coordinator.select))
         button.identifier = NSUserInterfaceItemIdentifier("native-settings-section-" + id)
         button.setAccessibilityIdentifier("native-settings-section-" + id)
         button.isBordered = false; button.alignment = .left; button.imagePosition = .noImage
+        button.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return button
     }
-    func updateNSView(_ button: NSButton, context: Context) {
+    func updateNSView(_ button: NavigationButton, context: Context) {
         button.title = title; button.isEnabled = context.environment.isEnabled
-        button.contentTintColor = model.section == id ? .controlAccentColor : .labelColor
+        button.font = .systemFont(ofSize: 13, weight: .medium)
+        button.palette = NativePreferences.interfacePalette(model.workspace.settings, catalog: model.catalog)
+        button.selected = model.section == id; button.needsDisplay = true
+        button.setAccessibilityLabel(title)
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NavigationButton, context: Context) -> CGSize? {
+        let width = proposal.width ?? 133
+        let text = (title as NSString).boundingRect(with: NSSize(width: max(1, width - 16), height: 200), options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: nsView.font ?? .systemFont(ofSize: 13)])
+        return CGSize(width: width, height: max(32, ceil(text.height) + 16))
+    }
+    @MainActor final class NavigationButton: NSButton {
+        var palette: JSONValue = .null
+        var selected = false
+        override var isFlipped: Bool { true }
+        override var acceptsFirstResponder: Bool { isEnabled }
+        override func becomeFirstResponder() -> Bool { needsDisplay = true; return super.becomeFirstResponder() }
+        override func resignFirstResponder() -> Bool { needsDisplay = true; return super.resignFirstResponder() }
+        override func draw(_ dirtyRect: NSRect) {
+            if selected || isHighlighted { NativePreferences.color(palette["hover"], fallback: .controlBackgroundColor).setFill(); NSBezierPath(roundedRect: bounds, xRadius: 4, yRadius: 4).fill() }
+            let style = NSMutableParagraphStyle(); style.lineBreakMode = .byWordWrapping
+            let color = NativePreferences.color(palette["text"]).withAlphaComponent(isEnabled ? 1 : 0.45)
+            (title as NSString).draw(in: bounds.insetBy(dx: 8, dy: 8), withAttributes: [.font: font ?? .systemFont(ofSize: 13), .foregroundColor: color, .paragraphStyle: style])
+            if window?.firstResponder === self { NativePreferences.color(palette["accent"], fallback: .controlAccentColor).setStroke(); let ring = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4); ring.lineWidth = 2; ring.stroke() }
+        }
     }
     @MainActor final class Coordinator: NSObject {
         let model: NativeSettingsModel
