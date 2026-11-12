@@ -19,7 +19,7 @@ class ImageVerificationTests(unittest.TestCase):
             disk.verify_disk_image(Path('/tmp/qa image.dmg'), attempts)
             self.assertEqual(run.call_count, 2)
             self.assertEqual(run.call_args.args[0], ['hdiutil', 'verify', '/tmp/qa image.dmg'])
-            sleep.assert_called_once_with(.25)
+            sleep.assert_called_once_with(1)
         self.assertEqual([item['passed'] for item in attempts], [False, True])
         self.assertIn('temporarily unavailable', attempts[0]['stderr'])
         self.assertEqual(attempts[1]['stdout'], 'checksum VALID')
@@ -41,7 +41,8 @@ class ImageVerificationTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'Resource busy'):
                 disk.verify_disk_image('busy.dmg', attempts)
             self.assertEqual(run.call_count, 5)
-            self.assertEqual(sleep.call_count, 4)
+            self.assertEqual([call.args[0] for call in sleep.call_args_list], [1, 2, 4, 8])
+            self.assertEqual([item.get("retryDelaySeconds") for item in attempts], [1, 2, 4, 8, None])
         self.assertEqual(len(attempts), 5)
         self.assertTrue(all(not item['passed'] for item in attempts))
         attempts = []
