@@ -262,7 +262,7 @@ enum SettingsSmoke {
         current.window.performClose(nil)
     }
 
-    private static func editField(_ settings: NativeSettingsWindow, key: String, text: String) async throws {
+    private static func editField(_ settings: NativeSettingsWindow, key: String, text: String, enter: Bool = false) async throws {
         let id = "native-settings-field-" + key
         try await TerminalSmoke.wait("Render editable native settings field " + key) { (view(settings.window, id: id) as? NSTextField)?.isEnabled == true }
         guard let field = view(settings.window, id: id) as? NSTextField else { throw BridgeFailure(code: "SETTINGS_QA_FIELD", message: "Settings field is missing") }
@@ -270,8 +270,8 @@ enum SettingsSmoke {
         guard let editor = field.currentEditor() as? NSTextView else { throw BridgeFailure(code: "SETTINGS_QA_FIELD", message: "Actual AppKit field editor is missing") }
         editor.insertText(text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
         guard field.stringValue == text else { throw BridgeFailure(code: "SETTINGS_QA_FIELD", message: "AppKit did not deliver the input") }
-        settings.window.makeFirstResponder(nil)
-        try await TerminalSmoke.wait("Complete native field blur save") { !settings.model.automaticSaving && !settings.model.busy }
+        if enter { try Self.key(settings.window, code: 36, characters: "\r") } else { settings.window.makeFirstResponder(nil) }
+        try await TerminalSmoke.wait("Complete native field commit") { !settings.model.automaticSaving && !settings.model.busy }
     }
 
     private static func verifyAutomaticSave(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
@@ -282,8 +282,13 @@ enum SettingsSmoke {
             try await editField(settings, key: "fileTabLimit", text: "0")
             guard model.errorCode == "INVALID_SETTINGS", model.numbers["fileTabLimit"] == "0", (try await peer.snapshot()).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_INVALID", message: "Automatic save lost an invalid draft or wrote it") }
             let limit = before.document.settings["fileTabLimit"].number == 7 ? 8 : 7
-            try await editField(settings, key: "fileTabLimit", text: String(limit))
-            guard model.error.isEmpty, (try await peer.snapshot()).document.settings["fileTabLimit"].number == Double(limit) else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_BLUR", message: "A corrected field did not save automatically on blur") }
+            let scrollback = model.numbers["scrollback"], scrollbackDraft = model.numbers["scrollback"] == "4999" ? "4998" : "4999"
+            model.numbers["scrollback"] = scrollbackDraft
+            try await editField(settings, key: "fileTabLimit", text: String(limit), enter: true)
+            let entered = try await peer.snapshot()
+            guard model.error.isEmpty, entered.document.settings["fileTabLimit"].number == Double(limit),
+                  entered.document.settings["scrollback"] == before.document.settings["scrollback"], model.numbers["scrollback"] == scrollbackDraft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_ENTER", message: "Return failed to save its field or saved an unrelated draft") }
+            model.numbers["scrollback"] = scrollback
             let draft = before.document.settings["fontSize"].number == 18 ? "19" : "18"
             let peerSize = before.document.settings["fontSize"].number == 20 ? 21.0 : 20.0
             model.numbers["fontSize"] = draft
@@ -328,7 +333,7 @@ enum SettingsSmoke {
             _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(current.revision), "patch": .object(["fileTabLimit": before.document.settings["fileTabLimit"], "fontSize": before.document.settings["fontSize"], "interfaceFont": before.document.settings["interfaceFont"], "interfaceTheme": before.document.settings["interfaceTheme"]])]))
             await model.workspace.reload(); await model.reload()
             guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_RELOAD", message: "Explicit reload did not recover the saved preferences") }
-            report["nativeSettingsAutomaticSaveProof"] = ["actualFieldEditorBlur": true, "invalidDraftRetainedWithoutWrite": true, "correctedFieldSavedAutomatically": true, "actualFontPicker": true, "scopedWrite": true, "otherDraftRetained": true, "peerWriteConflictRetained": true, "actualThemePreviewSelection": true, "terminalThemeUnchanged": true, "explicitReloadRecovery": true, "capture": capture, "themeCaptures": themeCaptures]
+            report["nativeSettingsAutomaticSaveProof"] = ["actualFieldEditorBlur": true, "actualFieldEditorEnter": true, "enterRetainsUnrelatedDraft": true, "invalidDraftRetainedWithoutWrite": true, "correctedFieldSavedAutomatically": true, "actualFontPicker": true, "scopedWrite": true, "otherDraftRetained": true, "peerWriteConflictRetained": true, "actualThemePreviewSelection": true, "terminalThemeUnchanged": true, "explicitReloadRecovery": true, "capture": capture, "themeCaptures": themeCaptures]
             await peer.close()
         } catch { await peer.close(); throw error }
     }

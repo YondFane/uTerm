@@ -384,7 +384,7 @@ struct NativeSettingsView: View {
                 Spacer()
                 if model.dirty { Text(localized("Unsaved changes", "有未保存修改")).foregroundStyle(.secondary) }
                 Button(localized("Reload", "重新读取")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }.disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
-                Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.keyboardShortcut(.defaultAction).disabled(!model.dirty || model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
+                Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.disabled(!model.dirty || model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
             }.padding()
             }
         }.task { await model.reload() }
