@@ -42,7 +42,8 @@ final class JavaRunModel: ObservableObject {
         self.directory = directory; self.bridge = bridge; self.settings = settings
     }
     func applySettings(_ value: JSONValue, catalog: JSONValue) {
-        settings = value; terminal?.apply(settings: value, catalog: catalog)
+        if settings != value { objectWillChange.send(); settings = value }
+        terminal?.apply(settings: value, catalog: catalog)
     }
     func start() async {
         frames = Task { @MainActor [weak self, bridge] in

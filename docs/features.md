@@ -184,37 +184,28 @@ save conflicts. Native Git QA exercises branch switching, stale expected-branch 
 restoration through the guarded application callback, and captures
 `native-toolbar-branch-picker-en-dark.png`. Database/Redis QA selects the actual AppKit row and
 captures `native-database-sidebar-profile-en-dark.png` and
-`native-redis-sidebar-profile-en-dark.png`. These new Mac scenarios and current-source paired visual
-acceptance remain pending CI; the branch popup's pointer/keyboard operation is not claimed from
-model checks.
+`native-redis-sidebar-profile-en-dark.png`. Full paired visual acceptance remains tracked in #53;
+the branch popup's physical pointer/keyboard operation is not claimed from model checks.
 
-The first Intel CI compilation rejected a shadowed error property, an ambiguous Objective-C selector
-and menu helpers missing main-actor isolation. The candidate corrects these diagnostics; no native
-execution is claimed for the failed build. Fresh Mac execution remains required.
+Background refresh clears only its own read failures. Explicit Reload and successful user operations
+acknowledge operation errors; branch writes return an explicit result and retain failure text across
+read refreshes. Native Git QA requires retention and dirty-worktree refusal.
 
-At source `b5ae671`, merge `85b133d`, ordinary macOS/Windows and the paired capture collector pass;
-both Personal architectures pass initial/replacement windows and update installation. ARM native
-execution exposes an outdated Redis capture count and a transient canonical writer refusal while
-saving the final SSH trust fixture. Capture checks now require the added actual sidebar proof; the
-SSH fixture simulates at most three explicit resubmissions only for `WRITER_BUSY`, preserving
-`CONFLICT` failures. SSH/Redis failures remain mandatory gates while independent Git/database checks
-continue. The complete native matrix and new Git/connection-row scenarios need a fresh run.
-
-At source `605d4d3`, both Personal packages and ordinary/paired capture checks pass. The ARM/Intel
-native matrices reach Git and expose operation feedback being cleared by unrelated successful
-snapshots. Background refresh now clears only its own read failures. Explicit Reload and successful
-user operations acknowledge operation errors; branch writes return an explicit result and retain
-failure text across read refreshes. Native Git QA requires that retention and keeps dirty-worktree
-refusal mandatory, with sheet/busy/file diagnostics on timeout. These corrections require new Mac
-execution; earlier passing captures do not accept the corrected source.
+At head `d7d7d04`, tested merge `fc6a6017`, both complete native matrices pass on macOS 15.8.2 ARM64
+and 15.7.9 Intel. Actual branch operations and AppKit connection-row selection pass; ordinary
+Mac/Windows, both Personal install/replacement and SDK checks, Maven and all three performance jobs
+also pass. [PR #57](https://github.com/YondFane/uTerm/pull/57) links exact reports and original
+PNGs; its release merge `09ce716` has the same tested tree. The same-source 38-pair collector is
+ready, but full visual/function parity remains open. Physical popup input is not claimed by model
+checks.
 
 CI runs Git window checks after the isolated build and display setup, publishing
 `native-git-{platform}-{head}-{attempt}` evidence before the remaining matrix. Git failures remain
 mandatory in the final gate; earlier evidence is retained across later failures. This reduces the
 wait for branch/Worktree failure details without removing the full matrix.
 
-Actual row/header/gap/inset measurements are required in both clients; current-source native
-rendering remains pending CI.
+Actual row/header/gap/inset measurements are required in both clients; complete native visual
+alignment remains pending.
 
 Session rows provide the same 22px **Close Session** action and shared close glyph in both clients.
 Native actions appear on row hover or keyboard focus, retain their layout space while hidden and
@@ -263,19 +254,28 @@ terminal without closing its retained task. Both clients read the same Core disc
 never starts a host and excludes build/test history. The native Close menu labels embedded content
 as a tab and a standalone file as a file; each action retains its existing save and close guard.
 
-The isolated `workspace-panels-native.json` scenario captures six actual main-window scenes, clicks
-terminal/panel/close controls, checks retained views/documents and preserves terminal
-identity/generation. Connection profiles in this integration scene are offline fixtures; the
-existing PostgreSQL, Redis, SSH and run suites retain service/lifetime coverage. Run suites also
-capture the actual main-window menu entry, simulate a stale launch selection, dispatch the real
-NSMenu task item and verify the same hosted generation. They click the actual toolbar button twice
-to hide/reopen the retained panel without replacing its task. Pressed styling follows panel
-selection immediately, independently of task polling. Popup pointer/keyboard input is not claimed.
-Linux passes two Core discovery tests, including absent/broken hosts and literal removed roots, plus
-the existing backend run-classification check. Linux passes 24 focused content/workbench checks and
-the production build. New AppKit integration and screenshots remain pending macOS ARM/Intel CI. The
-previous integration run on both architectures found the standalone-file Close label incorrectly
-changed to Close tab; the correction needs a new run. No full visual acceptance is claimed here.
+The isolated `workspace-panels-native.json` scenario captures twelve actual main-window scenes
+(English/dark at 1100px and Chinese/light at 640px), clicks terminal/panel/close controls, checks
+retained views/documents and preserves terminal identity/generation. Each capture records its
+source, actual window width and platform metadata. Run panels redraw localized labels when settings
+change. The disposable mixed project contains a valid minimal POM and Python entry. Connection
+profiles in this integration scene are offline fixtures; the existing PostgreSQL, Redis, SSH and run
+suites retain service/lifetime coverage.
+
+Run suites also capture the actual main-window menu entry, simulate a stale launch selection,
+dispatch the real NSMenu task item and verify the same hosted generation. They click the actual
+toolbar button twice to hide/reopen the retained panel without replacing its task. Pressed styling
+follows panel selection immediately, independently of task polling. Popup pointer/keyboard input is
+not claimed.
+
+Linux passes three Core discovery tests, including the real request route, absent/broken hosts,
+rejected parameters and literal removed roots, plus the existing backend run-classification check.
+Linux passes 24 focused content/workbench checks and the production build. At head `edff1f4`, the
+Intel real main-workspace integration passes all six mounted panel scenes and the actual settings
+checks pass, while live Java launch selection fails: `project.tasks` was placed in a Java-only
+handler and never reached from the public request route. The correction dispatches it directly, adds
+an actual Core request regression, and reads again after an overlapping status poll. New-source Mac
+run-list and full visual acceptance remain required.
 
 Each native split pane has its own session/directory header, 10–32 point font controls, output
 search, match-case toggle, match counter and previous/next controls. Escape closes search and

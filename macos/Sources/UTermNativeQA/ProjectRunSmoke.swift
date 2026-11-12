@@ -7,6 +7,7 @@ enum ProjectRunSmoke {
         guard let id = task["spec"]["id"].string, let generation = task["generation"].string,
               let backing = controller.window else { throw BridgeFailure(code: "RUN_LIST", message: "Missing live task") }
         await model.projectRuns.refresh()
+        guard model.projectRuns.error.isEmpty else { throw BridgeFailure(code: "RUN_LIST", message: model.projectRuns.error) }
         guard model.projectRuns.tasks(language).contains(where: { $0["spec"]["id"].string == id && $0["generation"].string == generation }) else { throw BridgeFailure(code: "RUN_LIST", message: "Shared run discovery missed the actual host task") }
         let coordinator = NativeProjectRunButton.Coordinator(model: model, language: language)
         let menu = coordinator.menu()

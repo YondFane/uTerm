@@ -37,7 +37,15 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-panels-') as directory:
     assert project['sourceHeadSHA'] == data['sourceHeadSHA'] and project['testedMergeSHA'] == data['sourceSHA']
     assert (evidence / project['screenshot']).stat().st_size > 1000
     assert data['cleanup']
-    assert len(data['captures']) == 6
+    expected = {(kind, language, appearance, width) for kind in ['java', 'python', 'ssh', 'database', 'redis', 'git']
+                for language, appearance, width in [('en', 'dark', 1100), ('zh-Hans', 'light', 640)]}
+    assert len(data['scenes']) == len(expected)
+    assert {(scene['scenario'], scene['language'], scene['appearance'], scene['width']) for scene in data['scenes']} == expected
+    for scene in data['scenes']:
+        assert scene['sourceHeadSHA'] == data['sourceHeadSHA'] and scene['testedMergeSHA'] == data['sourceSHA']
+        assert scene['platform'] == 'macOS' and scene['architecture'] == data['architecture'] and scene['system'] == data['system']
+        assert scene['height'] == 720 and scene['screenshot'] in data['captures']
+    assert len(data['captures']) == 12
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
     assert not subprocess.check_output(['git', 'status', '--porcelain'])
