@@ -5231,7 +5231,7 @@ The original interactive terminal interface is retained. Installing Hooks is opt
 | Agent                                                                                | Notification source                                                                                                                                                                |
 | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Codex                                                                                | A dedicated authenticated loopback app-server and the original TUI connected through `--remote`; unsupported versions or invocation-specific configuration use terminal reminders. |
-| OpenCode                                                                             | Its own authenticated loopback server and SSE session/permission events. Custom server or attach arguments retain terminal reminders.                                              |
+| OpenCode                                                                             | Authenticated loopback server and SSE when top-level listener flags are supported. OpenCode v2 or custom server options retain the original TUI and terminal reminders.            |
 | Claude                                                                               | A terminal bell enabled for this launch with `--settings`; explicit later CLI settings retain precedence.                                                                          |
 | Gemini, Kimi, Grok, Hermes, Pi, MiniMax, Qwen Code, Copilot CLI, iFlow CLI, TRAE CLI | Native terminal notifications or BEL when the CLI emits them. Availability and enablement depend on the CLI version and settings.                                                  |
 
@@ -5249,6 +5249,16 @@ The original interactive terminal interface is retained. Installing Hooks is opt
   starting-directory overrides retain the original local launch with terminal reminders, so an
   independent server cannot silently change those settings. Configuration from `CODEX_HOME` remains
   available to the managed event server.
+
+OpenCode startup checks the actual executable’s top-level help. uTerm configures the legacy event
+server only when both `--hostname` and `--port` are supported. OpenCode v2.2.2 exposes these options
+on `serve`, so uTerm starts its original interactive interface without adding those flags or
+substituting `serve`. If listener support cannot be confirmed, startup also retains the plain TUI.
+
+`--continue`, `--session`, custom prompts and project directories with spaces are preserved.
+Explicit `--server`, `--standalone`, `attach` and service/tool subcommands are not rewritten.
+Generic terminal reminders depend on notifications emitted by the CLI; this path does not provide
+the legacy SSE completion/permission status.
 
 - Codex and OpenCode use structured status to distinguish work, completion, attention and failure.
   Codex excludes subagents and temporary helper threads and supports both paginated and legacy
@@ -5281,6 +5291,22 @@ The original interactive terminal interface is retained. Installing Hooks is opt
   including in the background. Reopening after quitting restores state without sending historical
   notifications. SSH and terminal-multiplexer forwarding remain dependent on those tools passing the
   escape sequences through.
+
+#### OpenCode CLI compatibility validation
+
+- The Linux host suite passes serially, together with focused Agent/session-lifecycle frontend
+  checks. Regression coverage includes v2 argument preservation, legacy authentication, help on
+  stdout/stderr, failed/timed-out probes, paths with spaces and permission/completion filtering. A
+  parallel host-management timing failure passes on serial rerun.
+- Official OpenCode 2.2.2 runs in real PTYs with isolated configuration/data directories, covering
+  new sessions, `--session`, `--continue`, `--standalone` and a project path containing spaces. A
+  temporary empty session created through the API verifies restoration without model requests.
+  Official 1.18.32 also passes its real-PTY/authenticated-SSE check and rejects unauthenticated
+  requests.
+- Both CLI archives are checked against official SHA-256 values. The temporary v2 service uses a
+  separate port and is stopped afterwards; user configuration and installed apps are untouched.
+  Native macOS/Windows entry-point acceptance remains pending. This does not establish legacy SSE
+  event support for v2.
 
 #### No-Hook notification validation
 
