@@ -19,7 +19,7 @@ private final class SessionDragInfo: NSObject, NSDraggingInfo {
         draggingDestinationWindow = table.window; draggingSource = table; draggingPasteboard = pasteboard
     }
     func slideDraggedImage(to screenPoint: NSPoint) {}
-    func namesOfPromisedFilesDropped(atDestination dropDestination: URL) -> [String]? { nil }
+    override func namesOfPromisedFilesDropped(atDestination dropDestination: URL) -> [String]? { nil }
     func enumerateDraggingItems(options: NSDraggingItemEnumerationOptions, for view: NSView?, classes classArray: [AnyClass], searchOptions: [NSPasteboard.ReadingOptionKey: Any], using block: (NSDraggingItem, Int, UnsafeMutablePointer<ObjCBool>) -> Void) {}
     func resetSpringLoading() {}
 }
