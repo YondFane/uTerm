@@ -74,7 +74,8 @@ enum DatabaseSmoke {
             // 等待 WebKit 提交绘制后再截取 WindowServer 合成图像。
             _ = try await EditorSmoke.evaluate(content, script: "await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); return true;", arguments: [:])
             try await Task.sleep(for: .milliseconds(200))
-            try await TerminalSmoke.capture(window: native, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
+            guard let presentation = content.presentationWindow else { throw BridgeFailure(code: "DB_WINDOW", message: "The database presentation window is unavailable") }
+            try await TerminalSmoke.capture(window: presentation, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name))
             captures.append(name)
         }
         try await wait(content, "document.querySelector('.native-database-profile-name')?.textContent === 'PostgreSQL Native QA 中文'")
@@ -176,6 +177,22 @@ enum DatabaseSmoke {
         try await wait(content, "document.querySelector('.native-database-profile-name[aria-pressed=true]') !== null")
         report["databaseSidebarSelectionProof"] = ["actualAppKitRow": true, "selectedTarget": true, "capture": sidebarCapture]
         captures.append(sidebarCapture)
+        try await wait(content, "document.querySelector('.native-database-toolbar').hidden && document.querySelector('.native-database-layout > aside').hidden && document.querySelector('.native-workbench-connections')?.getAttribute('aria-expanded')==='false'")
+        guard try await EditorSmoke.evaluate(content, script: """
+            const workbench=document.querySelector('.database-workspace:not([hidden])');
+            const container=document.querySelector('.native-database-layout');
+            if(!workbench || Math.abs(workbench.getBoundingClientRect().width-container.getBoundingClientRect().width)>1) return false;
+            window.__qaRetainedWorkbench=workbench;
+            document.querySelector('.native-workbench-connections').click();return true;
+            """, arguments: [:]) else { throw BridgeFailure(code: "DB_WORKSPACE_LAYOUT", message: "The selected database workbench did not use the full main pane") }
+        try await wait(content, "!document.querySelector('.native-database-toolbar').hidden && !document.querySelector('.native-database-layout > aside').hidden")
+        try await capture("native-database-retained-connection-manager.png")
+        guard try await EditorSmoke.evaluate(content, script: """
+            if(document.querySelector('.database-workspace:not([hidden])')!==window.__qaRetainedWorkbench) return false;
+            document.querySelector('.native-workbench-connections').click();return true;
+            """, arguments: [:]) else { throw BridgeFailure(code: "DB_WORKSPACE_LAYOUT", message: "Opening connection management replaced the database workbench") }
+        try await wait(content, "document.querySelector('.native-database-toolbar').hidden && document.querySelector('.database-workspace:not([hidden])')===window.__qaRetainedWorkbench")
+        report["databaseDirectWorkbenchProof"] = ["fullMainPane": true, "catalogHiddenAfterSidebarSelection": true, "actualManagementButton": true, "sameWorkbenchAfterManagement": true, "capture": "native-database-retained-connection-manager.png"]
         report["nativeDatabaseCaptures"] = captures
         report["databaseService"] = "Real isolated PostgreSQL"
         report["nativeManualPickerAcceptance"] = false

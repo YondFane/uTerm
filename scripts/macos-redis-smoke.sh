@@ -88,7 +88,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-redis-') as directory:
         assert command('LLEN', LARGE_KEY) == str(LARGE_MEMBERS).encode()
         assert command('LINDEX', LARGE_KEY, -1) == list_value(LARGE_MEMBERS - 1).encode()
         assert int(command('PTTL', LARGE_KEY)) > 0
-        assert len(report['nativeRedisCaptures']) == 7
+        assert len(report['nativeRedisCaptures']) == 8
+        direct = report['redisDirectWorkbenchProof']
+        assert all(direct[key] is True for key in ['fullMainPane', 'catalogHiddenAfterSidebarSelection', 'actualManagementButton', 'sameWorkbenchAfterManagement'])
+        assert direct['capture'] == 'native-redis-retained-connection-manager.png'
+        assert direct['capture'] in report['nativeRedisCaptures']
         selection = report['redisSidebarSelectionProof']
         assert selection['actualAppKitRow'] is True and selection['selectedTarget'] is True
         assert selection['capture'] == 'native-redis-sidebar-profile-en-dark.png'

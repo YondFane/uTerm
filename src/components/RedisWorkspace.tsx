@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { EditorView } from "@codemirror/view";
 import { contentInvoke as invoke, listenContent, copyContentText } from "../lib/content-host";
 import { tx } from "../lib/i18n";
@@ -39,11 +39,13 @@ export function RedisWorkspace({
   active,
   password: initialPassword,
   consumed,
+  profileActions,
 }: {
   config: RedisConfig;
   active: boolean;
   password: string;
   consumed: () => void;
+  profileActions?: ReactNode;
 }) {
   useUiLanguage();
   const [handle, setHandle] = useState<string | null>(null);
@@ -825,6 +827,7 @@ export function RedisWorkspace({
       }}
     >
       <header className="redis-toolbar">
+        {profileActions}
         {handle && (
           <button
             ref={browserToggle}

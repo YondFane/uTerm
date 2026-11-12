@@ -1,4 +1,12 @@
-import { createRef, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  createRef,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { DatabaseGrid } from "./DatabaseGrid";
 import { DocumentWorkspace } from "./DocumentWorkspace";
 import { ToolbarIcon } from "./SidebarIcon";
@@ -83,6 +91,7 @@ export function DatabaseWorkspace(props: {
   config: DatabaseConfig;
   active: boolean;
   password: string;
+  profileActions?: ReactNode;
 }) {
   return isDocumentDatabase(props.config.kind) ? (
     <DocumentWorkspace {...props} />
@@ -95,10 +104,12 @@ function SqlDatabaseWorkspace({
   config,
   active,
   password: initialPassword,
+  profileActions,
 }: {
   config: DatabaseConfig;
   active: boolean;
   password: string;
+  profileActions?: ReactNode;
 }) {
   useUiLanguage();
   const [handle, setHandle] = useState<string | null>(null);
@@ -824,6 +835,7 @@ function SqlDatabaseWorkspace({
       }}
     >
       <header className="redis-toolbar database-connection-bar">
+        {profileActions}
         <button
           aria-label={tx("对象浏览区")}
           aria-expanded={browserOpen}

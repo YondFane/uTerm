@@ -7536,6 +7536,17 @@ error strings keep their existing format. Revision conflicts keep the connection
 request a reload; busy/pending errors retain their specific guidance even when the host message does
 not repeat the code.
 
+Selecting a database or Redis connection in the native main sidebar opens its workbench across the
+main pane. The inner connection directory and management header stay hidden. Use the connection
+button in the workbench toolbar to edit or add profiles, then **Return to workbench**. This keeps
+the same workbench mounted, including its connection, query, temporary password and drafts.
+
+Seventeen Linux UI regressions pass, covering directory collapse, reopening management, retained
+workbench identity and the existing profile-conflict/password guards. Type checking, production
+build, localization and documentation checks also pass. Current-source macOS checks additionally
+require full-pane bounds, the actual management button, retained views and original main-window
+screenshots; these new native checks have not yet run.
+
 Closing this window hides it while retaining connections, drafts and results. Application quit
 refuses active work or pending transactions and confirms draft loss. If another window cancels quit,
 the database view resumes with its draft protection. Component selection uses AppKit; content cannot

@@ -75,6 +75,10 @@ body,
   width: auto;
   max-width: 220px;
 }
+.native-database-toolbar[hidden],
+.native-database-layout > aside[hidden] {
+  display: none;
+}
 .native-database-layout {
   display: flex;
   flex: 1;

@@ -43,6 +43,21 @@ enum NativeChromeSmoke {
             guard let document = model.documents.active(in: model.inspectorContextKey) else { return false }
             return document.content.workbenchHost?.kind == category && document.content.webView.window === window && window.isVisible
         }
+        guard let content = model.documents.active(in: model.inspectorContextKey)?.content else { throw BridgeFailure(code: "SIDEBAR_PROFILE", message: "The selected workbench is unavailable") }
+        let deadline = Date().addingTimeInterval(20)
+        var ready = false
+        while Date() < deadline {
+            ready = try await EditorSmoke.evaluate(content, script: """
+                const selected=document.querySelector('.native-database-profile-name[aria-pressed=true]');
+                return selected?.closest('.native-database-profile')?.dataset.profileId===id &&
+                    document.querySelector('.native-database-toolbar')?.hidden===true &&
+                    document.querySelector('.native-database-layout > aside')?.hidden===true;
+                """, arguments: ["id": id])
+            if ready { break }
+            try await Task.sleep(for: .milliseconds(40))
+        }
+        guard ready else { throw BridgeFailure(code: "SIDEBAR_PROFILE", message: "The main workbench did not finish selecting the connection") }
+        _ = try await EditorSmoke.evaluate(content, script: "await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return true;", arguments: [:])
         try await TerminalSmoke.capture(window: window, path: capture)
     }
 }

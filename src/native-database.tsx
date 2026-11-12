@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { DatabaseComponents } from "./components/DatabaseComponents";
 import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
 import { DatabaseWorkspace } from "./components/DatabaseWorkspace";
+import { ToolbarIcon } from "./components/SidebarIcon";
 import { contentInvoke, listenContent } from "./lib/content-host";
 import { contentErrorText } from "./lib/content-transport";
 import {
@@ -55,6 +56,7 @@ export function NativeDatabase() {
   );
   const [components, setComponents] = useState(false);
   const [componentsOpened, setComponentsOpened] = useState(false);
+  const [connectionsVisible, setConnectionsVisible] = useState(true);
   const [busy, setBusy] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const [error, setError] = useState("");
@@ -86,6 +88,7 @@ export function NativeDatabase() {
           : [...previous, target.profile],
       );
       setComponents(false);
+      setConnectionsVisible(false);
       return;
     }
     setGroupId((previous) =>
@@ -225,9 +228,20 @@ export function NativeDatabase() {
       className="native-content native-database"
       inert={frozen}
       data-frozen={frozen || undefined}
+      data-connections-visible={connectionsVisible}
     >
-      <header className="native-database-toolbar">
+      <header className="native-database-toolbar" hidden={!connectionsVisible}>
         <strong>{tx("数据库连接")}</strong>
+        {selected && (
+          <button
+            onClick={() => {
+              setComponents(false);
+              setConnectionsVisible(false);
+            }}
+          >
+            {tx("返回工作台")}
+          </button>
+        )}
         <select
           aria-label={tx("工作区")}
           value={groupId}
@@ -267,12 +281,13 @@ export function NativeDatabase() {
         </p>
       )}
       <div className="native-database-layout">
-        <aside aria-label={tx("数据库连接")}>
+        <aside aria-label={tx("数据库连接")} hidden={!connectionsVisible}>
           {group?.databaseConnections.map((config) => (
             <div
               className="native-database-profile"
               key={config.id}
               data-selected={selected === config.id || undefined}
+              data-profile-id={config.id}
             >
               <button
                 className="native-database-profile-name"
@@ -320,6 +335,17 @@ export function NativeDatabase() {
                 passwords[config.id]?.fingerprint === databaseConfigFingerprint(config)
                   ? passwords[config.id].value
                   : ""
+              }
+              profileActions={
+                <button
+                  className="native-workbench-connections"
+                  aria-label={tx("数据库连接")}
+                  title={tx("数据库连接")}
+                  aria-expanded={connectionsVisible}
+                  onClick={() => setConnectionsVisible((value) => !value)}
+                >
+                  <ToolbarIcon name="settings" />
+                </button>
               }
             />
           ))}

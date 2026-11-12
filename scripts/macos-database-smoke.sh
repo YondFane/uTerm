@@ -55,7 +55,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-database-') as director
         for key in ['nativeProfileSaveWithoutPasswordPersistence', 'nativeRealPostgresqlConnection', 'nativeSQLInputWaitedForReadyControls', 'nativeSQLClipboardMatchesEditedQuery', 'nativeExactBigintDecimalAndUnicode', 'hiddenWindowRetainedConnectionDraftAndResult', 'nativeActiveProfileMutationRefused', 'temporaryPasswordSurvivedWindowHideAndReconnect', 'nativeDatabaseThemeLanguageAndNarrowLayout']:
             assert report[key], key
         assert report['sharedComponentEventsReachSettingsAndWorkbench']
-        assert len(report['nativeDatabaseCaptures']) == 3
+        assert len(report['nativeDatabaseCaptures']) == 4
+        direct = report['databaseDirectWorkbenchProof']
+        assert all(direct[key] is True for key in ['fullMainPane', 'catalogHiddenAfterSidebarSelection', 'actualManagementButton', 'sameWorkbenchAfterManagement'])
+        assert direct['capture'] == 'native-database-retained-connection-manager.png'
+        assert direct['capture'] in report['nativeDatabaseCaptures']
         selection = report['databaseSidebarSelectionProof']
         assert selection['actualAppKitRow'] is True and selection['selectedTarget'] is True
         assert selection['capture'] == 'native-database-sidebar-profile-en-dark.png'

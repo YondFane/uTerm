@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { RedisConnectionDialog } from "./components/RedisConnectionDialog";
 import { RedisWorkspace } from "./components/RedisWorkspace";
+import { ToolbarIcon } from "./components/SidebarIcon";
 import { contentInvoke, listenContent } from "./lib/content-host";
 import { contentErrorText } from "./lib/content-transport";
 import {
@@ -51,6 +52,7 @@ export function NativeRedis() {
   >({});
   const [dialog, setDialog] = useState<{ group: Group; connection?: RedisConfig } | null>(null);
   const [removing, setRemoving] = useState<{ group: Group; connection: RedisConfig } | null>(null);
+  const [connectionsVisible, setConnectionsVisible] = useState(true);
   const [busy, setBusy] = useState(false);
   const [frozen, setFrozen] = useState(false);
   const [error, setError] = useState("");
@@ -77,6 +79,7 @@ export function NativeRedis() {
       consumedSelection.current = target.request;
       setGroupId(target.group);
       setSelected(target.profile.id);
+      setConnectionsVisible(false);
       setTabs((previous) =>
         previous.some((tab) => tab.id === target.profile.id)
           ? previous
@@ -221,9 +224,13 @@ export function NativeRedis() {
       className="native-content native-database native-redis"
       inert={frozen}
       data-frozen={frozen || undefined}
+      data-connections-visible={connectionsVisible}
     >
-      <header className="native-database-toolbar">
+      <header className="native-database-toolbar" hidden={!connectionsVisible}>
         <strong>{tx("Redis 连接")}</strong>
+        {selected && (
+          <button onClick={() => setConnectionsVisible(false)}>{tx("返回工作台")}</button>
+        )}
         <select
           aria-label={tx("工作区")}
           value={groupId}
@@ -255,12 +262,13 @@ export function NativeRedis() {
         </p>
       )}
       <div className="native-database-layout">
-        <aside aria-label={tx("Redis 连接")}>
+        <aside aria-label={tx("Redis 连接")} hidden={!connectionsVisible}>
           {group?.redisConnections.map((config) => (
             <div
               className="native-database-profile"
               key={config.id}
               data-selected={selected === config.id || undefined}
+              data-profile-id={config.id}
             >
               <button
                 className="native-database-profile-name"
@@ -309,6 +317,17 @@ export function NativeRedis() {
                 passwords[config.id]?.fingerprint === redisConfigFingerprint(config)
                   ? passwords[config.id].value
                   : ""
+              }
+              profileActions={
+                <button
+                  className="native-workbench-connections"
+                  aria-label={tx("Redis 连接")}
+                  title={tx("Redis 连接")}
+                  aria-expanded={connectionsVisible}
+                  onClick={() => setConnectionsVisible((value) => !value)}
+                >
+                  <ToolbarIcon name="settings" />
+                </button>
               }
             />
           ))}

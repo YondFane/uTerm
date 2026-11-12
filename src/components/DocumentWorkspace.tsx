@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { contentInvoke as invoke } from "../lib/content-host";
 import { databaseError, databaseNames, databaseStatus, type DatabaseConfig } from "../lib/database";
 import {
@@ -15,10 +15,12 @@ export function DocumentWorkspace({
   config,
   active,
   password: initialPassword,
+  profileActions,
 }: {
   config: DatabaseConfig;
   active: boolean;
   password: string;
+  profileActions?: ReactNode;
 }) {
   useUiLanguage();
   const elastic = config.kind === "elasticsearch";
@@ -210,6 +212,7 @@ export function DocumentWorkspace({
       aria-label={`${databaseNames[config.kind]} ${config.name}`}
     >
       <header className="redis-toolbar database-connection-bar">
+        {profileActions}
         <strong>{config.name}</strong>
         <span>
           {databaseNames[config.kind]} · {config.host}:{config.port}
