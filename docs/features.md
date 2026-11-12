@@ -279,7 +279,13 @@ out for both languages on ARM64 despite successful action delivery. These failed
 available. Bounded stage records now follow the actual callback through discovery, project/context
 selection and panel attachment in `javaLaunchSelectionDiagnostics` /
 `pythonLaunchSelectionDiagnostics`. They locate a failure without accepting it; current-source macOS
-checks and full comparison remain required.
+checks and full comparison remain required. On Intel source `7ef74ba`, both callbacks reach
+presentation in under half a second, but the panel list remains empty and the original Java failure
+window is blank. QA now explicitly removes retained content from its former host before restoring
+the standalone window and checks that exact view/window ownership. Production attachment reports
+missing content visibly instead of silently returning. Actual menu selection, unchanged task
+generation and hide/reopen assertions remain required; the new handoff still needs current-source
+Mac execution.
 
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
 before the Git test tool compiles, and uploads their early reports and original windows. Failures

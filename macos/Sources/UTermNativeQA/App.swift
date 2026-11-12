@@ -821,7 +821,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private func presentPanel(_ controller: NSWindowController, id: String, title: String, scope: String) throws {
         guard let parent = window, model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: localized("Workspace changed. Open the panel again.", "工作区已变化，请重新打开面板。")) }
         model.documents.showTerminal(in: scope)
-        model.panels.attach(controller, id: id, title: title, scope: scope, parent: parent)
+        try model.panels.attach(controller, id: id, title: title, scope: scope, parent: parent)
     }
     private func openProfile(kind: String, group: String, id: String) {
         Task { @MainActor in
@@ -928,7 +928,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     model.projectRuns.traceSelection("python.tasks.done")
                     try presentPanel(controller, id: "python-" + controller.model.directory, title: "Python — " + directory.lastPathComponent, scope: scope)
                 }
-                model.projectRuns.traceSelection("panel.presented")
+                model.projectRuns.traceSelection("panel.attached " + String(model.panels.panels.count))
             } catch { model.projectRuns.traceSelection("request.failed " + error.localizedDescription); model.error = error.localizedDescription }
         }
     }

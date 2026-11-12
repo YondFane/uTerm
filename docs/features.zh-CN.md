@@ -152,7 +152,9 @@ Linux 通过三项 Core 查询测试，覆盖公开请求路由、未启动／�
 macOS 通过全部十二张实际主工作区面板截图及保留 Java/Python 视图的直接切换。启动列表 QA 仍超时，未出现产品错误或已挂载面板。QA 现在取得实际顶栏控件的处理器，通过 AppKit 分发过期及当前 NSMenu 项，在面板／generation 断言前检查动作交付。源码
 `cdbd110`、测试 merge `63b9bea4`
 在 ARM64 上仍出现两种语言超时，尽管动作已成功交付。失败运行继续保留。有界阶段记录现在沿实际回调追踪任务发现、项目／上下文选择及面板挂载，写入
-`javaLaunchSelectionDiagnostics`／`pythonLaunchSelectionDiagnostics`；这些记录用于定位失败，不能作为验收通过，仍需当前源码 macOS 检查及完整对照。
+`javaLaunchSelectionDiagnostics`／`pythonLaunchSelectionDiagnostics`；这些记录用于定位失败，不能作为验收通过，仍需当前源码 macOS 检查及完整对照。Intel 源码
+`7ef74ba`
+的两种回调都在半秒内走到展示入口，但面板列表仍为空，Java 原始失败窗口空白。QA 现在先将保留视图明确移出旧容器，再恢复独立窗口，并检查精确的视图／窗口所属关系；生产挂载在内容缺失时显示错误，不再静默返回。真实菜单选择、相同任务 generation 及隐藏／重开断言全部保留，新回装仍需当前源码 Mac 运行。
 
 原生 CI 在构建应用、准备显示区域后、Git 测试工具编译之前执行 Java/Python 交互检查，并提前上传报告及窗口原图。失败仍计入最终矩阵，其他独立套件继续执行。完整 Core、桥接、SDK 及服务检查均保留，完整产物仍为必要条件。作业预算为 55 分钟，以容纳实际观察到的 Intel 构建、完整交互矩阵及缓存清理。
 
