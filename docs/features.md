@@ -541,7 +541,9 @@ table callbacks to reject foreign sources, forged payloads, cancelled drags and 
 then reorder and restore sessions through shared Core. Its report explicitly labels the input as
 simulated; physical pointer dragging has not been executed. The new menu, simulated drop and
 screenshot scenarios remain pending Mac CI. Manual interaction is waived for this task; the
-automated checks remain required.
+automated checks remain required. The first ARM compile of the delegate simulation identified an
+inherited NSObject file-promise method that needs `override`; the corrected declaration still
+requires a fresh Mac build and execution.
 
 [Two-client acceptance](native-ui-parity.md) covers the full matching scope, including remaining
 checks for drag/group operations, layout persistence, content tabs and workbench integration. Both
