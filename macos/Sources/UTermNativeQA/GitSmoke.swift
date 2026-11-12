@@ -47,6 +47,25 @@ enum GitSmoke {
         await model.reload()
         let favoriteSource = "[\r\n \"refs/heads/to\\u0070ic\"\r\n]"
         _ = try await bridge.call("git.favorites.import", params: .object(["directory": .string(root.path), "legacy": .string(favoriteSource)]))
+        await model.branchPicker.refresh()
+        guard let branchContext = model.branchPicker.context, model.branchPicker.current == "main" else { throw BridgeFailure(code: "GIT_TOOLBAR", message: "Toolbar did not read the selected repository") }
+        await model.branchPicker.execute("git.switchBranch", arguments: ["branch": .string("topic")], captured: branchContext, expected: .string("main"))
+        guard try git(["branch", "--show-current"]) == "topic", model.branchPicker.current == "topic", let topicContext = model.branchPicker.context else { throw BridgeFailure(code: "GIT_TOOLBAR", message: "Toolbar branch switch failed") }
+        await model.branchPicker.execute("git.switchBranch", arguments: ["branch": .string("main")], captured: topicContext, expected: .string("main"))
+        guard try git(["branch", "--show-current"]) == "topic", !model.error.isEmpty else { throw BridgeFailure(code: "GIT_TOOLBAR_STALE", message: "Stale branch action was not rejected") }
+        model.error = ""
+        await model.branchPicker.execute("git.switchBranch", arguments: ["branch": .string("main")], captured: topicContext, expected: .string("topic"))
+        guard try git(["branch", "--show-current"]) == "main" else { throw BridgeFailure(code: "GIT_TOOLBAR", message: "Toolbar branch restore failed") }
+        var toolbarWindow: NSWindow?
+        try await TerminalSmoke.wait("Actual toolbar branch control reflects selected branch") {
+            for window in NSApp.windows {
+                guard let root = window.contentView, let button = TerminalSmoke.descendants(root).first(where: { $0.identifier?.rawValue == "native-branch-picker" }) as? NSButton else { continue }
+                if button.isEnabled && button.title.contains("main") { toolbarWindow = window; return true }
+            }
+            return false
+        }
+        if let toolbarWindow { try await TerminalSmoke.capture(window: toolbarWindow, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent("native-toolbar-branch-picker-en-dark.png")) }
+        report["gitToolbarProof"] = ["read": true, "switch": true, "staleExpectedRejected": true, "restored": true, "realAppKitControl": true, "input": "model operation through guarded App callback; popup pointer/keyboard interaction not executed", "capture": "native-toolbar-branch-picker-en-dark.png"]
         let content = try await open(root)
         defer { content.forceClose() }
         var captures: [String] = []

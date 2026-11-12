@@ -99,6 +99,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.canPruneQuickSSH = { [weak self] in self?.sshWindow?.model.dirty != true && self?.sshWindow?.model.busy != true }
         model.openDatabasesRequested = { [weak self] in self?.openDatabases() }
         model.openRedisRequested = { [weak self] in self?.openRedis() }
+        model.openDatabaseProfileRequested = { [weak self] group, id in self?.openProfile(kind: "database", group: group, id: id) }
+        model.openRedisProfileRequested = { [weak self] group, id in self?.openProfile(kind: "redis", group: group, id: id) }
+        model.branchPicker.mutate = { [weak self] method, params, captured in
+            guard let self, self.model.inspectorContextKey == captured.key,
+                  try await self.selectedProjectDirectory().path == captured.directory,
+                  self.model.inspectorContextKey == captured.key else {
+                throw BridgeFailure(code: "GIT_CONTEXT_CHANGED", message: localized("The selected project changed. Reopen the branch menu.", "所选项目已变化，请重新打开分支菜单。"))
+            }
+            let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
+            do {
+                let result = try await self.performRepositoryMutation(method: method, params: params, bridge: worker, projectID: captured.projectID)
+                await worker.close(); return result
+            } catch { await worker.close(); throw error }
+        }
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
         model.openSettingsRequested = { [weak self] in self?.openFullSettings() }
         model.openFileRequested = { [weak self] in self?.openFile() }
@@ -763,6 +777,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
         }
         content.reveal(); return content
+    }
+    private func openProfile(kind: String, group: String, id: String) {
+        Task { @MainActor in
+            do {
+                guard model.groupID == group, !preparingQuit else { return }
+                let content: ContentWindow
+                if kind == "database" { content = try await makeDatabaseWindow() }
+                else { content = try await makeRedisWindow() }
+                guard model.groupID == group else { return }
+                if let host = content.workbenchHost as? DatabaseHost { try await host.selectProfile(group: group, id: id) }
+                else if let host = content.workbenchHost as? RedisHost { try await host.selectProfile(group: group, id: id) }
+            } catch { model.error = error.localizedDescription }
+        }
     }
     private func makeDatabaseWindow() async throws -> ContentWindow {
         guard !preparingQuit, let bridge = model.sshBridge else { throw BridgeFailure(code: "DB_CLOSED", message: localized("Database client is unavailable.", "数据库客户端不可用。")) }

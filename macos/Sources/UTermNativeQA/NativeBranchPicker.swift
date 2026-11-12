@@ -1,0 +1,141 @@
+import AppKit
+import SwiftUI
+import UTermBridge
+
+@MainActor
+final class NativeBranchPickerModel: ObservableObject {
+    struct Context: Equatable {
+        let key: String
+        let projectID: String
+        let directory: String
+    }
+    @Published private(set) var branches: JSONValue = .null
+    @Published private(set) var context: Context?
+    @Published private(set) var error = ""
+    @Published private(set) var changing = false
+    weak var workspace: WorkspaceModel?
+    private var epoch = 0
+    var mutate: ((String, JSONValue, Context) async throws -> JSONValue)?
+    init(_ workspace: WorkspaceModel) { self.workspace = workspace }
+    var current: String { branches["current"].string ?? localized("Branch unavailable", "分支不可用") }
+    var enabled: Bool { workspace?.ready == true && workspace?.busy == false && !changing && context != nil && branches["current"].string != nil }
+
+    func refresh() async {
+        epoch += 1
+        let request = epoch
+        guard let workspace, workspace.ready, let bridge = workspace.bridge else { context = nil; branches = .null; return }
+        let key = workspace.inspectorContextKey
+        if context?.key != key { context = nil; branches = .null; error = "" }
+        do {
+            let snapshot = try await bridge.snapshot()
+            let saved = snapshot.document.workspace
+            let savedKey = [saved["selectedWorkspace"].string ?? "local", saved["selectedProject"].string ?? "", saved["selectedWorktree"].string ?? ""].joined(separator: "\u{0}")
+            guard savedKey == key else { return }
+            let selected = try await bridge.projectContext(expectedRevision: snapshot.revision)
+            guard request == epoch, key == workspace.inspectorContextKey, !Task.isCancelled else { return }
+            guard let directory = selected.directory, let projectID = selected.projectId else { context = nil; branches = .null; return }
+            let value = try await bridge.call("git.branches", params: .object(["directory": .string(directory)]))
+            guard request == epoch, key == workspace.inspectorContextKey, !Task.isCancelled else { return }
+            context = Context(key: key, projectID: projectID, directory: directory); branches = value; error = ""
+        } catch {
+            guard request == epoch, key == workspace.inspectorContextKey, !Task.isCancelled else { return }
+            context = nil; branches = .null; self.error = error.localizedDescription
+        }
+    }
+    func remote(_ captured: Context) async throws -> JSONValue {
+        guard let workspace, workspace.inspectorContextKey == captured.key, context == captured, let bridge = workspace.bridge else {
+            throw BridgeFailure(code: "GIT_CONTEXT_CHANGED", message: localized("The selected project changed. Reopen the branch menu.", "所选项目已变化，请重新打开分支菜单。"))
+        }
+        let value = try await bridge.call("git.remoteBranches", params: .object(["directory": .string(captured.directory)]))
+        guard workspace.inspectorContextKey == captured.key, context == captured else { throw BridgeFailure(code: "GIT_CONTEXT_CHANGED", message: "The selected project changed") }
+        return value
+    }
+    func execute(_ method: String, arguments: [String: JSONValue], captured: Context, expected: JSONValue) async {
+        guard enabled, context == captured, workspace?.inspectorContextKey == captured.key, let mutate else { return }
+        changing = true; defer { changing = false }
+        var values = arguments; values["directory"] = .string(captured.directory); values["expected"] = expected
+        do { _ = try await mutate(method, .object(values), captured) }
+        catch { error = error.localizedDescription; workspace?.error = error.localizedDescription }
+        await refresh()
+    }
+}
+
+@MainActor
+struct NativeBranchPicker: NSViewRepresentable {
+    @ObservedObject var picker: NativeBranchPickerModel
+    var settings: JSONValue
+    func makeNSView(context: Context) -> BranchButton {
+        let button = BranchButton(title: "", target: context.coordinator, action: #selector(Coordinator.openBranches))
+        button.isBordered = false; button.setButtonType(.momentaryPushIn); button.identifier = .init("native-branch-picker")
+        let image = NativeChromeImages.sidebar(.branch).copy() as! NSImage
+        image.size = NSSize(width: 15, height: 15); button.image = image; button.imagePosition = .imageLeading
+        button.actionsRequested = { [weak coordinator = context.coordinator] in coordinator?.open(actions: true) }
+        return button
+    }
+    func updateNSView(_ button: BranchButton, context: Context) {
+        context.coordinator.picker = picker; context.coordinator.button = button
+        button.title = picker.current + " ⌄"; button.isEnabled = picker.enabled
+        button.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
+        button.toolTip = picker.error.isEmpty ? localized("Switch branch · Right-click for Git actions", "切换分支 · 右键打开 Git 操作") : picker.error
+        button.setAccessibilityLabel(localized("Switch branch", "切换分支") + ": " + picker.current)
+    }
+    func makeCoordinator() -> Coordinator { Coordinator(picker) }
+    @MainActor final class BranchButton: NSButton {
+        var actionsRequested: (() -> Void)?
+        override var acceptsFirstResponder: Bool { isEnabled }
+        override func rightMouseDown(with event: NSEvent) { if isEnabled { actionsRequested?() } }
+        override func keyDown(with event: NSEvent) {
+            if event.keyCode == 109 && event.modifierFlags.contains(.shift) { actionsRequested?() }
+            else if event.keyCode == 125 { performClick(nil) }
+            else { super.keyDown(with: event) }
+        }
+    }
+    @MainActor final class Coordinator: NSObject {
+        var picker: NativeBranchPickerModel
+        weak var button: BranchButton?
+        private var commands: [String: (String, [String: JSONValue], NativeBranchPickerModel.Context, JSONValue)] = [:]
+        init(_ picker: NativeBranchPickerModel) { self.picker = picker }
+        @objc func openBranches() { open(actions: false) }
+        func open(actions: Bool) {
+            guard let button, picker.enabled, let captured = picker.context else { return }
+            let expected = picker.branches["current"]
+            Task { @MainActor in
+                do {
+                    let remote = actions ? JSONValue.null : try await picker.remote(captured)
+                    guard picker.enabled, picker.context == captured, picker.workspace?.inspectorContextKey == captured.key, button.window?.isVisible == true else { return }
+                    let menu = NSMenu(); menu.autoenablesItems = false; commands.removeAll()
+                    func note(_ title: String) { let item = NSMenuItem(title: title, action: nil, keyEquivalent: ""); item.isEnabled = false; menu.addItem(item) }
+                    func command(_ title: String, _ method: String, _ values: [String: JSONValue], enabled: Bool = true, checked: Bool = false) {
+                        let id = UUID().uuidString
+                        commands[id] = (method, values, captured, expected)
+                        let item = NSMenuItem(title: title, action: #selector(perform(_:)), keyEquivalent: "")
+                        item.target = self; item.representedObject = id; item.isEnabled = enabled; item.state = checked ? .on : .off; menu.addItem(item)
+                    }
+                    if actions {
+                        note(picker.current); note(picker.branches["upstream"].string ?? localized("No upstream branch", "未设置上游分支"))
+                        for action in ["push", "pull", "fetch"] {
+                            command(action.capitalized, "git.branchAction", ["action": .string(action)], enabled: action == "fetch" || (expected.string != nil && picker.branches["upstream"].string != nil))
+                        }
+                        menu.addItem(.separator()); command(localized("Refresh", "刷新"), "refresh", [:])
+                    } else {
+                        note(localized("Local", "本地"))
+                        for branch in picker.branches["local"].array.compactMap(\.string) {
+                            command(branch, "git.switchBranch", ["branch": .string(branch)], enabled: branch != expected.string, checked: branch == expected.string)
+                        }
+                        menu.addItem(.separator()); note(localized("Remote", "远程"))
+                        for branch in remote["branches"].array {
+                            command((branch["remote"].string ?? "") + "/" + (branch["branch"].string ?? ""), "git.switchRemoteBranch", ["remote": branch["remote"], "branch": branch["branch"]])
+                        }
+                        for error in remote["errors"].array.compactMap(\.string) { note(error) }
+                        if remote["branches"].array.isEmpty && remote["errors"].array.isEmpty { note(localized("No remote branches", "没有远程分支")) }
+                    }
+                    menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.maxY), in: button)
+                } catch { picker.workspace?.error = error.localizedDescription }
+            }
+        }
+        @objc private func perform(_ sender: NSMenuItem) {
+            guard let id = sender.representedObject as? String, let (method, values, captured, expected) = commands[id] else { return }
+            Task { if method == "refresh" { await picker.refresh() } else { await picker.execute(method, arguments: values, captured: captured, expected: expected) } }
+        }
+    }
+}

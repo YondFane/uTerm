@@ -29,7 +29,7 @@ private final class SidebarSessionCloseButton: NSButton {
     }
     override func becomeFirstResponder() -> Bool {
         let accepted = super.becomeFirstResponder()
-        if accepted { alphaValue = 1 }
+        if accepted { alphaValue = 1; needsDisplay = true }
         return accepted
     }
     override func resignFirstResponder() -> Bool {
@@ -236,10 +236,14 @@ struct NativeSidebar: NSViewRepresentable {
                 appendSection("ssh", "SSH", rows: connections)
             }
             if (section == "all" || section == "redis") && settings["showRedisConnections"].bool != false {
-                appendSection("redis", "Redis", rows: group["redisConnections"].array.isEmpty ? [] : [Row(key: "redis", name: localized("Redis connections…", "Redis 连接…"), symbol: "cylinder")])
+                appendSection("redis", "Redis", rows: group["redisConnections"].array.compactMap { profile in
+                    profile["id"].string.map { Row(key: "r:" + $0, name: profile["name"].string ?? "Redis", symbol: "cylinder") }
+                })
             }
             if (section == "all" || section == "database") && settings["showDatabaseConnections"].bool != false {
-                appendSection("database", localized("Databases", "数据库"), rows: group["databaseConnections"].array.isEmpty ? [] : [Row(key: "db", name: localized("Database connections…", "数据库连接…"), symbol: "externaldrive")])
+                appendSection("database", localized("Databases", "数据库"), rows: group["databaseConnections"].array.compactMap { profile in
+                    profile["id"].string.map { Row(key: "d:" + $0, name: profile["name"].string ?? localized("Database", "数据库"), symbol: "externaldrive") }
+                })
             }
             if showProjects {
                 let terminals = loose.filter { $0.session["pinned"].bool != true && $0.session["agent"].string == nil }
@@ -578,7 +582,7 @@ struct NativeSidebar: NSViewRepresentable {
             if let section = item.sectionID {
                 let toggle = SectionButton(title: item.name, target: self, action: #selector(toggleSection(_:)))
                 toggle.sectionID = section; toggle.isBordered = false; toggle.alignment = .left
-                toggle.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: 11, bold: true)
+                toggle.font = NativePreferences.semiboldFont(settings["interfaceFont"].string ?? "", size: 11)
                 toggle.contentTintColor = NativePreferences.color(palette["text"], fallback: .labelColor)
                 toggle.image = NativeChromeImages.sidebarChevron(expanded: !item.collapsed)
                 toggle.imagePosition = .imageTrailing; toggle.imageScaling = .scaleProportionallyDown
@@ -598,7 +602,7 @@ struct NativeSidebar: NSViewRepresentable {
                 return cell
             }
             let text = NSTextField(labelWithString: item.name)
-            text.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13), bold: true)
+            text.font = NativePreferences.semiboldFont(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
             text.textColor = NativePreferences.color(palette[item.symbol == nil ? "muted" : "text"], fallback: item.symbol == nil ? .secondaryLabelColor : .labelColor)
             text.lineBreakMode = .byTruncatingTail
             text.translatesAutoresizingMaskIntoConstraints = false
@@ -669,6 +673,7 @@ struct NativeSidebar: NSViewRepresentable {
             guard row.symbol != nil else { return }
             request += 1
             let token = request
+            let group = model.groupID
             let focus = NSApp.currentEvent?.type != .keyDown
             pending = true
             // Programmatic selection never invokes domain actions; user actions wait until AppKit returns.
@@ -677,8 +682,8 @@ struct NativeSidebar: NSViewRepresentable {
                 guard let self, let model, self.request == token else { return }
                 Task { @MainActor in
                     let id = String(row.key.dropFirst(2))
-                    if row.key == "db" { model.openDatabasesRequested?() }
-                    else if row.key == "redis" { model.openRedisRequested?() }
+                    if row.key.hasPrefix("d:") { if model.groupID == group { model.openDatabaseProfileRequested?(group, id) } }
+                    else if row.key.hasPrefix("r:") { if model.groupID == group { model.openRedisProfileRequested?(group, id) } }
                     else if row.key.hasPrefix("q:") { model.openSSHRequested?(id) }
                     else if row.key.hasPrefix("s:") { await model.selectSession(id, focus: focus) }
                     else if let project = row.projectID, let tree = row.worktreeID { await model.selectProject(project, worktree: tree, focus: focus) }

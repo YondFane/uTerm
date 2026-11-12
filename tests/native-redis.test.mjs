@@ -142,6 +142,27 @@ test("native Redis profile conflicts retain input and quit/resume keeps a modal 
     await act(async () =>
       document.querySelector('[aria-label="Edit Redis connection: Redis QA"]').click(),
     );
+    catalog.selection = { request: "sidebar-click", group: "qa", id: config.id };
+    await act(async () =>
+      window.dispatchEvent(
+        new window.CustomEvent("uterm-content-event", {
+          detail: {
+            version: 1,
+            document: "native-redis-unit",
+            kind: "redis-selection-changed",
+            payload: null,
+          },
+        }),
+      ),
+    );
+    assert.ok(
+      document.querySelector("dialog[open]"),
+      "Selecting a connection must preserve the open profile draft",
+    );
+    assert.equal(
+      document.querySelector(".native-database-profile-name[aria-pressed=true]")?.textContent,
+      config.name,
+    );
     const name = document.querySelector("dialog[open] input");
     await change(name, "Retained draft 中文");
     await change(input("Password (optional)"), "PRIVATE_TEMPORARY_PASSWORD");
@@ -176,7 +197,16 @@ test("native Redis profile conflicts retain input and quit/resume keeps a modal 
     await act(async () => signal(false));
     assert.notEqual(document.querySelector("dialog[open]").inert, true);
     assert.equal(input("Password (optional)").value, "PRIVATE_TEMPORARY_PASSWORD");
-    assert.equal(calls.filter((call) => call.method === "redis_guard").at(-1).params.active, true);
+    assert.equal(
+      calls
+        .filter(
+          (call) =>
+            call.method === "redis_guard" &&
+            call.params.id === calls.find((call) => call.method === "redis_guard").params.id,
+        )
+        .at(-1).params.active,
+      true,
+    );
     assert.match(
       calls.find((call) => call.method === "redis_guard").params.id,
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,

@@ -162,6 +162,32 @@ list inset. Row padding and larger interface text still expand rows.
 Native selection uses the same rounded accent fill/border, and project folder icons reveal
 disclosure arrows on hover. The toolbar shows pane zoom only for split layouts.
 
+The native toolbar includes the selected repository's branch picker. Left click or Arrow Down opens
+local and remote branches; right click or Shift-F10 opens Push, Pull, Fetch and Refresh. Mutations
+capture the project, working directory and expected branch, retain editor-save and conflict checks,
+and reject changed selections without retrying writes. Reads refresh every four seconds. Errors are
+shown in the workspace.
+
+Redis and Database sections list each saved connection by name. Selecting a row opens that exact
+profile in its retained workbench, without closing other tabs or an open connection-editing draft.
+Selection requests are scoped to the current workspace, survive initial document loading and are
+consumed once. Deleted profiles and workspace changes reject the request. Sidebar text uses the
+shared 600 weight; focusing a hidden session-close button invalidates its drawing immediately. The
+GitHub PR modal casts the interface-theme shadow outside its clipped form.
+
+**Toolbar and connection-row validation**
+
+Linux x86_64 / Node 26: the frontend suite passes 478 checks (11 conditional skips); type checks,
+production build and documentation checks pass. Focused checks cover workspace boundaries,
+deleted/repeated targets, connection selection with a protected profile/password draft, and existing
+save conflicts. Native Git QA exercises branch switching, stale expected-branch rejection and
+restoration through the guarded application callback, and captures
+`native-toolbar-branch-picker-en-dark.png`. Database/Redis QA selects the actual AppKit row and
+captures `native-database-sidebar-profile-en-dark.png` and
+`native-redis-sidebar-profile-en-dark.png`. These new Mac scenarios and current-source paired visual
+acceptance remain pending CI; the branch popup's pointer/keyboard operation is not claimed from
+model checks.
+
 Actual row/header/gap/inset measurements are required in both clients; current-source native
 rendering remains pending CI.
 
@@ -193,7 +219,7 @@ active-icon color.
 Quick SSH and host search appear inside the SSH section in both All and SSH categories. Filtering
 uses name, host and username, ignoring case, and retains selection, sessions and an already-focused
 search editor. Native Quick SSH displays the same modal form and parser over the main workspace.
-Direct connection rows and full workbench alignment remain pending.
+Full workbench integration and visual alignment remain pending.
 
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.

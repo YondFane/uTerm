@@ -16,6 +16,8 @@ import type { SshConnection } from "./lib/workspace";
 import { useSettings } from "./lib/SettingsContext";
 import { useUiLanguage } from "./lib/useUiLanguage";
 
+import { workbenchSelection, type WorkbenchSelection } from "./lib/workbench-selection";
+
 interface Group {
   id: string;
   name: string;
@@ -25,6 +27,7 @@ interface Group {
 interface Catalog {
   revision: string;
   selectedWorkspace: string;
+  selection?: WorkbenchSelection | null;
   groups: Group[];
 }
 const message = (reason: unknown) =>
@@ -57,6 +60,7 @@ export function NativeDatabase() {
   const [error, setError] = useState("");
   const removeDialog = useRef<HTMLDialogElement>(null);
   const revision = useRef(0);
+  const consumedSelection = useRef<string>(undefined);
   const statuses = useSyncExternalStore(subscribeDatabase, databaseSnapshot);
   const group = catalog?.groups.find((group) => group.id === groupId);
   const inUse = (id: string) => {
@@ -66,6 +70,24 @@ export function NativeDatabase() {
   const accept = (value: Catalog) => {
     revision.current++;
     setCatalog(value);
+    const target = workbenchSelection(
+      value.selection,
+      consumedSelection.current,
+      value.selectedWorkspace,
+      value.groups.map((group) => ({ id: group.id, profiles: group.databaseConnections })),
+    );
+    if (target) {
+      consumedSelection.current = target.request;
+      setGroupId(target.group);
+      setSelected(target.profile.id);
+      setTabs((previous) =>
+        previous.some((tab) => tab.id === target.profile.id)
+          ? previous
+          : [...previous, target.profile],
+      );
+      setComponents(false);
+      return;
+    }
     setGroupId((previous) =>
       value.groups.some((group) => group.id === previous) ? previous : value.selectedWorkspace,
     );
@@ -96,6 +118,11 @@ export function NativeDatabase() {
     track(
       listenContent("database-settings-changed", () => {
         void reloadSettings.current().catch((reason) => setError(message(reason)));
+      }),
+    );
+    track(
+      listenContent("database-selection-changed", () => {
+        void refresh();
       }),
     );
     void refresh();

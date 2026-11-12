@@ -75,6 +75,9 @@ final class WorkspaceModel: ObservableObject {
     var canPruneQuickSSH: (() -> Bool)?
     var openDatabasesRequested: (() -> Void)?
     var openRedisRequested: (() -> Void)?
+    var openDatabaseProfileRequested: ((String, String) -> Void)?
+    var openRedisProfileRequested: ((String, String) -> Void)?
+    lazy var branchPicker = NativeBranchPickerModel(self)
     var openAgentsRequested: (() -> Void)?
     var openSettingsRequested: (() -> Void)?
     var openFileRequested: (() -> Void)?

@@ -6,6 +6,16 @@ final class DatabaseHost: WorkbenchHost {
     let kind = "database"
     private let bridge: CoreBridge
     private var polling: Task<Void, Never>?
+    private var selection: JSONValue = .null
+    func selectProfile(group: String, id: String) async throws {
+        let snapshot = try await bridge.snapshot()
+        guard !prepared, !preparing, snapshot.document.workspace["selectedWorkspace"].string == group,
+              snapshot.document.workspace["groups"].array.first(where: { $0["id"].string == group })?["databaseConnections"].array.contains(where: { $0["id"].string == id }) == true else {
+            throw BridgeFailure(code: "PROFILE_CHANGED", message: localized("The connection or workspace changed. Select it again.", "连接或工作区已变化，请重新选择。"))
+        }
+        selection = .object(["request": .string(UUID().uuidString), "group": .string(group), "id": .string(id)])
+        publish("database-selection-changed", .null)
+    }
     private var pending = 0
     private var preparing = false
     private var lastSettings: JSONValue?
@@ -89,7 +99,7 @@ final class DatabaseHost: WorkbenchHost {
     private func profiles() async throws -> JSONValue {
         let state = try await bridge.snapshot()
         return .object([
-            "revision": .string(state.revision), "selectedWorkspace": state.document.workspace["selectedWorkspace"],
+            "revision": .string(state.revision), "selectedWorkspace": state.document.workspace["selectedWorkspace"], "selection": selection,
             "groups": .array(state.document.workspace["groups"].array.map { group in .object([
                 "id": group["id"], "name": group["name"],
                 "databaseConnections": .array(group["databaseConnections"].array), "sshConnections": .array(group["sshConnections"].array)
