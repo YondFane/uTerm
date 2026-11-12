@@ -288,8 +288,8 @@ def find_native_run(repository, head, artifact_name):
         with urllib.request.urlopen(req, timeout=30) as reply:
             return json.load(reply)
     for _ in range(120):
-        runs = request(f"/actions/runs?head_sha={head}&event=pull_request&per_page=100")["workflow_runs"]
-        candidates = [run for run in runs if run["name"] == "macOS personal packages" and run["head_sha"] == head]
+        runs = request(f"/actions/runs?head_sha={head}&per_page=100")["workflow_runs"]
+        candidates = [run for run in runs if run["name"] == "macOS personal packages" and run["head_sha"] == head and run.get("event") in ["pull_request", "workflow_dispatch"]]
         if candidates:
             run = max(candidates, key=lambda candidate: candidate["id"])
             artifacts = request(f"/actions/runs/{run['id']}/artifacts?per_page=100")["artifacts"]

@@ -290,8 +290,11 @@ content/workbench checks. At head `ad94eea`, tested merge `76fd24cc`, Intel macO
 actual main-workspace panel captures and direct retained Java/Python switching. Launch-list QA still
 times out with no product error or mounted panel. QA now obtains the actual mounted toolbar
 coordinator and dispatches both stale and current NSMenu items through AppKit, checking action
-delivery before panel/generation assertions. The failed run is retained; the new dispatch still
-requires actual macOS execution and full visual comparison.
+delivery before panel/generation assertions. At ARM head `cdbd110`, tested merge `63b9bea4`, both
+languages still time out after AppKit dispatch with no mounted panel or product error. Failure
+reports now include bounded, timestamped stages for the actual handler, discovery, workspace/project
+selection, context and controller attachment. The new trace requires actual macOS execution; failed
+runs remain unaccepted and full visual comparison is pending.
 
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
 and uploads their early reports and original windows. Failures remain mandatory in the final matrix
@@ -498,14 +501,17 @@ drafts or errors. Return commits an edited field. Local control still changes it
 immediately.
 
 PR and manually dispatched CI collect same-source original images and reports into downloadable
-artifacts. Both collectors record the actual settings card bounds inside matching workspace windows.
-Pairing rejects separate settings windows, missing measurements, out-of-bounds cards or different
-actual positions/sizes. Linux passes 25 paired-evidence policy checks, including both-client modal
-and geometry rejection; 479 Node checks pass with 11 platform skips, alongside type/production build
-and format checks. Native QA uses the 640×420 minimum workspace, clicks the actual close button,
-verifies workspace focus and cached reopen, and requires `nativeSettingsOverlayProof` plus
-`native-settings-workspace-overlay.png`. These new actual-window operations and screenshots remain
-pending current-source macOS CI; the complete settings field styling is not accepted yet.
+artifacts. Discovery accepts only exact-head PR/manual Personal runs and uses the newest eligible
+run; a failed or expired newest artifact cannot be replaced by an older pass. Four isolated HTTP
+fixture checks cover this selection without network access. Both collectors record the actual
+settings card bounds inside matching workspace windows. Pairing rejects separate settings windows,
+missing measurements, out-of-bounds cards or different actual positions/sizes. Linux passes 25
+paired-evidence policy checks, including both-client modal and geometry rejection; 479 Node checks
+pass with 11 platform skips, alongside type/production build and format checks. Native QA uses the
+640×420 minimum workspace, clicks the actual close button, verifies workspace focus and cached
+reopen, and requires `nativeSettingsOverlayProof` plus `native-settings-workspace-overlay.png`.
+These new actual-window operations and screenshots remain pending current-source macOS CI; the
+complete settings field styling is not accepted yet.
 
 Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
 side/tool widths in both real apps. Collection rejects stale vectors, old height, titlebar insets or

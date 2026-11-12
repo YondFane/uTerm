@@ -41,7 +41,7 @@ enum ProjectRunSmoke {
             let mounted: [[String: Any]] = model.panels.panels.map { ["id": $0.id, "scope": $0.scope, "matchesController": $0.controller === controller, "windowNumber": $0.view.window?.windowNumber ?? -1, "visible": $0.view.window?.isVisible == true] }
             report[language + "LaunchSelectionDiagnostics"] = ["operationError": model.error, "busy": model.busy,
                 "taskRoot": task["task"]["root"].string ?? "", "scope": model.inspectorContextKey,
-                "selectedProject": model.workspace["selectedProject"].string ?? "", "selectedWorktree": model.workspace["selectedWorktree"].string ?? "", "panels": mounted]
+                "selectedProject": model.workspace["selectedProject"].string ?? "", "selectedWorktree": model.workspace["selectedWorktree"].string ?? "", "panels": mounted, "selectionTrace": model.projectRuns.selectionTrace]
             throw error
         }
         guard let panel = model.panels.panels.first(where: { $0.controller === controller }), let window = panel.view.window else { throw BridgeFailure(code: "RUN_LIST", message: "No mounted run panel") }
