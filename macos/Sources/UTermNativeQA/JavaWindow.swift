@@ -499,7 +499,12 @@ final class JavaWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePan
     }
     func prepareForQuit() async -> Bool {
         guard !model.busy else { model.error = localized("Wait for the Java operation to finish.", "请等待 Java 操作完成。"); return false }
-        if model.dirty {
+        if model.prepared { return true }
+        // Docked panels save loaded configuration on hide, including clean stale snapshots.
+        // 停靠面板隐藏时保存已加载配置，包括未编辑但修订已过期的快照。
+        if model.workspaceDocked, model.config != nil {
+            guard await model.save() else { return false }
+        } else if model.dirty {
             switch discardChoice() {
             case .alertSecondButtonReturn: break
             case .alertThirdButtonReturn: guard await model.save() else { return false }

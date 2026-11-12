@@ -281,6 +281,11 @@ retained. No application write retry is introduced; full current-source Mac acce
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
 
+Hiding or closing a docked Java/Python panel saves its loaded configuration, including an unchanged
+form. Busy operations, conflicts and storage errors keep the panel and draft open. Reload saved
+configuration explicitly after another window changes it, then try again. Standalone windows retain
+their Save/Discard/Cancel choice. Closing a run panel detaches its view and preserves its task.
+
 Java/Maven and Python dock below the main terminal or file, using shared default heights of 380px
 and 470px. Drag the separator or use Up/Down in 24px steps, Home/End for its bounds, and
 double-click for the default height. Expand/Restore retains the docked height and the same native
@@ -301,6 +306,16 @@ assertion; a failed wait captures the original window and records actual host/co
 [Artifact13958940224](https://github.com/YondFane/uTerm/actions/runs/43243047041/artifacts/13958940224)
 retains the failed reports. Fresh Mac interaction and matched ordinary-client images remain
 required.
+
+The native workspace smoke adds actual Hide-button checks for both Java and Python: a peer Core
+write makes a clean configuration stale; hiding must fail and retain the panel. A separately
+injected unsaved draft then fails against the same revision without overwriting the peer. An
+explicit QA fixture reload followed by another edit and actual Hide must persist the exact draft.
+Reports label the injected draft, retain both conflict originals and require 16 workspace-smoke
+PNGs; the 50-pair Personal/ordinary grid is separate. Linux passes 56 existing
+evidence/package/matrix policy checks and two existing run-panel frontend regressions, plus type,
+format and document checks; Swift and shell/Python parsing pass. These checks do not compile AppKit.
+New Mac execution and original-image inspection remain required.
 
 The paired run-panel grid uses the shared minimal POM/Python project and twelve required scenes:
 Java/Python × docked/expanded/file × English dark 1100px/Chinese light 640px, all at 720px height.

@@ -440,7 +440,12 @@ final class PythonWindow: NSWindowController, NSWindowDelegate, NativeWorkspaceP
     }
     func prepareForQuit() async -> Bool {
         guard !model.busy else { model.error = localized("Wait for the Python operation to finish.", "请等待 Python 操作完成。"); return false }
-        if model.dirty {
+        if model.prepared { return true }
+        // Docked panels save loaded configuration on hide, including clean stale snapshots.
+        // 停靠面板隐藏时保存已加载配置，包括未编辑但修订已过期的快照。
+        if model.workspaceDocked, model.config != nil {
+            guard await model.save() else { return false }
+        } else if model.dirty {
             switch discardChoice() {
             case .alertSecondButtonReturn: break
             case .alertThirdButtonReturn: guard await model.save() else { return false }

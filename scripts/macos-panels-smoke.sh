@@ -36,6 +36,12 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-panels-') as directory:
         assert data[kind + 'DockedFileRetained'] is True
         assert len(dock['captures']) == 2
         for name in dock['captures']: assert (evidence / name).stat().st_size > 1000, name
+        hide = data[kind + 'HideConfiguration']
+        for key in ['passed', 'actualHideButton', 'cleanStaleHideRefused', 'dirtyStaleHideRefused', 'draftRetained', 'peerValueRetained', 'explicitFixtureReload', 'savedDraftAfterReload', 'draftInjectedForQA']:
+            assert hide[key] is True, (kind, key)
+        assert hide['failedHideAttempts'] == 2
+        assert hide['screenshot'] == 'native-workspace-' + kind + '-hide-conflict.png'
+        assert hide['screenshot'] in data['captures']
     project = data['nativeProjectMenuRevisionAndWorkspaceMove']
     for key in ['passed', 'actualMenuActions', 'stalePinRejected', 'staleMoveRejected', 'peerSettingRetained', 'terminalGenerationsAndViewsRetained', 'splitLayoutRetainedInReopenedSnapshot', 'movedAndReturned']:
         assert project[key] is True, key
@@ -53,9 +59,9 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-panels-') as directory:
         assert scene['sourceHeadSHA'] == data['sourceHeadSHA'] and scene['testedMergeSHA'] == data['sourceSHA']
         assert scene['platform'] == 'macOS' and scene['architecture'] == data['architecture'] and scene['system'] == data['system']
         assert scene['height'] == 720 and scene['screenshot'] in data['captures']
-    files = {'native-workspace-' + kind + '-dock-with-file.png' for kind in ['java', 'python']}
+    files = {'native-workspace-' + kind + suffix + '.png' for kind in ['java', 'python'] for suffix in ['-dock-with-file', '-hide-conflict']}
     assert set(data['captures']) == {scene['screenshot'] for scene in data['scenes']} | files
-    assert len(data['captures']) == 14
+    assert len(data['captures']) == 16
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
     assert not subprocess.check_output(['git', 'status', '--porcelain'])

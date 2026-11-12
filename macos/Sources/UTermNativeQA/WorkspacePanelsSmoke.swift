@@ -83,8 +83,14 @@ enum WorkspacePanelsSmoke {
             tab.performClick(nil)
             try await TerminalSmoke.wait("Native panel tab restores the same retained view") { model.panels.active(in: model.inspectorContextKey)?.view === view && view.window === window }
             guard model.selectedID == session, model.selectedTerminal?.generation == generation else { throw BridgeFailure(code: "PANELS_PTY", message: "Panel switching changed the terminal identity") }
-            guard let close = button("native-panel-close-" + panel.id) else { throw BridgeFailure(code: "PANELS_CLOSE", message: "Missing native panel close control") }
-            close.performClick(nil)
+            if panel.runKind != nil {
+                let proof = try await RunPanelHideSmoke.run(model: model, panel: panel, window: window, evidence: evidence)
+                report[kind + "HideConfiguration"] = proof
+                if let image = proof["screenshot"] as? String { captures.append(image) }
+            } else {
+                guard let close = button("native-panel-close-" + panel.id) else { throw BridgeFailure(code: "PANELS_CLOSE", message: "Missing native panel close control") }
+                close.performClick(nil)
+            }
             try await TerminalSmoke.wait("Actual close button routes through the native panel close guard") { !model.panels.panels.contains { $0.id == panel.id } }
             report[kind + "WorkspacePanelProof"] = ["actualMainWindow": true, "retainedViewAfterTabSwitch": true, "terminalGenerationRetained": true, "actualCloseButton": true]
         }
