@@ -25,6 +25,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     for key in ['actualAppKitInput', 'filteredNavigation', 'matchingCategoryClickable', 'draftRetained', 'escapeClearsWithoutClosing', 'savedBytesUnchanged']:
         assert proof[key] is True, key
     assert (evidence / proof['capture']).stat().st_size > 1000
+    proof = data['nativeIconColorProof']
+    for key in ['actualModePicker', 'renderDoesNotWrite', 'customStartsWithThemeAccent', 'actualColorWellAction', 'fieldScopedPersistence', 'invalidDraftAndSavedColorRetained', 'followThemeRestored', 'preferencesRestored']:
+        assert proof[key] is True, key
+    for name in proof['captures']: assert (evidence / name).stat().st_size > 1000, name
     proof = data['nativeSettingsAutomaticSaveProof']
     for key in ['actualFieldEditorBlur', 'actualFieldEditorEnter', 'enterRetainsUnrelatedDraft', 'invalidDraftRetainedWithoutWrite', 'correctedFieldSavedAutomatically', 'actualFontPicker', 'scopedWrite', 'otherDraftRetained', 'peerWriteConflictRetained', 'actualThemePreviewSelection', 'terminalThemeUnchanged', 'explicitReloadRecovery']:
         assert proof[key] is True, key

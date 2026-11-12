@@ -41,6 +41,7 @@ final class NativeSettingsModel: ObservableObject {
     private var baseline: [String: JSONValue] = [:]
     private var baselineNumbers: [String: String] = [:]
     private var baselineShortcuts: [String: String] = [:]
+    func lastSavedValue(_ key: String) -> JSONValue { baseline[key] ?? .null }
     private var bridge: CoreBridge? { workspace.sshBridge ?? workspace.bridge }
     var dirty: Bool { values != baseline || numbers != baselineNumbers || shortcuts != baselineShortcuts }
     var commands: [JSONValue] { catalog["commands"].array }
@@ -274,10 +275,7 @@ struct NativeSettingsView: View {
           VStack(alignment: .leading, spacing: 16) {
             NativeInterfaceThemes(model: model)
             Divider()
-            HStack {
-                Text(localized("Active icon color (hex, optional)", "活跃图标颜色（十六进制，可选）")); Spacer()
-                NativeSettingsField(model: model, key: "activeIconColor", numeric: false, label: localized("Highlight color value", "高亮颜色值")).frame(width: 160, height: 24)
-            }
+            NativeIconColor(model: model)
             choice("appearance", "Color mode", "颜色模式", [("system", "System default", "系统默认"), ("dark", "Dark", "深色"), ("light", "Light", "浅色")])
             ForEach(["darkTheme", "lightTheme"], id: \.self) { key in
                 Picker(key == "darkTheme" ? localized("Dark terminal theme", "深色终端主题") : localized("Light terminal theme", "浅色终端主题"), selection: text(key)) {

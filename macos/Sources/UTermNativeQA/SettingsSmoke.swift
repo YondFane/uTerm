@@ -86,6 +86,7 @@ enum SettingsSmoke {
         try await save(model)
         guard model.error.isEmpty, !model.dirty, workspace.settings["fontSize"].number == 17 else { throw BridgeFailure(code: "SETTINGS_QA_SAVE", message: "Native settings did not save") }
         try await verifyAutomaticSave(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
+        try await verifyIconColor(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         try await verifyLegacyExport(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         try await verifyDefaultAgent(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         let other = try await CoreBridge.open(root: root)
@@ -343,6 +344,72 @@ enum SettingsSmoke {
         guard field.stringValue == text else { throw BridgeFailure(code: "SETTINGS_QA_FIELD", message: "AppKit did not deliver the input") }
         if enter { try Self.key(settings.window, code: 36, characters: "\r") } else { settings.window.makeFirstResponder(nil) }
         try await TerminalSmoke.wait("Complete native field commit") { !settings.model.automaticSaving && !settings.model.busy }
+    }
+
+    private static func verifyIconColor(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Missing settings bridge") }
+        let before = try await bridge.snapshot()
+        model.section = "appearance"
+        try await TerminalSmoke.wait("Render actual native highlight mode") { (view(settings.window, id: "native-settings-icon-color-mode") as? NSPopUpButton)?.isEnabled == true }
+        guard let mode = view(settings.window, id: "native-settings-icon-color-mode") as? NSPopUpButton else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Missing actual highlight mode control") }
+        guard (try await bridge.snapshot()).document.settings == before.document.settings else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Rendering highlight controls wrote preferences") }
+        var attempts: [[String: Any]] = []
+        func check(_ value: String) async throws {
+            guard case .object(var expected) = before.document.settings else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Missing preferences") }
+            expected["activeIconColor"] = .string(value)
+            guard model.error.isEmpty, (try await bridge.snapshot()).document.settings == .object(expected) else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Highlight selection did not save its field or changed another preference") }
+        }
+        func commit(_ control: NSControl) async throws {
+            let previous = (try await bridge.snapshot()).document.settings["activeIconColor"]
+            for attempt in 0..<3 {
+                try await TerminalSmoke.wait("Actual highlight control is ready") { control.isEnabled }
+                guard let action = control.action, NSApp.sendAction(action, to: control.target, from: control) else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Actual highlight control action was not delivered") }
+                let draft = model.values["activeIconColor"]
+                try await TerminalSmoke.wait("Complete highlight control save") { !model.automaticSaving && !model.busy }
+                attempts.append(["control": control.identifier?.rawValue ?? "", "attempt": attempt + 1, "errorCode": model.errorCode])
+                guard model.errorCode == "WRITER_BUSY", attempt < 2 else { return }
+                guard model.values["activeIconColor"] == draft, (try await bridge.snapshot()).document.settings["activeIconColor"] == previous else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Contention lost the color draft or changed committed data") }
+                // Retry by explicitly using the control, without replaying a failed write inside the app.
+                // 通过明确操作控件重试，应用内部不重放失败写入。
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        do {
+            mode.selectItem(at: 1); try await commit(mode)
+            let accent = NativePreferences.interfacePalette(model.workspace.settings, catalog: model.catalog)["accent"].string ?? "#62d98a"
+            try await check(accent)
+            try await TerminalSmoke.wait("Render actual color well and hex editor") { (view(settings.window, id: "native-settings-icon-color-well") as? NSColorWell)?.isEnabled == true }
+            guard let well = view(settings.window, id: "native-settings-icon-color-well") as? NSColorWell else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Missing actual native color well") }
+            well.color = NSColor(srgbRed: 18.0 / 255, green: 52.0 / 255, blue: 86.0 / 255, alpha: 1)
+            try await commit(well); try await check("#123456")
+            let selected = "native-settings-icon-color-custom.png"
+            try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(selected))
+            try await editField(settings, key: "activeIconColor", text: "#xyz")
+            guard model.errorCode == "INVALID_SETTINGS", model.values["activeIconColor"] == .string("#xyz"), (try await bridge.snapshot()).document.settings["activeIconColor"] == .string("#123456") else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Invalid highlight input lost its draft or changed the saved color") }
+            try await TerminalSmoke.wait("Invalid text keeps the committed swatch color") {
+                guard let color = well.color.usingColorSpace(.sRGB) else { return false }
+                return abs(color.redComponent - 18.0 / 255) < 0.001 && abs(color.greenComponent - 52.0 / 255) < 0.001 && abs(color.blueComponent - 86.0 / 255) < 0.001
+            }
+            let invalid = "native-settings-icon-color-invalid.png"
+            try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(invalid))
+            mode.selectItem(at: 0); try await commit(mode); try await check("")
+            try await TerminalSmoke.wait("Follow theme removes custom controls") { view(settings.window, id: "native-settings-icon-color-well") == nil }
+            if let original = before.document.settings["activeIconColor"].string, !original.isEmpty {
+                mode.selectItem(at: 1); try await commit(mode)
+                try await editField(settings, key: "activeIconColor", text: original, enter: true)
+                try await check(original)
+            }
+            await model.reload()
+            guard model.error.isEmpty, !model.dirty, (try await bridge.snapshot()).document.settings == before.document.settings else { throw BridgeFailure(code: "ICON_COLOR_QA", message: "Highlight QA did not restore preferences") }
+            var proof: [String: Any] = ["actualModePicker": true, "renderDoesNotWrite": true, "customStartsWithThemeAccent": true,
+                "actualColorWellAction": true, "fieldScopedPersistence": true, "invalidDraftAndSavedColorRetained": true,
+                "followThemeRestored": true, "preferencesRestored": true]
+            proof["captures"] = [selected, invalid]
+            proof["input"] = "Actual AppKit control action; no physical system color-panel gesture claim"
+            report["nativeIconColorProof"] = proof
+            report["nativeIconColorAttempts"] = attempts
+        } catch { report["nativeIconColorAttempts"] = attempts; throw error }
     }
 
     private static func verifyAutomaticSave(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {

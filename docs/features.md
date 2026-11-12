@@ -657,6 +657,20 @@ localized names, descriptions and a selected marker. Narrow settings use one col
 saves the interface theme while retaining terminal colors. Full settings styling still requires
 comparison.
 
+Native Appearance provides the same **Icon highlight → Follow theme / Custom color** choices as the
+ordinary client. Custom starts with the current interface accent and offers a native color well plus
+a hex field; choosing Follow theme clears the custom value. Actual selection saves only
+`activeIconColor`. Invalid text retains the draft, last saved swatch and visible error; Enter/blur
+trims surrounding whitespace before validation.
+
+The new real-window QA operates the actual mode picker and color-well action, reads the Core
+snapshot, rejects invalid hex without changing saved data, checks the retained swatch and returns to
+Follow theme. `nativeIconColorProof` requires these operations and screenshots
+`native-settings-icon-color-custom.png` / `native-settings-icon-color-invalid.png`. The color-panel
+pointer gesture is not simulated as native input acceptance. Current-source Mac execution remains
+pending; Linux preference validation, policy, syntax and documentation checks cannot establish these
+AppKit operations.
+
 Native General includes **Export legacy-compatible data**, using the shared export format and a
 native save sheet. Cancel leaves the store and drafts unchanged. Export writes committed values,
 keeps pending drafts, and reports destination failures without replacing a prior export. The

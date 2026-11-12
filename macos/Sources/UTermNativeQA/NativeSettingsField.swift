@@ -32,7 +32,10 @@ struct NativeSettingsField: NSViewRepresentable {
             if numeric { model.numbers[key] = field.stringValue }
             else { model.values[key] = .string(field.stringValue) }
         }
-        func controlTextDidEndEditing(_ notification: Notification) { model.saveAutomatically([key]) }
+        func controlTextDidEndEditing(_ notification: Notification) {
+            if key == "activeIconColor", let value = model.values[key]?.string { model.values[key] = .string(value.trimmingCharacters(in: .whitespacesAndNewlines)) }
+            model.saveAutomatically([key])
+        }
         func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
             guard NSStringFromSelector(selector) == "insertNewline:" else { return false }
             control.window?.makeFirstResponder(nil)
