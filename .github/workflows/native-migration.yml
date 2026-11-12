@@ -72,7 +72,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 2
         run: |
-          swiftc -parse-as-library macos/Sources/UTermBridge/WindowCaptureAlpha.swift scripts/macos-qa-capture-probe.swift -o "$RUNNER_TEMP/uterm-capture-probe"
+          swiftc -parse-as-library macos/Sources/UTermBridge/WindowCaptureAlpha.swift macos/Sources/UTermBridge/WindowCaptureSystemPointer.swift scripts/macos-qa-capture-probe.swift -o "$RUNNER_TEMP/uterm-capture-probe"
           UTERM_QA_TESTED_SHA="$(git rev-parse HEAD)" "$RUNNER_TEMP/uterm-capture-probe" "$PWD/macos/.build/evidence/capture-probe"
       - name: Preserve capture infrastructure diagnostics
         if: always()
