@@ -19,8 +19,8 @@ struct NativeWorkspaceToolbar: View {
             Spacer(minLength: 8)
             if model.busy { ProgressView().controlSize(.small) }
             if model.workspace["selectedProject"].string != nil {
-                NativeProjectRunButton(model: model, runs: model.projectRuns, language: "java")
-                NativeProjectRunButton(model: model, runs: model.projectRuns, language: "python")
+                NativeProjectRunButton(model: model, runs: model.projectRuns, panels: model.panels, language: "java")
+                NativeProjectRunButton(model: model, runs: model.projectRuns, panels: model.panels, language: "python")
             }
             if model.paneZoomed || model.state?.layout["kind"].string == "split" {
                 tool(model.paneZoomed ? .restore : .maximize, localized("Toggle pane zoom", "切换面板缩放")) { model.performCommandRequested?("zoom") }.disabled(model.commandIsAvailable?("zoom") != true)
