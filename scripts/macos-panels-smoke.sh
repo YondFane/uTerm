@@ -31,6 +31,9 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-panels-') as directory:
     project = data['nativeProjectMenuRevisionAndWorkspaceMove']
     for key in ['passed', 'actualMenuActions', 'stalePinRejected', 'staleMoveRejected', 'peerSettingRetained', 'terminalGenerationsAndViewsRetained', 'splitLayoutRetainedInReopenedSnapshot', 'movedAndReturned']:
         assert project[key] is True, key
+    drag = project.get("dragSimulation", {})
+    for key in ["passed", "actualNSTableViewCallbacks", "ownedPasteboard", "foreignSourceRejected", "forgedPayloadRejected", "cancelledDragRejected", "staleRevisionRejected", "freshDropAndReverseVerified"]:
+        assert drag.get(key) is True, key
     assert project['sourceHeadSHA'] == data['sourceHeadSHA'] and project['testedMergeSHA'] == data['sourceSHA']
     assert (evidence / project['screenshot']).stat().st_size > 1000
     assert data['cleanup']

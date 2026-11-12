@@ -62,6 +62,9 @@ def validate_workspace_scenes(report, head, tested, phase):
     project = report.get("nativeProjectMenuRevisionAndWorkspaceMove", {})
     for key in ["passed", "actualMenuActions", "stalePinRejected", "staleMoveRejected", "peerSettingRetained", "terminalGenerationsAndViewsRetained", "splitLayoutRetainedInReopenedSnapshot", "movedAndReturned"]:
         assert project.get(key) is True, key
+    drag = project.get("dragSimulation", {})
+    for key in ["passed", "actualNSTableViewCallbacks", "ownedPasteboard", "foreignSourceRejected", "forgedPayloadRejected", "cancelledDragRejected", "staleRevisionRejected", "freshDropAndReverseVerified"]:
+        assert drag.get(key) is True, key
     assert project.get("sourceHeadSHA") == head and project.get("testedMergeSHA") == tested
     assert project.get("platform") == "macOS" and project.get("architecture") in ["arm64", "x86_64"]
     assert project.get("system") and project.get("screenshot") == f"personal-{phase}-project-workspace-move.png"

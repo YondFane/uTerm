@@ -103,6 +103,7 @@ final class WorkspaceModel: ObservableObject {
     private var failures: Task<Void, Never>?
     private var operation: Task<Bool, Never>?
     private var loadEpoch = 0
+    private var snapshotReadError: String?
     private var shuttingDown = false
     private var helperReady = false
     private var needsReload = false
@@ -224,7 +225,7 @@ final class WorkspaceModel: ObservableObject {
             if let sshBridge { startSSHTrust(sshBridge) }
             for session in terminals.values { session.rebind(bridge) }
             environment = try await bridge.call("host.environment")
-            await reload()
+            await reload(clearOperationError: true)
             guard state != nil else { throw BridgeFailure(code: "BOOTSTRAP", message: error) }
             await cleanupQuickSSH()
             events = Task { @MainActor [weak self, bridge] in
@@ -258,7 +259,8 @@ final class WorkspaceModel: ObservableObject {
         } catch { self.error = error.localizedDescription }
     }
 
-    func reload() async {
+    func reload(clearOperationError: Bool = false) async {
+        if clearOperationError { error = ""; snapshotReadError = nil }
         guard let bridge, !shuttingDown else { return }
         loadEpoch += 1
         let epoch = loadEpoch
@@ -306,8 +308,13 @@ final class WorkspaceModel: ObservableObject {
                 terminals[id]?.apply(settings: settings, catalog: settingsCatalog)
                 if let session = terminals[id] { Task { await session.connect() } }
             }
-            error = ""
-        } catch { if epoch == loadEpoch { self.error = error.localizedDescription } }
+            // Background snapshots clear only their own read error, preserving the last failed operation.
+            // 后台快照仅清除自身读取错误，保留最近操作的失败反馈。
+            if let snapshotReadError, error == snapshotReadError { error = "" }
+            snapshotReadError = nil
+        } catch {
+            if epoch == loadEpoch { snapshotReadError = error.localizedDescription; self.error = error.localizedDescription }
+        }
     }
 
     @discardableResult
@@ -326,7 +333,7 @@ final class WorkspaceModel: ObservableObject {
             defer { self.busy = false; self.operation = nil }
             do {
                 _ = try await actionBridge.call(method, params: .object(params))
-                await self.reload()
+                await self.reload(clearOperationError: true)
                 if self.needsReload { self.needsReload = false; await self.reload() }
                 return true
             } catch { self.error = error.localizedDescription; return false }
@@ -408,7 +415,7 @@ final class WorkspaceModel: ObservableObject {
                 "requestId": request["id"], "expectedRevision": .string(state.snapshot.revision),
                 "generation": generation.map(JSONValue.string) ?? .null
             ]))
-            await reload()
+            await reload(clearOperationError: true)
             if needsReload { needsReload = false; await reload() }
             if ["sessions.new", "sessions.focus", "open"].contains(method) {
                 focusRevision += 1
@@ -619,7 +626,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func reloadNameDraft() async {
-        await reload()
+        await reload(clearOperationError: true)
         if let state { nameDraft?.revision = state.snapshot.revision }
     }
 
@@ -640,7 +647,7 @@ final class WorkspaceModel: ObservableObject {
                 alert.addButton(withTitle: localized("Cancel", "取消"))
                 guard alert.runModal() == .alertFirstButtonReturn else { return }
                 _ = try await bridge.call("recovery.restore", params: .object(["expectedRevision": listing["currentRevision"], "backupRevision": .string(revisions[choice.indexOfSelectedItem])]))
-                if self.helperReady { await self.reload() }
+                if self.helperReady { await self.reload(clearOperationError: true) }
                 else { await bridge.close(); self.bridge = nil; await self.start() }
             } catch { self.error = error.localizedDescription }
         }
