@@ -40,10 +40,15 @@ struct NativeHostedPanel: NSViewRepresentable {
     let panel: NativeWorkspacePanels.Panel
     func makeNSView(context: Context) -> NSView {
         let host = NSView(); host.identifier = .init("native-workspace-panel-" + panel.id)
-        panel.view.removeFromSuperview(); panel.view.translatesAutoresizingMaskIntoConstraints = false; host.addSubview(panel.view)
-        NSLayoutConstraint.activate([panel.view.leadingAnchor.constraint(equalTo: host.leadingAnchor), panel.view.trailingAnchor.constraint(equalTo: host.trailingAnchor), panel.view.topAnchor.constraint(equalTo: host.topAnchor), panel.view.bottomAnchor.constraint(equalTo: host.bottomAnchor)])
+        mount(in: host)
         return host
     }
-    func updateNSView(_ host: NSView, context: Context) {}
+    private func mount(in host: NSView) {
+        guard panel.view.superview !== host else { return }
+        host.subviews.forEach { $0.removeFromSuperview() }
+        panel.view.removeFromSuperview(); panel.view.translatesAutoresizingMaskIntoConstraints = false; host.addSubview(panel.view)
+        NSLayoutConstraint.activate([panel.view.leadingAnchor.constraint(equalTo: host.leadingAnchor), panel.view.trailingAnchor.constraint(equalTo: host.trailingAnchor), panel.view.topAnchor.constraint(equalTo: host.topAnchor), panel.view.bottomAnchor.constraint(equalTo: host.bottomAnchor)])
+    }
+    func updateNSView(_ host: NSView, context: Context) { mount(in: host) }
     static func dismantleNSView(_ host: NSView, coordinator: ()) { host.subviews.forEach { $0.removeFromSuperview() } }
 }

@@ -19,6 +19,10 @@ final class NativeSettingsModel: ObservableObject {
     @Published var numbers: [String: String] = [:]
     @Published var shortcuts: [String: String] = [:]
     @Published private(set) var busy = false
+    @Published private(set) var automaticSaving = false
+    private var automaticKeys: Set<String> = []
+    private var automaticTask: Task<Void, Never>?
+    private var automaticFailures: [String: (String, String)] = [:]
     @Published var frozen = false
     @Published var error = ""
     @Published var notice = ""
@@ -59,8 +63,48 @@ final class NativeSettingsModel: ObservableObject {
         shortcuts = object(value["shortcuts"]).compactMapValues(\.string)
         baseline = values; baselineNumbers = numbers; baselineShortcuts = shortcuts
     }
+    private func applySaved(_ value: JSONValue, keys: Set<String>?, submittedValues: [String: JSONValue], submittedNumbers: [String: String], submittedShortcuts: [String: String]) {
+        let requested = keys ?? Set(submittedValues.keys)
+        let oldBaseline = baseline, oldNumbers = baselineNumbers, oldShortcuts = baselineShortcuts
+        var retainedKeys = Set(values.filter { !requested.contains($0.key) && baseline[$0.key] != $0.value }.keys)
+        retainedKeys.formUnion(numbers.filter { !requested.contains($0.key) && baselineNumbers[$0.key] != $0.value }.keys)
+        let keepShortcuts = shortcuts != (requested.contains("shortcuts") ? submittedShortcuts : baselineShortcuts)
+        if !requested.contains("shortcuts"), keepShortcuts { retainedKeys.insert("shortcuts") }
+        let retainedValues = values.filter { retainedKeys.contains($0.key) || (requested.contains($0.key) && submittedValues[$0.key] != $0.value) }
+        let retainedNumbers = numbers.filter { retainedKeys.contains($0.key) || (requested.contains($0.key) && submittedNumbers[$0.key] != $0.value) }
+        let draftShortcuts = shortcuts
+        apply(value)
+        // An unrelated save must retain the original comparison point of every uncommitted field.
+        // 保存无关字段时，必须保留每个未提交字段最初的冲突比较基点。
+        for key in retainedKeys { baseline[key] = oldBaseline[key]; baselineNumbers[key] = oldNumbers[key] }
+        if retainedKeys.contains("shortcuts") { baselineShortcuts = oldShortcuts }
+        values.merge(retainedValues) { _, draft in draft }; numbers.merge(retainedNumbers) { _, draft in draft }
+        if keepShortcuts { shortcuts = draftShortcuts }
+    }
+    func saveAutomatically(_ keys: Set<String>) {
+        automaticKeys.formUnion(keys)
+        guard !frozen, !automaticKeys.isEmpty, automaticTask == nil else { return }
+        automaticSaving = true
+        automaticTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.automaticTask = nil; self.automaticSaving = false }
+            while !self.automaticKeys.isEmpty && !Task.isCancelled {
+                while self.busy { do { try await Task.sleep(for: .milliseconds(10)) } catch { return } }
+                guard !self.frozen else { return }
+                let requested = self.automaticKeys; self.automaticKeys.removeAll()
+                if await self.save(keys: requested) {
+                    for key in requested { self.automaticFailures[key] = nil }
+                    if let previous = self.automaticFailures.values.first { self.errorCode = previous.0; self.error = previous.1 }
+                } else {
+                    for key in requested { self.automaticFailures[key] = (self.errorCode, self.error) }
+                    self.automaticKeys.subtract(requested)
+                }
+            }
+        }
+    }
     func reload() async {
-        guard !busy, !frozen, let bridge else { return }
+        guard !busy, !frozen, !automaticSaving, let bridge else { return }
+        automaticKeys.removeAll(); automaticFailures.removeAll()
         busy = true; error = ""; errorCode = ""; notice = ""; defer { busy = false }
         do {
             catalog = try await bridge.call("settings.catalog")
@@ -70,7 +114,7 @@ final class NativeSettingsModel: ObservableObject {
         } catch { self.error = localized("Could not read settings. Retry after checking saved data.", "无法读取设置，请检查保存数据后重试。") }
     }
     func resetDraft() {
-        guard !busy, !frozen, catalog != .null else { return }
+        guard !busy, !automaticSaving, !frozen, catalog != .null else { return }
         values = object(catalog["defaults"])
         values["agentNotifications"] = .bool(false)
         numbers = numberStrings(values); shortcuts = [:]
@@ -90,7 +134,7 @@ final class NativeSettingsModel: ObservableObject {
         guard !busy, !frozen else { return }
         let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        Task { await importThemeFile(url) }
+        Task { await importThemeFile(url); if error.isEmpty { saveAutomatically(["customThemes", "darkTheme"]) } }
     }
     func importThemeFile(_ url: URL) async {
         guard !busy, !frozen else { return }
@@ -102,19 +146,26 @@ final class NativeSettingsModel: ObservableObject {
             await importTheme(source: source, name: name)
         } catch { self.error = localized("Could not read the theme. Select a UTF-8 file up to 32 KB.", "无法读取主题，请选择不超过 32 KB 的 UTF-8 文件。") }
     }
-    func save() async {
-        guard !busy, !frozen, let bridge else { return }
+    @discardableResult
+    func save(keys: Set<String>? = nil) async -> Bool {
+        guard !busy, !frozen else { return false }
+        guard let bridge else { errorCode = "CLOSED"; error = localized("The settings client is closed. Reopen settings.", "设置客户端已关闭，请重新打开设置。"); return false }
         busy = true; error = ""; errorCode = ""; notice = ""; defer { busy = false }
+        let submittedValues = values, submittedNumbers = numbers, submittedShortcuts = shortcuts
         do {
             var draft = values
-            for (key, text) in numbers {
+            for (key, text) in numbers where keys == nil || keys!.contains(key) {
                 guard let value = Double(text), value.isFinite else { throw BridgeFailure(code: "INVALID_SETTINGS", message: "Invalid number") }
                 draft[key] = .number(value)
             }
             draft["shortcuts"] = .object(shortcuts.mapValues(JSONValue.string))
-            let patch = draft.filter { baseline[$0.key] != $0.value }
-            if patch.isEmpty { apply(.object(draft)); return }
+            let patch = draft.filter { (keys == nil || keys!.contains($0.key)) && baseline[$0.key] != $0.value }
             let current = try await bridge.snapshot()
+            if patch.isEmpty {
+                applySaved(current.document.settings, keys: keys, submittedValues: submittedValues, submittedNumbers: submittedNumbers, submittedShortcuts: submittedShortcuts)
+                if keys == nil { automaticFailures.removeAll() }
+                return true
+            }
             var merged = object(current.document.settings)
             // Rebase unrelated changes, but never overwrite a field another client changed.
             // 可合并无关修改，但绝不覆盖另一客户端已改动的字段。
@@ -124,9 +175,11 @@ final class NativeSettingsModel: ObservableObject {
             }
             _ = try await bridge.call("settings.validate", params: .object(["settings": .object(merged), "platform": .string("macos")]))
             let saved = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(current.revision), "patch": .object(patch)]))
-            apply(saved["document"]["settings"])
+            applySaved(saved["document"]["settings"], keys: keys, submittedValues: submittedValues, submittedNumbers: submittedNumbers, submittedShortcuts: submittedShortcuts)
+            if keys == nil { automaticFailures.removeAll() }
             await workspace.reload()
             notice = localized("Settings saved.", "设置已保存。")
+            return true
         } catch let failure as BridgeFailure {
             errorCode = failure.code
             switch failure.code {
@@ -137,6 +190,7 @@ final class NativeSettingsModel: ObservableObject {
             default: error = localized("Settings are invalid or could not be saved. Check the values and retry.", "设置无效或无法保存，请检查填写值后重试。")
             }
         } catch { self.error = localized("Could not save settings. Your draft is retained.", "无法保存设置，草稿已保留。") }
+        return false
     }
     func title(_ item: JSONValue) -> String { localized(item["labels"]["en"].string ?? item["name"].string ?? "", item["labels"]["zh-Hans"].string ?? item["name"].string ?? "") }
     func defaultShortcut(_ id: String) -> String { commands.first { $0["id"].string == id }?["defaultShortcut"].string ?? "" }
@@ -148,10 +202,13 @@ struct NativeSettingsView: View {
     @ObservedObject var workspace: WorkspaceModel
     @State private var confirmReset = false
     @State private var confirmReload = false
-    private func text(_ key: String) -> Binding<String> { Binding(get: { model.values[key]?.string ?? "" }, set: { model.values[key] = .string($0) }) }
-    private func flag(_ key: String) -> Binding<Bool> { Binding(get: { model.values[key]?.bool == true }, set: { model.values[key] = .bool($0) }) }
+    private func text(_ key: String) -> Binding<String> { Binding(get: { model.values[key]?.string ?? "" }, set: { model.values[key] = .string($0); model.saveAutomatically([key]) }) }
+    private func flag(_ key: String) -> Binding<Bool> { Binding(get: { model.values[key]?.bool == true }, set: { model.values[key] = .bool($0); model.saveAutomatically([key]) }) }
     private func number(_ key: String, _ en: String, _ zh: String) -> some View {
-        TextField(localized(en, zh), text: Binding(get: { model.numbers[key] ?? "" }, set: { model.numbers[key] = $0 }))
+        HStack {
+            Text(localized(en, zh)); Spacer()
+            NativeSettingsField(model: model, key: key, numeric: true, label: localized(en, zh)).frame(width: 140, height: 24)
+        }
     }
     private func choice(_ key: String, _ en: String, _ zh: String, _ entries: [(String, String, String)]) -> some View {
         Picker(localized(en, zh), selection: text(key)) {
@@ -168,11 +225,14 @@ struct NativeSettingsView: View {
         }.formStyle(.grouped)
     }
     private var appearance: some View {
-        Form {
-            Picker(localized("Interface theme", "界面主题"), selection: text("interfaceTheme")) {
-                ForEach(Array(model.catalog["interfaceThemes"].array.enumerated()), id: \.offset) { _, item in Text(model.title(item)).tag(item["id"].string ?? "") }
+        ScrollView {
+          VStack(alignment: .leading, spacing: 16) {
+            NativeInterfaceThemes(model: model)
+            Divider()
+            HStack {
+                Text(localized("Active icon color (hex, optional)", "活跃图标颜色（十六进制，可选）")); Spacer()
+                NativeSettingsField(model: model, key: "activeIconColor", numeric: false, label: localized("Highlight color value", "高亮颜色值")).frame(width: 160, height: 24)
             }
-            TextField(localized("Active icon color (hex, optional)", "活跃图标颜色（十六进制，可选）"), text: text("activeIconColor"))
             choice("appearance", "Color mode", "颜色模式", [("system", "System default", "系统默认"), ("dark", "Dark", "深色"), ("light", "Light", "浅色")])
             ForEach(["darkTheme", "lightTheme"], id: \.self) { key in
                 Picker(key == "darkTheme" ? localized("Dark terminal theme", "深色终端主题") : localized("Light terminal theme", "浅色终端主题"), selection: text(key)) {
@@ -192,7 +252,8 @@ struct NativeSettingsView: View {
             number("lineHeight", "Line height (1–2)", "行高（1–2）")
             number("fileFontSize", "File font size", "文件字号")
             number("gitDiffFontSize", "Diff font size", "差异字号")
-        }.formStyle(.grouped)
+          }.padding(28)
+        }
     }
     private var terminal: some View {
         Form {
@@ -271,10 +332,10 @@ struct NativeSettingsView: View {
                 let id = command["id"].string ?? ""
                 HStack {
                     Text(model.title(command)); Spacer()
-                    NativeShortcutCapture(id: id, value: model.shortcuts[id] ?? model.defaultShortcut(id)) { model.shortcuts[id] = $0 }
+                    NativeShortcutCapture(id: id, value: model.shortcuts[id] ?? model.defaultShortcut(id)) { model.shortcuts[id] = $0; model.saveAutomatically(["shortcuts"]) }
                         .frame(width: 170, height: 26)
-                    Button(localized("Clear", "清除")) { model.shortcuts[id] = "" }
-                    Button(localized("Default", "默认")) { model.shortcuts[id] = nil }
+                    Button(localized("Clear", "清除")) { model.shortcuts[id] = ""; model.saveAutomatically(["shortcuts"]) }
+                    Button(localized("Default", "默认")) { model.shortcuts[id] = nil; model.saveAutomatically(["shortcuts"]) }
                 }
             }
         }.formStyle(.grouped)
@@ -304,22 +365,22 @@ struct NativeSettingsView: View {
                     }.frame(width: 160).background(.bar).disabled(model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
                     Divider()
                     selectedSection.frame(maxWidth: .infinity, maxHeight: .infinity)
-                }.disabled(model.busy || model.frozen || model.maven.busy || workspace.busy)
+                }.disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || workspace.busy)
             }
             if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled).padding(.horizontal) }
             if !model.notice.isEmpty { Text(model.notice).textSelection(.enabled).padding(.horizontal) }
             HStack {
-                Button(localized("Restore defaults…", "恢复默认值…")) { confirmReset = true }.disabled(model.busy || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
+                Button(localized("Restore defaults…", "恢复默认值…")) { confirmReset = true }.disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
                 if model.busy { ProgressView().controlSize(.small) }
                 Spacer()
                 if model.dirty { Text(localized("Unsaved changes", "有未保存修改")).foregroundStyle(.secondary) }
-                Button(localized("Reload", "重新读取")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }.disabled(model.busy || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
-                Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.keyboardShortcut(.defaultAction).disabled(!model.dirty || model.busy || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
+                Button(localized("Reload", "重新读取")) { if model.dirty { confirmReload = true } else { Task { await model.reload() } } }.disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
+                Button(localized("Save settings", "保存设置")) { Task { await model.save() } }.keyboardShortcut(.defaultAction).disabled(!model.dirty || model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
             }.padding()
         }.frame(minWidth: 640, minHeight: 480).task { await model.reload() }
         .sheet(item: Binding(get: { workspace.nameDraftOwner == .settings ? workspace.nameDraft : nil }, set: { if workspace.nameDraftOwner == .settings { workspace.nameDraft = $0 } })) { _ in NameEditorView(model: workspace) }
         .confirmationDialog(localized("Replace this draft with default settings?", "用默认设置替换当前草稿？"), isPresented: $confirmReset) {
-            Button(localized("Restore defaults", "恢复默认值")) { model.resetDraft() }
+            Button(localized("Restore defaults", "恢复默认值")) { model.resetDraft(); model.saveAutomatically(Set(model.values.keys).union(["shortcuts"])) }
             Button(localized("Cancel", "取消"), role: .cancel) {}
         }
         .confirmationDialog(localized("Discard changes and read saved settings?", "放弃修改并读取已保存设置？"), isPresented: $confirmReload) {
@@ -448,13 +509,13 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: NativeSettingsView(model: model, workspace: workspace)); window.center()
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard !model.busy, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.javaComponents.pending, !model.javaComponents.mutating, !model.frozen else { return false }
+        guard !model.busy, !model.automaticSaving, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.javaComponents.pending, !model.javaComponents.mutating, !model.frozen else { return false }
         sender.orderOut(nil)
         model.workspace.settingsPresented = false
         return false
     }
     func prepareForQuit() async -> Bool {
-        guard !model.busy, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.javaComponents.pending, !model.javaComponents.mutating else { return false }
+        guard !model.busy, !model.automaticSaving, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.javaComponents.pending, !model.javaComponents.mutating else { return false }
         model.frozen = true; model.maven.frozen = true; model.databaseComponents.frozen = true; model.javaComponents.frozen = true
         guard model.dirty || model.maven.dirty else { return true }
         let alert = NSAlert(); alert.messageText = localized("Discard settings changes?", "放弃设置修改？")
@@ -464,5 +525,5 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
         if response != .alertFirstButtonReturn { resumeAfterQuit(); return false }
         return true
     }
-    func resumeAfterQuit() { model.frozen = false; model.maven.frozen = false; model.databaseComponents.frozen = false; model.javaComponents.frozen = false }
+    func resumeAfterQuit() { model.frozen = false; model.saveAutomatically([]); model.maven.frozen = false; model.databaseComponents.frozen = false; model.javaComponents.frozen = false }
 }
