@@ -13,8 +13,10 @@ struct NativeLegacyExportButton: NSViewRepresentable {
     }
     func updateNSView(_ button: NSButton, context: Context) {
         button.title = localized("Export legacy-compatible data", "导出旧版兼容数据")
+        button.font = .systemFont(ofSize: 11)
         button.isEnabled = context.environment.isEnabled && !model.busy && !model.automaticSaving && !model.frozen
     }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSButton, context: Context) -> CGSize? { CGSize(width: nsView.intrinsicContentSize.width, height: 28) }
     @MainActor final class Coordinator: NSObject {
         let model: NativeSettingsModel
         init(_ model: NativeSettingsModel) { self.model = model }

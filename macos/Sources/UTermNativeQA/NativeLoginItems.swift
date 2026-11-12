@@ -47,7 +47,7 @@ final class NativeLoginItems: ObservableObject {
 struct NativeLoginItemsView: View {
     @ObservedObject var model: NativeLoginItems
     var body: some View {
-        Section(localized("Login startup", "开机启动")) {
+        VStack(alignment: .leading, spacing: 12) {
             Toggle(localized("Open at login", "登录时打开"), isOn: Binding(get: { model.enabled }, set: { value in Task { await model.setEnabled(value) } })).disabled(model.busy)
             Text(localized("This system preference applies immediately and is separate from the settings draft.", "此系统偏好立即生效，独立于设置草稿。")).foregroundStyle(.secondary)
             if model.busy { ProgressView().controlSize(.small) }

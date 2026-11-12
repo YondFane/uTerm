@@ -265,16 +265,22 @@ struct NativeSettingsView: View {
         }
     }
     private var general: some View {
-        Form {
+        NativeSettingsForm {
             choice("language", "Language", "语言", [("system", "System default", "系统默认"), ("en", "English", "English"), ("zh-Hans", "简体中文", "简体中文")])
             NativeLoginItemsView(model: model.login).id(NativeLocale.preference)
             number("fileTabLimit", "File tab limit", "文件标签数量上限")
             Toggle(localized("Break reminder", "休息提醒"), isOn: flag("breakReminder"))
             number("breakInterval", "Break interval (minutes)", "休息间隔（分钟）").disabled(model.values["breakReminder"]?.bool != true)
-            NativeLegacyExportButton(model: model).frame(height: 28)
-            Button(localized("Restore interface and terminal defaults…", "恢复界面与终端默认设置…")) { confirmReset = true }
-                .disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
-        }.formStyle(.grouped)
+            Divider().padding(.top, 16)
+            if model.presentationWidth <= 650 { VStack(alignment: .leading, spacing: 8) { generalActions } }
+            else { HStack(spacing: 0) { generalActions } }
+        }
+    }
+    @ViewBuilder private var generalActions: some View {
+        NativeLegacyExportButton(model: model).fixedSize(horizontal: true, vertical: false).frame(height: 28)
+        Button(localized("Reset interface and terminal settings", "恢复界面与终端默认设置")) { confirmReset = true }
+            .font(.system(size: 11)).controlSize(.small)
+            .disabled(model.busy || model.automaticSaving || model.frozen || model.maven.busy || model.databaseComponents.working || model.javaComponents.pending || model.javaComponents.mutating)
     }
     private var appearance: some View {
         ScrollView {
@@ -305,12 +311,12 @@ struct NativeSettingsView: View {
         }
     }
     private var terminal: some View {
-        Form {
+        NativeSettingsForm {
             choice("cursorStyle", "Cursor", "光标", [("block", "Block", "方块"), ("bar", "Bar", "竖线"), ("underline", "Underline", "下划线")])
             Toggle(localized("Blink cursor", "光标闪烁"), isOn: flag("cursorBlink"))
             number("scrollback", "Scrollback lines", "回滚行数")
             Toggle(localized("Copy on selection", "选中即复制"), isOn: flag("copyOnSelect"))
-        }.formStyle(.grouped)
+        }
     }
     private var workspaceSection: some View {
         Form {
@@ -351,7 +357,7 @@ struct NativeSettingsView: View {
         }
     }
     private var control: some View {
-        Form {
+        NativeSettingsForm {
             LocalControlCheckbox(model: workspace)
             if let directory = workspace.controlStatus["directory"].string {
                 Text(localized("CLI data directory: ", "CLI 数据目录：") + directory).font(.caption).textSelection(.enabled)
@@ -360,18 +366,18 @@ struct NativeSettingsView: View {
                 Text(workspace.controlError).foregroundStyle(.red)
                 Button(localized("Retry control service", "重试控制服务")) { Task { await workspace.startControl() } }.disabled(workspace.controlBusy)
             }
-        }.formStyle(.grouped)
+        }
     }
     private var updates: some View {
-        Form {
+        NativeSettingsForm {
             if workspace.updates.controlsVisible {
                 Toggle(WorkspaceModel.applicationProfile.mode == .personal ? localized("Automatically check and download updates", "自动检查并下载更新") : localized("Automatically check for updates", "自动检查更新"), isOn: flag("automaticUpdates"))
             }
             NativeUpdateStatus(model: workspace.updates).id(NativeLocale.preference)
-        }.formStyle(.grouped)
+        }
     }
     private var keyboard: some View {
-        Form {
+        NativeSettingsForm {
             Text(localized("Click a shortcut and press the new keys. Escape cancels.", "点击快捷键后按下新组合键，Escape 取消。"))
             ForEach(Array(model.commands.enumerated()), id: \.offset) { _, command in
                 let id = command["id"].string ?? ""
@@ -383,7 +389,7 @@ struct NativeSettingsView: View {
                     Button(localized("Default", "默认")) { model.shortcuts[id] = nil; model.saveAutomatically(["shortcuts"]) }
                 }
             }
-        }.formStyle(.grouped)
+        }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {

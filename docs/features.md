@@ -650,6 +650,13 @@ require a successful current-source macOS run; Linux cannot establish AppKit acc
 passes 23 focused settings/Agent tests, 34 paired-evidence/discovery policies, 19 personal package
 policies, formatting, report-validator syntax and documentation checks for this candidate.
 
+General, Terminal, Shortcuts, Local control and Software updates use plain scrollable rows with
+checkboxes instead of macOS grouped cards. General keeps the existing login-item approval/retry
+controls, with compact export/reset actions below a divider; narrow windows stack these actions.
+Native export QA measures the actual button before opening its save sheet. Current-source Mac
+screenshots must still verify this layout against the ordinary client; remaining settings sections
+and full visual parity are not accepted.
+
 Both settings windows provide **Search settings** above category navigation. Search matches category
 names and bilingual field keywords, including JDK registration, proxy settings and update
 preferences. Matching normalizes full-width characters, ignores case and requires every word to
