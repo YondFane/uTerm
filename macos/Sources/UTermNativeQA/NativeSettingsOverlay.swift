@@ -17,7 +17,7 @@ struct NativeSettingsOverlay: View {
                     HStack {
                         Text(localized("Settings", "设置")).font(.system(size: 17, weight: .semibold))
                         Spacer()
-                        SettingsCloseButton(enabled: !model.busy && !model.automaticSaving && !model.frozen && !model.login.busy && !model.maven.busy && !model.databaseComponents.working && !model.javaComponents.pending && !model.javaComponents.mutating, palette: palette, action: close).frame(width: 32, height: 32)
+                        SettingsCloseButton(enabled: !model.busy && !model.automaticSaving && !model.agentSettings.busy && !model.frozen && !model.login.busy && !model.maven.busy && !model.databaseComponents.working && !model.javaComponents.pending && !model.javaComponents.mutating, palette: palette, action: close).frame(width: 32, height: 32)
                     }.padding(.horizontal, 24).padding(.vertical, 20)
                     Color(nsColor: NativePreferences.color(palette["border"], fallback: .separatorColor)).frame(height: 1)
                     NativeSettingsView(model: model, workspace: workspace)

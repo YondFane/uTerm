@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var fullSettingsWindow: NativeSettingsWindow?
     private var commandPalette: NativeCommandPalette?
     private let model = WorkspaceModel()
+    private lazy var agentSettings = AgentSettingsModel(workspace: model)
     private var terminating = false
     private var preparingQuit = false
     private var mutatingRepository = false
@@ -281,7 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             if let path = WorkspaceModel.argument("--settings-smoke-report") {
                 var report = baseReport()
                 do {
-                    try await SettingsSmoke.run(workspace: model, open: { self.openFullSettings(); return self.fullSettingsWindow! }, report: &report)
+                    try await SettingsSmoke.run(workspace: model, open: { self.openFullSettings(); return self.fullSettingsWindow! }, openAgents: { self.openAgents(); return self.agentsWindow! }, report: &report)
                     try await PreferencesSmoke.run(workspace: model, parent: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) }, report: &report)
                 }
                 catch {
@@ -732,16 +733,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if let next = candidates.min(by: { $0.1 < $1.1 }) { Task { await model.selectSession(next.0) } }
     }
     @objc private func openFullSettings() {
-        if fullSettingsWindow == nil { fullSettingsWindow = NativeSettingsWindow(workspace: model) }
+        if fullSettingsWindow == nil { fullSettingsWindow = NativeSettingsWindow(workspace: model, agents: agentSettings) }
         fullSettingsWindow?.window.appearance = window?.appearance
         model.settingsPresented = true
         if let window { fullSettingsWindow?.present(over: window) }
         NSApp.activate(ignoringOtherApps: true)
     }
     @objc private func openAgents() {
-        if agentsWindow == nil { agentsWindow = AgentSettingsWindow(workspace: model) }
+        if agentsWindow == nil { agentsWindow = AgentSettingsWindow(workspace: model, model: agentSettings) }
         agentsWindow?.window.appearance = window?.appearance
         agentsWindow?.model.visible = true
+        agentSettings.updateUsagePolling()
         agentsWindow?.window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -1593,9 +1595,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             fullSettingsWindow.window.makeKeyAndOrderFront(nil)
             return .terminateCancel
         }
-        if let agentsWindow, agentsWindow.model.busy {
-            agentsWindow.model.error = localized("Wait for the Agent operation to finish.", "请等待 Agent 操作完成。")
-            agentsWindow.window.makeKeyAndOrderFront(nil)
+        if agentSettings.busy {
+            agentSettings.error = localized("Wait for the Agent operation to finish.", "请等待 Agent 操作完成。")
+            if fullSettingsWindow?.window.isVisible == true { fullSettingsWindow?.window.makeKeyAndOrderFront(nil) }
+            else { agentsWindow?.window.makeKeyAndOrderFront(nil) }
             return .terminateCancel
         }
         if terminating { return .terminateNow }
@@ -1621,7 +1624,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 if let fullSettingsWindow = self.fullSettingsWindow, !(await fullSettingsWindow.prepareForQuit()) {
                     throw BridgeFailure(code: "SETTINGS_QUIT_REFUSED", message: localized("Resolve settings changes before quitting.", "退出前请处理设置修改。"))
                 }
-                if let agentsWindow = self.agentsWindow, !(await agentsWindow.prepareForQuit()) {
+                let agentOwner = self.fullSettingsWindow?.window.isVisible == true ? self.fullSettingsWindow?.window : self.agentsWindow?.window ?? self.window
+                if let agentOwner, !(await self.agentSettings.prepareForQuit(over: agentOwner)) {
                     throw BridgeFailure(code: "AGENT_QUIT_REFUSED", message: localized("Resolve Agent configuration changes before quitting.", "退出前请处理 Agent 配置修改。"))
                 }
                 if let current = self.sshWindow, !(await current.model.prepareForQuit()) { throw BridgeFailure(code: "SSH_QUIT_REFUSED", message: localized("Finish the SSH operation before quitting.", "退出前请完成 SSH 操作。")) }
@@ -1645,7 +1649,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     throw BridgeFailure(code: "CONTENT_CHANGED", message: localized("A file window changed while preparing to quit. Try again.", "准备退出时文件窗口已变化，请重试。"))
                 }
             } catch {
-                self.agentsWindow?.resumeAfterQuit()
+                self.agentSettings.resumeAfterQuit()
                 self.fullSettingsWindow?.resumeAfterQuit()
                 await self.sshWindow?.model.resumeAfterQuit()
                 for content in contents { content.resumeAfterQuit() }

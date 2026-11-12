@@ -11,10 +11,12 @@ final class NativeSettingsModel: ObservableObject {
     let maven: NativeMavenSettingsModel
     let databaseComponents: NativeDatabaseComponentsModel
     let javaComponents: NativeJavaComponentsModel
+    let agentSettings: AgentSettingsModel
     private var mavenChanges: AnyCancellable?
     private var databaseChanges: AnyCancellable?
     private var javaChanges: AnyCancellable?
     private var loginChanges: AnyCancellable?
+    private var agentChanges: AnyCancellable?
     @Published private(set) var catalog: JSONValue = .null
     @Published private(set) var agents: JSONValue = .null
     @Published var values: [String: JSONValue] = [:]
@@ -31,6 +33,8 @@ final class NativeSettingsModel: ObservableObject {
     @Published var section = "general"
     @Published var query = ""
     @Published var presentationWidth: CGFloat = 760
+    @Published var presentationVisible = false
+    func syncAgentVisibility() { agentSettings.setInlineVisible("full-settings-usage", presentationVisible && section == "usage") }
     var presentationCardFrame = CGRect.zero
     func matchesSection(_ id: String, title: String) -> Bool {
         let section = catalog["sections"].array.first { $0["id"].string == id } ?? .null
@@ -50,14 +54,16 @@ final class NativeSettingsModel: ObservableObject {
         let enabled = Set((values["enabledAgents"]?.array ?? []).compactMap(\.string))
         return agents["available"].array.compactMap(\.string).filter { enabled.contains($0) }
     }
-    init(workspace: WorkspaceModel) {
+    init(workspace: WorkspaceModel, agents: AgentSettingsModel? = nil) {
         self.workspace = workspace; maven = NativeMavenSettingsModel()
+        agentSettings = agents ?? AgentSettingsModel(workspace: workspace)
         databaseComponents = NativeDatabaseComponentsModel(workspace: workspace)
         javaComponents = NativeJavaComponentsModel()
         mavenChanges = maven.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         databaseChanges = databaseComponents.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         javaChanges = javaComponents.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
         loginChanges = login.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
+        agentChanges = agentSettings.objectWillChange.sink { [weak self] in self?.objectWillChange.send() }
     }
     private func object(_ value: JSONValue) -> [String: JSONValue] { if case .object(let entries) = value { return entries }; return [:] }
     private func numberStrings(_ entries: [String: JSONValue]) -> [String: String] {
@@ -333,18 +339,16 @@ struct NativeSettingsView: View {
         }.formStyle(.grouped)
     }
     private var agents: some View {
-        Form {
-            Section(localized("Agents", "Agent")) {
-                Button(localized("Agent commands, hooks and notifications…", "Agent 命令、Hooks 与通知…")) { workspace.openAgentsRequested?() }
-            }
-        }.formStyle(.grouped)
+        AgentSettingsView(model: model.agentSettings, workspace: workspace, scope: .commands)
     }
     private var usage: some View {
-        Form {
+        VStack(alignment: .leading, spacing: 0) {
+          VStack(alignment: .leading, spacing: 12) {
             Toggle(localized("Read remote usage", "读取远程用量"), isOn: flag("usageRemote"))
             number("usageRefreshInterval", "Usage refresh interval (seconds)", "用量刷新间隔（秒）")
-            Button(localized("Agent usage and account quota…", "Agent 用量与账户额度…")) { workspace.openAgentsRequested?() }
-        }.formStyle(.grouped)
+          }.padding(.horizontal, 28).padding(.top, 16)
+          AgentSettingsView(model: model.agentSettings, workspace: workspace, scope: .usage)
+        }
     }
     private var control: some View {
         Form {
@@ -423,6 +427,8 @@ struct NativeSettingsView: View {
             }.padding()
             }
         }.task { await model.reload() }
+        .onChange(of: model.section, initial: true) { _, _ in model.syncAgentVisibility() }
+        .onChange(of: model.presentationVisible) { _, _ in model.syncAgentVisibility() }
         .sheet(item: Binding(get: { workspace.nameDraftOwner == .settings ? workspace.nameDraft : nil }, set: { if workspace.nameDraftOwner == .settings { workspace.nameDraft = $0 } })) { _ in NameEditorView(model: workspace) }
         .confirmationDialog(localized("Replace this draft with default settings?", "用默认设置替换当前草稿？"), isPresented: $confirmReset) {
             Button(localized("Restore defaults", "恢复默认值")) { model.resetDraft(); model.saveAutomatically(Set(model.values.keys).union(["shortcuts"])) }
@@ -569,8 +575,8 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
     let model: NativeSettingsModel
     let window: NSWindow
     private weak var previousResponder: NSView?
-    init(workspace: WorkspaceModel) {
-        model = NativeSettingsModel(workspace: workspace)
+    init(workspace: WorkspaceModel, agents: AgentSettingsModel? = nil) {
+        model = NativeSettingsModel(workspace: workspace, agents: agents)
         window = NativeSettingsOverlayWindow(contentRect: NSRect(x: 0, y: 0, width: 760, height: 620), styleMask: [.borderless, .resizable], backing: .buffered, defer: false)
         super.init()
         window.identifier = NSUserInterfaceItemIdentifier("native-full-settings")
@@ -581,6 +587,7 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
         window.contentView = NSHostingView(rootView: NativeSettingsOverlay(model: model, workspace: workspace, close: { [weak self] in self?.window.performClose(nil) })); window.center()
     }
     func present(over parent: NSWindow) {
+        model.presentationVisible = true; model.syncAgentVisibility()
         if !window.isVisible { previousResponder = parent.firstResponder as? NSView }
         parent.orderFront(nil)
         if window.parent !== parent { window.parent?.removeChildWindow(window); parent.addChildWindow(window, ordered: .above) }
@@ -590,7 +597,8 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
         if window.isVisible, let parent = window.parent { window.setFrame(parent.frame, display: true) }
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        guard !model.busy, !model.automaticSaving, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.javaComponents.pending, !model.javaComponents.mutating, !model.frozen else { return false }
+        guard !model.busy, !model.automaticSaving, !model.agentSettings.busy, !model.login.busy, !model.maven.busy, !model.databaseComponents.working, !model.javaComponents.pending, !model.javaComponents.mutating, !model.frozen else { return false }
+        model.presentationVisible = false; model.syncAgentVisibility()
         let parent = sender.parent; parent?.removeChildWindow(sender); sender.orderOut(nil)
         model.workspace.settingsPresented = false
         parent?.makeKeyAndOrderFront(nil)

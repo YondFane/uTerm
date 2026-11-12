@@ -635,9 +635,20 @@ workspace name as well as matching project data.
 Settings use left-side categories for General, Appearance, Terminal, Workspaces, Shortcuts, Agents,
 Usage, Local control, Database components, Maven settings, Java development tools and Software
 updates. Appearance includes file font/tab preferences; workspace management offers shared
-create/rename/delete operations. Agent commands/hooks and quota open their existing complete native
-window. Java development tools has a standalone section; its source-bound native checks are recorded
-under Optional JDK and Maven tools.
+create/rename/delete operations. Agents and Usage now show their controls inside the settings
+overlay. The menu's Agent window shares the same command model and draft. Usage polling has one
+owner per model, stops when both views are hidden and never requests Keychain access automatically.
+Quitting protects an unsaved command even when its separate window is hidden. Java development tools
+has a standalone section; its source-bound native checks are recorded under Optional JDK and Maven
+tools.
+
+The new native QA edits the actual command field, selects Usage through its category button, reads
+local usage, hides/reopens both entries and cancels a real application quit. It requires retained
+drafts, unchanged saved data and two originals, `native-settings-inline-agent-command.png` and
+`native-settings-inline-agent-usage.png`, in `nativeInlineAgentSettingsProof`. These checks still
+require a successful current-source macOS run; Linux cannot establish AppKit acceptance. Linux
+passes 23 focused settings/Agent tests, 34 paired-evidence/discovery policies, 19 personal package
+policies, formatting, report-validator syntax and documentation checks for this candidate.
 
 Both settings windows provide **Search settings** above category navigation. Search matches category
 names and bilingual field keywords, including JDK registration, proxy settings and update
@@ -5308,7 +5319,8 @@ guides or defaults, including identifiers such as `constructor`.
 Provider credentials and permissions determine availability. Terminal input and process I/O are
 handled independently of UI rendering.
 
-The native QA client opens **File → Agent settings…** for custom commands, enable/disable,
+The native client provides **Settings → Agents** and **Settings → Usage** inside the workspace,
+alongside **File → Agent settings…**. Both entries share custom commands, enable/disable,
 installation, Hooks and usage. Commands use an executable and JSON string array; argument errors
 retain the draft. Hiding the window retains it, switching commands confirms unsaved changes and
 quitting refuses an active operation or asks about an unsaved command. Local usage reads no account

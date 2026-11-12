@@ -50,9 +50,11 @@ enum SettingsSmoke {
         model.numbers["fontSize"] = original; model.section = "general"; settings.window.makeFirstResponder(nil)
         report["nativeSettingsSearchProof"] = ["actualAppKitInput": true, "filteredNavigation": true, "matchingCategoryClickable": true, "draftRetained": true, "escapeClearsWithoutClosing": true, "savedBytesUnchanged": true, "capture": name]
     }
-    static func run(workspace: WorkspaceModel, open: () -> NativeSettingsWindow, report: inout [String: Any]) async throws {
+    static func run(workspace: WorkspaceModel, open: () -> NativeSettingsWindow, openAgents: () -> AgentSettingsWindow, report: inout [String: Any]) async throws {
         guard workspace.ready, let bridge = workspace.bridge, let path = WorkspaceModel.argument("--settings-smoke-report") else { throw BridgeFailure(code: "SETTINGS_QA_CONTEXT", message: "Missing isolated settings context") }
         let root = try WorkspaceModel.dataRoot()
+        await workspace.patchSettings(["usageRemote": .bool(false)])
+        guard workspace.settings["usageRemote"].bool == false else { throw BridgeFailure(code: "SETTINGS_QA_USAGE", message: "Could not isolate automatic usage reads") }
         guard !workspace.updates.available, workspace.updates.controller == nil else { throw BridgeFailure(code: "UPDATE_DEFAULT", message: "Unconfigured QA build unexpectedly initialized network updates") }
         report["unconfiguredNativeUpdatesHaveNoSDKControllerOrNetworkChecks"] = true
         let snapshotFile = root.appendingPathComponent("snapshot-v1.json")
@@ -89,6 +91,7 @@ enum SettingsSmoke {
         try await verifyIconColor(settings: current, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         try await verifyLegacyExport(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         try await verifyDefaultAgent(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
+        try await verifyInlineAgents(settings: current, open: open, openAgents: openAgents, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         let other = try await CoreBridge.open(root: root)
         do {
             model.numbers["fileFontSize"] = "19"
@@ -296,6 +299,63 @@ enum SettingsSmoke {
         model.numbers["fontSize"] = original; await model.reload()
         guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_EXPORT", message: "Explicit reload did not recover export feedback") }
         report["nativeLegacyExportProof"] = ["actualSavePanelCancellation": true, "busyCloseGuard": true, "committedDataExported": true, "storeUnchanged": true, "draftRetained": true, "failedWriteRetainsPreviousExport": true, "capture": capture, "exportFile": name]
+    }
+
+    private static func verifyInlineAgents(settings: NativeSettingsWindow, open: () -> NativeSettingsWindow, openAgents: () -> AgentSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model, agents = model.agentSettings
+        let previousRemote = model.values["usageRemote"] ?? .bool(true)
+        model.values["usageRemote"] = .bool(false)
+        try await save(model)
+        guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Could not select isolated local usage") }
+        let snapshotFile = root.appendingPathComponent("snapshot-v1.json")
+        let before = try Data(contentsOf: snapshotFile)
+        guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Missing isolated Core bridge") }
+        let commandsBefore = try await bridge.call("agent.catalog")["definitions"]
+        model.section = "agents"
+        try await TerminalSmoke.wait("Load inline Agent commands in the settings workspace") { agents.catalog != .null && !agents.busy && view(settings.window, id: "native-agent-field-program") != nil }
+        let program = agents.program
+        func editProgram(_ text: String) throws {
+            guard let field = view(settings.window, id: "native-agent-field-program") as? NSTextField else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Inline Agent command field is missing") }
+            _ = field.scrollToVisible(field.bounds)
+            settings.window.makeKeyAndOrderFront(nil); settings.window.makeFirstResponder(field)
+            guard let editor = field.currentEditor() as? NSTextView else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Inline Agent field editor is missing") }
+            editor.insertText(text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+            settings.window.makeFirstResponder(nil)
+        }
+        let draft = "/tmp/uterm-qa-retained-command"
+        try editProgram(draft)
+        guard agents.program == draft, agents.dirty, settings.window.parent?.isVisible == true else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual inline Agent editing did not retain a draft in the workspace") }
+        let commandsCapture = "native-settings-inline-agent-command.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(commandsCapture))
+        guard let usage = view(settings.window, id: "native-settings-section-usage") as? NSButton else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual Usage category is missing") }
+        let reads = agents.qaUsageReads
+        usage.performClick(nil)
+        try await TerminalSmoke.wait("Read local usage inside the same settings overlay") { model.section == "usage" && agents.inlineVisible && agents.qaUsageReads > reads && !agents.busy }
+        guard !agents.qaUsageLastRemote, !agents.qaUsageLastKeychain, agents.program == draft else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Inline usage lost the command draft or requested account access") }
+        let usageCapture = "native-settings-inline-agent-usage.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(usageCapture))
+        settings.window.performClose(nil)
+        try await TerminalSmoke.wait("Closing settings stops inline usage polling") { !settings.window.isVisible && !agents.inlineVisible && !agents.busy }
+        let standalone = openAgents()
+        try await TerminalSmoke.wait("The menu Agent window uses the same retained command model") { standalone.model === agents && !agents.busy }
+        guard agents.program == draft, agents.dirty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "The existing menu window replaced the inline Agent draft") }
+        standalone.window.performClose(nil)
+        try await TerminalSmoke.wait("Hide the existing Agent window after its reads finish") { !standalone.window.isVisible && !agents.visible && !agents.busy }
+        model.section = "agents"
+        guard open() === settings else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Opening settings replaced its cached window") }
+        try await TerminalSmoke.wait("Reopen the actual inline Agent editor") { (view(settings.window, id: "native-agent-field-program") as? NSTextField)?.stringValue == draft && !agents.busy }
+        NSApp.terminate(nil)
+        try await TerminalSmoke.wait("Quit protects the shared Agent draft even when its separate window is hidden") { settings.window.attachedSheet != nil }
+        if let sheet = settings.window.attachedSheet { settings.window.endSheet(sheet, returnCode: .alertSecondButtonReturn) }
+        try await TerminalSmoke.wait("Cancelled quit resumes inline settings and Agent operations") { !model.frozen && !agents.frozen && settings.window.attachedSheet == nil }
+        guard agents.program == draft, agents.dirty, try Data(contentsOf: snapshotFile) == before, try await bridge.call("agent.catalog")["definitions"] == commandsBefore else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Navigation, window hiding or cancelled quit changed the saved Agent command or discarded the draft") }
+        try editProgram(program)
+        guard !agents.dirty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Could not restore the isolated command draft") }
+        model.values["usageRemote"] = previousRemote
+        try await save(model)
+        guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Could not restore the saved usage preference") }
+        report["nativeInlineAgentSettingsProof"] = ["actualFieldEditor": true, "actualCategorySelection": true, "sameWorkspaceOverlay": true, "sameCachedModelAcrossMenuWindow": true, "inlineLocalUsage": true, "automaticKeychainAllowed": agents.qaUsageLastKeychain, "hiddenPollingStopped": true, "cancelledQuitRetainsDraft": true, "savedDataUnchanged": true, "preferencesRestored": true, "captures": [commandsCapture, usageCapture]] as [String: Any]
+        model.section = "general"
     }
 
     private static func verifyDefaultAgent(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
