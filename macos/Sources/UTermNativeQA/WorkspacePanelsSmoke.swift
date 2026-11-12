@@ -67,6 +67,11 @@ enum WorkspacePanelsSmoke {
                     model.documents.active(in: model.inspectorContextKey)?.content.webView.window === window && model.panels.active(in: model.inspectorContextKey)?.id == panel.id && view.window === window
                 }
                 guard let document = model.documents.active(in: model.inspectorContextKey) else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "Missing mounted file") }
+                // Mounted WebKit content can still be loading; close only after the actual editor is ready.
+                // 已挂载的 WebKit 仍可能正在加载，实际编辑器就绪后再操作关闭。
+                try await ContentSmoke.wait(document.content, "document.querySelector('.file-editor .cm-content')?.textContent.includes('Workspace fixture') === true && [...document.querySelectorAll('.editor-header button')].some(button => button.textContent === 'Reload' && !button.disabled)")
+                guard !document.content.editorDirty else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "The loaded fixture unexpectedly contains unsaved changes") }
+                report[kind + "DockedFileLoaded"] = true
                 try await capture("native-workspace-" + kind + "-dock-with-file.png")
                 guard let closeFile = button("native-file-close-" + document.id.uuidString) else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "Missing actual file close control") }
                 closeFile.performClick(nil)

@@ -307,6 +307,15 @@ assertion; a failed wait captures the original window and records actual host/co
 retains the failed reports. Fresh Mac interaction and matched ordinary-client images remain
 required.
 
+At source `d0c5ebb`, tested merge `b93af668`, ARM64 SDK and editor recovery reports pass, including
+recovery in the main workspace and actual tab close preserving the readonly draft.
+[Artifact13976370340](https://github.com/YondFane/uTerm/actions/runs/43282517996/artifacts/13976370340)
+retains the originals and logs. Workspace integration fails when closing the clean file; its
+inspected original still shows an empty editor region. QA now waits for the actual fixture text and
+enabled Reload control before capture or close, and requires a clean file. This is a readiness
+correction, not evidence that the failed close behavior has passed. The subsequent Hide-conflict
+checks were not reached; new Mac execution remains required.
+
 The native workspace smoke adds actual Hide-button checks for both Java and Python: a peer Core
 write makes a clean configuration stale; hiding must fail and retain the panel. A separately
 injected unsaved draft then fails against the same revision without overwriting the peer. An

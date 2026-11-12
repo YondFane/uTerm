@@ -33,6 +33,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-panels-') as directory:
         dock = data[kind + 'DockedRunPanel']
         for key in ['passed', 'nativeKeyboardResize', 'boundedHomeAndEnd', 'labelledDoubleClickReset', 'actualExpandAndRestore', 'retainedPanelView', 'mainTerminalPresent', 'mainTerminalRetainedAndVisible']:
             assert dock[key] is True, (kind, key)
+        assert data[kind + 'DockedFileLoaded'] is True
         assert data[kind + 'DockedFileRetained'] is True
         assert len(dock['captures']) == 2
         for name in dock['captures']: assert (evidence / name).stat().st_size > 1000, name
