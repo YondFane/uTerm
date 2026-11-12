@@ -48,12 +48,13 @@ GitHub sign-in requirement. First launch may require approval in **System Settin
 Security**. Version 0.2.6 has no updater: install an updater-enabled release manually once.
 
 In an updater-enabled build, **Settings → Software updates → Automatically check and download
-updates** enables Sparkle checks and signed downloads after **Save settings**. It is off by default.
-The app menu and settings also provide **Check for updates…**. Background downloads can install when
-the app quits; Sparkle asks before an immediate install/relaunch. Existing editor, transfer and
-database quit guards still apply. Turning the option off stops future automatic checks/downloads; an
-already prepared update can still install on quit. Update failures remain visible and can be retried
-manually. Update status text follows language changes immediately, including the no-update result.
+updates** saves the choice immediately and enables Sparkle checks and signed downloads. It is off by
+default. The app menu and settings also provide **Check for updates…**. Background downloads can
+install when the app quits; Sparkle asks before an immediate install/relaunch. Existing editor,
+transfer and database quit guards still apply. Turning the option off stops future automatic
+checks/downloads; an already prepared update can still install on quit. Update failures remain
+visible and can be retried manually. Update status text follows language changes immediately,
+including the no-update result.
 
 The personal client uses separate HTTPS `personal-stable-arm64.xml` and `personal-stable-x86_64.xml`
 feeds and Ed25519-signed ZIPs. The SDK verifies signatures before extraction; platform,
@@ -620,7 +621,14 @@ Mac artifact. Automatic-save QA uses actual AppKit field editing, invalid blur a
 input with an unrelated numeric draft, then an actual font selection with an unrelated draft and a
 concurrent Core writer. It checks invalid-input retention, correction, scoped persistence, the
 original conflict baseline and explicit reload recovery, recording
-`nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`. The same check
+`nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`. A macOS ARM64 run
+reported visible `WRITER_BUSY` during the font action; that run does not establish scoped-save
+acceptance. CI runs settings interactions before the heavy core suite and uploads an early
+`native-settings-<runner>-<head>-<attempt>` artifact, while retaining every later check and final
+failure gate. QA records every attempted font action's error, committed values and retained draft in
+`nativeSettingsAutomaticSaveAttempts`. On contention it first requires unchanged committed data and
+retained drafts, captures `native-settings-autosave-busy.png`, and explicitly reselects the same
+control at most twice. The application does not retry failed mutations automatically. The same check
 clicks a real theme-preview button, verifies terminal preferences are unchanged, and captures
 `native-settings-theme-cards-900.png` / `native-settings-theme-cards-640.png`. These new
 automatic-save operations and same-source screenshots remain pending macOS CI; the reordered fields
