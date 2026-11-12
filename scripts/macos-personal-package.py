@@ -61,6 +61,7 @@ def validate_info(info, head, tested):
 
 
 def validate_workspace_scenes(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
     project = report.get("nativeProjectMenuRevisionAndWorkspaceMove", {})
     for key in ["passed", "actualMenuActions", "stalePinRejected", "staleMoveRejected", "peerSettingRetained", "terminalGenerationsAndViewsRetained", "splitLayoutRetainedInReopenedSnapshot", "movedAndReturned"]:
         assert project.get(key) is True, key
@@ -97,7 +98,7 @@ def validate_workspace_scenes(report, head, tested, phase):
         assert scene["system"] and scene["height"] == 720
         assert scene["scenario"] == "toolbar-sidebar-two-sessions-files"
         assert scene["filesReadable"] is True
-        assert scene.get("fileGitStates") == {"note.txt": "untracked", "README.md": "untracked"}, "Missing actual file Git states"
+        assert scene.get("fileGitStates") == {path: "untracked" for path in fixture["files"]}, "Missing actual file Git states"
     assert observed == expected
 
 

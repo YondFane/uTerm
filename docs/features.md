@@ -322,8 +322,11 @@ map from every key in the shared fixture. Source `7356a7c`, tested merge `b12d5c
 actual settings captures but then fails before its first workspace image because the collector still
 expects two files while the expanded POM/Python fixture has four. The inspected original and
 [artifact13968962533](https://github.com/YondFane/uTerm/actions/runs/43262878537/artifacts/13968962533)
-retain all four readable paths. The correction keeps exact-set and per-file untracked-state checks;
-replacement and the 50-pair grid require a new Mac run.
+retain all four readable paths. Both the collector and package validator require the exact shared
+file set and each file's untracked state. Linux passed 54 package/pairing policies, including
+initial/replacement refusal of missing or modified POM/Python states and unexpected files; these
+synthetic reports are not native window evidence. App replacement and the 50-pair grid still need
+fresh Mac execution.
 
 The paired run-panel grid uses the shared minimal POM/Python project and twelve required scenes:
 Java/Python × docked/expanded/file × English dark 1100px/Chinese light 640px, all at 720px height.
@@ -464,8 +467,9 @@ to the captured repository/project and reject changed workspace context.
 Native Git status/snapshot reads normalize the returned repository root with the same Cocoa
 filesystem rules as the selected Files root. This keeps temporary-directory and symlink aliases in
 one path namespace without changing draft keys, relative change paths or write guards. Workspace
-captures now require actual untracked markers on both fixture files; missing or incorrect states
-fail Personal and paired evidence checks. Raw Git/selected/normalized roots remain in the report.
+captures now require actual untracked markers on every shared fixture file; missing or incorrect
+states fail Personal and paired evidence checks. Raw Git/selected/normalized roots remain in the
+report.
 
 The Linux real Git/Core alias check and 20 file-state/native-transport regressions pass, as do 16
 Personal and 26 paired/fixture policies. Two Swift checks cover alias normalization, malformed roots

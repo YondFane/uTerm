@@ -129,12 +129,12 @@ class PersonalPackageTests(unittest.TestCase):
                          SUEnableAutomaticChecks=False, SUAutomaticallyUpdate=False, SUAllowsAutomaticUpdates=False)
 
     def workspace_evidence(self, phase):
+        fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
         scenes = [dict(language=language, appearance=appearance, width=width, height=720,
                        screenshot=f"personal-{phase}-workspace-{language}-{appearance}-{width}.png",
                        sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64",
-                       system="macOS fixture", filesReadable=True, fileGitStates={"note.txt": "untracked", "README.md": "untracked"}, scenario="toolbar-sidebar-two-sessions-files", branchPicker=dict(name="qa-feature", fontSize=11, captionGap=5, width=115, height=24, actualAppKitControl=True, fontName="policy fixture"), windowControls=[dict(x=16+20*i, y=18, width=14, height=16) for i in range(3)])
+                       system="macOS fixture", filesReadable=True, fileGitStates={path: "untracked" for path in fixture["files"]}, scenario="toolbar-sidebar-two-sessions-files", branchPicker=dict(name="qa-feature", fontSize=11, captionGap=5, width=115, height=24, actualAppKitControl=True, fontName="policy fixture"), windowControls=[dict(x=16+20*i, y=18, width=14, height=16) for i in range(3)])
                   for language in ["en", "zh-Hans"] for appearance in ["dark", "light"] for width in [1100, 640]]
-        fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
         settings = [dict(scene, section=section["id"], sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
                          draftUnchanged=True, navigationControlActivated=True, javaFixtureMatched=section["id"] == "java",
                          screenshot=f"personal-{phase}-settings-{section['id']}-{scene['language']}-{scene['appearance']}-{scene['width']}.png")
@@ -252,6 +252,20 @@ class PersonalPackageTests(unittest.TestCase):
             if mutation == "project-actions": report["nativeProjectMenuPinCollapseOrderAndConflictVerified"] = False
             with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
                 package.validate_workspace_scenes(report, "a" * 40, "b" * 40, "initial")
+
+    def test_workspace_requires_all_shared_fixture_file_states(self):
+        for phase in ["initial", "replacement"]:
+            report = self.workspace_evidence(phase)
+            package.validate_workspace_scenes(report, "a" * 40, "b" * 40, phase)
+            scene = report["workspaceScenes"][0]
+            original = scene["fileGitStates"]
+            for path in ["pom.xml", "main.py"]:
+                for states in [{key: value for key, value in original.items() if key != path},
+                               dict(original, **{path: "modified"}), dict(original, unexpected="untracked")]:
+                    with self.subTest(phase=phase, path=path, states=states), self.assertRaises(AssertionError):
+                        scene["fileGitStates"] = states
+                        package.validate_workspace_scenes(report, "a" * 40, "b" * 40, phase)
+            scene["fileGitStates"] = original
 
     def test_workspace_chrome_requires_actual_branch_and_window_control_measurements(self):
         for mutation in ["branch", "font", "gap", "controls", "inset"]:
