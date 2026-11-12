@@ -39,6 +39,7 @@ final class WorkspaceModel: ObservableObject {
     }
     @Published var nameDraft: NameDraft?
     @Published var nameDraftOwner: NameDraftOwner = .workspace
+    private(set) var qaNameSaveCompletions = 0
     @Published var fullScreen = false
     @Published var sidebarVisible = true
     @Published var sidebarSection = "all"
@@ -624,9 +625,12 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func saveNameDraft() async {
-        guard let draft = nameDraft else { return }
+        guard !busy, let draft = nameDraft else { return }
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
+        // QA observes the complete naming action, including draft cleanup after the mutation task.
+        // QA 观察完整命名动作，包含写入任务结束后的草稿清理。
+        defer { qaNameSaveCompletions += 1 }
         let method = draft.target == nil ? "workspace.create" : "workspace.rename"
         if await mutate(method, ["id": .string(draft.target ?? draft.id.uuidString), "name": .string(name), "select": .bool(nameDraftOwner == .workspace)], revision: draft.revision) { nameDraft = nil }
     }

@@ -531,13 +531,14 @@ enum SettingsSmoke {
         func submit(_ sheet: NSWindow, phase: String) async throws {
             let before = try await readSnapshot(bridge)
             for attempt in 1...3 {
+                let completedBefore = workspace.qaNameSaveCompletions
                 try key(sheet, code: 36, characters: "\r")
-                try await Task.sleep(for: .milliseconds(50))
-                try await TerminalSmoke.wait("Complete the explicit workspace name action") { !workspace.busy }
+                try await TerminalSmoke.wait("Complete the explicit workspace name action and draft cleanup") { workspace.qaNameSaveCompletions > completedBefore && !workspace.busy }
                 let saved = workspace.nameDraft == nil, busy = workspace.error.hasPrefix("WRITER_BUSY:")
                 let after = try await readSnapshot(bridge)
                 let retained = after.revision == before.revision && after.document.workspace == before.document.workspace
-                attempts.append(["phase": phase, "attempt": attempt, "saved": saved, "writerBusy": busy, "unchangedOnBusy": !busy || retained])
+                attempts.append(["phase": phase, "attempt": attempt, "saved": saved, "completedAction": true, "errorCode": String(workspace.error.split(separator: ":", maxSplits: 1).first ?? ""), "writerBusy": busy, "unchangedOnBusy": !busy || retained])
+                report["nativeWorkspaceManagementAttempts"] = attempts
                 if saved { return }
                 guard busy, retained, attempt < 3 else { throw BridgeFailure(code: "WORKSPACE_SETTINGS_QA", message: "Workspace naming failed; no uncertain operation was repeated") }
                 try await Task.sleep(for: .milliseconds(100))

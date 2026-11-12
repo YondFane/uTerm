@@ -676,17 +676,22 @@ workspaces and the final workspace.
 
 Twenty-one shared workspace and rendering regressions pass on Linux. The new macOS check uses actual
 add/edit/delete buttons and name input while a terminal remains live, checks a stale peer rename and
-cancelled deletion, and requires the same active session, view and generation after cleanup.
-`native-settings-workspace-inactive-row.png` and `nativeWorkspaceManagementProof` remain pending
-current-source Mac execution; the Linux regressions do not validate these AppKit controls.
+cancelled deletion, and requires the same active session, view and generation after cleanup. At
+source/tested commit `1f792a1`, Intel macOS 15.7.9 persists and displays the added row, but QA
+samples the result before the naming action has cleaned up its draft. Its failed report and
+originals remain in
+[artifact13945614134](https://github.com/YondFane/uTerm/actions/runs/43219505232/artifacts/13945614134).
+The collector now waits for the complete naming action, records each attempt before checking it and
+keeps the unchanged-store requirement for any explicit busy retry. Rename, stale-peer and deletion
+proofs still require current-source Mac execution; Linux cannot validate these AppKit controls.
 
 The new native QA edits the actual command field, selects Usage through its category button, reads
 local usage, hides/reopens both entries and cancels a real application quit. It requires retained
 drafts, unchanged saved data and two originals, `native-settings-inline-agent-command.png` and
-`native-settings-inline-agent-usage.png`, in `nativeInlineAgentSettingsProof`. These checks still
-require a successful current-source macOS run; Linux cannot establish AppKit acceptance. Linux
-passes 23 focused settings/Agent tests, 34 paired-evidence/discovery policies, 19 personal package
-policies, formatting, report-validator syntax and documentation checks for this candidate.
+`native-settings-inline-agent-usage.png`, in `nativeInlineAgentSettingsProof`. The actual Intel run
+described below passes this proof; the full settings suite remains incomplete. Linux passes 23
+focused settings/Agent tests, 34 paired-evidence/discovery policies, 19 personal package policies,
+formatting, report-validator syntax and documentation checks for this candidate.
 
 Usage has independent Claude, Codex, Kimi and Grok tabs, so changing its Agent never selects or
 discards a command draft. Results and errors are retained per Agent, including cache-read/write
@@ -694,15 +699,15 @@ counts and partial/no-record notices. Visible entries share one sequential polli
 reads preserve unrelated command errors. QA operates the actual Agent tabs with an unsaved command
 and requires a new read plus both retained results.
 
-Source/tested commit `994a43a` passes the ARM64 build, actual automatic saves, icon colors, default
-Agent selection and export, including the real 182×28-point export button and save-sheet guards. Its
-settings suite still fails while waiting for the Agent draft's quit confirmation after reopening.
-The original images and report remain in
-[artifact13944372328](https://github.com/YondFane/uTerm/actions/runs/43216419431/artifacts/13944372328).
-QA now waits for a completed catalog read from the reopened command view and idle settings
-operations before quitting, retaining the actual confirmation and cancelled-quit requirements. A
-failure records busy/frozen/draft/window diagnostics. These new checks still need Mac execution; the
-earlier failure is not accepted as a complete settings pass.
+Source/tested commit `1f792a1` on Intel macOS 15.7.9 passes the reopened catalog-read barrier,
+actual quit confirmation/cancellation, all four usage tabs and retained command results. It also
+passes actual automatic saves, icon colors, default Agent selection and the real 182×28-point export
+button with save-sheet guards. `nativeInlineAgentSettingsProof` and `nativeShortcutActionsProof` are
+true in
+[artifact13945614134](https://github.com/YondFane/uTerm/actions/runs/43219505232/artifacts/13945614134).
+The suite then fails the workspace naming collector described above; this is partial native
+evidence, not a complete settings pass. Both architectures still need the final candidate's full
+gates.
 
 General, Terminal, Workspace, Shortcuts, Local control, Maven and Software updates use plain
 scrollable rows with checkboxes instead of macOS grouped cards. Maven paths have visible labels,
@@ -718,8 +723,9 @@ clears all overrides immediately. Both operations save only `shortcuts`, retaini
 and drafts. The actual recorder disables with the settings page during saves or a frozen quit.
 Native QA dispatches Backspace, clicks the actual reset button, checks the complete Core snapshot
 with an unrelated numeric draft, and verifies a frozen recorder refuses input. It requires
-`nativeShortcutActionsProof` and `native-settings-shortcuts-reset.png`; these new controls and
-checks still need current-source Mac execution.
+`nativeShortcutActionsProof` and `native-settings-shortcuts-reset.png`. Source/tested commit
+`1f792a1` passes these actual Intel controls in the settings artifact above; the final candidate
+still requires its full Mac gates.
 
 Settings QA reads retry a writer-busy snapshot at most twice. A peer fixture write repeats only
 after confirming that its original revision, workspace and settings are unchanged; an uncertain

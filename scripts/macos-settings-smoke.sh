@@ -70,6 +70,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     for phase in ['add', 'rename']:
         attempts = [item for item in data['nativeWorkspaceManagementAttempts'] if item['phase'] == phase]
         assert attempts and len(attempts) <= 3 and attempts[-1]['saved'] is True
+        assert all(item['completedAction'] is True for item in attempts)
         assert all(item['unchangedOnBusy'] is True for item in attempts)
     assert data['nativeDatabaseComponentsReadonlyCatalogWithoutDownloads']
     assert data['nativeJavaCatalogDetectionRegistrationFailureRetentionAndRecordRemoval']
