@@ -1,4 +1,11 @@
 export const messages: Record<string, string> = {
+  "高亮已被其他窗口修改，请明确重试。": "Highlights changed in another window. Retry explicitly.",
+  "请先重试或取消未保存的高亮。": "Retry or cancel the unsaved highlight first.",
+  "后台服务不支持会话重启。请关闭会话后退出并重新打开应用；已有进程未被终止。":
+    "The host cannot restart sessions. Close sessions, quit and reopen the app; existing processes were not stopped.",
+  "无法加载内置终端字体，请重试或重新安装应用。":
+    "Could not load the bundled terminal font. Retry or reinstall the app.",
+  "加载中…": "Loading…",
   "配置正在由其他窗口保存，请稍后重试。":
     "Another window is saving the configuration. Please retry shortly.",
   "选择或添加 Redis 连接后打开工作台。": "Select or add a Redis connection to open its workbench.",
@@ -144,6 +151,7 @@ export const messages: Record<string, string> = {
   "无法监听本地端口，请检查端口权限或更换端口。":
     "Could not listen on the local port. Check port permissions or choose another port.",
   "快速 SSH 连接": "Quick SSH connection",
+  "快速 SSH 工作区无效，请重试。": "Invalid Quick SSH workspace. Retry.",
   "搜索 SSH 主机": "Search SSH hosts",
   "没有匹配的 SSH 主机": "No matching SSH hosts",
   临时: "Temporary",

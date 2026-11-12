@@ -5,8 +5,10 @@ import json
 import struct
 import tempfile
 import unittest
+import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 spec = importlib.util.spec_from_file_location("parity_evidence", Path(__file__).parents[1] / "scripts/ui-parity-evidence.py")
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
@@ -24,10 +26,13 @@ class ParityEvidenceTests(unittest.TestCase):
         self.fixture = Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json"
         fixture = module.read_json(self.fixture)
         digest = hashlib.sha256(self.fixture.read_bytes()).hexdigest()
+        chrome = self.fixture.parent.parent / "contracts/chrome-ui-v1.json"
+        chrome_digest = hashlib.sha256(chrome.read_bytes()).hexdigest()
+        font_digest = module.read_json(self.fixture.parents[2] / "src/assets/fonts/manifest.json")["files"]["CascadiaCode-Regular.ttf"]
         self.n = dict(passed=True, platform="macOS", architecture="arm64", system="Version 15.8.2",
                       sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, productionDataAccess=False,
                       uiParityFixtureSHA256=digest, backgroundTabCloseRetainedSelectedGeneration=True,
-                      workspaceScenes=[], settingsScenes=[], captures=[])
+                      workspaceScenes=[], settingsScenes=[], contentScenes=[], quickSSHScenes=[], captures=[], pdfHighlightsNativeDrawDeleteReopenAndScopeVerified=True, pdfMarkWrongRootAndPathRejected=True)
         self.t = dict(passed=True, platform="darwin", architecture="arm64", productVersion="15.8.2",
                       head="a" * 40, tested="b" * 40, productionDataAccess=False, sourceTreeDirty=False,
                       uiParityFixtureSHA256=digest, scenes=[])
@@ -35,8 +40,13 @@ class ParityEvidenceTests(unittest.TestCase):
             for appearance in fixture["appearances"]:
                 for width in fixture["widths"]:
                     values = dict(language=lang, appearance=appearance, width=width, height=720,
-                                  scenario="toolbar-sidebar-two-session-tabs-files", sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
-                                  generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
+                                  sidebarRailLeft=0, sidebarRailWidth=48, sidebarAllButtonLeft=7, sidebarAllButtonTop=52, sidebarAllButtonWidth=34, sidebarAllButtonHeight=34,
+                                  terminalInsetLeft=11, terminalInsetRight=11, terminalInsetBottom=11, terminalHeaderTop=11, terminalHeaderHeight=35, terminalViewportGap=12,
+                                  inspectorTop=0, inspectorHeight=720, inspectorHeaderTop=0, inspectorFooterBottom=720, inspectorViewportHeight=720,
+                                  sidebarRowHeight=32, sidebarSectionHeight=32, sidebarSectionGap=18, sidebarListTop=8,
+                                  fontFamily="Cascadia Code", fontFace="CascadiaCode-Regular", fontSourceSHA256=font_digest, fontCharacterWidth=9.96,
+                                  scenario="toolbar-sidebar-two-sessions-files", fileGitStates={path: "untracked" for path in fixture["files"]}, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
+                                  chromeContractSHA256=chrome_digest, toolbarHeight=44, toolbarTop=0, sidebarWidth=min(248, max(180, min(320, width * .3))), inspectorWidth=298.2 if width == 1100 else 128, generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
                     native = f"personal-initial-workspace-{lang}-{appearance}-{width}.png"
                     tauri = f"ui-parity-workspace-{lang}-{appearance}-{width}.png"
                     # Synthetic header fixtures test rejection policy, never native acceptance.
@@ -59,6 +69,64 @@ class ParityEvidenceTests(unittest.TestCase):
                                                     platform="macOS", architecture="arm64", system=self.n["system"]))
                 self.n["captures"].append(native)
                 self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
+        for scene in fixture["contentScenes"]:
+            values = dict(scene, passed=True, fixtureSessionCount=1, filesFolderExpanded=True, pdfSHA256=fixture["pdf"]["sha256"], markID=fixture["pdf"]["mark"]["id"], marksCount=1,
+                          actualRemoveButton=True, reopenedRestoredMarks=True, originalPdfUnchanged=True, inMainWorkspace=True, settingsPreserveDocument=True)
+            name = f"pdf-highlights-{scene['language']}-{scene['appearance']}-{scene['width']}"
+            native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+            image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", scene["width"], scene["height"]) + bytes(1100)
+            (self.native / native).write_bytes(image)
+            (self.tauri / tauri).write_bytes(image)
+            self.n["contentScenes"].append(dict(values, scenario="pdf-highlights", screenshot=native, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
+                                                platform="macOS", architecture="arm64", system=self.n["system"], nativePointerDrawAndDelete=True))
+            self.n["captures"].append(native)
+            self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
+        for scene in fixture["quickScenes"]:
+            values = dict(scene, passed=True, inputAddress=fixture["quickAddress"], terminalFixtureMarker=fixture["marker"],
+                          invalidInputRejected=True, addressRetained=True, savedWorkspaceUnchanged=True, sameMainWindow=True,
+                          terminalGenerationRetained=True, actualSidebarButton=True, actualCancelPreservedState=True,
+                          workspaceVisibleAroundDialog=True, modalWidth=540, modalHeight=300, modalLeft=(scene["width"]-540)/2, modalTop=(scene["height"]-300)/2)
+            name = f"quick-ssh-invalid-{scene['language']}-{scene['appearance']}-{scene['width']}"
+            native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+            image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", scene["width"], scene["height"]) + bytes(1100)
+            (self.native / native).write_bytes(image); (self.tauri / tauri).write_bytes(image)
+            self.n["quickSSHScenes"].append(dict(values, scenario="quick-ssh-invalid", screenshot=native,
+                                                sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system=self.n["system"]))
+            self.n["captures"].append(native)
+            self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
+        self.n["githubPRScenes"] = []
+        for scene in fixture["githubScenes"]:
+            width = min(640, scene["width"]*.92)
+            values = dict(scene, passed=True, form=fixture["github"], actualToolsSwitcher=True, literalInputRetained=True, readableFields=True,
+                          workspaceVisibleAroundDialog=True, terminalGenerationRetained=True, savedWorkspaceUnchanged=True,
+                          isolatedSimulatedCLI=True, noGitHubWrites=True, actualCancelPreservedState=True,
+                          modalWidth=width, modalHeight=500, modalLeft=(scene["width"]-width)/2, modalTop=(scene["height"]-500)/2)
+            name = f"github-pr-draft-{scene['language']}-{scene['appearance']}-{scene['width']}"
+            native, tauri = f"personal-initial-{name}.png", f"ui-parity-{name}.png"
+            image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", scene["width"], scene["height"]) + bytes(1100)
+            (self.native / native).write_bytes(image); (self.tauri / tauri).write_bytes(image)
+            self.n["githubPRScenes"].append(dict(values, scenario="github-pr-draft", screenshot=native, sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system=self.n["system"]))
+            self.n["captures"].append(native)
+            self.t["scenes"].append(dict(scenario=name, checks=values, screenshot=tauri))
+        restart = "ui-parity-terminal-restart.png"
+        image = b"\x89PNG\r\n\x1a\n" + struct.pack(">I", 13) + b"IHDR" + struct.pack(">II", 1100, 720) + bytes(1100)
+        (self.tauri / restart).write_bytes(image)
+        self.t["scenes"].append(dict(scenario="terminal-restart", screenshot=restart, checks=dict(
+            passed=True, actualRestartButton=True, parsedUnicodeOutput=True, canonicalWorkspaceRetained=True,
+            terminalViewRetained=True, generationBeforeRestart="old-generation", restartedGeneration="new-generation")))
+
+    def test_pr_tool_width_and_missing_or_modified_operations_are_rejected(self):
+        baseline = copy.deepcopy(self.n)
+        for key, value in [("modalWidth",128), ("readableFields",False), ("noGitHubWrites",False), ("form",{}), ("modalLeft", float("nan"))]:
+            with self.subTest(key=key):
+                self.n=copy.deepcopy(baseline);self.n["githubPRScenes"][0][key]=value
+                with self.assertRaises(AssertionError): self.run_compare()
+        self.n=copy.deepcopy(baseline);self.n["githubPRScenes"].pop()
+        with self.assertRaises(AssertionError): self.run_compare()
+
+    def test_pr_centered_forms_with_different_heights_are_rejected(self):
+        self.n["githubPRScenes"][0].update(modalHeight=502,modalTop=(720-502)/2)
+        with self.assertRaises(AssertionError): self.run_compare()
 
     def run_compare(self):
         for root, name, report in [(self.native, "personal-initial.json", self.n), (self.tauri, "report.json", self.t)]:
@@ -76,8 +144,82 @@ class ParityEvidenceTests(unittest.TestCase):
         result = self.run_compare()
         self.assertTrue(result["comparisonReady"])
         self.assertFalse(result["functionalParityAccepted"])
-        self.assertEqual(len(result["pairs"]), 32)
-        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 64)
+        self.assertEqual(len(result["pairs"]), 38)
+        self.assertEqual(len(list((self.root / "comparison").glob("*.png"))), 77)
+
+    def test_quick_ssh_requires_current_main_window_images_and_preserved_data(self):
+        original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
+        changes = [("sourceHeadSHA", "c" * 40), ("testedMergeSHA", "c" * 40), ("inputAddress", "different"), ("terminalFixtureMarker", "old"), ("screenshot", "old.png")]
+        changes += [(key, False) for key in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState", "workspaceVisibleAroundDialog"]]
+        changes += [("modalWidth", 1100), ("modalHeight", 720), ("modalTop", None), ("modalLeft", float("nan"))]
+        for key, value in changes:
+            self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+            self.n["quickSSHScenes"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): self.run_compare()
+        for kind in ["missing", "duplicate", "ordinary", "platform"]:
+            self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+            if kind == "missing": self.n["quickSSHScenes"].pop()
+            if kind == "duplicate": self.n["quickSSHScenes"][0] = self.n["quickSSHScenes"][1]
+            if kind == "ordinary": next(row for row in self.t["scenes"] if row["scenario"].startswith("quick-ssh-invalid-"))["checks"]["sameMainWindow"] = False
+            if kind == "platform": self.n["quickSSHScenes"][0]["platform"] = "browser"
+            with self.subTest(kind=kind), self.assertRaises(AssertionError): self.run_compare()
+
+    def test_quick_ssh_forms_must_have_the_same_actual_bounds(self):
+        self.n["quickSSHScenes"][0].update(modalHeight=302, modalTop=209)
+        with self.assertRaisesRegex(AssertionError, "Different actual Quick SSH geometry"):
+            self.run_compare()
+
+    def test_terminal_geometry_requires_matching_actual_insets_header_and_viewport_gap(self):
+        original = copy.deepcopy(self.n)
+        for key in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop", "terminalHeaderHeight", "terminalViewportGap"]:
+            for value in [None, True, float("nan"), float("inf"), -1, original["workspaceScenes"][0][key] + 12]:
+                self.n = copy.deepcopy(original)
+                self.n["workspaceScenes"][0][key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
+        self.n = copy.deepcopy(original)
+        self.n["workspaceScenes"][0].pop("terminalHeaderHeight")
+        with self.assertRaises(AssertionError): self.run_compare()
+
+    def test_navigation_cannot_pass_from_outer_sidebar_width_while_the_rail_is_clipped(self):
+        original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
+        for side in ["native", "ordinary"]:
+            for key in ["sidebarRailLeft", "sidebarRailWidth", "sidebarAllButtonLeft", "sidebarAllButtonTop", "sidebarAllButtonWidth", "sidebarAllButtonHeight"]:
+                for value in [None, True, float("nan"), -24]:
+                    self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+                    scene = self.n["workspaceScenes"][0] if side == "native" else self.t["scenes"][0]["checks"]
+                    scene[key] = value
+                    with self.subTest(side=side, key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
+
+    def test_pdf_requires_current_images_matching_data_and_actual_operations(self):
+        original_n, original_t = copy.deepcopy(self.n), copy.deepcopy(self.t)
+        mutations = [("sourceHeadSHA", "c" * 40), ("pdfSHA256", "0" * 64), ("markID", "old"), ("marksCount", 0), ("fixtureSessionCount", 2), ("filesFolderExpanded", False),
+                     ("actualRemoveButton", False), ("reopenedRestoredMarks", False), ("originalPdfUnchanged", False),
+                     ("inMainWorkspace", False), ("settingsPreserveDocument", False), ("nativePointerDrawAndDelete", False), ("screenshot", "old.png")]
+        for key, value in mutations:
+            self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+            self.n["contentScenes"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): self.run_compare()
+        for kind in ["missing", "duplicate", "ordinary", "scope", "pointer"]:
+            self.n, self.t = copy.deepcopy(original_n), copy.deepcopy(original_t)
+            if kind == "missing": self.n["contentScenes"].pop()
+            if kind == "duplicate": self.n["contentScenes"][0] = self.n["contentScenes"][1]
+            if kind == "ordinary": next(row for row in self.t["scenes"] if row["scenario"].startswith("pdf-highlights-"))["checks"]["actualRemoveButton"] = False
+            if kind == "scope": self.n["pdfMarkWrongRootAndPathRejected"] = False
+            if kind == "pointer": self.n["pdfHighlightsNativeDrawDeleteReopenAndScopeVerified"] = False
+            with self.subTest(kind=kind), self.assertRaises(AssertionError): self.run_compare()
+
+    def test_restart_requires_unique_actual_operation_new_generation_and_screenshot(self):
+        original = copy.deepcopy(self.t["scenes"])
+        for mutation in ["missing", "duplicate", "button", "output", "workspace", "view", "generation", "screenshot"]:
+            self.t["scenes"] = copy.deepcopy(original)
+            restart = self.t["scenes"][-1]
+            if mutation == "missing": self.t["scenes"].pop()
+            if mutation == "duplicate": self.t["scenes"].append(copy.deepcopy(restart))
+            for name, key in [("button", "actualRestartButton"), ("output", "parsedUnicodeOutput"), ("workspace", "canonicalWorkspaceRetained"), ("view", "terminalViewRetained")]:
+                if mutation == name: restart["checks"][key] = False
+            if mutation == "generation": restart["checks"]["restartedGeneration"] = restart["checks"]["generationBeforeRestart"]
+            if mutation == "screenshot": restart["screenshot"] = "absent.png"
+            with self.subTest(mutation=mutation), self.assertRaises(AssertionError): self.run_compare()
 
     def test_settings_scenes_require_complete_source_bound_unchanged_navigation(self):
         original = copy.deepcopy(self.n["settingsScenes"])
@@ -101,6 +243,25 @@ class ParityEvidenceTests(unittest.TestCase):
                 self.run_compare()
             self.t = original
 
+    def test_rejects_different_chrome_and_old_toolbar_geometry(self):
+        original = copy.deepcopy(self.t["scenes"][0]["checks"])
+        for key, value in [("chromeContractSHA256", "0" * 64), ("sidebarRowHeight", 28), ("sidebarSectionHeight", 28), ("sidebarSectionGap", 2), ("sidebarListTop", 0), ("toolbarTop", 28), ("toolbarHeight", 40), ("inspectorWidth", 420), ("sidebarWidth", 320), ("toolbarHeight", 0)]:
+            self.t["scenes"][0]["checks"] = {**original, key: value}
+            with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
+        self.t["scenes"][0]["checks"] = original
+        self.n["workspaceScenes"][0].pop("chromeContractSHA256")
+        with self.assertRaises(AssertionError): self.run_compare()
+
+    def test_rejects_offset_short_clipped_or_missing_native_and_ordinary_tools_geometry(self):
+        for scene in [self.n["workspaceScenes"][0], self.t["scenes"][0]["checks"]]:
+            original = copy.deepcopy(scene)
+            for key in ["inspectorTop", "inspectorHeight", "inspectorHeaderTop", "inspectorFooterBottom", "inspectorViewportHeight"]:
+                for value in [None, float("nan"), original[key] + 44]:
+                    scene[key] = value
+                    with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
+                scene.clear()
+                scene.update(original)
+
     def test_rejects_missing_and_duplicate_scene_records(self):
         original = copy.deepcopy(self.n)
         self.n["workspaceScenes"].pop()
@@ -109,12 +270,29 @@ class ParityEvidenceTests(unittest.TestCase):
         self.n["workspaceScenes"][0] = self.n["workspaceScenes"][1]
         with self.assertRaises(AssertionError): self.run_compare()
 
+    def test_rejects_fallback_stale_or_differently_measured_fonts(self):
+        original = copy.deepcopy(self.t["scenes"][0]["checks"])
+        for key, value in [("fontFamily", "Courier"), ("fontFace", "Menlo-Regular"), ("fontSourceSHA256", "0" * 64), ("fontCharacterWidth", 10.4), ("fontCharacterWidth", None), ("fontCharacterWidth", float('nan'))]:
+            self.t["scenes"][0]["checks"] = {**original, key: value}
+            with self.subTest(key=key, value=value), self.assertRaises(AssertionError): self.run_compare()
+
     def test_rejects_missing_or_tiny_images(self):
         path = self.native / self.n["captures"][0]
         path.write_bytes(b"\x89PNG\r\n\x1a\n")
         with self.assertRaises(AssertionError): self.run_compare()
         path.unlink()
         with self.assertRaises(FileNotFoundError): self.run_compare()
+
+    def test_rejects_missing_incomplete_or_wrong_actual_file_git_states(self):
+        for side in ["native", "tauri"]:
+            scene = self.n["workspaceScenes"][0] if side == "native" else self.t["scenes"][0]["checks"]
+            original = scene["fileGitStates"]
+            try:
+                for states in [None, {}, {"note.txt": "untracked"}, {"note.txt": "modified", "README.md": "untracked"}]:
+                    scene["fileGitStates"] = states
+                    with self.subTest(side=side, states=states), self.assertRaises(AssertionError): self.run_compare()
+            finally:
+                scene["fileGitStates"] = original
 
     def test_rejects_scene_source_mismatch_and_unverified_background_close(self):
         self.n["workspaceScenes"][0]["testedMergeSHA"] = "c" * 40

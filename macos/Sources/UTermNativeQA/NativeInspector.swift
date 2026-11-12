@@ -1,12 +1,17 @@
 import AppKit
 import SwiftUI
 import UTermBridge
+import WebKit
 
 @MainActor
 final class NativeInspectorModel: ObservableObject {
-    enum Mode: String, CaseIterable { case files, search, quick }
+    enum Mode: String, CaseIterable { case files, search, quick, github }
     private weak var workspace: WorkspaceModel?
-    @Published var mode: Mode = .files
+    @Published var mode: Mode = .files {
+        didSet { if mode != oldValue && mode != .github { (content?.workbenchHost as? FilesHost)?.modeChanged() } }
+    }
+    @Published private(set) var content: ContentWindow?
+    private(set) var request = 0
     @Published var query = ""
     @Published var hidden = false
     @Published var sensitive = false
@@ -22,23 +27,49 @@ final class NativeInspectorModel: ObservableObject {
     private var generation = 0
     private var context = ""
     init(workspace: WorkspaceModel) { self.workspace = workspace }
+    func show(_ mode: Mode) {
+        if (mode == .github) != (content?.workbenchHost?.kind == "github") { content = nil }
+        self.mode = mode; request += 1
+        if mode != .github { (content?.workbenchHost as? FilesHost)?.modeChanged() }
+    }
+    func presentGitHub(_ content: ContentWindow, scope: String) {
+        guard let workspace, workspace.inspectorContextKey == scope else { return }
+        generation += 1; busy = false; error = ""; errorCode = ""
+        context = scope; directory = content.directory.path
+        mode = .github; self.content = content
+    }
     func invalidate() { generation += 1; busy = false }
     func reload() async {
         guard let workspace, let bridge = workspace.bridge, workspace.state != nil else { return }
         generation += 1; let request = generation
         if context != workspace.inspectorContextKey {
-            context = workspace.inspectorContextKey; directory = ""; path = ""; rows = []; query = ""; selected = -1
+            context = workspace.inspectorContextKey; directory = ""; path = ""; rows = []; query = ""; selected = -1; content = nil
         }
         busy = true; error = ""; errorCode = ""; defer { if request == generation { busy = false } }
         do {
             guard let current = try await currentProject(bridge, workspace: workspace, request: request) else { return }
             guard request == generation, !Task.isCancelled else { return }
             guard let root = current.directory, root.hasPrefix("/") else {
-                directory = ""; rows = []
+                directory = ""; rows = []; content = nil
                 error = localized("Select a local project or Worktree first.", "请先选择本地项目或 Worktree。")
                 return
             }
-            if directory != root { directory = root; path = ""; rows = []; selected = -1 }
+            if directory != root { directory = root; path = ""; rows = []; selected = -1; content = nil }
+            if mode == .github {
+                guard let make = workspace.makeGitHubTools else { throw BridgeFailure(code: "CLOSED", message: "GitHub tools are unavailable") }
+                if content?.workbenchHost?.kind != "github" {
+                    let next = try await make(URL(fileURLWithPath: root), context)
+                    guard request == generation, context == workspace.inspectorContextKey, mode == .github, !Task.isCancelled else { return }
+                    content = next
+                }
+                return
+            }
+            if content == nil, let make = workspace.makeFileTools {
+                let next = try await make(URL(fileURLWithPath: root), context)
+                guard request == generation, context == workspace.inspectorContextKey, !Task.isCancelled else { return }
+                content = next
+                (next.workbenchHost as? FilesHost)?.modeChanged()
+            }
             let result: JSONValue
             if mode == .files {
                 result = try await bridge.call("files.list", params: .object(["directory": .string(root), "path": .string(path), "hidden": .bool(hidden)]))
@@ -101,49 +132,25 @@ final class NativeInspectorModel: ObservableObject {
 struct NativeInspectorView: View {
     @ObservedObject var model: NativeInspectorModel
     @ObservedObject var workspace: WorkspaceModel
-    @FocusState private var queryFocused: Bool
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Picker(localized("Tools", "工具"), selection: $model.mode) {
-                    Text(localized("Files", "文件")).tag(NativeInspectorModel.Mode.files)
-                    Text(localized("Search", "搜索")).tag(NativeInspectorModel.Mode.search)
-                    Text(localized("Quick open", "快速打开")).tag(NativeInspectorModel.Mode.quick)
-                }.labelsHidden().pickerStyle(.segmented)
-                Button { workspace.hideInspector() } label: { Image(systemName: "xmark") }.help(localized("Close tools", "关闭工具"))
-            }
-            if !model.directory.isEmpty { Text(URL(fileURLWithPath: model.directory).lastPathComponent).font(.caption).foregroundStyle(.secondary).lineLimit(1).help(model.directory) }
-            if model.mode == .files {
-                HStack {
-                    Button(localized("Up", "上一级")) { Task { await model.up() } }.disabled(model.path.isEmpty || model.busy)
-                    Text(model.path.isEmpty ? "/" : model.path).font(.caption).lineLimit(1).truncationMode(.middle)
-                    Spacer()
-                }
+        Group {
+            if let content = model.content {
+                if content.workbenchHost?.kind == "github" {
+                    NativeEmbeddedDocument(content: content).id(ObjectIdentifier(content))
+                } else { FileToolsSurface(content: content) }
             } else {
-                TextField(model.mode == .search ? localized("Search file contents", "搜索文件内容") : localized("Search file names", "搜索文件名"), text: $model.query)
-                    .focused($queryFocused).onSubmit { Task { await model.reload() } }
-                    .accessibilityIdentifier("native-inspector-query")
-                if model.mode == .search { Toggle(localized("Match case", "区分大小写"), isOn: $model.sensitive).onChange(of: model.sensitive) { _, _ in Task { await model.reload() } } }
+                VStack(alignment: .leading, spacing: 8) {
+                    if model.busy { ProgressView().controlSize(.small) }
+                    if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled) }
+                    Button(localized("Refresh", "刷新")) { Task { await model.reload() } }.disabled(model.busy)
+                    Spacer()
+                }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
             }
-            HStack {
-                Toggle(localized("Show hidden files", "显示隐藏文件"), isOn: $model.hidden)
-                Spacer()
-                Button(localized("Refresh", "刷新")) { Task { await model.reload() } }.disabled(model.busy)
-            }.font(.caption)
-            if model.busy { ProgressView().controlSize(.small) }
-            if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).font(.caption).textSelection(.enabled) }
-            InspectorRows(model: model, workspace: workspace).frame(maxWidth: .infinity, maxHeight: .infinity)
-            if model.partial || model.skipped > 0 { Text(localized("Some results were omitted. Narrow the search or refresh.", "部分结果未显示，请缩小搜索范围或刷新。")).font(.caption).foregroundStyle(.secondary) }
-            HStack {
-                Button("Git") { workspace.openGitRequested?() }
-                Button("GitHub") { workspace.openGitHubRequested?() }.disabled(workspace.openGitHubRequested == nil)
-                Spacer()
-                Button(localized("Open", "打开")) { model.activateFromUI(model.selected) }.disabled(!model.rows.indices.contains(model.selected) || model.busy)
-            }
-        }.padding(10)
-        .task(id: workspace.inspectorContextKey) { await model.reload(); queryFocused = model.mode != .files }
-        .onChange(of: model.mode) { _, mode in Task { await model.reload() }; queryFocused = mode != .files }
-        .onChange(of: model.hidden) { _, _ in Task { await model.reload() } }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea(.container, edges: .top)
+        .task(id: workspace.inspectorContextKey) { await model.reload() }
+        .onChange(of: model.mode) { _, _ in Task { await model.reload() } }
         .onDisappear { model.invalidate() }
         .accessibilityIdentifier("native-inspector")
     }
@@ -158,73 +165,40 @@ struct InspectorHost: NSViewRepresentable {
     func makeNSView(context: Context) -> InspectorContainer {
         let view = InspectorContainer(rootView: NativeInspectorView(model: model.inspector, workspace: model))
         view.identifier = NSUserInterfaceItemIdentifier("native-inspector-container")
+        view.safeAreaRegions = []
         return view
     }
     func updateNSView(_ view: InspectorContainer, context: Context) {
-        // The root observes both models; replacing it on PTY updates restarts focus and reload tasks.
-        // 根视图已监听两个模型，因 PTY 更新替换根视图会重启焦点及重新加载任务。
+        // Keep the mounted file tools and their query while terminal frames update.
+        // 终端帧更新时保留已接入的文件工具及其查询。
         if view.rootView.workspace !== model { view.rootView = NativeInspectorView(model: model.inspector, workspace: model) }
     }
 }
 
 @MainActor
-private struct InspectorRows: NSViewRepresentable {
-    @ObservedObject var model: NativeInspectorModel
-    @ObservedObject var workspace: WorkspaceModel
-    func makeCoordinator() -> Coordinator { Coordinator() }
-    func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSScrollView(); scroll.hasVerticalScroller = true
-        let table = InspectorTable(); table.identifier = NSUserInterfaceItemIdentifier("native-inspector-rows")
-        table.addTableColumn(NSTableColumn(identifier: NSUserInterfaceItemIdentifier("file")))
-        table.headerView = nil; table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle; table.autoresizingMask = [.width]
-        table.delegate = context.coordinator; table.dataSource = context.coordinator; table.target = context.coordinator; table.doubleAction = #selector(Coordinator.open(_:))
-        let coordinator = context.coordinator
-        table.activate = { [weak table, weak coordinator] in guard let table else { return }; coordinator?.activate(row: table.selectedRow) }
-        scroll.documentView = table; context.coordinator.update(model, workspace: workspace, table: table)
-        return scroll
+private struct FileToolsSurface: NSViewRepresentable {
+    let content: ContentWindow
+    func makeNSView(context: Context) -> NSView {
+        let host = NSView()
+        attach(to: host)
+        return host
     }
-    func updateNSView(_ scroll: NSScrollView, context: Context) { if let table = scroll.documentView as? NSTableView { context.coordinator.update(model, workspace: workspace, table: table) } }
-    final class InspectorTable: NSTableView {
-        var activate: (() -> Void)?
-        override func keyDown(with event: NSEvent) { if event.keyCode == 36 { activate?() } else { super.keyDown(with: event) } }
+    func updateNSView(_ host: NSView, context: Context) {
+        if content.webView.superview !== host { attach(to: host) }
     }
-    @MainActor
-    final class Coordinator: NSObject, NSTableViewDataSource, NSTableViewDelegate {
-        private weak var model: NativeInspectorModel?
-        private weak var workspace: WorkspaceModel?
-        private var rows: [JSONValue] = []
-        private var fontFamily = ""
-        private var mode: NativeInspectorModel.Mode?
-        private var updating = false
-        func update(_ model: NativeInspectorModel, workspace: WorkspaceModel, table: NSTableView) {
-            self.model = model; self.workspace = workspace
-            let height = CGFloat(workspace.settings["fileFontSize"].number ?? 14) + (model.mode == .search ? 28 : 12)
-            let family = workspace.settings["fontFamily"].string ?? "monospace"
-            if rows != model.rows || table.rowHeight != height || fontFamily != family || mode != model.mode {
-                updating = true; rows = model.rows; fontFamily = family; mode = model.mode; table.rowHeight = height; table.reloadData(); updating = false
-            }
-            let selection = rows.indices.contains(model.selected) ? IndexSet(integer: model.selected) : IndexSet()
-            if table.selectedRowIndexes != selection { updating = true; table.selectRowIndexes(selection, byExtendingSelection: false); updating = false }
-        }
-        func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
-        func tableViewSelectionDidChange(_ notification: Notification) {
-            guard !updating, let table = notification.object as? NSTableView else { return }
-            model?.selected = table.selectedRow
-        }
-        func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-            guard rows.indices.contains(row) else { return nil }
-            let value = rows[row], path = value["path"].string ?? ""
-            let name = value["name"].string ?? path
-            let icon = NSImageView(image: NSImage(systemSymbolName: value["directory"].bool == true ? "folder" : value["symlink"].bool == true ? "link" : "doc", accessibilityDescription: nil) ?? NSImage())
-            let text = NSTextField(labelWithString: name); text.lineBreakMode = .byTruncatingMiddle
-            text.font = NativePreferences.font(workspace?.settings["fontFamily"].string ?? "monospace", size: CGFloat(workspace?.settings["fileFontSize"].number ?? 14), mono: true)
-            let title = NSStackView(views: [icon, text]); title.spacing = 6
-            if model?.mode != .search { return title }
-            let line = Int(value["line"].number ?? 0)
-            let preview = NSTextField(labelWithString: "\(line): " + (value["text"].string ?? "")); preview.lineBreakMode = .byTruncatingTail; preview.font = .systemFont(ofSize: 11); preview.textColor = .secondaryLabelColor
-            let stack = NSStackView(views: [title, preview]); stack.orientation = .vertical; stack.alignment = .leading; return stack
-        }
-        func activate(row: Int) { guard rows.indices.contains(row) else { return }; model?.activateFromUI(row, expected: rows[row]) }
-        @objc func open(_ table: NSTableView) { activate(row: table.clickedRow) }
+    private func attach(to host: NSView) {
+        host.subviews.forEach { $0.removeFromSuperview() }
+        content.webView.removeFromSuperview()
+        content.webView.translatesAutoresizingMaskIntoConstraints = false
+        host.addSubview(content.webView)
+        NSLayoutConstraint.activate([
+            content.webView.leadingAnchor.constraint(equalTo: host.leadingAnchor),
+            content.webView.trailingAnchor.constraint(equalTo: host.trailingAnchor),
+            content.webView.topAnchor.constraint(equalTo: host.topAnchor),
+            content.webView.bottomAnchor.constraint(equalTo: host.bottomAnchor)
+        ])
+    }
+    static func dismantleNSView(_ host: NSView, coordinator: ()) {
+        host.subviews.forEach { $0.removeFromSuperview() }
     }
 }

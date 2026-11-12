@@ -166,6 +166,20 @@ and `bash scripts/macos-native-test.sh` for the isolated QA app and Rust/Swift b
 bridge suite includes logical file-root alias recovery and resolved file-picker boundary
 regressions.
 
+`pnpm chrome:generate` generates the Swift vectors and client digest from
+`shared/contracts/chrome-ui-v1.json`; `pnpm chrome:check` rejects stale copies. Both are included in
+contract generation/checks.
+
+Both clients bundle the same Cascadia Code 2407.24 font faces and their SIL Open Font License.
+Startup waits for the bundled default face before creating terminals; builds and app startup do not
+download fonts. Native registration is limited to the app process. See
+[`src/assets/fonts/manifest.json`](src/assets/fonts/manifest.json) for source and checksums.
+
+The native UI candidate includes workspace file tabs and per-pane font/search controls. Sidebar row
+geometry is shared and measured in both real-window collectors. Complete parity and the latest
+real-window checks remain pending; see the
+[native workspace guide](docs/features.md#native-workspace-interaction).
+
 `pnpm settings:generate` derives the native command/theme catalog from the existing TypeScript
 settings and translations; `pnpm settings:check` verifies it. Contract generation/checks include
 this catalog. Core `settings.catalog` and `settings.validate` read defaults and validate platform
@@ -450,6 +464,12 @@ real-window tab checks pass on macOS ARM/Intel. Persisted tab/window order and c
 acceptance remain pending. Content writes are restricted to the selected file. `pnpm test:core`
 explicitly runs filesystem failure/retry checks for workspace/draft snapshots and metadata saving
 after Worktree removal, plus Git favorite save/restore/retry.
+
+The native Files inspector mounts the shared `src/components/FilePanel.tsx` through
+`src/native-files.tsx` and scoped `FilesHost.swift` calls. File operations retain root checks and
+editor draft guards. Current-source native interaction and matching screenshots remain required;
+Copied file sources survive native panel replacement within the same workspace, without saving paths
+to disk. Git/GitHub workbench embedding and cross-workspace file-copy alignment remain pending.
 
 The shared loopback control server is in `crates/utermd-local/src/control/server.rs`; Tauri and core
 operations use the same queue and lifecycle. The host directly declares Tokio and tempfile for this

@@ -25,12 +25,25 @@ final class WorkspaceModel: ObservableObject {
     @Published var editorRecoveryPresented = false
     @Published var gitFavoritesRecoveryPresented = false
     @Published var worktreeDeletionPresented = false
+    @Published var quickSSHPresented = false
+    @Published var quickSSHContent: ContentWindow?
+    @Published var quickSSHHeight: Double = 240
+    @Published var githubPRContent: ContentWindow?
+    @Published var githubPRHeight: Double = 520
+    var workspaceModalContent: ContentWindow? { quickSSHContent ?? githubPRContent }
+    var workspaceModalPresented: Bool { workspaceModalContent != nil }
+    var workspaceModalPending: Bool {
+        if let host = workspaceModalContent?.workbenchHost as? QuickSSHHost { return host.pending }
+        if let host = workspaceModalContent?.workbenchHost as? GitHubPRHost { return host.pending }
+        return false
+    }
     @Published var nameDraft: NameDraft?
     @Published var nameDraftOwner: NameDraftOwner = .workspace
     @Published var fullScreen = false
     @Published var sidebarVisible = true
     @Published var sidebarSection = "all"
     @Published var sidebarQuery = ""
+    @Published var sidebarCollapsed: Set<String> = []
     @Published var inspectorVisible = false
     @Published var paneZoomed = false
     @Published private(set) var breakReminderVisible = false
@@ -38,6 +51,11 @@ final class WorkspaceModel: ObservableObject {
     private var breakTimer: Task<Void, Never>?
     @Published private(set) var focusRevision = 0
     @Published private(set) var toolbarHeight: CGFloat = 0
+    @Published private(set) var toolbarTop: CGFloat = -1
+    @Published private(set) var sidebarWidth: CGFloat = 0
+    private(set) var sidebarRailFrame: CGRect = .zero
+    private(set) var sidebarAllButtonFrame: CGRect = .zero
+    @Published private(set) var inspectorWidth: CGFloat = 0
     @Published var controlStatus: JSONValue = .null
     @Published var controlError = ""
     @Published var controlBusy = false
@@ -53,6 +71,8 @@ final class WorkspaceModel: ObservableObject {
     var commandsChanged: (() -> Void)?
     var deleteWorktreeRequested: ((String, String) -> Void)?
     var openSSHRequested: ((String?) -> Void)?
+    var openQuickSSHRequested: (() -> Void)?
+    var canPruneQuickSSH: (() -> Bool)?
     var openDatabasesRequested: (() -> Void)?
     var openRedisRequested: (() -> Void)?
     var openAgentsRequested: (() -> Void)?
@@ -65,7 +85,9 @@ final class WorkspaceModel: ObservableObject {
     private var databaseHostCache: DatabaseHost?
     var openGitRequested: (() -> Void)?
     var openGitHubRequested: (() -> Void)?
+    var makeGitHubTools: ((URL, String) async throws -> ContentWindow)?
     var openInspectorFile: ((String, String, Int) async throws -> Void)?
+    var makeFileTools: ((URL, String) async throws -> ContentWindow)?
     var prepareSSHTransportReconnect: (() async -> Bool)?
     var sshTrustTask: Task<Void, Never>?
     var sshTrustAlert: NSAlert?
@@ -80,6 +102,11 @@ final class WorkspaceModel: ObservableObject {
     private var helperReady = false
     private var needsReload = false
     lazy var agentNotifications = AgentNotifications(workspace: self)
+    lazy var documents: NativeWorkspaceDocuments = {
+        let value = NativeWorkspaceDocuments()
+        value.terminalFocusRequested = { [weak self] in self?.focusRevision += 1 }
+        return value
+    }()
     lazy var inspector = NativeInspectorModel(workspace: self)
     lazy var updates = NativeUpdates()
     var inspectorContextKey: String { [groupID, workspace["selectedProject"].string ?? "", workspace["selectedWorktree"].string ?? ""].joined(separator: "\u{0}") }
@@ -89,7 +116,7 @@ final class WorkspaceModel: ObservableObject {
         while let current = view { if current is InspectorContainer { return true }; view = current.superview }
         return false
     }
-    func showInspector(_ mode: NativeInspectorModel.Mode) { inspector.mode = mode; inspectorVisible = true }
+    func showInspector(_ mode: NativeInspectorModel.Mode) { inspector.show(mode); inspectorVisible = true }
     func hideInspector() { inspectorVisible = false; inspector.invalidate(); focusRevision += 1 }
     func sharedDatabaseHost() throws -> DatabaseHost {
         if let databaseHostCache { return databaseHostCache }
@@ -120,6 +147,11 @@ final class WorkspaceModel: ObservableObject {
     var projectItems: [NativeListItem] { projects.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var sessionEntries: [CoreSessionEntry] { (state?.sessions ?? []).filter { $0.workspaceId == groupID } }
     func revealSelectedPane() { paneZoomed = false; focusRevision += 1 }
+    func measureInspector(_ width: CGFloat) { if abs(inspectorWidth - width) > 0.1 { inspectorWidth = width } }
+    func measureSidebar(_ width: CGFloat) { if abs(sidebarWidth - width) > 0.1 { sidebarWidth = width } }
+    func measureSidebarRail(_ frame: CGRect) { sidebarRailFrame = frame }
+    func measureSidebarAllButton(_ frame: CGRect) { sidebarAllButtonFrame = frame }
+    func measureToolbarTop(_ top: CGFloat) { if abs(toolbarTop - top) > 0.1 { toolbarTop = top } }
     func measureToolbar(_ height: CGFloat) { if abs(toolbarHeight - height) > 0.1 { toolbarHeight = height } }
 
     static var applicationProfile: NativeApplicationProfile {
@@ -182,6 +214,7 @@ final class WorkspaceModel: ObservableObject {
             environment = try await bridge.call("host.environment")
             await reload()
             guard state != nil else { throw BridgeFailure(code: "BOOTSTRAP", message: error) }
+            await cleanupQuickSSH()
             events = Task { @MainActor [weak self, bridge] in
                 for await event in bridge.events {
                     guard let self, !Task.isCancelled else { return }
@@ -269,7 +302,7 @@ final class WorkspaceModel: ObservableObject {
     func mutate(_ method: String, _ values: [String: JSONValue], revision: String? = nil) async -> Bool {
         guard !busy, !shuttingDown, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, let bridge, let state else { return false }
         let actionBridge: CoreBridge
-        if method.hasPrefix("ssh.") {
+        if method.hasPrefix("ssh."), !["ssh.quick.create", "ssh.quick.keep"].contains(method) {
             guard let sshBridge else { return false }
             actionBridge = sshBridge
         } else { actionBridge = bridge }
@@ -303,14 +336,53 @@ final class WorkspaceModel: ObservableObject {
         if let operation { _ = await operation.value }
     }
 
+    func createQuickSSH(_ connection: JSONValue, workspaceID: String) async throws -> Bool {
+        await flushWorkspaceOperations()
+        guard !busy, !shuttingDown, groupID == workspaceID, let bridge, let sshBridge,
+              let directory = environment["home"].string else { throw BridgeFailure(code: "CONFLICT", message: localized("Workspace changed. Reopen Quick SSH.", "工作区已变化，请重新打开快速 SSH。")) }
+        let snapshot = try await bridge.snapshot()
+        let id = UUID().uuidString
+        guard await mutate("ssh.quick.create", ["connection": connection, "id": .string(id), "directory": .string(directory)], revision: snapshot.revision) else {
+            throw BridgeFailure(code: "SSH_SAVE_FAILED", message: error.isEmpty ? localized("Could not save the connection.", "无法保存连接。") : error)
+        }
+        do {
+            _ = try await sshBridge.call("ssh.session.start", params: .object(["id": .string(id)]))
+            await reload()
+        } catch {
+            // Metadata is already committed; a transport failure must not invite duplicate creation.
+            // 元数据已提交，传输失败不能引导用户重复创建连接。
+            self.error = localized("Connection saved. SSH could not start: ", "连接已保存，SSH 无法启动：") + error.localizedDescription
+        }
+        return true
+    }
+
+    func keepQuickSSH(_ id: String) async {
+        guard let bridge, !busy else { return }
+        do {
+            let snapshot = try await bridge.snapshot()
+            _ = await mutate("ssh.quick.keep", ["id": .string(id)], revision: snapshot.revision)
+        } catch { self.error = error.localizedDescription }
+    }
+
+    func cleanupQuickSSH() async {
+        await flushWorkspaceOperations()
+        guard !busy, !shuttingDown, canPruneQuickSSH?() != false, let bridge,
+              groups.contains(where: { $0["sshConnections"].array.contains { $0["temporary"].bool == true && $0["sessions"].array.isEmpty } }) else { return }
+        do {
+            let snapshot = try await bridge.snapshot()
+            _ = await mutate("ssh.quick.prune", [:], revision: snapshot.revision)
+        } catch { self.error = error.localizedDescription }
+    }
+
     func selectSession(_ id: String, focus: Bool = true) async {
-        if selectedID == id { return }
+        if focus { documents.showTerminal(in: inspectorContextKey) }
+        if selectedID == id { if focus { focusRevision += 1 }; return }
         if let operation { _ = await operation.value }
         if await mutate("session.select", ["id": .string(id)]), focus { focusRevision += 1 }
     }
 
     func performControlAction(_ request: JSONValue) async throws -> JSONValue {
-        guard !busy, !shuttingDown, !settingsPresented, !editorRecoveryPresented, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, nameDraft == nil,
+        guard !busy, !shuttingDown, !settingsPresented, !editorRecoveryPresented, !worktreeDeletionPresented, !gitFavoritesRecoveryPresented, !workspaceModalPresented, nameDraft == nil,
               let bridge, let state else {
             throw BridgeFailure(code: "CONTROL_BUSY", message: localized("Finish the current dialog or operation first.", "请先完成当前对话框或操作。"))
         }
@@ -386,12 +458,16 @@ final class WorkspaceModel: ObservableObject {
 
     func closeSession(id target: String? = nil) async {
         guard !busy, let id = target ?? selectedID, let terminal = terminals[id], let bridge else { return }
+        let isSSH = sessionEntries.contains { $0.sessionID == id && $0.session["ssh"] != .null }
         if let operation { _ = await operation.value }
         do {
             await terminal.drainInput()
             await terminal.finishConnection()
             _ = try await bridge.call("host.close", params: .object(["id": .string(id), "generation": terminal.generation.map(JSONValue.string) ?? .null]))
-            if await mutate("session.remove", ["id": .string(id)]) { focusRevision += 1 }
+            if await mutate("session.remove", ["id": .string(id)]) {
+                focusRevision += 1
+                if isSSH { await cleanupQuickSSH() }
+            }
         } catch { self.error = error.localizedDescription }
     }
 

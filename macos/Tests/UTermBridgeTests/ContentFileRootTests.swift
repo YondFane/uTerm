@@ -3,6 +3,63 @@ import XCTest
 @testable import UTermBridge
 
 final class ContentFileRootTests: XCTestCase {
+    func testGitRootNormalizationPreservesChangesAndRejectsInvalidRoots() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let project = base.appendingPathComponent("project 中文")
+        let alias = base.appendingPathComponent("selected link")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: project)
+        let changes: JSONValue = .array([.object(["path": .string("literal 中文.txt"), "index": .string("?"), "working": .string("?")])])
+        let snapshot: JSONValue = .object(["root": .string(alias.path), "changes": changes, "truncated": .bool(false), "branch": .string("main")])
+        let normalized = try ContentFileRoot.normalizingGitRoot(snapshot)
+        XCTAssertNotEqual(snapshot["root"], normalized["root"])
+        XCTAssertEqual(normalized["root"].string, try ContentFileRoot(directory: project).resolvedDirectory.path)
+        XCTAssertEqual(normalized["changes"], changes)
+        XCTAssertEqual(normalized["truncated"], snapshot["truncated"])
+        XCTAssertEqual(normalized["branch"], snapshot["branch"])
+        XCTAssertEqual(try ContentFileRoot.normalizingGitRoot(.null), .null)
+        let invalidValues: [JSONValue] = [.bool(true), .object([:]), .object(["root": .string("relative/path")]), .object(["root": .string("/invalid\0path")])]
+        for invalid in invalidValues {
+            XCTAssertThrowsError(try ContentFileRoot.normalizingGitRoot(invalid))
+        }
+    }
+
+    func testActualGitStatusMatchesCocoaRootForAliasedSelectedSubdirectories() async throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let project = base.appendingPathComponent("project 中文")
+        let nested = project.appendingPathComponent("nested")
+        let alias = base.appendingPathComponent("selected link")
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        try FileManager.default.createSymbolicLink(at: alias, withDestinationURL: project)
+        let git = Process(); git.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        git.arguments = ["-C", project.path, "init", "--initial-branch=main"]
+        git.standardOutput = Pipe(); git.standardError = Pipe()
+        try git.run(); git.waitUntilExit(); XCTAssertEqual(git.terminationStatus, 0)
+        try Data("LITERAL\n".utf8).write(to: nested.appendingPathComponent("literal 中文.txt"))
+        try Data("SIBLING\n".utf8).write(to: project.appendingPathComponent("outside.txt"))
+        let core = try await CoreBridge.open(root: base.appendingPathComponent("store"))
+        do {
+            for selected in [project, alias, alias.appendingPathComponent("nested")] {
+                let root = try ContentFileRoot(directory: selected)
+                let raw = try await core.call("git.fileStatus", params: .object(["directory": .string(root.resolvedDirectory.path)]))
+                let status = try ContentFileRoot.normalizingGitRoot(raw)
+                XCTAssertEqual(status["root"].string, try ContentFileRoot(directory: project).resolvedDirectory.path)
+                XCTAssertEqual(status["changes"], raw["changes"])
+                XCTAssertEqual(status["truncated"], .bool(false))
+                let paths = status["changes"].array.compactMap { $0["path"].string }
+                XCTAssertTrue(paths.contains("nested/literal 中文.txt"))
+                if selected.lastPathComponent == "nested" { XCTAssertFalse(paths.contains("outside.txt")) }
+                for path in paths {
+                    let target = URL(fileURLWithPath: try XCTUnwrap(status["root"].string)).appendingPathComponent(path)
+                    XCTAssertNotNil(root.relativePath(for: target))
+                }
+            }
+            await core.close()
+        } catch { await core.close(); throw error }
+    }
+
     func testAliasKeepsDraftIdentityWhilePickerRejectsEscapesAndPrefixSiblings() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let actual = base.appendingPathComponent("project 中文")

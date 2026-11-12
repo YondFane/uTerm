@@ -186,7 +186,21 @@ enum SSHSmoke {
         reopened.model.name = "Host trust QA"; reopened.model.host = fixture["unknownAlias"].string ?? ""; reopened.model.mode = "alias"; reopened.model.port = ""; reopened.model.authentication = "password"; reopened.model.password = fixture["password"].string ?? "isolated-qa-password"; reopened.model.rootPath = fixture["passwordRemote"].string ?? ""
         guard await reopened.model.save() else { throw BridgeFailure(code: "SSH_QA", message: reopened.model.error) }
         let connecting = Task { @MainActor in await reopened.model.connectFiles() }
-        try await TerminalSmoke.wait("Native host trust sheet through actual askpass") { model.sshTrustPresented && model.sshTrustAlert?.window.isVisible == true }
+        do {
+            try await TerminalSmoke.wait("Native host trust sheet through actual askpass") {
+                (model.sshTrustPresented && model.sshTrustAlert?.window.isVisible == true) || (!reopened.model.busy && !reopened.model.error.isEmpty)
+            }
+            guard model.sshTrustPresented && model.sshTrustAlert?.window.isVisible == true else { throw BridgeFailure(code: "SSH_QA_TRUST", message: reopened.model.error) }
+        } catch {
+            let pending = try? await bridge.call("ssh.trust.pending")
+            report["nativeTrustFailureDiagnostics"] = ["pendingCount": pending?.array.count ?? -1, "pollerExists": model.sshTrustTask != nil,
+                "pollerCancelled": model.sshTrustTask?.isCancelled ?? true, "presented": model.sshTrustPresented,
+                "alertVisible": model.sshTrustAlert?.window.isVisible ?? false, "connectBusy": reopened.model.busy,
+                "connectError": reopened.model.error, "workspaceError": model.error,
+                "profileAuthentication": reopened.model.profile["authentication"].string ?? "", "profileHasCredential": reopened.model.profile["credential_id"].string != nil,
+                "keyWindowVisible": NSApp.keyWindow?.isVisible ?? false, "keyWindowHasSheet": NSApp.keyWindow?.attachedSheet != nil]
+            throw error
+        }
         guard let alert = model.sshTrustAlert, let view = alert.window.contentView,
               let cancel = TerminalSmoke.descendants(view).compactMap({ $0 as? NSButton }).first(where: { $0.title == "Cancel" }) else { throw BridgeFailure(code: "SSH_QA", message: "Real host trust Cancel button missing") }
         try await capture(alert.window, "native-ssh-host-trust-en-dark.png"); captures.append("native-ssh-host-trust-en-dark.png")

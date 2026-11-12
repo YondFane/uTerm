@@ -162,7 +162,14 @@ enum DatabaseSmoke {
         native.setContentSize(NSSize(width: 1080, height: 720))
         try await wait(content, "document.documentElement.lang==='en'")
         try await EditorSmoke.click(content, title: "Disconnect")
-        let status = try await bridge.call("database.status")
+        try await wait(content, "!![...document.querySelectorAll('.database-connection-bar button')].find(b=>b.textContent.trim()==='Connect' && !b.disabled)")
+        var status = try await bridge.call("database.status")
+        let disconnectDeadline = Date().addingTimeInterval(10)
+        while (status["connected"] != .bool(false) || status["busy"] != .bool(false)) && Date() < disconnectDeadline {
+            try await Task.sleep(for: .milliseconds(50))
+            status = try await bridge.call("database.status")
+        }
+        report["databaseDisconnectStatus"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(status))
         guard status["connected"] == .bool(false), status["busy"] == .bool(false) else { throw BridgeFailure(code: "DB_CLEANUP", message: "Database work remained after disconnect") }
         report["nativeDatabaseCaptures"] = captures
         report["databaseService"] = "Real isolated PostgreSQL"

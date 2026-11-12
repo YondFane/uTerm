@@ -6,8 +6,15 @@ import { tauriContentPort } from "../src/lib/tauri-content.ts";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-for (const platform of ["Tauri", "WebKit"]) {
-  test(`${platform} database writes retain their caller after cancellation until the actual result`, async (t) => {
+for (const [platform, method] of [
+  ["Tauri", "database_request"],
+  ["Tauri", "quick_ssh_connect"],
+  ["Tauri", "pdf_marks_write"],
+  ["WebKit", "database_request"],
+  ["WebKit", "quick_ssh_connect"],
+  ["WebKit", "pdf_marks_write"],
+]) {
+  test(`${platform} ${method} writes retain their caller after cancellation until the actual result`, async (t) => {
     const previous = global.window;
     global.window = {};
     const upstream = deferred();
@@ -36,8 +43,18 @@ for (const platform of ["Tauri", "WebKit"]) {
             new EventTarget(),
           );
     if (platform === "Tauri")
-      mockIPC(() => {
+      mockIPC((command, args) => {
+        if (method === "pdf_marks_write") {
+          assert.equal(command, "shared_core_request");
+          const envelope = JSON.parse(args.request);
+          assert.equal(envelope.method, "pdf.marks.write");
+          assert.equal(envelope.params.path, "fixture.pdf");
+        }
         writes++;
+        if (method === "pdf_marks_write")
+          return upstream.promise.then((result) =>
+            JSON.stringify({ version: 1, id: JSON.parse(args.request).id, result }),
+          );
         return upstream.promise;
       });
     const scope = new ContentScope(port, "database-cancel");
@@ -51,8 +68,16 @@ for (const platform of ["Tauri", "WebKit"]) {
     let finished = false;
     const result = scope
       .call(
-        "database_request",
-        { handle: "qa", request: { op: "query", sql: "UPDATE fixture SET value=1" } },
+        method,
+        method === "pdf_marks_write"
+          ? {
+              directory: "/qa",
+              path: "fixture.pdf",
+              version: "a".repeat(64),
+              expectedRevision: "b".repeat(64),
+              marks: [],
+            }
+          : { handle: "qa", request: { op: "query", sql: "UPDATE fixture SET value=1" } },
         controller.signal,
       )
       .finally(() => {
@@ -193,7 +218,12 @@ test("content abort and timeout suppress late responses without claiming writes 
   assert.equal(h.cancelled.at(-1).document, "file-slow");
   slow.close();
 });
-for (const eventKind of ["editor-close-request", "file-focus-line"]) {
+for (const eventKind of [
+  "editor-close-request",
+  "file-focus-line",
+  "content-font-adjust",
+  "content-settings-changed",
+]) {
   test(`closing a content document drains ${eventKind} and rejects pending deliveries`, async () => {
     const h = harness();
     const scope = new ContentScope(h.port, "A");

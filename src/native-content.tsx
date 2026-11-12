@@ -1,25 +1,94 @@
 import { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { FileEditor, UnsavedDialog } from "./components/FileEditor";
-import { SettingsProvider } from "./lib/SettingsContext";
+import { SettingsProvider, useSettings } from "./lib/SettingsContext";
 import { contentInvoke, listenContent } from "./lib/content-host";
 import { activeLanguage, localizeMessage, setUiLanguage, tx } from "./lib/i18n";
 import { readSettings, type Settings } from "./lib/settings";
+import { isDirty } from "./lib/file-document";
 import { useFileDocument } from "./lib/useFileDocument";
 import "./styles.css";
 import "./native-content.css";
+import "./assets/fonts/fonts.css";
+import { BundledFontReady } from "./components/BundledFontReady";
 import { NativeGit } from "./native-git";
 import { NativeDatabase } from "./native-database";
 import { NativeRedis } from "./native-redis";
+import { NativeGitHubPR } from "./native-github-pr";
 import { NativeGitHub } from "./native-github";
+import { NativeFiles } from "./native-files";
+import { NativeSshQuick } from "./native-ssh-quick";
 
 interface Context {
-  kind?: "file" | "git" | "github" | "database" | "redis";
+  kind?: "file" | "files" | "git" | "github" | "database" | "redis" | "ssh-quick" | "github-pr";
   directory: string;
   path: string;
   line?: number;
   settings: Settings;
   editable: boolean;
+  embedded?: boolean;
+}
+function ContentFontCommands({ kind }: { kind: Context["kind"] }) {
+  const { resizeFont, reload } = useSettings();
+  const resize = useRef(resizeFont);
+  resize.current = resizeFont;
+  const [error, setError] = useState("");
+  const [settingsError, setSettingsError] = useState("");
+  const reloadSettings = useRef(reload);
+  reloadSettings.current = reload;
+  useEffect(() => {
+    let disposed = false;
+    const subscription = listenContent("content-settings-changed", () => {
+      void reloadSettings
+        .current()
+        .then(() => {
+          if (!disposed) setSettingsError("");
+        })
+        .catch((reason) => {
+          if (!disposed) setSettingsError(String(reason));
+        });
+    }).catch((reason) => {
+      if (!disposed) setSettingsError(String(reason));
+    });
+    return () => {
+      disposed = true;
+      void subscription.then((stop) => stop?.());
+    };
+  }, []);
+  useEffect(() => {
+    if (kind && kind !== "file" && kind !== "git") return;
+    let disposed = false;
+    const subscription = listenContent<number>("content-font-adjust", (delta) => {
+      if (delta !== 1 && delta !== -1) return;
+      const eligible =
+        kind === "git"
+          ? document.querySelector(".git-diff pre")
+          : document.querySelector(".code-editor-host, .markdown-preview");
+      if (!eligible || document.querySelector(".html-preview, dialog[open]")) return;
+      void resize
+        .current(kind === "git" ? "gitDiffFontSize" : "fileFontSize", delta, true)
+        .then(() => {
+          if (!disposed) setError("");
+        })
+        .catch((reason) => {
+          if (!disposed) setError(String(reason));
+        });
+    }).catch((reason) => {
+      if (!disposed) setError(String(reason));
+      return undefined;
+    });
+    return () => {
+      disposed = true;
+      void subscription.then((remove) => remove?.());
+    };
+  }, [kind]);
+  return error || settingsError ? (
+    <p role="alert" className="native-content-command-error">
+      {error
+        ? tx("无法保存字号：{p0}", { p0: localizeMessage(error) })
+        : localizeMessage(settingsError)}
+    </p>
+  ) : null;
 }
 function Content({ context }: { context: Context }) {
   const state = useFileDocument(
@@ -40,6 +109,17 @@ function Content({ context }: { context: Context }) {
   const [focusError, setFocusError] = useState("");
   const [focusRequest, setFocusRequest] = useState({ line: context.line ?? 0, serial: 0 });
   const appliedFocus = useRef(-1);
+  const dirty = isDirty(editor.document);
+  useEffect(() => {
+    if (!context.editable || !context.embedded) return;
+    let disposed = false;
+    void contentInvoke("content_editor_state", { dirty }).catch((reason) => {
+      if (!disposed) setFocusError(String(reason));
+    });
+    return () => {
+      disposed = true;
+    };
+  }, [dirty, context.editable, context.embedded]);
   useEffect(() => {
     void current.current.open(context.directory, context.path, context.line);
     let disposed = false;
@@ -84,7 +164,7 @@ function Content({ context }: { context: Context }) {
     <main className="native-content">
       {focusError && <p role="alert">{localizeMessage(focusError)}</p>}
       {editor.document ? (
-        <FileEditor editor={editor} allowPdfAnnotations={false} />
+        <FileEditor editor={editor} />
       ) : (
         <p role={editor.error ? "alert" : "status"}>
           {editor.error ? localizeMessage(editor.error) : tx("文件")}
@@ -136,17 +216,26 @@ async function start() {
       };
       root.render(
         <SettingsProvider content={content}>
-          {context.kind === "database" ? (
-            <NativeDatabase />
-          ) : context.kind === "redis" ? (
-            <NativeRedis />
-          ) : context.kind === "github" ? (
-            <NativeGitHub directory={context.directory} />
-          ) : context.kind === "git" ? (
-            <NativeGit directory={context.directory} />
-          ) : (
-            <Content context={context} />
-          )}
+          <BundledFontReady>
+            <ContentFontCommands kind={context.kind} />
+            {context.kind === "ssh-quick" ? (
+              <NativeSshQuick />
+            ) : context.kind === "github-pr" ? (
+              <NativeGitHubPR />
+            ) : context.kind === "files" ? (
+              <NativeFiles directory={context.directory} />
+            ) : context.kind === "database" ? (
+              <NativeDatabase />
+            ) : context.kind === "redis" ? (
+              <NativeRedis />
+            ) : context.kind === "github" ? (
+              <NativeGitHub directory={context.directory} />
+            ) : context.kind === "git" ? (
+              <NativeGit directory={context.directory} />
+            ) : (
+              <Content context={context} />
+            )}
+          </BundledFontReady>
         </SettingsProvider>,
       );
     } catch (reason) {

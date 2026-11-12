@@ -5,6 +5,11 @@ import UTermBridge
 @MainActor
 final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     let id: String
+    lazy var search = NativeTerminalSearch(session: self)
+    var name: String { entry.session["name"].string ?? localized("Terminal", "终端") }
+    var directory: String { entry.directory }
+    var supportsRestart: Bool { taskGeneration == nil && entry.session["ssh"] == .null }
+    var acceptsInput: Bool { taskGeneration == nil && receivedInitialFrame && inputControl?.owned != false && generation != nil && error.isEmpty && !exited && !reconnecting }
     let view: NativeTerminalView
     private var appliedSettings: JSONValue = .null
     private var appliedCatalog: JSONValue = .null
@@ -224,6 +229,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             applyingTaskLogViewport = false
         }
         qaRenderedBytes += packet.bytes.count
+        search.outputChanged()
         qaRenderedFrames += 1
         qaLargestFrame = max(qaLargestFrame, packet.bytes.count)
         let wasExited = exited
@@ -239,6 +245,28 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
             qaLastAckUptime = ProcessInfo.processInfo.systemUptime
         } catch { self.error = error.localizedDescription; changed?() }
         await resizeIfNeeded()
+    }
+
+    func restart() async {
+        guard supportsRestart, exited, !reconnecting else { return }
+        reconnecting = true
+        defer { reconnecting = false; changed?() }
+        if let connecting { await connecting.value }
+        guard exited, generation != nil else { return }
+        let previous = attachment
+        await drainInput()
+        do {
+            _ = try await bridge.call("terminal.action", params: .object(["attachment": .string(previous), "action": .string("restart")]))
+            guard attachment == previous else { return }
+            attachment = UUID().uuidString; self.generation = nil; inputControl = nil
+            receivedInitialFrame = false; hostSize = nil; exited = false; error = ""; input.removeAll()
+            search.close()
+            await connect()
+        } catch {
+            self.error = error.localizedDescription.contains("SESSION_HOST_UPGRADE_REQUIRED")
+                ? localized("The host cannot restart sessions. Close sessions, quit and reopen the app; existing processes were not stopped.", "后台服务不支持会话重启。请关闭会话后退出并重新打开应用；已有进程未被终止。")
+                : error.localizedDescription
+        }
     }
 
     func reconnect() async {
@@ -261,7 +289,7 @@ final class TerminalSession: NSObject, @preconcurrency TerminalViewDelegate {
     }
 
     func enqueue(_ bytes: Data) {
-        guard taskGeneration == nil, receivedInitialFrame, inputControl?.owned != false, generation != nil, error.isEmpty, !exited, !reconnecting else { return }
+        guard acceptsInput else { return }
         guard input.count + bytes.count <= 1024 * 1024 else {
             error = localized("Input queue is full. Wait before pasting again.", "输入队列已满，请等待后再粘贴。")
             changed?(); return

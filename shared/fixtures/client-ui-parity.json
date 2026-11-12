@@ -5,6 +5,7 @@
   "appearances": ["dark", "light"],
   "widths": [1100, 640],
   "height": 720,
+  "ordinaryOperations": ["terminal-restart"],
   "fontSize": 17,
   "automaticUpdates": false,
   "settingsScenes": [
@@ -48,5 +49,60 @@
     "README.md": "# UI parity\n\nTemporary comparison project.\n"
   },
   "marker": "PERSONAL_READY 中文",
-  "command": "printf 'PERSONAL_%s 中文\\n' READY"
+  "command": "printf 'PERSONAL_%s 中文\\n' READY",
+  "pdf": {
+    "path": ".ui-parity-pdf/fixture.pdf",
+    "base64": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCA0MjAgMjQwXSAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA1IDAgUiA+PiA+PiAvQ29udGVudHMgNCAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA1NiA+PgpzdHJlYW0KQlQgL0YxIDIwIFRmIDMwIDE5MCBUZCAodVRlcm0gUERGIHBhcml0eSBmaXh0dXJlKSBUaiBFVAplbmRzdHJlYW0KZW5kb2JqCjUgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNhID4+CmVuZG9iagp4cmVmCjAgNgowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1OCAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4gCjAwMDAwMDAyNDEgMDAwMDAgbiAKMDAwMDAwMDM0NiAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXplIDYgL1Jvb3QgMSAwIFIgPj4Kc3RhcnR4cmVmCjQxNgolJUVPRgo=",
+    "sha256": "69dabead7571ebf94d30c1d5250f75b94585d64f8d6b165079e5b4ca9b1ec237",
+    "mark": {
+      "id": "ui-parity-mark",
+      "page": 1,
+      "x": 0.1,
+      "y": 0.125,
+      "width": 0.4,
+      "height": 0.25
+    }
+  },
+  "contentScenes": [
+    {
+      "language": "en",
+      "appearance": "dark",
+      "width": 1100,
+      "height": 720
+    },
+    {
+      "language": "zh-Hans",
+      "appearance": "light",
+      "width": 640,
+      "height": 720
+    }
+  ],
+  "quickAddress": "ssh://qa:fixture@example.invalid",
+  "quickTerminalCommand": "export PS1='ui-parity > '; printf '\\033[3J\\033[2J\\033[H'; printf 'PERSONAL_%s 中文\\n' READY",
+  "quickScenes": [
+    {
+      "language": "en",
+      "appearance": "dark",
+      "width": 1100,
+      "height": 720
+    },
+    {
+      "language": "zh-Hans",
+      "appearance": "light",
+      "width": 640,
+      "height": 720
+    }
+  ],
+  "github": {
+    "repository": "fixture-owner/fixture-repo",
+    "title": "Keep `literal` $(literal) 中文",
+    "body": "Line one\n$(literal)\n`literal` 中文",
+    "base": "main",
+    "head": "qa-feature",
+    "draft": true
+  },
+  "githubScenes": [
+    { "language": "en", "appearance": "dark", "width": 1100, "height": 720 },
+    { "language": "zh-Hans", "appearance": "light", "width": 640, "height": 720 }
+  ]
 }

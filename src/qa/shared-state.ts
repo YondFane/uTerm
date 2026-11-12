@@ -1,3 +1,6 @@
+import { chromeContractSHA256 } from "../lib/chrome.generated";
+import fontManifest from "../assets/fonts/manifest.json" with { type: "json" };
+import chrome from "../../shared/contracts/chrome-ui-v1.json" with { type: "json" };
 import { translate } from "../lib/i18n";
 import parityFixtureJSON from "../../shared/fixtures/client-ui-parity.json?raw";
 import editorFixtureJSON from "../../shared/fixtures/editor-draft-qa.json?raw";
@@ -24,6 +27,7 @@ import type {
   CoreFileDocument,
   CoreGitFavoriteRecoveryCatalog,
   CoreGitFavorites,
+  CoreSnapshot,
 } from "../lib/core-contract.generated";
 
 interface Context {
@@ -56,6 +60,7 @@ interface Context {
 const parityFixture = JSON.parse(parityFixtureJSON) as {
   workspaceName: string;
   projectName: string;
+  files: Record<string, string>;
   fontSize: number;
   automaticUpdates: boolean;
   databaseComponentIds: string[];
@@ -77,6 +82,25 @@ const parityFixture = JSON.parse(parityFixtureJSON) as {
     height: number;
   }[];
   settingsSections: { id: string; label: string }[];
+  pdf: { path: string; base64: string; sha256: string; mark: import("../lib/pdf-marks").PdfMark };
+  contentScenes: {
+    language: "en" | "zh-Hans";
+    appearance: string;
+    width: number;
+    height: number;
+  }[];
+  quickAddress: string;
+  quickTerminalCommand: string;
+  github: {
+    repository: string;
+    title: string;
+    body: string;
+    base: string;
+    head: string;
+    draft: boolean;
+  };
+  githubScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
+  quickScenes: { language: "en" | "zh-Hans"; appearance: string; width: number; height: number }[];
 };
 const backupKey = "uterm.desktop.editorDraft.v1.backup";
 const sentinel = "opaque QA draft backup retained byte-for-byte";
@@ -112,6 +136,7 @@ async function observeCore(method: string, params?: Parameters<typeof coreReques
   assert(
     [
       "snapshot.read",
+      "session.entries",
       "editor.drafts.document",
       "git.favorites.read",
       "git.favorites.recovery.list",
@@ -346,15 +371,210 @@ async function runUiParity() {
           current?.generation === original.generation,
           "Parity layout restarted the selected terminal",
         );
+        const toolbarBounds = document.querySelector("main > .toolbar")?.getBoundingClientRect();
+        const toolbarHeight = toolbarBounds?.height;
+        const toolbarTop = toolbarBounds?.top;
+        assert(
+          toolbarTop !== undefined && Math.abs(toolbarTop) < 1,
+          "Actual toolbar does not begin at the workspace top",
+        );
+        assert(
+          toolbarHeight !== undefined &&
+            Math.abs(toolbarHeight - chrome.metrics.titlebarHeight) < 1,
+          "Actual toolbar differs from shared chrome height",
+        );
+        const sidebarWidth = document
+          .querySelector("#workspace-sidebar")
+          ?.getBoundingClientRect().width;
+        const railBounds = document.querySelector(".sidebar-rail")!.getBoundingClientRect();
+        const allButtonBounds = document
+          .querySelector(".sidebar-rail-button")!
+          .getBoundingClientRect();
+        const sidebarRailGeometry = {
+          sidebarRailLeft: railBounds.left,
+          sidebarRailWidth: railBounds.width,
+          sidebarAllButtonLeft: allButtonBounds.left,
+          sidebarAllButtonTop: allButtonBounds.top,
+          sidebarAllButtonWidth: allButtonBounds.width,
+          sidebarAllButtonHeight: allButtonBounds.height,
+        };
+        for (const [key, expected] of Object.entries({
+          sidebarRailLeft: 0,
+          sidebarRailWidth: chrome.metrics.sidebarRailWidth,
+          sidebarAllButtonLeft:
+            (chrome.metrics.sidebarRailWidth - chrome.metrics.railButtonSize) / 2,
+          sidebarAllButtonTop: chrome.metrics.titlebarHeight + 8,
+          sidebarAllButtonWidth: chrome.metrics.railButtonSize,
+          sidebarAllButtonHeight: chrome.metrics.railButtonSize,
+        }))
+          assert(
+            Math.abs(sidebarRailGeometry[key as keyof typeof sidebarRailGeometry] - expected) < 1,
+            `Clipped actual ${key}`,
+          );
+        const expectedSidebar = Math.min(
+          chrome.metrics.sidebarDefaultWidth,
+          Math.max(
+            chrome.metrics.sidebarMinimumWide,
+            Math.min(
+              chrome.metrics.sidebarMaximumWidth,
+              innerWidth * chrome.metrics.sidebarMaximumRatio,
+            ),
+          ),
+        );
+        assert(
+          sidebarWidth !== undefined && Math.abs(sidebarWidth - expectedSidebar) < 1,
+          "Actual sidebar differs from shared responsive bounds",
+        );
+        const inspectorWidth = document
+          .querySelector(".app-shell > .file-panel")
+          ?.getBoundingClientRect().width;
+        const inspector = document.querySelector(".app-shell > .file-panel")!;
+        const inspectorGeometry = {
+          inspectorTop: inspector.getBoundingClientRect().top,
+          inspectorHeight: inspector.getBoundingClientRect().height,
+          inspectorHeaderTop: inspector.querySelector(".inspector-header")!.getBoundingClientRect()
+            .top,
+          inspectorFooterBottom: inspector
+            .querySelector(".file-panel-footer")!
+            .getBoundingClientRect().bottom,
+          inspectorViewportHeight: innerHeight,
+        };
+        for (const [key, expected] of Object.entries({
+          inspectorTop: 0,
+          inspectorHeight: innerHeight,
+          inspectorHeaderTop: 0,
+          inspectorFooterBottom: innerHeight,
+          inspectorViewportHeight: innerHeight,
+        })) {
+          assert(
+            Math.abs(inspectorGeometry[key as keyof typeof inspectorGeometry] - expected) < 1,
+            `Actual ${key} does not span the full tools height`,
+          );
+        }
+        const remaining = Math.max(
+          chrome.metrics.inspectorMinimumAvailable,
+          innerWidth - expectedSidebar,
+        );
+        const expectedInspector = Math.max(
+          chrome.metrics.panelCollapseWidth,
+          Math.min(
+            remaining - chrome.metrics.mainMinimumWidth,
+            remaining * chrome.metrics.inspectorMaximumRatio,
+            remaining * chrome.metrics.inspectorDefaultRatio,
+          ),
+        );
+        assert(
+          inspectorWidth !== undefined && Math.abs(inspectorWidth - expectedInspector) < 1,
+          "Actual tools width differs from shared responsive bounds",
+        );
+        const terminalSettings = await settings();
+        const fontSize = terminalSettings.fontSize;
+        const paneBounds = terminal.getBoundingClientRect();
+        const terminalBounds = terminal.querySelector(".terminal")!.getBoundingClientRect();
+        const headerBounds = terminal.querySelector(".session-controls")!.getBoundingClientRect();
+        const terminalGeometry = {
+          terminalInsetLeft: terminalBounds.left - paneBounds.left,
+          terminalInsetRight: paneBounds.right - terminalBounds.right,
+          terminalInsetBottom: paneBounds.bottom - terminalBounds.bottom,
+          terminalHeaderTop: headerBounds.top - paneBounds.top,
+          terminalHeaderHeight: headerBounds.height,
+          terminalViewportGap: terminalBounds.top - headerBounds.bottom,
+        };
+        for (const key of [
+          "terminalInsetLeft",
+          "terminalInsetRight",
+          "terminalInsetBottom",
+          "terminalHeaderTop",
+        ] as const)
+          assert(
+            Math.abs(terminalGeometry[key] - terminalSettings.windowPadding - 1) < 1,
+            `Wrong actual ${key}`,
+          );
+        assert(
+          Math.abs(terminalGeometry.terminalViewportGap - 12) < 1,
+          "Wrong terminal viewport gap",
+        );
+        const fontQuery = `${fontSize}px "Cascadia Code"`;
+        const fontFaces = await document.fonts.load(fontQuery);
+        await document.fonts.ready;
+        assert(
+          fontFaces.length > 0 && document.fonts.check(fontQuery),
+          `Bundled terminal font was not loaded: ${JSON.stringify({
+            query: fontQuery,
+            status: document.fonts.status,
+            faces: fontFaces.map((face) => ({
+              family: face.family,
+              style: face.style,
+              weight: face.weight,
+              status: face.status,
+            })),
+          })}`,
+        );
+        const fontContext = document.createElement("canvas").getContext("2d");
+        assert(fontContext, "Cannot measure actual terminal font");
+        fontContext.font = fontQuery;
+        const sectionHeader = document
+          .querySelector(".sidebar-section .section-header")
+          ?.getBoundingClientRect();
+        const sidebarHeader = document.querySelector(".sidebar-header")?.getBoundingClientRect();
+        const laterSection = document.querySelectorAll(".sidebar-section")[1];
+        const sidebarGeometry = {
+          sidebarRowHeight: document.querySelector(".sidebar-row")?.getBoundingClientRect().height,
+          sidebarSectionHeight: sectionHeader?.height,
+          sidebarSectionGap: laterSection
+            ? parseFloat(getComputedStyle(laterSection).marginTop)
+            : undefined,
+          sidebarListTop:
+            sectionHeader && sidebarHeader ? sectionHeader.top - sidebarHeader.bottom : undefined,
+        };
+        for (const key of [
+          "sidebarRowHeight",
+          "sidebarSectionHeight",
+          "sidebarSectionGap",
+          "sidebarListTop",
+        ] as const) {
+          const actual = sidebarGeometry[key];
+          assert(
+            actual !== undefined && Math.abs(actual - chrome.metrics[key]) < 1,
+            `Actual ${key} differs from shared geometry`,
+          );
+        }
+        const fileGitStates = () =>
+          Object.fromEntries(
+            Object.keys(parityFixture.files).map((path) => [
+              path,
+              [...document.querySelectorAll<HTMLElement>(".file-row")].find(
+                (row) => row.dataset.path === path,
+              )?.dataset.gitStatus,
+            ]),
+          );
+        await until(
+          () => Object.values(fileGitStates()).every((state) => state === "untracked"),
+          "actual file Git state decorations",
+        );
         await scene(`workspace-${language}-${appearance}-${width}`, {
+          chromeContractSHA256,
+          toolbarHeight,
+          toolbarTop,
+          sidebarWidth,
+          inspectorWidth,
+          ...inspectorGeometry,
+          ...terminalGeometry,
           language,
           appearance,
           width: innerWidth,
           height: innerHeight,
-          scenario: "toolbar-sidebar-two-session-tabs-files",
+          scenario: "toolbar-sidebar-two-sessions-files",
           generationRetained: true,
           filesReadable: true,
-          fontSize: (await settings()).fontSize,
+          fileGitStates: fileGitStates(),
+          fontSize,
+          fontFamily: fontManifest.family,
+          fontFace: "CascadiaCode-Regular",
+          fontSourceSHA256: fontManifest.files["CascadiaCode-Regular.ttf"],
+          fontCharacterWidth: fontContext.measureText("M").width,
+          ...sidebarGeometry,
+          ...sidebarRailGeometry,
           projectName: parityFixture.projectName,
           workspaceName: parityFixture.workspaceName,
         });
@@ -488,6 +708,465 @@ async function runUiParity() {
       assert(draftUnchanged, "Settings capture shows unsaved values or an error");
     }
     document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+  }
+  await invoke("qa_performance_window", { width: 1100, height: 720 });
+  await until(() => innerWidth === 1100 && innerHeight === 720, "actual restart capture size");
+  await flushSharedState();
+  const workspaceBeforeRestart = (await observeCore("snapshot.read")) as unknown as CoreSnapshot;
+  await invoke("control_session", { id: "ui-parity-0", action: "send", text: "exit\r" });
+  const restart = await until(
+    () =>
+      visibleTerminal("ui-parity-0")?.querySelector<HTMLButtonElement>(
+        `button[aria-label="${translate("en", "重新启动")}"],button[aria-label="${translate("zh-Hans", "重新启动")}"]`,
+      ),
+    "actual exited-shell restart button",
+  );
+  restart.click();
+  const restarted = await until(async () => {
+    const current = (
+      await invoke<{ sessions: { spec: { id: string }; generation: string; running: boolean }[] }>(
+        "qa_host_status",
+      )
+    ).sessions.find((entry) => entry.spec.id === "ui-parity-0");
+    return current?.running && current.generation !== original.generation ? current : null;
+  }, "actual restarted process generation");
+  await until(() => {
+    const current = terminalPerformanceSnapshot("ui-parity-0");
+    return current?.writable && !current.text.includes(parityFixture.marker);
+  }, "restarted input ownership");
+  await invoke("control_session", {
+    id: "ui-parity-0",
+    action: "send",
+    text: parityFixture.command + "\r",
+  });
+  await until(
+    () => terminalPerformanceSnapshot("ui-parity-0")?.text.includes(parityFixture.marker),
+    "actual restarted terminal output",
+  );
+  const workspaceAfterRestart = (await observeCore("snapshot.read")) as unknown as CoreSnapshot;
+  assert(
+    JSON.stringify(workspaceBeforeRestart.document.workspace) ===
+      JSON.stringify(workspaceAfterRestart.document.workspace),
+    "Explicit restart changed canonical workspace descriptors",
+  );
+  assert(
+    visibleTerminal("ui-parity-0") === terminal,
+    "Explicit restart replaced the terminal view",
+  );
+  await scene("terminal-restart", {
+    passed: true,
+    actualRestartButton: true,
+    parsedUnicodeOutput: true,
+    canonicalWorkspaceRetained: true,
+    terminalViewRetained: true,
+    generationBeforeRestart: original.generation,
+    restartedGeneration: restarted.generation,
+  });
+  const backgroundClose = await until(
+    () =>
+      [...document.querySelectorAll<HTMLButtonElement>(".session-close")].find((button) =>
+        [
+          translate("en", "关闭会话：{p0}", { p0: parityFixture.sessions[1] }),
+          translate("zh-Hans", "关闭会话：{p0}", { p0: parityFixture.sessions[1] }),
+        ].includes(button.getAttribute("aria-label") ?? ""),
+      ),
+    "actual background session close before PDF comparison",
+  );
+  backgroundClose.click();
+  await until(async () => {
+    const entries = (await observeCore("session.entries")) as unknown as {
+      session: { id: string };
+    }[];
+    const status = await invoke<{ sessions: { spec: { id: string }; generation: string }[] }>(
+      "qa_host_status",
+    );
+    return (
+      entries.length === 1 &&
+      entries[0].session.id === "ui-parity-0" &&
+      status.sessions.length === 1 &&
+      status.sessions[0].spec.id === "ui-parity-0" &&
+      status.sessions[0].generation === restarted.generation
+    );
+  }, "matching single-session PDF fixture and retained process");
+  const pdfContext = await invoke<Context>("qa_context");
+  const pdfFile = (await coreRequest("files.read", {
+    directory: pdfContext.project,
+    path: parityFixture.pdf.path,
+  })) as unknown as { version: string; kind: string };
+  assert(
+    pdfFile.kind === "pdf" && pdfFile.version === parityFixture.pdf.sha256,
+    "Shared PDF fixture bytes differ",
+  );
+  const pdfTarget = {
+    directory: pdfContext.project,
+    path: parityFixture.pdf.path,
+    version: pdfFile.version,
+  };
+  const pdfMarks = async () =>
+    (await coreRequest("pdf.marks.read", pdfTarget)) as unknown as {
+      revision: string;
+      marks: unknown[];
+    };
+  const initialMarks = await pdfMarks();
+  await coreRequest("pdf.marks.write", {
+    ...pdfTarget,
+    expectedRevision: initialMarks.revision,
+    marks: [parityFixture.pdf.mark],
+  });
+  const pdfReady = async (count: number) =>
+    until(() => {
+      const viewer = document.querySelector(".pdf-reader");
+      return (
+        viewer &&
+        viewer.querySelectorAll(".pdf-mark").length === count &&
+        viewer.querySelector<HTMLCanvasElement>("canvas[data-rendered=true]") &&
+        viewer.querySelector<HTMLButtonElement>(".pdf-controls button[aria-pressed]")?.disabled ===
+          false
+      );
+    }, "actual PDF canvas and acknowledged highlights");
+  const openPdf = async (count: number) => {
+    const folder = await until(
+      () => document.querySelector<HTMLButtonElement>('.file-row[data-path=".ui-parity-pdf"]'),
+      "shared PDF fixture folder",
+    );
+    if (folder.getAttribute("aria-expanded") !== "true") folder.click();
+    const file = await until(
+      () =>
+        document.querySelector<HTMLButtonElement>(
+          `.file-row[data-path="${parityFixture.pdf.path}"]`,
+        ),
+      "shared PDF file row",
+    );
+    file.click();
+    await pdfReady(count);
+    const select = document.querySelector<HTMLSelectElement>(".pdf-layout nav select")!;
+    select.value = "marks";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  const closePdf = async () => {
+    const close = await until(
+      () =>
+        [...document.querySelectorAll<HTMLButtonElement>(".workspace-tab-close")].find((button) =>
+          button.getAttribute("aria-label")?.includes(parityFixture.pdf.path),
+        ),
+      "actual PDF workspace close tab",
+    );
+    close.click();
+    await until(() => !document.querySelector(".pdf-reader"), "closed actual PDF workspace view");
+  };
+  await openPdf(1);
+  const removeMark = await until(
+    () =>
+      [...document.querySelectorAll<HTMLButtonElement>(".pdf-layout nav button")].find((button) =>
+        [translate("en", "删除高亮"), translate("zh-Hans", "删除高亮")].includes(
+          button.textContent?.trim() ?? "",
+        ),
+      ),
+    "actual highlight removal button",
+  );
+  removeMark.click();
+  await pdfReady(0);
+  const removedMarks = await pdfMarks();
+  assert(removedMarks.marks.length === 0, "Highlight removal did not reach shared storage");
+  await closePdf();
+  await openPdf(0);
+  await closePdf();
+  await coreRequest("pdf.marks.write", {
+    ...pdfTarget,
+    expectedRevision: removedMarks.revision,
+    marks: [parityFixture.pdf.mark],
+  });
+  await openPdf(1);
+  const pdfView = document.querySelector(".pdf-reader");
+  for (const pdfScene of parityFixture.contentScenes) {
+    await open();
+    await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+    await choose(
+      [translate("en", "应用语言"), translate("zh-Hans", "应用语言")],
+      pdfScene.language,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await open();
+    await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+    await choose(
+      [translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")],
+      pdfScene.appearance,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await invoke("qa_performance_window", { width: pdfScene.width, height: pdfScene.height });
+    await until(
+      () => innerWidth === pdfScene.width && innerHeight === pdfScene.height,
+      "actual PDF capture size",
+    );
+    await pdfReady(1);
+    await until(
+      () =>
+        [...document.querySelectorAll(".pdf-layout nav button")].some(
+          (button) => button.textContent?.trim() === translate(pdfScene.language, "删除高亮"),
+        ),
+      "localized actual PDF controls",
+    );
+    assert(document.querySelector(".pdf-reader") === pdfView, "Settings replaced the PDF view");
+    const unchanged = (await coreRequest("files.read", {
+      directory: pdfContext.project,
+      path: parityFixture.pdf.path,
+    })) as unknown as { version: string };
+    assert(unchanged.version === pdfFile.version, "Annotations changed PDF source bytes");
+    const savedMarks = (await pdfMarks()).marks as Record<string, unknown>[];
+    assert(
+      savedMarks.length === 1 &&
+        Object.entries(parityFixture.pdf.mark).every(
+          ([key, value]) => savedMarks[0][key] === value,
+        ),
+      "Unexpected saved PDF marks",
+    );
+    assert(
+      document.querySelector(".pdf-mark")?.getAttribute("data-mark-id") ===
+        parityFixture.pdf.mark.id,
+      "Rendered PDF highlight differs",
+    );
+    await scene(`pdf-highlights-${pdfScene.language}-${pdfScene.appearance}-${pdfScene.width}`, {
+      ...pdfScene,
+      passed: true,
+      pdfSHA256: pdfFile.version,
+      markID: parityFixture.pdf.mark.id,
+      marksCount: 1,
+      fixtureSessionCount: 1,
+      filesFolderExpanded: true,
+      actualRemoveButton: true,
+      reopenedRestoredMarks: true,
+      originalPdfUnchanged: true,
+      inMainWorkspace: true,
+      settingsPreserveDocument: true,
+      input:
+        "Actual shared file rows, PDF removal and workspace close controls; the initial comparison mark is seeded fixture data, not a claimed ordinary native pointer gesture",
+    });
+  }
+  await closePdf();
+  const quickWorkspace = ((await observeCore("snapshot.read")) as unknown as CoreSnapshot).document
+    .workspace;
+  const quickFrames = terminalPerformanceSnapshot("ui-parity-0")!.frames;
+  await invoke("control_session", {
+    id: "ui-parity-0",
+    action: "send",
+    text: parityFixture.quickTerminalCommand + "\r",
+  });
+  await until(() => {
+    const current = terminalPerformanceSnapshot("ui-parity-0");
+    return (
+      current &&
+      current.frames > quickFrames &&
+      current.text.includes(parityFixture.marker) &&
+      current.text.trimEnd().endsWith("ui-parity >")
+    );
+  }, "shared modal background prepared by actual shell output");
+  async function unchangedQuick() {
+    const current = await invoke<{ sessions: { spec: { id: string }; generation: string }[] }>(
+      "qa_host_status",
+    );
+    assert(
+      current.sessions.length === 1 &&
+        current.sessions[0].spec.id === "ui-parity-0" &&
+        current.sessions[0].generation === restarted.generation &&
+        JSON.stringify(
+          ((await observeCore("snapshot.read")) as unknown as CoreSnapshot).document.workspace,
+        ) === JSON.stringify(quickWorkspace),
+      "Quick SSH changed the workspace or terminal generation",
+    );
+    assert(visibleTerminal("ui-parity-0") === terminal, "Quick SSH replaced the terminal view");
+  }
+  for (const quickScene of parityFixture.quickScenes) {
+    await open();
+    await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+    await choose(
+      [translate("en", "应用语言"), translate("zh-Hans", "应用语言")],
+      quickScene.language,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await open();
+    await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+    await choose(
+      [translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")],
+      quickScene.appearance,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await invoke("qa_performance_window", { width: quickScene.width, height: quickScene.height });
+    await until(
+      () => innerWidth === quickScene.width && innerHeight === quickScene.height,
+      "actual Quick SSH capture dimensions",
+    );
+    async function invalidQuick() {
+      const trigger = await until(
+        () =>
+          [...document.querySelectorAll<HTMLButtonElement>(".ssh-sidebar-tools button")].find(
+            (button) =>
+              button.textContent?.trim() === translate(quickScene.language, "快速 SSH 连接") &&
+              !button.disabled,
+          ),
+        "actual Quick SSH sidebar button",
+      );
+      trigger.click();
+      const dialog = await until(
+        () => document.querySelector<HTMLDialogElement>(".ssh-quick-dialog[open]"),
+        "actual shared Quick SSH modal",
+      );
+      const field = dialog.querySelector<HTMLInputElement>("input")!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(
+        field,
+        parityFixture.quickAddress,
+      );
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+      await pause(0);
+      dialog.querySelector("form")!.requestSubmit();
+      await until(
+        () => dialog.querySelector("[role=alert]") && !field.disabled,
+        "actual invalid-input rejection",
+      );
+      assert(field.value === parityFixture.quickAddress, "Quick SSH lost the rejected address");
+      return dialog;
+    }
+    async function cancelQuick(dialog: HTMLDialogElement) {
+      const cancel = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(
+        (button) => button.textContent?.trim() === translate(quickScene.language, "取消"),
+      );
+      assert(cancel, "Actual modal Cancel is unavailable");
+      cancel.click();
+      await until(
+        () => !document.querySelector(".ssh-quick-dialog"),
+        "cancel only the actual Quick SSH modal",
+      );
+      await unchangedQuick();
+    }
+    await cancelQuick(await invalidQuick());
+    const dialog = await invalidQuick();
+    await unchangedQuick();
+    const bounds = dialog.getBoundingClientRect();
+    await scene(
+      `quick-ssh-invalid-${quickScene.language}-${quickScene.appearance}-${quickScene.width}`,
+      {
+        ...quickScene,
+        passed: true,
+        inputAddress: parityFixture.quickAddress,
+        terminalFixtureMarker: parityFixture.marker,
+        invalidInputRejected: true,
+        addressRetained: true,
+        savedWorkspaceUnchanged: true,
+        sameMainWindow: true,
+        terminalGenerationRetained: true,
+        actualSidebarButton: true,
+        actualCancelPreservedState: true,
+        workspaceVisibleAroundDialog: true,
+        modalLeft: bounds.left,
+        modalTop: bounds.top,
+        modalWidth: bounds.width,
+        modalHeight: bounds.height,
+      },
+    );
+    await cancelQuick(dialog);
+  }
+  for (const githubScene of parityFixture.githubScenes) {
+    await open();
+    await tab([translate("en", "通用"), translate("zh-Hans", "通用")]);
+    await choose(
+      [translate("en", "应用语言"), translate("zh-Hans", "应用语言")],
+      githubScene.language,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await open();
+    await tab([translate("en", "外观"), translate("zh-Hans", "外观")]);
+    await choose(
+      [translate("en", "颜色模式"), translate("zh-Hans", "颜色模式")],
+      githubScene.appearance,
+    );
+    document.querySelector<HTMLButtonElement>(".settings-close")!.click();
+    await invoke("qa_performance_window", { width: githubScene.width, height: githubScene.height });
+    await until(
+      () => innerWidth === githubScene.width && innerHeight === githubScene.height,
+      "actual GitHub capture dimensions",
+    );
+    const trigger = await until(
+      () =>
+        document.querySelector<HTMLButtonElement>(".inspector-switcher button[aria-label=GitHub]"),
+      "actual GitHub tool switcher",
+    );
+    trigger.click();
+    await until(
+      () =>
+        document.querySelector<HTMLSelectElement>(".github-panel .compare-picker select")?.value ===
+        parityFixture.github.repository,
+      "captured fixture repository",
+    );
+    await click(translate(githubScene.language, "合并请求"));
+    await until(() => {
+      const current = button(translate(githubScene.language, "新建 PR"));
+      return current && !current.disabled;
+    }, "ready PR creation control");
+    await click(translate(githubScene.language, "新建 PR"));
+    const dialog = await until(
+      () => document.querySelector<HTMLDialogElement>(".pr-dialog[open]"),
+      "actual shared PR dialog",
+    );
+    const form = dialog.querySelector("form")!,
+      fields = form.querySelectorAll<HTMLInputElement>("input:not([type=checkbox])");
+    for (const [field, prototype, value] of [
+      [fields[0], HTMLInputElement.prototype, parityFixture.github.title],
+      [fields[1], HTMLInputElement.prototype, parityFixture.github.base],
+      [fields[2], HTMLInputElement.prototype, parityFixture.github.head],
+      [form.querySelector("textarea")!, HTMLTextAreaElement.prototype, parityFixture.github.body],
+    ] as const) {
+      Object.getOwnPropertyDescriptor(prototype, "value")!.set!.call(field, value);
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+    const draft = form.querySelector<HTMLInputElement>("input[type=checkbox]")!;
+    if (draft.checked !== parityFixture.github.draft) draft.click();
+    await pause(0);
+    assert(
+      fields[0].value === parityFixture.github.title &&
+        form.querySelector("textarea")!.value === parityFixture.github.body,
+      "PR literal input changed",
+    );
+    assert(
+      [...form.querySelectorAll<HTMLInputElement>("input:not([type=checkbox]),textarea")].every(
+        (field) => field.getBoundingClientRect().width > 300,
+      ),
+      "PR fields are crushed",
+    );
+    assert(
+      fields[1].value === parityFixture.github.base &&
+        fields[2].value === parityFixture.github.head &&
+        draft.checked === parityFixture.github.draft,
+      "PR branch/draft fields changed",
+    );
+    await unchangedQuick();
+    const bounds = dialog.getBoundingClientRect();
+    const proofs = {
+      ...githubScene,
+      passed: true,
+      form: parityFixture.github,
+      actualToolsSwitcher: true,
+      literalInputRetained: true,
+      readableFields: true,
+      workspaceVisibleAroundDialog: true,
+      terminalGenerationRetained: true,
+      savedWorkspaceUnchanged: true,
+      isolatedSimulatedCLI: true,
+      noGitHubWrites: true,
+      actualCancelPreservedState: true,
+      modalLeft: bounds.left,
+      modalTop: bounds.top,
+      modalWidth: bounds.width,
+      modalHeight: bounds.height,
+    };
+    const cancel = [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent?.trim() === translate(githubScene.language, "取消"),
+    )!;
+    await scene(
+      `github-pr-draft-${githubScene.language}-${githubScene.appearance}-${githubScene.width}`,
+      proofs,
+    );
+    cancel.click();
+    await until(() => !dialog.open, "actual PR cancel");
+    await unchangedQuick();
   }
   await invoke("qa_request_exit");
 }

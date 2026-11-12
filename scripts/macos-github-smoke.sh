@@ -31,6 +31,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-github-') as directory:
     for key in ['githubNativeRootMethodAndPrivateParameterBoundaries', 'nativeGithubMarkdownAssociationAndLinkedSession',
                 'nativeGithubPRDetailsAndDiff', 'nativeGithubOfflineFailureVisibleAndRetryRecovered',
                 'nativeGithubCancellationRetainsPendingOperationUntilCLICompletes', 'nativeGithubHideReopenAndQuitCancelRetainDraft',
+                'nativeGithubMainWindowToolsAndCloseRetainDraft',
+                'nativeGithubActualFilesSwitcherRetainsSessions',
+                'nativeGithubPRModalRejectsRootInjectionAndInvalidLayout', 'nativeGithubPRModalWholeWorkspaceReadableFields',
+                'nativeGithubPRModalActualEscapeAndExplicitCancel',
                 'nativeGithubExplicitCreateLiteralPayloadAndPendingQuitGuard', 'nativeGithubBilingualThemeAndCleanQuitResume',
                 'explicitFixtureCloseAndIdleHostShutdown']:
         assert data[key], key

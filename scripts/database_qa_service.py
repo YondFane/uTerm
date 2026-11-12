@@ -10,6 +10,43 @@ import secrets
 import shutil
 import socket
 import subprocess
+import tempfile
+
+
+def fetch_postgres_driver(destination):
+    """Fetch the pinned QA driver, with an independent Maven Central DNS fallback.
+    下载固定版本的 QA 驱动，并提供独立域名的 Maven Central 备用地址。
+    """
+    destination = Path(destination)
+    catalog = Path(__file__).resolve().parent.parent / "components/database/catalog.json"
+    artifact = json.loads(catalog.read_text(encoding="utf-8"))["drivers"]["postgresql"]
+    primary = artifact["url"]
+    assert primary.startswith("https://repo.maven.apache.org/maven2/")
+    urls = [primary, primary.replace("https://repo.maven.apache.org/maven2/",
+                                     "https://repo1.maven.org/maven2/", 1)]
+    attempted = []
+    with tempfile.TemporaryDirectory(prefix="uterm-qa-jdbc-", dir=destination.parent) as directory:
+        candidate = Path(directory) / "postgresql.jar"
+        for url in urls:
+            attempted.append(url)
+            try:
+                subprocess.run(["curl", "--fail", "--location", "--retry", "2",
+                                "--connect-timeout", "10", "--max-time", "60", "--silent",
+                                "--show-error", "--output", str(candidate), url],
+                               check=True, timeout=210)
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+                if url == urls[-1]:
+                    raise
+                candidate.unlink(missing_ok=True)
+                continue
+            # An integrity failure must not be hidden by a second download.
+            # 完整性校验失败不能用另一次下载掩盖。
+            digest = hashlib.sha256(candidate.read_bytes()).hexdigest()
+            if candidate.stat().st_size != artifact["size"] or digest != artifact["sha256"]:
+                raise ValueError("Pinned PostgreSQL QA driver integrity check failed")
+            candidate.replace(destination)
+            return {"version": artifact["version"], "sha256": digest,
+                    "size": artifact["size"], "sourceURL": url, "attemptedURLs": attempted}
 
 
 SAVED_TEXT = json.loads((Path(__file__).resolve().parent.parent / "shared/fixtures/database-qa.json")

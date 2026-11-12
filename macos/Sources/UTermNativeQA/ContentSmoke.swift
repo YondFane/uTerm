@@ -65,7 +65,7 @@ enum ContentSmoke {
         for (path, name, script) in [
             ("中文.txt", "native-content-text.png", "document.querySelector('.cm-content[contenteditable=false]')?.textContent.includes('UTERM_CONTENT_中文') === true"),
             ("preview.html", "native-content-html.png", "document.querySelector('.html-preview')?.getAttribute('srcdoc')?.includes('STATIC_QA') === true"),
-            ("preview.pdf", "native-content-pdf.png", "document.querySelector('option[value=marks]') === null && Array.from(document.querySelectorAll('.pdf-page canvas')).some(canvas => canvas.width > 0 && canvas.height > 0 && canvas.dataset.rendered === 'true' )")
+            ("preview.pdf", "native-content-pdf.png", "document.querySelector('option[value=marks]') !== null && Array.from(document.querySelectorAll('.pdf-page canvas')).some(canvas => canvas.width > 0 && canvas.height > 0 && canvas.dataset.rendered === 'true' )")
         ] {
             let content = try open(root, path)
             defer { content.forceClose() }

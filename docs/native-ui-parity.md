@@ -49,6 +49,134 @@ must match.
 | Settings / 设置 | One complete entry, all sections/defaults, search, theme import and shortcuts / 统一完整入口、全部分类／默认值、搜索、主题导入及快捷键          | Pending / 待验收 |
 | Settings / 设置 | Save/reload/reset, concurrent conflicts, retained drafts, restart and update preferences / 保存／重读／重置、并发冲突、草稿保留、重启及更新偏好 | Pending / 待验收 |
 
+The shared-vector candidate uses `shared/contracts/chrome-ui-v1.json` for regular icon paths and
+44-point chrome metrics. New workspace captures must report the generated contract SHA-256 and
+actual toolbar height/top position and responsive side/tool widths in both applications. The
+collector rejects stale vectors, titlebar insets or old panel geometry; 0.2.10 captures do not meet
+this new candidate's evidence requirement. Full visual and functional parity remains pending.
+
+Workspace pairing also requires measured full-height inspector/header/viewport/footer geometry in
+both applications. A 44-point nested-titlebar offset or clipped footer fails comparison, even if the
+files themselves are readable.
+
+共享矢量候选使用 `shared/contracts/chrome-ui-v1.json`
+的常规图标路径与 44 点界面尺寸。新的工作区截图须在两版应用中记录生成契约的 SHA-256 与实际顶栏高度／顶部位置及响应式侧栏／工具宽度；汇集器拒绝过期路径、标题栏额外留白或旧面板尺寸。0.2.10 原图不满足此新候选的证据要求，完整视觉／功能一致性仍待完成。
+
+工作区配对还要求两版实测完整高度的工具面板／标题／视口／底部路径边界。即使文件可读，内层标题栏造成的 44 点偏移或路径栏裁切仍会使对照失败。
+
+The shared PR form now has a bounded native workspace modal instead of using the narrow tools
+viewport. Native host requests fix the repository/root, reject injected fields and duplicate writes,
+and retain a hidden draft across Command-W/reopen. Cancel/Escape discard; pending writes still block
+close/quit. Linux frontend (475 passed, 11 skipped), nine GitHub/grid checks and three-width CSS
+checks pass. New real Mac modal screenshots and ordinary PR pairs remain required.
+
+共用 PR 表单改为有界的原生工作区模态，不再受窄工具视口限制。原生请求固定仓库／根目录，拒绝注入字段及重复写入；Command-W／重开保留隐藏草稿，取消／Escape 放弃，写入期间仍禁止关闭／退出。Linux 前端 474 通过、11 跳过，22 项专项及三种宽度 CSS 检查通过。新模态仍需真实 Mac 截图及普通版 PR 配对。
+
+Two shared PR scenes add English/dark 1100×720 and Chinese/light 640×720. Both real clients operate
+literal fields and Cancel with the same temporary Git repository and simulated CLI, retaining the
+live terminal and saved data; Personal repeats after app replacement. Original screenshots, source
+metadata and CLI logs must show no GitHub write. Twenty-five evidence/fixture and 15 Personal Python
+policies pass, including refusal of external/symlink/reused roots and crushed or stale form proof. A
+real Linux Rust Core process prepares/reads the fixture without an account. The expanded grid is 39
+ordinary captures / 38 pairs / 77 original PNGs including restart. Current-source Mac screenshots
+remain pending; historical 36-pair artifacts do not satisfy this expanded grid.
+
+新增两组共用 PR 场景：英文深色 1100×720、中文浅色 640×720。两种真实客户端在同一临时 Git 仓库及模拟 CLI 下输入字面字段并取消，保留实时终端及保存数据；Personal 在应用替换后重复。原始截图、源码元数据及 CLI 日志必须证明未写 GitHub。25 项证据／样例及 15 项 Personal
+Python 策略通过，包含外部／符号链接／复用目录及挤压／过期表单证据拒绝。真实 Linux Rust
+Core 进程通过无需账户的准备／读取。扩大网格为普通版 39 张／38 组／含重启共 77 张原始 PNG；当前源码 Mac 原图仍待生成，历史 36 组不满足新网格。
+
+Head `92bd88e2f0ba0f31d8fd20c02eed45d40229ac7d` / merge `383f762158b9285bd65d70bfbbe3fe1bfcdca018`
+fails ARM compilation: the PR collector passed Double sizes to the Int window-sizing function. Exact
+conversion now rejects fractional/non-finite input; new screenshots remain pending. The
+[failed artifact](https://github.com/YondFane/uTerm/actions/runs/43084143961/artifacts/13885543296)
+is retained. At prior head `43b3995769cf7d8c687a2b038e57e3325941488b` / merge
+`5ff58f2dbdb25a063c222ab99df3852965bb43d1`, the full ARM matrix and SDK install pass. Both real PR
+originals in
+[artifact13885342948](https://github.com/YondFane/uTerm/actions/runs/43080810933/artifacts/13885342948)
+were viewed: 640×500 wide and 588×500 narrow, with readable fields and the surrounding workspace.
+This does not accept the new Personal/ordinary paired grid.
+
+92bd88e／上述 merge 的 ARM 构建失败：PR 采集器将 Double 尺寸传入 Int 窗口函数。候选精确转换并拒绝小数／非有限值，新增截图仍待执行，失败产物保留。此前 43b3995／上述 merge 的完整 ARM 矩阵及 SDK 安装通过，产物中两张真实 PR 原图已查看：宽窗 640×500、窄窗 588×500，字段可读且保留外围工作区。这不接受新增 Personal／普通版配对网格。
+
+At source `efcb4dfa997232d68458374f919a1b45f7d4fe26`, merge
+`a3fb8fcd7f2785e50a43cbc42687a838aed2186e`,
+[Personal ARM](https://github.com/YondFane/uTerm/actions/runs/43085265725/artifacts/13887612080)
+passes package/windows/replacement/full SDK. The
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43085266223/artifacts/13887811848)
+has 38 pairs and 77 originals; all 76 paired digests and viewer scenes were checked. Both PR pairs
+were inspected: literal fields and centered 640×500 / 588×500 forms match. Two workspace pairs were
+also inspected and still expose sidebar font/control and Git presentation differences; PR shadow
+alignment remains pending. This is not full functional parity.
+
+The same EF source's
+[Personal Intel](https://github.com/YondFane/uTerm/actions/runs/43085265725/artifacts/13887922988)
+also passes package/windows/replacement/SDK. Its
+[native Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43085265868/artifacts/13887393269)
+fails file tools with `CONTENT_RENDER` and a missing path, after passed root/symlink checks. The
+failure PNG was viewed; GitHub/SDK pass does not waive the failed inspector/matrix. A deterministic
+Linux component test now reproduces the exact missing-path error: deleting an expanded directory
+starts child reads before the delayed parent can remove it. Parent-first revision refresh passes the
+same test, preserving cached rows/expansion and real permission errors. Native CI saves the targeted
+regression log and the actual CRUD stage; the fix still needs its own Mac matrix.
+
+同一 EF 源码的 Personal
+Intel 也通过安装包／窗口／替换／SDK；原生 Intel 产物却在根目录／链接检查后，文件工具报
+`CONTENT_RENDER`
+路径缺失。失败原图已查看，GitHub／SDK 通过不豁免文件及最终矩阵。Linux 组件测试已稳定复现相同路径错误：删除展开目录时，子目录先于延迟父回复读取已删除路径。父目录优先刷新后同一测试通过，缓存行／展开状态及真实权限错误保留；原生 CI 保存专项日志与实际增删改阶段，修复仍待自己的 Mac 矩阵。
+
+The sidebar candidate adds a 22px hover/focus Close Session action, with hidden layout retained and
+pointer hits refused while invisible. Space targets the row ID and keeps a background close from
+changing the selected generation. Both names use end ellipsis. Personal QA now requires an actual
+focused control, Space, target/selected identities and a real screenshot; direct model closure is
+insufficient. Sixteen Personal policy checks pass; actual new Mac execution and hover inspection
+remain pending.
+
+上述 efcb4df／merge 的 Personal
+ARM 安装包、初次／替换及完整 SDK 通过。配对产物包含 38 组、77 张原图，76 个配对摘要和全部查看器场景核对通过。两组 PR 已查看，字面字段及居中的 640×500／588×500 表单相符；两组工作区仍显示侧栏字体／控件及 Git 呈现差异，PR 阴影也需对齐，不能作为完整功能一致性。
+
+侧栏候选新增 22px 悬停／聚焦关闭会话操作，隐藏时保留布局且拒绝鼠标命中。Space 按行 ID 关闭，后台关闭保留当前 generation；两版名称使用末尾省略。Personal
+QA 必须有实际聚焦控件、Space、前后台身份及真实截图，直接模型调用不足。16 项 Personal 策略通过；新 Mac 执行与悬停目视核对仍待完成。
+
+At head `689c445d40878906c40314c0018697997b518f02` / merge
+`c560eaeac79d2cbd790b9b3b60fb04673800cc9b`, ARM Swift 6.1.2 cannot type-check the sidebar proof
+dictionary in time. The
+[failed build artifact](https://github.com/YondFane/uTerm/actions/runs/43093865999/artifacts/13890621537)
+has no window captures. Typed, smaller expressions retain all proof fields and assertions; fresh
+native/Personal execution remains pending.
+
+上述 689c445／merge 在 ARM Swift
+6.1.2 上因侧栏报告字典类型推断超时而失败，失败构建产物没有窗口截图。候选使用明确类型及更小表达式，保留全部证据字段与断言；新的原生／Personal 执行仍待完成。
+
+The Git-color candidate normalizes read-only Git roots through the same Cocoa path rules as Files;
+relative changes, draft identities and write guards stay intact. Real Linux Git/Core alias reads
+reproduce the empty lexical mapping and pass with one namespace, retaining index bytes. Twenty UI
+regressions, 16 Personal and 26 paired/fixture policies pass. Two Swift tests and actual Mac
+captures remain pending. Both collectors now require each fixture file's actual `data-git-status`,
+and retain raw/selected/normalized roots for diagnosis; readable names alone cannot accept missing
+colors.
+
+Git 着色候选使用与文件面板一致的 Cocoa 路径规则规范只读 Git 根目录，保留相对变更、草稿身份与写入保护。Linux 真实 Git／Core 别名读取复现空的字面路径映射，统一表示后通过且索引字节保持。20 项界面回归、16 项 Personal 及 26 项配对／样例策略通过；两项 Swift 测试与实际 Mac 截图仍待完成。两版采集器要求每个样例文件实际的
+`data-git-status`，保留原始／所选／规范根目录用于诊断；仅文件名可读不能接受缺失着色。
+
+At head `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
+`6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)
+contains 36 pairs, 73 original PNGs and the offline viewer. Both Quick SSH pairs were inspected:
+measured bounds and the live surrounding workspace match, while sidebar styling remains different.
+The
+[Intel native report](https://github.com/YondFane/uTerm/actions/runs/43074768464/artifacts/13882499663)
+passes actual backdrop cancellation and real SSH trust Cancel/Approve. This does not accept the new
+PR modal or the full parity goal. ARM Personal initial/replacement pass, but its
+[SDK install scenario](https://github.com/YondFane/uTerm/actions/runs/43074768643/artifacts/13881394081)
+fails redundant outer cleanup with a host lock-acquisition error after successful reattachment and
+explicit shutdown. QA now avoids that second query only after successful internal cleanup and also
+requires actual host PID exit and endpoint removal. The new checks still need current-source Mac CI;
+the complete retained run remains failed.
+
+源码与 merge 如上，两种原生矩阵通过。配对产物包含 36 组、73 张原始 PNG 及离线查看器；两组快速 SSH 原图已查看，实测边界与外围实时工作区相符，侧栏样式仍有差异。Intel 原生报告通过实际外围取消及真实 SSH 信任取消／批准。这不接受新 PR 模态或完整一致性目标。ARM
+Personal 初次／替换通过，但 SDK 安装场景在成功重新附着及明确关闭后，外层重复清理发生宿主锁错误。QA 仅在内部成功清理后避免第二次查询，并要求实际宿主 PID 退出及端点移除；新检查仍待当前源码 Mac
+CI，保留的完整运行仍失败。
+
 ## Evidence / 证据
 
 Use isolated application identities and temporary projects. Capture both actual windows for English
@@ -100,16 +228,29 @@ acceptance.
 
 For PR CI, the `ui-parity-evidence` job collects the ordinary macOS and same-source Personal ARM64
 artifacts. It validates source/merge identities, OS, architecture, fixture hash and PNG files, then
-uploads 64 original images, `comparison.md` and `comparison.json`. Collection runs on Ubuntu and
-never replaces a missing native capture with a browser render. `comparisonReady` means the images
-are ready for review; `functionalParityAccepted` remains false until all acceptance rows are met.
-The source-bound results below include actual CI execution and inspection of the Java originals.
+uploads 72 matching original images, the ordinary restart image, `comparison.md` and
+`comparison.json`. Collection runs on Ubuntu and never replaces a missing native capture with a
+browser render. `comparisonReady` means the images are ready for review; `functionalParityAccepted`
+remains false until all acceptance rows are met. The source-bound results below include actual CI
+execution and inspection of the Java originals.
+
+After downloading and extracting the paired artifact, open `comparison.html` to choose an area and
+scene, move between pairs and open either original PNG at its actual size. The page includes both
+source identities, image digests and restart evidence, and keeps the pending functional-acceptance
+notice. It uses local artifact files without external scripts or services. The viewer does not
+generate or modify application images. Linux browser verification opens all 34 historical pairs,
+checks unchanged original digests, filters the 24 settings pairs and exercises both navigation
+buttons; this verifies the report viewer, not the current application. The new HTML still requires
+upload in a current-source paired CI artifact.
 
 PR CI 的 `ui-parity-evidence` 任务汇集普通 macOS 版及同源码 Personal
-ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 64 张原图、`comparison.md` 和
-`comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
+ARM64 产物，校验源码／merge、系统、架构、样例哈希及 PNG 后，上传 72 张匹配原图、普通版重启原图、`comparison.md`
+和 `comparison.json`。汇集任务在 Ubuntu 运行，不会用浏览器渲染替代缺失的原生截图。`comparisonReady`
 仅表示图片可供对照；在所有验收项满足前，`functionalParityAccepted`
 始终为 false。下列绑定源码的结果包含实际 CI 执行及 Java 原图核对。
+
+下载并解压成对产物后，打开 `comparison.html`
+可选择区域和场景、前后翻页，并按实际尺寸打开两版原始 PNG。页面包含两项源码身份、图片摘要及重启证据，并保留功能待验收提示；仅使用产物内文件，不加载外部脚本或服务，不生成或修改应用截图。Linux 浏览器检查打开全部 34 组历史图片、核对原图摘要不变、筛选 24 组设置图片并操作前后翻页；这仅验证报告查看器，不作为当前应用验收。新增 HTML 仍需随当前源码成对 CI 产物上传。
 
 Settings add 24 matched navigation scenes: twelve common categories at English dark 900×640 and
 Chinese light 660×640. Native QA presses actual AppKit buttons; ordinary QA clicks the rendered
@@ -120,6 +261,62 @@ registration tests. Both native architectures pass these operations in the sourc
 below; captures alone cannot establish complete settings parity.
 
 设置另采集 24 组匹配导航场景：十二个共有分类，分别使用英文深色 900×640 与中文浅色 660×640。原生 QA 按下实际 AppKit 按钮，普通版点击渲染的设置导航；两版均检查实际内容尺寸、所选分类及草稿未变。汇集器要求完整分类场景、源码身份及原图。Java 开发环境分类接入共享组件服务，包含目录加载断言与本机 JDK 注册测试。下列绑定源码的结果中，两种原生架构均通过这些操作；不能只凭截图证明完整设置一致性。
+
+PDF adds two matched main-workspace scenes: English/dark 1100×720 and Chinese/light 640×720, using
+the same deterministic PDF bytes and seeded comparison mark. Both clients must activate actual
+delete and tab-close controls, reopen to verify deletion, and restore the retained comparison mark.
+Native QA also draws and deletes through actual window pointer events, verifies document scope and
+checks marks after app replacement. Both keep the same document while settings change and preserve
+original PDF bytes. The strict grid now requires 39 ordinary captures and 38 pairs (76 paired
+originals plus the ordinary restart image), including two Quick SSH modal scenes. Missing,
+duplicated, stale or unverified PDF scenes fail collection. Seeded marks demonstrate matched
+display; they are not described as a user drawing gesture. The new PDF scenes are pending real CI
+execution and visual inspection.
+
+PDF 另采集两组主工作区对照：英文深色 1100×720、中文浅色 640×720，使用相同确定性 PDF 字节和预置对照标记。两版均须操作实际删除及标签关闭控件，重开验证删除结果，并恢复保留的对照标记。原生 QA 另通过实际窗口指针事件绘制并删除标记，验证文档作用域和应用替换后的标记保留。两版切换设置时保留同一文档，PDF 原字节不变。严格网格现要求普通版 39 张截图、38 组成对截图（76 张配对原图加普通版重启原图），包含两组快速 SSH 模态场景；PDF 场景缺失、重复、过期或未经操作验证均使汇集失败。预置标记仅证明匹配显示，不描述为用户绘制手势。新增 PDF 场景尚待真实 CI 执行及目视核对。
+
+Terminal pairing also measures actual pane insets, header height/top and the 12px output gap. The
+native header wraps individual controls using their measured text widths and retained order;
+selected terminal backgrounds fill its margins. Missing, non-finite or unequal geometry fails
+collection. PDF pairing additionally requires one retained session and an expanded PDF folder in
+both apps. Native collection opens the actual file row; ordinary collection closes its background
+session through the actual sidebar control before capturing PDF scenes. These stricter geometry and
+surrounding-state gates require fresh real-window CI; the earlier 34-pair artifact does not satisfy
+the new gates.
+
+终端配对还测量实际窗格内边距、标题高度／顶部及输出前 12px 间距。原生标题按实测文本宽度和原顺序逐项换行，留白填充所选终端背景；几何值缺失、非有限数或不一致均使汇集失败。PDF 配对另要求两版仅保留一个会话、展开 PDF 文件夹；原生通过实际文件行打开，普通版在截图前通过实际侧栏控件关闭后台会话。更严格的几何及周围状态门槛需新的真实窗口 CI，已有 34 组产物不能满足新增门槛。
+
+Sidebar pairing additionally requires the rail to begin at the window's left edge with its shared
+width, and the actual All button to remain fully visible at the shared position and size. The native
+workspace menu receives only its allocated width. Outer sidebar width alone cannot accept an
+overflowing inner layout. These new navigation gates require current-source real windows.
+
+侧栏配对另要求图标栏从窗口左缘开始、保持共用宽度，实际“全部”按钮完整显示于共用位置／尺寸；原生工作区菜单仅使用分配的宽度。外层侧栏宽度正确不能接受内部布局溢出，新增导航门槛需当前源码真实窗口验证。
+
+Quick SSH adds English/dark 1100×720 and Chinese/light 640×720 modal comparisons. Both apps prepare
+the same prompt/marker through the real shell, open the actual sidebar entry, reject the same
+synthetic invalid address, retain that address and cancel without changing workspace data or the
+terminal generation. Native Personal captures require the shared WK form in the main window;
+separate-window images cannot satisfy this gate. Invalid address fixtures do not prove remote login.
+Original images, platform/source identities and actual operation proofs are mandatory. Native
+regression additionally exercises Escape and Command-W; loading failures retain a modal Retry/Cancel
+flow. The new modal and 39/38/77 grid remain pending current-source CI.
+
+快速 SSH 另采集英文深色 1100×720、中文浅色 640×720 两组模态对照。两版通过真实 Shell 准备相同提示符／标记，打开实际侧栏入口，拒绝相同的模拟无效地址并保留输入，取消后工作区数据和终端 generation 不变。原生 Personal 原图要求共用 WK 表单位于主窗口，独立窗口图不能满足门槛；无效地址样例不证明远端登录。必须保留原图、平台／源码身份和实际操作证据。原生回归另执行 Escape 与 Command-W；加载失败保留模态重试／取消流程。新增模态及 39／38／77 网格仍待当前源码 CI。
+
+The Intel Personal images at head `becc4e233a0354137fe8248486e8dd7fb0df29fa`, merge
+`198238492c3f298999257b09bb3813468a1b11b3`, pass automated operations but visibly hide the workspace
+behind an opaque WebKit canvas. They fail visual acceptance. The candidate limits WebKit to the
+measured form and draws the outer dimming natively. Both reports must include finite, centered
+`modalLeft`/`modalTop`/`modalWidth`/`modalHeight`, equal within one pixel, plus retained visible
+workspace proof. Oversized or clipped frames fail; earlier images cannot satisfy this new gate.
+Actual backdrop clicks and invalid layout arguments are checked separately. New composition still
+requires real Mac images.
+
+源码 `becc4e233a0354137fe8248486e8dd7fb0df29fa`、merge `198238492c3f298999257b09bb3813468a1b11b3`
+的 Intel
+Personal 原图虽通过自动操作，却显示不透明 WebKit 底色遮住工作区，视觉验收失败。候选将 WebKit 限于实测表单，外围由原生绘制遮罩。两版报告须包含有限且居中的
+`modalLeft`／`modalTop`／`modalWidth`／`modalHeight`，相差小于一像素，并证明外围工作区仍显示。过大或裁切的边界失败；旧图不能满足新增门槛。另检查实际外围点击和无效尺寸参数；新合成仍须真实 Mac 原图。
 
 ## Source-bound CI findings / 绑定源码的 CI 结果
 

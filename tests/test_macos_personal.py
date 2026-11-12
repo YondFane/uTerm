@@ -57,15 +57,96 @@ class PersonalPackageTests(unittest.TestCase):
         scenes = [dict(language=language, appearance=appearance, width=width, height=720,
                        screenshot=f"personal-{phase}-workspace-{language}-{appearance}-{width}.png",
                        sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64",
-                       system="macOS fixture", filesReadable=True, scenario="toolbar-sidebar-two-session-tabs-files")
+                       system="macOS fixture", filesReadable=True, fileGitStates={"note.txt": "untracked", "README.md": "untracked"}, scenario="toolbar-sidebar-two-sessions-files")
                   for language in ["en", "zh-Hans"] for appearance in ["dark", "light"] for width in [1100, 640]]
         fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
         settings = [dict(scene, section=section["id"], sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
                          draftUnchanged=True, navigationControlActivated=True, javaFixtureMatched=section["id"] == "java",
                          screenshot=f"personal-{phase}-settings-{section['id']}-{scene['language']}-{scene['appearance']}-{scene['width']}.png")
                     for section in fixture["settingsSections"] for scene in fixture["settingsScenes"]]
-        return dict(backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,
-                    settingsScenes=settings, captures=[scene["screenshot"] for scene in scenes + settings])
+        pdf = [dict(scene, scenario="pdf-highlights", screenshot=f"personal-{phase}-pdf-highlights-{scene['language']}-{scene['appearance']}-{scene['width']}.png",
+                    sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture",
+                    pdfSHA256=fixture["pdf"]["sha256"], markID=fixture["pdf"]["mark"]["id"], marksCount=1, fixtureSessionCount=1, filesFolderExpanded=True, actualRemoveButton=True, reopenedRestoredMarks=True,
+                    originalPdfUnchanged=True, inMainWorkspace=True, settingsPreserveDocument=True, nativePointerDrawAndDelete=True) for scene in fixture["contentScenes"]]
+        quick = [dict(scene, scenario="quick-ssh-invalid", screenshot=f"personal-{phase}-quick-ssh-invalid-{scene['language']}-{scene['appearance']}-{scene['width']}.png",
+                      sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture",
+                      inputAddress=fixture["quickAddress"], terminalFixtureMarker=fixture["marker"], invalidInputRejected=True, addressRetained=True,
+                      savedWorkspaceUnchanged=True, sameMainWindow=True, terminalGenerationRetained=True, actualSidebarButton=True, actualCancelPreservedState=True,
+                      workspaceVisibleAroundDialog=True, modalWidth=540, modalHeight=300, modalLeft=(scene["width"]-540)/2, modalTop=(scene["height"]-300)/2)
+                 for scene in fixture["quickScenes"]]
+        github = [dict(scene, scenario="github-pr-draft", screenshot=f"personal-{phase}-github-pr-draft-{scene['language']}-{scene['appearance']}-{scene['width']}.png",
+                       sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system="policy fixture", form=fixture["github"],
+                       actualToolsSwitcher=True, literalInputRetained=True, readableFields=True, workspaceVisibleAroundDialog=True, terminalGenerationRetained=True, savedWorkspaceUnchanged=True,
+                       isolatedSimulatedCLI=True, noGitHubWrites=True, actualCancelPreservedState=True, modalWidth=min(640,scene["width"]*.92), modalHeight=500,
+                       modalLeft=(scene["width"]-min(640,scene["width"]*.92))/2, modalTop=(scene["height"]-500)/2) for scene in fixture["githubScenes"]]
+        return dict(nativeSidebarSessionClose=dict(passed=True, actualKeyboardFocusVisible=True, actualSpaceClosedBackgroundSession=True, selectedGenerationRetained=True, targetSessionID="background", selectedSessionID="foreground", screenshot=f"personal-{phase}-sidebar-close-background.png", sourceHeadSHA="a"*40, testedMergeSHA="b"*40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720), githubPRScenes=github, quickSSHScenes=quick, contentScenes=pdf, pdfHighlightsNativeDrawDeleteReopenAndScopeVerified=True, pdfMarkWrongRootAndPathRejected=True, pdfHighlightsRetainedAfterReplacement=phase == "replacement", nativeSidebarSectionOrderAndReadOnlyCollapse=True, backgroundTabCloseRetainedSelectedGeneration=True, nativeProjectMenuPinCollapseOrderAndConflictVerified=True, workspaceScenes=scenes,
+                    settingsScenes=settings, nativeTerminalControls=dict(generationBeforeRestart="old-generation", restartedGeneration="new-generation", searchInputBytesBefore=0, searchInputBytesAfter=0, passed=True, actualFontButtonsAppliedAndRestored=True, fontWritesRemainAvailableDuringFileRefresh=True, fontBoundsDisabled=True, unicodeCaseCountsAndNavigation=True, keyboardOpenAndEscape=True, keyboardShiftFindRoutesProjectSearch=True, searchInputDidNotReachPTY=True, terminalIdentityAndGenerationRetained=True, explicitRestartRetainedDescriptorAndView=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-terminal-search.png"), embeddedWorkspaceFiles=dict(passed=True, tabControlsActivated=True, fontShortcutsTargetEditor=True, findShortcutRetainsEditorAndTerminal=True, arrowNavigationActivated=True, sameMainWindow=True, orderedAndReused=True, exactUnsavedDraftRetained=True, cancelCloseRetainedTabs=True, discardPreservedSiblingAndExternalWriter=True, terminalViewAndGenerationRetained=True, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64", system="policy fixture", width=640, height=720, screenshot=f"personal-{phase}-embedded-files.png"), captures=[scene["screenshot"] for scene in scenes + settings + pdf + quick + github] + [f"personal-{phase}-sidebar-close-background.png", f"personal-{phase}-embedded-files.png", f"personal-{phase}-terminal-search.png"])
+
+    def test_sidebar_close_requires_real_control_and_background_target_proof(self):
+        import copy
+        report = self.workspace_evidence("initial")
+        package.validate_sidebar_close(report,"a"*40,"b"*40,"initial")
+        for key,value in [("actualSpaceClosedBackgroundSession",False),("actualKeyboardFocusVisible",False),("selectedGenerationRetained",False),("sourceHeadSHA","c"*40),("targetSessionID","foreground"),("screenshot","old.png")]:
+            wrong=copy.deepcopy(report);wrong["nativeSidebarSessionClose"][key]=value
+            with self.subTest(key=key), self.assertRaises(AssertionError): package.validate_sidebar_close(wrong,"a"*40,"b"*40,"initial")
+
+    def test_pr_requires_bounded_current_modal_and_no_api_writes(self):
+        report = self.workspace_evidence("initial")
+        package.validate_github_scenes(report, "a"*40, "b"*40, "initial")
+        import copy
+        for key,value in [("sourceHeadSHA","c"*40),("modalWidth",128),("noGitHubWrites",False),("readableFields",False),("form",{})]:
+            wrong=copy.deepcopy(report);wrong["githubPRScenes"][0][key]=value
+            with self.subTest(key=key), self.assertRaises(AssertionError): package.validate_github_scenes(wrong,"a"*40,"b"*40,"initial")
+        for rows in [[],report["githubPRScenes"][1:],[report["githubPRScenes"][0]]*2]:
+            wrong=copy.deepcopy(report);wrong["githubPRScenes"]=rows
+            with self.assertRaises(AssertionError): package.validate_github_scenes(wrong,"a"*40,"b"*40,"initial")
+
+    def test_quick_ssh_proof_requires_current_embedded_modal_and_preserved_data(self):
+        changes = [("sourceHeadSHA", "c" * 40), ("testedMergeSHA", "c" * 40), ("inputAddress", "different"), ("terminalFixtureMarker", "old"), ("screenshot", "old.png")]
+        changes += [(key, False) for key in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState", "workspaceVisibleAroundDialog"]]
+        changes += [("modalWidth", 1100), ("modalHeight", 720), ("modalTop", None), ("modalLeft", float("inf"))]
+        for key, value in changes:
+            report = self.workspace_evidence("initial"); report["quickSSHScenes"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): package.validate_quick_scenes(report, "a" * 40, "b" * 40, "initial")
+        for kind in ["missing", "duplicate"]:
+            report = self.workspace_evidence("initial")
+            if kind == "missing": report["quickSSHScenes"].pop()
+            else: report["quickSSHScenes"][0] = report["quickSSHScenes"][1]
+            with self.subTest(kind=kind), self.assertRaises(AssertionError): package.validate_quick_scenes(report, "a" * 40, "b" * 40, "initial")
+
+    def test_pdf_proof_rejects_missing_stale_or_unexecuted_operations(self):
+        for key, value in [("sourceHeadSHA", "c" * 40), ("pdfSHA256", "0" * 64), ("markID", "old"), ("marksCount", 0), ("fixtureSessionCount", 2), ("filesFolderExpanded", False),
+                           ("actualRemoveButton", False), ("reopenedRestoredMarks", False), ("originalPdfUnchanged", False), ("inMainWorkspace", False),
+                           ("settingsPreserveDocument", False), ("nativePointerDrawAndDelete", False), ("screenshot", "old.png")]:
+            report = self.workspace_evidence("initial")
+            report["contentScenes"][0][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): package.validate_pdf_scenes(report, "a" * 40, "b" * 40, "initial")
+        for kind in ["missing", "duplicate", "scope", "pointer", "replacement"]:
+            report = self.workspace_evidence("replacement")
+            if kind == "missing": report["contentScenes"].pop()
+            if kind == "duplicate": report["contentScenes"][0] = report["contentScenes"][1]
+            if kind == "scope": report["pdfMarkWrongRootAndPathRejected"] = False
+            if kind == "pointer": report["pdfHighlightsNativeDrawDeleteReopenAndScopeVerified"] = False
+            if kind == "replacement": report["pdfHighlightsRetainedAfterReplacement"] = False
+            with self.subTest(kind=kind), self.assertRaises(AssertionError): package.validate_pdf_scenes(report, "a" * 40, "b" * 40, "replacement")
+
+    def test_terminal_controls_require_actual_input_and_current_source(self):
+        for key, value in [("fontWritesRemainAvailableDuringFileRefresh", False), ("keyboardShiftFindRoutesProjectSearch", False), ("unicodeCaseCountsAndNavigation", False), ("searchInputDidNotReachPTY", False), ("terminalIdentityAndGenerationRetained", False), ("sourceHeadSHA", "c" * 40), ("screenshot", "old.png")]:
+            report = self.workspace_evidence("initial")
+            report["nativeTerminalControls"][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): package.validate_terminal_controls(report, "a" * 40, "b" * 40, "initial")
+        report = self.workspace_evidence("initial")
+        report.pop("nativeTerminalControls")
+        with self.assertRaises(AssertionError): package.validate_terminal_controls(report, "a" * 40, "b" * 40, "initial")
+
+    def test_embedded_workspace_requires_actual_controls_and_current_source(self):
+        for key, value in [("tabControlsActivated", False), ("fontShortcutsTargetEditor", False), ("findShortcutRetainsEditorAndTerminal", False), ("arrowNavigationActivated", False), ("terminalViewAndGenerationRetained", False), ("sourceHeadSHA", "c" * 40), ("screenshot", "old.png")]:
+            report = self.workspace_evidence("initial")
+            report["embeddedWorkspaceFiles"][key] = value
+            with self.subTest(key=key), self.assertRaises(AssertionError): package.validate_embedded_workspace(report, "a" * 40, "b" * 40, "initial")
+        report = self.workspace_evidence("initial")
+        report.pop("embeddedWorkspaceFiles")
+        with self.assertRaises(AssertionError): package.validate_embedded_workspace(report, "a" * 40, "b" * 40, "initial")
 
     def test_settings_navigation_evidence_rejects_missing_stale_or_changed_drafts(self):
         for mutation in ["missing", "duplicate", "source", "draft", "navigation", "height"]:
@@ -80,14 +161,17 @@ class PersonalPackageTests(unittest.TestCase):
                 package.validate_settings_scenes(report, "a" * 40, "b" * 40, "initial")
 
     def test_workspace_acceptance_rejects_missing_duplicate_or_wrong_source_screenshots(self):
-        for mutation in ["missing", "duplicate", "source", "file", "background-close", "unreadable-files", "project-actions"]:
+        for mutation in ["missing", "duplicate", "source", "file", "background-close", "unreadable-files", "missing-git-states", "wrong-git-state", "sidebar-sections", "project-actions"]:
             report = self.workspace_evidence("initial")
             if mutation == "missing": report["workspaceScenes"].pop()
             if mutation == "duplicate": report["workspaceScenes"][0] = report["workspaceScenes"][1]
             if mutation == "source": report["workspaceScenes"][0]["testedMergeSHA"] = "c" * 40
             if mutation == "file": report["captures"].remove(report["workspaceScenes"][0]["screenshot"])
+            if mutation == "sidebar-sections": report["nativeSidebarSectionOrderAndReadOnlyCollapse"] = False
             if mutation == "background-close": report["backgroundTabCloseRetainedSelectedGeneration"] = False
             if mutation == "unreadable-files": report["workspaceScenes"][0]["filesReadable"] = False
+            if mutation == "missing-git-states": report["workspaceScenes"][0].pop("fileGitStates")
+            if mutation == "wrong-git-state": report["workspaceScenes"][0]["fileGitStates"]["note.txt"] = "modified"
             if mutation == "project-actions": report["nativeProjectMenuPinCollapseOrderAndConflictVerified"] = False
             with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
                 package.validate_workspace_scenes(report, "a" * 40, "b" * 40, "initial")

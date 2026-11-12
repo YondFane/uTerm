@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke } from "./content-host";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { gitFileStates, type GitTreeSnapshot } from "./git-file-status";
 import { gitReadError } from "./git-snapshot";

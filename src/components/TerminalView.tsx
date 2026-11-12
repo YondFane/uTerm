@@ -765,9 +765,15 @@ export function TerminalView({
     if (current) {
       try {
         await current.ready;
-        await action(current.id, "close");
+        await action(current.id, "restart");
       } catch (reason) {
-        setError(session.ssh ? sshError(reason) : String(reason));
+        setError(
+          String(reason).includes("SESSION_HOST_UPGRADE_REQUIRED")
+            ? tx("后台服务不支持会话重启。请关闭会话后退出并重新打开应用；已有进程未被终止。")
+            : session.ssh
+              ? sshError(reason)
+              : String(reason),
+        );
         return;
       }
       current.closed = true;

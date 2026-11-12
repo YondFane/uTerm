@@ -93,7 +93,9 @@ enum SettingsSmoke {
             try await TerminalSmoke.wait("Render native shortcut capture") { view(current.window, id: "native-shortcut-palette") != nil }
             guard let capture = view(current.window, id: "native-shortcut-palette") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_CAPTURE", message: "Shortcut capture control is missing") }
             capture.performClick(nil)
-            guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "K", charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40), current.window.performKeyEquivalent(with: event) else { throw BridgeFailure(code: "SETTINGS_QA_KEY", message: "Native shortcut event was not captured") }
+            // AppKit's charactersIgnoringModifiers retains Shift, as a real shifted letter event does.
+            // AppKit 的 charactersIgnoringModifiers 保留 Shift，与真实带 Shift 的字母事件一致。
+            guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "K", charactersIgnoringModifiers: "K", isARepeat: false, keyCode: 40), current.window.performKeyEquivalent(with: event) else { throw BridgeFailure(code: "SETTINGS_QA_KEY", message: "Native shortcut event was not captured") }
             guard model.shortcuts["palette"] == "Mod+Shift+KeyK" else { throw BridgeFailure(code: "SETTINGS_QA_CHORD", message: "Native shortcut did not preserve its semantic chord") }
             try await save(model)
             guard model.error.isEmpty else { throw BridgeFailure(code: "SETTINGS_QA_SHORTCUT_SAVE", message: "Captured shortcut could not be saved") }
@@ -102,7 +104,10 @@ enum SettingsSmoke {
             NSApp.activate(ignoringOtherApps: true)
             try await TerminalSmoke.wait("Focus settings before opening its command palette") { current.window.isKeyWindow }
             report["paletteOriginWindow"] = current.window.windowNumber
-            guard let paletteMenu = NSApp.mainMenu?.items.compactMap(\.submenu).flatMap(\.items).first(where: { $0.representedObject as? String == "palette" }), paletteMenu.keyEquivalent == "k", paletteMenu.keyEquivalentModifierMask == [.command, .shift], let paletteEvent = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "K", charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40), NSApp.mainMenu?.performKeyEquivalent(with: paletteEvent) == true else { throw BridgeFailure(code: "SETTINGS_QA_MENU_BINDING", message: "Saved semantic shortcut did not update the system menu") }
+            guard let unshifted = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "k", charactersIgnoringModifiers: "k", isARepeat: false, keyCode: 40), NSApp.mainMenu?.performKeyEquivalent(with: unshifted) == false else { throw BridgeFailure(code: "SETTINGS_QA_SHIFT", message: "A shifted shortcut accepted the unshifted event") }
+            let paletteMenu = NSApp.mainMenu?.items.compactMap(\.submenu).flatMap(\.items).first(where: { $0.representedObject as? String == "palette" })
+            report["paletteMenuBinding"] = ["key": paletteMenu?.keyEquivalent ?? "", "modifiers": paletteMenu?.keyEquivalentModifierMask.rawValue ?? 0, "enabled": paletteMenu?.isEnabled == true]
+            guard paletteMenu?.keyEquivalent == "K", paletteMenu?.keyEquivalentModifierMask == [.command, .shift], let paletteEvent = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.command, .shift], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: current.window.windowNumber, context: nil, characters: "K", charactersIgnoringModifiers: "K", isARepeat: false, keyCode: 40), NSApp.mainMenu?.performKeyEquivalent(with: paletteEvent) == true else { throw BridgeFailure(code: "SETTINGS_QA_MENU_BINDING", message: "Saved semantic shortcut did not update the system menu") }
             try await TerminalSmoke.wait("Open palette through the actual menu shortcut") { NSApp.keyWindow?.identifier?.rawValue == "native-command-palette" }
             guard let palette = NSApp.keyWindow else { throw BridgeFailure(code: "SETTINGS_QA_PALETTE", message: "Palette did not open") }
             palette.contentView?.layoutSubtreeIfNeeded()
@@ -263,8 +268,15 @@ enum SettingsSmoke {
         try await TerminalSmoke.wait("Retain invalid JDK path and show visible failure") { !java.mutating && !java.error.isEmpty }
         guard java.home == "/missing JDK 中文 & %", java.adding else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Invalid JDK path was lost") }
         java.home = home
-        add.performClick(nil)
-        try await TerminalSmoke.wait("Register real local full JDK through actual AppKit button") { !java.mutating && java.error.isEmpty && !java.adding }
+        try await TerminalSmoke.wait("Re-enable the actual JDK registration control after rejected input") { (view(settings.window, id: "native-java-register") as? NSButton)?.isEnabled == true }
+        guard let retry = view(settings.window, id: "native-java-register") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Updated JDK register control missing") }
+        retry.performClick(nil)
+        do {
+            try await TerminalSmoke.wait("Register real local full JDK through actual AppKit button") { !java.mutating && java.error.isEmpty && !java.adding }
+        } catch {
+            report["javaRegistrationDiagnostics"] = ["error": java.error, "adding": java.adding, "mutating": java.mutating, "blocked": java.blocked, "home": java.home, "liveButtonEnabled": (view(settings.window, id: "native-java-register") as? NSButton)?.isEnabled ?? false] as [String: Any]
+            throw error
+        }
         guard let registered = java.jdks.first(where: { $0["registered"].bool == true }), let canonical = registered["home"].string,
               registered["available"].bool == true else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Real local JDK record is missing") }
         await java.register(canonical, remove: true)

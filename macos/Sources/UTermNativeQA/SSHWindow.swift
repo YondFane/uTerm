@@ -165,6 +165,14 @@ final class SSHModel: ObservableObject {
             self.resolution = (value["username"].string ?? "") + "@" + (value["hostname"].string ?? "") + ":" + (value["port"].string ?? "") + (value["proxy"].bool == true ? localized(" · Proxy configured", " · 已配置代理") : "")
         }
     }
+    func keepTemporary() async {
+        guard !dirty, !selectedID.isEmpty, profile["temporary"].bool == true else { return }
+        await execute {
+            let snapshot = try await self.bridge.snapshot()
+            _ = try await self.bridge.call("ssh.quick.keep", params: .object(["expectedRevision": .string(snapshot.revision), "id": .string(self.selectedID)]))
+            await self.reload(select: self.selectedID); await self.workspace?.reload()
+        }
+    }
     func execute(_ operation: () async throws -> Void) async {
         guard !busy, !prepared else { return }
         busy = true; error = ""; feedback = ""
@@ -207,6 +215,8 @@ final class SSHModel: ObservableObject {
             _ = try await self.perform(["kind": .string("files.disconnect"), "connection_id": .string(self.selectedID)])
             self.roots.removeValue(forKey: self.selectedID); self.remoteRoot = .null; self.listing = []; self.selection = nil
         }
+        await workspace?.cleanupQuickSSH()
+        if !dirty { await reload(select: selectedID) }
     }
     func previewFile() async {
         guard let selection else { return }
@@ -285,6 +295,8 @@ final class SSHModel: ObservableObject {
     }
     func stopForward(_ status: JSONValue) async {
         await execute { _ = try await self.bridge.call("ssh.tunnel.stop", params: .object(["connection_id": status["connection_id"], "id": status["id"], "generation": status["generation"]])) }
+        await workspace?.cleanupQuickSSH()
+        if !dirty { await reload(select: selectedID) }
     }
     func removeForward(_ rule: JSONValue) async {
         guard let snapshot else { return }
@@ -344,6 +356,9 @@ struct SSHView: View {
             Spacer()
             Button(localized("Reload", "重新读取")) { Task { if await model.confirmDraft() { await model.reload() } } }
             Button(localized("Save connection", "保存连接")) { Task { _ = await model.save() } }.accessibilityIdentifier("ssh-save")
+            if model.profile["temporary"].bool == true {
+                Button(localized("Save connection", "保存为常用连接")) { Task { await model.keepTemporary() } }.disabled(model.dirty).accessibilityIdentifier("ssh-keep-temporary")
+            }
             Button(localized("New SSH terminal", "新建 SSH 终端")) { Task { await model.newTerminal() } }.disabled(model.dirty || model.selectedID.isEmpty).accessibilityIdentifier("ssh-new-terminal")
         }.disabled(model.busy || model.prepared)
         if !model.resolution.isEmpty { Text(model.resolution).font(.caption).textSelection(.enabled) }

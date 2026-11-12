@@ -3,6 +3,14 @@ import UTermBridge
 
 @MainActor
 enum GitHubSmoke {
+    static func modalGeometry(_ content: ContentWindow, parent: NSWindow) async throws -> [String: Double] {
+        try await ContentSmoke.wait(content, "(()=>{const d=document.querySelector('.pr-dialog[open]');if(!d)return false;const r=d.getBoundingClientRect();return r.left===0&&r.top===0&&Math.abs(r.width-innerWidth)<1&&Math.abs(d.scrollHeight+2-innerHeight)<1&&[...d.querySelectorAll('input:not([type=checkbox]),textarea')].every(i=>i.getBoundingClientRect().width>300)})()")
+        guard let root = parent.contentView, content.webView.window === parent else { throw BridgeFailure(code: "GITHUB_QA_MODAL", message: "PR form is detached from the main workspace") }
+        let frame = content.webView.convert(content.webView.bounds, to: root), bounds = root.bounds
+        guard abs(frame.width - min(640, bounds.width * 0.92)) < 1, frame.height >= 40, frame.height <= bounds.height - 48 + 1,
+              abs(frame.midX - bounds.midX) < 1, abs(frame.midY - bounds.midY) < 1 else { throw BridgeFailure(code: "GITHUB_QA_MODAL", message: "PR form does not use centered workspace bounds") }
+        return ["left": Double(frame.minX), "top": Double(frame.minY), "width": Double(frame.width), "height": Double(frame.height)]
+    }
     static func run(model: WorkspaceModel, parent: NSWindow, open: (URL) async throws -> ContentWindow, report: inout [String: Any]) async throws {
         guard model.ready, let bridge = model.bridge, let path = WorkspaceModel.argument("--github-smoke-report"),
               let fixture = ProcessInfo.processInfo.environment["UTERM_GITHUB_FIXTURE_ROOT"],
@@ -22,13 +30,32 @@ enum GitHubSmoke {
         try git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "--no-gpg-sign", "-m", "Native GitHub fixture"])
         try git(["remote", "add", "origin", "https://github.com/fixture-owner/fixture-repo.git"])
         await model.patchSettings(["language": .string("en"), "appearance": .string("dark")])
+        _ = try await TerminalSmoke.sizeCaptureWindow(parent, width: 1100, height: 720)
         guard await model.mutate("project.open", ["id": .string(UUID().uuidString), "name": .string("GitHub QA 中文"), "directory": .string(root.path), "workspaceId": .string(model.groupID)]) else { throw BridgeFailure(code: "GITHUB_QA_PROJECT", message: model.error) }
         await model.newTerminal()
         try await TerminalSmoke.wait("Start GitHub fixture PTY") { model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true }
         guard let first = model.selectedTerminal else { throw BridgeFailure(code: "GITHUB_QA_PTY", message: "Missing fixture terminal") }
         let content = try await open(root)
-        guard let window = content.window, let host = content.workbenchHost as? GitHubHost else { throw BridgeFailure(code: "GITHUB_QA_HOST", message: "No GitHub workbench") }
+        try await TerminalSmoke.wait("Attach GitHub tools to the actual main window") { content.webView.window === parent && model.inspectorVisible && model.inspector.content === content }
+        guard let window = content.presentationWindow, window === parent, content.window?.isVisible == false, let host = content.workbenchHost as? GitHubHost else { throw BridgeFailure(code: "GITHUB_QA_HOST", message: "GitHub did not open inside the main workspace") }
         try await ContentSmoke.wait(content, "document.querySelectorAll('.github-items button').length === 1")
+        let originalGeneration = first.generation, originalView = ObjectIdentifier(content.webView)
+        _ = try await content.webView.evaluateJavaScript("document.querySelector('.inspector-switcher button[aria-label=Files]').click()")
+        try await TerminalSmoke.wait("Switch to actual shared Files through the GitHub header") { model.inspector.mode == .files && model.inspector.content?.workbenchHost?.kind == "files" && model.inspector.content?.webView.window === parent }
+        guard let files = model.inspector.content else { throw BridgeFailure(code: "GITHUB_QA_TOOLS", message: "Files switch did not attach a document") }
+        try await ContentSmoke.wait(files, "document.querySelector('.inspector-switcher button[aria-label=GitHub]') !== null")
+        _ = try await files.webView.evaluateJavaScript("document.querySelector('[role=tab][aria-label=\"Project search\"]').click()")
+        try await ContentSmoke.wait(files, "document.querySelector('[role=tab][aria-label=\"Project search\"]').getAttribute('aria-selected')==='true'")
+        _ = try await files.webView.evaluateJavaScript("document.querySelector('.inspector-switcher button[aria-label=GitHub]').click()")
+        try await TerminalSmoke.wait("Return to the same GitHub document through the Files header") { model.inspector.mode == .github && model.inspector.content === content && content.webView.window === parent }
+        _ = try await content.webView.evaluateJavaScript("document.querySelector('.inspector-switcher button[aria-label=Files]').click()")
+        try await TerminalSmoke.wait("Reuse the Files document with the explicitly selected mode") { model.inspector.content === files && files.webView.window === parent }
+        try await ContentSmoke.wait(files, "document.querySelector('[role=tab][aria-label=\"File tree\"]').getAttribute('aria-selected')==='true'")
+        _ = try await files.webView.evaluateJavaScript("document.querySelector('.inspector-switcher button[aria-label=GitHub]').click()")
+        try await TerminalSmoke.wait("Restore GitHub after the retained Files mode check") { model.inspector.content === content && content.webView.window === parent }
+        guard first.generation == originalGeneration, ObjectIdentifier(content.webView) == originalView else { throw BridgeFailure(code: "GITHUB_QA_TOOLS", message: "Tool switching replaced the terminal or GitHub document") }
+        report["nativeGithubActualFilesSwitcherRetainsSessions"] = true
+        try await ContentSmoke.wait(content, "(()=>{const p=document.querySelector('.github-panel').getBoundingClientRect(),h=document.querySelector('.inspector-header').getBoundingClientRect();return p.top===0 && h.top===0 && Math.abs(p.height-innerHeight)<1 && Math.abs(p.width-innerWidth)<1 && innerHeight===720})()")
         let wrongRoot = try await ContentSmoke.request(content, method: "github_repositories", params: ["directory": temporary.path])
         let unknown = try await ContentSmoke.request(content, method: "file_save", params: ["directory": root.path, "path": "notes.txt", "text": "WRONG"])
         let privateArgument = try await ContentSmoke.request(content, method: "github_read", params: ["directory": root.path, "repository": "fixture-owner/fixture-repo", "kind": "issue", "token": "not-a-secret"])
@@ -60,6 +87,14 @@ enum GitHubSmoke {
         try await EditorSmoke.click(content, title: "View diff")
         try await ContentSmoke.wait(content, "document.querySelector('.github-panel')?.textContent.includes('GITHUB_FIXTURE_DIFF') === true")
         try await capture("native-github-pr-diff-dark-en.png"); captures.append("native-github-pr-diff-dark-en.png")
+        let beforeToolsClose = model.terminals.mapValues { $0.generation }
+        guard window.makeFirstResponder(content.webView) else { throw BridgeFailure(code: "GITHUB_QA_FOCUS", message: "GitHub tools cannot receive close shortcut") }
+        try TerminalSmoke.postKey(window: window, code: 13, characters: "w", modifiers: .command)
+        try await TerminalSmoke.wait("Actual tools close retains the main window") { !model.inspectorVisible && window.isVisible }
+        let reopenedTools = try await open(root)
+        guard reopenedTools === content, model.terminals.mapValues({ $0.generation }) == beforeToolsClose else { throw BridgeFailure(code: "GITHUB_QA_REUSE", message: "Closing and reopening tools replaced its document or terminal") }
+        try await TerminalSmoke.wait("Reattach GitHub after actual Close tools") { content.webView.window === window }
+
         report["nativeGithubPRDetailsAndDiff"] = true
         try Data().write(to: temporary.appendingPathComponent("github-slow-read"))
         let cancelledRead = Task { @MainActor in
@@ -75,20 +110,30 @@ enum GitHubSmoke {
         try FileManager.default.removeItem(at: temporary.appendingPathComponent("github-slow-read"))
         report["nativeGithubCancellationRetainsPendingOperationUntilCLICompletes"] = true
         try await EditorSmoke.click(content, title: "New PR")
-        try await ContentSmoke.wait(content, "document.querySelector('dialog[open] textarea') !== null")
+        try await TerminalSmoke.wait("PR form attaches above the live main workspace") { model.githubPRContent?.webView.window === window }
+        guard let modal = model.githubPRContent, let modalHost = modal.workbenchHost as? GitHubPRHost else { throw BridgeFailure(code: "GITHUB_QA_MODAL", message: "Missing workspace PR form") }
+        try await ContentSmoke.wait(modal, "document.querySelector('dialog[open] textarea') !== null")
         let literalTitle = "Keep `literal` $(literal) 中文", literalBody = "Line one\n$(literal)\n`literal` 中文"
-        guard try await EditorSmoke.evaluate(content, script: """
+        guard try await EditorSmoke.evaluate(modal, script: """
             const form=document.querySelector('dialog[open] form');
             const input=form.querySelector('input'),body=form.querySelector('textarea');
             Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,title);input.dispatchEvent(new Event('input',{bubbles:true}));
             Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(body,text);body.dispatchEvent(new Event('input',{bubbles:true}));
             return true;
             """, arguments: ["title": literalTitle, "text": literalBody]) else { throw BridgeFailure(code: "GITHUB_QA_FORM", message: "PR form did not accept input") }
-        window.performClose(nil)
-        guard !window.isVisible else { throw BridgeFailure(code: "GITHUB_QA_HIDE", message: "Close did not hide the GitHub window") }
-        let reopened = try await open(root)
-        guard reopened === content else { throw BridgeFailure(code: "GITHUB_QA_REUSE", message: "Reopening replaced the PR draft window") }
-        try await ContentSmoke.wait(content, "document.querySelector('dialog[open] textarea')?.value.includes('$(literal)') === true")
+        let beforeClose = model.terminals.mapValues { $0.generation }
+        guard window.makeFirstResponder(modal.webView) else { throw BridgeFailure(code: "GITHUB_QA_FOCUS", message: "GitHub tools cannot receive keyboard focus") }
+        try TerminalSmoke.postKey(window: window, code: 13, characters: "w", modifiers: .command)
+        try await TerminalSmoke.wait("Command-W hides only the PR modal and retains live tools") { model.githubPRContent == nil && model.inspectorVisible && content.webView.window === window && window.isVisible }
+        try await EditorSmoke.click(content, title: "New PR")
+        try await TerminalSmoke.wait("Reattach the same PR WebKit draft") { model.githubPRContent === modal && modal.webView.window === window }
+        guard model.terminals.mapValues({ $0.generation }) == beforeClose else { throw BridgeFailure(code: "GITHUB_QA_CLOSE", message: "Closing the PR modal changed terminal generations") }
+        try await ContentSmoke.wait(modal, "document.querySelector('dialog[open] textarea')?.value.includes('$(literal)') === true")
+        let rejectedRoot = try await ContentSmoke.request(modal, method: "github_pr_submit", params: ["directory": temporary.path, "repository": "other/repo", "title": "Wrong", "body": "", "base": "main", "head": "qa", "draft": true])
+        let rejectedLayout = try await ContentSmoke.request(modal, method: "github_pr_layout", params: ["height": -1])
+        let rejectedMethod = try await ContentSmoke.request(modal, method: "file_save", params: ["directory": root.path, "path": "notes.txt", "text": "WRONG"])
+        guard rejectedRoot == "INVALID_ARGUMENT", rejectedLayout == "INVALID_ARGUMENT", rejectedMethod == "METHOD_DENIED" else { throw BridgeFailure(code: "GITHUB_QA_SCOPE", message: "PR modal accepted an unscoped request") }
+        report["nativeGithubPRModalRejectsRootInjectionAndInvalidLayout"] = true
         let preparing = Task { @MainActor in try await host.prepareForQuit() }
         try await TerminalSmoke.wait("Actual GitHub draft confirmation sheet") { window.attachedSheet != nil }
         var queue = window.attachedSheet?.contentView.map { [$0] } ?? []
@@ -102,28 +147,44 @@ enum GitHubSmoke {
         }
         guard cancelledSheet, try await preparing.value == false else { throw BridgeFailure(code: "GITHUB_QA_QUIT", message: "Cancel discarded a PR draft") }
         try await TerminalSmoke.wait("GitHub draft confirmation sheet dismissed") { window.attachedSheet == nil }
-        guard try await EditorSmoke.evaluate(content, script: "return document.querySelector('dialog[open] input').value===title && document.querySelector('dialog[open] textarea').value===text;", arguments: ["title": literalTitle, "text": literalBody]) else { throw BridgeFailure(code: "GITHUB_QA_DRAFT", message: "Quit cancellation changed the PR draft") }
+        guard try await EditorSmoke.evaluate(modal, script: "return document.querySelector('dialog[open] input').value===title && document.querySelector('dialog[open] textarea').value===text;", arguments: ["title": literalTitle, "text": literalBody]) else { throw BridgeFailure(code: "GITHUB_QA_DRAFT", message: "Quit cancellation changed the PR draft") }
+        report["nativeGithubWidePRModalGeometry"] = try await modalGeometry(modal, parent: window)
         try await capture("native-github-pr-draft-dark-en.png"); captures.append("native-github-pr-draft-dark-en.png")
         report["nativeGithubHideReopenAndQuitCancelRetainDraft"] = true
-        try await EditorSmoke.click(content, title: "Create on GitHub")
+        report["nativeGithubMainWindowToolsAndCloseRetainDraft"] = true
+        try await EditorSmoke.click(modal, title: "Create on GitHub")
         try await TerminalSmoke.wait("Fixture CLI starts explicit PR creation") { FileManager.default.fileExists(atPath: temporary.appendingPathComponent("github-create-started").path) }
-        guard try await host.prepareForQuit() == false else { throw BridgeFailure(code: "GITHUB_QA_PENDING", message: "Quit bypassed an active API write") }
+        guard try await host.prepareForQuit() == false, try await modalHost.prepareForQuit() == false else { throw BridgeFailure(code: "GITHUB_QA_PENDING", message: "Quit bypassed an active API write") }
         try await ContentSmoke.wait(content, "document.querySelector('[role=status]')?.textContent.includes('Created PR #99') === true")
         let lines = try String(contentsOf: temporary.appendingPathComponent("github-cli.jsonl"), encoding: .utf8).split(separator: "\n")
         let completed = try lines.map { try JSONSerialization.jsonObject(with: Data($0.utf8)) as! [String: Any] }.filter { $0["event"] as? String == "create-completed" }
         guard completed.count == 1, let payload = completed[0]["payload"] as? [String: Any], payload["title"] as? String == literalTitle, payload["body"] as? String == literalBody, payload["draft"] as? Bool == true else { throw BridgeFailure(code: "GITHUB_QA_PAYLOAD", message: "CLI did not receive exactly one literal PR payload") }
         report["nativeGithubExplicitCreateLiteralPayloadAndPendingQuitGuard"] = true
+        try await TerminalSmoke.wait("Completed PR closes only its modal") { model.githubPRContent == nil && model.inspector.content === content && window.isVisible }
         try await EditorSmoke.click(content, title: "New PR")
-        try await ContentSmoke.wait(content, "document.querySelector('dialog[open] textarea') !== null")
+        try await TerminalSmoke.wait("Open a new independent PR form") { model.githubPRContent?.webView.window === window }
+        guard let narrow = model.githubPRContent, narrow !== modal else { throw BridgeFailure(code: "GITHUB_QA_REUSE", message: "Completed PR retained the submitted form") }
+        try await ContentSmoke.wait(narrow, "document.querySelector('dialog[open] textarea') !== null")
         await model.patchSettings(["language": .string("zh-Hans"), "appearance": .string("light")])
-        window.setContentSize(NSSize(width: 680, height: 620))
-        try await ContentSmoke.wait(content, "document.documentElement.lang==='zh-Hans' && document.querySelector('dialog[open]')?.textContent.includes('新建 Pull Request') === true")
+        _ = try await TerminalSmoke.sizeCaptureWindow(window, width: 640, height: 720)
+        try await ContentSmoke.wait(narrow, "document.documentElement.lang==='zh-Hans' && document.querySelector('dialog[open]')?.textContent.includes('新建 Pull Request') === true")
+        report["nativeGithubNarrowPRModalGeometry"] = try await modalGeometry(narrow, parent: window)
+        guard content.webView.window === window, model.selectedTerminal?.view.window === window, model.terminals.mapValues({ $0.generation }) == beforeClose else { throw BridgeFailure(code: "GITHUB_QA_MODAL", message: "PR form replaced live workspace views") }
+        report["nativeGithubPRModalWholeWorkspaceReadableFields"] = true
         try await capture("native-github-pr-draft-light-zh-narrow.png"); captures.append("native-github-pr-draft-light-zh-narrow.png")
-        try await EditorSmoke.click(content, title: "取消")
-        try await ContentSmoke.wait(content, "document.querySelector('dialog[open]') === null")
+        try await EditorSmoke.click(narrow, title: "取消")
+        try await TerminalSmoke.wait("Explicit Cancel discards only the new PR form") { model.githubPRContent == nil && !host.formActive }
+        try await EditorSmoke.click(content, title: "新建 PR")
+        try await TerminalSmoke.wait("Open PR form for actual Escape") { model.githubPRContent?.webView.window === window }
+        guard let escape = model.githubPRContent, window.makeFirstResponder(escape.webView) else { throw BridgeFailure(code: "GITHUB_QA_FOCUS", message: "PR form cannot receive Escape") }
+        try await ContentSmoke.wait(escape, "document.querySelector('dialog[open] textarea') !== null")
+        try TerminalSmoke.postKey(window: window, code: 53, characters: "\u{1b}", modifiers: [])
+        try await TerminalSmoke.wait("Actual Escape discards only the PR form") { model.githubPRContent == nil && !host.formActive && window.isVisible }
+        report["nativeGithubPRModalActualEscapeAndExplicitCancel"] = true
         guard try await host.prepareForQuit() else { throw BridgeFailure(code: "GITHUB_QA_FINAL_QUIT", message: "Clean GitHub workbench could not prepare to quit") }
         await host.resumeAfterQuit()
         report["nativeGithubBilingualThemeAndCleanQuitResume"] = true
+        report["nativeGithubMainWindowSizes"] = ["wide": [1100, 720], "narrow": [640, 720]]
         report["captures"] = captures; report["githubCLI"] = "isolated simulated gh; no account, network request, real PR, push or fork"
         report["inputMethod"] = "Actual native WKWebView DOM events and AppKit quit dialog cancellation; manual IME acceptance waived by user"
         for id in Array(model.terminals.keys) { await model.selectSession(id); await model.closeSession() }

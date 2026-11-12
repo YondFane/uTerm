@@ -5,7 +5,7 @@ import { createServer } from "./vite-server.mjs";
 import React, { act } from "react";
 import { mockIPC, clearMocks } from "@tauri-apps/api/mocks";
 
-test("file-manager actions stay within the window and retain their target and visible errors", async () => {
+async function verifyFileManager(transport) {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost" });
   for (const key of ["window", "document", "navigator", "HTMLElement", "Node"])
     Object.defineProperty(globalThis, key, { configurable: true, value: dom.window[key] });
@@ -30,7 +30,7 @@ test("file-manager actions stay within the window and retain their target and vi
   const root = createRoot(document.getElementById("root"));
   const calls = [];
   let fail = false;
-  mockIPC((command, args) => {
+  const invoke = (command, args) => {
     if (command === "git_file_status") return null;
     if (command === "files_list")
       return {
@@ -45,7 +45,36 @@ test("file-manager actions stay within the window and retain their target and vi
     calls.push(args);
     if (fail) throw new Error("File manager unavailable");
     return null;
-  });
+  };
+  mockIPC(invoke);
+  if (transport === "WebKit") {
+    window.utermContentDocument = "file-panel-document";
+    window.webkit = {
+      messageHandlers: {
+        utermContent: {
+          async postMessage(message) {
+            assert.equal(message.document, "file-panel-document");
+            assert.equal(message.kind, "request");
+            try {
+              return {
+                version: 1,
+                id: message.id,
+                document: message.document,
+                result: await invoke(message.method, message.params),
+              };
+            } catch (reason) {
+              return {
+                version: 1,
+                id: message.id,
+                document: message.document,
+                error: { code: "HOST_ERROR", message: String(reason) },
+              };
+            }
+          },
+        },
+      },
+    };
+  }
   const openMenu = async (target, x = 639, y = 599) => {
     await act(async () =>
       target.dispatchEvent(
@@ -124,8 +153,14 @@ test("file-manager actions stay within the window and retain their target and vi
     assert.match(document.querySelector('[role="alert"]').textContent, /File manager unavailable/);
   } finally {
     await act(async () => root.unmount());
+    window.dispatchEvent(new window.Event("pagehide"));
     clearMocks();
     await server.close();
     dom.window.close();
   }
-});
+}
+
+for (const transport of ["Tauri", "WebKit"]) {
+  test(`file-manager actions retain their target and visible errors through ${transport}`, () =>
+    verifyFileManager(transport));
+}

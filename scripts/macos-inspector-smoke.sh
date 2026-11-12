@@ -12,7 +12,7 @@ report = evidence / 'inspector-native.json'; report.unlink(missing_ok=True)
 with tempfile.TemporaryDirectory(prefix='uterm-native-qa-inspector-') as directory:
     with (evidence / 'inspector-native-stdout.log').open('w') as out, (evidence / 'inspector-native-stderr.log').open('w') as err:
         process = subprocess.Popen([str(app / 'Contents/MacOS/UTermNativeQA'), '--qa-data-root', directory, '--inspector-smoke-report', str(report)], stdout=out, stderr=err)
-        try: code = process.wait(timeout=150)
+        try: code = process.wait(timeout=210)
         finally:
             if process.poll() is None: process.kill(); process.wait()
     assert code == 0, code
@@ -22,11 +22,15 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-inspector-') as directo
     assert data['coreReady'] and not data['productionDataAccess']
     assert data['bundleIdentifier'] == 'sh.uterm.desktop.qa.native'
     for key in ['nativeFilesHiddenNavigationAndSymlinkBoundary', 'nativeInspectorQueryFocusSurvivesPTYOutput', 'nativeSearchReturnOpenedExactLine',
+                'sharedFilesRootAndMethodBoundaries', 'sharedFilesActualCreateCopyRenameDeleteAndCancel', 'sharedFilesStaleProjectRejected', 'sharedFilesAcrossProjectsRetainCopiedSource',
+                'sharedFilesAcrossWorkspacesRetainCopiedSourceAndRejectRemovedRoots',
+                'nativeSSHSearchAllAndCategoryRetainFocusAndSessions', 'nativeQuickSSHInvalidCancelAndStaleWorkspacePreserveState', 'nativeQuickSSHActualCreateAndKeepRetainSession',
+                'nativeQuickSSHActualFinalSessionPrunesTemporary', 'nativeQuickSSHInMainWindow', 'nativeQuickSSHModalCloseKeysRetainState', 'nativeQuickSSHModalRetainsExistingSessions', 'nativeQuickSSHFormBoundsAndLayoutArguments', 'nativeQuickSSHActualBackdropCancelRetainsState',
                 'searchJumpRetainsExistingEditorText', 'cancelledSearchAndFilenameQuickOpen',
                 'paneSwapAndZoomRetainLayoutViewsAndOutput', 'closeFocusedToolsRetainsPTYAndReturnsFocus',
                 'leftToolsRemainVisibleWithoutSidebar', 'explicitFixtureCloseAndIdleHostShutdown']:
         assert data[key], key
-    assert len(data['captures']) == 4
+    assert len(data['captures']) == 9
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name
     assert data['sourceHeadSHA'] == os.environ.get('PR_HEAD_SHA', data['sourceHeadSHA'])
     assert not subprocess.check_output(['git', 'status', '--porcelain'])
