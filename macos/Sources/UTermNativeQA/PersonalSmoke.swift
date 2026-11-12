@@ -18,7 +18,16 @@ enum PersonalSmoke {
             "sourceHeadSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceHeadSHA") as? String ?? "",
             "testedMergeSHA": Bundle.main.object(forInfoDictionaryKey: "UTermSourceSHA") as? String ?? "",
             "bundleIdentifier": Bundle.main.bundleIdentifier ?? "", "productionDataAccess": false, "passed": false]
+        let started = ProcessInfo.processInfo.systemUptime
+        func checkpoint(_ stage: String) throws {
+            report["stage"] = stage; report["inProgress"] = true
+            report["elapsedSeconds"] = ProcessInfo.processInfo.systemUptime - started
+            report["qaProcessID"] = ProcessInfo.processInfo.processIdentifier
+            var progress = report; progress["passed"] = false
+            try JSONSerialization.data(withJSONObject: progress, options: [.prettyPrinted, .sortedKeys]).write(to: root.appendingPathComponent("personal-\(phase)-progress.json"), options: .atomic)
+        }
         do {
+            try checkpoint("startup")
             guard model.ready, let bridge = model.bridge, WorkspaceModel.argument("--qa-data-root") == nil,
                   WorkspaceModel.argument("--smoke-report") == nil else { throw BridgeFailure(code: "PERSONAL_QA", message: "Personal startup or QA argument isolation failed: " + model.error) }
             guard let resources = Bundle.main.resourceURL else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing resources") }
@@ -52,6 +61,7 @@ enum PersonalSmoke {
                 guard model.settings["fontSize"] == parity["fontSize"], model.projects.contains(where: { $0["id"].string == "personal-qa-project" }) else { throw BridgeFailure(code: "PERSONAL_RETAIN", message: "Replacing the app lost the personal profile") }
             }
             let snapshot = try await bridge.snapshot()
+            try checkpoint("fixture-prepared")
             let drafts = try await bridge.call("editor.drafts.read")
             let archive = try await bridge.call("rollback.export", params: .object(["expectedRevision": .string(snapshot.revision), "expectedDraftRevision": drafts["revision"]]))
             let decoded = try JSONDecoder().decode(CoreRollbackArchive.self, from: JSONEncoder().encode(archive))
@@ -96,7 +106,9 @@ enum PersonalSmoke {
             await model.selectSession(originalID)
             try await TerminalSmoke.wait("Switch back without replacing the terminal") { terminal.view.window === window && model.selectedID == originalID }
             var captures: [String] = []
+            try checkpoint("sidebar")
             try await verifySidebar(model: model, window: window, root: root, phase: phase, report: &report)
+            try checkpoint("sidebar-completed")
             captures = report["captures"] as? [String] ?? []
             var appearances: [String: String] = [:]
             var updateStatuses: [String: String] = [:]
@@ -123,6 +135,7 @@ enum PersonalSmoke {
                       let width = scene["width"].number.flatMap({ Int(exactly: $0) }), let height = scene["height"].number.flatMap({ Int(exactly: $0) }) else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing settings capture fixture") }
                 for section in parity["settingsSections"].array {
                     guard let id = section["id"].string else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing settings section") }
+                    try checkpoint("settings-" + language + "-" + id)
                     try await TerminalSmoke.wait("Render actual settings navigation " + id) {
                         settings.window.contentView.map { TerminalSmoke.descendants($0).contains { $0.identifier?.rawValue == "native-settings-section-" + id && ($0 as? NSButton)?.isEnabled == true } } == true
                     }
@@ -159,6 +172,7 @@ enum PersonalSmoke {
                         "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? "",
                         "navigationControlActivated": true, "draftUnchanged": true, "mavenFixtureMatched": id == "maven", "databaseFixtureMatched": id == "database", "javaFixtureMatched": id == "java", "automaticUpdates": model.settings["automaticUpdates"].bool ?? false, "windowSizeAttempts": attempts])
                     report["settingsScenes"] = scenes
+                    try checkpoint("settings-captured-" + language + "-" + id)
                 }
                 settings.window.performClose(nil)
                 guard !settings.window.isVisible, !model.settingsPresented else { throw BridgeFailure(code: "PERSONAL_SETTINGS", message: "Settings close did not restore workspace command availability") }
@@ -172,6 +186,7 @@ enum PersonalSmoke {
                 for appearance in ["dark", "light"] {
                     await model.patchSettings(["language": .string(language), "appearance": .string(appearance)])
                     for width in [1100, 640] {
+                        try checkpoint("workspace-" + language + "-" + appearance + "-" + String(width))
                         window.makeKeyAndOrderFront(nil)
                         let sizeAttempts = try await TerminalSmoke.sizeCaptureWindow(window, width: width, height: 720)
                         guard model.settings["fontSize"] == parity["fontSize"], model.settings["language"].string == language, model.settings["appearance"].string == appearance,
@@ -264,6 +279,7 @@ enum PersonalSmoke {
                         }
                         workspaceScenes.append(captured)
                         report["workspaceScenes"] = workspaceScenes
+                        try checkpoint("workspace-captured-" + language + "-" + appearance + "-" + String(width))
                     }
                 }
             }
@@ -300,12 +316,18 @@ enum PersonalSmoke {
             report["captures"] = captures; report["realBundledHelperUnicodePTY"] = true
             report["profileRetainedAfterAppReplacement"] = phase != "initial"
             guard let projectDirectory = model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["directory"].string else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Missing fixture project") }
+            try checkpoint("terminal-controls")
             try await TerminalControlsSmoke.run(model: model, window: window, root: root, phase: phase, report: &report, captures: &captures)
+            try checkpoint("embedded-documents")
             try await EmbeddedDocumentsSmoke.run(model: model, window: window, root: URL(fileURLWithPath: projectDirectory), phase: phase, open: openFile, report: &report, captures: &captures)
+            try checkpoint("pdf")
             try await PdfParitySmoke.run(model: model, window: window, project: URL(fileURLWithPath: projectDirectory), output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
+            try checkpoint("quick-ssh")
             try await QuickParitySmoke.run(model: model, window: window, output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
+            try checkpoint("github")
             try await GitHubParitySmoke.run(model: model, window: window, output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
             report["captures"] = captures
+            try checkpoint("host-shutdown")
             await model.closeSession()
             let host = try await bridge.call("host.status")
             report["hostPID"] = host["pid"].number.flatMap { Int(exactly: $0) }
@@ -315,6 +337,7 @@ enum PersonalSmoke {
             report["passed"] = true
         } catch {
             report["failure"] = error.localizedDescription
+            report["failureStage"] = report["stage"]
             report["inspectorDiagnostics"] = ["error": model.inspector.error, "code": model.inspector.errorCode, "directory": model.inspector.directory, "paths": model.inspector.rows.compactMap { $0["path"].string }] as [String: Any]
             report["sidebarDiagnostics"] = ["busy": model.busy, "error": model.error, "section": model.sidebarSection, "query": model.sidebarQuery,
                 "projects": model.projects.map { ["id": $0["id"].string ?? "", "collapsed": $0["collapsed"].bool ?? false] as [String: Any] }] as [String: Any]
@@ -326,7 +349,10 @@ enum PersonalSmoke {
                 report["failureCaptureError"] = error.localizedDescription
             }
         }
+        try? checkpoint("model-shutdown")
         await model.shutdown()
+        report["inProgress"] = false
+        report["elapsedSeconds"] = ProcessInfo.processInfo.systemUptime - started
         do {
             let bytes = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
             try bytes.write(to: root.appendingPathComponent("personal-\(phase).json"), options: .atomic)
