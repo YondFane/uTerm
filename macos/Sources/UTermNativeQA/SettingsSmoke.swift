@@ -4,6 +4,37 @@ import UTermBridge
 
 @MainActor
 enum SettingsSmoke {
+    private static var readRetries = 0
+    private static var peerWriteRetries = 0
+    private static func readSnapshot(_ bridge: CoreBridge) async throws -> CoreSnapshot {
+        // Retry only a bounded read; never replay application settings writes here.
+        // 这里只有限重读，不重放应用的设置写入。
+        for attempt in 1...3 {
+            do { return try await bridge.snapshot() }
+            catch let failure as BridgeFailure where failure.code == "WRITER_BUSY" {
+                guard attempt < 3 else { throw failure }
+                readRetries += 1; NSLog("Settings QA read-only snapshot retry %ld", attempt)
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
+        throw BridgeFailure(code: "WRITER_BUSY", message: "Settings QA snapshot remained busy")
+    }
+    private static func patchPeer(_ bridge: CoreBridge, baseline: CoreSnapshot, patch: JSONValue) async throws {
+        // A fixture may repeat its peer write only after proving the original store is unchanged.
+        // 测试样例仅在确认原始存储未变后，才可明确再次执行外部写入。
+        for attempt in 1...3 {
+            do {
+                _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(baseline.revision), "patch": patch]))
+                return
+            } catch let failure as BridgeFailure where failure.code == "WRITER_BUSY" {
+                let after = try await readSnapshot(bridge)
+                guard attempt < 3, after.revision == baseline.revision, after.document.workspace == baseline.document.workspace,
+                      after.document.settings == baseline.document.settings else { throw failure }
+                peerWriteRetries += 1; NSLog("Settings QA unchanged peer fixture retry %ld", attempt)
+                try await Task.sleep(for: .milliseconds(100))
+            }
+        }
+    }
     private static func key(_ window: NSWindow, code: UInt16, characters: String) throws {
         guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code) else { throw BridgeFailure(code: "SETTINGS_QA_EVENT", message: "Could not construct native key input") }
         NSApp.sendEvent(event)
@@ -25,6 +56,7 @@ enum SettingsSmoke {
         return nil
     }
     static func run(workspace: WorkspaceModel, open: () -> NativeSettingsWindow, report: inout [String: Any]) async throws {
+        readRetries = 0; peerWriteRetries = 0
         guard workspace.ready, let bridge = workspace.bridge, let path = WorkspaceModel.argument("--settings-smoke-report") else { throw BridgeFailure(code: "SETTINGS_QA_CONTEXT", message: "Missing isolated settings context") }
         let root = try WorkspaceModel.dataRoot()
         guard !workspace.updates.available, workspace.updates.controller == nil else { throw BridgeFailure(code: "UPDATE_DEFAULT", message: "Unconfigured QA build unexpectedly initialized network updates") }
@@ -61,16 +93,19 @@ enum SettingsSmoke {
         let other = try await CoreBridge.open(root: root)
         do {
             model.numbers["fileFontSize"] = "19"
-            var snapshot = try await other.snapshot()
-            _ = try await other.call("settings.patch", params: .object(["expectedRevision": .string(snapshot.revision), "patch": .object(["usageRefreshInterval": .number(70)])]))
+            var snapshot = try await readSnapshot(other)
+            report["settingsPeerPhase"] = "prepare-unrelated-write"
+            try await patchPeer(other, baseline: snapshot, patch: .object(["usageRefreshInterval": .number(70)]))
             try await save(model)
-            snapshot = try await other.snapshot()
+            snapshot = try await readSnapshot(other)
             guard model.error.isEmpty, snapshot.document.settings["fileFontSize"].number == 19, snapshot.document.settings["usageRefreshInterval"].number == 70 else { throw BridgeFailure(code: "SETTINGS_QA_REBASE", message: "Saving overwrote an unrelated external preference") }
             report["unrelatedExternalSettingsPreserved"] = true
             model.numbers["fontSize"] = "18"
-            _ = try await other.call("settings.patch", params: .object(["expectedRevision": .string(snapshot.revision), "patch": .object(["fontSize": .number(20)])]))
+            report["settingsPeerPhase"] = "prepare-same-field-conflict"
+            try await patchPeer(other, baseline: snapshot, patch: .object(["fontSize": .number(20)]))
+            report["settingsPeerPhase"] = "verify-same-field-conflict"
             try await save(model)
-            guard model.errorCode == "SETTINGS_CONFLICT", model.numbers["fontSize"] == "18", (try await other.snapshot()).document.settings["fontSize"].number == 20 else { throw BridgeFailure(code: "SETTINGS_QA_CONFLICT", message: "A stale field overwrote the other client") }
+            guard model.errorCode == "SETTINGS_CONFLICT", model.numbers["fontSize"] == "18", (try await readSnapshot(other)).document.settings["fontSize"].number == 20 else { throw BridgeFailure(code: "SETTINGS_QA_CONFLICT", message: "A stale field overwrote the other client") }
             report["sameFieldConflictRetainsDraftAndPeerValue"] = true
             current.window.performClose(nil)
             guard !current.window.isVisible, open() === current, model.numbers["fontSize"] == "18" else { throw BridgeFailure(code: "SETTINGS_QA_REOPEN", message: "Hidden settings draft was lost") }
@@ -214,6 +249,8 @@ enum SettingsSmoke {
             await other.close()
         } catch { await other.close(); throw error }
         report["manualAcceptance"] = "waived by user"
+        report["settingsQAReadOnlyRetryCount"] = readRetries
+        report["settingsQAPeerWriteRetryCount"] = peerWriteRetries
         report["nativeSettingsFeatureAcceptanceComplete"] = false
         report["remaining"] = ["Automatic update effects remain tracked in #45; preference/file/search/inspector/swap/zoom and GitHub have separate reports; actual OS login approval uses the authorized simulation boundary"]
         current.window.orderOut(nil)
@@ -222,7 +259,7 @@ enum SettingsSmoke {
     private static func verifyFontPickers(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
         let model = settings.model
         guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Missing font preference bridge") }
-        let before = try await bridge.snapshot()
+        let before = try await readSnapshot(bridge)
         let custom = "QA literal \"中文\", monospace"
         var selected: [String: JSONValue] = [:]
         var capture = ""
@@ -233,7 +270,7 @@ enum SettingsSmoke {
             guard let picker = view(settings.window, id: identifier) as? NSPopUpButton,
                   let font = model.catalog["fonts"][key].array.dropFirst().first?["value"].string,
                   let option = picker.itemArray.first(where: { $0.representedObject as? String == font }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Shared font presets or custom selection are missing") }
-            guard (try await bridge.snapshot()).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_FONT_DRAFT", message: "Rendering a custom font changed saved settings") }
+            guard (try await readSnapshot(bridge)).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_FONT_DRAFT", message: "Rendering a custom font changed saved settings") }
             if key == "interfaceFont" {
                 capture = "native-settings-custom-font.png"
                 try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
@@ -243,7 +280,7 @@ enum SettingsSmoke {
             selected[key] = .string(font)
         }
         try await save(model)
-        let saved = try await bridge.snapshot()
+        let saved = try await readSnapshot(bridge)
         guard model.error.isEmpty, !model.dirty, selected.allSatisfy({ saved.document.settings[$0.key] == $0.value }) else { throw BridgeFailure(code: "SETTINGS_QA_FONT_SAVE", message: "Selected font values did not round trip through the shared core") }
         report["nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets"] = true
         return capture
@@ -260,7 +297,7 @@ enum SettingsSmoke {
         try await TerminalSmoke.wait("Load actual Java component catalog and JDK list") { !java.loading && java.catalog != .null }
         guard java.error.isEmpty, java.catalog["items"].array.compactMap({ $0["id"].string }).sorted() == ["jdk-11", "jdk-17", "jdk-21", "jdk-8", "maven"],
               !java.working else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Java settings did not load all managed tools without starting a download") }
-        let before = try await bridge.snapshot()
+        let before = try await readSnapshot(bridge)
         java.adding = true; java.home = "/missing JDK 中文 & %"
         try await TerminalSmoke.wait("Render actual JDK registration button") { (view(settings.window, id: "native-java-register") as? NSButton)?.isEnabled == true }
         guard let add = view(settings.window, id: "native-java-register") as? NSButton else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "JDK register control missing") }
@@ -280,7 +317,7 @@ enum SettingsSmoke {
         guard let registered = java.jdks.first(where: { $0["registered"].bool == true }), let canonical = registered["home"].string,
               registered["available"].bool == true else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "Real local JDK record is missing") }
         await java.register(canonical, remove: true)
-        let after = try await bridge.snapshot()
+        let after = try await readSnapshot(bridge)
         guard java.error.isEmpty, !java.jdks.contains(where: { $0["home"].string == canonical && $0["registered"].bool == true }),
               FileManager.default.fileExists(atPath: URL(fileURLWithPath: canonical).appendingPathComponent("bin/javac").path),
               after.document.workspace == before.document.workspace, after.document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_JAVA", message: "JDK record removal changed files or workspace/settings state") }

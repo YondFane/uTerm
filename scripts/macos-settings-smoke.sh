@@ -22,6 +22,9 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
     for key in ['nativeSettingsMenuAndReadonlyOpen', 'invalidNumericDraftRetainedWithoutWrite', 'unrelatedExternalSettingsPreserved', 'sameFieldConflictRetainsDraftAndPeerValue', 'hiddenWindowAndActualQuitCancellationRetainDraft', 'nativeReservedAndDuplicateShortcutErrors', 'nativeShortcutCaptureAndSave', 'nativeDynamicMenuPaletteKeyboardAndFocusReturn', 'nativeThemeImportDraftFailureAndTerminalEffects', 'explicitResetUsesSharedDefaults', 'simulatedLoginItemOptInApprovalFailureAndDisable']:
         assert data[key], key
     assert data['nativeThemeFileNamesAndBoundedReads']
+    assert data['settingsPeerPhase'] == 'verify-same-field-conflict'
+    assert data['settingsQAReadOnlyRetryCount'] >= 0
+    assert 0 <= data['settingsQAPeerWriteRetryCount'] <= 4
     assert data['nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets']
     assert data['nativeGlobalMavenActualSaveConflictDraftAndProjectPreservation']
     assert data['nativeDatabaseComponentsReadonlyCatalogWithoutDownloads']
