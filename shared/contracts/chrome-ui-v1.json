@@ -20,7 +20,16 @@
     "mainMinimumWidth": 320,
     "inspectorMinimumAvailable": 350,
     "inspectorMaximumRatio": 0.6,
-    "inspectorDefaultRatio": 0.35
+    "inspectorDefaultRatio": 0.35,
+    "javaPanelDefaultHeight": 380,
+    "pythonPanelDefaultHeight": 470,
+    "runPanelMinimumHeight": 240,
+    "runPanelCompactMinimumHeight": 200,
+    "runPanelCompactViewportHeight": 550,
+    "runPanelReservedHeight": 88,
+    "runPanelExpandedTop": 80,
+    "runPanelResizeStep": 24,
+    "runPanelHeaderHeight": 36
   },
   "icons": {
     "sidebar": {

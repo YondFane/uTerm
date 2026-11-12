@@ -271,8 +271,13 @@ Full workbench integration and visual alignment remain pending.
 Agent usage polling waits for catalog initialization, including when polling starts before the
 window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
 
-Java/Maven, Python and SSH/SFTP open as native tabs in the main workspace. Switching to the terminal
-and back retains the same native view, run model, transfers and drafts; closing uses the existing
+Java/Maven and Python dock below the main terminal or file, using shared default heights of 380px
+and 470px. Drag the separator or use Up/Down in 24px steps, Home/End for its bounds, and
+double-click for the default height. Expand/Restore retains the docked height and the same native
+view, run model and task log. Window shrinking clamps the panel and reserves space for the main
+area. Opening or closing a file retains the run panel; connection workbenches and SSH use their
+existing main-area selection. SSH/SFTP remains a native workspace tab. Switching to the terminal and
+back retains the same native view, run model, transfers and drafts; closing uses the existing
 save/transfer/run guards. Database and Redis use workspace document tabs. Closing a workbench tab
 hides its retained client; reopening restores the same WebKit document, connection handles and
 drafts. Project changes scope visible panels without retargeting an in-flight request. New terminal
@@ -285,7 +290,15 @@ terminal without closing its retained task. Both clients read the same Core disc
 never starts a host and excludes build/test history. The native Close menu labels embedded content
 as a tab and a standalone file as a file; each action retains its existing save and close guard.
 
-The isolated `workspace-panels-native.json` scenario captures twelve actual main-window scenes
+The dock candidate adds two passing Swift 6.1.2 Linux Foundation-only geometry tests and five
+passing Node panel/navigation/vector regressions. These do not compile AppKit or establish native
+docking acceptance. The required Mac run exercises real responder keys, actual Expand/Restore
+buttons and labelled synthetic double-click events, both on empty panels and while real Java/Python
+tasks run. Reports retain task IDs/generations, follow mode, native-view identity, original
+expanded/restored PNGs and the main terminal or file. This candidate's Mac execution and
+ordinary-client panel pairing remain pending; earlier full-tab images do not accept the new dock.
+
+The isolated `workspace-panels-native.json` scenario captures twelve panel-grid main-window scenes
 (English/dark at 1100px and Chinese/light at 640px), clicks terminal/panel/close controls, checks
 retained views/documents and preserves terminal identity/generation. Each capture records its
 source, actual window width and platform metadata. Run panels redraw localized labels when settings

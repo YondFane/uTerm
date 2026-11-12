@@ -65,6 +65,7 @@ enum ProjectRunSmoke {
         guard panel.view === retainedView else { throw BridgeFailure(code: "RUN_LIST", message: "Launch selection replaced the retained panel view") }
         let terminal = (controller as? JavaWindow)?.model.terminal ?? (controller as? PythonWindow)?.model.terminal
         guard terminal?.id == id, terminal?.generation == generation else { throw BridgeFailure(code: "RUN_LIST", message: "Launch selection replaced the task generation") }
+        report[language + "DockedRunPanel"] = try await RunPanelSmoke.run(model: model, panel: panel, window: window, prefix: "native-live-" + language, evidence: evidence)
         let screenshot = "native-" + language + "-launch-list-workspace.png"
         try await TerminalSmoke.capture(window: window, path: evidence.appendingPathComponent(screenshot))
         guard let content = window.contentView else { throw BridgeFailure(code: "RUN_LIST", message: "Missing actual workspace view") }
@@ -83,6 +84,7 @@ enum ProjectRunSmoke {
             "actualMainWindow": true, "actualToggleButtonRetainedGeneration": true, "retainedContentAfterBackingWindowCleared": true,
             "backingHadContentBeforeQA": backingHadContent]
         proof["screenshot"] = screenshot
+        proof["taskID"] = id; proof["taskGeneration"] = generation
         proof["input"] = "NSApplication.sendAction using the mounted toolbar coordinator and actual NSMenuItem; explicit backing content removal reproduces the observed loss; real Core host task; no physical popup pointer/keyboard claim"
         report[language + "ToolbarRunList"] = proof
     }

@@ -823,7 +823,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     private func presentPanel(_ controller: NSWindowController, id: String, title: String, scope: String) throws {
         guard let parent = window, model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: localized("Workspace changed. Open the panel again.", "工作区已变化，请重新打开面板。")) }
-        model.documents.showTerminal(in: scope)
+        if !(controller is JavaWindow || controller is PythonWindow) || model.documents.active(in: scope)?.content.workbenchHost != nil { model.documents.showTerminal(in: scope) }
         try model.panels.attach(controller, id: id, title: title, scope: scope, parent: parent)
     }
     private func openProfile(kind: String, group: String, id: String) {

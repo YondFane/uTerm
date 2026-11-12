@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { tx } from "../lib/i18n";
+import chrome from "../../shared/contracts/chrome-ui-v1.json" with { type: "json" };
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { displayLocalPath } from "../lib/file-target";
 import {
@@ -62,7 +63,11 @@ export function PythonRunPanel({
   const lifecycle = useRef(0);
   const prepare = useRef<() => Promise<boolean>>(async () => false);
   const panel = useRef<HTMLElement>(null);
-  const [size, setSize] = useState({ height: 470, minimum: 240, maximum: 700 });
+  const [size, setSize] = useState({
+    height: chrome.metrics.pythonPanelDefaultHeight,
+    minimum: chrome.metrics.runPanelMinimumHeight,
+    maximum: 700,
+  });
   const sizeRef = useRef(size);
   sizeRef.current = size;
   const drag = useRef<{ y: number; height: number; next: number } | null>(null);
@@ -98,8 +103,8 @@ export function PythonRunPanel({
     const measure = () => {
       if (!parent.clientHeight) return;
       finishDrag(false);
-      const maximum = Math.max(0, parent.clientHeight - 88);
-      const minimum = Math.min(240, maximum);
+      const maximum = Math.max(0, parent.clientHeight - chrome.metrics.runPanelReservedHeight);
+      const minimum = Math.min(chrome.metrics.runPanelMinimumHeight, maximum);
       setSize((previous) => ({
         height: Math.max(minimum, Math.min(maximum, previous.height)),
         minimum,
@@ -351,7 +356,12 @@ export function PythonRunPanel({
           }}
           onPointerCancel={() => finishDrag(false)}
           onLostPointerCapture={() => finishDrag(false)}
-          onDoubleClick={() => setSize((previous) => ({ ...previous, height: clamp(470) }))}
+          onDoubleClick={() =>
+            setSize((previous) => ({
+              ...previous,
+              height: clamp(chrome.metrics.pythonPanelDefaultHeight),
+            }))
+          }
           onKeyDown={(event) => {
             const value =
               event.key === "Home"
@@ -359,9 +369,9 @@ export function PythonRunPanel({
                 : event.key === "End"
                   ? size.maximum
                   : event.key === "ArrowUp"
-                    ? size.height + 24
+                    ? size.height + chrome.metrics.runPanelResizeStep
                     : event.key === "ArrowDown"
-                      ? size.height - 24
+                      ? size.height - chrome.metrics.runPanelResizeStep
                       : null;
             if (value !== null) {
               event.preventDefault();

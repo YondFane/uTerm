@@ -114,7 +114,10 @@ final class WorkspaceModel: ObservableObject {
     lazy var agentNotifications = AgentNotifications(workspace: self)
     lazy var documents: NativeWorkspaceDocuments = {
         let value = NativeWorkspaceDocuments()
-        value.selectionChanged = { [weak self] in guard let self else { return }; self.panels.showTerminal(in: self.inspectorContextKey) }
+        value.selectionChanged = { [weak self] content in
+            guard let self else { return }
+            if content.workbenchHost != nil || self.panels.active(in: self.inspectorContextKey)?.runKind == nil { self.panels.showTerminal(in: self.inspectorContextKey) }
+        }
         value.terminalFocusRequested = { [weak self] in self?.focusRevision += 1 }
         return value
     }()

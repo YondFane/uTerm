@@ -59,6 +59,22 @@ enum WorkspacePanelsSmoke {
             }
             guard let panel = model.panels.active(in: model.inspectorContextKey) else { throw BridgeFailure(code: "PANELS_VIEW", message: "Missing mounted native panel") }
             let view = panel.view
+            if panel.runKind != nil {
+                report[kind + "DockedRunPanel"] = try await RunPanelSmoke.run(model: model, panel: panel, window: window, prefix: "native-workspace-" + kind, evidence: evidence)
+                guard let openFile = model.openInspectorFile else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "Missing actual file entry point") }
+                try await openFile(root.path, "README.md", 0)
+                try await TerminalSmoke.wait("A real file and the run panel share the main workspace") {
+                    model.documents.active(in: model.inspectorContextKey)?.content.webView.window === window && model.panels.active(in: model.inspectorContextKey)?.id == panel.id && view.window === window
+                }
+                guard let document = model.documents.active(in: model.inspectorContextKey) else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "Missing mounted file") }
+                try await capture("native-workspace-" + kind + "-dock-with-file.png")
+                guard let closeFile = button("native-file-close-" + document.id.uuidString) else { throw BridgeFailure(code: "PANELS_DOCUMENT", message: "Missing actual file close control") }
+                closeFile.performClick(nil)
+                try await TerminalSmoke.wait("Closing the clean file retains the docked run panel") {
+                    model.documents.active(in: model.inspectorContextKey) == nil && model.panels.active(in: model.inspectorContextKey)?.id == panel.id && view.window === window
+                }
+                report[kind + "DockedFileRetained"] = true
+            }
             try await captureWidths(kind)
             guard let terminalTab = button("native-workspace-terminal-tab") else { throw BridgeFailure(code: "PANELS_TAB", message: "Missing terminal tab") }
             terminalTab.performClick(nil)

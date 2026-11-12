@@ -8,6 +8,7 @@ struct JavaEnvironment: Identifiable { let id = UUID(); var key = ""; var value 
 
 @MainActor
 final class JavaRunModel: ObservableObject {
+    @Published var workspaceDocked = false
     let directory: String
     let bridge: CoreBridge
     private(set) var settings: JSONValue
@@ -404,7 +405,7 @@ struct JavaRunView: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(model.directory).font(.caption).textSelection(.enabled)
+            if !model.workspaceDocked { Text(model.directory).font(.caption).textSelection(.enabled) }
             ScrollView { configuration.padding(2) }.frame(maxHeight: 310).disabled(model.busy || model.prepared || model.config == nil)
             if !model.error.isEmpty { Text(model.error).foregroundStyle(.red).textSelection(.enabled) }
             if !model.feedback.isEmpty { Text(model.feedback).font(.caption) }
@@ -460,6 +461,7 @@ private struct JavaLogCanvas: NSViewRepresentable {
 final class JavaWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePanelContent {
     let model: JavaRunModel
     private(set) var workspacePanelView: NSView?
+    func workspaceEmbeddingChanged(_ embedded: Bool) { model.workspaceDocked = embedded }
     var didClose: (() -> Void)?
     private var closing = false
     init(model: JavaRunModel) {

@@ -9,6 +9,7 @@ struct PythonEnvironment: Identifiable { let id = UUID(); var key = ""; var valu
 
 @MainActor
 final class PythonRunModel: ObservableObject {
+    @Published var workspaceDocked = false
     let directory: String
     let bridge: CoreBridge
     private(set) var settings: JSONValue
@@ -284,7 +285,7 @@ struct PythonRunView: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(model.directory).font(.caption).textSelection(.enabled)
+            if !model.workspaceDocked { Text(model.directory).font(.caption).textSelection(.enabled) }
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
@@ -401,6 +402,7 @@ private struct PythonLogCanvas: NSViewRepresentable {
 final class PythonWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePanelContent {
     let model: PythonRunModel
     private(set) var workspacePanelView: NSView?
+    func workspaceEmbeddingChanged(_ embedded: Bool) { model.workspaceDocked = embedded }
     var didClose: (() -> Void)?
     private var closing = false
     init(model: PythonRunModel) {

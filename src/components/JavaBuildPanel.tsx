@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { tx } from "../lib/i18n";
+import chrome from "../../shared/contracts/chrome-ui-v1.json" with { type: "json" };
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { useDialogBackdrop } from "../lib/useDialogBackdrop";
 import {
@@ -71,7 +72,11 @@ export function JavaBuildPanel({
     [environmentText, setEnvironmentText] = useState("");
   const [manualMainClass, setManualMainClass] = useState(false);
   const panel = useRef<HTMLElement>(null);
-  const [panelSize, setPanelSize] = useState({ height: 380, minimum: 240, maximum: 600 });
+  const [panelSize, setPanelSize] = useState({
+    height: chrome.metrics.javaPanelDefaultHeight,
+    minimum: chrome.metrics.runPanelMinimumHeight,
+    maximum: 600,
+  });
   const sizeRef = useRef(panelSize);
   sizeRef.current = panelSize;
   const heightDrag = useRef<{ y: number; height: number; next: number } | null>(null);
@@ -109,8 +114,13 @@ export function JavaBuildPanel({
     const measure = () => {
       if (!parent.clientHeight) return;
       finishHeightDrag(false);
-      const maximum = Math.max(0, parent.clientHeight - 88);
-      const minimum = Math.min(window.innerHeight <= 550 ? 200 : 240, maximum);
+      const maximum = Math.max(0, parent.clientHeight - chrome.metrics.runPanelReservedHeight);
+      const minimum = Math.min(
+        window.innerHeight <= chrome.metrics.runPanelCompactViewportHeight
+          ? chrome.metrics.runPanelCompactMinimumHeight
+          : chrome.metrics.runPanelMinimumHeight,
+        maximum,
+      );
       setPanelSize((previous) => {
         const height = Math.max(minimum, Math.min(maximum, previous.height));
         return height === previous.height &&
@@ -468,7 +478,10 @@ export function JavaBuildPanel({
           onPointerCancel={() => finishHeightDrag(false)}
           onLostPointerCapture={() => finishHeightDrag(false)}
           onDoubleClick={() =>
-            setPanelSize((previous) => ({ ...previous, height: clampHeight(380) }))
+            setPanelSize((previous) => ({
+              ...previous,
+              height: clampHeight(chrome.metrics.javaPanelDefaultHeight),
+            }))
           }
           onKeyDown={(event) => {
             const height =
@@ -477,9 +490,9 @@ export function JavaBuildPanel({
                 : event.key === "End"
                   ? panelSize.maximum
                   : event.key === "ArrowUp"
-                    ? panelSize.height + 24
+                    ? panelSize.height + chrome.metrics.runPanelResizeStep
                     : event.key === "ArrowDown"
-                      ? panelSize.height - 24
+                      ? panelSize.height - chrome.metrics.runPanelResizeStep
                       : null;
             if (height === null) return;
             event.preventDefault();
