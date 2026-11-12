@@ -75,6 +75,13 @@ def validate_workspace_scenes(report, head, tested, phase):
     assert len(scenes) == len(expected)
     observed = set()
     for scene in scenes:
+        branch = scene.get("branchPicker", {})
+        assert branch.get("actualAppKitControl") is True and branch.get("name")
+        assert abs(branch.get("fontSize", 0) - 11) < 0.01 and abs(branch.get("captionGap", -100) - 5) < 1
+        assert branch.get("width", 0) >= 24 and branch.get("height", 0) > 20 and branch.get("fontName")
+        controls = scene.get("windowControls", [])
+        assert len(controls) == 3 and abs(controls[0].get("x", -100) - 16) < 1
+        assert all(control.get("width", 0) > 0 and control.get("height", 0) > 0 and 0 <= control.get("y", -100) < 44 for control in controls)
         identity = (scene["language"], scene["appearance"], scene["width"])
         assert identity in expected and identity not in observed
         observed.add(identity)

@@ -552,8 +552,31 @@ async function runUiParity() {
           () => Object.values(fileGitStates()).every((state) => state === "untracked"),
           "actual file Git state decorations",
         );
+        const branch = document.querySelector<HTMLElement>(".workspace-branch");
+        const trigger = branch?.querySelector<HTMLButtonElement>(".branch-trigger");
+        const branchIcon = branch?.querySelector("svg");
+        assert(branch && trigger && branchIcon, "Missing actual ordinary branch picker");
+        const branchBounds = branch.getBoundingClientRect();
+        const branchStyle = getComputedStyle(branch);
+        const branchMetrics = {
+          name: trigger.textContent?.trim().replace(/\s+⌄$/u, "") ?? "",
+          height: branchBounds.height,
+          width: branchBounds.width,
+          fontSize: Number.parseFloat(branchStyle.fontSize),
+          captionGap:
+            trigger.getBoundingClientRect().left - branchIcon.getBoundingClientRect().right,
+          actualDOMControl: true,
+          fontName: branchStyle.fontFamily,
+        };
+        assert(
+          branchMetrics.name === parityFixture.github.head &&
+            Math.abs(branchMetrics.fontSize - 11) < 0.01 &&
+            Math.abs(branchMetrics.captionGap - 5) < 1,
+          "Incorrect actual ordinary branch geometry",
+        );
         await scene(`workspace-${language}-${appearance}-${width}`, {
           chromeContractSHA256,
+          branchPicker: branchMetrics,
           toolbarHeight,
           toolbarTop,
           sidebarWidth,

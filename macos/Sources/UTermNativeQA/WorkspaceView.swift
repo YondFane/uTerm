@@ -90,6 +90,7 @@ struct WorkspaceView: View {
                     }
                 }
             }
+            .onChange(of: geometry.size.width, initial: true) { _, width in model.measureViewport(width) }
             .onChange(of: model.inspectorVisible) { _, visible in
                 inspectorResizeStart = nil
                 if visible && tools.width <= CoreChrome.panelCollapseWidth + 1 { inspectorRatio = CoreChrome.inspectorDefaultRatio }

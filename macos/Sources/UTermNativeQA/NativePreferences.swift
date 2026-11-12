@@ -31,6 +31,7 @@ enum NativePreferences {
     static func semiboldFont(_ families: String, size: CGFloat) -> NSFont {
         let regular = font(families, size: size)
         if regular.familyName == NSFont.systemFont(ofSize: size).familyName { return .systemFont(ofSize: size, weight: .semibold) }
+        if regular.familyName == "Cascadia Code", let exact = NSFont(name: "CascadiaCode-SemiBold", size: size) { return exact }
         let descriptor = regular.fontDescriptor.addingAttributes([.traits: [NSFontDescriptor.TraitKey.weight: NSFont.Weight.semibold.rawValue]])
         return NSFont(descriptor: descriptor, size: size) ?? regular
     }

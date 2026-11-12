@@ -222,6 +222,18 @@ enum PersonalSmoke {
                                 "allWidth": model.sidebarAllButtonFrame.width, "allHeight": model.sidebarAllButtonFrame.height]
                             throw error
                         }
+                        var branchMetrics: [String: Any] = [:]
+                        try await TerminalSmoke.wait("Actual compact branch picker shows the fixture branch") {
+                            guard let content = window.contentView, let button = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-branch-picker" }) as? NSButton,
+                                  button.isEnabled, button.title == (parity["github"]["head"].string ?? "") + " ⌄", let cell = button.cell else { return false }
+                            let icon = cell.imageRect(forBounds: button.bounds), title = cell.titleRect(forBounds: button.bounds)
+                            branchMetrics = ["name": model.branchPicker.current, "height": button.frame.height, "width": button.frame.width,
+                                "fontSize": button.font?.pointSize ?? 0, "captionGap": title.minX - icon.maxX,
+                                "actualAppKitControl": true, "fontName": button.font?.fontName ?? ""]
+                            return abs((button.font?.pointSize ?? 0) - 11) < 0.01 && abs(title.minX - icon.maxX - 5) < 1 && button.frame.width >= 24 && button.frame.height > 20
+                        }
+                        let controls = NativeWindowControls.metrics(window)
+                        guard controls.count == 3, let closeX = controls.first?["x"], abs(closeX - 16) < 1 else { throw BridgeFailure(code: "PERSONAL_WINDOW_CONTROLS", message: "Actual window controls differ from the shared inset") }
                         let name = "personal-\(phase)-workspace-\(language)-\(appearance)-\(width).png"
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
                         captures.append(name)
@@ -236,6 +248,8 @@ enum PersonalSmoke {
                             "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""]
                         guard let font = model.selectedTerminal?.view.font, font.fontName == "CascadiaCode-Regular", font.familyName == "Cascadia Code" else { throw BridgeFailure(code: "PERSONAL_FONT", message: "Terminal used a fallback instead of the bundled face") }
                         captured["fontFamily"] = font.familyName ?? ""
+                        captured["branchPicker"] = branchMetrics
+                        captured["windowControls"] = controls
                         for (key, value) in inspectorGeometry { captured[key] = value }
                         captured["sidebarRailLeft"] = model.sidebarRailFrame.minX
                         captured["sidebarRailWidth"] = model.sidebarRailFrame.width

@@ -61,26 +61,60 @@ final class NativeBranchPickerModel: ObservableObject {
 }
 
 @MainActor
-struct NativeBranchPicker: NSViewRepresentable {
+struct NativeBranchPicker: View {
+    @ObservedObject var picker: NativeBranchPickerModel
+    var settings: JSONValue
+    var body: some View {
+        if picker.branches["current"].string != nil || !picker.error.isEmpty {
+            NativeBranchControl(picker: picker, settings: settings)
+                .frame(maxWidth: min(220, ceil(((picker.current + " ⌄") as NSString).size(withAttributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)]).width) + 36))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+@MainActor
+struct NativeBranchControl: NSViewRepresentable {
     @ObservedObject var picker: NativeBranchPickerModel
     var settings: JSONValue
     func makeNSView(context: Context) -> BranchButton {
-        let button = BranchButton(title: "", target: context.coordinator, action: #selector(Coordinator.openBranches))
+        let button = BranchButton(title: "", target: nil, action: nil)
+        button.cell = BranchCell(textCell: "")
+        button.target = context.coordinator; button.action = #selector(Coordinator.openBranches)
+        button.wantsLayer = true; button.layer?.cornerRadius = 4; button.layer?.borderWidth = 1
         button.isBordered = false; button.setButtonType(.momentaryPushIn); button.identifier = .init("native-branch-picker")
         let image = NativeChromeImages.sidebar(.branch).copy() as! NSImage
-        image.size = NSSize(width: 15, height: 15); button.image = image; button.imagePosition = .imageLeading
+        image.size = NSSize(width: 15, height: 15); button.image = image; button.imagePosition = .imageLeft; button.alignment = .left
         button.actionsRequested = { [weak coordinator = context.coordinator] in coordinator?.open(actions: true) }
         return button
     }
     func updateNSView(_ button: BranchButton, context: Context) {
         context.coordinator.picker = picker; context.coordinator.button = button
-        button.title = picker.current + " ⌄"; button.isEnabled = picker.enabled
-        button.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
-        button.toolTip = picker.error.isEmpty ? localized("Switch branch · Right-click for Git actions", "切换分支 · 右键打开 Git 操作") : picker.error
+        button.title = picker.current + " ⌄"; button.isEnabled = context.environment.isEnabled && picker.enabled
+        button.font = .monospacedSystemFont(ofSize: 11, weight: .semibold)
+        let palette = NativePreferences.interfacePalette(settings, catalog: picker.workspace?.settingsCatalog ?? .null)
+        let text = NativePreferences.color(palette["text"], fallback: .labelColor)
+        button.layer?.borderColor = NativePreferences.color(palette["border"], fallback: .separatorColor).cgColor
+        button.contentTintColor = text
+        let paragraph = NSMutableParagraphStyle(); paragraph.lineBreakMode = .byTruncatingTail
+        button.attributedTitle = NSAttributedString(string: button.title, attributes: [.font: NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold), .foregroundColor: text, .paragraphStyle: paragraph])
+        button.toolTip = picker.error.isEmpty ? localized("Switch branch · Right-click for Git actions", "切换分支 · 右键打开 Git 操作") + " · " + picker.current : picker.error
         button.setAccessibilityLabel(localized("Switch branch", "切换分支") + ": " + picker.current)
+    }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView button: BranchButton, context: Context) -> CGSize? {
+        let limit: CGFloat = (button.window?.frame.width ?? 1100) <= 760 ? 140 : 220
+        return CGSize(width: max(24, min(button.intrinsicContentSize.width, limit, proposal.width ?? limit)), height: 24)
+    }
+    @MainActor final class BranchCell: NSButtonCell {
+        override func imageRect(forBounds rect: NSRect) -> NSRect { NSRect(x: rect.minX + 7, y: rect.midY - 7.5, width: 15, height: 15) }
+        override func titleRect(forBounds rect: NSRect) -> NSRect {
+            let normal = super.titleRect(forBounds: rect)
+            return NSRect(x: rect.minX + 27, y: normal.minY, width: max(0, rect.width - 34), height: normal.height)
+        }
     }
     func makeCoordinator() -> Coordinator { Coordinator(picker) }
     @MainActor final class BranchButton: NSButton {
+        override var intrinsicContentSize: NSSize { NSSize(width: ceil(attributedTitle.size().width) + 36, height: 24) }
         var actionsRequested: (() -> Void)?
         override var acceptsFirstResponder: Bool { isEnabled }
         override func rightMouseDown(with event: NSEvent) { if isEnabled { actionsRequested?() } }
@@ -97,7 +131,7 @@ struct NativeBranchPicker: NSViewRepresentable {
         init(_ picker: NativeBranchPickerModel) { self.picker = picker }
         @objc func openBranches() { open(actions: false) }
         func open(actions: Bool) {
-            guard let button, picker.enabled, let captured = picker.context else { return }
+            guard let button, button.isEnabled, picker.enabled, let captured = picker.context else { return }
             let expected = picker.branches["current"]
             Task { @MainActor in
                 do {

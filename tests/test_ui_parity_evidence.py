@@ -45,7 +45,7 @@ class ParityEvidenceTests(unittest.TestCase):
                                   inspectorTop=0, inspectorHeight=720, inspectorHeaderTop=0, inspectorFooterBottom=720, inspectorViewportHeight=720,
                                   sidebarRowHeight=32, sidebarSectionHeight=32, sidebarSectionGap=18, sidebarListTop=8,
                                   fontFamily="Cascadia Code", fontFace="CascadiaCode-Regular", fontSourceSHA256=font_digest, fontCharacterWidth=9.96,
-                                  scenario="toolbar-sidebar-two-sessions-files", fileGitStates={path: "untracked" for path in fixture["files"]}, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
+                                  scenario="toolbar-sidebar-two-sessions-files", branchPicker=dict(name=fixture["github"]["head"], fontSize=11, captionGap=5, width=115, height=24, actualAppKitControl=True, actualDOMControl=True, fontName="policy fixture"), fileGitStates={path: "untracked" for path in fixture["files"]}, sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
                                   chromeContractSHA256=chrome_digest, toolbarHeight=44, toolbarTop=0, sidebarWidth=min(248, max(180, min(320, width * .3))), inspectorWidth=298.2 if width == 1100 else 128, generationRetained=True, filesReadable=True, fontSize=17, projectName=fixture["projectName"], workspaceName=fixture["workspaceName"])
                     native = f"personal-initial-workspace-{lang}-{appearance}-{width}.png"
                     tauri = f"ui-parity-workspace-{lang}-{appearance}-{width}.png"
@@ -282,6 +282,20 @@ class ParityEvidenceTests(unittest.TestCase):
         with self.assertRaises(AssertionError): self.run_compare()
         path.unlink()
         with self.assertRaises(FileNotFoundError): self.run_compare()
+
+    def test_rejects_missing_or_unmeasured_branch_picker_geometry(self):
+        for side in ["native", "ordinary"]:
+            for mutation in ["missing", "name", "fontSize", "captionGap", "height", "control"]:
+                self.setUp()
+                scene = self.n["workspaceScenes"][0] if side == "native" else self.t["scenes"][0]["checks"]
+                if mutation == "missing": scene.pop("branchPicker")
+                else:
+                    scene["branchPicker"] = dict(scene["branchPicker"])
+                    if mutation == "name": scene["branchPicker"]["name"] = "wrong-branch"
+                    elif mutation == "control": scene["branchPicker"]["actualAppKitControl" if side == "native" else "actualDOMControl"] = False
+                    else: scene["branchPicker"][mutation] = 44
+                with self.subTest(side=side, mutation=mutation), self.assertRaises(AssertionError):
+                    self.run_compare()
 
     def test_rejects_missing_incomplete_or_wrong_actual_file_git_states(self):
         for side in ["native", "tauri"]:

@@ -7,29 +7,13 @@ struct NativeWorkspaceToolbar: View {
     @ObservedObject var model: WorkspaceModel
     var sidebarWidth: CGFloat = CGFloat(CoreChrome.sidebarDefaultWidth)
     var body: some View {
-        HStack(spacing: 8) {
-            if !model.sidebarVisible {
-                sidebarTool(.sidebar, localized("Show sidebar", "显示侧栏")) { model.sidebarVisible = true }
-            }
-            Text(model.projects.first { $0["id"] == model.workspace["selectedProject"] }?["name"].string ?? localized("Terminal", "终端"))
-                .font(.system(size: 13, weight: .semibold)).lineLimit(1).truncationMode(.middle)
-            if model.workspace["selectedProject"].string != nil {
-                NativeBranchPicker(picker: model.branchPicker, settings: model.settings).frame(maxWidth: 180).fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            if model.busy { ProgressView().controlSize(.small) }
-            if model.workspace["selectedProject"].string != nil {
-                tool(.java, localized("Java build and run…", "Java 构建与运行…")) { model.openJavaRequested?() }
-                tool(.python, localized("Python run…", "Python 运行…")) { model.openPythonRequested?() }
-            }
-            if model.paneZoomed || model.state?.layout["kind"].string == "split" {
-                tool(model.paneZoomed ? .restore : .maximize, localized("Toggle pane zoom", "切换面板缩放")) { model.performCommandRequested?("zoom") }.disabled(model.commandIsAvailable?("zoom") != true)
-            }
-            sidebarTool(.sidebarRight, localized("Toggle tools", "显示或隐藏工具")) { if model.inspectorVisible { model.hideInspector() } else { model.showInspector(.files) } }
+        HStack(spacing: model.viewportWidth <= 760 ? 6 : 12) {
+            heading.frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+            actions
         }
         .buttonStyle(.borderless).controlSize(.small)
         .disabled(!model.ready || model.busy || model.gitFavoritesRecoveryPresented)
-        .padding(.leading, model.fullScreen ? 18 : max(18, 96 - sidebarWidth)).padding(.trailing, 18)
+        .padding(.leading, model.fullScreen || (model.inspectorVisible && model.settings["inspectorPosition"].string == "left") ? 18 : max(18, 96 - sidebarWidth)).padding(.trailing, model.viewportWidth <= 760 ? 10 : 18)
         .frame(height: CGFloat(CoreChrome.titlebarHeight))
         .background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["sidebar"], fallback: .windowBackgroundColor)))
         .overlay(alignment: .bottom) { Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["border"], fallback: .separatorColor)).frame(height: 1) }
@@ -44,12 +28,45 @@ struct NativeWorkspaceToolbar: View {
             }
         }
     }
+    private var heading: some View {
+        HStack(spacing: 10) {
+            if !model.sidebarVisible { sidebarTool(.sidebar, localized("Show sidebar", "显示侧栏")) { model.sidebarVisible = true } }
+            Text(headingTitle)
+                .font(.custom(NativePreferences.semiboldFont(model.settings["interfaceFont"].string ?? "", size: 13).fontName, size: 13))
+                .lineLimit(1).truncationMode(.tail)
+            if model.workspace["selectedProject"].string != nil { NativeBranchPicker(picker: model.branchPicker, settings: model.settings) }
+        }
+    }
+    private var headingTitle: String {
+        if let project = model.projects.first(where: { $0["id"] == model.workspace["selectedProject"] }) {
+            let name = project["name"].string ?? ""
+            if let tree = project["worktrees"].array.first(where: { $0["id"] == model.workspace["selectedWorktree"] }), let title = tree["name"].string { return name + " / " + title }
+            return name
+        }
+        let session = model.sessionEntries.first { $0.sessionID == model.selectedID }
+        if let id = session?.session["ssh"]["connection_id"].string,
+           let name = model.groups.flatMap({ $0["sshConnections"].array }).first(where: { $0["id"].string == id })?["name"].string { return name }
+        return session?.session["agent"].string != nil ? localized("Chat", "聊天") : localized("Terminal", "终端")
+    }
+    private var actions: some View {
+        HStack(spacing: 6) {
+            if model.busy { ProgressView().controlSize(.small) }
+            if model.workspace["selectedProject"].string != nil {
+                tool(.java, localized("Java build and run…", "Java 构建与运行…")) { model.openJavaRequested?() }
+                tool(.python, localized("Python run…", "Python 运行…")) { model.openPythonRequested?() }
+            }
+            if model.paneZoomed || model.state?.layout["kind"].string == "split" {
+                tool(model.paneZoomed ? .restore : .maximize, localized("Toggle pane zoom", "切换面板缩放")) { model.performCommandRequested?("zoom") }.disabled(model.commandIsAvailable?("zoom") != true)
+            }
+            sidebarTool(model.settings["inspectorPosition"].string == "left" ? .sidebar : .sidebarRight, localized("Toggle tools", "显示或隐藏工具")) { if model.inspectorVisible { model.hideInspector() } else { model.showInspector(.files) } }.padding(.trailing, -10)
+        }
+    }
     private func tool(_ icon: CoreToolbarIcon, _ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { NativeChromeIcon(toolbar: icon).frame(width: 24, height: 24) }
+        Button(action: action) { NativeChromeIcon(toolbar: icon).frame(width: 30, height: 30) }
             .help(title).accessibilityLabel(title)
     }
     private func sidebarTool(_ icon: CoreSidebarIcon, _ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) { NativeChromeIcon(sidebar: icon).frame(width: 24, height: 24) }.help(title).accessibilityLabel(title)
+        Button(action: action) { NativeChromeIcon(sidebar: icon).frame(width: 36, height: 36) }.help(title).accessibilityLabel(title)
     }
 }
 
@@ -70,7 +87,7 @@ struct NativeSidebarNavigation: View {
                     Button(localized("Delete workspace…", "删除工作区…")) { model.removeWorkspace() }.disabled(!model.canRemoveWorkspace)
                 } label: {
                     Text(model.groupItems.first { $0.id == model.groupID }?.name ?? localized("Workspace", "工作区"))
-                        .font(.system(size: 12, weight: .semibold)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                        .font(.custom(NativePreferences.semiboldFont(model.settings["interfaceFont"].string ?? "", size: 13).fontName, size: 13)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                 }.menuStyle(.borderlessButton).menuIndicator(.hidden)
                     .frame(width: max(0, geometry.size.width - trafficPadding - 24), alignment: .leading)
                     .clipped()

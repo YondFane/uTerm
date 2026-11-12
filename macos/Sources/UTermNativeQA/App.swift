@@ -49,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.contentView = NSHostingView(rootView: WorkspaceView(model: model))
         window.center()
         self.window = window
+        NativeWindowControls.align(window)
         model.languageChanged = { [weak self] in
             self?.configureMenu()
             self?.sshWindow?.window?.title = localized("SSH connections", "SSH 连接")
@@ -1503,6 +1504,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func decreaseFont() { adjustFocusedFont(-1) }
 
     func windowDidUpdate(_ notification: Notification) {
+        if let window { NativeWindowControls.align(window) }
         guard let responder = window?.firstResponder else { return }
         DispatchQueue.main.async { [weak self, weak responder] in
             guard let self, let responder, self.window?.firstResponder === responder,
@@ -1518,7 +1520,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return false
     }
     func windowDidEnterFullScreen(_ notification: Notification) { model.fullScreen = true }
-    func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false }
+    func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false; if let window { NativeWindowControls.align(window) } }
+    func windowDidResize(_ notification: Notification) { if let window { NativeWindowControls.align(window) } }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if let fullSettingsWindow, fullSettingsWindow.model.busy || fullSettingsWindow.model.login.busy {

@@ -57,7 +57,7 @@ class PersonalPackageTests(unittest.TestCase):
         scenes = [dict(language=language, appearance=appearance, width=width, height=720,
                        screenshot=f"personal-{phase}-workspace-{language}-{appearance}-{width}.png",
                        sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, platform="macOS", architecture="arm64",
-                       system="macOS fixture", filesReadable=True, fileGitStates={"note.txt": "untracked", "README.md": "untracked"}, scenario="toolbar-sidebar-two-sessions-files")
+                       system="macOS fixture", filesReadable=True, fileGitStates={"note.txt": "untracked", "README.md": "untracked"}, scenario="toolbar-sidebar-two-sessions-files", branchPicker=dict(name="qa-feature", fontSize=11, captionGap=5, width=115, height=24, actualAppKitControl=True, fontName="policy fixture"), windowControls=[dict(x=16+20*i, y=18, width=14, height=16) for i in range(3)])
                   for language in ["en", "zh-Hans"] for appearance in ["dark", "light"] for width in [1100, 640]]
         fixture = json.loads((Path(__file__).parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
         settings = [dict(scene, section=section["id"], sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40,
@@ -173,6 +173,18 @@ class PersonalPackageTests(unittest.TestCase):
             if mutation == "missing-git-states": report["workspaceScenes"][0].pop("fileGitStates")
             if mutation == "wrong-git-state": report["workspaceScenes"][0]["fileGitStates"]["note.txt"] = "modified"
             if mutation == "project-actions": report["nativeProjectMenuPinCollapseOrderAndConflictVerified"] = False
+            with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
+                package.validate_workspace_scenes(report, "a" * 40, "b" * 40, "initial")
+
+    def test_workspace_chrome_requires_actual_branch_and_window_control_measurements(self):
+        for mutation in ["branch", "font", "gap", "controls", "inset"]:
+            report = self.workspace_evidence("initial")
+            scene = report["workspaceScenes"][0]
+            if mutation == "branch": scene.pop("branchPicker")
+            elif mutation == "font": scene["branchPicker"]["fontSize"] = 13
+            elif mutation == "gap": scene["branchPicker"]["captionGap"] = 40
+            elif mutation == "controls": scene["windowControls"].pop()
+            else: scene["windowControls"][0]["x"] = 8
             with self.subTest(mutation=mutation), self.assertRaises(AssertionError):
                 package.validate_workspace_scenes(report, "a" * 40, "b" * 40, "initial")
 

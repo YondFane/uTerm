@@ -52,6 +52,7 @@ final class WorkspaceModel: ObservableObject {
     @Published private(set) var focusRevision = 0
     @Published private(set) var toolbarHeight: CGFloat = 0
     @Published private(set) var toolbarTop: CGFloat = -1
+    @Published private(set) var viewportWidth: CGFloat = 1100
     @Published private(set) var sidebarWidth: CGFloat = 0
     private(set) var sidebarRailFrame: CGRect = .zero
     private(set) var sidebarAllButtonFrame: CGRect = .zero
@@ -157,6 +158,7 @@ final class WorkspaceModel: ObservableObject {
     var projectItems: [NativeListItem] { projects.map { NativeListItem(id: $0["id"].string ?? "", name: $0["name"].string ?? "") } }
     var sessionEntries: [CoreSessionEntry] { (state?.sessions ?? []).filter { $0.workspaceId == groupID } }
     func revealSelectedPane() { paneZoomed = false; focusRevision += 1 }
+    func measureViewport(_ width: CGFloat) { if abs(viewportWidth - width) > 0.1 { viewportWidth = width } }
     func measureInspector(_ width: CGFloat) { if abs(inspectorWidth - width) > 0.1 { inspectorWidth = width } }
     func measureSidebar(_ width: CGFloat) { if abs(sidebarWidth - width) > 0.1 { sidebarWidth = width } }
     func measureSidebarRail(_ frame: CGRect) { sidebarRailFrame = frame }

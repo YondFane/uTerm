@@ -329,7 +329,9 @@ struct NativeSidebar: NSViewRepresentable {
             return ["sidebarRowHeight": Double(regularHeight), "sidebarSectionHeight": Double(section), "sidebarSectionGap": Double(table.rect(ofRow: later).height - section), "sidebarListTop": Double(top) - CoreChrome.titlebarHeight]
         }
         func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-            guard rows.indices.contains(row), rows[row].sectionID != nil else { return tableView.rowHeight }
+            guard rows.indices.contains(row) else { return tableView.rowHeight }
+            if rows[row].key == "ssh-filter" { return max(tableView.rowHeight, 44) }
+            guard rows[row].sectionID != nil else { return tableView.rowHeight }
             return CGFloat(CoreChrome.sidebarSectionHeight + (row == 0 ? 0 : CoreChrome.sidebarSectionGap))
         }
         func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
@@ -562,14 +564,16 @@ struct NativeSidebar: NSViewRepresentable {
                 let control: NSView
                 if item.key == "ssh-quick" {
                     let button = NSButton(title: item.name, target: self, action: #selector(quickSSH(_:)))
-                    button.bezelStyle = .rounded
+                    button.isBordered = false; button.alignment = .left
+                    button.contentTintColor = NativePreferences.color(palette["text"], fallback: .labelColor)
                     button.identifier = NSUserInterfaceItemIdentifier("native-ssh-quick")
-                    button.font = NativePreferences.font(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
+                    button.font = NativePreferences.semiboldFont(settings["interfaceFont"].string ?? "", size: CGFloat(settings["interfaceSize"].number ?? 13))
                     button.isEnabled = model?.busy == false
                     control = button
                 } else {
                     sshSearch.removeFromSuperview()
                     sshSearch.delegate = self
+                    (sshSearch.cell as? NSSearchFieldCell)?.searchButtonCell = nil
                     sshSearch.identifier = NSUserInterfaceItemIdentifier("native-sidebar-filter")
                     sshSearch.placeholderString = localized("Search SSH hosts", "搜索 SSH 主机")
                     sshSearch.setAccessibilityLabel(sshSearch.placeholderString)
@@ -579,7 +583,7 @@ struct NativeSidebar: NSViewRepresentable {
                     control = sshSearch
                 }
                 control.translatesAutoresizingMaskIntoConstraints = false; cell.addSubview(control)
-                NSLayoutConstraint.activate([control.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2), control.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2), control.centerYAnchor.constraint(equalTo: cell.centerYAnchor), control.heightAnchor.constraint(equalToConstant: 26)])
+                NSLayoutConstraint.activate([control.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8), control.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8), control.centerYAnchor.constraint(equalTo: cell.centerYAnchor), control.heightAnchor.constraint(equalToConstant: item.key == "ssh-filter" ? 36 : 26)])
                 return cell
             }
             if let section = item.sectionID {

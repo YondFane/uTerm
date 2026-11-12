@@ -162,6 +162,22 @@ list inset. Row padding and larger interface text still expand rows.
 Native selection uses the same rounded accent fill/border, and project folder icons reveal
 disclosure arrows on hover. The toolbar shows pane zoom only for split layouts.
 
+Native workspace/project headings use the configured interface font; Worktree and SSH headings
+include the selected resource name. Toolbar heading/actions use the ordinary client's spacing,
+30/36-point action targets and narrow-window trailing inset. The branch picker uses an 11-point
+monospaced label, a 5-point caption gap and compact bordered control; non-Git projects omit it.
+Quick SSH uses a flat action and a 36-point host-search field, with the same list inset. Cascadia
+Code semibold uses its bundled exact face.
+
+The main window retains AppKit's actual close/minimize/zoom buttons and aligns their container to
+the ordinary client's 16/24 inset, including after resize or leaving fullscreen. Workspace capture
+records their actual bounds and the mounted branch control's font, size and caption spacing. The
+paired collector rejects missing controls, a wrong branch/font/gap or mismatched control heights.
+Linux passes 18 personal-package and 24 paired-evidence policies, plus type/production build, i18n
+and generated-contract checks. Corrected native rendering, focus/hover and same-source paired
+acceptance remain pending Mac CI; earlier originals identify the differences but do not accept these
+changes.
+
 The native toolbar includes the selected repository's branch picker. Left click or Arrow Down opens
 local and remote branches; right click or Shift-F10 opens Push, Pull, Fetch and Refresh. Mutations
 capture the project, working directory and expected branch, retain editor-save and conflict checks,

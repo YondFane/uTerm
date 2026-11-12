@@ -90,6 +90,12 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         for scene in [n, t["checks"]]:
             assert scene.get("fileGitStates") == {path: "untracked" for path in fixture["files"]}, "Missing actual file Git states"
         assert n.get("chromeContractSHA256") == t["checks"].get("chromeContractSHA256") == chrome_digest, "Different or stale chrome contract"
+        for branch, kind in [(n.get("branchPicker", {}), "actualAppKitControl"), (t["checks"].get("branchPicker", {}), "actualDOMControl")]:
+            assert branch.get(kind) is True and branch.get("name") == fixture["github"]["head"], "Missing actual branch control"
+            assert abs(branch.get("fontSize", 0) - 11) < 0.01 and abs(branch.get("captionGap", -100) - 5) < 1, "Incorrect branch font or caption spacing"
+            assert branch.get("width", 0) >= 24 and branch.get("height", 0) > 20 and branch.get("fontName"), "Unmeasured branch control"
+        assert abs(n["branchPicker"]["height"] - t["checks"]["branchPicker"]["height"]) < 1, "Mismatched branch control heights"
+
         assert all(abs(scene.get("toolbarHeight", 0) - chrome["metrics"]["titlebarHeight"]) < 1 for scene in [n, t["checks"]]), "Wrong actual chrome height"
         assert all(abs(scene.get("toolbarTop", -100)) < 1 for scene in [n, t["checks"]]), "Wrong actual chrome position"
         expected_sidebar = min(chrome["metrics"]["sidebarDefaultWidth"], max(chrome["metrics"]["sidebarMinimumWide"], min(chrome["metrics"]["sidebarMaximumWidth"], width * chrome["metrics"]["sidebarMaximumRatio"])))
