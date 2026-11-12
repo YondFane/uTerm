@@ -117,9 +117,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
         model.openSettingsRequested = { [weak self] in self?.openFullSettings() }
-        model.openJavaToolsRequested = { [weak self] in
+        model.openJavaToolsRequested = { [weak self] run in
             guard let self, !self.model.settingsPresented, !self.model.workspaceModalPresented, self.commandAvailable("settings") else { return false }
             self.openFullSettings()
+            self.fullSettingsWindow?.didHide = { [weak run] in Task { await run?.detect() } }
             self.fullSettingsWindow?.model.section = "java"
             return self.fullSettingsWindow?.window.isVisible == true
         }

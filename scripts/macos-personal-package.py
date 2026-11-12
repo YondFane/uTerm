@@ -147,7 +147,7 @@ def validate_java_run_tools(report, head, tested, phase):
         identity = (proof["language"], proof["appearance"], proof["width"], proof["height"])
         assert identity in expected and identity not in seen, "Missing or duplicate Java tools scenario"
         seen.add(identity)
-        for key in ["passed", "actualManageToolsButton", "busyStateInjectedForQA", "busyActionRejected", "argumentDraftInjectedForQA", "argumentDraftRetained", "actualSharedJavaCatalog", "actualCloseControl", "projectDetectionCompletedAfterClose", "runConfigurationAndPanelRetained", "terminalGenerationRetained", "canonicalStateUnchanged"]:
+        for key in ["passed", "actualManageToolsButton", "busyStateInjectedForQA", "busyActionRejected", "argumentDraftInjectedForQA", "argumentDraftRetained", "originPanelHiddenByQA", "refreshCompletedWithOriginPanelHidden", "actualRunToolbarRestore", "actualSharedJavaCatalog", "actualCloseControl", "projectDetectionCompletedAfterClose", "runConfigurationAndPanelRetained", "terminalGenerationRetained", "canonicalStateUnchanged"]:
             assert proof.get(key) is True, "Missing actual Java run tools operation: " + key
         assert proof.get("sourceHeadSHA") == head and proof.get("testedMergeSHA") == tested, "Stale Java tools evidence"
         assert proof.get("platform") == report["platform"] and proof.get("architecture") == report["architecture"] and proof.get("system") == report["system"]

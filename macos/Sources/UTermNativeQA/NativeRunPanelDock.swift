@@ -10,7 +10,6 @@ struct NativeDockedRunPanel: View {
     let layout: RunPanelLayout
     let available: Double
     let viewport: Double
-    @State private var javaToolsOpened = false
     private var expanded: Bool { panels.runExpanded(panel.id) }
     private var palette: JSONValue { NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog) }
     var body: some View {
@@ -21,7 +20,7 @@ struct NativeDockedRunPanel: View {
                 Spacer(minLength: 0)
                 if let controller = panel.controller as? JavaWindow {
                     NativeRunJavaToolsButton(workspace: model, run: controller.model, identifier: "native-run-panel-java-tools-" + panel.id, scope: panel.scope) {
-                        javaToolsOpened = model.openJavaToolsRequested?() == true
+                        _ = model.openJavaToolsRequested?(controller.model)
                     }
                 }
                 NativeDocumentAction(title: expanded ? localized("Restore run panel", "还原运行面板") : localized("Expand run panel", "展开运行面板"), identifier: "native-run-panel-expand-" + panel.id, image: NativeChromeImages.toolbar(expanded ? .restore : .maximize), iconOnly: true, active: expanded, tint: tint) { panels.toggleRunExpanded(panel.id) }.frame(width: 28, height: 28)
@@ -43,11 +42,6 @@ struct NativeDockedRunPanel: View {
             }
         }
         .disabled(model.workspaceModalPresented)
-        .onChange(of: model.settingsPresented) { _, presented in
-            guard !presented, javaToolsOpened else { return }
-            javaToolsOpened = false
-            if let controller = panel.controller as? JavaWindow { Task { await controller.model.detect() } }
-        }
         .accessibilityIdentifier("native-run-panel-dock-" + panel.id)
     }
     private var tint: NSColor { NativePreferences.color(palette["muted"], fallback: .secondaryLabelColor) }

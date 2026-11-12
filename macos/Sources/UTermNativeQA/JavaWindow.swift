@@ -97,7 +97,7 @@ final class JavaRunModel: ObservableObject {
         modules = try await bridge.call("java.project", params: .object(["directory": .string(directory)]))["modules"].array
     }
     func detect() async {
-        guard !busy, !prepared else { return }
+        guard !busy, !prepared, !closed else { return }
         busy = true; error = ""
         defer { busy = false }
         do { try await detectValues(); qaCompletedDetections += 1 } catch { self.error = error.localizedDescription }

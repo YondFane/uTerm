@@ -580,6 +580,7 @@ private struct NativeShortcutCapture: NSViewRepresentable {
 
 @MainActor
 final class NativeSettingsWindow: NSObject, NSWindowDelegate {
+    var didHide: (() -> Void)?
     let model: NativeSettingsModel
     let window: NSWindow
     private weak var previousResponder: NSView?
@@ -611,6 +612,7 @@ final class NativeSettingsWindow: NSObject, NSWindowDelegate {
         model.workspace.settingsPresented = false
         parent?.makeKeyAndOrderFront(nil)
         if let previousResponder, previousResponder.window === parent { parent?.makeFirstResponder(previousResponder) }
+        let completion = didHide; didHide = nil; completion?()
         return false
     }
     func prepareForQuit() async -> Bool {

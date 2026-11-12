@@ -40,12 +40,19 @@ enum RunPanelJavaToolsSmoke {
         guard settings.model.error.isEmpty, settings.model.javaComponents.error.isEmpty,
               Set(settings.model.javaComponents.catalog["items"].array.compactMap { $0["id"].string }) == Set(["jdk-8", "jdk-11", "jdk-17", "jdk-21", "maven"]) else { throw BridgeFailure(code: "JAVA_TOOLS_QA", message: "Java tools did not mount the complete shared catalog") }
         let name = "personal-\(phase)-java-tools-\(language)-\(appearance)-\(Int(width)).png"
+        model.panels.showTerminal(in: panel.scope)
+        try await TerminalSmoke.wait("Unmount the originating panel as an explicit QA context-change fixture") { model.panels.active(in: panel.scope) == nil && panel.view.window !== window }
         try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(name)); captures.append(name)
         guard let content = settings.window.contentView,
               let close = TerminalSmoke.descendants(content).first(where: { $0.identifier?.rawValue == "native-settings-close" }) as? NSButton,
               close.isEnabled else { throw BridgeFailure(code: "JAVA_TOOLS_QA", message: "Missing actual Java settings close control") }
         close.performClick(nil)
         try await TerminalSmoke.wait("Close Java settings and complete fresh project detection") { !model.settingsPresented && !run.busy && run.qaCompletedDetections > detection }
+        guard model.panels.active(in: panel.scope) == nil,
+              let restore = TerminalSmoke.descendants(root).first(where: { $0.identifier?.rawValue == "native-project-run-java" }) as? NSButton,
+              restore.isEnabled else { throw BridgeFailure(code: "JAVA_TOOLS_QA", message: "Closing tools did not refresh the hidden originating model or retain its actual toolbar control") }
+        restore.performClick(nil)
+        try await TerminalSmoke.wait("The actual run toolbar restores the retained originating panel") { model.panels.active(in: panel.scope)?.id == panel.id && panel.view.window === window }
         let after = try await readSnapshot()
         guard run.error.isEmpty, try encoder.encode(run.config) == configBytes, try encoder.encode(run.global) == globalBytes,
               run.arguments.map(\.text) == arguments, run.vmArguments.map(\.text) == vmArguments,
@@ -56,6 +63,7 @@ enum RunPanelJavaToolsSmoke {
         var proof: [String: Any] = ["language": language, "appearance": appearance, "width": Int(width), "height": Int(scene["height"].number ?? 0), "screenshot": name,
             "passed": true, "actualManageToolsButton": true, "busyStateInjectedForQA": true, "busyActionRejected": true,
             "argumentDraftInjectedForQA": true, "argumentDraftRetained": true,
+            "originPanelHiddenByQA": true, "refreshCompletedWithOriginPanelHidden": true, "actualRunToolbarRestore": true,
             "actualSharedJavaCatalog": true, "actualCloseControl": true, "projectDetectionCompletedAfterClose": true,
             "runConfigurationAndPanelRetained": true, "terminalGenerationRetained": true, "canonicalStateUnchanged": true]
         for key in ["sourceHeadSHA", "testedMergeSHA", "platform", "architecture", "system"] { proof[key] = report[key] }

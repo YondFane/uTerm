@@ -157,7 +157,7 @@ class PersonalPackageTests(unittest.TestCase):
         from tests.run_panel_parity_fixtures import policy_scenes
         runs = policy_scenes(fixture, phase, "a"*40, "b"*40, "policy fixture")
         tools = [dict(scene, passed=True, actualManageToolsButton=True, busyStateInjectedForQA=True, busyActionRejected=True,
-                      argumentDraftInjectedForQA=True, argumentDraftRetained=True, actualSharedJavaCatalog=True, actualCloseControl=True,
+                      argumentDraftInjectedForQA=True, argumentDraftRetained=True, originPanelHiddenByQA=True, refreshCompletedWithOriginPanelHidden=True, actualRunToolbarRestore=True, actualSharedJavaCatalog=True, actualCloseControl=True,
                       projectDetectionCompletedAfterClose=True, runConfigurationAndPanelRetained=True, terminalGenerationRetained=True,
                       canonicalStateUnchanged=True, sourceHeadSHA="a"*40, testedMergeSHA="b"*40,
                       platform="macOS", architecture="arm64", system="policy fixture",
@@ -173,7 +173,7 @@ class PersonalPackageTests(unittest.TestCase):
             report = self.workspace_evidence(phase)
             package.validate_java_run_tools(report, "a"*40, "b"*40, phase)
             for key, value in [("actualManageToolsButton", False), ("busyActionRejected", False), ("argumentDraftRetained", False),
-                               ("actualSharedJavaCatalog", False), ("projectDetectionCompletedAfterClose", False),
+                               ("actualSharedJavaCatalog", False), ("projectDetectionCompletedAfterClose", False), ("originPanelHiddenByQA", False), ("refreshCompletedWithOriginPanelHidden", False), ("actualRunToolbarRestore", False),
                                ("terminalGenerationRetained", False), ("canonicalStateUnchanged", False),
                                ("sourceHeadSHA", "c"*40), ("testedMergeSHA", "c"*40), ("screenshot", "stale.png")]:
                 wrong = copy.deepcopy(report); wrong["runPanelJavaToolsProof"][0][key] = value
