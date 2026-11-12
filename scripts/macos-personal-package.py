@@ -118,6 +118,7 @@ def validate_sidebar_close(report, head, tested, phase):
 
 
 def validate_smoke_report(report, head, tested, phase):
+    assert report.get("inProgress", False) is False, "An unfinished phase cannot satisfy acceptance"
     assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
     validate_workspace_scenes(report, head, tested, phase)
     validate_settings_scenes(report, head, tested, phase)
@@ -273,6 +274,41 @@ def smoke(installed, source, root, evidence, head, tested):
         thread.join(timeout=5)
 
 
+def preserve_capture(root, evidence, name):
+    assert isinstance(name, str) and Path(name).name == name and name.endswith(".png")
+    image = root / name
+    assert not image.is_symlink() and image.resolve().is_relative_to(root.resolve())
+    assert image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+    shutil.copyfile(image, evidence / name)
+
+
+def preserve_incomplete_smoke(root, evidence, phase, reason, head, tested):
+    """Incomplete evidence never satisfies acceptance. 未完成证据不能满足验收。"""
+    progress = root / f"personal-{phase}-progress.json"
+    report = dict(passed=False, incomplete=True, phase=phase, failure=reason, captures=[],
+                  sourceHeadSHA=head, testedMergeSHA=tested)
+    if progress.exists():
+        assert not progress.is_symlink() and progress.resolve().is_relative_to(root.resolve())
+        report["lastProgress"] = json.loads(progress.read_text())
+        shutil.copyfile(progress, evidence / progress.name)
+    for image in sorted(root.glob(f"personal-{phase}-*.png")):
+        preserve_capture(root, evidence, image.name)
+        report["captures"].append(image.name)
+    (evidence / f"personal-{phase}-incomplete.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+
+
+def sample_smoke_timeout(pid, evidence, phase):
+    """Sample only the owned QA process, with a separate bounded deadline. 仅限时采样自有 QA 进程。"""
+    target = evidence / f"personal-{phase}-timeout-sample.txt"
+    try:
+        result = subprocess.run(["sample", str(pid), "1", "-file", str(target)], timeout=5,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+        if result.returncode or not target.is_file():
+            target.write_text(f"QA timeout sampling did not produce a report (exit {result.returncode})\n")
+    except (OSError, subprocess.SubprocessError) as error:
+        target.write_text("QA timeout sampling failed: " + str(error) + "\n")
+
+
 def preserve_smoke_outputs(root, evidence, phase):
     """Keep raw failure evidence before acceptance checks. 在验收检查前保留原始失败证据。"""
     path = root / f"personal-{phase}.json"
@@ -283,11 +319,7 @@ def preserve_smoke_outputs(root, evidence, phase):
         shutil.copyfile(rollback, evidence / rollback.name)
     captures = []
     for name in report.get("captures", []):
-        assert isinstance(name, str) and Path(name).name == name and name.endswith(".png")
-        image = root / name
-        assert not image.is_symlink() and image.resolve().is_relative_to(root.resolve())
-        assert image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
-        shutil.copyfile(image, evidence / name)
+        preserve_capture(root, evidence, name)
         captures.append(name)
     return report, captures
 
@@ -295,6 +327,7 @@ def preserve_smoke_outputs(root, evidence, phase):
 def run_smoke(installed, source, root, evidence, head, tested, feed):
     captures = []
     reports = []
+    phase_durations = {}
     identity = "sh.uterm.desktop.qa.native.personal." + uuid.uuid4().hex
     github_root = root / "uterm-native-qa-github-parity"
     environment = dict(os.environ)
@@ -313,8 +346,16 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
         with (evidence / f"personal-{phase}-stdout.log").open("wb") as out, (evidence / f"personal-{phase}-stderr.log").open("wb") as err:
             process = subprocess.Popen([str(installed / "Contents/MacOS/uTerm"), "--qa-data-root", str(root / "ignored"),
                                         "--smoke-report", str(root / "must-not-exist.json")], stdout=out, stderr=err, env=environment)
+            failure = "Personal app exited without its final report"
+            started = time.monotonic()
             try:
-                result = process.wait(timeout=90)
+                # The full paired grid runs in each phase; all original operation assertions still apply.
+                # 每个阶段都执行完整配对网格，全部原有操作断言仍须满足。
+                result = process.wait(timeout=180)
+            except subprocess.TimeoutExpired:
+                failure = "Personal app exceeded the 180-second phase deadline"
+                sample_smoke_timeout(process.pid, evidence, phase)
+                raise
             finally:
                 if process.poll() is None:
                     process.kill()
@@ -323,6 +364,9 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
                     shutil.copyfile(github_root / "github-cli.jsonl", evidence / f"github-parity-cli-{phase}-simulated.jsonl")
                 if (root / f"personal-{phase}.json").is_file():
                     report, phase_captures = preserve_smoke_outputs(root, evidence, phase)
+                else:
+                    preserve_incomplete_smoke(root, evidence, phase, failure, head, tested)
+            phase_durations[phase] = time.monotonic() - started
         assert result == 0
         assert not (root / "ignored").exists() and not (root / "must-not-exist.json").exists()
         path = root / f"personal-{phase}.json"
@@ -349,7 +393,8 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
             shutil.rmtree(installed)
             run("ditto", source, installed)
     return dict(reports=reports, captures=captures, realWindow=True, manualAppReplacement=True,
-                fixtureBundleIdentifier=identity, qaArgumentsIgnored=True, productionDataAccess=False)
+                fixtureBundleIdentifier=identity, qaArgumentsIgnored=True, productionDataAccess=False,
+                phaseDeadlineSeconds=180, phaseDurationsSeconds=phase_durations)
 
 
 def main():

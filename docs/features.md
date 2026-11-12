@@ -581,9 +581,21 @@ visual parity.
 Real-window CI prepares a display of at least 1280×900 before the matching screenshot grid; the
 required 720-pixel content height is still checked against actual window bounds. Personal smoke
 failures retain the raw report and available original captures before validation, including an
-attempted failure-window capture. The ordinary collector waits for real terminal input ownership
-before inspecting the host. Linux passes 12 Personal package/evidence policy tests and 13
-paired-evidence policy tests; these fixtures do not represent native window execution.
+attempted failure-window capture. Each initial/replacement phase has a 180-second process deadline
+for the full grid. Atomic progress checkpoints retain the exact source/merge, stage and elapsed
+time. A timeout samples only the owned QA process for at most five seconds and keeps incomplete
+reports and existing original images, even if no final report was produced. Incomplete progress
+cannot satisfy acceptance; all operation, fixture and shutdown assertions remain required.
+
+Source `d8fe48e`, tested merge `a801c8f`, passes the complete ARM native matrix and Personal
+initial/replacement/SDK checks. Its Intel Personal phase exceeds the former 90-second deadline
+before writing a final report; the original
+[failed artifact](https://github.com/YondFane/uTerm/actions/runs/43219329935/artifacts/13947023184)
+has logs but no scene report. The exact stalled stage remains unknown. The new checkpoints and
+bounded phase budget still need their own Mac execution. The ordinary collector waits for real
+terminal input ownership before inspecting the host. Linux passes 19 Personal package/evidence
+policies and 26 pairing/interaction policies, including incomplete reports, scoped image copying and
+sample failure. These fixtures do not represent native window execution.
 
 The Personal collector adjusts the real window frame against measured content bounds, with at most
 five attempts and recorded geometry. It also executes the project context menu and disclosure
