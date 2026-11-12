@@ -599,9 +599,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 menuItem.title = localized("Close window", "关闭窗口")
                 return !run.model.busy && !run.model.prepared
             }
-            let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow } || (NSApp.keyWindow === window && !model.inspectorOwnsFocus && (model.documents.active(in: model.inspectorContextKey) != nil || model.panels.active(in: model.inspectorContextKey) != nil))
-            menuItem.title = fileFocused ? localized("Close tab", "关闭标签") : model.inspectorOwnsFocus ? localized("Close tools", "关闭工具") : localized("Close session", "关闭会话")
-            if fileFocused { return true }
+            if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) {
+                menuItem.title = content.workbenchHost == nil ? localized("Close file", "关闭文件") : localized("Close window", "关闭窗口")
+                return true
+            }
+            let tabFocused = NSApp.keyWindow === window && !model.inspectorOwnsFocus && (model.documents.active(in: model.inspectorContextKey) != nil || model.panels.active(in: model.inspectorContextKey) != nil)
+            menuItem.title = tabFocused ? localized("Close tab", "关闭标签") : model.inspectorOwnsFocus ? localized("Close tools", "关闭工具") : localized("Close session", "关闭会话")
+            if tabFocused { return true }
             if model.inspectorOwnsFocus { return true }
         }
         if contentWindows.values.contains(where: { $0.window === NSApp.keyWindow }) || agentsWindow?.window === NSApp.keyWindow || fullSettingsWindow?.window === NSApp.keyWindow, let action = menuItem.action,

@@ -254,14 +254,18 @@ and back retains the same native view, run model, transfers and drafts; closing 
 save/transfer/run guards. Database and Redis use workspace document tabs. Closing a workbench tab
 hides its retained client; reopening restores the same WebKit document, connection handles and
 drafts. Project changes scope visible panels without retargeting an in-flight request. New terminal
-actions return to the terminal, and closing a native panel restores terminal focus.
+actions return to the terminal, and closing a native panel restores terminal focus. The native Close
+menu labels embedded content as a tab and a standalone file as a file; each action retains its
+existing save and close guard.
 
 The isolated `workspace-panels-native.json` scenario captures six actual main-window scenes, clicks
 terminal/panel/close controls, checks retained views/documents and preserves terminal
 identity/generation. Connection profiles in this integration scene are offline fixtures; the
 existing PostgreSQL, Redis, SSH and run suites retain service/lifetime coverage. Linux passes 24
 focused content/workbench checks and the production build. New AppKit integration and screenshots
-remain pending macOS ARM/Intel CI; no full visual acceptance is claimed here.
+remain pending macOS ARM/Intel CI. The previous integration run on both architectures found the
+standalone-file Close label incorrectly changed to Close tab; the correction needs a new run. No
+full visual acceptance is claimed here.
 
 Each native split pane has its own session/directory header, 10–32 point font controls, output
 search, match-case toggle, match counter and previous/next controls. Escape closes search and
