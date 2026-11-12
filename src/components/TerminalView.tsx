@@ -26,7 +26,10 @@ import { attachTerminalScrollInput } from "../lib/terminal-scroll";
 import { attachTerminalFit, createTerminalResizeQueue } from "../lib/terminal-resize";
 import { terminalRendererPool } from "../lib/terminal-renderer";
 import { attachTerminalAccessibilityLimit } from "../lib/terminal-accessibility";
-import { registerTerminalPerformanceProbe } from "../lib/terminal-performance-qa";
+import {
+  registerTerminalPerformanceProbe,
+  type TerminalViewportSnapshot,
+} from "../lib/terminal-performance-qa";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { Terminal } from "@xterm/xterm";
 import type { DragEventHandler, PointerEventHandler } from "react";
@@ -317,7 +320,7 @@ export function TerminalView({
       import.meta.env.VITE_UTERM_STATE_QA === "1"
         ? registerTerminalPerformanceProbe(
             session.id,
-            (tailOnly = false) => {
+            (tailOnly = false, measureViewport = false) => {
               const buffer = term.buffer.active;
               const end = tailOnly
                 ? Math.min(buffer.length, buffer.baseY + buffer.cursorY + 1)
@@ -327,6 +330,27 @@ export function TerminalView({
                 { length: end - first },
                 (_, row) => buffer.getLine(first + row)?.translateToString(true) ?? "",
               );
+              // Measure layout only for screenshot QA, keeping performance polling unchanged.
+              // 仅为截图 QA 测量布局，避免影响性能轮询。
+              let viewport: TerminalViewportSnapshot | undefined;
+              if (measureViewport) {
+                const proposed = fit.proposeDimensions();
+                const bounds = container.current?.getBoundingClientRect();
+                const screen = term.element
+                  ?.querySelector(".xterm-screen")
+                  ?.getBoundingClientRect();
+                viewport = {
+                  proposedColumns: proposed?.cols ?? 0,
+                  proposedRows: proposed?.rows ?? 0,
+                  viewportWidth: bounds?.width ?? 0,
+                  viewportHeight: bounds?.height ?? 0,
+                  screenWidth: screen?.width ?? 0,
+                  screenHeight: screen?.height ?? 0,
+                  cellWidth: (screen?.width ?? 0) / term.cols,
+                  cellHeight: (screen?.height ?? 0) / term.rows,
+                  backingScale: devicePixelRatio,
+                };
+              }
               return {
                 ...performanceStats.current,
                 text: lines.join("\n"),
@@ -334,6 +358,7 @@ export function TerminalView({
                 rows: term.rows,
                 writable: !term.options.disableStdin,
                 alternateScreen: term.buffer.active.type === "alternate",
+                ...(viewport ? { viewport } : {}),
               };
             },
             reconnect,

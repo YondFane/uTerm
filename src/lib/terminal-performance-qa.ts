@@ -1,3 +1,15 @@
+export interface TerminalViewportSnapshot {
+  proposedColumns: number;
+  proposedRows: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  screenWidth: number;
+  screenHeight: number;
+  cellWidth: number;
+  cellHeight: number;
+  backingScale: number;
+}
+
 export interface TerminalPerformanceSnapshot {
   text: string;
   frames: number;
@@ -13,12 +25,13 @@ export interface TerminalPerformanceSnapshot {
   waitingToRender: boolean;
   largestFrameBytes: number;
   alternateScreen: boolean;
+  viewport?: TerminalViewportSnapshot;
 }
 
 const probes = new Map<
   string,
   {
-    read: (tailOnly?: boolean) => TerminalPerformanceSnapshot;
+    read: (tailOnly?: boolean, measureViewport?: boolean) => TerminalPerformanceSnapshot;
     reconnect?: () => Promise<void>;
     delay?: (milliseconds: number) => void;
     pause?: (paused: boolean) => void;
@@ -27,7 +40,7 @@ const probes = new Map<
 
 export function registerTerminalPerformanceProbe(
   session: string,
-  read: (tailOnly?: boolean) => TerminalPerformanceSnapshot,
+  read: (tailOnly?: boolean, measureViewport?: boolean) => TerminalPerformanceSnapshot,
   reconnect?: () => Promise<void>,
   delay?: (milliseconds: number) => void,
   pause?: (paused: boolean) => void,
@@ -54,8 +67,12 @@ export function pauseTerminalPerformanceConsumer(session: string, paused: boolea
   probe.pause(paused);
 }
 
-export function terminalPerformanceSnapshot(session: string, tailOnly = false) {
-  return probes.get(session)?.read(tailOnly);
+export function terminalPerformanceSnapshot(
+  session: string,
+  tailOnly = false,
+  measureViewport = false,
+) {
+  return probes.get(session)?.read(tailOnly, measureViewport);
 }
 
 export async function reconnectTerminalPerformanceProbe(session: string) {

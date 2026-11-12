@@ -83,12 +83,19 @@ Linux checks verify release bytes, styles, delayed mounting, load failures and r
 Chromium loads all five faces with an M advance of 9.9609375px at 17px. Latest macOS font
 registration, window rendering and paired metrics still require CI.
 
-Workspace reports also read actual renderer columns/rows, viewport bounds and backing scale from
-SwiftTerm and xterm. Native optimal size and ordinary screen bounds are retained alongside them. The
-paired report rejects missing or invalid metrics and retains both grids for diagnosis; matching font
-glyph widths alone do not establish matching terminal wrapping or full visual acceptance. Linux
-passes 33 paired-evidence and run-discovery policy checks, type/production build, formatting and
-documentation checks. These new renderer measurements still require same-source Mac captures.
+Workspace reports read actual renderer columns/rows, viewport bounds, cell sizes and backing scale
+from SwiftTerm and xterm. They observe each renderer's proposed dimensions and require an unchanged,
+fitted grid for at least 250 ms before capture and the same metrics after capture. The collectors do
+not force a fit. Viewport measurement covers the available terminal container, while screen and
+native optimal sizes remain separate diagnostics. Performance polling does not measure layout unless
+screenshot QA explicitly requests it.
+
+A source `c78fa57` ordinary capture recorded a 423px grid in a 531.8px container; those earlier
+measurements cannot establish settled rendering. The paired report now rejects unfitted grids as
+well as missing/invalid measurements and retains both grids for diagnosis. Matching font glyph
+widths alone does not establish matching wrapping or full visual acceptance. Linux passes 34
+paired-evidence/run-discovery policies, type/production build and formatting/documentation checks.
+Fresh same-source Mac captures of this wait condition remain required.
 
 Regular toolbar/sidebar vectors and dimensions use `shared/contracts/chrome-ui-v1.json`. React reads
 that source and Swift renders the generated paths through CoreGraphics. The native candidate uses

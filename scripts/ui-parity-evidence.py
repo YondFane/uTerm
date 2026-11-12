@@ -124,7 +124,8 @@ def compare(native_path, tauri_path, output, head, tested, fixture_path):
         for scene in [n, t["checks"]]:
             renderer = scene.get("terminalRenderer", {})
             assert all(type(renderer.get(key)) is int and 0 < renderer[key] <= 10000 for key in ["columns", "rows"]), "Missing actual terminal renderer grid"
-            assert all(type(renderer.get(key)) in [int, float] and math.isfinite(renderer[key]) and 0 < renderer[key] <= 10000 for key in ["viewportWidth", "viewportHeight", "backingScale"]), "Missing actual terminal renderer viewport or scale"
+            assert all(type(renderer.get(key)) is int and renderer[key] == renderer[actual] for key, actual in [("proposedColumns", "columns"), ("proposedRows", "rows")]), "Terminal grid has not fitted its current viewport"
+            assert all(type(renderer.get(key)) in [int, float] and math.isfinite(renderer[key]) and 0 < renderer[key] <= 10000 for key in ["viewportWidth", "viewportHeight", "backingScale", "cellWidth", "cellHeight"]), "Missing actual terminal renderer viewport, scale or cell size"
         for metric in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop", "terminalHeaderHeight", "terminalViewportGap"]:
             values = [scene.get(metric) for scene in [n, t["checks"]]]
             assert all(type(value) in [int, float] and 0 <= value < 1000 for value in values), "Missing actual terminal geometry: " + metric

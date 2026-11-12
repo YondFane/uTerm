@@ -574,23 +574,35 @@ async function runUiParity() {
             Math.abs(branchMetrics.captionGap - 5) < 1,
           "Incorrect actual ordinary branch geometry",
         );
-        const renderer = terminalPerformanceSnapshot("ui-parity-0");
-        const viewport = terminal.querySelector<HTMLElement>(".xterm");
-        const screen = viewport?.querySelector<HTMLElement>(".xterm-screen");
-        assert(
-          renderer && renderer.columns > 0 && renderer.rows > 0 && viewport && screen,
-          "Missing actual ordinary terminal renderer grid",
-        );
-        const viewportBounds = viewport.getBoundingClientRect();
-        const screenBounds = screen.getBoundingClientRect();
+        let gridSignature = "",
+          gridStableSince = 0;
+        const renderer = await until(() => {
+          const sample = terminalPerformanceSnapshot("ui-parity-0", true, true);
+          const viewport = sample?.viewport;
+          if (
+            !sample ||
+            !viewport ||
+            sample.columns !== viewport.proposedColumns ||
+            sample.rows !== viewport.proposedRows ||
+            viewport.proposedColumns < 1 ||
+            viewport.proposedRows < 1
+          ) {
+            gridSignature = "";
+            return null;
+          }
+          const signature = JSON.stringify(viewport);
+          if (signature !== gridSignature) {
+            gridSignature = signature;
+            gridStableSince = performance.now();
+            return null;
+          }
+          return performance.now() - gridStableSince >= 250 ? sample : null;
+        }, "actual fitted terminal grid settles after window/font changes");
+        assert(renderer.viewport, "Missing fitted ordinary terminal measurement");
         const terminalRenderer = {
           columns: renderer.columns,
           rows: renderer.rows,
-          viewportWidth: viewportBounds.width,
-          viewportHeight: viewportBounds.height,
-          backingScale: devicePixelRatio,
-          screenWidth: screenBounds.width,
-          screenHeight: screenBounds.height,
+          ...renderer.viewport,
         };
         await scene(`workspace-${language}-${appearance}-${width}`, {
           chromeContractSHA256,
@@ -620,6 +632,13 @@ async function runUiParity() {
           projectName: parityFixture.projectName,
           workspaceName: parityFixture.workspaceName,
         });
+        const afterCapture = terminalPerformanceSnapshot("ui-parity-0", true, true);
+        assert(
+          JSON.stringify(afterCapture?.viewport) === gridSignature &&
+            afterCapture?.columns === renderer.columns &&
+            afterCapture?.rows === renderer.rows,
+          "Terminal grid changed during workspace capture",
+        );
       }
     }
   }

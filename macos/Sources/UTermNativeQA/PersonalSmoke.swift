@@ -4,6 +4,33 @@ import UTermBridge
 
 @MainActor
 enum PersonalSmoke {
+    private static func rendererMetrics(_ terminal: TerminalSession, window: NSWindow) -> [String: Any]? {
+        let view = terminal.view, renderer = terminal.view.getTerminal(), scale = window.backingScaleFactor
+        guard view.window === window, renderer.cols > 0, renderer.rows > 0, scale > 0,
+              let pixels = view.cellSizeInPixels(source: renderer), pixels.width > 0, pixels.height > 0 else { return nil }
+        let optimal = view.getOptimalFrameSize(), cellWidth = CGFloat(pixels.width) / scale, cellHeight = CGFloat(pixels.height) / scale
+        let scrollbar = max(0, optimal.width - CGFloat(renderer.cols) * cellWidth)
+        return ["columns": renderer.cols, "rows": renderer.rows,
+            "proposedColumns": max(1, Int((view.bounds.width - scrollbar) / cellWidth)), "proposedRows": max(1, Int(view.bounds.height / cellHeight)),
+            "viewportWidth": view.bounds.width, "viewportHeight": view.bounds.height, "backingScale": scale,
+            "cellWidth": cellWidth, "cellHeight": cellHeight, "reservedScrollbarWidth": scrollbar,
+            "optimalWidth": optimal.width, "optimalHeight": optimal.height]
+    }
+    private static func rendererSignature(_ value: [String: Any]) -> String {
+        ["columns", "rows", "proposedColumns", "proposedRows", "viewportWidth", "viewportHeight", "backingScale", "cellWidth", "cellHeight", "optimalWidth", "optimalHeight"].map { String(describing: value[$0] ?? "") }.joined(separator: "/")
+    }
+    private static func settledRenderer(_ terminal: TerminalSession, window: NSWindow) async throws -> [String: Any] {
+        var signature = "", stableSince = ProcessInfo.processInfo.systemUptime, result: [String: Any] = [:]
+        try await TerminalSmoke.wait("Actual native renderer settles after window/font changes") {
+            guard let sample = rendererMetrics(terminal, window: window), sample["columns"] as? Int == sample["proposedColumns"] as? Int,
+                  sample["rows"] as? Int == sample["proposedRows"] as? Int else { signature = ""; return false }
+            let current = rendererSignature(sample)
+            if current != signature { signature = current; stableSince = ProcessInfo.processInfo.systemUptime; return false }
+            result = sample
+            return ProcessInfo.processInfo.systemUptime - stableSince >= 0.25
+        }
+        return result
+    }
     static func run(model: WorkspaceModel, window: NSWindow, openSettings: () -> NativeSettingsWindow, openFile: (URL, String) async throws -> ContentWindow) async {
         guard WorkspaceModel.applicationProfile.personalFixture, let store = try? WorkspaceModel.dataRoot() else { return }
         let root = store.deletingLastPathComponent()
@@ -239,7 +266,9 @@ enum PersonalSmoke {
                         let controls = NativeWindowControls.metrics(window)
                         guard controls.count == 3, let closeX = controls.first?["x"], abs(closeX - 16) < 1 else { throw BridgeFailure(code: "PERSONAL_WINDOW_CONTROLS", message: "Actual window controls differ from the shared inset") }
                         let name = "personal-\(phase)-workspace-\(language)-\(appearance)-\(width).png"
+                        let rendered = try await settledRenderer(terminal, window: window)
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
+                        guard let after = rendererMetrics(terminal, window: window), rendererSignature(after) == rendererSignature(rendered) else { throw BridgeFailure(code: "PERSONAL_TERMINAL_RENDERER", message: "The terminal grid changed during capture") }
                         captures.append(name)
                         report["captures"] = captures
                         var captured: [String: Any] = ["screenshot": name, "language": language, "appearance": appearance,
@@ -265,12 +294,7 @@ enum PersonalSmoke {
                         captured["fileGitStates"] = fileGitStates
                         captured["fontSourceSHA256"] = NativeBundledFonts.regularSHA256
                         captured["fontCharacterWidth"] = ("M" as NSString).size(withAttributes: [.font: font]).width
-                        let renderer = terminal.view.getTerminal(), optimal = terminal.view.getOptimalFrameSize()
-                        guard renderer.cols > 0, renderer.rows > 0, terminal.view.bounds.width > 0, terminal.view.bounds.height > 0,
-                              terminal.view.window === window else { throw BridgeFailure(code: "PERSONAL_TERMINAL_RENDERER", message: "Actual terminal renderer is detached or has no grid") }
-                        captured["terminalRenderer"] = ["columns": renderer.cols, "rows": renderer.rows,
-                            "viewportWidth": terminal.view.bounds.width, "viewportHeight": terminal.view.bounds.height,
-                            "backingScale": window.backingScaleFactor, "optimalWidth": optimal.width, "optimalHeight": optimal.height] as [String: Any]
+                        captured["terminalRenderer"] = rendered
                         guard let pane = terminal.view.superview as? NativeTerminalPane else { throw BridgeFailure(code: "PERSONAL_TERMINAL_GEOMETRY", message: "Actual terminal pane is detached") }
                         let terminalGeometry = pane.measuredGeometry()
                         for key in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop"] {
