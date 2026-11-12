@@ -58,6 +58,9 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
         assert proof[key] is True, key
     assert proof['automaticKeychainAllowed'] is False
     for name in proof['captures']: assert (evidence / name).stat().st_size > 1000, name
+    assert data['settingsPeerPhase'] == 'verify-same-field-conflict'
+    assert data['settingsQAReadOnlyRetryCount'] >= 0
+    assert 0 <= data['settingsQAPeerWriteRetryCount'] <= 4
     assert data['nativeFontPickersPreserveCustomDraftsAndSaveSharedPresets']
     assert data['nativeGlobalMavenActualSaveConflictDraftAndProjectPreservation']
     proof = data['nativeWorkspaceManagementProof']
