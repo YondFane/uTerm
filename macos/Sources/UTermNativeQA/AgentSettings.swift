@@ -9,6 +9,8 @@ final class AgentSettingsModel: ObservableObject {
     @Published private(set) var busy = false
     @Published var frozen = false
     @Published var selected = "codex"
+    @Published var query = ""
+    @Published var filter = "all"
     @Published var identifier = ""
     @Published var name = ""
     @Published var program = ""
@@ -43,6 +45,16 @@ final class AgentSettingsModel: ObservableObject {
     private var draftID = "codex"
     var definitions: [JSONValue] { catalog["definitions"].array }
     var identifiers: [String] { Array(Set(catalog["builtins"].array.compactMap(\.string) + definitions.compactMap { $0["id"].string })).sorted() }
+    func displayName(_ id: String) -> String { definitions.first { $0["id"].string == id }?["name"].string ?? id }
+    var visibleIdentifiers: [String] {
+        let search = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return identifiers.filter { id in
+            let program = definitions.first { $0["id"].string == id }?["program"].string ?? id
+            return (search.isEmpty || (displayName(id) + " " + id + " " + program).lowercased().contains(search)) &&
+                (filter != "available" || catalog["available"].array.contains(.string(id))) &&
+                (filter != "enabled" || workspace.settings["enabledAgents"].array.contains(.string(id)))
+        }
+    }
     var dirty: Bool { [identifier, name, program, argumentsText].joined(separator: "\u{0}") != original }
     init(workspace: WorkspaceModel) { self.workspace = workspace; select("codex", force: true) }
     private var bridge: CoreBridge? { workspace.sshBridge ?? workspace.bridge }
@@ -194,7 +206,11 @@ struct AgentSettingsView: View {
         }
         Toggle(localized("Enable this Agent", "启用此 Agent"), isOn: Binding(
             get: { workspace.settings["enabledAgents"].array.contains(.string(model.selected)) },
-            set: { enabled in Task { await workspace.mutate("settings.agent.toggle", ["agent": .string(model.selected), "enabled": .bool(enabled)]) } }))
+            set: { enabled in
+                let id = model.selected
+                Task { await workspace.mutate("settings.agent.toggle", ["agent": .string(id), "enabled": .bool(enabled)]) }
+            }))
+            .disabled(!model.catalog["available"].array.contains(.string(model.selected)) && !workspace.settings["enabledAgents"].array.contains(.string(model.selected)))
         Section(localized("Activity hooks", "活动 Hooks")) {
             Toggle(localized("Notify when tasks finish or need attention", "任务完成或需要处理时通知"), isOn: Binding(
                 get: { workspace.agentNotifications.enabled },
@@ -243,10 +259,11 @@ struct AgentSettingsView: View {
             Form {
                 if scope == .usage { NativeUsageTabs(model: model).frame(height: 32) }
                 else {
-                Picker("Agent", selection: $model.selected) {
-                    if !model.identifiers.contains(model.selected) { Text(model.selected.isEmpty ? localized("New custom Agent", "新建自定义 Agent") : model.selected).tag(model.selected) }
-                    ForEach(model.identifiers, id: \.self) { id in Text(id).tag(id) }
-                }.onChange(of: model.selected) { _, value in model.select(value) }
+                    HStack {
+                        NativeAgentSearch(model: model).frame(minWidth: 80, maxWidth: .infinity, minHeight: 28)
+                        NativeAgentCatalogPicker(model: model, kind: .filter).frame(width: 140, height: 28)
+                    }
+                    NativeAgentCatalogPicker(model: model, kind: .agent).frame(height: 28)
                 }
                 if scope != .usage { commandControls }
                 if scope != .commands { usageControls }

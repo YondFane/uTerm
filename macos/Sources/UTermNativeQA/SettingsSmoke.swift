@@ -424,6 +424,51 @@ enum SettingsSmoke {
         report["nativeShortcutActionAttempts"] = attempts
     }
 
+    private static func verifyAgentCatalog(settings: NativeSettingsWindow, snapshotFile: URL, evidence: URL, report: inout [String: Any]) async throws {
+        let agents = settings.model.agentSettings, selected = settings.model.agentSettings.selected
+        let draft = agents.program, before = try Data(contentsOf: snapshotFile)
+        try await TerminalSmoke.wait("Render actual Agent catalog search and filters") {
+            (view(settings.window, id: "native-agent-search") as? NSSearchField)?.isEnabled == true &&
+                (view(settings.window, id: "native-agent-filter") as? NSPopUpButton)?.isEnabled == true
+        }
+        guard let search = view(settings.window, id: "native-agent-search") as? NSSearchField,
+              let filter = view(settings.window, id: "native-agent-filter") as? NSPopUpButton,
+              let choices = view(settings.window, id: "native-agent-selection") as? NSPopUpButton else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Actual Agent catalog controls are missing") }
+        func ids() -> [String] { choices.itemArray.compactMap { $0.representedObject as? String } }
+        func searchFor(_ text: String) async throws {
+            _ = search.scrollToVisible(search.bounds)
+            settings.window.makeKeyAndOrderFront(nil); settings.window.makeFirstResponder(search)
+            guard let editor = search.currentEditor() as? NSTextView else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Agent search field has no editor") }
+            editor.insertText(text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+            try await TerminalSmoke.wait("Filter Agent choices through the actual search field") { agents.query == text && ids() == agents.visibleIdentifiers }
+        }
+        try await searchFor(selected.uppercased())
+        guard ids().contains(selected), agents.selected == selected, agents.program == draft, agents.dirty else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Case-insensitive search lost the selected command draft") }
+        try await searchFor("uterm-no-matching-agent-qa")
+        guard ids().isEmpty, !choices.isEnabled, agents.selected == selected, agents.program == draft else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Empty Agent results selected another command") }
+        let capture = "native-settings-agent-search-empty.png"
+        try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+        try key(settings.window, code: 53, characters: "\u{1b}")
+        try await TerminalSmoke.wait("Escape clears Agent search without closing settings") { agents.query.isEmpty && settings.window.isVisible && ids() == agents.identifiers }
+        settings.window.makeFirstResponder(nil)
+        for value in ["available", "enabled", "all"] {
+            guard let item = filter.itemArray.first(where: { $0.representedObject as? String == value }), let action = filter.action else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Agent filter option is missing") }
+            filter.select(item)
+            guard NSApp.sendAction(action, to: filter.target, from: filter) else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Agent filter action was not delivered") }
+            let expected = agents.identifiers.filter { id in
+                value == "all" || (value == "available" ? agents.catalog["available"].array : agents.workspace.settings["enabledAgents"].array).contains(.string(id))
+            }
+            try await TerminalSmoke.wait("Match Agent filter options to the actual catalog") { agents.filter == value && ids() == expected }
+            guard agents.selected == selected, agents.program == draft, agents.dirty else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Filtering discarded the command draft") }
+        }
+        agents.frozen = true
+        try await TerminalSmoke.wait("Freeze disables actual Agent catalog controls") { !search.isEnabled && !filter.isEnabled && !choices.isEnabled }
+        agents.frozen = false
+        try await TerminalSmoke.wait("Resume actual Agent catalog controls") { search.isEnabled && filter.isEnabled && choices.isEnabled }
+        guard try Data(contentsOf: snapshotFile) == before else { throw BridgeFailure(code: "AGENT_CATALOG_QA", message: "Filtering changed saved data") }
+        report["nativeAgentCatalogProof"] = ["actualSearchField": true, "actualFilterActions": true, "caseInsensitive": true, "emptyResultsDoNotSelect": true, "availableAndEnabledMatchCatalog": true, "escapeClearsWithoutClosing": true, "frozenControlsDisabled": true, "commandDraftRetained": true, "savedDataUnchanged": true, "capture": capture] as [String: Any]
+    }
+
     private static func verifyInlineAgents(settings: NativeSettingsWindow, open: () -> NativeSettingsWindow, openAgents: () -> AgentSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
         let model = settings.model, agents = model.agentSettings
         let previousRemote = model.values["usageRemote"] ?? .bool(true)
@@ -448,6 +493,7 @@ enum SettingsSmoke {
         let draft = "/tmp/uterm-qa-retained-command"
         try editProgram(draft)
         guard agents.program == draft, agents.dirty, settings.window.parent?.isVisible == true else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual inline Agent editing did not retain a draft in the workspace") }
+        try await verifyAgentCatalog(settings: settings, snapshotFile: snapshotFile, evidence: evidence, report: &report)
         let commandsCapture = "native-settings-inline-agent-command.png"
         try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(commandsCapture))
         guard let usage = view(settings.window, id: "native-settings-section-usage") as? NSButton else { throw BridgeFailure(code: "SETTINGS_AGENT_QA", message: "Actual Usage category is missing") }

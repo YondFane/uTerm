@@ -58,6 +58,10 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-settings-') as director
         assert proof[key] is True, key
     assert proof['automaticKeychainAllowed'] is False
     for name in proof['captures']: assert (evidence / name).stat().st_size > 1000, name
+    proof = data['nativeAgentCatalogProof']
+    for key in ['actualSearchField', 'actualFilterActions', 'caseInsensitive', 'emptyResultsDoNotSelect', 'availableAndEnabledMatchCatalog', 'escapeClearsWithoutClosing', 'frozenControlsDisabled', 'commandDraftRetained', 'savedDataUnchanged']:
+        assert proof[key] is True, key
+    assert (evidence / proof['capture']).stat().st_size > 1000
     assert data['settingsPeerPhase'] == 'verify-same-field-conflict'
     assert data['settingsQAReadOnlyRetryCount'] >= 0
     assert 0 <= data['settingsQAPeerWriteRetryCount'] <= 4

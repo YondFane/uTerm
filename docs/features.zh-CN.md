@@ -323,6 +323,12 @@ Linux 的 21 项共享工作区及渲染回归通过。新增 macOS 检查在终
 
 用量使用独立的 Claude、Codex、Kimi 和 Grok 标签，切换其 Agent 不会选择或丢弃命令草稿。结果与错误按 Agent 保留，包含缓存读取／写入数量及部分统计／无记录提示。可见入口共用一个串行轮询任务，自动读取保留无关命令错误。QA 在存在未保存命令时操作实际 Agent 标签，要求产生新读取并保留两份结果。
 
+原生命令页按已保存的 Agent 名称、标识及程序路径搜索，提供**全部 Agent**、**可用**和**已启用**筛选。筛选保留当前命令及草稿，空结果不选择其他 Agent。Escape 优先清除非空搜索，再关闭设置。不可用的 Agent 已启用时仍可停用，但不能新启用；启用操作保留点击时的 Agent 标识。
+
+原生采集器操作实际搜索框及筛选菜单，在保留命令草稿时检查忽略大小写、空结果、Escape、冻结控件及保存数据未变，要求
+`nativeAgentCatalogProof` 与
+`native-settings-agent-search-empty.png`。这些新增控件仍待当前源码的 Mac 执行。Linux 的四项普通版 Agent／设置回归及 30 项报告策略通过，但不能证明原生验收通过。
+
 源码／实际测试提交 `1f792a1` 在 Intel macOS
 15.7.9 中通过重新打开后的目录读取屏障、实际退出确认／取消、四种用量标签及命令结果保留，也通过实际自动保存、图标颜色、默认 Agent 选择和真实的 182×28 点导出按钮及保存对话框保护。[artifact13945614134](https://github.com/YondFane/uTerm/actions/runs/43219505232/artifacts/13945614134)中的
 `nativeInlineAgentSettingsProof` 和 `nativeShortcutActionsProof`

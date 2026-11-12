@@ -699,6 +699,18 @@ counts and partial/no-record notices. Visible entries share one sequential polli
 reads preserve unrelated command errors. QA operates the actual Agent tabs with an unsaved command
 and requires a new read plus both retained results.
 
+The native command page searches saved Agent names, identifiers and executable paths, with **All
+Agents**, **Available** and **Enabled** filters. Filtering keeps the selected command and its draft;
+empty results do not select another Agent. Escape clears a nonempty search before closing settings.
+An unavailable Agent can be disabled if already enabled, but cannot be newly enabled. The enable
+action retains the Agent identifier captured when it was clicked.
+
+The native collector uses the actual search field and filter menus, checks case-insensitive and
+empty results, Escape, frozen controls and unchanged saved data with a retained command draft. It
+requires `nativeAgentCatalogProof` and `native-settings-agent-search-empty.png`. These new controls
+remain pending current-source Mac execution. Four ordinary Agent/settings regressions and 30 report
+policies pass on Linux; these do not establish native acceptance.
+
 Source/tested commit `1f792a1` on Intel macOS 15.7.9 passes the reopened catalog-read barrier,
 actual quit confirmation/cancellation, all four usage tabs and retained command results. It also
 passes actual automatic saves, icon colors, default Agent selection and the real 182×28-point export
