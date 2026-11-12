@@ -18,6 +18,7 @@ from pathlib import Path
 
 from ui_parity_github import validate_pr
 from macos_disk_image import create_disk_image, verify_disk_image
+from macos_qa_http import LoopbackHTTPServer
 
 IDENTIFIER = "sh.uterm.desktop.personal"
 
@@ -280,7 +281,7 @@ def smoke(installed, source, root, evidence, head, tested):
             self.end_headers()
             self.wfile.write(body)
 
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), EmptyFeed)
+    server = LoopbackHTTPServer(EmptyFeed)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
@@ -297,6 +298,10 @@ def preserve_capture(root, evidence, name):
     assert not image.is_symlink() and image.resolve().is_relative_to(root.resolve())
     assert image.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     shutil.copyfile(image, evidence / name)
+    visibility = root / (name + ".visibility.json")
+    if visibility.exists() or visibility.is_symlink():
+        assert not visibility.is_symlink() and visibility.resolve().is_relative_to(root.resolve())
+        shutil.copyfile(visibility, evidence / visibility.name)
 
 
 def preserve_incomplete_smoke(root, evidence, phase, reason, head, tested):
@@ -338,6 +343,11 @@ def preserve_smoke_outputs(root, evidence, phase):
     for name in report.get("captures", []):
         preserve_capture(root, evidence, name)
         captures.append(name)
+    # A visibility rejection can occur before the caller records the attempted capture.
+    # 可见性门禁可能在调用方登记本次截图前拒绝验收。
+    for image in sorted(root.glob(f"personal-{phase}-*.png")):
+        if image.name not in captures:
+            preserve_capture(root, evidence, image.name)
     return report, captures
 
 

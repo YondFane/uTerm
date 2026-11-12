@@ -105,6 +105,7 @@ final class WorkspaceModel: ObservableObject {
     private var frames: Task<Void, Never>?
     private var failures: Task<Void, Never>?
     private var operation: Task<Bool, Never>?
+    private let refreshCycle = WorkspaceRefreshCycle()
     private var loadEpoch = 0
     private var snapshotReadError: String?
     private var shuttingDown = false
@@ -264,23 +265,33 @@ final class WorkspaceModel: ObservableObject {
 
     func reload(clearOperationError: Bool = false) async {
         if clearOperationError { error = ""; snapshotReadError = nil }
+        guard bridge != nil, !shuttingDown else { return }
+        await refreshCycle.run { [weak self] in
+            if let self { await self.readWorkspaceSnapshot() }
+        }
+    }
+
+    private func readWorkspaceSnapshot() async {
         guard let bridge, !shuttingDown else { return }
         loadEpoch += 1
         let epoch = loadEpoch
         do {
             if settingsCatalog == .null { settingsCatalog = try await bridge.call("settings.catalog") }
             let state = try await bridge.viewSnapshot()
-            guard epoch == loadEpoch else { return }
+            guard epoch == loadEpoch, bridge === self.bridge, !shuttingDown else { return }
+            let settings = state.snapshot.document.settings
+            var refreshedCommands: [JSONValue]?
+            if commandItems.isEmpty || resolvedShortcuts != settings["shortcuts"] {
+                refreshedCommands = try await bridge.call("settings.commands", params: .object(["settings": settings, "platform": .string("macos")])).array
+            }
+            guard epoch == loadEpoch, bridge === self.bridge, !shuttingDown else { return }
+            // Publish the snapshot and its commands together, before notifying menu observers.
+            // 同时发布快照及其命令，再通知菜单观察者。
+            self.state = state
+            if let refreshedCommands { commandItems = refreshedCommands; resolvedShortcuts = settings["shortcuts"] }
             let language = state.snapshot.document.settings["language"].string ?? "system"
             if NativeLocale.preference != language { NativeLocale.preference = language; languageChanged?() }
-            self.state = state
-            if commandItems.isEmpty || resolvedShortcuts != settings["shortcuts"] {
-                let items = try await bridge.call("settings.commands", params: .object(["settings": settings, "platform": .string("macos")])).array
-                guard epoch == loadEpoch else { return }
-                commandItems = items
-                resolvedShortcuts = settings["shortcuts"]
-                commandsChanged?()
-            }
+            if refreshedCommands != nil { commandsChanged?() }
             appearanceChanged?(settings["appearance"].string ?? "system")
             updates.apply(settings)
             breakSchedule.configure(enabled: settings["breakReminder"].bool == true, minutes: settings["breakInterval"].number ?? 60, now: ProcessInfo.processInfo.systemUptime)
@@ -297,6 +308,7 @@ final class WorkspaceModel: ObservableObject {
             agentNotifications.retain(existing)
             for (id, terminal) in terminals where !existing.contains(id) {
                 _ = try await bridge.call("terminal.action", params: .object(["attachment": .string(terminal.attachment), "action": .string("detach")]))
+                guard bridge === self.bridge, !shuttingDown else { return }
             }
             terminals = terminals.filter { existing.contains($0.key) }
             for entry in state.sessions {
@@ -316,7 +328,7 @@ final class WorkspaceModel: ObservableObject {
             if let snapshotReadError, error == snapshotReadError { error = "" }
             snapshotReadError = nil
         } catch {
-            if epoch == loadEpoch { snapshotReadError = error.localizedDescription; self.error = error.localizedDescription }
+            if epoch == loadEpoch, bridge === self.bridge, !shuttingDown { snapshotReadError = error.localizedDescription; self.error = error.localizedDescription }
         }
     }
 
