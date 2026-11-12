@@ -440,8 +440,9 @@ struct SSHView: View {
 }
 
 @MainActor
-final class SSHWindow: NSWindowController, NSWindowDelegate {
+final class SSHWindow: NSWindowController, NSWindowDelegate, NativeWorkspacePanelContent {
     let model: SSHModel
+    private(set) var workspacePanelView: NSView?
     var didClose: (() -> Void)?
     private var closing = false
     init(model: SSHModel) {
@@ -449,7 +450,8 @@ final class SSHWindow: NSWindowController, NSWindowDelegate {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 980, height: 820), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         super.init(window: window)
         window.title = localized("SSH connections", "SSH 连接"); window.minSize = NSSize(width: 760, height: 520); window.delegate = self
-        window.contentView = NSHostingView(rootView: SSHView(model: model)); model.ownerWindow = window
+        workspacePanelView = NSHostingView(rootView: SSHView(model: model))
+        window.contentView = workspacePanelView; model.ownerWindow = window
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     func windowShouldClose(_ sender: NSWindow) -> Bool {

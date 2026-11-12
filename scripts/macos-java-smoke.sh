@@ -68,7 +68,7 @@ public class TaskProbe {
         assert report[key], (key, report)
     assert report['unsupportedDevelopmentArgumentsRejected'], report
     proof = report['javaToolbarRunList']
-    for field in ['passed', 'realHostTask', 'actualMenuAction', 'actualToolbarCoordinator', 'appKitActionDispatched', 'staleGenerationRejected', 'scopeRetainedOnRejection', 'sameTaskGeneration', 'actualMainWindow', 'actualToggleButtonRetainedGeneration']:
+    for field in ['passed', 'realHostTask', 'actualMenuAction', 'actualToolbarCoordinator', 'appKitActionDispatched', 'staleGenerationRejected', 'scopeRetainedOnRejection', 'sameTaskGeneration', 'actualMainWindow', 'actualToggleButtonRetainedGeneration', 'retainedContentAfterBackingWindowCleared']:
         assert proof[field] is True, (field, proof)
     for name in [proof['screenshot'], report['nativeJavaMenuWorkspaceCapture']]:
         assert (evidence / name).stat().st_size > 1000, name
