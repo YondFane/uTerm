@@ -692,12 +692,14 @@ are retained in
 The inspected General original confirms readable wrapped navigation and the visible close icon, but
 does not accept the incomplete settings suite. Fresh current-source Mac execution is required.
 
-General, Terminal, Shortcuts, Local control and Software updates use plain scrollable rows with
-checkboxes instead of macOS grouped cards. General keeps the existing login-item approval/retry
-controls, with compact export/reset actions below a divider; narrow windows stack these actions.
-Native export QA measures the actual button before opening its save sheet. Current-source Mac
-screenshots must still verify this layout against the ordinary client; remaining settings sections
-and full visual parity are not accepted.
+General, Terminal, Workspace, Shortcuts, Local control, Maven and Software updates use plain
+scrollable rows with checkboxes instead of macOS grouped cards. Maven paths have visible labels,
+blank-value hints and adjacent native pickers; its global scope, explicit save and conflict guards
+remain in place. General keeps the existing login-item approval/retry controls, with compact
+export/reset actions below a divider; narrow windows stack these actions. Native export QA measures
+the actual button before opening its save sheet. Current-source Mac builds and screenshots must
+still verify the Workspace and Maven layouts and compare all sections against the ordinary client;
+full visual parity is not accepted.
 
 In **Shortcuts**, Backspace clears the binding being recorded and **Restore default shortcuts**
 clears all overrides immediately. Both operations save only `shortcuts`, retaining other preferences

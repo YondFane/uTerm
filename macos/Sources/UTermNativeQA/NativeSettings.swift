@@ -319,8 +319,8 @@ struct NativeSettingsView: View {
         }
     }
     private var workspaceSection: some View {
-        Form {
-            Section(localized("Manage workspaces", "管理工作区")) {
+        NativeSettingsForm {
+            VStack(alignment: .leading, spacing: 12) {
                 ForEach(workspace.groupItems) { group in
                     Button { Task { await workspace.mutate("workspace.switch", ["id": .string(group.id)]) } } label: {
                         HStack { Text(group.name); Spacer(); if group.id == workspace.groupID { Image(systemName: "checkmark") } }
@@ -335,14 +335,15 @@ struct NativeSettingsView: View {
             }
             choice("projectOrder", "Project order", "项目排序", [("manual", "Manual", "手动"), ("name", "Name", "名称")])
             NativeDefaultAgentPicker(model: model)
-            Section(localized("Sidebar", "侧栏")) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(localized("Sidebar", "侧栏")).font(.headline)
                 Toggle(localized("Show SSH connections", "显示 SSH 连接"), isOn: flag("showSshConnections"))
                 Toggle(localized("Show Redis connections", "显示 Redis 连接"), isOn: flag("showRedisConnections"))
                 Toggle(localized("Show database connections", "显示数据库连接"), isOn: flag("showDatabaseConnections"))
             }
             choice("inspectorPosition", "Inspector position", "检查器位置", [("left", "Left", "左侧"), ("right", "Right", "右侧")])
             choice("sidebarStyle", "Sidebar style", "侧栏样式", [("navigation", "Navigation", "导航")])
-        }.formStyle(.grouped)
+        }
     }
     private var agents: some View {
         AgentSettingsView(model: model.agentSettings, workspace: workspace, scope: .commands)
