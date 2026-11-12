@@ -623,7 +623,23 @@ The capture gate inspects WindowServer before and after each original PNG. Anoth
 intersecting visible window rejects acceptance; the original and `.visibility.json` diagnostics
 remain available, including a capture rejected before it entered the scene list. The private
 package/update HTTP fixtures bind numeric loopback and skip reverse hostname lookup. This changes
-neither macOS permissions nor application network access.
+neither macOS permissions nor application network access. WindowServer can report a full-display
+layer-20 Dock surface even when its pixels over the app are transparent. Only that verified system
+surface is additionally captured and checked pixel by pixel in the target intersection; zero alpha
+is required to ignore it. Nontransparent pixels, missing captures or decode errors still block
+acceptance. Original desktop-surface PNGs and alpha diagnostics accompany early CI artifacts.
+
+At source `8a3211a`, tested merge `c8cd160f`, the Intel gate stops before menu acceptance because
+WindowServer reports Dock over the whole 1920×1080 display. The
+[settings report, visibility data and original](https://github.com/YondFane/uTerm/actions/runs/43236606283/artifacts/13954825002)
+are retained; the actual settings search image shows no visible dialog. This establishes a metadata
+ambiguity, without proving the Dock surface transparent. Two Mac CoreGraphics tests cover actual
+alpha extraction, scaled/translated intersections and invalid regions; their execution and this
+pixel-based candidate's native acceptance remain pending. Unknown foreign windows are never excluded
+by owner name or layer alone. A short source-bound diagnostic probe compiles this exact alpha helper
+and captures an isolated test window before the full native/personal build, retaining its own
+originals and JSON. It is capture-infrastructure evidence, not a uTerm window or product acceptance;
+all application gates remain required.
 
 At source `d07e8ff`, tested merge `d3e31732`, the
 [Personal Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43228172020/artifacts/13951198726)

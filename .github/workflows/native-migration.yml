@@ -64,16 +64,30 @@ jobs:
             java -version
             javac -version
           } 2>&1 | tee macos/.build/evidence/toolchain.txt
+      - name: Prepare real-window capture display
+        run: |
+          swift scripts/macos-qa-display.swift | tee macos/.build/evidence/display.json
+          swift scripts/macos-qa-display.swift --verify-only | tee macos/.build/evidence/display-verified.json
+      - name: Probe capture infrastructure before application compilation
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          swiftc -parse-as-library macos/Sources/UTermBridge/WindowCaptureAlpha.swift scripts/macos-qa-capture-probe.swift -o "$RUNNER_TEMP/uterm-capture-probe"
+          UTERM_QA_TESTED_SHA="$(git rev-parse HEAD)" "$RUNNER_TEMP/uterm-capture-probe" "$PWD/macos/.build/evidence/capture-probe"
+      - name: Preserve capture infrastructure diagnostics
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-capture-probe-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.run_attempt }}
+          path: macos/.build/evidence/capture-probe/
+          if-no-files-found: warn
       - name: Build isolated native application
         id: native_build
         run: bash scripts/macos-native-build.sh 2>&1 | tee macos/.build/evidence/native-build.log
       - name: Shared file-tree refresh and deletion regression
         run: |
           node --experimental-strip-types --test tests/file-refresh-order.test.mjs tests/file-refresh.test.mjs tests/file-delete.test.mjs 2>&1 | tee macos/.build/evidence/file-refresh-tests.log
-      - name: Prepare real-window capture display
-        run: |
-          swift scripts/macos-qa-display.swift | tee macos/.build/evidence/display.json
-          swift scripts/macos-qa-display.swift --verify-only | tee macos/.build/evidence/display-verified.json
       - name: Real native Java configuration, output and task lifetime
         id: java-runs
         continue-on-error: true
@@ -95,6 +109,8 @@ jobs:
             macos/.build/evidence/python-*.log
             macos/.build/evidence/native-java*.png
             macos/.build/evidence/native-python*.png
+            macos/.build/evidence/*.visibility.json
+            macos/.build/evidence/*.desktop-*.png
             macos/.build/evidence/toolchain.txt
             macos/.build/evidence/display*.json
       - name: Real native settings, conflicts, shortcut capture, reset and screenshots
@@ -145,6 +161,8 @@ jobs:
             macos/.build/evidence/native-ssh*.png
             macos/.build/evidence/native-database*.png
             macos/.build/evidence/native-redis*.png
+            macos/.build/evidence/*.visibility.json
+            macos/.build/evidence/*.desktop-*.png
             macos/.build/evidence/toolchain.txt
             macos/.build/evidence/display*.json
       - name: Real native Git, Worktree and open-editor protection
@@ -161,6 +179,8 @@ jobs:
             macos/.build/evidence/git-*.log
             macos/.build/evidence/native-git*.png
             macos/.build/evidence/native-toolbar-branch-picker*.png
+            macos/.build/evidence/*.visibility.json
+            macos/.build/evidence/*.desktop-*.png
             macos/.build/evidence/toolchain.txt
             macos/.build/evidence/display*.json
       - name: Shared core, FFI and Swift bridge tests
