@@ -19,7 +19,7 @@ final class AgentSettingsModel: ObservableObject {
     @Published var visible = false
     private(set) var qaUsageReads = 0
     private(set) var qaUsageLastRemote = false
-    var usageRefreshKey: String { [selected, String(visible), String(frozen), String(workspace.settings["usageRemote"].bool ?? true), String(workspace.settings["usageRefreshInterval"].number ?? 60)].joined(separator: ":") }
+    var usageRefreshKey: String { [String(catalog != .null), selected, String(visible), String(frozen), String(workspace.settings["usageRemote"].bool ?? true), String(workspace.settings["usageRefreshInterval"].number ?? 60)].joined(separator: ":") }
     private var original = ""
     private var draftID = "codex"
     var definitions: [JSONValue] { catalog["definitions"].array }
@@ -78,6 +78,11 @@ final class AgentSettingsModel: ObservableObject {
     }
     func pollUsage() async {
         guard visible, !frozen, ["codex", "claude", "kimi", "grok"].contains(selected) else { return }
+        while catalog == .null && visible && !frozen && !Task.isCancelled {
+            if busy { try? await Task.sleep(for: .milliseconds(25)) }
+            else { await reload(); if catalog == .null { return } }
+        }
+        guard catalog != .null else { return }
         while !Task.isCancelled && visible && !frozen {
             while busy && !Task.isCancelled {
                 do { try await Task.sleep(for: .milliseconds(100)) } catch { return }

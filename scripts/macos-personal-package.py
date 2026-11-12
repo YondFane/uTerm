@@ -3,6 +3,7 @@ import base64
 import hashlib
 import http.server
 import json
+import math
 import os
 import platform
 import plistlib
@@ -15,6 +16,7 @@ import time
 import uuid
 from pathlib import Path
 
+from ui_parity_github import validate_pr
 from macos_disk_image import create_disk_image, verify_disk_image
 
 IDENTIFIER = "sh.uterm.desktop.personal"
@@ -58,6 +60,7 @@ def validate_info(info, head, tested):
 
 def validate_workspace_scenes(report, head, tested, phase):
     assert report.get("nativeProjectMenuPinCollapseOrderAndConflictVerified") is True
+    assert report.get("nativeSidebarSectionOrderAndReadOnlyCollapse") is True
     assert report.get("backgroundTabCloseRetainedSelectedGeneration") is True
     scenes = report.get("workspaceScenes", [])
     expected = {(language, appearance, width) for language in ["en", "zh-Hans"]
@@ -73,15 +76,57 @@ def validate_workspace_scenes(report, head, tested, phase):
         assert scene["sourceHeadSHA"] == head and scene["testedMergeSHA"] == tested
         assert scene["platform"] == "macOS" and scene["architecture"] in ["arm64", "x86_64"]
         assert scene["system"] and scene["height"] == 720
-        assert scene["scenario"] == "toolbar-sidebar-two-session-tabs-files"
+        assert scene["scenario"] == "toolbar-sidebar-two-sessions-files"
         assert scene["filesReadable"] is True
+        assert scene.get("fileGitStates") == {"note.txt": "untracked", "README.md": "untracked"}, "Missing actual file Git states"
     assert observed == expected
+
+
+def validate_embedded_workspace(report, head, tested, phase):
+    proof = report.get("embeddedWorkspaceFiles", {})
+    for key in ["passed", "tabControlsActivated", "arrowNavigationActivated", "sameMainWindow", "orderedAndReused", "exactUnsavedDraftRetained", "cancelCloseRetainedTabs", "discardPreservedSiblingAndExternalWriter", "terminalViewAndGenerationRetained", "fontShortcutsTargetEditor", "findShortcutRetainsEditorAndTerminal"]:
+        assert proof.get(key) is True, "Missing actual embedded workspace operation: " + key
+    assert proof.get("sourceHeadSHA") == head and proof.get("testedMergeSHA") == tested
+    assert proof.get("platform") == "macOS" and proof.get("architecture") in ["arm64", "x86_64"]
+    assert proof.get("system") and proof.get("width", 0) >= 640 and proof.get("height", 0) >= 420
+    assert proof.get("screenshot") == f"personal-{phase}-embedded-files.png" and proof["screenshot"] in report["captures"]
+
+
+def validate_terminal_controls(report, head, tested, phase):
+    proof = report.get("nativeTerminalControls", {})
+    for key in ["passed", "actualFontButtonsAppliedAndRestored", "fontWritesRemainAvailableDuringFileRefresh", "fontBoundsDisabled", "unicodeCaseCountsAndNavigation", "keyboardOpenAndEscape", "keyboardShiftFindRoutesProjectSearch", "searchInputDidNotReachPTY", "terminalIdentityAndGenerationRetained", "explicitRestartRetainedDescriptorAndView"]:
+        assert proof.get(key) is True, "Missing actual terminal control operation: " + key
+    assert proof.get("sourceHeadSHA") == head and proof.get("testedMergeSHA") == tested
+    assert proof.get("platform") == "macOS" and proof.get("architecture") in ["arm64", "x86_64"]
+    assert proof.get("system") and proof.get("width", 0) >= 640 and proof.get("height", 0) >= 420
+    assert proof.get("screenshot") == f"personal-{phase}-terminal-search.png" and proof["screenshot"] in report["captures"]
+    assert isinstance(proof.get("generationBeforeRestart"), str) and proof["generationBeforeRestart"]
+    assert isinstance(proof.get("restartedGeneration"), str) and proof["restartedGeneration"] and proof["restartedGeneration"] != proof["generationBeforeRestart"]
+    assert type(proof.get("searchInputBytesBefore")) is int and proof["searchInputBytesBefore"] >= 0
+    assert proof["searchInputBytesBefore"] == proof.get("searchInputBytesAfter")
+
+
+def validate_sidebar_close(report, head, tested, phase):
+    proof = report.get("nativeSidebarSessionClose", {})
+    for key in ["passed", "actualKeyboardFocusVisible", "actualSpaceClosedBackgroundSession", "selectedGenerationRetained"]:
+        assert proof.get(key) is True, "Missing actual sidebar close operation: " + key
+    assert proof.get("sourceHeadSHA") == head and proof.get("testedMergeSHA") == tested
+    assert proof.get("platform") == "macOS" and proof.get("architecture") in ["arm64", "x86_64"] and proof.get("system")
+    assert proof.get("targetSessionID") and proof.get("selectedSessionID") and proof["targetSessionID"] != proof["selectedSessionID"]
+    assert proof.get("screenshot") == f"personal-{phase}-sidebar-close-background.png" and proof["screenshot"] in report["captures"]
+    assert proof.get("width", 0) >= 640 and proof.get("height", 0) >= 420
 
 
 def validate_smoke_report(report, head, tested, phase):
     assert report["passed"] and report["explicitCloseAndIdleHostShutdown"], report
     validate_workspace_scenes(report, head, tested, phase)
     validate_settings_scenes(report, head, tested, phase)
+    validate_embedded_workspace(report, head, tested, phase)
+    validate_terminal_controls(report, head, tested, phase)
+    validate_sidebar_close(report, head, tested, phase)
+    validate_pdf_scenes(report, head, tested, phase)
+    validate_quick_scenes(report, head, tested, phase)
+    validate_github_scenes(report, head, tested, phase)
     assert report.get("automaticOptInAndOutVerified") if report.get("updateMode") == "automatic" else report.get("automaticOptInCannotStartUpdater")
     if report.get("updateMode") == "automatic" and phase == "initial":
         assert report["localizedUpdateStatuses"] == {"en": "You’re up to date.", "zh-Hans": "当前已是最新版本。"}
@@ -89,6 +134,74 @@ def validate_smoke_report(report, head, tested, phase):
     assert report["settingsWindowAppearances"] == {"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"}
     if phase == "replacement":
         assert report["profileRetainedAfterAppReplacement"]
+
+
+def validate_pdf_scenes(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    expected = {(scene["language"], scene["appearance"], scene["width"], scene["height"]) for scene in fixture["contentScenes"]}
+    scenes = report.get("contentScenes", [])
+    assert len(scenes) == len(expected), "Incomplete PDF screenshot grid"
+    assert report.get("pdfHighlightsNativeDrawDeleteReopenAndScopeVerified") is True
+    assert report.get("pdfMarkWrongRootAndPathRejected") is True
+    if phase == "replacement": assert report.get("pdfHighlightsRetainedAfterReplacement") is True
+    seen = set()
+    for scene in scenes:
+        identity = (scene["language"], scene["appearance"], scene["width"], scene["height"])
+        assert identity in expected and identity not in seen, "Missing or duplicate PDF scene"
+        seen.add(identity)
+        assert scene.get("sourceHeadSHA") == head and scene.get("testedMergeSHA") == tested
+        assert scene.get("platform") == "macOS" and scene.get("architecture") in ["arm64", "x86_64"] and scene.get("system")
+        assert scene.get("scenario") == "pdf-highlights"
+        assert scene.get("pdfSHA256") == fixture["pdf"]["sha256"] and scene.get("markID") == fixture["pdf"]["mark"]["id"]
+        assert scene.get("marksCount") == 1
+        assert scene.get("fixtureSessionCount") == 1 and scene.get("filesFolderExpanded") is True
+        for key in ["actualRemoveButton", "reopenedRestoredMarks", "originalPdfUnchanged", "inMainWorkspace", "settingsPreserveDocument", "nativePointerDrawAndDelete"]:
+            assert scene.get(key) is True, "Unverified PDF operation: " + key
+        name = f"personal-{phase}-pdf-highlights-{identity[0]}-{identity[1]}-{identity[2]}.png"
+        assert scene.get("screenshot") == name and name in report["captures"]
+
+
+def validate_quick_scenes(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    expected = {(scene["language"], scene["appearance"], scene["width"], scene["height"]) for scene in fixture["quickScenes"]}
+    scenes = report.get("quickSSHScenes", [])
+    assert len(scenes) == len(expected), "Incomplete Quick SSH screenshot grid"
+    seen = set()
+    for scene in scenes:
+        identity = (scene["language"], scene["appearance"], scene["width"], scene["height"])
+        assert identity in expected and identity not in seen, "Missing or duplicate Quick SSH scene"
+        seen.add(identity)
+        assert scene.get("sourceHeadSHA") == head and scene.get("testedMergeSHA") == tested
+        assert scene.get("platform") == "macOS" and scene.get("architecture") in ["arm64", "x86_64"] and scene.get("system")
+        assert scene.get("scenario") == "quick-ssh-invalid" and scene.get("inputAddress") == fixture["quickAddress"]
+        assert scene.get("terminalFixtureMarker") == fixture["marker"]
+        for key in ["invalidInputRejected", "addressRetained", "savedWorkspaceUnchanged", "sameMainWindow", "terminalGenerationRetained", "actualSidebarButton", "actualCancelPreservedState", "workspaceVisibleAroundDialog"]:
+            assert scene.get(key) is True, "Unverified Quick SSH operation: " + key
+        for key in ["modalLeft", "modalTop", "modalWidth", "modalHeight"]:
+            assert type(scene.get(key)) in [int, float] and math.isfinite(scene[key]), "Missing actual Quick SSH geometry: " + key
+        assert abs(scene["modalWidth"] - min(540, scene["width"] - 32)) < 1, "Quick SSH covers more than its form"
+        assert 40 <= scene["modalHeight"] <= scene["height"] - 48, "Quick SSH form is clipped"
+        assert abs(scene["modalLeft"] - (scene["width"] - scene["modalWidth"]) / 2) < 1 and abs(scene["modalTop"] - (scene["height"] - scene["modalHeight"]) / 2) < 1, "Quick SSH is not centered"
+        name = f"personal-{phase}-quick-ssh-invalid-{identity[0]}-{identity[1]}-{identity[2]}.png"
+        assert scene.get("screenshot") == name and name in report["captures"]
+
+
+def validate_github_scenes(report, head, tested, phase):
+    fixture = json.loads((Path(__file__).resolve().parents[1] / "shared/fixtures/client-ui-parity.json").read_text())
+    expected = {(scene["language"], scene["appearance"], scene["width"], scene["height"]) for scene in fixture["githubScenes"]}
+    scenes = report.get("githubPRScenes", [])
+    assert len(scenes) == len(expected), "Incomplete PR screenshot grid"
+    seen = set()
+    for scene in scenes:
+        identity = (scene["language"], scene["appearance"], scene["width"], scene["height"])
+        assert identity in expected and identity not in seen, "Missing or duplicate PR scene"
+        seen.add(identity)
+        assert scene.get("sourceHeadSHA") == head and scene.get("testedMergeSHA") == tested
+        assert scene.get("platform") == "macOS" and scene.get("architecture") in ["arm64", "x86_64"] and scene.get("system")
+        assert scene.get("scenario") == "github-pr-draft"
+        validate_pr(scene, fixture)
+        name = f"personal-{phase}-github-pr-draft-{identity[0]}-{identity[1]}-{identity[2]}.png"
+        assert scene.get("screenshot") == name and name in report["captures"]
 
 
 def validate_settings_scenes(report, head, tested, phase):
@@ -183,6 +296,10 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
     captures = []
     reports = []
     identity = "sh.uterm.desktop.qa.native.personal." + uuid.uuid4().hex
+    github_root = root / "uterm-native-qa-github-parity"
+    environment = dict(os.environ)
+    environment.update(json.loads(run("python3", Path(__file__).with_name("ui-parity-github-fixture.py"), "--root", github_root, "--project", root / "project")))
+    for key in ["GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"]: environment.pop(key, None)
     for phase in ["initial", "replacement"]:
         info_path = installed / "Contents/Info.plist"
         info = plistlib.loads(info_path.read_bytes())
@@ -195,13 +312,15 @@ def run_smoke(installed, source, root, evidence, head, tested, feed):
         run("codesign", "--force", "--sign", "-", installed)
         with (evidence / f"personal-{phase}-stdout.log").open("wb") as out, (evidence / f"personal-{phase}-stderr.log").open("wb") as err:
             process = subprocess.Popen([str(installed / "Contents/MacOS/uTerm"), "--qa-data-root", str(root / "ignored"),
-                                        "--smoke-report", str(root / "must-not-exist.json")], stdout=out, stderr=err)
+                                        "--smoke-report", str(root / "must-not-exist.json")], stdout=out, stderr=err, env=environment)
             try:
                 result = process.wait(timeout=90)
             finally:
                 if process.poll() is None:
                     process.kill()
                     process.wait()
+                if (github_root / "github-cli.jsonl").is_file():
+                    shutil.copyfile(github_root / "github-cli.jsonl", evidence / f"github-parity-cli-{phase}-simulated.jsonl")
                 if (root / f"personal-{phase}.json").is_file():
                     report, phase_captures = preserve_smoke_outputs(root, evidence, phase)
         assert result == 0

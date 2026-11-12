@@ -24,6 +24,7 @@ impl ContentOperations {
                 "contract.info"
                     | "state.defaults"
                     | "snapshot.read"
+                    | "pdf.marks.read"
                     | "snapshot.view"
                     | "session.entries"
                     | "project.context"
@@ -194,6 +195,69 @@ mod tests {
             std::thread::yield_now();
         }
         assert!(state.begin().is_err());
+    }
+
+    #[test]
+    fn pdf_write_guard_survives_commit_until_worker_finishes_but_read_does_not_block_quit() {
+        use serde_json::json;
+        let root = tempfile::tempdir().unwrap();
+        let core = Arc::new(uterm_core::Core::open(root.path().join("shared-state-v1")).unwrap());
+        let execute = |method: &str, params| {
+            core.execute(
+                &serde_json::to_vec(
+                    &json!({"version":1,"id":"pdf","method":method,"params":params}),
+                )
+                .unwrap(),
+            )
+        };
+        let defaults = execute("state.defaults", serde_json::Value::Null)
+            .result
+            .unwrap();
+        assert!(execute(
+            "migration.import",
+            json!({"workspace":defaults["workspace"],"settings":defaults["settings"],"legacy":{}})
+        )
+        .error
+        .is_none());
+        let target = json!({"directory":"/qa","path":"fixture.pdf","version":"a".repeat(64)});
+        let snapshot = execute("pdf.marks.read", target.clone()).result.unwrap();
+        let state = ContentOperations::default();
+        assert!(state
+            .begin_request(r#"{"method":"pdf.marks.read"}"#)
+            .unwrap()
+            .is_none());
+        let mut params = target.clone();
+        params["expectedRevision"] = snapshot["revision"].clone();
+        params["marks"] = json!([{"id":"qa","page":1,"x":0.1,"y":0.2,"width":0.3,"height":0.1}]);
+        let request =
+            json!({"version":1,"id":"pdf","method":"pdf.marks.write","params":params}).to_string();
+        let operation = state.begin_request(&request).unwrap().unwrap();
+        let (committed, receive) = mpsc::channel();
+        let (release, wait) = mpsc::channel();
+        let worker_core = core.clone();
+        let worker = std::thread::spawn(move || {
+            let _operation = operation;
+            committed
+                .send(worker_core.execute(request.as_bytes()))
+                .unwrap();
+            wait.recv().unwrap();
+        });
+        assert!(receive
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap()
+            .error
+            .is_none());
+        assert!(!state.prepare_exit());
+        assert_eq!(
+            execute("pdf.marks.read", target).result.unwrap()["marks"][0]["id"],
+            "qa"
+        );
+        release.send(()).unwrap();
+        worker.join().unwrap();
+        assert!(state.prepare_exit());
+        assert!(state
+            .begin_request(r#"{"method":"pdf.marks.write"}"#)
+            .is_err());
     }
 
     #[test]

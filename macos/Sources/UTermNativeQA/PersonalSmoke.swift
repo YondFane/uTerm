@@ -4,7 +4,7 @@ import UTermBridge
 
 @MainActor
 enum PersonalSmoke {
-    static func run(model: WorkspaceModel, window: NSWindow, openSettings: () -> NativeSettingsWindow) async {
+    static func run(model: WorkspaceModel, window: NSWindow, openSettings: () -> NativeSettingsWindow, openFile: (URL, String) async throws -> ContentWindow) async {
         guard WorkspaceModel.applicationProfile.personalFixture, let store = try? WorkspaceModel.dataRoot() else { return }
         let root = store.deletingLastPathComponent()
         let phase = Bundle.main.object(forInfoDictionaryKey: "UTermPersonalQAPhase") as? String ?? "initial"
@@ -36,6 +36,10 @@ enum PersonalSmoke {
                         try Data(text.utf8).write(to: project.appendingPathComponent(name))
                     }
                 }
+                guard parity["pdf"]["path"].string == ".ui-parity-pdf/fixture.pdf", let encoded = parity["pdf"]["base64"].string, let pdf = Data(base64Encoded: encoded), SHA256.hash(data: pdf).map({ String(format: "%02x", $0) }).joined() == parity["pdf"]["sha256"].string else { throw BridgeFailure(code: "PERSONAL_PDF_FIXTURE", message: "Invalid shared PDF fixture") }
+                let pdfPath = project.appendingPathComponent(".ui-parity-pdf/fixture.pdf")
+                try FileManager.default.createDirectory(at: pdfPath.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try pdf.write(to: pdfPath)
                 _ = try await bridge.call("editor.drafts.import", params: .object([:]))
                 for (path, text) in [("note.txt", "Personal 中文 é\r\n"), ("second.txt", "Second 🧪\r\n")] {
                     _ = try await bridge.call("editor.drafts.putDocument", params: .object(["expectedDraftRevision": .null, "draft": .object([
@@ -179,28 +183,112 @@ enum PersonalSmoke {
                             model.inspector.error.isEmpty && !model.inspector.busy
                                 && Set(model.inspector.rows.compactMap { $0["path"].string }) == Set(["note.txt", "README.md"])
                         }
+                        guard let files = model.inspector.content, files.webView.window === window else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Shared file controls are not mounted in the real inspector") }
+                        try await ContentSmoke.wait(files, "['note.txt','README.md'].every(name => [...document.querySelectorAll('.file-row-name')].some(row => row.textContent.trim() === name)) && document.querySelectorAll('.inspector-tabs [role=tab]').length === 3 && document.querySelectorAll('.inspector-switcher button').length === 4")
+                        let rawStatus = try await bridge.call("git.fileStatus", params: .object(["directory": .string(files.directory.path)]))
+                        let normalizedStatus = try ContentFileRoot.normalizingGitRoot(rawStatus)
+                        report["workspaceGitRootDiagnostics"] = ["selectedDirectory": files.directory.path, "rawGitRoot": rawStatus["root"].string ?? "", "normalizedGitRoot": normalizedStatus["root"].string ?? ""]
+                        try await ContentSmoke.wait(files, "['note.txt','README.md'].every(path=>[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus==='untracked')")
+                        let gitStateJSON = try await files.webView.evaluateJavaScript("JSON.stringify(Object.fromEntries(['note.txt','README.md'].map(path=>[path,[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus])))")
+                        guard let gitStateText = gitStateJSON as? String, let gitStateBytes = gitStateText.data(using: .utf8) else { throw BridgeFailure(code: "PERSONAL_FILE_GIT_STATE", message: "Could not read actual file-row Git states") }
+                        let fileGitStates = try JSONDecoder().decode([String: String].self, from: gitStateBytes)
+                        try await ContentSmoke.wait(files, "document.querySelector('.file-panel')?.getAttribute('aria-label') === " + (language == "en" ? "'Files panel'" : "'文件面板'"))
+                        let inspectorDOM = try await files.webView.evaluateJavaScript("JSON.stringify({inspectorHeaderTop:document.querySelector('.inspector-header').getBoundingClientRect().top,inspectorFooterBottom:document.querySelector('.file-panel-footer').getBoundingClientRect().bottom,inspectorViewportHeight:innerHeight})")
+                        guard let json = inspectorDOM as? String, let bytes = json.data(using: .utf8), let metrics = try JSONSerialization.jsonObject(with: bytes) as? [String: Double], let windowRoot = window.contentView else { throw BridgeFailure(code: "PERSONAL_INSPECTOR_GEOMETRY", message: "Could not measure the shared inspector") }
+                        let inspectorFrame = files.webView.convert(files.webView.bounds, to: windowRoot)
+                        let inspectorTop = windowRoot.isFlipped ? inspectorFrame.minY - windowRoot.bounds.minY : windowRoot.bounds.maxY - inspectorFrame.maxY
+                        var inspectorGeometry: [String: Double] = ["inspectorTop": Double(inspectorTop), "inspectorHeight": Double(inspectorFrame.height), "inspectorSafeAreaTop": Double(files.webView.safeAreaInsets.top)]
+                        for (key, value) in metrics { inspectorGeometry[key] = value + (key == "inspectorViewportHeight" ? 0 : Double(inspectorTop)) }
+                        report["inspectorGeometry"] = inspectorGeometry
+                        for (key, expected) in ["inspectorTop": 0.0, "inspectorHeight": 720.0, "inspectorHeaderTop": 0.0, "inspectorFooterBottom": 720.0, "inspectorViewportHeight": 720.0] {
+                            guard let actual = inspectorGeometry[key], abs(actual - expected) < 1 else { throw BridgeFailure(code: "PERSONAL_INSPECTOR_GEOMETRY", message: "Wrong full-height tools geometry: " + key + "=" + String(describing: inspectorGeometry[key])) }
+                        }
+                        let expectedSidebar = CoreChromeLayout.sidebar(available: Double(window.contentView?.bounds.width ?? 0), requested: CoreChrome.sidebarDefaultWidth).width
+                        guard abs(Double(model.sidebarWidth) - expectedSidebar) < 1 else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_WIDTH", message: "Actual sidebar differs from shared responsive bounds") }
+                        let expectedTools = CoreChromeLayout.inspector(available: Double(window.contentView?.bounds.width ?? 0) - expectedSidebar, ratio: CoreChrome.inspectorDefaultRatio).width
+                        guard abs(Double(model.inspectorWidth) - expectedTools) < 1 else { throw BridgeFailure(code: "PERSONAL_INSPECTOR_WIDTH", message: "Actual tools width differs from shared responsive bounds") }
+                        guard abs(model.toolbarTop) < 1 else { throw BridgeFailure(code: "PERSONAL_CHROME_POSITION", message: "Actual toolbar does not begin at the workspace top") }
+                        guard abs(model.toolbarHeight - CGFloat(CoreChrome.titlebarHeight)) < 1 else { throw BridgeFailure(code: "PERSONAL_CHROME_HEIGHT", message: "Actual toolbar differs from the shared chrome height") }
+                        do {
+                            try await TerminalSmoke.wait("Keep actual sidebar navigation inside the narrow window") {
+                                abs(model.sidebarRailFrame.minX) < 1 && abs(model.sidebarRailFrame.width - CGFloat(CoreChrome.sidebarRailWidth)) < 1 &&
+                                abs(model.sidebarAllButtonFrame.width - CGFloat(CoreChrome.railButtonSize)) < 1 && abs(model.sidebarAllButtonFrame.height - CGFloat(CoreChrome.railButtonSize)) < 1 &&
+                                abs(model.sidebarAllButtonFrame.minX - CGFloat((CoreChrome.sidebarRailWidth - CoreChrome.railButtonSize) / 2)) < 1 &&
+                                abs(model.sidebarAllButtonFrame.minY - CGFloat(CoreChrome.titlebarHeight + 8)) < 1
+                            }
+                        } catch {
+                            report["sidebarNavigationGeometry"] = ["railLeft": model.sidebarRailFrame.minX, "railWidth": model.sidebarRailFrame.width,
+                                "allLeft": model.sidebarAllButtonFrame.minX, "allTop": model.sidebarAllButtonFrame.minY,
+                                "allWidth": model.sidebarAllButtonFrame.width, "allHeight": model.sidebarAllButtonFrame.height]
+                            throw error
+                        }
                         let name = "personal-\(phase)-workspace-\(language)-\(appearance)-\(width).png"
                         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(name))
                         captures.append(name)
                         report["captures"] = captures
-                        workspaceScenes.append(["screenshot": name, "language": language, "appearance": appearance,
+                        var captured: [String: Any] = ["screenshot": name, "language": language, "appearance": appearance,
+                            "chromeContractSHA256": CoreChrome.contractSHA256, "toolbarHeight": model.toolbarHeight, "toolbarTop": model.toolbarTop, "sidebarWidth": model.sidebarWidth, "inspectorWidth": model.inspectorWidth,
                             "windowSizeAttempts": sizeAttempts,
                             "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0),
-                            "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-session-tabs-files", "filesReadable": true, "fontSize": model.settings["fontSize"].number ?? 0,
+                            "platform": "macOS", "architecture": architecture, "system": ProcessInfo.processInfo.operatingSystemVersionString, "scenario": "toolbar-sidebar-two-sessions-files", "filesReadable": true, "fontSize": model.settings["fontSize"].number ?? 0,
                             "projectName": model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["name"].string ?? "",
                             "workspaceName": model.groups.first(where: { $0["id"].string == model.groupID })?["name"].string ?? "",
-                            "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""])
+                            "sourceHeadSHA": report["sourceHeadSHA"] ?? "", "testedMergeSHA": report["testedMergeSHA"] ?? ""]
+                        guard let font = model.selectedTerminal?.view.font, font.fontName == "CascadiaCode-Regular", font.familyName == "Cascadia Code" else { throw BridgeFailure(code: "PERSONAL_FONT", message: "Terminal used a fallback instead of the bundled face") }
+                        captured["fontFamily"] = font.familyName ?? ""
+                        for (key, value) in inspectorGeometry { captured[key] = value }
+                        captured["sidebarRailLeft"] = model.sidebarRailFrame.minX
+                        captured["sidebarRailWidth"] = model.sidebarRailFrame.width
+                        captured["sidebarAllButtonLeft"] = model.sidebarAllButtonFrame.minX
+                        captured["sidebarAllButtonTop"] = model.sidebarAllButtonFrame.minY
+                        captured["sidebarAllButtonWidth"] = model.sidebarAllButtonFrame.width
+                        captured["sidebarAllButtonHeight"] = model.sidebarAllButtonFrame.height
+                        captured["fontFace"] = font.fontName
+                        captured["fileGitStates"] = fileGitStates
+                        captured["fontSourceSHA256"] = NativeBundledFonts.regularSHA256
+                        captured["fontCharacterWidth"] = ("M" as NSString).size(withAttributes: [.font: font]).width
+                        guard let pane = terminal.view.superview as? NativeTerminalPane else { throw BridgeFailure(code: "PERSONAL_TERMINAL_GEOMETRY", message: "Actual terminal pane is detached") }
+                        let terminalGeometry = pane.measuredGeometry()
+                        for key in ["terminalInsetLeft", "terminalInsetRight", "terminalInsetBottom", "terminalHeaderTop"] {
+                            guard let actual = terminalGeometry[key], abs(actual - (model.settings["windowPadding"].number ?? 10) - 1) < 1 else { throw BridgeFailure(code: "PERSONAL_TERMINAL_GEOMETRY", message: "Wrong actual terminal inset: " + key) }
+                        }
+                        guard let gap = terminalGeometry["terminalViewportGap"], abs(gap - 12) < 1 else { throw BridgeFailure(code: "PERSONAL_TERMINAL_GEOMETRY", message: "Wrong terminal viewport gap") }
+                        for (key, value) in terminalGeometry { captured[key] = value }
+                        guard let rootView = window.contentView,
+                              let sidebar = TerminalSmoke.descendants(rootView).first(where: { $0.identifier?.rawValue == "native-sidebar" }) as? NSTableView,
+                              let coordinator = sidebar.delegate as? NativeSidebar.Coordinator,
+                              let measured = coordinator.measuredGeometry(in: rootView) else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_GEOMETRY", message: "Actual sidebar rows could not be measured") }
+                        for (key, expected) in ["sidebarRowHeight": CoreChrome.sidebarRowHeight, "sidebarSectionHeight": CoreChrome.sidebarSectionHeight, "sidebarSectionGap": CoreChrome.sidebarSectionGap, "sidebarListTop": CoreChrome.sidebarListTop] {
+                            guard let actual = measured[key], abs(actual - expected) < 1 else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_GEOMETRY", message: "Actual " + key + " differs from shared geometry: " + String(describing: measured[key])) }
+                            captured[key] = actual
+                        }
+                        workspaceScenes.append(captured)
                         report["workspaceScenes"] = workspaceScenes
                     }
                 }
             }
-            await model.closeSession(id: peerID)
+            guard let sidebarRoot = window.contentView,
+                  let close = TerminalSmoke.descendants(sidebarRoot).first(where: { $0.identifier?.rawValue == "native-sidebar-close-" + peerID }) as? NSButton,
+                  close.isEnabled, window.makeFirstResponder(close), close.alphaValue == 1 else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_CLOSE", message: "Background session close control cannot receive visible keyboard focus") }
+            let closeCapture = "personal-\(phase)-sidebar-close-background.png"
+            try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(closeCapture))
+            captures.append(closeCapture); report["captures"] = captures
+            try TerminalSmoke.postKey(window: window, code: 49, characters: " ", modifiers: [])
+            try await TerminalSmoke.wait("Close the background session through actual focused sidebar control") { !model.sessionEntries.contains(where: { $0.sessionID == peerID }) }
             guard model.selectedID == originalID, terminal.generation == originalGeneration,
                   model.sessionEntries.contains(where: { $0.sessionID == originalID }),
                   !model.sessionEntries.contains(where: { $0.sessionID == peerID }) else {
                 throw BridgeFailure(code: "PERSONAL_TABS", message: "Closing a background tab changed the selected session")
             }
             report["backgroundTabCloseRetainedSelectedGeneration"] = true
+            var closeProof: [String: Any] = ["passed": true, "actualKeyboardFocusVisible": true, "actualSpaceClosedBackgroundSession": true,
+                "selectedGenerationRetained": true, "targetSessionID": peerID, "selectedSessionID": originalID, "screenshot": closeCapture,
+                "platform": "macOS", "architecture": architecture,
+                "width": Int(window.contentView?.bounds.width ?? 0), "height": Int(window.contentView?.bounds.height ?? 0)]
+            closeProof["sourceHeadSHA"] = report["sourceHeadSHA"] ?? ""
+            closeProof["testedMergeSHA"] = report["testedMergeSHA"] ?? ""
+            closeProof["system"] = report["system"] ?? ""
+            report["nativeSidebarSessionClose"] = closeProof
             report["workspaceScenes"] = workspaceScenes
             window.makeKeyAndOrderFront(nil)
             let capture = "personal-\(phase)-terminal.png"
@@ -211,6 +299,13 @@ enum PersonalSmoke {
             report["localizedUpdateStatuses"] = updateStatuses
             report["captures"] = captures; report["realBundledHelperUnicodePTY"] = true
             report["profileRetainedAfterAppReplacement"] = phase != "initial"
+            guard let projectDirectory = model.projects.first(where: { $0["id"].string == "personal-qa-project" })?["directory"].string else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Missing fixture project") }
+            try await TerminalControlsSmoke.run(model: model, window: window, root: root, phase: phase, report: &report, captures: &captures)
+            try await EmbeddedDocumentsSmoke.run(model: model, window: window, root: URL(fileURLWithPath: projectDirectory), phase: phase, open: openFile, report: &report, captures: &captures)
+            try await PdfParitySmoke.run(model: model, window: window, project: URL(fileURLWithPath: projectDirectory), output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
+            try await QuickParitySmoke.run(model: model, window: window, output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
+            try await GitHubParitySmoke.run(model: model, window: window, output: root, fixture: parity, phase: phase, report: &report, captures: &captures)
+            report["captures"] = captures
             await model.closeSession()
             let host = try await bridge.call("host.status")
             report["hostPID"] = host["pid"].number.flatMap { Int(exactly: $0) }
@@ -294,6 +389,27 @@ enum PersonalSmoke {
               snapshot.document.workspace["projects"].array.first?["pinned"].bool == false,
               model.selectedID == selected, model.selectedTerminal?.generation == generation, model.selectedTerminal?.view.window === window,
               !model.canRemoveWorkspace else { throw BridgeFailure(code: "PERSONAL_SIDEBAR", message: "Sidebar edits lost state or replaced the selected terminal") }
+        var sections: [String] = []
+        for index in 0..<table.numberOfRows {
+            if let cell = table.view(atColumn: 0, row: index, makeIfNecessary: true), let id = cell.subviews.compactMap({ $0.identifier?.rawValue }).first(where: { $0.hasPrefix("native-sidebar-section-") }) { sections.append(String(id.dropFirst("native-sidebar-section-".count))) }
+        }
+        var expected = ["active"]
+        if model.settings["showSshConnections"].bool != false { expected.append("ssh") }
+        if model.settings["showRedisConnections"].bool != false { expected.append("redis") }
+        if model.settings["showDatabaseConnections"].bool != false { expected.append("database") }
+        expected.append("projects")
+        guard sections == expected else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_SECTIONS", message: "Actual sidebar section order differs from the workspace categories") }
+        func sectionButton() -> NSButton? { window.contentView.flatMap { TerminalSmoke.descendants($0).first(where: { $0.identifier?.rawValue == "native-sidebar-section-active" }) as? NSButton } }
+        guard let collapse = sectionButton(), collapse.isEnabled else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_SECTIONS", message: "Missing actual Active disclosure") }
+        collapse.performClick(nil)
+        try await TerminalSmoke.wait("Collapse Active through its actual sidebar control") { row(projectName) == nil }
+        guard let expand = sectionButton(), expand.isEnabled else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_SECTIONS", message: "Missing updated Active disclosure") }
+        expand.performClick(nil)
+        try await TerminalSmoke.wait("Expand Active through its actual sidebar control") { row(projectName) != nil }
+        let afterSections = try await bridge.snapshot()
+        guard afterSections.revision == snapshot.revision, afterSections.document.workspace == snapshot.document.workspace, afterSections.document.settings == snapshot.document.settings, model.selectedID == selected, model.selectedTerminal?.generation == generation else { throw BridgeFailure(code: "PERSONAL_SIDEBAR_SECTIONS", message: "Section collapse changed shared data or a session") }
+        report["nativeSidebarSectionOrderAndReadOnlyCollapse"] = true
+        report["nativeSidebarSectionIds"] = sections
         let expanded = "personal-\(phase)-sidebar-expanded.png"
         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(expanded))
         report["captures"] = (report["captures"] as? [String] ?? []) + [expanded]

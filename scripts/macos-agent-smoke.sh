@@ -29,7 +29,7 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-agent-') as directory:
     data = json.loads(report.read_text())
     assert 'failure' not in data, data.get('failure')
     assert 'cleanupError' not in data, data.get('cleanupError')
-    for key in ['coreReady', 'openingDoesNotWriteDefaults', 'nativeCustomCommandSaveEnableDisableRemove', 'nativeHookPreservationDraftAndLocalUsage', 'actualApplicationQuitCancellationRetainsDraft', 'nativeNotificationOptInDenialDedupAndStaleCancellation', 'realHostAndReporterProcess', 'simulatedOSNotificationPermissionAndDelivery']:
+    for key in ['usagePollingLoadsCatalogBeforeUsage', 'coreReady', 'openingDoesNotWriteDefaults', 'nativeCustomCommandSaveEnableDisableRemove', 'nativeHookPreservationDraftAndLocalUsage', 'actualApplicationQuitCancellationRetainsDraft', 'nativeNotificationOptInDenialDedupAndStaleCancellation', 'realHostAndReporterProcess', 'simulatedOSNotificationPermissionAndDelivery']:
         assert data[key], key
     assert not data['productionDataAccess'] and not data['actualAgentProvider'] and not data['keychainOrProviderAccountAccess']
     assert data['nativeUsageRefreshRespectsSelectedAgentAndLocalPreference']

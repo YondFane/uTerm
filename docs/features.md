@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-11
+updated: 2026-11-12
 ---
 
 # uTerm feature guide
@@ -71,16 +71,365 @@ app does not automatically restore old data or perform the Tauri-to-native cutov
 
 #### Native workspace interaction
 
-The native toolbar opens complete settings directly, as does the app menu. Settings retain their
-save/reload/reset behavior and unsaved drafts when the window is hidden. Return saves an edited
-settings draft; Command-W hides the window. The local CLI control switch remains an immediate
-service control in Local control.
+Both clients include the same unmodified Cascadia Code 2407.24 static faces and their SIL Open Font
+License. The default face loads before a Web terminal mounts; native CoreText registration remains
+inside the app process. No font installation or startup download is required, and custom family
+settings remain available. Font loading failures show a retry or reinstall message.
 
-The sidebar includes workspace selection, category navigation and text filtering. A horizontal
-session strip switches sessions and offers rename/close actions. Closing a background session
-addresses its own ID and generation, retaining the selected session. Files, content search and quick
-open use segmented tool navigation. These interactions use the existing shared operations and
-conflict protections.
+Matching workspace evidence records the bundled regular-face digest and actual measured character
+width. The comparison rejects stale files, fallback faces or widths differing by 0.1 point or more.
+Linux checks verify release bytes, styles, delayed mounting, load failures and retry. Actual
+Chromium loads all five faces with an M advance of 9.9609375px at 17px. Latest macOS font
+registration, window rendering and paired metrics still require CI.
+
+Regular toolbar/sidebar vectors and dimensions use `shared/contracts/chrome-ui-v1.json`. React reads
+that source and Swift renders the generated paths through CoreGraphics. The native candidate uses
+the shared 44-point toolbar and interface palette; Agent brands and special close controls remain
+outside this vector contract.
+
+The 48-point category rail sits at the left edge, workspace selection above its list, and the
+title/Java/Python controls above the main pane. The sidebar defaults to 248 points, clamps to 30% of
+the window (at most 320), and retains the rail when collapsed. Add, Commands, Settings and Agents
+have separate footer entries.
+
+Tools default to 35% of the remaining width and reserve a 320-point main pane. Narrow windows keep
+the whole tools column inside the window. Side/tool separators support dragging, arrows, Home/End
+and Return; native layout avoids an extra split-view titlebar inset.
+
+The file tools use the full window height, with their toolbar at the top and the path footer at the
+bottom. Embedded tools stay in normal document flow; narrow WebKit viewports do not inherit the
+ordinary floating panel's 44-point offset or shadow. Their root ignores the nested titlebar safe
+area. Both collectors measure actual panel/header position, panel/viewport height and footer bounds;
+pairing rejects offsets, missing metrics and clipped paths. Fifteen Linux pairing-policy tests and
+Chromium geometry checks at five widths (128–1100px) pass; current-source macOS rendering still
+requires CI.
+
+Narrow sidebars allocate separate widths to the navigation rail and workspace menu/list. The
+workspace name stays within its own button instead of pushing navigation icons outside the window.
+Both collectors measure actual rail position/width and All-button position/size, rejecting clipping
+regardless of the outer sidebar width. At source `1a9754a0f86acaf9178dbe65dd30e91957469627`, tested
+merge `e59b91c76512f176a5fe904a38c46311a3a31931`, both Personal architectures pass the full package
+and real-window/replacement checks. The
+[ARM artifact](https://github.com/YondFane/uTerm/actions/runs/43051436652/artifacts/13869434943)
+reports a 192px sidebar at 640px, rail left/width 0/48 and All button left/top/size 7/52/34×34.
+English/dark workspace and Chinese/light PDF originals were inspected; the rail is fully visible.
+The
+[ARM native matrix](https://github.com/YondFane/uTerm/actions/runs/43051436660/artifacts/13871301710)
+also passes, including actual typed SSH clearing, create/keep/prune and PostgreSQL disconnect.
+Ordinary Mac pairing at this source fails its QA-only read observer because `session.entries` was
+missing from its explicit read allowlist. The candidate adds only that read method; mutation retries
+remain forbidden. Failed images/logs are retained in the
+[ordinary artifact](https://github.com/YondFane/uTerm/actions/runs/43051436701/artifacts/13873090397).
+The new modal and full pairing remain unaccepted until their own current-source run.
+
+Paired artifacts also include a local `comparison.html` scene viewer alongside the original PNGs,
+JSON and Markdown. Extract the artifact, select an area/scene, and open either image at its original
+size. Source/merge identities, image digests and the pending functional-acceptance notice stay
+visible; no screenshots are synthesized or changed. Linux browser checks verify all 34 historical
+pairs, unchanged digests, the 24 settings-pair filter and previous/next actions. This is report-tool
+validation. At source `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
+`6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, the
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)
+contains the viewer, 36 pairs and 73 originals including restart. Image digests and all viewer
+scenes were checked. English/dark wide and Chinese/light narrow Quick SSH pairs were inspected: the
+form and live surrounding workspace now agree; sidebar styling and full functional parity remain
+pending.
+
+Real Mac reports exposed a one-pixel narrow terminal-header difference. Source
+`becc4e233a0354137fe8248486e8dd7fb0df29fa`, merge `198238492c3f298999257b09bb3813468a1b11b3`, now
+records 66px narrow and 35px wide across all eight Intel Personal scenes, with top inset 11px and
+output gap 12px, in the
+[Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43065251107/artifacts/13876314613).
+Native flow uses the measured 23px Mac font-button height; the Swift regression passes. The strict
+pairing tolerance is unchanged, and matching current-source ordinary/ARM captures remain required.
+
+The Intel native matrix at that source stops before launching database QA because Maven Central DNS
+resolution fails. Its
+[retained artifact](https://github.com/YondFane/uTerm/actions/runs/43051436660/artifacts/13871038779)
+does pass the original Quick SSH/search/clipboard checks, but does not accept the full matrix or the
+new modal. QA now tries the independent official Central domain after a transport failure, requiring
+the same catalog size and SHA-256; integrity failures stop immediately. Five simulated download
+checks cover DNS/partial files, timeouts, both hosts failing and digest rejection. Mac CI retains
+`database-download-tests.log` and successful `database-jdbc.json` provenance; real PostgreSQL
+acceptance remains mandatory.
+
+The list separates Active, Pinned, SSH, Redis, Databases, loose terminals/chats and inactive
+Projects.
+
+Rows share a 32-point minimum height, 32-point section headers, 18-point section gaps and an 8-point
+list inset. Row padding and larger interface text still expand rows.
+
+Native selection uses the same rounded accent fill/border, and project folder icons reveal
+disclosure arrows on hover. The toolbar shows pane zoom only for split layouts.
+
+Actual row/header/gap/inset measurements are required in both clients; current-source native
+rendering remains pending CI.
+
+Session rows provide the same 22px **Close Session** action and shared close glyph in both clients.
+Native actions appear on row hover or keyboard focus, retain their layout space while hidden and
+reject pointer hits until visible. Focusing the native button shows its theme-colored focus ring;
+Space closes that specific session. Closing a background row keeps the selected session and its
+process generation. Busy operations and workspace modals disable the action. Long names use one line
+with end ellipsis in both clients, leaving room for the close action; the full name remains in
+accessibility text and the existing name control.
+
+The new Personal QA captures `personal-{phase}-sidebar-close-background.png`, focuses the actual
+AppKit control and posts Space, then checks the background ID was removed while selection and the
+original generation remain. Its mandatory proof rejects stale metadata, missing controls or a
+foreground target. Sixteen local Personal policies pass; the native control, mouse-hover rendering
+and actual Space action still require this candidate's own Mac execution. A direct model call is no
+longer sufficient for the new close-control proof.
+
+At source `689c445d40878906c40314c0018697997b518f02`, tested merge
+`c560eaeac79d2cbd790b9b3b60fb04673800cc9b`, ARM macOS 15.8.2 / Swift 6.1.2 stops at a type-checking
+timeout in the close-proof dictionary. The candidate splits that construction without removing
+fields or assertions. No close-control screenshot was produced at that source; a fresh Mac build and
+interaction run remain required.
+
+Section disclosures hide local rows without editing shared data or closing sessions; empty
+connection categories retain their add/manage entry. Rail controls follow the interface palette and
+active-icon color.
+
+Quick SSH and host search appear inside the SSH section in both All and SSH categories. Filtering
+uses name, host and username, ignoring case, and retains selection, sessions and an already-focused
+search editor. Native Quick SSH displays the same modal form and parser over the main workspace.
+Direct connection rows and full workbench alignment remain pending.
+
+Agent usage polling waits for catalog initialization, including when polling starts before the
+window reload task. Recovering the catalog restarts visible usage refresh without discarding drafts.
+
+Each native split pane has its own session/directory header, 10–32 point font controls, output
+search, match-case toggle, match counter and previous/next controls. Escape closes search and
+returns input to that terminal; search-field input does not enter the PTY. Missing reverse
+selections recover within 1,000 matches; changing the query or closing search cancels recovery, and
+long scans yield execution time. An exited local shell can restart from its header, retaining its
+descriptor and view with a new process generation.
+
+Both clients use the same explicit restart operation. It requires the current generation, input
+control and an exited process; a failed launch retains the old replay for retry. Closing a session
+still prevents reopening that ID. Older hosts show an upgrade message before any restart is sent.
+
+Native pane margins now use the selected terminal background. Header labels and controls wrap
+individually in their original order as the pane narrows, retaining font/search/status controls and
+the 12 px gap before output. Both collectors measure actual left/right/bottom insets, header
+position/height and output gap; mismatches reject pairing. Linux stylesheet probes cover nine pane
+widths; 14 related frontend checks and 17 paired-evidence policy tests pass. The Swift wrapping
+regression and the updated actual windows still require current-source macOS CI.
+
+Read-only/take-control and visible transport/activity errors remain available. SSH restart, pane
+dragging and complete toolbar alignment remain in the parity scope.
+
+The native Files inspector embeds the same file tree, Quick open, Project search, inline naming,
+context menus and deletion dialogs as the ordinary client. Its header uses the shared Files, Git,
+GitHub and working-directory icons. GitHub opens in the same tools column; Git still uses its
+existing window. Moving tools left or right reorders stable native regions and retains the mounted
+WebKit document and query. Deferred pane focus yields to a later explicit focus change, but returns
+to the terminal when the previous control was removed and focus fell back to the window; acceptance
+checks the actual visible file controls after swapping and restoring split panes.
+
+GitHub and Files use the same translated tool switcher. Switching retains each WebKit document;
+returning to Files applies the requested tree/search mode to its retained view. Requests stay bound
+to the captured repository/project and reject changed workspace context.
+
+Native Git status/snapshot reads normalize the returned repository root with the same Cocoa
+filesystem rules as the selected Files root. This keeps temporary-directory and symlink aliases in
+one path namespace without changing draft keys, relative change paths or write guards. Workspace
+captures now require actual untracked markers on both fixture files; missing or incorrect states
+fail Personal and paired evidence checks. Raw Git/selected/normalized roots remain in the report.
+
+The Linux real Git/Core alias check and 20 file-state/native-transport regressions pass, as do 16
+Personal and 26 paired/fixture policies. Two Swift checks cover alias normalization, malformed roots
+and actual Core status for selected subdirectories. Their execution and the new actual macOS
+markers/screenshots remain pending; the candidate does not yet accept the observed missing colors.
+
+**New PR** uses the shared title/body/base/head/draft form over the entire main workspace, at up to
+640px or 92% of its width. WebKit covers only the measured form; native views dim and blur the live
+workspace. The tools and terminal remain mounted. Command-W hides the form and retains its literal
+draft; **New PR** restores that same document. Cancel and Escape discard it. Without a form,
+Command-W with tools focused hides the tools column. Draft-discard confirmation belongs to the main
+window; pending CLI operations block closing and quitting until their actual result. The native host
+injects the captured root/repository and rejects extra fields, invalid layout and duplicate
+submission. Ambiguous create failures retain the warning to refresh before retrying.
+
+At head `efcb4dfa997232d68458374f919a1b45f7d4fe26`, tested merge
+`a3fb8fcd7f2785e50a43cbc42687a838aed2186e`, the
+[ARM Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43085265725/artifacts/13887612080)
+and
+[Intel artifact](https://github.com/YondFane/uTerm/actions/runs/43085265725/artifacts/13887922988)
+both pass package, initial/replacement windows and the complete SDK installation, including original
+host PID exit and endpoint removal. The
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43085266223/artifacts/13887811848)
+contains all 38 pairs and 77 original PNGs. All 76 paired digests and all viewer scenes pass. Both
+PR pairs were viewed: title/body/branches/draft, readable fields and centered 640×500 / 588×500
+forms agree. English wide and Chinese narrow workspace pairs were also viewed; sidebar
+controls/fonts, Git branch/status presentation and other visible differences remain. The native PR
+shadow also needs alignment. These source-specific captures do not accept the new sidebar control or
+full parity. Full functional acceptance stays false.
+
+The same source's
+[Intel native matrix artifact](https://github.com/YondFane/uTerm/actions/runs/43085265868/artifacts/13887393269)
+retains a failing file-tools operation: `CONTENT_RENDER` reports a missing file path after the root,
+symlink and hidden-file checks. Its GitHub and complete SDK checks pass, but the inspector and final
+matrix remain failed. The original `native-inspector-failure.png` was viewed; the source literal
+file remains and the copy-target directory is absent. This failure requires diagnosis and a targeted
+regression; it is not waived by the successful Personal or paired runs.
+
+Nine focused GitHub/grid checks and the full frontend suite (475 passed, 11 conditional skips) pass,
+plus type/build, format, contracts and i18n checks. Context failures offer Retry/Cancel;
+language/theme refresh retains literal input, frozen/pending forms cannot close or submit, and a
+failed create never retries automatically. Chromium checks at widths 640/900/1100 match the shared
+form dimensions within one pixel. These are frontend/CSS checks; the new Swift modal, actual
+Command-W/reopen, Escape, quit cancellation and readable narrow fields still require their own Mac
+run and ordinary-client paired images.
+
+The shared screenshot grid includes English/dark 1100×720 and Chinese/light 640×720 PR drafts. Both
+actual applications use the same temporary repository and isolated simulated CLI, enter the literal
+title/body/branches/draft, capture the centered form and cancel without changing saved workspace
+data or terminal generations. The collectors reject missing/stale/duplicate scenes, crushed fields,
+injected form values, GitHub writes and geometry differing by at least one pixel. Personal repeats
+the controls after app replacement. CLI logs and originals are artifacts; fixture responses are
+explicitly simulated, not authenticated GitHub acceptance. The grid requires 39 ordinary captures
+and 38 pairs (77 original PNGs including restart).
+
+Twenty-five Python evidence/fixture policies and 15 Personal policies pass. They reject a reused
+fixture, external/symlink project, old source metadata, 128px PR forms and missing no-write proof. A
+real Rust Core process prepares/reads the new CLI fixture on Linux without an account or GitHub
+write. Type/build, format, contracts and i18n checks pass. Actual new Mac images remain pending;
+760d433's 36 pairs retain their original scope and do not satisfy the expanded grid.
+
+The macOS ARM capture build at head `92bd88e2f0ba0f31d8fd20c02eed45d40229ac7d`, merge
+`383f762158b9285bd65d70bfbbe3fe1bfcdca018`, fails because the new collector passed JSON Double sizes
+to an Int window-sizing function. The candidate uses exact integer conversion, rejecting fractional
+or non-finite dimensions. The
+[failed build artifact](https://github.com/YondFane/uTerm/actions/runs/43084143961/artifacts/13885543296)
+is retained; no new PR pair was accepted.
+
+The workspace PR implementation itself passes the full ARM native matrix at head
+`43b3995769cf7d8c687a2b038e57e3325941488b`, merge `5ff58f2dbdb25a063c222ab99df3852965bb43d1`. Both
+original PR images in the
+[artifact](https://github.com/YondFane/uTerm/actions/runs/43080810933/artifacts/13885342948) were
+inspected: English 1100×720 uses a centered 640×500 form; Chinese 640×720 uses 588×500. Fields are
+readable and the live workspace remains around the form. Actual draft, pending/quit, injected-root
+and Escape checks pass. The same source's complete SDK installation accepts the update and proves
+original host PID exit and endpoint removal. This accepts that source's ARM native QA scope; it does
+not accept the new Personal/ordinary capture grid or Intel.
+
+At source `760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge
+`6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`, both native matrices pass. The
+[Intel report](https://github.com/YondFane/uTerm/actions/runs/43074768464/artifacts/13882499663)
+passes real host-trust Cancel/Approve/authentication and the full interaction matrix, including
+Files/search/GitHub switching and guarded drafts. The earlier narrow GitHub form remains visually
+rejected: those images do not accept the new workspace modal. The previous intermittent Intel trust
+failure has not reproduced in this run; no speculative trust workaround was applied.
+
+Files context refreshes discard older replies and errors when a newer mode request exists. A
+reordered-response regression fails with the earlier handler and passes with this guard; hidden
+Files documents cannot receive the GitHub mode value. The same-source native inspector checks pass.
+Git embedding and the other remaining tools still require parity work.
+
+File requests stay on the captured local project or Worktree. Writes first resolve open editor
+drafts, then recheck the selected root; cancelled delivery does not release a dispatched write
+early. Paste accepts only known project/Worktree source roots in saved workspaces. Native memory
+retains the copied source when switching projects or workspaces and replacing the file-tools
+document; paths are not saved to disk. A removed source project is rejected even if its files still
+exist. Copy updates serialize, and a rejected copy restores the last confirmed source with a visible
+error. Clipboard hydration ignores late replies from an older document. Cross-workspace native
+execution still requires current-source CI.
+
+Project metadata reads share the main state bridge with settings writes, while filesystem scans stay
+on their worker. This avoids the client's own background reads rejecting a font change as
+`WRITER_BUSY`; external writer conflicts retain their explicit retry behavior. Native acceptance
+refreshes the actual file list while pressing smaller/larger font controls through six cycles,
+including after application replacement. Acceptance uses the shared **Refresh files** control and
+waits for directory mutation completion, rather than the early dismissal of its confirmation.
+
+Focused Linux WebKit-transport simulations cover the shared controls, exact open path/line, visible
+failure/retry, retained search text, language/theme refresh and quit freeze/resume. Native QA
+operates actual WebKit tree/search controls and AppKit Return, checks symlink/root/method rejection
+and stale-project writes, and creates, copies, renames and deletes literal temporary names,
+including cancelled directory deletion. It also copies in one actual panel, switches projects and
+workspaces, replaces that WebKit document and pastes into the new project, checking original bytes,
+rejected outside-root clipboard values and a removed source whose files remain on disk. Native QA
+also operates actual host search and Quick SSH controls, checks invalid/cancelled/stale-workspace
+writes, and creates and keeps a temporary connection using loopback port 1 without external
+credentials. This exercises failure handling, not authenticated remote login. Linux simulations
+exercise queued failures, confirmed-source rollback and stale hydration.
+`native-inspector-copy-across-projects-light-zh.png` records the destination panel. Personal
+workspace captures require the mounted shared controls and translated labels. These new checks and
+screenshots still require current-source macOS CI; simulations do not accept native rendering.
+
+At head `ccdbf1ea0427ac4b37200b63f56808686d4e07f5`, tested merge
+`eaa310c912902c2c222175b6b5fafc2fd19933ec`, both Personal architectures pass the full package,
+real-window and same-source replacement checks in
+[Personal CI](https://github.com/YondFane/uTerm/actions/runs/43037565205). The
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43037565265/artifacts/13865841147)
+contains 32 matched pairs and the ordinary restart image; all paired image digests were checked, and
+both English/dark workspace originals were inspected. Full-height files controls align, while
+terminal insets, native control styling and other parity rows still differ. The
+[native ARM report](https://github.com/YondFane/uTerm/actions/runs/43037565487/artifacts/13865611496)
+passes actual pane swap/zoom/close focus and cross-workspace paste with removed-source rejection,
+then fails SSH search-focus acceptance. That failure does not accept Quick SSH or the full native
+matrix. New PDF and search-focus changes require their own current-source CI.
+
+Editable files open in the main workspace. When files are open, the tab row includes the selected
+terminal, ordered file names, unsaved indicators and close controls. Reopening selects the retained
+WK editor; returning to the terminal retains its view and generation.
+
+Left/Right and Home/End move between tabs. Editors receive focus after their AppKit view attaches,
+and keyboard tab navigation retains tab focus. Dirty close, repository operations and quit
+preparation keep the existing editor confirmation and conflict guards.
+
+Font shortcuts in file editors and Git diffs adjust their own saved content size through the scoped
+content channel. Invalid or stale events are ignored; save failures remain visible and can be
+retried. Command-F in an active file stays in its editor rather than revealing the terminal.
+
+Standalone previews and detached regression windows retain separate presentation. Persistent
+tab/window restoration, wrapping, embedded workbenches and complete settings styling still require
+alignment.
+
+The toolbar footer and app menu open complete settings. Save/reload/reset and unsaved drafts remain
+available when the settings window is hidden; Return saves an edited draft and Command-W hides it.
+The local CLI control switch remains an immediate service control in Local control.
+
+Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
+side/tool widths in both real apps. Collection rejects stale vectors, old height, titlebar insets or
+stale panel widths. Linux passes 463 Node checks (11 platform skips), type checking and focused
+SVG/side-panel regressions; these do not establish complete native parity.
+
+Real Personal-window checks click file/tab/close controls, send AppKit arrows, retain exact
+recovered Unicode drafts with existing autosave, cancel a dirty close and discard one file while
+retaining its sibling and external bytes. Packaging requires its source-bound report and
+`personal-<phase>-embedded-files.png`.
+
+Native menu shortcuts preserve Shift for letter chords: Command-F opens terminal search and
+Command-Shift-F opens project search. The custom shifted palette shortcut rejects the unshifted
+event. Synthetic AppKit events retain Shift in `charactersIgnoringModifiers`, matching actual letter
+events; reports retain the live menu binding. These event-routing checks still require
+current-source native execution.
+
+Another real-window check clicks font controls and their bounds, types Unicode into native search,
+checks case/match navigation, exercises Command-F/Escape and restarts an exited shell. Packaging
+requires its source-bound report and `personal-<phase>-terminal-search.png`. The restarted shell
+must reach the same writable condition used by its input entry point before QA sends the output
+probe.
+
+Linux restart tests exercise actual PTYs, rejected stale generations, read-only/live-process
+requests, failed-launch replay, closed-session history and an old-host capability probe. The Core
+end-to-end check verifies writable output after restart with unchanged workspace descriptors. The
+ordinary collector explicitly loads the measured font size and waits for the document font set
+before checking readiness and character width; failures retain the requested face statuses.
+Ordinary-window QA also clicks the actual Restart button and verifies a new generation, parsed
+Unicode output and the retained terminal element. Current-source macOS execution remains pending.
+
+The ordinary capture contract requires all 32 matching workspace/settings scenes plus one
+`terminal-restart` scene. Missing, duplicate or unknown scenes and incomplete restart assertions
+fail; the paired artifact includes the 64 matching PNGs and the additional restart original.
+
+JDK acceptance waits for the live Add control after rejected input before clicking it. Sidebar
+acceptance checks actual section order and disclosures while retaining shared revision, selection
+and generation; Agent acceptance also exercises polling before catalog loading. These candidate
+checks, Swift vector geometry and complete real-window acceptance still require the latest macOS CI;
+earlier-source results cannot accept new code.
 
 Session context menus add pin/unpin, move up/down, Group with, Ungroup and Copy session link.
 Grouping existing sessions and ungrouping select the moved session while retaining its descriptor,
@@ -113,7 +462,7 @@ Real-window CI prepares a display of at least 1280×900 before the matching scre
 required 720-pixel content height is still checked against actual window bounds. Personal smoke
 failures retain the raw report and available original captures before validation, including an
 attempted failure-window capture. The ordinary collector waits for real terminal input ownership
-before inspecting the host. Linux passes 18 macOS package/evidence policy tests and ten
+before inspecting the host. Linux passes 12 Personal package/evidence policy tests and 13
 paired-evidence policy tests; these fixtures do not represent native window execution.
 
 The Personal collector adjusts the real window frame against measured content bounds, with at most
@@ -143,9 +492,9 @@ busy-state and selected-project guards.
 The same-source comparison includes 24 settings navigation pairs: twelve shared categories at
 English dark 900×640 and Chinese light 660×640. Both collectors activate actual navigation controls
 and reject missing/stale captures, changed drafts or unverified navigation. The combined artifact
-holds 64 original screenshots; collection does not establish complete functional parity. The sidebar
-updates existing disclosure buttons when busy state ends, so persisted collapse does not leave
-expansion disabled.
+holds 64 matching PNGs and the ordinary restart original; collection does not establish complete
+functional parity. The sidebar updates existing disclosure buttons when busy state ends, so
+persisted collapse does not leave expansion disabled.
 
 **Settings → Maven settings** edits global distribution, Maven home, `settings.xml`, local
 repository and Wrapper preference without requiring a project. Changes remain a draft until **Save
@@ -718,20 +1067,21 @@ Export legacy-compatible data** saves the current workspace/settings and origina
 as JSON. This export is a recovery artifact. A real Rust-process test reads the exported
 workspace/settings with unchanged release readers, preserving split/session IDs and opaque
 draft/backup bytes after repeated import. Automatic downgrade into an unmodified old client's
-WebView storage is not verified. Export refreshes workspace/settings and adopted Git favorites;
-other auxiliary values retain their first-import bytes. Before replacement, retain a fresh old
-WebView profile and the complete canonical store as well. Editor/PDF, Git favorites and Agent
-notification migration belong to #34, #35 and #40; full installation rollback remains #46.
+WebView storage is not verified. Export refreshes workspace/settings, adopted Git favorites and
+current PDF highlights; other auxiliary values retain their first-import bytes. Before replacement,
+retain a fresh old WebView profile and the complete canonical store as well. Editor/PDF, Git
+favorites and Agent notification migration belong to #34, #35 and #40; full installation rollback
+remains #46.
 
 For operators preparing rollback, the Core `rollback.export` method accepts the current
 `expectedRevision` and optional `expectedDraftRevision`. It reads canonical state, adopted Git
-favorites and current editor drafts under one writer lease, returning schema1 `RollbackArchive` with
-source revisions, original auxiliary strings, every current draft and per-document old-format
-candidates. A single current draft fills the old slot; cleared drafts remove it; multiple drafts
-leave the slot empty and require an explicit choice while retaining every draft in the archive. The
-existing UI's `legacy.export` keeps its original semantics. Export never installs, restores or
-automatically authorizes a downgrade. Keep the complete data backup and validate the old reader;
-credential stores and live host endpoint files remain outside this archive.
+favorites, current PDF highlights and current editor drafts under one writer lease, returning
+schema1 `RollbackArchive` with source revisions, original auxiliary strings, every current draft and
+per-document old-format candidates. A single current draft fills the old slot; cleared drafts remove
+it; multiple drafts leave the slot empty and require an explicit choice while retaining every draft
+in the archive. The existing UI's `legacy.export` keeps its original semantics. Export never
+installs, restores or automatically authorizes a downgrade. Keep the complete data backup and
+validate the old reader; credential stores and live host endpoint files remain outside this archive.
 
 Linux checks pass 33 targeted storage/rollback tests (three existing permission cases ignored), two
 real-process reader tests, generated TS/Swift contract checks and type checking. They cover latest
@@ -1211,6 +1561,15 @@ establish hosted Pages deployment or desktop runtime acceptance.
 ## Installation
 
 ### Stable releases
+
+Release drafts are published by their verified numeric ID. An explicit recovery dispatch can restore
+the five feeds from an already public version after all five source builds pass; it preserves the
+tag and archives a source-bound recovery report. Eight local release-policy tests and YAML/docs
+checks pass. The [actual recovery run](https://github.com/YondFane/uTerm/actions/runs/42974125671)
+passes for published source `a0b865e32a57a78d9cbab76c744ae4a01edd393a`; its
+[report](https://github.com/YondFane/uTerm/actions/runs/42974125671/artifacts/13833859633) records
+five successful source builds, five restored feeds, five public installers and Latest. The original
+failed publication run is retained as failure evidence.
 
 The repository sidebar’s Latest entry points to the stable installer release. The release workflow
 marks a version Latest only after public downloads are verified and the stable update feed is
@@ -2050,7 +2409,17 @@ status.
 Choose **Quick SSH connection** in the SSH sidebar and enter a Host alias, `user@host:port` or
 `ssh://user@host:port`. IPv6 addresses with a port use brackets, such as `user@[::1]:2222`. A plain
 alias inherits OpenSSH configuration; explicit addresses default to port 22. Commands, embedded
-passwords, URL paths and invalid ports are rejected.
+passwords, URL paths and invalid ports are rejected. Both clients use the same address form and
+parser. The native form opens over the main workspace. Cancel, Escape and Command-W close only the
+form; existing terminal generations and editor views are retained. Background commands are disabled
+while it is open. A pending submission blocks dismissal and quit until its actual result. Closing
+restores the previous visible control or active document/terminal focus.
+
+The shared core saves the temporary connection and first session in one revision-checked write. It
+rejects a workspace changed after the dialog opened, duplicate IDs and stale revisions without
+leaving half a connection. SSH login starts only after saving succeeds. Saving disables duplicate
+submission and dismissal; failures retain the address for explicit retry. A later SSH launch failure
+retains the saved connection and reports a separate error.
 
 Quick connections use automatic OpenSSH authentication in the terminal. They appear as Temporary;
 their local settings remain available for attachment after reopening the app. Closing the last
@@ -2059,7 +2428,76 @@ been released. **Save connection** keeps the profile without changing existing s
 before selecting it for a Redis or database tunnel.
 
 **Search SSH hosts** filters the current workspace by connection name, host and username, ignoring
-case. Clearing the search restores all hosts; filtering preserves sessions and connections.
+case. Clearing the search restores all hosts; filtering preserves sessions and connections. The
+native search is available in All and SSH and retains its input focus when filtered rows reload.
+Native temporary connections offer **Save connection** in their context menu and connection window.
+Cleanup retains file/tunnel ownership and database/Redis dependencies, including legacy SSH-host
+references; an unresolved native connection draft also defers cleanup.
+
+SSH host filtering retains the mounted native search cell while inserting/removing result rows. An
+empty query explicitly restores all hosts and external query changes synchronize the editor. At head
+`1a9754a0f86acaf9178dbe65dd30e91957469627`, merge `e59b91c76512f176a5fe904a38c46311a3a31931`, both
+native architectures pass the actual typed search/clear/focus and original Quick SSH
+create/keep/prune flows. Reports and nine screenshots are in the
+[ARM](https://github.com/YondFane/uTerm/actions/runs/43051436660/artifacts/13871301710) and
+[Intel](https://github.com/YondFane/uTerm/actions/runs/43051436660/artifacts/13871038779) artifacts.
+Those flows use a separate Quick SSH window and do not accept the new main-window modal. The ARM
+matrix passes real PostgreSQL disconnect; Intel database QA remains unexecuted after its download
+DNS failure.
+
+At source `becc4e233a0354137fe8248486e8dd7fb0df29fa`, merge
+`198238492c3f298999257b09bb3813468a1b11b3`, Intel Personal passes real install, initial/replacement
+windows and the Sparkle SDK suite. Its
+[artifact](https://github.com/YondFane/uTerm/actions/runs/43065251107/artifacts/13876314613)
+includes English/dark 1100px and replacement Chinese/light 640px Quick SSH images. Both were
+inspected: the form is in the main window and operations pass, but an opaque WebKit canvas hides the
+workspace, so visual acceptance fails. Passing window identity alone is insufficient.
+
+The candidate bounds WebKit to the measured form, paints the outer dimming with native views and
+clips the form's corners. A ResizeObserver reports content height without changing saved data.
+Acceptance requires actual centered form bounds in both clients, matching within one pixel, with the
+live terminal retained around the form. Missing, oversized or clipped bounds fail collection; the
+native test also clicks the actual backdrop and checks invalid layout arguments. At source
+`760d433f319a0e95685e7dd4724a8b23b14b07ec`, merge `6e78c0fd82c2aeb6a760d939e97c420bf3488c1d`,
+[36 paired scenes](https://github.com/YondFane/uTerm/actions/runs/43074768506/artifacts/13882103469)
+pass the bounds policy; both Quick SSH original pairs were viewed and retain the surrounding
+workspace. Actual backdrop Cancel and invalid layout checks pass the Intel native inspector. The ARM
+Personal initial/replacement windows pass, but its full SDK suite fails in redundant outer cleanup
+after the installed app has already reattached, retained its PTY/draft and explicitly stopped its
+host. The second host-status query races shutdown. QA skips that query only after the internal
+successful-cleanup flag, retaining fallback cleanup and all failures. The coordinator also uses the
+shared process-exit observer to require the retained host PID to exit and its endpoint to disappear;
+it never terminates the host to force a pass. Seven focused Linux updater/exit checks pass,
+including delayed endpoint removal and a still-running process. Python syntax and documentation
+checks pass; current-source Mac verification remains pending. Package/window success alone does not
+accept the update scenario. The
+[failure artifact](https://github.com/YondFane/uTerm/actions/runs/43074768643/artifacts/13881394081)
+retains the actual reports. The full functional-parity flag stays false.
+
+Twenty-seven targeted Linux UI/transport/grid checks, 20 paired-evidence policies and 14 Personal
+policies pass. The complete frontend run passes 473 tests with 11 conditional skips; type/build,
+contracts, i18n, format and documentation checks pass. Loading failures retain modal Retry/Cancel
+and prevent duplicate reads. Two shared invalid-address scenes still require actual sidebar opening,
+visible rejection, retained input, Cancel/Escape/Command-W and unchanged workspace/session
+generations. The expanded strict grid requires 39 ordinary captures / 38 pairs (77 originals
+including restart and two PR scenes), without accepting the opaque historical images as proof of the
+new renderer.
+
+Linux validation passes six targeted core tests for atomic creation, rollback, stale revisions,
+private fields, retention and cleanup; the complete core, FFI and desktop-backend suites also pass.
+These core results belong to the existing implementation; this modal phase changes no Rust code.
+
+At the same `becc4e2` source, the
+[ARM native matrix](https://github.com/YondFane/uTerm/actions/runs/43065251099/artifacts/13878942719)
+passes completely, including GitHub switching, real SSH trust and PostgreSQL. Its JDBC provenance
+retains the pinned 42.7.14 digest and primary Central URL. The
+[ARM Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43065251107/artifacts/13877484403)
+also passes package, initial/replacement and SDK checks; its Chinese Quick SSH original was
+inspected and shows the same opaque background. Intel SSH trust remains unresolved. The ordinary Mac
+job executed no steps:
+[GitHub reports](https://github.com/YondFane/uTerm/actions/runs/43065251386/job/130678363243) that
+no hosted runner acquired it after multiple attempts, with macOS ARM capacity notices. No paired
+artifact exists for that run; a fresh ordinary run remains required.
 
 ### Jump hosts
 
@@ -2683,9 +3121,10 @@ project. Text editing and recovery use the protected editable window; preview wi
 read-only mode. Its ephemeral WKWebView loads manifest-listed bundle resources and accepts only
 main-document messages. The host rejects stale document IDs, another root and writes from the
 readonly preview. Fonts use revision-checked shared settings; static HTML cannot run scripts or load
-external resources. This preview does not offer PDF annotation controls. Writable-editor and
-interaction evidence is recorded separately in the closed #34/#42 tasks, with their original gaps
-and user-approved human waiver still visible in #13.
+external resources. PDF previews expose the shared highlight controls; annotations are separate
+metadata and never change the read-only PDF bytes. Writable-editor and interaction evidence is
+recorded separately in the closed #34/#42 tasks, with their original gaps and user-approved human
+waiver still visible in #13.
 
 At source `8a72b00754c5580150546ea2ae104f5166e04a39` / tested merge
 `ea3895ab1d8db65ad59159fc45f3deff7326baf6`,
@@ -2713,6 +3152,54 @@ unexecuted human IME/focus checks remain distinct. This accepts #33 without a si
 #34–#37 are now closed in their recorded scope; M3 #17 was closed not_planned by the user. Original
 layout/PDF/Windows panel gaps remain in #13. Earlier PDF, workspace/path and input-control failures
 retain their source-bound reports.
+
+### PDF highlights
+
+Open a PDF in a workspace file tab. Choose **Box highlight** and drag on the page, or choose
+**Highlights** in PDF navigation to jump to or delete a mark. Both clients use the same reader and
+highlight controls. Language and appearance changes update an open native document without replacing
+its WebView.
+
+Desktop highlights are saved in the shared Rust store, separately for the project root, relative
+file path and PDF byte digest. Reopening the same version restores its marks; changed PDF bytes
+start a separate set. Up to 2,000 marks are allowed, with normalized double-precision coordinates.
+The PDF itself remains unchanged. Browser previews retain their existing local-storage owner.
+Original imported highlight strings remain intact; legacy-compatible and coherent rollback exports
+include the latest adopted marks. Up to eight previous sidecar versions are retained. Corrupt,
+unsupported or blocked stores, or missing current records with recovery copies, fail visibly without
+resetting the original.
+
+The viewer shows a mark as saved only after acknowledgment. A conflicting or failed write retains
+the attempted operation and offers **Retry** or **Cancel**. Retry explicitly reads the latest marks
+and reapplies only this operation, preserving marks from another window. It never automatically
+replays a write. Cancellation of an already dispatched request does not undo it; close and quit wait
+for its actual result. Failed attempts are held in memory until handled or the view is closed.
+
+Linux checks pass eight targeted real-filesystem Core tests, all 471 frontend/build-helper checks
+(11 platform checks skipped), 257 Core checks (17 ignored), six FFI checks, and 19 QA-enabled
+backend checks (one ignored). The focused frontend/transport/evidence-grid suite passes 27 checks;
+16 paired-evidence policy tests and 13 Personal package policy tests also pass. They cover stale
+revisions, exact PDF bytes, independent writers, legacy retention, export, filesystem failure,
+symlink rejection, corrupt/missing stores, canceled writes, delayed replies and explicit retry.
+Policy fixtures test rejection rules and do not count as application screenshots. The candidate adds
+English/dark 1100×720 and Chinese/light 640×720 real-window comparison scenes with shared PDF bytes
+and seeded comparison marks. Actual deletion and close/reopen are required in both apps; native QA
+also draws and deletes through window pointer events, rejects other document targets, and checks
+persistence after same-source app replacement. At source `3d0217a9df8fb9c019c909187315ce71931ae0f1`,
+tested merge `aa48cadf41f9c9b1a9a323b22d8862b235915676`, the
+[ARM Personal artifact](https://github.com/YondFane/uTerm/actions/runs/43043946735/artifacts/13866689848)
+passes initial and replacement PDF drawing/deletion/reopen, document-scope and original-byte checks.
+Both `personal-initial.json` and `personal-replacement.json` were read; English/dark initial and
+Chinese/light replacement PDF originals were inspected. The
+[paired artifact](https://github.com/YondFane/uTerm/actions/runs/43043946739/artifacts/13867981101)
+contains 34 pairs plus the restart image (69 PNGs); all 68 paired digests were verified, and the two
+ordinary PDF originals were inspected. Reader/highlight content matches; surrounding session counts
+and folder expansion differ. Updated collection closes the background ordinary session through its
+actual control, opens native PDFs through actual file rows, and requires one retained session and
+the expanded PDF folder in both captures. Those stricter surrounding-state checks need fresh CI. The
+[Windows log](https://github.com/YondFane/uTerm/actions/runs/43043946739/artifacts/13866998454)
+records all seven portable PDF storage tests passing; Unix symlink coverage remains
+platform-specific.
 
 ### Shared local file service
 
@@ -3304,6 +3791,10 @@ changing projects or closing the panel cancels its timer and ignores late result
 
 Quick-open and content-search results are not periodically queried.
 
+Manual and mutation-triggered refreshes update each parent before rereading its expanded children.
+Cached rows and expansion remain while the parent loads; deleted directories are removed before
+their old child paths can be read. Real directory errors remain visible.
+
 #### Validation and limits
 
 - Component tests cover updated listings, scheduling after completion and timer cleanup; frontend
@@ -3311,6 +3802,12 @@ Quick-open and content-search results are not periodically queried.
   macOS. Native timing and Windows runtime acceptance remain pending.
 - The Windows file-tree refresh regression, scoped formatting and documentation checks pass. Native
   empty-folder visual acceptance remains pending.
+- A Linux component regression reproduces the missing-path error when deleting an expanded folder
+  with a delayed parent response, then passes with parent-first refresh. It also checks retained
+  cached rows/expansion, resumed child reads and visible permission errors. The native CI retains
+  `file-refresh-tests.log` and records the actual CRUD stage if a window check fails; this fix still
+  requires its own macOS run. The complete Linux frontend suite passes 477 checks with 11
+  conditional skips; TypeScript/production, formatting, localization and documentation checks pass.
 
 ### File-operation errors
 
@@ -5398,6 +5895,10 @@ bracketed-paste mode when enabled.
   “Paste” click and does not produce that API's `NotAllowedError` banner. Control keys remain
   available to terminal programs.
 
+- When input would exceed the 1 MiB queue limit, that input is not sent and a notice asks you to
+  paste in smaller parts. The notice disappears after three seconds; triggering it again restarts
+  the timer. Connection, clipboard and font-setting errors are not cleared by this timer.
+
 - Native paste retains bracketed-paste handling and disabled-input protection. Other clipboard and
   session failures remain visible; a pending asynchronous paste is discarded if its connection
   closes or changes.
@@ -5406,6 +5907,17 @@ bracketed-paste mode when enabled.
 
 - Shortcut regression tests cover native macOS routing, selection states and Shift modifiers,
   alongside Windows copy/paste and Control passthrough; native acceptance is recorded below.
+
+- Linux component regression uses real xterm with fixture session IPC to cover three-second expiry,
+  repeated-notice timer resets, normal input, persistent write errors and unmount cleanup. Linux
+  Chromium at 900×600 and 640×420 uses the actual terminal component and fixture IPC to verify
+  notice display/expiry, repeated timing, subsequent input and retained errors, with visual
+  inspection of terminal layout after dismissal. TypeScript, production build, localization and
+  formatting checks for changed files pass. On merged source `24a1928`, the Linux suite passes 477
+  frontend checks with 11 conditional skips. Shared Core/FFI checks pass 267 cases, host checks pass
+  86 and backend checks pass 17; optional cases remain ignored. TypeScript/production, desktop
+  compilation, contracts, localization, formatting and documentation checks pass. Native
+  macOS/Windows long-paste acceptance remains pending.
 
 ### Input-method punctuation
 

@@ -1,8 +1,10 @@
+import chrome from "../shared/contracts/chrome-ui-v1.json" with { type: "json" };
 import { DatabaseConnectionDialog } from "./components/DatabaseConnectionDialog";
 import { GitFavoritesRecovery } from "./components/GitFavoritesRecovery";
 import { WorktreeDeleteDialog } from "./components/WorktreeDeleteDialog";
 import {
   canonicalStateActive,
+  createSharedQuickSsh,
   deleteSharedWorktree,
   flushSharedState,
   initializeSharedState,
@@ -194,7 +196,9 @@ export function App() {
   const registerJavaClose = useCallback((prepare: (() => Promise<boolean>) | null) => {
     prepareJavaClose.current = prepare;
   }, []);
-  const [requestedSidebarWidth, setRequestedSidebarWidth] = useState(248);
+  const [requestedSidebarWidth, setRequestedSidebarWidth] = useState(
+    chrome.metrics.sidebarDefaultWidth,
+  );
   const sidebarDrag = useRef<{
     x: number;
     width: number;
@@ -217,7 +221,7 @@ export function App() {
   const [gitDiffTarget, setGitDiffTarget] = useState<HTMLDivElement | null>(null);
   const shellElement = useRef<HTMLDivElement>(null);
   const [shellWidth, setShellWidth] = useState(window.innerWidth);
-  const [inspectorRatio, setInspectorRatio] = useState(0.35);
+  const [inspectorRatio, setInspectorRatio] = useState(chrome.metrics.inspectorDefaultRatio);
   const [resizingInspector, setResizingInspector] = useState(false);
   const inspectorDrag = useRef<{
     x: number;
@@ -542,7 +546,8 @@ export function App() {
   const [selectedRedisId, setSelectedRedisId] = useState<string | null>(null);
   const [redisPasswords, setRedisPasswords] = useState<Record<string, string>>({});
   const [sshDialog, setSshDialog] = useState<{ connection?: SshConnection } | null>(null);
-  const [quickSshOpen, setQuickSshOpen] = useState(false);
+  const [quickSshWorkspace, setQuickSshWorkspace] = useState<string | null>(null);
+  const quickSshOpen = quickSshWorkspace !== null;
   const [tunnelsOpen, setTunnelsOpen] = useState(false);
   const [tunnelStatuses, setTunnelStatuses] = useState<SshTunnelStatus[]>([]);
   const [tunnelError, setTunnelError] = useState("");
@@ -2527,6 +2532,13 @@ export function App() {
         {
           "--inspector-width": `${inspectorSize.width}px`,
           "--sidebar-width": `${sidebarWidth}px`,
+          "--titlebar-height": `${chrome.metrics.titlebarHeight}px`,
+          "--sidebar-rail-width": `${chrome.metrics.sidebarRailWidth}px`,
+          "--sidebar-row-height": `${chrome.metrics.sidebarRowHeight}px`,
+          "--sidebar-section-height": `${chrome.metrics.sidebarSectionHeight}px`,
+          "--sidebar-section-gap": `${chrome.metrics.sidebarSectionGap}px`,
+          "--sidebar-list-top": `${chrome.metrics.sidebarListTop}px`,
+          "--sidebar-row-corner": `${chrome.metrics.sidebarRowCorner}px`,
           "--inspector-boundary": `${sidebarWidth + (inspectorOnLeft ? inspectorSize.width : Math.max(320, shellWidth - sidebarWidth - inspectorSize.width))}px`,
         } as CSSProperties
       }
@@ -2658,7 +2670,11 @@ export function App() {
           void remove().catch((error) => setError(redisError(error)));
         }}
         addSsh={() => setSshDialog({})}
-        quickSsh={() => revealWithEditorGuard(() => setQuickSshOpen(true))}
+        quickSsh={() =>
+          revealWithEditorGuard(() =>
+            setQuickSshWorkspace(currentWorkspace.current?.selectedWorkspace ?? null),
+          )
+        }
         editSsh={(connection) => setSshDialog({ connection })}
         selectSsh={selectSshConnection}
         newSshTerminal={newSshTerminal}
@@ -2866,11 +2882,11 @@ export function App() {
       )}
       {quickSshOpen && (
         <SshQuickConnect
-          close={() => setQuickSshOpen(false)}
+          close={() => setQuickSshWorkspace(null)}
           connect={async (connection) => {
             const current = currentWorkspace.current;
             const group = current?.groups?.find((item) => item.id === current.selectedWorkspace);
-            if (!group || !runtime) return false;
+            if (!group || group.id !== quickSshWorkspace || !runtime) return false;
             const id = crypto.randomUUID();
             const value = {
               ...connection,
@@ -2884,18 +2900,21 @@ export function App() {
                 },
               ],
             };
-            const saved = await update((previous) =>
-              selectSession(
-                {
-                  ...previous,
-                  groups: previous.groups?.map((item) =>
-                    item.id === group.id
-                      ? { ...item, sshConnections: [...(item.sshConnections ?? []), value] }
-                      : item,
-                  ),
-                },
-                id,
-              ),
+            const saved = await update(
+              (previous) =>
+                selectSession(
+                  {
+                    ...previous,
+                    groups: previous.groups?.map((item) =>
+                      item.id === group.id
+                        ? { ...item, sshConnections: [...(item.sshConnections ?? []), value] }
+                        : item,
+                    ),
+                  },
+                  id,
+                ),
+              undefined,
+              () => createSharedQuickSsh(connection, group.id, id, runtime.home),
             );
             if (saved) {
               setSshLaunches((previous) => new Set(previous).add(id));

@@ -45,12 +45,29 @@ impl Core {
         Ok(service)
     }
     pub(crate) fn ssh_request(&self, method: &str, params: Value) -> Result<Value> {
+        if method == "ssh.quick.create" {
+            return service_json(super::quick::create(&self.store, params)?);
+        }
+        if method == "ssh.quick.keep" {
+            return service_json(super::quick::keep(&self.store, params)?);
+        }
         if method == "ssh.configure" {
             let service = self.ssh_service(Some(string(&params, "credentialService")?))?;
             return Ok(json!({"configured":true,"credentialService":service.namespace}));
         }
         let service = self.ssh_service(None)?;
         match method {
+            "ssh.quick.prune" => {
+                if service.busy() {
+                    return Err(CoreError::new(
+                        "SSH_OPERATION_BUSY",
+                        "Wait for the current SSH operation",
+                    ));
+                }
+                service_json(super::quick::prune(&self.store, params, |id| {
+                    service.connection_busy(id).map_err(failure)
+                })?)
+            }
             "ssh.resume" => {
                 service.resume().map_err(failure)?;
                 Ok(Value::Null)

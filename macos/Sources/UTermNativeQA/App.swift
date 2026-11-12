@@ -15,6 +15,7 @@ func localized(_ english: String, _ chinese: String) -> String {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     private var window: NSWindow?
     private var contentWindows: [UUID: ContentWindow] = [:]
+    private var fileClipboard: JSONValue = .null
     private var fileWindowOrder: [UUID] = []
     private var changingFileTabs = false
     private var pendingFileTabTrim = false
@@ -31,6 +32,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var mutatingRepository = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        do { try NativeBundledFonts.register() }
+        catch {
+            let alert = NSAlert()
+            alert.messageText = localized("Could not load the bundled terminal font. Reinstall the app.", "无法加载内置终端字体，请重新安装应用。")
+            alert.informativeText = error.localizedDescription
+            alert.runModal(); NSApp.terminate(nil); return
+        }
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1100, height: 720), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.title = WorkspaceModel.applicationProfile.displayName
         window.titleVisibility = .hidden
@@ -73,14 +81,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     self.previousFileTabLimit = limit; self.pendingFileTabTrim = true
                     Task { await self.trimFileTabs() }
                 }
-                for content in self.contentWindows.values where content.workbenchHost != nil {
+                for content in self.contentWindows.values {
                     content.window?.appearance = value
                     content.workbenchHost?.settingsChanged(self.model.settings)
+                    content.settingsChanged(self.model.settings)
                 }
             }
         }
         model.deleteWorktreeRequested = { [weak self] project, tree in self?.confirmWorktreeDeletion(projectID: project, worktreeID: tree) }
         model.openSSHRequested = { [weak self] id in Task { @MainActor in try? await self?.makeSSHWindow(selected: id) } }
+        model.openQuickSSHRequested = { [weak self] in
+            Task { @MainActor in
+                do { _ = try await self?.makeQuickSSHWindow() }
+                catch { self?.model.error = error.localizedDescription }
+            }
+        }
+        model.canPruneQuickSSH = { [weak self] in self?.sshWindow?.model.dirty != true && self?.sshWindow?.model.busy != true }
         model.openDatabasesRequested = { [weak self] in self?.openDatabases() }
         model.openRedisRequested = { [weak self] in self?.openRedis() }
         model.openAgentsRequested = { [weak self] in self?.openAgents() }
@@ -92,6 +108,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         model.openPythonRequested = { [weak self] in self?.openPython() }
         model.openGitRequested = { [weak self] in self?.openGit() }
         model.openGitHubRequested = { [weak self] in self?.openGitHub() }
+        model.makeGitHubTools = { [weak self] root, scope in
+            guard let self, self.model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: "GitHub tools no longer own the selected project") }
+            return try await self.makeGitHubContentWindow(directory: root, present: false)
+        }
+        model.makeFileTools = { [weak self] root, scope in
+            guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
+            return try await self.makeFileToolsWindow(directory: root, scope: scope)
+        }
         model.openInspectorFile = { [weak self] directory, path, line in
             guard let self else { throw BridgeFailure(code: "CLOSED", message: "Client is closed") }
             let root = try await self.selectedProjectDirectory()
@@ -118,13 +142,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 do {
                     if Bundle.main.object(forInfoDictionaryKey: "UTermUpdateTestMode") as? String == "install" {
                         try await UpdateInstallationSmoke.run(model: model, window: window,
-                            openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) },
+                            openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) },
                             openSSH: { try await self.makeSSHWindow() }, openDatabase: { try await self.makeDatabaseWindow() },
                             attemptQuit: { _ = self.applicationShouldTerminate(NSApp) }, report: &report)
                     } else { try await UpdatesSmoke.run(model: model, window: window, report: &report) }
                 }
                 catch { report["failure"] = error.localizedDescription }
-                if let bridge = model.bridge {
+                // Installation already closes its fixture host; querying it again races shutdown or restarts it.
+                // 安装检查已关闭自己的样例宿主，再次查询会与退出竞争或重新启动宿主。
+                if report["explicitFixtureCloseAndIdleHostShutdown"] as? Bool != true, let bridge = model.bridge {
                     do {
                         for session in try await bridge.call("host.status")["sessions"].array { _ = try await bridge.call("host.close", params: .object(["id": session["spec"]["id"], "generation": session["generation"]])) }
                         _ = try await bridge.call("host.shutdownIdle")
@@ -135,14 +161,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             #if UTERM_PERSONAL
             if WorkspaceModel.applicationProfile.personalFixture {
-                await PersonalSmoke.run(model: model, window: window, openSettings: { self.openFullSettings(); return self.fullSettingsWindow! })
+                await PersonalSmoke.run(model: model, window: window, openSettings: { self.openFullSettings(); return self.fullSettingsWindow! }, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) })
                 terminating = true
                 NSApp.terminate(nil)
             }
             #else
             if let path = WorkspaceModel.argument("--transition-smoke-report") {
                 var report = baseReport()
-                do { try await TransitionSmoke.run(model: model, window: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report) }
+                do { try await TransitionSmoke.run(model: model, window: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) }, report: &report) }
                 catch { report["failure"] = error.localizedDescription }
                 let checkpoint = WorkspaceModel.argument("--transition-smoke-phase") == "checkpoint" && report["failure"] == nil
                 if !checkpoint {
@@ -200,7 +226,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             if let path = WorkspaceModel.argument("--inspector-smoke-report") {
                 var report = baseReport()
-                do { try await InspectorSmoke.run(model: model, window: window, lookup: { self.existingContent(directory: $0, path: $1, editable: true) }, report: &report) }
+                do { try await InspectorSmoke.run(model: model, window: window, lookup: { self.existingContent(directory: $0, path: $1, editable: true) }, quickLookup: { self.contentWindows.values.first { $0.workbenchHost?.kind == "ssh-quick" } }, report: &report) }
                 catch {
                     report["failure"] = error.localizedDescription
                     try? await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent("native-inspector-failure.png"))
@@ -219,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 var report = baseReport()
                 do {
                     try await SettingsSmoke.run(workspace: model, open: { self.openFullSettings(); return self.fullSettingsWindow! }, report: &report)
-                    try await PreferencesSmoke.run(workspace: model, parent: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report)
+                    try await PreferencesSmoke.run(workspace: model, parent: window, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) }, report: &report)
                 }
                 catch {
                     report["failure"] = error.localizedDescription
@@ -382,14 +408,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             if let path = WorkspaceModel.argument("--git-smoke-report") {
                 var report = baseReport()
-                do { try await GitSmoke.run(model: model, parent: window, open: { directory in try await self.makeGitContentWindow(directory: directory) }, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, report: &report) }
+                do { try await GitSmoke.run(model: model, parent: window, open: { directory in try await self.makeGitContentWindow(directory: directory) }, openFile: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) }, report: &report) }
                 catch { report["failure"] = error.localizedDescription }
                 finishReport(report, path: path)
                 return
             }
             if let path = WorkspaceModel.argument("--editor-smoke-report") {
                 var report = baseReport()
-                do { try await EditorSmoke.run(model: model, parent: window, open: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path) }, lookup: { directory, path in self.existingContent(directory: directory, path: path, editable: true) }, report: &report) }
+                do { try await EditorSmoke.run(model: model, parent: window, open: { directory, path in try await self.makeEditableContentWindow(directory: directory, path: path, embedded: false) }, lookup: { directory, path in self.existingContent(directory: directory, path: path, editable: true) }, report: &report) }
                 catch { report["failure"] = error.localizedDescription }
                 finishReport(report, path: path, keepRunning: WorkspaceModel.argument("--editor-smoke-phase") == "checkpoint" && report["failure"] == nil)
                 return
@@ -435,7 +461,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return submenu
         }
         func add(_ menu: NSMenu, _ title: String, _ action: Selector, _ key: String = "", _ modifiers: NSEvent.ModifierFlags = .command) {
-            let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: modifiers.contains(.shift) ? key.uppercased() : key)
             item.keyEquivalentModifierMask = modifiers
             item.target = self
             menu.addItem(item)
@@ -500,6 +526,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         if preparingQuit || mutatingRepository || model.editorRecoveryPresented || model.worktreeDeletionPresented || model.gitFavoritesRecoveryPresented { return false }
+        if model.workspaceModalContent != nil {
+            if menuItem.action == #selector(quit) { return true }
+            if menuItem.action == #selector(closeSession) { menuItem.title = localized("Close dialog", "关闭对话框"); return !model.workspaceModalPending }
+            if menuItem.action != #selector(performSemanticCommand(_:)) { return false }
+        }
         if menuItem.action == #selector(performSemanticCommand(_:)) { return (menuItem.representedObject as? String).map(commandAvailable) == true }
         if menuItem.action == #selector(closeSession) {
             if let fullSettingsWindow, fullSettingsWindow.window === NSApp.keyWindow {
@@ -522,13 +553,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 menuItem.title = localized("Close window", "关闭窗口")
                 return !run.model.busy && !run.model.prepared
             }
-            let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow }
+            let fileFocused = contentWindows.values.contains { $0.window === NSApp.keyWindow } || (NSApp.keyWindow === window && !model.inspectorOwnsFocus && model.documents.active(in: model.inspectorContextKey) != nil)
             menuItem.title = fileFocused ? localized("Close file", "关闭文件") : model.inspectorOwnsFocus ? localized("Close tools", "关闭工具") : localized("Close session", "关闭会话")
             if fileFocused { return true }
             if model.inspectorOwnsFocus { return true }
         }
         if contentWindows.values.contains(where: { $0.window === NSApp.keyWindow }) || agentsWindow?.window === NSApp.keyWindow || fullSettingsWindow?.window === NSApp.keyWindow, let action = menuItem.action,
-           [#selector(splitRight), #selector(splitDown), #selector(increaseFont), #selector(decreaseFont)].contains(action) { return false }
+           [#selector(splitRight), #selector(splitDown)].contains(action) { return false }
+        if menuItem.action == #selector(increaseFont) { return commandAvailable("fontIncrease") }
+        if menuItem.action == #selector(decreaseFont) { return commandAvailable("fontDecrease") }
         if menuItem.action == #selector(quit) || menuItem.action == #selector(hideWindow) { return true }
         if model.nameDraft != nil || model.settingsPresented { return false }
         if menuItem.action == #selector(settings) { return model.state != nil }
@@ -548,6 +581,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     private func commandAvailable(_ id: String) -> Bool {
         guard model.ready, !model.busy, !preparingQuit, !mutatingRepository, model.nameDraft == nil, NSApp.modalWindow == nil, NSApp.keyWindow?.sheetParent == nil else { return false }
+        if model.workspaceModalContent != nil { return id == "close" && NSApp.keyWindow === window && !model.workspaceModalPending }
         let origin = NSApp.keyWindow === commandPalette?.window ? commandPalette?.returnWindow : NSApp.keyWindow
         // Settings blocks external writes, while commands owned by that window remain available.
         // 设置窗口阻止外部写入，但属于该窗口的命令仍可使用。
@@ -556,13 +590,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if ["palette", "settings", "project", "agents", "nextWorkspace", "previousWorkspace"].contains(id) { return true }
         if id == "close", NSApp.keyWindow === commandPalette?.window { return true }
         if id == "close" {
-            if origin === window { return model.inspectorOwnsFocus || model.selectedID != nil }
+            if origin === window { return model.inspectorOwnsFocus || model.selectedID != nil || model.documents.active(in: model.inspectorContextKey) != nil }
             return origin != nil && (origin === commandPalette?.window || origin === fullSettingsWindow?.window || origin === agentsWindow?.window || origin === sshWindow?.window || contentWindows.values.contains { $0.window === origin } || pythonWindows.values.contains { $0.window === origin } || javaWindows.values.contains { $0.window === origin })
         }
-        if ["fontIncrease", "fontDecrease"].contains(id) { return origin === window || contentWindows.values.contains { $0.window === origin } }
+        if ["fontIncrease", "fontDecrease"].contains(id) {
+            if let content = focusedContent(in: origin) { return content.workbenchHost == nil }
+            return origin === window && model.selectedTerminal != nil && !model.inspectorOwnsFocus
+        }
         if id == "git", contentWindows.values.contains(where: { $0.gitMode && $0.window === origin }) { return true }
         if id == "github", contentWindows.values.contains(where: { $0.workbenchHost?.kind == "github" && $0.window === origin }) { return true }
         guard origin === window else { return false }
+        if id == "terminalSearch", model.documents.active(in: model.inspectorContextKey) != nil { return false }
         if ["terminal", "chat", "toggleSidebar", "toggleInspector"].contains(id) { return true }
         if ["quick", "git", "github", "files", "search"].contains(id) { return model.workspace["selectedProject"].string != nil }
         if id == "swapPanes" { return model.inspectorVisible }
@@ -594,7 +632,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case "swapPanes": Task { await model.mutate("settings.patch", ["patch": .object(["inspectorPosition": .string(model.settings["inspectorPosition"].string == "left" ? "right" : "left")])]) }
         case "zoom": model.paneZoomed.toggle()
         case "git": if let current = contentWindows.values.first(where: { $0.gitMode && $0.window === NSApp.keyWindow }) { current.window?.orderOut(nil) } else { openGit() }
-        case "github": if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "github" && $0.window === NSApp.keyWindow }) { current.window?.orderOut(nil) } else { openGitHub() }
+        case "github": if model.inspectorVisible && model.inspector.mode == .github { model.hideInspector() } else { openGitHub() }
         case "agents": openAgents()
         case "toggleSidebar": toggleSidebar()
         case "splitRight": splitRight()
@@ -608,8 +646,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString("uterm://session/" + id, forType: .string)
             }
         case "terminalSearch":
-            let item = NSMenuItem(); item.tag = Int(NSFindPanelAction.showFindPanel.rawValue)
-            model.selectedTerminal?.view.performFindPanelAction(item)
+            if let session = model.selectedTerminal {
+                session.search.open()
+            }
         case "next", "previous":
             let selected = model.sessionEntries.first { $0.sessionID == model.selectedID }
             let entries = model.sessionEntries.filter { $0.rosterId == selected?.rosterId && $0.session["worktreeId"] == selected?.session["worktreeId"] }
@@ -679,6 +718,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             do { _ = try await makeDatabaseWindow() }
             catch { model.error = error.localizedDescription }
         }
+    }
+    private func makeQuickSSHWindow() async throws -> ContentWindow {
+        guard !preparingQuit, !mutatingRepository, !model.busy, !model.settingsPresented, !model.editorRecoveryPresented,
+              !model.worktreeDeletionPresented, !model.gitFavoritesRecoveryPresented, model.githubPRContent == nil, model.nameDraft == nil,
+              let bridge = model.bridge, let parent = window else { throw BridgeFailure(code: "SSH_OPERATION_BUSY", message: localized("Finish the current operation first.", "请先完成当前操作。")) }
+        if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "ssh-quick" }) { current.reveal(); return current }
+        let workspaceID = model.groupID
+        let host = QuickSSHHost(workspaceID: workspaceID)
+        host.connect = { [weak self] connection in
+            guard let self, !self.preparingQuit else { throw BridgeFailure(code: "CLOSED", message: "Quick SSH is closed") }
+            return try await self.model.createQuickSSH(connection, workspaceID: workspaceID)
+        }
+        let content = try ContentWindow(bridge: bridge, directory: WorkspaceModel.dataRoot().deletingLastPathComponent(), path: "", workbenchHost: host)
+        model.quickSSHHeight = 240
+        host.layoutChanged = { [weak self, weak content] height in
+            guard let self, let content, self.model.quickSSHContent === content else { return }
+            if abs(self.model.quickSSHHeight - height) >= 0.5 { self.model.quickSSHHeight = height }
+        }
+        host.close = { [weak content] in content?.forceClose() }
+        content.window?.appearance = window?.appearance
+        let previous = parent.firstResponder as? NSView
+        parent.makeFirstResponder(nil)
+        content.window?.contentView = NSView()
+        content.window?.orderOut(nil)
+        content.presentEmbedded = { [weak parent, weak content] in
+            guard let parent, let content else { return }
+            parent.makeKeyAndOrderFront(nil)
+            DispatchQueue.main.async { [weak parent, weak content] in
+                guard let parent, let content, content.webView.window === parent else { return }
+                parent.makeFirstResponder(content.webView)
+            }
+        }
+        let id = UUID(); contentWindows[id] = content; model.quickSSHPresented = true
+        model.quickSSHContent = content
+        content.closed = { [weak self, weak parent, weak previous] in
+            guard let self else { return }
+            self.contentWindows.removeValue(forKey: id); self.model.quickSSHContent = nil; self.model.quickSSHPresented = false
+            DispatchQueue.main.async { [weak self, weak parent, weak previous] in
+                guard let self, let parent, parent.isKeyWindow else { return }
+                if let previous, previous.window === parent, parent.makeFirstResponder(previous) { return }
+                if let active = self.model.documents.active(in: self.model.inspectorContextKey)?.content, active.webView.window === parent { parent.makeFirstResponder(active.webView) }
+                else if let terminal = self.model.selectedTerminal, terminal.view.window === parent { parent.makeFirstResponder(terminal.view) }
+            }
+        }
+        content.reveal(); return content
     }
     private func makeDatabaseWindow() async throws -> ContentWindow {
         guard !preparingQuit, let bridge = model.sshBridge else { throw BridgeFailure(code: "DB_CLOSED", message: localized("Database client is unavailable.", "数据库客户端不可用。")) }
@@ -764,7 +848,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let ssh = SSHModel(workspace: model, bridge: bridge)
         let controller = SSHWindow(model: ssh)
-        controller.didClose = { [weak self] in self?.sshWindow = nil }
+        controller.didClose = { [weak self] in
+            self?.sshWindow = nil
+            Task { await self?.model.cleanupQuickSSH() }
+        }
         controller.window?.appearance = window?.appearance
         sshWindow = controller
         controller.showWindow(nil); controller.window?.makeKeyAndOrderFront(nil)
@@ -786,6 +873,122 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             await run.start()
             return controller
         } catch { await worker.close(); throw error }
+    }
+    private func validateFileTools(directory: URL, scope: String, bridge: CoreBridge) async throws {
+        for attempt in 0..<3 {
+            guard model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Refresh the file tools.", "项目选择已变化，请刷新文件面板。")) }
+            do {
+                let snapshot = try await bridge.snapshot()
+                let saved = snapshot.document.workspace
+                let actualScope = [saved["selectedWorkspace"].string ?? "local", saved["selectedProject"].string ?? "", saved["selectedWorktree"].string ?? ""].joined(separator: "\u{0}")
+                guard actualScope == scope else { throw BridgeFailure(code: "ROOT_DENIED", message: "File tools no longer own the selected project") }
+                let context = try await bridge.projectContext(expectedRevision: snapshot.revision)
+                guard let path = context.directory, URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath() == directory.standardizedFileURL.resolvingSymlinksInPath(), model.inspectorContextKey == scope else { throw BridgeFailure(code: "ROOT_DENIED", message: "File tools cannot select another project root") }
+                return
+            } catch let failure as BridgeFailure where attempt < 2 && ["CONFLICT", "WRITER_BUSY"].contains(failure.code) {
+                try await Task.sleep(for: .milliseconds(25 * (attempt + 1)))
+            }
+        }
+    }
+    private func fileToolsSourceRoot(_ source: String, bridge: CoreBridge) async throws -> URL {
+        let state = try await bridge.snapshot()
+        let saved = state.document.workspace
+        var candidates: [String] = []
+        for project in saved["projects"].array {
+            if let directory = project["directory"].string { candidates.append(directory) }
+            for tree in project["worktrees"].array { if let path = tree["path"].string { candidates.append(path) } }
+        }
+        let requested = URL(fileURLWithPath: source).standardizedFileURL.resolvingSymlinksInPath()
+        guard source.hasPrefix("/"), candidates.contains(where: { URL(fileURLWithPath: $0).standardizedFileURL.resolvingSymlinksInPath() == requested }) else { throw BridgeFailure(code: "ROOT_DENIED", message: localized("Copy source must be a saved project or Worktree.", "复制来源必须是已保存的项目或 Worktree。")) }
+        return requested
+    }
+    private func makeFileToolsWindow(directory: URL, scope: String) async throws -> ContentWindow {
+        guard !preparingQuit, let stateBridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+        let root = directory.standardizedFileURL.resolvingSymlinksInPath()
+        try await validateFileTools(directory: root, scope: scope, bridge: stateBridge)
+        if let content = contentWindows.values.first(where: { $0.workbenchHost?.kind == "files" && $0.gitProjectID == scope && $0.directory == root }) { return content }
+        for previous in Array(contentWindows.values) where previous.workbenchHost?.kind == "files" {
+            guard try await previous.prepareForQuit() else { throw BridgeFailure(code: "FILES_BUSY", message: localized("Finish the current file operation first.", "请先完成当前文件操作。")) }
+            previous.forceClose()
+        }
+        let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
+        do {
+            let host = try FilesHost(bridge: worker, directory: root)
+            host.validate = { [weak self] in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                // Serialize canonical reads with UI writes; filesystem work stays on the worker.
+                // 规范数据读取与界面写入串行执行；文件系统工作仍使用工作桥接。
+                try await self.validateFileTools(directory: root, scope: scope, bridge: stateBridge)
+            }
+            host.context = { [weak self, weak model] in
+                let mode = model?.inspector.mode ?? .files
+                let fileMode = mode == .search || mode == .quick ? mode.rawValue : "tree"
+                return .object(["mode": .string(fileMode), "request": .number(Double(model?.inspector.request ?? 0)), "clipboard": self?.fileClipboard ?? .null])
+            }
+            host.copySource = { [weak self] value in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                self.fileClipboard = value
+            }
+            host.changeMode = { [weak model] mode in
+                let modes: [String: NativeInspectorModel.Mode] = ["tree": .files, "quick": .quick, "search": .search]
+                guard let model, let value = modes[mode] else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Unknown file mode") }
+                model.showInspector(value)
+            }
+            host.toolbar = { [weak model] kind in
+                guard let model else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                switch kind {
+                case "files": model.showInspector(.files)
+                case "git": model.openGitRequested?()
+                case "github": model.openGitHubRequested?()
+                case "directory": NSWorkspace.shared.activateFileViewerSelecting([root])
+                default: throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Unknown file toolbar action")
+                }
+            }
+            host.openFile = { [weak model] path, line in
+                guard let open = model?.openInspectorFile else { throw BridgeFailure(code: "CLOSED", message: "File editor is closed") }
+                try await open(root.path, path, line)
+            }
+            host.sourceRoot = { [weak self] source in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                return try await self.fileToolsSourceRoot(source, bridge: stateBridge)
+            }
+            host.mutate = { [weak self] method, params, bridge in
+                guard let self else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+                return try await self.performFileMutation(method: method, params: params, bridge: bridge, directory: root, scope: scope)
+            }
+            let content = try ContentWindow(bridge: worker, directory: root, path: "Files", gitProjectID: scope, stateBridge: stateBridge, ownsBridge: true, workbenchHost: host)
+            content.window?.contentView = NSView(); content.window?.orderOut(nil)
+            content.presentEmbedded = { [weak model] in if model?.inspectorContextKey == scope { model?.showInspector(.files) } }
+            let id = UUID(); contentWindows[id] = content
+            content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
+            host.settingsChanged(model.settings)
+            return content
+        } catch { await worker.close(); throw error }
+    }
+    private func performFileMutation(method: String, params: JSONValue, bridge: CoreBridge, directory: URL, scope: String) async throws -> JSONValue {
+        guard !preparingQuit, !mutatingRepository, model.beginRepositoryMutation() else { throw BridgeFailure(code: "FILES_BUSY", message: localized("Finish the current file operation first.", "请先完成当前文件操作。")) }
+        mutatingRepository = true
+        let contents = contentWindows.values.filter { $0.editable }
+        var started = false
+        defer {
+            for content in contents {
+                content.resumeAfterQuit()
+                if started { content.refreshAfterRepositoryMutation() }
+            }
+            mutatingRepository = false; model.finishRepositoryMutation()
+        }
+        for content in contents {
+            guard try await content.prepareForQuit() else { throw BridgeFailure(code: "CONTENT_CHANGED", message: localized("Save or resolve open file changes before the file operation.", "执行文件操作前请保存或处理已打开文件的修改。")) }
+        }
+        try Task.checkCancellation()
+        guard let stateBridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: "File tools are closed") }
+        try await validateFileTools(directory: directory, scope: scope, bridge: stateBridge)
+        if method == "files.copy", let source = params["source_directory"].string { _ = try await fileToolsSourceRoot(source, bridge: stateBridge) }
+        guard contents.allSatisfy({ $0.isPreparedForQuit }) else { throw BridgeFailure(code: "CONTENT_CHANGED", message: "A file changed during mutation preparation") }
+        started = true
+        // Keep dispatched writes alive through document cancellation until the actual result.
+        // 文档取消后，已分发的写入仍保持保护，直至取得实际结果。
+        return try await Task.detached { try await bridge.call(method, params: params) }.value
     }
     private func selectedProjectDirectory() async throws -> URL {
         guard let bridge = model.bridge, let state = model.state else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
@@ -815,11 +1018,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
         }
     }
-    private func makeEditableContentWindow(directory: URL, path: String) async throws -> ContentWindow {
+    private func makeEditableContentWindow(directory: URL, path: String, embedded: Bool = true) async throws -> ContentWindow {
         guard !changingFileTabs else { throw BridgeFailure(code: "CONTENT_BUSY", message: localized("Finish the current file operation first.", "请先完成当前文件操作。")) }
         changingFileTabs = true; defer { changingFileTabs = false; if pendingFileTabTrim { Task { await self.trimFileTabs() } } }
         guard !mutatingRepository, !model.worktreeDeletionPresented, !model.gitFavoritesRecoveryPresented else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current repository operation first.", "请先完成当前仓库操作。")) }
         if let content = existingContent(directory: directory, path: path, editable: true) {
+            if embedded { model.documents.retarget(content, scope: model.inspectorContextKey) }
             content.reveal()
             return content
         }
@@ -846,7 +1050,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         // Construct successfully before removing prepared tabs, so a failed open retains existing editors.
         // 成功创建后才移除已确认的标签，打开失败时保留现有编辑器。
         let content: ContentWindow
-        do { content = try makeContentWindow(directory: directory, path: path, editable: true) }
+        do { content = try makeContentWindow(directory: directory, path: path, editable: true, embedded: embedded) }
         catch { excess.forEach { $0.resumeAfterQuit() }; throw error }
         excess.forEach { $0.forceClose() }
         return content
@@ -870,7 +1074,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             excess.forEach { $0.forceClose() }
         } catch { excess.forEach { $0.resumeAfterQuit() }; model.error = error.localizedDescription }
     }
-    private func makeContentWindow(directory: URL, path: String, editable: Bool = false) throws -> ContentWindow {
+    private func makeContentWindow(directory: URL, path: String, editable: Bool = false, embedded: Bool = false) throws -> ContentWindow {
         guard !preparingQuit else { throw BridgeFailure(code: "QUIT_BUSY", message: localized("The client is preparing to quit.", "客户端正在准备退出。")) }
         guard let bridge = model.bridge else { throw BridgeFailure(code: "CLOSED", message: localized("Client is closed.", "客户端已关闭。")) }
         if let content = existingContent(directory: directory, path: path, editable: editable) {
@@ -879,7 +1083,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let content = try ContentWindow(bridge: bridge, directory: directory, path: path, editable: editable)
         content.window?.appearance = window?.appearance
-        if editable, let next = content.window {
+        if editable, !embedded, let next = content.window {
             let siblings = contentWindows.values.filter { $0.editable && !$0.gitMode && $0.directory == content.directory }
             if let anchor = NSApp.orderedWindows.first(where: { window in siblings.contains { $0.window === window } }) {
                 // Append after the group's last tab; dictionary iteration must not choose the tab order.
@@ -890,7 +1094,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let id = UUID()
         contentWindows[id] = content
         fileWindowOrder.append(id)
-        content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id); self?.fileWindowOrder.removeAll { $0 == id } }
+        content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id); self?.fileWindowOrder.removeAll { $0 == id }; self?.model.documents.remove(id) }
+        if embedded, let window { model.documents.attach(content, id: id, scope: model.inspectorContextKey, parent: window) }
         content.reveal()
         return content
     }
@@ -900,21 +1105,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return contentWindows.values.first { !$0.gitMode && $0.workbenchHost == nil && $0.directory == root && $0.documentDirectory == directory.path && $0.path == path && $0.editable == editable }
     }
     private func openGitHub() {
-        Task { @MainActor in
-            do { let directory = try await selectedProjectDirectory(); _ = try await makeGitHubContentWindow(directory: directory) }
-            catch { model.error = error.localizedDescription }
+        model.showInspector(.github)
+    }
+    private func embedGitHubTools(_ content: ContentWindow, scope: String) throws {
+        guard let parent = window, model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+        content.window?.contentView = NSView(); content.window?.orderOut(nil)
+        (content.workbenchHost as? GitHubHost)?.window = parent
+        (content.workbenchHost as? GitHubHost)?.toolbar = { [weak self, weak content] kind in
+            guard let self, let content, self.model.inspectorContextKey == scope else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+            switch kind {
+            case "files": self.model.showInspector(.files)
+            case "git": self.openGit()
+            case "github": self.model.showInspector(.github)
+            case "directory": NSWorkspace.shared.activateFileViewerSelecting([content.directory])
+            default: throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Unknown GitHub toolbar action")
+            }
+        }
+        content.presentEmbedded = { [weak model, weak content] in
+            guard let model, let content, model.inspectorContextKey == scope else { return }
+            model.inspector.presentGitHub(content, scope: scope); model.inspectorVisible = true
         }
     }
-    private func makeGitHubContentWindow(directory: URL) async throws -> ContentWindow {
+    private func makeGitHubContentWindow(directory: URL, present: Bool = true) async throws -> ContentWindow {
         guard !preparingQuit, !mutatingRepository, let bridge = model.bridge, let state = model.state else { throw BridgeFailure(code: "GIT_BUSY", message: localized("Finish the current client operation first.", "请先完成当前客户端操作。")) }
+        let scope = model.inspectorContextKey
         let root = directory.standardizedFileURL.resolvingSymlinksInPath()
         let selected = try await bridge.projectContext(expectedRevision: state.snapshot.revision)
-        guard let projectID = selected.projectId, let path = selected.directory, URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath() == root else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+        guard model.inspectorContextKey == scope, let projectID = selected.projectId, let path = selected.directory, URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath() == root else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
         if let current = contentWindows.values.first(where: { $0.workbenchHost?.kind == "github" && $0.directory == root && $0.gitProjectID == projectID }) {
-            current.workbenchHost?.emit?("github-context-changed", .null); current.reveal(); return current
+            try embedGitHubTools(current, scope: scope)
+            current.workbenchHost?.emit?("github-context-changed", .null)
+            if present { current.reveal() }
+            return current
         }
         let worker = try await CoreBridge.open(root: WorkspaceModel.dataRoot())
         do {
+            guard model.inspectorContextKey == scope, window != nil else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
             let host = GitHubHost(bridge: worker, directory: root.path)
             host.context = { [weak self] in
                 guard let self, self.model.workspace["selectedProject"].string == projectID else { return .object(["canAssociate": .bool(false), "canInsert": .bool(false)]) }
@@ -943,10 +1169,65 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             let content = try ContentWindow(bridge: worker, directory: root, path: "", gitProjectID: projectID, stateBridge: bridge, ownsBridge: true, workbenchHost: host)
             content.window?.appearance = window?.appearance
+            try embedGitHubTools(content, scope: scope)
             let id = UUID(); contentWindows[id] = content
-            content.closed = { [weak self] in self?.contentWindows.removeValue(forKey: id) }
-            content.reveal(); return content
+            host.openPR = { [weak self, weak content] repository in
+                guard let self, let content, !self.preparingQuit, !self.mutatingRepository, self.model.inspector.content === content, self.model.inspectorContextKey == scope, self.model.quickSSHContent == nil else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+                try await self.presentGitHubPR(owner: content, repository: repository)
+            }
+            content.closed = { [weak self, weak host] in
+                guard let self else { return }
+                for child in Array(self.contentWindows.values) where (child.workbenchHost as? GitHubPRHost)?.owner === host { child.forceClose() }
+                self.contentWindows.removeValue(forKey: id)
+            }
+            if present { content.reveal() }
+            return content
         } catch { await worker.close(); throw error }
+    }
+    private func presentGitHubPR(owner: ContentWindow, repository: String) async throws {
+        guard let host = owner.workbenchHost as? GitHubHost, let bridge = model.bridge, let parent = window else { throw BridgeFailure(code: "CLOSED", message: "GitHub workbench is closed") }
+        let scope = model.inspectorContextKey
+        if let cached = contentWindows.values.first(where: { ($0.workbenchHost as? GitHubPRHost)?.owner === host }) {
+            model.githubPRContent = cached; cached.reveal(); return
+        }
+        let context = try await host.execute("github_prepare_pr", params: ["directory": .string(host.directory), "repository": .string(repository)])
+        guard !preparingQuit, !mutatingRepository, model.inspectorContextKey == scope, model.inspector.content === owner else { throw BridgeFailure(code: "CONFLICT", message: localized("Project selection changed. Open GitHub again.", "项目选择已变化，请重新打开 GitHub。")) }
+        let form = GitHubPRHost(owner: host, repository: repository, context: context)
+        let content = try ContentWindow(bridge: bridge, directory: owner.directory, path: "", workbenchHost: form)
+        content.window?.appearance = parent.appearance
+        content.window?.contentView = NSView(); content.window?.orderOut(nil)
+        let id = UUID(); contentWindows[id] = content; host.formActive = true
+        model.githubPRHeight = 520; model.githubPRContent = content
+        form.layoutChanged = { [weak self, weak content] height in
+            guard let self, let content, self.model.githubPRContent === content else { return }
+            if abs(self.model.githubPRHeight - height) >= 0.5 { self.model.githubPRHeight = height }
+        }
+        func restoreToolsFocus() {
+            DispatchQueue.main.async { [weak parent, weak owner] in
+                guard let parent, let owner, parent.isKeyWindow, owner.webView.window === parent else { return }
+                parent.makeFirstResponder(owner.webView)
+            }
+        }
+        form.dismiss = { [weak self, weak content] in
+            guard let self, self.model.githubPRContent === content else { return }
+            self.model.githubPRContent = nil; restoreToolsFocus()
+        }
+        form.close = { [weak content] in content?.forceClose() }
+        content.closed = { [weak self, weak content, weak host] in
+            guard let self else { return }
+            host?.formActive = false
+            if self.model.githubPRContent === content { self.model.githubPRContent = nil }
+            self.contentWindows.removeValue(forKey: id); restoreToolsFocus()
+        }
+        content.presentEmbedded = { [weak parent, weak content] in
+            guard let parent else { return }
+            parent.makeKeyAndOrderFront(nil)
+            DispatchQueue.main.async { [weak parent, weak content] in
+                guard let parent, let content, content.webView.window === parent else { return }
+                parent.makeFirstResponder(content.webView)
+            }
+        }
+        content.reveal()
     }
     private func makeGitContentWindow(directory: URL) async throws -> ContentWindow {
         guard !preparingQuit, !mutatingRepository, let stateBridge = model.bridge else {
@@ -1109,6 +1390,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func newTerminal() { Task { await model.newTerminal() } }
     @objc private func newAgent() { Task { await model.newDefaultAgent() } }
     @objc private func closeSession() {
+        if let quick = model.workspaceModalContent { quick.window?.performClose(nil); return }
         if commandPalette?.window === NSApp.keyWindow { commandPalette?.dismiss(); return }
         if let fullSettingsWindow, fullSettingsWindow.window === NSApp.keyWindow { fullSettingsWindow.window.performClose(nil); return }
         if let agentsWindow, agentsWindow.window === NSApp.keyWindow { agentsWindow.window.performClose(nil); return }
@@ -1116,25 +1398,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if let run = javaWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let run = pythonWindows.values.first(where: { $0.window === NSApp.keyWindow }) { run.window?.performClose(nil); return }
         if let content = contentWindows.values.first(where: { $0.window === NSApp.keyWindow }) { content.window?.performClose(nil) }
+        else if NSApp.keyWindow === window, !model.inspectorOwnsFocus, let document = model.documents.active(in: model.inspectorContextKey) { model.documents.close(document.id) }
         else if NSApp.keyWindow === window && model.inspectorOwnsFocus { model.hideInspector() }
         else { Task { await model.closeSession() } }
     }
     @objc private func splitRight() { Task { await model.split("horizontal") } }
     @objc private func splitDown() { Task { await model.split("vertical") } }
-    @objc private func increaseFont() { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(1)]) } }
-    @objc private func decreaseFont() { Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(-1)]) } }
+    private func focusedContent(in origin: NSWindow?) -> ContentWindow? {
+        guard let origin else { return nil }
+        if origin === window, !model.inspectorOwnsFocus { return model.documents.active(in: model.inspectorContextKey)?.content }
+        return contentWindows.values.first { $0.window === origin }
+    }
+    private func adjustFocusedFont(_ delta: Int) {
+        if let content = focusedContent(in: NSApp.keyWindow) { content.adjustContentFont(delta); return }
+        Task { await model.mutate("settings.font.adjust", ["key": .string("fontSize"), "delta": .number(Double(delta))]) }
+    }
+    @objc private func increaseFont() { adjustFocusedFont(1) }
+    @objc private func decreaseFont() { adjustFocusedFont(-1) }
 
     func windowDidUpdate(_ notification: Notification) {
         guard let responder = window?.firstResponder else { return }
         DispatchQueue.main.async { [weak self, weak responder] in
             guard let self, let responder, self.window?.firstResponder === responder,
-                  self.model.ready, !self.model.busy, !self.model.settingsPresented, !self.model.editorRecoveryPresented, self.model.nameDraft == nil,
+                  self.model.ready, !self.model.busy, !self.model.settingsPresented, !self.model.workspaceModalPresented, !self.model.editorRecoveryPresented, self.model.nameDraft == nil,
                   let session = self.model.terminals.values.first(where: { $0.view === responder }),
                   session.id != self.model.selectedID else { return }
             Task { await self.model.selectSession(session.id, focus: false) }
         }
     }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { if !model.worktreeDeletionPresented && !model.gitFavoritesRecoveryPresented { sender.orderOut(nil) }; return false }
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if let quick = model.workspaceModalContent { quick.window?.performClose(nil); return false }
+        if !model.worktreeDeletionPresented && !model.gitFavoritesRecoveryPresented { sender.orderOut(nil) }
+        return false
+    }
     func windowDidEnterFullScreen(_ notification: Notification) { model.fullScreen = true }
     func windowDidExitFullScreen(_ notification: Notification) { model.fullScreen = false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { window?.makeKeyAndOrderFront(nil); return true }
@@ -1185,7 +1481,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 for content in contents {
                     guard try await content.prepareForQuit() else {
                         let message: String
-                        if content.workbenchHost?.kind == "redis" { message = localized("Finish Redis operations and resolve drafts before quitting.", "退出前请完成 Redis 操作并处理草稿。") }
+                        if content.workbenchHost?.kind == "ssh-quick" { message = localized("Wait for the Quick SSH operation to finish.", "请等待快速 SSH 操作完成。") }
+                        else if content.workbenchHost?.kind == "redis" { message = localized("Finish Redis operations and resolve drafts before quitting.", "退出前请完成 Redis 操作并处理草稿。") }
                         else if content.workbenchHost != nil { message = localized("Finish database operations and commit or roll back transactions before quitting.", "退出前请完成数据库操作，并提交或回滚事务。") }
                         else { message = localized("Save or resolve file changes before quitting.", "退出前请保存或处理文件修改。") }
                         throw BridgeFailure(code: "QUIT_REFUSED", message: message)

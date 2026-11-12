@@ -56,21 +56,32 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     private let stateBridge: CoreBridge
     private let ownsBridge: Bool
     private var gitMutationInProgress = false
+    private var pdfMutationInProgress = false
     private var documentID = UUID().uuidString
     private var tasks: [String: Task<Void, Never>] = [:]
     private var permitsClose = false
     private let quitGate = ContentQuitGate()
     private var quitToken: String?
     private var preparedDocument: String?
-    var isPreparedForQuit: Bool { permitsClose || (workbenchHost?.prepared ?? (preparedDocument == documentID && (gitMode ? !gitMutationInProgress : quitToken != nil))) }
+    var isPreparedForQuit: Bool { !pdfMutationInProgress && (permitsClose || (workbenchHost?.prepared ?? (preparedDocument == documentID && (gitMode ? !gitMutationInProgress : quitToken != nil)))) }
     private(set) var navigationError = ""
     private var focusLine = 0
+    private var lastContentSettings: JSONValue?
+    func settingsChanged(_ settings: JSONValue) {
+        guard workbenchHost == nil, settings != lastContentSettings else { return }
+        lastContentSettings = settings
+        deliver("content-settings-changed", payload: .null)
+    }
     func focusFileLine(_ line: Int) {
         guard editable, !gitMode, workbenchHost == nil, line > 0 else { return }
         focusLine = line
         deliver("file-focus-line", payload: .number(Double(line)))
     }
     var closed: (() -> Void)?
+    var presentEmbedded: (() -> Void)?
+    var editorStateChanged: (() -> Void)?
+    private(set) var editorDirty = false
+    var presentationWindow: NSWindow? { presentEmbedded == nil ? window : webView.window }
     var mutateGit: ((String, JSONValue, CoreBridge) async throws -> JSONValue)?
     var openRepositoryFile: ((String) async throws -> Void)?
     var recoverGitFavorites: (() throws -> Void)?
@@ -116,10 +127,16 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     required init?(coder: NSCoder) { return nil }
 
     func reveal() {
+        if let presentEmbedded { presentEmbedded(); return }
         guard let window else { return }
         window.tabGroup?.selectedWindow = window
         showWindow(nil)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    func adjustContentFont(_ delta: Int) {
+        guard [-1, 1].contains(delta), workbenchHost == nil else { return }
+        deliver("content-font-adjust", payload: .number(Double(delta)))
     }
 
     private func prepareDocument() {
@@ -187,6 +204,13 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
         if let workbenchHost, !["content_context", "content_copy_text", "open_external", "content_font_adjust", "content_settings_patch"].contains(request.method ?? "") {
             return try await workbenchHost.execute(request.method ?? "", params: params)
         }
+        if let method = request.method, ["pdf_marks_read", "pdf_marks_write"].contains(method) {
+            guard !gitMode, workbenchHost == nil, params["directory"] == .string(documentDirectory), params["path"] == .string(path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "PDF highlights belong to this document only") }
+            if method == "pdf_marks_read" { return try await stateBridge.call("pdf.marks.read", params: .object(params)) }
+            guard !permitsClose, quitToken == nil, !pdfMutationInProgress else { throw BridgeFailure(code: "QUIT_BUSY", message: localized("Wait for the PDF highlight operation.", "请等待 PDF 高亮操作完成。")) }
+            pdfMutationInProgress = true; defer { pdfMutationInProgress = false }
+            return try await stateBridge.call("pdf.marks.write", params: .object(params))
+        }
         if request.method == "git_favorites_recovery_open" {
             guard gitMode, let recoverGitFavorites else { throw BridgeFailure(code: "METHOD_DENIED", message: "This window cannot open favorite recovery") }
             guard params.count == 1, params["directory"] == .string(directory.path) else { throw BridgeFailure(code: "ROOT_DENIED", message: "Favorite recovery cannot select another repository") }
@@ -209,12 +233,13 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
                 defer { gitMutationInProgress = false; window?.standardWindowButton(.closeButton)?.isEnabled = true }
                 return try await mutateGit(method, .object(params), bridge)
             }
-            return try await bridge.call(method, params: .object(params))
+            let result = try await bridge.call(method, params: .object(params))
+            return ["git.snapshot", "git.fileStatus"].contains(method) ? try ContentFileRoot.normalizingGitRoot(result) : result
         }
         switch request.method {
         case "content_context":
             let state = try await stateBridge.snapshot()
-            return .object(["directory": .string(documentDirectory), "path": .string(path), "line": .number(Double(focusLine)), "settings": state.document.settings, "editable": .bool(editable), "kind": .string(workbenchHost?.kind ?? (gitMode ? "git" : "file"))])
+            return .object(["directory": .string(documentDirectory), "path": .string(path), "line": .number(Double(focusLine)), "settings": state.document.settings, "editable": .bool(editable), "embedded": .bool(presentEmbedded != nil), "kind": .string(workbenchHost?.kind ?? (gitMode ? "git" : "file"))])
         case "content_copy_text":
             guard params.count == 1, let text = params["text"]?.string else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing clipboard text") }
             NSPasteboard.general.clearContents()
@@ -258,6 +283,12 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             return try await bridge.call("files.save", params: .object(scoped))
         case "file_copy", "file_mutate":
             throw BridgeFailure(code: "READ_ONLY", message: localized("This window opens files read-only.", "此窗口以只读方式打开文件。"))
+        case "content_editor_state":
+            guard editable, !gitMode, workbenchHost == nil, params.count == 1, let value = params["dirty"], case .bool(let dirty) = value else {
+                throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Invalid editor state")
+            }
+            if editorDirty != dirty { editorDirty = dirty; editorStateChanged?() }
+            return .null
         case "editor_guard":
             guard params["active"] == .bool(false) || (editable && params["active"] == .bool(true)) else { throw BridgeFailure(code: "READ_ONLY", message: "Native preview cannot enable editing") }
             return .null
@@ -287,6 +318,15 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if permitsClose { return true }
+        if pdfMutationInProgress { return false }
+        if let quick = workbenchHost as? QuickSSHHost {
+            if !quick.pending { forceClose() }
+            return false
+        }
+        if let form = workbenchHost as? GitHubPRHost {
+            if !form.pending && !form.prepared { form.dismiss?() }
+            return false
+        }
         if workbenchHost != nil { sender.orderOut(nil); return false }
         if gitMode {
             if !gitMutationInProgress { forceClose() }
@@ -332,6 +372,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
     }
     func prepareForQuit(timeout: Duration = .seconds(20)) async throws -> Bool {
         if permitsClose { return true }
+        if pdfMutationInProgress { return false }
         if let workbenchHost { return try await workbenchHost.prepareForQuit() }
         if gitMode {
             if gitMutationInProgress { return false }
@@ -339,6 +380,7 @@ final class ContentWindow: NSWindowController, NSWindowDelegate, WKNavigationDel
             return true
         }
         guard quitToken == nil else { throw BridgeFailure(code: "QUIT_BUSY", message: "Content is already preparing to quit") }
+        if editorDirty { presentEmbedded?() }
         let sourceDocument = documentID
         do {
             let ready = try await quitGate.prepare(timeout: timeout) { token in

@@ -12,7 +12,7 @@ enum InspectorSmoke {
         while !queue.isEmpty { let next = queue.removeFirst(); if next.identifier?.rawValue == id { return next }; queue += next.subviews }
         return nil
     }
-    static func run(model: WorkspaceModel, window: NSWindow, lookup: @escaping (URL, String) -> ContentWindow?, report: inout [String: Any]) async throws {
+    static func run(model: WorkspaceModel, window: NSWindow, lookup: @escaping (URL, String) -> ContentWindow?, quickLookup: @escaping () -> ContentWindow?, report: inout [String: Any]) async throws {
         guard model.ready, let bridge = model.bridge, let reportPath = WorkspaceModel.argument("--inspector-smoke-report") else { throw BridgeFailure(code: "INSPECTOR_CONTEXT", message: "Missing isolated inspector context") }
         let root = try WorkspaceModel.dataRoot().appendingPathComponent("inspector-project")
         let nested = root.appendingPathComponent("nested")
@@ -34,41 +34,46 @@ enum InspectorSmoke {
         try await TerminalSmoke.wait("Focus main workspace") { window.isKeyWindow }
         try command("files")
         let tools = model.inspector
-        try await TerminalSmoke.wait("Render shared file list") { model.inspectorVisible && !tools.busy && tools.rows.contains { $0["path"].string == "nested" } }
-        guard !tools.rows.contains(where: { $0["path"].string == ".hidden.txt" }), let escape = tools.rows.firstIndex(where: { $0["path"].string == "escape.txt" && $0["symlink"].bool == true }) else { throw BridgeFailure(code: "INSPECTOR_SCOPE", message: "Hidden filter or symlink marker failed") }
-        await tools.activate(escape)
-        guard !tools.error.isEmpty, lookup(root, "escape.txt") == nil else { throw BridgeFailure(code: "INSPECTOR_SCOPE", message: "Outside-root link opened in an editor") }
-        tools.hidden = true; try await Task.sleep(for: .milliseconds(50)); await tools.reload()
-        guard tools.rows.contains(where: { $0["path"].string == ".hidden.txt" }) else { throw BridgeFailure(code: "INSPECTOR_HIDDEN", message: "Hidden filter failed") }
-        tools.hidden = false; try await Task.sleep(for: .milliseconds(50)); await tools.reload()
-        guard let row = tools.rows.firstIndex(where: { $0["path"].string == "nested" }) else { throw BridgeFailure(code: "INSPECTOR_FOLDER", message: "Nested folder missing") }
-        await tools.activate(row)
-        guard tools.path == "nested", tools.rows.count == 1 else { throw BridgeFailure(code: "INSPECTOR_FOLDER", message: "Folder navigation failed") }
-        await tools.up()
-        guard tools.path.isEmpty else { throw BridgeFailure(code: "INSPECTOR_UP", message: "Up did not return to root") }
+        try await TerminalSmoke.wait("Mount shared file tools in the actual inspector") { model.inspectorVisible && tools.content?.webView.window === window }
+        guard let files = tools.content else { throw BridgeFailure(code: "INSPECTOR_FILES", message: "Shared file tools are missing") }
+        defer {
+            report["toolsAttachmentDiagnostics"] = ["keyWindowIsMain": window.isKeyWindow, "filesWindowIsMain": files.webView.window === window, "currentDocumentRetained": tools.content === files, "mode": tools.mode.rawValue, "hierarchy": files.webView.superview.map { String(describing: $0) } ?? "detached"]
+        }
+        try await ContentSmoke.wait(files, "document.querySelector('.file-row[data-path=\"nested\"]') !== null && document.querySelector('.file-row[data-path=\".hidden.txt\"]') !== null")
+        guard try await ContentSmoke.request(files, method: "content_open_file", params: ["path": "escape.txt", "line": 0]) == "FILE_ERROR", lookup(root, "escape.txt") == nil else { throw BridgeFailure(code: "INSPECTOR_SCOPE", message: "Outside-root link opened in an editor") }
+        guard try await EditorSmoke.evaluate(files, script: "document.querySelector('.file-row[data-path=\"nested\"]').click();return true;", arguments: [:]) else { throw BridgeFailure(code: "INSPECTOR_FOLDER", message: "Folder control did not activate") }
+        try await ContentSmoke.wait(files, "document.querySelector('.file-row[data-path=\"nested/notes-中文.txt\"]') !== null && document.querySelector('.file-row[data-path=\"nested\"]').getAttribute('aria-expanded') === 'true'")
+        _ = try await files.webView.evaluateJavaScript("document.querySelector('.file-row[data-path=\"nested\"]').click()")
+        try await ContentSmoke.wait(files, "document.querySelector('.file-row[data-path=\"nested/notes-中文.txt\"]') === null")
+        let wrongRoot = try await ContentSmoke.request(files, method: "file_mutate", params: ["directory": root.deletingLastPathComponent().path, "path": "", "action": "file", "name": "must-not-exist.txt"])
+        let unknown = try await ContentSmoke.request(files, method: "host.close", params: [:])
+        guard wrongRoot == "ROOT_DENIED", unknown != "SUCCESS", !FileManager.default.fileExists(atPath: root.deletingLastPathComponent().appendingPathComponent("must-not-exist.txt").path) else { throw BridgeFailure(code: "INSPECTOR_SCOPE", message: "File tool root or method boundary failed") }
         report["nativeFilesHiddenNavigationAndSymlinkBoundary"] = true
+        report["sharedFilesRootAndMethodBoundaries"] = true
+        try await FileToolsSmoke.run(files, root: root, report: &report)
         var captures: [String] = []
         func capture(_ name: String) async throws { try await TerminalSmoke.capture(window: window, path: URL(fileURLWithPath: reportPath).deletingLastPathComponent().appendingPathComponent(name)) }
-        try await capture("native-inspector-files-dark-en.png"); captures.append("native-inspector-files-dark-en.png")
+        try await capture("native-inspector-files-dark-en.png"); captures.append("native-inspector-files-dark-en.png"); report["captures"] = captures
         try command("search")
-        try await Task.sleep(for: .milliseconds(150))
-        tools.query = "MATCH_中文"; await tools.reload()
-        guard tools.rows.count == 1, tools.rows[0]["path"].string == "nested/notes-中文.txt", tools.rows[0]["line"].number == 2 else { throw BridgeFailure(code: "INSPECTOR_SEARCH", message: "Shared content search did not return the Unicode line") }
-        try await TerminalSmoke.wait("Focus the native project search") { model.inspectorOwnsFocus }
+        try await ContentSmoke.wait(files, "document.querySelector('.file-query') !== null")
+        func query(_ text: String) async throws {
+            window.makeKeyAndOrderFront(nil)
+            guard window.makeFirstResponder(files.webView), try await EditorSmoke.evaluate(files, script: """
+                const field=document.querySelector('.file-query');if(!field) return false;
+                field.focus();field.select();return document.execCommand('insertText',false,text);
+                """, arguments: ["text": text]) else { throw BridgeFailure(code: "INSPECTOR_QUERY", message: "Shared query did not accept actual WebKit input") }
+        }
+        try await query("MATCH_中文")
+        try await ContentSmoke.wait(files, "document.querySelectorAll('.file-hit').length === 1 && document.querySelector('.file-hit').textContent.includes('nested/notes-中文.txt:2')")
+        try await TerminalSmoke.wait("Focus the actual project search") { model.inspectorOwnsFocus }
         let queryResponder = window.firstResponder, queryFrames = first.qaRenderedFrames
         first.enqueue(Data("printf 'F_%s\\n' OK\r".utf8))
         try await TerminalSmoke.wait("Render background PTY output while project search has focus") { first.qaRenderedFrames > queryFrames && first.text.contains("F_OK") }
-        guard window.firstResponder === queryResponder, tools.query == "MATCH_中文", !tools.busy else { throw BridgeFailure(code: "INSPECTOR_QUERY_FOCUS", message: "Background PTY output restarted project search or stole keyboard focus") }
+        guard window.firstResponder === queryResponder else { throw BridgeFailure(code: "INSPECTOR_QUERY_FOCUS", message: "Background PTY output stole project-search focus") }
+        try await ContentSmoke.wait(files, "document.activeElement === document.querySelector('.file-query') && document.querySelector('.file-query').value === 'MATCH_中文'")
         report["nativeInspectorQueryFocusSurvivesPTYOutput"] = true
-        try await TerminalSmoke.wait("Create native search result table") { view(window, id: "native-inspector-rows") is NSTableView }
-        guard let table = view(window, id: "native-inspector-rows") as? NSTableView else { throw BridgeFailure(code: "INSPECTOR_TABLE", message: "No native table") }
-        table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
-        guard window.makeFirstResponder(table), model.inspectorOwnsFocus,
-              let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil, characters: "\r", charactersIgnoringModifiers: "\r", isARepeat: false, keyCode: 36) else { throw BridgeFailure(code: "INSPECTOR_FOCUS", message: "Result table did not own keyboard focus") }
-        NSApp.sendEvent(event)
-        report["searchReturnBefore"] = ["nativeRow": table.selectedRow, "modelRow": tools.selected, "busy": tools.busy] as [String: Any]
-        do { try await TerminalSmoke.wait("Open search result through Return") { lookup(root, "nested/notes-中文.txt") != nil } }
-        catch { report["searchReturnAfter"] = ["nativeRow": table.selectedRow, "modelRow": tools.selected, "busy": tools.busy, "error": tools.error] as [String: Any]; throw error }
+        try TerminalSmoke.postKey(window: window, code: 36, characters: "\r")
+        try await TerminalSmoke.wait("Open the shared search result through actual Return") { lookup(root, "nested/notes-中文.txt") != nil }
         guard let content = lookup(root, "nested/notes-中文.txt") else { throw BridgeFailure(code: "INSPECTOR_OPEN", message: "Search result did not open") }
         try await ContentSmoke.wait(content, "document.querySelector('.editor-status')?.textContent.includes('Line 2') === true")
         report["nativeSearchReturnOpenedExactLine"] = true
@@ -84,13 +89,15 @@ enum InspectorSmoke {
         try await TerminalSmoke.wait("Close clean search result editor") { content.window?.isVisible == false }
         window.makeKeyAndOrderFront(nil)
         try await TerminalSmoke.wait("Return to project search") { window.isKeyWindow }
-        try await capture("native-inspector-search-dark-en.png"); captures.append("native-inspector-search-dark-en.png")
-        let cancelled = Task { @MainActor in await tools.reload() }; cancelled.cancel(); await cancelled.value
-        tools.query = "NO_SUCH_MATCH"; await tools.reload()
-        guard tools.rows.isEmpty, !tools.busy else { throw BridgeFailure(code: "INSPECTOR_CANCEL", message: "Cancelled search replaced newer results") }
-        try command("quick"); try await Task.sleep(for: .milliseconds(100))
-        tools.query = "notes-中文"; await tools.reload()
-        guard tools.mode == .quick, tools.rows.count == 1 else { throw BridgeFailure(code: "INSPECTOR_QUICK", message: "Filename quick open failed") }
+        try await capture("native-inspector-search-dark-en.png"); captures.append("native-inspector-search-dark-en.png"); report["captures"] = captures
+        try await query("MATCH_中文")
+        try await query("NO_SUCH_MATCH")
+        try await ContentSmoke.wait(files, "document.querySelector('.file-query').value === 'NO_SUCH_MATCH' && document.querySelectorAll('.file-hit').length === 0 && !document.querySelector('.file-results').textContent.includes('Searching')")
+        try command("quick")
+        try await ContentSmoke.wait(files, "document.querySelector('.file-query')?.getAttribute('aria-label') === 'Search file paths'")
+        try await query("notes-中文")
+        try await ContentSmoke.wait(files, "document.querySelectorAll('.file-hit').length === 1 && document.querySelector('.file-hit').title === 'nested/notes-中文.txt'")
+        guard tools.mode == .quick else { throw BridgeFailure(code: "INSPECTOR_QUICK", message: "Shared quick-open tab did not update native command state") }
         report["cancelledSearchAndFilenameQuickOpen"] = true
         await model.split("horizontal")
         try await TerminalSmoke.wait("Start second inspector fixture PTY") { model.terminals.count == 2 && model.selectedTerminal?.generation != nil && model.selectedTerminal?.error.isEmpty == true }
@@ -99,7 +106,7 @@ enum InspectorSmoke {
         let layout = model.state?.layout, ids = Set(model.terminals.keys), firstView = ObjectIdentifier(first.view), secondView = ObjectIdentifier(second.view)
         try command("swapPanes")
         try await TerminalSmoke.wait("Persist left tools preference") { !model.busy && model.settings["inspectorPosition"].string == "left" }
-        try await TerminalSmoke.wait("Reattach native inspector after swapping") { view(window, id: "native-inspector-container") != nil }
+        try await TerminalSmoke.wait("Retain the actual WebKit file tools after swapping") { tools.content === files && files.webView.window === window && files.webView.visibleRect.width > 0 && files.webView.visibleRect.height > 0 }
         try command("zoom")
         try await TerminalSmoke.wait("Zoom selected terminal only") { model.paneZoomed && second.view.window === window && first.view.window == nil }
         let renderedBefore = first.qaRenderedFrames, acknowledgedBefore = first.qaAcknowledgedFrames
@@ -112,28 +119,90 @@ enum InspectorSmoke {
             try await TerminalSmoke.wait("Continue hidden terminal output and acknowledgements while zoomed") { first.text.contains("Z中OK") && first.qaRenderedFrames > renderedBefore && first.qaAcknowledgedFrames > acknowledgedBefore }
         } catch { report["hiddenZoomAfter"] = hiddenDiagnostics(); throw error }
         report["hiddenZoomAfter"] = hiddenDiagnostics()
-        try await capture("native-inspector-zoom-dark-en.png"); captures.append("native-inspector-zoom-dark-en.png")
+        try await capture("native-inspector-zoom-dark-en.png"); captures.append("native-inspector-zoom-dark-en.png"); report["captures"] = captures
         try command("zoom")
         try await TerminalSmoke.wait("Restore original split views") { !model.paneZoomed && first.view.window === window && second.view.window === window }
+        try await TerminalSmoke.wait("Keep the actual file tools attached after restoring split views") { tools.content === files && files.webView.window === window && files.webView.visibleRect.width > 0 && files.webView.visibleRect.height > 0 }
         guard model.state?.layout == layout, Set(model.terminals.keys) == ids, ObjectIdentifier(first.view) == firstView, ObjectIdentifier(second.view) == secondView else { throw BridgeFailure(code: "INSPECTOR_IDENTITY", message: "Swap or zoom replaced a session, view or shared layout") }
         report["paneSwapAndZoomRetainLayoutViewsAndOutput"] = true
-        guard let focusTable = view(window, id: "native-inspector-rows") as? NSTableView, window.makeFirstResponder(focusTable), model.inspectorOwnsFocus else { throw BridgeFailure(code: "INSPECTOR_CLOSE_FOCUS", message: "Tools did not regain focus") }
+        guard window.makeFirstResponder(files.webView) else { throw BridgeFailure(code: "INSPECTOR_CLOSE_FOCUS", message: "Shared tools cannot regain focus") }
+        _ = try await files.webView.evaluateJavaScript("document.querySelector('.file-query')?.focus()")
+        do { try await TerminalSmoke.wait("Return focus to the actual shared tools") { model.inspectorOwnsFocus } }
+        catch {
+            report["toolsFocusDiagnostics"] = ["keyWindowIsMain": window.isKeyWindow, "responder": String(describing: window.firstResponder), "filesWindowIsMain": files.webView.window === window, "currentDocumentRetained": tools.content === files, "mode": tools.mode.rawValue, "hierarchy": files.webView.superview.map { String(describing: $0) } ?? "detached"]
+            throw error
+        }
         try command("close")
-        try await TerminalSmoke.wait("Close tools and return focus to terminal") { !model.inspectorVisible && window.firstResponder === second.view }
+        do { try await TerminalSmoke.wait("Close tools and return focus to terminal") { !model.inspectorVisible && window.firstResponder === second.view } }
+        catch {
+            report["toolsCloseDiagnostics"] = ["visible": model.inspectorVisible, "selectedID": model.selectedID ?? "", "expectedID": second.id, "responder": String(describing: window.firstResponder)]
+            throw error
+        }
         guard Set(model.terminals.keys) == ids else { throw BridgeFailure(code: "INSPECTOR_CLOSE", message: "Close tools terminated a PTY") }
         report["closeFocusedToolsRetainsPTYAndReturnsFocus"] = true
         model.sidebarVisible = false
         await model.patchSettings(["language": .string("zh-Hans"), "appearance": .string("light")])
         try command("files")
-        try await TerminalSmoke.wait("Restore tools without project sidebar") { model.inspectorVisible && !tools.busy && !tools.rows.isEmpty }
+        try await TerminalSmoke.wait("Restore tools without project sidebar") { model.inspectorVisible && tools.content?.webView.window === window }
+        try await ContentSmoke.wait(files, "document.querySelector('.file-panel')?.getAttribute('aria-label') === '文件面板' && document.querySelector('.file-row[data-path=\"nested\"]') !== null")
         window.setContentSize(NSSize(width: 680, height: 600))
         try await Task.sleep(for: .milliseconds(200))
         guard let container = view(window, id: "native-inspector-container"), container.frame.width >= 210 else { throw BridgeFailure(code: "INSPECTOR_NARROW", message: "Inspector disappeared with hidden sidebar") }
-        try await capture("native-inspector-files-light-zh-narrow.png"); captures.append("native-inspector-files-light-zh-narrow.png")
+        try await capture("native-inspector-files-light-zh-narrow.png"); captures.append("native-inspector-files-light-zh-narrow.png"); report["captures"] = captures
         report["leftToolsRemainVisibleWithoutSidebar"] = true
         report["captures"] = captures
-        report["inputMethod"] = "Actual NSMenu/NSTableView Return; native WK editor DOM insertText; not manual IME acceptance"
+        report["inputMethod"] = "Actual NSMenu, AppKit Return, shared WK file controls and DOM insertText; not manual IME acceptance"
         report["manualAcceptance"] = "waived by user"
+        guard let oldHost = files.workbenchHost as? FilesHost else { throw BridgeFailure(code: "INSPECTOR_HOST", message: "Shared file host is missing") }
+        let deniedClipboard = try await ContentSmoke.request(files, method: "files_clipboard", params: ["value": ["directory": root.deletingLastPathComponent().path, "path": "outside-private.txt"]])
+        guard deniedClipboard == "ROOT_DENIED" else { throw BridgeFailure(code: "INSPECTOR_CLIPBOARD", message: "Clipboard accepted an unselected source root") }
+        try await FileToolsSmoke.menu(files, path: ".hidden.txt", title: "复制")
+        try await TerminalSmoke.wait("Retain the copied source in native memory") { oldHost.context?()["clipboard"]["path"].string == ".hidden.txt" }
+        let other = root.deletingLastPathComponent().appendingPathComponent("other-file-project")
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        guard await model.mutate("project.open", ["id": .string(UUID().uuidString), "name": .string("Other files"), "directory": .string(other.path), "workspaceId": .string(model.groupID)]) else { throw BridgeFailure(code: "INSPECTOR_PROJECT", message: model.error) }
+        do {
+            _ = try await oldHost.execute("file_mutate", params: ["directory": .string(root.path), "path": .string(""), "action": .string("file"), "name": .string("stale-must-not-exist.txt")])
+            throw BridgeFailure(code: "INSPECTOR_STALE_ACCEPTED", message: "Old file tools accepted a write after switching projects")
+        } catch let error as BridgeFailure {
+            guard ["CONFLICT", "ROOT_DENIED", "FILES_QUITTING"].contains(error.code), !FileManager.default.fileExists(atPath: root.appendingPathComponent("stale-must-not-exist.txt").path) else { throw error }
+        }
+        report["sharedFilesStaleProjectRejected"] = true
+        try await TerminalSmoke.wait("Mount new project file tools after replacing the old WebKit document") { model.inspector.content !== files && model.inspector.content?.webView.window === window }
+        guard let destination = model.inspector.content else { throw BridgeFailure(code: "INSPECTOR_CLIPBOARD", message: "Destination file tools are missing") }
+        try await ContentSmoke.wait(destination, "document.querySelector('.file-results') !== null")
+        _ = try await destination.webView.evaluateJavaScript("document.querySelector('.file-results').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:40,clientY:120}))")
+        try await ContentSmoke.wait(destination, "[...document.querySelectorAll('[role=menuitem]')].some(button=>button.textContent.trim()==='粘贴'&&!button.disabled)")
+        try await EditorSmoke.click(destination, title: "粘贴")
+        try await TerminalSmoke.wait("Paste the retained source into the new project") { (try? Data(contentsOf: other.appendingPathComponent(".hidden.txt"))) == Data("HIDDEN_ONLY\n".utf8) }
+        report["sharedFilesAcrossProjectsRetainCopiedSource"] = true
+        try await capture("native-inspector-copy-across-projects-light-zh.png")
+        captures.append("native-inspector-copy-across-projects-light-zh.png"); report["captures"] = captures
+        let copyWorkspace = UUID().uuidString
+        guard await model.mutate("workspace.create", ["id": .string(copyWorkspace), "name": .string("Copy destination workspace"), "select": .bool(true)]) else { throw BridgeFailure(code: "INSPECTOR_COPY_WORKSPACE", message: model.error) }
+        let removedSource = root.deletingLastPathComponent().appendingPathComponent("removed-copy-source")
+        let removedID = UUID().uuidString
+        try FileManager.default.createDirectory(at: removedSource, withIntermediateDirectories: true)
+        try Data("MUST_NOT_COPY\n".utf8).write(to: removedSource.appendingPathComponent("private.txt"))
+        guard await model.mutate("project.open", ["id": .string(removedID), "name": .string("Removed source"), "directory": .string(removedSource.path), "workspaceId": .string(copyWorkspace)]) else { throw BridgeFailure(code: "INSPECTOR_COPY_SOURCE", message: model.error) }
+        let crossWorkspace = root.deletingLastPathComponent().appendingPathComponent("cross-workspace-copy-destination")
+        try FileManager.default.createDirectory(at: crossWorkspace, withIntermediateDirectories: true)
+        guard await model.mutate("project.open", ["id": .string(UUID().uuidString), "name": .string("Cross-workspace files"), "directory": .string(crossWorkspace.path), "workspaceId": .string(copyWorkspace)]),
+              await model.mutate("project.remove", ["id": .string(removedID)]) else { throw BridgeFailure(code: "INSPECTOR_COPY_DESTINATION", message: model.error) }
+        try await TerminalSmoke.wait("Mount tools in a different workspace with the retained file source") { model.inspector.content?.webView.window === window && model.inspector.content?.directory.path == crossWorkspace.path }
+        guard let crossFiles = model.inspector.content else { throw BridgeFailure(code: "INSPECTOR_COPY_CONTEXT", message: "Cross-workspace file tools are missing") }
+        try await ContentSmoke.wait(crossFiles, "document.querySelector('.file-results') !== null")
+        _ = try await crossFiles.webView.evaluateJavaScript("document.querySelector('.file-results').dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:40,clientY:120}))")
+        try await ContentSmoke.wait(crossFiles, "[...document.querySelectorAll('[role=menuitem]')].some(button=>button.textContent.trim()==='粘贴'&&!button.disabled)")
+        try await EditorSmoke.click(crossFiles, title: "粘贴")
+        try await TerminalSmoke.wait("Paste original bytes across workspaces") { (try? Data(contentsOf: crossWorkspace.appendingPathComponent(".hidden.txt"))) == Data("HIDDEN_ONLY\n".utf8) }
+        try await ContentSmoke.wait(crossFiles, "document.querySelector('.file-row[data-path=\".hidden.txt\"]') !== null && !document.querySelector('.file-options button[disabled]')")
+        let rejectedSource = try await ContentSmoke.request(crossFiles, method: "file_copy", params: ["directory": crossWorkspace.path, "sourceDirectory": removedSource.path, "path": "private.txt", "destination": ""])
+        guard rejectedSource == "ROOT_DENIED", !FileManager.default.fileExists(atPath: crossWorkspace.appendingPathComponent("private.txt").path) else { throw BridgeFailure(code: "INSPECTOR_COPY_BOUNDARY", message: "Copy accepted a removed project source") }
+        report["sharedFilesAcrossWorkspacesRetainCopiedSourceAndRejectRemovedRoots"] = true
+        try await capture("native-inspector-copy-across-workspaces-light-zh.png")
+        captures.append("native-inspector-copy-across-workspaces-light-zh.png"); report["captures"] = captures
+        try await QuickSSHSmoke.run(model: model, window: window, lookup: quickLookup, report: &report)
         for id in Array(model.terminals.keys) { await model.selectSession(id); await model.closeSession() }
         let status = try await bridge.call("host.status")
         guard status["sessions"].array.isEmpty else { throw BridgeFailure(code: "INSPECTOR_CLEANUP", message: "Fixture host sessions remain") }

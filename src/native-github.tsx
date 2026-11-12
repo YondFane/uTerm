@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { GitHubPanel, type GitHubItem } from "./components/GitHubPanel";
+import { NativeInspectorActions } from "./components/NativeInspectorActions";
 import { contentInvoke, listenContent } from "./lib/content-host";
 import { localizeMessage } from "./lib/i18n";
 import { useSettings } from "./lib/SettingsContext";
@@ -7,6 +8,7 @@ import { useSettings } from "./lib/SettingsContext";
 export function NativeGitHub({ directory }: { directory: string }) {
   const settings = useSettings();
   const [context, setContext] = useState({ canAssociate: false, canInsert: false });
+  const [createdPR, setCreatedPR] = useState<{ number: number }>();
   const [frozen, setFrozen] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
@@ -26,6 +28,14 @@ export function NativeGitHub({ directory }: { directory: string }) {
     void refresh();
     for (const [kind, receive] of [
       ["github-frozen", (value: unknown) => setFrozen(value === true)],
+      [
+        "github-pr-created",
+        (value: unknown) => {
+          const number = (value as { number?: unknown })?.number;
+          if (typeof number === "number" && Number.isSafeInteger(number) && number > 0)
+            setCreatedPR({ number });
+        },
+      ],
       ["github-context-changed", () => void refresh()],
       [
         "github-settings-changed",
@@ -61,10 +71,14 @@ export function NativeGitHub({ directory }: { directory: string }) {
           directory={directory}
           resizeHandle={null}
           headerActions={
-            <>
-              <strong>GitHub</strong>
-              <span title={directory}>{directory}</span>
-            </>
+            <NativeInspectorActions
+              active="github"
+              command={(kind) => {
+                void contentInvoke("github_toolbar", { kind })
+                  .then(() => setError(""))
+                  .catch((reason) => setError(String(reason)));
+              }}
+            />
           }
           port={contentInvoke}
           canAssociate={context.canAssociate}
@@ -72,8 +86,9 @@ export function NativeGitHub({ directory }: { directory: string }) {
           associate={(item) => action("associate", item)}
           insert={(url) => action("insert", { url, title: "" })}
           createSession={(item) => action("create", item)}
-          guardForm={async (active) => {
-            await contentInvoke("github_form_guard", { active });
+          createdPR={createdPR}
+          externalForm={async (repository) => {
+            await contentInvoke("github_pr_open", { repository });
           }}
         />
       </fieldset>

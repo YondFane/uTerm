@@ -1,10 +1,11 @@
 import { localizeMessage } from "../lib/i18n";
+import { PullRequestDialog, type PullRequestDraft } from "./PullRequestDialog";
 import { gitReadError } from "../lib/git-snapshot";
 import { githubStatus } from "../lib/github-i18n";
 import { useUiLanguage } from "../lib/useUiLanguage";
 import { tx } from "../lib/i18n";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import MarkdownIt from "markdown-it";
 import DOMPurify from "dompurify";
@@ -46,6 +47,8 @@ export function GitHubPanel({
   createSession,
   port = invoke,
   guardForm,
+  externalForm,
+  createdPR,
 }: {
   resizeHandle: ReactNode;
   headerActions: ReactNode;
@@ -57,6 +60,8 @@ export function GitHubPanel({
   createSession: (item: Item) => void | Promise<void>;
   port?: ContentInvoker;
   guardForm?: (active: boolean) => Promise<void>;
+  externalForm?: (repository: string) => Promise<void>;
+  createdPR?: { number: number };
 }) {
   const uiLanguage = useUiLanguage();
 
@@ -75,16 +80,9 @@ export function GitHubPanel({
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [revision, refresh] = useState(0);
-  const [form, setForm] = useState<{
-    title: string;
-    body: string;
-    base: string;
-    head: string;
-    draft: boolean;
-  } | null>(null);
+  const [form, setForm] = useState<PullRequestDraft | null>(null);
   const [posting, setPosting] = useState(false);
   const [formError, setFormError] = useState("");
-  const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     let disposed = false;
     void port<string[]>("github_repositories", { directory })
@@ -181,9 +179,11 @@ export function GitHubPanel({
     };
   }, [showDiff, selected, directory, repository, kind, revision]);
   useEffect(() => {
-    if (form) dialog.current?.showModal();
-    else dialog.current?.close();
-  }, [!!form]);
+    if (!createdPR) return;
+    setSelected(createdPR.number);
+    refresh((v) => v + 1);
+    setNotice(tx("已创建 PR #{p0}", { p0: createdPR.number }));
+  }, [createdPR]);
   const html = useMemo(
     () =>
       DOMPurify.sanitize(markdown.render(detail?.body ?? ""), {
@@ -197,6 +197,10 @@ export function GitHubPanel({
     setError("");
     setLoading(true);
     try {
+      if (externalForm) {
+        await externalForm(repository);
+        return;
+      }
       const value = await port<{ base: string; head: string; title: string }>("github_prepare_pr", {
         directory,
         repository,
@@ -434,83 +438,36 @@ export function GitHubPanel({
           {tx("正在读取…")}
         </p>
       )}
-      <dialog
-        ref={dialog}
-        className="name-dialog pr-dialog"
-        aria-label={tx("新建 Pull Request")}
-        onCancel={(event) => {
-          if (posting) event.preventDefault();
-          else closeForm();
+      <PullRequestDialog
+        repository={repository}
+        form={form}
+        posting={posting}
+        formError={formError}
+        change={setForm}
+        close={closeForm}
+        submit={() => {
+          if (!form) return;
+          setPosting(true);
+          setFormError("");
+          void port<{ html_url: string; number: number }>("github_create_pr", {
+            directory,
+            repository,
+            ...form,
+          })
+            .then((value) => {
+              closeForm();
+              setSelected(value.number);
+              refresh((v) => v + 1);
+              setNotice(tx("已创建 PR #{p0}", { p0: value.number }));
+            })
+            .catch((reason) =>
+              setFormError(
+                tx("{p0}；请先刷新列表确认是否已创建，再决定是否重试。", { p0: String(reason) }),
+              ),
+            )
+            .finally(() => setPosting(false));
         }}
-      >
-        {form && (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              setPosting(true);
-              setFormError("");
-              void port<{ html_url: string; number: number }>("github_create_pr", {
-                directory,
-                repository,
-                ...form,
-              })
-                .then((value) => {
-                  closeForm();
-                  setSelected(value.number);
-                  refresh((v) => v + 1);
-                  setNotice(tx("已创建 PR #{p0}", { p0: value.number }));
-                })
-                .catch((reason) =>
-                  setFormError(
-                    tx("{p0}；请先刷新列表确认是否已创建，再决定是否重试。", {
-                      p0: String(reason),
-                    }),
-                  ),
-                )
-                .finally(() => setPosting(false));
-            }}
-          >
-            <h2>{tx("新建 Pull Request")}</h2>
-            <p>{tx("{p0} · 分支需事先推送到 GitHub。", { p0: repository })}</p>
-            {formError && <p role="alert">{localizeMessage(formError)}</p>}
-            {(["title", "base", "head"] as const).map((key) => (
-              <label key={key}>
-                {{ title: tx("标题"), base: tx("目标分支"), head: tx("来源分支") }[key]}
-                <input
-                  required
-                  disabled={posting}
-                  value={form[key]}
-                  onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-                />
-              </label>
-            ))}
-            <label>
-              {tx("说明")}
-              <textarea
-                disabled={posting}
-                rows={9}
-                value={form.body}
-                onChange={(e) => setForm({ ...form, body: e.target.value })}
-              />
-            </label>
-            <label className="pr-draft-choice">
-              <input
-                type="checkbox"
-                disabled={posting}
-                checked={form.draft}
-                onChange={(e) => setForm({ ...form, draft: e.target.checked })}
-              />
-              {tx("创建草稿")}
-            </label>
-            <div>
-              <button type="button" disabled={posting} onClick={closeForm}>
-                {tx("取消")}
-              </button>
-              <button disabled={posting}>{posting ? tx("正在创建…") : tx("在 GitHub 创建")}</button>
-            </div>
-          </form>
-        )}
-      </dialog>
+      />
     </aside>
   );
 }

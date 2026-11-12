@@ -145,6 +145,15 @@ ARM64／X64 DMG和ZIP附件，不设置自动过期、下载无需登录。 **ma
 `bash scripts/macos-native-build.sh` 和 `bash scripts/macos-native-test.sh`
 构建隔离QA应用并运行Rust／Swift桥接测试；桥接测试包含逻辑文件根路径别名恢复及解析后的文件选择边界回归。
 
+`pnpm chrome:generate` 从 `shared/contracts/chrome-ui-v1.json`
+生成 Swift 矢量及客户端摘要；`pnpm chrome:check` 拒绝过期副本，契约生成／检查已包含这两项。
+
+两版随包提供同一组 Cascadia Code 2407.24 字形及 SIL Open
+Font 许可。启动时等待内置默认字体就绪后再创建终端；构建与应用启动均不下载字体。原生注册仅限应用进程，来源及摘要见
+[`src/assets/fonts/manifest.json`](src/assets/fonts/manifest.json)。
+
+原生 UI 候选包含工作区文件标签及各窗格字号／搜索控件；侧栏行尺寸共用来源，由两版真实窗口采集器实测。完整一致性及最新真实窗口检查仍待完成，参见[原生工作区指南](docs/features.zh-CN.md#原生工作区交互)。
+
 `pnpm settings:generate` 从现有 TypeScript 设置和文案生成原生命令／主题目录， `pnpm settings:check`
 核对目录；契约生成／检查已包含该目录。Core `settings.catalog` 和 `settings.validate`
 读取默认值并校验平台快捷键，不保存配置；共享／原生设置、菜单及受保护的登录模拟已在
@@ -329,6 +338,9 @@ CLI 会检查这组版本。
 的有界队列接入。Tauri 在 App 前初始化准确的带版本旧来源备份及明确迁移，冻结旧草稿键，并提供来源冲突／损坏副本恢复选择。原生可编辑文件现按项目组成 AppKit 标签，重复打开复用原标签；真实窗口标签检查已在 macOS
 ARM／Intel 通过，持久标签／窗口顺序及完整编辑验收仍待完成，内容写入仅限所选文件。 `pnpm test:core`
 明确执行工作区／草稿快照及 Worktree 删除后元数据及 Git 收藏保存／恢复的文件系统失败／重试检查。
+
+原生文件面板通过 `src/native-files.tsx` 与限定范围的 `FilesHost.swift` 调用接入共用
+`src/components/FilePanel.tsx`，文件操作保留根目录检查与编辑器草稿保护。同一工作区内替换原生面板后保留已复制文件的来源，路径不写入磁盘。仍要求当前源码的原生交互及匹配截图；Git／GitHub 工作台嵌入及跨工作区文件复制对齐仍待完成。
 
 共享回环控制服务位于
 `crates/utermd-local/src/control/server.rs`，Tauri 与核心操作复用同一队列及生命周期；宿主为该服务直接声明 Tokio 和 tempfile。`pnpm test:host`

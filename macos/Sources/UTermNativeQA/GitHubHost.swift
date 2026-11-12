@@ -7,12 +7,15 @@ final class GitHubHost: WorkbenchHost {
     let directory: String
     private let bridge: CoreBridge
     private var pending = 0
-    private var formActive = false
+    private var openingPR = false
+    var formActive = false
     private var lastSettings: JSONValue?
     private(set) var prepared = false
     var emit: ((String, JSONValue) -> Void)?
     var context: (() async throws -> JSONValue)?
     var sessionAction: ((String, JSONValue) async throws -> Void)?
+    var toolbar: ((String) throws -> Void)?
+    var openPR: ((String) async throws -> Void)?
     weak var window: NSWindow?
     init(bridge: CoreBridge, directory: String) { self.bridge = bridge; self.directory = directory }
     func settingsChanged(_ settings: JSONValue) {
@@ -29,7 +32,17 @@ final class GitHubHost: WorkbenchHost {
             guard params.count == 1, let active = params["active"]?.bool else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing PR form state") }
             formActive = active; return .null
         }
+        if method == "github_toolbar" {
+            guard params.count == 1, let kind = params["kind"]?.string, let toolbar else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing GitHub toolbar action") }
+            try toolbar(kind); return .null
+        }
         pending += 1; defer { pending -= 1 }
+        if method == "github_pr_open" {
+            guard !openingPR else { throw BridgeFailure(code: "GITHUB_BUSY", message: "Wait for the PR form to open") }
+            guard params.count == 1, let repository = params["repository"]?.string, let openPR else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing PR repository") }
+            openingPR = true; defer { openingPR = false }
+            try await openPR(repository); return .null
+        }
         if method == "github_session_action" {
             guard params.count == 2, let action = params["kind"]?.string, let item = params["item"], let sessionAction else { throw BridgeFailure(code: "INVALID_ARGUMENT", message: "Missing GitHub session action") }
             try await sessionAction(action, item); return .null

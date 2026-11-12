@@ -1,0 +1,30 @@
+@font-face {
+  font-family: "Cascadia Code";
+  src: url("./CascadiaCode-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: "Cascadia Code";
+  src: url("./CascadiaCode-SemiBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 600;
+}
+@font-face {
+  font-family: "Cascadia Code";
+  src: url("./CascadiaCode-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+}
+@font-face {
+  font-family: "Cascadia Code";
+  src: url("./CascadiaCode-Italic.ttf") format("truetype");
+  font-style: italic;
+  font-weight: 400;
+}
+@font-face {
+  font-family: "Cascadia Code";
+  src: url("./CascadiaCode-BoldItalic.ttf") format("truetype");
+  font-style: italic;
+  font-weight: 700;
+}

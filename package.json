@@ -1,6 +1,6 @@
 {
   "name": "uterm",
-  "version": "0.2.10",
+  "version": "0.2.11",
   "private": true,
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
@@ -11,8 +11,8 @@
   "scripts": {
     "dev": "vite",
     "check": "tsc --noEmit",
-    "contracts:generate": "node scripts/generate-core-contracts.mjs && pnpm settings:generate",
-    "contracts:check": "node scripts/generate-core-contracts.mjs --check && pnpm settings:check",
+    "contracts:generate": "node scripts/generate-core-contracts.mjs && pnpm settings:generate && pnpm chrome:generate",
+    "contracts:check": "node scripts/generate-core-contracts.mjs --check && pnpm settings:check && pnpm chrome:check",
     "settings:generate": "node --experimental-strip-types scripts/generate-native-settings.mjs",
     "settings:check": "node --experimental-strip-types scripts/generate-native-settings.mjs --check",
     "test:core": "cargo build --locked --manifest-path crates/utermd-local/Cargo.toml --bin utermd-local && cargo test --locked --manifest-path crates/uterm-core/Cargo.toml && cargo test --locked --manifest-path crates/uterm-ffi/Cargo.toml && cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test persistence filesystem_failure_preserves_snapshot_and_allows_retry -- --include-ignored && cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test editor_drafts filesystem_failure_preserves_editor_drafts_and_allows_retry -- --include-ignored && cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test worktrees metadata_failure_after_git_removal_retains_snapshot_and_allows_explicit_refresh -- --include-ignored && cargo test --locked --manifest-path crates/uterm-core/Cargo.toml --test git_favorites filesystem_failure_preserves_git_favorites_and_allows_explicit_retry -- --include-ignored",
@@ -37,7 +37,9 @@
     "test:backend": "cargo test --manifest-path src-tauri/Cargo.toml --locked",
     "docs:sync": "node scripts/docs-index.mjs",
     "docs:check": "node scripts/docs-index.mjs --check",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "chrome:generate": "node scripts/generate-native-chrome.mjs",
+    "chrome:check": "node scripts/generate-native-chrome.mjs --check"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

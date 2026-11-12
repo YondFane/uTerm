@@ -1,16 +1,23 @@
+import chrome from "../../shared/contracts/chrome-ui-v1.json" with { type: "json" };
 import { panelCollapseWidth } from "./sidebar-layout.ts";
 
 export function inspectorDragLayout(available: number, requestedWidth: number) {
   return {
-    ...inspectorLayout(available, requestedWidth / Math.max(560, available)),
+    ...inspectorLayout(
+      available,
+      requestedWidth / Math.max(chrome.metrics.inspectorMinimumAvailable, available),
+    ),
     hidden: requestedWidth <= panelCollapseWidth,
   };
 }
 
 export function inspectorLayout(availableWidth: number, ratio: number) {
-  const available = Math.max(560, availableWidth);
+  const available = Math.max(chrome.metrics.inspectorMinimumAvailable, availableWidth);
   const minimum = panelCollapseWidth;
-  const maximum = Math.min(available - 320, available * 0.6);
+  const maximum = Math.min(
+    available - chrome.metrics.mainMinimumWidth,
+    available * chrome.metrics.inspectorMaximumRatio,
+  );
   const width = Math.max(minimum, Math.min(maximum, available * ratio));
   return { available, minimum, maximum, width, ratio: width / available };
 }

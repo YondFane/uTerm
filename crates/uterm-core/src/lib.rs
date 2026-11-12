@@ -1025,6 +1025,7 @@ impl Core {
                 };
                 serde_json::to_value(self.store.editor_list(directory)?).map_err(Into::into)
             }
+            "pdf.marks.read" | "pdf.marks.write" => self.store.pdf_marks_request(method, params),
             "editor.drafts.document" => serde_json::to_value(
                 self.store
                     .editor_document(&string(&params, "directory")?, &string(&params, "path")?)?,
@@ -1286,6 +1287,7 @@ impl Core {
                 let snapshot = self.store.read()?;
                 let mut legacy = snapshot.document.legacy;
                 self.store.favorites_export(&mut legacy)?;
+                self.store.pdf_export(&mut legacy)?;
                 legacy.insert(
                     "uterm.desktop.workspace.v1".into(),
                     serde_json::to_string(&snapshot.document.workspace)?,

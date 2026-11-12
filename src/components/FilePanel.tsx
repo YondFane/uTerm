@@ -5,7 +5,7 @@ import { ToolbarIcon } from "./SidebarIcon";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { fileInvoke, isRemoteDirectory, displayDirectory } from "../lib/file-target";
-import { invoke } from "@tauri-apps/api/core";
+import { contentInvoke as invoke } from "../lib/content-host";
 import { clipboardPath } from "../lib/file-document";
 import { setFileClipboard, useFileClipboard } from "../lib/file-clipboard";
 import { gitFileKey, type GitFileState } from "../lib/git-file-status";
@@ -53,6 +53,7 @@ function Folder({
   path,
   depth,
   hidden,
+  paused,
   open,
   manage,
   select,
@@ -64,6 +65,7 @@ function Folder({
   path: string;
   depth: number;
   hidden: boolean;
+  paused: boolean;
   open: (path: string) => void;
   manage: (entry: Entry, x: number, y: number) => void;
   select: (entry: Entry) => void;
@@ -74,9 +76,11 @@ function Folder({
   useUiLanguage();
 
   const [listing, setListing] = useState<Listing | null>(null);
+  const [loadedRevision, setLoadedRevision] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   useEffect(() => {
+    if (paused) return;
     let disposed = false;
     let timer: ReturnType<typeof setTimeout>;
     const refresh = async () => {
@@ -84,6 +88,7 @@ function Folder({
         const result = await fileInvoke<Listing>("files_list", { directory, path, hidden });
         if (!disposed) {
           setListing(result);
+          setLoadedRevision(revision);
           setError("");
         }
       } catch (reason) {
@@ -99,7 +104,7 @@ function Folder({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [directory, path, hidden, revision]);
+  }, [directory, path, hidden, revision, paused]);
   useEffect(() => {
     if (!edit || edit.rename) return;
     setExpanded(
@@ -188,6 +193,9 @@ function Folder({
                   path={entry.path}
                   depth={depth + 1}
                   hidden={hidden}
+                  // Refresh the parent before descendants so deleted expanded paths are pruned.
+                  // 先刷新父目录再读取子目录，避免再次读取已删除但尚未从列表移除的展开路径。
+                  paused={paused || loadedRevision !== revision}
                   open={open}
                   manage={manage}
                   select={select}
@@ -218,6 +226,7 @@ export function FilePanel({
   setMode,
   open,
   beforeMutation,
+  paused = false,
 }: {
   resizeHandle: ReactNode;
   headerActions: ReactNode;
@@ -228,6 +237,7 @@ export function FilePanel({
   setMode: (mode: FileMode) => void;
   open: (path: string, line?: number) => void;
   beforeMutation: (action: () => void) => void;
+  paused?: boolean;
 }) {
   useUiLanguage();
 
@@ -251,7 +261,7 @@ export function FilePanel({
   const [focusedEntry, setFocusedEntry] = useState<Entry | null>(null);
   const copying = useRef(false);
   const remote = isRemoteDirectory(directory);
-  const gitStatus = useGitFileStatus(directory, mode === "tree" && !remote, revision);
+  const gitStatus = useGitFileStatus(directory, mode === "tree" && !remote && !paused, revision);
   const currentDirectory = useRef(directory);
   currentDirectory.current = directory;
   useEffect(() => {
@@ -420,7 +430,7 @@ export function FilePanel({
     results.current?.querySelector(".file-hit.selected")?.scrollIntoView({ block: "nearest" });
   }, [selected]);
   useEffect(() => {
-    if (mode === "tree") return;
+    if (mode === "tree" || paused) return;
     let disposed = false;
     setLoading(true);
     setError("");
@@ -451,7 +461,7 @@ export function FilePanel({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [directory, query, mode, sensitive, hidden, revision]);
+  }, [directory, query, mode, sensitive, hidden, revision, paused]);
   const mutationForm = target && (
     <form
       className={action === "delete" ? "file-management" : "file-inline-edit"}
@@ -742,6 +752,7 @@ export function FilePanel({
             path=""
             depth={0}
             hidden={hidden}
+            paused={paused}
             revision={revision}
             gitStates={gitStatus.states}
             edit={

@@ -9,6 +9,11 @@ on:
         description: "Existing release tag, such as uTerm-v0.1.0"
         required: true
         type: string
+      recovery_run_id:
+        description: "Restore publication for an already public tag from its successful build run"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -72,6 +77,7 @@ jobs:
           signPersonalArchive(Buffer.from('Personal updater configuration check'), process.env.PERSONAL_UPDATER_PRIVATE_KEY, process.env.PERSONAL_UPDATER_PUBLIC_KEY);
           JS
   build:
+    if: ${{ !inputs.recovery_run_id }}
     needs: validate-source
     strategy:
       fail-fast: false
@@ -173,6 +179,7 @@ jobs:
           if-no-files-found: error
 
   personal:
+    if: ${{ !inputs.recovery_run_id }}
     needs: validate-source
     uses: ./.github/workflows/macos-personal.yml
     with:
@@ -181,6 +188,7 @@ jobs:
       updater_public_key: ${{ vars.PERSONAL_UPDATER_PUBLIC_KEY }}
 
   publish:
+    if: ${{ !inputs.recovery_run_id }}
     needs: [validate-source, build, personal]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -208,13 +216,16 @@ jobs:
       - name: Collect verified personal Mac packages from the release commit
         env:
           PERSONAL_UPDATER_PUBLIC_KEY: ${{ vars.PERSONAL_UPDATER_PUBLIC_KEY }}
-        run: node scripts/release.mjs collect-personal "$RELEASE_TAG" "$RELEASE_SOURCE_SHA"
+        run:
+          node scripts/release.mjs collect-personal "$RELEASE_TAG" "$RELEASE_SOURCE_SHA"
           personal-packages release
       - name: Sign separate personal Mac update feeds
         env:
           PERSONAL_UPDATER_PRIVATE_KEY: ${{ secrets.PERSONAL_UPDATER_PRIVATE_KEY }}
           PERSONAL_UPDATER_PUBLIC_KEY: ${{ vars.PERSONAL_UPDATER_PUBLIC_KEY }}
-        run: node scripts/release.mjs personal-feeds "$RELEASE_TAG" "$RELEASE_SOURCE_SHA" personal-packages release
+        run:
+          node scripts/release.mjs personal-feeds "$RELEASE_TAG" "$RELEASE_SOURCE_SHA"
+          personal-packages release
       - name: Validate release and existing feed
         run: |
           test "$(gh repo view --json isPrivate --jq .isPrivate)" = false || { echo 'Updater downloads require a public repository.'; exit 1; }
@@ -256,7 +267,15 @@ jobs:
           JS
           gh release create "$RELEASE_TAG" release/uTerm-* release/latest*.json release/personal-stable-*.xml \
             --verify-tag --draft --latest=false --title "uTerm $VERSION" --notes-file release-notes.md
-          gh release edit "$RELEASE_TAG" --draft=false --latest=false
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > draft-releases.json
+          RELEASE_ID=$(node --input-type=module - <<'JS'
+          import { readFileSync } from 'node:fs';
+          const matches = JSON.parse(readFileSync('draft-releases.json', 'utf8')).filter(value => value.tag_name === process.env.RELEASE_TAG && value.draft);
+          if (matches.length !== 1 || !Number.isSafeInteger(matches[0].id)) throw new Error('Expected exactly one matching draft release');
+          console.log(matches[0].id);
+          JS
+          )
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -F draft=false -f make_latest=false
       - name: Verify public downloads
         run: |
           for TARGET in windows-x86_64 darwin-aarch64 darwin-x86_64; do
@@ -279,3 +298,94 @@ jobs:
           fi
       - name: Mark stable version as latest
         run: gh release edit "$RELEASE_TAG" --latest=true
+
+  recover-publication:
+    if: ${{ inputs.recovery_run_id }}
+    needs: validate-source
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_RUN: ${{ inputs.recovery_run_id }}
+      RELEASE_SOURCE_SHA: ${{ needs.validate-source.outputs.commit }}
+      RECOVERY_WORKFLOW_SHA: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Validate successful source builds and published version
+        run: |
+          [[ "$SOURCE_RUN" =~ ^[0-9]+$ ]]
+          mkdir -p recovery/version recovery/channel
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" > recovery/source-run.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs?per_page=100" > recovery/source-jobs.json
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" > recovery/release.json
+          python3 - <<'PYREC'
+          import json, os, pathlib
+          root=pathlib.Path('recovery')
+          run=json.loads((root/'source-run.json').read_text()); jobs=json.loads((root/'source-jobs.json').read_text())['jobs']
+          assert run['head_sha']==os.environ['RELEASE_SOURCE_SHA'] and run['name']=='uTerm release' and run['event']=='push'
+          builds=[j for j in jobs if j['name'].startswith('build (') or j['name'].startswith('personal / personal (')]
+          assert len(builds)==5 and all(j['conclusion']=='success' for j in builds)
+          release=json.loads((root/'release.json').read_text())
+          assert not release['draft'] and not release['prerelease'] and release['tag_name']==os.environ['RELEASE_TAG'] and len(release['assets'])==18
+          notes=pathlib.Path('release-notes',os.environ['RELEASE_TAG']+'.md').read_text().strip()
+          assert release['body'].startswith(notes)
+          report=dict(passed=False,sourceSHA=os.environ['RELEASE_SOURCE_SHA'],sourceRun=int(os.environ['SOURCE_RUN']),recoveryWorkflowSHA=os.environ['RECOVERY_WORKFLOW_SHA'],successfulBuilds=[j['id'] for j in builds],releaseID=release['id'])
+          (root/'report.json').write_text(json.dumps(report,indent=2))
+          PYREC
+      - name: Download and validate the immutable version feeds
+        run: |
+          gh release download "$RELEASE_TAG" --pattern 'latest*.json' --pattern 'personal-stable-*.xml' --dir recovery/version
+          python3 - <<'PYREC'
+          import json, os, pathlib, xml.etree.ElementTree as ET
+          root=pathlib.Path('recovery'); release=json.loads((root/'release.json').read_text()); assets={a['name']:a for a in release['assets']}
+          version=os.environ['RELEASE_TAG'].removeprefix('uTerm-v'); base='https://github.com/'+os.environ['GITHUB_REPOSITORY']+'/releases/download/'+os.environ['RELEASE_TAG']+'/'
+          notes=pathlib.Path('release-notes',os.environ['RELEASE_TAG']+'.md').read_text().strip()
+          for target,file in [('windows-x86_64','latest.json'),('darwin-aarch64','latest-darwin-aarch64.json'),('darwin-x86_64','latest-darwin-x86_64.json')]:
+              value=json.loads((root/'version'/file).read_text()); assert value['version']==version and value['notes']==notes
+              item=value['platforms'][target]; installer=value['installers'][target]
+              assert item['url'].startswith(base) and item['url'].removeprefix(base) in assets and item['signature']
+              assert installer['url']==base+installer['filename'] and assets[installer['filename']]['size']==installer['size']
+          for arch,target in [('arm64','darwin-aarch64'),('x86_64','darwin-x86_64')]:
+              enclosure=ET.parse(root/'version'/('personal-stable-'+arch+'.xml')).find('./channel/item/enclosure'); assert enclosure is not None
+              name='uTerm-'+version+'-personal-'+target+'.zip'
+              assert enclosure.attrib['url']==base+name and int(enclosure.attrib['length'])==assets[name]['size']
+              assert any(k.endswith('shortVersionString') and v==version for k,v in enclosure.attrib.items())
+              assert any(k.endswith('edSignature') and v for k,v in enclosure.attrib.items())
+          assert len(list((root/'version').iterdir()))==5
+          PYREC
+      - name: Restore verified stable feeds and Latest
+        run: |
+          gh release upload uTerm-updates recovery/version/* --clobber
+          gh release download uTerm-updates --pattern 'latest*.json' --pattern 'personal-stable-*.xml' --dir recovery/channel
+          python3 - <<'PYREC'
+          from pathlib import Path
+          for file in Path('recovery/version').iterdir():
+              assert file.read_bytes()==(Path('recovery/channel')/file.name).read_bytes()
+          PYREC
+          RELEASE_ID=$(node -p "JSON.parse(require('fs').readFileSync('recovery/release.json')).id")
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" -f make_latest=true
+          gh api "repos/$GITHUB_REPOSITORY/releases/latest" > recovery/latest.json
+          python3 - <<'PYREC'
+          import json, os, pathlib, urllib.request
+          root=pathlib.Path('recovery'); latest=json.loads((root/'latest.json').read_text()); assert latest['tag_name']==os.environ['RELEASE_TAG']
+          links=[a['browser_download_url'] for a in latest['assets'] if a['name'].endswith('.dmg') or a['name'].endswith('setup.exe')]
+          assert len(links)==5
+          for url in links:
+              with urllib.request.urlopen(urllib.request.Request(url,method='HEAD'),timeout=30) as response: assert response.status==200
+          report=json.loads((root/'report.json').read_text()); report.update(passed=True,stableFeeds=5,publicInstallers=5,latest=latest['tag_name'])
+          (root/'report.json').write_text(json.dumps(report,indent=2))
+          PYREC
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-publication-recovery-${{ inputs.tag }}-${{ github.run_id }}
+          path: recovery/
+          if-no-files-found: error

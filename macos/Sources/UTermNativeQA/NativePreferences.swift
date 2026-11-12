@@ -21,9 +21,11 @@ enum NativePreferences {
             let name = family.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
             if name == "-apple-system" || name == "BlinkMacSystemFont" || name == "sans-serif" { selected = .systemFont(ofSize: size); break }
             if name == "monospace" { selected = .monospacedSystemFont(ofSize: size, weight: .regular); break }
+            if name == "Cascadia Code", let value = NSFont(name: "CascadiaCode-Regular", size: size) { selected = value; break }
             if let value = NSFont(name: name, size: size) { selected = value; break }
         }
         let font = selected ?? (mono ? .monospacedSystemFont(ofSize: size, weight: .regular) : .systemFont(ofSize: size))
+        if bold, font.familyName == "Cascadia Code", let semibold = NSFont(name: "CascadiaCode-SemiBold", size: size) { return semibold }
         return bold ? NSFontManager.shared.convert(font, toHaveTrait: .boldFontMask) : font
     }
     static func terminalTheme(_ settings: JSONValue, catalog: JSONValue) -> JSONValue {

@@ -99,6 +99,10 @@ pub enum Operation {
         rows: u16,
         cols: u16,
     },
+    Restart {
+        id: String,
+        generation: String,
+    },
     OpenSsh {
         spec: SessionSpec,
         rows: u16,
@@ -217,6 +221,13 @@ struct ViewState {
     claims: Mutex<()>,
 }
 impl Client {
+    pub fn require_restart_support(&self) -> Result<()> {
+        if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "local-session-restart-v1"))
+        {
+            return Ok(());
+        }
+        bail!("SESSION_HOST_UPGRADE_REQUIRED");
+    }
     pub fn require_task_support(&self) -> Result<()> {
         if matches!(self.request(Operation::Ping)?, Reply::Ready { capabilities, .. } if capabilities.iter().any(|value| value == "java-tasks-v1"))
         {
@@ -995,13 +1006,28 @@ impl Host {
         )>,
         task: Option<(crate::tasks::TaskInfo, crate::tasks::Launch)>,
     ) -> Result<Arc<Entry>> {
+        // Serialize creation without holding up I/O for already-running sessions.
+        // 串行创建会话，同时避免阻塞已有会话的 I/O。
+        let _opening = lock(&self.opening);
+        self.open_session_locked(spec, rows, cols, create, configured, task)
+    }
+
+    fn open_session_locked(
+        &self,
+        spec: SessionSpec,
+        rows: u16,
+        cols: u16,
+        create: bool,
+        configured: Option<(
+            crate::ssh::ResolvedTarget,
+            Option<crate::ssh_askpass::Endpoint>,
+        )>,
+        task: Option<(crate::tasks::TaskInfo, crate::tasks::Launch)>,
+    ) -> Result<Arc<Entry>> {
         crate::size(rows, cols)?;
         if spec.id.is_empty() || spec.id.len() > 200 {
             bail!("Invalid session identifier");
         }
-        // Serialize creation without holding up I/O for already-running sessions.
-        // 串行创建会话，同时避免阻塞已有会话的 I/O。
-        let _opening = lock(&self.opening);
         let sessions = lock(&self.sessions);
         if self.stopping.load(Ordering::Acquire) {
             bail!("Session host is restarting; reconnect before opening a session");
@@ -1406,6 +1432,7 @@ impl Host {
                         "local-session-list-v1".into(),
                         "local-session-snapshot-v1".into(),
                         "local-host-management-v1".into(),
+                        "local-session-restart-v1".into(),
                         "java-tasks-v1".into(),
                         crate::session_control::CAPABILITY.into(),
                         "task-pipe-output-v1".into(),
@@ -1483,6 +1510,36 @@ impl Host {
                 Ok(Reply::Opened {
                     generation: entry.generation.clone(),
                 })
+            }
+            Operation::Restart { id, generation } => {
+                let _opening = lock(&self.opening);
+                let entry = self.entry(&id, &generation)?;
+                if entry.task.is_some() || entry.spec.ssh.is_some() {
+                    bail!("SESSION_RESTART_UNSUPPORTED");
+                }
+                let view = view.context("SESSION_CONTROL_REQUIRED")?;
+                self.with_input_control(&entry, |control, now| control.authorize(Some(view), now))?;
+                let (rows, cols) = {
+                    let output = lock(&entry.output.0);
+                    if !output.exited {
+                        bail!("SESSION_STILL_RUNNING");
+                    }
+                    output.parser.screen().size()
+                };
+                entry.session.close()?;
+                entry.stop_activity()?;
+                lock(&self.sessions).remove(&id);
+                // Restart never clears explicit-close history and restores replay if a new spawn fails.
+                // 重启不清除明确关闭记录；新进程启动失败时恢复旧回放。
+                match self.open_session_locked(entry.spec.clone(), rows, cols, true, None, None) {
+                    Ok(next) => Ok(Reply::Opened {
+                        generation: next.generation.clone(),
+                    }),
+                    Err(error) => {
+                        lock(&self.sessions).insert(id, entry);
+                        Err(error)
+                    }
+                }
             }
             Operation::OpenSshConfigured {
                 spec,
@@ -1603,6 +1660,7 @@ impl Host {
                 })
             }
             Operation::Close { id, generation } => {
+                let _opening = lock(&self.opening);
                 let mut sessions = lock(&self.sessions);
                 if let Some(entry) = sessions.get(&id) {
                     if entry.generation != generation {
@@ -1777,6 +1835,182 @@ mod tests {
         client.require_task_support().unwrap();
         client.require_java_utf8_support().unwrap();
         peer.join().unwrap();
+    }
+
+    #[test]
+    fn restart_probe_rejects_old_hosts_before_sending_a_restart() {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let endpoint = Endpoint {
+            version: VERSION,
+            port: listener.local_addr().unwrap().port(),
+            token: uuid::Uuid::new_v4().to_string(),
+        };
+        std::fs::write(
+            directory.path().join("endpoint.json"),
+            serde_json::to_vec(&endpoint).unwrap(),
+        )
+        .unwrap();
+        let peer = std::thread::spawn(move || {
+            for probe in 0..3 {
+                let (mut stream, _) = listener.accept().unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(3)))
+                    .unwrap();
+                let request: Request = receive(&mut stream).unwrap();
+                assert_eq!(request.version, VERSION);
+                assert_eq!(request.token, endpoint.token);
+                assert!(matches!(request.operation, Operation::Ping));
+                let capabilities = if probe == 2 {
+                    vec!["local-session-restart-v1".into()]
+                } else {
+                    vec![]
+                };
+                send(
+                    &mut stream,
+                    &Reply::Ready {
+                        pid: 1,
+                        capabilities,
+                    },
+                )
+                .unwrap();
+            }
+        });
+        let client = Client::connect(directory.path()).unwrap();
+        assert_eq!(
+            client.require_restart_support().unwrap_err().to_string(),
+            "SESSION_HOST_UPGRADE_REQUIRED"
+        );
+        client.require_restart_support().unwrap();
+        peer.join().unwrap();
+    }
+
+    #[test]
+    fn restart_preserves_generation_guards_closed_history_and_failed_spawn_replay() {
+        struct Fixture(Host);
+        impl Drop for Fixture {
+            fn drop(&mut self) {
+                for entry in lock(&self.0.sessions).values() {
+                    let _ = entry.session.close();
+                }
+            }
+        }
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("host");
+        std::fs::create_dir(&directory).unwrap();
+        let project = root.path().join("project");
+        std::fs::create_dir(&project).unwrap();
+        let fixture = Fixture(Host {
+            directory,
+            opening: Mutex::new(()),
+            sessions: Mutex::new(HashMap::new()),
+            closed_sessions: Mutex::new(HashSet::new()),
+            stopping: Arc::new(AtomicBool::new(false)),
+            processes: Mutex::new(ProcessCache::default()),
+        });
+        let host = &fixture.0;
+        let spec = SessionSpec {
+            id: "restart-fixture".into(),
+            directory: project.clone(),
+            shell: "default".into(),
+            agent: None,
+            ssh: None,
+        };
+        let entry = host
+            .open_session(spec.clone(), 24, 80, true, None, None)
+            .unwrap();
+        let old = entry.generation.clone();
+        let mut owner = crate::session_control::View::new("Restart owner").unwrap();
+        owner.lease = host
+            .with_input_control(&entry, |control, now| Ok(control.claim(&owner, false, now)))
+            .unwrap()
+            .lease;
+        let restart = || Operation::Restart {
+            id: spec.id.clone(),
+            generation: old.clone(),
+        };
+        assert!(host.dispatch(restart()).is_err());
+        let passive = crate::session_control::View::new("Read-only attachment").unwrap();
+        assert!(host.dispatch_for_view(restart(), Some(&passive)).is_err());
+        assert_eq!(
+            host.dispatch_for_view(restart(), Some(&owner))
+                .unwrap_err()
+                .to_string(),
+            "SESSION_STILL_RUNNING"
+        );
+        host.dispatch_for_view(
+            Operation::Write {
+                id: spec.id.clone(),
+                generation: old.clone(),
+                data: b"echo UTERM_RESTART_BEFORE\rexit\r".to_vec(),
+            },
+            Some(&owner),
+        )
+        .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !lock(&entry.output.0).exited && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(
+            lock(&entry.output.0).exited,
+            "Actual fixture shell did not exit"
+        );
+        std::fs::remove_dir(&project).unwrap();
+        assert!(host.dispatch_for_view(restart(), Some(&owner)).is_err());
+        assert!(Arc::ptr_eq(&host.entry(&spec.id, &old).unwrap(), &entry));
+        assert!(!lock(&host.closed_sessions).contains(&spec.id));
+        assert!(
+            String::from_utf8_lossy(&lock(&entry.output.0).frame(None).data)
+                .contains("UTERM_RESTART_BEFORE")
+        );
+        std::fs::create_dir(&project).unwrap();
+        let Reply::Opened { generation: next } =
+            host.dispatch_for_view(restart(), Some(&owner)).unwrap()
+        else {
+            panic!("Restart did not open a new generation")
+        };
+        assert_ne!(old, next);
+        assert_eq!(host.entry(&spec.id, &next).unwrap().spec, spec);
+        assert!(!lock(&host.closed_sessions).contains(&spec.id));
+        for operation in [
+            restart(),
+            Operation::Write {
+                id: spec.id.clone(),
+                generation: old.clone(),
+                data: b"STALE\r".to_vec(),
+            },
+            Operation::Resize {
+                id: spec.id.clone(),
+                generation: old.clone(),
+                rows: 12,
+                cols: 30,
+            },
+            Operation::Close {
+                id: spec.id.clone(),
+                generation: old,
+            },
+        ] {
+            assert!(host.dispatch_for_view(operation, Some(&owner)).is_err());
+        }
+        assert!(host.entry(&spec.id, &next).is_ok());
+        host.dispatch(Operation::Close {
+            id: spec.id.clone(),
+            generation: next.clone(),
+        })
+        .unwrap();
+        assert!(lock(&host.closed_sessions).contains(&spec.id));
+        assert!(host
+            .dispatch(Operation::Restart {
+                id: spec.id.clone(),
+                generation: next
+            })
+            .is_err());
+        assert!(host
+            .open_session(spec, 24, 80, true, None, None)
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("explicitly closed"));
     }
 
     #[test]

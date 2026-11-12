@@ -368,6 +368,19 @@ impl Links {
         }
         let id = link.session.clone();
         let generation = link.generation.clone();
+        if action == "restart" {
+            link.client
+                .require_restart_support()
+                .map_err(|error| format!("{error:#}"))?;
+            if !link
+                .client
+                .claim_control(&id, &generation, false)
+                .map_err(|error| format!("{error:#}"))?
+                .is_some_and(|status| status.owned)
+            {
+                return Err("SESSION_READ_ONLY".into());
+            }
+        }
         let operation = match action {
             "write" => Operation::Write {
                 id,
@@ -381,12 +394,13 @@ impl Links {
                 cols: cols.ok_or("Missing columns")?,
             },
             "close" => Operation::Close { id, generation },
+            "restart" => Operation::Restart { id, generation },
             _ => return Err("Unknown session action".into()),
         };
         link.client
             .request(operation)
             .map_err(|e| format!("{e:#}"))?;
-        if action == "close" {
+        if action == "close" || action == "restart" {
             link.stop();
             self.remove(attachment, &link)?;
         }

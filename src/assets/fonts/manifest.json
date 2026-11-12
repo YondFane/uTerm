@@ -1,0 +1,13 @@
+{
+  "family": "Cascadia Code",
+  "version": "2407.24",
+  "source": "https://github.com/microsoft/cascadia-code/releases/tag/v2407.24",
+  "archiveSHA256": "e67a68ee3386db63f48b9054bd196ea752bc6a4ebb4df35adce6733da50c8474",
+  "files": {
+    "CascadiaCode-Regular.ttf": "c33ef522cdfeff99907fb54f3e97152bb18bfb9b56ec2fef4d4ceec51c8974a4",
+    "CascadiaCode-SemiBold.ttf": "152f369a2a568eda3281f8f280b907dd7a90cc2d4235677d0d7ded4daea324ec",
+    "CascadiaCode-Bold.ttf": "58197c5c3ba2967d4780b0ef8aee72d0cbbfa42885ddede9ec96fa7a1df5aead",
+    "CascadiaCode-Italic.ttf": "1f0676937792fe550effeafb7f4622080c2a5d62715d1245d471258fa1a23b8c",
+    "CascadiaCode-BoldItalic.ttf": "aff1984cbbdd990137691ae9567b87e7b1190f6a4e146017c6a0893ca4b000e7"
+  }
+}

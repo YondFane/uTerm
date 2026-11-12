@@ -6,68 +6,119 @@ import UTermBridge
 struct WorkspaceView: View {
     @ObservedObject var model: WorkspaceModel
     @Environment(\.colorScheme) private var colorScheme
+    @State private var requestedSidebarWidth = CoreChrome.sidebarDefaultWidth
+    @State private var resizeStart: Double?
+    @State private var inspectorRatio = CoreChrome.inspectorDefaultRatio
+    @State private var inspectorResizeStart: Double?
 
     var body: some View {
-        VStack(spacing: 0) {
-            NativeWorkspaceToolbar(model: model)
-            Divider()
-            HSplitView {
-                if model.sidebarVisible {
-                VStack(spacing: 0) {
-                    NativeSidebarNavigation(model: model)
-                    NativeSidebar(model: model).frame(maxHeight: .infinity)
-                    HStack {
-                        Button { model.newWorkspace() } label: { Label(localized("New workspace", "新建工作区"), systemImage: "plus") }
-                        Button { model.renameWorkspace() } label: { Label(localized("Rename workspace", "重命名工作区"), systemImage: "pencil") }
-                        Spacer()
-                    }.labelStyle(.iconOnly).buttonStyle(.borderless).padding(12).disabled(model.busy || !model.ready || model.gitFavoritesRecoveryPresented)
-                }
-                .frame(minWidth: 176, idealWidth: 220, maxWidth: 320)
-                }
-                if model.inspectorVisible && model.settings["inspectorPosition"].string == "left" { inspector }
-                VStack(spacing: 0) {
-                    if !model.terminalError.isEmpty {
-                        HStack { Text(model.terminalError).font(.caption).textSelection(.enabled); Spacer(); Button(localized("Reconnect", "重新连接")) { Task { await model.reconnectTransport() } } }.padding(8)
+        GeometryReader { geometry in
+            let sidebar = CoreChromeLayout.sidebar(available: Double(geometry.size.width), requested: requestedSidebarWidth)
+            let sidebarWidth = model.sidebarVisible ? sidebar.width : CoreChrome.sidebarRailWidth
+            let tools = CoreChromeLayout.inspector(available: Double(geometry.size.width) - sidebarWidth, ratio: inspectorRatio)
+            let regions = model.settings["inspectorPosition"].string == "left" ? ["tools", "main"] : ["main", "tools"]
+            HStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    NativeSidebarRail(model: model)
+                    if model.sidebarVisible {
+                        VStack(spacing: 0) {
+                            NativeSidebarNavigation(model: model)
+                            NativeSidebar(model: model).padding(.horizontal, 2).padding(.top, CGFloat(CoreChrome.sidebarListTop)).padding(.bottom, 10).frame(maxHeight: .infinity)
+                        }.padding(.horizontal, 10)
+                            .frame(width: max(0, CGFloat(sidebarWidth - CoreChrome.sidebarRailWidth)), alignment: .leading)
                     }
+                }
+                .frame(width: CGFloat(sidebarWidth), alignment: .leading)
+                .background(GeometryReader { geometry in
+                    Color.clear.onAppear { model.measureSidebar(geometry.size.width) }
+                        .onChange(of: geometry.size.width) { _, width in model.measureSidebar(width) }
+                })
+                .background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["sidebar"], fallback: .windowBackgroundColor)))
+                .overlay(alignment: .trailing) {
+                    Color(nsColor: .separatorColor).frame(width: 1)
 
-                    if !model.error.isEmpty {
-                        HStack {
-                            Text(model.error).font(.caption).textSelection(.enabled).lineLimit(3)
-                            Spacer()
-                            Button(localized("Reload", "重新读取")) { Task { await model.reload() } }
-                            Button(localized("Recovery copies", "恢复副本")) { model.recover() }
-                        }.padding(8)
-                    }
-                    NativeSessionTabs(model: model)
-                    if let session = model.selectedTerminal {
-                        HStack {
-                            Text(model.state?.sessions.first { $0.sessionID == session.id }?.session["name"].string ?? "")
-                            if !session.activityLabel.isEmpty { Text(session.activityLabel).foregroundStyle(.secondary) }
-                            Spacer()
-                            if session.exited { Text(localized("Exited", "已退出")).foregroundStyle(.secondary) }
-                            if session.inputControl?.owned == false {
-                                Text(localized("Read-only attachment", "只读连接")).foregroundStyle(.secondary)
-                                InputControlButton(session: session)
+                        .focusable()
+                        .accessibilityLabel(localized("Resize sidebar", "调整侧栏宽度"))
+                        .accessibilityValue(Text(String(Int(sidebarWidth.rounded()))))
+                        .accessibilityAdjustableAction { direction in
+                            switch direction {
+                            case .increment: resizeSidebar(sidebarWidth + 24, available: Double(geometry.size.width))
+                            case .decrement: resizeSidebar(sidebarWidth - 24, available: Double(geometry.size.width))
+                            @unknown default: break
                             }
-                            Button(localized("Reconnect", "重新连接")) { Task { await session.reconnect() } }
-                            Button(localized("Close session", "关闭会话")) { Task { await model.closeSession() } }
-                                .disabled(model.busy || model.gitFavoritesRecoveryPresented)
-                        }.font(.caption).padding(.horizontal, 10).frame(height: 30)
-                        if !session.error.isEmpty { Text(session.error).font(.caption).foregroundStyle(.red).textSelection(.enabled).padding(6) }
-                        if session.activityUnavailable { Text(localized("Agent activity is unavailable. Reconnect to retry.", "Agent 活动暂不可用，请重新连接后重试。")).font(.caption).foregroundStyle(.red).padding(6) }
-                    }
-                    TerminalCanvas(model: model).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        }
+                        .onKeyPress(.leftArrow) { resizeSidebar(sidebarWidth - 24, available: Double(geometry.size.width)); return .handled }
+                        .onKeyPress(.rightArrow) { resizeSidebar(model.sidebarVisible ? sidebarWidth + 24 : CoreChromeLayout.sidebarCollapseWidth + 24, available: Double(geometry.size.width)); return .handled }
+                        .onKeyPress(.home) { resizeSidebar(CoreChromeLayout.sidebarCollapseWidth, available: Double(geometry.size.width)); return .handled }
+                        .onKeyPress(.end) { resizeSidebar(sidebar.maximum, available: Double(geometry.size.width)); return .handled }
+                        .onKeyPress(.return) { resizeSidebar(CoreChrome.sidebarDefaultWidth, available: Double(geometry.size.width)); return .handled }
+                        .overlay(Color.clear.frame(width: 8).contentShape(Rectangle()).gesture(
+                            DragGesture(minimumDistance: 0).onChanged { value in
+                                if resizeStart == nil { resizeStart = sidebarWidth }
+                                let requested = (resizeStart ?? sidebarWidth) + Double(value.translation.width)
+                                let next = CoreChromeLayout.sidebar(available: Double(geometry.size.width), requested: requested)
+                                requestedSidebarWidth = next.width
+                                model.sidebarVisible = !next.hidden
+                            }.onEnded { _ in resizeStart = nil }
+                        ))
                 }
-                .frame(minWidth: 220)
-                if model.inspectorVisible && model.settings["inspectorPosition"].string != "left" { inspector }
+                HStack(spacing: 0) {
+                    // Moving stable regions retains the WebKit document instead of mounting competing hosts.
+                    // 移动稳定标识的区域以保留 WebKit 文档，避免接入相互争用的宿主。
+                    ForEach(regions, id: \.self) { region in
+                        if region == "tools" {
+                            if model.inspectorVisible { inspector(width: tools.width, available: tools.available, height: geometry.size.height) }
+                        } else {
+                            VStack(spacing: 0) {
+                                NativeWorkspaceToolbar(model: model, sidebarWidth: CGFloat(sidebarWidth))
+                                if !model.terminalError.isEmpty {
+                                    HStack { Text(model.terminalError).font(.caption).textSelection(.enabled); Spacer(); Button(localized("Reconnect", "重新连接")) { Task { await model.reconnectTransport() } } }.padding(8)
+                                }
+
+                                if !model.error.isEmpty {
+                                    HStack {
+                                        Text(model.error).font(.caption).textSelection(.enabled).lineLimit(3)
+                                        Spacer()
+                                        Button(localized("Reload", "重新读取")) { Task { await model.reload() } }
+                                        Button(localized("Recovery copies", "恢复副本")) { model.recover() }
+                                    }.padding(8)
+                                }
+                                NativeWorkspaceDocumentSurface(model: model, documents: model.documents).frame(maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                            .frame(minWidth: CGFloat(CoreChrome.mainMinimumWidth), maxWidth: .infinity)
+                        }
+                    }
+                }
             }
-            .padding(CGFloat(model.settings["windowPadding"].number ?? 10))
+            .onChange(of: model.inspectorVisible) { _, visible in
+                inspectorResizeStart = nil
+                if visible && tools.width <= CoreChrome.panelCollapseWidth + 1 { inspectorRatio = CoreChrome.inspectorDefaultRatio }
+            }
         }
         .font(.custom(NativePreferences.font(model.settings["interfaceFont"].string ?? "", size: CGFloat(model.settings["interfaceSize"].number ?? 13)).fontName, size: CGFloat(model.settings["interfaceSize"].number ?? 13)))
         .foregroundStyle(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["text"], fallback: .labelColor)))
-        .background(Color(nsColor: NativePreferences.color(NativePreferences.interfacePalette(model.settings, catalog: model.settingsCatalog)["canvas"], fallback: .windowBackgroundColor)).opacity(model.settings["opacity"].number ?? 1))
+        .background(Color(nsColor: NativePreferences.color(NativePreferences.terminalTheme(model.settings, catalog: model.settingsCatalog)["background"], fallback: .textBackgroundColor)).opacity(model.settings["opacity"].number ?? 1))
         .background(NativeWindowMaterial(enabled: model.settings["blur"].bool == true))
         .ignoresSafeArea(.container, edges: .top)
+        .blur(radius: model.githubPRContent == nil ? 0 : 4)
+        .disabled(model.workspaceModalPresented)
+        .overlay {
+            if let content = model.workspaceModalContent {
+                let pr = content.workbenchHost is GitHubPRHost
+                GeometryReader { geometry in
+                    ZStack {
+                        // WebKit still paints its page canvas; limit it to the form and dim native views separately.
+                        // WebKit 仍会绘制页面底色，因此只让它覆盖表单，原生视图另行绘制遮罩。
+                        Color.black.opacity((pr ? 119.0 : 136.0) / 255).contentShape(Rectangle())
+                            .onTapGesture { if !pr { content.window?.performClose(nil) } }
+                        NativeEmbeddedDocument(content: content, modal: true)
+                            .id(ObjectIdentifier(content))
+                            .frame(width: (pr ? min(640, geometry.size.width * 0.92) : min(540, max(0, geometry.size.width - 32))), height: min(CGFloat(pr ? model.githubPRHeight : model.quickSSHHeight), max(0, geometry.size.height - 48)))
+                            .clipShape(RoundedRectangle(cornerRadius: pr ? 9 : 12))
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }.ignoresSafeArea(.container, edges: .top)
+            }
+        }
         .overlay(alignment: .bottomTrailing) {
             if model.breakReminderVisible {
                 VStack(alignment: .leading, spacing: 8) {
@@ -78,10 +129,53 @@ struct WorkspaceView: View {
                 }.padding(16).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10)).padding(20)
             }
         }
+        .onChange(of: model.sidebarVisible) { _, visible in
+            if visible && requestedSidebarWidth <= CoreChromeLayout.sidebarCollapseWidth { requestedSidebarWidth = CoreChrome.sidebarDefaultWidth }
+        }
         .onChange(of: colorScheme) { _, _ in if model.settings["appearance"].string == "system" { Task { await model.reload() } } }
         .sheet(item: Binding(get: { model.nameDraftOwner == .workspace ? model.nameDraft : nil }, set: { if model.nameDraftOwner == .workspace { model.nameDraft = $0 } })) { _ in NameEditorView(model: model) }
     }
-    private var inspector: some View { InspectorHost(model: model).frame(minWidth: 220, idealWidth: 300, maxWidth: 420) }
+    private func resizeSidebar(_ requested: Double, available: Double) {
+        let next = CoreChromeLayout.sidebar(available: available, requested: requested)
+        requestedSidebarWidth = next.width
+        model.sidebarVisible = !next.hidden
+    }
+    private func resizeInspector(_ requested: Double, available: Double) {
+        inspectorRatio = CoreChromeLayout.inspector(available: available, ratio: requested / available).ratio
+        if requested <= CoreChrome.panelCollapseWidth { model.hideInspector() }
+    }
+    private func inspector(width: Double, available: Double, height: CGFloat) -> some View {
+        let left = model.settings["inspectorPosition"].string == "left"
+        return InspectorHost(model: model).frame(width: CGFloat(width), height: height).clipped()
+            .background(NativeChromeMeasurement { frame in model.measureInspector(frame.width) }.allowsHitTesting(false))
+            .overlay(alignment: left ? .trailing : .leading) {
+                Color(nsColor: .separatorColor).frame(width: 1)
+
+                    .focusable()
+                    .accessibilityLabel(localized("Resize tools", "调整工具面板宽度"))
+                    .accessibilityValue(Text(String(Int((width / available * 100).rounded())) + "%"))
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: resizeInspector(width + 24, available: available)
+                        case .decrement: resizeInspector(width - 24, available: available)
+                        @unknown default: break
+                        }
+                    }
+                    .onKeyPress(.leftArrow) { resizeInspector(width + (left ? -24 : 24), available: available); return .handled }
+                    .onKeyPress(.rightArrow) { resizeInspector(width + (left ? 24 : -24), available: available); return .handled }
+                    .onKeyPress(.home) { model.hideInspector(); return .handled }
+                    .onKeyPress(.end) { inspectorRatio = CoreChrome.inspectorMaximumRatio; return .handled }
+                    .onKeyPress(.return) { inspectorRatio = CoreChrome.inspectorDefaultRatio; return .handled }
+                    .overlay(Color.clear.frame(width: 8).contentShape(Rectangle()).gesture(
+                        DragGesture(minimumDistance: 0).onChanged { value in
+                            if inspectorResizeStart == nil { inspectorResizeStart = width }
+                            let next = (inspectorResizeStart ?? width) + Double(value.translation.width) * (left ? 1 : -1)
+                            inspectorRatio = CoreChromeLayout.inspector(available: available, ratio: next / available).ratio
+                            if next <= CoreChrome.panelCollapseWidth { model.hideInspector() }
+                        }.onEnded { _ in inspectorResizeStart = nil }
+                    ))
+            }
+    }
 }
 
 @MainActor
@@ -113,7 +207,7 @@ private struct NativeWindowMaterial: NSViewRepresentable {
 }
 
 @MainActor
-private struct InputControlButton: NSViewRepresentable {
+struct InputControlButton: NSViewRepresentable {
     let session: TerminalSession
     func makeCoordinator() -> Coordinator { Coordinator(session) }
     func makeNSView(context: Context) -> NSButton {
@@ -192,8 +286,9 @@ struct LocalControlCheckbox: NSViewRepresentable {
 @MainActor
 struct TerminalCanvas: NSViewRepresentable {
     @ObservedObject var model: WorkspaceModel
+    var hidden = false
     func makeNSView(context: Context) -> CanvasHost { CanvasHost() }
-    func updateNSView(_ host: CanvasHost, context: Context) { host.render(model) }
+    func updateNSView(_ host: CanvasHost, context: Context) { host.isHidden = hidden; host.render(model) }
 }
 
 @MainActor
@@ -231,19 +326,27 @@ final class CanvasHost: NSView {
             apply(node["first"]); apply(node["second"])
         }
         apply(layout)
-        if focusRevision != model.focusRevision, let view = model.selectedTerminal?.view {
+        for session in model.terminals.values { session.search.outputChanged() }
+        if !isHidden, focusRevision != model.focusRevision, let view = model.selectedTerminal?.view {
             focusRevision = model.focusRevision
-            DispatchQueue.main.async { [weak self, weak view] in
-                guard let self, let view, view.window === self.window else { return }
-                self.window?.makeFirstResponder(view)
+            let requested = focusRevision
+            let previousResponder = window?.firstResponder
+            DispatchQueue.main.async { [weak self, weak view, weak model, weak previousResponder] in
+                guard let self, let view, let model, let window = self.window, view.window === window,
+                      requested == model.focusRevision, !model.inspectorOwnsFocus else { return }
+                // A later explicit click or search focus takes precedence over queued pane focus.
+                // 后发生的明确点击或搜索焦点优先于排队中的窗格聚焦。
+                let fallback = window.firstResponder === window || window.firstResponder === window.contentView
+                let previousWasRemoved = (previousResponder as? NSView)?.window !== window
+                guard window.firstResponder === previousResponder || (fallback && previousWasRemoved) else { return }
+                window.makeFirstResponder(view)
             }
         }
     }
 
     private func makePane(_ node: JSONValue, model: WorkspaceModel) -> NSView {
-        if node["kind"].string == "leaf", let id = node["session"].string, let view = model.terminals[id]?.view {
-            view.removeFromSuperview()
-            return view
+        if node["kind"].string == "leaf", let id = node["session"].string, let session = model.terminals[id] {
+            return NativeTerminalPane(model: model, session: session)
         }
         if node["kind"].string == "split" {
             let split = SessionSplitView()
