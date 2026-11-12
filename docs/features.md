@@ -277,12 +277,20 @@ hide/reopen. ARM64 also passes all twelve main-window panel scenes and direct re
 switching. Controllers retain panel content independently of the backing window; missing content
 reports a visible error. Bounded callback stages remain available for failure diagnosis.
 
-The full matrix is not accepted: real PostgreSQL operations succeed but actual sidebar selection
-times out, while SSH service operations pass and its old standalone-window visibility check is false
-after embedding. QA now brings the actual workspace forward before matching a saved connection's
-stable ID, requires its retained workbench in that main window, and records safe sidebar diagnostics
-on failure. SSH verifies the real menu's mounted panel and canonical saved profile before restoring
-its standalone service-test view. Current-source execution of these corrections remains required.
+The full matrix is not accepted. At source `f681cba`, tested merge `64406481`, ARM64 passes settings
+interactions and real Redis; Java/Python again pass. PostgreSQL/SQL operations pass, but the sidebar
+check compares the original name after the same test has renamed the saved connection. Its
+diagnostic confirms the exact connection-ID row in a visible key workspace. QA now verifies the
+committed updated name and stable ID together, retaining actual row selection and mounted-view
+checks.
+
+That run also passes the actual embedded SSH menu/profile check, transfer, forwarding and replay,
+but fails its immediate second-session assertion after reconnect. New SSH terminal actions now
+return the created ID and visibly report unsaved/missing/busy connection state. QA explicitly reads
+the saved profile and waits for that exact session to be selected/attached; it preserves the
+independent-sibling close check and records safe state on creation failure. These corrections still
+require fresh current-source Mac execution. Linux passes nine targeted SSH/workbench tests, three
+evidence policies, shell syntax, Markdown formatting and documentation checks for these corrections.
 
 Native CI executes Java/Python interaction checks after building the app and preparing the display,
 before the Git test tool compiles, and uploads their early reports and original windows. SSH,
