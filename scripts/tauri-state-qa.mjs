@@ -829,6 +829,14 @@ print(number.uint32Value)
               expectedRevision: snapshot.revision,
             });
           } else if (value.scene === "git-favorite-recovery-ready") {
+            for (const phase of ["checkpoint", "restore-fixture"]) {
+              const attempts = value.checks.favoriteFixtureAttempts.filter(
+                (item) => item.phase === phase,
+              );
+              assert(attempts.length > 0 && attempts.length <= 3);
+              assert(attempts.at(-1).saved);
+              assert(attempts.every((item) => item.unchangedOnBusy));
+            }
             favoriteOriginal = readFileSync(favoriteFile);
             assert.equal(
               createHash("sha256").update(favoriteOriginal).digest("hex"),

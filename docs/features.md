@@ -1627,6 +1627,17 @@ repositories' recovery data.
 
 #### Git and editor concurrency validation
 
+Git recovery QA prepares its two checkpoints with at most three explicit fixture writes each. A
+writer-busy failure permits another attempt only while the repository, favorite revision, source
+digest and exact references remain unchanged; uncertain writes, conflicts and failed reads stop the
+fixture. Every attempt is recorded in `favoriteFixtureAttempts`. Production writes keep their
+existing explicit-retry behavior. Source/tested commit `994a43a` fails this preparation on macOS
+15.8.2 ARM64 with a real writer-busy error; the failure is retained in
+[artifact13945320297](https://github.com/YondFane/uTerm/actions/runs/43216431201/artifacts/13945320297).
+Linux passes six fixture/recovery regressions, including actual Core-backed dialog checks, plus type
+checking and the production build. Fresh native desktop execution of the checkpoint guard remains
+required.
+
 The accepted Git/Worktree implementation is source `e06168dbe9491c3c862977dc931c6b7ad098a4ee` /
 actual CI merge `e48ce2f886987f92b17f77a42637f6b692bf6da2`. Merge parents were verified as this
 source and release `ca65aa9ca76abcc510124427398789ba01635c4d`; this is a CI test merge, not a merged
