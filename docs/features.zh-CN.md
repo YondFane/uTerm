@@ -274,7 +274,7 @@ CI 将同源码原始 PNG 及对照报告汇集为可下载产物，源码、系
 Linux x86_64／Node
 26 的 20 项设置、搜索及 Maven 专项检查，以及类型／生产构建、i18n 和生成契约检查通过。原生 QA 通过实际 AppKit 字段编辑器输入、点击匹配分类、发送 Escape，检查数值草稿保留且快照字节未变；Mac 产物记录
 `nativeSettingsSearchProof` 和
-`native-settings-search-jdk.png`。自动保存 QA 使用真实 AppKit 字段编辑及失去焦点，再在无关草稿与另一个 Core 写入者同时存在时操作真实字体选择器，检查无效输入保留、修正、字段独立持久化、原始冲突基点及明确重读恢复，记录
+`native-settings-search-jdk.png`。自动保存 QA 使用真实 AppKit 字段编辑、无效值失去焦点及修正后回车，再在无关草稿与另一个 Core 写入者同时存在时操作真实字体选择器，检查无效输入保留、修正、字段独立持久化、原始冲突基点及明确重读恢复，记录
 `nativeSettingsAutomaticSaveProof` 和
 `native-settings-autosave-conflict.png`。同一检查点击真实主题预览按钮、核对终端偏好未变，并采集
 `native-settings-theme-cards-900.png`／`native-settings-theme-cards-640.png`。新增自动保存操作及同源码截图仍待 macOS
