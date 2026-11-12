@@ -101,7 +101,9 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           UTERM_INPUT_CONTROL_REPORT: ${{ github.workspace }}/ci-evidence/input-control-host.json
           UTERM_TASK_OUTPUT_AUTH_REPORT: ${{ github.workspace }}/ci-evidence/task-output-auth.json
-        run: cargo test --manifest-path crates/utermd-local/Cargo.toml --locked 2>&1 | tee ci-evidence/host-tests.log
+        run:
+          cargo test --manifest-path crates/utermd-local/Cargo.toml --locked 2>&1 | tee
+          ci-evidence/host-tests.log
       - name: Java launcher encoding diagnostics
         shell: bash
         env:
@@ -115,14 +117,18 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           UTERM_TERMINAL_LOAD_REPORT: ${{ github.workspace }}/ci-evidence/terminal-load-core.json
           UTERM_JAVA_CORE_REPORT: ${{ github.workspace }}/ci-evidence/java-live-core.json
-          UTERM_INPUT_CONTROL_CORE_REPORT: ${{ github.workspace }}/ci-evidence/input-control-core.json
-          UTERM_INPUT_REACQUIRE_REPORT: ${{ github.workspace }}/ci-evidence/input-reacquire-core.json
+          UTERM_INPUT_CONTROL_CORE_REPORT:
+            ${{ github.workspace }}/ci-evidence/input-control-core.json
+          UTERM_INPUT_REACQUIRE_REPORT:
+            ${{ github.workspace }}/ci-evidence/input-reacquire-core.json
           UTERM_M2_SIMULATION_REPORT: ${{ github.workspace }}/ci-evidence/m2-simulation-core.json
-          UTERM_SSH_CONFIGURATION_REPORT: ${{ github.workspace }}/ci-evidence/ssh-configuration-core.json
+          UTERM_SSH_CONFIGURATION_REPORT:
+            ${{ github.workspace }}/ci-evidence/ssh-configuration-core.json
           UTERM_SSH_SERVICE_REPORT: ${{ github.workspace }}/ci-evidence/ssh-service-core.json
           UTERM_GIT_CORE_REPORT: ${{ github.workspace }}/ci-evidence/git-operations-core.json
           UTERM_AGENT_CORE_REPORT: ${{ github.workspace }}/ci-evidence/agent-hooks-core.json
-          UTERM_ROLLBACK_EXPORT_REPORT: ${{ github.workspace }}/ci-evidence/rollback-export-core.json
+          UTERM_ROLLBACK_EXPORT_REPORT:
+            ${{ github.workspace }}/ci-evidence/rollback-export-core.json
         run: pnpm test:core 2>&1 | tee ci-evidence/core-ffi-tests.log
       - name: Generated contracts
         shell: bash
@@ -153,10 +159,14 @@ jobs:
         run: pnpm test 2>&1 | tee ci-evidence/frontend-tests.log
       - name: Backend tests
         shell: bash
-        run: cargo test --manifest-path src-tauri/Cargo.toml --locked 2>&1 | tee ci-evidence/backend-tests.log
+        run:
+          cargo test --manifest-path src-tauri/Cargo.toml --locked 2>&1 | tee
+          ci-evidence/backend-tests.log
       - name: Desktop build
         shell: bash
-        run: node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle -- --locked 2>&1 | tee ci-evidence/desktop-build.log
+        run:
+          node node_modules/@tauri-apps/cli/tauri.js build --debug --no-bundle -- --locked 2>&1 |
+          tee ci-evidence/desktop-build.log
       - name: Isolated native shared-state, SSH and Redis QA
         shell: bash
         env:
@@ -178,7 +188,9 @@ jobs:
         shell: pwsh
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: ./scripts/windows-candidate-package.ps1 *>&1 | Tee-Object -FilePath ci-evidence/candidate-package-command.log
+        run:
+          ./scripts/windows-candidate-package.ps1 *>&1 | Tee-Object -FilePath
+          ci-evidence/candidate-package-command.log
       - name: Preserve shared Core failure
         if: ${{ always() && steps.shared-core.outcome == 'failure' }}
         shell: bash
@@ -197,12 +209,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: legacy-checks-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          name:
+            legacy-checks-${{ matrix.os }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: ci-evidence/
           if-no-files-found: error
 
   ui-parity-evidence:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 40
@@ -210,7 +223,7 @@ jobs:
       contents: read
       actions: read
     env:
-      SOURCE_HEAD: ${{ github.event.pull_request.head.sha }}
+      SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v6

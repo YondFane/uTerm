@@ -492,11 +492,12 @@ settings model. Restore defaults is in General, while retry/reload controls appe
 drafts or errors. Return commits an edited field. Local control still changes its service
 immediately.
 
-Both collectors record the actual settings card bounds inside matching workspace windows. Pairing
-rejects separate settings windows, missing measurements, out-of-bounds cards or different actual
-positions/sizes. Linux passes 25 paired-evidence policy checks, including both-client modal and
-geometry rejection; 479 Node checks pass with 11 platform skips, alongside type/production build and
-format checks. Native QA uses the 640×420 minimum workspace, clicks the actual close button,
+PR and manually dispatched CI collect same-source original images and reports into downloadable
+artifacts. Both collectors record the actual settings card bounds inside matching workspace windows.
+Pairing rejects separate settings windows, missing measurements, out-of-bounds cards or different
+actual positions/sizes. Linux passes 25 paired-evidence policy checks, including both-client modal
+and geometry rejection; 479 Node checks pass with 11 platform skips, alongside type/production build
+and format checks. Native QA uses the 640×420 minimum workspace, clicks the actual close button,
 verifies workspace focus and cached reopen, and requires `nativeSettingsOverlayProof` plus
 `native-settings-workspace-overlay.png`. These new actual-window operations and screenshots remain
 pending current-source macOS CI; the complete settings field styling is not accepted yet.
