@@ -649,9 +649,21 @@ visual parity.
 Real-window CI prepares a display of at least 1280×900 before the matching screenshot grid; the
 required 720-pixel content height is still checked against actual window bounds. Personal smoke
 failures retain the raw report and available original captures before validation, including an
-attempted failure-window capture. The ordinary collector waits for real terminal input ownership
-before inspecting the host. Linux passes 12 Personal package/evidence policy tests and 13
-paired-evidence policy tests; these fixtures do not represent native window execution.
+attempted failure-window capture. Each initial/replacement phase has a 180-second process deadline
+for the full grid. Atomic progress checkpoints retain the exact source/merge, stage and elapsed
+time. A timeout samples only the owned QA process for at most five seconds and keeps incomplete
+reports and existing original images, even if no final report was produced. Incomplete progress
+cannot satisfy acceptance; all operation, fixture and shutdown assertions remain required.
+
+Source `d8fe48e`, tested merge `a801c8f`, passes the complete ARM native matrix and Personal
+initial/replacement/SDK checks. Its Intel Personal phase exceeds the former 90-second deadline
+before writing a final report; the original
+[failed artifact](https://github.com/YondFane/uTerm/actions/runs/43219329935/artifacts/13947023184)
+has logs but no scene report. The exact stalled stage remains unknown. The new checkpoints and
+bounded phase budget still need their own Mac execution. The ordinary collector waits for real
+terminal input ownership before inspecting the host. Linux passes 19 Personal package/evidence
+policies and 26 pairing/interaction policies, including incomplete reports, scoped image copying and
+sample failure. These fixtures do not represent native window execution.
 
 The Personal collector adjusts the real window frame against measured content bounds, with at most
 five attempts and recorded geometry. It also executes the project context menu and disclosure
@@ -5549,7 +5561,7 @@ The original interactive terminal interface is retained. Installing Hooks is opt
 | Agent                                                                                | Notification source                                                                                                                                                                |
 | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Codex                                                                                | A dedicated authenticated loopback app-server and the original TUI connected through `--remote`; unsupported versions or invocation-specific configuration use terminal reminders. |
-| OpenCode                                                                             | Its own authenticated loopback server and SSE session/permission events. Custom server or attach arguments retain terminal reminders.                                              |
+| OpenCode                                                                             | Authenticated loopback server and SSE when top-level listener flags are supported. OpenCode v2 or custom server options retain the original TUI and terminal reminders.            |
 | Claude                                                                               | A terminal bell enabled for this launch with `--settings`; explicit later CLI settings retain precedence.                                                                          |
 | Gemini, Kimi, Grok, Hermes, Pi, MiniMax, Qwen Code, Copilot CLI, iFlow CLI, TRAE CLI | Native terminal notifications or BEL when the CLI emits them. Availability and enablement depend on the CLI version and settings.                                                  |
 
@@ -5567,6 +5579,16 @@ The original interactive terminal interface is retained. Installing Hooks is opt
   starting-directory overrides retain the original local launch with terminal reminders, so an
   independent server cannot silently change those settings. Configuration from `CODEX_HOME` remains
   available to the managed event server.
+
+OpenCode startup checks the actual executable’s top-level help. uTerm configures the legacy event
+server only when both `--hostname` and `--port` are supported. OpenCode v2.2.2 exposes these options
+on `serve`, so uTerm starts its original interactive interface without adding those flags or
+substituting `serve`. If listener support cannot be confirmed, startup also retains the plain TUI.
+
+`--continue`, `--session`, custom prompts and project directories with spaces are preserved.
+Explicit `--server`, `--standalone`, `attach` and service/tool subcommands are not rewritten.
+Generic terminal reminders depend on notifications emitted by the CLI; this path does not provide
+the legacy SSE completion/permission status.
 
 - Codex and OpenCode use structured status to distinguish work, completion, attention and failure.
   Codex excludes subagents and temporary helper threads and supports both paginated and legacy
@@ -5599,6 +5621,31 @@ The original interactive terminal interface is retained. Installing Hooks is opt
   including in the background. Reopening after quitting restores state without sending historical
   notifications. SSH and terminal-multiplexer forwarding remain dependent on those tools passing the
   escape sequences through.
+
+#### OpenCode CLI compatibility validation
+
+- The macOS ARM host check at source `957a50f`, tested merge `4b7fc570`, fails a test that compares
+  `/private/var` and `/var` as literal strings, before desktop QA starts. Its
+  [report and log](https://github.com/YondFane/uTerm/actions/runs/43223865217/artifacts/13947094255)
+  remain failed. The test now uses a real project-directory symlink and compares canonical directory
+  identities, retaining all legacy listener authentication and launch assertions. Linux reproduces
+  the former assertion and passes all 11 event-bridge regressions after correction; two
+  installed-CLI checks remain ignored. No production argument or authentication behavior changes.
+  Fresh Mac execution is still required.
+
+- The Linux host suite passes serially, together with focused Agent/session-lifecycle frontend
+  checks. Regression coverage includes v2 argument preservation, legacy authentication, help on
+  stdout/stderr, failed/timed-out probes, paths with spaces and permission/completion filtering. A
+  parallel host-management timing failure passes on serial rerun.
+- Official OpenCode 2.2.2 runs in real PTYs with isolated configuration/data directories, covering
+  new sessions, `--session`, `--continue`, `--standalone` and a project path containing spaces. A
+  temporary empty session created through the API verifies restoration without model requests.
+  Official 1.18.32 also passes its real-PTY/authenticated-SSE check and rejects unauthenticated
+  requests.
+- Both CLI archives are checked against official SHA-256 values. The temporary v2 service uses a
+  separate port and is stopped afterwards; user configuration and installed apps are untouched.
+  Native macOS/Windows entry-point acceptance remains pending. This does not establish legacy SSE
+  event support for v2.
 
 #### No-Hook notification validation
 

@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
@@ -13,6 +14,50 @@ spec.loader.exec_module(package)
 
 
 class PersonalPackageTests(unittest.TestCase):
+    def test_missing_final_report_retains_progress_and_actual_partial_images(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root, evidence = Path(temporary) / "source", Path(temporary) / "evidence"
+            root.mkdir(); evidence.mkdir()
+            progress = dict(passed=False, inProgress=True, stage="settings-en-maven", sourceHeadSHA="a" * 40,
+                            testedMergeSHA="b" * 40, elapsedSeconds=87)
+            raw = json.dumps(progress)
+            (root / "personal-initial-progress.json").write_text(raw)
+            image = b"\x89PNG\r\n\x1a\npolicy-test-only"
+            (root / "personal-initial-settings.png").write_bytes(image)
+            package.preserve_incomplete_smoke(root, evidence, "initial", "timeout", "a" * 40, "b" * 40)
+            self.assertEqual((evidence / "personal-initial-progress.json").read_text(), raw)
+            self.assertEqual((evidence / "personal-initial-settings.png").read_bytes(), image)
+            report = json.loads((evidence / "personal-initial-incomplete.json").read_text())
+            self.assertFalse(report["passed"])
+            self.assertTrue(report["incomplete"])
+            self.assertEqual(report["lastProgress"], progress)
+            self.assertEqual(report["captures"], ["personal-initial-settings.png"])
+            self.assertFalse((evidence / "personal-initial.json").exists())
+            with self.assertRaises(AssertionError):
+                package.validate_smoke_report(report, "a" * 40, "b" * 40, "initial")
+
+    def test_incomplete_capture_and_progress_cannot_follow_symlinks(self):
+        for kind in ["capture", "progress"]:
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temporary:
+                root, evidence = Path(temporary) / "source", Path(temporary) / "evidence"
+                root.mkdir(); evidence.mkdir()
+                outside = Path(temporary) / "outside"
+                outside.write_bytes(b"\x89PNG\r\n\x1a\npolicy-test-only" if kind == "capture" else b'{}')
+                name = "personal-initial-image.png" if kind == "capture" else "personal-initial-progress.json"
+                (root / name).symlink_to(outside)
+                with self.assertRaises(AssertionError):
+                    package.preserve_incomplete_smoke(root, evidence, "initial", "timeout", "a" * 40, "b" * 40)
+                self.assertFalse((evidence / name).exists())
+
+    def test_timeout_sampling_is_bounded_and_its_failure_remains_diagnostic(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            evidence = Path(temporary)
+            with mock.patch.object(package.subprocess, "run", side_effect=package.subprocess.TimeoutExpired("sample", 5)) as run:
+                package.sample_smoke_timeout(12345, evidence, "initial")
+            self.assertEqual(run.call_args.args[0][:3], ["sample", "12345", "1"])
+            self.assertEqual(run.call_args.kwargs["timeout"], 5)
+            self.assertIn("sampling failed", (evidence / "personal-initial-timeout-sample.txt").read_text())
+
     def test_failed_acceptance_keeps_raw_report_and_available_images(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / "source"
@@ -231,6 +276,10 @@ class PersonalPackageTests(unittest.TestCase):
                       sourceHeadSHA="a" * 40, testedMergeSHA="b" * 40, profileRetainedAfterAppReplacement=True,
                       settingsWindowAppearances={"en-dark": "NSAppearanceNameDarkAqua", "zh-Hans-light": "NSAppearanceNameAqua"})
         package.validate_smoke_report(report, "a" * 40, "b" * 40, "replacement")
+        report["inProgress"] = True
+        with self.assertRaises(AssertionError):
+            package.validate_smoke_report(report, "a" * 40, "b" * 40, "replacement")
+        report["inProgress"] = False
         report["settingsWindowAppearances"]["en-dark"] = "NSAppearanceNameAqua"
         report["storedAppearance"] = "dark"
         with self.assertRaises(AssertionError):
