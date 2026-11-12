@@ -499,7 +499,20 @@ rename, pin/unpin, move up/down, move to another workspace and removal of an emp
 project order supports local dragging within the same pin group; name sorting disables manual
 reordering. Pinning, collapse and order write shared state with revision checks. The workspace menu
 adds create/rename/delete; deletion is available only for an empty workspace when another remains.
-These candidate interactions require their new native CI checks; drag acceptance remains pending.
+Project pin/collapse, reorder, workspace-move and removal menus capture the revision when opened. A
+menu held across another client's write rejects its stale operation, preserving the current project
+and peer settings; reopen the menu to act on fresh data. Disclosure controls retain their existing
+immediate behavior.
+
+Native QA holds actual pin/move menus across a second Core client's write, requires conflict
+rejection, then moves grouped real terminals to another workspace and back through fresh menus. It
+checks the same PTY generations and native views, and reopens the saved snapshot to verify the split
+layout. Originals are `native-project-workspace-move.png` and
+`personal-{phase}-project-workspace-move.png`; source-bound
+`nativeProjectMenuRevisionAndWorkspaceMove` proof is required for personal packages. Linux x86_64
+passes five session checks, twelve persistence checks (one explicit I/O check ignored) and seventeen
+package-evidence policies. The new menu scenarios and screenshots remain pending Mac CI. Physical
+dragging has not been executed and remains in the full acceptance scope.
 
 [Two-client acceptance](native-ui-parity.md) covers the full matching scope, including remaining
 checks for drag/group operations, layout persistence, content tabs and workbench integration. Both

@@ -429,9 +429,12 @@ struct NativeSidebar: NSViewRepresentable {
             if row.key.hasPrefix("p:"), let project = model.projects.first(where: { $0["id"].string == String(row.key.dropFirst(2)) }) {
                 let id = project["id"].string ?? ""
                 let enabled = !model.busy && !model.gitFavoritesRecoveryPresented && !model.worktreeDeletionPresented
-                func action(_ title: String, _ selector: Selector, _ target: Any, enabled available: Bool = true) {
+                let revision = model.state?.snapshot.revision ?? ""
+                @MainActor func action(_ title: String, _ selector: Selector, _ target: Any, enabled available: Bool = true) {
                     let item = NSMenuItem(title: title, action: selector, keyEquivalent: "")
-                    item.target = self; item.representedObject = target; item.isEnabled = enabled && available; menu.addItem(item)
+                    var captured = target
+                    if var values = target as? [String: String] { values["revision"] = revision; captured = values }
+                    item.target = self; item.representedObject = captured; item.isEnabled = enabled && available; menu.addItem(item)
                 }
                 action(localized("Rename project…", "重命名项目…"), #selector(renameProject(_:)), id)
                 action(project["pinned"].bool == true ? localized("Unpin project", "取消置顶项目") : localized("Pin project", "置顶项目"), #selector(toggleProjectFlag(_:)), ["id": id, "key": "pinned"])
@@ -444,11 +447,11 @@ struct NativeSidebar: NSViewRepresentable {
                 let targets = NSMenu()
                 for group in model.groupItems where group.id != model.groupID {
                     let item = NSMenuItem(title: group.name, action: #selector(moveProject(_:)), keyEquivalent: "")
-                    item.target = self; item.representedObject = ["id": id, "workspaceId": group.id]; item.isEnabled = enabled
+                    item.target = self; item.representedObject = ["id": id, "workspaceId": group.id, "revision": revision]; item.isEnabled = enabled
                     targets.addItem(item)
                 }
                 move.submenu = targets; move.isEnabled = enabled && !targets.items.isEmpty; menu.addItem(move)
-                action(localized("Remove project", "移除项目"), #selector(removeProject(_:)), id, enabled: project["sessions"].array.isEmpty)
+                action(localized("Remove project", "移除项目"), #selector(removeProject(_:)), ["id": id], enabled: project["sessions"].array.isEmpty)
                 menu.addItem(.separator())
             }
             let item = NSMenuItem(title: localized("Refresh Worktrees", "刷新 Worktree"), action: #selector(refreshWorktrees(_:)), keyEquivalent: "")
@@ -470,9 +473,9 @@ struct NativeSidebar: NSViewRepresentable {
             model?.renameProject(id)
         }
         @objc private func toggleProjectFlag(_ item: NSMenuItem) {
-            guard let params = item.representedObject as? [String: String], let id = params["id"], let key = params["key"], let model,
+            guard let params = item.representedObject as? [String: String], let id = params["id"], let key = params["key"], let revision = params["revision"], !revision.isEmpty, let model,
                   let project = model.projects.first(where: { $0["id"].string == id }) else { return }
-            Task { await model.setProjectFlag(id, key: key, value: project[key].bool != true) }
+            Task { await model.setProjectFlag(id, key: key, value: project[key].bool != true, revision: revision) }
         }
         final class SectionButton: NSButton { var sectionID = "" }
         @objc private func closeSidebarSession(_ sender: SidebarSessionCloseButton) {
@@ -523,19 +526,19 @@ struct NativeSidebar: NSViewRepresentable {
             Task { await model.setProjectFlag(button.projectID, key: "collapsed", value: project["collapsed"].bool != true) }
         }
         @objc private func reorderProject(_ item: NSMenuItem) {
-            guard let params = item.representedObject as? [String: String], let id = params["id"], let model else { return }
+            guard let params = item.representedObject as? [String: String], let id = params["id"], let revision = params["revision"], !revision.isEmpty, let model else { return }
             let peers = model.projectOrderPeers(id)
             guard let index = peers.firstIndex(of: id) else { return }
-            if params["direction"] == "up", index > 0 { Task { await model.moveProjectOrder(id, before: peers[index - 1]) } }
-            else if params["direction"] == "down", index + 1 < peers.count { Task { await model.moveProjectOrder(id, before: index + 2 < peers.count ? peers[index + 2] : nil) } }
+            if params["direction"] == "up", index > 0 { Task { await model.moveProjectOrder(id, before: peers[index - 1], revision: revision) } }
+            else if params["direction"] == "down", index + 1 < peers.count { Task { await model.moveProjectOrder(id, before: index + 2 < peers.count ? peers[index + 2] : nil, revision: revision) } }
         }
         @objc private func moveProject(_ item: NSMenuItem) {
-            guard let params = item.representedObject as? [String: String], let id = params["id"], let workspace = params["workspaceId"], let model else { return }
-            Task { await model.mutate("project.move", ["id": .string(id), "workspaceId": .string(workspace)]) }
+            guard let params = item.representedObject as? [String: String], let id = params["id"], let workspace = params["workspaceId"], let revision = params["revision"], !revision.isEmpty, let model else { return }
+            Task { await model.mutate("project.move", ["id": .string(id), "workspaceId": .string(workspace)], revision: revision) }
         }
         @objc private func removeProject(_ item: NSMenuItem) {
-            guard let id = item.representedObject as? String, let model else { return }
-            Task { await model.mutate("project.remove", ["id": .string(id)]) }
+            guard let params = item.representedObject as? [String: String], let id = params["id"], let revision = params["revision"], !revision.isEmpty, let model else { return }
+            Task { await model.mutate("project.remove", ["id": .string(id)], revision: revision) }
         }
         @objc private func refreshWorktrees(_ item: NSMenuItem) {
             guard let id = item.representedObject as? String, let model else { return }

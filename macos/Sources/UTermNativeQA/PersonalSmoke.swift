@@ -414,5 +414,7 @@ enum PersonalSmoke {
         try await TerminalSmoke.capture(window: window, path: root.appendingPathComponent(expanded))
         report["captures"] = (report["captures"] as? [String] ?? []) + [expanded]
         report["nativeProjectMenuPinCollapseOrderAndConflictVerified"] = true
+        try await ProjectMenuSmoke.run(model: model, window: window, projectID: "personal-qa-project", prefix: "personal-" + phase, evidence: root, report: &report)
+        if let proof = report["nativeProjectMenuRevisionAndWorkspaceMove"] as? [String: Any], let image = proof["screenshot"] as? String { report["captures"] = (report["captures"] as? [String] ?? []) + [image] }
     }
 }

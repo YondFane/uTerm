@@ -28,6 +28,11 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-panels-') as directory:
     for kind, fields in required.items():
         proof = data[kind + 'WorkspacePanelProof']
         for key in ['actualMainWindow', *fields]: assert proof[key] is True, (kind, key)
+    project = data['nativeProjectMenuRevisionAndWorkspaceMove']
+    for key in ['passed', 'actualMenuActions', 'stalePinRejected', 'staleMoveRejected', 'peerSettingRetained', 'terminalGenerationsAndViewsRetained', 'splitLayoutRetainedInReopenedSnapshot', 'movedAndReturned']:
+        assert project[key] is True, key
+    assert project['sourceHeadSHA'] == data['sourceHeadSHA'] and project['testedMergeSHA'] == data['sourceSHA']
+    assert (evidence / project['screenshot']).stat().st_size > 1000
     assert data['cleanup']
     assert len(data['captures']) == 6
     for name in data['captures']: assert (evidence / name).stat().st_size > 1000, name

@@ -539,13 +539,13 @@ final class WorkspaceModel: ObservableObject {
     }
 
     @discardableResult
-    func setProjectFlag(_ id: String, key: String, value: Bool) async -> Bool {
+    func setProjectFlag(_ id: String, key: String, value: Bool, revision: String? = nil) async -> Bool {
         guard ["pinned", "collapsed"].contains(key), let state,
               case .object(var document) = workspace,
               let index = document["projects"]?.array.firstIndex(where: { $0["id"].string == id && $0["workspaceId"].string == groupID }),
               var projects = document["projects"]?.array, case .object(var project) = projects[index] else { return false }
         project[key] = .bool(value); projects[index] = .object(project); document["projects"] = .array(projects)
-        return await mutate("snapshot.replace", ["workspace": .object(document), "settings": settings], revision: state.snapshot.revision)
+        return await mutate("snapshot.replace", ["workspace": .object(document), "settings": settings], revision: revision ?? state.snapshot.revision)
     }
 
     func projectOrderPeers(_ id: String) -> [String] {

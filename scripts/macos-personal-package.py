@@ -59,6 +59,13 @@ def validate_info(info, head, tested):
 
 
 def validate_workspace_scenes(report, head, tested, phase):
+    project = report.get("nativeProjectMenuRevisionAndWorkspaceMove", {})
+    for key in ["passed", "actualMenuActions", "stalePinRejected", "staleMoveRejected", "peerSettingRetained", "terminalGenerationsAndViewsRetained", "splitLayoutRetainedInReopenedSnapshot", "movedAndReturned"]:
+        assert project.get(key) is True, key
+    assert project.get("sourceHeadSHA") == head and project.get("testedMergeSHA") == tested
+    assert project.get("platform") == "macOS" and project.get("architecture") in ["arm64", "x86_64"]
+    assert project.get("system") and project.get("screenshot") == f"personal-{phase}-project-workspace-move.png"
+    assert project["screenshot"] in report.get("captures", [])
     assert report.get("nativeProjectMenuPinCollapseOrderAndConflictVerified") is True
     assert report.get("nativeSidebarSectionOrderAndReadOnlyCollapse") is True
     assert report.get("backgroundTabCloseRetainedSelectedGeneration") is True
