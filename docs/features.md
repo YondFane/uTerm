@@ -522,6 +522,20 @@ create/rename/delete operations. Agent commands/hooks and quota open their exist
 window. Java development tools has a standalone section; its source-bound native checks are recorded
 under Optional JDK and Maven tools.
 
+Both settings windows provide **Search settings** above category navigation. Search matches category
+names and bilingual field keywords, including JDK registration, proxy settings and update
+preferences. Matching normalizes full-width characters, ignores case and requires every word to
+match. Filtering keeps the selected category and unsaved values; select a result to navigate. Escape
+clears a nonempty query without closing the window. Clearing search restores every category. The
+search index is shared with the Rust-delivered native catalog and never changes saved settings.
+
+Linux x86_64 / Node 26 passes 20 focused settings, search and Maven checks, type/production build,
+i18n and generated-contract checks. Native QA inserts text through the actual AppKit field editor,
+clicks the matching category, sends Escape and checks the retained numeric draft and unchanged
+snapshot bytes. It records `nativeSettingsSearchProof` and `native-settings-search-jdk.png` in the
+Mac artifact. The new native operation and same-source search screenshots remain pending CI;
+complete settings styling and field-order comparison are still tracked in #53.
+
 Interface and terminal font selectors share the ordinary client's preset catalog and localized
 labels. Existing custom font strings remain a selected custom entry until a preset is chosen; simply
 opening or switching categories does not replace them. Selection retains the exact fallback-family

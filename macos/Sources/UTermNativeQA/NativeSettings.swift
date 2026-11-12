@@ -23,6 +23,12 @@ final class NativeSettingsModel: ObservableObject {
     @Published var error = ""
     @Published var notice = ""
     @Published var section = "general"
+    @Published var query = ""
+    func matchesSection(_ id: String, title: String) -> Bool {
+        let section = catalog["sections"].array.first { $0["id"].string == id } ?? .null
+        let value = [id, title, section["labels"]["en"].string ?? "", section["labels"]["zh-Hans"].string ?? "", section["keywords"].string ?? ""].joined(separator: " ").precomposedStringWithCompatibilityMapping.lowercased()
+        return query.precomposedStringWithCompatibilityMapping.lowercased().split(whereSeparator: \.isWhitespace).allSatisfy { value.contains($0) }
+    }
     private(set) var errorCode = ""
     private var baseline: [String: JSONValue] = [:]
     private var baselineNumbers: [String: String] = [:]
@@ -281,6 +287,8 @@ struct NativeSettingsView: View {
                 HStack(spacing: 0) {
                     ScrollView {
                         VStack(spacing: 4) {
+                            NativeSettingsSearch(model: model).frame(height: 28)
+                            if !model.catalog["sections"].array.contains(where: { model.matchesSection($0["id"].string ?? "", title: model.title($0)) }) { Text(localized("No matching items.", "没有匹配的条目。")).font(.caption).foregroundStyle(.secondary) }
                             navigation("general", "gearshape", "General", "通用")
                             navigation("appearance", "paintpalette", "Appearance", "外观")
                             navigation("terminal", "terminal", "Terminal", "终端")
@@ -321,9 +329,13 @@ struct NativeSettingsView: View {
         }
     }
     private func navigation(_ id: String, _ symbol: String, _ en: String, _ zh: String) -> some View {
-        NativeSettingsNavigation(model: model, id: id, symbol: symbol, title: localized(en, zh)).frame(height: 32)
-            .background(model.section == id ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-            .accessibilityIdentifier("native-settings-section-" + id)
+        Group {
+            if model.matchesSection(id, title: localized(en, zh)) {
+                NativeSettingsNavigation(model: model, id: id, symbol: symbol, title: localized(en, zh)).frame(height: 32)
+                    .background(model.section == id ? Color.accentColor.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                    .accessibilityIdentifier("native-settings-section-" + id)
+            }
+        }
     }
     @ViewBuilder private var selectedSection: some View {
         switch model.section {

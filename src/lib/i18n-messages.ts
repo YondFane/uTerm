@@ -1,4 +1,5 @@
 export const messages: Record<string, string> = {
+  搜索设置: "Search settings",
   "高亮已被其他窗口修改，请明确重试。": "Highlights changed in another window. Retry explicitly.",
   "请先重试或取消未保存的高亮。": "Retry or cancel the unsaved highlight first.",
   "后台服务不支持会话重启。请关闭会话后退出并重新打开应用；已有进程未被终止。":

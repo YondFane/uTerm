@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "sections": [
+    {
+      "id": "general",
+      "label": "通用",
+      "keywords": "language defaultShell login startup breakReminder breakInterval SSH Redis database 语言 默认 Shell 开机 登录 休息 提醒 侧栏 连接"
+    },
+    {
+      "id": "appearance",
+      "label": "外观",
+      "keywords": "appearance interfaceTheme darkTheme lightTheme interfaceFont interfaceSize activeIconColor opacity blur windowFrameStyle fileTabLimit previewFont themes import export 外观 深色 浅色 界面 主题 字体 字号 透明 模糊 窗口 边框 文件 标签 导入 导出"
+    },
+    {
+      "id": "terminal",
+      "label": "终端",
+      "keywords": "fontFamily fontSize cursorStyle cursorBlink scrollback bell copyOnSelect rightClickPaste 终端 字体 字号 光标 闪烁 回滚 提示音 选择 复制 右键 粘贴"
+    },
+    {
+      "id": "workspace",
+      "label": "工作区",
+      "keywords": "projectOrder recentLimit workspaces create rename remove projects sessions 项目 排序 最近 工作区 新建 重命名 删除 会话"
+    },
+    {
+      "id": "keyboard",
+      "label": "快捷键",
+      "keywords": "keyboard shortcuts commands binding key 快捷键 键盘 命令 按键"
+    },
+    {
+      "id": "agents",
+      "label": "Agent",
+      "keywords": "agent notifications hooks shell skills CLI 通知 钩子 技能 命令行"
+    },
+    {
+      "id": "usage",
+      "label": "用量",
+      "keywords": "usage polling interval quota refresh 用量 配额 轮询 间隔 刷新"
+    },
+    {
+      "id": "control",
+      "label": "本地控制",
+      "keywords": "local control CLI token directory 本地 控制 令牌 目录"
+    },
+    {
+      "id": "database",
+      "label": "数据库组件",
+      "keywords": "database JDBC PostgreSQL MySQL SQLite driver component download import 数据库 驱动 组件 下载 导入"
+    },
+    {
+      "id": "maven",
+      "label": "Maven 设置",
+      "keywords": "Maven settings repository mirror proxy server profile local global project 仓库 镜像 代理 服务器 全局 项目"
+    },
+    {
+      "id": "java",
+      "label": "Java 开发环境",
+      "keywords": "Java JDK Maven tools managed install download import detect register remove cache 开发 环境 工具 托管 安装 下载 导入 检测 注册 删除 缓存"
+    },
+    {
+      "id": "updates",
+      "label": "软件更新",
+      "keywords": "software automaticUpdates update version release download install 软件 自动 更新 版本 下载 安装"
+    }
+  ]
+}

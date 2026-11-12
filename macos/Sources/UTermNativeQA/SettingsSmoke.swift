@@ -24,6 +24,31 @@ enum SettingsSmoke {
         }
         return nil
     }
+    private static func checkSearch(_ settings: NativeSettingsWindow, snapshotFile: URL, report: inout [String: Any]) async throws {
+        let model = settings.model, before = try Data(contentsOf: snapshotFile)
+        let original = model.numbers["fontSize"]
+        model.numbers["fontSize"] = original == "19" ? "18" : "19"
+        let retained = model.numbers["fontSize"]
+        try await TerminalSmoke.wait("Render native settings search") { (view(settings.window, id: "native-settings-search") as? NSSearchField)?.isEnabled == true }
+        guard let field = view(settings.window, id: "native-settings-search") as? NSSearchField else { throw BridgeFailure(code: "SETTINGS_SEARCH", message: "Missing settings search field") }
+        settings.window.makeKeyAndOrderFront(nil); settings.window.makeFirstResponder(field)
+        guard let editor = field.currentEditor() as? NSTextView else { throw BridgeFailure(code: "SETTINGS_SEARCH", message: "Missing actual AppKit search editor") }
+        editor.insertText("JDK", replacementRange: NSRange(location: 0, length: 0))
+        try await TerminalSmoke.wait("Search filters categories through actual AppKit input") { model.query == "JDK" && view(settings.window, id: "native-settings-section-java") != nil && view(settings.window, id: "native-settings-section-appearance") == nil }
+        guard model.section == "general", model.numbers["fontSize"] == retained, model.dirty else { throw BridgeFailure(code: "SETTINGS_SEARCH_DRAFT", message: "Filtering navigation changed the selected section or draft") }
+        guard let java = view(settings.window, id: "native-settings-section-java") as? NSButton else { throw BridgeFailure(code: "SETTINGS_SEARCH", message: "Missing matching category") }
+        java.performClick(nil)
+        try await TerminalSmoke.wait("Matching category remains actionable") { model.section == "java" }
+        let name = "native-settings-search-jdk.png"
+        if let path = WorkspaceModel.argument("--settings-smoke-report") { try await TerminalSmoke.capture(window: settings.window, path: URL(fileURLWithPath: path).deletingLastPathComponent().appendingPathComponent(name)) }
+        try await TerminalSmoke.wait("Search field is ready after category loading") { field.isEnabled && !model.javaComponents.pending && !model.javaComponents.mutating }
+        settings.window.makeFirstResponder(field)
+        try key(settings.window, code: 53, characters: "\u{1b}")
+        try await TerminalSmoke.wait("Escape clears search while retaining the settings window") { model.query.isEmpty && settings.window.isVisible && view(settings.window, id: "native-settings-section-appearance") != nil }
+        guard model.numbers["fontSize"] == retained, try Data(contentsOf: snapshotFile) == before else { throw BridgeFailure(code: "SETTINGS_SEARCH_DRAFT", message: "Settings search changed a draft or saved data") }
+        model.numbers["fontSize"] = original; model.section = "general"; settings.window.makeFirstResponder(nil)
+        report["nativeSettingsSearchProof"] = ["actualAppKitInput": true, "filteredNavigation": true, "matchingCategoryClickable": true, "draftRetained": true, "escapeClearsWithoutClosing": true, "savedBytesUnchanged": true, "capture": name]
+    }
     static func run(workspace: WorkspaceModel, open: () -> NativeSettingsWindow, report: inout [String: Any]) async throws {
         guard workspace.ready, let bridge = workspace.bridge, let path = WorkspaceModel.argument("--settings-smoke-report") else { throw BridgeFailure(code: "SETTINGS_QA_CONTEXT", message: "Missing isolated settings context") }
         let root = try WorkspaceModel.dataRoot()
@@ -44,6 +69,7 @@ enum SettingsSmoke {
         }
         guard try Data(contentsOf: snapshotFile) == before, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_SECTION", message: "Navigating settings changed saved data") }
         report["nativeSettingsSidebarNavigationPreservesSavedData"] = true
+        try await checkSearch(current, snapshotFile: snapshotFile, report: &report)
         workspace.newWorkspace(owner: .settings)
         try await TerminalSmoke.wait("Attach workspace naming to the settings window") { current.window.attachedSheet != nil && workspace.nameDraftOwner == .settings }
         guard let nameSheet = current.window.attachedSheet else { throw BridgeFailure(code: "SETTINGS_QA_WORKSPACE", message: "Workspace naming sheet is missing") }
