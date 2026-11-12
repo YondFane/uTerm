@@ -317,6 +317,14 @@ evidence/package/matrix policy checks and two existing run-panel frontend regres
 format and document checks; Swift and shell/Python parsing pass. These checks do not compile AppKit.
 New Mac execution and original-image inspection remain required.
 
+Personal workspace collection derives its exact expected paths, visible file checks and Git-state
+map from every key in the shared fixture. Source `7356a7c`, tested merge `b12d5c56`, passes 24
+actual settings captures but then fails before its first workspace image because the collector still
+expects two files while the expanded POM/Python fixture has four. The inspected original and
+[artifact13968962533](https://github.com/YondFane/uTerm/actions/runs/43262878537/artifacts/13968962533)
+retain all four readable paths. The correction keeps exact-set and per-file untracked-state checks;
+replacement and the 50-pair grid require a new Mac run.
+
 The paired run-panel grid uses the shared minimal POM/Python project and twelve required scenes:
 Java/Python × docked/expanded/file × English dark 1100px/Chinese light 640px, all at 720px height.
 Both collectors click actual toolbar, expand/restore, Files-row, file-close and hide controls while

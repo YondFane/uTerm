@@ -61,6 +61,10 @@ enum PersonalSmoke {
             guard let resources = Bundle.main.resourceURL else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing resources") }
             let parityBytes = try Data(contentsOf: resources.appendingPathComponent("client-ui-parity.json"))
             let parity = try JSONDecoder().decode(JSONValue.self, from: parityBytes)
+            guard case .object(let fixtureFiles) = parity["files"], !fixtureFiles.isEmpty else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: "Missing shared fixture files") }
+            let fixturePaths = fixtureFiles.keys.sorted()
+            let fixturePathsJSON = String(decoding: try JSONEncoder().encode(fixturePaths), as: UTF8.self)
+            report["workspaceFixturePaths"] = fixturePaths
             report["uiParityFixtureSHA256"] = SHA256.hash(data: parityBytes).map { String(format: "%02x", $0) }.joined()
             if phase == "initial" {
                 guard await model.mutate("workspace.rename", ["id": .string(model.groupID), "name": parity["workspaceName"]]) else { throw BridgeFailure(code: "PERSONAL_FIXTURE", message: model.error) }
@@ -228,15 +232,15 @@ enum PersonalSmoke {
                         }
                         try await TerminalSmoke.wait("Fixture files remain readable across settings changes") {
                             model.inspector.error.isEmpty && !model.inspector.busy
-                                && Set(model.inspector.rows.compactMap { $0["path"].string }) == Set(["note.txt", "README.md"])
+                                && Set(model.inspector.rows.compactMap { $0["path"].string }) == Set(fixturePaths)
                         }
                         guard let files = model.inspector.content, files.webView.window === window else { throw BridgeFailure(code: "PERSONAL_FILES", message: "Shared file controls are not mounted in the real inspector") }
-                        try await ContentSmoke.wait(files, "['note.txt','README.md'].every(name => [...document.querySelectorAll('.file-row-name')].some(row => row.textContent.trim() === name)) && document.querySelectorAll('.inspector-tabs [role=tab]').length === 3 && document.querySelectorAll('.inspector-switcher button').length === 4")
+                        try await ContentSmoke.wait(files, "\(fixturePathsJSON).every(name => [...document.querySelectorAll('.file-row-name')].some(row => row.textContent.trim() === name)) && document.querySelectorAll('.inspector-tabs [role=tab]').length === 3 && document.querySelectorAll('.inspector-switcher button').length === 4")
                         let rawStatus = try await bridge.call("git.fileStatus", params: .object(["directory": .string(files.directory.path)]))
                         let normalizedStatus = try ContentFileRoot.normalizingGitRoot(rawStatus)
                         report["workspaceGitRootDiagnostics"] = ["selectedDirectory": files.directory.path, "rawGitRoot": rawStatus["root"].string ?? "", "normalizedGitRoot": normalizedStatus["root"].string ?? ""]
-                        try await ContentSmoke.wait(files, "['note.txt','README.md'].every(path=>[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus==='untracked')")
-                        let gitStateJSON = try await files.webView.evaluateJavaScript("JSON.stringify(Object.fromEntries(['note.txt','README.md'].map(path=>[path,[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus])))")
+                        try await ContentSmoke.wait(files, "\(fixturePathsJSON).every(path=>[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus==='untracked')")
+                        let gitStateJSON = try await files.webView.evaluateJavaScript("JSON.stringify(Object.fromEntries(\(fixturePathsJSON).map(path=>[path,[...document.querySelectorAll('.file-row')].find(row=>row.dataset.path===path)?.dataset.gitStatus])))")
                         guard let gitStateText = gitStateJSON as? String, let gitStateBytes = gitStateText.data(using: .utf8) else { throw BridgeFailure(code: "PERSONAL_FILE_GIT_STATE", message: "Could not read actual file-row Git states") }
                         let fileGitStates = try JSONDecoder().decode([String: String].self, from: gitStateBytes)
                         try await ContentSmoke.wait(files, "document.querySelector('.file-panel')?.getAttribute('aria-label') === " + (language == "en" ? "'Files panel'" : "'文件面板'"))
