@@ -608,6 +608,14 @@ time. A timeout samples only the owned QA process for at most five seconds and k
 reports and existing original images, even if no final report was produced. Incomplete progress
 cannot satisfy acceptance; all operation, fixture and shutdown assertions remain required.
 
+The SDK capture-boundary test loads its local loopback helper from the repository's scripts
+directory, matching direct script execution. At source `6153824`, tested merge `0f49119a`, its
+[CI log](https://github.com/YondFane/uTerm/actions/runs/43274768437/job/131380131074) records an
+import failure before the SDK scenario ran. The same failure was reproduced on Linux; the corrected
+capture-boundary test and real numeric-loopback request both pass. The loopback check requires
+socket access outside the default cloud sandbox. Actual new Mac SDK execution remains required; a
+continue-on-error step conclusion does not establish that execution.
+
 The capture gate inspects WindowServer before and after each original PNG. Another application's
 intersecting visible window rejects acceptance; the original and `.visibility.json` diagnostics
 remain available, including a capture rejected before it entered the scene list. The private
@@ -1556,19 +1564,27 @@ and installs without overwriting a newly created snapshot. Existing restore/null
 preserved; damaged bytes, originals and invalid copies remain.
 
 **File → Recover editor drafts…** previews retained text, copies the full text without writing files
-or opens its latest draft. Reopening an existing file focuses its current window. Drafts with
-unavailable or differently spelled project locations can still be copied.
+or opens its latest draft in a main-workspace file tab. Reopening focuses the retained document.
+Drafts with unavailable or differently spelled project locations can still be copied.
 
 **File → Restore editor recovery copy…** previews verified backups and explicitly restores the
 selected copy, retaining damaged bytes. A changed snapshot rejects the restore; an absent snapshot
 uses non-overwriting installation. Cancel does not change recovery data. Open editors retain their
 current text; reopen files to load restored drafts.
 
-Editable native files from the same canonical project open as AppKit window tabs in opening order.
-Opening an existing file selects its existing tab. Different projects, read-only previews and Git
-windows stay outside that editable group. Each tab keeps its own document-scoped bridge, recovery
-queue and close guard; cancelling a conflicted close retains both drafts and the external file.
-Closing one tab continues to guard and acknowledge only its own document.
+Recovery QA captures the actual presentation window and operates the main-workspace tab's close
+control, then requires that document to be removed while its readonly recovery draft remains. Source
+`6153824`, tested merge `0f49119a`, passed copy/cancel but then tried to capture the hidden backing
+window;
+[artifact 13971913986](https://github.com/YondFane/uTerm/actions/runs/43274768437/artifacts/13971913986)
+retains that visibility failure. Linux Swift parsing and shell/embedded-Python parsing pass for the
+corrected checks. Actual new Mac recovery capture and close verification remain pending.
+
+Standalone editable native files from the same canonical project open as AppKit window tabs in
+opening order. Opening an existing file selects its existing tab. Different projects, read-only
+previews and Git windows stay outside that editable group. Each tab keeps its own document-scoped
+bridge, recovery queue and close guard; cancelling a conflicted close retains both drafts and the
+external file. Closing one tab continues to guard and acknowledge only its own document.
 
 The real editor smoke edits two recovered files in native tabs, leaves both open for SIGKILL, then
 explicitly reopens and checks exact drafts, order/reuse, project/preview isolation, conflict/Keep

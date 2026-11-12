@@ -45,7 +45,8 @@ with tempfile.TemporaryDirectory(prefix='uterm-native-qa-') as root:
                                 'discardRemovedOnlyOwnDraft', 'savedExactBytesAndClearedDraft', 'cleanEditorQuitPrepared',
                                 'narrowEditorControlsWithinViewport', 'missingSourceRetainedReadonlyAfterClose', 'escapeClosedNativeFileWindow',
                                 'recoveryCopyPreservedExactTextAndStore', 'recoveryCancelPreservedStore',
-                                'recoveryMenuOpenedAndReusedReadonlyWindow', 'recoveryStaleSelectionPreservedNewerBytes',
+                                'recoveryMenuOpenedAndReusedReadonlyWindow', 'recoveryOpenedInMainWorkspace',
+                                'recoveryActualTabClosePreservedDraft', 'recoveryStaleSelectionPreservedNewerBytes',
                                 'recoveryRestoreRetainedDamagedBytes', 'recoveryMissingPreviewReadonlyAndExplicitRestore']:
                         assert report[key], (key, report)
                     for key in ['nativeFileTabDraftsSurvivedForcedExit', 'nativeFileTabsExcludeOtherProjectsAndPreviews',
