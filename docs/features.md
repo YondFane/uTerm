@@ -467,7 +467,7 @@ tab/window restoration, wrapping, embedded workbenches and complete settings sty
 alignment.
 
 The toolbar footer and app menu open complete settings. Save/reload/reset and unsaved drafts remain
-available when the settings window is hidden; Return saves an edited draft and Command-W hides it.
+available when the settings window is hidden; Return commits an edited field and Command-W hides it.
 The local CLI control switch remains an immediate service control in Local control.
 
 Candidate capture records the contract SHA-256, actual toolbar height/top position and responsive
@@ -568,24 +568,33 @@ Native settings use the same category labels as the shared catalog. File tab lim
 General; terminal fonts, weight, size and line height are in Appearance alongside interface and file
 fonts. Terminal contains cursor, blink, scrollback and copy behavior. The default Agent is in
 Workspace; Windows-only shell selection is not offered on macOS. Break interval is disabled while
-the reminder is off. Search aliases follow these actual field locations. Existing draft, save,
-reload and conflict handling is preserved; this does not yet claim matching automatic-save behavior
-or complete settings styling.
+the reminder is off. Search aliases follow these actual field locations.
+
+Native switches, choices, fonts and shortcut changes save automatically. Numeric and highlight-color
+text fields save on Enter or blur, retaining incomplete input while typing. Each change writes only
+its own field; unrelated drafts retain their original conflict comparison point. Invalid values and
+conflicts remain visible without an automatic retry. Correct the field to retry, use **Reload** to
+discard drafts, or **Save settings** to retry the complete draft. Restore defaults and theme file
+selection also apply automatically. Full settings styling still requires comparison.
 
 Linux x86_64 / Node 26 passes 20 focused settings, search and Maven checks, type/production build,
 i18n and generated-contract checks. Native QA inserts text through the actual AppKit field editor,
 clicks the matching category, sends Escape and checks the retained numeric draft and unchanged
 snapshot bytes. It records `nativeSettingsSearchProof` and `native-settings-search-jdk.png` in the
-Mac artifact. The new native operation and same-source search screenshots remain pending CI; the
-reordered fields and full settings styling still require actual Mac screenshots and comparison under
-#53.
+Mac artifact. Automatic-save QA uses actual AppKit field editing and blur, then an actual font
+selection with an unrelated draft and a concurrent Core writer. It checks invalid-input retention,
+correction, scoped persistence, the original conflict baseline and explicit reload recovery,
+recording `nativeSettingsAutomaticSaveProof` and `native-settings-autosave-conflict.png`. These new
+automatic-save operations and same-source screenshots remain pending macOS CI; the reordered fields
+and full settings styling still require actual Mac screenshots and comparison under #53.
 
 Interface and terminal font selectors share the ordinary client's preset catalog and localized
 labels. Existing custom font strings remain a selected custom entry until a preset is chosen; simply
 opening or switching categories does not replace them. Selection retains the exact fallback-family
 string, and the existing settings save/conflict rules apply. Native QA checks both actual AppKit
-selectors, custom draft retention, no implicit write and a save/read round trip; it also captures
-`native-settings-custom-font.png`. Current-source macOS execution is still required.
+selectors, custom draft retention, no write while rendering and an automatic save/read round trip;
+it also captures `native-settings-custom-font.png`. Current-source macOS execution is still
+required.
 
 The toolbar includes file opening, the command palette, pane zoom and a tools menu for files/search,
 Git/GitHub, Java/Python, SSH, database and Redis entry points. Commands retain their existing focus,

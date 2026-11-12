@@ -9,6 +9,7 @@ enum SettingsSmoke {
         NSApp.sendEvent(event)
     }
     private static func save(_ model: NativeSettingsModel) async throws {
+        try await TerminalSmoke.wait("Finish pending control saves before saving the retained draft") { !model.automaticSaving }
         for _ in 0..<3 {
             await model.save()
             if model.errorCode != "WRITER_BUSY" { return }
@@ -84,6 +85,7 @@ enum SettingsSmoke {
         model.numbers["fontSize"] = "17"
         try await save(model)
         guard model.error.isEmpty, !model.dirty, workspace.settings["fontSize"].number == 17 else { throw BridgeFailure(code: "SETTINGS_QA_SAVE", message: "Native settings did not save") }
+        try await verifyAutomaticSave(settings: current, root: root, evidence: URL(fileURLWithPath: path).deletingLastPathComponent(), report: &report)
         let other = try await CoreBridge.open(root: root)
         do {
             model.numbers["fileFontSize"] = "19"
@@ -245,14 +247,67 @@ enum SettingsSmoke {
         current.window.orderOut(nil)
     }
 
+    private static func editField(_ settings: NativeSettingsWindow, key: String, text: String) async throws {
+        let id = "native-settings-field-" + key
+        try await TerminalSmoke.wait("Render editable native settings field " + key) { (view(settings.window, id: id) as? NSTextField)?.isEnabled == true }
+        guard let field = view(settings.window, id: id) as? NSTextField else { throw BridgeFailure(code: "SETTINGS_QA_FIELD", message: "Settings field is missing") }
+        settings.window.makeKeyAndOrderFront(nil); settings.window.makeFirstResponder(field)
+        guard let editor = field.currentEditor() as? NSTextView else { throw BridgeFailure(code: "SETTINGS_QA_FIELD", message: "Actual AppKit field editor is missing") }
+        editor.insertText(text, replacementRange: NSRange(location: 0, length: editor.string.utf16.count))
+        guard field.stringValue == text else { throw BridgeFailure(code: "SETTINGS_QA_FIELD", message: "AppKit did not deliver the input") }
+        settings.window.makeFirstResponder(nil)
+        try await TerminalSmoke.wait("Complete native field blur save") { !settings.model.automaticSaving && !settings.model.busy }
+    }
+
+    private static func verifyAutomaticSave(settings: NativeSettingsWindow, root: URL, evidence: URL, report: inout [String: Any]) async throws {
+        let model = settings.model, peer = try await CoreBridge.open(root: root)
+        do {
+            let before = try await peer.snapshot()
+            model.section = "general"
+            try await editField(settings, key: "fileTabLimit", text: "0")
+            guard model.errorCode == "INVALID_SETTINGS", model.numbers["fileTabLimit"] == "0", (try await peer.snapshot()).document.settings == before.document.settings else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_INVALID", message: "Automatic save lost an invalid draft or wrote it") }
+            let limit = before.document.settings["fileTabLimit"].number == 7 ? 8 : 7
+            try await editField(settings, key: "fileTabLimit", text: String(limit))
+            guard model.error.isEmpty, (try await peer.snapshot()).document.settings["fileTabLimit"].number == Double(limit) else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_BLUR", message: "A corrected field did not save automatically on blur") }
+            let draft = before.document.settings["fontSize"].number == 18 ? "19" : "18"
+            let peerSize = before.document.settings["fontSize"].number == 20 ? 21.0 : 20.0
+            model.numbers["fontSize"] = draft
+            let snapshot = try await peer.snapshot()
+            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(snapshot.revision), "patch": .object(["fontSize": .number(peerSize)])]))
+            model.section = "appearance"
+            let id = "native-settings-font-interfaceFont"
+            try await TerminalSmoke.wait("Render the actual font picker for scoped automatic save") { (view(settings.window, id: id) as? NSPopUpButton)?.isEnabled == true }
+            guard let picker = view(settings.window, id: id) as? NSPopUpButton,
+                  let option = picker.itemArray.first(where: { ($0.representedObject as? String).map { $0 != model.values["interfaceFont"]?.string } == true }),
+                  let font = option.representedObject as? String else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_PICKER", message: "Alternative font preset is missing") }
+            picker.select(option)
+            guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker) else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_PICKER", message: "Actual font action was not delivered") }
+            try await TerminalSmoke.wait("Complete scoped font automatic save") { !model.automaticSaving && !model.busy }
+            let saved = try await peer.snapshot()
+            guard model.error.isEmpty, saved.document.settings["interfaceFont"].string == font,
+                  saved.document.settings["fontSize"].number == peerSize, model.numbers["fontSize"] == draft else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_SCOPE", message: "Automatic save overwrote an unrelated draft or the peer value") }
+            try await save(model)
+            guard model.errorCode == "SETTINGS_CONFLICT", model.numbers["fontSize"] == draft,
+                  (try await peer.snapshot()).document.settings["fontSize"].number == peerSize else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_CONFLICT", message: "Saving another field silently rebased the conflicting draft") }
+            let capture = "native-settings-autosave-conflict.png"
+            try await TerminalSmoke.capture(window: settings.window, path: evidence.appendingPathComponent(capture))
+            let current = try await peer.snapshot()
+            _ = try await peer.call("settings.patch", params: .object(["expectedRevision": .string(current.revision), "patch": .object(["fileTabLimit": before.document.settings["fileTabLimit"], "fontSize": before.document.settings["fontSize"], "interfaceFont": before.document.settings["interfaceFont"]])]))
+            await model.workspace.reload(); await model.reload()
+            guard model.error.isEmpty, !model.dirty else { throw BridgeFailure(code: "SETTINGS_QA_AUTO_RELOAD", message: "Explicit reload did not recover the saved preferences") }
+            report["nativeSettingsAutomaticSaveProof"] = ["actualFieldEditorBlur": true, "invalidDraftRetainedWithoutWrite": true, "correctedFieldSavedAutomatically": true, "actualFontPicker": true, "scopedWrite": true, "otherDraftRetained": true, "peerWriteConflictRetained": true, "explicitReloadRecovery": true, "capture": capture]
+            await peer.close()
+        } catch { await peer.close(); throw error }
+    }
+
     private static func verifyFontPickers(settings: NativeSettingsWindow, evidence: URL, report: inout [String: Any]) async throws -> String {
         let model = settings.model
         guard let bridge = model.workspace.bridge else { throw BridgeFailure(code: "SETTINGS_QA_FONT", message: "Missing font preference bridge") }
-        let before = try await bridge.snapshot()
         let custom = "QA literal \"中文\", monospace"
         var selected: [String: JSONValue] = [:]
         var capture = ""
         for (key, section) in [("interfaceFont", "appearance"), ("fontFamily", "appearance")] {
+            let before = try await bridge.snapshot()
             model.values[key] = .string(custom); model.section = section
             let identifier = "native-settings-font-" + key
             try await TerminalSmoke.wait("Render native custom font selection") { (view(settings.window, id: identifier) as? NSPopUpButton)?.selectedItem?.representedObject as? String == custom }
@@ -266,6 +321,8 @@ enum SettingsSmoke {
             }
             picker.select(option)
             guard let action = picker.action, NSApp.sendAction(action, to: picker.target, from: picker), model.values[key] == .string(font) else { throw BridgeFailure(code: "SETTINGS_QA_FONT_ACTION", message: "Native font picker did not retain the shared preset value") }
+            try await TerminalSmoke.wait("Persist the actual font selection automatically") { !model.automaticSaving && !model.busy }
+            guard model.error.isEmpty, (try await bridge.snapshot()).document.settings[key].string == font else { throw BridgeFailure(code: "SETTINGS_QA_FONT_SAVE", message: "Selected font preset was not saved automatically") }
             selected[key] = .string(font)
         }
         try await save(model)
