@@ -26,6 +26,7 @@ private struct NativeInterfaceThemeButton: NSViewRepresentable {
     @ObservedObject var model: NativeSettingsModel
     let theme: JSONValue
     func makeCoordinator() -> Coordinator { Coordinator(model) }
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: ThemeButton, context: Context) -> CGSize? { CGSize(width: proposal.width ?? 160, height: 150) }
     func makeNSView(context: Context) -> ThemeButton {
         let button = ThemeButton(frame: .zero)
         button.target = context.coordinator; button.action = #selector(Coordinator.select(_:))
