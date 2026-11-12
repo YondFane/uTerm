@@ -142,8 +142,10 @@ Java/Maven、Python 和 SSH/SFTP 在主工作区内使用原生标签。切回�
 
 Java 与 Python 顶栏按钮显示实际运行状态，右键或 Shift-F10 打开对应语言的启动列表。选择任务后打开其项目／Worktree 面板并保留同一任务 generation；项目已移除或 generation 过期时显示错误。点击当前运行按钮返回终端，不关闭保留任务。两版共用 Core 查询逻辑，不启动宿主，并排除构建／测试历史。原生关闭菜单对内嵌内容显示“关闭标签”，对独立文件显示“关闭文件”，各操作保留既有保存与关闭保护。
 
-独立 SSH 窗口与 Java／Python 一样在可见桌面居中打开。源码 `c977840`、实际测试 merge `0f5ac287`
-的 SSH 冲突截图包含41,315个不透明 Dock 像素，[产物13958841216](https://github.com/YondFane/uTerm/actions/runs/43243034024/artifacts/13958841216)保留该失败。位置修正保留遮挡检查，仍须新的 Mac 执行。
+独立 SSH 窗口在可用桌面内居中打开，保留 8 点边距；需要时缩小初始尺寸，以避开 Dock。QA 记录实际窗口与可用屏幕矩形，在截图之前拒绝越界窗口。ARM64 源码
+`7356a7c`、实际测试 merge `b12d5c56`
+的 SSH 冲突截图包含 32,527 个不透明 Dock 像素，[产物 13968292984](https://github.com/YondFane/uTerm/actions/runs/43262878555/artifacts/13968292984)保留该失败。位置修正通过 Linux
+Swift 语法解析，真实 Mac 窗口与遮挡检查仍待执行。
 
 隔离的 `workspace-panels-native.json`
 场景采集十二张实际主窗口：1100px 英文深色、640px 中文浅色；点击终端／面板／关闭控件，检查视图与文档保留，以及终端身份／generation。每张记录源码、实际窗口宽度及平台信息。运行面板在设置变化时重绘本地化标签；临时混合项目同时包含有效的最小 POM 与 Python 入口。此集成场景使用离线连接样例；既有 PostgreSQL、Redis、SSH 及运行测试继续覆盖服务与生命周期。

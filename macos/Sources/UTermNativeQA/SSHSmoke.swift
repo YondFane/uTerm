@@ -98,6 +98,8 @@ enum SSHSmoke {
         report["nativeSSHMenuAndProfileSaved"] = true
         report["nativeSSHMenuWorkspaceCapture"] = menuCapture
         try await ProjectRunSmoke.restoreStandalone(model: model, panel: panel)
+        guard let visible = window.screen?.visibleFrame, visible.contains(window.frame) else { throw BridgeFailure(code: "SSH_QA_WINDOW_BOUNDS", message: "Standalone SSH window extends outside the usable desktop: " + NSStringFromRect(window.frame)) }
+        report["standaloneSSHWindowPlacement"] = ["frame": NSStringFromRect(window.frame), "visibleScreen": NSStringFromRect(visible), "insideVisibleScreen": true]
         let previousRevision = ssh.snapshot?.revision
         _ = try await bridge.call("settings.patch", params: .object(["expectedRevision": .string(previousRevision ?? ""), "patch": .object(["fontSize": .number(15)])]))
         ssh.name = "RETAINED_DRAFT"
