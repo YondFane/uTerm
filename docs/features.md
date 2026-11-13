@@ -3,7 +3,7 @@ title: uTerm feature guide
 status: active
 type: reference
 created: 2026-09-24
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # uTerm feature guide
@@ -268,7 +268,17 @@ retained views/documents and preserves terminal identity/generation. Each captur
 source, actual window width and platform metadata. Run panels redraw localized labels when settings
 change. The disposable mixed project contains a valid minimal POM and Python entry. Connection
 profiles in this integration scene are offline fixtures; the existing PostgreSQL, Redis, SSH and run
-suites retain service/lifetime coverage.
+suites retain service/lifetime coverage. Fixture profile creation repeats at most three times only
+for `WRITER_BUSY` after confirming that the original revision, complete workspace, settings and
+selected context remain unchanged. Every attempt uses the original revision; conflicts and other
+errors fail immediately. Reports retain per-profile attempts and read-only retries. Application save
+behavior is unchanged.
+
+At source `1ab7a74`, tested merge `06a6fa33`, the full ARM64 native gate fails with
+`PANELS_PROFILE: WRITER_BUSY` while creating the offline fixture; the Intel native gate passes. The
+[native run](https://github.com/YondFane/uTerm/actions/runs/43288575280) retains the failure log.
+Linux Swift/script syntax and documentation checks pass for the bounded fixture retry; full Mac
+execution of the new source is pending.
 
 Run suites also capture the actual main-window menu entry, simulate a stale launch selection,
 dispatch the real NSMenu task item and verify the same hosted generation. They click the actual
